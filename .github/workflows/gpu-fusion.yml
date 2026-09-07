@@ -1,13 +1,17 @@
 # GPU point-cloud registration validated against the CPU reference on a
 # GPU-enabled self-hosted runner (docs/rust-3d-data-ecosystem-build-vs-adopt.md
 # §3.6). Not one of the six numbered gates; never run inside plain `cargo test`.
+#
+# Dormant since 2026-09-07: manual dispatch only. It used to trigger on pull requests
+# touching gungnir-data-fusion or gungnir-render, and every such job waited a day for a
+# runner labelled `gpu` that is not registered, then failed. Two things have to exist
+# before the trigger comes back, and both are GAP-024's: the GPU registration path with
+# its `#[ignore]` tests behind the `gpu-tests` feature (today the feature is empty and
+# `--features gpu-tests -- --ignored` runs zero tests), and the runner. The last step
+# below fails a run that executed nothing, so a runner alone cannot turn this green.
 name: gpu-fusion
 
 on:
-  pull_request:
-    paths:
-      - "gungnir-data-fusion/**"
-      - "gungnir-render/**"
   workflow_dispatch:
 
 env:
@@ -26,4 +30,16 @@ jobs:
       - name: GPU path against the CPU reference
         env:
           GUNGNIR_GPU_TESTS: "1"
-        run: cargo test -p gungnir-data-fusion --features gpu-tests -- --ignored
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test -p gungnir-data-fusion --features gpu-tests -- --ignored 2>&1 | tee gpu-tests.log
+      - name: A gate that ran nothing has not passed
+        shell: bash
+        run: |
+          ran=$(awk '/^test result:/ { s += $4 } END { print s + 0 }' gpu-tests.log)
+          echo "GPU tests executed: $ran"
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::the GPU test run executed zero tests; the gate cannot pass vacuously (GAP-024)"
+            exit 1
+          fi

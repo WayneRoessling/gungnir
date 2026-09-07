@@ -97,7 +97,12 @@ outcomes are also in `../../../ARCHITECTURE.md` §10; mission outcomes in `../mi
   `github.com/WayneRoessling/gungnir`**: the port is gone and the eight workflows stay
   where they are, but the effort stays M, because what gates the gap is not the port. The
   workspace is not a git repository, so the gap starts with an initial commit, and
-  `gpu-fusion.yml` still needs a self-hosted runner labelled `gpu`.
+  `gpu-fusion.yml` still needs a self-hosted runner labelled `gpu`. **On 2026-09-07 that
+  workflow was made dormant** (manual dispatch only): with no runner registered, every
+  pull request touching the two crates it watched queued a job that failed a day later,
+  and the job itself ran zero tests, because the GPU path and its tests are GAP-024's
+  and are not built. It now fails a run that executed nothing, so the runner alone
+  cannot pass it.
 - D-13 fixed the closing action of GAP-021 without a new dependency edge.
 - D-01 confirms that no gap is out of scope; every I4 item is release content.
 - Plan 07 (test-track suite, 2026-09-04) delivered the catalogue, class profiles,

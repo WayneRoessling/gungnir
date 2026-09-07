@@ -61,7 +61,7 @@ gungnir-workspace/
 │   ├── loom.yml                    # gate 4
 │   ├── fuzz-nightly.yml            # gate 5
 │   ├── bench-regression.yml        # gate 6
-│   ├── gpu-fusion.yml              # GPU-vs-CPU registration check, GPU runner
+│   ├── gpu-fusion.yml              # GPU-vs-CPU registration check; dormant (manual dispatch) until GAP-024
 │   └── release.yml                 # cargo-deny, cargo-audit, SBOM, signed builds, image
 │
 │   # Tracking core (docs/agentic-coding-standards.md governs)
@@ -142,9 +142,9 @@ The map lives in `architecture.md` so it exists in exactly one place.
 ## Agentic verification gates and CI workflows
 
 Direct mapping from the six-gate verification stack in `agentic-workflow.md` to the
-workflow files that enforce them. The files exist; until the repository is hosted with
-runners (and a GPU-labelled self-hosted runner for `gpu-fusion.yml`), reviewers apply
-the gates by hand and say so in the PR.
+workflow files that enforce them. They run on GitHub (D-10 as amended 2026-09-07);
+`gpu-fusion.yml` alone is dormant, on manual dispatch, until GAP-024 delivers the GPU
+path, its tests and a GPU-labelled self-hosted runner.
 
 | # | Gate | Workflow | Trigger |
 |---|---|---|---|
@@ -160,7 +160,9 @@ the gates by hand and say so in the PR.
 rather than being folded into general CI, and both require explicit human sign-off in
 addition to a green check. Two further workflows are not numbered gates:
 `gpu-fusion.yml` validates the GPU registration path against the CPU reference on a
-GPU runner, and `release.yml` runs the assurance track in `release-governance.md`.
+GPU runner (dormant since 2026-09-07: manual dispatch only, and it fails a run that
+executed zero tests, because the path and its tests are GAP-024's and do not exist
+yet), and `release.yml` runs the assurance track in `release-governance.md`.
 
 ## Naming notes
 
