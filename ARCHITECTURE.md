@@ -3062,8 +3062,8 @@ Three departures from DN-21 -- the shared types placed in `gungnir-model` rather
     entries exist to catch. GAP-079 was not taken: its dataset extraction has no settled
     crate.
 
-89. **The theme is an installed style, not a set of constants** (2026-09-06, D-33 to
-    D-36). An outside review of `gungnir-ui/src/theme.rs` was assessed against the
+89. **The theme is an installed style, not a set of constants** (2026-09-06, D-35 to
+    D-38). An outside review of `gungnir-ui/src/theme.rs` was assessed against the
     design system and the dependency graph; what survived is built. `theme::
     install_egui_theme` runs once from the eframe creation closure in `gungnir-app`
     and from the headless render probe, and gives egui's own chrome the tokens the
@@ -3107,12 +3107,20 @@ Three departures from DN-21 -- the shared types placed in `gungnir-model` rather
     control row was corrected to what the strip has drawn since GAP-072: free is the
     permissive state and takes the red, hold is the safe one.
 
-    The decisions: D-33 keep the tokens as flat constants and file the night variant
-    as GAP-090 rather than thread a `Palette` value through 239 call sites now; D-34
-    the selection halo stays white and the assignment line moves instead; D-35
-    monospace for compared numerals; D-36 the blue-black viewport set and the
+    The decisions: D-35 keep the tokens as flat constants and file the night variant
+    as GAP-094 rather than thread a `Palette` value through 239 call sites now; D-36
+    the selection halo stays white and the assignment line moves instead; D-37
+    monospace for compared numerals; D-38 the blue-black viewport set and the
     coverage alpha at 80. The night variant and the dashed low-confidence frame remain
     the two open items in `docs/ux/ux-to-code-map.md` §4.
+
+    These four were filed the same day as D-33 to D-36 and GAP-090; both numbers were
+    taken the same day by an unrelated session's work (D-33 by the Cursor-on-Target
+    scope decision, D-34 by the licensing decision, GAP-090 by the friendly-set gap
+    out of DN-25), so the theme decisions and gap were renumbered 2026-09-07 to the
+    numbers above, and this paragraph and `docs/ux/design-system.md` were re-pointed
+    to match. The lesson: a decision or gap number is only safe to cite once its row
+    is committed on `main`, not from the moment it is chosen in a working tree.
 
 90. **A seventh ten: nine built, one closed** (2026-09-06). Built: GAP-016 (closed: the
     `gen_tracks.py` composition ported over `TrackLibrary` and `PythonRandom`, all ten

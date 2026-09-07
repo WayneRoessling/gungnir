@@ -103,6 +103,7 @@ drafting agent's proposals for the owner and the engineering reviewer to confirm
 | GAP-091 | No exchange bearer for a participant that holds no machine identity | Technical | CAP-7.4, CAP-1.6 | 4 | 5 | L | 20 | I3 | Services engineer | Open |
 | GAP-092 | The journal budget's debug cost was attributed to runner I/O; it is the encode | Technical | CAP-5.10 | 2 | 10 | S | 20 | I2 | Services engineer | Closed |
 | GAP-093 | Gate 6 never saves a baseline, so it compares nothing and cannot fail | Technical | CAP-5.10 | 3 | 10 | S | 30 | I2 | Services engineer | Closed |
+| GAP-094 | The night variant of the theme | Technical | CAP-5.9 | 2 | 10 | M | 20 | I3 | UI engineer | Open |
 
 Counts: 91 gaps, 3 mission, 88 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
@@ -661,6 +662,19 @@ Counts: 91 gaps, 3 mission, 88 technical; 1 already covered by a plan in `../../
 - Target: I2. Owner: Services engineer. Status: Closed.
 - Reference: `../../../.github/workflows/bench-regression.yml`; `../../../benches/README.md`.
 - Depends on: GAP-061.
+
+**GAP-094 The night variant of the theme**
+
+- Type: Technical.
+- Capability: CAP-5.9 Role workspaces and workflow.
+- Description: **Filed 2026-09-06 out of D-35**, and refiled here 2026-09-07 as GAP-094: it first entered this register as GAP-090, a number reused the same day by an unrelated entry (the friendly-set gap out of DN-25), so this text is moved rather than duplicated -- the earlier GAP-090 wording never described this gap. `docs/ux/design-system.md` DS-07 proposes a second token set -- the same hues at 70 percent luminance, `ALERT_COLOR` unchanged, the grid darker still -- selected by a configuration baseline setting rather than a per-session toggle, so a shift does not inherit a surprise. It has been "still open" in `ux-to-code-map.md` §4 since 2026-09-05. The 2026-09-06 theme tranche (ARCHITECTURE.md §10 item 89) made the palette an installed egui style but kept the tokens as flat constants, because a `Palette` value threaded through the 239 call sites across `gungnir-ui`, `gungnir-viewport3d` and `gungnir-app` is its own tranche and the owner chose not to take it with the installer. What is needed: a `Palette` (or equivalent) that both sets implement, `install_egui_theme` and `track_color` taking it, a `night` setting in `UiSettings` read at start-up, and the contrast tests run against both sets. It adds no dependency edge: the setting is in `gungnir-model::UiSettings`, which the theme's crate already depends on.
+- Evidence: `../../ux/design-system.md` DS-07; `../../ux/accessibility.md` "Out of reach in egui today" (the night variant is the substitute for OS high-contrast inheritance).
+- Severity: 2. Reach: 10 threads. Effort: M. Priority: 20.
+- Impact: Without it the only palette is the one operations-room set; a darkened room or a high-contrast need has no supported answer, and accessibility.md names this variant as the substitute for OS theme inheritance egui cannot offer.
+- Closing action: The second token set in `gungnir-ui/src/theme.rs`, selected by a baseline setting; both sets under the contrast tests; DS-07 and `ux-to-code-map.md` §4 updated to say it is built.
+- Target: I3. Owner: UI engineer. Status: Open.
+- Reference: `../../ux/design-system.md` DS-07.
+- Depends on: D-35.
 
 **GAP-042 Warning function**
 

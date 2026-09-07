@@ -185,7 +185,7 @@ the frame around the picture is the same operations-room surface as the picture.
 A "night" variant is proposed as a second token set: the same hues at 70 percent
 luminance, `ALERT_COLOR` unchanged, grid darker still. Switching is a configuration
 baseline setting, not a per-session toggle, so a shift does not inherit a surprise.
-**Not built**: it is GAP-090. The 2026-09-06 decision (D-33) was to keep the tokens
+**Not built**: it is GAP-094 (filed 2026-09-06 as GAP-090, renumbered 2026-09-07 when GAP-090 was taken the same day by an unrelated gap out of DN-25). The 2026-09-06 decision (D-35, filed that day as D-33 and renumbered for the same reason) was to keep the tokens
 as flat constants until the variant is scheduled, because a `Palette` value threaded
 through the 239 call sites across three crates is its own tranche.
 
@@ -208,7 +208,7 @@ The surface, text and interaction tokens, the stroke tokens, `numeral`,
 operator a removed track might still be there) and the dock's tab-bar hooks in
 `gungnir-app/src/dock.rs`.
 
-Still not built: the night variant (GAP-090), and the dashed low-confidence frame,
+Still not built: the night variant (GAP-094), and the dashed low-confidence frame,
 which needs the policy margin `gungnir-policy` owns; a threshold invented in the
 viewport would mark tracks low-confidence against a rule nobody set.
 

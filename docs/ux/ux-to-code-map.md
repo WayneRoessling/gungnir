@@ -76,7 +76,7 @@ four private colours were removed in favour of the theme's; `theme::numeral` set
 compared numbers in the monospace face (DS-05); and the contrast tests run against
 every surface, which raised `ALERT_COLOR` and `TRACK_DELETED_COLOR` to meet the rule.
 **Still open:** the night variant as a second constant set selected by a baseline
-setting (GAP-090, deferred by D-33), and the dashed low-confidence frame, which needs
+setting (GAP-094, deferred by D-35), and the dashed low-confidence frame, which needs
 the policy margin `gungnir-policy` owns rather than a threshold invented in the
 viewport.
 
