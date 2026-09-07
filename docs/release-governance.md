@@ -67,7 +67,11 @@ anything; the gate names and pass criteria do not change.
 
 `gpu-fusion.yml` needs a self-hosted runner labelled `gpu` registered to the repository.
 No hosted runner has a GPU, and that requirement belonged to the workflow rather than to
-the forge it ran on, so the amendment does not remove it.
+the forge it ran on, so the amendment does not remove it. Since 2026-09-07 the workflow
+runs on manual dispatch only: a pull-request trigger queued a job that waited a day for
+the absent runner and then failed, and the job it would have run is empty, because the
+GPU path and its tests (GAP-024) do not exist yet. It fails a run that executed zero
+tests, so registering a runner alone cannot make it green.
 
 **No forge credential appears in this repository, and none can.** GitHub does not accept
 a password for git operations; access is a personal access token or an SSH key, held by

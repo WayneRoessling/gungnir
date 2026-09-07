@@ -166,7 +166,7 @@ does the row's status move in `architecture.md`. Rows with no test are listed as
 | `gungnir-data` Loader correctness per format | `gungnir-data/tests/{dem,pointcloud,vtk_gltf}.rs` (LAS, DEM, VTK, glTF; COPC not yet) | |
 | `gungnir-data` Loading off the UI thread | `gungnir-app/tests/terrain.rs` (`spawn_loader`) | |
 | `gungnir-data-fusion` CPU ICP reference | `mod tests` in `gungnir-data-fusion/src/lib.rs` | |
-| `gungnir-data-fusion` GPU path against CPU reference | none: the GPU runner (GAP-024) | |
+| `gungnir-data-fusion` GPU path against CPU reference | none: neither the GPU path nor a test behind the `gpu-tests` feature exists, nor the GPU runner (GAP-024); `gpu-fusion.yml` is dormant and fails a run that executed zero tests | |
 | `gungnir-render` Single device, no per-frame resource creation | none | |
 | `gungnir-viewport3d` SSE and tileset traversal | `mod tests` in `gungnir-viewport3d/src/lib.rs` | |
 | `gungnir-viewport3d` Glyph rebuild only on change | `mod tests` in `gungnir-viewport3d/src/lib.rs` | |
