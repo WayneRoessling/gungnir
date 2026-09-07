@@ -336,6 +336,25 @@ fn snapshot_calls_are_measured() {
 /// debug measurement to a budget stated for the shipping build is deliberate
 /// conservatism, but it leaves the margin thin, which is why the statistic has to be
 /// the right one.
+///
+/// # Why the assertion is release-only (owner decision, 2026-09-07)
+///
+/// That conservatism stopped being conservative and became wrong. On a GitHub Actions
+/// runner this measured a median of **1.844781 ms** against the 1 ms budget -- worse
+/// than the 1.0681 ms a Windows development machine gives -- because shared runners
+/// have throttled I/O. The budget in `performance-budgets.md` is a product figure whose
+/// evidence is 157 µs in release; a debug build on the slowest hardware the suite runs
+/// on is not the thing that budget describes, so failing on it reported a defect that
+/// did not exist.
+///
+/// The budget itself is unchanged at 1 ms. What changed is which build it is asserted
+/// against. The measurement still runs on every profile and is always printed, so the
+/// debug figure stays visible rather than disappearing.
+///
+/// **`ci.yml` runs this test a second time with `--release`, and that is where the gate
+/// is enforced.** Without that step a release-only budget would be a gate no job could
+/// ever fail -- which is worse than the flaky one it replaced, because it would look
+/// green while measuring nothing.
 #[test]
 fn journal_append_meets_its_budget() {
     let dir = scratch("journal");
@@ -387,11 +406,24 @@ fn journal_append_meets_its_budget() {
     let median = samples[samples.len() / 2];
     let worst = samples.last().copied().unwrap_or_default();
 
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
     println!(
-        "journal append, 50 envelopes: median {median:?}, worst {worst:?} over {JOURNAL_RUNS} runs (budget {BUDGET_JOURNAL_50:?}, debug profile)"
+        "journal append, 50 envelopes: median {median:?}, worst {worst:?} over {JOURNAL_RUNS} runs (budget {BUDGET_JOURNAL_50:?}, {profile} profile)"
     );
-    assert!(
-        median < BUDGET_JOURNAL_50,
-        "journaling 50 envelopes took a median of {median:?} over {JOURNAL_RUNS} runs, over the {BUDGET_JOURNAL_50:?} budget"
-    );
+    if cfg!(debug_assertions) {
+        // Measured and reported, not asserted: see this test's documentation. The gate
+        // runs in `ci.yml`'s release step.
+        println!(
+            "  not asserted in debug; the budget is a release figure and ci.yml enforces it with --release"
+        );
+    } else {
+        assert!(
+            median < BUDGET_JOURNAL_50,
+            "journaling 50 envelopes took a median of {median:?} over {JOURNAL_RUNS} runs, over the {BUDGET_JOURNAL_50:?} budget"
+        );
+    }
 }
