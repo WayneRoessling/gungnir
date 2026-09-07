@@ -1074,6 +1074,7 @@ fn pipeline_settings(
         baseline.config.gate_threshold,
         &baseline.config.filter_selection,
         &imm_fields(&baseline.config),
+        baseline.config.measurement_noise_var,
     ) {
         Ok(settings) => settings,
         Err(err) => {
@@ -1097,6 +1098,7 @@ fn applied_baseline(
         baseline.config.gate_threshold,
         &baseline.config.filter_selection,
         &imm_fields(&baseline.config),
+        baseline.config.measurement_noise_var,
     )
     .ok()
     .map(|_| &baseline.id)

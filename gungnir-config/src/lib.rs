@@ -545,6 +545,12 @@ pub struct TrackingProfileConfig {
     /// is `"imm-cv-ct"`.
     #[serde(default)]
     pub imm_initial_mode_probabilities: [f64; 2],
+    /// Measurement-noise variance per axis, m² (east, north, height) -- DN-29 §5.
+    /// Defaults to `PipelineSettings::default()`'s own figure so a baseline written
+    /// before this field existed keeps behaving exactly as it did; a deployment names
+    /// its actual sensor's own variance to correct the mismatch DN-28 §7 found.
+    #[serde(default = "default_measurement_noise_var")]
+    pub measurement_noise_var: [f64; 3],
     /// The one candidate per profile that is in force when the console opens.
     ///
     /// Exactly one per declared profile: zero means the deployment cannot say what is
@@ -587,6 +593,18 @@ pub struct TrackingConfig {
     pub imm_mode_transition: [[f64; 2]; 2],
     #[serde(default)]
     pub imm_initial_mode_probabilities: [f64; 2],
+    /// Measurement-noise variance per axis, m² (east, north, height) -- DN-29 §5. See
+    /// [`TrackingProfileConfig::measurement_noise_var`] for what it means and its
+    /// default.
+    #[serde(default = "default_measurement_noise_var")]
+    pub measurement_noise_var: [f64; 3],
+}
+
+/// `PipelineSettings::default()`'s own figure (DN-29), so a baseline predating this
+/// field is read as exactly what it already meant rather than as a silent change in
+/// behaviour.
+fn default_measurement_noise_var() -> [f64; 3] {
+    [400.0, 400.0, 900.0]
 }
 
 /// Which services-layer backend the desktop uses (ARCHITECTURE.md §8.2).
@@ -1007,6 +1025,7 @@ impl ConfigBaseline {
                         imm_turn_rate_rad_s: c.imm_turn_rate_rad_s,
                         imm_mode_transition: c.imm_mode_transition,
                         imm_initial_mode_probabilities: c.imm_initial_mode_probabilities,
+                        measurement_noise_var: c.measurement_noise_var,
                     },
                     promoted: c.promoted,
                     validated_by: c.validated_by.clone(),
@@ -2205,6 +2224,13 @@ fn validate_profiles(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 candidate.name, candidate.profile
             )));
         }
+        validate_measurement_noise_var(
+            candidate.measurement_noise_var,
+            &format!(
+                "candidate {:?} in profile {:?}",
+                candidate.name, candidate.profile
+            ),
+        )?;
         if candidate.filter_selection == "imm-cv-ct" {
             validate_imm_fields(
                 candidate.imm_turn_rate_rad_s,
@@ -2296,6 +2322,28 @@ fn validate_imm_fields(
         return Err(ConfigError::Invalid(format!(
             "{what}'s imm-cv-ct initial mode probabilities do not sum to one"
         )));
+    }
+    Ok(())
+}
+
+/// A candidate's (or the legacy `tracking` field's) measurement-noise variance, checked
+/// unconditionally -- unlike the `imm-cv-ct` fields, every filter selection uses this
+/// one (DN-29 §5). An axis at or below zero states no error, which is not a measurement
+/// noise; DN-28 §7's finding is that `PipelineSettings::default()`'s placeholder figure
+/// was the wrong number for every scenario's sensor, not that having a number was wrong
+/// -- so this validates a real one rather than accepting anything that parses.
+///
+/// # Errors
+///
+/// [`ConfigError::Invalid`], naming `what` (the candidate or `tracking`) and which axis.
+fn validate_measurement_noise_var(variance: [f64; 3], what: &str) -> Result<(), ConfigError> {
+    const AXES: [&str; 3] = ["east", "north", "height"];
+    for (value, axis) in variance.iter().zip(AXES) {
+        if !(value.is_finite() && *value > 0.0) {
+            return Err(ConfigError::Invalid(format!(
+                "{what}'s measurement_noise_var.{axis} must be finite and positive"
+            )));
+        }
     }
     Ok(())
 }
@@ -2708,6 +2756,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 "tracking.filter_selection is empty".into(),
             ));
         }
+        validate_measurement_noise_var(t.measurement_noise_var, "tracking")?;
         if t.filter_selection == "imm-cv-ct" {
             validate_imm_fields(
                 t.imm_turn_rate_rad_s,
@@ -3998,6 +4047,9 @@ mod tests {
             imm_turn_rate_rad_s: 0.05,
             imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
             imm_initial_mode_probabilities: [0.9, 0.1],
+            // DN-29 §5: a well-formed figure, distinct from the default, so a test using
+            // this helper is exercising DN-24's rules rather than the noise value itself.
+            measurement_noise_var: [625.0, 3600.0, 22500.0],
             promoted,
             validated_by: None,
         }
@@ -4033,6 +4085,24 @@ mod tests {
             b.operating_profile(),
             Some(gungnir_model::MissionProfile::new("air-defence"))
         );
+    }
+
+    /// **DN-29 §5: unlike the `imm-cv-ct` fields, every filter selection is held to
+    /// this rule.** A zero or negative axis states no error, which
+    /// `PipelineSettings::new_filter` would otherwise build a measurement-noise matrix
+    /// from silently.
+    #[test]
+    fn a_non_positive_measurement_noise_axis_is_refused_regardless_of_filter_selection() {
+        let mut bad = candidate("air-defence", "imm baseline", true);
+        bad.filter_selection = "kf-cv".into();
+        bad.measurement_noise_var = [625.0, 0.0, 22500.0];
+        let b = with_profiles(&["air-defence"], vec![bad], None);
+        match validate(&b) {
+            Err(ConfigError::Invalid(m)) => {
+                assert!(m.contains("measurement_noise_var.north"), "{m}");
+            }
+            other => panic!("a zero measurement-noise axis was accepted: {other:?}"),
+        }
     }
 
     /// **DN-28 §5: a file this function accepts must never be one `Imm::new` refuses.**
@@ -4161,6 +4231,7 @@ mod tests {
             imm_turn_rate_rad_s: 0.05,
             imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
             imm_initial_mode_probabilities: [0.9, 0.1],
+            measurement_noise_var: [625.0, 3600.0, 22500.0],
         });
         match validate(&b) {
             Err(ConfigError::Invalid(m)) => assert!(m.contains("mutually exclusive"), "{m}"),
@@ -4216,6 +4287,7 @@ mod tests {
                 imm_turn_rate_rad_s: 0.05,
                 imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
                 imm_initial_mode_probabilities: [0.9, 0.1],
+                measurement_noise_var: [625.0, 3600.0, 22500.0],
             }),
             ..ConfigBaseline::default()
         };
