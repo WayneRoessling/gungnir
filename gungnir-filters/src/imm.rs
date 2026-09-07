@@ -161,7 +161,11 @@ where
 /// See the module documentation for the recursion and for the oracle this row is
 /// gated against.
 pub struct Imm<const N: usize, const M: usize> {
-    modes: Vec<Box<dyn ModeFilter<N, M>>>,
+    // `+ Send`: `gungnir-fusion-async` (DN-28) holds a `TrackFilter` across an await
+    // point in a spawned task, and `tokio::spawn` requires the whole future -- so
+    // everything inside it -- to be `Send`. Every `ModeFilter` this crate provides
+    // (`KalmanFilter`) already is, so this costs nothing here and is load-bearing there.
+    modes: Vec<Box<dyn ModeFilter<N, M> + Send>>,
     /// Row-major `modes × modes`; `transition[i * n + j]` is `P(mode j now | mode i before)`.
     transition: Vec<f64>,
     mode_probabilities: Vec<f64>,
@@ -208,7 +212,7 @@ impl<const N: usize, const M: usize> Imm<N, M> {
     /// [`FilterError::MalformedModeProbabilities`] on the same grounds for the initial
     /// probabilities.
     pub fn new(
-        modes: Vec<Box<dyn ModeFilter<N, M>>>,
+        modes: Vec<Box<dyn ModeFilter<N, M> + Send>>,
         mode_probabilities: &[f64],
         transition: &[Vec<f64>],
     ) -> Result<Self, FilterError> {
@@ -307,6 +311,37 @@ impl<const N: usize, const M: usize> Imm<N, M> {
     #[must_use]
     pub fn covariance(&self) -> &SMatrix<f64, N, N> {
         &self.p
+    }
+
+    /// Innovation covariance `S = H P Hᵀ + R` for the *combined* estimate, under a
+    /// linear measurement `h` with additive noise `r` common to every mode.
+    ///
+    /// `Imm` carries no `H`/`R` of its own -- each mode's internal filter already has
+    /// its own copy, and [`ModeFilter`] deliberately does not expose it (module
+    /// documentation: "the operations mixing needs and nothing else") -- so a caller
+    /// gating this filter passes the same measurement model it built the modes with.
+    ///
+    /// **This gates against the combined covariance, spread term included** (see
+    /// [`Imm::covariance`]'s documentation): during a mode disagreement the spread
+    /// widens `S`, which widens the gate at exactly the moment a manoeuvre makes the
+    /// single-mode filters disagree about where the target is. `docs/design/DN-28-imm-in-the-pipeline.md`
+    /// §3 raises this as a live question for a reviewer rather than a settled tuning
+    /// choice: it is probably the right behaviour and it is also a real change in what
+    /// "the gate" means relative to a track running a plain linear filter.
+    #[must_use]
+    pub fn innovation_covariance(
+        &self,
+        h: &SMatrix<f64, M, N>,
+        r: &SMatrix<f64, M, M>,
+    ) -> SMatrix<f64, M, M> {
+        h * self.p * h.transpose() + r
+    }
+
+    /// Innovation (measurement residual) `y = z - H x` for the combined estimate, under
+    /// the same `h` as [`Imm::innovation_covariance`].
+    #[must_use]
+    pub fn innovation(&self, z: &SVector<f64, M>, h: &SMatrix<f64, M, N>) -> SVector<f64, M> {
+        z - h * self.x
     }
 
     /// The estimate of one mode, for a consumer that needs the mixture rather than its
@@ -592,6 +627,45 @@ mod tests {
         assert!(
             imm.covariance().trace() > average.trace(),
             "the combined covariance did not include the between-mode spread"
+        );
+    }
+
+    /// `innovation`/`innovation_covariance` (DN-28 §3) read the combined `(x, P)`, not
+    /// a mode's own: `y = z - Hx` and `S = H P Hᵀ + R` against [`Imm::state`] and
+    /// [`Imm::covariance`] exactly.
+    #[test]
+    fn innovation_and_innovation_covariance_use_the_combined_estimate() {
+        let imm = cv_ct_imm(SVector::<f64, 6>::new(10.0, -5.0, 3.0, 1.0, 2.0, 0.0));
+        let h = position_h();
+        let r = SMatrix::<f64, 3, 3>::identity() * 25.0;
+        let z = SVector::<f64, 3>::new(12.0, -4.0, 4.0);
+
+        let expected_y = z - h * imm.state();
+        assert_eq!(imm.innovation(&z, &h), expected_y);
+
+        let expected_s = h * imm.covariance() * h.transpose() + r;
+        assert_eq!(imm.innovation_covariance(&h, &r), expected_s);
+    }
+
+    /// The gating question DN-28 §3 raises for a reviewer, pinned as a fact about the
+    /// code rather than left implicit: a mode disagreement widens the combined
+    /// covariance ([`disagreement_between_modes_widens_the_combined_covariance`]), and
+    /// that same widening reaches the gate through `innovation_covariance`.
+    #[test]
+    fn mode_disagreement_widens_the_gate_too() {
+        let mut agreeing = cv_ct_imm(SVector::<f64, 6>::new(0.0, 0.0, 100.0, 0.0, 0.0, 0.0));
+        let mut turning = cv_ct_imm(SVector::<f64, 6>::new(0.0, 0.0, 100.0, 100.0, 0.0, 0.0));
+        let h = position_h();
+        let r = SMatrix::<f64, 3, 3>::identity() * 25.0;
+        for _ in 0..10 {
+            agreeing.predict(1.0);
+            turning.predict(1.0);
+        }
+        assert!(
+            turning.innovation_covariance(&h, &r).trace()
+                > agreeing.innovation_covariance(&h, &r).trace(),
+            "a manoeuvring target's mode disagreement should widen the gate, not just the \
+             reported covariance"
         );
     }
 

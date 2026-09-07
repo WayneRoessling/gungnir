@@ -533,6 +533,18 @@ pub struct TrackingProfileConfig {
     pub name: String,
     pub filter_selection: String,
     pub gate_threshold: f64,
+    /// The coordinated-turn mode's fixed turn rate, radians/second (DN-28 §5). Ignored,
+    /// and not validated, unless `filter_selection` is `"imm-cv-ct"` -- see `validate`.
+    #[serde(default)]
+    pub imm_turn_rate_rad_s: f64,
+    /// Row-major over `[constant-velocity, coordinated-turn]`, each row summing to one
+    /// (DN-28 §5). Ignored unless `filter_selection` is `"imm-cv-ct"`.
+    #[serde(default)]
+    pub imm_mode_transition: [[f64; 2]; 2],
+    /// Over the same order, summing to one (DN-28 §5). Ignored unless `filter_selection`
+    /// is `"imm-cv-ct"`.
+    #[serde(default)]
+    pub imm_initial_mode_probabilities: [f64; 2],
     /// The one candidate per profile that is in force when the console opens.
     ///
     /// Exactly one per declared profile: zero means the deployment cannot say what is
@@ -566,6 +578,15 @@ pub struct TrackingConfig {
     pub filter_selection: String,
     /// Chi-square gate threshold; must be finite and positive.
     pub gate_threshold: f64,
+    /// The `"imm-cv-ct"` selection's own fields (DN-28 §5); see
+    /// [`TrackingProfileConfig`]'s fields of the same names for what each means and
+    /// when it is validated.
+    #[serde(default)]
+    pub imm_turn_rate_rad_s: f64,
+    #[serde(default)]
+    pub imm_mode_transition: [[f64; 2]; 2],
+    #[serde(default)]
+    pub imm_initial_mode_probabilities: [f64; 2],
 }
 
 /// Which services-layer backend the desktop uses (ARCHITECTURE.md §8.2).
@@ -983,6 +1004,9 @@ impl ConfigBaseline {
                     config: TrackingConfig {
                         filter_selection: c.filter_selection.clone(),
                         gate_threshold: c.gate_threshold,
+                        imm_turn_rate_rad_s: c.imm_turn_rate_rad_s,
+                        imm_mode_transition: c.imm_mode_transition,
+                        imm_initial_mode_probabilities: c.imm_initial_mode_probabilities,
                     },
                     promoted: c.promoted,
                     validated_by: c.validated_by.clone(),
@@ -2181,6 +2205,17 @@ fn validate_profiles(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 candidate.name, candidate.profile
             )));
         }
+        if candidate.filter_selection == "imm-cv-ct" {
+            validate_imm_fields(
+                candidate.imm_turn_rate_rad_s,
+                candidate.imm_mode_transition,
+                candidate.imm_initial_mode_probabilities,
+                &format!(
+                    "candidate {:?} in profile {:?}",
+                    candidate.name, candidate.profile
+                ),
+            )?;
+        }
     }
 
     for profile in &baseline.mission_profiles {
@@ -2204,6 +2239,63 @@ fn validate_profiles(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             ))
         }
         None => {}
+    }
+    Ok(())
+}
+
+/// Mirrors `gungnir_filters::imm::Imm::new`'s own tolerance exactly (DN-28 §5): a file
+/// this module accepts must never be one `Imm::new` refuses at pipeline-construction
+/// time, and this crate sits below `gungnir-filters` and cannot import the constant to
+/// guarantee that structurally, so it is restated here instead.
+const IMM_STOCHASTIC_TOLERANCE: f64 = 1e-9;
+
+/// The `"imm-cv-ct"` selection's own fields, validated against the same rules
+/// `gungnir_filters::imm::Imm::new` refuses on (DN-28 §5): a transition row or the
+/// initial probabilities outside `[0, 1]` or not summing to one. Called only when a
+/// candidate's `filter_selection` is `"imm-cv-ct"` -- these fields are meaningless for
+/// every other selection and are not validated for one.
+///
+/// # Errors
+///
+/// [`ConfigError::Invalid`], naming `what` (the candidate or the legacy `tracking`
+/// field) and which rule failed.
+fn validate_imm_fields(
+    turn_rate_rad_s: f64,
+    mode_transition: [[f64; 2]; 2],
+    initial_mode_probabilities: [f64; 2],
+    what: &str,
+) -> Result<(), ConfigError> {
+    if !turn_rate_rad_s.is_finite() {
+        return Err(ConfigError::Invalid(format!(
+            "{what} selects imm-cv-ct with a non-finite turn rate"
+        )));
+    }
+    for row in mode_transition {
+        if row.iter().any(|v| !v.is_finite() || *v < 0.0 || *v > 1.0) {
+            return Err(ConfigError::Invalid(format!(
+                "{what}'s imm-cv-ct mode transition matrix has an entry outside [0, 1]"
+            )));
+        }
+        let sum: f64 = row.iter().sum();
+        if (sum - 1.0).abs() > IMM_STOCHASTIC_TOLERANCE {
+            return Err(ConfigError::Invalid(format!(
+                "{what}'s imm-cv-ct mode transition matrix has a row that does not sum to one"
+            )));
+        }
+    }
+    if initial_mode_probabilities
+        .iter()
+        .any(|v| !v.is_finite() || *v < 0.0 || *v > 1.0)
+    {
+        return Err(ConfigError::Invalid(format!(
+            "{what}'s imm-cv-ct initial mode probabilities have an entry outside [0, 1]"
+        )));
+    }
+    let sum: f64 = initial_mode_probabilities.iter().sum();
+    if (sum - 1.0).abs() > IMM_STOCHASTIC_TOLERANCE {
+        return Err(ConfigError::Invalid(format!(
+            "{what}'s imm-cv-ct initial mode probabilities do not sum to one"
+        )));
     }
     Ok(())
 }
@@ -2531,6 +2623,7 @@ fn validate_security(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     validate_security(baseline)?;
     if baseline.version > SUPPORTED_CONFIG_VERSION {
@@ -2614,6 +2707,14 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             return Err(ConfigError::Invalid(
                 "tracking.filter_selection is empty".into(),
             ));
+        }
+        if t.filter_selection == "imm-cv-ct" {
+            validate_imm_fields(
+                t.imm_turn_rate_rad_s,
+                t.imm_mode_transition,
+                t.imm_initial_mode_probabilities,
+                "tracking",
+            )?;
         }
     }
     if let BackendConfig::Remote { endpoint } = &baseline.backend {
@@ -3890,6 +3991,13 @@ mod tests {
             name: name.into(),
             filter_selection: "imm-cv-ct".into(),
             gate_threshold: 9.21,
+            // A well-formed imm-cv-ct triple (DN-28 §5): this helper names the selection
+            // to exercise DN-24's promotion/rollback rules, not the IMM's own math, and
+            // an invalid triple here would fail validation for a reason unrelated to
+            // whatever a test using it is actually checking.
+            imm_turn_rate_rad_s: 0.05,
+            imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
+            imm_initial_mode_probabilities: [0.9, 0.1],
             promoted,
             validated_by: None,
         }
@@ -3925,6 +4033,49 @@ mod tests {
             b.operating_profile(),
             Some(gungnir_model::MissionProfile::new("air-defence"))
         );
+    }
+
+    /// **DN-28 §5: a file this function accepts must never be one `Imm::new` refuses.**
+    /// A candidate naming `imm-cv-ct` is validated against the same rules, so a
+    /// misconfigured transition matrix is refused at config load rather than reaching
+    /// `FusionPipeline::new_filter` at runtime.
+    #[test]
+    fn an_imm_cv_ct_candidate_with_a_transition_row_that_does_not_sum_to_one_is_refused() {
+        let mut bad = candidate("air-defence", "imm baseline", true);
+        bad.imm_mode_transition = [[0.9, 0.2], [0.03, 0.97]];
+        let b = with_profiles(&["air-defence"], vec![bad], None);
+        match validate(&b) {
+            Err(ConfigError::Invalid(m)) => {
+                assert!(m.contains("does not sum to one"), "{m}");
+            }
+            other => panic!("a malformed transition matrix was accepted: {other:?}"),
+        }
+    }
+
+    /// The same rule for the initial mode probabilities, and for an entry outside
+    /// `[0, 1]` rather than only a bad sum.
+    #[test]
+    fn an_imm_cv_ct_candidate_with_an_out_of_range_initial_probability_is_refused() {
+        let mut bad = candidate("air-defence", "imm baseline", true);
+        bad.imm_initial_mode_probabilities = [1.5, -0.5];
+        let b = with_profiles(&["air-defence"], vec![bad], None);
+        match validate(&b) {
+            Err(ConfigError::Invalid(m)) => assert!(m.contains("[0, 1]"), "{m}"),
+            other => panic!("an out-of-range probability was accepted: {other:?}"),
+        }
+    }
+
+    /// A candidate naming a different filter is not held to imm-cv-ct's rules at all:
+    /// these fields are meaningless for it and default to a row of zeros, which would
+    /// fail the same checks if they were ever applied.
+    #[test]
+    fn imm_fields_are_not_validated_for_a_non_imm_candidate() {
+        let mut cv = candidate("air-defence", "linear", true);
+        cv.filter_selection = "kf-cv".into();
+        cv.imm_mode_transition = [[0.0, 0.0], [0.0, 0.0]];
+        cv.imm_initial_mode_probabilities = [0.0, 0.0];
+        let b = with_profiles(&["air-defence"], vec![cv], None);
+        assert!(validate(&b).is_ok(), "{:?}", validate(&b));
     }
 
     /// **The rule the whole schema turns on.** A profile promoting nothing means the
@@ -4007,6 +4158,9 @@ mod tests {
         b.tracking = Some(TrackingConfig {
             filter_selection: "imm-cv-ct".into(),
             gate_threshold: 9.21,
+            imm_turn_rate_rad_s: 0.05,
+            imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
+            imm_initial_mode_probabilities: [0.9, 0.1],
         });
         match validate(&b) {
             Err(ConfigError::Invalid(m)) => assert!(m.contains("mutually exclusive"), "{m}"),
@@ -4059,6 +4213,9 @@ mod tests {
             tracking: Some(TrackingConfig {
                 filter_selection: "imm-cv-ct".into(),
                 gate_threshold: 9.21,
+                imm_turn_rate_rad_s: 0.05,
+                imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
+                imm_initial_mode_probabilities: [0.9, 0.1],
             }),
             ..ConfigBaseline::default()
         };

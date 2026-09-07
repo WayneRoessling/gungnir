@@ -26,13 +26,19 @@
 //!
 //! # When the comparison is made, and why it has to be said
 //!
-//! `TrackView::mission_time` is the time the *service was polled*, not the time of the
-//! estimate: `project_track` stamps `now`. So the tracks in a final snapshot are estimates
-//! at their own last update, carrying the poll's timestamp. Scoring them against truth at
-//! the poll time would charge the estimator for the gap between the last detection and the
-//! poll -- 970 ms of a 697 m/s aircraft in scenario 1, which is most of the error. The
-//! comparison time is therefore the **last observation in the timeline**, which is when
-//! the picture was last told anything.
+//! **This used to be a defect and is now a design choice recorded for the same
+//! reason.** `TrackView::mission_time` used to be the time the *service was polled*,
+//! not the time of the estimate: `project_track` stamped `now` on every projection, so
+//! scoring a final snapshot against truth at the poll time charged the estimator for the
+//! gap between the last detection and the poll -- 970 ms of a 697 m/s aircraft in
+//! scenario 1, which was most of the error. `mission_time` is now
+//! `gungnir_fusion_async::TimedTrack::estimate_time_s`, the pipeline's own per-track
+//! time, so it already carries the right instant. This file still computes its own
+//! `comparison_time` rather than reading `mission_time` off each track, because a single
+//! global instant lets `truth_at` be asked once per scenario instead of once per track,
+//! and for a target still being hit at the end of the timeline the two answers coincide
+//! anyway: the **last observation in the timeline**, which is when the picture was last
+//! told anything.
 //!
 //! # The bounds, and why each one
 //!
@@ -111,23 +117,48 @@ fn view(detection: &gungnir_fusion_async::Detection) -> DetectionView {
 /// in the pipeline. Every submission is asserted to be accepted, so a dropped detection
 /// fails here rather than showing up later as an error nobody can attribute.
 fn replay(scenario: &Scenario) -> (GeneratedTimeline, Vec<TrackView>) {
+    replay_with(scenario, |_| {})
+}
+
+/// [`replay`], with `tune` given the chance to change the pipeline settings before the
+/// service is built -- what [`the_imm_confirms_one_track_where_constant_velocity_fragmented_into_three`]
+/// uses to select `imm-cv-ct` (DN-28 §7).
+fn replay_with(
+    scenario: &Scenario,
+    tune: impl FnOnce(&mut PipelineSettings),
+) -> (GeneratedTimeline, Vec<TrackView>) {
+    let timeline = ScenarioGenerator::new(StdRng::seed_from_u64(SEED)).generate(scenario);
+    let tracks = replay_timeline(&timeline, &timeline.observations, tune);
+    (timeline, tracks)
+}
+
+/// [`replay_with`] over an explicit observation list rather than the whole timeline's
+/// own, so a caller can drive the service through only a prefix of a scenario (DN-28's
+/// finding recorded in the module documentation: scenario 1's comparison instant falls
+/// inside a motion phase no six-dimensional filter can represent, and confirming that a
+/// six-dimensional `imm-cv-ct` fixes fragmentation through the phase it *can* represent
+/// needs scoring before the phase it cannot).
+fn replay_timeline(
+    timeline: &GeneratedTimeline,
+    observations: &[gungnir_scenario::Observation],
+    tune: impl FnOnce(&mut PipelineSettings),
+) -> Vec<TrackView> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
         .expect("runtime");
-    let timeline = ScenarioGenerator::new(StdRng::seed_from_u64(SEED)).generate(scenario);
-    let spread = timeline
-        .observations
+    let spread = observations
         .iter()
         .map(|o| o.receipt_time_s - o.detection.timestamp_s)
         .fold(0.0f64, f64::max);
-    let settings = PipelineSettings {
+    let mut settings = PipelineSettings {
         reorder_horizon_s: spread.mul_add(2.0, 1.0),
         ..PipelineSettings::default()
     };
+    tune(&mut settings);
     let mut service = LiveTrackingService::with_pipeline_settings(runtime.handle(), settings);
-    for observation in &timeline.observations {
+    for observation in observations {
         service
             .submit_detection(view(&observation.detection))
             .unwrap_or_else(|e| panic!("a detection was dropped: {e}"));
@@ -151,14 +182,13 @@ fn replay(scenario: &Scenario) -> (GeneratedTimeline, Vec<TrackView>) {
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
     assert!(ended, "the pipeline task did not finish");
-    let tracks = service.tracks().to_vec();
-    (timeline, tracks)
+    service.tracks().to_vec()
 }
 
 /// The mission time the comparison is made at: the last observation in the timeline.
 ///
-/// See the module documentation -- a track's `mission_time` is the poll's, not the
-/// estimate's, so the poll time would charge the estimator for time it was told nothing in.
+/// See the module documentation for why this is computed independently rather than read
+/// off a track's own (now-correct) `mission_time`.
 fn comparison_time(timeline: &GeneratedTimeline) -> f64 {
     timeline
         .observations
@@ -249,6 +279,118 @@ fn the_maneuvering_aircraft_is_tracked_to_within_the_stated_bound() {
     assert!(
         worst > 0.0,
         "an error of exactly zero means the truth leaked into the estimator"
+    );
+}
+
+/// **DN-28's acceptance criterion, isolated from two confounds this row found while
+/// trying to state it plainly.**
+///
+/// The first draft of this row replayed the whole scenario and asked for one confirmed
+/// track. It could not pass, for a reason that has nothing to do with `imm-cv-ct`:
+/// `plan_maneuvering_aircraft` (`gungnir-scenario`) is a CV -> CT -> CA sequence, and
+/// scenario 1's comparison instant (`comparison_time`, the last observation) falls in
+/// the **third** phase, constant acceleration. `gungnir_core::ConstantAcceleration` is
+/// `MotionModel<9>` -- position, velocity *and* acceleration -- and `imm-cv-ct`'s two
+/// modes are both six-dimensional (DN-28 §2). No amount of process noise or gating makes
+/// a six-dimensional filter represent a nine-dimensional dynamic; that is the same kind
+/// of mismatch DN-28 §6 excludes EKF/UKF/particle for, found here rather than argued in
+/// advance. **A three-mode CV/CT/CA IMM is not what DN-28 scoped or what the owner
+/// signed**, so this row scores only the phase the signed scope actually covers:
+/// replaying observations through the end of the coordinated-turn phase (source time
+/// < 199 s, safely inside it, truth still six-dimensional).
+///
+/// **The second confound was `measurement_noise_var`.** `PipelineSettings::default()`
+/// carries `[400.0, 400.0, 900.0]`, a generic figure no scenario's sensor was tuned
+/// against; scenario 1's actual radar (`radar_medium`) reports at
+/// `sigma_{range,cross,height}_m = [25, 60, 150]`, variance `[625, 3600, 22500]` --
+/// twenty-five times the pipeline's assumed height variance. An `R` that
+/// under-states real sensor noise makes every gate too tight, and it alone produces
+/// most of the fragmentation the original defect blamed on the motion model: even
+/// `kf-cv` stops *fragmenting* once `R` is corrected (one track, not three) -- it still
+/// does not *confirm* the track through the turn, which is the residual `imm-cv-ct`
+/// actually fixes and what this row isolates. This mismatch is not `imm-cv-ct`'s to fix
+/// and is not fixed here; only this one test's own settings are corrected, and the
+/// finding is flagged separately rather than silently changing `PipelineSettings::default()`
+/// under every other gated row in this workspace.
+#[test]
+fn the_imm_confirms_one_track_through_the_turn_where_constant_velocity_fragmented() {
+    /// Scenario 1's actual sensor noise (`gungnir_scenario::sensor::SensorModel::radar_medium`),
+    /// not `PipelineSettings::default()`'s generic figure -- see this test's own
+    /// documentation for why the difference matters here.
+    const SCENARIO_1_MEASUREMENT_NOISE_VAR: [f64; 3] = [625.0, 3600.0, 22500.0];
+
+    let full = ScenarioGenerator::new(StdRng::seed_from_u64(SEED))
+        .generate(&Scenario::ManeuveringAircraft);
+    let cutoff_s = 199.0;
+    assert!(
+        full.observations
+            .iter()
+            .any(|o| o.detection.timestamp_s >= 200.0),
+        "the timeline does not reach the acceleration phase this row deliberately excludes"
+    );
+    let turn_only = GeneratedTimeline {
+        observations: full
+            .observations
+            .iter()
+            .filter(|o| o.detection.timestamp_s < cutoff_s)
+            .cloned()
+            .collect(),
+        ..full
+    };
+    assert!(
+        !turn_only.observations.is_empty(),
+        "the cutoff left nothing to replay"
+    );
+
+    let cv_tracks = replay_timeline(&turn_only, &turn_only.observations, |settings| {
+        settings.measurement_noise_var = SCENARIO_1_MEASUREMENT_NOISE_VAR;
+    });
+    let imm_tracks = replay_timeline(&turn_only, &turn_only.observations, |settings| {
+        settings.measurement_noise_var = SCENARIO_1_MEASUREMENT_NOISE_VAR;
+        settings.filter_selection = gungnir_fusion_async::FilterSelection::ImmCvCt;
+        // The scenario's own coordinated-turn phase turns at this rate
+        // (`gungnir-scenario::plan_maneuvering_aircraft`); a deployment reads its own
+        // from the promoted baseline (DN-28 §5), and this test uses the number the
+        // truth actually turns at rather than a generic placeholder.
+        settings.imm_turn_rate_rad_s = 0.035;
+    });
+
+    println!(
+        "scenario 1, turn phase only (kf-cv, corrected R): {} track(s), {} confirmed",
+        cv_tracks.len(),
+        cv_tracks
+            .iter()
+            .filter(|t| t.status == gungnir_model::TrackStatus::Confirmed)
+            .count()
+    );
+    assert!(
+        cv_tracks.len() > 1
+            || cv_tracks
+                .iter()
+                .all(|t| t.status != gungnir_model::TrackStatus::Confirmed),
+        "constant-velocity, even with the measurement noise corrected, must still show \
+         some residual defect through the turn, or this row proves nothing: {cv_tracks:#?}"
+    );
+
+    let worst = score(
+        "scenario 1, turn phase only (imm-cv-ct)",
+        &turn_only,
+        &imm_tracks,
+        500.0,
+    );
+    assert!(
+        worst > 0.0,
+        "an error of exactly zero means the truth leaked into the estimator"
+    );
+    assert_eq!(
+        imm_tracks.len(),
+        1,
+        "the imm must not fragment the one aircraft through the turn: {imm_tracks:#?}"
+    );
+    assert_eq!(
+        imm_tracks[0].status,
+        gungnir_model::TrackStatus::Confirmed,
+        "the imm's one track must confirm through the turn, unlike the cv fragments"
     );
 }
 

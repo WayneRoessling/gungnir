@@ -27,7 +27,9 @@ pub use gungnir_fusion_async::Detection;
 /// How the pipeline behind this service is tuned (GAP-053). Re-exported rather than
 /// making every host depend on `gungnir-fusion-async`: the hosts speak to the pipeline
 /// through this facade, which is the whole point of `ARCHITECTURE.md` §2.
-pub use gungnir_fusion_async::{PipelineSettings, UnsupportedFilter};
+pub use gungnir_fusion_async::{
+    FilterSelection, ImmBaselineFields, PipelineSettings, UnsupportedFilter,
+};
 pub use gungnir_model::{DetectionView, MissionTime, SensorId, TrackId, TrackStatus, TrackView};
 pub use registration::RegistrationLedger;
 
@@ -206,9 +208,6 @@ pub fn to_core_detection(d: &DetectionView) -> Option<Detection> {
     })
 }
 
-/// Project a core track into the canonical view. Classification is `Unknown` until
-/// `gungnir-identification` sets it; quality confidence is not yet produced by the
-/// core and is left at the default.
 /// Whether an estimate last reported at `last_reported` is stale at `now`.
 ///
 /// The one staleness rule in the system (GAP-012). PN-03 colours by
@@ -232,7 +231,22 @@ pub fn is_stale(
     limit_s > 0.0 && now.seconds_since(last_reported) > limit_s
 }
 
-pub fn project_track(track: &Track, now: MissionTime, provenance: &Provenance) -> TrackView {
+/// Project a core track into the canonical view, stamped with the time its state and
+/// covariance are actually current for. Classification is `Unknown` until
+/// `gungnir-identification` sets it; quality confidence is not yet produced by the core
+/// and is left at the default.
+///
+/// **`estimate_time` is not the caller's own clock.** It used to be: this function took
+/// `now` and stamped every projection with it, so `TrackView::mission_time` read as the
+/// time the estimate is *of* while actually carrying the time the service was last
+/// *asked* -- a track the pipeline had gone quiet on kept reading as freshly updated for
+/// as long as anyone kept polling. `estimate_time` is `gungnir_fusion_async::TimedTrack`'s
+/// own per-track time, so it changes only when the pipeline actually moves the track.
+pub fn project_track(
+    track: &Track,
+    estimate_time: MissionTime,
+    provenance: &Provenance,
+) -> TrackView {
     TrackView {
         id: track.id,
         status: track.status,
@@ -241,7 +255,7 @@ pub fn project_track(track: &Track, now: MissionTime, provenance: &Provenance) -
         classification: gungnir_model::Classification::Unknown,
         provenance: provenance.clone(),
         quality: gungnir_model::Quality::default(),
-        mission_time: now,
+        mission_time: estimate_time,
         releasability: gungnir_model::Releasability::default(),
     }
 }
@@ -272,16 +286,16 @@ pub struct LiveTrackingService {
     detection_tx: Option<Sender<gungnir_fusion_async::Submission>>,
     /// Where each sensor measures from, so an angular report can be placed at all.
     sensor_positions: SensorPositions,
-    track_rx: Receiver<Vec<Track>>,
+    track_rx: Receiver<Vec<gungnir_fusion_async::TimedTrack>>,
     pipeline_alive: bool,
     provenance: Provenance,
     /// The staleness policy in force (GAP-012). `Default` is a zero limit, which
     /// [`is_stale`] treats as "no rule configured" rather than "everything is stale".
     staleness: gungnir_model::StalenessSettings,
-    /// When the pipeline last reported each track, which is what staleness is measured
-    /// from. **Not the track's own timestamp**: the core `Track` carries none, and the
-    /// question is how long since this service last heard about the track, which it can
-    /// answer itself.
+    /// When this service last *heard about* each track, which is what staleness is
+    /// measured from. **Not the same clock as `TrackView::mission_time`**: that is the
+    /// pipeline's own estimate time carried on `TimedTrack`, and this is how long since
+    /// a poll last reported the track at all, which only this service can answer.
     last_reported: std::collections::HashMap<gungnir_model::TrackId, MissionTime>,
 }
 
@@ -305,7 +319,8 @@ impl LiveTrackingService {
     ) -> Self {
         let (detection_tx, detection_rx) =
             crossbeam_channel::unbounded::<gungnir_fusion_async::Submission>();
-        let (track_tx, track_rx) = crossbeam_channel::unbounded::<Vec<Track>>();
+        let (track_tx, track_rx) =
+            crossbeam_channel::unbounded::<Vec<gungnir_fusion_async::TimedTrack>>();
         runtime.spawn(gungnir_fusion_async::ingest_with(
             detection_rx,
             track_tx,
@@ -473,18 +488,34 @@ impl LiveTrackingService {
 
     /// Project a pipeline snapshot into views, deciding staleness for each track.
     ///
+    /// `now` decides staleness alone; each view's `mission_time` comes from its own
+    /// `TimedTrack::estimate_time_s` instead, which is what fixed the poll-time defect
+    /// (see [`project_track`]).
+    ///
     /// Public so the rule can be exercised without a pipeline behind it: the channel this
-    /// service polls is fed by a task that produces nothing today (GAP-011).
-    pub fn apply_snapshot(&mut self, snapshot: &[Track], now: MissionTime) {
-        for track in snapshot {
-            self.last_reported.insert(track.id, now);
+    /// service polls is fed by a task that produces nothing until the pipeline reports.
+    pub fn apply_snapshot(
+        &mut self,
+        snapshot: &[gungnir_fusion_async::TimedTrack],
+        now: MissionTime,
+    ) {
+        for timed in snapshot {
+            self.last_reported.insert(timed.track.id, now);
         }
         // A track absent from this snapshot keeps its last-reported time and ages.
         self.tracks = snapshot
             .iter()
-            .map(|t| {
-                let mut view = project_track(t, now, &self.provenance);
-                let last = self.last_reported.get(&t.id).copied().unwrap_or(now);
+            .map(|timed| {
+                let mut view = project_track(
+                    &timed.track,
+                    MissionTime(timed.estimate_time_s),
+                    &self.provenance,
+                );
+                let last = self
+                    .last_reported
+                    .get(&timed.track.id)
+                    .copied()
+                    .unwrap_or(now);
                 view.quality.is_stale = is_stale(last, now, None, &self.staleness);
                 view
             })
@@ -512,7 +543,7 @@ impl TrackingService for LiveTrackingService {
     }
 
     fn poll(&mut self, now: MissionTime) {
-        let mut latest: Option<Vec<Track>> = None;
+        let mut latest: Option<Vec<gungnir_fusion_async::TimedTrack>> = None;
         loop {
             match self.track_rx.try_recv() {
                 Ok(snapshot) => latest = Some(snapshot),
@@ -531,12 +562,13 @@ impl TrackingService for LiveTrackingService {
         if let Some(snapshot) = latest {
             self.apply_snapshot(&snapshot, now);
         } else {
-            // No new snapshot: the tracks on screen age against the last report, so a
-            // pipeline that has gone quiet is drawn as quiet rather than as current.
+            // No new snapshot: only staleness ages against the last report. A track's
+            // `mission_time` stays exactly what it was -- the pipeline has not moved it,
+            // so bumping it to `now` here is the poll-time defect `project_track` used to
+            // have, reintroduced on this branch alone.
             for view in &mut self.tracks {
                 if let Some(last) = self.last_reported.get(&view.id).copied() {
                     view.quality.is_stale = is_stale(last, now, None, &self.staleness);
-                    view.mission_time = now;
                 }
             }
         }
@@ -606,6 +638,15 @@ mod tests {
         }
     }
 
+    /// A track paired with the estimate time a real pipeline snapshot would carry it
+    /// with, distinct from whatever `MissionTime` a test then polls at.
+    fn timed(id: u64, estimate_time_s: f64) -> gungnir_fusion_async::TimedTrack {
+        gungnir_fusion_async::TimedTrack {
+            track: track(id),
+            estimate_time_s,
+        }
+    }
+
     fn policy(default_s: f64) -> gungnir_model::StalenessSettings {
         gungnir_model::StalenessSettings {
             default_s,
@@ -624,7 +665,7 @@ mod tests {
             .expect("runtime");
         let mut svc = LiveTrackingService::new(runtime.handle()).with_staleness(policy(5.0));
 
-        svc.apply_snapshot(&[track(1)], MissionTime(10.0));
+        svc.apply_snapshot(&[timed(1, 10.0)], MissionTime(10.0));
         assert!(!svc.tracks()[0].quality.is_stale, "fresh on report");
 
         // Polled with nothing new for longer than the limit: stale, and still shown.
@@ -637,8 +678,42 @@ mod tests {
         assert!(svc.tracks()[0].quality.is_stale);
 
         // Reported again: fresh again.
-        svc.apply_snapshot(&[track(1)], MissionTime(17.0));
+        svc.apply_snapshot(&[timed(1, 17.0)], MissionTime(17.0));
         assert!(!svc.tracks()[0].quality.is_stale);
+        drop(svc);
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+    }
+
+    /// **The poll-time defect, pinned.** `TrackView::mission_time` is the estimate's own
+    /// time, not the caller's polling clock: a track reported with an estimate time far
+    /// behind the poll must keep reading as of that estimate, and a poll that hands back
+    /// no new snapshot at all must not move it either.
+    #[test]
+    fn mission_time_is_the_estimate_time_not_the_poll_time() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let mut svc = LiveTrackingService::new(runtime.handle());
+
+        // Reported at t = 10 with an estimate current for t = 9.03 -- the pipeline's own
+        // instant, well behind the poll's.
+        svc.apply_snapshot(&[timed(1, 9.03)], MissionTime(10.0));
+        assert_eq!(
+            svc.tracks()[0].mission_time,
+            MissionTime(9.03),
+            "mission_time must be the estimate's time, not the poll's"
+        );
+
+        // Polled again with nothing new from the pipeline: mission_time is unmoved,
+        // because the estimate itself has not changed. Only staleness may react.
+        svc.poll(MissionTime(20.0));
+        assert_eq!(
+            svc.tracks()[0].mission_time,
+            MissionTime(9.03),
+            "a poll with no new snapshot must not silently advance mission_time"
+        );
         drop(svc);
         runtime.shutdown_timeout(std::time::Duration::from_secs(1));
     }
@@ -720,14 +795,7 @@ mod tests {
             .enable_all()
             .build()
             .expect("runtime");
-        let track = Track {
-            id: gungnir_model::TrackId(1),
-            status: gungnir_model::TrackStatus::Confirmed,
-            state: nalgebra::SVector::zeros(),
-            covariance: nalgebra::SMatrix::identity(),
-            misses_since_update: 0,
-            hits: 3,
-        };
+        let track = timed(1, 1.0);
 
         let mut ungoverned = LiveTrackingService::new(runtime.handle());
         ungoverned.apply_snapshot(std::slice::from_ref(&track), MissionTime(1.0));
@@ -741,7 +809,8 @@ mod tests {
             profile: gungnir_model::MissionProfile("air-defence".into()),
             name: "kf baseline".into(),
         };
-        let settings = PipelineSettings::from_baseline(11.34, "kf-cv").expect("implemented");
+        let settings =
+            PipelineSettings::from_baseline(11.34, "kf-cv", &imm_fields()).expect("implemented");
         let mut governed = LiveTrackingService::with_pipeline_settings(runtime.handle(), settings)
             .with_algorithm_baseline(&id);
         governed.apply_snapshot(std::slice::from_ref(&track), MissionTime(1.0));
@@ -751,11 +820,40 @@ mod tests {
         );
 
         // A filter this build does not have is refused rather than substituted.
-        let err = PipelineSettings::from_baseline(11.34, "imm-cv-ct").expect_err("not built");
-        assert_eq!(err.selection, "imm-cv-ct");
+        let err =
+            PipelineSettings::from_baseline(11.34, "ekf", &imm_fields()).expect_err("not built");
+        assert_eq!(err.selection, "ekf");
         assert!(err.to_string().contains("does not implement"), "{err}");
 
         runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+    }
+
+    /// A well-formed placeholder: valid by `Imm::new`'s own rules, distinct from any
+    /// deployment's real numbers, and enough to prove `from_baseline` reads and carries
+    /// them rather than testing anything about a particular turn rate or transition.
+    fn imm_fields() -> gungnir_fusion_async::ImmBaselineFields {
+        gungnir_fusion_async::ImmBaselineFields {
+            turn_rate_rad_s: 0.05,
+            mode_transition: [[0.97, 0.03], [0.03, 0.97]],
+            initial_mode_probabilities: [0.9, 0.1],
+        }
+    }
+
+    /// **DN-28.** The default baseline names `imm-cv-ct`, and this is what closed the
+    /// gap between that name and `IMPLEMENTED_FILTERS`: it is accepted, the pipeline
+    /// selects it, and a track it produces carries the promoted baseline's identifier
+    /// exactly as the linear filter already did above.
+    #[test]
+    fn imm_cv_ct_is_implemented_and_selects_the_imm() {
+        let settings = PipelineSettings::from_baseline(11.34, "imm-cv-ct", &imm_fields())
+            .expect("DN-28: imm-cv-ct is implemented");
+        assert_eq!(
+            settings.filter_selection,
+            gungnir_fusion_async::FilterSelection::ImmCvCt
+        );
+        assert_eq!(settings.imm_turn_rate_rad_s, 0.05);
+        assert_eq!(settings.imm_mode_transition, [[0.97, 0.03], [0.03, 0.97]]);
+        assert_eq!(settings.imm_initial_mode_probabilities, [0.9, 0.1]);
     }
 
     #[test]

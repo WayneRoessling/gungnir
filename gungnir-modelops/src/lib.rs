@@ -244,6 +244,11 @@ mod tests {
             config: TrackingConfig {
                 filter_selection: filter.into(),
                 gate_threshold: 9.21,
+                // Inert here: this crate's own `validate` (unlike `gungnir-config`'s)
+                // does not read the imm-cv-ct fields at all.
+                imm_turn_rate_rad_s: 0.0,
+                imm_mode_transition: [[0.0; 2]; 2],
+                imm_initial_mode_probabilities: [0.0; 2],
             },
             state: PromotionState::Candidate,
             validated_by: None,
@@ -323,6 +328,9 @@ mod tests {
             name: name.into(),
             filter_selection: "imm-cv-ct".into(),
             gate_threshold: 9.21,
+            imm_turn_rate_rad_s: 0.0,
+            imm_mode_transition: [[0.0; 2]; 2],
+            imm_initial_mode_probabilities: [0.0; 2],
             promoted,
             validated_by: Some("oracle comparison 2026-09-05".into()),
         }
@@ -401,6 +409,9 @@ mod tests {
             tracking: Some(TrackingConfig {
                 filter_selection: "imm-cv-ct".into(),
                 gate_threshold: 9.21,
+                imm_turn_rate_rad_s: 0.0,
+                imm_mode_transition: [[0.0; 2]; 2],
+                imm_initial_mode_probabilities: [0.0; 2],
             }),
             ..ConfigBaseline::default()
         };
