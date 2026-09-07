@@ -262,6 +262,25 @@ enum HandoffError <<InformationElement>> {
 class GlobalEntityId <<InformationElement>> {
   pub u128
 }
+class LaydownId <<InformationElement>> {
+  pub String
+}
+class SensorPlacement <<InformationElement>> {
+  sensor: SensorId
+  position_enu: [f64; 3]
+  mode: SensorMode
+}
+class ResourcePlacement <<InformationElement>> {
+  resource: ResourceId
+  position_enu: [f64; 3]
+}
+class Laydown <<InformationElement>> {
+  id: LaydownId
+  intent: String
+  sensors: Vec<SensorPlacement>
+  resources: Vec<ResourcePlacement>
+  current: bool
+}
 enum SensorMode <<InformationElement>> {
   Standby
   Search
@@ -702,6 +721,11 @@ EffectorReport --> MissionTime
 EffectorReport --> MissionTime
 EffectorReport --> MissionTime
 HandoffError --> DecisionId
+SensorPlacement --> SensorId
+SensorPlacement --> SensorMode
+Laydown --> LaydownId
+Laydown --> SensorPlacement
+Laydown --> ResourcePlacement
 SensorCommand --> SensorMode
 SensorCommand --> AssetExtent
 DetectionView --> SensorId
