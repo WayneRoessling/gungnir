@@ -2,7 +2,7 @@
 
 Status: rendered by `tools/build_catalogue.py` from `catalogue-*.yaml` (version 2026-09-04) on 2026-09-04; do not edit by hand. One table per domain; per-platform detail pages with sources under `platforms/`. Every figure follows `sourcing-and-legal.md`; figures are published approximations organised by kinematic class for tracker testing, given as ranges. Speeds in m/s, altitudes in m, endurance in hours, range in km.
 
-## Air (reviewer: subject-matter reviewer (air defense), pending)
+## Air (reviewer: owner, acting as subject-matter reviewer (air defense), approved 2026-09-07)
 
 | Class | Platform | Side | Speed | Altitude (typical) | Endurance | Range | RCS | IR | Acoustic | Confidence |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -39,7 +39,7 @@ Status: rendered by `tools/build_catalogue.py` from `catalogue-*.yaml` (version 
 | Air-defense interceptor missile | [NASAMS (AIM-120 class) interceptor](platforms/nasams-amraam.md) | blue | 800 to 1400 | 0 to 15000 (200 to 10000) | 0.01 to 0.02 | 15 to 40 | small | high | loud | medium |
 | Air-defense interceptor missile | [S-300 and S-400 family interceptors (48N6 class)](platforms/s-400-interceptor.md) | red | 1200 to 2000 | 0 to 30000 (1000 to 25000) | 0.01 to 0.04 | 40 to 250 | small | high | loud | low |
 
-## Sea (reviewer: subject-matter reviewer (maritime), pending)
+## Sea (reviewer: owner, acting as subject-matter reviewer (maritime), approved 2026-09-07)
 
 | Class | Platform | Side | Speed | Altitude (typical) | Endurance | Range | RCS | IR | Acoustic | Confidence |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -54,7 +54,7 @@ Status: rendered by `tools/build_catalogue.py` from `catalogue-*.yaml` (version 
 | Amphibious, auxiliary, and civil traffic | [Fishing vessel and small craft (civil)](platforms/fishing-vessel.md) | civil | 0 to 12 | 0 | 6 to 240 | 20 to 500 | small | low | moderate | high |
 | Submarine, surfaced or snorkelling | [Kilo class submarine (surfaced or snorkelling)](platforms/kilo-surfaced.md) | red | 2 to 6 | 0 | 720 to 1080 | 6000 to 12000 | small | low | quiet | high |
 
-## Land (reviewer: subject-matter reviewer (land and fires), pending)
+## Land (reviewer: owner, acting as subject-matter reviewer (land and fires), approved 2026-09-07)
 
 | Class | Platform | Side | Speed | Altitude (typical) | Endurance | Range | RCS | IR | Acoustic | Confidence |
 |---|---|---|---|---|---|---|---|---|---|---|

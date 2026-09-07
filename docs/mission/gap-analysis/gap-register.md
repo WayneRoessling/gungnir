@@ -64,7 +64,7 @@ drafting agent's proposals for the owner and the engineering reviewer to confirm
 | GAP-074 | Usability test rounds and MOP-37 targets | Technical | CAP-5.9 | 3 | 10 | M | 30 | I3 | Plan 06 lead | In progress |
 | GAP-075 | Docking and multi-window | Technical | CAP-5.9 | 2 | 10 | M | 20 | I3 | UI engineer | Closed |
 | GAP-045 | Scenario replay through the live pipeline | Technical | CAP-5.2 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
-| GAP-046 | Test-track suite | Mission | CAP-5.2, CAP-5.10 | 4 | 8 | L | 32 | I2 | Plan 07 lead | In progress |
+| GAP-046 | Test-track suite | Mission | CAP-5.2, CAP-5.10 | 4 | 8 | L | 32 | I2 | Plan 07 lead | Closed |
 | GAP-076 | Test-track integration: fuzz corpus, benchmark inputs, end-to-end replay | Technical | CAP-5.2, CAP-5.10, CAP-6.7 | 3 | 9 | S | 27 | I2 | Services engineer | Closed |
 | GAP-077 | `gungnir-ml` crate, inference runtime sign-off, and the dependency edge | Technical | CAP-2.6, CAP-5.7 | 2 | 7 | L | 14 | I4 | Services engineer | Open |
 | GAP-078 | Model manifests as `gungnir-modelops` baselines | Technical | CAP-5.7 | 3 | 1 | M | 3 | I4 | Services engineer | Open |
@@ -794,12 +794,12 @@ Counts: 94 gaps, 3 mission, 91 technical; 1 already covered by a plan in `../../
 
 - Type: Mission.
 - Capability: CAP-5.2 Replay and rehearse; CAP-5.10 Performance budgets.
-- Description: **The integration half is done 2026-09-06** (GAP-076 closed): the sample sets are fed to the fuzz corpus and through the whole-pipeline replay. What remains is the subject-matter review of the domain tables, which is a person's judgement and not a coding task. **A Rust-generated set replays 2026-09-06**: `gungnir-ingest/tests/generated_set_replays.rs` generates TT-02 in the workspace and replays it through the gateway under its own sensor list. Integration is done as far as ingest; the subject-matter review remains. **The Rust generator landed 2026-09-06** (GAP-016 closed): `gungnir_scenario::tracks::generate` reproduces every committed sample set byte for byte, so a TT set is produced from the workspace and the reference generator is the oracle rather than the only producer. What remains is the integration (GAP-076) and the subject-matter review of the vehicle data. Plan 07 delivered the catalogue (58 platforms in 30 kinematic classes), the class profiles, the sensor models, the scenario library TT-01 to TT-10, the data format, a reference generator, and ten validated sample sets on 2026-09-04. What remains is the Rust generator, the integration, and subject-matter review of the vehicle data.
-- Evidence: `docs/test-tracks/README.md`; `testdata/tracks/samples/`.
+- Description: **Closed 2026-09-07: the owner reviewed and approved all three domain tables.** Acting as the subject-matter reviewer for each domain -- air defense, land and fires, maritime -- the owner vetted `vehicle-catalogue.md` and approved it; `catalogue-air.yaml`, `catalogue-land.yaml` and `catalogue-sea.yaml` each carry the approval and the date in their `reviewer` field, and `tools/build_catalogue.py` renders it into the table heading. Review does not remove a figure's source or confidence mark and was never meant to: those record where a number came from, not whether it has been checked, and the two questions stay separate. **The integration half was done 2026-09-06** (GAP-076 closed): the sample sets are fed to the fuzz corpus and through the whole-pipeline replay. **A Rust-generated set replays 2026-09-06**: `gungnir-ingest/tests/generated_set_replays.rs` generates TT-02 in the workspace and replays it through the gateway under its own sensor list. **The Rust generator landed 2026-09-06** (GAP-016 closed): `gungnir_scenario::tracks::generate` reproduces every committed sample set byte for byte, so a TT set is produced from the workspace and the reference generator is the oracle rather than the only producer. Plan 07 delivered the catalogue (58 platforms in 30 kinematic classes), the class profiles, the sensor models, the scenario library TT-01 to TT-10, the data format, a reference generator, and ten validated sample sets on 2026-09-04.
+- Evidence: `docs/test-tracks/README.md`; `docs/test-tracks/vehicle-catalogue.md`; `docs/test-tracks/catalogue-{air,land,sea}.yaml`; `testdata/tracks/samples/`.
 - Severity: 4. Reach: 8 threads. Effort: L. Priority: 32.
-- Impact: Until the Rust generator lands, representative data comes only from the reference generator outside the workspace, and no full-scale set feeds the benchmarks.
-- Closing action: Integrate the sample sets (GAP-076) and have a subject-matter reviewer vet each domain table; the generator port is done.
-- Target: I2. Owner: Plan 07 lead. Status: In progress.
+- Impact: Until reviewed, representative data had no subject-matter check behind it and no figure could be treated as authoritative; that gap is now closed for all three domains.
+- Closing action: Closed.
+- Target: I2. Owner: Plan 07 lead. Status: Closed.
 - Reference: `../../plans/07-test-track-suite.md`.
 - Depends on: GAP-016.
 
