@@ -161,6 +161,8 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-063 Interface conformance suite | CAP-7.1, CAP-7.2 | 3 | M | I4 | `../../verification-capability-table.md` §2, cross-layer interop row |
 | GAP-067 Operational-readiness verification | CAP-5.7 | 4 | L | I3 | `docs/architecture.md` |
 | GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | CAP-6.5 | 4 | M | I2 | `docs/release-governance.md`; `deny.toml` |
+| GAP-092 The journal budget's debug cost was attributed to runner I/O; it is the encode | CAP-5.10 | 2 | S | I2 | `../../performance-budgets.md` |
+| GAP-093 Gate 6 never saves a baseline, so it compares nothing and cannot fail | CAP-5.10 | 3 | S | I2 | `.github/workflows/bench-regression.yml` |
 
 ## Integration gaps
 

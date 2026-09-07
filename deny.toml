@@ -7,7 +7,82 @@ all-features = false
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+
+# Every entry here is an acceptance with a reason and a condition, not a mute. An entry
+# whose condition stops being true is a defect, and the test named in it is what makes
+# that visible rather than a matter of memory.
+ignore = [
+    # RUSTSEC-2026-0194 (quadratic run time checking a start tag for duplicate attribute
+    # names) and RUSTSEC-2026-0195 (unbounded namespace-declaration allocation in
+    # `NsReader`), both denial of service, both in `quick-xml 0.36.2`.
+    #
+    # Accepted 2026-09-07 by the owner, under GAP-094, on this condition and no other:
+    # **the vulnerable parser is not reachable.** `quick-xml` enters the graph only
+    # through `vtkio`, and only for the XML VTK family; `gungnir-data` has only ever read
+    # legacy `POLYDATA`, and `scientific::refuse_xml_vtk` now refuses the XML family by
+    # extension *and* by content before `Vtk::import` opens the file.
+    #
+    # The condition is tested, not asserted: `gungnir-data/tests/vtk_gltf.rs`, module
+    # `xml_vtk_is_refused`, covers all ten XML extensions, XML content hiding under a
+    # `.vtk` name, and that a legacy file still loads. **If those tests are removed or
+    # weakened, these two entries are no longer honest and must go.**
+    #
+    # Both are fixed in `quick-xml >= 0.41.0` and no `vtkio` release depends on a fixed
+    # version; the entries come out when one does. The related
+    # RUSTSEC-2026-0041 (`lz4_flex`, uninitialised-memory disclosure) needed no entry: the
+    # move to `vtkio 0.7.0-rc2` on the same day brought `lz4_flex 0.11.6`, which is the
+    # fixed version, and that one was a real vulnerability on a reachable path.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+
+    # ---------------------------------------------------------------------------------
+    # Unmaintained crates, accepted 2026-09-07 by the owner under GAP-094.
+    #
+    # **None of these is a vulnerability.** They are advisories that a crate is no longer
+    # maintained, which matters because a future vulnerability in one would have no
+    # upstream fix. Every one reports "No safe upgrade is available", so the choice is to
+    # tolerate them with a reason or to drop the dependency that brings them -- and five
+    # of the six arrive through the UI stack that `docs/agentic-coding-standards.md` §2.9
+    # governs as a pinned set, where dropping one crate means changing the stack.
+    #
+    # Each entry names what brings it in, because "unmaintained" without provenance is
+    # not something a reviewer can act on.
+
+    # `ansi_term` 0.12.1, via `rs1090`, which is a **dev-dependency** of `gungnir-interop`
+    # and reaches no shipped binary. Terminal colour formatting in a decoder's own test
+    # tooling. The weakest exposure of the six.
+    "RUSTSEC-2021-0139",
+
+    # `cgmath` 0.18.0, via `three-d` 0.18.2, via `gungnir-viewport3d`. The maths types the
+    # 3D scene's own API is written in; it is not reachable except through `three-d`, and
+    # replacing it means replacing `three-d` (D-19 and the UI stack pin).
+    "RUSTSEC-2026-0196",
+
+    # `instant` 0.1.13, via `winit` 0.28.7, via `three-d`. A wasm time shim superseded by
+    # `web-time`; this workspace has no wasm target, so on every platform it builds for it
+    # is a thin wrapper over `std::time::Instant`. It leaves when `three-d` updates
+    # `winit`.
+    "RUSTSEC-2024-0384",
+
+    # `paste` 1.0.15, via `accesskit_windows` -> `accesskit_winit` -> `egui-winit`. A
+    # **proc-macro**: it runs at compile time and no part of it is linked into a shipped
+    # binary. It is in the accessibility layer egui uses on Windows.
+    "RUSTSEC-2024-0436",
+
+    # `rustls-pemfile` 2.2.0. **This one is ours, and it is the only entry here with a
+    # real exit.** It is a direct dependency of `gungnir-api` and `gungnir-remote`, used
+    # in four places -- `certs` and `private_key` in `gungnir-api/src/tls.rs` and the same
+    # two across the mutual-TLS test harnesses -- to read PEM without logging what it
+    # read. Its functionality moved into `rustls-pki-types`, so the migration is ours to
+    # make rather than an upstream's to release, and it is recorded as a follow-up on
+    # GAP-094 rather than being pretended away by this entry.
+    "RUSTSEC-2025-0134",
+
+    # `ttf-parser` 0.25.1, via `owned_ttf_parser` -> `ab_glyph` -> `epaint`, which is
+    # egui's own text stack. It parses font files the application ships, not files that
+    # arrive from anywhere, and it leaves when egui updates.
+    "RUSTSEC-2026-0192",
+]
 
 # The workspace is AGPL-3.0-or-later, so every entry below must be one-way compatible
 # *into* AGPL-3.0. All of them are: the permissive licenses unconditionally, Apache-2.0

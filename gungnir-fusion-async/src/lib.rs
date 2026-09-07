@@ -74,6 +74,41 @@ pub struct BearingDetection {
     pub elevation_variance_rad2: Option<f64>,
 }
 
+/// What a producer hands the ingest task: a position, or a direction with no range.
+///
+/// **Two variants rather than one, for the reason `BearingDetection` is a separate type
+/// at all** (DN-27 §5 rule 1). A bearing may refine an existing track and may not start
+/// one, and the pipeline enforces that through two different entry points --
+/// [`FusionPipeline::push`] and [`FusionPipeline::offer_bearing`]. If the channel carried
+/// one type, the loop below would have to decide which entry point to use by inspecting a
+/// field, and a wrong branch there would put a bearing into the reorder buffer where it
+/// would initiate a track at a range nobody measured.
+///
+/// The sensor's position is resolved by the *producer*, not here: `DetectionView` carries
+/// a `SensorId` and the deployment's sensor list is the thing that knows where that sensor
+/// is, which is `gungnir-tracking-service`'s business and not this task's.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Submission {
+    /// A measurement that determines a position. Enters the reorder buffer and may
+    /// initiate a track.
+    Position(Detection),
+    /// A direction with no range. Offered to the tracker under DN-27 §5's three rules,
+    /// and never able to initiate.
+    Bearing(BearingDetection),
+}
+
+impl From<Detection> for Submission {
+    fn from(d: Detection) -> Self {
+        Submission::Position(d)
+    }
+}
+
+impl From<BearingDetection> for Submission {
+    fn from(b: BearingDetection) -> Self {
+        Submission::Bearing(b)
+    }
+}
+
 /// How often the ingest loop re-polls its inbound channel while idle.
 const IDLE_POLL: Duration = Duration::from_millis(10);
 
@@ -109,7 +144,7 @@ pub const PIPELINE_IMPLEMENTED: bool = true;
 /// The inbound channel is a `crossbeam` channel because it is the boundary with the
 /// synchronous render/UI thread (§2.2); it is polled with `try_recv` plus a yield
 /// rather than a blocking `recv`, which would stall the executor thread.
-pub async fn ingest(rx: Receiver<Detection>, out: Sender<Vec<Track>>) {
+pub async fn ingest(rx: Receiver<Submission>, out: Sender<Vec<Track>>) {
     ingest_with(rx, out, PipelineSettings::default()).await;
 }
 
@@ -120,7 +155,7 @@ pub async fn ingest(rx: Receiver<Detection>, out: Sender<Vec<Track>>) {
 /// emitted before the task stops. Dropping it would lose the last horizon of every
 /// session, and a replay would then end short of the recording it replayed.
 pub async fn ingest_with(
-    rx: Receiver<Detection>,
+    rx: Receiver<Submission>,
     out: Sender<Vec<Track>>,
     settings: PipelineSettings,
 ) {
@@ -131,11 +166,45 @@ pub async fn ingest_with(
     );
     loop {
         match rx.try_recv() {
-            Ok(det) => {
+            Ok(Submission::Position(det)) => {
                 if let Err(err) = pipeline.push(det) {
                     tracing::warn!(%err, "detection refused by the reorder buffer");
                 }
                 if pipeline.run_ready() > 0 && out.send(pipeline.snapshot()).is_err() {
+                    tracing::warn!("track consumer is gone; stopping the pipeline");
+                    return;
+                }
+            }
+            Ok(Submission::Bearing(bearing)) => {
+                // DN-27 §5: a bearing may update a track, may not initiate one, and is
+                // retained and shown when it updates nothing. All three are the
+                // pipeline's rules; this loop only reports which happened, because an
+                // operator asking why a direction did not become a track needs the
+                // answer to have been recorded somewhere.
+                match pipeline.offer_bearing(&bearing) {
+                    BearingOutcome::Updated(track) => {
+                        tracing::debug!(
+                            sensor = bearing.sensor_id,
+                            ?track,
+                            "a bearing refined a track"
+                        );
+                    }
+                    BearingOutcome::Retained { until_s } => {
+                        tracing::debug!(
+                            sensor = bearing.sensor_id,
+                            until_s,
+                            "a bearing matched nothing and is retained"
+                        );
+                    }
+                    BearingOutcome::Refused(why) => {
+                        tracing::warn!(sensor = bearing.sensor_id, ?why, "a bearing was refused");
+                    }
+                }
+                // A retained bearing has a stated lifetime and something has to end it.
+                // Doing it here rather than on a timer keeps it on the same clock the
+                // bearings themselves carry.
+                pipeline.expire_bearings(bearing.timestamp_s);
+                if out.send(pipeline.snapshot()).is_err() {
                     tracing::warn!("track consumer is gone; stopping the pipeline");
                     return;
                 }

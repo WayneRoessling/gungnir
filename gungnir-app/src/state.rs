@@ -972,6 +972,17 @@ fn recover_requirements(
 /// The gateway with its allow-list and radar adapters (GAP-001), the radar feeds' service
 /// sinks (GAP-064), and the endpoint transport (GAP-040) trusting what the baseline pins
 /// (GAP-060). Split from the constructor for length; every alert it pushes says which.
+/// The sensor positions the tracker needs to place an angular report (GAP-001, DN-27 §4).
+///
+/// Built from the baseline's own sensor list, which is where a deployment states where
+/// each sensor is. Without it every bearing and every range-azimuth-elevation report is
+/// refused, which is what happened until 2026-09-07.
+fn sensor_positions(config: &ConfigBaseline) -> gungnir_tracking_service::SensorPositions {
+    gungnir_tracking_service::SensorPositions::from_sensors(
+        config.sensors.iter().map(|s| (s.id, s.position)),
+    )
+}
+
 fn build_ingest(
     config: &ConfigBaseline,
     runtime: &tokio::runtime::Handle,
@@ -1083,8 +1094,9 @@ fn tracking_service(
 ) -> LiveTrackingService {
     let _ = alerts;
     let staleness = config.policy.staleness.clone();
-    let service =
-        LiveTrackingService::with_pipeline_settings(runtime, pipeline).with_staleness(staleness);
+    let service = LiveTrackingService::with_pipeline_settings(runtime, pipeline)
+        .with_staleness(staleness)
+        .with_sensor_positions(sensor_positions(config));
     match applied_baseline(
         gungnir_modelops::InMemoryModelRegistry::from_baseline(config)
             .ok()

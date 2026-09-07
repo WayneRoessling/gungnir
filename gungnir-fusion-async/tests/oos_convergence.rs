@@ -29,7 +29,9 @@
 //! async run refused nothing (`too_late == 0`) and accepted every detection, and a
 //! second test proves the refusal path works by pushing a detection past the horizon.
 
-use gungnir_fusion_async::{ingest_with, run_batch, Detection, FusionPipeline, PipelineSettings};
+use gungnir_fusion_async::{
+    ingest_with, run_batch, Detection, FusionPipeline, PipelineSettings, Submission,
+};
 use gungnir_track::{Track, TrackStatus};
 use nalgebra::SVector;
 
@@ -154,12 +156,12 @@ async fn out_of_order_arrival_converges_on_the_offline_batch() {
         "both tracks confirm in the batch run: {batch:#?}"
     );
 
-    let (detection_tx, detection_rx) = crossbeam_channel::unbounded::<Detection>();
+    let (detection_tx, detection_rx) = crossbeam_channel::unbounded::<Submission>();
     let (track_tx, track_rx) = crossbeam_channel::unbounded::<Vec<Track>>();
     let task = tokio::spawn(ingest_with(detection_rx, track_tx, settings));
     for detection in arrival_order(&detections) {
         detection_tx
-            .send(detection)
+            .send(Submission::Position(detection))
             .expect("the pipeline is running");
     }
     // Closing the inbound channel is the end of the stream: the task flushes what is
