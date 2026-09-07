@@ -27,6 +27,14 @@ fn candidate(profile: &str, name: &str, promoted: bool) -> TrackingProfileConfig
         name: name.into(),
         filter_selection: "imm-cv-ct".into(),
         gate_threshold: 9.21,
+        // DN-28 §5: a well-formed triple, since this fixture names imm-cv-ct to
+        // exercise governance events rather than the IMM's own math.
+        imm_turn_rate_rad_s: 0.05,
+        imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
+        imm_initial_mode_probabilities: [0.9, 0.1],
+        // DN-30 §5: a well-formed figure, distinct from the default, since this fixture
+        // exercises governance events rather than the noise value itself.
+        measurement_noise_var: [625.0, 3600.0, 22500.0],
         promoted,
         validated_by: Some("oracle comparison".into()),
     }
@@ -157,6 +165,10 @@ fn a_baseline_with_only_tracking_governs_its_one_configuration() {
             tracking: Some(TrackingConfig {
                 filter_selection: "imm-cv-ct".into(),
                 gate_threshold: 9.21,
+                imm_turn_rate_rad_s: 0.05,
+                imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
+                imm_initial_mode_probabilities: [0.9, 0.1],
+                measurement_noise_var: [625.0, 3600.0, 22500.0],
             }),
             ..ConfigBaseline::default()
         },
@@ -216,11 +228,17 @@ fn a_refused_baseline_leaves_the_desktop_running_and_honest() {
 /// claim nothing downstream could check. A baseline this build *can* apply is stamped.
 #[test]
 fn a_governed_configuration_is_not_stamped_on_tracks_that_nothing_produced_from_it() {
+    // `imm-cv-ct` no longer serves this test's purpose: DN-28 implemented it, so a
+    // baseline naming it is now applied without complaint (the test right below this
+    // one). `ekf` still names a §1 row with no seat in the pipeline (DN-28 §6), which is
+    // what this test needs -- a filter selection this build genuinely does not run.
+    let mut unimplemented = candidate("air-defence", "imm baseline", true);
+    unimplemented.filter_selection = "ekf".into();
     let (state, dir) = desktop(
         "stamp",
         ConfigBaseline {
             mission_profiles: vec!["air-defence".into()],
-            tracking_profiles: vec![candidate("air-defence", "imm baseline", true)],
+            tracking_profiles: vec![unimplemented],
             ..ConfigBaseline::default()
         },
     );
@@ -231,7 +249,7 @@ fn a_governed_configuration_is_not_stamped_on_tracks_that_nothing_produced_from_
 
     // And nothing carries it, because nothing applied it. **The reason moved on
     // 2026-09-06** (GAP-053): the pipeline does read a promoted baseline now, and this
-    // one names `imm-cv-ct`, which this build does not implement. The desktop refuses
+    // one names `ekf`, which this build does not implement. The desktop refuses
     // to run a different filter under that baseline's identity and says so.
     assert!(
         gungnir_tracking_service::UNGOVERNED_ALGORITHM_VERSION.contains("ungoverned"),

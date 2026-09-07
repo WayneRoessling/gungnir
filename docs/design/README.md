@@ -67,10 +67,14 @@ six later notes read what they define.
 | DN-27 Bearing-only detections | **Proposed 2026-09-06, unsigned. Built and gated 2026-09-06; the sign-off is still outstanding, and §7's display half is not built at all.** Unblocks the acoustic, passive-RF and spotter halves of GAP-001 and the sensor half of GAP-004 | `DN-27-bearing-only-detections.md`. The note exists to forbid one thing: **a bearing must never become a position by assuming a range**, in any of its three tempting forms -- a nominal range, a terrain intersection, or a projection onto a defended asset -- each of which produces a valid `DetectionView` at a place nothing is. `DetectionView.measurement` becomes an enumeration and every variant carries its error, because for a bearing the error *is* the information. Three rules: a bearing may update a track and **may not initiate one** (a fixed sensor cannot localise from bearings at all, and a filter given them converges confidently to the wrong range); two crossing bearings may initiate, refused below a minimum crossing angle rather than initiated with a huge covariance; an unmatched bearing is kept and drawn as a **ray**, never a symbol. Ghost resolution is named as `gungnir-association`'s open problem rather than specified. **Breaking: `SCHEMA_VERSION` must bump**, and it did, from 2 to 3. The note's own §1 records what landed where, including the one piece built and not wired: `gungnir-tracking-service` names a bearing `NotAPosition` rather than offering it to the pipeline, because nothing resolves the reporting sensor's position for it |
 | DN-26 Laydown options | **Signed by the owner 2026-09-06, confirmed 2026-09-07. The schema and the options table are built (GAP-087); the rehearsal section, the gap-acceptance control and the viewport push are not.** Unblocks GAP-087, and through it GAP-020's approach corridors and GAP-045's rehearsal record | `DN-26-laydown-options.md`. Gives a laydown a schema and an identity so a planning panel has alternatives to compare, which is the same shape of fix DN-24 made for algorithm baselines and for the same reason: an options table with one row is theatre with a map behind it. **Adds no dependency edge.** Three rules are about not showing a plausible number: a comparison carries the terrain model it was computed under, a laydown that could not be evaluated is not one that scored zero, and any ranking is labelled advisory. **Adopting a laydown is deliberately out of scope**: moving a sensor is a physical act with an authority chain this system does not model |
 | DN-25 Cursor-on-Target exchange | **Design only; no code exists** (GAP-090, GAP-091, 2026-09-06). Not part of the plan-11 set and not signed | `DN-25-cursor-on-target.md`. Adds `ExchangeFormat::CursorOnTarget` and a `ReportedPosition` that is deliberately not a track; the codec in `gungnir-interop`, the feed in `gungnir-ingest` on edge (i), the sink in `gungnir-remote` behind proposed edge (s). **Both preconditions met 2026-09-06**: `external-standards.md` §5 pins the schema under D-33, and edge (s) is accepted. All three of its verification rows (CAP-7.4, CAP-3.8, CAP-1.6) were agreed 2026-09-06 and are in `../verification-capability-table.md` §2. It waits on a self-recorded corpus before the codec |
+| DN-28 Selecting the IMM in the fusion pipeline | **Signed by the owner 2026-09-07. Built and gated 2026-09-07, and the code signed by the owner the same day.** Not part of the plan-11 set | `DN-28-imm-in-the-pipeline.md`. Closed what `ARCHITECTURE.md` §10 item 94 named and did not build: `gungnir-fusion-async`'s `TrackFilter` is now an enum over the fixed constant-velocity filter and the CV/CT IMM, selected by `PipelineSettings::filter_selection`, and `"imm-cv-ct"` -- the default baseline's own name -- is in `IMPLEMENTED_FILTERS`. Motivated by a diagnosed defect rather than a feature request: the track-fragmentation finding on GAP-011 did not go away under 1000x more process noise, because a CV-only filter cannot represent a real turn. Scoped narrowly on purpose -- CV and CT are both six-dimensional `MotionModel`s, unlike the nine-dimensional constant-acceleration phase found while verifying this (below), so `Imm<6, 3>` over that pair is dimensionally identical to the pipeline's existing filter. `Imm` gained `innovation`/`innovation_covariance` over its combined estimate for gating (`gungnir-filters`), and `gungnir-config` validates a candidate's `imm-cv-ct` fields against the same rules `Imm::new` refuses on. **Building the acceptance test found two confounds neither belongs to `imm-cv-ct`**: scenario 1's comparison instant sits in a nine-dimensional constant-acceleration phase no six-dimensional filter can represent, and `PipelineSettings::default().measurement_noise_var` understates scenario 1's actual sensor noise by up to 25x, which alone produces most of the fragmentation. Isolated from both, the row is clean: identical settings but `filter_selection`, `kf-cv` still does not confirm through the turn and `imm-cv-ct` does |
+| DN-30 Measurement noise from the baseline | **Proposed and built 2026-09-07. Not yet signed by the owner** -- it touches `gungnir-fusion-async`'s low-trust tier (`from_baseline`'s signature) and wants the same review DN-28's code diff got | `DN-30-measurement-noise-from-the-baseline.md`. Closes the follow-up DN-28 §7 named and left unfixed: `measurement_noise_var` now reaches `PipelineSettings::from_baseline` from `TrackingConfig`/`TrackingProfileConfig` (`gungnir-config`, validated finite and positive, unconditionally on filter selection), so a deployment can match its baseline to its actual sensor instead of running every deployment on `PipelineSettings::default()`'s generic `[400, 400, 900]`. `scenario_truth_replay.rs`'s scenario 1 and 2 tests now run with `radar_medium`'s and `radar_coastal`'s own noise: scenario 1's worst measured error drops from 238 m to 169 m and its coverage-test track count from three (none confirmed) to two (still none confirmed) -- most of the original fragmentation finding was this noise mismatch, not a defect DN-30 closes on its own account. Scenario 2 is nearly unchanged (85 m to 83 m; its ten-tracks-for-six-vessels count is unaffected, driven by clutter and dropout rather than noise). Two things this note explicitly does not do, named rather than absorbed: it does not rotate a sensor's line-of-sight noise into ENU per detection (it follows DN-28 §7's own approximation instead), and it does not carry `radar_coastal`'s real zero height variance into scenario 2's test, because this pipeline seeds a new track's prior covariance from the same array it builds `R` from, and an exact zero there is a zero prior, not a stated noise |
 
 **All twenty-two notes are implemented as of 2026-09-05.**
 
-**DN-25 is design only; DN-26 is signed and partly built.** DN-26 (laydown
+**DN-25 is the only note in this directory that is still design only.** DN-26 and DN-28
+both started that way and have since been built, each for its own reason recorded where
+it happened. DN-26 (laydown
 options) was raised 2026-09-06 because GAP-087 had stayed open across three batches on a
 blocker that was not the planning panel's own: `ConfigBaseline` carries one set of sensor
 and resource positions, so an options table would have exactly one row. It is **signed by
@@ -83,6 +87,36 @@ which is the discovery that GAP-009 and GAP-065 wired an exchange only participa
 machine identity can use, and GAP-090, which is what that costs the fires deconfliction
 check. It is not signed and nothing in it is built. The row below says so, and the sentence
 above is about the plan-11 set, not about this directory.
+
+**DN-28 is scoped deliberately smaller than the gap it closes.** `ARCHITECTURE.md` §10 item
+94 states "selecting between filters per mission profile... is its own increment" about the
+whole set `gungnir-filters` now has (IMM, EKF, UKF, particle, square-root, JPDA, MHT). DN-28
+takes only the one pair the default baseline already names and the fragmentation defect
+already needs -- CV and CT, both six-dimensional -- and names every other selection an
+explicit non-goal with its own reason, rather than proposing the general heterogeneous-filter
+redesign item 94's wording could be read as asking for. **Signed by the owner 2026-09-07**,
+and built, gated, and signed the same day: the design signature covers the scope, the open
+gating question in §3, and the sizing in §8; the code signature is on the
+`gungnir-fusion-async`/`gungnir-filters`/`gungnir-config` diff built from it, per
+`docs/agentic-workflow.md`. Verifying it found scenario 1's own comparison instant sits in
+a nine-dimensional constant-acceleration phase this six-dimensional pair cannot represent
+regardless of tuning, and separately that `PipelineSettings::default()`'s measurement noise
+understates scenario 1's actual sensor by up to 25x -- both recorded in the note's §7 rather
+than smoothed into the acceptance test's own choices.
+
+**DN-30 picks up the second of those two findings.** `measurement_noise_var` now reaches
+`from_baseline` from the baseline's own `TrackingConfig`/`TrackingProfileConfig`, so a
+deployment names its actual sensor's noise instead of running on the placeholder every
+deployment shared before this note. Proposed and built the same week as DN-28; not yet
+signed, because it still touches `gungnir-fusion-async`'s low-trust tier even though the
+change itself is mechanical (a new argument to an existing function, no new estimator, no
+new concurrency). **Renumbered from DN-29 on merge**: this note and DN-29 (the third IMM
+mode for the constant-acceleration phase, `DN-29-a-third-mode-for-the-imm.md`) were both
+written the same day by unrelated sessions working from the same DN-28 §7 follow-ups, and
+DN-29's own branch reached `main` first. Same lesson as the D-33/D-34/GAP-090 collision
+this directory's own history already records: a decision or gap number is only safe to
+cite once its row is committed on `main`, not from the moment it is chosen in a working
+tree.
 
 What the keystone tranche put in place, with a test for each: an asset list that reports
 itself unconfigured rather than scoring zero; an unknown priority or effector layer that

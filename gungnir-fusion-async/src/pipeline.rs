@@ -17,14 +17,16 @@
 //! gate, and the confirm/coast/delete state machine in `gungnir-track`. What was
 //! missing was the composition: a loop that predicts each track to a measurement's
 //! time, gates, associates, updates, initiates and ages. That is this module, and it
-//! adds no new estimator.
+//! adds no new estimator of its own -- **the one exception is `imm-cv-ct`'s selection
+//! logic** (DN-28, [`TrackFilter::ImmCvCt`]), which composes the already-signed IMM
+//! (item 94) rather than estimating anything new either.
 //!
 //! **Not in the pipeline yet, and named rather than implied**: the nonlinear
-//! estimators are not selected here (a track is a constant-velocity Kalman filter,
-//! GAP-011's remaining rows), random-finite-set filtering is not run (GAP-015), and
-//! track-to-track fusion across platforms is not run (GAP-013). A deployment gets
-//! single-sensor-per-detection sequential fusion with global assignment inside a scan,
-//! which is what the composition honestly provides.
+//! estimators are not selected here beyond the CV/CT IMM (EKF, UKF and the particle and
+//! square-root forms are still unreachable from a baseline, DN-28 §6), random-finite-set
+//! filtering is not run (GAP-015), and track-to-track fusion across platforms is not run
+//! (GAP-013). A deployment gets single-sensor-per-detection sequential fusion with
+//! global assignment inside a scan, which is what the composition honestly provides.
 //!
 //! # Out of sequence, and why a horizon rather than a re-filter
 //!
@@ -54,8 +56,10 @@
 
 use crate::{BearingDetection, Detection};
 use gungnir_association::{solve_assignment, ChiSquareGate, GlobalNearestNeighbor};
-use gungnir_core::ConstantVelocity;
-use gungnir_filters::{AzimuthElevation, BearingOnly, Filter, KalmanFilter, MeasurementModel};
+use gungnir_core::{ConstantVelocity, CoordinatedTurn};
+use gungnir_filters::{
+    AzimuthElevation, BearingOnly, Filter, Imm, KalmanFilter, MeasurementModel, ModeFilter,
+};
 use gungnir_track::{Track, TrackId, TrackManager};
 use nalgebra::{DMatrix, SMatrix, SVector};
 use std::collections::HashMap;
@@ -68,9 +72,92 @@ type ScanAssociation = (
     Vec<SVector<f64, 3>>,
 );
 
-/// One track's estimator. Position-only measurement of a constant-velocity state,
-/// which is the shape every sensor in `docs/test-tracks/sensor-models.md` produces.
-type TrackFilter = KalmanFilter<ConstantVelocity, 6, 3>;
+/// One track's estimator: the position-only measurement shape every sensor in
+/// `docs/test-tracks/sensor-models.md` produces, either estimated (DN-28).
+///
+/// An enum rather than a trait object because there are exactly two selections this
+/// pipeline runs (DN-28 §4, §6 -- the EKF/UKF/particle/square-root/JPDA/MHT selections
+/// are each their own future increment) and both are known at compile time; nothing
+/// outside this module needs to be generic over filter type.
+///
+/// **The `ImmCvCt` variant carries its own `h`/`r`** because [`Imm`] does not: each
+/// mode's internal [`KalmanFilter`] already has a copy, and [`ModeFilter`] deliberately
+/// does not expose it (`imm.rs` module documentation). Gating and construction both need
+/// the same `h`/`r` [`FusionPipeline::new_filter`] built the modes from, so this enum is
+/// where that copy lives rather than re-deriving it or reaching into a mode.
+enum TrackFilter {
+    ConstantVelocity(KalmanFilter<ConstantVelocity, 6, 3>),
+    ImmCvCt {
+        imm: Imm<6, 3>,
+        h: SMatrix<f64, 3, 6>,
+        r: SMatrix<f64, 3, 3>,
+    },
+}
+
+impl TrackFilter {
+    // `Filter::predict`/`Filter::state` disambiguated below: `ModeFilter` is in scope
+    // for `new_filter`'s mode construction and also names `predict`/`state`, so
+    // `KalmanFilter` -- which implements both traits -- is ambiguous on plain `.` calls.
+    fn predict(&mut self, dt: f64) {
+        match self {
+            TrackFilter::ConstantVelocity(kf) => Filter::predict(kf, dt),
+            TrackFilter::ImmCvCt { imm, .. } => imm.predict(dt),
+        }
+    }
+
+    fn update(&mut self, z: &SVector<f64, 3>) {
+        match self {
+            TrackFilter::ConstantVelocity(kf) => Filter::update(kf, z),
+            TrackFilter::ImmCvCt { imm, .. } => imm.update(z),
+        }
+    }
+
+    fn state(&self) -> &SVector<f64, 6> {
+        match self {
+            TrackFilter::ConstantVelocity(kf) => Filter::state(kf),
+            TrackFilter::ImmCvCt { imm, .. } => imm.state(),
+        }
+    }
+
+    fn covariance(&self) -> &SMatrix<f64, 6, 6> {
+        match self {
+            TrackFilter::ConstantVelocity(kf) => kf.covariance(),
+            TrackFilter::ImmCvCt { imm, .. } => imm.covariance(),
+        }
+    }
+
+    /// Gating's innovation pair. For `ImmCvCt` this reads the *combined* estimate,
+    /// spread term included -- DN-28 §3's open question for a reviewer, not a settled
+    /// tuning choice; see [`Imm::innovation_covariance`]'s documentation.
+    fn innovation(&self, z: &SVector<f64, 3>) -> SVector<f64, 3> {
+        match self {
+            TrackFilter::ConstantVelocity(kf) => kf.innovation(z),
+            TrackFilter::ImmCvCt { imm, h, .. } => imm.innovation(z, h),
+        }
+    }
+
+    fn innovation_covariance(&self) -> SMatrix<f64, 3, 3> {
+        match self {
+            TrackFilter::ConstantVelocity(kf) => kf.innovation_covariance(),
+            TrackFilter::ImmCvCt { imm, h, r } => imm.innovation_covariance(h, r),
+        }
+    }
+}
+
+/// Which filter [`FusionPipeline`] runs for every track (DN-28 §4). One selection per
+/// pipeline instance, not per track: DN-24 §7 already ties a baseline to a mission
+/// profile, and a whole session builds one [`PipelineSettings`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FilterSelection {
+    /// A fixed constant-velocity Kalman filter. What every track ran before DN-28.
+    #[default]
+    ConstantVelocity,
+    /// The IMM over constant-velocity and coordinated-turn modes (DN-28). The default
+    /// algorithm baseline names this (`"imm-cv-ct"`, DN-24), and it is what fixed the
+    /// track-fragmentation defect a fixed constant-velocity filter cannot follow a real
+    /// manoeuvre through (DN-28's motivation).
+    ImmCvCt,
+}
 
 /// How the pipeline is tuned. Every field is a deployment choice rather than a
 /// constant, because the baseline supplies them (`ConfigBaseline.tracking`).
@@ -90,7 +177,12 @@ pub struct PipelineSettings {
     pub delete_after_misses: u32,
     /// Process-noise spectral density of the constant-velocity model, (m/s²)²/Hz.
     pub process_noise_psd: f64,
-    /// Measurement-noise variances per axis, m².
+    /// Measurement-noise variances per axis, m² (east, north, height). The baseline's
+    /// own figure, matched to its actual sensor, unless nothing promoted supplies one
+    /// (DN-30 §5) -- before DN-30 this was fixed at `Self::default()`'s placeholder for
+    /// every deployment, which DN-28 §7 found understated scenario 1's real sensor noise
+    /// by up to 25x and named as the dominant driver of the fragmentation GAP-011
+    /// recorded, not the motion model DN-28 was scoped to fix.
     pub measurement_noise_var: [f64; 3],
     /// Initial velocity variance for a track initiated from one detection, (m/s)².
     ///
@@ -107,6 +199,20 @@ pub struct PipelineSettings {
     /// It is a lifetime and not a hold-forever, because a bearing is a statement about
     /// one instant and a picture full of hour-old directions is not a picture.
     pub bearing_retention_s: f64,
+    /// Which filter every track runs (DN-28). `ConstantVelocity` unless a promoted
+    /// baseline names `"imm-cv-ct"` (`PipelineSettings::from_baseline`).
+    pub filter_selection: FilterSelection,
+    /// The coordinated-turn mode's fixed turn rate, radians/second. Ignored unless
+    /// `filter_selection` is [`FilterSelection::ImmCvCt`] -- a turn rate for a filter
+    /// that is not running would be a number with nothing to mean.
+    pub imm_turn_rate_rad_s: f64,
+    /// Row-major mode-transition matrix over `[constant-velocity, coordinated-turn]`,
+    /// `transition[i][j] = P(mode j now | mode i before)` -- [`Imm::new`]'s convention.
+    /// Each row must sum to one; ignored unless `filter_selection` is `ImmCvCt`.
+    pub imm_mode_transition: [[f64; 2]; 2],
+    /// Initial mode probabilities over the same `[constant-velocity, coordinated-turn]`
+    /// order, summing to one. Ignored unless `filter_selection` is `ImmCvCt`.
+    pub imm_initial_mode_probabilities: [f64; 2],
 }
 
 impl Default for PipelineSettings {
@@ -121,6 +227,17 @@ impl Default for PipelineSettings {
             measurement_noise_var: [400.0, 400.0, 900.0],
             initial_velocity_var: 40_000.0,
             bearing_retention_s: 60.0,
+            filter_selection: FilterSelection::default(),
+            // A generic medium-rate turn (Bar-Shalom's own IMM examples use a similar
+            // figure); a deployment naming "imm-cv-ct" supplies its own via
+            // `from_baseline`, and this value is inert under `ConstantVelocity`.
+            imm_turn_rate_rad_s: 0.05,
+            // 3% chance per epoch of switching mode, in both directions: quick enough
+            // to follow a manoeuvre without treating every measurement's noise as the
+            // start of a turn.
+            imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
+            // Mostly constant-velocity to start, matching most targets most of the time.
+            imm_initial_mode_probabilities: [0.9, 0.1],
         }
     }
 }
@@ -142,45 +259,74 @@ pub struct UnsupportedFilter {
 
 /// The filter selections `PipelineSettings::from_baseline` accepts.
 ///
-/// One, today. The names are `TrackingConfig::filter_selection`'s vocabulary and grow
-/// as `gungnir-filters` gains estimators (GAP-011's remaining §1 rows).
-/// The filter selections this **pipeline** can apply.
+/// Two, as of DN-28. The names are `TrackingConfig::filter_selection`'s vocabulary and
+/// grow as `gungnir-filters` gains estimators the pipeline can actually run (GAP-011's
+/// remaining §1 rows).
 ///
 /// **This is not the list of filters `gungnir-filters` contains, and the difference is
-/// the whole point.** As of 2026-09-06 that crate has an extended and an unscented
-/// Kalman filter, an IMM, a particle filter and a square-root form, and
-/// `gungnir-association` has JPDA and MHT. None of them appears here, because
-/// [`TrackFilter`] -- the type this pipeline actually runs -- is a fixed linear Kalman
-/// filter over a constant-velocity model, and this list is the answer to "what can the
-/// pipeline apply", not "what has been written somewhere".
+/// the whole point.** That crate also has an extended and an unscented Kalman filter, a
+/// particle filter and a square-root form, and `gungnir-association` has JPDA and MHT.
+/// None of them appears here: [`TrackFilter`] -- the type this pipeline actually runs --
+/// is a linear Kalman filter or the CV/CT IMM, and this list is the answer to "what can
+/// the pipeline apply", not "what has been written somewhere".
 ///
 /// **Adding a name here without changing what the pipeline runs would be the exact
 /// failure GAP-053 exists to prevent**: `with_algorithm_baseline` would stamp every track
-/// with a baseline claiming an IMM produced it, the governance record would say one thing
-/// and the picture would be another, and nothing downstream could tell. A register entry
-/// once described extending this as "a one-line change". It is not one, and that sentence
-/// has been corrected wherever it appeared.
+/// with a baseline claiming an estimator produced it that did not, the governance record
+/// would say one thing and the picture would be another, and nothing downstream could
+/// tell. A register entry once described extending this as "a one-line change". It was
+/// not one for `"imm-cv-ct"` either, in the ordinary sense -- see DN-28 for what the
+/// increment actually was -- but that pair was smaller than the general case: CV and CT
+/// are both six-dimensional `MotionModel`s with a fixed turn rate, so `Imm<6, 3>` over
+/// them is dimensionally identical to the linear filter it joined (DN-28 §2). EKF/UKF
+/// (a different, nonlinear measurement), the particle filter (a sample cloud, not a
+/// Gaussian) and JPDA/MHT (a different axis, association rather than estimation) are
+/// each still their own future increment (DN-28 §6).
+pub const IMPLEMENTED_FILTERS: &[&str] = &["kf-cv", "linear-kf", "constant-velocity", "imm-cv-ct"];
+
+/// The `"imm-cv-ct"` selection's own settings, from the baseline (DN-28 §5).
 ///
-/// Extending it means giving the pipeline a way to hold more than one filter type -- the
-/// filters have different state dimensions and different update signatures -- and gating
-/// the result end to end, which is its own increment.
-pub const IMPLEMENTED_FILTERS: &[&str] = &["kf-cv", "linear-kf", "constant-velocity"];
+/// **Not optional and not defaulted here.** Every call to [`PipelineSettings::from_baseline`]
+/// supplies one, whichever filter the baseline names: a caller does not know in advance
+/// which selection it will turn out to be, and a `None` accepted for the common
+/// `"kf-cv"` case would make `"imm-cv-ct"` runnable on invented numbers the one time it
+/// mattered. `gungnir-config` is where a deployment's own file is validated against
+/// [`Imm::new`]'s refusals before a candidate is promoted (DN-28 §5); this type only
+/// carries what validation already passed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ImmBaselineFields {
+    /// The coordinated-turn mode's fixed turn rate, radians/second.
+    pub turn_rate_rad_s: f64,
+    /// Row-major over `[constant-velocity, coordinated-turn]`; see
+    /// [`PipelineSettings::imm_mode_transition`].
+    pub mode_transition: [[f64; 2]; 2],
+    /// Over the same order; see [`PipelineSettings::imm_initial_mode_probabilities`].
+    pub initial_mode_probabilities: [f64; 2],
+}
 
 impl PipelineSettings {
-    /// Build settings from a promoted algorithm baseline's fields (DN-24 §7, GAP-053).
+    /// Build settings from a promoted algorithm baseline's fields (DN-24 §7, GAP-053;
+    /// `imm` fields added by DN-28 §5; `measurement_noise_var` added by DN-30 §5).
     ///
     /// Takes the primitives rather than `gungnir_config::TrackingConfig`, because this
     /// crate sits below `gungnir-config` and may not depend on it; both binaries read
-    /// the baseline and pass the two fields through.
+    /// the baseline and pass the fields through. `imm` is read only when
+    /// `filter_selection` turns out to be `"imm-cv-ct"`; a caller not naming that
+    /// selection may still have to supply a value, since it does not know in advance
+    /// which candidate a baseline promoted. `measurement_noise_var` is read
+    /// unconditionally: every filter selection builds its `R` from it, unlike the `imm`
+    /// fields.
     ///
     /// # Errors
     ///
     /// [`UnsupportedFilter`] when the baseline names a filter this build does not have,
-    /// and a non-positive or non-finite gate threshold, which `gungnir-config` already
-    /// refuses but which this does not assume.
+    /// and a non-positive or non-finite gate threshold or measurement-noise axis, both
+    /// of which `gungnir-config` already refuses but which this does not assume.
     pub fn from_baseline(
         gate_threshold: f64,
         filter_selection: &str,
+        imm: &ImmBaselineFields,
+        measurement_noise_var: [f64; 3],
     ) -> Result<Self, UnsupportedFilter> {
         if !IMPLEMENTED_FILTERS.contains(&filter_selection) {
             return Err(UnsupportedFilter {
@@ -191,6 +337,18 @@ impl PipelineSettings {
         let mut settings = Self::default();
         if gate_threshold.is_finite() && gate_threshold > 0.0 {
             settings.gate = ChiSquareGate { gate_threshold };
+        }
+        if measurement_noise_var
+            .iter()
+            .all(|v| v.is_finite() && *v > 0.0)
+        {
+            settings.measurement_noise_var = measurement_noise_var;
+        }
+        if filter_selection == "imm-cv-ct" {
+            settings.filter_selection = FilterSelection::ImmCvCt;
+            settings.imm_turn_rate_rad_s = imm.turn_rate_rad_s;
+            settings.imm_mode_transition = imm.mode_transition;
+            settings.imm_initial_mode_probabilities = imm.initial_mode_probabilities;
         }
         Ok(settings)
     }
@@ -294,6 +452,28 @@ pub struct RetainedBearing {
     pub until_s: f64,
 }
 
+/// A track's kinematic record together with the source-time instant its state and
+/// covariance were last actually produced at.
+///
+/// `Track` deliberately carries no time of its own (`gungnir-track`'s module
+/// documentation: "kinematic state only") -- the pipeline is what knows when it last
+/// touched a track, and this is how that reaches a poller. Before this type existed, a
+/// caller polling the pipeline had only its own polling time to put on a projected
+/// [`gungnir_track::Track`], which is a different instant: this is a GAP-011 finding,
+/// recorded in the register, that `gungnir-tracking-service::project_track` stamped
+/// `now` -- the time the *service* was asked, not the time the estimate is *of* -- so a
+/// track that had gone quiet read as freshly updated for as long as anyone kept polling.
+#[derive(Debug, Clone)]
+pub struct TimedTrack {
+    pub track: Track,
+    /// Mission time, seconds, that `track.state` and `track.covariance` are current
+    /// for: the epoch a position update or initiation last moved them to, or the
+    /// cursor a bearing refinement was applied at (bearings are applied at the
+    /// pipeline's cursor rather than retrodicted to their own source time; see
+    /// [`FusionPipeline::offer_bearing`]).
+    pub estimate_time_s: f64,
+}
+
 /// The out-of-sequence, multi-rate fusion pipeline.
 ///
 /// Synchronous and owned by one task. [`crate::ingest`] drives it from the channel;
@@ -303,6 +483,10 @@ pub struct FusionPipeline {
     settings: PipelineSettings,
     manager: TrackManager<GlobalNearestNeighbor>,
     filters: HashMap<TrackId, TrackFilter>,
+    /// When each live track's filter was last actually moved: the epoch of a position
+    /// update or initiation, or the cursor a bearing refinement was applied at. What
+    /// [`FusionPipeline::timed_snapshot`] reports instead of a poller's own time.
+    estimate_time_s: HashMap<TrackId, f64>,
     /// Buffered detections, kept sorted by source time. Small by construction: it
     /// holds one reorder horizon of one sector's detections.
     buffer: Vec<Detection>,
@@ -339,6 +523,7 @@ impl FusionPipeline {
             settings,
             manager,
             filters: HashMap::new(),
+            estimate_time_s: HashMap::new(),
             buffer: Vec::new(),
             cursor_s: None,
             newest_seen_s: f64::NEG_INFINITY,
@@ -367,6 +552,29 @@ impl FusionPipeline {
     #[must_use]
     pub fn snapshot(&self) -> Vec<Track> {
         self.manager.live_tracks().cloned().collect()
+    }
+
+    /// [`FusionPipeline::snapshot`], each track paired with the time its state and
+    /// covariance are actually current for -- what [`crate::ingest`] sends, so
+    /// `gungnir-tracking-service` never has to substitute its own polling time.
+    ///
+    /// A live track always has an entry: one is written when a track is initiated and
+    /// refreshed every epoch that predicts it, whether or not it was hit that scan (an
+    /// epoch predicts every live filter before associating). The cursor fallback below
+    /// is defensive rather than reachable.
+    #[must_use]
+    pub fn timed_snapshot(&self) -> Vec<TimedTrack> {
+        self.manager
+            .live_tracks()
+            .map(|track| TimedTrack {
+                estimate_time_s: self
+                    .estimate_time_s
+                    .get(&track.id)
+                    .copied()
+                    .unwrap_or(self.cursor_s.unwrap_or(f64::NAN)),
+                track: track.clone(),
+            })
+            .collect()
     }
 
     /// Take a detection into the reorder buffer.
@@ -457,11 +665,32 @@ impl FusionPipeline {
         if let Some((id, state, covariance)) = self.best_bearing_match(bearing) {
             // The estimates the filters hold are the truth about kinematics, exactly as
             // in an epoch; the filter is rebuilt around the refined pair so the next
-            // position update starts from it.
-            self.filters.insert(id, self.new_filter(state, &covariance));
-            self.manager.update_estimate(id, state, covariance);
-            self.stats.bearings_updated = self.stats.bearings_updated.saturating_add(1);
-            return BearingOutcome::Updated(id);
+            // position update starts from it. For `ImmCvCt` this is a stated
+            // simplification DN-28 does not resolve: every mode restarts from the same
+            // refined state at the baseline's initial mode probabilities, rather than
+            // carrying forward what the mode probabilities had learned. A bearing
+            // refines the *position* estimate a gate already admitted it into; it is not
+            // itself evidence about which mode the target is in.
+            if let Some(filter) = self.new_filter(state, &covariance) {
+                self.filters.insert(id, filter);
+                self.manager.update_estimate(id, state, covariance);
+                // Applied at the cursor, not the bearing's own source time -- see this
+                // method's documentation on why the update itself is not retrodicted.
+                self.estimate_time_s
+                    .insert(id, self.cursor_s.unwrap_or(bearing.timestamp_s));
+                self.stats.bearings_updated = self.stats.bearings_updated.saturating_add(1);
+                return BearingOutcome::Updated(id);
+            }
+            // `new_filter` refused the baseline's own imm-cv-ct fields, which
+            // `gungnir-config` validates before a candidate is promoted (DN-28 §5); the
+            // existing filter is left in place rather than dropped, and the bearing
+            // falls through to the retained path below as though it had matched nothing.
+            tracing::error!(
+                ?id,
+                "a bearing gated into a track but its filter could not be rebuilt; \
+                 the track keeps its previous estimate and the bearing is treated as \
+                 unmatched"
+            );
         }
 
         // Rule 3: a bearing that updates nothing is retained and shown, not dropped.
@@ -622,17 +851,21 @@ impl FusionPipeline {
         let outcome = self.manager.step(&hit_ids, &misses);
         for id in &outcome.deleted {
             self.filters.remove(id);
+            self.estimate_time_s.remove(id);
         }
 
         // The estimates the filters hold are the truth about kinematics; write them
-        // into the records the lifecycle owns.
+        // into the records the lifecycle owns. Every filter was predicted to `epoch_s`
+        // above whether or not it was hit this scan, so every one is stamped with it,
+        // not only the ones in `hits`.
         for (id, filter) in &self.filters {
             self.manager
                 .update_estimate(*id, *filter.state(), *filter.covariance());
+            self.estimate_time_s.insert(*id, epoch_s);
         }
 
         for measurement in unassigned {
-            self.initiate(&measurement);
+            self.initiate(&measurement, epoch_s);
         }
     }
 
@@ -712,8 +945,9 @@ impl FusionPipeline {
         (hits, misses, unassigned)
     }
 
-    /// Start a tentative track from one detection: position measured, velocity unknown.
-    fn initiate(&mut self, measurement: &SVector<f64, 3>) {
+    /// Start a tentative track from one detection: position measured, velocity unknown,
+    /// current as of `epoch_s`.
+    fn initiate(&mut self, measurement: &SVector<f64, 3>, epoch_s: f64) {
         let mut state = SVector::<f64, 6>::zeros();
         state.fixed_rows_mut::<3>(0).copy_from(measurement);
         let mut covariance = SMatrix::<f64, 6, 6>::zeros();
@@ -722,11 +956,34 @@ impl FusionPipeline {
             covariance[(3 + axis, 3 + axis)] = self.settings.initial_velocity_var;
         }
         let id = self.manager.initiate(state, covariance);
-        self.filters.insert(id, self.new_filter(state, &covariance));
+        if let Some(filter) = self.new_filter(state, &covariance) {
+            self.filters.insert(id, filter);
+            self.estimate_time_s.insert(id, epoch_s);
+        } else {
+            // See `new_filter`'s documentation: reachable only for a hand-built
+            // `PipelineSettings` carrying imm-cv-ct fields `gungnir-config` would have
+            // refused. The track exists with no filter behind it, which every other read
+            // path here already treats as nothing to gate, predict, or report a time for.
+            tracing::error!(?id, "track initiated with no filter behind it");
+        }
         self.stats.initiated = self.stats.initiated.saturating_add(1);
     }
 
-    fn new_filter(&self, state: SVector<f64, 6>, covariance: &SMatrix<f64, 6, 6>) -> TrackFilter {
+    /// Build this pipeline's filter for a freshly initiated or bearing-refined track, per
+    /// `self.settings.filter_selection` (DN-28 §4).
+    ///
+    /// `None` only when `imm-cv-ct` is selected and [`Imm::new`] refuses the baseline's
+    /// own transition matrix or initial mode probabilities. `gungnir-config` validates
+    /// both against the same rules before a candidate is promoted (DN-28 §5), so reaching
+    /// `None` means a caller built [`PipelineSettings`] directly with values no baseline
+    /// could have produced -- logged and degraded by both call sites rather than a panic,
+    /// matching how [`FusionPipeline::associate`] already treats a broken cost matrix as
+    /// a scan nothing could be gated against rather than a reason to stop.
+    fn new_filter(
+        &self,
+        state: SVector<f64, 6>,
+        covariance: &SMatrix<f64, 6, 6>,
+    ) -> Option<TrackFilter> {
         let mut h = SMatrix::<f64, 3, 6>::zeros();
         for axis in 0..3 {
             h[(axis, axis)] = 1.0;
@@ -735,15 +992,64 @@ impl FusionPipeline {
         for axis in 0..3 {
             r[(axis, axis)] = self.settings.measurement_noise_var[axis];
         }
-        KalmanFilter::new(
-            state,
-            *covariance,
-            ConstantVelocity {
-                sigma_a_sq: self.settings.process_noise_psd,
-            },
-            h,
-            r,
-        )
+        match self.settings.filter_selection {
+            FilterSelection::ConstantVelocity => {
+                Some(TrackFilter::ConstantVelocity(KalmanFilter::new(
+                    state,
+                    *covariance,
+                    ConstantVelocity {
+                        sigma_a_sq: self.settings.process_noise_psd,
+                    },
+                    h,
+                    r,
+                )))
+            }
+            FilterSelection::ImmCvCt => {
+                // Both modes start from the same estimate: a single detection says
+                // nothing about which mode the target is in, so there is no basis for
+                // giving them different priors.
+                let cv: Box<dyn ModeFilter<6, 3> + Send> = Box::new(KalmanFilter::new(
+                    state,
+                    *covariance,
+                    ConstantVelocity {
+                        sigma_a_sq: self.settings.process_noise_psd,
+                    },
+                    h,
+                    r,
+                ));
+                let ct: Box<dyn ModeFilter<6, 3> + Send> = Box::new(KalmanFilter::new(
+                    state,
+                    *covariance,
+                    CoordinatedTurn {
+                        omega: self.settings.imm_turn_rate_rad_s,
+                        sigma_a_sq: self.settings.process_noise_psd,
+                    },
+                    h,
+                    r,
+                ));
+                let transition: Vec<Vec<f64>> = self
+                    .settings
+                    .imm_mode_transition
+                    .iter()
+                    .map(|row| row.to_vec())
+                    .collect();
+                match Imm::new(
+                    vec![cv, ct],
+                    &self.settings.imm_initial_mode_probabilities,
+                    &transition,
+                ) {
+                    Ok(imm) => Some(TrackFilter::ImmCvCt { imm, h, r }),
+                    Err(err) => {
+                        tracing::error!(
+                            %err,
+                            "imm-cv-ct baseline fields were refused by Imm::new; a \
+                             validated config should never reach this"
+                        );
+                        None
+                    }
+                }
+            }
+        }
     }
 }
 

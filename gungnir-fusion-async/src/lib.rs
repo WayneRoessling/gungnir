@@ -11,12 +11,12 @@
 pub mod pipeline;
 
 pub use pipeline::{
-    run_batch, BearingOutcome, BearingRefusal, FusionPipeline, PipelineSettings, PipelineStats,
-    PushError, RetainedBearing, UnsupportedFilter, IMPLEMENTED_FILTERS,
+    run_batch, BearingOutcome, BearingRefusal, FilterSelection, FusionPipeline, ImmBaselineFields,
+    PipelineSettings, PipelineStats, PushError, RetainedBearing, TimedTrack, UnsupportedFilter,
+    IMPLEMENTED_FILTERS,
 };
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
-use gungnir_track::Track;
 use std::time::Duration;
 
 /// A raw detection as the tracking core consumes it. The canonical, provenance-bearing
@@ -122,11 +122,13 @@ const IDLE_POLL: Duration = Duration::from_millis(10);
 /// `tests/oos_convergence.rs` gates the `fusion-async` row -- the async path against
 /// the offline batch over the same multi-sensor timeline.
 ///
-/// **What it does not claim.** The pipeline runs one constant-velocity Kalman filter
-/// per track. The nonlinear estimators, random-finite-set filtering and track-to-track
-/// fusion are separate rows and separate gaps (GAP-011's remainder, GAP-015, GAP-013);
-/// this constant says a pipeline exists and produces tracks, not that every estimator
-/// in the capability table is in it.
+/// **What it does not claim.** The pipeline runs a constant-velocity Kalman filter per
+/// track, or, where a baseline names `imm-cv-ct` (DN-28), the CV/CT IMM over it -- one
+/// selection per pipeline instance (`PipelineSettings::filter_selection`), not per
+/// track. The remaining nonlinear estimators, random-finite-set filtering and
+/// track-to-track fusion are separate rows and separate gaps (GAP-011's remainder,
+/// GAP-015, GAP-013, DN-28 §6); this constant says a pipeline exists and produces
+/// tracks, not that every estimator in the capability table is in it.
 pub const PIPELINE_IMPLEMENTED: bool = true;
 
 /// The ingest task: buffers out-of-order/late detections from multiple sensors,
@@ -144,7 +146,7 @@ pub const PIPELINE_IMPLEMENTED: bool = true;
 /// The inbound channel is a `crossbeam` channel because it is the boundary with the
 /// synchronous render/UI thread (§2.2); it is polled with `try_recv` plus a yield
 /// rather than a blocking `recv`, which would stall the executor thread.
-pub async fn ingest(rx: Receiver<Submission>, out: Sender<Vec<Track>>) {
+pub async fn ingest(rx: Receiver<Submission>, out: Sender<Vec<TimedTrack>>) {
     ingest_with(rx, out, PipelineSettings::default()).await;
 }
 
@@ -156,7 +158,7 @@ pub async fn ingest(rx: Receiver<Submission>, out: Sender<Vec<Track>>) {
 /// session, and a replay would then end short of the recording it replayed.
 pub async fn ingest_with(
     rx: Receiver<Submission>,
-    out: Sender<Vec<Track>>,
+    out: Sender<Vec<TimedTrack>>,
     settings: PipelineSettings,
 ) {
     let mut pipeline = FusionPipeline::new(settings);
@@ -170,7 +172,7 @@ pub async fn ingest_with(
                 if let Err(err) = pipeline.push(det) {
                     tracing::warn!(%err, "detection refused by the reorder buffer");
                 }
-                if pipeline.run_ready() > 0 && out.send(pipeline.snapshot()).is_err() {
+                if pipeline.run_ready() > 0 && out.send(pipeline.timed_snapshot()).is_err() {
                     tracing::warn!("track consumer is gone; stopping the pipeline");
                     return;
                 }
@@ -204,7 +206,7 @@ pub async fn ingest_with(
                 // Doing it here rather than on a timer keeps it on the same clock the
                 // bearings themselves carry.
                 pipeline.expire_bearings(bearing.timestamp_s);
-                if out.send(pipeline.snapshot()).is_err() {
+                if out.send(pipeline.timed_snapshot()).is_err() {
                     tracing::warn!("track consumer is gone; stopping the pipeline");
                     return;
                 }
@@ -214,7 +216,7 @@ pub async fn ingest_with(
         }
     }
     if pipeline.flush() > 0 {
-        let _ = out.send(pipeline.snapshot());
+        let _ = out.send(pipeline.timed_snapshot());
     }
     tracing::info!(
         stats = ?pipeline.stats(),

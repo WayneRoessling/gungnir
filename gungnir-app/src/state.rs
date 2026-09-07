@@ -1047,6 +1047,20 @@ fn build_ingest(
 /// the default: the alert says so, and [`tracking_service`] leaves the tracker
 /// ungoverned, so the picture and the governance record disagree visibly rather than
 /// quietly.
+/// The `imm-cv-ct` fields `PipelineSettings::from_baseline` needs, from the baseline's
+/// own `TrackingConfig` (DN-28 §5). Built here rather than in `gungnir-tracking-service`,
+/// which sits below `gungnir-config` and may not depend on it (the same reason
+/// `from_baseline` takes primitives at all).
+fn imm_fields(
+    config: &gungnir_config::TrackingConfig,
+) -> gungnir_tracking_service::ImmBaselineFields {
+    gungnir_tracking_service::ImmBaselineFields {
+        turn_rate_rad_s: config.imm_turn_rate_rad_s,
+        mode_transition: config.imm_mode_transition,
+        initial_mode_probabilities: config.imm_initial_mode_probabilities,
+    }
+}
+
 fn pipeline_settings(
     config: &ConfigBaseline,
     in_force: Option<&gungnir_modelops::ModelBaseline>,
@@ -1059,6 +1073,8 @@ fn pipeline_settings(
     match gungnir_tracking_service::PipelineSettings::from_baseline(
         baseline.config.gate_threshold,
         &baseline.config.filter_selection,
+        &imm_fields(&baseline.config),
+        baseline.config.measurement_noise_var,
     ) {
         Ok(settings) => settings,
         Err(err) => {
@@ -1081,6 +1097,8 @@ fn applied_baseline(
     gungnir_tracking_service::PipelineSettings::from_baseline(
         baseline.config.gate_threshold,
         &baseline.config.filter_selection,
+        &imm_fields(&baseline.config),
+        baseline.config.measurement_noise_var,
     )
     .ok()
     .map(|_| &baseline.id)

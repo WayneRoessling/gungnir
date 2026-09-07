@@ -30,7 +30,8 @@
 //! second test proves the refusal path works by pushing a detection past the horizon.
 
 use gungnir_fusion_async::{
-    ingest_with, run_batch, Detection, FusionPipeline, PipelineSettings, Submission,
+    ingest_with, run_batch, Detection, FilterSelection, FusionPipeline, PipelineSettings,
+    Submission, TimedTrack,
 };
 use gungnir_track::{Track, TrackStatus};
 use nalgebra::SVector;
@@ -157,7 +158,7 @@ async fn out_of_order_arrival_converges_on_the_offline_batch() {
     );
 
     let (detection_tx, detection_rx) = crossbeam_channel::unbounded::<Submission>();
-    let (track_tx, track_rx) = crossbeam_channel::unbounded::<Vec<Track>>();
+    let (track_tx, track_rx) = crossbeam_channel::unbounded::<Vec<TimedTrack>>();
     let task = tokio::spawn(ingest_with(detection_rx, track_tx, settings));
     for detection in arrival_order(&detections) {
         detection_tx
@@ -174,6 +175,46 @@ async fn out_of_order_arrival_converges_on_the_offline_batch() {
         last = snapshot;
     }
     assert!(!last.is_empty(), "the async path emitted a final snapshot");
+    let last: Vec<Track> = last.into_iter().map(|t| t.track).collect();
+    compare(&last, &batch);
+}
+
+/// **DN-28 §7's first row: async-vs-batch, `imm-cv-ct` selected.** Proves the plumbing
+/// with the IMM in the loop, not the estimator -- `gungnir-filters`' own tests already
+/// gate the IMM's math (item 94), and
+/// `the_imm_confirms_one_track_through_the_turn_where_constant_velocity_fragmented`
+/// (`gungnir-tracking-service`) is DN-28's actual acceptance criterion. This row is the
+/// same equality [`out_of_order_arrival_converges_on_the_offline_batch`] proves for the
+/// linear filter, over the same timeline, so a disagreement here is the ordering and
+/// buffering around the IMM rather than two implementations of anything.
+#[tokio::test(flavor = "multi_thread")]
+async fn out_of_order_arrival_converges_on_the_offline_batch_with_imm_selected() {
+    let settings = PipelineSettings {
+        filter_selection: FilterSelection::ImmCvCt,
+        ..PipelineSettings::default()
+    };
+    let detections = timeline();
+
+    let batch = run_batch(settings.clone(), &detections);
+    assert_eq!(batch.len(), 2, "two targets, two tracks: {batch:#?}");
+
+    let (detection_tx, detection_rx) = crossbeam_channel::unbounded::<Submission>();
+    let (track_tx, track_rx) = crossbeam_channel::unbounded::<Vec<TimedTrack>>();
+    let task = tokio::spawn(ingest_with(detection_rx, track_tx, settings));
+    for detection in arrival_order(&detections) {
+        detection_tx
+            .send(Submission::Position(detection))
+            .expect("the pipeline is running");
+    }
+    drop(detection_tx);
+    task.await.expect("the ingest task ran to completion");
+
+    let mut last = Vec::new();
+    while let Ok(snapshot) = track_rx.try_recv() {
+        last = snapshot;
+    }
+    assert!(!last.is_empty(), "the async path emitted a final snapshot");
+    let last: Vec<Track> = last.into_iter().map(|t| t.track).collect();
     compare(&last, &batch);
 }
 

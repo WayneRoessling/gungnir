@@ -114,7 +114,7 @@ fn build(case: &Case) -> Imm<6, 3> {
     let x0 = vector(&case.x0);
     let p0 = diagonal::<6>(&case.p0_diag);
     let r = diagonal::<3>(&case.r_diag);
-    let cv: Box<dyn ModeFilter<6, 3>> = Box::new(KalmanFilter::new(
+    let cv: Box<dyn ModeFilter<6, 3> + Send> = Box::new(KalmanFilter::new(
         x0,
         p0,
         ConstantVelocity {
@@ -123,7 +123,7 @@ fn build(case: &Case) -> Imm<6, 3> {
         position_h(),
         r,
     ));
-    let ct: Box<dyn ModeFilter<6, 3>> = Box::new(KalmanFilter::new(
+    let ct: Box<dyn ModeFilter<6, 3> + Send> = Box::new(KalmanFilter::new(
         x0,
         p0,
         CoordinatedTurn {

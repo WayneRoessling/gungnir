@@ -1021,11 +1021,21 @@ async fn run(
     // this build does not implement is refused by name and the tracker stays ungoverned,
     // rather than running a different filter under the promoted one's identity.
     let mut tracking = match promoted.as_ref().map(|b| {
+        // DN-28 §5: the imm-cv-ct fields, built from the baseline's own `TrackingConfig`
+        // here rather than in `gungnir-tracking-service`, which may not depend on
+        // `gungnir-config`.
+        let imm = gungnir_tracking_service::ImmBaselineFields {
+            turn_rate_rad_s: b.config.imm_turn_rate_rad_s,
+            mode_transition: b.config.imm_mode_transition,
+            initial_mode_probabilities: b.config.imm_initial_mode_probabilities,
+        };
         (
             b,
             gungnir_tracking_service::PipelineSettings::from_baseline(
                 b.config.gate_threshold,
                 &b.config.filter_selection,
+                &imm,
+                b.config.measurement_noise_var,
             ),
         )
     }) {
