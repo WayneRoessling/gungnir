@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The VTK and glTF loaders against the hand-written fixtures (GAP-023): exact counts,
 //! and a corrupt file that yields `DataError` and never a panic (verification table §2,
 //! `gungnir-data` row).

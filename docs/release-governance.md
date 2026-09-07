@@ -12,6 +12,9 @@ materials, reproducible builds, signing, and artifact promotion. It is enforced 
 | Control | Mechanism | Where |
 |---|---|---|
 | Allowed licenses | `cargo deny check licenses` against the allow-list | `deny.toml` `[licenses]` |
+| Outbound license | `AGPL-3.0-or-later` plus §7 additional terms; every allow-list entry must be one-way compatible *into* it, so a denied license can make the workspace undistributable rather than merely unvetted | `LICENSE`, `LICENSE-ADDITIONAL-TERMS.md`, `Cargo.toml` `[workspace.package]` |
+| Relicensing rights | Contributors sign off (DCO) and grant Roessling Digital Solutions LLC the right to relicense, without which the commercial edition cannot ship | `CLA.md`, `CONTRIBUTING.md` |
+| Third-party material in-tree | Fixtures under `testdata/` are redistributed under their own licenses, never linked or shipped; each directory's `SOURCE.md` records origin and license, and the required license texts sit beside them | `NOTICE`, `testdata/*/SOURCE.md` |
 | Known vulnerabilities | `cargo deny check advisories` and `cargo audit` on every release; `fuzz-nightly.yml` for our own parsers | `release.yml`, `fuzz-nightly.yml` |
 | Dependency provenance | Only crates.io; git and unknown registries denied; wildcard versions denied | `deny.toml` `[sources]`, `[bans]` |
 | Duplicate dependency versions | Warned, so the single resolved set in the workspace `Cargo.toml` stays single | `deny.toml` `[bans]` |

@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "Remote implementations of the TrackingService and InterceptService traits that talk to a gungnir-node over gungnir-api, so the desktop switches between the embedded and connected profiles without any UI change (ARCHITECTURE.md §8.2). Store-and-forward while disconnected."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

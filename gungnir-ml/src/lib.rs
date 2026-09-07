@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Learned models as the rest of the system may hold them (plan 09; GAP-077, GAP-079).
 //!
 //! `docs/ml/architecture.md` §2 names the surface: a [`Model`] is something that turns a

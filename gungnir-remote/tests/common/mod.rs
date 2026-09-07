@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The two-node harness these tests share: a throwaway certificate authority, a node
 //! served over mutual TLS on loopback, and a bounded wait.
 //!

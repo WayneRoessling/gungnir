@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Short-lived session tokens, for a desktop talking to a node (GAP-057, DN-23 §5).
 //!
 //! D-02: "short-lived signed tokens for operator sessions issued by the node or a local

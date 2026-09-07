@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! After-action review: sessions, findings, and the actions that come out of them.
 //!
 //! Design: docs/design/DN-20-after-action-review.md. Capability CAP-5.3; measure

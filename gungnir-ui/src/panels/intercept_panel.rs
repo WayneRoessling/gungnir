@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Renders the current intercept plan (resource -> track assignments, intercept
 //! geometry where known). Read-only over `gungnir_model::PlanView`; the accept /
 //! override / reject controls belong to the approval workflow in `gungnir-command`

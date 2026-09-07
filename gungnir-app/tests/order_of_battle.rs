@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Cross-session identity and the order of battle (GAP-019, GAP-025; DN-19): a track
 //! seen in one session is recognised in the next by similarity, the lineage says on
 //! what basis, and the product over both sessions rests on the journal's own

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The `sensor_ingestion_parser` fuzz corpus is real input (GAP-076).
 //!
 //! `gungnir-fuzz` is excluded from the workspace, so nothing in the ordinary gate compiles

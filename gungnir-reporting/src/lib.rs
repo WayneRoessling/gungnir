@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Reporting, after-action review & export (report half), per
 //! docs/gungnir-capabilities.md §5.6. The tracking core's RTS/fixed-lag smoothing
 //! already implies post-hoc analysis is a valued use case; this crate packages

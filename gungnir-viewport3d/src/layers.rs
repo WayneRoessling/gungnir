@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Coverage on the map (GAP-007), and the static hazards (GAP-017).
 //!
 //! `docs/ux/ux-to-code-map.md` §1 puts this in `gungnir-viewport3d/src/layers.rs`, drawn

@@ -9,6 +9,18 @@ version = 2
 yanked = "deny"
 ignore = []
 
+# The workspace is AGPL-3.0-or-later, so every entry below must be one-way compatible
+# *into* AGPL-3.0. All of them are: the permissive licenses unconditionally, Apache-2.0
+# and MPL-2.0 in the GPLv3 direction only. A dependency that is not on this list is not
+# merely unvetted, it may make the workspace undistributable -- see CLA.md section 4.
+#
+# `OpenSSL` was removed on 2026-09-07 when the license was set. The classic OpenSSL and
+# SSLeay texts carry an advertising clause that AGPL section 7 forbids as a further
+# restriction, so a crate under it could not be linked into this workspace at all.
+# Nothing in the tree needs it: at the pinned versions `ring` 0.17.14 is `Apache-2.0 AND
+# ISC` and `aws-lc-sys` 0.45.0 no longer carries an OpenSSL component, and no crate in
+# the resolved graph declares that license. Leaving the entry in place would have let a
+# future upgrade walk a GPL-incompatible license in silently.
 [licenses]
 version = 2
 allow = [
@@ -24,7 +36,6 @@ allow = [
     "MPL-2.0",
     "CC0-1.0",
     "BSL-1.0",
-    "OpenSSL",
 ]
 confidence-threshold = 0.9
 

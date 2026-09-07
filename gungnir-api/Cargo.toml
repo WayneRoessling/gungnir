@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "Versioned, security-gated external contract (v1: snapshot, event stream, detection submit, plan decision) so remote desktops, peer C2 systems, analytics tools, or enterprise data services can integrate with a service node. Transport-neutral types here; the HTTP/JSON + WebSocket transport is the next stack addition. docs/gungnir-capabilities.md §5.5 -- High."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

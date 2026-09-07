@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Geofences reach the policy chain from the baseline (GAP-088).
 //!
 //! The geofence engine ran against an empty service on both binaries and could only

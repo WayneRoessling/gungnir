@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The after-action review reaches PN-13 (GAP-049, DN-20 §8).
 //!
 //! The workflow's rules have their own tests. These are the wiring's: a finding recorded

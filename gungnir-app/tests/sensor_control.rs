@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The outbound control path through the desktop (GAP-004, DN-11 §5).
 //!
 //! The unit tests in `gungnir-sensor-management` prove the registry's rules and the

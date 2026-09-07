@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! filters: KF, EKF, UKF, PF, IMM, sqrt/UDU, RTS -- verification-capability-table.md
 //! rows "Linear Kalman Filter" through "RTS smoother / fixed-lag smoothing".
 //! Fixed-size nalgebra types only (SVector/SMatrix); DVector/DMatrix reserved for

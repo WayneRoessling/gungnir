@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The asymmetric provider (GAP-084; docs/design/DN-22-key-management.md §9a and §11).
 //!
 //! **Signed by the owner 2026-09-06** (`gungnir-security` is human-owned).

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! CPU-side small linear solve (nalgebra) for the ICP transform-estimation step
 //! (GAP-024). §3.4 step 5: the linear system is tiny, so reading back a small GPU buffer
 //! and solving here each iteration is far simpler than implementing SVD in WGSL.

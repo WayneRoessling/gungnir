@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Binding the role workspace to the screen (GAP-055, GAP-072, GAP-073).
 //!
 //! `gungnir_workflow::WorkspaceLayout::for_role` says which panels a role has and in
@@ -262,7 +266,27 @@ fn owning_gap(panel: PanelId) -> &'static str {
         | PanelId::CoverageLayers
         | PanelId::InterceptPanel
         | PanelId::Alerts
+        | PanelId::About
         | PanelId::SystemHealth => "built",
+    }
+}
+
+/// Where this build's corresponding source can be obtained (D-10).
+///
+/// A constant rather than configuration: AGPL section 13's offer is about *this*
+/// program, and a deployment that could point it somewhere else could point it at
+/// nothing.
+pub const SOURCE_URL: &str = "https://github.com/WayneRoessling/gungnir";
+
+/// This build's identity, for PN-21.
+///
+/// The version is the binary's own rather than a string in the baseline, so a build
+/// cannot claim to be a version it is not.
+#[must_use]
+pub fn about_view() -> gungnir_ui::panels::about::AboutView<'static> {
+    gungnir_ui::panels::about::AboutView {
+        version: env!("CARGO_PKG_VERSION"),
+        source_url: SOURCE_URL,
     }
 }
 
@@ -427,6 +451,13 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
         // The viewport has its own area; a docked slot for it would draw it twice.
         PanelId::Viewport3d => {
             ui.label("The viewport is drawn in the central area.");
+        }
+        // PN-21 is normally the window main.rs opens from the status strip, but a
+        // baseline arrangement may name it and an administrator may dock it. Drawn
+        // properly in either case: falling through to the not-implemented placeholder
+        // would report the one panel the licence requires as missing.
+        PanelId::About => {
+            gungnir_ui::panels::about::render_about(ui, &about_view());
         }
         // Everything else is designed and not built. Say so rather than drawing
         // nothing: see the module documentation.
@@ -1198,6 +1229,7 @@ pub fn is_implemented(panel: PanelId) -> bool {
             | PanelId::Alerts
             | PanelId::Viewport3d
             | PanelId::Audit
+            | PanelId::About
     )
 }
 

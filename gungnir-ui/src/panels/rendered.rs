@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! What the panels actually draw (GAP-071/GAP-075 follow-up).
 //!
 //! Every other test in this crate asserts on a view struct: that `EmptyBecause` holds
@@ -2580,4 +2584,76 @@ fn the_comparison_control_names_the_gap_that_would_build_it() {
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &view));
     assert!(frame.says("GAP-055"), "{}", frame.joined());
+}
+
+/// PN-21 has to paint all four elements of AGPL section 0, not merely hold them.
+///
+/// This is the test that matters most in this file, and for an unusual reason: it is
+/// the only one whose failure has a consequence outside the program. The additional
+/// term in `LICENSE-ADDITIONAL-TERMS.md` section 1 requires a derivative work's
+/// interface to preserve this attribution, and AGPL section 5(d) makes that binding on
+/// a derivative *only if this interface displays the notices first*. A panel that held
+/// the right constants and drew none of them would satisfy every unit test in
+/// `about.rs`, look correct in review, and quietly release every future fork of Gungnir
+/// from crediting anyone.
+///
+/// So the assertion is on painted text, element by element, with each failure naming
+/// which of section 0's four it lost.
+#[test]
+fn the_about_panel_paints_every_appropriate_legal_notice() {
+    use crate::panels::about::{
+        render_about, AboutView, ADDITIONAL_TERMS, APPROPRIATE_LEGAL_NOTICES, COPYRIGHT,
+    };
+
+    let view = AboutView {
+        version: "0.1.0",
+        source_url: "https://example.invalid/gungnir",
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| render_about(ui, &view));
+
+    for notice in APPROPRIATE_LEGAL_NOTICES {
+        // Painted text wraps, so the whole sentence is not one drawn string. The first
+        // clause is: it is what identifies which notice reached the screen.
+        let opening: String = notice
+            .split_whitespace()
+            .take(4)
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            frame.says(&opening),
+            "AGPL section 0 requires this and PN-21 did not draw it: {notice}\n\ndrawn:\n{}",
+            frame.joined()
+        );
+    }
+
+    // The holder has to be named, not merely the word "Copyright": the section 7(b)
+    // term is about *whose* attribution survives.
+    assert!(
+        frame.says("Roessling Digital Solutions LLC"),
+        "{}",
+        frame.joined()
+    );
+    assert!(frame.says("WITHOUT ANY"), "{}", frame.joined());
+    assert!(
+        frame.says("https://www.gnu.org/licenses/"),
+        "{}",
+        frame.joined()
+    );
+    // Section 7 asks that added terms be stated in the notice of what they govern.
+    let terms_opening: String = ADDITIONAL_TERMS
+        .split_whitespace()
+        .take(4)
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(frame.says(&terms_opening), "{}", frame.joined());
+    assert!(COPYRIGHT.contains("2026"));
+
+    // Section 13's offer: an operator who cannot see where source comes from cannot
+    // tell whether a modified build has honoured it.
+    assert!(
+        frame.says("https://example.invalid/gungnir"),
+        "{}",
+        frame.joined()
+    );
 }

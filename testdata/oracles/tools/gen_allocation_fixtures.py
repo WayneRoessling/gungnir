@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 """Generate the DP oracle fixture for the `gungnir-allocation` row.
 
 Row: "Bellman/DP resource-to-track assignment" in

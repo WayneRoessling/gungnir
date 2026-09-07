@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The 56-bit ME field of a DF17 or DF18 extended squitter, decoded by type code.
 //!
 //! Four type-code groups are interpreted here — identification (1 to 4), surface

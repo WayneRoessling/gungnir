@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Attaching the three-d scene to eframe's OpenGL context (GAP-022).
 //!
 //! `ARCHITECTURE.md` §4 kept three-d for the viewport and §9 records the consequence:

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The eight message types this system reads, field by field from ITU-R M.1371-6
 //! Annex 7 (the table numbers are that edition's): Messages 1, 2, 3 (Table 46), 5
 //! (Table 50), 18 (Table 68), 19 (Table 69), 21 (Table 71), 24 (Tables 76 and 77).

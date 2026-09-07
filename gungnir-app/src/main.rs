@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! main.rs -- eframe app bootstrap only, no logic here, per
 //! rust-ui-architecture-coding-standards.md §1. Runs eframe with `Renderer::Glow`
 //! because the 3D viewport draws through three-d's OpenGL context
@@ -19,6 +23,13 @@ use std::time::Duration;
 
 /// Target redraw cadence when nothing else requests a repaint.
 const REPAINT_INTERVAL: Duration = Duration::from_millis(33);
+
+/// PN-21's default width (D-34).
+///
+/// Wide enough that the warranty disclaimer and the licence location each wrap to two
+/// lines rather than a column of fragments: they are the sentences AGPL section 0
+/// requires be *told* to the user, and a notice nobody can read is not one.
+const ABOUT_WINDOW_WIDTH: f32 = 520.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
@@ -70,6 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 sustainment: sustainment::SustainmentState::default(),
                 workspace: Workspace::default(),
                 scene,
+                about_open: false,
             }))
         }),
     )?;
@@ -102,6 +114,9 @@ struct App {
     /// the viewport keeps the 2D projection. Behind an `Arc<Mutex<..>>` because
     /// `egui_glow`'s paint callback runs later in the frame and owns what it captures.
     scene: Option<Arc<Mutex<gungnir_viewport3d::gl::SceneRenderer>>>,
+    /// Whether PN-21 is open (D-34). Session-local, like the replay cursor: which
+    /// windows a person has open is what this window is doing, not what the mission is.
+    about_open: bool,
 }
 
 /// The arrangement on screen: the main window's tree and the detached panels.
@@ -143,6 +158,7 @@ impl eframe::App for App {
         // what was clicked rather than writing to `AppState`, and the last `Some` wins
         // because at most one panel is clicked per frame.
         self.draw_status_strip(ctx);
+        self.draw_about(ctx);
         let mut action = self.draw_workspace(ctx);
         if !self.workspace.detached.contains(&PanelId::ApprovalQueue) {
             // With the queue docked, its dialog belongs to this window. When the queue
@@ -172,15 +188,61 @@ impl eframe::App for App {
 
 impl App {
     /// GAP-072: PN-01 is on every layout, so it is a top panel rather than a slot in
-    /// any one workspace. It reads and writes nothing.
-    fn draw_status_strip(&self, ctx: &egui::Context) {
-        let strip_data = gungnir_app::status::StatusStripData::from_state(&self.state);
-        egui::TopBottomPanel::top("status_strip").show(ctx, |ui| {
-            gungnir_ui::panels::status_strip::render_status_strip(
-                ui,
-                &gungnir_app::status::status_strip_view(&self.state, &strip_data),
-            );
-        });
+    /// any one workspace. It reads nothing and writes nothing but the About toggle.
+    ///
+    /// D-34: the strip carries the control that opens PN-21, because the strip is the
+    /// only surface guaranteed to be on screen for every role -- and for a session with
+    /// nobody signed in. AGPL section 0 asks for the notices to sit behind a "convenient
+    /// and prominently visible feature", and any other host would have made them
+    /// reachable for some roles and not others.
+    fn draw_status_strip(&mut self, ctx: &egui::Context) {
+        // Scoped so the borrows of `self.state` end before the toggle is applied.
+        let toggled = {
+            let strip_data = gungnir_app::status::StatusStripData::from_state(&self.state);
+            let view = gungnir_app::status::status_strip_view(&self.state, &strip_data);
+            let mut clicked = false;
+            egui::TopBottomPanel::top("status_strip").show(ctx, |ui| {
+                // Right to left, so the strip keeps the eight elements in the
+                // left-to-right order `information-architecture.md` §2 specifies and the
+                // About control takes the far end rather than a place among them.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    clicked = ui
+                        .button(PanelId::About.title())
+                        .on_hover_text("Copyright, licence and warranty notices")
+                        .clicked();
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        gungnir_ui::panels::status_strip::render_status_strip(ui, &view);
+                    });
+                });
+            });
+            clicked
+        };
+        if toggled {
+            self.about_open = !self.about_open;
+        }
+    }
+
+    /// D-34: PN-21, the Appropriate Legal Notices.
+    ///
+    /// A window rather than a docked slot, for the same reason PN-21 is in no role's
+    /// layout: the one panel that must be reachable from every workspace is the one that
+    /// should belong to none of them. It floats above the workspace because egui puts a
+    /// `Window` at `Order::Middle` and the side and top panels in the background layer,
+    /// not because of where this call sits; it is drawn straight after the strip that
+    /// opens it so the table of contents above reads in the order a person meets them.
+    fn draw_about(&mut self, ctx: &egui::Context) {
+        if !self.about_open {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new(PanelId::About.title())
+            .open(&mut open)
+            .collapsible(false)
+            .default_width(ABOUT_WINDOW_WIDTH)
+            .show(ctx, |ui| {
+                gungnir_ui::panels::about::render_about(ui, &gungnir_app::workspace::about_view());
+            });
+        self.about_open = open;
     }
 
     /// GAP-055 and GAP-075: the side panel is the current role's workspace, drawn as a

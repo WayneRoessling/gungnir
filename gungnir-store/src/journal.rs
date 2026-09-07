@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Append-only journal framing: one JSON object per line (`.jsonl`), one file per
 //! session, named `session-<zero-padded id>.jsonl`. Kept separate from the
 //! `EventJournal` trait in lib.rs so the on-disk format can change (checksums,

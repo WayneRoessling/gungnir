@@ -63,10 +63,10 @@ figures below are from this development machine, release profile except where no
 |---|---|---|---|
 | Per-frame `update()` | p99 under 4 ms | ~20 µs per frame (300 frames in 6.1 ms); debug-profile p99 533 µs, worst 3.32 ms | **No.** The tracking stage is a stub, so this is a floor, not the budgeted quantity. |
 | `tracks()` / `is_healthy()` | p99 under 1 ms | ~0.6 ns each | **No.** The snapshot is empty while `PIPELINE_IMPLEMENTED` is false, so it is not "at Scenario 4 track counts". |
-| Journal append per frame | under 1 ms for 50 envelopes | **157 µs release; median 400 µs debug over 9 runs** | **Yes**, since GAP-085. |
+| Journal append per frame | under 1 ms for 50 envelopes | **157 µs release; median 400 µs debug over 9 runs on this machine, 1.84 ms debug on a shared CI runner** | **Yes**, since GAP-085 — **in the release profile only** since 2026-09-07; see the note below. |
 | Startup to first frame | under 3 s | 16.5 ms release, 12.5 ms debug (excludes eframe window creation) | **Yes.** |
 
-Two notes on those figures.
+Three notes on those figures.
 
 **The journal budget was the one failure, and it is fixed.** Before GAP-085,
 `FileEventJournal::append` opened the session file, wrote one line, and closed it once
@@ -78,6 +78,24 @@ dominant term. Which profile is measured matters: this budget is stated for the 
 **desktop** profile. Under the node profile fifty envelopes are fifty fsyncs, and the
 node is measured against its own budget instead, "an accepted envelope is on disk within
 100 ms".
+
+**The journal budget is asserted in release only (owner decision, 2026-09-07).** The
+budget is unchanged at 1 ms for fifty envelopes; what changed is which build it is
+asserted against. `cargo test` builds in debug, and the first CI run this repository ever
+had (GAP-061) measured a median of **1.844781 ms** on a GitHub Actions runner — worse
+than the 1.0681 ms a Windows development machine gives, because shared runners have
+throttled I/O. Both are debug figures being held to a budget whose evidence is 157 µs in
+release, so the failure was about the build profile and the hardware rather than about
+`FileEventJournal`.
+
+`gungnir-app/tests/frame_budgets.rs` still measures and prints the figure on every
+profile, so the debug number stays visible; the assertion applies in release.
+**`ci.yml` runs `cargo test -p gungnir-app --test frame_budgets --release` as a separate
+step, and that is where the gate is enforced.** That step is load-bearing: a release-only
+budget that no job runs in release would be a gate that cannot fail, which would be worse
+than the flaky one it replaced. The alternatives considered and rejected were widening the
+budget, scaling it per profile, and skipping the test — each makes the gate pass by making
+it claim less.
 
 **Startup got slower, and that is a measurement artifact rather than a regression.** The
 `criterion` startup group builds a desktop per iteration, so each one now pays the

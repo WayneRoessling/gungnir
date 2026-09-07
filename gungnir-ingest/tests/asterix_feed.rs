@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The public radar capture through the real gateway: the adapter, authentication,
 //! validation, and the tracking-service sink, end to end (GAP-001, radar half).
 //!

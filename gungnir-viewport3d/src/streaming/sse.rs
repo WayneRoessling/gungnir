@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Screen-space-error calc against the live three-d Camera -- the actual novel work
 //! per §2.1, since no existing crate wires tile refinement to three-d's camera types.
 /// # Errors

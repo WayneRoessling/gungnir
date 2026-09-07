@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Cross-session products: the order of battle and pattern of life.
 //!
 //! Design: docs/design/DN-19-order-of-battle.md. Capability CAP-2.12; mission thread

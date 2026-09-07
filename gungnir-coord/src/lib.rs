@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Verifies against verification-capability-table.md: "Coordinate frame transforms
 //! (ECEF/ENU/NED/geodetic)". Position error < 1e-6 m vs. pymap3d/ecef2enu/geodetic2ecef.
 //! Deliberately stress-tested with an adversarial pole/antimeridian scenario -- see

@@ -112,13 +112,18 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-tracking-service` | `core`, `coord`, `filters`, `association`, `track`, `rfs`, `track-fusion`, `fusion-async`, `model` |
 | `gungnir-intercept-service` | `core`, `coord`, `allocation`, `model` |
 | `gungnir-data-fusion` | `data` |
-| `gungnir-remote` | `model`, `eventing`, `api`, `tracking-service`, `intercept-service` |
+| `gungnir-remote` | `model`, `eventing`, `api`, `tracking-service`, `intercept-service`, `security` (t) |
 | `gungnir-node` | `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `sensor-management`, `tracking-service`, `intercept-service`, `api`, `analytics` (g), `security`, `observability`, `modelops` (h), `policy` (k), `geo` (l), `remote` (p), `identity` (s) |
 | `gungnir-ui` | `model` |
 | `gungnir-viewport3d` | `data`, `data-fusion`, `model`, `ui` (theme only) |
 | `gungnir-app` | Both facades, `remote`, `data`, `data-fusion`, `render`, `viewport3d`, `ui`, `workflow`, `security`, `policy`, `command`, `geo`, `replay`, `reporting`, `analytics`, `sensor-management`, `assessment`, `modelops` (h), `decision` (i), `resilience` (m), `identification` (n), `identity` (o), `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `observability` |
 
 The productization-layer edges are listed in §7.1.
+
+`gungnir-remote` → `gungnir-security` is edge (t). It was in the manifest from 2026-09-06
+but absent from this table until 2026-09-07, when the first CI run of the UAF generator
+(GAP-061) produced a view showing an edge the table did not. Its reason, the two refused
+alternatives, and why no test caught it are in `docs/design/dependency-edges.md` §14.
 
 ## §1 — Why the tracking core stays untouched and fully separate
 
@@ -441,8 +446,17 @@ edge in the graph are checked by `gungnir-app/tests/dependency_graph.rs` on ever
 - **(p) `gungnir-node` ──► `gungnir-remote`** (2026-09-06, GAP-009). A peer link is a client
   link to a partner's node, and the client lives in `gungnir-remote`; the node binds one
   per peer as a machine under its own certificate. Downward from the binary; `gungnir-remote`
-  depends on api, the two facades, security and analytics, none a binary; acyclic.
+  depends on api, the two facades, security (t) and analytics, none a binary; acyclic.
   Review: accepted by the owner 2026-09-06 (`docs/design/dependency-edges.md` §11).
+- **(t) `gungnir-remote` ──► `gungnir-security`** (2026-09-06, GAP-060, D-29). `identity.rs`
+  builds a host's TLS identity from that host's own `KeyProvider`, so the private half never
+  leaves custody. `gungnir-remote` carries it because it is the only crate both binaries
+  depend on at runtime that already holds `rustls` and owns `LinkTls`. The refused
+  alternative was `gungnir-api`, the better home on layering grounds, rejected because the
+  desktop holds it as a dev-dependency only. Downward, Deployment to Productization;
+  `gungnir-security` has no `gungnir-*` dependency, so no cycle is reachable. **Recorded
+  late**: in a manifest from 2026-09-06, in this table from 2026-09-07
+  (`docs/design/dependency-edges.md` §14).
 - **(q) `gungnir-ml` ──► `gungnir-model` and `gungnir-interop`** (2026-09-06, GAP-077,
   GAP-079). The crate `docs/ml/architecture.md` §1 drew as `gungnir-model ──► gungnir-ml`
   exists: the `Model` and `FeatureExtractor` traits, a fake for the consumers' tests,

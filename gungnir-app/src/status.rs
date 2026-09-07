@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Assembling PN-01's view from `AppState` (GAP-072).
 //!
 //! `gungnir_ui::panels::status_strip` draws the strip and knows nothing about where

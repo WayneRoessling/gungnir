@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Validation/quarantine rules, kept separate from the `IngestGateway` struct in
 //! lib.rs so the policy can be unit-tested against synthetic malformed/malicious
 //! payloads independent of any real adapter. The `sensor_ingestion_parser` fuzz

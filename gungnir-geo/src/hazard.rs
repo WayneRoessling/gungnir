@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Physical obstacles and hazards: booms, nets, barriers, wrecks, shoals.
 //!
 //! Design: docs/design/DN-14-hazard-layer.md. Capability CAP-2.5; mission thread

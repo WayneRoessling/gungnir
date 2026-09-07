@@ -33,6 +33,15 @@ jobs:
         run: cargo clippy --workspace --all-targets
       - name: test
         run: cargo test --workspace
+      # The journal-append budget in performance-budgets.md is a release figure (157 us
+      # release against about 665 us debug), and a shared runner's throttled I/O put the
+      # debug measurement at 1.84 ms against a 1 ms budget -- a failure about the build
+      # profile and the hardware, not about the code. The debug run above therefore
+      # measures and prints it without asserting, and this step is where the gate is
+      # enforced. It must stay: a release-only budget that no job runs in release is a
+      # gate that cannot fail.
+      - name: budget gates, release profile
+        run: cargo test -p gungnir-app --test frame_budgets --release
       - name: benches compile
         run: cargo bench --workspace --no-run
 

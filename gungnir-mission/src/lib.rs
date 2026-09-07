@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Mission/session lifecycle, per gungnir-capabilities.md §5.1.
 //! `gungnir-scenario` remains the *generator* of synthetic scenarios (test/bench
 //! only, never a runtime dependency of a production crate, per

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Advanced 3D analytical functions, per docs/gungnir-capabilities.md §5.3:
 //! analysis, not display. The viewport renders geometry; this crate answers "can
 //! this sensor actually see that location", "which of these points are visible

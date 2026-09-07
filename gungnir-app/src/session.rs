@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Signing in and out on the desktop (GAP-057, DN-23 §5), and what a session changes.
 //!
 //! `AppState::sign_in` audits every attempt and never invents attribution; this module is

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Key custody, rotation, and escrow.
 //!
 //! Design: docs/design/DN-22-key-management.md, **signed by the owner 2026-09-05**.

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! A seeded session for usability rounds (GAP-089, docs/ux/usability-round-1-session.md §3).
 //!
 //! **Written when the live desktop had neither tracks nor plans**, and both now exist

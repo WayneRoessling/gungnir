@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The arithmetic the reference generator's numbers obey (GAP-016).
 //!
 //! `gen_tracks.py` is Python, and a Python number is an `int` or a `float` depending on

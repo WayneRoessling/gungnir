@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The four remaining mechanical architecture checks (GAP-081; plan 10 finding CA-F1;
 //! `docs/architecture/togaf/phase-g-implementation-governance/architecture-contracts.md`
 //! C-07, C-14, AP-12/C-03 part one, and C-05's document integrity). The fifth, dependency

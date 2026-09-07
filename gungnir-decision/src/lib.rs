@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Decision support beyond DP allocation, per docs/gungnir-capabilities.md §5.4.
 //! `gungnir_intercept_service::DpInterceptService` gives one optimized assignment;
 //! real operational decisions usually need alternatives, explainability, and

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The DEM loaders against their verification row (`verification-capability-table.md`
 //! §2, `gungnir-data`): a fixture loads to exact counts and bounds, and a corrupt file
 //! is a `DataError`, never a panic. The fixtures and their figures are described in

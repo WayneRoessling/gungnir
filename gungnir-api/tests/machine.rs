@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Machine identities on the routes that serve a sensor or an effector (D-02; GAP-002,
 //! GAP-004, GAP-040): a certificate speaks for exactly what the baseline says it does.
 //!

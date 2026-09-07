@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! metrics: MOTA/MOTP, purity/fragmentation --
 //! verification-capability-table.md `metrics` row. Values within 1e-3 vs. motmetrics.
 //! Validated against the dense-swarm scenario, where fragmentation is a meaningful

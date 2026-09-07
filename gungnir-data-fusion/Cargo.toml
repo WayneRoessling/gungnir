@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "GPU-accelerated point cloud registration/fusion (point-to-plane ICP) on wgpu compute, per rust-3d-data-ecosystem-build-vs-adopt.md §3. The one genuine ecosystem gap identified -- kept as its own crate, separate from gungnir-data, because it's the only data-layer crate that needs a wgpu::Device (borrowed from gungnir-render)."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

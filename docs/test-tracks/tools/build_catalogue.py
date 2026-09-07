@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 """Render the test-track documents from the YAML sources (plan 07).
 
 Reads catalogue.yaml (and its includes), classes.yaml, sensors.yaml, scenarios.yaml and

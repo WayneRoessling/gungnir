@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Single source of truth for rendering (rust-ui-architecture-coding-standards.md
 //! §2) -- but per docs/gungnir-capabilities.md §9 ("`AppState` must not become the
 //! system of record"), this struct is a local, render-friendly *projection* of

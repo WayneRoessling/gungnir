@@ -4,6 +4,23 @@ Read `docs/README.md` first; it indexes every design and standards document and
 carries the glossary. This file is the short version of the rules that apply to any
 change, human- or agent-authored.
 
+## Licensing and sign-off
+
+Gungnir is AGPL-3.0-or-later (`LICENSE`) with additional terms under section 7
+(`LICENSE-ADDITIONAL-TERMS.md`), and is also licensed commercially by Roessling Digital
+Solutions LLC. That second half only works while one party can relicense the whole
+codebase, so contributions carry two requirements:
+
+1. **Sign off every commit.** `git commit -s` adds the `Signed-off-by` line that
+   certifies the Developer Certificate of Origin 1.1.
+2. **Agree to `CLA.md` once**, for anything beyond a trivial change. It grants
+   Roessling Digital Solutions LLC the right to relicense your contribution, including
+   under proprietary terms. You keep your copyright.
+
+A contribution that cannot be relicensed cannot be merged — including a dependency
+under GPL or any other license absent from `deny.toml`'s allow-list, because it would
+make the commercial edition undistributable.
+
 ## Before you write code
 
 1. Find the capability you are touching in `docs/gungnir-capabilities.md` and, for
@@ -42,6 +59,16 @@ change, human- or agent-authored.
 - **Doc comments cite their source.** Every crate's `lib.rs` names the document and
   section it implements; section numbers in `ARCHITECTURE.md` §1–§10 and the
   standards documents are stable, so cite them.
+- **Every new source file carries the license header.** Three lines above everything
+  else, including above a `//!` module doc comment, using `#` for Python and `//` for
+  Rust and WGSL. A Python file with a shebang keeps it on line 1 and puts the header
+  underneath.
+
+  ```
+  // Copyright (C) 2026 Roessling Digital Solutions LLC
+  // SPDX-License-Identifier: AGPL-3.0-or-later
+  // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+  ```
 - **Tests alongside the change.** For the tracking core that means the
   oracle-comparison test in the same PR; for everything else, unit tests of the
   invariant the code claims.

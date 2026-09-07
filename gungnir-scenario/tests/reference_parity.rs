@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The Rust generator against the reference generator's committed output (GAP-016,
 //! GAP-046): every sample set under `testdata/tracks/samples/` is regenerated from the
 //! four YAML files and its four data files must be **byte-identical**; the two JSON

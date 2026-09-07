@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The static hazard layer reaches the picture (GAP-017, DN-14).
 //!
 //! `HazardLayer` existed with its tests and nothing built one. These are the tests behind

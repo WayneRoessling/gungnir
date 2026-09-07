@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! ADS-B: Mode S 1090 MHz extended squitter (GAP-010, D-24, D-32).
 //!
 //! # No normative source is pinned, and that is a decision, not an omission

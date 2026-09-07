@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "Advanced 3D analytical functions -- line-of-sight, viewshed, sensor-coverage volumes, terrain masking, route deconfliction -- as standalone CPU services rendered by gungnir-viewport3d rather than embedded in it. docs/gungnir-capabilities.md §5.3 -- Medium."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

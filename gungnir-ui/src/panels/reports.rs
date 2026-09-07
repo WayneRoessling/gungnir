@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! PN-13, mission reports (GAP-071).
 //!
 //! `docs/ux/information-architecture.md` §1: a `Report` with its figures and their

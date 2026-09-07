@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! track-manager: init/confirm/coast/delete lifecycle --
 //! verification-capability-table.md "Track lifecycle" row. Exact match on step index
 //! vs. Stone Soup initiators/deleters and MATLAB trackHistoryLogic/trackScoreLogic.

@@ -192,10 +192,50 @@ dependency-driven minimum; the rest follow the priorities in
 9. `gungnir-viewport3d::streaming` (3D Tiles) last, and only once a panel needs
    site-scale streamed terrain.
 
+## Licensing
+
+Gungnir is free software under the **GNU Affero General Public License, version 3 or
+later** ([`LICENSE`](./LICENSE)), with additional terms under AGPL section 7 covering
+attribution, origin marking, and trademarks
+([`LICENSE-ADDITIONAL-TERMS.md`](./LICENSE-ADDITIONAL-TERMS.md)).
+
+Copyright (C) 2026 Roessling Digital Solutions LLC.
+
+You may run, study, modify, redistribute, and self-host Gungnir at no charge, including
+commercially. Two obligations are worth stating plainly because of how this system is
+deployed:
+
+- **Section 13, the network clause.** If you modify Gungnir and let users interact with
+  your version over a network — which is what the on-prem and cloud service-node
+  profiles in [`ARCHITECTURE.md`](./ARCHITECTURE.md) §8 are — you must offer those users
+  the corresponding source of your modified version. Running an unmodified copy carries
+  no such obligation.
+- **Attribution survives.** The notice in [`NOTICE`](./NOTICE) and the copyright header
+  on each source file must be preserved, and where a derivative work has an interactive
+  user interface, the attribution must appear in its Appropriate Legal Notices.
+
+**Commercial licensing.** Where AGPL terms are incompatible with a program's
+requirements, Roessling Digital Solutions LLC offers Gungnir under a separate commercial
+license on negotiated terms: wayne.roessling@roesslingdigital.com.
+
+**Contributions** require a sign-off and a relicensing grant ([`CLA.md`](./CLA.md));
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) has the mechanics.
+
+**Not everything here is AGPL.** Test fixtures under `testdata/` are third-party
+material redistributed under their own licenses and are never linked into or shipped
+with a binary — notably `testdata/asterix/`, which is **GPL-2.0**
+(`testdata/asterix/COPYING`). [`NOTICE`](./NOTICE) lists every exception with its
+license and text. Rust dependencies are permissively licensed and gated against the
+allow-list in [`deny.toml`](./deny.toml).
+
 ## Documentation
 
 | Document | Purpose |
 |---|---|
+| `LICENSE` | GNU Affero General Public License v3 |
+| `LICENSE-ADDITIONAL-TERMS.md` | Attribution, origin, and trademark terms under AGPL §7 |
+| `NOTICE` | Attribution text, and every third-party license in the repository |
+| `CLA.md` | Contributor License Agreement and sign-off requirement |
 | `ARCHITECTURE.md` | Technical reference for the whole workspace |
 | `CONTRIBUTING.md` | The rules that apply to any change |
 | `CLAUDE.md` | Working notes for coding agents |

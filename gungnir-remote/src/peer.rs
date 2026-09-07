@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! A link to a partner's node as a machine (GAP-009, DN-16; GAP-065, DN-18).
 //!
 //! The same link task the desktop uses, started without a sign-in: the client

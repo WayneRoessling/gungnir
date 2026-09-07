@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! egui <-> wgpu render pass wiring. **Inactive**: the application presents through
 //! eframe's `glow` backend so that three-d has an OpenGL context
 //! (ARCHITECTURE.md §9). Kept as the seam where an egui-over-wgpu presentation path

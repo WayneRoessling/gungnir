@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The plan-07 test-track library as typed data (GAP-016, D-31).
 //!
 //! `docs/test-tracks/tools/gen_tracks.py` composes the TT-01 to TT-10 sets from four

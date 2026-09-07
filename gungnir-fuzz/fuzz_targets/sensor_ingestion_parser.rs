@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Fuzz target for CI gate #5 (fuzz-nightly.yml), scheduled nightly per
 //! gungnir-workspace-structure.md, not run per-PR. Feeds arbitrary bytes through
 //! the recorded-feed line decoder and the gateway validation rules: neither may

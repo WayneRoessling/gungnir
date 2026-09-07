@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Row: "`fusion-async` Bearing update" in `docs/verification-capability-table.md` §1
 //! (docs/design/DN-27-bearing-only-detections.md §10, third row).
 //!

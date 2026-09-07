@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Replay, reports and the configuration baseline through the desktop (GAP-071).
 //!
 //! None of this is demonstrable on screen without a display, and two of the three

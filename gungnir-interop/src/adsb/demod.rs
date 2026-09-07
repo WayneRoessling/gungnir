@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The 1090 MHz pulse-position demodulator: 8-bit unsigned IQ at 2 MS/s in, Mode S
 //! frames out.
 //!

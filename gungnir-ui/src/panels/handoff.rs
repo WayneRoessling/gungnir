@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The handoff rows PN-06 and PN-20 both draw (GAP-040; DN-07 §5 and §7;
 //! `docs/ux/ux-to-code-map.md`, PN-06 and PN-20).
 //!

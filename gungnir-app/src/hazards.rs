@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The static hazard layer, from the baseline to the map (DN-14, GAP-017).
 //!
 //! `gungnir_geo::HazardLayer` existed with its tests and nothing built one. This is the

@@ -175,6 +175,7 @@ RS_node --> RS_api
 RS_node --> RS_remote
 RS_node --> RS_security
 RS_node --> RS_modelops
+RS_node --> RS_identity
 RS_node --> RS_policy
 RS_node --> RS_geo
 RS_node --> RS_analytics
@@ -186,6 +187,7 @@ RS_oracle --> RS_rfs
 RS_oracle --> RS_scenario
 RS_policy --> RS_model
 RS_policy --> RS_geo
+RS_remote --> RS_security
 RS_remote --> RS_model
 RS_remote --> RS_eventing
 RS_remote --> RS_api

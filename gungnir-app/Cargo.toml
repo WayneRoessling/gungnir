@@ -137,12 +137,16 @@ gungnir-reporting = { path = "../gungnir-reporting" }
 # tests in tests/ reach `update::tick`, which docs/performance-budgets.md names as
 # the thing the desktop budgets are measured around (GAP-056).
 [lib]
+bench = false
 name = "gungnir_app"
 path = "src/lib.rs"
 
 [[bin]]
 name = "gungnir-app"
 path = "src/main.rs"
+# Same reason as [lib]: a bin's implicit bench harness is libtest and rejects
+# criterion's flags. The criterion benchmark is the [[bench]] target below.
+bench = false
 
 [[bench]]
 name = "app_tick"

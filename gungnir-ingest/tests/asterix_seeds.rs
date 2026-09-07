@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The `asterix_feed` fuzz corpus is real input, and stays decodable.
 //!
 //! Same reasoning as `fuzz_corpus.rs`: `gungnir-fuzz` is outside the workspace, so a

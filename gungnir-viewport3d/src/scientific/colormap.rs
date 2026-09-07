@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Standard colormaps -- palette shared with `gungnir_ui::theme`.
 //!
 //! **Viridis is built (2026-09-06, GAP-023)** as a nine-stop table with linear

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Pure-CPU ICP reference (GAP-024, `rust-3d-data-ecosystem-build-vs-adopt.md` §3.6
 //! step 1): no `wgpu` types at all, unit-tested against known synthetic transforms and
 //! the degenerate cases. Also the runtime fallback for headless configurations.

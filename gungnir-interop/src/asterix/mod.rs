@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! ASTERIX framing shared by every category: data blocks, records, and the field
 //! specification (FSPEC), per EUROCONTROL Specification for Surveillance Data
 //! Exchange Part I edition 3.1 (pinned in `docs/design/external-standards.md` §1.6).

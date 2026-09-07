@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "Canonical, versioned operational data model -- TrackView/DetectionView/ResourceView/PlanView and friends, with provenance, quality, identity, timestamps, and classification as first-class fields. Foundational/Critical per docs/gungnir-capabilities.md §5.1 -- the service facades and every productization crate build on this one."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

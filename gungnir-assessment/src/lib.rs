@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Threat/risk assessment, per docs/gungnir-capabilities.md §5.4.
 //! gungnir-intercept-service optimizes a reward matrix it is *given*; this crate is
 //! the "why does this track matter more than that one" layer that derives those

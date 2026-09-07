@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The provenance of an accepted detection says how strongly its source was
 //! authenticated (GAP-002), stamped by the gateway from the authenticator that admitted
 //! it: an allow-list admission and an admit-everything one are different claims.

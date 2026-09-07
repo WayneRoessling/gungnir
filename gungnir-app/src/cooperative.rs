@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Cooperative identity on the desktop (GAP-010, GAP-018): the AIS feeds the baseline
 //! names, their reports associated with tracks, and the identification engine fed from
 //! them.

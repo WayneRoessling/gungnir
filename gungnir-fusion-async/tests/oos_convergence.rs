@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The `fusion-async` row of `docs/verification-capability-table.md` §1:
 //! "Out-of-sequence handling, multi-rate fusion".
 //!

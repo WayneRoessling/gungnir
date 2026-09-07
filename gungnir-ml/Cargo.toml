@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "The model and feature-extractor traits learned models are held to, a fake model for the consumers' tests, and the dataset extraction from test-track sets into the Arrow form docs/ml/data-pipeline.md documents (GAP-077, GAP-079). No inference runtime: that sign-off is deferred (docs/ml/architecture.md §3), and a build without one reports that learned models are absent rather than pretending."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

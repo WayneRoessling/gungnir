@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! fusion-async: out-of-sequence handling / multi-rate fusion + concurrency
 //! correctness -- verification-capability-table.md `fusion-async` rows. The *only*
 //! crate that uses the tokio runtime (agentic-coding-standards.md §2.2); the runtime

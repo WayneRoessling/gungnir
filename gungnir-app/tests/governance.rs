@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Which algorithm configuration a deployment is running (GAP-086, DN-24).
 //!
 //! `gungnir-modelops` shipped with the scaffold and **no crate imported it**: the registry,

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! PN-10, sensor management (GAP-003, GAP-004).
 //!
 //! `docs/ux/information-architecture.md` §1: a `SensorRecord` per sensor -- mode,

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Canonical operational data model, per docs/gungnir-capabilities.md §5.1
 //! ("Canonical Operational Data Model" -- Critical). One shared, versioned set of
 //! domain types that every service facade, UI, ingest, store, and API crate in this

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The policy chain's verdict is on the record (GAP-028).
 //!
 //! Every plan the desktop submits leaves `PlanEvaluated` on the bus, naming the engines

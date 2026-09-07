@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The AIS decoder against gpsd's regression captures (`testdata/ais/SOURCE.md`, D-32):
 //! every sentence gpsd decoded to one of the eight message types in scope must decode
 //! here to the same raw field values. gpsd's `.chk` files are the oracle; the sentences

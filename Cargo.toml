@@ -75,7 +75,12 @@ exclude = ["gungnir-fuzz"]  # fuzz crate has its own toolchain/workspace quirks,
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "UNLICENSED"
+# AGPL-3.0-or-later, plus additional terms under section 7 covering attribution, origin
+# marking, and trademarks (LICENSE-ADDITIONAL-TERMS.md). Every crate inherits this with
+# `license.workspace = true`; the matching header sits at the top of every source file.
+# Dual-licensed commercially by Roessling Digital Solutions LLC, which is why CLA.md
+# requires a relicensing grant from contributors.
+license = "AGPL-3.0-or-later"
 
 # Lint policy from docs/agentic-coding-standards.md §3.5 and §7: every crate opts in
 # with `[lints] workspace = true`.

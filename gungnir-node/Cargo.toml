@@ -60,6 +60,9 @@ gungnir-observability = { path = "../gungnir-observability" }
 [[bin]]
 name = "gungnir-node"
 path = "src/main.rs"
+# Same reason as [lib]: a bin's implicit bench harness is libtest and rejects
+# criterion's flags. The criterion benchmark is the [[bench]] target below.
+bench = false
 
 [dev-dependencies]
 # The identity test verifies the provider's signature with the public half.

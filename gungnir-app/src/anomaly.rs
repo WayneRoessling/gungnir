@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The anomaly detectors on the tick (GAP-021, D-13, DN-15).
 //!
 //! `gungnir-analytics` holds six detectors as pure functions over snapshots, tested and,

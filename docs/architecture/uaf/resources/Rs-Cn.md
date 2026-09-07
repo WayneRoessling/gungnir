@@ -40,11 +40,11 @@ Diagram: [`Rs-Cn.puml`](Rs-Cn.puml) (rendered under `rendered/resources/` by the
 | RS-ml `gungnir-ml` | `gungnir-model`, `gungnir-interop` |  |
 | RS-model `gungnir-model` | `gungnir-core`, `gungnir-coord` |  |
 | RS-modelops `gungnir-modelops` | `gungnir-config`, `gungnir-model` |  |
-| RS-node `gungnir-node` | `gungnir-model`, `gungnir-config`, `gungnir-mission`, `gungnir-eventing`, `gungnir-store`, `gungnir-time`, `gungnir-ingest`, `gungnir-sensor-management`, `gungnir-tracking-service`, `gungnir-intercept-service`, `gungnir-api`, `gungnir-remote`, `gungnir-security`, `gungnir-modelops`, `gungnir-policy`, `gungnir-geo`, `gungnir-analytics`, `gungnir-observability` | `gungnir-scenario` |
+| RS-node `gungnir-node` | `gungnir-model`, `gungnir-config`, `gungnir-mission`, `gungnir-eventing`, `gungnir-store`, `gungnir-time`, `gungnir-ingest`, `gungnir-sensor-management`, `gungnir-tracking-service`, `gungnir-intercept-service`, `gungnir-api`, `gungnir-remote`, `gungnir-security`, `gungnir-modelops`, `gungnir-identity`, `gungnir-policy`, `gungnir-geo`, `gungnir-analytics`, `gungnir-observability` | `gungnir-scenario` |
 | RS-observability `gungnir-observability` | `gungnir-model` |  |
 | RS-oracle `gungnir-oracle` | `gungnir-filters`, `gungnir-association`, `gungnir-rfs`, `gungnir-scenario` | `gungnir-testkit` |
 | RS-policy `gungnir-policy` | `gungnir-model`, `gungnir-geo` |  |
-| RS-remote `gungnir-remote` | `gungnir-model`, `gungnir-eventing`, `gungnir-api`, `gungnir-tracking-service`, `gungnir-intercept-service` | `gungnir-security`, `gungnir-analytics` |
+| RS-remote `gungnir-remote` | `gungnir-security`, `gungnir-model`, `gungnir-eventing`, `gungnir-api`, `gungnir-tracking-service`, `gungnir-intercept-service` | `gungnir-analytics` |
 | RS-render `gungnir-render` | none |  |
 | RS-replay `gungnir-replay` | `gungnir-model`, `gungnir-eventing`, `gungnir-store`, `gungnir-time` |  |
 | RS-reporting `gungnir-reporting` | `gungnir-model`, `gungnir-eventing`, `gungnir-store`, `gungnir-metrics`, `gungnir-identity` |  |

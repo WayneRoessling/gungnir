@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Verifies against verification-capability-table.md: "Motion models: CV, CA, CT".
 //! Exact-match (~1e-10) vs. filterpy/hand-derived and MATLAB initcvkf/initcakf/initctekf.
 //! Deterministic closed-form math -- no logging (per agentic-coding-standards.md §2.8).

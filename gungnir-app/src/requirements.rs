@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Collection requirements wired to the desktop (GAP-005, DN-11).
 //!
 //! MT-08 steps 2 and 3 -- an analyst's tasking request and the sensor manager's

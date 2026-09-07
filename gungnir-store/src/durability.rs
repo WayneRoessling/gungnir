@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The journal's durability policy (decision D-04, `ARCHITECTURE.md` §10 item 19).
 //!
 //! D-04 settles the fsync question **per deployment profile**, not once for the

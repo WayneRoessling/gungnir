@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Per-frame update/tick logic (non-render). Never do I/O, allocation-heavy work, or
 //! blocking calls here beyond the journal append, which is a small buffered write
 //! (rust-ui-architecture-coding-standards.md §2's immediate-mode implication). The

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Benchmark group `ekf_predict_update`, named after the capability-table row it
 //! measures (agentic-coding-standards.md §2.6). Inputs come from `gungnir-scenario`
 //! Scenario 1 once the generator exists; until the EKF has a constructor this

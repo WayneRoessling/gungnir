@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Fires deconfliction.
 //!
 //! Design: docs/design/DN-05-fires.md. Capability CAP-3.8; decision D-07 put fires

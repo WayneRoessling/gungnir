@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Debug-only numerical invariant checks, per agentic-coding-standards.md §2.1.
 //!
 //! [`assert_psd`] lives here rather than in `gungnir-testkit` because library code

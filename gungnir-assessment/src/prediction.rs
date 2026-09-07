@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Trajectory prediction and closest point of approach.
 //!
 //! Design: docs/design/DN-02-prediction-and-approach.md. Capability CAP-2.8;

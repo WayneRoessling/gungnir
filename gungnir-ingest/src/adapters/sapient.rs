@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! A SAPIENT spotter as a source: the human half of GAP-001 and the sensor half of
 //! GAP-004 (`docs/design/external-standards.md` §7,
 //! `docs/design/DN-27-bearing-only-detections.md` §4 and §5).

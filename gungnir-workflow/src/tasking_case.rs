@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The tasking case: a collection requirement and the sensor tasks serving it.
 //!
 //! Design: docs/design/DN-11-sensor-control-and-tasking.md. Capability CAP-2.12;
