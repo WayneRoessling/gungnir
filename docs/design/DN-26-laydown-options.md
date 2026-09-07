@@ -1,10 +1,10 @@
 # DN-26 Laydown options
 
 Unblocks GAP-087, and through it GAP-020's approach corridors and GAP-045's rehearsal
-record. Status: **signed by the owner 2026-09-06**. Nothing in this note is built: the
-signature settles the design and clears GAP-087's blocker, and `ConfigBaseline.laydowns`
-with its five refusals plus the panel over the existing coverage computation are that
-gap's engineering.
+record. Status: **signed by the owner 2026-09-06, confirmed 2026-09-07** (the confirmation
+was needed because the signed status appeared on disk with nobody present to vouch for
+it; see GAP-087's register entry). `ConfigBaseline.laydowns` with its five refusals is
+**built (GAP-087, 2026-09-07)**; the panel over the existing coverage computation is not.
 
 ## 1. The gap and what it blocks
 
