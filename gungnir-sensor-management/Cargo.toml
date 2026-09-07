@@ -22,6 +22,9 @@ workspace = true
 [dependencies]
 thiserror.workspace = true
 serde.workspace = true
+# gungnir-sensor-management/src/sapient_task.rs: JSON-encodes an outbound SAPIENT
+# Task message (GAP-004). Already a workspace dependency; no new §2.9 entry needed.
+serde_json.workspace = true
 gungnir-coord = { path = "../gungnir-coord", version = "0.1.0" }
 gungnir-model = { path = "../gungnir-model", version = "0.1.0" }
 gungnir-config = { path = "../gungnir-config", version = "0.1.0" }

@@ -4,6 +4,7 @@ Cross-tool verification matrix: Rust modules, target capabilities, Python/MATLAB
 
 §1 is the tracking core's matrix and is the source of truth for every pass criterion the crate doc comments restate. §2 is a draft for the other layers: the verification method is taken from the design documents, and every pass criterion that had no value was set by the owner on 2026-09-04 (D-16); the rows stay Draft until their tests exist. Row names in §1 are cited from Rust doc comments and must not be changed.
 
+| `gungnir-sensor-management` | Outbound SAPIENT tasking (CAP-1.3) | `gungnir-sensor-management/src/sapient_task.rs` `mod tests` and `mod ulid::tests`: each SensorCommand mapping, a refused Search, a refused unconfigured destination, dwell producing a task end time, and the ULID/RFC-3339 encoders against a published worked example | each deliverable command produces a well-formed Task message with the stated field mapping; Search and an unconfigured sensor are refused naming the reason; the ULID encoder reproduces the published specification's own example |
 ## 1. Tracking core
 
 The *Rust Module* column uses the module names from the original tracking design; `architecture.md` maps them to crates (`track-manager` is the crate `gungnir-track`, every other module is `gungnir-<module>`).
