@@ -1035,6 +1035,7 @@ async fn run(
                 b.config.gate_threshold,
                 &b.config.filter_selection,
                 &imm,
+                b.config.measurement_noise_var,
             ),
         )
     }) {

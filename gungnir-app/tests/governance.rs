@@ -32,6 +32,9 @@ fn candidate(profile: &str, name: &str, promoted: bool) -> TrackingProfileConfig
         imm_turn_rate_rad_s: 0.05,
         imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
         imm_initial_mode_probabilities: [0.9, 0.1],
+        // DN-29 §5: a well-formed figure, distinct from the default, since this fixture
+        // exercises governance events rather than the noise value itself.
+        measurement_noise_var: [625.0, 3600.0, 22500.0],
         promoted,
         validated_by: Some("oracle comparison".into()),
     }
@@ -165,6 +168,7 @@ fn a_baseline_with_only_tracking_governs_its_one_configuration() {
                 imm_turn_rate_rad_s: 0.05,
                 imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
                 imm_initial_mode_probabilities: [0.9, 0.1],
+                measurement_noise_var: [625.0, 3600.0, 22500.0],
             }),
             ..ConfigBaseline::default()
         },
