@@ -56,7 +56,7 @@ Then, by sequence range, which datagrams are which of §5.6's six items:
 | Item | Sequence range | Note |
 |---|---|---|
 | 1 Own position over several minutes | | |
-| 2 Each affiliation the client offers | | **The type strings this yields are what pins the affiliation mapping** (§5.6, DN-25 §5 rule 3). Record the exact strings here |
+| 2 Each affiliation the client offers | | The affiliation mapping is **pinned** as of 2026-09-07 (`external-standards.md` §5.7: `friend` is `^a-f-`, case-sensitive, from MITRE's August 2005 guide). This item is what checks that pin against a client rather than against a twenty-year-old document. **Record the exact type strings here**, and if any client disagrees with the guide, that is the finding §5.7.5 is waiting for |
 | 3 A marker placed by hand | | |
 | 4 A chat message | | |
 | 5 A deletion, and an event left to expire | | |

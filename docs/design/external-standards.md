@@ -458,7 +458,10 @@ changes the oracle column and nothing else: the tests are reused unchanged.
 ## 5. Cursor-on-Target (MITRE)
 
 **Public, and the only format in this note whose releasability is not in doubt.** Pinned
-2026-09-06 under D-33, which put SD-16 in scope for the release. The design that consumes it
+2026-09-06 under D-33, which put SD-16 in scope for the release, and extended 2026-09-07
+when the owner asked for the type tree as well: **three artifacts, two of them pinned.** The
+event schema is §5.1, the type tree is §5.7, and §5.4 says why the protobuf framing is
+deliberately left unpinned. The design that consumes it
 is [`DN-25-cursor-on-target.md`](DN-25-cursor-on-target.md); the gaps are GAP-090 and
 GAP-091.
 
@@ -594,7 +597,7 @@ needs it, and the sixth exists because the corpus is otherwise recorded from one
 | # | What to make the client emit | Why the corpus needs it |
 |---|---|---|
 | 1 | The client's own position, left running for several minutes | The self-report GAP-090 exists for. Several minutes, not several events, because the emission interval, the `stale` horizon and what a client repeats unchanged are all read from the capture rather than assumed |
-| 2 | The same client set to **each affiliation it offers** | **This is how the affiliation mapping gets pinned, and it is the item most likely to be skipped.** §5.1 pins the event schema; the *type tree* that gives the `type` attribute its meaning is a separate artifact and is **not** pinned here, so DN-25 §5 rule 3 -- only `Friendly` is acted on -- has no pinned definition today of which type strings are friendly. Recording a client set to each affiliation settles it from that client's own output instead of from a remembered convention, which is exactly the "confidently wrong" outcome GAP-064 exists to prevent |
+| 2 | The same client set to **each affiliation it offers** | **This is what turns §5.7's pin from a citation into a check, and it is the item most likely to be skipped.** The type tree is pinned as of 2026-09-07 and `friend` is `^a-f-` -- but that is read from a document published in 2005 and has never been seen on a wire here. Recording a client set to each affiliation is what tests it against the client a deployment will actually meet, and a client that disagrees with the guide is a finding §5.7.5 is waiting for, not a fixture to be discarded |
 | 3 | A marker or point placed by hand | The simplest event that is not about the sender, and the one that shows what a client attaches to `detail` when it has little to say |
 | 4 | A chat message | §5.2's consequence 2 in the flesh: `detail` is unconstrained, so whatever arrives there is validated by us or by nobody |
 | 5 | A deletion, and an event left to expire | `stale` is mandatory (§5.2 consequence 3) and it is the sender's claim, not our policy. A decoder that has never seen an event go stale in a real stream has not met the case |
@@ -670,9 +673,140 @@ it and the codec waits.
 the corpus before the codec, in that order, for the reason §1.5 gives: a fixture with no
 recorded origin is not a fixture.
 
-### 5.7 What is built
+### 5.7 The type tree -- pinned 2026-09-07
 
-**No codec, and no corpus.** `gungnir-interop` has no CoT codec, the schema catalogue has
+§5.6 item 2 named this as the gap in §5.1's pin: the event schema says the `type` attribute
+must match `\w+(-\w+)*(;[^;]*)?` and says nothing whatever about what it means, so DN-25 §5
+rule 3 -- only `Friendly` is acted on -- had no pinned definition of which type strings are
+friendly. This subsection closes that as far as public artifacts allow, and says plainly
+where they stop.
+
+#### 5.7.1 The specification of record
+
+| Document | Edition | Date | Release statement |
+|---|---|---|---|
+| **The Developer's Guide to Cursor on Target**, MITRE Technical Report, Mike Butler, Center for Air Force Command & Control, Bedford, Massachusetts | the August 2005 report | 2005-08 | "©2005 The MITRE Corporation. All Rights Reserved." / **"Approved for Public Release; Distribution Unlimited. Case #06-0249"** |
+
+**Pinned: the August 2005 guide, MITRE case #06-0249**, for the grammar and the semantics
+of `type`. It is named in the codec's doc comment beside the schema version, and the
+conformance tests name it too.
+
+Obtained 2026-09-07 by fetching a public copy and reading the document itself, not a
+summary of it: twenty pages, the cover carrying the title, the date, the author, the MITRE
+copyright and the release case number quoted above. MITRE's own host refused an automated
+fetch of the companion Message Router guide on 2026-09-06 (§5.1) and was not retried; the
+release marking is on the document, which is what matters, and §5.7.5 says what that does
+and does not establish.
+
+#### 5.7.2 What the guide settles, transcribed 2026-09-07
+
+Six findings. Each is here because a decoder that missed it would be wrong in a way its own
+tests would not catch.
+
+1. **The type is a path through an object hierarchy, not an enumeration.** `a-h-G-E-V-A-T-t`
+   is `atoms::hostile::ground::equipment::vehicle::armored::tank::t72`; the hyphens separate
+   branches so that the tree can have cardinality greater than the alphabet. **Partial
+   understanding is the design**: the guide states that a receiver knowing only the first
+   three branches still reads `a-h-G-E-V-A-T` as `a-h-G-<something>`, "a hostile ground
+   unit". So a decoder that refuses a type it cannot resolve in full is refusing exactly
+   what the format was built to let it accept, and this note's mapping reads a prefix on
+   purpose rather than for want of a table.
+2. **The root branches, with a defect in the guide's own list.** As printed: `a` atoms
+   ("anything you drop on your foot"), `b` bits ("a chunk of information, e.g., image or
+   chat"), `t` tasking, `r` reply, `c` capability, `r` reservation. **`r` is assigned
+   twice**, to reply and to reservation. Nothing here resolves it and nothing here needs to:
+   DN-25 touches neither branch. A later build that needs one settles it against the type
+   file (§5.7.4) and records what it found, rather than picking the one that suits it.
+3. **Affiliation lives in the type, and only in the atoms branch.** The guide's own
+   self-criticism, in its list of warts: "Affiliation (friend, hostile, ...) is in the type.
+   That's not the ideal place, but it is the best place. It's only applicable to the atoms
+   branch." **Reading affiliation by position is therefore wrong**: a `b-` event -- a chat
+   message, an image -- has no affiliation at all, and a decoder that takes the second
+   element of every type as an affiliation will invent one for it.
+4. **The atoms subtree is MIL-STD-2525B, pruned.** "The Atoms tree is the most populated, it
+   is based on MS2525B. (This is a change from V1.0 which used our own organization.)" It
+   inherits that standard's redundancies knowingly -- "MS2525B has some redundancies. For
+   example, there are multiple representations for helicopter. This is a wart we adopted" --
+   and MITRE has "pruned some branches of that tree and intend to prune more". **So pinning
+   MIL-STD-2525 would be the wrong pin.** CoT's tree is neither 2525B nor any current
+   edition of 2525; 2525B is its ancestor, and the tree is the artifact.
+5. **Case is significant, and the schema does not say so.** From the type file's own header:
+   "Upper case strings are taken directly from the mil-std-2525 type hierarchy, lower case
+   characters are CoT extensions. The matching *is* case sensitive!!!" §5.2's transcribed
+   pattern permits both cases and cannot express which means what, so **a decoder that
+   case-folds a type string is wrong** and would silently conflate a 2525 branch with a CoT
+   extension.
+6. **The predicate, not the prefix, is the recommended test.** "As with other 'magic
+   constants,' it's unwise to hard-code these class strings into your code." The recommended
+   form is a file of predicates, each `<is what="..." match="..."/>` with a Perl-style
+   regular expression, evaluated as `if(event->is("friend"))`, and the guide calls it "the
+   recommended way to make runtime type decisions with CoT".
+
+#### 5.7.3 The one predicate this system needs
+
+DN-25 §5 rule 3 asks one question of the type: is this event friendly. The guide publishes
+that predicate verbatim, as its own worked example of the mechanism:
+
+```xml
+<is what="friend" match="^a-f-" />
+```
+
+**Pinned: `friend` is `^a-f-`, case-sensitive, from the August 2005 guide.**
+
+What the pin buys, and what it deliberately does not:
+
+- **It answers the atoms question and the affiliation question in one anchored test.**
+  `b-t-f-...` does not match, which is the right answer by finding 3 -- a chat message has
+  no affiliation -- where a positional reading would have manufactured one.
+- **It is case-sensitive by finding 5.** `A-F-` is not a friendly and is not folded into
+  one.
+- **It licenses nothing else.** This note pins `friend` and no other affiliation, because
+  rule 3 acts on `Friendly` alone and everything else is recorded and does nothing. Writing
+  down the other letters from memory is precisely the failure this whole section exists to
+  prevent, and the corpus is what would earn them (§5.6 item 2).
+
+#### 5.7.4 Two files called `CoTtypes.xml`, and only one is obtainable
+
+Confusing them would be the easy mistake, so both are named:
+
+| File | What it holds | Obtainable |
+|---|---|---|
+| **The predicate file** the guide recommends | `<is what="..." match="..."/>` entries | **No.** "The sole 'official' CoT types tree is in CoTtypes.xml which ships with the CoT debugger", and the debugger is not public. §5.7.3 takes the one predicate it needs from the guide's own text instead of from a file nobody can fetch |
+| **The type mapping file** | Root `<types>`, roughly nine hundred `<cot cot= full= desc=/>` entries mapping CoT types to other message formats' types | **Yes, permissively.** `dB-SPL/cot-types` (**Apache-2.0**), <https://github.com/dB-SPL/cot-types>, copied there from ESRI's `solutions-geoevent-java`. Header: `$Id: CoTtypes.xml,v 1.80 2009/06/10 17:01:00 econnors Exp $`, `Copyright (C) 2003 MITRE Corporation`, author Mike Butler, dated 02-Mar-03 |
+
+**Revision 1.80 (2009-06-10) is the version to name** should a build ever need the full
+tree. Use it the way §1.4 says to use `asterix-specs`: to generate tables or to cross-check
+a hand-written decoder, never as the authority, and where it and the guide disagree the
+guide governs. Its header also carries finding 5 and one more that matters -- the mappings
+exclude the affiliation prefix "to allow the same type mapping to be used for all variants
+(`a-h-`, `a-f-`, `a-u-`, ...)", which is the file's own confirmation that affiliation
+separates cleanly from the rest of the path.
+
+**Nothing has been copied into this repository.** DN-25 needs one predicate, §5.7.3 has it,
+and copying nine hundred entries to use one of them would invert the rule §5.4 follows: pin
+what is needed, name what is not.
+
+#### 5.7.5 What is verified and what is not
+
+**Verified 2026-09-07**, by reading the artifacts rather than descriptions of them: the
+guide's title, date, author, publisher, copyright line and public-release case number; each
+of the six findings in §5.7.2, quoted from the document; the text of the `friend` predicate;
+and the mapping file's header line, revision, date, author and licence.
+
+**Not verified**: that the predicate file's current `friend` entry still reads `^a-f-`, the
+file being unobtainable and the guide being twenty years old; that revision 1.80 is the
+latest of the mapping file; whether MITRE has published a later edition of the guide; and
+the `r` collision in finding 2, which is recorded rather than resolved.
+
+**This is why §5.6 item 2 stays on the corpus list even now that the mapping is pinned.** A
+pin read from a 2005 document and never seen on a wire is a pin, not evidence. Recording a
+client set to each affiliation is what turns `^a-f-` from a citation into a check, and if a
+real client disagrees with the guide, the capture is the finding and this subsection gains
+it.
+
+### 5.8 What is built
+
+**No codec, and no corpus; two of the three artifacts pinned.** `gungnir-interop` has no CoT codec, the schema catalogue has
 no entry for it, and no binary opens a socket for it. GAP-090 and GAP-091 are open. This
 section exists so that the codec, when it is written, can name what it decodes -- GAP-064's
 rule, which is the rule this whole note was written to serve.
@@ -841,6 +975,7 @@ decision §7.3 names.
 | AIS (GAP-010) | **M.1371-6 pinned, the gpsd captures copied, the decoder built and gated 2026-09-06** (§3.1, §3.3, §3.5; D-32) | A receiver adapter in `gungnir-ingest` and the evidence path into `gungnir-identification` |
 | ADS-B (GAP-010) | **Codec built and gated 2026-09-06** on the open-source-consensus route, with **two permissively licensed captures vendored** and **no normative source pinned** (§4.3, §4.5). Doc 9871 2nd edition with Amendment 2 remains the specification of record and is not held | A receiver adapter in `gungnir-ingest` and the evidence path into `gungnir-identification`, the same two the AIS half waits on. Buying Doc 9871 is a later upgrade that changes the oracle column and no test |
 | CoT, the schema (GAP-091) | **Version 2.0 pinned 2026-09-06 under D-33**, transcribed in §5.2, publicly released and with the release statement read; no codec, no fixture | A self-recorded corpus (§5.6), then the codec in `gungnir-interop`, the feed in `gungnir-ingest` and the multicast sink in `gungnir-remote` |
+| CoT, the type tree (GAP-091) | **Pinned 2026-09-07** (§5.7): the August 2005 MITRE Developer's Guide, case #06-0249, for the grammar and semantics, and the `friend` predicate `^a-f-` for the one question DN-25 asks of a type. The predicate file itself is unobtainable and the mapping file (Apache-2.0, revision 1.80) is named rather than copied | The corpus (§5.6 item 2), which is what turns the 2005 citation into a check against a client |
 | CoT, the protobuf framing (GAP-091) | **Deliberately not pinned** (§5.4): no version and no date exist, and the only identifier is a commit of a GPLv3 repository | Needed only by the stream sink in I4. The owner answers the licence question in §5.5 when it is; XML negotiation means nothing else waits on it |
 
 When either codec is built, replace the corresponding `NotImplemented` and cite this note

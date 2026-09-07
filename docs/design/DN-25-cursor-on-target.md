@@ -87,7 +87,8 @@ pub struct ReportedPosition {
     /// The accuracy the reporter claims, in metres. Recorded on the provenance and
     /// weighted by nothing.
     pub claimed_accuracy_m: Option<f64>,
-    /// What the reporter says it is. Only `Friendly` is acted on; see §5 rule 3.
+    /// What the reporter says it is, from the type's `friend` predicate and
+    /// nothing else. Only `Friendly` is acted on; see §5 rule 3.
     pub affiliation: Classification,
 }
 ```
@@ -139,6 +140,17 @@ that looks like a track but decays on somebody else's schedule is worse than no 
 report claiming `Hostile` is recorded with its reporter and does nothing: an unauthenticated
 sender who can create a hostile declaration can aim this system, which is the one outcome
 worth designing against in advance.
+
+**The test is the pinned predicate, not the second element of the type.**
+`external-standards.md` §5.7 pins `friend` as the anchored, case-sensitive expression
+`^a-f-`, published in MITRE's August 2005 guide, and §5.7.2's finding 3 is why the
+distinction is not pedantry: affiliation exists **only in the atoms branch**, so a chat
+message or an image (`b-...`) has no affiliation at all, and a decoder reading "the second
+element" would manufacture one for it. The anchored predicate answers both questions at
+once and refuses `b-` by construction. Nothing else about the type is interpreted: the
+remaining branches are carried raw, because §5.7.2's finding 1 says partial understanding is
+the format's design and a decoder that demanded the whole path would refuse what CoT expects
+it to accept.
 
 **4. Quality and age are DN-16's, unchanged.** `assigned_quality` comes from our
 configuration; the age between the reporter's stamp and our receipt is on every reported
@@ -192,6 +204,14 @@ needs it. GAP-064's rule is satisfied ahead of the codec rather than behind it, 
 returned one requirement to this note that a summary would have lost: **`ce` and `le` carry
 no stated confidence level**, so the mapping declares which multiple of sigma it writes, on
 the sink and in the conversion loss.
+
+**The type tree was pinned on 2026-09-07** (§5.7), which this note had left open and §5.6
+had named as the gap. It returns two more requirements. The friendly test is the pinned
+`friend` predicate `^a-f-`, anchored and **case-sensitive** -- §5.7.2's finding 5 records
+that upper case is MIL-STD-2525B and lower case is a CoT extension, and that a decoder which
+case-folds a type string conflates the two. And the codec's doc comment names three things
+rather than two: the schema version, the guide's case number, and the predicate it
+evaluates.
 
 ## 7. User-interface delta
 
@@ -259,8 +279,10 @@ channel-versus-data rule §5 rule 1 turns on; on DN-18 for the agreement and the
 DN-05 for the deconfliction rule GAP-090 feeds; on DN-03 for the warning ledger and its
 `Sent`-versus-`Acknowledged` distinction; on DN-01 §3a for anchoring in the caller. Requires
 [`external-standards.md`](external-standards.md) §5 for the pinned schema, the transcribed
-attributes and the licence finding; **D-33** for the scope decision and the two pins; edge (s)
-accepted 2026-09-06 and recorded in [`dependency-edges.md`](dependency-edges.md) §13.
+attributes and the licence finding, and §5.7 for the type tree, the `friend` predicate and
+the case-sensitivity finding; **D-33** for the scope decision and the pins, extended
+2026-09-07 to cover the type tree; edge (s) accepted 2026-09-06 and recorded in
+[`dependency-edges.md`](dependency-edges.md) §13.
 Principles AP-02 (honest status: §5 rules 5, 6 and 8), AP-06 (one owning crate per type: §2),
 AP-07 (provenance travels with the data: §5 rule 7), and above all **AP-09** (releasability is
 a property of the data, which is what §5 rule 1 refuses to trade away for a convenient
