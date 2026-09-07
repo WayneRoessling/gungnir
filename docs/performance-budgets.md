@@ -83,10 +83,37 @@ node is measured against its own budget instead, "an accepted envelope is on dis
 budget is unchanged at 1 ms for fifty envelopes; what changed is which build it is
 asserted against. `cargo test` builds in debug, and the first CI run this repository ever
 had (GAP-061) measured a median of **1.844781 ms** on a GitHub Actions runner — worse
-than the 1.0681 ms a Windows development machine gives, because shared runners have
-throttled I/O. Both are debug figures being held to a budget whose evidence is 157 µs in
-release, so the failure was about the build profile and the hardware rather than about
-`FileEventJournal`.
+than the 1.0681 ms a Windows development machine gives. Both are debug figures being held
+to a budget whose evidence is 157 µs in release, so the failure was about the build
+profile rather than about `FileEventJournal`.
+
+**Why it is slow in debug was measured afterwards, and it is not the I/O** (GAP-092). The
+first reading of this attributed it to a shared runner's throttled I/O. Splitting `append`
+into its two halves says otherwise: on a P-core, `serde_json::to_string` alone measures
+~500 µs, the file write 15-50 µs, and the whole append ~515 µs. **The encode, compiled at
+`opt-level = 0`, is nineteen twentieths of it and the write is about a twentieth.** Three
+further measurements agree. Running the same nine-run measurement alternately against
+`%TEMP%` on C: and `target/` on D: — two different filesystems — gives 514.9 / 516.5 /
+513.8 µs against 518.1 / 506.7 / 508.4 µs, indistinguishable. Pinning the test to each of
+the twenty logical CPUs of an 8 P-core, 12 E-core development machine splits it 8 fast
+(~760-990 µs) from 12 slow (~1,650-2,045 µs) on the P/E boundary exactly, reproducing the
+whole spread with no I/O involved. And in release the same path measures 45 µs on a
+P-core and 157 µs on an E-core, the second of which is the recorded release figure.
+
+The decision is unaffected — a debug build of fifty `serde_json` encodes takes about a
+millisecond on ordinary hardware, whatever the disk does, so a 1 ms budget asserted in
+debug has no margin anywhere. It is recorded because a right decision resting on a wrong
+reason invites the wrong follow-up: chasing runner I/O, or moving the test's scratch
+directory off the system temp directory, neither of which would change this number.
+
+**One recorded figure disagrees with itself.** The 2026-09-05 debug measurement appears
+three times: "median 400 µs debug over 9 runs" in the table above, **679 µs** in the gap
+register's GAP-085 closing action, and **about 665 µs** in the test's own doc comment.
+Today's debug P-core median is ~520 µs. Against 665-679 µs there is nothing to explain;
+against 400 µs there appears to be a 2.6x regression that does not exist. The 400 µs is
+the outlier of the three, and is best read as a best-case P-core sample rather than the
+median it is labelled. It is left in place rather than silently corrected, because a
+measurement is not amended by a later measurement's author.
 
 `gungnir-app/tests/frame_budgets.rs` still measures and prints the figure on every
 profile, so the debug number stays visible; the assertion applies in release.

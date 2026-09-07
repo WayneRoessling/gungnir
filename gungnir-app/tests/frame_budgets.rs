@@ -341,11 +341,24 @@ fn snapshot_calls_are_measured() {
 ///
 /// That conservatism stopped being conservative and became wrong. On a GitHub Actions
 /// runner this measured a median of **1.844781 ms** against the 1 ms budget -- worse
-/// than the 1.0681 ms a Windows development machine gives -- because shared runners
-/// have throttled I/O. The budget in `performance-budgets.md` is a product figure whose
-/// evidence is 157 µs in release; a debug build on the slowest hardware the suite runs
-/// on is not the thing that budget describes, so failing on it reported a defect that
-/// did not exist.
+/// than the 1.0681 ms a Windows development machine gives. The budget in
+/// `performance-budgets.md` is a product figure whose evidence is 157 µs in release; a
+/// debug build is not the thing that budget describes, so failing on it reported a
+/// defect that did not exist.
+///
+/// **What makes the debug build slow is the encode, not the I/O** (GAP-092, measured
+/// 2026-09-07 after the first reading blamed a shared runner's throttled disk). On a
+/// P-core, `serde_json::to_string` alone is ~500 µs of a ~515 µs append and the file
+/// write is 15-50 µs -- nineteen twentieths against one. `%TEMP%` on C: and `target/`
+/// on D: measure the same to within 2%, so the filesystem is not the variable and
+/// moving this test's scratch directory would change nothing. Pinning to each of the
+/// twenty logical CPUs of an 8 P-core, 12 E-core machine splits 8 fast from 12 slow on
+/// the P/E boundary exactly, which reproduces the entire spread with no disk involved.
+/// In release the same path is 45 µs on a P-core and 157 µs on an E-core.
+///
+/// The decision is unchanged by that; fifty `serde_json` encodes at `opt-level = 0`
+/// cost about a millisecond on ordinary hardware whatever the disk does. It is written
+/// down because the wrong reason points at the wrong fix.
 ///
 /// The budget itself is unchanged at 1 ms. What changed is which build it is asserted
 /// against. The measurement still runs on every profile and is always printed, so the
