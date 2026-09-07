@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Track/intercept rendering. Depends on `gungnir_model::TrackView` (the service
 //! facades' public type), never on any internal tracking crate.
 //!

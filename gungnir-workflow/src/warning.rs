@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Warning assets and authorities.
 //!
 //! Design: docs/design/DN-03-warning.md. Capability CAP-4.5; measures MOE-01 and

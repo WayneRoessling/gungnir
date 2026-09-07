@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The measures catalogue, computed from the journal (GAP-047, `docs/mission/measures.md`).
 //!
 //! **Every figure is a fold over the envelopes and carries its basis**, so an analyst can

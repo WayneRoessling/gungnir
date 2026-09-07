@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! gungnir-testkit: shared proptest strategies (agentic-coding-standards.md §2.5).
 //! A dev-dependency of every tracking-core crate; depends on no workspace crate, so
 //! that it never creates a dev-dependency cycle that would split a crate's types into

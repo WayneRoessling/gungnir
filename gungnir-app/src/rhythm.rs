@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The watch's rhythm on the tick: scheduled products, planned downtime, handover
 //! (GAP-054, `docs/design/DN-21-battle-rhythm.md`).
 //!

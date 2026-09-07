@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Intercept geometry (GAP-031): where and when an effector meets a track.
 //!
 //! The model is the least one that gives the geofence policy a point to check and PN-05

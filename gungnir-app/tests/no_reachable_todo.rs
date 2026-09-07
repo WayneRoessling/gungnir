@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! No `todo!()` survives anywhere in the workspace (GAP-082, plan 10 finding CA-F2).
 //!
 //! `agentic-coding-standards.md` §3.1 reserves `todo!()` for functions nothing can call

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Geospatial reference & map service layer, per docs/gungnir-capabilities.md
 //! §5.3. Extends gungnir-data's terrain-elevation-only ingestion with visual and
 //! functional geospatial context -- elevation alone gives shape without the

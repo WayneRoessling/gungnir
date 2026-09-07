@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! v2 external contract. Read paths: a snapshot and an event stream. Write paths:
 //! detection submission and plan decisions, both authorized per caller through
 //! `gungnir-security`. Every payload carries `gungnir_model::SCHEMA_VERSION` so a

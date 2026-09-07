@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! An in-memory queue of detections, fed by tests or by a `gungnir-scenario`
 //! generator in a test harness, so the gateway's validation and quarantine path can
 //! run end to end without hardware.

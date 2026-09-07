@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Prediction on the desktop (GAP-020, DN-02) and the warning it obliges (GAP-042,
 //! DN-03): a track heading for an asset with an obligation is predicted to arrive, PN-04
 //! gets an approach line naming the predictor, the viewport gets a dashed path, and a

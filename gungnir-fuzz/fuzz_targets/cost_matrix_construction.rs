@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Fuzz target for CI gate #5: build an association cost matrix from arbitrary
 //! bytes (dimensions from the first two bytes, entries from the rest as f64 bit
 //! patterns, including NaN and infinities) and assert construction never panics.

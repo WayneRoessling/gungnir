@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Remote backends for the connected deployment profiles (ARCHITECTURE.md §8.2).
 //! [`RemoteTrackingService`] and [`RemoteInterceptService`] implement the same two
 //! traits the embedded services do, over the `gungnir-api` v2 contract: subscribe

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Sensor tasks through the node (GAP-004, DN-11 §5) and effector reports applied
 //! (GAP-040): a command issued on a linked desktop is delivered by the link, mapped to
 //! the node's task id, and closed only by what the node streams back; a report on a

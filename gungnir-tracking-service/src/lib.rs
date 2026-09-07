@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Combines gungnir-filters/-association/-track/-rfs/-track-fusion/-fusion-async into
 //! one app-facing service, per ARCHITECTURE.md §2. Each internal dependency edge
 //! here is exactly the one already fixed by agentic-coding-standards.md §1.1.

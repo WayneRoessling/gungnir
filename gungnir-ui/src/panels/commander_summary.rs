@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! PN-17, the commander summary (GAP-073).
 //!
 //! `docs/ux/ux-to-code-map.md` §1: queue statistics, delegations in force, accepted

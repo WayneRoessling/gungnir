@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Peer links on the desktop (GAP-009, DN-16; the inbound half of GAP-065, DN-18).
 //!
 //! One machine link per configured peer whose endpoint is a partner's node, over the

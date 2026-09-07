@@ -25,10 +25,26 @@ is claimed here.
 | `cat048.raw` | 48 | `17481bd2955d046efc5aac1022b4f5879ab02456060c419503aded54bf2e5efd` | One Category 048 data block: category byte 48, declared length 48 |
 | `cat034.raw` | 16 | `a5d24d471cc0fac2554924cbd6aacbf532be96204b4fb335f6275b9a1a0e5766` | One Category 034 data block: category byte 34, declared length 16 |
 | `cat_034_048.pcap` | 12770 | `7f4e9a37641bfa27022ee95ba52f178e68260c1b7e83d6a0e4720a96b3a2cc3d` | Libpcap capture, little-endian, microsecond timestamps; 100 UDP datagrams over Ethernet and IPv4 holding 120 ASTERIX data blocks: 86 of Category 048 and 34 of Category 034 |
+| `COPYING` | 17984 | `edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6` | The GPL-2.0 text, verbatim, fetched 2026-09-07 from <https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt> |
 
 The structural checks in the last column were made on copy (category byte, declared block
 length against file length, pcap magic, block count per category). The edition the
 source decoder was written against is not recorded in its repository.
+
+## Why `COPYING` is here (added 2026-09-07)
+
+GPL-2.0 section 1 conditions redistribution of these files on the license text
+travelling with them, and it was missing — unlike `../adsb/` and `../ais/`, which each
+carry their upstream text. That was invisible while this repository was private and
+becomes a defect on publication, so the text was added when the workspace license was
+set.
+
+The workspace is `AGPL-3.0-or-later` (`../../LICENSE`); these four files are not, and
+`../../NOTICE` names them as an exception. The two coexist as an aggregate: separate
+works distributed together, not combined into one program. Nothing in
+`gungnir-interop` derives from the Croatia Control decoder's source — the Category 048
+decoder was built to edition 1.32 independently, and these files are only ever read as
+fixtures.
 
 ## What decoding it established (2026-09-06)
 

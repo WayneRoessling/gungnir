@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! **No code path executes without a recorded human decision** (contract C-01, AP-01;
 //! GAP-039). Two halves, because the rule is about paths and about the code that has
 //! them.

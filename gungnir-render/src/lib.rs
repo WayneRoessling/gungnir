@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! render/: the single `wgpu` device and queue in the process, created once
 //! (rust-ui-architecture-coding-standards.md §5) and lent to `gungnir-data-fusion`
 //! for point-cloud compute. This is a **headless compute context**: presentation

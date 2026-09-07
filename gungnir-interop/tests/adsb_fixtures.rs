@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The ADS-B decoder against the two open-source decoders, over the two vendored
 //! captures (GAP-010, `testdata/adsb/SOURCE.md`).
 //!

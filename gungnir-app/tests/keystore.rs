@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The passphrase-sealed keystore on the desktop (GAP-084, DN-22 amendment 3): a desktop
 //! starts with the journal in the clear and says so; a sign-in opens the keystore, seals
 //! the journal from there on, and writes the escrow record beside it; a second start

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! A seeded session for usability rounds (GAP-089): the seed's plan reaches the queue
 //! through the real chain, the seed's tracks appear on schedule, the journal opens with
 //! the rehearsal mark, and a node-backed baseline refuses it.

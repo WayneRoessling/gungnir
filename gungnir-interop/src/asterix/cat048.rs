@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! EUROCONTROL ASTERIX Category 048, monoradar target reports.
 //!
 //! Built to EUROCONTROL-SPEC-0149-4 **edition 1.32** (1 July 2024), with Part I

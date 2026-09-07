@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Docking and multi-window (D-17, D-19, GAP-075).
 //!
 //! `gungnir_workflow::WorkspaceLayout::for_role` says which panels a role has; until now

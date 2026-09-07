@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Terrain: digital elevation models (GAP-023).
 //!
 //! Two formats, decided by the owner on 2026-09-06 (`ARCHITECTURE.md` §10 item 84;

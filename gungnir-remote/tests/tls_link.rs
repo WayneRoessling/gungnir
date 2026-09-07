@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The link over mutual TLS (GAP-060, GAP-041): an operator's desktop and a partner's
 //! machine link both reach a node that serves nothing in the clear.
 //!

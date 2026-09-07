@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Data standards & interoperability, per docs/gungnir-capabilities.md §5.6 and
 //! the "Scenario/interop schema (JSON/Arrow, ASTERIX/STANAG)" row of
 //! verification-capability-table.md §1. Owns the schema catalog (what formats and

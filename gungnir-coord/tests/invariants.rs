@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! `proptest` invariants for the verification-capability-table.md §1 row
 //! "Coordinate frame transforms (ECEF/ENU/NED/geodetic)", the gate that sits beside
 //! the pymap3d differential test (`pymap3d_diff.rs`).

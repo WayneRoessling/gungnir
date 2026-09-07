@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The generic endpoint transport (GAP-040, D-08): one HTTP client that posts a JSON
 //! message to a configured address and reports what the endpoint said, off the render
 //! thread.

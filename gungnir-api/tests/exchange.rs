@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! DN-18's three remaining exchange items over the wire (GAP-065): warnings, reports and
 //! handoffs served to a party through both of §5's gates.
 //!

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Every gated act leaves an audit row (GAP-059, contract C-04), attributed to the
 //! verified operator or to nobody -- never to a role standing in for a person.
 

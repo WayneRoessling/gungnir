@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Versioned event schema -- what `gungnir-eventing` publishes and subscribes,
 //! replacing the polling-a-mutable-slice pattern per docs/gungnir-capabilities.md
 //! §5.1 ("Event & Durable Messaging"). `gungnir-eventing::Event` wraps these four

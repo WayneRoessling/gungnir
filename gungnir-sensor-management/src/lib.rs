@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Sensor management & adaptive collection, per docs/gungnir-capabilities.md
 //! §5.2. The dashboard shows sensor health; this crate is the management
 //! capability behind that display: a registry initialized from `gungnir-config`,

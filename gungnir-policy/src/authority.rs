@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Weapons control status and engagement authority.
 //!
 //! Design: docs/design/DN-09-authority-and-control-status.md, **signed by the owner

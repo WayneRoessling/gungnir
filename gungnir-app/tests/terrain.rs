@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Terrain on the desktop (GAP-023): the configured DEM loads off the render thread,
 //! line of sight is masked against it and the coverage parameters say so; a file whose
 //! own frame contradicts the baseline is refused by name; a missing file fails loudly.

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Wraps gungnir-allocation (Bellman/DP resource-to-track assignment) and
 //! gungnir-coord behind one trait `gungnir-app` and `gungnir-node` depend on.
 //! Internal dependency edges match agentic-coding-standards.md §1.1. The public

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! scenario: five-scenario ground-truth + sensor simulation generator.
 //! See scenario-crate-narrative.md for why these five and no more. Test/bench
 //! dependency only -- never a normal dependency of a production crate

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! tiles3d-threed bridge: streaming 3D Tiles / COPC-EPT into three-d, per
 //! rust-3d-data-ecosystem-build-vs-adopt.md §2.1. Deferred until a specific panel
 //! actually requires planet/site-scale streamed terrain (§4 build order) -- scaffolded

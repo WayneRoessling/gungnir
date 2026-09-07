@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! data/ layer per rust-3d-data-ecosystem-build-vs-adopt.md §1. Every `*_source`
 //! module converts a third-party crate's types into an internal, dependency-free
 //! type. Nothing outside this crate imports `pasture`/`vtkio`/`tiff` directly.

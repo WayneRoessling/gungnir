@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! A party-bearing caller (GAP-062, GAP-065; DN-17 §5, DN-18 §5): a peer that presents a
 //! client certificate the node's authority signed is a machine caller whose party is
 //! the certificate's subject, and what it receives is decided by the agreement and the

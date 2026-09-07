@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Identity management & track continuity, per docs/gungnir-capabilities.md
 //! §5.3. gungnir-track manages track IDs correctly *within one session*; a
 //! multi-system or multi-session deployment needs identity that survives restarts,

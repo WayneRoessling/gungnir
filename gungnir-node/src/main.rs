@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! gungnir-node: the headless service node (ARCHITECTURE.md §8). Runs the same
 //! services layer the desktop embeds, journals every event as the authoritative
 //! record for the mission, and exposes `gungnir-api` to desktops and peer systems.

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Mid-session failover (GAP-050): a node silent past its heartbeat timeout makes the
 //! desktop fall back to embedded services, say so on the record, and keep the link; the
 //! node answering again marks a reconciliation due, and the desktop does not switch back

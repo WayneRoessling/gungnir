@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Detector settings for the anomaly rules of docs/design/DN-15-anomaly-detectors.md.
 //!
 //! Here rather than beside the detectors in `gungnir-analytics`, because the baseline

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Resilience & disconnected operations, per docs/gungnir-capabilities.md §5.6 and
 //! ARCHITECTURE.md §8.4. A connected desktop that loses its node keeps operating
 //! on the embedded services and keeps journaling locally; when the link returns,

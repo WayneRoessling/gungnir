@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Plan validity: a plan produced under a baseline outside its window is superseded
 //! rather than applied (GAP-052, DN-08 §5, the CAP-5.6 verification row).
 //!

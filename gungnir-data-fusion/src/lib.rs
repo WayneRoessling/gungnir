@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! GPU-accelerated point cloud registration/fusion, per
 //! rust-3d-data-ecosystem-build-vs-adopt.md §3. Point-to-plane ICP as the primary
 //! algorithm (§3.2); NDT correspondence-search swap-in left as a follow-on per that

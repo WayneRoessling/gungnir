@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Human factors & operator workflow design, per docs/gungnir-capabilities.md
 //! §5.6. `gungnir-ui` names panels; this crate defines who uses which view, how an
 //! alert is acknowledged, escalated, and closed, and how annotations and cases are
@@ -22,10 +26,10 @@ use gungnir_model::{MissionTime, TrackId};
 use gungnir_observability::Alert;
 use gungnir_security::Role;
 
-/// Every panel the desktop can show: the twenty of `docs/ux/ux-to-code-map.md` §1,
+/// Every panel the desktop can show: the twenty-one of `docs/ux/ux-to-code-map.md` §1,
 /// where each variant's PN number and its owning file are recorded.
 ///
-/// The identifiers are `PN-01` to `PN-20` in the UX documents. They are named here
+/// The identifiers are `PN-01` to `PN-21` in the UX documents. They are named here
 /// rather than numbered so that a layout reads as a workspace instead of as a list of
 /// indices.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -70,6 +74,14 @@ pub enum PanelId {
     Assistant,
     /// PN-20.
     Audit,
+    /// PN-21, the Appropriate Legal Notices (D-34).
+    ///
+    /// Not in any role's layout and not in [`WorkspaceLayout::ALWAYS`]: it is opened
+    /// from the status strip, which is itself in every layout, so the notices are
+    /// reachable for every role without occupying a docked slot in any of them. See
+    /// [`WorkspaceLayout::ALWAYS_AVAILABLE`] for why that reachability is a licence
+    /// obligation rather than a convenience.
+    About,
 }
 
 impl PanelId {
@@ -95,6 +107,7 @@ impl PanelId {
         PanelId::Reconciliation,
         PanelId::Assistant,
         PanelId::Audit,
+        PanelId::About,
     ];
 
     /// The `PN-nn` identifier the UX documents use, so a panel can be traced from the
@@ -122,6 +135,7 @@ impl PanelId {
             PanelId::Reconciliation => "PN-18",
             PanelId::Assistant => "PN-19",
             PanelId::Audit => "PN-20",
+            PanelId::About => "PN-21",
         }
     }
 
@@ -149,6 +163,7 @@ impl PanelId {
             PanelId::Reconciliation => "Reconciliation",
             PanelId::Assistant => "Assistant",
             PanelId::Audit => "Audit",
+            PanelId::About => "About",
         }
     }
 }
@@ -177,6 +192,24 @@ impl WorkspaceLayout {
     /// and health are in force, and the viewport at the centre of the screen
     /// (`docs/ux/information-architecture.md` §1).
     pub const ALWAYS: &'static [PanelId] = &[PanelId::StatusStrip, PanelId::Viewport3d];
+
+    /// Openable in every layout, whatever the role, but docked in none of them.
+    ///
+    /// [`ALWAYS`](Self::ALWAYS) is about screen real estate: those panels occupy a slot
+    /// in every workspace. This is about reachability: PN-21 must be one click away for
+    /// every role, and for a session with nobody signed in, but wants a docked slot in
+    /// none of them.
+    ///
+    /// The distinction is a licence obligation rather than a preference. The additional
+    /// term in `LICENSE-ADDITIONAL-TERMS.md` section 1 requires that a derivative's
+    /// interface preserve the attribution in its Appropriate Legal Notices, and AGPL
+    /// section 5(d) only makes that binding on a derivative if *this* program's
+    /// interface displays them. A role-gated About panel would make the notices
+    /// reachable for some operators and not others, which is not the "convenient and
+    /// prominently visible feature" AGPL section 0 defines -- so this list exists to
+    /// keep the reachability out of the per-role table, where a future edit to one
+    /// role's layout could quietly drop it.
+    pub const ALWAYS_AVAILABLE: &'static [PanelId] = &[PanelId::About];
 
     /// The workspace for a role, transcribed from the layout table in
     /// `docs/ux/information-architecture.md` §1.
@@ -241,6 +274,9 @@ impl WorkspaceLayout {
                                 | PanelId::DecisionDialog
                                 | PanelId::StatusStrip
                                 | PanelId::Viewport3d
+                                // In ALWAYS_AVAILABLE, so listing it per role would
+                                // make one role's copy look load-bearing when it is not.
+                                | PanelId::About
                         )
                     })
                     .collect(),
@@ -281,9 +317,16 @@ impl WorkspaceLayout {
     /// not mean its actions are permitted: `gungnir_security::role_permits` decides
     /// that, and the decision dialog in particular is reachable for roles that may not
     /// decide, because it is also how a delegated decision is *viewed*.
+    ///
+    /// [`ALWAYS_AVAILABLE`](Self::ALWAYS_AVAILABLE) is included last and unconditionally:
+    /// PN-21 is openable for every role whatever its lists say, because AGPL section 0
+    /// asks for a feature that is *prominently visible*, not one that is visible to the
+    /// roles someone remembered.
     #[must_use]
     pub fn may_open(&self, panel: PanelId) -> bool {
-        self.shows(panel) || self.on_demand.contains(&panel)
+        self.shows(panel)
+            || self.on_demand.contains(&panel)
+            || Self::ALWAYS_AVAILABLE.contains(&panel)
     }
 
     /// Docked panels in order, with the always-present two first.
@@ -616,9 +659,18 @@ mod workspace_tests {
 
     /// Every panel identifier maps to a distinct PN number, so a panel in the running
     /// application can be traced back to the wireframe it came from.
+    ///
+    /// The count is the panel catalogue in `docs/ux/information-architecture.md` §3,
+    /// which is the document this enum transcribes. It went from twenty to twenty-one on
+    /// 2026-09-07 when D-34 added PN-21; changing it here without adding the row there
+    /// would break the traceability the test exists to hold.
     #[test]
     fn panel_identifiers_are_unique_and_traceable() {
-        assert_eq!(PanelId::ALL.len(), 20, "the UX set is twenty panels");
+        assert_eq!(
+            PanelId::ALL.len(),
+            21,
+            "the UX catalogue is twenty-one panels, PN-01 to PN-21"
+        );
         let mut seen = std::collections::HashSet::new();
         for panel in PanelId::ALL {
             assert!(seen.insert(panel.pn()), "{panel:?} duplicates a PN number");

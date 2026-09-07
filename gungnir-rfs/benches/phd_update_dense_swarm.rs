@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Benchmark group `phd_update_dense_swarm` (agentic-coding-standards.md §2.6).
 //! Inputs come from `gungnir-scenario` Scenario 4 once the generator exists; until
 //! the PHD update is implemented this measures only the component-list allocation.

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The endpoint transport (GAP-040, GAP-042): a handoff posted to a configured HTTP
 //! endpoint is `Delivered` when the endpoint accepts, `Refused` with the body when it does
 //! not, and retried, never dropped, when it is unreachable; a warning is `Sent` when the

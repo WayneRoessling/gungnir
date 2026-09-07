@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 """Reference generator for test-track sets (plan 07).
 
 Reads classes.yaml, sensors.yaml, scenarios.yaml, and the catalogue, and writes a set

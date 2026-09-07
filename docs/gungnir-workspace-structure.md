@@ -170,8 +170,12 @@ Recorded when the tracking-core crate names were chosen; not re-verified since.
   re-exporting the sub-crates remains possible if wanted.
 - The fourteen tracking-core crate names (`gungnir-core` through `gungnir-fuzz`) were
   confirmed available on crates.io at that time. The names added later were not
-  checked. The workspace license is `UNLICENSED`, so publication is not currently
-  planned and availability only matters if that changes.
+  checked. **This note used to end "the workspace license is `UNLICENSED`, so
+  publication is not currently planned and availability only matters if that
+  changes." That changed on 2026-09-07**: the workspace is `AGPL-3.0-or-later`
+  (`../LICENSE`), which crates.io accepts, so nothing in the license blocks
+  publication and name availability now matters. Neither the later names nor the
+  original fourteen have been re-checked since.
 - The `fusion-` prefix used by early drafts for the data and UI crates is retired
   (`ARCHITECTURE.md` §7).
 - A GitHub organization or repository name was not verified.

@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 """Generate the py-motmetrics oracle fixture for the `metrics` row.
 
 Row: "MOTA/MOTP, purity/fragmentation, track-to-truth assignment" in

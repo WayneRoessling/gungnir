@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Time management & synchronization, per docs/gungnir-capabilities.md §5.2.
 //! Formalizes what gungnir-fusion-async's out-of-sequence handling already does
 //! internally, extended application-wide so ingestion, persistence, and replay all

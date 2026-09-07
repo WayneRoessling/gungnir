@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Cross-session entity identity on the node (GAP-019, DN-19), over edge (s).
 //!
 //! # Why this is on the node at all, when the desktop already has one

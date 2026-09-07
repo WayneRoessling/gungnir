@@ -74,6 +74,7 @@ The strip is the one place principles 4 and 6 are enforced for every role.
 | PN-18 | Reconciliation conflicts | supervisor | no (GAP-050) | `ReconciliationReport` conflicts with both decisions and the arbitration result | confirm or overturn (a decision) |
 | PN-19 | Assistant | all except where the profile forbids | no (plan 08, GAP-044) | the conversation with provenance labels | question text only; never state |
 | PN-20 | Audit and accounts | administrator | yes (`audit.rs`, GAP-057, GAP-059): who is signed in or which of the three reasons nobody is, a masked sign-in form, sign-out, the accounts without their hashes, and the audit log with failed attempts; assigning a role is not drawn | `SessionState`, the account listing, the `AuditEntry` log | sign in, sign out; assign role (a decision, not drawn) |
+| PN-21 | About | all, including a session with nobody signed in | yes (`about.rs`, D-34): the Appropriate Legal Notices AGPL §0 defines -- copyright, the absence of warranty, that the work may be conveyed under the licence, and how to read it -- with the §7 additional terms and where the source is | nothing; the version is the binary's own and the notices are constants checked against `NOTICE` | nothing |
 
 ## 4. Layouts per role
 
@@ -91,6 +92,16 @@ by selection.
 | Intelligence analyst | PN-15, PN-04, PN-03, PN-13 | PN-12, PN-19 |
 | Planner | PN-16, PN-11, PN-14, PN-12 | PN-10 read-only, PN-19 |
 | Commander | PN-17, PN-06, PN-08 (incidents), PN-09 | PN-04, PN-05, PN-07, PN-16 |
+
+PN-21 is in no row of that table on purpose. It is opened from the status strip and is
+docked nowhere, so every role reaches it and none spends a slot on it
+(`WorkspaceLayout::ALWAYS_AVAILABLE`). That is a licence obligation rather than a layout
+preference: `LICENSE-ADDITIONAL-TERMS.md` §1 requires a derivative work's interface to
+preserve the attribution, AGPL §5(d) makes that binding on a derivative only if this
+interface displays the notices first, and §0 asks for a feature that is *prominently
+visible* -- which a panel some roles could not open would not be. `gungnir-app`'s
+`appropriate_legal_notices.rs` asserts both halves: every role may open it, and no role
+docks it.
 
 Differences from the code today (`WorkspaceLayout::for_role`):
 

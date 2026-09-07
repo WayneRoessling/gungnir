@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! One section of a panel that this build cannot fill, and what owns it (GAP-073).
 //!
 //! Three panels need the same idea and it is worth having exactly one type for it: an

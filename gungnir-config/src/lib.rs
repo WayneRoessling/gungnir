@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Configuration management, per docs/gungnir-capabilities.md §5.1. Sensors,
 //! resources, thresholds, and the deployment backend are supplied here rather than
 //! in code, so an operator can add or reconfigure a sensor, or point a desktop at a
@@ -1185,9 +1189,10 @@ pub const DETACHABLE_PANELS: [&str; 3] = ["PN-02", "PN-06", "PN-12"];
 /// `gungnir-workflow`; `gungnir-app`'s tests assert the two agree, which is the check
 /// that matters -- a baseline naming a panel that does not exist must be refused at
 /// load, not silently ignored at draw time.
-const KNOWN_PANELS: [&str; 20] = [
+const KNOWN_PANELS: [&str; 21] = [
     "PN-01", "PN-02", "PN-03", "PN-04", "PN-05", "PN-06", "PN-07", "PN-08", "PN-09", "PN-10",
     "PN-11", "PN-12", "PN-13", "PN-14", "PN-15", "PN-16", "PN-17", "PN-18", "PN-19", "PN-20",
+    "PN-21",
 ];
 
 /// Coverage analysis settings (DN-12 §6).

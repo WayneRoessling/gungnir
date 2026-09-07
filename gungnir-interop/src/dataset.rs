@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The Arrow form of a training dataset (`docs/ml/data-pipeline.md` §2; GAP-079).
 //!
 //! Owned here rather than by `gungnir-ml` so the catalogue can name it: a dataset is a

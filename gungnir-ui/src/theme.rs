@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Colors, spacing, fonts -- centralized, no magic numbers in panels
 //! (rust-ui-architecture-coding-standards.md §6). `gungnir-viewport3d::materials`
 //! reads the same palette so 2D and 3D views agree.

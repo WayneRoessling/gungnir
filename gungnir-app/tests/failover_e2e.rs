@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The disconnected-reconciliation row against a real transport (GAP-050, the
 //! cross-layer row of `docs/verification-capability-table.md` §2): a desktop signed in
 //! to a real node over the real client, the node goes down, the desktop falls back and

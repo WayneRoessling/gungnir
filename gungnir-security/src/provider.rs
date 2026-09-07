@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! A key provider that actually holds keys (GAP-084, DN-22 amendment 1).
 //!
 //! `KeyProvider` was a trait with no implementor until 2026-09-05, so nothing could be

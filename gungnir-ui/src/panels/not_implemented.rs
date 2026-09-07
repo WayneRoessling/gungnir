@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The panel body for a workspace slot whose panel has not been built yet.
 //!
 //! `docs/ux/information-architecture.md` §1 gives each of the eight roles a workspace

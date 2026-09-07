@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Protocol adapters. Live adapters (radar, EO/IR, ADS-B/AIS, lidar, external C2
 //! via `gungnir-interop` codecs) are deployment-specific and added here as they are
 //! integrated. `asterix` is the first live one (GAP-001, radar half, 2026-09-06);

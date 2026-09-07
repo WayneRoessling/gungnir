@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The after-action review on the desktop (GAP-049, DN-20).
 //!
 //! `gungnir_workflow::review` owns the case, the findings and the rule that a review

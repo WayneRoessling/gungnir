@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Battle rhythm: scheduled products and the handover summary.
 //!
 //! Design: docs/design/DN-21-battle-rhythm.md. Capability CAP-5.8; measure MOE-13.

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! The words the interface uses for domain values (D-12, GAP-070).
 //!
 //! D-12 chose the NATO and joint terms of `docs/mission/glossary.md` as the default UI

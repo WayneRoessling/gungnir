@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Classification & identification, per docs/gungnir-capabilities.md §5.3.
 //! Every track in gungnir-model is purely kinematic by default -- this crate is
 //! what actually sets `Classification` from evidence, feeding both the dashboard

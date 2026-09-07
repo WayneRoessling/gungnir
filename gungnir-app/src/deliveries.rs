@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Deliveries in flight to configured endpoints (GAP-040, DN-07 §5; GAP-042, DN-03 §5):
 //! handoffs and warnings posted through `gungnir-remote`'s endpoint client, their
 //! outcomes swept every frame onto the records and the journal.

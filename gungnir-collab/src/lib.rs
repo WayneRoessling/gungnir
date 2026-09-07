@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Collaboration & multi-user concurrency, per docs/gungnir-capabilities.md §5.6
 //! and ARCHITECTURE.md §8. In the connected profiles several desktops share one
 //! mission through a service node that is the system of record; each desktop's

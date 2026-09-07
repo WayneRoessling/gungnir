@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 //! Safety/authority controls for intercept planning, per
 //! docs/gungnir-capabilities.md §5.4. The Intercept Service produces a plan;
 //! nothing may act on it until it has cleared every policy here and a human has

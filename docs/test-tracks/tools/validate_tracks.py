@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 """Validate generated test-track sets (plan 07, docs/test-tracks/validation.md).
 
 Checks every set under testdata/tracks/samples (or the directories given): files
