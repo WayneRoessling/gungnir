@@ -129,7 +129,7 @@ egui = "0.29"
 three-d = "0.18"
 wgpu = "22"
 gltf = "1"
-vtkio = "0.7.0-rc2"
+vtkio = { version = "0.6", default-features = false }
 las = { version = "0.9", features = ["laz-parallel"] }
 # GeoTIFF DEMs (GAP-023, decided 2026-09-06): the image-rs TIFF codec, pure Rust;
 # gungnir-data owns the three GeoTIFF tags itself (§2.9, "Terrain").
