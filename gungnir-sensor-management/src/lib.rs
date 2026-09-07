@@ -8,6 +8,7 @@
 //! a mode state machine with explicit transition rules, and coverage regions that
 //! feed `gungnir-geo` map layers and `gungnir-assessment` exposure calculations.
 
+pub mod sapient_task;
 pub mod tasking;
 
 pub use tasking::{
