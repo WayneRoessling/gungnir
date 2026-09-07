@@ -1,0 +1,24 @@
+[package]
+name = "gungnir-ml"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The model and feature-extractor traits learned models are held to, a fake model for the consumers' tests, and the dataset extraction from test-track sets into the Arrow form docs/ml/data-pipeline.md documents (GAP-077, GAP-079). No inference runtime: that sign-off is deferred (docs/ml/architecture.md §3), and a build without one reports that learned models are absent rather than pretending."
+
+[lints]
+workspace = true
+
+[dependencies]
+arrow.workspace = true
+# The truth's kinematics are placed in a `TrackView` state vector for the extractor.
+nalgebra.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+# The dataset's content hash (docs/ml/data-pipeline.md §5): a model card names the
+# dataset it was trained on by this.
+sha2.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+# The dataset's Arrow schema is a catalogue entry, so a dataset and the wire format share
+# one definition (docs/ml/data-pipeline.md §2). Edge (q) in ARCHITECTURE.md §7.1.
+gungnir-interop = { path = "../gungnir-interop" }

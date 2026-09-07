@@ -1,0 +1,32 @@
+@startuml Op-Is-VG-04
+title Op-Is VG-04: USV attack on the anchorage (MT-04)
+autonumber
+participant "AR-04 Sensor feeds" as Sensors
+participant "OP-30 C2 system" as System
+actor "OP-02 Supervisor" as R0
+actor "OP-01 Operator" as R1
+actor "OP-04 Sensor manager" as R2
+actor "Port defense authority (OP-02)" as R3
+participant "OP-22 Effectors" as E0
+participant "OP-24 Civil and port authorities" as E1
+note over System
+Timeline:
+03:04 coastal radar detects three low tracks at 12 km in sea state 4; 03:06 cameras
+confirm wakes; 03:07 port defense authority declares hostile; 03:08 patrol boats
+dispatched, the tanker held, the boom closed; the helicopter is not recommended because of
+the missile-carrying variant; 03:14 first USV engaged by a patrol boat at 4 km; 03:19 last
+USV neutralized or beached.
+end note
+Sensors -> System : 1. Ingest coastal radar, AIS, camera, patrol reports; suppress clutter; hold track…
+System -> System : 2. Cue cameras to inbound low-confidence tracks; fuse visual identification
+System -> System : 3. Identify: no AIS, high speed, heading to the anchorage, night, group behaviour,…
+System -> System : 4. Assess closest point of approach and time to protected ships and infrastructure…
+System -> System : 5. Recommend patrol craft, helicopter, shore effector, barrier closure, ship movem…
+System -> R3 : 6. present: Present; decide; record
+R3 -> System : decision: Port defense authority
+System -> System : 7. Hand off; warn ships; close barriers
+System -> E0 : handoff with provenance
+System -> E1 : warning
+System -> R1 : 8. present: Assess; continue for the rest of the group
+R1 -> System : decision: complete
+@enduml

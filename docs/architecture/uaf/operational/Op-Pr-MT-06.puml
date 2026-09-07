@@ -1,0 +1,20 @@
+@startuml Op-Pr-MT-06
+title Op-Pr MT-06: Convoy and battery tracking with cueing of fires
+skinparam activityDiamondBackgroundColor #EEE
+|OP-30 Command-and-control system|
+start
+:1. Ingest ISR video observations, ground radar, acoustic and spotter reports at mismatched r…\n<<OA-01>>;
+:2. Track vehicles and groups; register sensors against each other to remove bias; coast thro…\n<<OA-02>>;
+:3. Resolve global identity across sorties and gaps; classify vehicle type from video and emi…\n<<OA-19, OA-03>>;
+:4. Assess priority and time sensitivity (a battery that fired will move within minutes)\n<<OA-04>>;
+:5. Recommend a fires task: target location and uncertainty, time window, deconfliction again…\n<<OA-30, OA-06>>;
+:6. Present; fires authority decides; record\n<<OA-07>>\n(prepare and present);
+|Human performers|
+:6. decide: Fires authority\n(Fires authority (OP-08));
+|OP-30 Command-and-control system|
+:7. Hand off with provenance; the fires unit executes\n<<OA-08>>;
+:8. Battle damage assessment from the next observation; update the entity\n<<OA-10, OA-19>>\n(prepare and present);
+|Human performers|
+:8. decide: complete the step\n(OP-01 Operator);
+stop
+@enduml

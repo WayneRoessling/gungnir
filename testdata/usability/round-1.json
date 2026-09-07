@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "revision": 1,
+  "origin": [0.959931, 0.20944, 0.0],
+  "sensors": [
+    { "id": 1, "modality": "radar", "position": [0.959931, 0.20944, 25.0], "max_range_m": 15000.0 },
+    { "id": 2, "modality": "radar", "position": [0.96010, 0.21100, 30.0], "max_range_m": 12000.0 }
+  ],
+  "resources": [
+    { "id": 1, "position": [0.959931, 0.20944, 0.0], "capacity": 4, "layer": "point", "rounds_available": 8, "reserve": 2, "intercept_speed_mps": 250.0 },
+    { "id": 2, "position": [0.96010, 0.21100, 0.0], "capacity": 2, "layer": "area", "intercept_speed_mps": 600.0 }
+  ],
+  "assets": [
+    { "id": 1, "name": "the harbour", "position": [0.959931, 0.20944, 0.0], "radius_m": 600.0, "priority": "high", "warning_lead_time_s": 120.0, "warning_channel": "port-authority" },
+    { "id": 2, "name": "the plant", "position": [0.96010, 0.21100, 0.0], "radius_m": 400.0, "priority": "critical" }
+  ],
+  "policy": {
+    "control_status": { "by_layer": { "point": "free", "area": "hold" } },
+    "authority": { "rules": [
+      { "action": "plan.decide", "role": "Operator", "layer": "point", "class": null, "pre_delegated": false },
+      { "action": "plan.decide", "role": "Supervisor", "layer": "point", "class": null, "pre_delegated": false }
+    ] },
+    "decisions": { "expiry_s": { "point": 90.0 }, "escalate_after_s": { "point": 45.0 } }
+  },
+  "endpoints": [
+    { "name": "port-authority", "kind": "voice", "address": "vhf-16" }
+  ],
+  "geofences": [
+    { "name": "upper Vell no-go", "center": [0.96020, 0.20900, 0.0], "radius_m": 1500.0, "no_go": true }
+  ],
+  "hazards": [
+    { "name": "harbour boom", "kind": "boom", "shape": "polyline", "points": [[0.9599, 0.2094, 0.0], [0.9599, 0.2095, 0.0]], "blocks_surface": true }
+  ]
+}

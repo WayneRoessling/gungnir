@@ -1,0 +1,30 @@
+# Gate 5: nightly fuzzing of the sensor-ingestion parser, the ASTERIX radar adapter, and association
+# cost-matrix construction (docs/agentic-workflow.md). Scheduled, not per-PR.
+name: fuzz-nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [sensor_ingestion_parser, asterix_feed, cost_matrix_construction]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-fuzz --locked
+      - name: fuzz ${{ matrix.target }} for 20 minutes
+        working-directory: gungnir-fuzz
+        run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=1200
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: gungnir-fuzz/artifacts/
+          if-no-files-found: ignore

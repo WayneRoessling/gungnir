@@ -1,0 +1,53 @@
+{
+ "format": 1,
+ "scenario": "TT-06",
+ "variant": "sample",
+ "seed": 1706,
+ "generator": "tt-gen 0.1.0",
+ "catalogue_version": "2026-09-04",
+ "classes_version": "2026-09-04",
+ "sensors_version": "2026-09-04",
+ "scenarios_version": "2026-09-04",
+ "duration_s": 900,
+ "truth_tick_s": 2.0,
+ "origin": {
+  "name": "Sector command post, Ostmark (fictional)",
+  "lat": 0.0,
+  "lon": 0.0,
+  "alt_m": 0.0
+ },
+ "start_time_of_day": "22:00:00",
+ "counts": {
+  "entities": 8,
+  "entities_by_class": {
+   "land.spg": 2,
+   "land.truck": 4,
+   "air.tactical-isr": 1,
+   "land.mobile-ad": 1
+  },
+  "truth_records": 2348,
+  "detections": 642,
+  "false_alarms": 123,
+  "sensors": 4
+ },
+ "expected": {
+  "entities": 15,
+  "identity_gaps": 1,
+  "bias_sensor": 17,
+  "success": "the battery engaged inside its shoot-and-move window; the convoy's identity survives the gap (MOE-09); the bias between radar and ISR video estimated and removed"
+ },
+ "provenance": {
+  "policy": "docs/test-tracks/sourcing-and-legal.md",
+  "inputs": [
+   "classes.yaml",
+   "sensors.yaml",
+   "scenarios.yaml",
+   "catalogue-*.yaml"
+  ]
+ },
+ "validation": {
+  "passed": true,
+  "checks": 18,
+  "report": "validation-report.json"
+ }
+}

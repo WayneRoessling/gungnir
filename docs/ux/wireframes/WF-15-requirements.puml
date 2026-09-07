@@ -1,0 +1,17 @@
+@startsalt WF-15
+title WF-15 PN-15 Requirements and tasking (intelligence analyst states; sensor manager tasks; commander prioritises)
+{+
+  { [ + new requirement ] | filter: [ open ▾ ] }
+  {#
+    Id | Question | Area | Priority | Window | Status | Tasked to
+    RQ-31 | Is the ISR UAS east of the ridge cueing the battery? | polygon E1 | 2 | 15:00–16:00 | <b>tasked</b> | R2 radar track + ISR sortie 2
+    RQ-30 | Identity of light aircraft T-051 | corridor | 3 | until resolved | collected | C2 camera (visual 15:48)
+    RQ-29 | Launch area of the sea stream | sea sector | 1 | 00:00–03:00 | <color:orange>declined</color>: "no sensor reaches 80 km" (Pieter) | —
+  }
+  --
+  <b>RQ-31</b>
+  { Question: "Is the ISR UAS east of the ridge cueing the battery?" | Area: [ draw / edit on map ] | Priority: [ 2 ▾ ] (commander sets 1) | Window: [ 15:00 ] – [ 16:00 ] }
+  { Tasking (sensor manager): R2 track mode on T-048 · ISR sortie 2 orbit · <i>defense coverage cost: upper Vell −8 km for 60 min → needs supervisor concurrence</i> }
+  { [ task ] [ decline with reason ] [ mark satisfied ] [ close ] }
+}
+@endsalt

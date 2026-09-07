@@ -1,0 +1,24 @@
+[package]
+name = "gungnir-data-fusion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "GPU-accelerated point cloud registration/fusion (point-to-plane ICP) on wgpu compute, per rust-3d-data-ecosystem-build-vs-adopt.md §3. The one genuine ecosystem gap identified -- kept as its own crate, separate from gungnir-data, because it's the only data-layer crate that needs a wgpu::Device (borrowed from gungnir-render)."
+
+[lints]
+workspace = true
+
+[features]
+# GPU-vs-CPU validation runs only on GPU-enabled runners (gpu-fusion.yml), never
+# inside plain `cargo test`.
+gpu-tests = []
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+wgpu.workspace = true
+gungnir-data = { path = "../gungnir-data" }
+
+[dev-dependencies]
+proptest.workspace = true

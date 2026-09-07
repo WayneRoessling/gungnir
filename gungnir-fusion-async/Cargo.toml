@@ -1,0 +1,31 @@
+[package]
+name = "gungnir-fusion-async"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "OOS handling / multi-rate async fusion pipeline. The only crate that uses the tokio runtime; the runtime is owned by the host binary."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+crossbeam-channel.workspace = true
+gungnir-track = { path = "../gungnir-track" }
+gungnir-rfs = { path = "../gungnir-rfs" }
+gungnir-track-fusion = { path = "../gungnir-track-fusion" }
+# GAP-011, edge (r) in ARCHITECTURE.md §7.1: the pipeline drives an estimator and an
+# association gate per epoch, so it names the crates that own them rather than
+# reimplementing either. Both are already beneath this crate through `gungnir-track`;
+# what changes is that the manifest now says what the code imports.
+gungnir-core = { path = "../gungnir-core" }
+gungnir-filters = { path = "../gungnir-filters" }
+gungnir-association = { path = "../gungnir-association" }
+
+[dev-dependencies]
+proptest.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }

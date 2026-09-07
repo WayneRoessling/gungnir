@@ -1,0 +1,25 @@
+[package]
+name = "gungnir-mission"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+description = "Mission/session lifecycle: create/load/save/replay/close, plus scenario binding. gungnir-capabilities.md §5.1 -- High. Pairs with gungnir-config."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-config = { path = "../gungnir-config" }
+gungnir-store = { path = "../gungnir-store" }
+# GAP-051: the lifecycle replays a session, and an envelope is what a session is
+# made of. `gungnir-store` already carries this type; naming it here is the same
+# edge the journal has.
+gungnir-eventing = { path = "../gungnir-eventing" }
+
+[dev-dependencies]
+gungnir-scenario = { path = "../gungnir-scenario" }

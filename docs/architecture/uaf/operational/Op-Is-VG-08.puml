@@ -1,0 +1,27 @@
+@startuml Op-Is-VG-08
+title Op-Is VG-08: Who is that aircraft (MT-08)
+autonumber
+participant "AR-04 Sensor feeds" as Sensors
+participant "OP-30 C2 system" as System
+actor "OP-06 Intelligence analyst" as R0
+actor "OP-04 Sensor manager" as R1
+actor "OP-08 Commander" as R2
+actor "OP-03 Analyst" as R3
+actor "OP-01 Operator" as R4
+participant "OP-21 Peers and higher command" as E0
+note over System
+Timeline:
+15:00 to 16:30; the ISR UAS is declared hostile at 15:12 on emitter and behaviour
+evidence; the fighters are identified friendly by IFF despite the missing plan; the light
+aircraft stays unknown until visual identification at 15:48.
+end note
+R2 -> System : 1. State the requirement: area, question, priority, time window
+System -> R1 : 2. present: Translate into sensor tasking; show the coverage cost
+R1 -> System : decision: Sensor manager
+System -> System : 3. Collect; observations carry provenance
+System -> System : 4. Fuse evidence into identities with confidence; keep the evidence with the track
+System -> R3 : 5. present: Maintain entities and order of battle across sessions
+R3 -> System : decision: Analyst merges or splits
+System -> System : 6. Disseminate identities, warnings, and products to roles and peers with releasab…
+System -> System : 7. Journal; pattern of life accumulates over sessions
+@enduml

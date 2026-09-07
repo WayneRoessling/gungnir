@@ -1,0 +1,37 @@
+[package]
+name = "gungnir-security"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+description = "Authentication, role/attribute-based authorization, encryption in transit and at rest, secrets/key management, signed binaries and configuration, audit logging. gungnir-capabilities.md §5.5 -- Critical."
+
+[lints]
+workspace = true
+
+[dependencies]
+# D-20, signed off 2026-09-05: operator authentication (GAP-057, DN-23).
+# argon2 verifies an operator's passphrase against a local account store; password-hash
+# carries the PHC encoding and the salt generator. No key material is held here --
+# custody is the host's (DN-22), and a passphrase is never stored, only its hash.
+#
+# hmac + sha2 authenticate the node-issued session tokens and subtle compares them in
+# constant time, so a forged token does not leak how much of it was right. A MAC rather
+# than a signature: the node issues and verifies its own tokens, so a private key in the
+# process would buy nothing (D-20).
+# D-22, signed off 2026-09-05: AES-256-GCM behind KeyProvider::seal/unseal (DN-22
+# amendment 1 b). The sealed form carries the KeyId that protected it, so rotation never
+# rewrites existing material.
+aes-gcm.workspace = true
+# GAP-084: the asymmetric provider (DN-22 §9a) and escrow (§11): ECDSA and ECDH over
+# P-256, the public key read from PEM. The `ecdh` feature is recorded in §2.9.
+p256.workspace = true
+argon2.workspace = true
+password-hash.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+tracing.workspace = true

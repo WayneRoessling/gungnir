@@ -1,0 +1,18 @@
+[package]
+name = "gungnir-identity"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Persistent global track/entity identity across feeds -- aliases, merge/split history, supersession -- beyond the tracking core's internal track IDs. docs/gungnir-capabilities.md §5.3 -- High."
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+# D-11 / GAP-069: this crate mints identities, so it is the one that needs a generator.
+uuid = { workspace = true, features = ["v7"] }
+
+[dev-dependencies]
+nalgebra.workspace = true

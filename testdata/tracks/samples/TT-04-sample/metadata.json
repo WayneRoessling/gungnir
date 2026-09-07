@@ -1,0 +1,50 @@
+{
+ "format": 1,
+ "scenario": "TT-04",
+ "variant": "sample",
+ "seed": 1704,
+ "generator": "tt-gen 0.1.0",
+ "catalogue_version": "2026-09-04",
+ "classes_version": "2026-09-04",
+ "sensors_version": "2026-09-04",
+ "scenarios_version": "2026-09-04",
+ "duration_s": 420,
+ "truth_tick_s": 2.0,
+ "origin": {
+  "name": "Sector command post, Ostmark (fictional)",
+  "lat": 0.0,
+  "lon": 0.0,
+  "alt_m": 0.0
+ },
+ "start_time_of_day": "03:02:00",
+ "counts": {
+  "entities": 9,
+  "entities_by_class": {
+   "sea.usv": 4,
+   "sea.amphibious-auxiliary": 3,
+   "sea.fast-craft": 2
+  },
+  "truth_records": 1454,
+  "detections": 2279,
+  "false_alarms": 365,
+  "sensors": 3
+ },
+ "expected": {
+  "entities": 9,
+  "success": "no USV reaches a ship or the port; the lost USV reacquired within five minutes; the helicopter not sent"
+ },
+ "provenance": {
+  "policy": "docs/test-tracks/sourcing-and-legal.md",
+  "inputs": [
+   "classes.yaml",
+   "sensors.yaml",
+   "scenarios.yaml",
+   "catalogue-*.yaml"
+  ]
+ },
+ "validation": {
+  "passed": true,
+  "checks": 18,
+  "report": "validation-report.json"
+ }
+}

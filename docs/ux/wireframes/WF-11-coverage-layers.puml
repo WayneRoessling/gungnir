@@ -1,0 +1,22 @@
+@startsalt WF-11
+title WF-11 PN-11 Coverage layer controls (drives what the viewport draws)
+{+
+  { Draw: [X] combined coverage  [X] gaps  [ ] per sensor  [X] defended assets  [X] approaches  [ ] terrain shading }
+  {#
+    Layer | Colour | Show
+    R2 HAF radar search | blue 30 % | [X]
+    A-net acoustic | teal 20 % | [X]
+    C1 camera | grey 20 % | [ ]
+    gaps along approaches | red hatch | [X]
+  }
+  --
+  <b>Compare</b>
+  { A: [ current ▾ ] | B: [ R2 search pattern (proposed) ▾ ] | [ side by side ] [ difference ] }
+  {#
+    . | Gaps | Assets uncovered | Upper Vell approach | Sea approach
+    A current | 1 | OPS partial | <color:red>uncovered 12 km</color> | covered
+    B proposed | 0 | none | covered from 31 km | covered
+  }
+  { recompute 6.2 s ago (budget 10 s, MOP-14) | [ recompute ] }
+}
+@endsalt

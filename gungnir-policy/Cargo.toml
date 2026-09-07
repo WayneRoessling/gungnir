@@ -1,0 +1,15 @@
+[package]
+name = "gungnir-policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Authority model, geofence/no-go enforcement, and policy evaluation sitting in front of the Intercept Planning Service's output. docs/gungnir-capabilities.md §5.4 -- Critical. Human-owned changes (agentic-workflow.md). Pairs with gungnir-command."
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-geo = { path = "../gungnir-geo" }

@@ -1,0 +1,100 @@
+{
+ "passed": true,
+ "checks": [
+  {
+   "check": "files present",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "check": "catalogue_version current",
+   "passed": true,
+   "detail": "set 2026-09-04 vs 2026-09-04"
+  },
+  {
+   "check": "classes_version current",
+   "passed": true,
+   "detail": "set 2026-09-04 vs 2026-09-04"
+  },
+  {
+   "check": "sensors_version current",
+   "passed": true,
+   "detail": "set 2026-09-04 vs 2026-09-04"
+  },
+  {
+   "check": "scenarios_version current",
+   "passed": true,
+   "detail": "set 2026-09-04 vs 2026-09-04"
+  },
+  {
+   "check": "truth speed within class envelope",
+   "passed": true,
+   "detail": "0 violations, first []"
+  },
+  {
+   "check": "truth altitude within class envelope",
+   "passed": true,
+   "detail": "[]"
+  },
+  {
+   "check": "truth has no teleports",
+   "passed": true,
+   "detail": "[]"
+  },
+  {
+   "check": "truth time monotonic per entity",
+   "passed": true,
+   "detail": "[]"
+  },
+  {
+   "check": "truth alive flag never revives",
+   "passed": true,
+   "detail": "[]"
+  },
+  {
+   "check": "truth record count matches metadata",
+   "passed": true,
+   "detail": "1454 vs 1454"
+  },
+  {
+   "check": "entity count matches metadata",
+   "passed": true,
+   "detail": "9 vs 9"
+  },
+  {
+   "check": "detections parse as DetectionView",
+   "passed": true,
+   "detail": "[]"
+  },
+  {
+   "check": "detections satisfy the gateway rules",
+   "passed": true,
+   "detail": "0 violations, first []"
+  },
+  {
+   "check": "detections name known sensors",
+   "passed": true,
+   "detail": "[]"
+  },
+  {
+   "check": "detections in receipt order",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "check": "detection count matches metadata",
+   "passed": true,
+   "detail": "2279 vs 2279"
+  },
+  {
+   "check": "out-of-order fraction per sensor within the model",
+   "passed": true,
+   "detail": "[]"
+  }
+ ],
+ "out_of_order": {
+  "8": 0.067,
+  "7": 0.0,
+  "10": 0.0
+ }
+}

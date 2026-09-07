@@ -1,0 +1,52 @@
+@startuml Op-Cn
+title Op-Cn operational connectivity: needlines between performers
+left to right direction
+skinparam rectangle {
+  BackgroundColor #F7F7F7
+}
+rectangle "OP-33 Sensor network" as OP_33 <<OperationalPerformer>>
+rectangle "OP-30 Command-and-control system\n(OP-31 workstations, OP-32 node)" as OP_30 <<OperationalPerformer>>
+rectangle "OP-34 Effector interface" as OP_34 <<OperationalPerformer>>
+actor "OP-01 Operator" as OP_01
+actor "OP-02 Supervisor" as OP_02
+actor "OP-03 Analyst" as OP_03
+actor "OP-04 Sensor manager" as OP_04
+actor "OP-05 Administrator" as OP_05
+actor "OP-06 Intelligence analyst" as OP_06
+actor "OP-07 Planner" as OP_07
+actor "OP-08 Commander" as OP_08
+rectangle "OP-20 Higher command" as OP_20
+rectangle "OP-21 Neighbouring sector" as OP_21
+rectangle "OP-22 Fire units and effectors" as OP_22
+rectangle "OP-23 Sensor operators" as OP_23
+rectangle "OP-24 Civil aviation" as OP_24
+rectangle "OP-25 Port and maritime authorities" as OP_25
+rectangle "OP-26 Coalition partners" as OP_26
+
+OP_33 --> OP_30 : NL-01 observations, health
+OP_21 --> OP_30 : NL-02 early warning, peer tracks
+OP_20 --> OP_30 : NL-02 warnings, ROE
+OP_24 --> OP_30 : NL-03 ADS-B, flight plans
+OP_25 --> OP_30 : NL-03 AIS, harbour state
+OP_30 --> OP_01 : NL-04 picture, plans, verdicts, alerts
+OP_30 --> OP_02 : NL-04 queue, incidents
+OP_30 --> OP_08 : NL-04 summary, queue state
+OP_01 --> OP_30 : NL-05 decisions
+OP_02 --> OP_30 : NL-05 decisions, holds, status
+OP_08 --> OP_30 : NL-05 decisions, delegations
+OP_30 --> OP_34 : NL-06 handoff
+OP_34 --> OP_22 : NL-06
+OP_22 --> OP_30 : NL-07 readiness, outcomes
+OP_30 --> OP_24 : NL-08 warnings
+OP_30 --> OP_25 : NL-08 warnings
+OP_04 --> OP_30 : NL-09 modes, tasking, calibration
+OP_30 --> OP_23 : NL-09 tasking
+OP_30 --> OP_04 : NL-10 health, coverage, incidents
+OP_06 --> OP_30 : NL-11 requirements, declarations, releases
+OP_30 --> OP_26 : NL-12 products with releasability
+OP_30 --> OP_20 : NL-12 status, reports
+OP_07 --> OP_30 : NL-13 laydown, plans
+OP_08 --> OP_30 : NL-13 asset list, policy
+OP_03 --> OP_30 : NL-14 replay, reports, promotions
+OP_05 --> OP_30 : NL-16 accounts, roles, baselines
+@enduml

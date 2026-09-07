@@ -1,0 +1,17 @@
+@startsalt WF-L5
+title WF-L5 Administrator layout (P-05): editors and logs, no engagement dialogs
+{+
+  { <b>PN-01 status strip</b> · Administrator (Sven) }
+  --
+  {
+    {+ <b>PN-14 Configuration editor</b> ..
+    {+ <b>PN-20 Audit and accounts</b> ..
+    } | {+
+      <b>PN-02 Viewport</b> (read-only)
+      .
+      .
+    } | {+ <b>PN-09 Health</b> (node, journal, watchdog, retention) ..
+    {+ <i>other panels read-only on demand</i> }
+  }
+}
+@endsalt

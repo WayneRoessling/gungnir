@@ -1,0 +1,28 @@
+@startuml Op-Is-VG-03
+title Op-Is VG-03: Quadcopter over the airfield (MT-03)
+autonumber
+participant "AR-04 Sensor feeds" as Sensors
+participant "OP-30 C2 system" as System
+actor "OP-04 Sensor manager" as R0
+actor "OP-02 Supervisor" as R1
+actor "OP-01 Operator" as R2
+actor "Site authority (OP-01)" as R3
+participant "OP-24 Civil and port authorities" as E0
+note over System
+Timeline:
+14:20 RF detection and radar track; 14:21 camera identification; 14:22 site authority
+decides to jam; 14:24 the multirotor returns toward its operator, whose position is
+estimated from the uplink; 14:32 acoustic and visual warning of the FPV; 14:33 impact or
+interception by the mobile fire group.
+end note
+Sensors -> System : 1. Ingest RF, radar, acoustic, and visual reports; correlate into one track
+System -> System : 2. Classify: consumer multirotor, FPV, fixed-wing ISR; link-controlled or autonomo…
+System -> System : 3. Assess: approaching the site, loitering, passing; risk to the site and to people
+System -> System : 4. Recommend: jam (if link-controlled and permitted here), interceptor drone, smal…
+System -> R3 : 5. present: Present; site authority decides; self-defense engagements are recorded after th…
+R3 -> System : decision: Site authority; self-defense retained
+System -> System : 6. Hand off to the site's effector; warn personnel
+System -> E0 : warning
+System -> R1 : 7. present: Assess; if the UAS was ISR, expect a strike: raise the site's alert state and r…
+R1 -> System : decision: Supervisor
+@enduml

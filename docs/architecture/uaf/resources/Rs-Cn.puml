@@ -1,0 +1,239 @@
+@startuml Rs-Cn
+title Rs-Cn resource connectivity: crate dependency graph (from Cargo.toml)
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "Tracking core" {
+  component "gungnir-allocation" as RS_allocation <<Resource>>
+  component "gungnir-association" as RS_association <<Resource>>
+  component "gungnir-coord" as RS_coord <<Resource>>
+  component "gungnir-core" as RS_core <<Resource>>
+  component "gungnir-filters" as RS_filters <<Resource>>
+  component "gungnir-fusion-async" as RS_fusion_async <<Resource>>
+  component "gungnir-fuzz" as RS_fuzz <<Resource>>
+  component "gungnir-metrics" as RS_metrics <<Resource>>
+  component "gungnir-oracle" as RS_oracle <<Resource>>
+  component "gungnir-rfs" as RS_rfs <<Resource>>
+  component "gungnir-scenario" as RS_scenario <<Resource>>
+  component "gungnir-testkit" as RS_testkit <<Resource>>
+  component "gungnir-track-fusion" as RS_track_fusion <<Resource>>
+  component "gungnir-track" as RS_track <<Resource>>
+}
+package "Foundation model" {
+  component "gungnir-model" as RS_model <<Resource>>
+}
+package "Service facades" {
+  component "gungnir-intercept-service" as RS_intercept_service <<Resource>>
+  component "gungnir-tracking-service" as RS_tracking_service <<Resource>>
+}
+package "Productization" {
+  component "gungnir-analytics" as RS_analytics <<Resource>>
+  component "gungnir-api" as RS_api <<Resource>>
+  component "gungnir-assessment" as RS_assessment <<Resource>>
+  component "gungnir-collab" as RS_collab <<Resource>>
+  component "gungnir-command" as RS_command <<Resource>>
+  component "gungnir-config" as RS_config <<Resource>>
+  component "gungnir-decision" as RS_decision <<Resource>>
+  component "gungnir-eventing" as RS_eventing <<Resource>>
+  component "gungnir-geo" as RS_geo <<Resource>>
+  component "gungnir-identification" as RS_identification <<Resource>>
+  component "gungnir-identity" as RS_identity <<Resource>>
+  component "gungnir-ingest" as RS_ingest <<Resource>>
+  component "gungnir-interop" as RS_interop <<Resource>>
+  component "gungnir-mission" as RS_mission <<Resource>>
+  component "gungnir-modelops" as RS_modelops <<Resource>>
+  component "gungnir-observability" as RS_observability <<Resource>>
+  component "gungnir-policy" as RS_policy <<Resource>>
+  component "gungnir-replay" as RS_replay <<Resource>>
+  component "gungnir-reporting" as RS_reporting <<Resource>>
+  component "gungnir-resilience" as RS_resilience <<Resource>>
+  component "gungnir-security" as RS_security <<Resource>>
+  component "gungnir-sensor-management" as RS_sensor_management <<Resource>>
+  component "gungnir-store" as RS_store <<Resource>>
+  component "gungnir-time" as RS_time <<Resource>>
+  component "gungnir-workflow" as RS_workflow <<Resource>>
+}
+package "Data ecosystem" {
+  component "gungnir-data-fusion" as RS_data_fusion <<Resource>>
+  component "gungnir-data" as RS_data <<Resource>>
+  component "gungnir-render" as RS_render <<Resource>>
+}
+package "Deployment" {
+  component "gungnir-node" as RS_node <<Binary>>
+  component "gungnir-remote" as RS_remote <<Resource>>
+}
+package "User interface" {
+  component "gungnir-app" as RS_app <<Binary>>
+  component "gungnir-ui" as RS_ui <<Resource>>
+  component "gungnir-viewport3d" as RS_viewport3d <<Resource>>
+}
+RS_allocation --> RS_core
+RS_analytics --> RS_coord
+RS_analytics --> RS_data
+RS_analytics --> RS_geo
+RS_analytics --> RS_model
+RS_analytics --> RS_sensor_management
+RS_api --> RS_model
+RS_api --> RS_eventing
+RS_api --> RS_security
+RS_api --> RS_tracking_service
+RS_api --> RS_intercept_service
+RS_api --> RS_analytics
+RS_app --> RS_tracking_service
+RS_app --> RS_intercept_service
+RS_app --> RS_remote
+RS_app --> RS_resilience
+RS_app --> RS_identification
+RS_app --> RS_identity
+RS_app --> RS_data
+RS_app --> RS_data_fusion
+RS_app --> RS_render
+RS_app --> RS_viewport3d
+RS_app --> RS_ui
+RS_app --> RS_model
+RS_app --> RS_config
+RS_app --> RS_mission
+RS_app --> RS_eventing
+RS_app --> RS_store
+RS_app --> RS_time
+RS_app --> RS_ingest
+RS_app --> RS_observability
+RS_app --> RS_workflow
+RS_app --> RS_security
+RS_app --> RS_policy
+RS_app --> RS_command
+RS_app --> RS_geo
+RS_app --> RS_sensor_management
+RS_app --> RS_analytics
+RS_app --> RS_assessment
+RS_app --> RS_modelops
+RS_app --> RS_decision
+RS_app --> RS_replay
+RS_app --> RS_reporting
+RS_assessment --> RS_model
+RS_association --> RS_filters
+RS_collab --> RS_model
+RS_collab --> RS_eventing
+RS_collab --> RS_command
+RS_collab --> RS_security
+RS_command --> RS_model
+RS_command --> RS_policy
+RS_config --> RS_model
+RS_data_fusion --> RS_data
+RS_decision --> RS_model
+RS_decision --> RS_assessment
+RS_decision --> RS_policy
+RS_decision --> RS_analytics
+RS_eventing --> RS_model
+RS_filters --> RS_core
+RS_filters --> RS_coord
+RS_fusion_async --> RS_track
+RS_fusion_async --> RS_rfs
+RS_fusion_async --> RS_track_fusion
+RS_fusion_async --> RS_core
+RS_fusion_async --> RS_filters
+RS_fusion_async --> RS_association
+RS_fuzz --> RS_association
+RS_fuzz --> RS_ingest
+RS_fuzz --> RS_model
+RS_geo --> RS_coord
+RS_geo --> RS_data
+RS_identification --> RS_model
+RS_identity --> RS_model
+RS_ingest --> RS_model
+RS_ingest --> RS_time
+RS_ingest --> RS_tracking_service
+RS_ingest --> RS_interop
+RS_intercept_service --> RS_core
+RS_intercept_service --> RS_coord
+RS_intercept_service --> RS_allocation
+RS_intercept_service --> RS_model
+RS_interop --> RS_model
+RS_metrics --> RS_track
+RS_metrics --> RS_association
+RS_mission --> RS_model
+RS_mission --> RS_config
+RS_mission --> RS_store
+RS_mission --> RS_eventing
+RS_ml --> RS_model
+RS_ml --> RS_interop
+RS_model --> RS_core
+RS_model --> RS_coord
+RS_modelops --> RS_config
+RS_modelops --> RS_model
+RS_node --> RS_model
+RS_node --> RS_config
+RS_node --> RS_mission
+RS_node --> RS_eventing
+RS_node --> RS_store
+RS_node --> RS_time
+RS_node --> RS_ingest
+RS_node --> RS_sensor_management
+RS_node --> RS_tracking_service
+RS_node --> RS_intercept_service
+RS_node --> RS_api
+RS_node --> RS_remote
+RS_node --> RS_security
+RS_node --> RS_modelops
+RS_node --> RS_policy
+RS_node --> RS_geo
+RS_node --> RS_analytics
+RS_node --> RS_observability
+RS_observability --> RS_model
+RS_oracle --> RS_filters
+RS_oracle --> RS_association
+RS_oracle --> RS_rfs
+RS_oracle --> RS_scenario
+RS_policy --> RS_model
+RS_policy --> RS_geo
+RS_remote --> RS_model
+RS_remote --> RS_eventing
+RS_remote --> RS_api
+RS_remote --> RS_tracking_service
+RS_remote --> RS_intercept_service
+RS_replay --> RS_model
+RS_replay --> RS_eventing
+RS_replay --> RS_store
+RS_replay --> RS_time
+RS_reporting --> RS_model
+RS_reporting --> RS_eventing
+RS_reporting --> RS_store
+RS_reporting --> RS_metrics
+RS_reporting --> RS_identity
+RS_resilience --> RS_model
+RS_resilience --> RS_eventing
+RS_resilience --> RS_store
+RS_rfs --> RS_track
+RS_scenario --> RS_core
+RS_scenario --> RS_coord
+RS_scenario --> RS_fusion_async
+RS_sensor_management --> RS_coord
+RS_sensor_management --> RS_model
+RS_sensor_management --> RS_config
+RS_store --> RS_model
+RS_store --> RS_eventing
+RS_time --> RS_model
+RS_track_fusion --> RS_track
+RS_track_fusion --> RS_coord
+RS_track --> RS_core
+RS_track --> RS_association
+RS_tracking_service --> RS_core
+RS_tracking_service --> RS_coord
+RS_tracking_service --> RS_filters
+RS_tracking_service --> RS_association
+RS_tracking_service --> RS_track
+RS_tracking_service --> RS_rfs
+RS_tracking_service --> RS_track_fusion
+RS_tracking_service --> RS_fusion_async
+RS_tracking_service --> RS_model
+RS_ui --> RS_model
+RS_viewport3d --> RS_data
+RS_viewport3d --> RS_data_fusion
+RS_viewport3d --> RS_model
+RS_viewport3d --> RS_ui
+RS_workflow --> RS_model
+RS_workflow --> RS_security
+RS_workflow --> RS_observability
+RS_workflow --> RS_sensor_management
+RS_workflow --> RS_assessment
+@enduml

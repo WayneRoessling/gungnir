@@ -1,0 +1,21 @@
+@startsalt WF-09
+title WF-09 PN-09 System health (reported, never inferred)
+{+
+  {#
+    Subsystem | Flag | Reported reason
+    tracking | <color:red>● unhealthy</color> | pipeline not implemented (PIPELINE_IMPLEMENTED = false)
+    intercept | <color:red>● unhealthy</color> | allocator NotImplemented; serving last good plan
+    ingest | <color:green>● healthy</color> | 2 of 2 adapters live; last receipt 0.4 s ago
+  }
+  --
+  {#
+    Sensor | Mode | Health | Last report | Clock skew | Calibration
+    R1 ridge radar | <color:gray>offline</color> | <color:red>no report 34 s</color> | 01:50:11 | — | cb-2026-09
+    R2 HAF radar | search | ok | 0.2 s | +0.01 s | cb-2026-09
+    A3 acoustic | track | ok | 0.9 s | <color:orange>+1.9 s</color> | cb-2026-08
+    C1 KAL camera | standby | ok | 3 s | +0.00 s | cb-2026-09
+  }
+  --
+  { Backend: Node connected · Journal: open, 41 218 envelopes, last append 2 ms · Watchdog: ingest gap 0.4 s / 30 s limit · Outbox: 0 queued, 0 dropped }
+}
+@endsalt

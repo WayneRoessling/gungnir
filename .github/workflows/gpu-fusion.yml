@@ -1,0 +1,29 @@
+# GPU point-cloud registration validated against the CPU reference on a
+# GPU-enabled self-hosted runner (docs/rust-3d-data-ecosystem-build-vs-adopt.md
+# §3.6). Not one of the six numbered gates; never run inside plain `cargo test`.
+name: gpu-fusion
+
+on:
+  pull_request:
+    paths:
+      - "gungnir-data-fusion/**"
+      - "gungnir-render/**"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gpu-vs-cpu:
+    runs-on: [self-hosted, gpu]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+      - name: CPU reference (plain cargo test)
+        run: cargo test -p gungnir-data-fusion
+      - name: GPU path against the CPU reference
+        env:
+          GUNGNIR_GPU_TESTS: "1"
+        run: cargo test -p gungnir-data-fusion --features gpu-tests -- --ignored

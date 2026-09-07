@@ -1,0 +1,15 @@
+@startsalt WF-17
+title WF-17 PN-17 Commander summary (every number links to its detail panel)
+{+
+  {#
+    Queue | pending <b>7</b> | oldest 0:41 left | 2.4 decisions/min | expired this hour <color:red>2</color> | [ open queue ]
+    Delegations in force | operator: point layer, hostile small UAS (to 02:30) | KAL cell: point layer while disconnected (expires 30 min after loss) | . | . | [ delegate… ]
+    Accepted gaps | HAF SAM maintenance 08:00–14:00 (accepted Reyes, warning 60 s) | upper Vell after R1 loss (accepted 01:55, until repaired) | . | . | [ accept a gap… ]
+    Plan in force | v12 applied 2026-09-01 · valid to 2026-09-08 | draft v13 awaiting approval (rehearsed 13:00) | . | . | [ review v13 ]
+    Weapons control status | point <b>Free</b> · area <b>Tight</b> (Tomas 01:38) | . | . | . | [ change… ]
+    Outcomes today | engaged 44 · destroyed 39 · missed 3 · continuing 2 · warnings issued 6 | . | . | . | [ open report ]
+  }
+  --
+  { <b>Delegate…</b> dialog: role or site [ ▾ ] · layer [ point ▾ ] (area and missiles not offered, D-15) · classes [ hostile small UAS ▾ ] · expires [ 02:30 ] (defaults to the battle rhythm, never indefinite) · [ Cancel ] [ Delegate ] }
+}
+@endsalt

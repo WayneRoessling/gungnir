@@ -1,0 +1,250 @@
+# Sensor models (plan 07). Source of truth for the table in docs/test-tracks/sensor-models.md
+# (rendered by tools/build_catalogue.py) and the observation models in tools/gen_tracks.py.
+#
+# Each type: detection range per radar-cross-section class (or per infrared, acoustic, or
+# emission class for the other sensors), probability of detection inside range, update period,
+# measurement noise (range, cross-range, height) or position noise, field of regard, altitude
+# limits, latency and jitter, dropout probability per opportunity, out-of-order fraction,
+# false alarms per scan (plots surviving the sensor's own thresholding, not raw threshold
+# crossings), and the electronic-attack sensitivities the scenarios can apply.
+# Values are engineering assumptions for tracker testing, not any real sensor's performance,
+# and are marked as such (confidence: assumption). Scenarios override per sensor instance.
+# Latency plus jitter plus the out-of-order delay stays under the gateway's 5 s receipt window
+# (gungnir-ingest MAX_FUTURE_RECEIPT_S) because the recorded adapter releases by source time.
+
+version: "2026-09-04"
+
+types:
+  - id: radar.long
+    name: Long-range surveillance radar (ridge site)
+    signature_key: rcs
+    range_m: {large: 200000, medium: 140000, small: 70000, very-small: 35000}
+    pd_in_range: 0.9
+    update_period_s: 2.0
+    noise: {range_m: 40, cross_m: 120, height_m: 250}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [30, 40000]
+    horizon: true
+    latency_s: {mean: 0.3, jitter: 0.15}
+    dropout: 0.05
+    out_of_order: 0.02
+    false_alarms_per_scan: 0.1
+    ea: {skew_s: 0, dropout_multiplier: 2.0, fa_multiplier: 3.0}
+    confidence: assumption
+  - id: radar.medium
+    name: Medium-range air-defense radar (airfield site)
+    signature_key: rcs
+    range_m: {large: 120000, medium: 80000, small: 45000, very-small: 20000}
+    pd_in_range: 0.92
+    update_period_s: 1.0
+    noise: {range_m: 25, cross_m: 60, height_m: 150}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [20, 25000]
+    horizon: true
+    latency_s: {mean: 0.25, jitter: 0.1}
+    dropout: 0.04
+    out_of_order: 0.02
+    false_alarms_per_scan: 0.08
+    ea: {skew_s: 0, dropout_multiplier: 2.0, fa_multiplier: 2.5}
+    confidence: assumption
+  - id: radar.short
+    name: Short-range counter-UAS radar (site)
+    signature_key: rcs
+    range_m: {large: 15000, medium: 10000, small: 6000, very-small: 3500}
+    pd_in_range: 0.85
+    update_period_s: 0.5
+    noise: {range_m: 8, cross_m: 20, height_m: 40}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [0, 5000]
+    horizon: false
+    latency_s: {mean: 0.15, jitter: 0.05}
+    dropout: 0.08
+    out_of_order: 0.01
+    false_alarms_per_scan: 0.05
+    ea: {skew_s: 0, dropout_multiplier: 3.0, fa_multiplier: 4.0}
+    confidence: assumption
+  - id: radar.coastal
+    name: Coastal surveillance radar (port)
+    signature_key: rcs
+    range_m: {large: 40000, medium: 25000, small: 14000, very-small: 9000}
+    pd_in_range: 0.8
+    update_period_s: 2.5
+    noise: {range_m: 15, cross_m: 60, height_m: 0}
+    field_of_regard_deg: [180, 360]
+    altitude_m: [0, 300]
+    horizon: true
+    latency_s: {mean: 0.4, jitter: 0.2}
+    dropout: 0.15
+    out_of_order: 0.03
+    false_alarms_per_scan: 2.0
+    sea_state_dropout: {4: 0.3, 5: 0.45}
+    ea: {skew_s: 0, dropout_multiplier: 1.5, fa_multiplier: 2.0}
+    confidence: assumption
+  - id: radar.ground
+    name: Ground surveillance radar (ridge)
+    signature_key: rcs
+    range_m: {large: 40000, medium: 25000, small: 12000, very-small: 6000}
+    pd_in_range: 0.75
+    update_period_s: 4.0
+    noise: {range_m: 20, cross_m: 60, height_m: 0}
+    field_of_regard_deg: [30, 150]
+    altitude_m: [0, 50]
+    horizon: true
+    moving_only: true
+    latency_s: {mean: 0.5, jitter: 0.3}
+    dropout: 0.2
+    out_of_order: 0.03
+    false_alarms_per_scan: 0.5
+    ea: {skew_s: 0, dropout_multiplier: 2.0, fa_multiplier: 2.0}
+    confidence: assumption
+  - id: eo-ir
+    name: Electro-optical and infrared camera (cued)
+    signature_key: ir
+    range_m: {high: 15000, medium: 8000, low: 4000}
+    pd_in_range: 0.7
+    update_period_s: 0.5
+    noise: {range_m: 150, cross_m: 15, height_m: 15}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [0, 10000]
+    horizon: true
+    cued: true
+    latency_s: {mean: 0.6, jitter: 0.3}
+    dropout: 0.25
+    out_of_order: 0.05
+    false_alarms_per_scan: 0.02
+    ea: {skew_s: 0, dropout_multiplier: 1.0, fa_multiplier: 1.0}
+    confidence: assumption
+  - id: acoustic
+    name: Acoustic sensor node (network)
+    signature_key: acoustic
+    range_m: {loud: 4000, moderate: 1500, quiet: 400}
+    pd_in_range: 0.6
+    update_period_s: 5.0
+    noise: {range_m: 800, cross_m: 400, height_m: 300}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [0, 3000]
+    horizon: false
+    latency_s: {mean: 2.5, jitter: 1.0}
+    dropout: 0.3
+    out_of_order: 0.25
+    false_alarms_per_scan: 0.05
+    ea: {skew_s: 2.0, dropout_multiplier: 1.2, fa_multiplier: 1.0}
+    gnss_dependent: true
+    confidence: assumption
+  - id: rf
+    name: Radio-frequency detector (site)
+    signature_key: emission
+    range_m: {datalink: 8000, control: 5000, radar: 30000, none: 0}
+    pd_in_range: 0.8
+    update_period_s: 1.0
+    noise: {range_m: 1500, cross_m: 300, height_m: 500}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [0, 6000]
+    horizon: false
+    latency_s: {mean: 0.8, jitter: 0.4}
+    dropout: 0.2
+    out_of_order: 0.05
+    false_alarms_per_scan: 0.1
+    ea: {skew_s: 0, dropout_multiplier: 1.0, fa_multiplier: 2.0}
+    confidence: assumption
+  - id: isr-video
+    name: ISR video observation (from a UAS sortie)
+    signature_key: ir
+    range_m: {high: 12000, medium: 8000, low: 5000}
+    pd_in_range: 0.8
+    update_period_s: 3.0
+    noise: {range_m: 25, cross_m: 25, height_m: 10}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [0, 100]
+    horizon: false
+    mobile: true
+    latency_s: {mean: 2.5, jitter: 1.0}
+    dropout: 0.15
+    out_of_order: 0.35
+    false_alarms_per_scan: 0.02
+    bias_m: {east: 0, north: 0}
+    ea: {skew_s: 1.5, dropout_multiplier: 3.0, fa_multiplier: 1.0}
+    gnss_dependent: true
+    confidence: assumption
+  - id: ais
+    name: AIS receiver (cooperative maritime)
+    signature_key: emission
+    range_m: {ais: 60000, none: 0}
+    pd_in_range: 0.98
+    update_period_s: 10.0
+    noise: {range_m: 10, cross_m: 10, height_m: 0}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [0, 0]
+    horizon: true
+    cooperative: true
+    latency_s: {mean: 1.0, jitter: 0.5}
+    dropout: 0.02
+    out_of_order: 0.05
+    false_alarms_per_scan: 0.0
+    spoofable: true
+    ea: {skew_s: 0, dropout_multiplier: 1.0, fa_multiplier: 1.0}
+    confidence: assumption
+  - id: adsb
+    name: ADS-B receiver (cooperative air)
+    signature_key: emission
+    range_m: {adsb: 250000, none: 0}
+    pd_in_range: 0.98
+    update_period_s: 1.0
+    noise: {range_m: 30, cross_m: 30, height_m: 30}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [0, 15000]
+    horizon: true
+    cooperative: true
+    latency_s: {mean: 0.5, jitter: 0.2}
+    dropout: 0.02
+    out_of_order: 0.02
+    false_alarms_per_scan: 0.0
+    ea: {skew_s: 0, dropout_multiplier: 1.0, fa_multiplier: 1.0}
+    confidence: assumption
+  - id: iff
+    name: IFF interrogator (cooperative, friendly only)
+    signature_key: emission
+    range_m: {iff: 150000, none: 0}
+    pd_in_range: 0.95
+    update_period_s: 4.0
+    noise: {range_m: 100, cross_m: 300, height_m: 300}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [0, 20000]
+    horizon: true
+    cooperative: true
+    latency_s: {mean: 0.3, jitter: 0.1}
+    dropout: 0.05
+    out_of_order: 0.01
+    false_alarms_per_scan: 0.0
+    ea: {skew_s: 0, dropout_multiplier: 1.0, fa_multiplier: 1.0}
+    confidence: assumption
+  - id: bft
+    name: Blue-force tracking (own vehicles)
+    signature_key: emission
+    range_m: {bft: 100000, none: 0}
+    pd_in_range: 0.99
+    update_period_s: 30.0
+    noise: {range_m: 15, cross_m: 15, height_m: 5}
+    field_of_regard_deg: [0, 360]
+    altitude_m: [0, 100]
+    horizon: false
+    cooperative: true
+    latency_s: {mean: 2.0, jitter: 1.0}
+    dropout: 0.05
+    out_of_order: 0.2
+    false_alarms_per_scan: 0.0
+    ea: {skew_s: 1.0, dropout_multiplier: 2.0, fa_multiplier: 1.0}
+    gnss_dependent: true
+    confidence: assumption
+
+# How signature keys map: a platform's rcs_class, ir_class, acoustic_class, and emissions
+# (mapped to one of datalink | control | radar | ais | adsb | iff | bft | none) select the
+# range band; cooperative sensors see only entities that emit the matching signal.
+emission_map:
+  datalink: [datalink, "datalink (video)", "datalink; radar altimeter", "control and video link", "satellite or radio control link", "control link"]
+  control: ["analogue video and control link; fibre-optic variants emit nothing", "control and video link"]
+  radar: ["fire-control radar", "navigation radar", "surveillance and fire-control radars", "engagement radar", "surveillance and engagement radars", "active radar seeker"]
+  ais: ["AIS (mandatory); navigation radar", "AIS on larger vessels; often none on small craft", "navigation radar; radio; AIS when in civil traffic"]
+  adsb: ["ADS-B when configured", "transponder and ADS-B; weather radar", "transponder and ADS-B when fitted; often intermittent"]
+  iff: ["IFF"]
+  bft: ["blue-force tracking"]

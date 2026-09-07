@@ -1,0 +1,15 @@
+[package]
+name = "gungnir-eventing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Transport-neutral broadcast event bus (in-process today; a durable/replayable log or network stream behind the same trait later). docs/gungnir-capabilities.md §5.1 -- High. Replaces the UI polling a mutable slice every frame."
+
+[lints]
+workspace = true
+
+[dependencies]
+crossbeam-channel.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+gungnir-model = { path = "../gungnir-model" }

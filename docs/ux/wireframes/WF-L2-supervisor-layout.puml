@@ -1,0 +1,23 @@
+@startsalt WF-L2
+title WF-L2 Supervisor layout (P-02): all queues, incidents, sensors
+{+
+  { <b>PN-01 status strip</b> · Supervisor (Tomas) · [ change WCS… ] }
+  --
+  {
+    {+ <b>PN-06 Approval queue, all domains</b> (7, capacity near limit) ..
+    {+ <b>PN-05 Recommendation</b> ..
+    {+ <b>PN-08 Incidents</b> (correlated) ..
+    {+ <b>PN-09 Health</b> ..
+    } | {+
+      <b>PN-02 Viewport</b> with coverage and gaps
+      .
+      .
+      <i>PN-18 conflicts dialog opens here on reconnection and must be decided</i>
+      .
+    } | {+ <b>PN-10 Sensors</b> ..
+    {+ <b>PN-03 Track table</b> ..
+    {+ <b>PN-17 Summary</b> (on demand) ..
+    {+ <b>PN-14 Config</b> (on demand) }
+  }
+}
+@endsalt

@@ -1,0 +1,32 @@
+@startuml Op-Is-VG-01
+title Op-Is VG-01: Night raid on the power station (MT-01)
+autonumber
+participant "AR-04 Sensor feeds" as Sensors
+participant "OP-30 C2 system" as System
+actor "OP-04 Sensor manager" as R0
+actor "OP-02 Supervisor" as R1
+actor "OP-08 Commander" as R2
+actor "OP-01 Operator" as R3
+participant "OP-22 Effectors" as E0
+participant "OP-21 Peers and higher command" as E1
+note over System
+Timeline:
+01:10 the neighbouring sector reports a raid crossing; 01:25 acoustic nodes on the upper
+Vell begin route tracks; 01:38 the ridge radar detects the first stream at 48 km; 01:41 to
+02:30 drones arrive at 2 to 4 per minute; the sea stream reaches Kalsund at 02:05; 02:40
+last engagement.
+end note
+Sensors -> System : 1. Ingest early-warning tracks and reports; validate; quarantine malformed
+E1 -> System : peer warning or tracks
+System -> System : 2. Initiate and maintain tracks across acoustic, radar, and spotter sources at dif…
+System -> System : 3. Classify by acoustic and kinematic evidence; identity Hostile at confidence onc…
+System -> System : 4. Score each track against the defended-asset list: predicted asset, time to impa…
+System -> System : 5. Recommend the cheapest adequate effector per track within readiness, geometry,…
+System -> R1 : 6. present: Present the queue of recommendations with rationale; the engagement authority a…
+R1 -> System : decision: Engagement authority per layer; supervisor for the queue
+System -> System : 7. Hand off decided assignments; warn assets on the predicted routes
+System -> E0 : handoff with provenance
+System -> R3 : 8. present: Assess: destroyed, missed, continuing; re-plan the remainder; publish PlanSuper…
+R3 -> System : decision: complete
+System -> System : 9. Journal everything; produce the raid summary after action
+@enduml

@@ -1,0 +1,54 @@
+[package]
+name = "gungnir-remote"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Remote implementations of the TrackingService and InterceptService traits that talk to a gungnir-node over gungnir-api, so the desktop switches between the embedded and connected profiles without any UI change (ARCHITECTURE.md §8.2). Store-and-forward while disconnected."
+
+[lints]
+workspace = true
+
+[dependencies]
+# Promoted from a dev-dependency 2026-09-06 (GAP-060): this crate now issues a host's TLS
+# identity from its key provider, so it needs `KeyProvider` at runtime and not only in a
+# test. Reviewed and accepted with the same decision that widened §2.9's rcgen rule.
+gungnir-security = { path = "../gungnir-security" }
+# GAP-060, and the widening of §2.9 point 2. `rcgen` builds the certificate through its
+# `SigningKey` trait, which calls the provider's `sign`, so the private half never leaves
+# custody. It lives here rather than in either binary because two binaries cannot depend
+# on each other and this is the only crate both already depend on at runtime that already
+# carries the rustls stack.
+rcgen.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+# GAP-041, D-18: the desktop's HTTP client and WebSocket client. tokio-tungstenite takes
+# no TLS feature of its own: for an https endpoint the client wraps a tokio-rustls stream
+# built from the baseline's trust roots and the desktop's client certificate (GAP-060),
+# and an https endpoint with no pinned roots is refused rather than trusted blindly.
+reqwest.workspace = true
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+rustls.workspace = true
+tokio-rustls.workspace = true
+rustls-pemfile.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-eventing = { path = "../gungnir-eventing" }
+gungnir-api = { path = "../gungnir-api" }
+gungnir-tracking-service = { path = "../gungnir-tracking-service" }
+gungnir-intercept-service = { path = "../gungnir-intercept-service" }
+
+[dev-dependencies]
+# The identity test verifies the provider's signature with the public half.
+p256.workspace = true
+nalgebra.workspace = true
+# The TLS link test makes its own authority and identities (D-22: test certificates
+# are made, never checked in).
+# The end-to-end test signs in, because every route but the session one needs a token
+# (GAP-057). A test that skipped it would be testing the refusal.
+# The coverage-route test builds a report to publish (GAP-006).
+gungnir-analytics = { path = "../gungnir-analytics" }
+serde_json.workspace = true
+# The end-to-end transport test drives the real server with the real client.
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

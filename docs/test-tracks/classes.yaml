@@ -1,0 +1,433 @@
+# Kinematic class profiles (plan 07). Source of truth for docs/test-tracks/class-profiles/*.md
+# (rendered by tools/build_catalogue.py) and the movement models in tools/gen_tracks.py.
+#
+# Each class: envelope (the union of its platforms' figures, from catalogue-*.yaml, widened to
+# the next round number so every platform at every confidence fits, and to ground level and the
+# terminal dive rate for classes whose last phase ends on a target), phases of a representative
+# mission with the movement model per phase, randomization rules, signature classes, the sensor
+# types that can see it, and the threads and scenarios that use it.
+#
+# Movement models (implemented in the generator):
+#   waypoint-cruise   follow the route at a speed drawn from the phase range; altitude drawn from the band;
+#                     turns limited by turn_g; small heading weave when `weave` is set
+#   nap-of-earth      waypoint-cruise with altitude jitter above ground and tighter turns
+#   orbit             circle of `radius_m` around the current point for the phase duration
+#   hover             hold position with metre-scale drift
+#   dash-terminal     accelerate toward the target to dash speed and dive to it; ends the entity
+#   ballistic         parabolic arc from launch to target with the given apogee; ends at impact
+#   glide             descend from release altitude at a glide ratio along the route; ends at impact
+#   road-move         waypoint-cruise on the ground with speed variation and random stops
+#   shoot-and-move    stop for `fire_stop_s`, emit a `fires` truth annotation, then road-move away
+#   sea-transit       waypoint-cruise on the surface with slow turns and speed variation
+#   anchored          stationary on the surface with metre-scale drift
+#   stationary        no movement (emitting vehicles, sites)
+#   evade             tight turns at max turn_g for the phase duration, then resume
+#
+# Randomization: every draw comes from the scenario's seeded generator; `per-entity` values are
+# drawn once per entity, `per-phase` once per phase, `per-tick` every truth tick.
+
+version: "2026-09-04"
+
+classes:
+  # ---------------------------------------------------------------- air
+  - id: air.owa-prop
+    domain: air
+    name: One-way attack UAS, propeller
+    description: Long-endurance propeller drone flown on a pre-planned route at low altitude to a fixed target; streams of tens; decoys mixed in; terminal dive on the target.
+    envelope: {speed_mps: [25, 62], altitude_m: [0, 4000], climb_mps: [-60, 6], turn_g: [0.2, 1.2], accel_mps2: [0, 2]}
+    phases:
+      - {name: ingress, model: waypoint-cruise, duration_s: [600, 7200], speed_mps: [40, 52], altitude_m: [300, 1500], weave: 0.02}
+      - {name: valley-run, model: nap-of-earth, duration_s: [300, 1800], speed_mps: [42, 52], altitude_m: [60, 300], weave: 0.05}
+      - {name: terminal, model: dash-terminal, duration_s: [20, 90], speed_mps: [45, 60], altitude_m: [0, 300]}
+    randomization: {speed: per-entity uniform in the phase range, altitude: per-phase uniform in the band, route: waypoints jittered up to 2 km laterally per entity, spawn: per scenario stream, decoy: a decoy uses the same profile with rcs_class large}
+    signatures: {rcs: small, ir: low, acoustic: loud}
+    sensors: [radar.long, radar.medium, radar.short, acoustic, eo-ir]
+    threads: [MT-01, MT-02, MT-07, MT-09, MT-10]
+    scenarios: [TT-01, TT-02, TT-07, TT-09, TT-10]
+  - id: air.owa-jet
+    domain: air
+    name: One-way attack UAS, jet
+    description: Turbojet variant of the one-way attack drone; faster ingress, same route discipline, shorter endurance.
+    envelope: {speed_mps: [70, 185], altitude_m: [0, 5000], climb_mps: [-120, 16], turn_g: [0.3, 1.6], accel_mps2: [0, 4]}
+    phases:
+      - {name: ingress, model: waypoint-cruise, duration_s: [600, 3600], speed_mps: [80, 150], altitude_m: [300, 2000], weave: 0.02}
+      - {name: valley-run, model: nap-of-earth, duration_s: [120, 900], speed_mps: [100, 170], altitude_m: [60, 300], weave: 0.04}
+      - {name: terminal, model: dash-terminal, duration_s: [10, 40], speed_mps: [120, 180], altitude_m: [0, 300]}
+    randomization: {speed: per-entity, altitude: per-phase, route: 2 km jitter}
+    signatures: {rcs: small, ir: medium, acoustic: loud}
+    sensors: [radar.long, radar.medium, radar.short, acoustic, eo-ir]
+    threads: [MT-01, MT-02]
+    scenarios: [TT-02]
+  - id: air.loitering
+    domain: air
+    name: Loitering munition
+    description: Launched toward an area, loiters under video control looking for a target, then dashes and dives; datalink emits until the dive.
+    envelope: {speed_mps: [20, 90], altitude_m: [0, 5000], climb_mps: [-80, 10], turn_g: [0.3, 2.5], accel_mps2: [0, 5]}
+    phases:
+      - {name: transit, model: waypoint-cruise, duration_s: [300, 1500], speed_mps: [25, 45], altitude_m: [500, 3000]}
+      - {name: loiter, model: orbit, duration_s: [120, 1200], speed_mps: [22, 35], altitude_m: [800, 3000], radius_m: [800, 2500]}
+      - {name: terminal, model: dash-terminal, duration_s: [15, 60], speed_mps: [60, 85], altitude_m: [0, 3000]}
+    randomization: {loiter centre: per-entity within the target area, loiter duration: per-entity, dash target: per-entity from the scenario target list}
+    signatures: {rcs: very-small, ir: low, acoustic: moderate}
+    sensors: [radar.short, radar.medium, rf, eo-ir, acoustic]
+    threads: [MT-03, MT-06]
+    scenarios: [TT-03, TT-06]
+  - id: air.small-multirotor
+    domain: air
+    name: Small multirotor
+    description: Consumer-class quadcopter for reconnaissance or drops; hovers, transits slowly, returns toward its operator; emits a control link.
+    envelope: {speed_mps: [0, 25], altitude_m: [0, 600], climb_mps: [-10, 10], turn_g: [0.3, 2.5], accel_mps2: [0, 6]}
+    phases:
+      - {name: approach, model: waypoint-cruise, duration_s: [60, 600], speed_mps: [8, 18], altitude_m: [30, 150]}
+      - {name: observe, model: hover, duration_s: [60, 900], speed_mps: [0, 2], altitude_m: [40, 150]}
+      - {name: return, model: waypoint-cruise, duration_s: [60, 600], speed_mps: [10, 20], altitude_m: [30, 150]}
+    randomization: {operator position: per-entity within 5 km of the site, hover point: per-entity over the site}
+    signatures: {rcs: very-small, ir: low, acoustic: quiet}
+    sensors: [radar.short, rf, eo-ir, acoustic]
+    threads: [MT-03]
+    scenarios: [TT-03]
+  - id: air.fpv
+    domain: air
+    name: FPV strike quadcopter
+    description: Fast, low, short-range strike quadcopter flown by video; approaches from cover at tree-top height and dives on the target; fibre-optic variants emit nothing.
+    envelope: {speed_mps: [10, 50], altitude_m: [0, 300], climb_mps: [-40, 16], turn_g: [0.5, 4.5], accel_mps2: [0, 10]}
+    phases:
+      - {name: approach, model: nap-of-earth, duration_s: [30, 180], speed_mps: [20, 40], altitude_m: [3, 40], weave: 0.1}
+      - {name: terminal, model: dash-terminal, duration_s: [5, 20], speed_mps: [30, 45], altitude_m: [0, 40]}
+    randomization: {launch point: per-entity from a tree line 1 to 3 km out, emitting: per-entity 70 percent radio and 30 percent fibre-optic}
+    signatures: {rcs: very-small, ir: low, acoustic: quiet}
+    sensors: [radar.short, rf, eo-ir, acoustic]
+    threads: [MT-03]
+    scenarios: [TT-03]
+  - id: air.tactical-isr
+    domain: air
+    name: Tactical fixed-wing ISR UAS
+    description: Small fixed-wing drone that transits to an area and orbits for hours, cueing strikes; steady speed, gentle turns, continuous datalink.
+    envelope: {speed_mps: [15, 45], altitude_m: [0, 5000], climb_mps: [-20, 6], turn_g: [0.2, 1.2], accel_mps2: [0, 2]}
+    phases:
+      - {name: transit, model: waypoint-cruise, duration_s: [600, 3600], speed_mps: [25, 40], altitude_m: [1000, 3000]}
+      - {name: orbit, model: orbit, duration_s: [1800, 14400], speed_mps: [22, 35], altitude_m: [1500, 3500], radius_m: [1500, 4000]}
+      - {name: egress, model: waypoint-cruise, duration_s: [600, 3600], speed_mps: [25, 40], altitude_m: [1000, 3000]}
+    randomization: {orbit centre: per-entity in the area of interest, orbit direction: per-entity}
+    signatures: {rcs: small, ir: low, acoustic: moderate}
+    sensors: [radar.long, radar.medium, rf, eo-ir]
+    threads: [MT-03, MT-06, MT-08]
+    scenarios: [TT-06, TT-08]
+  - id: air.male-uas
+    domain: air
+    name: Medium-altitude long-endurance UAS
+    description: Large drone at medium altitude, long orbits or transits, continuous datalink; behaves like a slow light aircraft to a radar.
+    envelope: {speed_mps: [30, 65], altitude_m: [0, 8000], climb_mps: [-20, 10], turn_g: [0.2, 1.6], accel_mps2: [0, 2]}
+    phases:
+      - {name: transit, model: waypoint-cruise, duration_s: [1200, 7200], speed_mps: [36, 55], altitude_m: [4000, 6500]}
+      - {name: orbit, model: orbit, duration_s: [3600, 36000], speed_mps: [36, 50], altitude_m: [4500, 7000], radius_m: [3000, 8000]}
+    randomization: {orbit centre and radius: per-entity}
+    signatures: {rcs: medium, ir: medium, acoustic: moderate}
+    sensors: [radar.long, radar.medium, rf]
+    threads: [MT-08]
+    scenarios: [TT-08]
+  - id: air.cruise-subsonic
+    domain: air
+    name: Cruise missile, subsonic
+    description: Terrain-following subsonic missile on a pre-planned route with waypoints, low over water and valleys, popping up or diving at the target; minutes of warning at most.
+    envelope: {speed_mps: [180, 320], altitude_m: [0, 6000], climb_mps: [-200, 60], turn_g: [0.5, 4.5], accel_mps2: [0, 10]}
+    phases:
+      - {name: cruise, model: nap-of-earth, duration_s: [300, 7200], speed_mps: [230, 300], altitude_m: [30, 150], weave: 0.01}
+      - {name: valley-run, model: nap-of-earth, duration_s: [60, 600], speed_mps: [240, 300], altitude_m: [30, 100], weave: 0.02}
+      - {name: terminal, model: dash-terminal, duration_s: [10, 40], speed_mps: [250, 310], altitude_m: [0, 1000]}
+    randomization: {route: waypoints jittered 1 km, altitude: per-phase, decoy missile: same profile with rcs_class medium and no terminal phase (flies past)}
+    signatures: {rcs: small, ir: medium, acoustic: loud}
+    sensors: [radar.long, radar.medium, radar.short, eo-ir, acoustic]
+    threads: [MT-02]
+    scenarios: [TT-02]
+  - id: air.cruise-supersonic
+    domain: air
+    name: Cruise missile, supersonic and aeroballistic
+    description: High-altitude supersonic cruise or aeroballistic lob followed by a steep, fast terminal dive; seconds of decision time; large radar return at altitude.
+    envelope: {speed_mps: [800, 2100], altitude_m: [0, 45000], climb_mps: [-1500, 600], turn_g: [0.5, 10.0], accel_mps2: [0, 50]}
+    phases:
+      - {name: high-cruise, model: waypoint-cruise, duration_s: [120, 900], speed_mps: [900, 1500], altitude_m: [12000, 30000]}
+      - {name: terminal, model: dash-terminal, duration_s: [20, 60], speed_mps: [1000, 2000], altitude_m: [0, 30000]}
+    randomization: {cruise altitude: per-entity, terminal dive angle: per-entity 30 to 70 degrees}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.long, radar.medium]
+    threads: [MT-02]
+    scenarios: [TT-02]
+  - id: air.ballistic-srbm
+    domain: air
+    name: Ballistic missile, short range
+    description: Boost, a high arc to tens of kilometres apogee, and a fast descent, with quasi-ballistic manoeuvre in the terminal phase for some types; the shortest warning of any class.
+    envelope: {speed_mps: [500, 2200], altitude_m: [0, 55000], climb_mps: [-2200, 2200], turn_g: [0.5, 12.0], accel_mps2: [0, 100]}
+    phases:
+      - {name: arc, model: ballistic, duration_s: [120, 420], speed_mps: [700, 2100], altitude_m: [0, 50000], apogee_m: [30000, 50000]}
+    randomization: {apogee: per-entity, terminal jink: per-entity 0 to 2 lateral pulls, decoys: 0 to 2 released at apogee}
+    signatures: {rcs: medium, ir: high, acoustic: loud}
+    sensors: [radar.long, radar.medium]
+    threads: [MT-02]
+    scenarios: [TT-02]
+  - id: air.glide-bomb
+    domain: air
+    name: Glide bomb
+    description: Released from an aircraft at altitude tens of kilometres out and glides to the target; steady descent, no propulsion, small return.
+    envelope: {speed_mps: [150, 320], altitude_m: [0, 15000], climb_mps: [-100, 0], turn_g: [0.3, 2.5], accel_mps2: [0, 5]}
+    phases:
+      - {name: glide, model: glide, duration_s: [90, 300], speed_mps: [180, 300], altitude_m: [0, 12000], glide_ratio: [5, 9]}
+    randomization: {release altitude and range: per-entity, aimpoint: per-entity from the target list}
+    signatures: {rcs: small, ir: low, acoustic: quiet}
+    sensors: [radar.long, radar.medium]
+    threads: [MT-02]
+    scenarios: [TT-02]
+  - id: air.tactical-fixed-wing
+    domain: air
+    name: Tactical fixed-wing aircraft
+    description: Fast jet on a transit, a stand-off release run, or a low-level attack; large return; friendly examples carry IFF and sometimes ADS-B.
+    envelope: {speed_mps: [100, 650], altitude_m: [0, 16000], climb_mps: [-250, 250], turn_g: [1.0, 9.5], accel_mps2: [0, 20]}
+    phases:
+      - {name: transit, model: waypoint-cruise, duration_s: [300, 3600], speed_mps: [200, 300], altitude_m: [5000, 11000]}
+      - {name: run-in, model: waypoint-cruise, duration_s: [60, 300], speed_mps: [250, 320], altitude_m: [200, 9000]}
+      - {name: evade, model: evade, duration_s: [20, 60], speed_mps: [250, 350], altitude_m: [200, 9000]}
+      - {name: egress, model: waypoint-cruise, duration_s: [300, 1800], speed_mps: [220, 320], altitude_m: [3000, 11000]}
+    randomization: {altitudes and speeds: per-phase, evade turns: per-entity}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.long, radar.medium, rf, adsb, iff]
+    threads: [MT-02, MT-08]
+    scenarios: [TT-02, TT-08]
+  - id: air.rotary-wing
+    domain: air
+    name: Rotary wing
+    description: Helicopter at nap-of-the-earth or low transit, hovers and pop-ups; large return with rotor modulation.
+    envelope: {speed_mps: [0, 95], altitude_m: [0, 6000], climb_mps: [-15, 15], turn_g: [0.3, 3.0], accel_mps2: [0, 5]}
+    phases:
+      - {name: transit, model: nap-of-earth, duration_s: [300, 3600], speed_mps: [50, 75], altitude_m: [15, 100], weave: 0.03}
+      - {name: hover, model: hover, duration_s: [30, 300], speed_mps: [0, 3], altitude_m: [10, 60]}
+      - {name: egress, model: nap-of-earth, duration_s: [300, 3600], speed_mps: [50, 80], altitude_m: [15, 100]}
+    randomization: {hover point: per-entity, altitudes: per-phase}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.long, radar.medium, radar.short, acoustic, eo-ir, iff]
+    threads: [MT-04, MT-08]
+    scenarios: [TT-04, TT-08]
+  - id: air.civil-airliner
+    domain: air
+    name: Civil airliner
+    description: Passenger aircraft on a published corridor at cruise altitude, steady speed and heading, transponder and ADS-B on; the traffic identification must never engage.
+    envelope: {speed_mps: [50, 270], altitude_m: [0, 13000], climb_mps: [-20, 20], turn_g: [1.0, 2.0], accel_mps2: [0, 3]}
+    phases:
+      - {name: transit, model: waypoint-cruise, duration_s: [600, 7200], speed_mps: [220, 250], altitude_m: [8000, 12000]}
+    randomization: {entry time: per-entity in the spawn window, cruise altitude: per-entity in the band}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.long, radar.medium, adsb]
+    threads: [MT-08]
+    scenarios: [TT-08]
+  - id: air.light-aircraft
+    domain: air
+    name: Light aircraft
+    description: General-aviation aircraft at low altitude and speed with an intermittent transponder; the identification problem that must stay unknown rather than becoming hostile.
+    envelope: {speed_mps: [20, 70], altitude_m: [0, 4200], climb_mps: [-6, 5], turn_g: [1.0, 2.0], accel_mps2: [0, 2]}
+    phases:
+      - {name: transit, model: waypoint-cruise, duration_s: [600, 7200], speed_mps: [50, 63], altitude_m: [800, 2500]}
+    randomization: {route: per-entity, transponder gaps: per-opportunity from the scenario's intermittency}
+    signatures: {rcs: medium, ir: medium, acoustic: moderate}
+    sensors: [radar.long, radar.medium, adsb]
+    threads: [MT-08]
+    scenarios: [TT-08]
+  - id: air.interceptor
+    domain: air
+    name: Air-defense interceptor missile
+    description: Own interceptor from launch to intercept; modelled so the tracker and deconfliction see it; very fast, short-lived.
+    envelope: {speed_mps: [500, 2100], altitude_m: [0, 30000], climb_mps: [-1500, 1500], turn_g: [2.0, 30.0], accel_mps2: [0, 300]}
+    phases:
+      - {name: fly-out, model: dash-terminal, duration_s: [15, 120], speed_mps: [900, 1800], altitude_m: [0, 25000]}
+    randomization: {launch site: from the scenario resources, target: the assigned track}
+    signatures: {rcs: small, ir: high, acoustic: loud}
+    sensors: [radar.long, radar.medium]
+    threads: [MT-02, MT-06]
+    scenarios: [TT-02, TT-06]
+  # ---------------------------------------------------------------- sea
+  - id: sea.usv
+    domain: sea
+    name: Uncrewed surface vessel
+    description: Small, fast, low craft in a loose group, no AIS, straight runs with occasional jinks; lost and reacquired in clutter.
+    envelope: {speed_mps: [3, 26], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.1, 0.9], accel_mps2: [0, 2]}
+    phases:
+      - {name: transit, model: sea-transit, duration_s: [1200, 7200], speed_mps: [10, 20], altitude_m: [0, 0]}
+      - {name: attack-run, model: sea-transit, duration_s: [200, 900], speed_mps: [18, 25], altitude_m: [0, 0], weave: 0.05}
+      - {name: terminal, model: dash-terminal, duration_s: [20, 120], speed_mps: [20, 26], altitude_m: [0, 0]}
+    randomization: {group spacing: per-scenario 300 to 1500 m, jinks: per-entity, target ship: per-entity}
+    signatures: {rcs: very-small, ir: low, acoustic: moderate}
+    sensors: [radar.coastal, eo-ir, acoustic]
+    threads: [MT-04, MT-05]
+    scenarios: [TT-04]
+  - id: sea.fast-craft
+    domain: sea
+    name: Fast craft and patrol boat
+    description: Patrol boats and armoured boats at planing or displacement speed; radar and radio emitters; AIS on when in civil traffic.
+    envelope: {speed_mps: [2, 26], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.05, 0.6], accel_mps2: [0, 1.5]}
+    phases:
+      - {name: patrol, model: sea-transit, duration_s: [1800, 14400], speed_mps: [5, 15], altitude_m: [0, 0]}
+      - {name: intercept, model: sea-transit, duration_s: [300, 1800], speed_mps: [15, 25], altitude_m: [0, 0]}
+    randomization: {patrol line: per-entity, intercept target: from the scenario}
+    signatures: {rcs: medium, ir: medium, acoustic: loud}
+    sensors: [radar.coastal, eo-ir, ais]
+    threads: [MT-04, MT-05]
+    scenarios: [TT-04, TT-05]
+  - id: sea.surface-combatant
+    domain: sea
+    name: Surface combatant
+    description: Corvette or frigate on a slow transit or holding station; large return; emitters on; AIS off in operations.
+    envelope: {speed_mps: [1, 16], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.03, 0.3], accel_mps2: [0, 0.5]}
+    phases:
+      - {name: transit, model: sea-transit, duration_s: [3600, 36000], speed_mps: [6, 13], altitude_m: [0, 0]}
+      - {name: station, model: sea-transit, duration_s: [3600, 36000], speed_mps: [2, 6], altitude_m: [0, 0]}
+    randomization: {station box: per-entity}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.coastal, radar.long, eo-ir, rf]
+    threads: [MT-05]
+    scenarios: [TT-05]
+  - id: sea.amphibious-auxiliary
+    domain: sea
+    name: Amphibious, auxiliary, and civil traffic
+    description: Landing ships, tankers, merchants, ferries, and fishing boats, slow and predictable, AIS on for the larger ones; the bulk of the surface picture.
+    envelope: {speed_mps: [0, 13], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.02, 0.4], accel_mps2: [0, 0.5]}
+    phases:
+      - {name: transit, model: sea-transit, duration_s: [3600, 36000], speed_mps: [4, 9], altitude_m: [0, 0]}
+      - {name: anchored, model: anchored, duration_s: [3600, 86400], speed_mps: [0, 0.3], altitude_m: [0, 0]}
+      - {name: loiter, model: orbit, duration_s: [600, 7200], speed_mps: [1, 4], altitude_m: [0, 0], radius_m: [200, 800]}
+    randomization: {lanes: per-entity from the scenario lanes, AIS off: per-scenario anomaly list, spoofed AIS: per-scenario anomaly list}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.coastal, ais, eo-ir]
+    threads: [MT-04, MT-05]
+    scenarios: [TT-04, TT-05]
+  - id: sea.submarine-surfaced
+    domain: sea
+    name: Submarine, surfaced or snorkelling
+    description: Slow surfaced submarine or snorkel mast; small intermittent return; for surface-picture purposes only.
+    envelope: {speed_mps: [0, 7], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.02, 0.2], accel_mps2: [0, 0.3]}
+    phases:
+      - {name: surfaced-transit, model: sea-transit, duration_s: [1800, 14400], speed_mps: [2, 6], altitude_m: [0, 0]}
+    randomization: {intermittent visibility: per-tick 40 percent}
+    signatures: {rcs: small, ir: low, acoustic: quiet}
+    sensors: [radar.coastal, eo-ir]
+    threads: [MT-05]
+    scenarios: [TT-05]
+  # ---------------------------------------------------------------- land
+  - id: land.mbt
+    domain: land
+    name: Main battle tank
+    description: Tracked heavy vehicle in column or dispersed movement, stops under cover; loud and hot; seen by ground radar and ISR video.
+    envelope: {speed_mps: [0, 21], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.05, 0.6], accel_mps2: [0, 1.5]}
+    phases:
+      - {name: road-move, model: road-move, duration_s: [600, 7200], speed_mps: [8, 18], altitude_m: [0, 0], stop_prob: 0.05}
+      - {name: cross-country, model: road-move, duration_s: [300, 3600], speed_mps: [3, 11], altitude_m: [0, 0], stop_prob: 0.1}
+      - {name: cover, model: stationary, duration_s: [300, 3600], speed_mps: [0, 0], altitude_m: [0, 0]}
+    randomization: {column spacing: per-scenario 50 to 150 m, stops: per-tick, cover gaps: per-entity}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.ground, isr-video, acoustic]
+    threads: [MT-06]
+    scenarios: [TT-06]
+  - id: land.ifv
+    domain: land
+    name: Infantry fighting vehicle
+    description: Tracked medium vehicle moving with tanks or infantry; similar kinematics to the tank, slightly faster.
+    envelope: {speed_mps: [0, 21], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.05, 0.6], accel_mps2: [0, 1.5]}
+    phases:
+      - {name: road-move, model: road-move, duration_s: [600, 7200], speed_mps: [8, 19], altitude_m: [0, 0], stop_prob: 0.05}
+      - {name: cross-country, model: road-move, duration_s: [300, 3600], speed_mps: [3, 12], altitude_m: [0, 0], stop_prob: 0.1}
+      - {name: cover, model: stationary, duration_s: [300, 3600], speed_mps: [0, 0], altitude_m: [0, 0]}
+    randomization: {as land.mbt}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.ground, isr-video, acoustic]
+    threads: [MT-06]
+    scenarios: [TT-06]
+  - id: land.apc
+    domain: land
+    name: Armoured personnel carrier and MRAP
+    description: Wheeled armoured vehicle, faster on roads, in convoys with trucks.
+    envelope: {speed_mps: [0, 30], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.05, 0.6], accel_mps2: [0, 2]}
+    phases:
+      - {name: road-move, model: road-move, duration_s: [600, 7200], speed_mps: [10, 25], altitude_m: [0, 0], stop_prob: 0.04}
+      - {name: cover, model: stationary, duration_s: [300, 3600], speed_mps: [0, 0], altitude_m: [0, 0]}
+    randomization: {as land.mbt}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.ground, isr-video, acoustic]
+    threads: [MT-06]
+    scenarios: [TT-06]
+  - id: land.spg
+    domain: land
+    name: Self-propelled artillery
+    description: Battery of self-propelled howitzers that moves into a firing position, fires, and moves within minutes; the firing signature is the cue.
+    envelope: {speed_mps: [0, 29], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.05, 0.5], accel_mps2: [0, 1.5]}
+    phases:
+      - {name: move-in, model: road-move, duration_s: [300, 1800], speed_mps: [6, 16], altitude_m: [0, 0], stop_prob: 0.03}
+      - {name: fire, model: shoot-and-move, duration_s: [120, 480], speed_mps: [0, 0], altitude_m: [0, 0], fire_stop_s: [90, 300]}
+      - {name: displace, model: road-move, duration_s: [300, 1200], speed_mps: [8, 18], altitude_m: [0, 0], stop_prob: 0.02}
+      - {name: hide, model: stationary, duration_s: [600, 7200], speed_mps: [0, 0], altitude_m: [0, 0]}
+    randomization: {firing position: per-entity from the scenario wood lines, dwell: per-entity, battery spacing: 100 to 300 m}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.ground, isr-video, acoustic]
+    threads: [MT-06]
+    scenarios: [TT-06]
+  - id: land.mrl
+    domain: land
+    name: Rocket artillery
+    description: Multiple rocket launcher on a truck or tracked chassis; shoot-and-move with shorter dwell than tube artillery; the launch is a bright, loud event.
+    envelope: {speed_mps: [0, 27], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.05, 0.5], accel_mps2: [0, 1.5]}
+    phases:
+      - {name: move-in, model: road-move, duration_s: [300, 1800], speed_mps: [8, 20], altitude_m: [0, 0], stop_prob: 0.03}
+      - {name: fire, model: shoot-and-move, duration_s: [60, 240], speed_mps: [0, 0], altitude_m: [0, 0], fire_stop_s: [45, 150]}
+      - {name: displace, model: road-move, duration_s: [300, 1200], speed_mps: [10, 22], altitude_m: [0, 0], stop_prob: 0.02}
+    randomization: {as land.spg}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.ground, isr-video, acoustic]
+    threads: [MT-06]
+    scenarios: [TT-06]
+  - id: land.mobile-ad
+    domain: land
+    name: Mobile air-defense system
+    description: Radar and launcher vehicles that move between positions and emit when operating; own systems appear as blue-force tracks.
+    envelope: {speed_mps: [0, 26], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.05, 0.5], accel_mps2: [0, 1.5]}
+    phases:
+      - {name: move, model: road-move, duration_s: [300, 3600], speed_mps: [6, 18], altitude_m: [0, 0], stop_prob: 0.03}
+      - {name: operate, model: stationary, duration_s: [1800, 36000], speed_mps: [0, 0], altitude_m: [0, 0], emitting: true}
+    randomization: {position: from the scenario laydown}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.ground, isr-video, rf, bft]
+    threads: [MT-06, MT-09]
+    scenarios: [TT-06, TT-09]
+  - id: land.ew
+    domain: land
+    name: Electronic-warfare vehicle
+    description: Vehicle that moves to a site and emits jamming; the model's effect is on sensors (clock skew, dropouts), the vehicle itself is a truck-like track.
+    envelope: {speed_mps: [0, 26], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.05, 0.5], accel_mps2: [0, 1.5]}
+    phases:
+      - {name: move, model: road-move, duration_s: [300, 3600], speed_mps: [6, 18], altitude_m: [0, 0], stop_prob: 0.03}
+      - {name: operate, model: stationary, duration_s: [1800, 36000], speed_mps: [0, 0], altitude_m: [0, 0], emitting: true}
+    randomization: {position: from the scenario}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.ground, isr-video, rf]
+    threads: [MT-07]
+    scenarios: [TT-07]
+  - id: land.truck
+    domain: land
+    name: Logistics truck
+    description: Trucks in convoy on roads at night, regular spacing, stops at halts, under tree cover in gaps.
+    envelope: {speed_mps: [0, 30], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.05, 0.5], accel_mps2: [0, 1.5]}
+    phases:
+      - {name: convoy, model: road-move, duration_s: [1200, 14400], speed_mps: [8, 20], altitude_m: [0, 0], stop_prob: 0.03}
+      - {name: halt, model: stationary, duration_s: [300, 1800], speed_mps: [0, 0], altitude_m: [0, 0]}
+    randomization: {convoy spacing: per-scenario 50 to 100 m, halts: per-scenario, cover gaps: per-scenario}
+    signatures: {rcs: large, ir: high, acoustic: loud}
+    sensors: [radar.ground, isr-video, acoustic]
+    threads: [MT-06]
+    scenarios: [TT-06]
+  - id: land.ugv
+    domain: land
+    name: Uncrewed ground vehicle
+    description: Small, slow ground robot on a supply or engineering task; small return; control link.
+    envelope: {speed_mps: [0, 7], altitude_m: [0, 0], climb_mps: [0, 0], turn_g: [0.05, 0.7], accel_mps2: [0, 1]}
+    phases:
+      - {name: task, model: road-move, duration_s: [600, 7200], speed_mps: [1, 5], altitude_m: [0, 0], stop_prob: 0.1}
+    randomization: {route: per-entity}
+    signatures: {rcs: small, ir: low, acoustic: quiet}
+    sensors: [radar.ground, isr-video, rf]
+    threads: [MT-06]
+    scenarios: [TT-06]

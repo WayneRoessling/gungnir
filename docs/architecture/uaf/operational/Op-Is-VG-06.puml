@@ -1,0 +1,33 @@
+@startuml Op-Is-VG-06
+title Op-Is VG-06: Battery on the far bank (MT-06)
+autonumber
+participant "AR-04 Sensor feeds" as Sensors
+participant "OP-30 C2 system" as System
+actor "OP-06 Intelligence analyst" as R0
+actor "OP-03 Analyst" as R1
+actor "OP-01 Operator" as R2
+actor "Fires authority (OP-08)" as R3
+participant "OP-22 Effectors" as E0
+participant "OP-24 Civil and port authorities" as E1
+participant "OP-23 Sensor operators" as E2
+note over System
+Timeline:
+22:00 the ISR UAS is tracked and engaged (MT-03 at sector scale); 22:30 acoustic detection
+of a fire mission; 22:31 the ridge radar tracks vehicles moving; 22:34 ISR video confirms
+the battery; 22:36 fires task recommended with deconfliction against the outgoing
+interceptor and a no-fire area; 22:37 fires authority accepts; 22:39 fires delivered;
+22:45 battle damage assessment from the next ISR pass; 23:10 the convoy is tracked through
+a 20-minute gap under tree cover and reacquired with the same identity.
+end note
+Sensors -> System : 1. Ingest ISR video observations, ground radar, acoustic and spotter reports at mi…
+System -> System : 2. Track vehicles and groups; register sensors against each other to remove bias;…
+System -> System : 3. Resolve global identity across sorties and gaps; classify vehicle type from vid…
+System -> System : 4. Assess priority and time sensitivity (a battery that fired will move within min…
+System -> System : 5. Recommend a fires task: target location and uncertainty, time window, deconflic…
+System -> R3 : 6. present: Present; fires authority decides; record
+R3 -> System : decision: Fires authority
+System -> System : 7. Hand off with provenance; the fires unit executes
+System -> E0 : handoff with provenance
+System -> R2 : 8. present: Battle damage assessment from the next observation; update the entity
+R2 -> System : decision: complete
+@enduml

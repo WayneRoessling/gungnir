@@ -1,0 +1,24 @@
+@startsalt WF-L1
+title WF-L1 Operator layout (P-01): queue first, map centre
+{+
+  { <b>PN-01 status strip</b>: Node connected · Live · 01:41 wall · health ●●● · WCS point Free area Tight · delegation point/hostile small UAS · alerts 3/5/1 · Operator }
+  --
+  {
+    {+ <b>PN-06 Approval queue</b> (7) ..
+    {+ <b>PN-05 Recommendation</b> P-1183 ..
+    {+ <b>PN-03 Track table</b> (187) ..
+    {+ <b>PN-08 Incidents</b> (3 new) ..
+    {+ <b>PN-09 Health</b> ..
+    } | {+
+      <b>PN-02 Viewport</b>
+      .
+      .
+      <i>map, glyphs, assignment lines, selection</i>
+      .
+      .
+      ..
+      <i>PN-04 evidence card docks here on selection; PN-07 decision dialog opens over the map</i>
+    } | {+ <b>PN-19 Assistant</b> (collapsed) }
+  }
+}
+@endsalt

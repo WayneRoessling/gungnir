@@ -1,0 +1,47 @@
+{
+ "format": 1,
+ "scenario": "TT-09",
+ "variant": "sample-laydown-B",
+ "seed": 1701,
+ "generator": "tt-gen 0.1.0",
+ "catalogue_version": "2026-09-04",
+ "classes_version": "2026-09-04",
+ "sensors_version": "2026-09-04",
+ "scenarios_version": "2026-09-04",
+ "duration_s": 480,
+ "truth_tick_s": 2.0,
+ "origin": {
+  "name": "Sector command post, Ostmark (fictional)",
+  "lat": 0.0,
+  "lon": 0.0,
+  "alt_m": 0.0
+ },
+ "start_time_of_day": "13:00:00",
+ "counts": {
+  "entities": 12,
+  "entities_by_class": {
+   "air.owa-prop": 12
+  },
+  "truth_records": 1536,
+  "detections": 751,
+  "false_alarms": 560,
+  "sensors": 10
+ },
+ "expected": {
+  "success": "laydown B engages the sea stream earlier than A (MOE-12); identical truth in both variants"
+ },
+ "provenance": {
+  "policy": "docs/test-tracks/sourcing-and-legal.md",
+  "inputs": [
+   "classes.yaml",
+   "sensors.yaml",
+   "scenarios.yaml",
+   "catalogue-*.yaml"
+  ]
+ },
+ "validation": {
+  "passed": true,
+  "checks": 18,
+  "report": "validation-report.json"
+ }
+}

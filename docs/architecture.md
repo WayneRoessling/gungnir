@@ -1,0 +1,106 @@
+# Crate to verification-row map
+
+This is the one table that maps every crate in the workspace to the module name used in
+`verification-capability-table.md` and to the status of its verification rows. The
+technical layering, dependency graph, and deployment topology are in the workspace
+`ARCHITECTURE.md`; the business description of each crate is in
+`gungnir-capabilities.md`. This file is deliberately short so it can be kept exact.
+
+The "Table module" column is the value of the *Rust Module* column in
+`verification-capability-table.md` §1. Rows in the tracking core have fully specified
+oracles and pass criteria. Rows for every other layer are in that table's §2; "Draft"
+means the pass criterion is still to be agreed, "Tested" means a unit test of the stated
+invariant exists in the crate today, and "Specified" means the criterion is agreed and
+the test is the gate.
+
+For §1 rows, "Fully specified" has always meant the criterion and oracle are settled, not
+that a test exists. **Gated** is added here for the rows where the differential test now
+runs; the date and the measured margin are given so a later tightening can see where the
+headroom actually was.
+
+## Tracking core
+
+| Crate | Table module | Rows | Status |
+|---|---|---|---|
+| `gungnir-core` | `core` | Motion models CV/CA/CT; also owns `TrackId`, `TrackStatus`, `ResourceId`, `assert_psd` | **Gated 2026-09-05** (`tests/motion_models_diff.rs`): 322 element-wise comparisons over 84 cases against filterpy, Stone Soup, and scipy; worst 1.4e-14 against the named closed-form oracle, criterion 1e-10. MATLAB not run (not installed). `assert_psd` tested. |
+| `gungnir-coord` | `coord` | Coordinate frame transforms | **Gated 2026-09-05** (`tests/pymap3d_diff.rs`): worst 2.1e-9 m against pymap3d 3.2.0, criterion 1e-6 m, over 16 geodetic and 8 ENU cases including both poles and the antimeridian; `tests/invariants.rs` adds the round-trip, isometry, and finiteness properties. Stress-tested by Scenario 5. |
+| `gungnir-filters` | `filters` | Linear KF, EKF, UKF, particle filter, IMM, square-root/UDU, RTS smoother | Linear KF **gated and signed off 2026-09-05** (`ARCHITECTURE.md` §10 item 36) (`tests/linear_kalman_diff.rs`): 155 filter steps over 4 cases against filterpy, worst state 9.1e-13 and covariance Frobenius 6.1e-14 against 1e-6 criteria. EKF, UKF and RTS gated 2026-09-06 against filterpy; **the IMM, the particle filter and the square-root form gated the same day** (`ARCHITECTURE.md` §10 item 94), the IMM against `filterpy`'s `IMMEstimator` because Stone Soup 1.9.1 has no IMM, and the particle filter statistically over 40 trials. **Signed by the owner 2026-09-06.** |
+| `gungnir-association` | `association` | NN/GNN, Hungarian/JV, gating, JPDA, MHT | Hungarian/JV, NN/GNN, and gating **gated 2026-09-05, assignment signed off the same day** (`ARCHITECTURE.md` §10 item 36) (`tests/association_diff.rs`) against `scipy`: cost exact to 1.9e-16 relative with the pairing exact wherever the optimum is provably unique, and gate membership exact on all 34 cases. **JPDA and MHT landed 2026-09-06** (`ARCHITECTURE.md` §10 item 94): JPDA by exact joint-event enumeration matching Stone Soup 1.9.1 on every probability of six cases, MHT as a bounded hypothesis tree with N-scan commitment, gated against hand-derived ground truth because Stone Soup 1.9.1 has no MHT hypothesiser. **Signed by the owner 2026-09-06.** |
+| `gungnir-track` | `track-manager` | Track lifecycle | **Gated 2026-09-05, cumulative confirmation rule signed off the same day** (`ARCHITECTURE.md` §10 item 36) (`tests/lifecycle_diff.rs`): 24 confirm/delete step indices exact against Stone Soup across 12 hit/miss sequences. Confirmation counts cumulative hits, not consecutive, because that is what the oracle does; the scaffold's contrary doc comment was corrected. Note the crate is `gungnir-track`; the table keeps the module name `track-manager`. |
+| `gungnir-rfs` | `rfs` | PHD/CPHD, GLMB/LMB | **The Gaussian-mixture PHD landed and is gated 2026-09-06** (`ARCHITECTURE.md` §10 item 94) against the textbook Vo--Ma recursion, because Stone Soup 1.9.1's mixture reducer clamps a merged weight to 1.0 and so under-reports cardinality. The CPHD's cardinality distribution and the GLMB/LMB labelled filters are **not built and return an explicit error naming themselves**; a PHD carries no identity, which is what those add. **The PHD is signed by the owner 2026-09-06; the three that are not built are not in that signature.** |
+| `gungnir-fusion-async` | `fusion-async` | Out-of-sequence and multi-rate fusion; concurrency correctness | Implemented 2026-09-06 (GAP-011) and **signed by the owner** the same day. `PIPELINE_IMPLEMENTED` is true; the §1 out-of-sequence row is gated against the offline batch and the §2 whole-pipeline replay row against all five scenarios. One constant-velocity Kalman filter per track: the nonlinear estimators, RFS and track-to-track fusion are not in it. |
+| `gungnir-track-fusion` | `track-fusion` | Track-to-track fusion; sensor registration and bias | **Both rows gated 2026-09-06** (`ARCHITECTURE.md` §10 item 94). Covariance intersection is the default and the information-matrix sum the alternative for a deployment that can argue its inputs independent; registration works from surveyed references as well as from a second platform, and publishes the residual spread of its own fit. **Signed by the owner 2026-09-06.** |
+| `gungnir-allocation` | `allocation` | Bellman/DP resource-to-track assignment | Implemented 2026-09-06 (GAP-029) and **signed by the owner** the same day. Exact dynamic program over the horizon, gated at 1e-9 against a textbook Python DP at every layer and subset; a problem past 16 tracks or 8 resources is refused by name rather than answered heuristically. |
+| `gungnir-scenario` | `scenario` | Statistical self-check; round-trip fidelity | **Both gated 2026-09-05.** Self-check (`gungnir-scenario/tests/statistical_self_check.rs`): worst 0.90σ against a 2σ criterion, pooled over 12 seeds, 15,552 detection opportunities and 2,880 scans. Round-trip fidelity (`gungnir-ingest/tests/scenario_round_trip.rs`, where the replay adapter lives): exact on content and release order. The plan-07 YAML library loads and cross-checks as of 2026-09-06 (D-31, `library.rs`), and the reference generator is reproduced byte for byte on all ten committed sample sets (`tracks.rs`, `tests/reference_parity.rs`, GAP-016 closed 2026-09-06). |
+| `gungnir-metrics` | `metrics` | MOTA/MOTP, purity/fragmentation | **Gated 2026-09-05** (`tests/motmetrics_diff.rs`): 52 values across 13 sequences against `py-motmetrics`, worst 2.2e-16 against a 1e-3 criterion, and every underlying count exact. |
+| `gungnir-oracle` | cross-cutting | Is the differential-test harness (gate 1), not a verified capability | Harness. |
+| `gungnir-testkit` | cross-cutting | Shared `proptest` strategies (gate 2) | Harness. Strategies tested. |
+| `gungnir-fuzz` | cross-cutting | Fuzz targets for the ingestion parser and cost-matrix construction (gate 5) | Harness. Excluded from the default workspace build. |
+
+The four cross-cutting rows in `verification-capability-table.md` §1 (end-to-end
+accuracy, numerical stability under sustained operation, performance, interop schema)
+are pipeline-level and have no single owning crate; end-to-end accuracy and stability
+run through `gungnir-tracking-service`, performance through the per-crate `benches/`,
+and the schema row through `gungnir-model` and `gungnir-interop`.
+
+## Foundation and service layer
+
+| Crate | Table module | Rows | Status |
+|---|---|---|---|
+| `gungnir-model` | `model` | Schema versioning; serde round-trip of every view and event type; derived kinematics | Tested. |
+| `gungnir-tracking-service` | `tracking-service` | Scenario replay through the whole pipeline; non-blocking snapshot; honest health | Draft; startup/health tested. |
+| `gungnir-intercept-service` | `intercept-service` | Plan determinism; last-good-plan degradation; unready resources never tasked | Tested. Wired as of 2026-09-06: the planner withholds inadequate resources with the reason (GAP-030) and the desktop opens engagements on decisions (GAP-043). |
+
+## 3D data ecosystem
+
+| Crate | Table module | Rows | Status |
+|---|---|---|---|
+| `gungnir-data` | `data` | Loader correctness per format; corrupt-file handling; loading off the UI thread | **DEM half met 2026-09-06** (GAP-023, D-25): `gungnir-data/tests/dem.rs` loads the generated ASCII-grid and GeoTIFF fixtures to exact counts and bounds and feeds sixteen corrupt files, each a `DataError`; the loader thread dispatches. **VTK and glTF met 2026-09-06**: `tests/vtk_gltf.rs` loads the hand-written `POLYDATA` and glTF fixtures to exact counts, feeds a wrong data set, a bad index, garbage and a validator-tripping file, each a `DataError`; the loader thread dispatches both. Point clouds beyond LAS still draft. |
+| `gungnir-data-fusion` | `data-fusion` | CPU ICP against known transforms; GPU path against CPU reference; non-convergence fallback | Draft. Method specified in `rust-3d-data-ecosystem-build-vs-adopt.md` §3.6; `gpu-fusion.yml` runs the GPU half. |
+
+## Deployment
+
+| Crate | Table module | Rows | Status |
+|---|---|---|---|
+| `gungnir-remote` | `remote` | Store-and-forward while disconnected; projection from the node's stream; honest connection state | Tested (detached mode); the outbox is flushed to `POST /v2/detections` while linked and proven end to end over loopback (GAP-050, 2026-09-06). The link speaks mutual TLS from the baseline's roots and the desktop's certificate, and a peer link is the same link started as a machine (GAP-060, GAP-009, 2026-09-06, `tests/tls_link.rs`). |
+| `gungnir-node` | `node` | Starts with the default config; journals every envelope; reports health; clean shutdown; runs the policy chain and seals its journal | Draft, smoke-run on every batch. As of 2026-09-06 it runs the geofence and control-status engines on every fresh plan (GAP-028), builds its geo service from the baseline (GAP-088), and seals its journal from the key provider (GAP-060). 2026-09-06, **signed by the owner the same day**: the TLS identity issued from the key provider through rcgen (D-29), and the ASTERIX adapter's `FeedStatsSink` (GAP-001), which sits in the human-owned gateway and was put to the owner separately once it was noticed. |
+
+## UI and rendering
+
+| Crate | Table module | Rows | Status |
+|---|---|---|---|
+| `gungnir-render` | `render` | Single wgpu compute device; `NoAdapter` on GPU-less hosts; no per-frame resource creation | Draft. |
+| `gungnir-viewport3d` | `viewport3d` | Projection math; glyph rebuild only on change; SSE and tileset traversal | Tested (projection, glyphs); SSE draft. As of 2026-09-06 the terrain is drawn under the 2D picture (`layers::draw_terrain_2d`, decimated to a vertex budget), `to_cpu_mesh` and the viridis ramp are real (GAP-023). |
+| `gungnir-ui` | `ui` | Panels reflect model views with no duplicate copies; no allocation in `ui()` beyond labels | Seventeen of twenty panels built as of 2026-09-06 (PN-16, PN-18 and PN-19 remain), with the sensor registry wired into both binaries so coverage is observed rather than nominal (GAP-003); sensor coverage is drawn on the map once a deployment declares its local frame origin (GAP-007); the three-d scene is attached to eframe's GL context and opt-in per deployment while the 2D projection remains the verified default (GAP-022), showing the deployment's display vocabulary rather than Rust variant names (GAP-070), drawn as a rearrangeable `egui_tiles` dock tree with the viewport, queue and replay detachable to their own windows (GAP-075), including the PN-06 approval queue and PN-07 decision dialog bound to a real policy chain and approval workflow (GAP-038), and PN-10 showing a requested mode and a confirmed mode as two separate things with commanding and recording as two separate controls (GAP-004), and PN-15 carrying collection requirements from an analyst's statement through the sensor manager's concurrence to an answer that always names its evidence (GAP-005), and PN-11 turning coverage layers on and off while saying on the map itself that a hidden layer is not an empty one (GAP-007), and PN-12 replay, PN-13 reports and PN-14 configuration over the journal and the baseline (GAP-071): the PN-01 status strip on every layout (GAP-072), and the PN-04 evidence card and PN-17 commander summary (GAP-073), whose sections name the crate and register entry behind each one they cannot fill. The rest render a placeholder naming their gap (GAP-055). Draft. |
+| `gungnir-app` | `app` | Wiring only; backend selection and fallback; tick order; journaling; the compliance checks | Draft; the five architecture checks and the C-01 and C-04 proofs run as its tests on every `cargo test` (GAP-081, GAP-039, GAP-059, 2026-09-06); a sign-in establishes the node link (GAP-057). Frame budgets measured 2026-09-05 by `benches/app_tick.rs` and `tests/frame_budgets.rs`; "startup to first frame" and journal append are gates, and the per-frame and snapshot budgets are measured but not gated while the tracking stage is a stub. 2026-09-06: the outage is reconciled from the node's history and switched back on a person's act (GAP-050); sessions expire and PN-01 says who is signed in (GAP-057); the keystore opens at sign-in (GAP-084). |
+
+## Productization layer
+
+| Crate | Table module | Rows | Status |
+|---|---|---|---|
+| `gungnir-eventing` | `eventing` | Broadcast delivery to every subscriber; ordering; late subscribers; pruning | Tested. |
+| `gungnir-store` | `store` | Journal round-trip; torn-tail tolerance; retention policy | Tested. |
+| `gungnir-config` | `config` | Validation rejects invalid baselines; version gating; file round-trip; forward compatibility | Tested. |
+| `gungnir-mission` | `mission` | Create/load/save/close lifecycle; replay reproduces a session | Implemented (GAP-051, 2026-09-05). `JournalMissionManager` records each session beside its journal with the baseline it ran under; a session left unclosed reopens as `Interrupted`, never `Live`. Both binaries open and close through it. |
+| `gungnir-time` | `time` | Wall clock monotone; replay clock advances only when stepped; lateness; per-source clock skew | Tested. `ClockSkewEstimator` fed from the desktop's ingest events as of 2026-09-06 (GAP-008). |
+| `gungnir-ingest` | `ingest` | Malformed and unauthenticated input quarantined; recorded feed released in source-time order; fuzz target; the authenticator's strength on provenance | Tested. Human-owned changes. The ASTERIX radar adapter landed 2026-09-06; the gateway stamps `SourceAuthentication` (GAP-002), and an adapter may bring the authenticator that admits its sources -- the machine-identity one is the only one that stamps `MachineIdentity` (GAP-002, 2026-09-06, signed by the owner the same day). |
+| `gungnir-sensor-management` | `sensor-management` | Mode-transition rules; coverage from mode and range | Tested. `SensorCommand` is the model's since 2026-09-06 (re-exported); the desktop's control adapter is its node link (GAP-004). |
+| `gungnir-interop` | `interop` | Arrow round-trip lossless; catalog version negotiation; codecs report `NotImplemented` | Tested. The AIS decoder (`ais`) is gated 2026-09-06 on gpsd's regression captures: every in-scope sentence decodes to gpsd's raw values (D-32). The ADS-B decoder (`adsb`) is gated the same day on two permissively licensed captures against two MIT Rust decoders (GAP-010) -- **open-source consensus, not conformance**: no ADS-B specification is both free to obtain and permissively licensed, so none is pinned and the catalogue entry says so in its own schema kind; the parity and the CPR position decode are gated by arithmetic instead. The conformance suite (`tests/conformance.rs`, GAP-063) walks the catalogue entry by entry; the Arrow round trip is lossless on provenance as of 2026-09-06. |
+| `gungnir-identity` | `identity` | Same track resolves to the same global id; merge redirects and records history | Tested; the desktop constructs the resolver over its retained sessions (GAP-019, GAP-025, 2026-09-06). |
+| `gungnir-identification` | `identification` | Evidence fusion to classification; conflicts stay `Unknown` | Tested; fed by the AIS adapter's cooperative reports on the desktop (GAP-010, 2026-09-06). |
+| `gungnir-ml` | `ml` | Model and extractor traits; a fake model; honest model-set health; dataset extraction split by scenario with a content hash | Tested (2026-09-06, GAP-077, GAP-079). No inference runtime, by decision; `ModelSet::load` refuses with the reason. |
+| `gungnir-geo` | `geo` | Geofence containment including antimeridian; only no-go fences deny; hazards never reach a verdict | Tested. The hazard layer is built from the baseline and drawn as of 2026-09-06 (GAP-017); a source scan guards the policy chain. |
+| `gungnir-analytics` | `analytics` | Terrain masking of line-of-sight; viewshed; coverage volume; route through no-go | Tested. |
+| `gungnir-policy` | `policy` | No plan approved inside a no-go geofence; unready resource denied; clean plan still needs a human | Tested. Human-owned changes. |
+| `gungnir-command` | `command` | Denied plans refused; every decision recorded and removed from the queue | Tested. Human-owned changes. |
+| `gungnir-assessment` | `assessment` | Score rises with proximity and approach; stale tracks score zero; reward matrix shape | Tested. The exposure carries the time to closest approach (GAP-042) and the assessor weighs a declared platform class (GAP-027), both 2026-09-06. |
+| `gungnir-decision` | `decision` | Rationale orders assignments by risk; alternatives policy-checked; what-if does not mutate live state; sensor plans from legal transitions only | Rationale and sensor planner tested; the planner is wired to PN-10 as of 2026-09-06 (GAP-037), the rest is draft. |
+| `gungnir-modelops` | `modelops` | Promotion requires validation; rollback restores prior baseline | Tested. |
+| `gungnir-security` | `security` | Role matrix; unknown operators may do nothing; audit order; a file account store | Tested. Human-owned changes. `FileAccountStore` and two audit action names added 2026-09-06 (GAP-057, GAP-059), signed by the owner the same day. 2026-09-06, **signed by the owner the same day**: `SecurityOfficer`, the passphrase-sealed `PersistentKeyProvider`, and `LocalAccountAuthority::with_lifetime`; later the same day, **signed**: `FileAccountStore::assign_role` and `save`, the store re-reading its file on lookup, and the `account.assign_role` action (GAP-057). |
+| `gungnir-api` | `api` | v1 payloads carry the schema version and round-trip; authorization on every endpoint | Serialization tested; operators by token and machines by client certificate, with releasability per party and the exchange agreement gating what a machine receives (`tests/party.rs`, GAP-062, GAP-065, 2026-09-06); a certificate speaks for a sensor, an effector or a peer per the baseline, and the sensor task and effector report routes are served (`tests/machine.rs`, GAP-002, GAP-004, GAP-040, 2026-09-06, signed by the owner the same day). |
+| `gungnir-observability` | `observability` | Health mirrors what the host reported; correlated alerts never exceed raw alerts | Tested. |
+| `gungnir-resilience` | `resilience` | Bounded queue drops oldest and counts; reconciliation merges by time, drops duplicates, reports conflicts | Tested. Wired 2026-09-06: the desktop runs `reconcile` over its journal and the node's history after an outage (GAP-050, edge (m)). |
+| `gungnir-collab` | `collab` | Higher role wins, earlier wins on a tie; stale envelopes rejected | Tested. |
+| `gungnir-workflow` | `workflow` | Panel set per role; alert lifecycle transitions enforced and recorded; a review closes only over closed actions | Tested. Wired into the desktop as of 2026-09-05: role layouts (GAP-055) and the tasking case behind PN-15 (GAP-005); the review case behind PN-13 as of 2026-09-06 (GAP-049). |
+| `gungnir-replay` | `replay` | Two replays identical; clock follows envelopes; seek | Tested. |
+| `gungnir-reporting` | `reporting` | Counts and measures recomputed from the journal; a measure the journal cannot answer says why; export round-trips | Tested. The measures catalogue is folded per figure as of 2026-09-06 (GAP-047). |

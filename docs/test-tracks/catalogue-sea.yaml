@@ -1,0 +1,196 @@
+# Sea platforms (plan 07 catalogue). See catalogue.yaml for the field definitions.
+# Depth applies to the submarine class only; all sea classes are tracked at the
+# surface (altitude 0) for the surface picture.
+domain: sea
+reviewer: subject-matter reviewer (maritime), pending
+platforms:
+  - id: magura-v5
+    name: Magura V5
+    class: sea.usv
+    side: blue
+    role: uncrewed surface vessel, attack and reconnaissance
+    speed_mps: [8, 22]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.2, 0.8]
+    endurance_h: [20, 60]
+    range_km: [450, 800]
+    rcs_class: very-small
+    ir_class: low
+    acoustic_class: moderate
+    emissions: satellite or radio control link
+    sources:
+      - {ref: "Public reporting and manufacturer statements on Magura V5, 2023 to 2025", fields: [speed, range, endurance], note: "42 knots maximum and 22 knots cruise reported"}
+    confidence: medium
+  - id: sea-baby
+    name: Sea Baby class
+    class: sea.usv
+    side: blue
+    role: uncrewed surface vessel, attack
+    speed_mps: [8, 25]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.2, 0.8]
+    endurance_h: [20, 60]
+    range_km: [800, 1000]
+    rcs_class: very-small
+    ir_class: low
+    acoustic_class: moderate
+    emissions: satellite or radio control link
+    sources:
+      - {ref: "Public reporting on Sea Baby class vessels, 2023 to 2025", fields: [speed, range], note: "claimed figures from few sources"}
+    confidence: low
+  - id: raptor-patrol-boat
+    name: Raptor class patrol boat (Project 03160)
+    class: sea.fast-craft
+    side: red
+    role: fast patrol boat
+    speed_mps: [5, 25]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.5]
+    endurance_h: [12, 36]
+    range_km: [500, 600]
+    rcs_class: medium
+    ir_class: medium
+    acoustic_class: loud
+    emissions: navigation radar; radio; AIS when in civil traffic
+    sources:
+      - {ref: "Wikipedia article Raptor-class patrol boat, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: gyurza-m
+    name: Gyurza-M class armoured boat
+    class: sea.fast-craft
+    side: blue
+    role: river and coastal armoured gunboat
+    speed_mps: [3, 13]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.4]
+    endurance_h: [48, 120]
+    range_km: [1500, 1700]
+    rcs_class: medium
+    ir_class: medium
+    acoustic_class: loud
+    emissions: navigation radar; radio
+    sources:
+      - {ref: "Wikipedia article Gyurza-M-class gunboat, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: corvette-karakurt
+    name: Karakurt and Buyan-M class corvettes
+    class: sea.surface-combatant
+    side: red
+    role: missile corvette
+    speed_mps: [2, 15]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.05, 0.3]
+    endurance_h: [240, 360]
+    range_km: [4000, 5000]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: surveillance and fire-control radars; radio; AIS off in operations
+    sources:
+      - {ref: "Wikipedia articles Karakurt-class corvette and Buyan-class corvette, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: frigate-grigorovich
+    name: Admiral Grigorovich class frigate
+    class: sea.surface-combatant
+    side: red
+    role: frigate
+    speed_mps: [2, 15]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.05, 0.25]
+    endurance_h: [600, 720]
+    range_km: [8000, 9000]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: surveillance and fire-control radars; radio
+    sources:
+      - {ref: "Wikipedia article Admiral Grigorovich-class frigate, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: landing-ship-ropucha
+    name: Ropucha class landing ship
+    class: sea.amphibious-auxiliary
+    side: red
+    role: landing ship
+    speed_mps: [2, 9]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.02, 0.2]
+    endurance_h: [480, 720]
+    range_km: [5000, 11000]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: navigation radar; radio
+    sources:
+      - {ref: "Wikipedia article Ropucha-class landing ship, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: tanker-coastal
+    name: Coastal tanker and merchant class (civil)
+    class: sea.amphibious-auxiliary
+    side: civil
+    role: merchant traffic in the approaches
+    speed_mps: [2, 8]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.02, 0.15]
+    endurance_h: [240, 720]
+    range_km: [3000, 10000]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: AIS (mandatory); navigation radar
+    sources:
+      - {ref: "Public merchant-shipping references (typical coastal tanker speeds of 10 to 15 knots)", fields: [speed]}
+    confidence: high
+  - id: fishing-vessel
+    name: Fishing vessel and small craft (civil)
+    class: sea.amphibious-auxiliary
+    side: civil
+    role: fishing and leisure traffic
+    speed_mps: [0, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.05, 0.4]
+    endurance_h: [6, 240]
+    range_km: [20, 500]
+    rcs_class: small
+    ir_class: low
+    acoustic_class: moderate
+    emissions: AIS on larger vessels; often none on small craft
+    sources:
+      - {ref: "Public small-craft references (typical speeds 5 to 25 knots)", fields: [speed]}
+    confidence: high
+  - id: kilo-surfaced
+    name: Kilo class submarine (surfaced or snorkelling)
+    class: sea.submarine-surfaced
+    side: red
+    role: submarine, surface-picture purposes only
+    speed_mps: [2, 6]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.02, 0.2]
+    endurance_h: [720, 1080]
+    range_km: [6000, 12000]
+    rcs_class: small
+    ir_class: low
+    acoustic_class: quiet
+    emissions: navigation radar when surfaced; radio
+    sources:
+      - {ref: "Wikipedia article Kilo-class submarine, accessed 2026-09", fields: [speed, range], note: "surfaced speed 10 to 12 knots"}
+    confidence: high

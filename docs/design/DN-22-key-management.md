@@ -1,0 +1,361 @@
+# DN-22 Key custody, rotation, and escrow
+
+Closes GAP-084, filed by plan 11 finding F-3. Status: **signed off by the owner 2026-09-05**, with **amendment 1 (§9) signed the same day** after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11), signed by the owner 2026-09-06**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12), signed by the owner 2026-09-06**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate.
+**Human-owned and signed**: `gungnir-security` is a low-trust crate and this note decides
+who can read what. The owner signed it on 2026-09-05.
+
+## 1. The gap and the thread step it blocks
+
+`ARCHITECTURE.md` §8.5 states the protection intent and D-02 fixed the credential
+mechanism. Between those two there is nothing: no component owns key material. Where keys
+live per profile, who may read them, how they rotate, what happens to a journal encrypted
+under a retired key, and how a disconnected desktop holds its own are all unanswered.
+
+GAP-060 cannot be implemented without answering them, and answering them at coding time
+means inventing a custody model in a pull request. An accreditor asks about custody before
+they ask about ciphers.
+
+## 2. The owning component
+
+`gungnir-security`, which already owns authentication, authorization, and audit. It gains
+a key-provider trait and no key material of its own.
+
+`gungnir-store` consumes the provider for journal encryption; the transport consumes it for
+its credentials. Both already depend on what they need or will when the transport lands.
+
+## 3. Types
+
+In `gungnir-security`:
+
+```rust
+/// What a key is for. Separate purposes never share material, so compromising
+/// one does not compromise the others.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum KeyPurpose {
+    /// Machine identity for mutual TLS (D-02).
+    TransportIdentity,
+    /// Journal encryption at rest.
+    JournalAtRest,
+    /// Signing configuration baselines.
+    BaselineSigning,
+}
+
+/// Identifies one key version. Recorded on anything the key protected, so a
+/// retired key can still be found for what it encrypted.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct KeyId {
+    pub purpose: KeyPurpose,
+    pub version: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum KeyState {
+    /// Usable for new material.
+    Active,
+    /// Not used for new material; still available to read old material.
+    Retired,
+    /// Unavailable. Anything it protected is unreadable, and the system says so.
+    Destroyed,
+}
+
+/// The custody boundary. Implementations hold key material; nothing above this
+/// trait ever sees bytes it did not ask to use.
+pub trait KeyProvider: Send + Sync {
+    fn active(&self, purpose: KeyPurpose) -> Result<KeyId, SecurityError>;
+    fn state(&self, id: &KeyId) -> Result<KeyState, SecurityError>;
+    /// Encrypt or decrypt without exposing the key. The provider does the work.
+    fn seal(&self, id: &KeyId, plaintext: &[u8]) -> Result<Vec<u8>, SecurityError>;
+    fn unseal(&self, id: &KeyId, ciphertext: &[u8]) -> Result<Vec<u8>, SecurityError>;
+    fn rotate(&self, purpose: KeyPurpose) -> Result<KeyId, SecurityError>;
+}
+```
+
+`seal` and `unseal` rather than `get_key` is the design's central choice. A provider that
+hands out key bytes has no custody boundary at all, and every consumer becomes a place
+material can leak.
+
+## 4. Edges
+
+**None.** `gungnir-store` gains a reference to a `&dyn KeyProvider` passed in by the
+binary, which is the same construction pattern the journal already uses. That does mean the
+binary owns the provider, which is correct: custody belongs to the host, not to a library.
+
+## 5. Behaviour
+
+**Custody per profile.** The three profiles have genuinely different answers and the design
+says so rather than picking one:
+
+| Profile | Where material lives | Who can read it |
+|---|---|---|
+| Disconnected desktop | The operating system's keystore on that machine, unlocked at operator login | That machine's operator. No remote party |
+| On-prem node | The deployment's own store, an operating-system keystore or a hardware module | The node process only |
+| Cloud node | A managed key service, **off-host**. The node process may `seal` and `unseal` and never holds material | The node process, through the service, auditable there |
+
+The cloud row is why `seal` and `unseal` are the interface: a managed service performs the
+operation and never releases material, and a design built around fetching key bytes could
+not use one.
+
+**Rotation.** `rotate` mints a new version and moves the previous to `Retired`. New material
+uses the active version; old material records the `KeyId` that protected it and is read
+with that version. **Rotation never rewrites existing data.** Re-encrypting a journal on
+rotation would rewrite the record, which AP-08 forbids.
+
+**Retirement and destruction are different, and the difference is visible.** A `Retired`
+key still reads. A `Destroyed` key does not, and everything it protected is permanently
+unreadable. The system therefore refuses to destroy a key that protects retained data
+without an explicit, recorded override naming what will become unreadable. An accidental
+destruction that silently orphans a year of journals is the worst outcome in this note.
+
+**The disconnected fallback.** A desktop that cannot reach any service must still journal
+and must still start. It uses a local key from the operating-system keystore. If that
+keystore is unavailable, the desktop **starts with journal encryption off and says so** in
+the status strip and the health summary, rather than refusing to run or, far worse,
+appearing to encrypt. That is AP-02 applied to a security feature: a system that claims
+encryption it is not performing is worse than one that admits it is not.
+
+**Audit.** Every rotation, retirement, destruction, and override is an audit entry with an
+operator. Key **use** is not audited per operation, because that would put an entry in the
+log for every journal append and drown the entries that matter.
+
+## 6. Configuration and interface delta
+
+`ConfigBaseline.security.key_provider: KeyProviderConfig`, naming which provider a
+deployment uses and its parameters. **No key material, no secret, and no path to one
+appears in the baseline**, which is checked by validation: a value that looks like key
+material is rejected rather than stored.
+
+Interface: nothing. Key state is not published. The health summary reports whether
+encryption is active per profile, which is a boolean and not a disclosure.
+
+## 7. User-interface delta
+
+| Panel | Change |
+|---|---|
+| PN-09 System health | Whether at-rest encryption is active, and the disconnected fallback state when it is not |
+| PN-01 Status strip | Journal encryption off, when it is |
+| PN-20 Audit and accounts | Rotations, retirements, destructions, and overrides with their operators |
+| PN-14 Configuration editor | The provider selection, with no field that accepts key material |
+
+## 8. Verification
+
+| Capability | Method | Pass criterion | Data source |
+|---|---|---|---|
+| CAP-6.4 Data protection | Unit tests with an in-memory provider, plus a rotation and recovery test | No consumer can obtain key bytes through the trait; rotation leaves existing data readable and unmodified; a key protecting retained data cannot be destroyed without a recorded override naming the affected data; an unavailable keystore yields an honest unencrypted state reported in health, never a claimed-but-absent encryption; no baseline field accepts key material | Generated journals across a rotation; a provider stub that can be made unavailable |
+
+The first criterion is enforced by the trait's shape, which is why the trait has no getter.
+
+## 9. Amendment 1 -- **signed by the owner 2026-09-05**
+
+Raised by GAP-060, which is the gap that implements against this note and could not
+start. Three things this note settled in principle and left unusable in practice. The same
+sign-off covers the code that conforms to it, and D-22 settled the crates the same day.
+
+**Implemented 2026-09-05.** `gungnir-security/src/provider.rs` is the first
+`KeyProvider` there has ever been: AES-256-GCM behind `seal`/`unseal`, the sealed form of
+(b), rotation that retires rather than rewrites, and destruction that says what it has made
+unreadable. `KeyProvider::sign` exists per (a) and this provider refuses it, because it
+holds symmetric keys only -- the asymmetric provider a cloud deployment wants needed D-22's
+third row, signed by the owner 2026-09-05 (`p256`, ECDSA P-256). The decision is taken; no
+gap builds the provider yet.
+
+Mutual TLS is `gungnir-api/src/tls.rs`, verified against real handshakes in
+`gungnir-api/tests/mutual_tls.rs` with certificates generated by `rcgen` and never checked
+in, per (c). It uses the **on-prem** custody model of §5's table -- a PEM the host provides,
+custody being the file's permissions -- and not the cloud one, which is what `sign` is for.
+The two coexist; neither supersedes the other.
+
+### a. A provider must be able to **sign**, or there can be no mutual TLS
+
+`KeyPurpose::TransportIdentity` names a machine identity for mutual TLS (D-02). §3's trait
+offers `seal`, `unseal` and `rotate` and deliberately no getter, and §3 argues that
+correctly: *"A provider that hands out key bytes has no custody boundary at all."*
+
+But a TLS handshake needs a **signature over the transcript** with the private key, and
+neither `seal` nor `unseal` can produce one. As written, `TransportIdentity` is a purpose
+no consumer can use, and GAP-041 stopped at exactly this: the transport serves loopback
+only because there is no way to obtain a TLS identity without breaking the boundary this
+note exists to draw.
+
+**The resolution is not to add a getter.** `rustls` does not require key bytes: its
+`sign::SigningKey` is a trait, and a `ResolvesServerCert` may hand back a `CertifiedKey`
+whose signer delegates elsewhere. That is how a hardware module or a managed key service
+terminates TLS today, and it is exactly the shape §5's cloud row already assumes. So the
+trait gains one operation:
+
+```rust
+/// Sign a message with a key the provider holds. The provider does the work, as
+/// `seal` does; the bytes never leave it.
+fn sign(
+    &self,
+    id: &KeyId,
+    message: &[u8],
+    scheme: SignatureScheme,
+) -> Result<Vec<u8>, SecurityError>;
+```
+
+`gungnir-node` adapts it to `rustls::sign::SigningKey`, so no crate below the binary
+learns about TLS and this note keeps naming no library.
+
+**The certificate chain is not key material** and needs no custody: it is public by
+construction, so it is read from a PEM path like any other configuration file. That is
+what §2.9's `rustls-pemfile` row means by "reads them"; only the private half goes through
+the provider.
+
+**A cost worth stating**: a signature per handshake means a round trip to a managed service
+per connection in the cloud profile. That is how every KMS-backed TLS deployment works and
+is acceptable for a node with few long-lived peers; it would not be for a public web
+service, and this is not one.
+
+### b. `seal` and `unseal` name no algorithm, and the sealed form has no shape
+
+§5 requires that rotation never rewrite existing data and that old material be read with
+the key that protected it. That is only possible if the ciphertext **carries its
+`KeyId`**, and this note does not say it does. The sealed form is therefore specified:
+
+```text
+<KeyId as 8 bytes: purpose, version> || <96-bit nonce> || <ciphertext || tag>
+```
+
+The nonce is per-operation and never reused under one key, which is the failure mode that
+makes AES-GCM catastrophic rather than merely broken.
+
+**No cipher is named** anywhere in this note or the register, and none is in the workspace:
+D-20 signed off `argon2`, `hmac`, `sha2` and `subtle` for authentication and **explicitly
+did not cover this**. `hmac` authenticates and does not encrypt. That is D-22 below.
+
+### c. The verification row cannot be met without a way to make certificates
+
+§8 asks for tests against "a provider stub that can be made unavailable", which is
+straightforward. GAP-060's other half is not: **mutual TLS cannot be tested without
+certificates**, and the workspace has no certificate-generation crate and no fixture. It
+must not gain a fixture either -- a private key checked into the repository is key material
+in the repository, whatever the comment above it says.
+
+So a test-only certificate generator is needed, which is a §2.9 row like any other. It
+belongs in `[dev-dependencies]` and must never enter a shipped manifest.
+
+## 10. Escrow is in this note's title and nowhere in its body
+
+**Raised 2026-09-05 by GAP-084 and not answered here.** The gap's closing action asks for
+"escrow for recorded journals"; the word appears in this note's heading and in no section
+of it.
+
+§5 answers what happens when a key is **deliberately** retired or destroyed:
+`may_destroy` refuses to destroy a key protecting retained data without an override that
+names what becomes unreadable. It does not answer what happens when a key is **lost** --
+a machine that fails, a keystore that is wiped, an operator who leaves -- nor how a
+journal is read later by somebody who is entitled to it and does not hold the key. For a
+system whose journals are the record an after-action review or an investigation reads,
+those are the questions an accreditor asks second, right after custody.
+
+The shape of an answer, for the owner to accept or replace: seal each journal's data key
+to a second **escrow** key held by a different authority, so the record can be recovered
+without that authority being able to read anything live. That needs the asymmetric scheme
+D-22 left as its third row -- signed 2026-09-05, so **that half is no longer the blocker** --
+and it needs a decision about who holds the escrow key, which is a deployment's question
+and not a design's, and which remains open.
+
+Recorded rather than designed, because inventing an escrow model in a pull request is the
+thing §1 of this note exists to stop.
+
+## 11. Amendment 2 -- the escrow holder is a named security-officer role, per deployment (**signed by the owner 2026-09-06**)
+
+**Answers §10's open question.** On 2026-09-06 the owner decided (D-27) who holds the
+escrow key: **a security officer**, a named role filled by a named person in each
+deployment. This section records the consequences, **signed by the owner the same day**; none
+of it is built, because all of it waits on the asymmetric provider (§9a's third row,
+`p256`, "not yet").
+
+**The role.** `SecurityOfficer` joins DN-20's role table as a role that **operates
+nothing**: it may not decide a plan, task a sensor, state a requirement or apply a
+baseline. It may recover a sealed journal, and that is the whole of its authority. It is
+held by a person recorded in the account store like any other account, so a recovery is
+attributed to a name (DN-23 §5, rule 1), and it is distinct from every operating role
+so that no supervisor is, by virtue of deciding engagements, also the one who can read
+every record afterwards. One deployment, one officer; a deputy is a second account with
+the same role, and both are named in the baseline.
+
+**The mechanism.** At sealing time the provider wraps each journal segment's data key to
+the officer's **public** key: ECDH over P-256 with HKDF-SHA-256 deriving a wrapping key
+and AES-256-GCM wrapping the data key, all of which the approved stack already holds
+(`p256` with its `ecdh` feature, `sha2`, `aes-gcm`; a feature flag on a signed-off crate,
+recorded in §2.9 when it lands, and no new crate). The wrapped key travels with the
+segment. The officer's private half **never enters a node or a desktop**: recovery is an
+offline act, on a machine the officer controls, that produces a readable copy of one
+segment. Nothing recovered becomes a live key, and a live system's ability to read its
+own journal is unchanged by escrow either way.
+
+**Audit.** Recovery is an authorized action, `KEY_ESCROW_RECOVER`, in
+`gungnir_security::actions`, audited with the segment recovered and the officer's
+identity, and the audit row is written by the recovery tool into a journal of its own,
+because the journal it recovered is by definition one the live system could not read.
+
+**Configuration delta.** `SecurityConfig` gains `escrow: Option<EscrowConfig>` with the
+officer's operator identifier and the public key **inline as PEM**, not by path. A public
+key is not key material and the hard rule against secrets and paths to them is kept; a
+path would have been a path to a file that, on an officer's machine, sits beside the
+private half. Validation refuses anything that parses as a private key, and refuses an
+escrow section whose officer is not an account with the `SecurityOfficer` role. A
+deployment with no escrow section escrows nothing and PN-09 says so, in the same three
+states the encryption line already uses.
+
+**Verification.** Seal a journal under a provider with escrow configured; assert the node
+holding only the public half cannot recover it, that the recovery tool with a test private
+key (`p256` in tests, never a checked-in key) can, that the recovered segment is
+byte-identical, and that the audit row names the officer. Fixture keys are generated in
+the test.
+
+**What is decided.** The holder, the mechanism above (the least scheme the stack already
+supports), the role's name and the rule that it operates nothing: all signed 2026-09-06.
+GAP-084 stays open on the asymmetric provider and on the persistent keystores §5 names;
+this amendment is now the design to build against.
+
+## 12. Amendment 3 -- a passphrase-sealed keystore for the disconnected desktop (2026-09-06, **signed by the owner the same day**)
+
+**Raised by GAP-084.** §5's disconnected row names the operating system's keystore,
+unlocked at operator login. No crate in the approved stack reaches an OS keystore, and
+admitting one is a §2.9 decision this amendment does not pre-empt. What the stack holds
+is argon2 and AES-256-GCM, and they are enough for the property §5 wants: **a persistent
+key this machine's operator can unlock and no remote party can read.**
+
+**The mechanism.** Every key the desktop owns lives in one file, `keystore.sealed`, in
+the data directory: a salt, a nonce, and AES-256-GCM ciphertext over the provider's keys,
+under a wrapping key derived by argon2 from the operator's passphrase and the file's own
+salt. The file is created at the first sign-in and opened at every later one. The
+baseline names the mechanism (`security.key_provider: passphrase-sealed-file`) and no
+path; the file's name is fixed. A file that does not open under the presented passphrase
+is refused and never overwritten, because it may be the only way to read a year of
+journals.
+
+**Unlocked at sign-in, not at start.** A desktop starts with the journal in the clear and
+says so on the strip, which is §5's fallback rule; from the sign-in on, the journal seals
+under the store's journal key, and the lines before it stay as they were written. The
+escrow record (§11) is written beside the journal at the same moment, so the key is
+recoverable without this desktop from its first use.
+
+**What it is not.** Not the OS keystore: the file is only as strong as the passphrase and
+argon2's cost, and a machine an attacker can read at rest yields a ciphertext they can
+attack offline. That is weaker than DPAPI-class custody and stronger than an ephemeral
+key nothing can read tomorrow. The row in §5 stands as the target; this is the profile's
+answer until a §2.9 decision admits the crate that reaches the OS.
+
+**Verification.** Keys survive a restart under the same passphrase and not another; the
+file holds no legible key; an escrowed journal key recovers under the officer's key
+(`gungnir-security/src/keystore.rs`); the desktop's journal reports sealing only after a
+sign-in (`gungnir-app/tests/keystore.rs`).
+
+**Landed 2026-09-06, and both halves are signed**: the code (`Role::SecurityOfficer` and
+the passphrase-sealed `PersistentKeyProvider`) and then this amendment as a design, each
+put to the owner separately on the same day. They were kept apart on purpose while one
+was signed and the other was not, because a signature on an implementation says the code
+does what it says and a signature on a design says the design is the right one; recording
+the first as though it were the second is how a note nobody agreed to becomes the thing
+later work cites.
+
+## Traceability
+
+GAP-084 (plan 11 finding F-3), and GAP-060 which implements against it; CAP-6.4; D-02;
+`../../ARCHITECTURE.md` §8.5; `../release-governance.md` for the open question about signed
+configuration baselines, which `BaselineSigning` answers the key half of;
+`../ux/wireframes/WF-09-system-health.puml`, `WF-20-audit-accounts.puml`; principles AP-02,
+AP-03; contract C-04.

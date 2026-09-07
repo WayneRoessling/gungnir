@@ -1,0 +1,21 @@
+@startsalt WF-10
+title WF-10 PN-10 Sensor management (sensor manager; supervisor; planner read-only)
+{+
+  {#
+    Sensor | Modality | Mode | Health | Coverage | Tasking | Calibration
+    R1 ridge radar | radar L | <color:gray>offline</color> | lost 01:50 | — | — | cb-2026-09
+    R2 HAF radar | radar M | search | ok | 0–48 km sector 300–060° | <b>search pattern upper Vell</b> | cb-2026-09
+    A-net acoustic | acoustic ×214 | track | ok (rate raised) | Vell + coast | . | cb-2026-08
+    C1 KAL camera | EO/IR | standby | ok | 0–8 km | cue: T-044 (Mira) | cb-2026-09
+    F1 OPS RF | RF | search | ok | 0–5 km | . | cb-2026-09
+  }
+  --
+  <b>Selected: R2 HAF radar</b>
+  { Mode: (X) search  ( ) track  ( ) standby  ( ) calibrating <i>(greyed: "returns through Standby")</i>  ( ) offline }
+  { Task: [ search pattern ▾ ] area: [ draw on map ] | Reason: "cover upper Vell after R1 loss" }
+  { Coverage before → after: [ show side by side in PN-11 ] | gaps before 1 (upper Vell) → after 0 }
+  { [ Cancel ] | . | [ <b>Commit mode change</b> ] <i>(enabled only after coverage before/after has been shown; audited; sent out via GAP-004)</i> }
+  --
+  { Tasking requests: 1 pending — Leyla: "ISR UAS orbit east of ridge, priority 2, until 16:00" [ open in PN-15 ] }
+}
+@endsalt

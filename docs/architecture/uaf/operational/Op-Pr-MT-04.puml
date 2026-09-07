@@ -1,0 +1,20 @@
+@startuml Op-Pr-MT-04
+title Op-Pr MT-04: Uncrewed surface vessel attack on a port or anchored ship
+skinparam activityDiamondBackgroundColor #EEE
+|OP-30 Command-and-control system|
+start
+:1. Ingest coastal radar, AIS, camera, patrol reports; suppress clutter; hold tracks through…\n<<OA-01, OA-02>>;
+:2. Cue cameras to inbound low-confidence tracks; fuse visual identification\n<<OA-12, OA-18>>;
+:3. Identify: no AIS, high speed, heading to the anchorage, night, group behaviour, wake sign…\n<<OA-03>>;
+:4. Assess closest point of approach and time to protected ships and infrastructure; cross-do…\n<<OA-04>>;
+:5. Recommend patrol craft, helicopter, shore effector, barrier closure, ship movement; geofe…\n<<OA-05, OA-06>>;
+:6. Present; decide; record\n<<OA-07>>\n(prepare and present);
+|Human performers|
+:6. decide: Port defense authority\n(Port defense authority (OP-02));
+|OP-30 Command-and-control system|
+:7. Hand off; warn ships; close barriers\n<<OA-08, OA-09>>;
+:8. Assess; continue for the rest of the group\n<<OA-10>>\n(prepare and present);
+|Human performers|
+:8. decide: complete the step\n(OP-01 Operator);
+stop
+@enduml

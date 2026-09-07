@@ -1,0 +1,67 @@
+@startwbs St-Tx
+title St-Tx capability taxonomy (registry ids; names in model/elements.yaml)
+* Gungnir capabilities
+** CAP-1 Sense
+*** CAP-1.1 Ingest observations
+*** CAP-1.2 Validate and quarantine
+*** CAP-1.3 Sensor modes and tasking
+*** CAP-1.4 Coverage and gaps
+*** CAP-1.5 Time discipline
+*** CAP-1.6 Peer early warning
+*** CAP-1.7 Cooperative identity
+** CAP-2 Understand
+*** CAP-2.1 Multi-sensor picture
+*** CAP-2.2 Tracks through gaps
+*** CAP-2.3 Sensor registration
+*** CAP-2.4 Dense groups
+*** CAP-2.5 Clutter-tolerant surface picture
+*** CAP-2.6 Classify and identify
+*** CAP-2.7 Global identity
+*** CAP-2.8 Predict trajectory and approach
+*** CAP-2.9 Anomalies
+*** CAP-2.10 Terrain and map context
+*** CAP-2.11 Geometric questions
+*** CAP-2.12 Pattern of life and order of battle
+** CAP-3 Decide
+*** CAP-3.1 Defended-asset list
+*** CAP-3.2 Threat scoring
+*** CAP-3.3 Assignment recommendation
+*** CAP-3.4 Intercept geometry
+*** CAP-3.5 Alternatives and rationale
+*** CAP-3.6 Rules of engagement
+*** CAP-3.7 Queue under saturation
+*** CAP-3.8 Fires tasks
+*** CAP-3.9 Sensor re-tasking
+** CAP-4 Act (recommend and authorize)
+*** CAP-4.1 Present for decision
+*** CAP-4.2 Record every decision
+*** CAP-4.3 Never execute without a decision
+*** CAP-4.4 Handoff with provenance
+*** CAP-4.5 Warn assets and authorities
+*** CAP-4.6 Track engagements and effects
+*** CAP-4.7 Assist without authority
+** CAP-5 Sustain
+*** CAP-5.1 Journal
+*** CAP-5.2 Replay and rehearse
+*** CAP-5.3 Reports and measures
+*** CAP-5.4 Disconnected and reconcile
+*** CAP-5.5 Health and alert lifecycle
+*** CAP-5.6 Baselines and plans
+*** CAP-5.7 Model governance
+*** CAP-5.8 Battle rhythm
+*** CAP-5.9 Role workspaces and workflow
+*** CAP-5.10 Performance budgets
+** CAP-6 Secure
+*** CAP-6.1 Authenticate
+*** CAP-6.2 Authorize by role, class, layer
+*** CAP-6.3 Audit
+*** CAP-6.4 Data protection
+*** CAP-6.5 Supply chain
+*** CAP-6.6 Releasability
+*** CAP-6.7 Untrusted input
+** CAP-7 Integrate
+*** CAP-7.1 Versioned interface
+*** CAP-7.2 Interop standards
+*** CAP-7.3 Three profiles
+*** CAP-7.4 Peer and coalition exchange
+@endwbs

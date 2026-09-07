@@ -1,0 +1,15 @@
+@startuml Op-Pr-MT-05
+title Op-Pr MT-05: Surface picture compilation
+skinparam activityDiamondBackgroundColor #EEE
+|OP-30 Command-and-control system|
+start
+:1. Fuse coastal radars, AIS, cameras, patrol and peer reports into one surface picture with…\n<<OA-01, OA-02, OA-03, OA-36>>;
+:2. Flag anomalies: AIS-off, speed or route inconsistent with declared type, loitering near i…\n<<OA-16>>;
+:3. Operator reviews anomalies; tasks cameras or patrols\n<<OA-12>>\n(prepare and present);
+|Human performers|
+:3. decide: Operator\n(OP-01 Operator);
+|OP-30 Command-and-control system|
+:4. Exchange the picture with peers and authorities\n<<OA-15>>;
+:5. Journal; the picture is the basis for MT-04 and for pattern of life\n<<OA-11>>;
+stop
+@enduml

@@ -1,0 +1,53 @@
+{
+ "format": 1,
+ "scenario": "TT-08",
+ "variant": "sample",
+ "seed": 1708,
+ "generator": "tt-gen 0.1.0",
+ "catalogue_version": "2026-09-04",
+ "classes_version": "2026-09-04",
+ "sensors_version": "2026-09-04",
+ "scenarios_version": "2026-09-04",
+ "duration_s": 900,
+ "truth_tick_s": 2.0,
+ "origin": {
+  "name": "Sector command post, Ostmark (fictional)",
+  "lat": 0.0,
+  "lon": 0.0,
+  "alt_m": 0.0
+ },
+ "start_time_of_day": "15:00:00",
+ "counts": {
+  "entities": 11,
+  "entities_by_class": {
+   "air.civil-airliner": 6,
+   "air.tactical-fixed-wing": 2,
+   "air.rotary-wing": 1,
+   "air.tactical-isr": 1,
+   "air.light-aircraft": 1
+  },
+  "truth_records": 1638,
+  "detections": 1739,
+  "false_alarms": 199,
+  "sensors": 5
+ },
+ "expected": {
+  "entities": 11,
+  "hostile": 1,
+  "success": "no friendly or civil track declared hostile (MOE-02); the ISR UAS declared with recorded evidence (MOP-24); the unknown resolved by tasking"
+ },
+ "provenance": {
+  "policy": "docs/test-tracks/sourcing-and-legal.md",
+  "inputs": [
+   "classes.yaml",
+   "sensors.yaml",
+   "scenarios.yaml",
+   "catalogue-*.yaml"
+  ]
+ },
+ "validation": {
+  "passed": true,
+  "checks": 18,
+  "report": "validation-report.json"
+ }
+}

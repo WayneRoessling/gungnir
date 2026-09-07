@@ -1,0 +1,49 @@
+{
+ "format": 1,
+ "scenario": "TT-03",
+ "variant": "sample",
+ "seed": 1703,
+ "generator": "tt-gen 0.1.0",
+ "catalogue_version": "2026-09-04",
+ "classes_version": "2026-09-04",
+ "sensors_version": "2026-09-04",
+ "scenarios_version": "2026-09-04",
+ "duration_s": 1200,
+ "truth_tick_s": 2.0,
+ "origin": {
+  "name": "Sector command post, Ostmark (fictional)",
+  "lat": 0.0,
+  "lon": 0.0,
+  "alt_m": 0.0
+ },
+ "start_time_of_day": "14:18:00",
+ "counts": {
+  "entities": 2,
+  "entities_by_class": {
+   "air.small-multirotor": 1,
+   "air.fpv": 1
+  },
+  "truth_records": 284,
+  "detections": 2070,
+  "false_alarms": 304,
+  "sensors": 5
+ },
+ "expected": {
+  "entities": 2,
+  "success": "the multirotor is driven off without jamming inside the navigation geofence; the FPV is warned in time; both recorded; sensors re-tasked"
+ },
+ "provenance": {
+  "policy": "docs/test-tracks/sourcing-and-legal.md",
+  "inputs": [
+   "classes.yaml",
+   "sensors.yaml",
+   "scenarios.yaml",
+   "catalogue-*.yaml"
+  ]
+ },
+ "validation": {
+  "passed": true,
+  "checks": 18,
+  "report": "validation-report.json"
+ }
+}

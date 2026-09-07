@@ -1,0 +1,54 @@
+@startuml Op-St
+title Op-St operational states: alert, plan, sensor mode, workstation backend
+
+state "IE-21 Alert lifecycle (gungnir_workflow::AlertState)" as Alert {
+  [*] --> New
+  New --> Acknowledged
+  Acknowledged --> Escalated
+  Acknowledged --> Closed
+  Escalated --> Closed
+  Closed --> [*]
+}
+
+state "IE-04 Plan lifecycle (InterceptEvent, IE-19 PolicyVerdict, IE-18 DecisionRecord)" as Plan {
+  [*] --> Proposed
+  Proposed --> Denied : PolicyVerdict::Denied {reason}
+  Proposed --> Pending : RequiresHumanApproval\n(ApprovalRequested)
+  Proposed --> PreApproved : Approved (configured pre-delegation, D-15)
+  Pending --> Decided : Accepted / Overridden / Rejected
+  Pending --> Expired : timeout (GAP-034)
+  Pending --> Escalated : escalation (GAP-034)
+  Escalated --> Decided
+  Decided --> Approved : accepted (PlanApproved)
+  PreApproved --> Approved : still recorded as a decision
+  Approved --> Superseded : PlanSuperseded
+  Decided --> Superseded : rejected or overridden
+  Denied --> [*]
+  Superseded --> [*]
+  Expired --> [*]
+}
+
+state "IE-27 Sensor mode (gungnir_sensor_management::SensorMode)" as Sensor {
+  [*] --> Standby
+  Standby --> Search
+  Standby --> Track
+  Standby --> Calibrating
+  Search --> Track
+  Track --> Search
+  Search --> Standby
+  Track --> Standby
+  Calibrating --> Standby : completes into Standby only
+  Standby --> Offline
+  Search --> Offline
+  Track --> Offline
+  Calibrating --> Offline
+  Offline --> Standby : returns through Standby only
+}
+
+state "IE-17 Workstation backend (BackendConfig, gungnir-remote)" as Backend {
+  [*] --> Embedded : disconnected profile
+  [*] --> Remote : connected profile
+  Remote --> EmbeddedFallback : node unreachable at startup (today)\nor heartbeat lost (GAP-050)
+  EmbeddedFallback --> Remote : reconnect, forward outbox,\nreconcile journals (GAP-050)
+}
+@enduml

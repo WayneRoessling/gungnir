@@ -1,0 +1,17 @@
+@startsalt WF-06
+title WF-06 PN-06 Approval queue (first panel on live layouts)
+{+
+  { <b>Pending 7</b> | oldest 0:41 left | sustained 2.4 decisions/min | capacity <color:orange>near limit</color> | [ sort: priority ▾ ] }
+  {#
+    . | Plan | Track | Priority | Time left | Verdict | Assigned to | State
+    ▶ | P-1183 | T-042 → OPS | 87 | <color:orange>2:58</color> | requires approval | operator (delegated) | pending
+    . | P-1184 | T-043 → OPS | 84 | 3:06 | requires approval | operator (delegated) | pending
+    . | P-1181 | T-039 → HAF | <color:gray>0</color> | 5:50 | <color:red>denied</color> | supervisor | denied: resource not ready
+    . | P-1179 | T-044 → KAL | 22 | 9:10 | requires approval | supervisor | pending (area layer)
+    . | P-1177 | T-038 → OPS | 61 | <color:red>0:09</color> | requires approval | operator | <color:red>expiring</color>
+    . | P-1175 | T-036 → OPS | 58 | . | . | operator | decided: accepted 01:40:50 (Mira)
+    . | P-1172 | T-035 → OPS | 55 | . | . | supervisor | escalated 01:40:21
+  }
+  { <i>Enter opens the recommendation (PN-05); the decision dialog opens only from there; reorders slide 200 ms; nothing pops over this panel</i> }
+}
+@endsalt

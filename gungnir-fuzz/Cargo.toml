@@ -1,0 +1,33 @@
+[package]
+name = "gungnir-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+nalgebra = "0.33"
+gungnir-association = { path = "../gungnir-association" }
+gungnir-ingest = { path = "../gungnir-ingest" }
+gungnir-model = { path = "../gungnir-model" }
+
+[[bin]]
+name = "sensor_ingestion_parser"
+path = "fuzz_targets/sensor_ingestion_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "asterix_feed"
+path = "fuzz_targets/asterix_feed.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "cost_matrix_construction"
+path = "fuzz_targets/cost_matrix_construction.rs"
+test = false
+doc = false

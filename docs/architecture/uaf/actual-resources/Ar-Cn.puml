@@ -1,0 +1,26 @@
+@startuml Ar-Cn
+title Ar-Cn actual resource connectivity: links per profile with budgets
+skinparam rectangle {
+  BackgroundColor #F7F7F7
+}
+node "AR-01 Operator workstation\nWindows 11, NVIDIA GPU\nRS-app (embedded or remote)" as AR_01
+node "AR-02 On-prem service node\nLinux x86_64 container\nRS-node" as AR_02
+node "AR-03 Cloud service node\nsame image, cloud host\nRS-node" as AR_03
+rectangle "AR-04 Sensor feeds" as AR_04
+rectangle "AR-05 Peer C2 nodes" as AR_05
+rectangle "AR-06 Effector systems" as AR_06
+rectangle "AR-07 Build and release\n(GitLab, runners, registry)" as AR_07
+
+AR_04 --> AR_01 : local sensors (adapters)
+AR_04 --> AR_02 : 5,000 det/s (MOP-17)
+AR_04 --> AR_03 : 5,000 det/s (MOP-17)
+AR_01 <..> AR_02 : HTTP + WebSocket, p99 150 ms (MOP-02)\nplanned, GAP-041
+AR_01 <..> AR_03 : HTTP + WebSocket over TLS, p99 400 ms\nplanned, GAP-041
+AR_02 <..> AR_05 : peer tracks, STANAG 4676, marking\nplanned
+AR_03 <..> AR_05 : as above, planned
+AR_02 ..> AR_06 : handoff under 500 ms (MOP-32), planned
+AR_03 ..> AR_06 : handoff, planned
+AR_07 ..> AR_02 : signed image (GAP-061)
+AR_07 ..> AR_03 : signed image (GAP-061)
+AR_07 ..> AR_01 : signed installer (GAP-061)
+@enduml

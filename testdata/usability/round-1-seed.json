@@ -1,0 +1,40 @@
+{
+  "name": "round-1 Vell estuary",
+  "tracks": [
+    {
+      "id": 39,
+      "at_s": 0.0,
+      "position_enu": [9000.0, 4000.0, 300.0],
+      "velocity_mps": [-45.0, -20.0, 0.0],
+      "classification": "Unknown",
+      "stale_after_s": 80.0
+    },
+    {
+      "id": 41,
+      "at_s": 20.0,
+      "position_enu": [12000.0, 1500.0, 120.0],
+      "velocity_mps": [-38.0, -5.0, 0.0],
+      "classification": "Unknown"
+    },
+    {
+      "id": 42,
+      "at_s": 20.0,
+      "position_enu": [11800.0, 1900.0, 140.0],
+      "velocity_mps": [-37.0, -7.0, 0.0],
+      "classification": "Unknown"
+    }
+  ],
+  "plans": [
+    { "id": 1181, "at_s": 30.0, "resource": 2, "track": 39 },
+    { "id": 1183, "at_s": 45.0, "resource": 1, "track": 41 }
+  ],
+  "alerts": [
+    { "at_s": 55.0, "text": "sensor 2: track update rate dropped to 0.4 Hz" },
+    { "at_s": 56.0, "text": "sensor 2: track update rate dropped to 0.3 Hz" },
+    { "at_s": 57.0, "text": "sensor 2: track update rate dropped to 0.2 Hz" },
+    { "at_s": 58.0, "text": "sensor 1: detection quality below threshold" },
+    { "at_s": 59.0, "text": "sensor 1: detection quality below threshold" },
+    { "at_s": 60.0, "text": "sensor 2: no update for 5 s" }
+  ],
+  "resources_not_ready": [2]
+}

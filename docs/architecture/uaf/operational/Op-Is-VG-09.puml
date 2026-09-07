@@ -1,0 +1,32 @@
+@startuml Op-Is-VG-09
+title Op-Is VG-09: Planning the week's laydown (MT-09)
+autonumber
+participant "AR-04 Sensor feeds" as Sensors
+participant "OP-30 C2 system" as System
+actor "OP-04 Sensor manager" as R0
+actor "OP-02 Supervisor" as R1
+actor "OP-08 Commander" as R2
+actor "OP-07 Planner" as R3
+actor "OP-03 Analyst" as R4
+actor "OP-01 Operator" as R5
+note over System
+Timeline:
+09:00 defended-asset priorities reviewed (KAL infrastructure raised to 2 for the week);
+10:00 laydown options computed with coverage over terrain; 11:00 policy updated (weapons
+control status per layer, delegation for the disconnected case at KAL); 13:00 rehearsal:
+TT-01 replayed under the old and new laydowns; 15:00 plan applied and audited; Friday:
+after-action review of the week's journals.
+end note
+R2 -> System : 1. Set the defended-asset list and priorities
+System -> R3 : 2. present: Plan sensor and effector laydown; compute coverage and gaps over terrain
+R3 -> System : decision: Planner
+System -> R2 : 3. present: Configure policy: identification criteria, weapons control status, authorities,…
+R2 -> System : decision: Commander approves
+System -> System : 4. Validate the plan as a configuration baseline
+System -> R1 : 5. present: Rehearse: replay a scenario through the pipeline with the plan; review recommen…
+R1 -> System : decision: Planner, supervisor
+System -> R1 : 6. present: Apply the plan; audit
+R1 -> System : decision: Supervisor or commander
+System -> R2 : 7. present: After the shift: review the journal, measure, record lessons
+R2 -> System : decision: Analyst, commander
+@enduml

@@ -1,0 +1,25 @@
+@startuml Op-Is-VG-02
+title Op-Is VG-02: Salvo with the raid (MT-02)
+autonumber
+participant "AR-04 Sensor feeds" as Sensors
+participant "OP-30 C2 system" as System
+actor "OP-02 Supervisor" as R0
+actor "OP-01 Operator" as R1
+participant "OP-22 Effectors" as E0
+note over System
+Timeline:
+01:52 warning; 01:58 ridge radar detects two fast tracks at 31 km; 01:59 pre-delegated
+engagement by HAF's missile system; 02:00 leakers to the OPS gun; 02:01 impacts or misses.
+end note
+Sensors -> System : 1. Ingest launch warnings and local radar; separate fast tracks from the drone pic…
+System -> System : 2. Track low-altitude fast targets through horizon dropouts; predict route and imp…
+System -> System : 3. Classify cruise missile versus decoy versus drone by speed, altitude, and signa…
+System -> System : 4. Score by time to impact and asset priority; missiles first
+System -> System : 5. Recommend the area-defense layer for missiles and the point layer for drones; c…
+System -> R0 : 6. present: Present within seconds; pre-delegated authority accepts; supervisor may hold fo…
+R0 -> System : decision: Engagement authority; hold by supervisor
+System -> System : 7. Hand off; warn assets to shelter
+System -> E0 : handoff with provenance
+System -> R1 : 8. present: Assess; leakers to the point layer; re-plan
+R1 -> System : decision: complete
+@enduml

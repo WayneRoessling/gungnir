@@ -1,0 +1,28 @@
+# Gate 4: loom exhaustive interleaving on gungnir-fusion-async only
+# (docs/agentic-workflow.md, docs/agentic-coding-standards.md §5). Always required
+# for changes to that crate, and human sign-off is required in addition.
+name: loom
+
+on:
+  pull_request:
+    paths:
+      - "gungnir-fusion-async/**"
+      - "gungnir-tracking-service/**"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  loom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+      - uses: Swatinem/rust-cache@v2
+      - name: loom model checks (Scenario 3 pipeline)
+        env:
+          RUSTFLAGS: --cfg loom
+          LOOM_MAX_PREEMPTIONS: "3"
+        run: cargo test -p gungnir-fusion-async --release --lib -- --nocapture

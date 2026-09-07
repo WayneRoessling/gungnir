@@ -1,0 +1,277 @@
+# Scenario library (plan 07). Source of truth for docs/test-tracks/scenario-library.md
+# (rendered by tools/build_catalogue.py) and the composition tools/gen_tracks.py generates.
+#
+# Geography is the fictional Vell estuary (docs/mission/vignettes.md): ENU metres from the
+# sector command post at Ostmark (origin). West is open sea; the Vell runs from the
+# south-east; the Hoge ridge is east; Halden airfield is north-west; Kalsund port is west.
+#
+# Each scenario: id, vignette, thread, narrative, duration, entities (class, platform, side,
+# count, spawn window, route, phases override), sensors (type, id, name, position, overrides),
+# events, expected outcomes for validation, and a `sample` block that reduces it for the
+# committed set. Full-size generation uses the top-level values.
+
+version: "2026-09-04"
+origin: {name: "Sector command post, Ostmark (fictional)", lat: 0.0, lon: 0.0, alt_m: 0.0}
+truth_tick_s: 1.0
+
+points:
+  SCP: [0, 0, 0]
+  OPS: [0, 0, 0]
+  KAL: [-25000, 2000, 0]
+  KAL_ANCHORAGE: [-29000, 1500, 0]
+  KAL_BOOM: [-24000, 2500, 0]
+  HAF: [-20000, 40000, 0]
+  RIDGE_RADAR: [8000, 3000, 450]
+  RIDGE_GSR: [9000, 2000, 420]
+  VELL_UPPER: [40000, -25000, 0]
+  FAR_BANK_WOODS: [35000, -8000, 0]
+  VALLEY_ROAD_START: [60000, -30000, 0]
+  VALLEY_ROAD_END: [30000, -6000, 0]
+  TREE_LINE_HAF: [-18500, 41200, 0]
+  SEA_FAR: [-90000, 20000, 0]
+  SEA_MID: [-45000, 8000, 0]
+  EAST_FAR: [120000, -80000, 0]
+  EAST_MID: [60000, -40000, 0]
+  EAST_NEAR: [20000, -12000, 0]
+  NORTH_CORRIDOR_S: [-40000, 70000, 9000]
+  NORTH_CORRIDOR_N: [-10000, 110000, 9000]
+  EAST_ORBIT: [60000, 5000, 5000]
+
+routes:
+  vell_valley: [EAST_FAR, EAST_MID, [40000, -25000, 0], EAST_NEAR, [8000, -4000, 0], OPS]
+  vell_valley_north: [EAST_FAR, [70000, -30000, 0], [45000, -18000, 0], [18000, -6000, 0], OPS]
+  sea_stream: [SEA_FAR, SEA_MID, [-32000, 4000, 0], KAL, [-12000, 1000, 0], OPS]
+  sea_to_haf: [SEA_FAR, [-50000, 25000, 0], [-30000, 36000, 0], HAF]
+  usv_approach: [[-60000, 6000, 0], [-42000, 3000, 0], [-34000, 2000, 0], KAL_ANCHORAGE]
+  coastal_lane_n: [[-70000, 30000, 0], [-40000, 12000, 0], [-30000, 4000, 0], KAL]
+  coastal_lane_s: [[-70000, -20000, 0], [-40000, -6000, 0], [-30000, 0, 0], KAL]
+  valley_road: [VALLEY_ROAD_START, [52000, -24000, 0], [44000, -16000, 0], [38000, -10000, 0], VALLEY_ROAD_END]
+  civil_corridor: [NORTH_CORRIDOR_S, NORTH_CORRIDOR_N]
+  fighter_return: [[-60000, 90000, 8000], [-35000, 60000, 5000], HAF]
+  haf_apron: [[-19500, 40500, 60], [-19800, 40300, 90], [-20100, 40100, 90]]
+  fpv_run: [TREE_LINE_HAF, [-19200, 40800, 20], [-19900, 40200, 15]]
+  light_aircraft_route: [[-45000, 55000, 1500], [-30000, 48000, 1800], [-14000, 44000, 1500], [-4000, 38000, 1200]]
+
+sensor_sets:
+  sector:
+    - {type: radar.long, id: 1, name: R1 ridge radar, pos: RIDGE_RADAR, calibration: cb-2026-09}
+    - {type: radar.medium, id: 2, name: R2 HAF radar, pos: [-20500, 39500, 30], calibration: cb-2026-09}
+    - {type: acoustic, id: 3, name: A3 acoustic node upper Vell, pos: [30000, -18000, 40], calibration: cb-2026-08}
+    - {type: acoustic, id: 5, name: A5 acoustic node mid Vell, pos: [16000, -9000, 30], calibration: cb-2026-08}
+    - {type: acoustic, id: 9, name: A9 acoustic node coast, pos: [-28000, 5000, 10], calibration: cb-2026-08}
+    - {type: radar.short, id: 4, name: F4 OPS counter-UAS radar, pos: [500, 300, 20], calibration: cb-2026-09}
+    - {type: eo-ir, id: 6, name: C6 OPS camera, pos: [400, -200, 25], calibration: cb-2026-09}
+  port:
+    - {type: radar.coastal, id: 7, name: R7 KAL coastal radar, pos: [-25500, 2800, 35], calibration: cb-2026-09}
+    - {type: eo-ir, id: 8, name: C8 KAL camera, pos: [-25200, 2600, 30], calibration: cb-2026-09}
+    - {type: ais, id: 10, name: AIS receiver KAL, pos: [-25000, 2000, 40], calibration: null}
+  airfield:
+    - {type: radar.short, id: 11, name: F11 HAF counter-UAS radar, pos: [-19800, 40400, 15], calibration: cb-2026-09}
+    - {type: rf, id: 12, name: F12 HAF RF detector, pos: [-19700, 40600, 20], calibration: cb-2026-09}
+    - {type: eo-ir, id: 13, name: C13 HAF camera, pos: [-19900, 40300, 20], calibration: cb-2026-09}
+    - {type: adsb, id: 14, name: ADS-B receiver HAF, pos: [-20000, 40000, 30], calibration: null}
+    - {type: iff, id: 15, name: IFF interrogator HAF, pos: [-20200, 39800, 30], calibration: cb-2026-09}
+  land:
+    - {type: radar.ground, id: 16, name: G16 ridge ground radar, pos: RIDGE_GSR, calibration: cb-2026-09}
+    - {type: isr-video, id: 17, name: V17 ISR sortie 1, pos: [40000, -15000, 2500], calibration: cb-2026-07, overrides: {bias_m: {east: 35, north: -20}}}
+    - {type: isr-video, id: 18, name: V18 ISR sortie 2, pos: [50000, -20000, 2500], calibration: cb-2026-09}
+    - {type: acoustic, id: 19, name: A19 battery-location array, pos: [12000, -5000, 60], calibration: cb-2026-08}
+
+scenarios:
+  - id: TT-01
+    name: Night raid of propeller drones with mixed routes and decoys
+    vignette: VG-01
+    thread: MT-01
+    narrative: Forty-five propeller one-way attack drones in three streams, two along the Vell below the ridge and one from the sea over Kalsund, six decoys with reflectors among them, arriving at two to four per minute over an hour; the medium-range system at HAF is held for missiles.
+    duration_s: 4200
+    start_time_of_day: "01:38:00"
+    sensors: [sector, port]
+    entities:
+      - {class: air.owa-prop, platform: shahed-136, side: red, count: 18, spawn_s: [0, 3000], route: vell_valley, group: stream-south}
+      - {class: air.owa-prop, platform: shahed-136, side: red, count: 15, spawn_s: [200, 3200], route: vell_valley_north, group: stream-north}
+      - {class: air.owa-prop, platform: shahed-136, side: red, count: 6, spawn_s: [900, 3300], route: sea_stream, group: stream-sea}
+      - {class: air.owa-prop, platform: shahed-136, side: red, count: 6, spawn_s: [0, 3300], route: vell_valley, group: decoys, decoy: true}
+    events:
+      - {t: 0, kind: launch_warning, note: "neighbouring sector reports a raid crossing at 01:10"}
+    expected:
+      entities: 45
+      decoys: 6
+      arrival_rate_per_min: [2, 4]
+      assets_threatened: [OPS, KAL]
+      success: no drone reaches OPS; at most two reach KAL infrastructure; every engagement recorded (MOE-01, MOE-05)
+    sample: {duration_s: 480, entity_scale: 0.25, sensors: [sector], seed: 1701}
+  - id: TT-02
+    name: Cruise-missile salvo with decoys during the raid
+    vignette: VG-02
+    thread: MT-02
+    narrative: The raid of TT-01 plus four subsonic cruise missiles routed low along the Vell to arrive at OPS and HAF at 02:00, two decoy missiles among them, and a peer launch warning eight minutes before detection; the area layer must find the fast tracks in the drone picture.
+    duration_s: 1500
+    start_time_of_day: "01:50:00"
+    sensors: [sector, airfield]
+    entities:
+      - {class: air.owa-prop, platform: shahed-136, side: red, count: 12, spawn_s: [0, 900], route: vell_valley, group: raid}
+      - {class: air.cruise-subsonic, platform: kalibr, side: red, count: 2, spawn_s: [480, 520], route: vell_valley, group: salvo-ops}
+      - {class: air.cruise-subsonic, platform: kh-101, side: red, count: 2, spawn_s: [500, 540], route: sea_to_haf, group: salvo-haf}
+      - {class: air.cruise-subsonic, platform: kalibr, side: red, count: 2, spawn_s: [490, 530], route: vell_valley_north, group: decoy-missiles, decoy: true, no_terminal: true}
+      - {class: air.interceptor, platform: pac-3, side: blue, count: 2, spawn_s: [1080, 1140], route: none, launch: HAF, group: interceptors, target_group: salvo-haf}
+    events:
+      - {t: 0, kind: launch_warning, note: "peer launch warning 01:52"}
+    expected:
+      entities: 20
+      fast_tracks: 6
+      decoys: 2
+      success: every missile engaged by the area layer or its target warned with sixty seconds; decoys draw at most one interceptor each; decision path in seconds (MOP-07)
+    sample: {duration_s: 420, entity_scale: 0.5, sensors: [sector], seed: 1702}
+  - id: TT-03
+    name: Multirotor and fibre-optic FPV at a site
+    vignette: VG-03
+    thread: MT-03
+    narrative: A consumer multirotor over the HAF apron in daylight, driven off by jamming; twelve minutes later an FPV on a fibre-optic tether approaches the site cell's mast from a tree line at 120 km/h.
+    duration_s: 1200
+    start_time_of_day: "14:18:00"
+    sensors: [airfield]
+    entities:
+      - {class: air.small-multirotor, platform: mavic-3, side: red, count: 1, spawn_s: [100, 100], route: haf_apron, group: recce}
+      - {class: air.fpv, platform: fpv-strike-quad, side: red, count: 1, spawn_s: [840, 840], route: fpv_run, group: fpv, emitting: false}
+    events: []
+    expected:
+      entities: 2
+      success: the multirotor is driven off without jamming inside the navigation geofence; the FPV is warned in time; both recorded; sensors re-tasked
+    sample: {duration_s: 1200, entity_scale: 1.0, sensors: [airfield], seed: 1703}
+  - id: TT-04
+    name: USV group at night against the anchorage
+    vignette: VG-04
+    thread: MT-04
+    narrative: Four uncrewed surface vessels from the west at 38 knots, no AIS, in a loose line; two ships at anchor; the boom open for a departing tanker; sea state 4; one USV lost in clutter and reacquired by camera cue.
+    duration_s: 1200
+    start_time_of_day: "03:02:00"
+    sensors: [port, sector]
+    entities:
+      - {class: sea.usv, platform: magura-v5, side: red, count: 4, spawn_s: [0, 120], route: usv_approach, group: usv-line, spacing_m: 600}
+      - {class: sea.amphibious-auxiliary, platform: tanker-coastal, side: civil, count: 2, spawn_s: [0, 0], route: none, phases: [anchored], at: KAL_ANCHORAGE, group: anchored}
+      - {class: sea.amphibious-auxiliary, platform: tanker-coastal, side: civil, count: 1, spawn_s: [0, 0], route: coastal_lane_n, reverse: true, group: departing-tanker}
+      - {class: sea.fast-craft, platform: gyurza-m, side: blue, count: 2, spawn_s: [360, 400], route: usv_approach, reverse: true, group: patrol}
+    events:
+      - {t: 0, kind: sea_state, value: 4}
+    expected:
+      entities: 9
+      success: no USV reaches a ship or the port; the lost USV reacquired within five minutes; the helicopter not sent
+    sample: {duration_s: 420, entity_scale: 1.0, sensors: [port], seed: 1704}
+  - id: TT-05
+    name: Dense compliant surface traffic with anomalies
+    vignette: VG-05
+    thread: MT-05
+    narrative: One hundred and forty vessels in the approaches on a weekday afternoon, coastal shipping, ferries, fishing boats, two patrol boats, a survey vessel; one fishing boat with AIS off loitering near the outfall; one spoofed AIS position for a coaster.
+    duration_s: 3600
+    start_time_of_day: "12:00:00"
+    sensors: [port]
+    entities:
+      - {class: sea.amphibious-auxiliary, platform: tanker-coastal, side: civil, count: 60, spawn_s: [0, 2400], route: coastal_lane_n, group: shipping-n}
+      - {class: sea.amphibious-auxiliary, platform: tanker-coastal, side: civil, count: 40, spawn_s: [0, 2400], route: coastal_lane_s, reverse: true, group: shipping-s}
+      - {class: sea.amphibious-auxiliary, platform: fishing-vessel, side: civil, count: 35, spawn_s: [0, 1800], route: coastal_lane_s, group: fishing, phases: [transit, loiter]}
+      - {class: sea.fast-craft, platform: gyurza-m, side: blue, count: 2, spawn_s: [0, 0], route: coastal_lane_n, group: patrol}
+      - {class: sea.amphibious-auxiliary, platform: fishing-vessel, side: civil, count: 1, spawn_s: [600, 600], route: none, phases: [loiter], at: [-27000, -1500, 0], group: ais-off-loiterer, ais: false}
+      - {class: sea.amphibious-auxiliary, platform: tanker-coastal, side: civil, count: 1, spawn_s: [1200, 1200], route: coastal_lane_n, group: spoofed-coaster, ais_spoof_offset_m: [6000, 4000]}
+    events: []
+    expected:
+      entities: 139
+      anomalies: 2
+      success: every vessel a track with identity or anomaly; both anomalies flagged within two minutes (MOP-26); false tracks under the display threshold (MOP-04)
+    sample: {duration_s: 420, entity_scale: 0.10, sensors: [port], seed: 1705}
+  - id: TT-06
+    name: Battery and convoy with ISR gaps and a biased sensor
+    vignette: VG-06
+    thread: MT-06
+    narrative: A self-propelled battery of four shoot-and-moving from wood lines east of the ridge; a resupply convoy of eight trucks on the valley road at night through a twenty-minute gap under tree cover; an ISR UAS orbiting over the ridge; ISR sortie 1 carries an injected position bias for the registration test.
+    duration_s: 5400
+    start_time_of_day: "22:00:00"
+    sensors: [land, sector]
+    entities:
+      - {class: land.spg, platform: 2s19-msta-s, side: red, count: 4, spawn_s: [0, 0], route: none, at: FAR_BANK_WOODS, spacing_m: 200, group: battery}
+      - {class: land.truck, platform: kamaz-truck, side: red, count: 8, spawn_s: [1800, 1800], route: valley_road, spacing_m: 80, group: convoy, cover_gap_s: [2400, 3600]}
+      - {class: air.tactical-isr, platform: orlan-10, side: red, count: 1, spawn_s: [0, 0], route: none, at: EAST_ORBIT, phases: [orbit], group: isr-uas}
+      - {class: land.mobile-ad, platform: patriot-launcher, side: blue, count: 2, spawn_s: [0, 0], route: none, at: [-21000, 39000, 0], phases: [operate], group: own-ad}
+    events:
+      - {t: 1800, kind: fires, note: "acoustic detection of a fire mission at 22:30"}
+    expected:
+      entities: 15
+      identity_gaps: 1
+      bias_sensor: 17
+      success: the battery engaged inside its shoot-and-move window; the convoy's identity survives the gap (MOE-09); the bias between radar and ISR video estimated and removed
+    sample: {duration_s: 900, entity_scale: 0.5, sensors: [land], seed: 1706}
+  - id: TT-07
+    name: Raid under GNSS denial with a radar loss
+    vignette: VG-07
+    thread: MT-07
+    narrative: The raid of TT-01 a week later; from the start the sector is under GNSS jamming from across the border, and twenty minutes in a loitering munition strikes the ridge radar, which goes off the air; coverage must be recomputed and the HAF radar re-tasked.
+    duration_s: 3000
+    start_time_of_day: "01:30:00"
+    sensors: [sector, port]
+    entities:
+      - {class: air.owa-prop, platform: shahed-136, side: red, count: 20, spawn_s: [0, 2400], route: vell_valley, group: stream-south}
+      - {class: air.owa-prop, platform: shahed-136, side: red, count: 10, spawn_s: [300, 2400], route: sea_stream, group: stream-sea}
+      - {class: air.loitering, platform: lancet-3, side: red, count: 1, spawn_s: [600, 600], route: vell_valley, target: RIDGE_RADAR, group: radar-strike}
+    events:
+      - {t: 0, kind: ea_skew, sensors: [3, 5, 9], skew_s: 2.0, until: 3000}
+      - {t: 0, kind: ea_dropout, sensors: [1, 2], multiplier: 1.5, until: 3000}
+      - {t: 1200, kind: sensor_lost, sensor: 1, note: "ridge radar struck 01:50"}
+      - {t: 1380, kind: sensor_retasked, sensor: 2, note: "HAF radar to search pattern upper Vell"}
+    expected:
+      entities: 31
+      skewed_sensors: [3, 5, 9]
+      lost_sensor: 1
+      success: operators know within a minute what they cannot see (MOE-10, 30 s); no decision on a stale track without acknowledgement; the loss a formal accepted gap
+    sample: {duration_s: 1500, entity_scale: 0.3, sensors: [sector], seed: 1707}
+  - id: TT-08
+    name: Mixed friendly, civil, and hostile air traffic with cooperative sources
+    vignette: VG-08
+    thread: MT-08
+    narrative: A busy afternoon at HAF, airliners on the corridor with ADS-B, two friendly fighters returning without a filed plan change but with IFF, a friendly helicopter, an adversary ISR UAS loitering at altitude sixty kilometres east, and a light aircraft with an intermittent transponder.
+    duration_s: 5400
+    start_time_of_day: "15:00:00"
+    sensors: [sector, airfield]
+    entities:
+      - {class: air.civil-airliner, platform: airliner-a320, side: civil, count: 6, spawn_s: [0, 4800], route: civil_corridor, group: airliners, adsb: true}
+      - {class: air.tactical-fixed-wing, platform: f-16, side: blue, count: 2, spawn_s: [1800, 1830], route: fighter_return, group: fighters, iff: true}
+      - {class: air.rotary-wing, platform: mi-8, side: blue, count: 1, spawn_s: [600, 600], route: sea_to_haf, group: helicopter, iff: true}
+      - {class: air.tactical-isr, platform: orlan-10, side: red, count: 1, spawn_s: [0, 0], route: none, at: EAST_ORBIT, phases: [orbit], group: isr-uas}
+      - {class: air.light-aircraft, platform: cessna-172, side: civil, count: 1, spawn_s: [2400, 2400], route: light_aircraft_route, group: light-aircraft, adsb_intermittent: 0.6}
+    events: []
+    expected:
+      entities: 11
+      hostile: 1
+      success: no friendly or civil track declared hostile (MOE-02); the ISR UAS declared with recorded evidence (MOP-24); the unknown resolved by tasking
+    sample: {duration_s: 900, entity_scale: 1.0, sensors: [airfield], seed: 1708}
+  - id: TT-09
+    name: TT-01 replayed under two laydowns
+    vignette: VG-09
+    thread: MT-09
+    narrative: The raid of TT-01 replayed under the current laydown (A) and a sea-weighted laydown (B) with the HAF radar moved to the coast and a second gun at Kalsund, to show the rehearsal effect; the same seed so only the laydown differs.
+    duration_s: 4200
+    start_time_of_day: "13:00:00"
+    sensors: [sector, port]
+    base: TT-01
+    variants:
+      - {id: laydown-A, sensors: [sector, port]}
+      - {id: laydown-B, sensors: [sector, port], moves: [{sensor: 2, pos: [-28000, 8000, 30]}]}
+    entities: inherit
+    events: []
+    expected:
+      success: laydown B engages the sea stream earlier than A (MOE-12); identical truth in both variants
+    sample: {duration_s: 480, entity_scale: 0.25, sensors: [sector, port], seed: 1701, variant: laydown-B}
+  - id: TT-10
+    name: TT-01 with a mid-raid link loss at the port cell
+    vignette: VG-10
+    thread: MT-10
+    narrative: The raid of TT-01 in progress; as the sea stream reaches Kalsund the link between the KAL desktop and the sector node fails for eleven minutes; the port cell continues on local sensors under delegated authority and reconciles on reconnection.
+    duration_s: 4200
+    start_time_of_day: "01:38:00"
+    sensors: [sector, port]
+    base: TT-01
+    entities: inherit
+    events:
+      - {t: 1500, kind: link_lost, node: KAL, until: 2160}
+    expected:
+      link_outage_s: 660
+      success: nothing recorded offline is lost (MOE-11); the one conflict visible and resolved; the operator saw the backend state throughout
+    sample: {duration_s: 480, entity_scale: 0.25, sensors: [sector, port], seed: 1701, events: [{t: 120, kind: link_lost, node: KAL, until: 360}]}

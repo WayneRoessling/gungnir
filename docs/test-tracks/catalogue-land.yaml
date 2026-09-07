@@ -1,0 +1,326 @@
+# Land platforms (plan 07 catalogue). See catalogue.yaml for the field definitions.
+# Land speed_mps ranges are cross-country minimum to road maximum; altitude is
+# terrain-following (0 above ground) in the generator.
+domain: land
+reviewer: subject-matter reviewer (land and fires), pending
+platforms:
+  - id: t-72
+    name: T-72 / T-80 / T-90 family
+    class: land.mbt
+    side: both
+    role: main battle tank
+    speed_mps: [0, 19]
+    cross_country_mps: [5, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.5]
+    endurance_h: [6, 10]
+    range_km: [400, 550]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio
+    sources:
+      - {ref: "Wikipedia articles T-72, T-80, T-90, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: leopard-2
+    name: Leopard 2 / Challenger 2 / M1 Abrams
+    class: land.mbt
+    side: blue
+    role: main battle tank
+    speed_mps: [0, 20]
+    cross_country_mps: [5, 13]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.5]
+    endurance_h: [6, 10]
+    range_km: [400, 550]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio; blue-force tracking when configured
+    sources:
+      - {ref: "Manufacturer public specifications; Wikipedia articles Leopard 2, Challenger 2, M1 Abrams, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: bmp-2
+    name: BMP-2 / BMP-3
+    class: land.ifv
+    side: both
+    role: infantry fighting vehicle
+    speed_mps: [0, 19]
+    cross_country_mps: [5, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.5]
+    endurance_h: [8, 12]
+    range_km: [550, 600]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio
+    sources:
+      - {ref: "Wikipedia articles BMP-2 and BMP-3, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: bradley
+    name: M2 Bradley / CV90 / Marder
+    class: land.ifv
+    side: blue
+    role: infantry fighting vehicle
+    speed_mps: [0, 19]
+    cross_country_mps: [5, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.5]
+    endurance_h: [8, 12]
+    range_km: [400, 500]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio; blue-force tracking when configured
+    sources:
+      - {ref: "Manufacturer public specifications; Wikipedia articles M2 Bradley, CV90, Marder, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: btr-82
+    name: BTR-82 / BTR-80
+    class: land.apc
+    side: both
+    role: wheeled armoured personnel carrier
+    speed_mps: [0, 22]
+    cross_country_mps: [6, 14]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.5]
+    endurance_h: [8, 12]
+    range_km: [600, 700]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio
+    sources:
+      - {ref: "Wikipedia article BTR-82, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: stryker
+    name: Stryker / M113 / MaxxPro
+    class: land.apc
+    side: blue
+    role: armoured personnel carrier and MRAP
+    speed_mps: [0, 29]
+    cross_country_mps: [5, 14]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.5]
+    endurance_h: [8, 12]
+    range_km: [480, 700]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio; blue-force tracking when configured
+    sources:
+      - {ref: "Manufacturer public specifications; Wikipedia articles Stryker, M113, MaxxPro, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: 2s19-msta-s
+    name: 2S19 Msta-S / 2S3 Akatsiya
+    class: land.spg
+    side: both
+    role: self-propelled howitzer
+    speed_mps: [0, 17]
+    cross_country_mps: [4, 10]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.4]
+    endurance_h: [8, 12]
+    range_km: [450, 500]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio; firing signature (acoustic, flash) when shooting
+    sources:
+      - {ref: "Wikipedia articles 2S19 Msta and 2S3 Akatsiya, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: pzh-2000
+    name: PzH 2000 / Caesar / M109 / Krab
+    class: land.spg
+    side: blue
+    role: self-propelled howitzer
+    speed_mps: [0, 28]
+    cross_country_mps: [4, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.4]
+    endurance_h: [8, 12]
+    range_km: [350, 600]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio; firing signature when shooting
+    sources:
+      - {ref: "Manufacturer public specifications; Wikipedia articles PzH 2000, CAESAR, M109, AHS Krab, accessed 2026-09", fields: [speed, range], note: "Caesar (truck) is the fast end of the range"}
+    confidence: high
+  - id: bm-21-grad
+    name: BM-21 Grad / Tornado-S
+    class: land.mrl
+    side: both
+    role: multiple rocket launcher
+    speed_mps: [0, 24]
+    cross_country_mps: [4, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.4]
+    endurance_h: [8, 12]
+    range_km: [450, 750]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio; firing signature when shooting
+    sources:
+      - {ref: "Wikipedia articles BM-21 Grad and Tornado (multiple rocket launcher), accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: himars
+    name: M142 HIMARS / M270
+    class: land.mrl
+    side: blue
+    role: multiple rocket launcher
+    speed_mps: [0, 26]
+    cross_country_mps: [4, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.4]
+    endurance_h: [8, 12]
+    range_km: [480, 640]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio; firing signature when shooting
+    sources:
+      - {ref: "Manufacturer and US Army public fact sheets; Wikipedia articles M142 HIMARS and M270, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: buk
+    name: Buk / Tor / Pantsir vehicles
+    class: land.mobile-ad
+    side: red
+    role: mobile air-defense system vehicle
+    speed_mps: [0, 25]
+    cross_country_mps: [4, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.4]
+    endurance_h: [8, 12]
+    range_km: [500, 700]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: surveillance and engagement radars when operating; radio
+    sources:
+      - {ref: "Wikipedia articles Buk missile system, Tor missile system, Pantsir missile system, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: patriot-launcher
+    name: Patriot and NASAMS launcher vehicles; Gepard
+    class: land.mobile-ad
+    side: blue
+    role: mobile air-defense system vehicle
+    speed_mps: [0, 25]
+    cross_country_mps: [4, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.4]
+    endurance_h: [8, 12]
+    range_km: [400, 700]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: engagement radar when operating; radio; blue-force tracking
+    sources:
+      - {ref: "Manufacturer public specifications for the M983 HEMTT and Gepard; Wikipedia articles, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: krasukha
+    name: Krasukha / Leer-3 electronic-warfare vehicles
+    class: land.ew
+    side: red
+    role: electronic-warfare vehicle
+    speed_mps: [0, 25]
+    cross_country_mps: [4, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.4]
+    endurance_h: [8, 12]
+    range_km: [500, 900]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: high-power jamming when operating (the modelled effect is on sensors, not the technique)
+    sources:
+      - {ref: "Wikipedia articles Krasukha and Leer-3, accessed 2026-09", fields: [speed], note: "carrier-vehicle figures; EW performance not modelled"}
+    confidence: medium
+  - id: bukovel-ad
+    name: Bukovel-AD class counter-UAS EW
+    class: land.ew
+    side: blue
+    role: counter-UAS electronic-warfare system (vehicle or trailer)
+    speed_mps: [0, 25]
+    cross_country_mps: [2, 10]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.4]
+    endurance_h: [8, 24]
+    range_km: [300, 600]
+    rcs_class: medium
+    ir_class: medium
+    acoustic_class: moderate
+    emissions: jamming when operating
+    sources:
+      - {ref: "Manufacturer public statements (Proximus) and press reporting", fields: [speed], note: "carrier-vehicle figures only"}
+    confidence: low
+  - id: kamaz-truck
+    name: KamAZ / Ural / HEMTT logistics trucks
+    class: land.truck
+    side: both
+    role: logistics truck
+    speed_mps: [0, 28]
+    cross_country_mps: [3, 12]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.4]
+    endurance_h: [8, 14]
+    range_km: [600, 1000]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio
+    sources:
+      - {ref: "Manufacturer public specifications; Wikipedia articles KamAZ-4310, Ural-4320, HEMTT, accessed 2026-09", fields: [speed, range]}
+    confidence: high
+  - id: small-ugv
+    name: Small logistics and engineering UGVs
+    class: land.ugv
+    side: both
+    role: uncrewed ground vehicle
+    speed_mps: [0, 6]
+    cross_country_mps: [1, 4]
+    altitude_m: [0, 0]
+    typical_altitude_m: [0, 0]
+    climb_mps: [0, 0]
+    turn_g: [0.1, 0.6]
+    endurance_h: [2, 10]
+    range_km: [10, 60]
+    rcs_class: small
+    ir_class: low
+    acoustic_class: quiet
+    emissions: control link
+    sources:
+      - {ref: "Public reporting on small UGVs in Ukraine, 2024 to 2025", fields: [speed, range], note: "many types; envelope is conservative"}
+    confidence: low

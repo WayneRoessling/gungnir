@@ -1,0 +1,619 @@
+# Air platforms (plan 07 catalogue). See catalogue.yaml for the field definitions.
+domain: air
+reviewer: subject-matter reviewer (air defense), pending
+platforms:
+  - id: shahed-136
+    name: Shahed-136 / Geran-2 family
+    class: air.owa-prop
+    side: red
+    role: one-way attack UAS, propeller
+    speed_mps: [40, 52]
+    altitude_m: [50, 4000]
+    typical_altitude_m: [100, 1500]
+    climb_mps: [1, 5]
+    turn_g: [0.3, 1.0]
+    endurance_h: [8, 12]
+    range_km: [1500, 2500]
+    rcs_class: small
+    ir_class: low
+    acoustic_class: loud
+    emissions: none (inertial and satellite navigation); some variants carry a datalink
+    sources:
+      - {ref: "Public reporting and research-institute analyses of the Shahed-136 and Geran-2, 2022 to 2025", fields: [speed, altitude, range], note: "cruise 150 to 185 km/h widely reported; range varies by variant"}
+      - {ref: "Wikipedia article HESA Shahed 136, accessed 2026-09", fields: [speed, range, endurance], note: "manufacturer claims recorded as claims"}
+    confidence: medium
+  - id: geran-3-jet
+    name: Jet-powered Geran variant (Geran-3 class)
+    class: air.owa-jet
+    side: red
+    role: one-way attack UAS, turbojet
+    speed_mps: [80, 170]
+    altitude_m: [50, 5000]
+    typical_altitude_m: [100, 2000]
+    climb_mps: [3, 15]
+    turn_g: [0.5, 1.5]
+    endurance_h: [1.5, 3]
+    range_km: [600, 1000]
+    rcs_class: small
+    ir_class: medium
+    acoustic_class: loud
+    emissions: none
+    sources:
+      - {ref: "Public reporting on jet-powered Geran variants, 2024 to 2025", fields: [speed, range], note: "300 to 600 km/h reported from few sources"}
+    confidence: low
+  - id: ua-long-range-strike-uas
+    name: Ukrainian long-range strike UAS (Liutyi, UJ-22 class)
+    class: air.owa-prop
+    side: blue
+    role: one-way attack UAS, propeller
+    speed_mps: [28, 50]
+    altitude_m: [50, 3000]
+    typical_altitude_m: [100, 1000]
+    climb_mps: [1, 5]
+    turn_g: [0.3, 1.0]
+    endurance_h: [6, 10]
+    range_km: [700, 1000]
+    rcs_class: small
+    ir_class: low
+    acoustic_class: loud
+    emissions: none
+    sources:
+      - {ref: "Public reporting on Ukrainian long-range strike UAS, 2023 to 2025", fields: [speed, range], note: "ranges of 700 to over 1000 km reported for several types"}
+    confidence: low
+  - id: lancet-3
+    name: Lancet-3
+    class: air.loitering
+    side: red
+    role: loitering munition
+    speed_mps: [22, 31]
+    dash_speed_mps: [70, 85]
+    altitude_m: [50, 5000]
+    typical_altitude_m: [500, 3000]
+    climb_mps: [2, 8]
+    turn_g: [0.5, 2.0]
+    endurance_h: [0.5, 0.7]
+    range_km: [40, 70]
+    rcs_class: very-small
+    ir_class: low
+    acoustic_class: moderate
+    emissions: video datalink until the terminal dive
+    sources:
+      - {ref: "Manufacturer public statements and press reporting on Lancet-3", fields: [speed, endurance, range], note: "terminal dive of about 300 km/h reported"}
+      - {ref: "Wikipedia article ZALA Lancet, accessed 2026-09", fields: [speed, endurance]}
+    confidence: medium
+  - id: switchblade-600
+    name: Switchblade 600
+    class: air.loitering
+    side: blue
+    role: loitering munition
+    speed_mps: [30, 52]
+    altitude_m: [50, 4500]
+    typical_altitude_m: [300, 2000]
+    climb_mps: [2, 8]
+    turn_g: [0.5, 2.0]
+    endurance_h: [0.6, 0.7]
+    range_km: [40, 90]
+    rcs_class: very-small
+    ir_class: low
+    acoustic_class: moderate
+    emissions: datalink
+    sources:
+      - {ref: "Manufacturer public specification (AeroVironment)", fields: [speed, endurance, range]}
+    confidence: high
+  - id: mavic-3
+    name: DJI Mavic 3 class multirotor
+    class: air.small-multirotor
+    side: both
+    role: reconnaissance and drop multirotor
+    speed_mps: [0, 21]
+    altitude_m: [0, 500]
+    typical_altitude_m: [30, 150]
+    climb_mps: [0, 8]
+    turn_g: [0.5, 2.0]
+    endurance_h: [0.5, 0.75]
+    range_km: [5, 15]
+    rcs_class: very-small
+    ir_class: low
+    acoustic_class: quiet
+    emissions: control and video link
+    sources:
+      - {ref: "Manufacturer public specification (DJI)", fields: [speed, endurance, altitude]}
+    confidence: high
+  - id: fpv-strike-quad
+    name: FPV strike quadcopter (7 to 10 inch)
+    class: air.fpv
+    side: both
+    role: first-person-view strike UAS
+    speed_mps: [15, 45]
+    altitude_m: [1, 300]
+    typical_altitude_m: [2, 60]
+    climb_mps: [0, 15]
+    turn_g: [1.0, 4.0]
+    endurance_h: [0.15, 0.35]
+    range_km: [5, 20]
+    rcs_class: very-small
+    ir_class: low
+    acoustic_class: quiet
+    emissions: analogue video and control link; fibre-optic variants emit nothing
+    sources:
+      - {ref: "Public reporting and hobbyist component specifications for FPV strike drones, 2023 to 2025", fields: [speed, endurance, range], note: "speed varies widely with payload; fibre-optic ranges of 10 to 20 km reported"}
+    confidence: medium
+  - id: orlan-10
+    name: Orlan-10
+    class: air.tactical-isr
+    side: red
+    role: tactical fixed-wing ISR UAS
+    speed_mps: [21, 42]
+    altitude_m: [100, 5000]
+    typical_altitude_m: [1000, 3000]
+    climb_mps: [1, 5]
+    turn_g: [0.3, 1.0]
+    endurance_h: [14, 18]
+    range_km: [120, 600]
+    rcs_class: small
+    ir_class: low
+    acoustic_class: moderate
+    emissions: datalink
+    sources:
+      - {ref: "Wikipedia article Orlan-10, accessed 2026-09", fields: [speed, altitude, endurance]}
+      - {ref: "Published open-source analyses of recovered Orlan-10 airframes", fields: [emissions]}
+    confidence: high
+  - id: leleka-100
+    name: Leleka-100 / Furia class
+    class: air.tactical-isr
+    side: blue
+    role: tactical fixed-wing ISR UAS
+    speed_mps: [18, 33]
+    altitude_m: [100, 3000]
+    typical_altitude_m: [500, 2000]
+    climb_mps: [1, 4]
+    turn_g: [0.3, 1.0]
+    endurance_h: [2.5, 4]
+    range_km: [45, 100]
+    rcs_class: small
+    ir_class: low
+    acoustic_class: quiet
+    emissions: datalink
+    sources:
+      - {ref: "Manufacturer public specifications (DeViRo, Athlon Avia)", fields: [speed, altitude, endurance]}
+    confidence: medium
+  - id: tb2
+    name: Bayraktar TB2
+    class: air.male-uas
+    side: blue
+    role: medium-altitude long-endurance UAS
+    speed_mps: [36, 61]
+    altitude_m: [500, 7600]
+    typical_altitude_m: [4000, 6000]
+    climb_mps: [2, 8]
+    turn_g: [0.3, 1.5]
+    endurance_h: [24, 27]
+    range_km: [150, 300]
+    rcs_class: medium
+    ir_class: medium
+    acoustic_class: moderate
+    emissions: datalink; radar altimeter
+    sources:
+      - {ref: "Manufacturer public specification (Baykar)", fields: [speed, altitude, endurance]}
+    confidence: high
+  - id: orion-uas
+    name: Orion (Inokhodets)
+    class: air.male-uas
+    side: red
+    role: medium-altitude long-endurance UAS
+    speed_mps: [33, 56]
+    altitude_m: [500, 7500]
+    typical_altitude_m: [3000, 6000]
+    climb_mps: [2, 8]
+    turn_g: [0.3, 1.5]
+    endurance_h: [20, 24]
+    range_km: [150, 300]
+    rcs_class: medium
+    ir_class: medium
+    acoustic_class: moderate
+    emissions: datalink
+    sources:
+      - {ref: "Wikipedia article Kronshtadt Orion, accessed 2026-09", fields: [speed, altitude, endurance], note: "manufacturer figures"}
+    confidence: medium
+  - id: kalibr
+    name: Kalibr (3M-14) land-attack cruise missile
+    class: air.cruise-subsonic
+    side: red
+    role: subsonic cruise missile
+    speed_mps: [230, 275]
+    altitude_m: [20, 1000]
+    typical_altitude_m: [50, 150]
+    climb_mps: [0, 50]
+    turn_g: [1.0, 4.0]
+    endurance_h: [1.5, 2.5]
+    range_km: [1500, 2500]
+    rcs_class: small
+    ir_class: medium
+    acoustic_class: loud
+    emissions: radar altimeter; terminal seeker on some variants
+    sources:
+      - {ref: "Wikipedia article 3M-54 Kalibr, accessed 2026-09", fields: [speed, altitude, range], note: "range figures for the land-attack variant vary widely"}
+      - {ref: "Published open-source analyses of cruise-missile strikes, 2022 to 2025", fields: [altitude], note: "terrain-following at low altitude"}
+    confidence: medium
+  - id: kh-101
+    name: Kh-101
+    class: air.cruise-subsonic
+    side: red
+    role: air-launched subsonic cruise missile
+    speed_mps: [190, 270]
+    altitude_m: [30, 6000]
+    typical_altitude_m: [30, 100]
+    climb_mps: [0, 50]
+    turn_g: [1.0, 3.0]
+    endurance_h: [3, 5]
+    range_km: [2500, 4500]
+    rcs_class: very-small
+    ir_class: medium
+    acoustic_class: loud
+    emissions: radar altimeter
+    sources:
+      - {ref: "Wikipedia article Kh-101, accessed 2026-09", fields: [speed, altitude, range]}
+    confidence: medium
+  - id: storm-shadow
+    name: Storm Shadow / SCALP-EG
+    class: air.cruise-subsonic
+    side: blue
+    role: air-launched subsonic cruise missile
+    speed_mps: [270, 310]
+    altitude_m: [30, 1000]
+    typical_altitude_m: [30, 100]
+    climb_mps: [0, 60]
+    turn_g: [1.0, 4.0]
+    endurance_h: [0.3, 0.6]
+    range_km: [250, 560]
+    rcs_class: small
+    ir_class: medium
+    acoustic_class: loud
+    emissions: radar altimeter; imaging infrared terminal seeker (passive)
+    sources:
+      - {ref: "Manufacturer public specification (MBDA)", fields: [speed, range]}
+      - {ref: "Wikipedia article Storm Shadow, accessed 2026-09", fields: [altitude, range]}
+    confidence: high
+  - id: neptune
+    name: R-360 Neptune
+    class: air.cruise-subsonic
+    side: blue
+    role: anti-ship and land-attack subsonic cruise missile
+    speed_mps: [250, 310]
+    altitude_m: [3, 300]
+    typical_altitude_m: [10, 50]
+    climb_mps: [0, 40]
+    turn_g: [1.0, 4.0]
+    endurance_h: [0.3, 0.5]
+    range_km: [280, 400]
+    rcs_class: small
+    ir_class: medium
+    acoustic_class: loud
+    emissions: active radar seeker (anti-ship variant) in the terminal phase
+    sources:
+      - {ref: "Wikipedia article R-360 Neptune, accessed 2026-09", fields: [speed, altitude, range]}
+    confidence: medium
+  - id: kh-22
+    name: Kh-22 / Kh-32
+    class: air.cruise-supersonic
+    side: red
+    role: supersonic air-launched cruise missile
+    speed_mps: [900, 1400]
+    altitude_m: [500, 40000]
+    typical_altitude_m: [12000, 25000]
+    climb_mps: [50, 300]
+    turn_g: [1.0, 5.0]
+    endurance_h: [0.15, 0.3]
+    range_km: [600, 1000]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: active radar seeker
+    sources:
+      - {ref: "Wikipedia articles Kh-22 and Kh-32, accessed 2026-09", fields: [speed, altitude, range], note: "high-altitude cruise then dive; figures contested"}
+    confidence: low
+  - id: kinzhal
+    name: Kh-47M2 Kinzhal
+    class: air.cruise-supersonic
+    side: red
+    role: air-launched aeroballistic missile
+    speed_mps: [1000, 2000]
+    altitude_m: [1000, 40000]
+    typical_altitude_m: [15000, 30000]
+    climb_mps: [100, 500]
+    turn_g: [1.0, 8.0]
+    endurance_h: [0.1, 0.25]
+    range_km: [1500, 2000]
+    rcs_class: medium
+    ir_class: high
+    acoustic_class: loud
+    emissions: none reported
+    sources:
+      - {ref: "Public reporting and open-source analyses of Kinzhal use, 2023 to 2025", fields: [speed, altitude, range], note: "claimed Mach 10; observed terminal speeds reported far lower; low confidence"}
+    confidence: low
+  - id: iskander-m
+    name: 9K720 Iskander-M (9M723)
+    class: air.ballistic-srbm
+    side: red
+    role: short-range quasi-ballistic missile
+    speed_mps: [700, 2100]
+    altitude_m: [0, 50000]
+    typical_altitude_m: [20000, 50000]
+    climb_mps: [200, 1500]
+    turn_g: [1.0, 10.0]
+    endurance_h: [0.05, 0.12]
+    range_km: [50, 500]
+    rcs_class: medium
+    ir_class: high
+    acoustic_class: loud
+    emissions: none reported; decoys reported
+    sources:
+      - {ref: "Wikipedia article 9K720 Iskander, accessed 2026-09", fields: [speed, altitude, range]}
+      - {ref: "Published open-source analyses of Iskander-M use, 2022 to 2025", fields: [altitude], note: "quasi-ballistic, manoeuvring terminal phase"}
+    confidence: medium
+  - id: atacms
+    name: MGM-140 ATACMS
+    class: air.ballistic-srbm
+    side: blue
+    role: short-range ballistic missile
+    speed_mps: [700, 1200]
+    altitude_m: [0, 50000]
+    typical_altitude_m: [20000, 50000]
+    climb_mps: [200, 1200]
+    turn_g: [1.0, 5.0]
+    endurance_h: [0.05, 0.1]
+    range_km: [70, 300]
+    rcs_class: medium
+    ir_class: high
+    acoustic_class: loud
+    emissions: none
+    sources:
+      - {ref: "Manufacturer and US Army public fact sheets; Wikipedia article MGM-140 ATACMS, accessed 2026-09", fields: [speed, range]}
+    confidence: medium
+  - id: kn-23
+    name: KN-23 class
+    class: air.ballistic-srbm
+    side: red
+    role: short-range quasi-ballistic missile
+    speed_mps: [700, 2000]
+    altitude_m: [0, 50000]
+    typical_altitude_m: [20000, 50000]
+    climb_mps: [200, 1500]
+    turn_g: [1.0, 8.0]
+    endurance_h: [0.08, 0.15]
+    range_km: [400, 900]
+    rcs_class: medium
+    ir_class: high
+    acoustic_class: loud
+    emissions: none reported
+    sources:
+      - {ref: "Public reporting on KN-23 use in Ukraine, 2024 to 2025", fields: [range], note: "few sources; performance largely inferred"}
+    confidence: low
+  - id: kab-umpk
+    name: KAB with UMPK glide kit (FAB-500 to FAB-1500 class)
+    class: air.glide-bomb
+    side: red
+    role: guided glide bomb
+    speed_mps: [180, 300]
+    altitude_m: [0, 15000]
+    typical_altitude_m: [3000, 12000]
+    climb_mps: [-80, 0]
+    turn_g: [0.5, 2.0]
+    endurance_h: [0.03, 0.08]
+    range_km: [40, 70]
+    rcs_class: small
+    ir_class: low
+    acoustic_class: quiet
+    emissions: satellite-navigation receiver only
+    sources:
+      - {ref: "Public reporting and open-source analyses of UMPK glide bombs, 2023 to 2025", fields: [range, altitude], note: "release altitudes and glide ranges reported, speeds derived"}
+    confidence: medium
+  - id: jdam-er
+    name: JDAM-ER class glide bomb
+    class: air.glide-bomb
+    side: blue
+    role: guided glide bomb
+    speed_mps: [180, 300]
+    altitude_m: [0, 12000]
+    typical_altitude_m: [3000, 10000]
+    climb_mps: [-80, 0]
+    turn_g: [0.5, 2.0]
+    endurance_h: [0.03, 0.08]
+    range_km: [40, 75]
+    rcs_class: small
+    ir_class: low
+    acoustic_class: quiet
+    emissions: satellite-navigation receiver only
+    sources:
+      - {ref: "Manufacturer public specification (Boeing); Wikipedia article JDAM, accessed 2026-09", fields: [range]}
+    confidence: medium
+  - id: su-25
+    name: Su-25
+    class: air.tactical-fixed-wing
+    side: both
+    role: ground-attack aircraft
+    speed_mps: [120, 265]
+    altitude_m: [20, 7000]
+    typical_altitude_m: [50, 3000]
+    climb_mps: [10, 58]
+    turn_g: [1.0, 6.5]
+    endurance_h: [1.5, 2.5]
+    range_km: [400, 750]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio; no search radar
+    sources:
+      - {ref: "Wikipedia article Sukhoi Su-25, accessed 2026-09", fields: [speed, altitude, climb, range]}
+    confidence: high
+  - id: su-34
+    name: Su-34
+    class: air.tactical-fixed-wing
+    side: red
+    role: strike fighter
+    speed_mps: [150, 550]
+    altitude_m: [30, 15000]
+    typical_altitude_m: [100, 10000]
+    climb_mps: [20, 230]
+    turn_g: [1.0, 9.0]
+    endurance_h: [2, 4]
+    range_km: [1000, 1500]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: fire-control radar; datalink; jamming pods reported
+    sources:
+      - {ref: "Wikipedia article Sukhoi Su-34, accessed 2026-09", fields: [speed, altitude, range]}
+    confidence: high
+  - id: f-16
+    name: F-16
+    class: air.tactical-fixed-wing
+    side: blue
+    role: multirole fighter
+    speed_mps: [150, 600]
+    altitude_m: [30, 15000]
+    typical_altitude_m: [500, 12000]
+    climb_mps: [20, 250]
+    turn_g: [1.0, 9.0]
+    endurance_h: [1.5, 3]
+    range_km: [500, 1200]
+    rcs_class: medium
+    ir_class: high
+    acoustic_class: loud
+    emissions: fire-control radar; datalink; IFF; ADS-B when configured
+    sources:
+      - {ref: "Manufacturer and US Air Force public fact sheets; Wikipedia article General Dynamics F-16, accessed 2026-09", fields: [speed, altitude, range]}
+    confidence: high
+  - id: ka-52
+    name: Ka-52
+    class: air.rotary-wing
+    side: red
+    role: attack helicopter
+    speed_mps: [0, 85]
+    altitude_m: [5, 5500]
+    typical_altitude_m: [10, 100]
+    climb_mps: [0, 12]
+    turn_g: [0.5, 2.5]
+    endurance_h: [1.5, 2.5]
+    range_km: [400, 500]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radar on some variants; datalink
+    sources:
+      - {ref: "Wikipedia article Kamov Ka-52, accessed 2026-09", fields: [speed, altitude, range]}
+    confidence: high
+  - id: mi-8
+    name: Mi-8 / Mi-17
+    class: air.rotary-wing
+    side: both
+    role: transport and utility helicopter
+    speed_mps: [0, 70]
+    altitude_m: [5, 5000]
+    typical_altitude_m: [20, 300]
+    climb_mps: [0, 10]
+    turn_g: [0.5, 2.0]
+    endurance_h: [2, 4]
+    range_km: [450, 800]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: radio; transponder when configured
+    sources:
+      - {ref: "Wikipedia article Mil Mi-8, accessed 2026-09", fields: [speed, altitude, range]}
+    confidence: high
+  - id: airliner-a320
+    name: Narrow-body airliner (A320 / 737 class)
+    class: air.civil-airliner
+    side: civil
+    role: civil passenger aircraft on a corridor
+    speed_mps: [60, 260]
+    altitude_m: [0, 12500]
+    typical_altitude_m: [8000, 12000]
+    climb_mps: [-15, 15]
+    turn_g: [1.0, 1.6]
+    endurance_h: [3, 6]
+    range_km: [3000, 6000]
+    rcs_class: large
+    ir_class: high
+    acoustic_class: loud
+    emissions: transponder and ADS-B; weather radar
+    sources:
+      - {ref: "Manufacturer public specifications (Airbus A320, Boeing 737); Wikipedia articles, accessed 2026-09", fields: [speed, altitude, range]}
+    confidence: high
+  - id: cessna-172
+    name: Light aircraft (Cessna 172 class)
+    class: air.light-aircraft
+    side: civil
+    role: general aviation
+    speed_mps: [25, 65]
+    altitude_m: [0, 4100]
+    typical_altitude_m: [300, 2500]
+    climb_mps: [-5, 4]
+    turn_g: [1.0, 1.8]
+    endurance_h: [3, 5]
+    range_km: [800, 1200]
+    rcs_class: medium
+    ir_class: medium
+    acoustic_class: moderate
+    emissions: transponder and ADS-B when fitted; often intermittent
+    sources:
+      - {ref: "Manufacturer public specification (Textron Aviation); Wikipedia article Cessna 172, accessed 2026-09", fields: [speed, altitude, endurance, range]}
+    confidence: high
+  - id: pac-3
+    name: Patriot PAC-2 and PAC-3 interceptors
+    class: air.interceptor
+    side: blue
+    role: surface-to-air interceptor missile
+    speed_mps: [1000, 1700]
+    altitude_m: [0, 25000]
+    typical_altitude_m: [1000, 20000]
+    climb_mps: [200, 1500]
+    turn_g: [5.0, 30.0]
+    endurance_h: [0.01, 0.03]
+    range_km: [20, 160]
+    rcs_class: small
+    ir_class: high
+    acoustic_class: loud
+    emissions: datalink; active seeker (PAC-3)
+    sources:
+      - {ref: "Manufacturer public fact sheets (Raytheon, Lockheed Martin); Wikipedia article MIM-104 Patriot, accessed 2026-09", fields: [speed, range]}
+    confidence: medium
+  - id: nasams-amraam
+    name: NASAMS (AIM-120 class) interceptor
+    class: air.interceptor
+    side: blue
+    role: surface-launched interceptor missile
+    speed_mps: [800, 1400]
+    altitude_m: [0, 15000]
+    typical_altitude_m: [200, 10000]
+    climb_mps: [200, 1000]
+    turn_g: [5.0, 30.0]
+    endurance_h: [0.01, 0.02]
+    range_km: [15, 40]
+    rcs_class: small
+    ir_class: high
+    acoustic_class: loud
+    emissions: active radar seeker
+    sources:
+      - {ref: "Manufacturer public specification (Kongsberg, Raytheon); Wikipedia article NASAMS, accessed 2026-09", fields: [speed, range]}
+    confidence: medium
+  - id: s-400-interceptor
+    name: S-300 and S-400 family interceptors (48N6 class)
+    class: air.interceptor
+    side: red
+    role: surface-to-air interceptor missile
+    speed_mps: [1200, 2000]
+    altitude_m: [0, 30000]
+    typical_altitude_m: [1000, 25000]
+    climb_mps: [200, 1500]
+    turn_g: [5.0, 25.0]
+    endurance_h: [0.01, 0.04]
+    range_km: [40, 250]
+    rcs_class: small
+    ir_class: high
+    acoustic_class: loud
+    emissions: semi-active or active seeker
+    sources:
+      - {ref: "Wikipedia articles S-300 and S-400 missile systems, accessed 2026-09", fields: [speed, range], note: "manufacturer claims"}
+    confidence: low

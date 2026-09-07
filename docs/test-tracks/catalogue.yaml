@@ -1,0 +1,19 @@
+# Vehicle catalogue index (plan 07). The catalogue is split by domain so that one
+# subject-matter reviewer owns each file. tools/build_catalogue.py renders
+# vehicle-catalogue.md and platforms/*.md from these; tools/gen_tracks.py reads the
+# platform envelopes. Policy: docs/test-tracks/sourcing-and-legal.md.
+#
+# Every platform entry: id, name, class (classes.yaml id), side (red | blue | both |
+# civil), role, envelope figures as [min, max] ranges in SI units (m/s, m, h, km, g),
+# signature classes (rcs_class: very-small | small | medium | large; ir_class and
+# acoustic_class: low/quiet | medium/moderate | high/loud), emissions, sources (ref,
+# fields, note) and confidence (high | medium | low | unknown). Figures are published
+# approximations organised for tracker testing; the class profile envelope contains
+# every platform in the class.
+
+version: "2026-09-04"
+policy: docs/test-tracks/sourcing-and-legal.md
+includes:
+  - catalogue-air.yaml
+  - catalogue-sea.yaml
+  - catalogue-land.yaml

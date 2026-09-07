@@ -1,0 +1,288 @@
+[workspace]
+resolver = "2"
+members = [
+    # --- Tracking / estimation core: pure, headless, no UI/render deps ---
+    "gungnir-core",
+    "gungnir-coord",
+    "gungnir-filters",
+    "gungnir-association",
+    "gungnir-track",
+    "gungnir-rfs",
+    "gungnir-fusion-async",
+    "gungnir-track-fusion",
+    "gungnir-allocation",
+    "gungnir-scenario",
+    "gungnir-metrics",
+    "gungnir-oracle",
+    "gungnir-testkit",
+
+    # --- Service facades: combine tracking crates into app-facing APIs ---
+    "gungnir-tracking-service",
+    "gungnir-intercept-service",
+
+    # --- Productization layer: docs/gungnir-capabilities.md §8 "Full Crate Map".
+    # Foundational first, since everything else in this group depends on
+    # gungnir-model. ---
+    "gungnir-model",              # Foundational / Critical
+    "gungnir-eventing",           # Foundational / High
+    "gungnir-store",              # Foundational / High
+    "gungnir-config",             # Foundational / High
+    "gungnir-mission",            # Foundational / High
+
+    "gungnir-ingest",             # Sense/Ingest / Critical
+    "gungnir-sensor-management",  # Sense/Ingest / High
+    "gungnir-time",               # Sense/Ingest / Critical
+    "gungnir-interop",            # Sense/Ingest / Medium  (schema catalog, ASTERIX/STANAG codecs)
+
+    "gungnir-identity",           # Understand / High
+    "gungnir-identification",     # Understand / Medium
+    "gungnir-ml",                 # Understand / Medium  (model traits, fake model, dataset extraction; no runtime, GAP-077)
+    "gungnir-geo",                # Understand / Medium
+    "gungnir-analytics",          # Understand / Medium  (line-of-sight, viewshed, coverage volumes)
+
+    "gungnir-policy",             # Assess/Decide / Critical
+    "gungnir-command",            # Assess/Decide / Critical
+    "gungnir-assessment",         # Assess/Decide / Medium
+    "gungnir-decision",           # Assess/Decide / Medium
+    "gungnir-modelops",           # Assess/Decide / Medium
+
+    "gungnir-security",           # Secure/Operate / Critical
+    "gungnir-api",                # Secure/Operate / High
+    "gungnir-observability",      # Secure/Operate / High
+    "gungnir-resilience",         # Secure/Operate / Medium  (offline-first, store-and-forward, reconciliation)
+    "gungnir-collab",             # Secure/Operate / Medium  (shared picture, multi-user authority)
+    "gungnir-workflow",           # Secure/Operate / Medium  (role workspaces, alert lifecycle)
+
+    "gungnir-replay",             # Validate / Lower
+    "gungnir-reporting",          # Validate / Lower
+
+    # --- 3D data ecosystem: I/O + GPU compute, no UI deps ---
+    "gungnir-data",
+    "gungnir-data-fusion",
+
+    # --- Deployment: remote backends + the headless service node (ARCHITECTURE.md §8) ---
+    "gungnir-remote",
+    "gungnir-node",
+
+    # --- UI / rendering: only layer allowed to depend on egui/three-d ---
+    "gungnir-render",
+    "gungnir-viewport3d",
+    "gungnir-ui",
+    "gungnir-app",
+]
+exclude = ["gungnir-fuzz"]  # fuzz crate has its own toolchain/workspace quirks, kept out of default build
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+
+# Lint policy from docs/agentic-coding-standards.md §3.5 and §7: every crate opts in
+# with `[lints] workspace = true`.
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Standard filter notation (f, q, h, r, p) in matrix-heavy code; see §3.5.
+many_single_char_names = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+# Fixed stack per docs/agentic-coding-standards.md (§2, §2.9) plus the UI stack from
+# docs/rust-ui-tech-stack-summary.md. Every crate should pull versions from here,
+# not pin its own, so the workspace stays on one resolved dependency set. The set
+# and its caveats are documented in ARCHITECTURE.md §9.
+[workspace.dependencies]
+# tracking/estimation stack
+nalgebra = { version = "0.33", features = ["serde-serialize"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time", "signal", "net"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.8"
+rand_distr = "0.4"
+proptest = "1"
+criterion = "0.5"
+arrow = "53"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1"
+crossbeam-channel = "0.5"
+# YAML for the plan-07 test-track library (GAP-016, decided 2026-09-06, D-31): the yaml
+# organisation's continuation of serde_yaml, same API, MIT OR Apache-2.0. Test/bench
+# crates only; no production crate reads YAML (docs/agentic-coding-standards.md §2.9).
+yaml_serde = "0.10"
+
+# UI / rendering stack. eframe runs with Renderer::Glow (three-d needs the OpenGL
+# context); wgpu is compute-only and pinned to the line eframe 0.29's optional wgpu
+# feature would use, so enabling that feature never yields two wgpu versions.
+eframe = "0.29"
+egui = "0.29"
+three-d = "0.18"
+wgpu = "22"
+gltf = "1"
+vtkio = "0.6"
+las = { version = "0.9", features = ["laz-parallel"] }
+# GeoTIFF DEMs (GAP-023, decided 2026-09-06): the image-rs TIFF codec, pure Rust;
+# gungnir-data owns the three GeoTIFF tags itself (§2.9, "Terrain").
+tiff = "0.11"
+
+# Docking for the role workspaces (signed off 2026-09-05, D-19;
+# docs/agentic-coding-standards.md §2.9). Pinned to 0.10 because that is the line that
+# depends on egui 0.29, the workspace pin; egui_tiles 0.11 moved to egui 0.30 and would
+# link a second egui. Checked with cargo tree -d against eframe/egui 0.29: no duplicate
+# egui, eframe, emath, or epaint. No member depends on it yet; it enters a member
+# manifest under GAP-075.
+egui_tiles = "0.10"
+
+# API transport stack (signed off 2026-09-05, D-18; docs/agentic-coding-standards.md
+# §2.9). JSON over HTTP plus a WebSocket event stream, per docs/gungnir-api-v1.md,
+# with mutual TLS for machine identities per D-02. rustls throughout rather than
+# native-tls, so neither the Linux node container nor the Windows desktop needs a
+# system OpenSSL and one TLS implementation appears in the SBOM. The tungstenite and
+# tower-http pins match what axum 0.8 and reqwest 0.13 already resolve to, so exactly
+# one copy of each is linked. tokio-tungstenite deliberately takes no TLS feature: the
+# client wraps a tokio-rustls stream built from our own roots and client certificate,
+# rather than bundling a public root store. No member depends on these yet; they enter
+# manifests under GAP-041.
+axum = { version = "0.8", features = ["ws"] }
+tokio-tungstenite = "0.29"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+rustls = "0.23"
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+tower-http = { version = "0.6", features = ["trace", "limit"] }
+# The Sink and Stream traits tokio-tungstenite's socket implements. Already in the
+# tree as its own dependency; named directly because sending and receiving a frame
+# needs the traits in scope. Default features off: only the trait extensions are
+# used, and the executor and io-compat halves are not.
+futures-util = { version = "0.3", default-features = false }
+
+# Cryptography (D-20, signed off 2026-09-05). No cryptographic crate was in this
+# workspace before; D-02 chose the mechanism and not the libraries, the way D-18 chose
+# the transport's. All RustCrypto, so one family and one audit surface.
+#
+# argon2 verifies operator passphrases: memory-hard, so a stolen account store is
+# expensive to attack offline. hmac + sha2 authenticate the short-lived session tokens a
+# node issues and verifies itself -- symmetric rather than public-key, because the issuer
+# is the only verifier and a private key in the process is the conflict that stopped TLS
+# in GAP-041. subtle is named directly so comparisons are obviously constant-time rather
+# than incidentally so.
+#
+# Resolution checked 2026-09-05 against the transport stack: one copy each of argon2,
+# password-hash, hmac, sha2, subtle, digest, generic-array, crypto-common and base64ct.
+argon2 = "0.5"
+password-hash = { version = "0.5", features = ["getrandom"] }
+hmac = "0.12"
+sha2 = "0.10"
+subtle = "2"
+
+# gRPC, the second transport for peer C2 systems (D-21, signed off 2026-09-05).
+# Deliberately unused: no member depends on these, and none may until a gap builds the
+# gRPC surface. tonic 0.14 and prost 0.14 share axum's hyper, tower and http rather than
+# pulling second copies, which was the condition of the sign-off.
+tonic = "0.14"
+prost = "0.14"
+
+# Data protection (D-22, signed off 2026-09-05, with DN-22 amendment 1).
+#
+# AES-256-GCM stands behind `KeyProvider::seal`/`unseal`: FIPS-approved, and
+# hardware-accelerated on both targets (the Linux x86_64 node container and the Windows
+# desktop), so encrypting a journal costs little. RustCrypto, so the same family as D-20's
+# authentication crates and one audit surface for both.
+#
+# Resolution checked 2026-09-05 against the whole stack: one copy each of aes-gcm, aes,
+# ctr, universal-hash and aead.
+aes-gcm = "0.10"
+
+# UUID v7 for `GlobalEntityId` (D-11, signed off 2026-09-04; landed 2026-09-05 under
+# GAP-069).
+#
+# v7 rather than v4 because the first 48 bits are a millisecond timestamp, so identities
+# minted in one session sort in the order they were minted -- which is what an after-action
+# review reads them in, and what makes an index over them behave.
+#
+# `gungnir-model` takes it without the `v7` feature: it owns the identity and therefore the
+# **textual form** of one, and formatting needs no generator. `gungnir-identity` takes `v7`,
+# because minting is its job and a timestamp source belongs with the thing that mints.
+uuid = { version = "1", default-features = false, features = ["std", "serde"] }
+
+# ECDSA P-256 for `KeyPurpose::BaselineSigning` and for the asymmetric provider a cloud
+# deployment's TLS identity needs (D-22's third row, signed off 2026-09-05).
+#
+# **Deliberately unused**: no member depends on it, and none may until a gap builds the
+# asymmetric provider. It is here rather than deferred because the decision, not the code,
+# was what GAP-060's remaining half was waiting on.
+#
+# The reason a signature scheme is needed at all is the one DN-22 amendment 1 (a) makes:
+# `seal`/`unseal` cannot produce a signature over a TLS transcript, so a cloud deployment
+# whose private key never leaves a hardware module or managed service needs `sign` rather
+# than a getter. P-256 rather than Ed25519 because it is FIPS-approved, which is what the
+# accreditor these documents keep in view will ask; RustCrypto, so the family stays one
+# family.
+#
+# Resolution checked 2026-09-05, and checking an unused workspace dependency needs a method:
+# a `[workspace.dependencies]` entry alone is never resolved, so p256 was added to
+# gungnir-security temporarily, `cargo metadata` run, the lockfile read, and the temporary
+# edge removed. Result: one copy each of p256 0.13.2, elliptic-curve 0.13.8, ecdsa 0.16.9,
+# primeorder 0.13.6 and sec1 0.7.3, and **no second copy** of sha2 0.10.9, digest 0.10.7,
+# generic-array 0.14.7, crypto-common 0.1.7, base64ct 1.8.3 or subtle 2.6.1 already beneath
+# D-20's crates. Repeat that way, not by reading `cargo tree` for a crate no member uses --
+# which reports the crate does not exist.
+p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pem"] }
+
+# Test-only. Mutual TLS cannot be verified without certificates, and a private key checked
+# into the repository would be key material in the repository whatever the comment above it
+# said. **Never a normal dependency of any member**: it belongs in [dev-dependencies].
+rcgen = { version = "0.14", default-features = false, features = ["pem", "aws_lc_rs"] }
+
+# ADS-B differential oracles (GAP-010, decided 2026-09-06; docs/agentic-coding-standards.md
+# §2.9, "ADS-B oracles"). Two independently written MIT Rust Mode S decoders, used to gate
+# `gungnir_interop::adsb` over the vendored captures because no ADS-B specification is both
+# free to obtain and permissively licensed (docs/design/external-standards.md §4).
+#
+# **Test-only, and never a normal dependency of any member.** They are oracles, not a
+# runtime decoder: a shipped binary that decoded through one of them would inherit its
+# reading of a standard this project has not pinned. `[dev-dependencies]` of
+# `gungnir-interop` alone.
+#
+# Exact `=` pins rather than caret ranges, which is deliberate and unlike every row above:
+# an oracle whose version floats is an oracle whose answers change without a change in this
+# repository, and the register's closing action asks for the decoders "at recorded commits".
+# Moving either pin is a change to the differential test's recorded disagreements in the
+# same commit.
+#
+# **adsb_deku is 0.7.1 and not the current 0.8.0, because 0.8.0 does not build.** It
+# requires `deku ^0.19`, and the only 0.19 the registry still offers is 0.19.1, whose derive
+# macro is stricter than the 0.19.0 the crate was written against: sixteen of its enums fail
+# with "`id_type` must be specified on non-unit variants". 0.19.0 itself is yanked. The
+# upstream fix is on the project's master branch and is unreleased, so taking it would mean
+# this workspace's first git dependency, which `deny.toml` refuses (`unknown-git = "deny"`).
+#
+# **Decided by the owner 2026-09-06: leave the pin here and revisit when the fix is
+# released.** No git dependency is taken, and the policy stays as it is. Two things make
+# that comfortable rather than merely tolerable. This is a dev-dependency, so nothing here
+# links into `gungnir-app` or `gungnir-node` -- `cargo tree -d -e normal,build` names none
+# of it. And 0.7.1 is arguably the better oracle anyway: 0.8.0 reads the surface movement
+# field as two bits where the message gives it seven, so the older release is the one that
+# agrees with the standard on that field.
+#
+# **What to do when it is released**: move the pin, re-run the differential test, and
+# update the recorded disagreements in `gungnir-interop/tests/adsb_fixtures.rs` in the same
+# commit -- the three oracle defects noted there are properties of these versions.
+#
+# Duplicate linkage checked 2026-09-06 with `cargo tree -d`, as D-18 requires. The pair
+# introduces, all of it beneath a dev-dependency and none of it in any shipped binary:
+# two `deku`/`deku_derive` (0.16.0 under adsb_deku, 0.20.3 under rs1090); two
+# `tokio-tungstenite` and `tungstenite` (0.28.0 under rs1090 against the workspace's 0.29.0);
+# and the proc-macro-time set `darling`, `proc-macro-crate`, `strsim`, `toml_edit`,
+# `toml_datetime` and `winnow`, second copies of which arrive under `deku_derive` 0.16.
+# `bytes` and `regex` gain a second **feature resolution** at one version, not a second
+# version. `cargo tree -d -e normal,build` names none of them, which is the check that
+# matters: nothing here is linked into `gungnir-app` or `gungnir-node`.
+adsb_deku = "=0.7.1"
+rs1090 = { version = "=0.6.0", default-features = false }
+

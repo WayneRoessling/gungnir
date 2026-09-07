@@ -1,0 +1,22 @@
+[package]
+name = "gungnir-reporting"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Mission reports and export packages with provenance preserved: every figure traces back to the recorded event journal it was computed from. docs/gungnir-capabilities.md §5.6 -- Lower."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-eventing = { path = "../gungnir-eventing" }
+gungnir-store = { path = "../gungnir-store" }
+gungnir-metrics = { path = "../gungnir-metrics" }
+# docs/design/dependency-edges.md: accepted by the engineering reviewer 2026-09-05.
+# An order of battle is a list of entities, not of tracks, and the lineage is
+# what makes an entry defensible when an analyst asks why two sightings are one.
+gungnir-identity = { path = "../gungnir-identity" }

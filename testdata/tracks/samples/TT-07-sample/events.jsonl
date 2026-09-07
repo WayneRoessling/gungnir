@@ -1,0 +1,4 @@
+{"t":0,"kind":"ea_skew","sensors":[3,5,9],"skew_s":2.0,"until":3000}
+{"t":0,"kind":"ea_dropout","sensors":[1,2],"multiplier":1.5,"until":3000}
+{"t":1200,"kind":"sensor_lost","sensor":1,"note":"ridge radar struck 01:50"}
+{"t":1380,"kind":"sensor_retasked","sensor":2,"note":"HAF radar to search pattern upper Vell"}

@@ -1,0 +1,28 @@
+[package]
+name = "gungnir-rfs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "PHD/CPHD, GLMB/LMB random finite set filters."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+gungnir-track = { path = "../gungnir-track" }
+
+[dev-dependencies]
+proptest.workspace = true
+# The GM-PHD oracle fixture in testdata/oracles/track/ is JSON; serde_json is an
+# already-approved workspace dependency (agentic-coding-standards.md 2.9), dev-only.
+serde_json.workspace = true
+criterion.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }
+
+[[bench]]
+name = "phd_update_dense_swarm"
+harness = false

@@ -1,0 +1,16 @@
+[package]
+name = "gungnir-resilience"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Resilience & disconnected operations: store-and-forward of envelopes while a node is unreachable, checkpoints, and journal reconciliation after the link returns (ARCHITECTURE.md §8.4). docs/gungnir-capabilities.md §5.6 -- Medium."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-eventing = { path = "../gungnir-eventing" }
+gungnir-store = { path = "../gungnir-store" }

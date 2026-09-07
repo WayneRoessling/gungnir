@@ -1,0 +1,16 @@
+[package]
+name = "gungnir-sensor-management"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Sensor registry (identity, modality, location, calibration version, operating state) plus tasking, mode management, and coverage planning. docs/gungnir-capabilities.md §5.2 -- High."
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+gungnir-coord = { path = "../gungnir-coord" }
+gungnir-model = { path = "../gungnir-model" }
+gungnir-config = { path = "../gungnir-config" }

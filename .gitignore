@@ -1,0 +1,58 @@
+/target/
+# The oracle virtual environment (testdata/oracles/README.md): development tooling,
+# deliberately not a workspace dependency and not checked in. The fixtures it
+# generates are.
+/.venv-oracles/
+/target-alt/
+**/target/
+/gungnir-journal/
+*.jsonl
+!docs/**/*.jsonl
+!testdata/tracks/samples/**/*.jsonl
+# The constructed SAPIENT session (testdata/sapient/SOURCE.md). Three tests in
+# gungnir-ingest/tests/sapient_spotter.rs read it, so it is fixture, not journal output.
+!testdata/sapient/*.jsonl
+/testdata/tracks/full/
+/deploy/**/*.local.*
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# --- Key material. Nothing in this repository may hold a secret or a path to one
+# (`docs/release-governance.md`, Hosting). These patterns are a backstop, not the
+# policy: a private key should not be inside the working tree in the first place.
+/github
+/github.pub
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ecdsa*
+id_ed25519*
+*_rsa
+*_ed25519
+!**/testdata/**/*.pem
+
+# --- Documents that may be read but not redistributed
+# `docs/design/external-standards.md` keeps this distinction per source. STANAG 4609
+# is published by the NATO Standardization Office; a reference copy is a working file
+# on the drafting host, not repository content.
+/4609EFed05.pdf
+*.pdf
+!docs/**/*.pdf
+
+# --- Editor and tool leavings
+.~lock.*#
+*.tmp
+*.bak
+/scratch/
+
+# --- Commercial material, kept out of the repository
+# The business plan, financial model, pricing, market and competitive analysis
+# (plan 01). Excluded by the owner on 2026-09-07. Documents elsewhere in `docs/`
+# still cite this folder; those citations resolve on the drafting host and not in a
+# clone, which is a deliberate consequence of the exclusion rather than an oversight.
+/docs/business/

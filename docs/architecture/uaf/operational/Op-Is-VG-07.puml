@@ -1,0 +1,26 @@
+@startuml Op-Is-VG-07
+title Op-Is VG-07: Raid under GNSS denial with a radar loss (MT-07)
+autonumber
+participant "AR-04 Sensor feeds" as Sensors
+participant "OP-30 C2 system" as System
+actor "OP-04 Sensor manager" as R0
+actor "OP-02 Supervisor" as R1
+actor "OP-01 Operator" as R2
+participant "OP-23 Sensor operators" as E0
+note over System
+Timeline:
+01:30 clock-source skew rises on GNSS-dependent feeds; 01:32 the system correlates the
+skew alerts into one incident; 01:50 radar loss; 01:51 coverage recomputed and the gap on
+the upper Vell shown; 01:53 the sensor manager re-tasks the HAF radar to a search pattern
+and raises acoustic node reporting rates; 01:55 the supervisor acknowledges the degraded
+state; drones continue to arrive.
+end note
+Sensors -> System : 1. Detect degradation: sensor health, ingest gaps, clock skew, track quality colla…
+System -> System : 2. Recompute coverage with the degraded sensors; show the gaps on the picture
+System -> R0 : 3. present: Recommend mode changes and re-tasking (search patterns, backup sensors, emissio…
+R0 -> System : decision: Sensor manager
+System -> System : 4. Mark affected tracks as degraded; the planner never allocates on stale tracks
+System -> R1 : 5. present: Supervisor acknowledges the degraded state on the plan; escalates if a defended…
+R1 -> System : decision: Supervisor; commander for accepted gaps
+System -> System : 6. Recover: sensors return, clocks resynchronize, coverage restored, alert closed
+@enduml

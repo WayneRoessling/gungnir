@@ -1,0 +1,31 @@
+[package]
+name = "gungnir-ingest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Protocol-specific adapters plus a validation/authentication/quarantine gateway that normalizes live, recorded, and simulated sources into the canonical DetectionView before anything reaches the Tracking Service. docs/gungnir-capabilities.md §5.2 -- Critical. Gateway changes are human-owned."
+
+[lints]
+workspace = true
+
+[dependencies]
+# GAP-009: a peer track's position as a detection measurement (was dev-only).
+nalgebra.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-time = { path = "../gungnir-time" }
+gungnir-tracking-service = { path = "../gungnir-tracking-service" }
+# Edge (i), drawn in ARCHITECTURE.md §7.1 (2026-09-06): the ASTERIX radar adapter uses the
+# Category 048 and 034 codecs. ARCHITECTURE.md §8.6 always described this edge; the
+# adapter is the first thing to need it.
+gungnir-interop = { path = "../gungnir-interop" }
+
+[dev-dependencies]
+rand.workspace = true
+# Dev-only, for the scenario round-trip fidelity row of
+# docs/verification-capability-table.md 1. The row names the ReplayAdapter, which
+# lives here, and the exported type is gungnir-model::DetectionView, which
+# gungnir-scenario deliberately does not depend on. No runtime edge; no cycle.
+gungnir-scenario = { path = "../gungnir-scenario" }

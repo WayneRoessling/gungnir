@@ -1,0 +1,488 @@
+{
+ "sensors": [
+  {
+   "id": 1,
+   "type": "radar.long",
+   "name": "R1 ridge radar",
+   "pos": [
+    8000,
+    3000,
+    450
+   ],
+   "params": {
+    "signature_key": "rcs",
+    "range_m": {
+     "large": 200000,
+     "medium": 140000,
+     "small": 70000,
+     "very-small": 35000
+    },
+    "pd_in_range": 0.9,
+    "update_period_s": 2.0,
+    "noise": {
+     "range_m": 40,
+     "cross_m": 120,
+     "height_m": 250
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     30,
+     40000
+    ],
+    "horizon": true,
+    "latency_s": {
+     "mean": 0.3,
+     "jitter": 0.15
+    },
+    "dropout": 0.05,
+    "out_of_order": 0.02,
+    "false_alarms_per_scan": 0.1,
+    "ea": {
+     "skew_s": 0,
+     "dropout_multiplier": 2.0,
+     "fa_multiplier": 3.0
+    }
+   },
+   "calibration": "cb-2026-09"
+  },
+  {
+   "id": 2,
+   "type": "radar.medium",
+   "name": "R2 HAF radar",
+   "pos": [
+    -28000.0,
+    8000.0,
+    30.0
+   ],
+   "params": {
+    "signature_key": "rcs",
+    "range_m": {
+     "large": 120000,
+     "medium": 80000,
+     "small": 45000,
+     "very-small": 20000
+    },
+    "pd_in_range": 0.92,
+    "update_period_s": 1.0,
+    "noise": {
+     "range_m": 25,
+     "cross_m": 60,
+     "height_m": 150
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     20,
+     25000
+    ],
+    "horizon": true,
+    "latency_s": {
+     "mean": 0.25,
+     "jitter": 0.1
+    },
+    "dropout": 0.04,
+    "out_of_order": 0.02,
+    "false_alarms_per_scan": 0.08,
+    "ea": {
+     "skew_s": 0,
+     "dropout_multiplier": 2.0,
+     "fa_multiplier": 2.5
+    }
+   },
+   "calibration": "cb-2026-09"
+  },
+  {
+   "id": 3,
+   "type": "acoustic",
+   "name": "A3 acoustic node upper Vell",
+   "pos": [
+    30000.0,
+    -18000.0,
+    40.0
+   ],
+   "params": {
+    "signature_key": "acoustic",
+    "range_m": {
+     "loud": 4000,
+     "moderate": 1500,
+     "quiet": 400
+    },
+    "pd_in_range": 0.6,
+    "update_period_s": 5.0,
+    "noise": {
+     "range_m": 800,
+     "cross_m": 400,
+     "height_m": 300
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     0,
+     3000
+    ],
+    "horizon": false,
+    "latency_s": {
+     "mean": 2.5,
+     "jitter": 1.0
+    },
+    "dropout": 0.3,
+    "out_of_order": 0.25,
+    "false_alarms_per_scan": 0.05,
+    "ea": {
+     "skew_s": 2.0,
+     "dropout_multiplier": 1.2,
+     "fa_multiplier": 1.0
+    },
+    "gnss_dependent": true
+   },
+   "calibration": "cb-2026-08"
+  },
+  {
+   "id": 5,
+   "type": "acoustic",
+   "name": "A5 acoustic node mid Vell",
+   "pos": [
+    16000.0,
+    -9000.0,
+    30.0
+   ],
+   "params": {
+    "signature_key": "acoustic",
+    "range_m": {
+     "loud": 4000,
+     "moderate": 1500,
+     "quiet": 400
+    },
+    "pd_in_range": 0.6,
+    "update_period_s": 5.0,
+    "noise": {
+     "range_m": 800,
+     "cross_m": 400,
+     "height_m": 300
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     0,
+     3000
+    ],
+    "horizon": false,
+    "latency_s": {
+     "mean": 2.5,
+     "jitter": 1.0
+    },
+    "dropout": 0.3,
+    "out_of_order": 0.25,
+    "false_alarms_per_scan": 0.05,
+    "ea": {
+     "skew_s": 2.0,
+     "dropout_multiplier": 1.2,
+     "fa_multiplier": 1.0
+    },
+    "gnss_dependent": true
+   },
+   "calibration": "cb-2026-08"
+  },
+  {
+   "id": 9,
+   "type": "acoustic",
+   "name": "A9 acoustic node coast",
+   "pos": [
+    -28000.0,
+    5000.0,
+    10.0
+   ],
+   "params": {
+    "signature_key": "acoustic",
+    "range_m": {
+     "loud": 4000,
+     "moderate": 1500,
+     "quiet": 400
+    },
+    "pd_in_range": 0.6,
+    "update_period_s": 5.0,
+    "noise": {
+     "range_m": 800,
+     "cross_m": 400,
+     "height_m": 300
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     0,
+     3000
+    ],
+    "horizon": false,
+    "latency_s": {
+     "mean": 2.5,
+     "jitter": 1.0
+    },
+    "dropout": 0.3,
+    "out_of_order": 0.25,
+    "false_alarms_per_scan": 0.05,
+    "ea": {
+     "skew_s": 2.0,
+     "dropout_multiplier": 1.2,
+     "fa_multiplier": 1.0
+    },
+    "gnss_dependent": true
+   },
+   "calibration": "cb-2026-08"
+  },
+  {
+   "id": 4,
+   "type": "radar.short",
+   "name": "F4 OPS counter-UAS radar",
+   "pos": [
+    500.0,
+    300.0,
+    20.0
+   ],
+   "params": {
+    "signature_key": "rcs",
+    "range_m": {
+     "large": 15000,
+     "medium": 10000,
+     "small": 6000,
+     "very-small": 3500
+    },
+    "pd_in_range": 0.85,
+    "update_period_s": 0.5,
+    "noise": {
+     "range_m": 8,
+     "cross_m": 20,
+     "height_m": 40
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     0,
+     5000
+    ],
+    "horizon": false,
+    "latency_s": {
+     "mean": 0.15,
+     "jitter": 0.05
+    },
+    "dropout": 0.08,
+    "out_of_order": 0.01,
+    "false_alarms_per_scan": 0.05,
+    "ea": {
+     "skew_s": 0,
+     "dropout_multiplier": 3.0,
+     "fa_multiplier": 4.0
+    }
+   },
+   "calibration": "cb-2026-09"
+  },
+  {
+   "id": 6,
+   "type": "eo-ir",
+   "name": "C6 OPS camera",
+   "pos": [
+    400.0,
+    -200.0,
+    25.0
+   ],
+   "params": {
+    "signature_key": "ir",
+    "range_m": {
+     "high": 15000,
+     "medium": 8000,
+     "low": 4000
+    },
+    "pd_in_range": 0.7,
+    "update_period_s": 0.5,
+    "noise": {
+     "range_m": 150,
+     "cross_m": 15,
+     "height_m": 15
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     0,
+     10000
+    ],
+    "horizon": true,
+    "cued": true,
+    "latency_s": {
+     "mean": 0.6,
+     "jitter": 0.3
+    },
+    "dropout": 0.25,
+    "out_of_order": 0.05,
+    "false_alarms_per_scan": 0.02,
+    "ea": {
+     "skew_s": 0,
+     "dropout_multiplier": 1.0,
+     "fa_multiplier": 1.0
+    }
+   },
+   "calibration": "cb-2026-09"
+  },
+  {
+   "id": 7,
+   "type": "radar.coastal",
+   "name": "R7 KAL coastal radar",
+   "pos": [
+    -25500.0,
+    2800.0,
+    35.0
+   ],
+   "params": {
+    "signature_key": "rcs",
+    "range_m": {
+     "large": 40000,
+     "medium": 25000,
+     "small": 14000,
+     "very-small": 9000
+    },
+    "pd_in_range": 0.8,
+    "update_period_s": 2.5,
+    "noise": {
+     "range_m": 15,
+     "cross_m": 60,
+     "height_m": 0
+    },
+    "field_of_regard_deg": [
+     180,
+     360
+    ],
+    "altitude_m": [
+     0,
+     300
+    ],
+    "horizon": true,
+    "latency_s": {
+     "mean": 0.4,
+     "jitter": 0.2
+    },
+    "dropout": 0.15,
+    "out_of_order": 0.03,
+    "false_alarms_per_scan": 2.0,
+    "sea_state_dropout": {
+     "4": 0.3,
+     "5": 0.45
+    },
+    "ea": {
+     "skew_s": 0,
+     "dropout_multiplier": 1.5,
+     "fa_multiplier": 2.0
+    }
+   },
+   "calibration": "cb-2026-09"
+  },
+  {
+   "id": 8,
+   "type": "eo-ir",
+   "name": "C8 KAL camera",
+   "pos": [
+    -25200.0,
+    2600.0,
+    30.0
+   ],
+   "params": {
+    "signature_key": "ir",
+    "range_m": {
+     "high": 15000,
+     "medium": 8000,
+     "low": 4000
+    },
+    "pd_in_range": 0.7,
+    "update_period_s": 0.5,
+    "noise": {
+     "range_m": 150,
+     "cross_m": 15,
+     "height_m": 15
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     0,
+     10000
+    ],
+    "horizon": true,
+    "cued": true,
+    "latency_s": {
+     "mean": 0.6,
+     "jitter": 0.3
+    },
+    "dropout": 0.25,
+    "out_of_order": 0.05,
+    "false_alarms_per_scan": 0.02,
+    "ea": {
+     "skew_s": 0,
+     "dropout_multiplier": 1.0,
+     "fa_multiplier": 1.0
+    }
+   },
+   "calibration": "cb-2026-09"
+  },
+  {
+   "id": 10,
+   "type": "ais",
+   "name": "AIS receiver KAL",
+   "pos": [
+    -25000.0,
+    2000.0,
+    40.0
+   ],
+   "params": {
+    "signature_key": "emission",
+    "range_m": {
+     "ais": 60000,
+     "none": 0
+    },
+    "pd_in_range": 0.98,
+    "update_period_s": 10.0,
+    "noise": {
+     "range_m": 10,
+     "cross_m": 10,
+     "height_m": 0
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     0,
+     0
+    ],
+    "horizon": true,
+    "cooperative": true,
+    "latency_s": {
+     "mean": 1.0,
+     "jitter": 0.5
+    },
+    "dropout": 0.02,
+    "out_of_order": 0.05,
+    "false_alarms_per_scan": 0.0,
+    "spoofable": true,
+    "ea": {
+     "skew_s": 0,
+     "dropout_multiplier": 1.0,
+     "fa_multiplier": 1.0
+    }
+   },
+   "calibration": null
+  }
+ ]
+}

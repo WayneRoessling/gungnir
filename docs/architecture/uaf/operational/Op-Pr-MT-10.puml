@@ -1,0 +1,19 @@
+@startuml Op-Pr-MT-10
+title Op-Pr MT-10: Disconnected operation and reconnection
+skinparam activityDiamondBackgroundColor #EEE
+|OP-30 Command-and-control system|
+start
+:1. Detect the link loss; fall back to embedded services; keep journaling locally; show the b…\n<<OA-27, OA-13>>;
+:2. Queue detections, decisions, and audit entries for forwarding\n<<OA-27>>;
+:3. Operate under pre-delegated authority for the disconnected case; decisions recorded local…\n<<OA-07, OA-27>>\n(prepare and present);
+|Human performers|
+:3. decide: Site authority per delegation\n(Site authority (OP-01));
+|OP-30 Command-and-control system|
+:4. Reconnect: forward the queue; reconcile the local and node journals; report conflicts\n<<OA-28>>;
+:5. Supervisor resolves reported conflicts under the arbitration rule; the node's record is u…\n<<OA-29>>\n(prepare and present);
+|Human performers|
+:5. decide: Supervisor\n(OP-02 Supervisor);
+|OP-30 Command-and-control system|
+:6. Return to the remote backend; local projection resynchronized\n<<OA-27>>;
+stop
+@enduml

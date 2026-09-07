@@ -1,0 +1,37 @@
+[package]
+name = "gungnir-tracking-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "App-facing facade over the tracking/estimation core. Owns the IMM bank, associator, track manager, and async multi-rate/OOS fusion pipeline behind one trait, and projects the core's kinematic Track into the canonical gungnir-model TrackView. See ARCHITECTURE.md §2."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+crossbeam-channel.workspace = true
+gungnir-core = { path = "../gungnir-core" }
+gungnir-coord = { path = "../gungnir-coord" }
+gungnir-filters = { path = "../gungnir-filters" }
+gungnir-association = { path = "../gungnir-association" }
+gungnir-track = { path = "../gungnir-track" }
+gungnir-rfs = { path = "../gungnir-rfs" }
+gungnir-track-fusion = { path = "../gungnir-track-fusion" }
+gungnir-fusion-async = { path = "../gungnir-fusion-async" }
+gungnir-model = { path = "../gungnir-model" }
+
+[dev-dependencies]
+# The §2 whole-pipeline replay row names the five scenarios, so the test generates them
+# on a seeded generator. Dev-only; the graph test reads normal dependencies alone.
+gungnir-scenario = { path = "../gungnir-scenario" }
+rand.workspace = true
+gungnir-oracle = { path = "../gungnir-oracle" }
+# The plan-07 sample sets in testdata/tracks/samples/ are JSON lines, and GAP-076 asks
+# for one of them through this crate's replay; serde_json is an already-approved
+# workspace dependency (agentic-coding-standards.md §2.9) and this is a dev-dependency
+# only, so no runtime edge changes and ARCHITECTURE.md §7.1 is untouched.
+serde_json.workspace = true

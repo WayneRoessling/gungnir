@@ -1,0 +1,23 @@
+[package]
+name = "gungnir-modelops"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+description = "Registry for selecting, tuning, comparing, validating, promoting, and rolling back filter/association configurations by mission profile. gungnir-capabilities.md §5.4 -- Medium."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+gungnir-config = { path = "../gungnir-config" }
+# GAP-086 / DN-24: a baseline's identity is `gungnir_model::AlgorithmBaselineId`, and the
+# registry is keyed on `MissionProfile`. The types have to be in `gungnir-model` because
+# `Provenance` -- which lives there -- eventually carries one, and because the
+# configuration and both binaries name them too. Downward from a crate that already depends
+# on `gungnir-config`, which itself depends on `gungnir-model`, so the graph stays acyclic.
+# Drawn in ARCHITECTURE.md §7.1 in this change. **DN-24 §5 did not list this edge**; the
+# omission is recorded as a correction in that note.
+gungnir-model = { path = "../gungnir-model" }

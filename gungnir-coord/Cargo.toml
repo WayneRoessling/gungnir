@@ -1,0 +1,26 @@
+[package]
+name = "gungnir-coord"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ECEF/ENU/NED/geodetic coordinate frame transforms."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+serde.workspace = true
+# DN-27 §5 rule 2: the bearing crossing refuses a shallow pair with a named error
+# rather than returning a huge covariance, so this crate now has an error type.
+# `thiserror` is already in `[workspace.dependencies]` and recorded in
+# docs/agentic-coding-standards.md §2.9; no new crate enters the workspace set.
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+# The pymap3d oracle fixture in testdata/oracles/coord/ is JSON; serde_json is an
+# already-approved workspace dependency (agentic-coding-standards.md §2.9) and this
+# is a dev-dependency only, so no runtime edge changes.
+serde_json.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }

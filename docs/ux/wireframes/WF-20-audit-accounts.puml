@@ -1,0 +1,25 @@
+@startsalt WF-20
+title WF-20 PN-20 Audit and accounts (administrator)
+{+
+  {/ <b>Audit log</b> | Accounts }
+  { filter: action [ all ▾ ] operator [ all ▾ ] from [ 2026-09-04 00:00 ] | [ export (marking required) ] }
+  {#
+    Time | Operator | Action | Outcome | Detail
+    01:52:01 | Tomas | alert.escalate | ok | incident 3 → commander
+    01:50:44 | Pieter | sensor.task | ok | R2 search pattern upper Vell
+    01:40:50 | Mira | plan.decide | ok | P-1175 accepted
+    01:38:10 | Tomas | wcs.set | ok | area Tight
+    01:12:00 | Sven | config.apply | <color:red>forbidden</color> | policy section requires supervisor
+  }
+  --
+  <b>Accounts</b>
+  {#
+    Operator | Role | Since | Credential
+    Mira | Operator | 2026-08-01 | token (D-02)
+    Tomas | Supervisor | 2026-08-01 | token
+    Leyla | Intelligence analyst <i>(GAP-068)</i> | 2026-09-04 | token
+    unknown-17 | <color:red>none</color> | — | rejected 3 calls
+  }
+  { [ assign role… ] <i>dialog shows what the role permits (role_permits) before confirming; audited</i> }
+}
+@endsalt

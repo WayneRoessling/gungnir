@@ -1,0 +1,50 @@
+{
+ "format": 1,
+ "scenario": "TT-05",
+ "variant": "sample",
+ "seed": 1705,
+ "generator": "tt-gen 0.1.0",
+ "catalogue_version": "2026-09-04",
+ "classes_version": "2026-09-04",
+ "sensors_version": "2026-09-04",
+ "scenarios_version": "2026-09-04",
+ "duration_s": 420,
+ "truth_tick_s": 2.0,
+ "origin": {
+  "name": "Sector command post, Ostmark (fictional)",
+  "lat": 0.0,
+  "lon": 0.0,
+  "alt_m": 0.0
+ },
+ "start_time_of_day": "12:00:00",
+ "counts": {
+  "entities": 17,
+  "entities_by_class": {
+   "sea.amphibious-auxiliary": 16,
+   "sea.fast-craft": 1
+  },
+  "truth_records": 2179,
+  "detections": 1761,
+  "false_alarms": 380,
+  "sensors": 3
+ },
+ "expected": {
+  "entities": 139,
+  "anomalies": 2,
+  "success": "every vessel a track with identity or anomaly; both anomalies flagged within two minutes (MOP-26); false tracks under the display threshold (MOP-04)"
+ },
+ "provenance": {
+  "policy": "docs/test-tracks/sourcing-and-legal.md",
+  "inputs": [
+   "classes.yaml",
+   "sensors.yaml",
+   "scenarios.yaml",
+   "catalogue-*.yaml"
+  ]
+ },
+ "validation": {
+  "passed": true,
+  "checks": 18,
+  "report": "validation-report.json"
+ }
+}

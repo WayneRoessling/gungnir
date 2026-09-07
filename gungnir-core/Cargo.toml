@@ -1,0 +1,21 @@
+[package]
+name = "gungnir-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CV/CA/CT motion models -- F/Q generation (exact-match closed-form oracle only) -- plus the identifier, lifecycle-status, and PSD-assertion primitives every higher crate shares (docs/agentic-coding-standards.md §1.2, §2.1)."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+# The filterpy/Stone Soup/scipy fixture in testdata/oracles/core/ is JSON; serde_json
+# is an already-approved workspace dependency (agentic-coding-standards.md 2.9) and
+# this is a dev-dependency only, so no runtime edge changes.
+serde_json.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }

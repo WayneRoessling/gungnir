@@ -1,0 +1,27 @@
+[package]
+name = "gungnir-scenario"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Ground-truth + sensor simulation, five-scenario generator. Test/bench dependency only -- never a normal dependency of a production crate."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+rand.workspace = true
+rand_distr.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+# D-31: the four plan-07 YAML files, loaded as typed data (library.rs).
+yaml_serde.workspace = true
+# GAP-016: the two JSON descriptors of a generated set (sensors.json, metadata.json).
+serde_json.workspace = true
+gungnir-core = { path = "../gungnir-core" }
+gungnir-coord = { path = "../gungnir-coord" }
+gungnir-fusion-async = { path = "../gungnir-fusion-async" }
+
+[dev-dependencies]
+proptest.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }

@@ -1,0 +1,22 @@
+@startsalt WF-14
+title WF-14 PN-14 Configuration editor (baselines; validate before apply)
+{+
+  { Baseline: [ v12 (applied 2026-09-01) ▾ ] [ new from v12 ] | working copy <b>v13 draft</b> | [ validate ] [ save ] }
+  {/ Sensors | Resources | Tracking | Backend | Node | <b>Assets</b> | Policy | Validity }
+  --
+  <b>Assets (GAP-026)</b>
+  {#
+    Asset | Priority | Warning obligation | Position
+    OPS power station | 1 | 60 s to site, 120 s civil | 25 km inland
+    HAF airfield | 2 | 60 s to site and civil aviation | 40 km N
+    KAL port infrastructure | <b>2 (was 3)</b> | 90 s port authority | estuary mouth
+    ships at anchor | 4 | 120 s | anchorage
+    SCP | 5 | 60 s | at OPS
+  }
+  --
+  { Validation: <color:green>ok</color> · version 13 · schema 1 · <i>or</i> <color:red>Invalid: resources[2].capacity must be ≥ 1</color> (jumps to the field) }
+  { Validity window: from [ 2026-09-08 09:00 ] to [ 2026-09-15 09:00 ] | Rehearsal record: TT-01 under v13, 13:00 (planner) }
+  --
+  { [ discard ] | . | [ <b>Apply…</b> ] <i>(requires config.apply; disabled until validation passes; opens a dialog naming the sections changed and writing an audit entry)</i> }
+}
+@endsalt

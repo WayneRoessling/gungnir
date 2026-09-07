@@ -1,0 +1,53 @@
+# Gate 6: benchmark regression. Criterion results on the PR are compared against
+# the baseline stored from main; a p99 regression beyond the threshold fails the
+# job (docs/agentic-workflow.md, docs/agentic-coding-standards.md §2.6).
+name: bench-regression
+
+on:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Fail when any benchmark's p99 is slower than baseline by more than this fraction.
+  BENCH_REGRESSION_THRESHOLD: "0.10"
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+      - uses: Swatinem/rust-cache@v2
+      - name: Restore baseline from main
+        uses: actions/cache/restore@v4
+        with:
+          path: target/criterion
+          key: criterion-baseline-main
+      - name: Run benchmarks against the baseline
+        run: cargo bench --workspace -- --baseline main --noplot
+      - name: Compare p99 against the threshold
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, sys
+          threshold = float(os.environ["BENCH_REGRESSION_THRESHOLD"])
+          failed = False
+          for est in pathlib.Path("target/criterion").glob("*/new/estimates.json"):
+              base = est.parent.parent / "main" / "estimates.json"
+              if not base.exists():
+                  continue
+              new = json.load(open(est))["mean"]["point_estimate"]
+              old = json.load(open(base))["mean"]["point_estimate"]
+              ratio = new / old if old else 1.0
+              print(f"{est.parent.parent.name}: {ratio:.3f}x")
+              if ratio > 1.0 + threshold:
+                  failed = True
+          sys.exit(1 if failed else 0)
+          PY
+      - name: Save baseline (main only)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: target/criterion
+          key: criterion-baseline-main

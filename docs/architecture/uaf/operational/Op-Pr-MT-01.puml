@@ -1,0 +1,22 @@
+@startuml Op-Pr-MT-01
+title Op-Pr MT-01: One-way attack drone raid against a defended-asset list
+skinparam activityDiamondBackgroundColor #EEE
+|OP-30 Command-and-control system|
+start
+:1. Ingest early-warning tracks and reports; validate; quarantine malformed\n<<OA-01>>;
+:2. Initiate and maintain tracks across acoustic, radar, and spotter sources at different rat…\n<<OA-02>>;
+:3. Classify by acoustic and kinematic evidence; identity Hostile at confidence once policy c…\n<<OA-03>>;
+:4. Score each track against the defended-asset list: predicted asset, time to impact, priori…\n<<OA-04>>;
+:5. Recommend the cheapest adequate effector per track within readiness, geometry, and geofen…\n<<OA-05, OA-06>>;
+:6. Present the queue of recommendations with rationale; the engagement authority accepts, ov…\n<<OA-07, OA-31>>\n(prepare and present);
+|Human performers|
+:6. decide: Engagement authority per layer; supervisor for the queue\n(OP-02 Supervisor);
+|OP-30 Command-and-control system|
+:7. Hand off decided assignments; warn assets on the predicted routes\n<<OA-08, OA-09>>;
+:8. Assess: destroyed, missed, continuing; re-plan the remainder; publish PlanSuperseded\n<<OA-10>>\n(prepare and present);
+|Human performers|
+:8. decide: complete the step\n(OP-01 Operator);
+|OP-30 Command-and-control system|
+:9. Journal everything; produce the raid summary after action\n<<OA-11>>;
+stop
+@enduml

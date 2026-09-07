@@ -1,0 +1,15 @@
+[package]
+name = "gungnir-command"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Human-approval workflow sitting on top of gungnir-policy's verdicts -- the operator-facing accept/override/reject boundary for an intercept plan, with every decision recorded. docs/gungnir-capabilities.md §5.4 -- Critical. Human-owned changes. Pairs with gungnir-policy."
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-policy = { path = "../gungnir-policy" }

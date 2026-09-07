@@ -1,0 +1,35 @@
+@startuml Pr-Sr
+title Pr-Sr organizational structure: posts and reporting in the vignettes' sector
+skinparam rectangle {
+  BackgroundColor #F7F7F7
+}
+rectangle "OP-20 Higher command" as OP_20
+package "OP-10 Sector command post" {
+  rectangle "PT-08 Commander" as PT_08 <<Post>>
+  rectangle "PT-02 Supervisor" as PT_02 <<Post>>
+  rectangle "PT-01 Air operator" as PT_01a <<Post>>
+  rectangle "PT-01 Land operator" as PT_01b <<Post>>
+  rectangle "PT-04 Sensor manager" as PT_04 <<Post>>
+  rectangle "PT-07 Planner" as PT_07 <<Post>>
+  rectangle "PT-06 Intelligence analyst" as PT_06 <<Post>>
+  rectangle "PT-03 Analyst" as PT_03 <<Post>>
+  rectangle "PT-05 Administrator" as PT_05 <<Post>>
+}
+package "OP-11 Site defense cells" {
+  rectangle "PT-01 Site operator\n(site authority by delegation)" as PT_01c <<Post>>
+}
+package "OP-12 Port defense cell" {
+  rectangle "PT-01 Maritime operator\n(port defense authority by delegation)" as PT_01d <<Post>>
+}
+OP_20 --> PT_08 : rules of engagement
+PT_08 --> PT_02 : delegation, weapons control status
+PT_02 --> PT_01a
+PT_02 --> PT_01b
+PT_02 --> PT_04
+PT_02 --> PT_01c : delegation (D-15)
+PT_02 --> PT_01d : delegation (D-15)
+PT_08 <.. PT_07 : plans, laydown
+PT_08 <.. PT_06 : identities, products
+PT_08 <.. PT_03 : reports, measures
+PT_08 <.. PT_05 : baselines, accounts
+@enduml

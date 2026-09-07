@@ -1,0 +1,19 @@
+@startsalt WF-L8
+title WF-L8 Commander layout (P-08, adopted role; wiring waits on GAP-068)
+{+
+  { <b>PN-01 status strip</b> · Commander (Reyes) }
+  --
+  {
+    {+ <b>PN-17 Summary</b> ..
+    {+ <b>PN-06 Approval queue</b> (decide directly) ..
+    } | {+
+      <b>PN-02 Viewport</b> with accepted gaps and assets
+      .
+      .
+      <i>PN-05 and PN-07 open on selection</i>
+    } | {+ <b>PN-08 Incidents</b> ..
+    {+ <b>PN-09 Health</b> ..
+    {+ <b>PN-16 Planning</b> (approve) }
+  }
+}
+@endsalt

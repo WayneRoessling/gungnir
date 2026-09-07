@@ -1,0 +1,6 @@
+@startsalt WF-01
+title WF-01 PN-01 Status strip (every layout, top edge)
+{+
+  { <b>Node scp-node:7410</b> connected | . | Session 1757030000 <b>Live</b> | . | 01:41:07 wall | . | tracking <color:red>●</color> intercept <color:red>●</color> ingest <color:green>●</color> | . | WCS point <b>Free</b> area <b>Tight</b> | . | Delegation: point layer, hostile small UAS → operator (expires 02:30) | . | Alerts new <b>3</b> ack 5 esc 1 | . | Role: Operator (Mira) | [ ? ] }
+}
+@endsalt

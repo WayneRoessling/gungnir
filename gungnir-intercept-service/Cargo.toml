@@ -1,0 +1,19 @@
+[package]
+name = "gungnir-intercept-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "App-facing facade over gungnir-allocation + gungnir-coord: turns current tracks + available resources into an intercept/tasking plan (gungnir-model PlanView). Kept separate from gungnir-tracking-service because it answers 'what should we do' rather than 'where are they' -- see ARCHITECTURE.md §2."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+gungnir-core = { path = "../gungnir-core" }
+gungnir-coord = { path = "../gungnir-coord" }
+gungnir-allocation = { path = "../gungnir-allocation" }
+gungnir-model = { path = "../gungnir-model" }

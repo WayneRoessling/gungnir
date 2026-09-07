@@ -1,0 +1,1 @@
+{"sensor":17,"source_time":262.417,"receipt_time":267.317,"measurement":{"Position":{"enu":[34395.13,-8827.16,0.0],"variance_m2":[400.0,400.0,900.0]}},"provenance":{"source_sensor_ids":[17],"calibration_baseline_version":"cb-2026-07","algorithm_version":"tt-gen 0.1.0"}}

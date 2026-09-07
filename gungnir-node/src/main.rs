@@ -1,0 +1,1533 @@
+//! gungnir-node: the headless service node (ARCHITECTURE.md §8). Runs the same
+//! services layer the desktop embeds, journals every event as the authoritative
+//! record for the mission, and exposes `gungnir-api` to desktops and peer systems.
+//!
+//! Usage: `gungnir-node [config.json]`. Without a config path the default baseline
+//! is used (no sensors, no resources), which is enough to prove the loop runs.
+//!
+//! **Status, 2026-09-06:** the tracking pipeline, the allocator and the v2 transport are
+//! all real. This node tracks, plans, and serves the v2 read paths plus four write paths
+//! -- submitting a detection, tasking a sensor, reporting on a handoff, acknowledging a
+//! warning -- each authorising its caller. This paragraph said the opposite until today,
+//! and understating what a deployment does is read as carelessly as overstating it.
+//!
+//! What it still does not do: run an approval queue, which is a desktop's job and which
+//! `POST /v2/plans/{id}/decision` refuses architecturally rather than for want of a
+//! feature; fuse cooperative evidence or correlate identity across sessions, for which it
+//! has no dependency edge (GAP-010, GAP-019); and produce any exchange product, so the
+//! three `/v2/exchange` routes answer `NotHeld` with a reason (GAP-065).
+
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+mod auth;
+mod entities;
+
+use gungnir_api::transport::NodeApi;
+use gungnir_api::v2::{CoverageResponse, SnapshotResponse};
+use gungnir_api::API_VERSION;
+use gungnir_config::{validate, ConfigBaseline, ConfigStore, FileConfigStore, NodeConfig};
+use gungnir_eventing::{Event, EventBus, InProcessBus};
+use gungnir_ingest::adapters::peer::{LaunchWarningOutcome, LaunchWarningSink};
+use gungnir_ingest::{AllowListAuthenticator, IngestGateway, MachineIdentityAuthenticator};
+use gungnir_intercept_service::{DpInterceptService, InterceptService};
+use gungnir_mission::{JournalMissionManager, MissionManager, MissionState};
+use gungnir_model::events::InterceptEvent;
+use gungnir_model::{PlanView, SensorId, SystemHealth};
+use gungnir_observability::WatchdogConfig;
+use gungnir_policy::{ControlStatusPolicy, GeofencePolicy, PolicyChain, PolicyEngine};
+use gungnir_sensor_management::{InMemorySensorRegistry, SensorRegistry};
+use gungnir_store::{EventJournal, FileEventJournal};
+use gungnir_time::{TimeAuthority, WallClockAuthority};
+use gungnir_tracking_service::{LiveTrackingService, TrackingService};
+use std::time::{Duration, Instant};
+
+/// Service tick period.
+const TICK: Duration = Duration::from_millis(50);
+/// How often health is logged while running.
+const HEALTH_LOG_INTERVAL: Duration = Duration::from_secs(10);
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt::init();
+    let config = load_config(std::env::args().nth(1))?;
+    let node_cfg = config.node.clone().unwrap_or_default();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    let handle = runtime.handle().clone();
+    runtime.block_on(run(config, node_cfg, handle))
+}
+
+fn load_config(path: Option<String>) -> Result<ConfigBaseline, gungnir_config::ConfigError> {
+    let Some(p) = path else {
+        tracing::info!("no config path given; using the default baseline");
+        return Ok(ConfigBaseline::default());
+    };
+    // GAP-052 / DN-08 §6 rule 3: the canonical action and role names come from
+    // `gungnir-security`, which `gungnir-config` may not depend on, so this binary hands
+    // them over. Without it a rule naming a misspelled action passes every other check,
+    // matches no request, and reads in the file exactly like a grant.
+    let known = gungnir_config::KnownVocabulary::new(
+        gungnir_security::actions::ALL.iter().copied(),
+        gungnir_security::Role::ALL.iter().map(|r| format!("{r:?}")),
+    );
+    let store = FileConfigStore::new(&p, known.clone());
+    let baseline = store.load()?;
+    validate(&baseline)?;
+    gungnir_config::validate_authority_names(&baseline, &known)?;
+    tracing::info!(path = %p, "loaded config baseline");
+    Ok(baseline)
+}
+
+/// The ingest gateway, allowing exactly the sensors the baseline names, with an ASTERIX
+/// adapter bound per configured radar feed (GAP-001). Returns the observation sinks the
+/// loop drains into the registry (GAP-064).
+/// A partner's tracks and launch warnings through a machine link (GAP-009): the
+/// adapter's stream over the link `gungnir-remote` keeps up.
+///
+/// Two calls rather than one (DN-16 §5): a launch warning is a distinct message and
+/// cannot be handed over where a track is expected.
+struct LinkPeerStream {
+    link: gungnir_remote::peer::PeerLink,
+}
+
+impl gungnir_ingest::adapters::peer::PeerStream for LinkPeerStream {
+    fn take_tracks(&mut self) -> Vec<gungnir_model::TrackView> {
+        self.link.take_tracks()
+    }
+
+    fn take_launch_warnings(&mut self) -> Vec<gungnir_model::LaunchWarningReport> {
+        self.link.take_launch_warnings()
+    }
+
+    fn describe(&self) -> String {
+        format!("link:{}", self.link.endpoint())
+    }
+}
+
+/// One bound peer: the link, and where its launch warnings land (GAP-009, DN-16 §5).
+///
+/// The sink is held here rather than reached through the adapter because the adapter is
+/// moved into the gateway; it is the same arrangement the ASTERIX feeds use for their
+/// service observations.
+struct BoundPeer {
+    name: String,
+    link: gungnir_remote::peer::PeerLink,
+    launch_warnings: LaunchWarningSink,
+}
+
+/// Put every peer's launch warnings on this node's record (GAP-009, DN-16 §5).
+///
+/// A node has no operator and no alert list, so DN-16 §5's "raises an alert with the
+/// peer named" is served the way every other node-side alert is: the log line for a
+/// person watching, and an envelope on the bus for the journal that is the system of
+/// record for every desktop reading this node. **No track is created**: a
+/// `LaunchWarningOutcome` never becomes a `DetectionView`, so there is nothing for the
+/// pipeline to take.
+fn record_launch_warnings(
+    peers: &[BoundPeer],
+    bus: &InProcessBus,
+    now: gungnir_model::MissionTime,
+) -> Result<(), gungnir_eventing::EventingError> {
+    for peer in peers {
+        // A poisoned sink means the adapter panicked holding it. Say so and carry on
+        // with the other peers rather than stopping the node.
+        let Ok(mut queue) = peer.launch_warnings.lock() else {
+            tracing::error!(peer = %peer.name, "the peer's launch-warning queue was poisoned");
+            continue;
+        };
+        let drained: Vec<LaunchWarningOutcome> = queue.drain(..).collect();
+        drop(queue);
+        for outcome in drained {
+            let event = match outcome {
+                LaunchWarningOutcome::Admitted(warning) => {
+                    tracing::warn!(peer = %warning.peer, warning = %warning.report.id, age_s = warning.age_s(), what = %warning.report.what, "launch warning from a peer");
+                    gungnir_model::events::LaunchWarningEvent::Received(warning)
+                }
+                LaunchWarningOutcome::Quarantined { peer, reason, at } => {
+                    tracing::warn!(%peer, %reason, "a peer's launch warning was refused");
+                    gungnir_model::events::LaunchWarningEvent::Refused { peer, reason, at }
+                }
+            };
+            bus.publish(now, Event::LaunchWarning(event))?;
+        }
+    }
+    Ok(())
+}
+
+/// What this host presents to a partner (D-02): the baseline's trust roots and, from the
+/// environment, the same certificate the node serves with. A provider-issued client
+/// identity is GAP-060's remaining half.
+fn host_tls(config: &ConfigBaseline) -> gungnir_remote::LinkTls {
+    let identity_pem = match (
+        std::env::var("GUNGNIR_TLS_CERT").ok(),
+        std::env::var("GUNGNIR_TLS_KEY").ok(),
+    ) {
+        (Some(cert), Some(key)) => {
+            match (
+                std::fs::read_to_string(&cert),
+                std::fs::read_to_string(&key),
+            ) {
+                (Ok(cert), Ok(key)) => Some(format!("{cert}\n{key}")),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+    gungnir_remote::LinkTls {
+        trust_roots_pem: config.security.tls.trust_roots_pem.clone(),
+        // The node presents an issued identity when it SERVES (see `spawn_tls_from_provider`).
+        // This is the client half -- what it presents to a peer's node -- and it still takes
+        // the environment path. Bringing the two together is the rest of GAP-060 and is not
+        // done here rather than half-done silently.
+        issued: None,
+        identity_pem,
+    }
+}
+
+/// Bind a peer link per configured peer whose endpoint is a node (GAP-009, GAP-065
+/// inbound). A peer whose endpoint is not one is said and skipped.
+fn bind_peers(
+    config: &ConfigBaseline,
+    gateway: &mut IngestGateway,
+    handle: &tokio::runtime::Handle,
+) -> Vec<BoundPeer> {
+    let tls = host_tls(config);
+    let mut bound = Vec::new();
+    for peer in &config.peers {
+        let Some(endpoint) = config.endpoints.iter().find(|e| e.name == peer.endpoint) else {
+            continue;
+        };
+        if endpoint.kind != "peer" || !endpoint.address.starts_with("http") {
+            tracing::warn!(peer = %peer.name, endpoint = %endpoint.name, kind = %endpoint.kind, "peer endpoint is not a node url; no link bound");
+            continue;
+        }
+        let remote = gungnir_remote::RemoteEndpoint {
+            url: endpoint.address.clone(),
+            tls: tls.clone(),
+        };
+        match gungnir_remote::peer::PeerLink::connect(&remote, handle) {
+            Ok(link) => {
+                let launch_warnings = LaunchWarningSink::default();
+                let adapter = gungnir_ingest::adapters::peer::PeerSourceAdapter::new(
+                    peer.name.clone(),
+                    SensorId(peer.source_id),
+                    peer.assigned_quality,
+                    peer.max_age_s,
+                    LinkPeerStream { link: link.clone() },
+                )
+                .with_launch_warning_sink(launch_warnings.clone());
+                gateway.add_adapter(Box::new(adapter));
+                tracing::info!(peer = %peer.name, url = %endpoint.address, "peer link bound as a machine (DN-16); connected when the partner answers");
+                bound.push(BoundPeer {
+                    name: peer.name.clone(),
+                    link,
+                    launch_warnings,
+                });
+            }
+            Err(err) => {
+                tracing::error!(peer = %peer.name, %err, "peer link not bound");
+            }
+        }
+    }
+    bound
+}
+
+/// What the node reports about its feeds on the health line (GAP-001, step 5): each
+/// radar feed's counters, and each peer link's state. A node has no panel; the log is
+/// where an operator reads it.
+struct FeedReports {
+    radar: Vec<(String, gungnir_ingest::adapters::asterix::FeedStatsSink)>,
+    peers: Vec<BoundPeer>,
+}
+
+impl FeedReports {
+    fn summary(&self) -> Vec<String> {
+        let mut lines: Vec<String> = self
+            .radar
+            .iter()
+            .map(|(name, sink)| {
+                let s = sink.lock().map(|s| *s).unwrap_or_default();
+                format!(
+                    "{name}: {} datagrams, {} detections, {} service reports, {} not decoded",
+                    s.datagrams,
+                    s.detections,
+                    s.service_reports,
+                    s.malformed_datagrams + s.not_detections
+                )
+            })
+            .collect();
+        lines.extend(self.peers.iter().map(|peer| {
+            let (name, link) = (&peer.name, &peer.link);
+            if link.connected() {
+                format!("peer {name}: linked to {}", link.endpoint())
+            } else {
+                format!(
+                    "peer {name}: not linked to {} ({})",
+                    link.endpoint(),
+                    link.last_error().unwrap_or_else(|| "no answer yet".into())
+                )
+            }
+        }));
+        lines
+    }
+}
+
+fn build_gateway(
+    config: &ConfigBaseline,
+    handle: &tokio::runtime::Handle,
+) -> (
+    IngestGateway,
+    Vec<gungnir_ingest::adapters::asterix::ServiceObservationSink>,
+    FeedReports,
+) {
+    let mut gateway = IngestGateway::new(Box::new(AllowListAuthenticator {
+        // DN-16 §5: a peer is a source and is admitted like one, under its own id.
+        allowed: config
+            .sensors
+            .iter()
+            .map(|s| SensorId(s.id))
+            .chain(config.peers.iter().map(|p| SensorId(p.source_id)))
+            .collect(),
+    }));
+    gateway.set_expected_adapters(config.sensors.len());
+    let mut reports = FeedReports {
+        radar: Vec::new(),
+        peers: Vec::new(),
+    };
+    if !config.peers.is_empty() {
+        reports.peers = bind_peers(config, &mut gateway, handle);
+        tracing::info!(
+            peers = config.peers.len(),
+            bound = reports.peers.len(),
+            "peer links"
+        );
+    }
+    let mut sinks = Vec::new();
+    if !config.radar_feeds.is_empty() {
+        match local_frame(config) {
+            None => tracing::warn!(
+                feeds = config.radar_feeds.len(),
+                "radar feeds are configured and no local frame origin is declared: no \
+                 adapter is bound, because a plot cannot be placed without one"
+            ),
+            Some(frame) => {
+                for spec in feed_specs(config) {
+                    let feed_sinks = gungnir_ingest::adapters::asterix::FeedSinks::default();
+                    match gungnir_ingest::adapters::asterix::bind_feed(&spec, &frame, &feed_sinks) {
+                        Ok(adapter) => {
+                            tracing::info!(feed = %spec.name, addr = %spec.bind_addr, radars = spec.radars.len(), "radar feed bound");
+                            gateway.add_adapter(Box::new(adapter));
+                            gateway.set_expected_adapters(config.sensors.len() + sinks.len() + 1);
+                            // The node has no panel; its counters reach the log on the
+                            // health line, and the sink keeps them readable there.
+                            sinks.push(feed_sinks.observations);
+                            reports.radar.push((spec.name.clone(), feed_sinks.stats));
+                        }
+                        Err(err) => {
+                            tracing::error!(feed = %spec.name, %err, "radar feed not bound");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // GAP-010: AIS receivers. The reports go to a sink nobody on the node fuses.
+    //
+    // **The reason changed on 2026-09-06 and the conclusion did not**, which is worth
+    // saying because the old reason was that the node had no tracks to attach evidence
+    // to: GAP-011 closed and it has tracks now. What stops it is that this binary has no
+    // edge to `gungnir-identification`, the crate that fuses evidence -- edge (n) chose
+    // the desktop, on an argument whose first half has since expired
+    // (`docs/design/dependency-edges.md`). So it is a graph decision rather than a
+    // missing capability. The detections still enter the gateway like any source, and the
+    // sink is drained on the loop so it cannot grow without bound.
+    if !config.ais_feeds.is_empty() {
+        match local_frame(config) {
+            None => tracing::warn!(
+                feeds = config.ais_feeds.len(),
+                "AIS feeds are configured and no local frame origin is declared: no receiver \
+                 is bound"
+            ),
+            Some(frame) => {
+                for feed in &config.ais_feeds {
+                    let source: Result<Box<dyn gungnir_ingest::adapters::ais::NmeaSource>, String> =
+                        match &feed.source {
+                            gungnir_config::AisSource::Tcp { addr } => addr
+                                .parse()
+                                .map_err(|e| format!("{addr}: {e}"))
+                                .and_then(|addr| {
+                                    gungnir_ingest::adapters::ais::TcpNmeaSource::connect(
+                                        addr,
+                                        std::time::Duration::from_secs(3),
+                                    )
+                                    .map(|s| Box::new(s) as _)
+                                    .map_err(|e| e.to_string())
+                                }),
+                            gungnir_config::AisSource::File { path } => {
+                                gungnir_ingest::adapters::ais::RecordedNmeaSource::open(
+                                    std::path::Path::new(path),
+                                )
+                                .map(|s| Box::new(s.with_lines_per_poll(64)) as _)
+                                .map_err(|e| e.to_string())
+                            }
+                        };
+                    match source {
+                        Ok(source) => {
+                            let adapter = gungnir_ingest::adapters::ais::AisReceiverAdapter::new(
+                                feed.name.clone(),
+                                SensorId(feed.sensor_id),
+                                frame,
+                                source,
+                            );
+                            tracing::info!(feed = %feed.name, sensor = feed.sensor_id, "AIS feed bound; detections are tracked, and the cooperative reports are not fused here because this binary has no edge to the crate that fuses evidence (GAP-010)");
+                            gateway.add_adapter(Box::new(adapter));
+                            gateway.set_expected_adapters(config.sensors.len() + sinks.len() + 1);
+                        }
+                        Err(err) => tracing::error!(feed = %feed.name, %err, "AIS feed not bound"),
+                    }
+                }
+            }
+        }
+    }
+    (gateway, sinks, reports)
+}
+
+/// The deployment's local frame, when it has declared one.
+fn local_frame(config: &ConfigBaseline) -> Option<gungnir_model::LocalFrame> {
+    config.origin.map(|[lat_rad, lon_rad, alt_m]| {
+        gungnir_model::LocalFrame::new(gungnir_model::Geodetic {
+            lat_rad,
+            lon_rad,
+            alt_m,
+        })
+    })
+}
+
+/// The feeds as the ingest crate builds them: validated addresses parsed, positions
+/// taken from the sensor list.
+fn feed_specs(config: &ConfigBaseline) -> Vec<gungnir_ingest::adapters::asterix::FeedSpec> {
+    use gungnir_ingest::adapters::asterix::{FeedSpec, RadarBinding};
+    config
+        .radar_feeds
+        .iter()
+        .filter_map(|f| {
+            let bind_addr = f.bind_addr.parse().ok()?;
+            let multicast = match &f.multicast {
+                Some(m) => Some((m.group.parse().ok()?, m.interface.parse().ok()?)),
+                None => None,
+            };
+            let radars = f
+                .radars
+                .iter()
+                .filter_map(|r| {
+                    let sensor = config.sensors.iter().find(|s| s.id == r.sensor_id)?;
+                    Some(RadarBinding {
+                        sac: r.sac,
+                        sic: r.sic,
+                        sensor: SensorId(r.sensor_id),
+                        position: gungnir_model::Geodetic {
+                            lat_rad: sensor.position[0],
+                            lon_rad: sensor.position[1],
+                            alt_m: sensor.position[2],
+                        },
+                    })
+                })
+                .collect();
+            Some(FeedSpec {
+                name: f.name.clone(),
+                bind_addr,
+                multicast,
+                radars,
+            })
+        })
+        .collect()
+}
+
+/// Drain the feeds' service observations into the registry (GAP-064): the radar
+/// speaking for itself confirms what the registry may report.
+fn observe_services(
+    sinks: &[gungnir_ingest::adapters::asterix::ServiceObservationSink],
+    sensors: &mut InMemorySensorRegistry,
+    now: gungnir_model::MissionTime,
+) {
+    use gungnir_ingest::adapters::asterix::ServiceObservationKind;
+    use gungnir_sensor_management::ServiceObservation;
+    for sink in sinks {
+        let drained: Vec<_> = match sink.lock() {
+            Ok(mut q) => q.drain(..).collect(),
+            Err(_) => continue,
+        };
+        for o in drained {
+            let observations = [
+                match o.kind {
+                    ServiceObservationKind::NorthMarker => Some(ServiceObservation::NorthMarker {
+                        rotation_period_s: o.rotation_period_s,
+                    }),
+                    ServiceObservationKind::SectorCrossing => {
+                        Some(ServiceObservation::SectorCrossing)
+                    }
+                    ServiceObservationKind::Other => None,
+                },
+                match (
+                    o.released_for_operational_use,
+                    o.overloaded,
+                    o.time_source_invalid,
+                ) {
+                    (Some(released), Some(overloaded), Some(time_source_invalid)) => {
+                        Some(ServiceObservation::Status {
+                            released_for_operational_use: released,
+                            overloaded,
+                            time_source_invalid,
+                        })
+                    }
+                    _ => None,
+                },
+            ];
+            for observation in observations.into_iter().flatten() {
+                match sensors.observe_service(o.sensor, observation, now) {
+                    Ok(Some(from)) => tracing::info!(
+                        sensor = o.sensor.0,
+                        ?from,
+                        "radar confirmed searching by its own service message"
+                    ),
+                    Ok(None) => {}
+                    Err(err) => {
+                        tracing::warn!(sensor = o.sensor.0, %err, "service message from a sensor the registry does not hold");
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The sensor registry this node holds (GAP-003).
+///
+/// Every sensor starts at Standby, so a node that has just come up reports covering
+/// nothing. That is true rather than pessimistic, and it is what makes the coverage
+/// view worth reading during MT-07: a registry that came up claiming everything was
+/// searching would report coverage nobody had switched on.
+fn build_registry(config: &ConfigBaseline) -> InMemorySensorRegistry {
+    let sensors = InMemorySensorRegistry::from_config(
+        &config.sensors,
+        &format!("baseline-v{}", config.version),
+    );
+    tracing::info!(
+        sensors = sensors.sensors().len(),
+        contributing = sensors.coverage().len(),
+        "sensor registry built from the baseline"
+    );
+    sensors
+}
+
+/// Carries detections submitted over the API into the ingest gateway.
+///
+/// **A `ProtocolAdapter` rather than a direct call into the gateway**, so a submission is
+/// authenticated against the sensor allow-list and validated by exactly the code a
+/// sensor's own feed goes through. `gungnir-ingest` is the trust boundary for external
+/// data; a route that reached past it would be a second way in with no checks on it.
+struct ApiSubmissionAdapter {
+    api: Arc<NodeApi>,
+}
+
+impl gungnir_ingest::ProtocolAdapter for ApiSubmissionAdapter {
+    // The trait ties the returned lifetime to `&self`, so a `&'static str` here would
+    // not match its signature. The adapters in `gungnir-ingest` are written the same way.
+    #[allow(clippy::unnecessary_literal_bound)]
+    fn name(&self) -> &str {
+        "api-v2-submission"
+    }
+
+    fn poll(
+        &mut self,
+        _now: gungnir_model::MissionTime,
+    ) -> Result<Vec<gungnir_model::DetectionView>, gungnir_ingest::IngestError> {
+        Ok(self.api.take_submissions())
+    }
+}
+
+/// Carries the machine-submitted detections (GAP-002) into the gateway, apart from the
+/// operators' queue so the gateway can admit them under the machine-identity
+/// authenticator.
+struct MachineSubmissionAdapter {
+    api: Arc<NodeApi>,
+}
+
+impl gungnir_ingest::ProtocolAdapter for MachineSubmissionAdapter {
+    #[allow(clippy::unnecessary_literal_bound)]
+    fn name(&self) -> &str {
+        "api-v2-machine-submission"
+    }
+
+    fn poll(
+        &mut self,
+        _now: gungnir_model::MissionTime,
+    ) -> Result<Vec<gungnir_model::DetectionView>, gungnir_ingest::IngestError> {
+        Ok(self.api.take_machine_submissions())
+    }
+}
+
+/// Issue the sensor tasks the transport accepted (GAP-004) through the registry, on the
+/// record, and answer each route. A refusal is the registry's own words and records
+/// nothing (DN-11 §5); an adapter's refusal is recorded as `Failed`, which the desktop
+/// sees on the stream.
+fn issue_api_tasks(
+    api: &NodeApi,
+    sensors: &mut InMemorySensorRegistry,
+    bus: &InProcessBus,
+    now: gungnir_model::MissionTime,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use gungnir_model::events::SensorTaskEvent;
+    use gungnir_sensor_management::SensorControl;
+    for pending in api.take_tasks() {
+        let sensor = pending.sensor;
+        let answer = sensors
+            .issue(sensor, pending.command, pending.requirement, now)
+            .map_err(|e| e.to_string());
+        if let Ok(task) = answer {
+            bus.publish(
+                now,
+                Event::SensorTask(SensorTaskEvent::Issued {
+                    task,
+                    sensor,
+                    at: now,
+                }),
+            )?;
+            if let Some(reason) =
+                sensors
+                    .tasks()
+                    .iter()
+                    .find(|t| t.id == task)
+                    .and_then(|t| match &t.state {
+                        gungnir_sensor_management::tasking::TaskState::Failed { reason } => {
+                            Some(reason.clone())
+                        }
+                        _ => None,
+                    })
+            {
+                bus.publish(
+                    now,
+                    Event::SensorTask(SensorTaskEvent::Failed {
+                        task,
+                        sensor,
+                        reason,
+                        at: now,
+                    }),
+                )?;
+            }
+        }
+        // A dropped receiver means the route timed out; nothing to answer.
+        let _ = pending.reply.send(answer);
+    }
+    Ok(())
+}
+
+/// Put the effector reports the transport accepted (GAP-040) on the record.
+fn record_effector_reports(
+    api: &NodeApi,
+    bus: &InProcessBus,
+    now: gungnir_model::MissionTime,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for record in api.take_effector_reports() {
+        tracing::info!(decision = record.decision.0, endpoint = %record.endpoint, "effector report on the record");
+        bus.publish(
+            now,
+            Event::Handoff(gungnir_model::events::HandoffEvent::Reported {
+                decision: record.decision,
+                endpoint: record.endpoint,
+                report: record.report,
+                at: now,
+            }),
+        )?;
+    }
+    Ok(())
+}
+
+/// Put the warning acknowledgements the transport accepted (GAP-042) on the record.
+///
+/// **The node owns no warnings**, so it applies none: a desktop raises them against its
+/// own defended assets and holds the ledger. This is the effector-report path exactly --
+/// record the fact for every desktop, and let the one that raised the warning apply it or
+/// reject it as naming a pair it never raised (DN-03 §5 rule 2).
+///
+/// The envelope's mission time is this node's `now`; the party's own claimed time travels
+/// inside the event, so the record holds both.
+fn record_warning_acknowledgements(
+    api: &NodeApi,
+    bus: &InProcessBus,
+    now: gungnir_model::MissionTime,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for record in api.take_warning_acknowledgements() {
+        tracing::info!(
+            asset = record.asset.0,
+            track = record.track.0,
+            party = %record.party,
+            "warning acknowledgement on the record"
+        );
+        bus.publish(
+            now,
+            Event::Warning(gungnir_model::events::WarningEvent::Acknowledged {
+                asset: record.asset,
+                track: record.track,
+                party: record.party,
+                at: record.at,
+            }),
+        )?;
+    }
+    Ok(())
+}
+
+/// The coverage answer this node serves, or why there is none (GAP-006, DN-12).
+///
+/// **A node with no declared local frame origin cannot produce one at all**: sensor
+/// positions and approach points are geodetic, and placing them in a common ENU picture
+/// needs the origin. Guessing one from the first sensor would put every ring somewhere
+/// plausible and wrong, so the absence is reported. Likewise a deployment that has
+/// declared no approaches has nothing to measure coverage *along*, and an empty gap list
+/// would read as a clean sector.
+fn coverage_answer(config: &ConfigBaseline, sensors: &InMemorySensorRegistry) -> CoverageResponse {
+    let Some([lat_rad, lon_rad, alt_m]) = config.origin else {
+        return CoverageResponse::NotComputed {
+            reason: "this deployment has declared no local frame origin, so geodetic \
+                     positions cannot be placed in a common picture"
+                .into(),
+        };
+    };
+    if config.approaches.is_empty() {
+        return CoverageResponse::NotComputed {
+            reason: "this deployment has declared no approaches, so there is nothing to \
+                     measure coverage along"
+                .into(),
+        };
+    }
+
+    let frame = gungnir_model::LocalFrame::new(gungnir_model::Geodetic {
+        lat_rad,
+        lon_rad,
+        alt_m,
+    });
+    let volumes = gungnir_analytics::coverage_from_registry(
+        sensors,
+        config.analytics.coverage_min_elevation_rad,
+        |record| frame.to_enu(record.position),
+    );
+    let routes: Vec<Vec<[f64; 3]>> = config
+        .approaches
+        .iter()
+        .map(|a| {
+            a.points
+                .iter()
+                .map(|[lat_rad, lon_rad, alt_m]| {
+                    frame.to_enu(gungnir_model::Geodetic {
+                        lat_rad: *lat_rad,
+                        lon_rad: *lon_rad,
+                        alt_m: *alt_m,
+                    })
+                })
+                .collect()
+        })
+        .collect();
+    let approaches: Vec<&[[f64; 3]]> = routes.iter().map(Vec::as_slice).collect();
+
+    CoverageResponse::Computed(gungnir_analytics::combined_coverage(
+        &volumes,
+        // No terrain is loaded (GAP-023), so line of sight is flat. Reported on the
+        // parameters rather than assumed away, which is why the response carries them.
+        &gungnir_analytics::FlatTerrainLineOfSight,
+        &approaches,
+        gungnir_analytics::CoverageParameters {
+            sample_spacing_m: config.analytics.coverage_sample_spacing_m,
+            terrain_masking_applied: false,
+        },
+    ))
+}
+
+/// Republish the picture for anyone connected.
+///
+/// Every tick: a desktop takes this once on connecting and follows the event stream
+/// after, so it is cheap and always current. Collection requirements are empty because
+/// a node states none of its own -- PN-15 is a desktop panel, and publishing an empty
+/// list is different from the field being absent (GAP-005).
+fn publish_picture(
+    api: &Arc<NodeApi>,
+    tracks: &[gungnir_model::TrackView],
+    plan: &PlanView,
+    health: SystemHealth,
+) {
+    if let Err(err) = api.publish_snapshot(SnapshotResponse::new(
+        tracks.to_vec(),
+        Some(plan.clone()),
+        health,
+        Vec::new(),
+    )) {
+        tracing::error!(%err, "could not publish the snapshot");
+    }
+}
+
+/// Start the v2 transport, or say why it is not started.
+///
+/// Mutual TLS when the deployment configures it, and plaintext on loopback when it does
+/// not. **The address restriction is on plaintext, not on the address**: a node with TLS
+/// may serve a routable address, and a node without it may not.
+///
+/// Not starting is not a fatal error: the node's job is to run the pipeline and journal
+/// it, and it does that with nobody connected. Refusing loudly is the point -- a node
+/// that fell back to a plaintext listener would be worse than one that serves nobody.
+async fn spawn_transport(
+    bind_addr: &str,
+    api: &Arc<NodeApi>,
+    handle: &tokio::runtime::Handle,
+    identity_dir: &std::path::Path,
+) {
+    let Ok(addr) = bind_addr.parse::<SocketAddr>() else {
+        tracing::error!(bind = %bind_addr, "bind address is not a socket address; not serving");
+        return;
+    };
+
+    // TLS first: a deployment that configured it and got it wrong must not quietly fall
+    // through to the plaintext path, which is the silent downgrade this design refuses.
+    match gungnir_api::tls::TlsPaths::from_env() {
+        Some(Ok(paths)) => {
+            spawn_tls(addr, &paths, api, handle).await;
+            return;
+        }
+        Some(Err(err)) => {
+            // D-29: the client authority alone means the node's own identity comes from
+            // its key provider; the other partial combinations stay misconfigurations.
+            if let Some(client_ca) = gungnir_api::tls::client_ca_from_env() {
+                if std::env::var("GUNGNIR_TLS_CERT").is_err()
+                    && std::env::var("GUNGNIR_TLS_KEY").is_err()
+                {
+                    spawn_tls_from_provider(addr, &client_ca, api, handle, identity_dir).await;
+                    return;
+                }
+            }
+            tracing::error!(%err, "TLS is misconfigured; not serving");
+            return;
+        }
+        None => {}
+    }
+
+    match gungnir_api::transport::bind(addr).await {
+        Ok(listener) => {
+            let served = listener
+                .local_addr()
+                .map_or_else(|_| addr.to_string(), |a| a.to_string());
+            tracing::info!(
+                bind = %served,
+                // Accurate in both configurations rather than always the pessimistic
+                // one. This line previously said writes always refuse, which stopped
+                // being true when the write paths gained authorisation and was still
+                // printed on every start; the two warnings above already say whether this
+                // deployment has a caller authority at all. A log that overstates what a
+                // deployment cannot do is read as carelessly as one that overstates what
+                // it can.
+                "serving the v2 transport; a write path is served where its caller can be authenticated and refuses otherwise"
+            );
+            let serving = Arc::clone(api);
+            handle.spawn(async move {
+                if let Err(err) = gungnir_api::transport::serve_on(listener, serving).await {
+                    tracing::error!(%err, "the v2 transport stopped");
+                }
+            });
+        }
+        Err(err) => tracing::error!(%err, "not serving the v2 transport"),
+    }
+}
+
+/// Serve with mutual TLS under an identity the node's key provider issues (D-29,
+/// GAP-060): a self-signed certificate over the provider's transport key, signed through
+/// custody, written beside the journal as `node-identity.pem` for operators to pin.
+async fn spawn_tls_from_provider(
+    addr: SocketAddr,
+    client_ca: &str,
+    api: &Arc<NodeApi>,
+    handle: &tokio::runtime::Handle,
+    identity_dir: &std::path::Path,
+) {
+    let mut provider = gungnir_security::P256KeyProvider::new();
+    let key = provider.generate(gungnir_security::KeyPurpose::TransportIdentity);
+    let spki = match provider.public_key_der(&key) {
+        Ok(spki) => spki,
+        Err(err) => {
+            tracing::error!(%err, "the provider gave no public key; not serving");
+            return;
+        }
+    };
+    let names = vec![addr.ip().to_string(), "localhost".to_string()];
+    // Moved to `gungnir-remote` on 2026-09-06 (GAP-060) so the desktop can issue one the
+    // same way. The node used to own this; two binaries cannot depend on each other, so
+    // leaving it here meant a second copy on the desktop that would drift.
+    let identity =
+        match gungnir_remote::identity::issue(Arc::new(provider), key, spki, names, "gungnir-node")
+        {
+            Ok(identity) => identity,
+            Err(err) => {
+                tracing::error!(%err, "the node's identity could not be issued; not serving");
+                return;
+            }
+        };
+    let pem_path = identity_dir.join("node-identity.pem");
+    match std::fs::write(&pem_path, &identity.certificate_pem) {
+        Ok(()) => {
+            tracing::info!(path = %pem_path.display(), "node identity written for operators to pin (public certificate only)");
+        }
+        Err(err) => {
+            tracing::warn!(%err, "the node identity could not be written; clients must pin it another way");
+        }
+    }
+    tracing::warn!(
+        "the node's TLS identity lives in process memory (the ephemeral provider): it is a \
+         new identity every start until a persistent keystore exists (GAP-084)"
+    );
+    let acceptor = match gungnir_api::tls::acceptor_with_key(
+        identity.certificate_der,
+        identity.key,
+        client_ca,
+    ) {
+        Ok(acceptor) => acceptor,
+        Err(err) => {
+            tracing::error!(%err, "the client authority could not be loaded; not serving");
+            return;
+        }
+    };
+    serve_acceptor(addr, acceptor, api, handle).await;
+}
+
+/// Bind and serve behind an acceptor, whichever way it was built.
+async fn serve_acceptor(
+    addr: SocketAddr,
+    acceptor: gungnir_api::tls::TlsAcceptor,
+    api: &Arc<NodeApi>,
+    handle: &tokio::runtime::Handle,
+) {
+    let tcp = match tokio::net::TcpListener::bind(addr).await {
+        Ok(tcp) => tcp,
+        Err(err) => {
+            tracing::error!(%err, bind = %addr, "could not bind; not serving");
+            return;
+        }
+    };
+    let served = tcp
+        .local_addr()
+        .map_or_else(|_| addr.to_string(), |a| a.to_string());
+    tracing::info!(
+        bind = %served,
+        "serving the v2 contract over mutual TLS; a client certificate is required"
+    );
+    let listener = gungnir_api::tls::TlsListener::new(tcp, acceptor);
+    let serving = Arc::clone(api);
+    handle.spawn(async move {
+        if let Err(err) = gungnir_api::transport::serve_on_listener(listener, serving).await {
+            tracing::error!(%err, "the v2 transport stopped");
+        }
+    });
+}
+
+/// Serve with mutual TLS.
+async fn spawn_tls(
+    addr: SocketAddr,
+    paths: &gungnir_api::tls::TlsPaths,
+    api: &Arc<NodeApi>,
+    handle: &tokio::runtime::Handle,
+) {
+    let acceptor = match gungnir_api::tls::acceptor(paths) {
+        Ok(acceptor) => acceptor,
+        // Fatal to serving, deliberately: a node that fell back to plaintext because a
+        // certificate was unreadable would be the downgrade nobody would notice.
+        Err(err) => {
+            tracing::error!(%err, "the TLS material could not be loaded; not serving");
+            return;
+        }
+    };
+    serve_acceptor(addr, acceptor, api, handle).await;
+}
+
+/// The node's whole life: construct the services, then tick them until stopped.
+///
+/// Long on purpose. Splitting the loop would put the order of the pipeline -- ingest,
+/// tracking, planning, journal, transport, health -- in two places, and that order is the
+/// thing a reader comes here to check.
+#[allow(clippy::too_many_lines)]
+async fn run(
+    config: ConfigBaseline,
+    node_cfg: NodeConfig,
+    handle: tokio::runtime::Handle,
+) -> Result<(), Box<dyn std::error::Error>> {
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        api = API_VERSION,
+        bind = %node_cfg.bind_addr,
+        data_dir = %node_cfg.data_dir,
+        "gungnir-node starting"
+    );
+
+    // GAP-086 and GAP-053: the promoted algorithm baseline decides how this node
+    // filters, so it is read here, before the tracker it configures. It reaches the
+    // journal further down, once the event bus exists.
+    let governance = gungnir_modelops::InMemoryModelRegistry::from_baseline(&config);
+    let promoted: Option<gungnir_modelops::ModelBaseline> = match &governance {
+        Ok(registry) => config
+            .operating_profile()
+            .and_then(|p| gungnir_modelops::ModelRegistry::promoted(registry, &p))
+            .cloned(),
+        Err(err) => {
+            tracing::error!(
+                %err,
+                "the baseline's algorithm configuration was refused; this node governs nothing"
+            );
+            None
+        }
+    };
+
+    // GAP-012: the tracker judges staleness by the baseline's policy. GAP-053: and it
+    // filters as the promoted algorithm baseline says, stamping that baseline's
+    // identifier only because it is applying it (DN-24 §7). A baseline naming a filter
+    // this build does not implement is refused by name and the tracker stays ungoverned,
+    // rather than running a different filter under the promoted one's identity.
+    let mut tracking = match promoted.as_ref().map(|b| {
+        (
+            b,
+            gungnir_tracking_service::PipelineSettings::from_baseline(
+                b.config.gate_threshold,
+                &b.config.filter_selection,
+            ),
+        )
+    }) {
+        Some((baseline, Ok(settings))) => {
+            tracing::info!(baseline = %baseline.id, "the promoted algorithm baseline is applied");
+            LiveTrackingService::with_pipeline_settings(&handle, settings)
+                .with_staleness(config.policy.staleness.clone())
+                .with_algorithm_baseline(&baseline.id)
+        }
+        Some((baseline, Err(err))) => {
+            tracing::error!(baseline = %baseline.id, %err, "the promoted algorithm baseline is not applied; the tracker runs its default filter and stays ungoverned");
+            LiveTrackingService::new(&handle).with_staleness(config.policy.staleness.clone())
+        }
+        None => LiveTrackingService::new(&handle).with_staleness(config.policy.staleness.clone()),
+    };
+    let mut intercept = DpInterceptService::new(config.allocation_horizon);
+    let resources = config.resource_views();
+    // GAP-088: the fences the baseline declares. None declared is said once, because
+    // an engine that can only pass is worth knowing about.
+    let geo = geo_service_from(&config);
+    if config.geofences.is_empty() {
+        tracing::warn!(
+            "no geofences are declared: the geofence engine will deny nothing; authority \
+             is not evaluated on a node, which has no signed-in caller (DN-23 §4)"
+        );
+    } else {
+        tracing::info!(
+            fences = config.geofences.len(),
+            "geofences declared; authority is not evaluated on a node (DN-23 §4)"
+        );
+    }
+
+    let bus = InProcessBus::new();
+    let journal_rx = bus.subscribe();
+    // The default policy is `SyncEveryEnvelope`, which is the service-node half of
+    // D-04 (`ARCHITECTURE.md` §10 item 19): the node is the system of record for every
+    // connected desktop, and its budget is "an accepted envelope is on disk within
+    // 100 ms". The desktop takes the buffered profile instead.
+    let mut journal = FileEventJournal::open(&node_cfg.data_dir)?;
+    // GAP-060: the node seals its journal the way the desktop does (DN-22 §5), and says
+    // what it is doing. An ephemeral key on a node is a system of record that cannot be
+    // read after restart; it is allowed because the baseline said so, and warned about.
+    let encryption = seal_journal(&config, &mut journal);
+    match &encryption {
+        gungnir_security::EncryptionStatus::Active { provider } => {
+            tracing::info!(%provider, "journal encryption active");
+        }
+        gungnir_security::EncryptionStatus::NotConfigured => {
+            tracing::warn!("journal encryption is not configured; the journal is plaintext");
+        }
+        gungnir_security::EncryptionStatus::UnavailableWritingPlaintext { reason } => {
+            tracing::warn!(%reason, "journal encryption is off; writing plaintext");
+        }
+    }
+
+    // GAP-019, edge (s): fold the retained sessions into a resolver before the loop
+    // opens a new one, so a track that reappears is correlated to the entity it was
+    // rather than minted afresh. Done here, on the node, because this journal is the
+    // authoritative account of the mission: a watch during which no desktop was attached
+    // is exactly the period whose correlation would otherwise be lost.
+    let mut entities =
+        entities::EntityIdentity::recover(&journal, config.reporting.retention_sessions);
+    if let Some(reason) = entities.unreadable() {
+        // Said, not skipped: a resolver folded from some of the retained sessions will
+        // mint a new entity for a track the unread ones would have matched, and the
+        // journal would show an object appearing where none did.
+        tracing::warn!(%reason, "the entity resolver was folded from an incomplete journal");
+    }
+    tracing::info!(
+        sessions = entities.sessions(),
+        entities = entities.entities(),
+        "entity resolver folded from the retained sessions"
+    );
+
+    let clock = WallClockAuthority::default();
+    // GAP-051: created through the lifecycle rather than minted from the wall clock, so
+    // there is a record on disk saying which baseline this session ran under and how it
+    // ended. A node killed without closing leaves that record marked live, and the next
+    // start reports it as interrupted rather than quietly reusing the ground.
+    // Scoped: the manager reads the journal, and the loop below writes to it. Holding
+    // one open across the run would borrow the journal for the whole node.
+    let mission = {
+        let mut missions = JournalMissionManager::open(journal.root(), &journal)?;
+        for earlier in missions.missions()? {
+            if missions.load(earlier)?.state == MissionState::Interrupted {
+                tracing::warn!(
+                    session = earlier.0,
+                    "an earlier session was not closed; its record ends where the process stopped"
+                );
+            }
+        }
+        let mut mission = missions.create(config.clone())?;
+        missions.transition(&mut mission, MissionState::Live)?;
+        mission
+    };
+    let session = mission.session;
+    tracing::info!(session = session.0, "opened live session");
+
+    // GAP-086: which algorithm configuration this session opened with, in the journal.
+    // **Not a promotion** -- nobody promoted anything, the baseline said so, and there is
+    // nobody signed in to attribute an act to.
+    // Read before the tracker was built, above; journaled here, where the bus exists.
+    let in_force = promoted.as_ref().map(|b| b.id.clone());
+    bus.publish(
+        clock.now(),
+        Event::Governance(match &in_force {
+            Some(baseline) => gungnir_model::events::GovernanceEvent::InForceAtStart {
+                baseline: baseline.clone(),
+                at: clock.now(),
+            },
+            None => gungnir_model::events::GovernanceEvent::NoneInForce {
+                profile: config.operating_profile(),
+                at: clock.now(),
+            },
+        }),
+    )?;
+    if let Some(b) = &in_force {
+        tracing::info!(baseline = %b, "algorithm configuration in force");
+    } else {
+        tracing::warn!("no algorithm configuration is in force");
+    }
+
+    let (mut gateway, service_sinks, feed_reports) = build_gateway(&config, &handle);
+    let mut sensors = build_registry(&config);
+
+    // GAP-041: the v2 read paths are served. The write paths are routed and refuse,
+    // because nothing can authenticate a caller (GAP-057, GAP-060), and only loopback is
+    // bound because there is no TLS (GAP-060). A node asked to bind anything else fails
+    // to start rather than listening in plaintext.
+    // DN-18 §6 (GAP-065): what each party may receive, from the baseline; empty means
+    // an authenticated peer may receive nothing.
+    let base = NodeApi::new(SnapshotResponse::new(
+        Vec::new(),
+        None,
+        SystemHealth::default(),
+        Vec::new(),
+    ))
+    .with_exchange(gungnir_model::ExchangeSet {
+        agreements: config.exchange.clone(),
+    })
+    // D-02: what each client certificate speaks for (GAP-002, GAP-040).
+    .with_machine_identities(
+        config
+            .machine_identities
+            .iter()
+            .map(|m| {
+                let role = match &m.speaks_for {
+                    gungnir_config::MachineRole::Sensor { sensor_id } => {
+                        gungnir_api::transport::MachineRole::Sensor(SensorId(*sensor_id))
+                    }
+                    gungnir_config::MachineRole::Effector { endpoint } => {
+                        gungnir_api::transport::MachineRole::Effector {
+                            endpoint: endpoint.clone(),
+                        }
+                    }
+                    gungnir_config::MachineRole::WarnedParty { channel } => {
+                        gungnir_api::transport::MachineRole::WarnedParty {
+                            channel: channel.clone(),
+                        }
+                    }
+                    gungnir_config::MachineRole::Peer { peer } => {
+                        gungnir_api::transport::MachineRole::Peer { name: peer.clone() }
+                    }
+                };
+                (m.common_name.clone(), role)
+            })
+            .collect(),
+    );
+    if !config.machine_identities.is_empty() {
+        tracing::info!(
+            identities = config.machine_identities.len(),
+            "machine identities recognised (D-02)"
+        );
+    }
+    if !config.exchange.is_empty() {
+        tracing::info!(
+            parties = config.exchange.len(),
+            "exchange agreements in force"
+        );
+    }
+    let callers = match auth::build_caller_authority(&config) {
+        Ok(authority) => {
+            tracing::info!("caller authority built from the baseline's account store");
+            Some(authority)
+        }
+        Err(why) => {
+            tracing::warn!(%why, "no caller authority: nobody can sign in to this node");
+            None
+        }
+    };
+    let api = Arc::new(if let Some(callers) = callers {
+        base.with_callers(Arc::new(callers))
+    } else {
+        tracing::warn!(
+            "no caller authority configured: the v2 transport will refuse every route but the session one (GAP-057)"
+        );
+        base
+    });
+    // DN-18 §5, GAP-065: the three exchange items this node does not hold. Said once, in
+    // words, rather than left to a default -- a partner reading an empty list would take
+    // it for "there are none here", and the truth is that warnings, reports and handoffs
+    // live on the desktops this node serves. `publish_exchange` is the door for a
+    // deployment that does hold them.
+    for (item, reason) in [
+        (
+            gungnir_model::ExchangeItem::Warnings,
+            "warnings are raised on a desktop against its own defended assets; this node \
+             holds no warning ledger",
+        ),
+        (
+            gungnir_model::ExchangeItem::Reports,
+            "reports are produced on a desktop from its journal; this node publishes none \
+             for exchange",
+        ),
+        (
+            gungnir_model::ExchangeItem::Handoffs,
+            "handoffs are issued on a desktop from a recorded decision; this node holds \
+             none",
+        ),
+    ] {
+        api.withhold_exchange(item, reason)?;
+    }
+    let api_rx = bus.subscribe();
+    // Registered after the transport is built, so a submitted detection has somewhere to
+    // arrive from. The gateway counts it as an adapter, so a node with the API enabled
+    // reports one more than the baseline's sensors -- which is true.
+    gateway.add_adapter(Box::new(ApiSubmissionAdapter {
+        api: Arc::clone(&api),
+    }));
+    // GAP-002: detections a sensor submitted under its own certificate, admitted by the
+    // one authenticator that may stamp `MachineIdentity`. Registered even when no
+    // identity is declared: an empty vouched list admits nothing, which is true.
+    gateway.add_adapter_with_authenticator(
+        Box::new(MachineSubmissionAdapter {
+            api: Arc::clone(&api),
+        }),
+        Box::new(MachineIdentityAuthenticator {
+            vouched: api.vouched_sensors(),
+        }),
+    );
+
+    spawn_transport(
+        &node_cfg.bind_addr,
+        &api,
+        &handle,
+        std::path::Path::new(&node_cfg.data_dir),
+    )
+    .await;
+
+    let watchdog = WatchdogConfig {
+        max_ingest_gap_s: 30.0,
+        max_tracking_pipeline_latency_s: 1.0,
+    };
+    let mut ticker = tokio::time::interval(TICK);
+    let mut last_plan = PlanView::default();
+    let mut last_health: Option<SystemHealth> = None;
+    let mut last_health_log = Instant::now();
+    let mut ingest_gap_warned = false;
+
+    let ctrl_c = tokio::signal::ctrl_c();
+    tokio::pin!(ctrl_c);
+
+    loop {
+        tokio::select! {
+            _ = &mut ctrl_c => {
+                tracing::info!("shutdown requested");
+                break;
+            }
+            _ = ticker.tick() => {}
+        }
+        let now = clock.now();
+
+        observe_services(&service_sinks, &mut sensors, now);
+        for event in gateway.tick(now, &mut tracking) {
+            bus.publish(now, Event::Ingest(event))?;
+        }
+        issue_api_tasks(&api, &mut sensors, &bus, now)?;
+        record_effector_reports(&api, &bus, now)?;
+        record_warning_acknowledgements(&api, &bus, now)?;
+        // GAP-009, DN-16 §5: what the peers said that was not a track. After the
+        // gateway tick, which is what fills the sinks.
+        record_launch_warnings(&feed_reports.peers, &bus, now)?;
+
+        // GAP-054: planned downtime is tracked here too, not only on the desktop. This
+        // node is the system of record for every desktop connected to it, so a window
+        // opening -- or closing with the sensor still off the air -- has to be in *its*
+        // journal. Scheduled products are not produced here: they are a watch's paperwork
+        // and a headless node has no watch, so the desktop owns them.
+        for (sensor, next) in sensors.advance_maintenance(now) {
+            let event = match next {
+                gungnir_model::MaintenanceState::Active => {
+                    gungnir_model::events::RhythmEvent::MaintenanceOpened {
+                        sensor,
+                        until: now,
+                        reason: "see the baseline".into(),
+                        at: now,
+                    }
+                }
+                gungnir_model::MaintenanceState::Completed => {
+                    gungnir_model::events::RhythmEvent::MaintenanceCompleted { sensor, at: now }
+                }
+                gungnir_model::MaintenanceState::Overrun => {
+                    tracing::warn!(
+                        sensor = sensor.0,
+                        "sensor did not return from planned maintenance"
+                    );
+                    gungnir_model::events::RhythmEvent::MaintenanceOverrun {
+                        sensor,
+                        window_closed: now,
+                        reason: "see the baseline".into(),
+                        at: now,
+                    }
+                }
+                gungnir_model::MaintenanceState::Planned => continue,
+            };
+            bus.publish(now, Event::Rhythm(event))?;
+        }
+        tracking.poll(now);
+
+        // GAP-019, edge (s): resolve cross-session identity and journal it. One event per
+        // track rather than one per tick -- an identity is a claim about what a track is,
+        // and repeating it ten times a second would bury the tracking events it sits
+        // beside. The picture is unchanged: `TrackView` carries no entity identity and
+        // none was added, because putting one there changes what every consumer of a
+        // track believes it is holding, and the record does not need it.
+        for event in entities.observe(tracking.tracks(), now) {
+            bus.publish(now, Event::Identity(event))?;
+        }
+
+        // GAP-066: only a plan computed for this snapshot is proposed. A stale one
+        // published as `PlanProposed` would be a recommendation nobody made now, and this
+        // node is the system of record for every desktop reading it.
+        let outcome = intercept.plan(now, tracking.tracks(), &resources);
+        let plan = outcome.plan().cloned().unwrap_or_default();
+        if outcome.is_fresh() && plan != last_plan {
+            bus.publish(
+                now,
+                Event::Intercept(InterceptEvent::PlanProposed(plan.clone())),
+            )?;
+            // GAP-028: the chain runs here too, and the record says which engines ran.
+            // Authority is not among them -- it is a question about who is asking, and
+            // nobody signs in to a node -- and there is no queue, for the same reason.
+            let verdict = evaluate_on_node(&config, &geo, tracking.tracks(), &plan, &resources);
+            bus.publish(
+                now,
+                Event::Intercept(InterceptEvent::PlanEvaluated {
+                    plan: plan.id,
+                    verdict: verdict.summary(),
+                    engines: NODE_ENGINES.iter().map(|e| (*e).to_string()).collect(),
+                }),
+            )?;
+            last_plan = plan;
+        }
+
+        for envelope in journal_rx.try_iter() {
+            journal.append(session, &envelope)?;
+        }
+        // The same envelopes reach every connected desktop. Offered after the journal
+        // append, so nothing is published to a client that is not yet on disk here --
+        // the node is the system of record, and a desktop must never hold an envelope
+        // the node could lose.
+        for envelope in api_rx.try_iter() {
+            if let Err(err) = api.publish_event(envelope) {
+                tracing::error!(%err, "could not offer an envelope to the transport");
+            }
+        }
+
+        let health = SystemHealth {
+            tracking_healthy: tracking.is_healthy(),
+            intercept_healthy: intercept.is_healthy(),
+            ingest_healthy: gateway.is_healthy(),
+        };
+        if last_health != Some(health) || last_health_log.elapsed() >= HEALTH_LOG_INTERVAL {
+            // The registry is reported rather than merely held: a node that built one
+            // and never read it would be construction without wiring, which is the
+            // thing this gap was open about.
+            tracing::info!(
+                ?health,
+                tracks = tracking.tracks().len(),
+                sensors = sensors.sensors().len(),
+                covering = sensors.coverage().len(),
+                feeds = ?feed_reports.summary(),
+                "node health"
+            );
+            if last_health != Some(health) {
+                // MOE-06: the transition is on the record, the periodic log is not.
+                bus.publish(
+                    now,
+                    Event::Health(gungnir_model::events::HealthEvent::Changed {
+                        tracking_healthy: health.tracking_healthy,
+                        intercept_healthy: health.intercept_healthy,
+                        ingest_healthy: health.ingest_healthy,
+                        at: now,
+                    }),
+                )?;
+            }
+            last_health = Some(health);
+            last_health_log = Instant::now();
+        }
+        api.set_now(now.0);
+        publish_picture(&api, tracking.tracks(), &last_plan, health);
+        // Computed here rather than in the request handler, so a caller's polling rate
+        // cannot decide this node's load.
+        if let Err(err) = api.publish_coverage(coverage_answer(&config, &sensors)) {
+            tracing::error!(%err, "could not publish the coverage answer");
+        }
+        if let Some(gap) = gateway.seconds_since_last_receipt(now) {
+            if gap > f64::from(watchdog.max_ingest_gap_s) && !ingest_gap_warned {
+                ingest_gap_warned = true;
+                tracing::warn!(
+                    gap_s = gap,
+                    "no detections accepted for longer than the watchdog limit"
+                );
+            } else if gap <= f64::from(watchdog.max_ingest_gap_s) {
+                ingest_gap_warned = false;
+            }
+        }
+    }
+
+    for envelope in journal_rx.try_iter() {
+        journal.append(session, &envelope)?;
+    }
+    // Drained first, then closed. A record marked closed over a journal still missing its
+    // last envelopes would claim a completeness it does not have; the other way round, a
+    // failure here leaves the session reported as interrupted, which is true of a node
+    // that could not finish shutting down.
+    JournalMissionManager::open(journal.root(), &journal)?.close(mission)?;
+    tracing::info!(
+        session = session.0,
+        "gungnir-node stopped; journal flushed and session closed"
+    );
+    Ok(())
+}
+
+/// The engines a node runs, in order. Two of the desktop's three: authority needs an
+/// asking role and a node has none.
+const NODE_ENGINES: [&str; 2] = ["readiness and geofence", "control status"];
+
+/// The policy chain as a node can honestly run it (GAP-028).
+fn evaluate_on_node(
+    config: &ConfigBaseline,
+    geo: &gungnir_geo::InMemoryGeoService,
+    tracks: &[gungnir_model::TrackView],
+    plan: &PlanView,
+    resources: &[gungnir_model::ResourceView],
+) -> gungnir_policy::PolicyVerdict {
+    let classification = |id: gungnir_model::TrackId| {
+        tracks
+            .iter()
+            .find(|t| t.id == id)
+            .map_or(gungnir_model::Classification::Unknown, |t| t.classification)
+    };
+    let chain = PolicyChain::new(vec![
+        Box::new(GeofencePolicy { geo }) as Box<dyn PolicyEngine>,
+        Box::new(ControlStatusPolicy {
+            settings: &config.policy.control_status,
+            track_classification: &classification,
+        }),
+    ]);
+    chain.evaluate(plan, resources)
+}
+
+/// The geo service from the baseline's fences (GAP-088). The same conversion as the
+/// desktop's `geofences::service_from_config`; the node has no edge to the app.
+fn geo_service_from(config: &ConfigBaseline) -> gungnir_geo::InMemoryGeoService {
+    gungnir_geo::InMemoryGeoService::new(
+        Vec::new(),
+        config
+            .geofences
+            .iter()
+            .map(|g| gungnir_geo::Geofence {
+                center: gungnir_model::Geodetic {
+                    lat_rad: g.center[0],
+                    lon_rad: g.center[1],
+                    alt_m: g.center[2],
+                },
+                radius_m: g.radius_m,
+                no_go: g.no_go,
+            })
+            .collect(),
+    )
+}
+
+/// The node's journal sealing from the baseline's key provider (GAP-060, DN-22 §5).
+///
+/// The same rule as the desktop's `build_encryption`, and the same sealer: the two
+/// binaries share no crate that depends on both `gungnir-store` and `gungnir-security`,
+/// so the twenty lines are here too rather than reached through a new edge.
+fn seal_journal(
+    config: &ConfigBaseline,
+    journal: &mut FileEventJournal,
+) -> gungnir_security::EncryptionStatus {
+    use gungnir_config::KeyProviderConfig;
+    use gungnir_security::{EncryptionStatus, KeyPurpose};
+    match &config.security.key_provider {
+        KeyProviderConfig::None => EncryptionStatus::NotConfigured,
+        KeyProviderConfig::Ephemeral => {
+            let mut provider = gungnir_security::InProcessKeyProvider::new();
+            let key = provider.generate(KeyPurpose::JournalAtRest);
+            journal.seal_with(Box::new(EphemeralSealer {
+                provider: std::sync::Arc::new(provider),
+                key,
+            }));
+            tracing::warn!(
+                "journal encryption uses an ephemeral key: this node's record cannot be \
+                 read after the process exits, and a node is a system of record"
+            );
+            EncryptionStatus::Active {
+                provider: "ephemeral".into(),
+            }
+        }
+        other => EncryptionStatus::UnavailableWritingPlaintext {
+            reason: format!(
+                "the configured key provider is designed and not built ({})",
+                other.owning_gap().unwrap_or("GAP-084")
+            ),
+        },
+    }
+}
+
+struct EphemeralSealer {
+    provider: std::sync::Arc<gungnir_security::InProcessKeyProvider>,
+    key: gungnir_security::KeyId,
+}
+
+impl gungnir_store::sealing::JournalSealer for EphemeralSealer {
+    fn seal(&self, plaintext: &[u8]) -> Result<Vec<u8>, gungnir_store::StoreError> {
+        use gungnir_security::KeyProvider;
+        self.provider
+            .seal(&self.key, plaintext)
+            .map_err(|e| gungnir_store::StoreError::Sealing(e.to_string()))
+    }
+
+    fn unseal(&self, sealed: &[u8]) -> Result<Vec<u8>, gungnir_store::StoreError> {
+        use gungnir_security::KeyProvider;
+        self.provider
+            .unseal(&self.key, sealed)
+            .map_err(|e| gungnir_store::StoreError::Sealing(e.to_string()))
+    }
+}

@@ -1,0 +1,23 @@
+[package]
+name = "gungnir-model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Canonical, versioned operational data model -- TrackView/DetectionView/ResourceView/PlanView and friends, with provenance, quality, identity, timestamps, and classification as first-class fields. Foundational/Critical per docs/gungnir-capabilities.md §5.1 -- the service facades and every productization crate build on this one."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+# D-11 / GAP-069. This crate owns `GlobalEntityId`, so it owns the textual form of one:
+# a peer that receives an identity has to be able to read and write it, and the format is
+# part of what the identity *is*. No generator feature -- minting is `gungnir-identity`'s.
+uuid.workspace = true
+gungnir-core = { path = "../gungnir-core" }
+gungnir-coord = { path = "../gungnir-coord" }
+
+[dev-dependencies]
+serde_json.workspace = true

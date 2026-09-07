@@ -1,0 +1,20 @@
+@startsalt WF-12
+title WF-12 PN-12 Replay (analyst, intelligence analyst, planner, administrator)
+{+
+  { Session: [ 1757030000 (2026-09-04 01:00–03:10, VG-01) ▾ ] | [ open ] | <b>Replaying</b> · replay clock 01:41:02 }
+  --
+  { 01:00 |===========|====●=======================| 03:10 }
+  { [ |◀ ] [ ◀ step ] [ ▶ play ] [ step ▶ ] [ ▶| ] | rate [ 1× ▾ ] | seek to: "01:41:02" [ go ] | position 18 402 / 41 218 · remaining 22 816 }
+  --
+  {#
+    seq | time | event | detail
+    18 400 | 01:41:01.8 | Tracking::TrackUpdated | T-042 hostile 0.91
+    18 401 | 01:41:02.0 | Intercept::PlanProposed | P-1183 MFG-2 → T-042, T-043
+    <b>18 402</b> | 01:41:02.0 | Command::ApprovalRequested | P-1183
+    18 403 | 01:41:02.4 | Ingest::Quarantined | sensor 9: schema mismatch
+  }
+  { <i>gap in seq → banner "events missing between 18 380 and 18 390"; the viewport shows the picture at the scrubbed time with a replay watermark</i> }
+  --
+  { Annotations (case "VG-01 review"): [ + note at 01:41:02 on T-042 ] | 3 notes }
+}
+@endsalt

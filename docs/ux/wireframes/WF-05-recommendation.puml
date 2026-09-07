@@ -1,0 +1,27 @@
+@startsalt WF-05
+title WF-05 PN-05 Recommendation panel (the selected plan)
+{+
+  <b>Plan P-1183</b>  proposed 01:41:02  <b>time remaining 2:58</b>
+  { Verdict: | <color:orange><b>Requires human approval</b></color> | . | delegation: within yours (point layer, hostile small UAS) }
+  --
+  {#
+    Resource | Track | Layer | Intercept | Cost | Readiness
+    MFG-2 gun | T-042 | point | 2.1 km / 1:40 | low | ready
+    MFG-2 gun | T-043 | point | 2.4 km / 1:52 | low | ready
+    <color:gray>HAF SAM</color> | <color:gray>T-039</color> | <color:gray>area</color> | <color:gray>—</color> | <color:gray>high</color> | <color:gray>held for missiles</color>
+  }
+  --
+  <b>Why</b>
+  { cheapest adequate layer for propeller drones; T-042 and T-043 threaten OPS (priority 1) in under 4 min; HAF SAM reserved by policy (WCS area Tight, class rule) }
+  --
+  <b>Alternatives</b> (each policy-checked)
+  {#
+    . | Assignment | Verdict | Cost | Note
+    A | MFG-1 gun → T-042, MFG-2 → T-043 | requires approval | low | MFG-1 farther: 2:05
+    B | HAF SAM → T-042 | <color:red>denied</color> | high | area layer held (WCS Tight)
+  }
+  --
+  { [ open decision… ] | [ what if… ] | [ show on map ] }
+  { <i>the accept control is not on this panel; it lives in the decision dialog (PN-07)</i> }
+}
+@endsalt

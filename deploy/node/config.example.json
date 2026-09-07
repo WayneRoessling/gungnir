@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "sensors": [
+    { "id": 1, "modality": "radar", "position": [0.7854, -1.3963, 25.0], "max_range_m": 60000.0 }
+  ],
+  "resources": [
+    { "id": 1, "position": [0.7850, -1.3960, 0.0], "capacity": 2 }
+  ],
+  "tracking": { "filter_selection": "imm-cv-ct", "gate_threshold": 9.21 },
+  "backend": { "kind": "embedded" },
+  "node": { "bind_addr": "0.0.0.0:7410", "data_dir": "/var/lib/gungnir" },
+  "allocation_horizon": 10,
+  "data_dir": "/var/lib/gungnir"
+}

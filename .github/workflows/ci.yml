@@ -1,0 +1,89 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt-clippy-test:
+    name: fmt, clippy, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: System libraries for eframe/glow
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libgl1-mesa-dev
+      - name: rustfmt
+        run: cargo fmt --all --check
+      - name: rustc warnings are errors
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo check --workspace --all-targets
+      # The workspace lint policy (Cargo.toml [workspace.lints]) already denies
+      # clippy::all; clippy::pedantic stays advisory, so it is not promoted here.
+      - name: clippy (all targets; gate 2 property tests compile here too)
+        run: cargo clippy --workspace --all-targets
+      - name: test
+        run: cargo test --workspace
+      - name: benches compile
+        run: cargo bench --workspace --no-run
+
+  uaf-registry:
+    name: UAF registry and generated views are consistent with the code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      # Regenerate the code-derived views, then fail if the result differs from
+      # what is committed (the manifests or the mission set changed without a
+      # regeneration) or if the registry check reports a problem.
+      - name: regenerate and check
+        run: python docs/architecture/uaf/tools/build_uaf.py
+      - name: generated files are committed
+        run: git diff --exit-code -- docs/architecture/uaf
+
+  test-tracks:
+    name: Test-track suite renders, generates, and validates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      # Re-render the documents from the YAML sources and regenerate the committed
+      # sample sets; fail if either differs from what is committed (a source changed
+      # without a regeneration) or if a check reports a problem.
+      - name: render the catalogue, profiles, sensor models, and scenario library
+        run: python docs/test-tracks/tools/build_catalogue.py
+      - name: regenerate the sample sets
+        run: python docs/test-tracks/tools/gen_tracks.py
+      - name: validate the sample sets
+        run: python docs/test-tracks/tools/validate_tracks.py
+      - name: rendered documents and sample sets are committed
+        run: git diff --exit-code -- docs/test-tracks testdata/tracks/samples
+
+  node-linux-container:
+    name: gungnir-node builds for Linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+      - uses: Swatinem/rust-cache@v2
+      - name: build the headless node only (no UI crates)
+        run: cargo build -p gungnir-node --release --target x86_64-unknown-linux-gnu
+      - name: container image
+        run: docker build -f deploy/node/Dockerfile -t gungnir-node:ci .

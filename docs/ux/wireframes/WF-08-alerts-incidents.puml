@@ -1,0 +1,19 @@
+@startsalt WF-08
+title WF-08 PN-08 Alerts and incidents (operators see incidents; raw alerts inside)
+{+
+  { <b>New 3</b> · Acknowledged 5 · Escalated 1 · Closed today 41 | [ show raw alerts ] | [ ack selected ] }
+  {#
+    Sev | Incident | Since | State | Raw | Action
+    <color:red>▌</color> critical | GNSS skew on 4 feeds, radar R1 lost | 01:50:12 | <b>new</b> | 6 alerts | [ acknowledge ] [ escalate ]
+    <color:orange>▌</color> warning | ingest gap A7 acoustic 38 s | 01:49:40 | acknowledged (Pieter 01:50) | 1 | [ close ]
+    <color:red>▌</color> critical | coverage gap over OPS upper Vell | 01:51:02 | escalated (Tomas 01:52) | 2 | [ view on map ]
+    ▌ info | journal append slow 120 ms | 01:47:10 | acknowledged | 1 | [ close ]
+  }
+  --
+  <b>Selected: GNSS skew on 4 feeds, radar R1 lost</b>
+  { history: new 01:50:12 · acknowledge → Pieter 01:50:40 · note "re-tasking HAF radar" · escalate → Tomas 01:52:01 }
+  { raw: A2 skew 1.9 s · A5 skew 2.4 s · A9 skew 2.1 s · A12 skew 2.0 s · R1 no report 30 s · R1 offline }
+  { [ acknowledge ] [ escalate ] [ close ] [ add note ] }
+  { <i>transitions follow AlertState::can_transition_to; invalid ones are absent, not greyed</i> }
+}
+@endsalt

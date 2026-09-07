@@ -1,0 +1,598 @@
+//! Combines gungnir-filters/-association/-track/-rfs/-track-fusion/-fusion-async into
+//! one app-facing service, per ARCHITECTURE.md §2. Each internal dependency edge
+//! here is exactly the one already fixed by agentic-coding-standards.md §1.1.
+//!
+//! `gungnir-app` and `gungnir-node` depend on the [`TrackingService`] trait only,
+//! never on the eight crates behind it, so adding/removing an internal tracking
+//! capability never touches UI or node code. The public types are the canonical
+//! `gungnir-model` views (ARCHITECTURE.md §7.2): the core's kinematic `Track` is
+//! projected into `TrackView` by [`project_track`], and the canonical
+//! `DetectionView` is reduced to the core's `Detection` by [`to_core_detection`].
+//!
+//! Deployment (ARCHITECTURE.md §8): [`LiveTrackingService`] is the embedded backend;
+//! `gungnir-remote` provides the same trait over `gungnir-api` for the connected
+//! profiles.
+
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use gungnir_model::Provenance;
+use gungnir_track::Track;
+
+pub mod registration;
+
+pub use gungnir_fusion_async::Detection;
+/// How the pipeline behind this service is tuned (GAP-053). Re-exported rather than
+/// making every host depend on `gungnir-fusion-async`: the hosts speak to the pipeline
+/// through this facade, which is the whole point of `ARCHITECTURE.md` §2.
+pub use gungnir_fusion_async::{PipelineSettings, UnsupportedFilter};
+pub use gungnir_model::{DetectionView, MissionTime, SensorId, TrackId, TrackStatus, TrackView};
+pub use registration::RegistrationLedger;
+
+/// The one trait `gungnir-app::AppState`, `gungnir-node`, and `gungnir-viewport3d`
+/// are allowed to depend on for "where are the targets right now."
+/// Why a detection did not reach the pipeline.
+///
+/// One variant today, and it is an enum rather than a unit so the next reason -- a full
+/// queue, a rejected epoch -- is added without changing every caller (GAP-066).
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum SubmitError {
+    /// The pipeline task is gone, so nothing can be submitted to it.
+    ///
+    /// Not recoverable by retrying: `is_healthy` is already false and stays false.
+    #[error("the tracking pipeline is not running; the detection was not accepted")]
+    PipelineGone,
+    /// The measurement is a bearing or a native range/azimuth/elevation report, and
+    /// this service cannot place it (`docs/design/DN-27-bearing-only-detections.md` §4).
+    ///
+    /// **Named rather than dropped, and never converted.** Both angular variants need
+    /// the reporting sensor's position in the local frame before they mean anything, and
+    /// `DetectionView` carries a `SensorId` and not a position; nothing in this
+    /// workspace resolves one for this service today. `gungnir_fusion_async` has the
+    /// bearing path -- `BearingDetection` and `FusionPipeline::offer_bearing`, built to
+    /// DN-27 §5 -- and this service is the wiring that is missing between them, which is
+    /// an open row and not a silent conversion. Inventing a range to make one fit is
+    /// exactly what DN-27 §2 exists to forbid.
+    #[error(
+        "the detection is a bearing or a polar report, and this service has no sensor \
+         position to place it from; it was refused rather than converted"
+    )]
+    NotAPosition,
+}
+
+pub trait TrackingService: Send + Sync {
+    /// Feed a validated detection in from any sensor. Non-blocking: internally hands
+    /// off to the fusion-async ingestion pipeline via channel, never blocks the
+    /// render/UI thread.
+    /// # Errors
+    ///
+    /// [`SubmitError::PipelineGone`] when the detection could not be handed off, and
+    /// [`SubmitError::NotAPosition`] when the measurement is a bearing or a polar report
+    /// this service has no sensor position to place (DN-27 §4).
+    ///
+    /// **This used to return `()`** (GAP-066): a caller could not tell a detection that
+    /// reached the pipeline from one that was dropped because the pipeline had died, and
+    /// the gateway that feeds this counts what it accepted. Counting an accepted
+    /// detection that went nowhere is how an ingest rate looks healthy while nothing is
+    /// being tracked.
+    fn submit_detection(&mut self, detection: DetectionView) -> Result<(), SubmitError>;
+
+    /// Pull any completed pipeline output into the snapshot [`tracks`](Self::tracks)
+    /// returns. Called once per tick by the host; non-blocking. `now` stamps the
+    /// projected views.
+    fn poll(&mut self, now: MissionTime);
+
+    /// Non-blocking snapshot of current tracks (confirmed + coasting). Cheap to call
+    /// every frame from `update()` per the UI standards' immediate-mode rule.
+    fn tracks(&self) -> &[TrackView];
+
+    /// True if the underlying pipeline is running and reporting (no stalled OOS
+    /// buffer, no fusion divergence beyond budget). False while the pipeline is
+    /// unimplemented, so the health panel never claims a working tracker.
+    fn is_healthy(&self) -> bool;
+}
+
+/// Reduce the canonical observation to the kinematic form the core consumes.
+///
+/// `None` when the measurement is **not a position**, which since
+/// `docs/design/DN-27-bearing-only-detections.md` §4 it need not be. There is
+/// deliberately no fallback: DN-27 §2 forbids turning a bearing into a position by
+/// assuming a range, in any of its three tempting forms, and a conversion here that
+/// invented one would produce a valid `Detection` that entered the tracker without
+/// complaint, initiated a track and was drawn as a symbol at a place nothing is.
+///
+/// The two angular variants need the reporting sensor's position in the local frame to
+/// be used at all, and `DetectionView` carries a `SensorId` and not a position, so this
+/// function cannot supply one. See [`SubmitError::NotAPosition`] for what the live
+/// service does with them, and what is not yet wired.
+pub fn to_core_detection(d: &DetectionView) -> Option<Detection> {
+    d.measurement.position_enu().map(|measurement| Detection {
+        sensor_id: d.sensor.0,
+        timestamp_s: d.source_time.0,
+        measurement,
+    })
+}
+
+/// Project a core track into the canonical view. Classification is `Unknown` until
+/// `gungnir-identification` sets it; quality confidence is not yet produced by the
+/// core and is left at the default.
+/// Whether an estimate last reported at `last_reported` is stale at `now`.
+///
+/// The one staleness rule in the system (GAP-012). PN-03 colours by
+/// `Quality::is_stale` on the stated principle that the rule is this crate's and a second
+/// one in a panel would drift from it -- and until this function existed, this crate had no
+/// rule at all, so every track was drawn as fresh however long the pipeline had been silent
+/// about it. `platform_class` is the key into the per-class table; it is `None` for every
+/// track today because nothing on a track carries a kinematic class yet (GAP-018), so the
+/// policy's `default_s` applies. That is the policy's own rule for an unclassed track, not a
+/// shortcut around it.
+#[must_use]
+pub fn is_stale(
+    last_reported: MissionTime,
+    now: MissionTime,
+    platform_class: Option<&str>,
+    settings: &gungnir_model::StalenessSettings,
+) -> bool {
+    let limit_s = platform_class.map_or(settings.default_s, |c| settings.for_class(c));
+    // A limit of zero or less means the deployment configured no staleness at all, and a
+    // track must not be drawn stale by an unconfigured rule.
+    limit_s > 0.0 && now.seconds_since(last_reported) > limit_s
+}
+
+pub fn project_track(track: &Track, now: MissionTime, provenance: &Provenance) -> TrackView {
+    TrackView {
+        id: track.id,
+        status: track.status,
+        state: track.state,
+        covariance: track.covariance,
+        classification: gungnir_model::Classification::Unknown,
+        provenance: provenance.clone(),
+        quality: gungnir_model::Quality::default(),
+        mission_time: now,
+        releasability: gungnir_model::Releasability::default(),
+    }
+}
+
+/// What `Provenance::algorithm_version` says while nothing governs this service.
+///
+/// **This used to be the crate version**, which answers a different question than the one
+/// the field asks: `Provenance` documents it as the version of the
+/// algorithm/configuration that produced the track, resolved through `gungnir-modelops`,
+/// and no `gungnir-modelops` baseline is promoted into anything (GAP-053). A semantic
+/// version sitting in that field reads as a governed configuration, and the day the
+/// pipeline lands (GAP-011) every track it produced would have carried one.
+///
+/// The build is still named, because it is the only true thing there is to say about what
+/// produced a track today. The rest of the string says what is missing.
+pub const UNGOVERNED_ALGORITHM_VERSION: &str = concat!(
+    "ungoverned: no promoted gungnir-modelops baseline (GAP-053); build ",
+    env!("CARGO_PKG_VERSION")
+);
+
+/// Default implementation wiring IMM filtering -> gating/JPDA association ->
+/// track-manager lifecycle -> optional PHD/CPHD for dense regions -> track-fusion
+/// across sensor platforms, all driven by `gungnir_fusion_async::ingest` on the
+/// host's tokio runtime.
+pub struct LiveTrackingService {
+    tracks: Vec<TrackView>,
+    /// `None` once [`LiveTrackingService::finish`] has ended the stream.
+    detection_tx: Option<Sender<Detection>>,
+    track_rx: Receiver<Vec<Track>>,
+    pipeline_alive: bool,
+    provenance: Provenance,
+    /// The staleness policy in force (GAP-012). `Default` is a zero limit, which
+    /// [`is_stale`] treats as "no rule configured" rather than "everything is stale".
+    staleness: gungnir_model::StalenessSettings,
+    /// When the pipeline last reported each track, which is what staleness is measured
+    /// from. **Not the track's own timestamp**: the core `Track` carries none, and the
+    /// question is how long since this service last heard about the track, which it can
+    /// answer itself.
+    last_reported: std::collections::HashMap<gungnir_model::TrackId, MissionTime>,
+}
+
+impl LiveTrackingService {
+    /// Spawn the ingest task on `runtime` and wire the two boundary channels. Never
+    /// panics; if the pipeline task later stops, `is_healthy` turns false.
+    pub fn new(runtime: &tokio::runtime::Handle) -> Self {
+        Self::with_pipeline_settings(runtime, gungnir_fusion_async::PipelineSettings::default())
+    }
+
+    /// As [`LiveTrackingService::new`], under a deployment's pipeline settings.
+    ///
+    /// Passed in as data rather than read from configuration, for the same reason the
+    /// staleness policy is: this crate may not depend on `gungnir-config`. Both binaries
+    /// build the settings from the promoted algorithm baseline and hand them here, which
+    /// is what makes a promoted configuration reach the picture (GAP-053, DN-24 §7).
+    #[must_use]
+    pub fn with_pipeline_settings(
+        runtime: &tokio::runtime::Handle,
+        settings: gungnir_fusion_async::PipelineSettings,
+    ) -> Self {
+        let (detection_tx, detection_rx) = crossbeam_channel::unbounded::<Detection>();
+        let (track_tx, track_rx) = crossbeam_channel::unbounded::<Vec<Track>>();
+        runtime.spawn(gungnir_fusion_async::ingest_with(
+            detection_rx,
+            track_tx,
+            settings,
+        ));
+        Self {
+            tracks: Vec::new(),
+            detection_tx: Some(detection_tx),
+            track_rx,
+            pipeline_alive: true,
+            provenance: Provenance {
+                source_sensor_ids: Vec::new(),
+                calibration_baseline_version: None,
+                algorithm_version: UNGOVERNED_ALGORITHM_VERSION.to_owned(),
+                peer: None,
+                conversion_loss: None,
+                authentication: gungnir_model::SourceAuthentication::default(),
+            },
+            staleness: gungnir_model::StalenessSettings::default(),
+            last_reported: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Stamp the algorithm baseline this service is **actually applying** into every
+    /// track's provenance (DN-24 §7, GAP-053).
+    ///
+    /// **Only a caller that also handed the matching settings to
+    /// [`LiveTrackingService::with_pipeline_settings`] may call this.** DN-24 §7 states
+    /// the rule the other way round and it is the same rule: the service may stamp an
+    /// identifier only once it applies the configuration that identifier names. A track
+    /// stamped with a baseline the pipeline is not running would read as governed and be
+    /// the exact fiction `UNGOVERNED_ALGORITHM_VERSION` exists to prevent.
+    #[must_use]
+    pub fn with_algorithm_baseline(
+        mut self,
+        baseline: &gungnir_model::AlgorithmBaselineId,
+    ) -> Self {
+        self.provenance.algorithm_version = baseline.to_string();
+        self
+    }
+
+    /// The staleness policy this service judges tracks by (GAP-012).
+    ///
+    /// Passed in as data rather than read from configuration, because this crate may not
+    /// depend on `gungnir-config`; both binaries hand it `config.policy.staleness`.
+    #[must_use]
+    pub fn with_staleness(mut self, staleness: gungnir_model::StalenessSettings) -> Self {
+        self.staleness = staleness;
+        self
+    }
+
+    /// End the detection stream, so the pipeline flushes its reorder buffer and emits a
+    /// final snapshot.
+    ///
+    /// **A session that never ends its stream loses its last reorder horizon**: the
+    /// buffer holds those detections waiting for a later one that never comes, and a
+    /// replay would finish short of the recording it replayed. Ending the stream is a
+    /// deliberate act rather than something a `Drop` does, because the desktop keeps
+    /// this service for the life of a session and dropping it is not the same event as
+    /// the sensors stopping.
+    ///
+    /// Submitting afterwards returns [`SubmitError::PipelineGone`], which is what it is.
+    pub fn finish(&mut self) {
+        self.detection_tx = None;
+    }
+
+    /// Project a pipeline snapshot into views, deciding staleness for each track.
+    ///
+    /// Public so the rule can be exercised without a pipeline behind it: the channel this
+    /// service polls is fed by a task that produces nothing today (GAP-011).
+    pub fn apply_snapshot(&mut self, snapshot: &[Track], now: MissionTime) {
+        for track in snapshot {
+            self.last_reported.insert(track.id, now);
+        }
+        // A track absent from this snapshot keeps its last-reported time and ages.
+        self.tracks = snapshot
+            .iter()
+            .map(|t| {
+                let mut view = project_track(t, now, &self.provenance);
+                let last = self.last_reported.get(&t.id).copied().unwrap_or(now);
+                view.quality.is_stale = is_stale(last, now, None, &self.staleness);
+                view
+            })
+            .collect();
+    }
+}
+
+impl TrackingService for LiveTrackingService {
+    fn submit_detection(&mut self, detection: DetectionView) -> Result<(), SubmitError> {
+        let Some(core) = to_core_detection(&detection) else {
+            return Err(SubmitError::NotAPosition);
+        };
+        if self
+            .detection_tx
+            .as_ref()
+            .is_some_and(|tx| tx.send(core).is_ok())
+        {
+            return Ok(());
+        }
+        if self.pipeline_alive {
+            self.pipeline_alive = false;
+            tracing::error!(
+                "fusion-async ingest task is gone; detections can no longer be submitted"
+            );
+        }
+        Err(SubmitError::PipelineGone)
+    }
+
+    fn poll(&mut self, now: MissionTime) {
+        let mut latest: Option<Vec<Track>> = None;
+        loop {
+            match self.track_rx.try_recv() {
+                Ok(snapshot) => latest = Some(snapshot),
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    if self.pipeline_alive {
+                        self.pipeline_alive = false;
+                        tracing::error!(
+                            "fusion-async ingest task stopped; track snapshot is frozen"
+                        );
+                    }
+                    break;
+                }
+            }
+        }
+        if let Some(snapshot) = latest {
+            self.apply_snapshot(&snapshot, now);
+        } else {
+            // No new snapshot: the tracks on screen age against the last report, so a
+            // pipeline that has gone quiet is drawn as quiet rather than as current.
+            for view in &mut self.tracks {
+                if let Some(last) = self.last_reported.get(&view.id).copied() {
+                    view.quality.is_stale = is_stale(last, now, None, &self.staleness);
+                    view.mission_time = now;
+                }
+            }
+        }
+    }
+
+    fn tracks(&self) -> &[TrackView] {
+        &self.tracks
+    }
+
+    fn is_healthy(&self) -> bool {
+        self.pipeline_alive && gungnir_fusion_async::PIPELINE_IMPLEMENTED
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::float_cmp)]
+mod tests {
+    use super::*;
+    use gungnir_model::SensorId;
+
+    fn detection() -> DetectionView {
+        DetectionView {
+            sensor: SensorId(4),
+            source_time: MissionTime(1.0),
+            receipt_time: MissionTime(1.1),
+            measurement: gungnir_model::Measurement::Position {
+                enu: nalgebra::Vector3::new(1.0, 2.0, 3.0),
+                variance_m2: [400.0, 400.0, 900.0],
+            },
+            provenance: Provenance::default(),
+        }
+    }
+
+    /// **A version number in `algorithm_version` reads as a governed configuration.**
+    /// This field used to carry the crate version, which answers a different question than
+    /// the one `Provenance` documents it as answering, and nothing would have caught it:
+    /// no track is produced today, so no stamp is visible until the pipeline lands and
+    /// every track it produces is already labelled.
+    #[test]
+    fn the_algorithm_version_does_not_read_as_a_governed_configuration() {
+        let v = UNGOVERNED_ALGORITHM_VERSION;
+        assert!(
+            v.contains("ungoverned"),
+            "the field does not say that nothing governs it: {v}"
+        );
+        assert!(
+            v.contains("gungnir-modelops"),
+            "the field does not name what is missing: {v}"
+        );
+        // Not a bare version string: that is exactly what it used to be.
+        assert!(
+            v.split('.')
+                .next()
+                .is_some_and(|p| p.parse::<u32>().is_err()),
+            "the field still reads as a plain version: {v}"
+        );
+    }
+
+    fn track(id: u64) -> Track {
+        Track {
+            id: gungnir_model::TrackId(id),
+            status: gungnir_model::TrackStatus::Confirmed,
+            state: nalgebra::SVector::zeros(),
+            covariance: nalgebra::SMatrix::identity(),
+            misses_since_update: 0,
+            hits: 3,
+        }
+    }
+
+    fn policy(default_s: f64) -> gungnir_model::StalenessSettings {
+        gungnir_model::StalenessSettings {
+            default_s,
+            by_class_s: std::collections::BTreeMap::new(),
+        }
+    }
+
+    /// **The rule that did not exist.** A track the pipeline stops reporting goes stale by
+    /// the policy's limit; before GAP-012 it was drawn fresh forever.
+    #[test]
+    fn a_track_the_pipeline_stops_reporting_goes_stale_by_policy() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let mut svc = LiveTrackingService::new(runtime.handle()).with_staleness(policy(5.0));
+
+        svc.apply_snapshot(&[track(1)], MissionTime(10.0));
+        assert!(!svc.tracks()[0].quality.is_stale, "fresh on report");
+
+        // Polled with nothing new for longer than the limit: stale, and still shown.
+        svc.poll(MissionTime(16.0));
+        assert_eq!(
+            svc.tracks().len(),
+            1,
+            "a stale track was dropped, not marked"
+        );
+        assert!(svc.tracks()[0].quality.is_stale);
+
+        // Reported again: fresh again.
+        svc.apply_snapshot(&[track(1)], MissionTime(17.0));
+        assert!(!svc.tracks()[0].quality.is_stale);
+        drop(svc);
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+    }
+
+    /// No configured limit means no rule, not an instant-stale rule.
+    #[test]
+    fn an_unconfigured_limit_never_marks_a_track_stale() {
+        assert!(!is_stale(
+            MissionTime(0.0),
+            MissionTime(1e6),
+            None,
+            &policy(0.0)
+        ));
+    }
+
+    /// Per class when a class is known; the default when it is not. Nothing on a track
+    /// carries a kinematic class yet (GAP-018), so the second is every track today.
+    #[test]
+    fn a_class_limit_applies_when_the_class_is_known() {
+        let mut p = policy(60.0);
+        p.by_class_s.insert("cruise-missile".into(), 2.0);
+        assert!(is_stale(
+            MissionTime(0.0),
+            MissionTime(3.0),
+            Some("cruise-missile"),
+            &p
+        ));
+        assert!(!is_stale(MissionTime(0.0), MissionTime(3.0), None, &p));
+    }
+
+    #[test]
+    fn core_detection_keeps_sensor_source_time_and_measurement() {
+        let d = to_core_detection(&detection()).expect("a position converts");
+        assert_eq!(d.sensor_id, 4);
+        assert_eq!(d.timestamp_s, 1.0);
+        assert_eq!(d.measurement, nalgebra::Vector3::new(1.0, 2.0, 3.0));
+    }
+
+    /// A bearing is **not** converted into a position, and the service says so instead
+    /// of guessing a range (docs/design/DN-27-bearing-only-detections.md §2 and §4).
+    #[test]
+    fn a_bearing_is_refused_rather_than_given_a_range() {
+        let bearing = DetectionView {
+            measurement: gungnir_model::Measurement::Bearing {
+                azimuth_rad: 0.6,
+                elevation_rad: None,
+                azimuth_variance_rad2: 1e-4,
+                elevation_variance_rad2: None,
+            },
+            ..detection()
+        };
+        assert!(to_core_detection(&bearing).is_none());
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let mut svc = LiveTrackingService::new(runtime.handle());
+        assert_eq!(
+            svc.submit_detection(bearing),
+            Err(SubmitError::NotAPosition)
+        );
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+    }
+
+    /// Health is the pipeline's liveness and nothing else: true while the task is
+    /// running, false the moment it is not.
+    ///
+    /// **This test used to assert the opposite** and was right to, because the
+    /// pipeline was a stub (GAP-011). It now pins the other half of the same rule:
+    /// health follows the pipeline rather than a constant, so a build with a running
+    /// tracker says so and a build whose tracker has died says that instead.
+    /// DN-24 §7 (GAP-053), both halves. A service applying a promoted baseline stamps
+    /// its identifier on every track it projects; one that is not stays ungoverned, and
+    /// the string says so in words rather than by being empty.
+    #[test]
+    fn a_track_carries_the_baseline_identifier_only_where_it_is_applied() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let track = Track {
+            id: gungnir_model::TrackId(1),
+            status: gungnir_model::TrackStatus::Confirmed,
+            state: nalgebra::SVector::zeros(),
+            covariance: nalgebra::SMatrix::identity(),
+            misses_since_update: 0,
+            hits: 3,
+        };
+
+        let mut ungoverned = LiveTrackingService::new(runtime.handle());
+        ungoverned.apply_snapshot(std::slice::from_ref(&track), MissionTime(1.0));
+        assert_eq!(
+            ungoverned.tracks()[0].provenance.algorithm_version,
+            UNGOVERNED_ALGORITHM_VERSION,
+            "a service applying no promoted baseline must not claim one"
+        );
+
+        let id = gungnir_model::AlgorithmBaselineId {
+            profile: gungnir_model::MissionProfile("air-defence".into()),
+            name: "kf baseline".into(),
+        };
+        let settings = PipelineSettings::from_baseline(11.34, "kf-cv").expect("implemented");
+        let mut governed = LiveTrackingService::with_pipeline_settings(runtime.handle(), settings)
+            .with_algorithm_baseline(&id);
+        governed.apply_snapshot(std::slice::from_ref(&track), MissionTime(1.0));
+        assert_eq!(
+            governed.tracks()[0].provenance.algorithm_version,
+            "air-defence/kf baseline"
+        );
+
+        // A filter this build does not have is refused rather than substituted.
+        let err = PipelineSettings::from_baseline(11.34, "imm-cv-ct").expect_err("not built");
+        assert_eq!(err.selection, "imm-cv-ct");
+        assert!(err.to_string().contains("does not implement"), "{err}");
+
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+    }
+
+    #[test]
+    fn health_follows_the_pipeline_and_turns_false_when_it_stops() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let mut svc = LiveTrackingService::new(runtime.handle());
+        svc.submit_detection(detection())
+            .expect("the pipeline took it");
+        svc.poll(MissionTime(2.0));
+        assert!(
+            svc.is_healthy(),
+            "the pipeline is running and health must say so"
+        );
+        // One detection does not leave the reorder buffer: nothing later has arrived
+        // for the horizon to be measured against, so the snapshot is honestly empty
+        // rather than a track invented from a single position.
+        assert!(svc.tracks().is_empty());
+
+        // The pipeline stops with the runtime; the next hand-off fails and health
+        // follows it down.
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+        assert_eq!(
+            svc.submit_detection(detection()),
+            Err(SubmitError::PipelineGone)
+        );
+        assert!(
+            !svc.is_healthy(),
+            "the pipeline is gone; health must not claim otherwise"
+        );
+    }
+}

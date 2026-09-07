@@ -1,0 +1,24 @@
+[package]
+name = "gungnir-track"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Track lifecycle: init/confirm/coast/delete."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+gungnir-core = { path = "../gungnir-core" }
+gungnir-association = { path = "../gungnir-association" }
+
+[dev-dependencies]
+# The Stone Soup oracle fixture in testdata/oracles/track/ is JSON; serde_json is an
+# already-approved workspace dependency (agentic-coding-standards.md 2.9), dev-only.
+serde_json.workspace = true
+proptest.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }

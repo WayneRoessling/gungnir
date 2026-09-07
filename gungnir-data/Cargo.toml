@@ -1,0 +1,23 @@
+[package]
+name = "gungnir-data"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+description = "File I/O for point cloud / VTK scientific mesh / terrain / glTF, per rust-3d-data-ecosystem-build-vs-adopt.md §1. No egui/three-d/wgpu dependency -- unit-testable with plain cargo test."
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+tracing.workspace = true
+crossbeam-channel.workspace = true
+las.workspace = true
+vtkio.workspace = true
+gltf.workspace = true
+tiff.workspace = true
+# copc-rs, pasture-core, pasture-io: young/pre-1.0 crates named in the source doc.
+# Pin exact tested minor versions in the PR that introduces them (agentic coding
+# standard: dependency discipline) rather than here. oxigdal-3d was the DEM route
+# the source doc named; the owner chose `tiff` instead on 2026-09-06 (GAP-023).

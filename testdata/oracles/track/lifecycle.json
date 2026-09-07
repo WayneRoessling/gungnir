@@ -1,0 +1,731 @@
+{
+ "row": "Track lifecycle (init/confirm/coast/delete)",
+ "oracle": "Stone Soup UpdateTimeStepsDeleter (driven); MultiMeasurementInitiator confirmation condition (lifted from source)",
+ "oracle_versions": {
+  "stonesoup": "1.9.1",
+  "numpy": "2.5.2"
+ },
+ "python": "3.12.10",
+ "generated_by": "testdata/oracles/tools/gen_lifecycle_fixtures.py",
+ "sequence_alphabet": {
+  "H": "the track was associated with a detection",
+  "M": "it was not"
+ },
+ "notes": [
+  "The deleter is a real Stone Soup object driven against a real Track; the deletion step index is its answer. The confirmation condition is the one line from MultiMeasurementInitiator.initiate, evaluated against the same real Track, because driving the whole initiator would put a predictor, updater, associator and measurement model between the fixture and the rule under test. This is stated in the module docstring and in the Rust test rather than implied.",
+  "UpdateTimeStepsDeleter deletes on the nth consecutive miss, not the (n+1)th: driving it with n = 1, 2, 3 shows deletion at exactly n misses. The comparison is >=, and the case list pins each of those.",
+  "Updates in this fixture carry a real SingleHypothesis. The deleter tests `isinstance(state, Update) and state.hypothesis`, so an update built with hypothesis=None is not counted as an update and the deleter falls through to a distinct-timestamp count. An earlier draft did that and reported a track deleted while it was being hit every step; dense_hits_never_deleted and hit_resets_the_miss_run are kept in the case list because they are what caught it.",
+  "Confirmation counts cumulative updates, not a consecutive run. confirm_counts_cumulative_across_a_miss is the case that distinguishes the two, and the one that showed the gungnir scaffold's original comment to be wrong.",
+  "MATLAB's trackHistoryLogic and trackScoreLogic are named by the row and were not run: MATLAB is not installed. See ../README.md."
+ ],
+ "cases": [
+  {
+   "name": "confirm_on_third_consecutive_hit",
+   "sequence": "HHHHH",
+   "min_points": 3,
+   "time_steps_since_update": 3,
+   "confirmed_at_step": 2,
+   "deleted_at_step": null,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "H",
+     "update_count": 2,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "H",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "H",
+     "update_count": 4,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 4,
+     "symbol": "H",
+     "update_count": 5,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    }
+   ]
+  },
+  {
+   "name": "confirm_counts_cumulative_across_a_miss",
+   "sequence": "HMHHH",
+   "min_points": 3,
+   "time_steps_since_update": 5,
+   "confirmed_at_step": 3,
+   "deleted_at_step": null,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "H",
+     "update_count": 2,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "H",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 4,
+     "symbol": "H",
+     "update_count": 4,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    }
+   ]
+  },
+  {
+   "name": "confirm_immediately_min_points_one",
+   "sequence": "HMMMM",
+   "min_points": 1,
+   "time_steps_since_update": 4,
+   "confirmed_at_step": 0,
+   "deleted_at_step": 4,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 4,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    }
+   ]
+  },
+  {
+   "name": "never_confirms_not_enough_hits",
+   "sequence": "HMMHM",
+   "min_points": 4,
+   "time_steps_since_update": 9,
+   "confirmed_at_step": null,
+   "deleted_at_step": null,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "H",
+     "update_count": 2,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 4,
+     "symbol": "M",
+     "update_count": 2,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    }
+   ]
+  },
+  {
+   "name": "delete_on_first_miss",
+   "sequence": "HMMMM",
+   "min_points": 1,
+   "time_steps_since_update": 1,
+   "confirmed_at_step": 0,
+   "deleted_at_step": 1,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    },
+    {
+     "step": 2,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    },
+    {
+     "step": 3,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    },
+    {
+     "step": 4,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    }
+   ]
+  },
+  {
+   "name": "delete_on_second_miss",
+   "sequence": "HHMMM",
+   "min_points": 2,
+   "time_steps_since_update": 2,
+   "confirmed_at_step": 1,
+   "deleted_at_step": 3,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "H",
+     "update_count": 2,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "M",
+     "update_count": 2,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "M",
+     "update_count": 2,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    },
+    {
+     "step": 4,
+     "symbol": "M",
+     "update_count": 2,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    }
+   ]
+  },
+  {
+   "name": "delete_on_third_miss",
+   "sequence": "HHHMMMM",
+   "min_points": 3,
+   "time_steps_since_update": 3,
+   "confirmed_at_step": 2,
+   "deleted_at_step": 5,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "H",
+     "update_count": 2,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "H",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "M",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 4,
+     "symbol": "M",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 5,
+     "symbol": "M",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    },
+    {
+     "step": 6,
+     "symbol": "M",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    }
+   ]
+  },
+  {
+   "name": "hit_resets_the_miss_run",
+   "sequence": "HHMMHMM",
+   "min_points": 2,
+   "time_steps_since_update": 3,
+   "confirmed_at_step": 1,
+   "deleted_at_step": null,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "H",
+     "update_count": 2,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "M",
+     "update_count": 2,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "M",
+     "update_count": 2,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 4,
+     "symbol": "H",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 5,
+     "symbol": "M",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 6,
+     "symbol": "M",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    }
+   ]
+  },
+  {
+   "name": "long_coast_then_reacquire",
+   "sequence": "HHHMMHHMMMM",
+   "min_points": 3,
+   "time_steps_since_update": 4,
+   "confirmed_at_step": 2,
+   "deleted_at_step": 10,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "H",
+     "update_count": 2,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "H",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "M",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 4,
+     "symbol": "M",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 5,
+     "symbol": "H",
+     "update_count": 4,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 6,
+     "symbol": "H",
+     "update_count": 5,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 7,
+     "symbol": "M",
+     "update_count": 5,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 8,
+     "symbol": "M",
+     "update_count": 5,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 9,
+     "symbol": "M",
+     "update_count": 5,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 10,
+     "symbol": "M",
+     "update_count": 5,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    }
+   ]
+  },
+  {
+   "name": "alternating",
+   "sequence": "HMHMHMHMHM",
+   "min_points": 3,
+   "time_steps_since_update": 2,
+   "confirmed_at_step": 4,
+   "deleted_at_step": null,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "H",
+     "update_count": 2,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "M",
+     "update_count": 2,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 4,
+     "symbol": "H",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 5,
+     "symbol": "M",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 6,
+     "symbol": "H",
+     "update_count": 4,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 7,
+     "symbol": "M",
+     "update_count": 4,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 8,
+     "symbol": "H",
+     "update_count": 5,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 9,
+     "symbol": "M",
+     "update_count": 5,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    }
+   ]
+  },
+  {
+   "name": "all_misses_after_one_hit",
+   "sequence": "HMMMMMMMM",
+   "min_points": 1,
+   "time_steps_since_update": 5,
+   "confirmed_at_step": 0,
+   "deleted_at_step": 5,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 4,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 5,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    },
+    {
+     "step": 6,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    },
+    {
+     "step": 7,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    },
+    {
+     "step": 8,
+     "symbol": "M",
+     "update_count": 1,
+     "confirmed_by_now": true,
+     "deleter_says_delete": true
+    }
+   ]
+  },
+  {
+   "name": "dense_hits_never_deleted",
+   "sequence": "HHHHHHHHHH",
+   "min_points": 2,
+   "time_steps_since_update": 2,
+   "confirmed_at_step": 1,
+   "deleted_at_step": null,
+   "per_step": [
+    {
+     "step": 0,
+     "symbol": "H",
+     "update_count": 1,
+     "confirmed_by_now": false,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 1,
+     "symbol": "H",
+     "update_count": 2,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 2,
+     "symbol": "H",
+     "update_count": 3,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 3,
+     "symbol": "H",
+     "update_count": 4,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 4,
+     "symbol": "H",
+     "update_count": 5,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 5,
+     "symbol": "H",
+     "update_count": 6,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 6,
+     "symbol": "H",
+     "update_count": 7,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 7,
+     "symbol": "H",
+     "update_count": 8,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 8,
+     "symbol": "H",
+     "update_count": 9,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    },
+    {
+     "step": 9,
+     "symbol": "H",
+     "update_count": 10,
+     "confirmed_by_now": true,
+     "deleter_says_delete": false
+    }
+   ]
+  }
+ ]
+}

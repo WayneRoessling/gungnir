@@ -1,0 +1,31 @@
+[package]
+name = "gungnir-interop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Data standards & interoperability: the schema catalog with version negotiation, the Arrow representation of detections, and the ASTERIX/STANAG codec boundary that gungnir-ingest adapters and gungnir-reporting exports use. docs/gungnir-capabilities.md §5.6 and §1 (interop schema row) -- Medium."
+
+[lints]
+workspace = true
+
+[dependencies]
+arrow.workspace = true
+nalgebra.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+# GAP-063: the Arrow representation carries the two non-scalar provenance fields as JSON
+# text; the AIS fixture test reads gpsd's JSON decodes as its oracle (D-32).
+serde_json.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+
+[dev-dependencies]
+# The conformance suite round-trips envelopes (GAP-063). `gungnir-eventing` depends on
+# the model alone, so this dev-only edge adds no cycle.
+gungnir-eventing = { path = "../gungnir-eventing" }
+# GAP-010: the two MIT Mode S decoders the ADS-B codec is gated against, because no
+# ADS-B specification is both free to obtain and permissively licensed
+# (docs/design/external-standards.md §4, docs/agentic-coding-standards.md §2.9).
+# **Oracles, not a decoder**: nothing outside `tests/` may name either crate, and a green
+# differential gate is agreement with the open-source consensus, not conformance.
+adsb_deku.workspace = true
+rs1090.workspace = true

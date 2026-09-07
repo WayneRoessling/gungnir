@@ -1,0 +1,26 @@
+[package]
+name = "gungnir-track-fusion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+description = "Track-to-track fusion (CI/info-matrix), sensor registration/bias."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+gungnir-track = { path = "../gungnir-track" }
+gungnir-coord = { path = "../gungnir-coord" }
+
+[dev-dependencies]
+proptest.workspace = true
+# The hand-derived CI and registration fixtures in testdata/oracles/track/ are JSON;
+# serde_json is an already-approved workspace dependency (agentic-coding-standards.md
+# 2.9), dev-only.
+serde_json.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }

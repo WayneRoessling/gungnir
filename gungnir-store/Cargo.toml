@@ -1,0 +1,17 @@
+[package]
+name = "gungnir-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Durable storage for mission sessions (an append-only JSON-lines event journal), replay artifacts, configuration baselines, and audit logs, with an explicit retention/deletion policy. docs/gungnir-capabilities.md §5.1 -- High."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-eventing = { path = "../gungnir-eventing" }

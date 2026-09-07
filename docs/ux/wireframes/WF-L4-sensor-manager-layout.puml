@@ -1,0 +1,20 @@
+@startsalt WF-L4
+title WF-L4 Sensor manager layout (P-04): sensors and coverage beside the map
+{+
+  { <b>PN-01 status strip</b> · Sensor manager (Pieter) }
+  --
+  {
+    {+ <b>PN-10 Sensor management</b> ..
+    {+ <b>PN-11 Coverage layers</b> and compare ..
+    } | {+
+      <b>PN-02 Viewport</b> with coverage, gaps, approaches
+      .
+      .
+      <i>before / after side by side when comparing</i>
+      .
+    } | {+ <b>PN-09 Health</b> (sensors, clock skew) ..
+    {+ <b>PN-08 Incidents</b> ..
+    {+ <b>PN-15 Tasking requests</b> (on demand) }
+  }
+}
+@endsalt

@@ -1,0 +1,79 @@
+[package]
+name = "gungnir-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Headless service-node binary for the on-prem and cloud profiles (ARCHITECTURE.md §8.1): hosts the services layer and the authoritative gungnir-store journal behind gungnir-api. Targets Linux x86_64 containers; depends on no UI, three-d, or wgpu crate."
+
+[lints]
+workspace = true
+
+[dependencies]
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+thiserror.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-config = { path = "../gungnir-config" }
+gungnir-mission = { path = "../gungnir-mission" }
+gungnir-eventing = { path = "../gungnir-eventing" }
+gungnir-store = { path = "../gungnir-store" }
+gungnir-time = { path = "../gungnir-time" }
+gungnir-ingest = { path = "../gungnir-ingest" }
+# GAP-003: the node holds the same registry the desktop does, so the sensors a service
+# node knows about are the baseline's rather than implicit in the ingest allow-list.
+gungnir-sensor-management = { path = "../gungnir-sensor-management" }
+gungnir-tracking-service = { path = "../gungnir-tracking-service" }
+gungnir-intercept-service = { path = "../gungnir-intercept-service" }
+gungnir-api = { path = "../gungnir-api" }
+# GAP-009 (DN-16), edge (p) in ARCHITECTURE.md §7.1: a peer link is a client link to a
+# partner's node, and the client lives in gungnir-remote. The node binds one per peer
+# in the baseline whose endpoint is a node, as a machine under its own certificate.
+gungnir-remote = { path = "../gungnir-remote" }
+# GAP-057: the node authenticates API callers against its own account store.
+gungnir-security = { path = "../gungnir-security" }
+rustls.workspace = true
+# GAP-086 / DN-24: the node journals which algorithm configuration it opened with, the
+# same as the desktop. It is the system of record for every desktop connected to it, so
+# "what was this session running" has to be answerable from its journal. Downward from the
+# binary and drawn in ARCHITECTURE.md §7.1 in the same change.
+gungnir-modelops = { path = "../gungnir-modelops" }
+# Edge (s), accepted by the owner as engineering reviewer 2026-09-06 (GAP-019): the node
+# resolves cross-session entity identity for the RECORD. Its journal is the authoritative
+# account of a mission (ARCHITECTURE.md §8.1), and a deployment whose desktops were not
+# connected for part of a watch has nowhere else the correlation could be made. It could
+# not be made here before GAP-011 closed, because the resolver needs tracks.
+gungnir-identity = { path = "../gungnir-identity" }
+# GAP-028, the node half: the headless profile runs the policy chain on every fresh plan
+# and publishes the verdict, so a desktop reading this node sees the same denial it would
+# compute. `gungnir-geo` supplies the geofence service the chain reads -- the case
+# ARCHITECTURE.md §8 named ("a node needs gungnir-geo only if geofence policy is evaluated
+# server-side"). No queue: a decision is a person's act and nobody signs in to a node
+# (DN-23 §4, GAP-057). Edges (k) and (l) in ARCHITECTURE.md §7.1.
+gungnir-policy = { path = "../gungnir-policy" }
+gungnir-geo = { path = "../gungnir-geo" }
+# ARCHITECTURE.md §7.1 edge (g), GAP-006: the node computes the coverage report it
+# serves on `GET /v2/coverage`. There is nobody else to compute it.
+gungnir-analytics = { path = "../gungnir-analytics" }
+gungnir-observability = { path = "../gungnir-observability" }
+
+[[bin]]
+name = "gungnir-node"
+path = "src/main.rs"
+
+[dev-dependencies]
+# The identity test verifies the provider's signature with the public half.
+p256.workspace = true
+# The entity-resolver tests build `TrackView`s, whose state and covariance are nalgebra
+# types the model owns. Dev-only: nothing in this binary constructs one at runtime.
+nalgebra.workspace = true
+criterion.workspace = true
+serde_json.workspace = true
+rand.workspace = true
+# Dev-only: the load harness is fed from generated scenario output at realistic rates,
+# as benches/README.md requires. No runtime edge (GAP-056).
+gungnir-scenario = { path = "../gungnir-scenario" }
+
+[[bench]]
+name = "node_load"
+harness = false

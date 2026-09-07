@@ -1,0 +1,268 @@
+{
+ "oracle": "stonesoup.dataassociator.probability.JPDA over PDAHypothesiser",
+ "stonesoup": "1.9.1",
+ "setup_note": "Every prediction is taken at the track's own timestamp, so dt = 0 and the prediction is the track state unchanged; the measurement model is the identity with R = I. Then S = P + R exactly, and P = (var - 1) I gives S = var I, the innovation covariance the Rust side is handed.",
+ "cases": [
+  {
+   "name": "one_track_one_clean_detection",
+   "probability_of_detection": 0.9,
+   "probability_of_gate": 0.99,
+   "clutter_density": 1e-06,
+   "tracks": [
+    {
+     "east": 0.0,
+     "north": 0.0,
+     "innovation_variance": 25.0
+    }
+   ],
+   "detections": [
+    [
+     1.0,
+     1.0
+    ]
+   ],
+   "expected": [
+    {
+     "missed": 1.980008458976595e-05,
+     "detections": [
+      0.9999801999154101
+     ]
+    }
+   ]
+  },
+  {
+   "name": "symmetric_crossing_two_tracks_two_detections",
+   "probability_of_detection": 0.9,
+   "probability_of_gate": 0.99,
+   "clutter_density": 1e-06,
+   "tracks": [
+    {
+     "east": -10.0,
+     "north": 0.0,
+     "innovation_variance": 100.0
+    },
+    {
+     "east": 10.0,
+     "north": 0.0,
+     "innovation_variance": 100.0
+    }
+   ],
+   "detections": [
+    [
+     0.0,
+     5.0
+    ],
+    [
+     0.0,
+     -5.0
+    ]
+   ],
+   "expected": [
+    {
+     "missed": 0.00014213639844929066,
+     "detections": [
+      0.4999289318007753,
+      0.4999289318007753
+     ]
+    },
+    {
+     "missed": 0.00014213639844929066,
+     "detections": [
+      0.4999289318007753,
+      0.4999289318007753
+     ]
+    }
+   ]
+  },
+  {
+   "name": "two_tracks_contending_for_one_detection",
+   "probability_of_detection": 0.9,
+   "probability_of_gate": 0.99,
+   "clutter_density": 1e-06,
+   "tracks": [
+    {
+     "east": -3.0,
+     "north": 0.0,
+     "innovation_variance": 100.0
+    },
+    {
+     "east": 3.0,
+     "north": 0.0,
+     "innovation_variance": 100.0
+    }
+   ],
+   "detections": [
+    [
+     0.0,
+     0.0
+    ]
+   ],
+   "expected": [
+    {
+     "missed": 0.5000198989349763,
+     "detections": [
+      0.4999801010650237
+     ]
+    },
+    {
+     "missed": 0.5000198989349763,
+     "detections": [
+      0.4999801010650237
+     ]
+    }
+   ]
+  },
+  {
+   "name": "three_tracks_in_clutter",
+   "probability_of_detection": 0.85,
+   "probability_of_gate": 0.99,
+   "clutter_density": 0.0001,
+   "tracks": [
+    {
+     "east": 0.0,
+     "north": 0.0,
+     "innovation_variance": 64.0
+    },
+    {
+     "east": 12.0,
+     "north": 0.0,
+     "innovation_variance": 64.0
+    },
+    {
+     "east": 6.0,
+     "north": 10.0,
+     "innovation_variance": 64.0
+    }
+   ],
+   "detections": [
+    [
+     1.0,
+     0.5
+    ],
+    [
+     11.0,
+     -1.0
+    ],
+    [
+     6.0,
+     9.0
+    ],
+    [
+     5.0,
+     3.0
+    ]
+   ],
+   "expected": [
+    {
+     "missed": 0.0054939605004153316,
+     "detections": [
+      0.46810805834080793,
+      0.1252024616695427,
+      0.12647589953506905,
+      0.27471961995416505
+     ]
+    },
+    {
+     "missed": 0.005715027830549922,
+     "detections": [
+      0.130891896700841,
+      0.5109503870001172,
+      0.1295864013462901,
+      0.22285628712220173
+     ]
+    },
+    {
+     "missed": 0.005795716575159448,
+     "detections": [
+      0.141335634385432,
+      0.10752324760732927,
+      0.49742131252818866,
+      0.24792408890389048
+     ]
+    }
+   ]
+  },
+  {
+   "name": "heavy_clutter_makes_every_association_less_certain",
+   "probability_of_detection": 0.85,
+   "probability_of_gate": 0.99,
+   "clutter_density": 0.01,
+   "tracks": [
+    {
+     "east": 0.0,
+     "north": 0.0,
+     "innovation_variance": 64.0
+    },
+    {
+     "east": 12.0,
+     "north": 0.0,
+     "innovation_variance": 64.0
+    }
+   ],
+   "detections": [
+    [
+     1.0,
+     0.5
+    ],
+    [
+     11.0,
+     -1.0
+    ]
+   ],
+   "expected": [
+    {
+     "missed": 0.42463826677345057,
+     "detections": [
+      0.458319110374666,
+      0.11704262285188356
+     ]
+    },
+    {
+     "missed": 0.4253425849152463,
+     "detections": [
+      0.11749597179689633,
+      0.45716144328785746
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a_track_with_nothing_in_its_gate_was_missed",
+   "probability_of_detection": 0.9,
+   "probability_of_gate": 0.99,
+   "clutter_density": 1e-06,
+   "tracks": [
+    {
+     "east": 0.0,
+     "north": 0.0,
+     "innovation_variance": 4.0
+    },
+    {
+     "east": 400.0,
+     "north": 400.0,
+     "innovation_variance": 4.0
+    }
+   ],
+   "detections": [
+    [
+     0.5,
+     0.5
+    ]
+   ],
+   "expected": [
+    {
+     "missed": 3.2401554474888784e-06,
+     "detections": [
+      0.9999967598445524
+     ]
+    },
+    {
+     "missed": 1.0,
+     "detections": [
+      0.0
+     ]
+    }
+   ]
+  }
+ ]
+}

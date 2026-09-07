@@ -1,0 +1,20 @@
+@startuml Op-Pr-MT-02
+title Op-Pr MT-02: Mixed salvo of cruise missiles, drones, and decoys
+skinparam activityDiamondBackgroundColor #EEE
+|OP-30 Command-and-control system|
+start
+:1. Ingest launch warnings and local radar; separate fast tracks from the drone picture by ki…\n<<OA-01, OA-15>>;
+:2. Track low-altitude fast targets through horizon dropouts; predict route and impact area\n<<OA-02, OA-04>>;
+:3. Classify cruise missile versus decoy versus drone by speed, altitude, and signature class…\n<<OA-03>>;
+:4. Score by time to impact and asset priority; missiles first\n<<OA-04>>;
+:5. Recommend the area-defense layer for missiles and the point layer for drones; check frien…\n<<OA-05, OA-06>>;
+:6. Present within seconds; pre-delegated authority accepts; supervisor may hold for deconfli…\n<<OA-07>>\n(prepare and present);
+|Human performers|
+:6. decide: Engagement authority; hold by supervisor\n(OP-02 Supervisor);
+|OP-30 Command-and-control system|
+:7. Hand off; warn assets to shelter\n<<OA-08, OA-09>>;
+:8. Assess; leakers to the point layer; re-plan\n<<OA-10>>\n(prepare and present);
+|Human performers|
+:8. decide: complete the step\n(OP-01 Operator);
+stop
+@enduml

@@ -1,0 +1,57 @@
+{
+ "format": 1,
+ "scenario": "TT-01",
+ "variant": "sample",
+ "seed": 1701,
+ "generator": "tt-gen 0.1.0",
+ "catalogue_version": "2026-09-04",
+ "classes_version": "2026-09-04",
+ "sensors_version": "2026-09-04",
+ "scenarios_version": "2026-09-04",
+ "duration_s": 480,
+ "truth_tick_s": 2.0,
+ "origin": {
+  "name": "Sector command post, Ostmark (fictional)",
+  "lat": 0.0,
+  "lon": 0.0,
+  "alt_m": 0.0
+ },
+ "start_time_of_day": "01:38:00",
+ "counts": {
+  "entities": 12,
+  "entities_by_class": {
+   "air.owa-prop": 12
+  },
+  "truth_records": 1408,
+  "detections": 408,
+  "false_alarms": 155,
+  "sensors": 7
+ },
+ "expected": {
+  "entities": 45,
+  "decoys": 6,
+  "arrival_rate_per_min": [
+   2,
+   4
+  ],
+  "assets_threatened": [
+   "OPS",
+   "KAL"
+  ],
+  "success": "no drone reaches OPS; at most two reach KAL infrastructure; every engagement recorded (MOE-01, MOE-05)"
+ },
+ "provenance": {
+  "policy": "docs/test-tracks/sourcing-and-legal.md",
+  "inputs": [
+   "classes.yaml",
+   "sensors.yaml",
+   "scenarios.yaml",
+   "catalogue-*.yaml"
+  ]
+ },
+ "validation": {
+  "passed": true,
+  "checks": 18,
+  "report": "validation-report.json"
+ }
+}

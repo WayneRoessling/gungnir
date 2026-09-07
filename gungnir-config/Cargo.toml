@@ -1,0 +1,15 @@
+[package]
+name = "gungnir-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Managed, versioned, validated configuration for sensor definitions, filter/association selection, thresholds, allocation weights, backend selection (embedded or remote), and service-node settings. docs/gungnir-capabilities.md §5.1 -- High. Pairs with gungnir-mission."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+gungnir-model = { path = "../gungnir-model" }

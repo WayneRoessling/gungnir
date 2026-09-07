@@ -1,0 +1,38 @@
+@startuml If-Cn
+title If-Cn information exchange: an observation and a decision, hop by hop
+left to right direction
+skinparam rectangle {
+  BackgroundColor #F7F7F7
+}
+rectangle "AR-04 Sensor" as SENSOR
+rectangle "Adapter (RS-ingest)" as ADAPTER
+rectangle "Gateway (SV-08)" as GATEWAY
+rectangle "Tracking (SV-01)" as TRACKING
+rectangle "Planning (SV-02)" as PLANNING
+rectangle "Policy (SV-15)" as POLICY
+rectangle "Workflow (SV-16, SV-27)" as WORKFLOW
+rectangle "Decider (PT-01, PT-02, PT-08)" as DECIDER
+rectangle "Bus (SV-03)" as BUS
+rectangle "Journal (SV-04)" as JOURNAL
+rectangle "API (SV-23)" as API
+rectangle "Peer (AR-05)" as PEER
+rectangle "Effector (AR-06)" as EFFECTOR
+rectangle "Report (SV-29)" as REPORT
+
+SENSOR --> ADAPTER : native (SD-03, AIS, ADS-B, recorded)
+ADAPTER --> GATEWAY : IE-01 DetectionView
+GATEWAY --> TRACKING : IE-01 accepted
+GATEWAY --> BUS : IE-15 IngestEvent
+TRACKING --> PLANNING : IE-02 TrackView
+PLANNING --> BUS : IE-14 PlanProposed (IE-04)
+PLANNING ..> POLICY : IE-04 (GAP-028)
+POLICY ..> WORKFLOW : IE-19 PolicyVerdict
+WORKFLOW --> DECIDER : pending approval, rationale
+DECIDER --> WORKFLOW : decision (IE-23 over API when remote)
+WORKFLOW ..> BUS : IE-16 Decided; IE-18 recorded; IE-20 audit
+BUS --> JOURNAL : IE-12 Envelope (SD-01, SD-05)
+BUS ..> API : IE-12 frames (SD-07)
+API ..> PEER : IE-02 as STANAG 4676 (SD-04) with marking
+API ..> EFFECTOR : handoff (GAP-040)
+JOURNAL --> REPORT : IE-28 traceable to IE-12 seq
+@enduml

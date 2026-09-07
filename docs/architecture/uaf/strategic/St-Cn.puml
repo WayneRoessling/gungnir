@@ -1,0 +1,103 @@
+@startuml St-Cn
+title St-Cn capability connectivity: what must exist before a capability can be full
+skinparam rectangle {
+  BackgroundColor #F7F7F7
+}
+left to right direction
+rectangle "CAP-1.3 Sensor modes and tasking" as CAP_1_3 <<Capability>>
+rectangle "CAP-1.4 Coverage and gaps" as CAP_1_4 <<Capability>>
+rectangle "CAP-1.6 Peer early warning" as CAP_1_6 <<Capability>>
+rectangle "CAP-1.7 Cooperative identity" as CAP_1_7 <<Capability>>
+rectangle "CAP-2.1 Multi-sensor picture" as CAP_2_1 <<Capability>>
+rectangle "CAP-2.2 Tracks through gaps" as CAP_2_2 <<Capability>>
+rectangle "CAP-2.3 Sensor registration" as CAP_2_3 <<Capability>>
+rectangle "CAP-2.4 Dense groups" as CAP_2_4 <<Capability>>
+rectangle "CAP-2.5 Clutter-tolerant surface picture" as CAP_2_5 <<Capability>>
+rectangle "CAP-2.6 Classify and identify" as CAP_2_6 <<Capability>>
+rectangle "CAP-2.7 Global identity" as CAP_2_7 <<Capability>>
+rectangle "CAP-2.8 Predict trajectory" as CAP_2_8 <<Capability>>
+rectangle "CAP-2.10 Terrain and map context" as CAP_2_10 <<Capability>>
+rectangle "CAP-2.12 Pattern of life" as CAP_2_12 <<Capability>>
+rectangle "CAP-3.1 Defended-asset list" as CAP_3_1 <<Capability>>
+rectangle "CAP-3.2 Threat scoring" as CAP_3_2 <<Capability>>
+rectangle "CAP-3.3 Assignment recommendation" as CAP_3_3 <<Capability>>
+rectangle "CAP-3.4 Intercept geometry" as CAP_3_4 <<Capability>>
+rectangle "CAP-3.5 Alternatives and rationale" as CAP_3_5 <<Capability>>
+rectangle "CAP-3.6 Rules of engagement" as CAP_3_6 <<Capability>>
+rectangle "CAP-3.7 Queue under saturation" as CAP_3_7 <<Capability>>
+rectangle "CAP-3.8 Fires tasks" as CAP_3_8 <<Capability>>
+rectangle "CAP-3.9 Sensor re-tasking" as CAP_3_9 <<Capability>>
+rectangle "CAP-4.1 Present for decision" as CAP_4_1 <<Capability>>
+rectangle "CAP-4.2 Record every decision" as CAP_4_2 <<Capability>>
+rectangle "CAP-4.4 Handoff" as CAP_4_4 <<Capability>>
+rectangle "CAP-4.5 Warn" as CAP_4_5 <<Capability>>
+rectangle "CAP-4.6 Engagement effects" as CAP_4_6 <<Capability>>
+rectangle "CAP-4.7 Assist" as CAP_4_7 <<Capability>>
+rectangle "CAP-5.1 Journal" as CAP_5_1 <<Capability>>
+rectangle "CAP-5.2 Replay and rehearse" as CAP_5_2 <<Capability>>
+rectangle "CAP-5.3 Reports and measures" as CAP_5_3 <<Capability>>
+rectangle "CAP-5.4 Disconnected and reconcile" as CAP_5_4 <<Capability>>
+rectangle "CAP-5.6 Baselines and plans" as CAP_5_6 <<Capability>>
+rectangle "CAP-5.7 Model governance" as CAP_5_7 <<Capability>>
+rectangle "CAP-6.1 Authenticate" as CAP_6_1 <<Capability>>
+rectangle "CAP-6.2 Authorize" as CAP_6_2 <<Capability>>
+rectangle "CAP-6.3 Audit" as CAP_6_3 <<Capability>>
+rectangle "CAP-6.4 Data protection" as CAP_6_4 <<Capability>>
+rectangle "CAP-6.6 Releasability" as CAP_6_6 <<Capability>>
+rectangle "CAP-6.7 Untrusted input" as CAP_6_7 <<Capability>>
+rectangle "CAP-7.1 Versioned interface" as CAP_7_1 <<Capability>>
+rectangle "CAP-7.2 Interop standards" as CAP_7_2 <<Capability>>
+rectangle "CAP-7.3 Three profiles" as CAP_7_3 <<Capability>>
+rectangle "CAP-7.4 Peer and coalition exchange" as CAP_7_4 <<Capability>>
+
+CAP_2_1 --> CAP_2_2
+CAP_2_1 --> CAP_2_4
+CAP_2_1 --> CAP_2_5
+CAP_2_1 --> CAP_2_8
+CAP_2_1 --> CAP_2_3
+CAP_2_10 --> CAP_2_3
+CAP_1_7 --> CAP_2_6
+CAP_2_1 --> CAP_2_6
+CAP_2_6 --> CAP_2_7
+CAP_5_1 --> CAP_2_7
+CAP_2_6 --> CAP_2_12
+CAP_5_1 --> CAP_2_12
+CAP_3_1 --> CAP_3_2
+CAP_2_8 --> CAP_3_2
+CAP_3_2 --> CAP_3_3
+CAP_2_1 --> CAP_3_3
+CAP_3_3 --> CAP_3_4
+CAP_3_4 --> CAP_3_6
+CAP_6_2 --> CAP_3_6
+CAP_3_3 --> CAP_3_5
+CAP_3_6 --> CAP_3_5
+CAP_3_3 --> CAP_3_7
+CAP_3_6 --> CAP_3_7
+CAP_3_3 --> CAP_3_8
+CAP_3_6 --> CAP_3_8
+CAP_1_3 --> CAP_3_9
+CAP_1_4 --> CAP_3_9
+CAP_3_6 --> CAP_4_1
+CAP_3_6 --> CAP_4_2
+CAP_4_2 --> CAP_4_4
+CAP_7_1 --> CAP_4_4
+CAP_4_2 --> CAP_4_5
+CAP_7_1 --> CAP_4_5
+CAP_4_2 --> CAP_4_6
+CAP_6_7 --> CAP_4_7
+CAP_6_3 --> CAP_4_7
+CAP_5_1 --> CAP_5_2
+CAP_5_1 --> CAP_5_3
+CAP_5_1 --> CAP_5_4
+CAP_7_1 --> CAP_5_4
+CAP_7_3 --> CAP_5_4
+CAP_5_6 --> CAP_5_7
+CAP_6_1 --> CAP_6_2
+CAP_6_1 --> CAP_6_4
+CAP_7_1 --> CAP_6_4
+CAP_7_4 --> CAP_6_6
+CAP_7_1 --> CAP_1_6
+CAP_7_2 --> CAP_1_6
+CAP_7_1 --> CAP_7_4
+CAP_7_2 --> CAP_7_4
+@enduml

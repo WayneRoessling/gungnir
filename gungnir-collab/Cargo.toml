@@ -1,0 +1,20 @@
+[package]
+name = "gungnir-collab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Collaboration & multi-user concurrency: shared operational picture across desktops connected to one node, concurrent annotations, and authority conflict resolution between operators' decisions. docs/gungnir-capabilities.md §5.6 -- Medium. Server-authoritative mission state lives on the node (ARCHITECTURE.md §8)."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-eventing = { path = "../gungnir-eventing" }
+gungnir-command = { path = "../gungnir-command" }
+gungnir-security = { path = "../gungnir-security" }
+
+[dev-dependencies]
+gungnir-policy = { path = "../gungnir-policy" }

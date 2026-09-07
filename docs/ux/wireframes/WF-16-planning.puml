@@ -1,0 +1,20 @@
+@startsalt WF-16
+title WF-16 PN-16 Planning panel (planner drafts; commander approves)
+{+
+  { Plan: [ week 37 laydown (draft v13) ▾ ] | threat estimate: raids favour the sea approach | maintenance: HAF SAM 2026-09-10 08:00–14:00 }
+  --
+  <b>Laydown options</b>
+  {#
+    . | Option | Sensors moved | Effectors moved | Gaps | Sea approach first engagement | Upper Vell
+    ( ) | A current | — | — | 1 | 9 km | 31 km
+    (X) | B sea-weighted | R2 → coast site | gun 2 → KAL | 0 (1 during maintenance) | <b>18 km</b> | 28 km
+    ( ) | C balanced | — | gun 2 → OPS | 1 | 12 km | 31 km
+  }
+  { [ compare A / B in PN-11 ] | [ show maintenance window coverage ] | gap to accept: HAF SAM window, 6 h, assets under it: HAF (2) → warning obligation 60 s }
+  --
+  <b>Rehearsal</b>
+  { scenario [ TT-01 raid ▾ ] under [ option B ▾ ] | [ run rehearsal ] | last: 13:00 — sea stream engaged at 18 km (was 9 km); 2 decisions expired in the queue peak }
+  --
+  { [ save draft ] | [ submit for approval ] <i>(carries the rehearsal record; disabled without one unless the commander overrides with a reason)</i> }
+}
+@endsalt

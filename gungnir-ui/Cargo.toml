@@ -1,0 +1,24 @@
+[package]
+name = "gungnir-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "2D egui dashboard panels + centralized theme, per rust-ui-architecture-coding-standards.md §1/§6. One file per panel; no magic layout numbers. Reads gungnir-model views only; holds no state of its own."
+
+[lints]
+workspace = true
+
+[features]
+# A headless render probe (`src/harness.rs`) so a test can assert on what a panel drew
+# rather than on the view struct it was given. Off by default; `gungnir-app`'s tests
+# turn it on. It is pure egui -- no window, no GPU, no display.
+harness = []
+
+[dependencies]
+egui.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+
+[dev-dependencies]
+# Test-only: the render tests construct a `TrackView`, whose state and covariance are
+# nalgebra types. No runtime edge.
+nalgebra.workspace = true

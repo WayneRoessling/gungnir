@@ -1,0 +1,44 @@
+# Gate 1: differential testing against the Python/MATLAB oracles
+# (docs/agentic-workflow.md). Runs when the oracle-comparable crates change.
+name: oracle-diff
+
+on:
+  pull_request:
+    paths:
+      - "gungnir-core/**"
+      - "gungnir-coord/**"
+      - "gungnir-filters/**"
+      - "gungnir-association/**"
+      - "gungnir-track/**"
+      - "gungnir-rfs/**"
+      - "gungnir-track-fusion/**"
+      - "gungnir-allocation/**"
+      - "gungnir-oracle/**"
+      - "gungnir-scenario/**"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  oracle-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reference implementations used to generate oracle fixtures
+        run: pip install filterpy stonesoup motmetrics pymap3d scipy numpy
+      - name: Differential tests
+        run: cargo test -p gungnir-oracle -- --nocapture
+      - name: Upload trace output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-diff-traces
+          path: target/oracle-traces/
+          if-no-files-found: ignore

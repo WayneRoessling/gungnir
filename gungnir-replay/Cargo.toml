@@ -1,0 +1,16 @@
+[package]
+name = "gungnir-replay"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Deterministic session playback, timeline scrubbing, and recorded-data replay -- reads gungnir-store's event journal through a gungnir-time ReplayClockAuthority. docs/gungnir-capabilities.md §5.6 -- Lower."
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-eventing = { path = "../gungnir-eventing" }
+gungnir-store = { path = "../gungnir-store" }
+gungnir-time = { path = "../gungnir-time" }

@@ -1,0 +1,15 @@
+[package]
+name = "gungnir-assessment"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Threat/risk scoring, predicted time-to-impact, asset exposure, confidence-aware prioritization feeding the allocation decision's reward matrix. docs/gungnir-capabilities.md §5.4 -- Medium."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+gungnir-model = { path = "../gungnir-model" }

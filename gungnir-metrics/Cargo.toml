@@ -1,0 +1,29 @@
+[package]
+name = "gungnir-metrics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+description = "MOTA/MOTP, purity/fragmentation, track-to-truth assignment."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+gungnir-track = { path = "../gungnir-track" }
+# The CLEAR MOT frame matching is a minimum-cost assignment, and this is the one the
+# oracle uses too (scipy's linear_sum_assignment); it is already gated against scipy.
+# gungnir-track already depends on gungnir-association, so the graph is unchanged in
+# shape -- see ARCHITECTURE.md section 7.1.
+gungnir-association = { path = "../gungnir-association" }
+
+[dev-dependencies]
+# The py-motmetrics oracle fixture in testdata/oracles/metrics/ is JSON; serde_json is
+# an already-approved workspace dependency (agentic-coding-standards.md 2.9), dev-only.
+serde_json.workspace = true
+proptest.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }

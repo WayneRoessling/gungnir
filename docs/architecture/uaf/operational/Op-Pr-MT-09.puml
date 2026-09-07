@@ -1,0 +1,30 @@
+@startuml Op-Pr-MT-09
+title Op-Pr MT-09: Defended-asset planning, laydown, and rehearsal
+skinparam activityDiamondBackgroundColor #EEE
+|OP-30 Command-and-control system|
+start
+|Human performers|
+:1. Set the defended-asset list and priorities\n<<OA-21>>\n(OP-08 Commander);
+|OP-30 Command-and-control system|
+:2. Plan sensor and effector laydown; compute coverage and gaps over terrain\n<<OA-22>>\n(prepare and present);
+|Human performers|
+:2. decide: Planner\n(OP-07 Planner);
+|OP-30 Command-and-control system|
+:3. Configure policy: identification criteria, weapons control status, authorities, restricti…\n<<OA-23>>\n(prepare and present);
+|Human performers|
+:3. decide: Commander approves\n(OP-08 Commander);
+|OP-30 Command-and-control system|
+:4. Validate the plan as a configuration baseline\n<<OA-24>>;
+:5. Rehearse: replay a scenario through the pipeline with the plan; review recommendations an…\n<<OA-25>>\n(prepare and present);
+|Human performers|
+:5. decide: Planner, supervisor\n(OP-02 Supervisor);
+|OP-30 Command-and-control system|
+:6. Apply the plan; audit\n<<OA-24, OA-35>>\n(prepare and present);
+|Human performers|
+:6. decide: Supervisor or commander\n(OP-02 Supervisor);
+|OP-30 Command-and-control system|
+:7. After the shift: review the journal, measure, record lessons\n<<OA-26>>\n(prepare and present);
+|Human performers|
+:7. decide: Analyst, commander\n(OP-08 Commander);
+stop
+@enduml

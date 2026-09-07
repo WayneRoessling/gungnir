@@ -1,0 +1,22 @@
+@startuml Op-Is-VG-05
+title Op-Is VG-05: The afternoon surface picture (MT-05)
+autonumber
+participant "AR-04 Sensor feeds" as Sensors
+participant "OP-30 C2 system" as System
+actor "OP-04 Sensor manager" as R0
+actor "OP-01 Operator" as R1
+participant "OP-21 Peers and higher command" as E0
+participant "OP-24 Civil and port authorities" as E1
+note over System
+Timeline:
+continuous 12:00 to 18:00; anomalies flagged at 13:12 and 15:40; a patrol boat checks the
+loiterer at 13:40.
+end note
+Sensors -> System : 1. Fuse coastal radars, AIS, cameras, patrol and peer reports into one surface pic…
+E0 -> System : peer warning or tracks
+System -> System : 2. Flag anomalies: AIS-off, speed or route inconsistent with declared type, loiter…
+System -> R1 : 3. present: Operator reviews anomalies; tasks cameras or patrols
+R1 -> System : decision: Operator
+System -> System : 4. Exchange the picture with peers and authorities
+System -> System : 5. Journal; the picture is the basis for MT-04 and for pattern of life
+@enduml

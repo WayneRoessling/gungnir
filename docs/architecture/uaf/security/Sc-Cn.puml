@@ -1,0 +1,31 @@
+@startuml Sc-Cn
+title Sc-Cn security connectivity: trust boundaries per profile
+skinparam rectangle {
+  BackgroundColor #F7F7F7
+}
+rectangle "Disconnected desktop enclave" as ENC1 {
+  node "AR-01 Operator workstation\nembedded services, local journal" as AR_01a
+}
+rectangle "Site or sector LAN enclave" as ENC2 {
+  node "AR-01 Operator workstations" as AR_01b
+  node "AR-02 On-prem service node\n(only surface: gungnir-api)" as AR_02
+  rectangle "AR-04 Sensor feeds" as AR_04
+}
+rectangle "Cloud enclave" as ENC3 {
+  node "AR-03 Cloud service node\n(journal encrypted at rest, planned)" as AR_03
+}
+rectangle "AR-05 Peer C2 nodes" as AR_05
+rectangle "AR-06 Effector systems" as AR_06
+rectangle "AR-07 Build and release (GitLab)" as AR_07
+
+AR_04 --> AR_01a : allow-list + validation (today)
+AR_04 --> AR_02 : allow-list + validation (today)\nmTLS (planned, D-02)
+AR_01b --> AR_02 : mTLS + operator token (planned)\nno transport today
+AR_01b --> AR_03 : mTLS + operator token (planned)
+AR_02 <--> AR_05 : mTLS + releasability (planned)
+AR_03 <--> AR_05 : mTLS + releasability (planned)
+AR_02 --> AR_06 : mTLS handoff (planned)
+AR_07 --> AR_02 : signed image + SBOM (planned)
+AR_07 --> AR_03 : signed image + SBOM (planned)
+AR_07 --> AR_01a : signed installer (planned)
+@enduml

@@ -1,0 +1,22 @@
+@startuml Op-Pr-MT-08
+title Op-Pr MT-08: Collection management and identification evidence fusion
+skinparam activityDiamondBackgroundColor #EEE
+|OP-30 Command-and-control system|
+start
+|Human performers|
+:1. State the requirement: area, question, priority, time window\n<<OA-17>>\n(OP-08 Commander);
+|OP-30 Command-and-control system|
+:2. Translate into sensor tasking; show the coverage cost\n<<OA-12>>\n(prepare and present);
+|Human performers|
+:2. decide: Sensor manager\n(OP-04 Sensor manager);
+|OP-30 Command-and-control system|
+:3. Collect; observations carry provenance\n<<OA-01>>;
+:4. Fuse evidence into identities with confidence; keep the evidence with the track\n<<OA-18>>;
+:5. Maintain entities and order of battle across sessions\n<<OA-19>>\n(prepare and present);
+|Human performers|
+:5. decide: Analyst merges or splits\n(OP-03 Analyst);
+|OP-30 Command-and-control system|
+:6. Disseminate identities, warnings, and products to roles and peers with releasability\n<<OA-20, OA-15>>;
+:7. Journal; pattern of life accumulates over sessions\n<<OA-11>>;
+stop
+@enduml

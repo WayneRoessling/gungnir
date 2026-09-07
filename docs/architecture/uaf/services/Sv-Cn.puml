@@ -1,0 +1,48 @@
+@startuml Sv-Cn
+title Sv-Cn service connectivity: information flow on one tick and across the API
+skinparam rectangle {
+  BackgroundColor #F7F7F7
+}
+left to right direction
+rectangle "SV-08 Ingest gateway" as SV_08 <<Service>>
+rectangle "SV-01 Tracking" as SV_01 <<Service>>
+rectangle "SV-17 Threat assessment" as SV_17 <<Service>>
+rectangle "SV-02 Intercept planning" as SV_02 <<Service>>
+rectangle "SV-15 Policy" as SV_15 <<Service>>
+rectangle "SV-16 Approval workflow" as SV_16 <<Service>>
+rectangle "SV-22 Audit log" as SV_22 <<Service>>
+rectangle "SV-03 Event bus" as SV_03 <<Service>>
+rectangle "SV-04 Event journal" as SV_04 <<Service>>
+rectangle "SV-23 API v1" as SV_23 <<Service>>
+rectangle "SV-30 Remote backends" as SV_30 <<Service>>
+rectangle "SV-25 Store-and-forward" as SV_25 <<Service>>
+rectangle "SV-24 Health monitor" as SV_24 <<Service>>
+rectangle "SV-27 Operator workflow" as SV_27 <<Service>>
+rectangle "SV-28 Replay" as SV_28 <<Service>>
+rectangle "SV-29 Reporting" as SV_29 <<Service>>
+rectangle "SV-06 Configuration store" as SV_06 <<Service>>
+rectangle "SV-09 Sensor registry" as SV_09 <<Service>>
+rectangle "SV-14 Analytics" as SV_14 <<Service>>
+rectangle "SV-12 Identification" as SV_12 <<Service>>
+
+SV_08 --> SV_01 : IE-01 DetectionView
+SV_08 --> SV_03 : IE-15 IngestEvent
+SV_01 --> SV_02 : IE-02 TrackView
+SV_06 --> SV_02 : IE-03 ResourceView
+SV_17 ..> SV_02 : rewards (not wired)
+SV_02 --> SV_03 : IE-14 PlanProposed
+SV_02 ..> SV_15 : IE-04 PlanView (not wired)
+SV_15 ..> SV_16 : IE-19 PolicyVerdict (not wired)
+SV_16 ..> SV_03 : IE-16 CommandEvent (not wired)
+SV_16 ..> SV_22 : IE-20 AuditEntry (not wired)
+SV_03 --> SV_04 : IE-12 Envelope
+SV_03 ..> SV_23 : IE-12 stream (transport pending)
+SV_23 ..> SV_30 : IE-22 snapshot, IE-12 stream
+SV_30 ..> SV_23 : IE-24, IE-23, outbox
+SV_25 --> SV_04 : merged journal, IE-31
+SV_24 --> SV_27 : IE-06, IE-21
+SV_04 --> SV_28 : IE-12
+SV_04 --> SV_29 : IE-12
+SV_09 ..> SV_14 : IE-27 coverage (not wired)
+SV_12 ..> SV_01 : IE-09 (not wired)
+@enduml

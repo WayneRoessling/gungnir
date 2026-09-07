@@ -1,0 +1,19 @@
+@startuml Op-Pr-MT-07
+title Op-Pr MT-07: Sensor management under electronic attack
+skinparam activityDiamondBackgroundColor #EEE
+|OP-30 Command-and-control system|
+start
+:1. Detect degradation: sensor health, ingest gaps, clock skew, track quality collapse; corre…\n<<OA-13>>;
+:2. Recompute coverage with the degraded sensors; show the gaps on the picture\n<<OA-12>>;
+:3. Recommend mode changes and re-tasking (search patterns, backup sensors, emission control)\n<<OA-14>>\n(prepare and present);
+|Human performers|
+:3. decide: Sensor manager\n(OP-04 Sensor manager);
+|OP-30 Command-and-control system|
+:4. Mark affected tracks as degraded; the planner never allocates on stale tracks\n<<OA-02>>;
+:5. Supervisor acknowledges the degraded state on the plan; escalates if a defended asset is…\n<<OA-13, OA-07>>\n(prepare and present);
+|Human performers|
+:5. decide: Supervisor; commander for accepted gaps\n(OP-02 Supervisor);
+|OP-30 Command-and-control system|
+:6. Recover: sensors return, clocks resynchronize, coverage restored, alert closed\n<<OA-13>>;
+stop
+@enduml

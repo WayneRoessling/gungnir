@@ -1,0 +1,23 @@
+[package]
+name = "gungnir-allocation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bellman/DP resource-to-track assignment."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+gungnir-core = { path = "../gungnir-core" }
+
+[dev-dependencies]
+# The oracle fixture for the §1 allocation row is JSON, read only by the differential
+# test (`tests/bellman_diff.rs`).
+serde.workspace = true
+serde_json.workspace = true
+proptest.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }

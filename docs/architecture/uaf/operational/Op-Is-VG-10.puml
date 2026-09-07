@@ -1,0 +1,27 @@
+@startuml Op-Is-VG-10
+title Op-Is VG-10: The port cell loses the node (MT-10)
+autonumber
+participant "AR-04 Sensor feeds" as Sensors
+participant "OP-30 C2 system" as System
+actor "OP-02 Supervisor" as R0
+actor "OP-08 Commander" as R1
+actor "OP-01 Operator" as R2
+actor "Site authority (OP-01)" as R3
+note over System
+Timeline:
+02:03 link loss detected; 02:04 the KAL desktop falls back to embedded services with a
+banner; 02:04 to 02:14 the port cell continues on local sensors and its pre-delegated
+authority, recording six decisions locally and queuing its detections; 02:14 the link
+returns; 02:15 the queue is forwarded and the journals reconciled; one decision conflicts
+with a supervisor hold issued at the node during the outage; 02:16 the supervisor resolves
+it under the arbitration rule; 02:17 the port cell is back on the remote backend.
+end note
+Sensors -> System : 1. Detect the link loss; fall back to embedded services; keep journaling locally;…
+System -> System : 2. Queue detections, decisions, and audit entries for forwarding
+System -> R3 : 3. present: Operate under pre-delegated authority for the disconnected case; decisions reco…
+R3 -> System : decision: Site authority per delegation
+System -> System : 4. Reconnect: forward the queue; reconcile the local and node journals; report con…
+System -> R0 : 5. present: Supervisor resolves reported conflicts under the arbitration rule; the node's r…
+R0 -> System : decision: Supervisor
+System -> System : 6. Return to the remote backend; local projection resynchronized
+@enduml

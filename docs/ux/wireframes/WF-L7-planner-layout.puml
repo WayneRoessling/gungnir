@@ -1,0 +1,18 @@
+@startsalt WF-L7
+title WF-L7 Planner layout (P-07, adopted role; wiring waits on GAP-068)
+{+
+  { <b>PN-01 status strip</b> · Planner (Anders) }
+  --
+  {
+    {+ <b>PN-16 Planning</b> options, rehearsal ..
+    {+ <b>PN-11 Coverage compare</b> ..
+    } | {+
+      <b>PN-02 Viewport</b> A / B side by side
+      .
+      .
+    } | {+ <b>PN-14 Configuration editor</b> (assets, policy, validity) ..
+    {+ <b>PN-12 Replay</b> (rehearsal) ..
+    {+ <b>PN-10 Sensors</b> (read-only) }
+  }
+}
+@endsalt

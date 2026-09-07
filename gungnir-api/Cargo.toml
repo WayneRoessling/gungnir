@@ -1,0 +1,43 @@
+[package]
+name = "gungnir-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Versioned, security-gated external contract (v1: snapshot, event stream, detection submit, plan decision) so remote desktops, peer C2 systems, analytics tools, or enterprise data services can integrate with a service node. Transport-neutral types here; the HTTP/JSON + WebSocket transport is the next stack addition. docs/gungnir-capabilities.md §5.5 -- High."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+# GAP-041, D-18: the node's HTTP surface and the event stream. Recorded in
+# agentic-coding-standards.md section 2.9; the `ws` feature is the server side, so no
+# separate server WebSocket crate is needed.
+axum.workspace = true
+# GAP-060, D-18: mutual TLS on the node's surface. Signed off 2026-09-05 and unused
+# until now; rustls-pemfile reads the PEM and never logs what it read.
+rustls.workspace = true
+tokio-rustls.workspace = true
+rustls-pemfile.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+gungnir-model = { path = "../gungnir-model" }
+gungnir-eventing = { path = "../gungnir-eventing" }
+gungnir-security = { path = "../gungnir-security" }
+gungnir-tracking-service = { path = "../gungnir-tracking-service" }
+gungnir-intercept-service = { path = "../gungnir-intercept-service" }
+# ARCHITECTURE.md §7.1 edge (f), GAP-006: `GET /v2/coverage` publishes a
+# `CoverageReport`, so the crate defining the contract names the type rather than
+# defining a second one that would drift from the picture.
+gungnir-analytics = { path = "../gungnir-analytics" }
+
+[dev-dependencies]
+serde_json.workspace = true
+# The party test builds tracks, whose state is an nalgebra vector.
+nalgebra.workspace = true
+# D-22, dev only: mutual TLS cannot be verified without certificates, and a private key
+# checked into the repository would be key material in the repository.
+rcgen.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

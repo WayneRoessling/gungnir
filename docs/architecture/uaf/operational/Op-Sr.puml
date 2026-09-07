@@ -1,0 +1,43 @@
+@startuml Op-Sr
+title Op-Sr operational structure: nodes, roles, and system parts
+skinparam packageStyle rectangle
+package "OP-10 Sector command post" <<OperationalPerformer>> {
+  actor "OP-02 Supervisor" as OP_02
+  actor "OP-01 Operators" as OP_01s
+  actor "OP-04 Sensor manager" as OP_04
+  actor "OP-07 Planner" as OP_07
+  actor "OP-06 Intelligence analyst" as OP_06
+  actor "OP-08 Commander" as OP_08
+  actor "OP-03 Analyst" as OP_03
+  actor "OP-05 Administrator" as OP_05
+  node "OP-32 Sector service node\n(system of record)" as OP_32
+  node "OP-31 Operator workstations" as OP_31a
+}
+package "OP-11 Site defense cell" <<OperationalPerformer>> {
+  actor "OP-01 Site operator" as OP_01b
+  node "OP-31 Operator workstation\n(embedded fallback)" as OP_31b
+}
+package "OP-12 Port defense cell" <<OperationalPerformer>> {
+  actor "OP-01 Maritime operator" as OP_01c
+  node "OP-31 Operator workstation\n(embedded fallback)" as OP_31c
+}
+cloud "External" {
+  rectangle "OP-20 Higher command" as OP_20
+  rectangle "OP-21 Neighbouring sector" as OP_21
+  rectangle "OP-22 Fire units and effectors" as OP_22
+  rectangle "OP-26 Coalition partners" as OP_26
+}
+rectangle "OP-33 Sensor network" as OP_33
+rectangle "OP-34 Effector interface" as OP_34
+OP_31a --> OP_32 : connected
+OP_31b --> OP_32 : connected (falls back)
+OP_31c --> OP_32 : connected (falls back)
+OP_33 --> OP_32 : observations
+OP_33 --> OP_31b : local sensors
+OP_33 --> OP_31c : local sensors
+OP_32 --> OP_34 : decided assignments
+OP_34 --> OP_22
+OP_32 <--> OP_20
+OP_32 <--> OP_21
+OP_32 <--> OP_26
+@enduml

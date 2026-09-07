@@ -1,0 +1,18 @@
+@startsalt WF-L6
+title WF-L6 Intelligence analyst layout (P-06, adopted role; wiring waits on GAP-068)
+{+
+  { <b>PN-01 status strip</b> · Intelligence analyst (Leyla) }
+  --
+  {
+    {+ <b>PN-15 Requirements and tasking</b> ..
+    {+ <b>PN-04 Evidence card</b> (selected track) ..
+    } | {+
+      <b>PN-02 Viewport</b> with requirement areas
+      .
+      .
+    } | {+ <b>PN-03 Track table</b> ..
+    {+ <b>PN-13 Reports</b> (order of battle, products with marking) ..
+    {+ <b>PN-12 Replay</b> (on demand) }
+  }
+}
+@endsalt

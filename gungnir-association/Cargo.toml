@@ -1,0 +1,28 @@
+[package]
+name = "gungnir-association"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "NN/GNN, Hungarian/JV, gating, JPDA, MHT."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+gungnir-filters = { path = "../gungnir-filters" }
+
+[dev-dependencies]
+proptest.workspace = true
+criterion.workspace = true
+# The scipy oracle fixtures in testdata/oracles/association/ are JSON; serde_json is
+# an already-approved workspace dependency (agentic-coding-standards.md 2.9), dev-only.
+serde_json.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }
+
+[[bench]]
+name = "hungarian_solve_100x100"
+harness = false

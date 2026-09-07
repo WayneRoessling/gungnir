@@ -1,0 +1,14 @@
+[package]
+name = "gungnir-time"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Clock discipline across sensors: source-time vs. receipt-time semantics, late-data policy, deterministic replay-time control, synchronization health. docs/gungnir-capabilities.md §5.2 -- Critical."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+gungnir-model = { path = "../gungnir-model" }

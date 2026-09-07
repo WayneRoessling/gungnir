@@ -1,0 +1,19 @@
+@startuml Op-Pr-MT-03
+title Op-Pr MT-03: Small UAS over a protected site
+skinparam activityDiamondBackgroundColor #EEE
+|OP-30 Command-and-control system|
+start
+:1. Ingest RF, radar, acoustic, and visual reports; correlate into one track\n<<OA-01, OA-02>>;
+:2. Classify: consumer multirotor, FPV, fixed-wing ISR; link-controlled or autonomous; friend…\n<<OA-03, OA-36>>;
+:3. Assess: approaching the site, loitering, passing; risk to the site and to people\n<<OA-04>>;
+:4. Recommend: jam (if link-controlled and permitted here), interceptor drone, small arms, or…\n<<OA-05, OA-06>>;
+:5. Present; site authority decides; self-defense engagements are recorded after the fact\n<<OA-07>>\n(prepare and present);
+|Human performers|
+:5. decide: Site authority; self-defense retained\n(Site authority (OP-01));
+|OP-30 Command-and-control system|
+:6. Hand off to the site's effector; warn personnel\n<<OA-08, OA-09>>;
+:7. Assess; if the UAS was ISR, expect a strike: raise the site's alert state and re-task sen…\n<<OA-10, OA-14>>\n(prepare and present);
+|Human performers|
+:7. decide: Supervisor\n(OP-02 Supervisor);
+stop
+@enduml

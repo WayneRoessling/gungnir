@@ -1,0 +1,17 @@
+@startsalt WF-18
+title WF-18 PN-18 Reconciliation conflicts (supervisor; opens on reconnection; must be closed by deciding)
+{+
+  <b>KAL cell reconnected 02:14:31</b> · outage 11 min · forwarded 2 318 detections, 6 decisions, 14 audit entries · merged 41 218 envelopes · duplicates dropped 12
+  --
+  <b>Conflicts (1)</b>
+  {#
+    Plan | Local decision (KAL) | Node decision (SCP) | Arbitration (higher role wins; earlier wins a tie)
+    P-1160 | accepted 02:09:12 by Mira (operator, delegated) | hold 02:08:50 by Tomas (supervisor) | <b>node: hold</b> (supervisor outranks)
+  }
+  { Effect if confirmed: P-1160 stays held; the KAL engagement record is kept as an offline decision under delegation and marked overtaken }
+  { Reason (required to overturn): "                                        " }
+  --
+  { [ Confirm arbitration ] | [ Overturn: apply the local decision ] }
+  { <i>nothing is written to the node's record until one of these is chosen; the dialog cannot be dismissed with Escape</i> }
+}
+@endsalt

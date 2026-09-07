@@ -1,0 +1,333 @@
+# UAF relationships between registry elements (plan 03). Every id must exist in
+# elements.yaml; tools/build_uaf.py checks that and builds the traceability
+# matrices from this file. Relationship kinds:
+#   exhibits     operational performer -> capability      (St / Op traceability)
+#   achieves     operational activity  -> capability      (capability to activity)
+#   performs     operational performer -> activity        (role to activity)
+#   realizes     service               -> activity        (activity to service)
+#   implements   resource              -> service         (service to resource)
+#   conforms_to  resource              -> standard        (resource to standard)
+#   uses         resource              -> resource        GENERATED from Cargo.toml
+# `status: planned` marks a relationship the design intends but the code does not
+# yet carry; the consistency check treats planned as satisfied but reports it.
+
+exhibits:
+  # The C2 system exhibits every system capability; roles exhibit those they act in.
+  - {from: OP-30, to: [CAP-1.1, CAP-1.2, CAP-1.3, CAP-1.4, CAP-1.5, CAP-1.6, CAP-1.7, CAP-2.1, CAP-2.2, CAP-2.3, CAP-2.4, CAP-2.5, CAP-2.6, CAP-2.7, CAP-2.8, CAP-2.9, CAP-2.10, CAP-2.11, CAP-2.12, CAP-3.1, CAP-3.2, CAP-3.3, CAP-3.4, CAP-3.5, CAP-3.6, CAP-3.7, CAP-3.8, CAP-3.9, CAP-4.1, CAP-4.2, CAP-4.3, CAP-4.4, CAP-4.5, CAP-4.6, CAP-4.7, CAP-5.1, CAP-5.2, CAP-5.3, CAP-5.4, CAP-5.5, CAP-5.6, CAP-5.7, CAP-5.8, CAP-5.9, CAP-5.10, CAP-6.1, CAP-6.2, CAP-6.3, CAP-6.4, CAP-6.5, CAP-6.6, CAP-6.7, CAP-7.1, CAP-7.2, CAP-7.3, CAP-7.4]}
+  - {from: OP-01, to: [CAP-2.6, CAP-3.6, CAP-4.1, CAP-4.2, CAP-5.9]}
+  - {from: OP-02, to: [CAP-3.6, CAP-3.7, CAP-4.2, CAP-5.4, CAP-5.5, CAP-5.6, CAP-5.9]}
+  - {from: OP-03, to: [CAP-5.2, CAP-5.3, CAP-5.7, CAP-5.9]}
+  - {from: OP-04, to: [CAP-1.3, CAP-1.4, CAP-3.9, CAP-5.9]}
+  - {from: OP-05, to: [CAP-5.6, CAP-6.1, CAP-6.2, CAP-6.3, CAP-6.5, CAP-7.3]}
+  - {from: OP-06, to: [CAP-1.3, CAP-2.6, CAP-2.7, CAP-2.12, CAP-6.6, CAP-7.4, CAP-5.9]}
+  - {from: OP-07, to: [CAP-1.4, CAP-3.1, CAP-5.2, CAP-5.6, CAP-5.9]}
+  - {from: OP-08, to: [CAP-3.1, CAP-3.6, CAP-4.2, CAP-5.6, CAP-5.9]}
+  - {from: OP-31, to: [CAP-2.10, CAP-2.11, CAP-4.1, CAP-5.4, CAP-5.9, CAP-7.3]}
+  - {from: OP-32, to: [CAP-5.1, CAP-5.4, CAP-6.1, CAP-6.4, CAP-7.1, CAP-7.3, CAP-7.4]}
+  - {from: OP-33, to: [CAP-1.1, CAP-1.7]}
+  - {from: OP-34, to: [CAP-4.4]}
+
+achieves:
+  - {from: OA-01, to: [CAP-1.1, CAP-1.2, CAP-1.5, CAP-6.7]}
+  - {from: OA-02, to: [CAP-2.1, CAP-2.2, CAP-2.3, CAP-2.4, CAP-2.5]}
+  - {from: OA-03, to: [CAP-2.6]}
+  - {from: OA-04, to: [CAP-2.8, CAP-3.2]}
+  - {from: OA-05, to: [CAP-3.3, CAP-3.4, CAP-3.5]}
+  - {from: OA-06, to: [CAP-3.6, CAP-4.3]}
+  - {from: OA-07, to: [CAP-4.1, CAP-4.2, CAP-4.3]}
+  - {from: OA-08, to: [CAP-4.4]}
+  - {from: OA-09, to: [CAP-4.5]}
+  - {from: OA-10, to: [CAP-4.6]}
+  - {from: OA-11, to: [CAP-5.1, CAP-5.3]}
+  - {from: OA-12, to: [CAP-1.3, CAP-1.4, CAP-2.11]}
+  - {from: OA-13, to: [CAP-5.5, CAP-1.5]}
+  - {from: OA-14, to: [CAP-3.9]}
+  - {from: OA-15, to: [CAP-1.6, CAP-7.1, CAP-7.2, CAP-7.4]}
+  - {from: OA-16, to: [CAP-2.9]}
+  - {from: OA-17, to: [CAP-1.3]}
+  - {from: OA-18, to: [CAP-2.6, CAP-1.7]}
+  - {from: OA-19, to: [CAP-2.7, CAP-2.12]}
+  - {from: OA-20, to: [CAP-6.6, CAP-7.4, CAP-5.8]}
+  - {from: OA-21, to: [CAP-3.1]}
+  - {from: OA-22, to: [CAP-1.4, CAP-2.10, CAP-2.11]}
+  - {from: OA-23, to: [CAP-3.6, CAP-5.6]}
+  - {from: OA-24, to: [CAP-5.6]}
+  - {from: OA-25, to: [CAP-5.2]}
+  - {from: OA-26, to: [CAP-5.3, CAP-5.8]}
+  - {from: OA-27, to: [CAP-5.4, CAP-7.3]}
+  - {from: OA-28, to: [CAP-5.4]}
+  - {from: OA-29, to: [CAP-5.4]}
+  - {from: OA-30, to: [CAP-3.8]}
+  - {from: OA-31, to: [CAP-3.7]}
+  - {from: OA-32, to: [CAP-4.7, CAP-5.8]}
+  - {from: OA-33, to: [CAP-5.7]}
+  - {from: OA-34, to: [CAP-6.1, CAP-6.2]}
+  - {from: OA-35, to: [CAP-6.3]}
+  - {from: OA-36, to: [CAP-1.7]}
+  # Capabilities with no activity of their own are cross-cutting qualities achieved by the
+  # system as a whole; they are listed here against the activities that evidence them.
+  - {from: OA-11, to: [CAP-5.10]}
+  - {from: OA-24, to: [CAP-6.5]}
+  - {from: OA-15, to: [CAP-6.4]}
+  - {from: OA-07, to: [CAP-5.9]}
+
+performs:
+  - {from: OP-01, to: [OA-03, OA-07, OA-12, OA-16, OA-27]}
+  - {from: OP-02, to: [OA-07, OA-13, OA-23, OA-24, OA-29, OA-31]}
+  - {from: OP-03, to: [OA-11, OA-25, OA-26, OA-33]}
+  - {from: OP-04, to: [OA-12, OA-14, OA-17, OA-22]}
+  - {from: OP-05, to: [OA-24, OA-34, OA-35]}
+  - {from: OP-06, to: [OA-03, OA-17, OA-18, OA-19, OA-20]}
+  - {from: OP-07, to: [OA-21, OA-22, OA-23, OA-25]}
+  - {from: OP-08, to: [OA-07, OA-13, OA-21, OA-23, OA-24, OA-26]}
+  - {from: OP-20, to: [OA-15, OA-23]}
+  - {from: OP-21, to: [OA-15]}
+  - {from: OP-22, to: [OA-08, OA-10]}
+  - {from: OP-23, to: [OA-12]}
+  - {from: OP-24, to: [OA-09, OA-36]}
+  - {from: OP-25, to: [OA-09, OA-36]}
+  - {from: OP-26, to: [OA-15, OA-20]}
+  - {from: OP-30, to: [OA-01, OA-02, OA-03, OA-04, OA-05, OA-06, OA-08, OA-09, OA-10, OA-11, OA-12, OA-13, OA-14, OA-15, OA-16, OA-18, OA-19, OA-20, OA-22, OA-24, OA-25, OA-27, OA-28, OA-30, OA-31, OA-32, OA-33, OA-34, OA-35, OA-36]}
+
+realizes:
+  - {from: SV-08, to: [OA-01]}
+  - {from: SV-05, to: [OA-01, OA-13]}
+  - {from: SV-10, to: [OA-01, OA-15, OA-36]}
+  - {from: SV-01, to: [OA-02]}
+  - {from: SV-12, to: [OA-03, OA-18]}
+  - {from: SV-11, to: [OA-19]}
+  - {from: SV-17, to: [OA-04]}
+  - {from: SV-02, to: [OA-05, OA-30]}
+  - {from: SV-18, to: [OA-05, OA-14, OA-25]}
+  - {from: SV-15, to: [OA-06, OA-23]}
+  - {from: SV-16, to: [OA-07, OA-31]}
+  - {from: SV-23, to: [OA-08, OA-09, OA-15, OA-20], status: planned}
+  - {from: SV-27, to: [OA-09, OA-13, OA-16, OA-17]}
+  - {from: SV-24, to: [OA-13]}
+  - {from: SV-03, to: [OA-10, OA-11]}
+  - {from: SV-04, to: [OA-11, OA-27]}
+  - {from: SV-29, to: [OA-11, OA-26, OA-19, OA-20]}
+  - {from: SV-33, to: [OA-26]}
+  - {from: SV-09, to: [OA-12, OA-14, OA-22]}
+  - {from: SV-14, to: [OA-12, OA-22, OA-16]}
+  - {from: SV-13, to: [OA-22, OA-23]}
+  - {from: SV-06, to: [OA-21, OA-23, OA-24]}
+  - {from: SV-07, to: [OA-24, OA-25]}
+  - {from: SV-28, to: [OA-25, OA-26]}
+  - {from: SV-34, to: [OA-25]}
+  - {from: SV-30, to: [OA-27, OA-28]}
+  - {from: SV-25, to: [OA-27, OA-28]}
+  - {from: SV-26, to: [OA-29, OA-15]}
+  - {from: SV-19, to: [OA-33]}
+  - {from: SV-20, to: [OA-34]}
+  - {from: SV-21, to: [OA-34]}
+  - {from: SV-22, to: [OA-35]}
+  - {from: SV-31, to: [OA-12, OA-22]}
+  - {from: SV-32, to: [OA-02], status: planned}
+  # OA-32 (assist) is realized by plan 08's agent crate, not yet in the workspace.
+  - {from: SV-18, to: [OA-32], status: planned}
+
+implements:
+  - {from: RS-tracking-service, to: [SV-01]}
+  - {from: RS-fusion-async, to: [SV-01]}
+  - {from: RS-filters, to: [SV-01]}
+  - {from: RS-association, to: [SV-01]}
+  - {from: RS-track, to: [SV-01]}
+  - {from: RS-rfs, to: [SV-01]}
+  - {from: RS-track-fusion, to: [SV-01]}
+  - {from: RS-core, to: [SV-01, SV-02]}
+  - {from: RS-coord, to: [SV-01, SV-02, SV-13, SV-14]}
+  - {from: RS-intercept-service, to: [SV-02]}
+  - {from: RS-allocation, to: [SV-02]}
+  - {from: RS-eventing, to: [SV-03]}
+  - {from: RS-store, to: [SV-04]}
+  - {from: RS-time, to: [SV-05]}
+  - {from: RS-config, to: [SV-06]}
+  - {from: RS-mission, to: [SV-07]}
+  - {from: RS-ingest, to: [SV-08]}
+  - {from: RS-sensor-management, to: [SV-09]}
+  - {from: RS-interop, to: [SV-10]}
+  - {from: RS-identity, to: [SV-11]}
+  - {from: RS-identification, to: [SV-12]}
+  - {from: RS-geo, to: [SV-13]}
+  - {from: RS-analytics, to: [SV-14]}
+  - {from: RS-policy, to: [SV-15]}
+  - {from: RS-command, to: [SV-16]}
+  - {from: RS-assessment, to: [SV-17]}
+  - {from: RS-decision, to: [SV-18]}
+  - {from: RS-modelops, to: [SV-19]}
+  - {from: RS-security, to: [SV-20, SV-21, SV-22]}
+  - {from: RS-api, to: [SV-23]}
+  - {from: RS-node, to: [SV-23]}
+  - {from: RS-observability, to: [SV-24]}
+  - {from: RS-resilience, to: [SV-25]}
+  - {from: RS-collab, to: [SV-26]}
+  - {from: RS-workflow, to: [SV-27]}
+  - {from: RS-replay, to: [SV-28]}
+  - {from: RS-reporting, to: [SV-29]}
+  - {from: RS-remote, to: [SV-30]}
+  - {from: RS-data, to: [SV-31]}
+  - {from: RS-data-fusion, to: [SV-32]}
+  - {from: RS-render, to: [SV-32]}
+  - {from: RS-metrics, to: [SV-33]}
+  - {from: RS-scenario, to: [SV-34]}
+  - {from: RS-model, to: [SV-01, SV-02, SV-03, SV-23]}
+  # UI crates implement no service; they consume them (Rs-Cn shows the edges).
+
+conforms_to:
+  - {from: RS-model, to: [SD-01, SD-05]}
+  - {from: RS-store, to: [SD-01, SD-05]}
+  - {from: RS-config, to: [SD-01, SD-05]}
+  - {from: RS-api, to: [SD-01, SD-05]}
+  - {from: RS-api, to: [SD-06, SD-07, SD-08], status: planned}
+  - {from: RS-remote, to: [SD-06, SD-07, SD-08], status: planned}
+  - {from: RS-node, to: [SD-12]}
+  - {from: RS-node, to: [SD-08], status: planned}
+  - {from: RS-interop, to: [SD-02]}
+  - {from: RS-interop, to: [SD-03, SD-04], status: planned}
+  - {from: RS-interop, to: [SD-16], status: planned}
+  - {from: RS-ingest, to: [SD-16], status: planned}
+  - {from: RS-remote, to: [SD-16], status: planned}
+  - {from: RS-ingest, to: [SD-09, SD-10], status: planned}
+  - {from: RS-identity, to: [SD-11], status: planned}
+  - {from: RS-app, to: [SD-13], status: planned}
+  - {from: RS-node, to: [SD-13], status: planned}
+
+# BEGIN generated uses
+uses:
+  - {from: RS-allocation, to: [RS-core]}
+  - {from: RS-allocation, to: [RS-testkit], kind: dev}
+  - {from: RS-analytics, to: [RS-coord, RS-data, RS-geo, RS-model, RS-sensor-management]}
+  - {from: RS-analytics, to: [RS-config], kind: dev}
+  - {from: RS-api, to: [RS-model, RS-eventing, RS-security, RS-tracking-service, RS-intercept-service, RS-analytics]}
+  - {from: RS-app, to: [RS-tracking-service, RS-intercept-service, RS-remote, RS-resilience, RS-identification, RS-identity, RS-data, RS-data-fusion, RS-render, RS-viewport3d, RS-ui, RS-model, RS-config, RS-mission, RS-eventing, RS-store, RS-time, RS-ingest, RS-observability, RS-workflow, RS-security, RS-policy, RS-command, RS-geo, RS-sensor-management, RS-analytics, RS-assessment, RS-modelops, RS-decision, RS-replay, RS-reporting]}
+  - {from: RS-app, to: [RS-scenario, RS-api, RS-ui], kind: dev}
+  - {from: RS-assessment, to: [RS-model]}
+  - {from: RS-association, to: [RS-filters]}
+  - {from: RS-association, to: [RS-testkit], kind: dev}
+  - {from: RS-collab, to: [RS-model, RS-eventing, RS-command, RS-security]}
+  - {from: RS-collab, to: [RS-policy], kind: dev}
+  - {from: RS-command, to: [RS-model, RS-policy]}
+  - {from: RS-config, to: [RS-model]}
+  - {from: RS-coord, to: [RS-testkit], kind: dev}
+  - {from: RS-core, to: [RS-testkit], kind: dev}
+  - {from: RS-data-fusion, to: [RS-data]}
+  - {from: RS-decision, to: [RS-model, RS-assessment, RS-policy, RS-analytics]}
+  - {from: RS-eventing, to: [RS-model]}
+  - {from: RS-filters, to: [RS-core, RS-coord]}
+  - {from: RS-filters, to: [RS-testkit], kind: dev}
+  - {from: RS-fusion-async, to: [RS-track, RS-rfs, RS-track-fusion, RS-core, RS-filters, RS-association]}
+  - {from: RS-fusion-async, to: [RS-testkit], kind: dev}
+  - {from: RS-fuzz, to: [RS-association, RS-ingest, RS-model]}
+  - {from: RS-geo, to: [RS-coord, RS-data]}
+  - {from: RS-identification, to: [RS-model]}
+  - {from: RS-identity, to: [RS-model]}
+  - {from: RS-ingest, to: [RS-model, RS-time, RS-tracking-service, RS-interop]}
+  - {from: RS-ingest, to: [RS-scenario], kind: dev}
+  - {from: RS-intercept-service, to: [RS-core, RS-coord, RS-allocation, RS-model]}
+  - {from: RS-interop, to: [RS-model]}
+  - {from: RS-interop, to: [RS-eventing], kind: dev}
+  - {from: RS-metrics, to: [RS-track, RS-association]}
+  - {from: RS-metrics, to: [RS-testkit], kind: dev}
+  - {from: RS-mission, to: [RS-model, RS-config, RS-store, RS-eventing]}
+  - {from: RS-mission, to: [RS-scenario], kind: dev}
+  - {from: RS-ml, to: [RS-model, RS-interop]}
+  - {from: RS-model, to: [RS-core, RS-coord]}
+  - {from: RS-modelops, to: [RS-config, RS-model]}
+  - {from: RS-node, to: [RS-model, RS-config, RS-mission, RS-eventing, RS-store, RS-time, RS-ingest, RS-sensor-management, RS-tracking-service, RS-intercept-service, RS-api, RS-remote, RS-security, RS-modelops, RS-policy, RS-geo, RS-analytics, RS-observability]}
+  - {from: RS-node, to: [RS-scenario], kind: dev}
+  - {from: RS-observability, to: [RS-model]}
+  - {from: RS-oracle, to: [RS-filters, RS-association, RS-rfs, RS-scenario]}
+  - {from: RS-oracle, to: [RS-testkit], kind: dev}
+  - {from: RS-policy, to: [RS-model, RS-geo]}
+  - {from: RS-remote, to: [RS-model, RS-eventing, RS-api, RS-tracking-service, RS-intercept-service]}
+  - {from: RS-remote, to: [RS-security, RS-analytics], kind: dev}
+  - {from: RS-replay, to: [RS-model, RS-eventing, RS-store, RS-time]}
+  - {from: RS-reporting, to: [RS-model, RS-eventing, RS-store, RS-metrics, RS-identity]}
+  - {from: RS-resilience, to: [RS-model, RS-eventing, RS-store]}
+  - {from: RS-rfs, to: [RS-track]}
+  - {from: RS-rfs, to: [RS-testkit], kind: dev}
+  - {from: RS-scenario, to: [RS-core, RS-coord, RS-fusion-async]}
+  - {from: RS-scenario, to: [RS-testkit], kind: dev}
+  - {from: RS-sensor-management, to: [RS-coord, RS-model, RS-config]}
+  - {from: RS-store, to: [RS-model, RS-eventing]}
+  - {from: RS-time, to: [RS-model]}
+  - {from: RS-track-fusion, to: [RS-track, RS-coord]}
+  - {from: RS-track-fusion, to: [RS-testkit], kind: dev}
+  - {from: RS-track, to: [RS-core, RS-association]}
+  - {from: RS-track, to: [RS-testkit], kind: dev}
+  - {from: RS-tracking-service, to: [RS-core, RS-coord, RS-filters, RS-association, RS-track, RS-rfs, RS-track-fusion, RS-fusion-async, RS-model]}
+  - {from: RS-tracking-service, to: [RS-scenario, RS-oracle], kind: dev}
+  - {from: RS-ui, to: [RS-model]}
+  - {from: RS-viewport3d, to: [RS-data, RS-data-fusion, RS-model, RS-ui]}
+  - {from: RS-workflow, to: [RS-model, RS-security, RS-observability, RS-sensor-management, RS-assessment]}
+# END generated uses
+
+# BEGIN generated requirement relationships
+# satisfies: requirement -> capability (the Source column); carried_by: requirement -> resource (the Carried-by column)
+satisfies:
+  - {from: REQ-F-01, to: [CAP-1.1, CAP-1.2]}
+  - {from: REQ-F-02, to: [CAP-1.2]}
+  - {from: REQ-F-03, to: [CAP-1.3]}
+  - {from: REQ-F-04, to: [CAP-1.4]}
+  - {from: REQ-F-05, to: [CAP-1.5]}
+  - {from: REQ-F-06, to: [CAP-1.7]}
+  - {from: REQ-F-07, to: [CAP-2.1, CAP-2.5]}
+  - {from: REQ-F-08, to: [CAP-2.2]}
+  - {from: REQ-F-09, to: [CAP-2.6]}
+  - {from: REQ-F-10, to: [CAP-2.7]}
+  - {from: REQ-F-11, to: [CAP-3.1, CAP-3.2]}
+  - {from: REQ-F-12, to: [CAP-3.3, CAP-3.4]}
+  - {from: REQ-F-13, to: [CAP-3.5]}
+  - {from: REQ-F-14, to: [CAP-3.7]}
+  - {from: REQ-F-15, to: [CAP-5.2]}
+  - {from: REQ-F-16, to: [CAP-5.3]}
+  - {from: REQ-D-02, to: [CAP-1.2]}
+  - {from: REQ-D-07, to: [CAP-6.6]}
+  - {from: REQ-I-01, to: [CAP-7.1]}
+  - {from: REQ-I-02, to: [CAP-7.2]}
+  - {from: REQ-S-01, to: [CAP-4.3]}
+  - {from: REQ-S-02, to: [CAP-6.2]}
+  - {from: REQ-S-03, to: [CAP-3.6]}
+  - {from: REQ-S-04, to: [CAP-3.6, CAP-3.7]}
+  - {from: REQ-S-05, to: [CAP-6.3]}
+  - {from: REQ-S-07, to: [CAP-6.4]}
+  - {from: REQ-S-10, to: [CAP-6.5]}
+  - {from: REQ-U-01, to: [CAP-5.9]}
+carried_by:
+  - {from: REQ-F-01, to: [RS-ingest]}
+  - {from: REQ-F-02, to: [RS-security]}
+  - {from: REQ-F-03, to: [RS-sensor-management]}
+  - {from: REQ-F-04, to: [RS-analytics]}
+  - {from: REQ-F-05, to: [RS-time]}
+  - {from: REQ-F-06, to: [RS-interop, RS-identification]}
+  - {from: REQ-F-08, to: [RS-model]}
+  - {from: REQ-F-09, to: [RS-identification, RS-policy]}
+  - {from: REQ-F-10, to: [RS-identity]}
+  - {from: REQ-F-11, to: [RS-assessment]}
+  - {from: REQ-F-12, to: [RS-allocation, RS-intercept-service]}
+  - {from: REQ-F-13, to: [RS-decision]}
+  - {from: REQ-F-14, to: [RS-command]}
+  - {from: REQ-F-15, to: [RS-store, RS-replay]}
+  - {from: REQ-F-16, to: [RS-reporting]}
+  - {from: REQ-D-01, to: [RS-core, RS-coord, RS-model]}
+  - {from: REQ-D-02, to: [RS-model]}
+  - {from: REQ-D-03, to: [RS-identification]}
+  - {from: REQ-D-04, to: [RS-eventing]}
+  - {from: REQ-D-05, to: [RS-store]}
+  - {from: REQ-D-06, to: [RS-resilience, RS-collab]}
+  - {from: REQ-D-07, to: [RS-model, RS-api]}
+  - {from: REQ-D-08, to: [RS-modelops]}
+  - {from: REQ-I-01, to: [RS-api]}
+  - {from: REQ-I-02, to: [RS-interop]}
+  - {from: REQ-I-03, to: [RS-interop]}
+  - {from: REQ-I-04, to: [RS-interop]}
+  - {from: REQ-I-05, to: [RS-api]}
+  - {from: REQ-I-06, to: [RS-interop]}
+  - {from: REQ-S-01, to: [RS-policy, RS-command]}
+  - {from: REQ-S-02, to: [RS-security]}
+  - {from: REQ-S-03, to: [RS-policy]}
+  - {from: REQ-S-04, to: [RS-command]}
+  - {from: REQ-S-05, to: [RS-security]}
+  - {from: REQ-S-06, to: [RS-security]}
+# END generated requirement relationships

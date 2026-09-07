@@ -1,0 +1,21 @@
+# gungnir-node: headless service node for the on-prem and cloud profiles
+# (ARCHITECTURE.md §8). Linux x86_64 only; builds nothing from the UI crates.
+
+FROM rust:1.98-slim-bookworm AS build
+WORKDIR /src
+COPY . .
+RUN cargo build --release -p gungnir-node --locked 2>/dev/null || cargo build --release -p gungnir-node
+
+FROM debian:bookworm-slim AS runtime
+RUN useradd --system --create-home --uid 10001 gungnir \
+    && mkdir -p /etc/gungnir /var/lib/gungnir \
+    && chown -R gungnir:gungnir /var/lib/gungnir
+COPY --from=build /src/target/release/gungnir-node /usr/local/bin/gungnir-node
+COPY deploy/node/config.example.json /etc/gungnir/config.json
+USER gungnir
+WORKDIR /var/lib/gungnir
+ENV RUST_LOG=info
+EXPOSE 7410
+VOLUME ["/var/lib/gungnir"]
+ENTRYPOINT ["gungnir-node"]
+CMD ["/etc/gungnir/config.json"]

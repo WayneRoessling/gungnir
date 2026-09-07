@@ -1,0 +1,22 @@
+@startsalt WF-02
+title WF-02 PN-02 Viewport (centre of every layout; 2D fallback today, three-d scene planned)
+{+
+  {
+    [layers ▾] | [coverage ▾] | [assets] | [geofences] | [follow selection] | . | scale 1 km | grid 500 m | [replay watermark when Replaying]
+  }
+  --
+  {
+    <i>map area: terrain (planned), defended assets as labelled squares, geofences as hatched polygons,</i>
+    <i>coverage regions per sensor (planned), gaps hatched red (planned)</i>
+    .
+    <i>track glyph: frame = classification (diamond hostile, rounded rect friendly, square neutral, quatrefoil unknown)</i>
+    <i>fill = lifecycle colour, grey when stale; leader line = velocity; faint ellipse = 1σ position uncertainty</i>
+    <i>label: id  class  "stale 34 s" when stale  score numeral when above threshold</i>
+    .
+    <i>assignment line resource → track in INTERCEPT_LINE_COLOR; intercept point as a cross when present</i>
+    <i>selection: white halo; selected track's evidence card opens in PN-04</i>
+  }
+  --
+  { hover: T-042 hostile 0.91 conf  fresh  312 m/s  → OPS 3:12 to impact | . | click: select | wheel: zoom | drag: pan }
+}
+@endsalt

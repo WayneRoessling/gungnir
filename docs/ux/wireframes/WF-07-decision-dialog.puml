@@ -1,0 +1,18 @@
+@startsalt WF-07
+title WF-07 PN-07 Decision dialog (modal over the viewport; one plan per dialog)
+{+
+  <b>Decide on plan P-1183</b>  ·  time remaining <b>2:51</b>  ·  deciding as Operator (Mira), within delegation
+  --
+  { Verdict | <color:orange><b>Requires human approval</b></color> }
+  { Picture | <color:green>fresh</color> (no stale track in this plan) }
+  { MFG-2 gun → T-042 (hostile 0.91, OPS 3:05) | MFG-2 gun → T-043 (hostile 0.88, OPS 3:13) }
+  { Why | cheapest adequate layer; OPS priority 1; area layer held }
+  --
+  { (X) Accept as recommended | ( ) Override with substitute: [ MFG-1 gun ▾ ] → T-042  <i>(re-checked by policy before enabling)</i> | ( ) Reject }
+  { Reason (required for override and reject): | "                                        " }
+  --
+  { [ Cancel (Esc) ] | . | . | [ Reject ] | [ Override ] | [ <b>Accept</b> ] }
+  { <i>tab order: verdict → rationale → reason → Reject → Override → Accept; Enter never accepts; Accept disabled if the plan was superseded while this dialog is open ("plan changed, reopen")</i> }
+  { <i>when the picture is degraded: an extra required checkbox "I acknowledge the degraded picture (radar R1 lost 01:50)" before any button enables</i> }
+}
+@endsalt

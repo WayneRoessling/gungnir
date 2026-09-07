@@ -1,0 +1,21 @@
+[package]
+name = "gungnir-viewport3d"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "three-d scene setup, camera, streaming/scientific data bridges, and live track/intercept rendering, drawn into eframe's OpenGL (glow) context. Combines rust-3d-data-ecosystem-build-vs-adopt.md §2 with gungnir-model views -- see ARCHITECTURE.md §4-5 for why track rendering lives here rather than in a translation crate."
+
+[lints]
+workspace = true
+
+[dependencies]
+egui.workspace = true
+three-d.workspace = true
+thiserror.workspace = true
+gungnir-data = { path = "../gungnir-data" }
+gungnir-data-fusion = { path = "../gungnir-data-fusion" }
+gungnir-model = { path = "../gungnir-model" }
+gungnir-ui = { path = "../gungnir-ui" }
+
+[dev-dependencies]
+nalgebra.workspace = true

@@ -1,0 +1,17 @@
+# Line endings are normalised to LF in the repository and checked out as LF.
+#
+# The drafting host is Windows with `core.autocrlf=true`, and the gates run on Linux
+# runners (`.github/workflows/`). Without this file a shell script or a fixture could
+# reach a runner with CRLF and fail there for a reason invisible on the host that
+# wrote it. `text=auto` lets git decide what is text; `eol=lf` fixes what it writes.
+* text=auto eol=lf
+
+# Committed fixtures are compared byte for byte (`testdata/oracles/README.md`,
+# GAP-016 byte parity). They must not be touched by any filter.
+testdata/** -text
+*.jsonl -text
+
+*.png binary
+*.jpg binary
+*.svg text eol=lf
+*.pdf binary

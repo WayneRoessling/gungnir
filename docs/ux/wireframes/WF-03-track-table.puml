@@ -1,0 +1,16 @@
+@startsalt WF-03
+title WF-03 PN-03 Track table (virtualised; sort by any column; filter by class and status)
+{+
+  { filter: [all classes ▾] [all statuses ▾] [ ] stale only | . | 187 tracks, 12 stale, 41 hostile }
+  {#
+    Id | Class | Status | Conf | Age | Speed | To asset | Score | Src
+    <b>T-042</b> | ◆ hostile | confirmed | 0.91 | 1 s | 312 m/s | OPS 3:12 | 87 | R1,A3
+    T-043 | ◆ hostile | confirmed | 0.88 | 2 s | 300 m/s | OPS 3:20 | 84 | R1
+    T-044 | ▢ unknown | tentative | 0.41 | 3 s | 88 m/s | KAL 9:40 | 22 | A7
+    T-039 | ◆ hostile | coasting | 0.77 | <color:gray>stale 34 s</color> | 95 m/s | HAF 6:01 | <color:gray>0</color> | R1
+    T-031 | ▭ friendly | confirmed | 0.99 | 1 s | 210 m/s | corridor | . | IFF
+    T-027 | ■ neutral | confirmed | 0.97 | 4 s | 12 kn | anchorage | . | AIS
+  }
+  { <i>stale rows: grey text, score forced to 0, never allocated; row click selects everywhere</i> }
+}
+@endsalt

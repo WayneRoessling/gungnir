@@ -1,0 +1,13 @@
+[package]
+name = "gungnir-testkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared proptest strategies for the tracking core. Depends on no workspace crate (so it can be a dev-dependency of every one of them without a dev-dependency cycle); nothing depends on it at runtime."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+proptest.workspace = true

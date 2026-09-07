@@ -1,0 +1,35 @@
+[package]
+name = "gungnir-filters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "KF/EKF/UKF/PF/IMM/sqrt-UDU/RTS state estimation."
+
+[lints]
+workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+# The particle filter's process-noise draws and resampling. Both are recorded in
+# docs/agentic-coding-standards.md §2.9, which named `gungnir-filters` (particle filter)
+# as a user before one existed; §2.4 is why every stochastic method here takes an
+# explicit `&mut impl Rng` rather than reaching for a thread-local generator.
+rand.workspace = true
+rand_distr.workspace = true
+gungnir-core = { path = "../gungnir-core" }
+gungnir-coord = { path = "../gungnir-coord" }
+
+[dev-dependencies]
+proptest.workspace = true
+criterion.workspace = true
+# The filterpy oracle fixture in testdata/oracles/filters/ is JSON; serde_json is an
+# already-approved workspace dependency (agentic-coding-standards.md 2.9), dev-only.
+serde_json.workspace = true
+gungnir-testkit = { path = "../gungnir-testkit" }
+
+[[bench]]
+name = "ekf_predict_update"
+harness = false

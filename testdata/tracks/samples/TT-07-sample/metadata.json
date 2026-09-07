@@ -1,0 +1,55 @@
+{
+ "format": 1,
+ "scenario": "TT-07",
+ "variant": "sample",
+ "seed": 1707,
+ "generator": "tt-gen 0.1.0",
+ "catalogue_version": "2026-09-04",
+ "classes_version": "2026-09-04",
+ "sensors_version": "2026-09-04",
+ "scenarios_version": "2026-09-04",
+ "duration_s": 1500,
+ "truth_tick_s": 2.0,
+ "origin": {
+  "name": "Sector command post, Ostmark (fictional)",
+  "lat": 0.0,
+  "lon": 0.0,
+  "alt_m": 0.0
+ },
+ "start_time_of_day": "01:30:00",
+ "counts": {
+  "entities": 10,
+  "entities_by_class": {
+   "air.owa-prop": 9,
+   "air.loitering": 1
+  },
+  "truth_records": 3773,
+  "detections": 954,
+  "false_alarms": 733,
+  "sensors": 7
+ },
+ "expected": {
+  "entities": 31,
+  "skewed_sensors": [
+   3,
+   5,
+   9
+  ],
+  "lost_sensor": 1,
+  "success": "operators know within a minute what they cannot see (MOE-10, 30 s); no decision on a stale track without acknowledgement; the loss a formal accepted gap"
+ },
+ "provenance": {
+  "policy": "docs/test-tracks/sourcing-and-legal.md",
+  "inputs": [
+   "classes.yaml",
+   "sensors.yaml",
+   "scenarios.yaml",
+   "catalogue-*.yaml"
+  ]
+ },
+ "validation": {
+  "passed": true,
+  "checks": 18,
+  "report": "validation-report.json"
+ }
+}

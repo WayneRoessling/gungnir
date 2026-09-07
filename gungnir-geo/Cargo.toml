@@ -1,0 +1,15 @@
+[package]
+name = "gungnir-geo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Coordinate-reference-system governance, map/imagery layers, geocoding, vector features, spatial indexing, and geofencing. docs/gungnir-capabilities.md §5.3 -- Medium."
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+gungnir-coord = { path = "../gungnir-coord" }
+gungnir-data = { path = "../gungnir-data" }

@@ -1,0 +1,18 @@
+@startsalt WF-19
+title WF-19 PN-19 Assistant (plan 08; labelled, sourced, no authority)
+{+
+  { <b>Assistant</b> · provider: cloud (claude-opus-5) · egress: live picture allowed (cloud profile) · <i>this panel cannot change anything</i> }
+  --
+  { <b>You</b> 01:41:20: why is T-042 scored 87? }
+  { <b>Assistant</b> 01:41:22 · sources: snapshot 01:41:20 · tools: get_track(T-042), get_score_factors(T-042) }
+  { T-042 is confirmed hostile (0.91) on acoustic signature and radar kinematics, predicted to reach OPS (priority 1) in 3:05. The score is class lethality 0.9 × asset priority 1 × time factor 0.8; it would drop to 22 if the class were a decoy. }
+  { [ show the factors in PN-04 ] [ this was wrong ] }
+  --
+  { <b>You</b> 01:41:40: draft the handover note for 02:00 }
+  { <b>Assistant</b> 01:41:46 · sources: journal 01:00–01:41 · tools: list_decisions, list_incidents · <color:orange>DRAFT, not a record</color> }
+  { "Raid in progress since 01:38: 12 engagements decided, 2 expired at the 01:40 peak; R1 lost 01:50, HAF radar re-tasked; KAL cell on delegated authority…" [ copy to case notes ] }
+  --
+  { > "                                                                   " [ ask ] | [ ] include selected track }
+  { <i>disconnected profile: "local model (llama-class, 8B); answers limited to the local journal"; when no provider is reachable the panel says so and offers nothing</i> }
+}
+@endsalt

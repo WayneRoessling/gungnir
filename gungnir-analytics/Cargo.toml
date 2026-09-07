@@ -1,0 +1,23 @@
+[package]
+name = "gungnir-analytics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Advanced 3D analytical functions -- line-of-sight, viewshed, sensor-coverage volumes, terrain masking, route deconfliction -- as standalone CPU services rendered by gungnir-viewport3d rather than embedded in it. docs/gungnir-capabilities.md §5.3 -- Medium."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+gungnir-coord = { path = "../gungnir-coord" }
+gungnir-data = { path = "../gungnir-data" }
+gungnir-geo = { path = "../gungnir-geo" }
+# docs/design/dependency-edges.md: accepted by the engineering reviewer 2026-09-05
+# so `coverage_from_registry` can build coverage input from live sensor records.
+gungnir-model = { path = "../gungnir-model" }
+gungnir-sensor-management = { path = "../gungnir-sensor-management" }
+
+[dev-dependencies]
+gungnir-config = { path = "../gungnir-config" }

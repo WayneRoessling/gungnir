@@ -1,0 +1,9 @@
+//! wgpu compute pipeline setup. Owns no `wgpu::Device` -- one is passed in from
+//! `gungnir-render`, shared, never a second device (§3.3).
+
+pub mod buffers;
+
+pub const SPATIAL_HASH_SHADER: &str = include_str!("shaders/spatial_hash.wgsl");
+pub const CORRESPONDENCE_SHADER: &str = include_str!("shaders/correspondence.wgsl");
+pub const REDUCTION_SHADER: &str = include_str!("shaders/reduction.wgsl");
+pub const FUSE_VOXELS_SHADER: &str = include_str!("shaders/fuse_voxels.wgsl");

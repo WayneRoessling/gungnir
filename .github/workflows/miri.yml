@@ -1,0 +1,44 @@
+# Gate 3: cargo miri on any PR whose diff contains `unsafe`
+# (docs/agentic-workflow.md, docs/agentic-coding-standards.md §4).
+name: miri
+
+on:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  detect-unsafe:
+    runs-on: ubuntu-latest
+    outputs:
+      has_unsafe: ${{ steps.scan.outputs.has_unsafe }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: scan
+        run: |
+          if git diff --unified=0 origin/${{ github.base_ref }}...HEAD -- '*.rs' | grep -E '^\+.*\bunsafe\b' ; then
+            echo "has_unsafe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_unsafe=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  miri:
+    needs: detect-unsafe
+    if: needs.detect-unsafe.outputs.has_unsafe == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo miri setup
+      - name: miri on the tracking core and service layer
+        run: >
+          cargo miri test
+          -p gungnir-core -p gungnir-coord -p gungnir-filters -p gungnir-association
+          -p gungnir-track -p gungnir-rfs -p gungnir-track-fusion -p gungnir-fusion-async
+          -p gungnir-allocation -p gungnir-metrics -p gungnir-tracking-service -p gungnir-intercept-service

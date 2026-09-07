@@ -1,0 +1,20 @@
+@startsalt WF-13
+title WF-13 PN-13 Reports (analyst, intelligence analyst)
+{+
+  { Session: [ 1757030000 ▾ ] | Template: [ raid summary ▾ ] [ measures ▾ ] [ order of battle ▾ ] | [ generate ] }
+  --
+  <b>Raid summary, VG-01, 2026-09-04</b>
+  {#
+    Figure | Value | Journal reference
+    tracks initiated | 47 | seq 12 001–40 990 (TrackInitiated ×47)
+    plans proposed | 61 | InterceptEvent::PlanProposed ×61
+    decisions recorded | 44 accepted · 3 overridden · 2 rejected | CommandEvent::Decided ×49
+    MOE-01 asset protection | 0.96 (46 of 48 predicted) | truth: TT-01 · seq list
+    MOE-04 decision timeliness | p95 0.27 | per-decision list
+    MOE-05 completeness | 1.0 | every PlanApproved has a Decided
+  }
+  { <i>every figure is a link to the envelopes it was computed from; figures are recomputed by gungnir-reporting, never edited here</i> }
+  --
+  { Releasability: [ select marking ▾ ] <i>(required)</i> | [ export package ] <i>(disabled without a marking)</i> | [ ask assistant to draft narrative ] <i>(draft labelled; figures untouched)</i> }
+}
+@endsalt

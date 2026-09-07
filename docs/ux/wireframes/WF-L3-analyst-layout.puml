@@ -1,0 +1,19 @@
+@startsalt WF-L3
+title WF-L3 Analyst layout (P-03): timeline and tables
+{+
+  { <b>PN-01 status strip</b> · Session 1757030000 <b>Replaying</b> · 01:41:02 replay · Analyst (Ines) }
+  --
+  {
+    {+ <b>PN-12 Replay</b> timeline, events, annotations ..
+    {+ <b>PN-03 Track table</b> (as of 01:41:02) ..
+    } | {+
+      <b>PN-02 Viewport</b> (replay watermark)
+      .
+      .
+      <i>picture at the scrubbed time</i>
+      .
+    } | {+ <b>PN-13 Reports</b> ..
+    {+ <b>PN-19 Assistant</b> (journal-scoped) }
+  }
+}
+@endsalt

@@ -1,0 +1,25 @@
+@startsalt WF-04
+title WF-04 PN-04 Track detail and identity evidence card (opens on selection)
+{+
+  <b>T-042</b>  ◆ hostile  confidence 0.91 (margin 0.80)  confirmed  fresh 1 s
+  {
+    Position | 4.21 km E, 12.30 km N, 210 m | Speed | 312 m/s heading 254°
+    Uncertainty | ±35 m E ±40 m N (1σ) | Predicted asset | OPS, time to impact 3:12
+    Score | 87 | Factors | class lethality 0.9 · asset priority 1 · time 0.8
+    Entity | E-7f3a… (lineage: 2 session tracks, 1 merge) | Provenance | sensors R1, A3 · calibration cb-2026-09 · algo imm-cv-ct 0.1.0
+  }
+  --
+  <b>Evidence</b>
+  {#
+    Source | Kind | Weight | Time | Detail
+    A3 acoustic | signature class | +0.35 | 01:39:12 | propeller, 2-blade class
+    R1 radar | kinematics | +0.30 | 01:40:02 | 300 m/s, 200 m AGL, route along Vell
+    peer NS | early warning | +0.20 | 01:10:00 | raid crossing reported
+    IFF | cooperative | none | . | no response (not evidence of hostility)
+    operator | designation | +0.10 | 01:40:40 | Mira: confirmed hostile
+  }
+  --
+  { [ why this score ] | [ designate identity… ] | [ request camera cue ] | [ open in queue ] }
+  { <i>designate opens a dialog: class criteria, margin, "declare hostile" recorded as evidence with your identity; refused below the margin with "escalate to supervisor"</i> }
+}
+@endsalt
