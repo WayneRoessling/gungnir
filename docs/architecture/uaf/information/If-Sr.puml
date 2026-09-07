@@ -88,6 +88,10 @@ enum IngestEvent <<InformationElement>> {
 enum SensorEvent <<InformationElement>> {
   ModeChanged { sensor: crate::SensorId, from: crate::SensorMode, to: crate::SensorMode, at: MissionTime, }
 }
+enum IdentityEvent <<InformationElement>> {
+  Correlated { track: TrackId, entity: crate::identity::GlobalEntityId, confidence: f64, basis: String, at: MissionTime, }
+  Minted { track: TrackId, entity: crate::identity::GlobalEntityId, at: MissionTime, }
+}
 enum CalibrationEvent <<InformationElement>> {
   ReferenceObserved { sensor: SensorId, reference: String, truth_enu: [f64; 3], observed_enu: [f64; 3], observation_variance_m2: [f64; 3], at: MissionTime, }
   RegistrationApplied { sensor: SensorId, offset_enu: [f64; 3], residual_spread_m: f64, references: u32, at: MissionTime, }
@@ -165,6 +169,11 @@ enum WarningEvent <<InformationElement>> {
   Waived { asset: crate::AssetId, track: crate::TrackId, operator: String, reason: String, at: MissionTime, }
   Closed { asset: crate::AssetId, track: crate::TrackId, final_state: String, at: MissionTime, }
 }
+enum LaunchWarningEvent <<InformationElement>> {
+  Issued(crate::LaunchWarningReport)
+  Received(crate::PeerLaunchWarning)
+  Refused { peer: String, reason: String, at: MissionTime, }
+}
 enum LinkEvent <<InformationElement>> {
   FellBack { endpoint: String, silent_s: f64, at: MissionTime, }
   Restored { endpoint: String, fallback_since: MissionTime, at: MissionTime, }
@@ -184,6 +193,17 @@ class PeerOrigin <<InformationElement>> {
   peer_time: MissionTime
   receipt_time: MissionTime
   assigned_quality: f32
+}
+class LaunchWarningReport <<InformationElement>> {
+  id: String
+  what: String
+  at: MissionTime
+  releasability: Releasability
+}
+class PeerLaunchWarning <<InformationElement>> {
+  peer: String
+  report: LaunchWarningReport
+  receipt_time: MissionTime
 }
 enum ExchangeItem <<InformationElement>> {
   Tracks
@@ -270,11 +290,16 @@ enum Classification <<InformationElement>> {
   Friendly
   Hostile
 }
+enum Measurement <<InformationElement>> {
+  Position { enu: nalgebra::Vector3<f64>, variance_m2: [f64; 3], }
+  RangeAzimuthElevation { range_m: f64, azimuth_rad: f64, elevation_rad: f64, variance: [f64; 3], }
+  Bearing { azimuth_rad: f64, elevation_rad: Option<f64>, azimuth_variance_rad2: f64, elevation_variance_rad2: Option<f64>, }
+}
 class DetectionView <<InformationElement>> {
   sensor: SensorId
   source_time: MissionTime
   receipt_time: MissionTime
-  measurement: nalgebra::Vector3<f64>
+  measurement: Measurement
   provenance: Provenance
 }
 class TrackView <<InformationElement>> {
@@ -520,31 +545,35 @@ TrackingEvent --> TrackView
 InterceptEvent --> PlanView
 InterceptEvent --> PlanView
 InterceptEvent --> PlanView
-InterceptEvent --> PlanId
 InterceptEvent --> VerdictSummary
+InterceptEvent --> PlanId
 IngestEvent --> DetectionView
 IngestEvent --> SensorId
 IngestEvent --> SensorId
 SensorEvent --> MissionTime
 SensorEvent --> SensorMode
 SensorEvent --> SensorId
+IdentityEvent --> MissionTime
+IdentityEvent --> GlobalEntityId
+IdentityEvent --> MissionTime
+IdentityEvent --> GlobalEntityId
 CalibrationEvent --> MissionTime
 CalibrationEvent --> SensorId
 CalibrationEvent --> MissionTime
 CalibrationEvent --> SensorId
 CalibrationEvent --> MissionTime
 CalibrationEvent --> SensorId
-SensorTaskEvent --> SensorTaskId
 SensorTaskEvent --> MissionTime
+SensorTaskEvent --> SensorTaskId
 SensorTaskEvent --> SensorId
-SensorTaskEvent --> SensorTaskId
 SensorTaskEvent --> MissionTime
+SensorTaskEvent --> SensorTaskId
 SensorTaskEvent --> SensorId
-SensorTaskEvent --> SensorTaskId
 SensorTaskEvent --> MissionTime
+SensorTaskEvent --> SensorTaskId
 SensorTaskEvent --> SensorId
-SensorTaskEvent --> SensorTaskId
 SensorTaskEvent --> MissionTime
+SensorTaskEvent --> SensorTaskId
 SensorTaskEvent --> SensorId
 GovernanceEvent --> MissionTime
 GovernanceEvent --> AlgorithmBaselineId
@@ -553,8 +582,8 @@ GovernanceEvent --> MissionProfile
 GovernanceEvent --> MissionTime
 GovernanceEvent --> AlgorithmBaselineId
 GovernanceEvent --> MissionTime
-GovernanceEvent --> AlgorithmBaselineId
 GovernanceEvent --> MissionProfile
+GovernanceEvent --> AlgorithmBaselineId
 GovernanceEvent --> MissionTime
 GovernanceEvent --> AlgorithmBaselineId
 RhythmEvent --> MissionTime
@@ -570,25 +599,25 @@ RhythmEvent --> MissionTime
 RhythmEvent --> SensorId
 RequirementEvent --> MissionTime
 RequirementEvent --> CollectionRequirement
+RequirementEvent --> MissionTime
 RequirementEvent --> SensorTaskId
-RequirementEvent --> MissionTime
-RequirementEvent --> RequirementId
 RequirementEvent --> Concurrence
-RequirementEvent --> MissionTime
 RequirementEvent --> RequirementId
+RequirementEvent --> MissionTime
 RequirementEvent --> Concurrence
+RequirementEvent --> RequirementId
 RequirementEvent --> MissionTime
 RequirementEvent --> RequirementId
 RequirementEvent --> MissionTime
 RequirementEvent --> RequirementId
 CommandEvent --> PlanId
 CommandEvent --> DecisionId
-CommandEvent --> PlanId
 CommandEvent --> VerdictSummary
-CommandEvent --> MissionTime
+CommandEvent --> PlanId
 CommandEvent --> PlanId
 CommandEvent --> MissionTime
 CommandEvent --> PlanId
+CommandEvent --> MissionTime
 EngagementEvent --> DecisionId
 EngagementEvent --> PlanId
 EngagementEvent --> DecisionId
@@ -608,7 +637,6 @@ HandoffEvent --> MissionTime
 HandoffEvent --> DecisionId
 HandoffEvent --> MissionTime
 HandoffEvent --> EffectorReport
-ReviewEvent --> SessionId
 ReviewEvent --> MissionTime
 ReviewEvent --> SessionId
 ReviewEvent --> MissionTime
@@ -618,6 +646,7 @@ ReviewEvent --> SessionId
 ReviewEvent --> MissionTime
 ReviewEvent --> SessionId
 ReviewEvent --> MissionTime
+ReviewEvent --> SessionId
 HealthEvent --> MissionTime
 WarningEvent --> MissionTime
 WarningEvent --> AssetId
@@ -633,18 +662,25 @@ WarningEvent --> MissionTime
 WarningEvent --> AssetId
 WarningEvent --> MissionTime
 WarningEvent --> AssetId
-LinkEvent --> MissionTime
+LaunchWarningEvent --> LaunchWarningReport
+LaunchWarningEvent --> PeerLaunchWarning
+LaunchWarningEvent --> MissionTime
 LinkEvent --> MissionTime
 LinkEvent --> MissionTime
 LinkEvent --> MissionTime
 LinkEvent --> PlanId
+LinkEvent --> MissionTime
 RehearsalEvent --> MissionTime
-ReplayEvent --> SessionId
 ReplayEvent --> MissionTime
 ReplayEvent --> SessionId
 ReplayEvent --> MissionTime
+ReplayEvent --> SessionId
 PeerOrigin --> MissionTime
 PeerOrigin --> MissionTime
+LaunchWarningReport --> MissionTime
+LaunchWarningReport --> Releasability
+PeerLaunchWarning --> LaunchWarningReport
+PeerLaunchWarning --> MissionTime
 ExchangeAgreement --> ExchangeItem
 ExchangeAgreement --> ExchangeItem
 ExchangeAgreement --> ExchangeFormat
@@ -671,6 +707,7 @@ SensorCommand --> AssetExtent
 DetectionView --> SensorId
 DetectionView --> MissionTime
 DetectionView --> MissionTime
+DetectionView --> Measurement
 DetectionView --> Provenance
 TrackView --> Classification
 TrackView --> Provenance

@@ -42,6 +42,11 @@ G = 9.80665
 # reaches the tracker, which is the point of TT-07: the skew must be detected (MOP-09),
 # not silently quarantined.
 MAX_LATENCY_S = 4.9
+# The per-axis variance the tracking baseline states, in metres squared
+# (`../data-format.md` section 3). A generated set is a position feed, so every
+# detection carries this rather than a per-sensor figure; the Rust side holds the same
+# number as `BASELINE_VARIANCE_M2`.
+BASELINE_VARIANCE_M2 = [400.0, 400.0, 900.0]
 # Clock skew from electronic attack is applied as a lagging clock (source time behind
 # the true observation time); a leading clock would be quarantined by the gateway.
 
@@ -538,7 +543,7 @@ def run(built, classes, sensors_yaml, out_dir: Path):
                         latency += rng.uniform(0.5, 1.5)
                     latency = min(latency, MAX_LATENCY_S - skew)
                     detections.append({"sensor": s["id"], "source_time": round(source, 3), "receipt_time": round(st + latency, 3),
-                                       "measurement": [round(x, 2) for x in meas],
+                                       "measurement": {"Position": {"enu": [round(x, 2) for x in meas], "variance_m2": BASELINE_VARIANCE_M2}},
                                        "provenance": {"source_sensor_ids": [s["id"]], "calibration_baseline_version": s["calibration"], "algorithm_version": GENERATOR},
                                        "_truth": e.id})
                     if not p.get("cued"):
@@ -563,7 +568,7 @@ def run(built, classes, sensors_yaml, out_dir: Path):
                     meas = [s["pos"][0] + r * math.cos(ang), s["pos"][1] + r * math.sin(ang), z]
                     latency = min(p["latency_s"]["mean"] + abs(rng.gauss(0, p["latency_s"]["jitter"])), MAX_LATENCY_S - skew)
                     detections.append({"sensor": s["id"], "source_time": round(st - skew, 3), "receipt_time": round(st + latency, 3),
-                                       "measurement": [round(x, 2) for x in meas],
+                                       "measurement": {"Position": {"enu": [round(x, 2) for x in meas], "variance_m2": BASELINE_VARIANCE_M2}},
                                        "provenance": {"source_sensor_ids": [s["id"]], "calibration_baseline_version": s["calibration"], "algorithm_version": GENERATOR},
                                        "_truth": None})
                     fa_total += 1

@@ -112,13 +112,25 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-tracking-service` | `core`, `coord`, `filters`, `association`, `track`, `rfs`, `track-fusion`, `fusion-async`, `model` |
 | `gungnir-intercept-service` | `core`, `coord`, `allocation`, `model` |
 | `gungnir-data-fusion` | `data` |
-| `gungnir-remote` | `model`, `eventing`, `api`, `tracking-service`, `intercept-service` |
+| `gungnir-remote` | `model`, `eventing`, `api`, `tracking-service`, `intercept-service`, `security` (†) |
 | `gungnir-node` | `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `sensor-management`, `tracking-service`, `intercept-service`, `api`, `analytics` (g), `security`, `observability`, `modelops` (h), `policy` (k), `geo` (l), `remote` (p), `identity` (s) |
 | `gungnir-ui` | `model` |
 | `gungnir-viewport3d` | `data`, `data-fusion`, `model`, `ui` (theme only) |
 | `gungnir-app` | Both facades, `remote`, `data`, `data-fusion`, `render`, `viewport3d`, `ui`, `workflow`, `security`, `policy`, `command`, `geo`, `replay`, `reporting`, `analytics`, `sensor-management`, `assessment`, `modelops` (h), `decision` (i), `resilience` (m), `identification` (n), `identity` (o), `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `observability` |
 
 The productization-layer edges are listed in §7.1.
+
+(†) `gungnir-remote` → `gungnir-security` is a real `[dependencies]` edge in
+`gungnir-remote/Cargo.toml` and has been since the initial commit, but this table did not
+show it and `docs/design/dependency-edges.md` gives it no lettered entry. Recorded here on
+2026-09-07, when the first CI run of the UAF generator surfaced the gap (GAP-061 is
+exactly "release workflow unexercised"). The manifest is the truth for the graph, so the
+table is corrected to match it rather than the reverse; `dependency_graph.rs` did not
+catch it because that test checks layer direction — deployment down to productization,
+which this is — and not individual edges. **It still needs a lettered entry in
+`dependency-edges.md` stating the reason for the edge and the alternative refused**, or,
+if the edge is not wanted, removal from the manifest. That is an owner decision and is not
+taken here.
 
 ## §1 — Why the tracking core stays untouched and fully separate
 

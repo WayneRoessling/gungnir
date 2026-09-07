@@ -234,14 +234,14 @@ uses:
   - {from: RS-ml, to: [RS-model, RS-interop]}
   - {from: RS-model, to: [RS-core, RS-coord]}
   - {from: RS-modelops, to: [RS-config, RS-model]}
-  - {from: RS-node, to: [RS-model, RS-config, RS-mission, RS-eventing, RS-store, RS-time, RS-ingest, RS-sensor-management, RS-tracking-service, RS-intercept-service, RS-api, RS-remote, RS-security, RS-modelops, RS-policy, RS-geo, RS-analytics, RS-observability]}
+  - {from: RS-node, to: [RS-model, RS-config, RS-mission, RS-eventing, RS-store, RS-time, RS-ingest, RS-sensor-management, RS-tracking-service, RS-intercept-service, RS-api, RS-remote, RS-security, RS-modelops, RS-identity, RS-policy, RS-geo, RS-analytics, RS-observability]}
   - {from: RS-node, to: [RS-scenario], kind: dev}
   - {from: RS-observability, to: [RS-model]}
   - {from: RS-oracle, to: [RS-filters, RS-association, RS-rfs, RS-scenario]}
   - {from: RS-oracle, to: [RS-testkit], kind: dev}
   - {from: RS-policy, to: [RS-model, RS-geo]}
-  - {from: RS-remote, to: [RS-model, RS-eventing, RS-api, RS-tracking-service, RS-intercept-service]}
-  - {from: RS-remote, to: [RS-security, RS-analytics], kind: dev}
+  - {from: RS-remote, to: [RS-security, RS-model, RS-eventing, RS-api, RS-tracking-service, RS-intercept-service]}
+  - {from: RS-remote, to: [RS-analytics], kind: dev}
   - {from: RS-replay, to: [RS-model, RS-eventing, RS-store, RS-time]}
   - {from: RS-reporting, to: [RS-model, RS-eventing, RS-store, RS-metrics, RS-identity]}
   - {from: RS-resilience, to: [RS-model, RS-eventing, RS-store]}
