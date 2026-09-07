@@ -100,6 +100,7 @@ one crate can talk to a sensor.
 | `gungnir-app` to `gungnir-identification` | GAP-010 | 2026-09-06 | Yes, as (n) |
 | `gungnir-app` to `gungnir-identity` | GAP-019, GAP-025 | 2026-09-06 | Yes, as (o) |
 | `gungnir-remote` to `gungnir-interop` | DN-25, GAP-091 | **No: accepted 2026-09-06, no code yet** | Not yet; §7.1 gains (s) in the change that adds the sink |
+| `gungnir-remote` to `gungnir-security` | GAP-060, D-29 | 2026-09-06, with the `identity.rs` move out of `gungnir-node` | Yes, as (t) -- **the entry is dated 2026-09-07; the manifest line is older, see §14** |
 
 **All five are in manifests and drawn.** The acyclicity check was re-run with the full set
 on 2026-09-05: 154 crate-to-crate edges, no cycle.
@@ -287,6 +288,41 @@ Acceptance and existence are different things, and §4a's row says which this is
 §7.1 describes manifests; an edge drawn there that no manifest carries would be the graph
 claiming something untrue, which is the one thing that document may not do. The change that
 adds the sink adds the manifest line and draws (s) in the same commit, per §5's rule.
+
+## 14. Edge (t) -- `gungnir-remote` to `gungnir-security` (recorded 2026-09-07; GAP-060, D-29)
+
+Recorded after the fact. The edge was in the manifest and carrying working code; what was
+missing was this entry. §5's rule is that a manifest line and its entry land together, and
+here they did not.
+
+| Edge | What it is | Evidence |
+|---|---|---|
+| (t) remote → security | `identity.rs` builds a host's TLS identity from that host's own `KeyProvider`, so **the private half never leaves custody**: `rcgen` signs through the provider's `sign`, rustls presents the result over the same call, and no path in the module can produce a certificate over key material that has left a provider. It imports `KeyId`, `KeyProvider`, `KeyPurpose` and `SignatureScheme`, and nothing else. **The refused alternative was `gungnir-api`**, the better home on layering grounds, rejected because `gungnir-app` holds it as a **dev-dependency only** and `ARCHITECTURE.md` refuses a dev-dependency as a production edge. Leaving the code in `gungnir-node`, where it lived until 2026-09-06, was refused separately: the desktop needs the same identity (GAP-060), two binaries cannot depend on each other, so it would have meant roughly 150 duplicated lines with nothing holding the copies in step | `gungnir-remote/src/identity.rs`; `DN-22-key-management.md` amendment 1; D-29 |
+
+**Why `gungnir-remote` carries it.** It is the only crate **both binaries already depend on
+at runtime** that already holds `rustls`, `tokio-rustls` and `rustls-pemfile`, and it already
+owns `LinkTls` -- the type that answers *who is this host*. The two alternative homes are the
+ones ruled out above.
+
+**Direction and depth.** `gungnir-remote` is Deployment and `gungnir-security` is
+Productization (`dependency_graph.rs`), so this is downward, the same shape as (p) and (s).
+It **cannot create a cycle**: `gungnir-security` has no `gungnir-*` dependency at all, so
+nothing in its subtree can reach `gungnir-remote`.
+
+**How it went unrecorded, which is the part worth keeping.** The edge arrived on 2026-09-06
+with the move of `identity.rs` out of `gungnir-node`, and the module's own documentation
+carries the whole argument above -- the reasoning was never lost, only the register entry.
+`ARCHITECTURE.md`'s §7 dependency table did not list it, and its §7.1 entry for (p) named it
+only in passing, inside a different edge's justification, where nothing would look for it.
+`dependency_graph.rs` did not catch it either, because that test checks layer **direction**
+-- deployment down to productization, which this is -- and not individual edges, so an
+unlisted edge in a legal direction passes silently.
+
+It surfaced on 2026-09-07, when the UAF generator ran in CI for the first time (GAP-061,
+"release workflow unexercised") and the view it regenerated from the manifests showed an edge
+the table did not. That is the gap worth noting: **no test in the workspace compares the
+manifests against `ARCHITECTURE.md`'s table**, so the next undeclared edge in a legal
+direction will be found the same way, by a generated view disagreeing, or not at all.
 
 ## Traceability
 
