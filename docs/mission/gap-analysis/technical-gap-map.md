@@ -143,6 +143,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-087 PN-16, the planning panel | CAP-5.9, CAP-5.2 | 3 | L | I3 | `../../ux/wireframes/WF-16-planning.puml` |
 | GAP-089 A seeded session for usability rounds | CAP-5.9 | 3 | M | I3 | `../../ux/usability-round-1-session.md` §3 |
 | GAP-055 Role workspaces in the UI | CAP-5.9 | 3 | L | I3 | `../../plans/06-ux-design-by-role.md` |
+| GAP-095 Night theme variant | CAP-5.9 | 2 | M | I4 | `../../../ARCHITECTURE.md` §10 item 89 (D-35 to D-38) |
 
 ### Verification and governance
 
