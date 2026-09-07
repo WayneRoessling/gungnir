@@ -269,7 +269,13 @@ fn snapshot_calls_are_measured() {
     // The pipeline task has the detections these frames submitted; give it time to
     // produce a picture, polling as the desktop does. Bounded, so a pipeline that
     // never answers fails the assertion below rather than hanging.
-    for _ in 0..400 {
+    //
+    // **This bound is the guard and not the budget.** The budgets asserted further down
+    // are what this test measures; two seconds of patience for a background task was a
+    // timing assumption sitting inside a performance test, which is the worst place for
+    // one -- it would fail the budget suite for a reason that has nothing to do with a
+    // budget. A minute, on the same reasoning as `sample_set_replay.rs`.
+    for _ in 0..12_000 {
         if !state.tracking.tracks().is_empty() {
             break;
         }

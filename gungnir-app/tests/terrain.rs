@@ -36,8 +36,14 @@ fn desktop(name: &str, path: String) -> (AppState, PathBuf) {
     (AppState::with_config(config).expect("starts"), dir)
 }
 
+/// Tick until the terrain loader thread answers.
+///
+/// **A deadlock guard, not a performance assertion** (the reasoning is
+/// `gungnir-tracking-service/tests/sample_set_replay.rs`'s): a real hang still fails,
+/// and a loaded machine no longer does. The loop exits the moment the condition holds,
+/// so a passing run costs what it always did.
 fn settle(state: &mut AppState) {
-    for _ in 0..200 {
+    for _ in 0..6_000 {
         update::tick(state);
         if !matches!(state.terrain, TerrainStatus::Loading { .. }) {
             return;

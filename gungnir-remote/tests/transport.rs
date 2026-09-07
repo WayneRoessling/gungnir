@@ -121,8 +121,23 @@ async fn serve_cuttable(api: Arc<NodeApi>) -> (String, tokio::runtime::Runtime) 
 /// Wait for a condition, or fail with what was seen. Polling beats a fixed sleep: the
 /// link is asynchronous and a sleep long enough to be reliable would be long enough to
 /// slow the suite.
+///
+/// **A deadlock guard, not a performance assertion**, and the bound is set on the same
+/// reasoning as `gungnir-tracking-service/tests/sample_set_replay.rs`. At 200 iterations
+/// this was five seconds of wall clock. Every one of these fourteen waits completes in
+/// about a second on an unloaded machine, so five seconds looks generous -- until a
+/// shared CI runner is doing something else, where `a_deleted_track_leaves_the_projection`
+/// timed out on a branch that touched nothing in this crate. A correctness test failing
+/// for want of CPU says nothing about the transport.
+///
+/// Two thousand four hundred iterations is a minute. What is being tested is unchanged:
+/// the condition still has to become true. Only the patience for a loaded machine
+/// changes, and if this ever fires now it is a hang and not a slow runner. The loop exits
+/// the moment the condition holds, so a passing run costs no more than it did.
+const PATIENCE: usize = 2_400;
+
 async fn until(mut check: impl FnMut() -> bool, what: &str) {
-    for _ in 0..200 {
+    for _ in 0..PATIENCE {
         if check() {
             return;
         }

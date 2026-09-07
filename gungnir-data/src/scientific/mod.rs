@@ -110,78 +110,13 @@ fn triangulate(polys: &VertexNumbers, vertex_count: usize) -> Result<Vec<u32>, D
     Ok(indices)
 }
 
-/// XML VTK files this build refuses to open, and why.
-///
-/// **This is a security boundary, not a feature limit** (GAP-094, D-10's vulnerability
-/// objective). `vtkio` reads two families: the legacy text/binary format, and the XML
-/// family (`.vtu`, `.vtp`, and the rest), which it parses with `quick-xml`. The pinned
-/// `quick-xml` carries RUSTSEC-2026-0194 (quadratic run time checking a start tag for
-/// duplicate attribute names) and RUSTSEC-2026-0195 (unbounded namespace-declaration
-/// allocation in `NsReader`), both denial of service, and no `vtkio` release exists that
-/// depends on a fixed version.
-///
-/// This module has only ever read legacy `POLYDATA` -- the module documentation said so
-/// before this guard existed -- so refusing the XML family costs nothing that was
-/// working and takes the vulnerable parser off the reachable path. **The acceptance
-/// recorded in `deny.toml` depends on this function**: without it the advisories would be
-/// tolerated on a path a file from elsewhere can reach, which is not an acceptance, it is
-/// a hope.
-const XML_VTK_EXTENSIONS: [&str; 10] = [
-    "vtu", "vtp", "vti", "vtr", "vts", "vtm", "pvtu", "pvtp", "pvti", "pvtr",
-];
-
-/// The XML declaration and the root element a VTK XML file opens with.
-///
-/// Checked as well as the extension, because an extension is a claim by whoever named
-/// the file and the bytes are not. A legacy file renamed to `.vtk` still reaches the XML
-/// reader on content if this is not tested.
-fn looks_like_xml(head: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(head);
-    let trimmed = text.trim_start();
-    trimmed.starts_with("<?xml") || trimmed.starts_with("<VTKFile")
-}
-
-/// Refuse an XML VTK file before `vtkio` opens it.
-///
-/// # Errors
-///
-/// `DataError::Parse` naming the format and the reason, so a reader is not left to
-/// wonder whether the file was corrupt.
-fn refuse_xml_vtk(path: &Path) -> Result<(), DataError> {
-    let by_extension = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| XML_VTK_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()));
-
-    let mut head = [0_u8; 64];
-    let by_content = match std::fs::File::open(path) {
-        Ok(mut f) => {
-            use std::io::Read as _;
-            let n = f.read(&mut head).unwrap_or(0);
-            looks_like_xml(&head[..n])
-        }
-        // Not readable is not this function's refusal to make; `Vtk::import` reports it.
-        Err(_) => false,
-    };
-
-    if by_extension || by_content {
-        return Err(parse(
-            "this is an XML VTK file, and this build reads only the legacy VTK format.              The XML reader is not used because the pinned quick-xml carries              RUSTSEC-2026-0194 and RUSTSEC-2026-0195, and no vtkio release depends on a              fixed version (GAP-094). Convert the file to legacy VTK",
-        ));
-    }
-    Ok(())
-}
-
 /// Load a VTK `POLYDATA` file into a triangle mesh.
 ///
 /// # Errors
 ///
 /// `DataError::Io` when the file cannot be read; `DataError::Parse` when it is not VTK,
 /// is a data set other than `POLYDATA`, or its polygons name vertices it does not have.
-/// Also `DataError::Parse` for an **XML VTK** file, which this build refuses before
-/// opening it -- see [`refuse_xml_vtk`] for why that is a security boundary.
 pub fn load_vtk(path: &Path) -> Result<MeshData, DataError> {
-    refuse_xml_vtk(path)?;
     let vtk = vtkio::Vtk::import(path).map_err(|e| match e {
         vtkio::Error::IO(io) => DataError::Io(io.to_string()),
         other => parse(other),

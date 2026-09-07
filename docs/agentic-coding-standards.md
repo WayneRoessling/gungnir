@@ -327,37 +327,6 @@ recorded here the way §2.8 records `tracing`.
 The UI stack (`eframe`, `egui`, `three-d`, `wgpu`, `gltf`, `vtkio`, `las`) is governed by
 `rust-ui-tech-stack-summary.md` and pinned in the same workspace `Cargo.toml`.
 
-#### `vtkio 0.7.0-rc2`: a release candidate, adopted deliberately (2026-09-07, GAP-094)
-
-**The only entry in this document that pins a pre-release, and the reason is security.**
-`vtkio 0.6.3` pulled `lz4_flex 0.7.5`, carrying RUSTSEC-2026-0041 -- decompressing invalid
-data can leak information from uninitialised memory or a reused output buffer -- on the
-live `LoadRequest::VtkMesh` path, which is exactly where a file from somewhere else
-arrives. It also pulled `nom 3.2.1` (future-incompatible) and `quick-xml 0.22.0`.
-
-There was no released fix. `0.6.3` is the last `0.6`, and the only newer version is
-`0.7.0-rc2`, which brings `lz4_flex 0.11.6` -- the fixed version -- and `nom 8.0.0`.
-
-**This runs against the standing preference, and that is the point of writing it down.**
-The workspace declined a source-control dependency for the AIS decoder's unreleased fix on
-2026-09-06 and left the pin where it was, because that was a convenience. This is not: it
-is a memory-disclosure vulnerability on a reachable path, and D-10's own vulnerability
-objective is critical advisories fixed or mitigated within 7 days of publication. The
-preference for released versions loses to that objective, and it loses explicitly rather
-than quietly.
-
-**What the upgrade did not fix, and what was done instead.** `vtkio 0.7.0-rc2` depends on
-`quick-xml 0.36.2`, still short of the `>= 0.41.0` that RUSTSEC-2026-0194 and
-RUSTSEC-2026-0195 require. Those are reached only through the XML VTK family, which
-`gungnir-data` has never read, so `scientific::refuse_xml_vtk` now refuses that family by
-extension and by content before the file is opened, and `deny.toml` records the two
-acceptances against that guard by name. The condition is tested in
-`gungnir-data/tests/vtk_gltf.rs`.
-
-**The exit.** Move to `vtkio 0.7.0` when it is released, and drop the two `deny.toml`
-entries when a `vtkio` release depends on `quick-xml >= 0.41.0`. The XML refusal may then
-stay or go on its own merits, which are about scope rather than about advisories.
-
 #### Docking crate (signed off 2026-09-05, D-19)
 
 D-17 (`../ARCHITECTURE.md` §10 item 25) adopted docking within each role's layout and

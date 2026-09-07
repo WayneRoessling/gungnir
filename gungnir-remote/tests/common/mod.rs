@@ -120,8 +120,16 @@ impl Pki {
 ///
 /// Bounded rather than unbounded: a link that never comes up must fail the test rather
 /// than hang a continuous-integration run.
+/// **A deadlock guard, not a performance assertion.** Set on the same reasoning as
+/// `gungnir-tracking-service/tests/sample_set_replay.rs`: at 200 iterations this was five
+/// seconds, which is generous on an unloaded machine and not on a shared runner doing
+/// something else. A correctness test failing for want of CPU says nothing about the
+/// link. A minute means a real hang still fails and load no longer does; the loop exits
+/// the moment the condition holds, so a passing run costs nothing extra.
+const PATIENCE: usize = 2_400;
+
 pub async fn until(mut check: impl FnMut() -> bool, what: &str) {
-    for _ in 0..200 {
+    for _ in 0..PATIENCE {
         if check() {
             return;
         }

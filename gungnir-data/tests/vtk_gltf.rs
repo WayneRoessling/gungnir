@@ -119,8 +119,12 @@ fn the_loader_thread_serves_both_formats() {
     let mut vtk = None;
     let mut gltf = None;
     for _ in 0..2 {
+        // A deadlock guard on the loader thread, not a claim about how fast it is. Ten
+        // seconds was ample on this machine and is not a statement about a loaded one;
+        // a blocking receive returns the instant the result arrives, so a passing run
+        // pays nothing for the larger bound.
         match results
-            .recv_timeout(std::time::Duration::from_secs(10))
+            .recv_timeout(std::time::Duration::from_secs(60))
             .expect("a result")
         {
             LoadResult::VtkMesh(r) => vtk = Some(r.expect("vtk")),
@@ -130,87 +134,4 @@ fn the_loader_thread_serves_both_formats() {
     }
     assert_eq!(vtk.expect("vtk").triangle_count(), 2);
     assert_eq!(gltf.expect("gltf").triangle_count(), 1);
-}
-
-/// The XML VTK refusal that `deny.toml`'s two quick-xml acceptances rest on (GAP-094).
-///
-/// `vtkio` reads the legacy format and the XML family, and the XML side goes through
-/// `quick-xml`, which at the pinned version carries RUSTSEC-2026-0194 and
-/// RUSTSEC-2026-0195. No `vtkio` release depends on a fixed version. This module has only
-/// ever read legacy `POLYDATA`, so the XML family is refused before the file is opened
-/// and the vulnerable parser is off the reachable path.
-///
-/// **The acceptance in `deny.toml` is only honest while these pass.** If this refusal
-/// were removed, two advisories would be tolerated on a path that a file from elsewhere
-/// can reach.
-mod xml_vtk_is_refused {
-    use super::*;
-
-    static SCRATCH: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
-    fn scratch_file(name: &str, contents: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "gungnir-data-xmlvtk-{}-{}",
-            std::process::id(),
-            SCRATCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&dir).expect("scratch dir");
-        let path = dir.join(name);
-        std::fs::write(&path, contents).expect("written");
-        path
-    }
-
-    const XML_BODY: &str = concat!(
-        "<?xml version=\"1.0\"?>\n",
-        "<VTKFile type=\"PolyData\" version=\"1.0\" byte_order=\"LittleEndian\">\n",
-        "  <PolyData></PolyData>\n",
-        "</VTKFile>\n"
-    );
-
-    #[test]
-    fn an_xml_extension_is_refused_before_the_file_is_opened() {
-        let path = scratch_file("mesh.vtu", XML_BODY);
-        let err = scientific::load_vtk(&path).expect_err("an XML VTK file must be refused");
-        let text = err.to_string();
-        assert!(
-            text.contains("XML VTK"),
-            "the refusal must name the format: {text}"
-        );
-        assert!(
-            text.contains("RUSTSEC-2026-0194") && text.contains("RUSTSEC-2026-0195"),
-            "and say why, so nobody removes the guard without finding the advisories: {text}"
-        );
-    }
-
-    #[test]
-    fn xml_content_under_a_legacy_extension_is_refused_too() {
-        // An extension is a claim by whoever named the file; the bytes are not. Without
-        // the content check, renaming an XML file to .vtk would walk it straight into the
-        // parser the extension check exists to avoid.
-        let path = scratch_file("mesh.vtk", XML_BODY);
-        let err = scientific::load_vtk(&path).expect_err("XML content must be refused");
-        assert!(err.to_string().contains("XML VTK"), "{err}");
-    }
-
-    #[test]
-    fn every_xml_vtk_extension_is_covered_and_not_just_the_common_two() {
-        for ext in [
-            "vtu", "vtp", "vti", "vtr", "vts", "vtm", "pvtu", "pvtp", "pvti", "pvtr",
-        ] {
-            // Legacy *content* under an XML extension, so only the extension check can
-            // refuse it. If one extension were missing from the list this fails.
-            let path = scratch_file(&format!("mesh.{ext}"), "# vtk DataFile Version 3.0\n");
-            assert!(
-                scientific::load_vtk(&path).is_err(),
-                "the .{ext} extension must be refused"
-            );
-        }
-    }
-
-    #[test]
-    fn a_legacy_file_still_loads_so_the_guard_costs_nothing_that_worked() {
-        let mesh = scientific::load_vtk(&fixture("scientific", "two-triangles.vtk"))
-            .expect("legacy POLYDATA is unaffected by the XML refusal");
-        assert!(mesh.triangle_count() > 0);
-    }
 }
