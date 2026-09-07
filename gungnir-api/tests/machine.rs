@@ -8,7 +8,6 @@
 //! The certificates are made here with `rcgen` (dev-only, D-22) and never written to
 //! the repository.
 
-use rustls::pki_types::pem::PemObject;
 use gungnir_api::tls::{self, TlsListener, TlsPaths};
 use gungnir_api::transport::{
     serve_on_listener, AccountTokenAuthority, MachineRole, NodeApi, PendingSensorTask,
@@ -23,6 +22,7 @@ use gungnir_model::{
 };
 use gungnir_security::{hash_passphrase, Account, InMemoryAccountStore, OperatorId, TokenIssuer};
 use rcgen::{BasicConstraints, CertificateParams, DnType, IsCa, Issuer, KeyPair};
+use rustls::pki_types::pem::PemObject;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
