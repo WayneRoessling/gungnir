@@ -168,8 +168,16 @@ async fn serve(pki: &Pki, api: Arc<NodeApi>) -> String {
     format!("https://localhost:{port}")
 }
 
+/// **A deadlock guard, not a performance assertion.** Set on the same reasoning as
+/// `gungnir-tracking-service/tests/sample_set_replay.rs`: at 200 iterations this was five
+/// seconds, which is generous on an unloaded machine and not on a shared runner doing
+/// something else. A correctness test failing for want of CPU says nothing about the
+/// link. A minute means a real hang still fails and load no longer does; the loop exits
+/// the moment the condition holds, so a passing run costs nothing extra.
+const PATIENCE: usize = 2_400;
+
 async fn until(mut check: impl FnMut() -> bool, what: &str) {
-    for _ in 0..200 {
+    for _ in 0..PATIENCE {
         if check() {
             return;
         }
@@ -217,7 +225,9 @@ async fn a_partner_links_as_a_machine_and_receives_its_agreement() {
     let peer = PeerLink::connect(&endpoint, &handle).expect("the peer link starts");
     until(|| peer.connected(), "the partner's link to come up").await;
     let mut got = peer.take_tracks();
-    for _ in 0..40 {
+    // Same guard as `until` above: one second was enough on this machine and is not a
+    // claim about a loaded one.
+    for _ in 0..PATIENCE {
         if !got.is_empty() {
             break;
         }
