@@ -52,12 +52,16 @@
 //!   between scans: a bound of 500 m asserts that the estimate is better than dead
 //!   reckoning from the previous scan would be, and it is above the 450 m that three sigma
 //!   of the worst measurement axis alone can explain. There is one target, so no
-//!   ambiguity is possible. Measured on this seed: 238 m.
+//!   ambiguity is possible. **Measured on this seed: 169 m, run with `radar_medium`'s own
+//!   measurement noise (DN-30); the figure this row carried before DN-30 (238 m) was run
+//!   against `PipelineSettings::default()`'s generic noise, not this scenario's radar.**
 //! * **Scenario 2, 300 m.** Six vessels at up to 12 m/s, one radar with one-sigma noise of
 //!   15 m in range and 60 m across, scanning every 2.5 s. 300 m is five sigma of the worst
 //!   measurement axis, and it is under a tenth of the 3.3 km separating the nearest two
 //!   vessels at the comparison instant, so the track nearest a vessel cannot be another
-//!   vessel's. Measured on this seed: 85 m.
+//!   vessel's. **Measured on this seed: 83 m, run with `radar_coastal`'s own range and
+//!   cross-range noise (DN-30); its height axis is left at the default's placeholder --
+//!   see the test's own documentation for why an exact zero cannot be used here.**
 //!
 //! Scenarios 3 and 4 are deliberately **not** scored this way. Their targets pass within
 //! 120 m and 233 m of each other, which is inside the error the same measurement noise
@@ -73,10 +77,16 @@
 //!
 //! * every target alive at the comparison time is accounted for by some track -- no target
 //!   is missed, in any of the four scenarios;
-//! * the pipeline also carries tracks that are not targets. On this seed scenario 1 ends
-//!   with **three tracks for one aircraft, none of them confirmed**, and scenario 2 with
-//!   ten tracks for six vessels, two confirmed. The extras are track fragments and
-//!   clutter-born tracks that the lifecycle has not deleted.
+//! * the pipeline also carries tracks that are not targets. **On this seed, run with each
+//!   single-sensor scenario's own measurement noise (DN-30) rather than the generic
+//!   figure these counts were first recorded against**: scenario 1 ends with two tracks
+//!   for one aircraft, none confirmed (three before DN-30, over the same scenario and
+//!   filter -- most of the fragmentation this row first blamed on the motion model was
+//!   the noise mismatch DN-28 §7 found, not a defect DN-30 closes); scenario 2 is
+//!   unchanged at ten tracks for six vessels, two confirmed, because its clutter and
+//!   dropout rates -- not its measurement noise -- are what drive its extra tracks.
+//!   The extras are track fragments and clutter-born tracks that the lifecycle has not
+//!   deleted.
 //!
 //! The second bullet is a finding about the pipeline, not about this test, and it is
 //! reported rather than asserted: asserting today's counts would pin the behaviour in
@@ -93,6 +103,23 @@ use rand::SeedableRng;
 
 /// The seed the sibling replay test uses, so both rows read the same five timelines.
 const SEED: u64 = 7;
+
+/// Each single-sensor scenario's own measurement-noise variance, `[sigma_range_m²,
+/// sigma_cross_m², sigma_height_m²]` from `gungnir_scenario::sensor::SensorModel`,
+/// carried into ENU as the pipeline's `measurement_noise_var` the same way DN-28 §7 did
+/// for scenario 1 -- an approximation this module documentation names rather than
+/// hides: the sigmas are in the sensor's line-of-sight frame (along/across the
+/// boresight), rotated into ENU per detection by the actual bearing, and a fixed triple
+/// cannot carry that rotation. DN-30 follows DN-28's own precedent rather than
+/// widening scope to a per-detection frame-aware `R`, which is its own future increment.
+///
+/// Scenario 3 is not here: `plan_urban_convoy` runs three sensors of different kinds
+/// (`radar_medium`, `isr_video`, `acoustic`) through one pipeline that has exactly one
+/// `measurement_noise_var` for every detection regardless of source, so no single figure
+/// is "the" correct one for it. Left at `PipelineSettings::default()` and named as its
+/// own open question rather than answered with an invented number.
+const RADAR_MEDIUM_MEASUREMENT_NOISE_VAR: [f64; 3] = [625.0, 3600.0, 22500.0];
+const RADAR_COASTAL_MEASUREMENT_NOISE_VAR: [f64; 3] = [225.0, 3600.0, 0.0];
 
 fn view(detection: &gungnir_fusion_async::Detection) -> DetectionView {
     DetectionView {
@@ -116,13 +143,12 @@ fn view(detection: &gungnir_fusion_async::Detection) -> DetectionView {
 /// setting, and one too small for a sensor set is a misconfiguration rather than a defect
 /// in the pipeline. Every submission is asserted to be accepted, so a dropped detection
 /// fails here rather than showing up later as an error nobody can attribute.
-fn replay(scenario: &Scenario) -> (GeneratedTimeline, Vec<TrackView>) {
-    replay_with(scenario, |_| {})
-}
-
-/// [`replay`], with `tune` given the chance to change the pipeline settings before the
-/// service is built -- what [`the_imm_confirms_one_track_where_constant_velocity_fragmented_into_three`]
-/// uses to select `imm-cv-ct` (DN-28 §7).
+///
+/// `tune` is given the chance to change the pipeline settings before the service is
+/// built -- what [`the_imm_confirms_one_track_through_the_turn_where_constant_velocity_fragmented`]
+/// uses to select `imm-cv-ct` (DN-28 §7), and what every test in this file now uses to
+/// set its scenario's own measurement noise (DN-30) rather than leaving every one on
+/// `PipelineSettings::default()`'s placeholder.
 fn replay_with(
     scenario: &Scenario,
     tune: impl FnOnce(&mut PipelineSettings),
@@ -272,9 +298,14 @@ fn score(name: &str, timeline: &GeneratedTimeline, tracks: &[TrackView], bound_m
 /// terminal acceleration phase at the comparison instant, which is the hardest moment in
 /// the scenario for a filter whose motion model is not the truth's, and is the moment
 /// worth pinning for exactly that reason.
+///
+/// Runs with `radar_medium`'s own measurement noise (DN-30), not
+/// `PipelineSettings::default()`'s generic figure -- see this module's constant.
 #[test]
 fn the_maneuvering_aircraft_is_tracked_to_within_the_stated_bound() {
-    let (timeline, tracks) = replay(&Scenario::ManeuveringAircraft);
+    let (timeline, tracks) = replay_with(&Scenario::ManeuveringAircraft, |settings| {
+        settings.measurement_noise_var = RADAR_MEDIUM_MEASUREMENT_NOISE_VAR;
+    });
     let worst = score("scenario 1", &timeline, &tracks, 500.0);
     assert!(
         worst > 0.0,
@@ -400,12 +431,26 @@ fn the_imm_confirms_one_track_through_the_turn_where_constant_velocity_fragmente
 ///
 /// This is the multi-target case the bound can be stated for: the vessels are kilometres
 /// apart, so a track within 300 m of one of them is that one's.
+///
+/// Runs with `radar_coastal`'s own range and cross-range noise (DN-30). Its height axis
+/// is left at the default's placeholder rather than the real `sigma_height_m = 0.0`:
+/// this pipeline seeds a freshly initiated track's covariance from the same
+/// `measurement_noise_var` it builds `R` from (`FusionPipeline::initiate`), so an exact
+/// zero there is a zero prior, not a stated noise, and is a substantively different
+/// finding from the range/cross correction -- named rather than routed around with an
+/// invented substitute.
 #[test]
 fn every_vessel_in_the_clutter_scenario_is_tracked_to_within_the_stated_bound() {
-    let (timeline, tracks) = replay(&Scenario::MaritimeClutter {
-        pd: 0.8,
-        clutter_rate: 2.0,
-    });
+    let (timeline, tracks) = replay_with(
+        &Scenario::MaritimeClutter {
+            pd: 0.8,
+            clutter_rate: 2.0,
+        },
+        |settings| {
+            settings.measurement_noise_var[0] = RADAR_COASTAL_MEASUREMENT_NOISE_VAR[0];
+            settings.measurement_noise_var[1] = RADAR_COASTAL_MEASUREMENT_NOISE_VAR[1];
+        },
+    );
     let alive = truth_at(&timeline, comparison_time(&timeline));
     // The bound is only meaningful while the vessels stay far enough apart for a nearest
     // match to be unambiguous, so the separation is checked rather than assumed.
@@ -431,26 +476,44 @@ fn every_vessel_in_the_clutter_scenario_is_tracked_to_within_the_stated_bound() 
 /// every entity alive at the comparison time has a track somewhere near it. The distance
 /// used here is deliberately generous -- a kilometre -- because the claim is about
 /// coverage rather than accuracy, and the accuracy claims are the two tests above.
+///
+/// Each single-sensor scenario runs with its own sensor's measurement noise (DN-30); the
+/// three-sensor scenario 3 does not have one to use and stays at
+/// `PipelineSettings::default()` -- see this module's constants.
 #[test]
 fn no_target_goes_untracked_in_any_scenario() {
-    for (name, scenario) in [
-        ("scenario 1", Scenario::ManeuveringAircraft),
+    let no_correction: fn(&mut PipelineSettings) = |_| {};
+    let radar_medium: fn(&mut PipelineSettings) = |settings| {
+        settings.measurement_noise_var = RADAR_MEDIUM_MEASUREMENT_NOISE_VAR;
+    };
+    let radar_coastal_range_cross: fn(&mut PipelineSettings) = |settings| {
+        settings.measurement_noise_var[0] = RADAR_COASTAL_MEASUREMENT_NOISE_VAR[0];
+        settings.measurement_noise_var[1] = RADAR_COASTAL_MEASUREMENT_NOISE_VAR[1];
+    };
+    for (name, scenario, tune) in [
+        ("scenario 1", Scenario::ManeuveringAircraft, radar_medium),
         (
             "scenario 2",
             Scenario::MaritimeClutter {
                 pd: 0.8,
                 clutter_rate: 2.0,
             },
+            radar_coastal_range_cross,
         ),
         (
             "scenario 3",
             Scenario::UrbanConvoy {
                 injected_bias_m: Vector3::new(40.0, -25.0, 5.0),
             },
+            no_correction,
         ),
-        ("scenario 4", Scenario::DenseSwarm { target_count: 40 }),
+        (
+            "scenario 4",
+            Scenario::DenseSwarm { target_count: 40 },
+            radar_medium,
+        ),
     ] {
-        let (timeline, tracks) = replay(&scenario);
+        let (timeline, tracks) = replay_with(&scenario, tune);
         let at = comparison_time(&timeline);
         for (id, position) in truth_at(&timeline, at) {
             let nearest = tracks

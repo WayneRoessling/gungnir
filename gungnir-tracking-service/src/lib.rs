@@ -809,8 +809,13 @@ mod tests {
             profile: gungnir_model::MissionProfile("air-defence".into()),
             name: "kf baseline".into(),
         };
-        let settings =
-            PipelineSettings::from_baseline(11.34, "kf-cv", &imm_fields()).expect("implemented");
+        let settings = PipelineSettings::from_baseline(
+            11.34,
+            "kf-cv",
+            &imm_fields(),
+            [625.0, 3600.0, 22500.0],
+        )
+        .expect("implemented");
         let mut governed = LiveTrackingService::with_pipeline_settings(runtime.handle(), settings)
             .with_algorithm_baseline(&id);
         governed.apply_snapshot(std::slice::from_ref(&track), MissionTime(1.0));
@@ -821,7 +826,8 @@ mod tests {
 
         // A filter this build does not have is refused rather than substituted.
         let err =
-            PipelineSettings::from_baseline(11.34, "ekf", &imm_fields()).expect_err("not built");
+            PipelineSettings::from_baseline(11.34, "ekf", &imm_fields(), [625.0, 3600.0, 22500.0])
+                .expect_err("not built");
         assert_eq!(err.selection, "ekf");
         assert!(err.to_string().contains("does not implement"), "{err}");
 
@@ -845,8 +851,13 @@ mod tests {
     /// exactly as the linear filter already did above.
     #[test]
     fn imm_cv_ct_is_implemented_and_selects_the_imm() {
-        let settings = PipelineSettings::from_baseline(11.34, "imm-cv-ct", &imm_fields())
-            .expect("DN-28: imm-cv-ct is implemented");
+        let settings = PipelineSettings::from_baseline(
+            11.34,
+            "imm-cv-ct",
+            &imm_fields(),
+            [625.0, 3600.0, 22500.0],
+        )
+        .expect("DN-28: imm-cv-ct is implemented");
         assert_eq!(
             settings.filter_selection,
             gungnir_fusion_async::FilterSelection::ImmCvCt
@@ -854,6 +865,20 @@ mod tests {
         assert_eq!(settings.imm_turn_rate_rad_s, 0.05);
         assert_eq!(settings.imm_mode_transition, [[0.97, 0.03], [0.03, 0.97]]);
         assert_eq!(settings.imm_initial_mode_probabilities, [0.9, 0.1]);
+    }
+
+    /// **DN-30.** A baseline's own measurement-noise variance reaches the pipeline's
+    /// settings, unconditionally on filter selection -- unlike the `imm-cv-ct` fields.
+    #[test]
+    fn measurement_noise_var_is_read_from_the_baseline() {
+        let settings = PipelineSettings::from_baseline(
+            11.34,
+            "kf-cv",
+            &imm_fields(),
+            [625.0, 3600.0, 22500.0],
+        )
+        .expect("implemented");
+        assert_eq!(settings.measurement_noise_var, [625.0, 3600.0, 22500.0]);
     }
 
     #[test]

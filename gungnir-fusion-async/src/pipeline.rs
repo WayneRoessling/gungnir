@@ -177,7 +177,12 @@ pub struct PipelineSettings {
     pub delete_after_misses: u32,
     /// Process-noise spectral density of the constant-velocity model, (m/s²)²/Hz.
     pub process_noise_psd: f64,
-    /// Measurement-noise variances per axis, m².
+    /// Measurement-noise variances per axis, m² (east, north, height). The baseline's
+    /// own figure, matched to its actual sensor, unless nothing promoted supplies one
+    /// (DN-30 §5) -- before DN-30 this was fixed at `Self::default()`'s placeholder for
+    /// every deployment, which DN-28 §7 found understated scenario 1's real sensor noise
+    /// by up to 25x and named as the dominant driver of the fragmentation GAP-011
+    /// recorded, not the motion model DN-28 was scoped to fix.
     pub measurement_noise_var: [f64; 3],
     /// Initial velocity variance for a track initiated from one detection, (m/s)².
     ///
@@ -301,24 +306,27 @@ pub struct ImmBaselineFields {
 
 impl PipelineSettings {
     /// Build settings from a promoted algorithm baseline's fields (DN-24 §7, GAP-053;
-    /// `imm` fields added by DN-28 §5).
+    /// `imm` fields added by DN-28 §5; `measurement_noise_var` added by DN-30 §5).
     ///
     /// Takes the primitives rather than `gungnir_config::TrackingConfig`, because this
     /// crate sits below `gungnir-config` and may not depend on it; both binaries read
     /// the baseline and pass the fields through. `imm` is read only when
     /// `filter_selection` turns out to be `"imm-cv-ct"`; a caller not naming that
     /// selection may still have to supply a value, since it does not know in advance
-    /// which candidate a baseline promoted.
+    /// which candidate a baseline promoted. `measurement_noise_var` is read
+    /// unconditionally: every filter selection builds its `R` from it, unlike the `imm`
+    /// fields.
     ///
     /// # Errors
     ///
     /// [`UnsupportedFilter`] when the baseline names a filter this build does not have,
-    /// and a non-positive or non-finite gate threshold, which `gungnir-config` already
-    /// refuses but which this does not assume.
+    /// and a non-positive or non-finite gate threshold or measurement-noise axis, both
+    /// of which `gungnir-config` already refuses but which this does not assume.
     pub fn from_baseline(
         gate_threshold: f64,
         filter_selection: &str,
         imm: &ImmBaselineFields,
+        measurement_noise_var: [f64; 3],
     ) -> Result<Self, UnsupportedFilter> {
         if !IMPLEMENTED_FILTERS.contains(&filter_selection) {
             return Err(UnsupportedFilter {
@@ -329,6 +337,12 @@ impl PipelineSettings {
         let mut settings = Self::default();
         if gate_threshold.is_finite() && gate_threshold > 0.0 {
             settings.gate = ChiSquareGate { gate_threshold };
+        }
+        if measurement_noise_var
+            .iter()
+            .all(|v| v.is_finite() && *v > 0.0)
+        {
+            settings.measurement_noise_var = measurement_noise_var;
         }
         if filter_selection == "imm-cv-ct" {
             settings.filter_selection = FilterSelection::ImmCvCt;
