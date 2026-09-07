@@ -32,8 +32,9 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 | 18 | GAP-069 `uuid` v7 for `GlobalEntityId` | Technical | 10 | S | Services engineer | D-11 |
 | 19 | GAP-013 Track-to-track fusion and sensor registration | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
 | 20 | GAP-051 Session lifecycle in `gungnir-mission` | Technical | 6 | M | Services engineer |  |
-| 21 | GAP-061 Release workflow unexercised | Technical | 3 | M | Owner | D-10 |
-| 22 | GAP-081 Architecture compliance checks not automated | Technical | 3 | M | Owner |  |
+| 21 | GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | Technical | 4 | M | Owner | D-10 |
+| 22 | GAP-061 Release workflow unexercised | Technical | 3 | M | Owner | D-10 |
+| 23 | GAP-081 Architecture compliance checks not automated | Technical | 3 | M | Owner |  |
 
 ## I3: Close the decision loop. Closes the allocator, geometry, asset list, policy model, queue, and the panels that let a human decide in the product.
 
@@ -131,6 +132,6 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 
 | Increment | Gaps | Effort S / M / L / XL |
 |---|---|---|
-| I2 | 22 | 3 / 10 / 7 / 2 |
+| I2 | 23 | 3 / 11 / 7 / 2 |
 | I3 | 52 | 8 / 32 / 11 / 1 |
 | I4 | 17 | 0 / 8 / 8 / 1 |

@@ -778,6 +778,17 @@ pub struct ConfigBaseline {
     pub machine_identities: Vec<MachineIdentityConfig>,
     #[serde(default)]
     pub resources: Vec<ResourceConfig>,
+    /// The laydowns this deployment can choose between
+    /// (`docs/design/DN-26-laydown-options.md` §4, GAP-087).
+    ///
+    /// **Empty is valid and means the deployment has no alternatives declared, which is a
+    /// different statement from having one**: an empty table says "none offered", a
+    /// one-row table would say "here are your options" and be lying. Defaulting to empty
+    /// also leaves every configuration file written before this field existed valid, and
+    /// describing a deployment with no declared alternatives is the honest reading of a
+    /// file that does not mention laydowns (DN-26 §8).
+    #[serde(default)]
+    pub laydowns: Vec<gungnir_model::Laydown>,
     #[serde(default)]
     pub tracking: Option<TrackingConfig>,
     #[serde(default)]
@@ -913,6 +924,9 @@ impl Default for ConfigBaseline {
             exchange: Vec::new(),
             machine_identities: Vec::new(),
             resources: Vec::new(),
+            // No alternatives declared, which is what a deployment that has not
+            // described any actually has (DN-26 §8).
+            laydowns: Vec::new(),
             tracking: None,
             backend: BackendConfig::Embedded,
             node: None,
@@ -1039,6 +1053,115 @@ fn has_duplicate_ids(mut ids: Vec<u32>) -> bool {
 
 /// Resource rules, including the effector model MOE-03 depends on
 /// (docs/design/DN-04-effector-model.md).
+/// DN-26 §4: the five refusals a laydown table is validated against.
+///
+/// Every one of these is a refusal rather than a default, because each of the quiet
+/// alternatives produces a comparison that looks like an answer. Guessing which laydown
+/// is current, ignoring a placement for a sensor no registry declares, or letting one
+/// option omit a sensor another places all yield a coverage number a planner would read
+/// as a property of the laydowns.
+fn validate_laydowns(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    if baseline.laydowns.is_empty() {
+        return Ok(());
+    }
+
+    // 3. A duplicate `LaydownId`. Checked first: every later message names a laydown by
+    //    its identifier, and two laydowns sharing one make those messages ambiguous.
+    let mut seen: Vec<&str> = Vec::new();
+    for l in &baseline.laydowns {
+        if seen.contains(&l.id.0.as_str()) {
+            return Err(ConfigError::Invalid(format!(
+                "two laydowns share the identifier {:?}; a laydown is named so that a comparison can say which option it is describing",
+                l.id.0
+            )));
+        }
+        seen.push(l.id.0.as_str());
+    }
+
+    // 1. More than one marked current, or none while the table is non-empty.
+    let current: Vec<&str> = baseline
+        .laydowns
+        .iter()
+        .filter(|l| l.current)
+        .map(|l| l.id.0.as_str())
+        .collect();
+    match current.len() {
+        1 => {}
+        0 => {
+            return Err(ConfigError::Invalid(format!(
+                "{} laydowns are declared and none is marked current; the current laydown is what the deployment is actually running and is the baseline every option is compared against, so it is refused rather than guessed",
+                baseline.laydowns.len()
+            )))
+        }
+        _ => {
+            return Err(ConfigError::Invalid(format!(
+                "laydowns {} are all marked current; exactly one placement is in force",
+                current.join(", ")
+            )))
+        }
+    }
+
+    let declared_sensors: Vec<u32> = baseline.sensors.iter().map(|s| s.id).collect();
+    let declared_resources: Vec<u32> = baseline.resources.iter().map(|r| r.id).collect();
+
+    for l in &baseline.laydowns {
+        // 5. A non-finite coordinate, which would propagate into a coverage answer.
+        if l.has_non_finite_coordinate() {
+            return Err(ConfigError::Invalid(format!(
+                "laydown {} has a non-finite coordinate",
+                l.id
+            )));
+        }
+        // 2. An identifier no registry declares.
+        for s in &l.sensors {
+            if !declared_sensors.contains(&s.sensor.0) {
+                return Err(ConfigError::Invalid(format!(
+                    "laydown {} places sensor {}, which no sensor in this baseline declares",
+                    l.id, s.sensor.0
+                )));
+            }
+        }
+        for r in &l.resources {
+            if !declared_resources.contains(&r.resource.0) {
+                return Err(ConfigError::Invalid(format!(
+                    "laydown {} places resource {}, which no resource in this baseline declares",
+                    l.id, r.resource.0
+                )));
+            }
+        }
+    }
+
+    // 4. A sensor or resource placed in one laydown and absent from another. A laydown is
+    //    complete by definition, and a partial one produces a coverage answer with a
+    //    silent hole in it: the missing sensor reads as a sensor that contributes nothing
+    //    rather than as one nobody said where to put.
+    let first = &baseline.laydowns[0];
+    let mut sensors = first.sensor_ids();
+    sensors.sort_unstable();
+    let mut resources = first.resource_ids();
+    resources.sort_unstable();
+    for l in baseline.laydowns.iter().skip(1) {
+        let mut theirs = l.sensor_ids();
+        theirs.sort_unstable();
+        if theirs != sensors {
+            return Err(ConfigError::Invalid(format!(
+                "laydowns {} and {} place different sensors; a laydown is a complete placement, so an option that omits a sensor another places would be compared as though that sensor contributed nothing",
+                first.id, l.id
+            )));
+        }
+        let mut theirs = l.resource_ids();
+        theirs.sort_unstable();
+        if theirs != resources {
+            return Err(ConfigError::Invalid(format!(
+                "laydowns {} and {} place different resources; a laydown is a complete placement",
+                first.id, l.id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 fn validate_resources(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     for r in &baseline.resources {
         if r.position.iter().any(|v| !v.is_finite()) {
@@ -2439,6 +2562,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
         }
     }
     validate_resources(baseline)?;
+    validate_laydowns(baseline)?;
     validate_assets(baseline)?;
     validate_endpoints(baseline)?;
     validate_policy(baseline)?;

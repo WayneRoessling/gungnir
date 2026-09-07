@@ -52,7 +52,9 @@ decision recorded in `../../../gungnir-api-v1.md` when a second version exists.
   a wire format is not a derivative work, their source is, and DN-25 §9 keeps the two
   apart. `../../../design/external-standards.md` §5 pins the schema version (2.0, MITRE
   case #11-3895, approved for public release) **before** any codec is written, on
-  GAP-064's rule, and §5.4 leaves the protobuf framing unpinned on purpose.
+  GAP-064's rule; §5.7 pins the type tree (MITRE's August 2005 developer guide, case
+  #06-0249, and the `friend` predicate `^a-f-`) after the owner asked for it on 2026-09-07;
+  and §5.4 leaves the protobuf framing unpinned on purpose. Three artifacts, two pinned.
 
 ## Traceability
 

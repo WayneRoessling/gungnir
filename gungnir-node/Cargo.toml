@@ -32,6 +32,11 @@ gungnir-api = { path = "../gungnir-api" }
 gungnir-remote = { path = "../gungnir-remote" }
 # GAP-057: the node authenticates API callers against its own account store.
 gungnir-security = { path = "../gungnir-security" }
+# GAP-057: `gungnir-node account add` reads and writes the account file, which is a JSON
+# array of {operator, role, phc} records (DN-23 §5). Dev-only until 2026-09-07, when the
+# provisioning path made it a runtime need. Not an ARCHITECTURE §7 edge -- serde_json is
+# an external crate governed by docs/agentic-coding-standards.md §2.9, not a workspace one.
+serde_json.workspace = true
 rustls.workspace = true
 # GAP-086 / DN-24: the node journals which algorithm configuration it opened with, the
 # same as the desktop. It is the system of record for every desktop connected to it, so
@@ -71,7 +76,6 @@ p256.workspace = true
 # types the model owns. Dev-only: nothing in this binary constructs one at runtime.
 nalgebra.workspace = true
 criterion.workspace = true
-serde_json.workspace = true
 rand.workspace = true
 # Dev-only: the load harness is fed from generated scenario output at realistic rates,
 # as benches/README.md requires. No runtime edge (GAP-056).

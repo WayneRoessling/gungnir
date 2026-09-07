@@ -160,6 +160,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-061 Release workflow unexercised | CAP-6.5 | 3 | M | I2 | `../../release-governance.md` |
 | GAP-063 Interface conformance suite | CAP-7.1, CAP-7.2 | 3 | M | I4 | `../../verification-capability-table.md` §2, cross-layer interop row |
 | GAP-067 Operational-readiness verification | CAP-5.7 | 4 | L | I3 | `docs/architecture.md` |
+| GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | CAP-6.5 | 4 | M | I2 | `docs/release-governance.md`; `deny.toml` |
 
 ## Integration gaps
 

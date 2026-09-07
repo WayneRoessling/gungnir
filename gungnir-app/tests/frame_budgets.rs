@@ -206,7 +206,7 @@ fn startup_to_first_frame_is_within_budget() {
     println!("startup to first frame: {best:?} best of {STARTUP_RUNS} (budget {BUDGET_STARTUP:?})");
     assert!(
         best < BUDGET_STARTUP,
-        "startup took {best:?} at its fastest of {STARTUP_RUNS} runs, over the          {BUDGET_STARTUP:?} budget -- every run was over it, so this is the code and not          a busy machine"
+        "startup took {best:?} at its fastest of {STARTUP_RUNS} runs, over the {BUDGET_STARTUP:?} budget -- every run was over it, so this is the code and not a busy machine"
     );
 }
 
