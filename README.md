@@ -87,25 +87,45 @@ open; a later pass locks which crates ship first (`ARCHITECTURE.md` §10).
 
 ## Status
 
+**Updated 2026-09-07.** The two lists below described the scaffold as it stood on
+2026-09-04, the day this document, `ARCHITECTURE.md`, and the rest of the design set
+were brought into agreement. Most of what "Scaffold" named has since been built and
+gated -- the tracking math among the largest of it -- and this section had not been
+brought forward to say so; corrected here, in a development-status review, rather
+than found stale by whoever read it next.
+
 Every crate compiles (`cargo check --workspace --all-targets`), every crate's public
 surface is doc-commented with the capability and, for the tracking core, the pass
-criterion it implements, and the crates that have logic have unit tests. What is real
-and what is a scaffold:
+criterion it implements, and the crates that have logic have unit tests (1,509
+passing across the workspace as of this update). What is real and what is a
+scaffold:
 
 - **Real:** the canonical data model and event schema; the broadcast event bus; the
   JSON-lines journal, replay, and reporting; config loading and validation with backend
-  selection; the ingest gateway with validation, quarantine, recorded and simulated
-  adapters; the geofence policy, approval workflow, risk scoring, decision rationale,
-  identity and classification engines, model registry, sensor registry, role-based
-  authorization and audit log; geofences, line-of-sight and coverage analytics;
-  store-and-forward and reconciliation; authority arbitration; role workspaces and the
-  alert lifecycle; the schema catalog and Arrow interop; the egui panels and the
-  viewport's 2D fallback; both binaries' startup and tick loops.
-- **Scaffold:** the tracking math (filters, association, lifecycle, RFS, fusion), the
-  allocator, the scenario generator, ICP, the three-d scene, the API transport, live
-  protocol adapters, and the ASTERIX/STANAG codecs. Each says so through a
-  `NotImplemented` error, a `todo!()` off every runtime path, or a health flag; nothing
-  pretends to work.
+  selection; the ingest gateway with validation, quarantine, recorded, simulated, ASTERIX
+  radar, and SAPIENT spotter adapters; the geofence policy, approval workflow, risk
+  scoring, decision rationale, identity and classification engines, model registry,
+  sensor registry, role-based authorization and audit log; geofences, line-of-sight and
+  coverage analytics; store-and-forward and reconciliation; authority arbitration; role
+  workspaces and the alert lifecycle; the schema catalog and Arrow interop; the egui
+  panels and the three-d viewport, attached to eframe's own GL context; both binaries'
+  startup and tick loops. **Also real since 2026-09-06:** the tracking pipeline itself --
+  the linear, extended and unscented Kalman filters, the particle filter, the
+  interacting-multiple-model and square-root/UDU forms, the RTS smoother, Hungarian/JV
+  and JPDA/MHT association, the Gaussian-mixture PHD filter, track-to-track fusion and
+  sensor registration, the Bellman/DP allocator, and the out-of-sequence, multi-rate
+  fusion pipeline that runs all of it (`gungnir_fusion_async::PIPELINE_IMPLEMENTED` is
+  `true`); the API transport (`gungnir_api::transport::serve`, `gungnir_remote::connect`,
+  both over mutual TLS); and the CPU reference for point-cloud registration.
+- **Scaffold:** the CPHD cardinality distribution and the GLMB/LMB labelled random-finite-
+  set filters (the PHD filter above is built; these would extend it); the GPU point-cloud
+  registration path (the CPU reference above is built and gated; the WGSL pipeline is
+  not); the STANAG 4676 codec; live adapters for EO/IR, acoustic, passive-RF, and
+  ISR-video sensors (radar and the SAPIENT spotter are built; a specification is pinned
+  for each of these four and none has an adapter yet); the Cursor-on-Target exchange
+  format; the `gungnir-ml` crate and its trained models; and assistant integration. Each
+  says so through a `NotImplemented` error, a `todo!()` off every runtime path, or a
+  health flag; nothing pretends to work.
 
 `ARCHITECTURE.md` §10 lists what the 2026-09-04 pass fixed and what remains open.
 
