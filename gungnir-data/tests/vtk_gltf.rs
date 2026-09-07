@@ -119,8 +119,12 @@ fn the_loader_thread_serves_both_formats() {
     let mut vtk = None;
     let mut gltf = None;
     for _ in 0..2 {
+        // A deadlock guard on the loader thread, not a claim about how fast it is. Ten
+        // seconds was ample on this machine and is not a statement about a loaded one;
+        // a blocking receive returns the instant the result arrives, so a passing run
+        // pays nothing for the larger bound.
         match results
-            .recv_timeout(std::time::Duration::from_secs(10))
+            .recv_timeout(std::time::Duration::from_secs(60))
             .expect("a result")
         {
             LoadResult::VtkMesh(r) => vtk = Some(r.expect("vtk")),

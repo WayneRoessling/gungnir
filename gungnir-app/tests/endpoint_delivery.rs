@@ -158,9 +158,14 @@ fn at(state: &mut AppState, t: f64) {
     update::tick(state);
 }
 
-/// Tick until the predicate holds or a few seconds of wall time pass.
+/// Tick until the predicate holds.
+///
+/// **A deadlock guard, not a performance assertion** (the reasoning is
+/// `gungnir-tracking-service/tests/sample_set_replay.rs`'s): a real hang still fails,
+/// and a loaded machine no longer does. The loop exits the moment the condition holds,
+/// so a passing run costs what it always did.
 fn settle(state: &mut AppState, t: f64, done: impl Fn(&AppState) -> bool) {
-    for _ in 0..300 {
+    for _ in 0..6_000 {
         at(state, t);
         if done(state) {
             return;

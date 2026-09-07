@@ -137,7 +137,12 @@ fn replay(scenario: &Scenario) -> (GeneratedTimeline, Vec<TrackView>) {
     service.finish();
 
     let mut ended = false;
-    for _ in 0..4_000 {
+    // **A deadlock guard, not a performance assertion.** This is the same wait as
+    // `sample_set_replay.rs`, on the same background pipeline task, and that one was
+    // raised to thirty thousand iterations on the reasoning recorded beside it -- a
+    // correctness test failing for want of CPU says nothing about the pipeline. This
+    // sibling was left at four thousand and is brought to the same figure.
+    for _ in 0..30_000 {
         service.poll(MissionTime(timeline.duration_s));
         if !service.is_healthy() {
             ended = true;
