@@ -5,6 +5,14 @@ name: bench-regression
 
 on:
   pull_request:
+  # **Without this the baseline is never written and the gate can never fail** (GAP-093).
+  # Both halves of the branch below, and the cache-save step at the end, are guarded on
+  # `refs/heads/main`; in a `pull_request` event `github.ref` is `refs/pull/<n>/merge`,
+  # so the main half was unreachable and no run ever executed `--save-baseline main`.
+  # Every pull request then reported "compared 0 benchmark(s)" and passed -- green, and
+  # measuring nothing, which is the failure the recursive-glob fix above it was for.
+  push:
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,11 +28,15 @@ jobs:
         with:
           toolchain: "1.98"
       - uses: Swatinem/rust-cache@v2
+      # Per-commit key with a prefix fallback: a cache key is immutable, so saving every
+      # main push under one fixed key would keep the first for ever and freeze the
+      # baseline at the day it landed. `restore-keys` takes the most recent match.
       - name: Restore baseline from main
         uses: actions/cache/restore@v4
         with:
           path: target/criterion
-          key: criterion-baseline-main
+          key: criterion-baseline-main-${{ github.sha }}
+          restore-keys: criterion-baseline-main-
       # Two different jobs, and they were run with the same flag, which could not work.
       #
       # On main the baseline has to be *written*: `--baseline` only ever compares, so the
@@ -80,8 +92,8 @@ jobs:
           sys.exit(1 if failed else 0)
           PY
       - name: Save baseline (main only)
-        if: github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4
         with:
           path: target/criterion
-          key: criterion-baseline-main
+          key: criterion-baseline-main-${{ github.sha }}

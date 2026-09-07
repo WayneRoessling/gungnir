@@ -101,6 +101,8 @@ drafting agent's proposals for the owner and the engineering reviewer to confirm
 | GAP-067 | Operational-readiness verification | Technical | CAP-5.7 | 4 | 1 | L | 4 | I3 | Owner | Open |
 | GAP-090 | The friendly set is only the friendlies a sensor detected | Technical | CAP-3.8, CAP-4.5 | 4 | 3 | M | 12 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-091 | No exchange bearer for a participant that holds no machine identity | Technical | CAP-7.4, CAP-1.6 | 4 | 5 | L | 20 | I3 | Services engineer | Open |
+| GAP-092 | The journal budget's debug cost was attributed to runner I/O; it is the encode | Technical | CAP-5.10 | 2 | 10 | S | 20 | I2 | Services engineer | Closed |
+| GAP-093 | Gate 6 never saves a baseline, so it compares nothing and cannot fail | Technical | CAP-5.10 | 3 | 10 | S | 30 | I2 | Services engineer | Closed |
 
 Counts: 91 gaps, 3 mission, 88 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
@@ -633,6 +635,32 @@ Counts: 91 gaps, 3 mission, 88 technical; 1 already covered by a plan in `../../
 - Target: I2. Owner: Services engineer. Status: Closed.
 - Reference: `../../../ARCHITECTURE.md` §10, performance budgets.
 - Depends on: D-04, GAP-056.
+
+**GAP-092 The journal budget's debug cost was attributed to runner I/O; it is the encode**
+
+- Type: Technical.
+- Capability: CAP-5.10 Performance budgets.
+- Description: The 2026-09-07 decision to assert the journal budget in release only was right and is unchanged. The **reason recorded beside it was not**: `performance-budgets.md` and `frame_budgets.rs` both said the debug measurement was inflated "because shared runners have throttled I/O". Measured afterwards, the I/O is not the term that matters. Splitting `FileEventJournal::append` in half on a P-core: `serde_json::to_string` alone ~500 µs, the file write 15-50 µs, the whole append ~515 µs -- **nineteen twentieths encode, about a twentieth write**, at `opt-level = 0`. Three further readings agree. Nine-run measurements taken alternately against `%TEMP%` on C: and `target/` on D: give 514.9 / 516.5 / 513.8 µs against 518.1 / 506.7 / 508.4 µs, so two different filesystems are indistinguishable. Pinning the test to each of the twenty logical CPUs of an 8 P-core, 12 E-core machine splits 8 fast (~760-990 µs) from 12 slow (~1,650-2,045 µs) on the P/E boundary exactly, reproducing the whole spread with no disk involved. In release the same path is 45 µs on a P-core and 157 µs on an E-core, the latter being the recorded release figure.
+- Evidence: `../../performance-budgets.md` § "The journal budget is asserted in release only"; `gungnir-app/tests/frame_budgets.rs::journal_append_meets_its_budget` doc comment.
+- Severity: 2. Reach: 10 threads. Effort: S. Priority: 20.
+- Impact: **A right decision resting on a wrong reason invites the wrong follow-up.** The I/O reading points at chasing runner disk performance, or at moving this test's scratch directory off `std::env::temp_dir()` -- the latter was investigated on the strength of a linker error seen in the same session and would have changed nothing, because the two filesystems measure the same. It also mislocates the general rule: any `cargo test` measurement of a serde-heavy path on this workspace is dominated by unoptimized encoding, so the same surprise is waiting behind every future budget asserted in debug.
+- Closing action: **Closed 2026-09-07.** Both documents now state the measured cause and keep the decision as it stands. Nothing in the code changed: the budget is still 1 ms, the statistic is still the median of nine runs, the assertion is still release-only, and `ci.yml` still runs it in release. **A second finding recorded rather than acted on**: the 2026-09-05 debug figure appears three times and disagrees with itself -- "median 400 µs over 9 runs" in `performance-budgets.md`, 679 µs in GAP-085's closing action above, about 665 µs in the test's doc comment. Today's debug P-core median is ~520 µs, which reads as no regression against 665-679 µs and as a 2.6x one against 400 µs. The 400 µs is the outlier and is best read as a best-case P-core sample; it is annotated where it appears rather than overwritten, because a measurement is not amended by a later measurement's author.
+- Target: I2. Owner: Services engineer. Status: Closed.
+- Reference: `../../performance-budgets.md`.
+- Depends on: GAP-085.
+
+**GAP-093 Gate 6 never saves a baseline, so it compares nothing and cannot fail**
+
+- Type: Technical.
+- Capability: CAP-5.10 Performance budgets.
+- Description: The three faults fixed on 2026-09-07 left the workflow able to run, and it does. It still cannot compare anything. `bench-regression.yml` triggers on `pull_request` alone, while the branch that writes the baseline and the `actions/cache/save` step that preserves it are both guarded on `github.ref == 'refs/heads/main'`. In a `pull_request` event `github.ref` is `refs/pull/<n>/merge`, so **neither guard has ever been true and `--save-baseline main` has never executed**. The cache the restore step reads is therefore always empty, `--baseline-lenient` skips every comparison, and the threshold step reports zero compared and exits 0.
+- Evidence: run 34124967440, the first green Gate 6 in this repository, printing "compared 0 benchmark(s); 12 had no baseline to compare against"; `gh run list --workflow bench-regression.yml --branch main` returning no runs at all, including for the merge of pull request 1.
+- Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
+- Impact: **This is the same defect as the glob that matched nothing, wearing a different hat.** That one was fixed on the grounds that a gate reporting success while comparing zero benchmarks is worse than one that fails noisily; the trigger reproduces exactly that outcome one layer out. Gate 6 is now green on every pull request, will stay green against a regression of any size, and looks like working regression cover. Nothing in the comparison logic is wrong -- it is never given anything to compare.
+- Closing action: **Closed 2026-09-07.** `push: branches: [main]` added, which is the whole of the fix: it makes the main half of the existing branch reachable and lets the save step run. Two adjustments came with it. The save guard gained `github.event_name == 'push'`, because `github.ref` on its own would also match a `pull_request` targeting main on some event shapes. And the cache key became `criterion-baseline-main-${{ github.sha }}` with a `criterion-baseline-main-` restore prefix, because **a cache key is immutable**: one fixed key would have accepted the first save and silently discarded every later one, freezing the baseline at the day it landed -- a slower version of the same "looks green, means nothing" failure. The first push to main after this merges writes the first baseline; the pull request after that is the first one this gate can actually fail.
+- Target: I2. Owner: Services engineer. Status: Closed.
+- Reference: `../../../.github/workflows/bench-regression.yml`; `../../../benches/README.md`.
+- Depends on: GAP-061.
 
 **GAP-042 Warning function**
 
