@@ -7,7 +7,34 @@ all-features = false
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+
+# Every entry here is an acceptance with a reason and a condition, not a mute. An entry
+# whose condition stops being true is a defect, and the test named in it is what makes
+# that visible rather than a matter of memory.
+ignore = [
+    # RUSTSEC-2026-0194 (quadratic run time checking a start tag for duplicate attribute
+    # names) and RUSTSEC-2026-0195 (unbounded namespace-declaration allocation in
+    # `NsReader`), both denial of service, both in `quick-xml 0.36.2`.
+    #
+    # Accepted 2026-09-07 by the owner, under GAP-094, on this condition and no other:
+    # **the vulnerable parser is not reachable.** `quick-xml` enters the graph only
+    # through `vtkio`, and only for the XML VTK family; `gungnir-data` has only ever read
+    # legacy `POLYDATA`, and `scientific::refuse_xml_vtk` now refuses the XML family by
+    # extension *and* by content before `Vtk::import` opens the file.
+    #
+    # The condition is tested, not asserted: `gungnir-data/tests/vtk_gltf.rs`, module
+    # `xml_vtk_is_refused`, covers all ten XML extensions, XML content hiding under a
+    # `.vtk` name, and that a legacy file still loads. **If those tests are removed or
+    # weakened, these two entries are no longer honest and must go.**
+    #
+    # Both are fixed in `quick-xml >= 0.41.0` and no `vtkio` release depends on a fixed
+    # version; the entries come out when one does. The related
+    # RUSTSEC-2026-0041 (`lz4_flex`, uninitialised-memory disclosure) needed no entry: the
+    # move to `vtkio 0.7.0-rc2` on the same day brought `lz4_flex 0.11.6`, which is the
+    # fixed version, and that one was a real vulnerability on a reachable path.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+]
 
 # The workspace is AGPL-3.0-or-later, so every entry below must be one-way compatible
 # *into* AGPL-3.0. All of them are: the permissive licenses unconditionally, Apache-2.0

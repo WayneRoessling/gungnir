@@ -353,6 +353,11 @@ impl LiveTrackingService {
     /// Passed in as data rather than read from configuration, because this crate may not
     /// depend on `gungnir-config`; both binaries hand it `config.policy.staleness`.
     #[must_use]
+    pub fn with_staleness(mut self, staleness: gungnir_model::StalenessSettings) -> Self {
+        self.staleness = staleness;
+        self
+    }
+
     /// Supply the deployment's sensor positions, which is what lets an angular
     /// measurement be placed (GAP-001, DN-27 §4).
     ///
@@ -362,11 +367,6 @@ impl LiveTrackingService {
     #[must_use]
     pub fn with_sensor_positions(mut self, positions: SensorPositions) -> Self {
         self.sensor_positions = positions;
-        self
-    }
-
-    pub fn with_staleness(mut self, staleness: gungnir_model::StalenessSettings) -> Self {
-        self.staleness = staleness;
         self
     }
 
