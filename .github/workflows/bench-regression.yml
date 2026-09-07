@@ -25,24 +25,58 @@ jobs:
         with:
           path: target/criterion
           key: criterion-baseline-main
+      # Two different jobs, and they were run with the same flag, which could not work.
+      #
+      # On main the baseline has to be *written*: `--baseline` only ever compares, so the
+      # `main/` directory the cache save step is meant to preserve was never created and
+      # the cache could never hold one. `--save-baseline main` writes it.
+      #
+      # On a pull request it has to be *read*, and tolerantly. `--baseline` panics with
+      # "Baseline 'main' must exist before comparison is allowed" when the restored cache
+      # is empty, which is every pull request until a main run has saved one -- including
+      # the first, so this job could not pass on the commit that introduced it.
+      # `--baseline-lenient` compares when the baseline is there and skips the comparison
+      # when it is not. The threshold step below already tolerates a missing baseline the
+      # same way, so the two now agree.
       - name: Run benchmarks against the baseline
-        run: cargo bench --workspace -- --baseline main --noplot
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            cargo bench --workspace -- --save-baseline main --noplot
+          else
+            cargo bench --workspace -- --baseline-lenient main --noplot
+          fi
       - name: Compare p99 against the threshold
         run: |
           python3 - <<'PY'
           import json, os, pathlib, sys
           threshold = float(os.environ["BENCH_REGRESSION_THRESHOLD"])
+          root = pathlib.Path("target/criterion")
           failed = False
-          for est in pathlib.Path("target/criterion").glob("*/new/estimates.json"):
+          compared = skipped = 0
+          # Recursive: criterion writes <group>/<bench>/new/estimates.json for a grouped
+          # benchmark and <bench>/new/estimates.json for an ungrouped one. This globbed
+          # one level only, matched nothing at all against the real layout, and so
+          # compared nothing and passed unconditionally -- a gate that could not fail.
+          for est in sorted(root.glob("**/new/estimates.json")):
+              name = est.relative_to(root).parent.parent.as_posix()
               base = est.parent.parent / "main" / "estimates.json"
               if not base.exists():
+                  skipped += 1
                   continue
               new = json.load(open(est))["mean"]["point_estimate"]
               old = json.load(open(base))["mean"]["point_estimate"]
               ratio = new / old if old else 1.0
-              print(f"{est.parent.parent.name}: {ratio:.3f}x")
+              print(f"{name}: {ratio:.3f}x")
               if ratio > 1.0 + threshold:
+                  print(f"  REGRESSION: over the {threshold:.0%} threshold")
                   failed = True
+              compared += 1
+          # Say what was measured. A run that compares nothing is the expected state only
+          # until main has saved a baseline; after that it means the wiring broke again,
+          # and silence is how that goes unnoticed for months.
+          print(f"compared {compared} benchmark(s); {skipped} had no baseline to compare against")
+          if compared == 0:
+              print("no baseline yet: this is expected until a run on main saves one")
           sys.exit(1 if failed else 0)
           PY
       - name: Save baseline (main only)
