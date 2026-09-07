@@ -92,7 +92,7 @@ drafting agent's proposals for the owner and the engineering reviewer to confirm
 | GAP-059 | Audit wiring | Technical | CAP-6.3 | 4 | 9 | M | 36 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-060 | Encryption in transit and at rest | Technical | CAP-6.4 | 4 | 2 | L | 8 | I4 | Security engineer (human-owned crate) | In progress |
 | GAP-084 | Key custody, rotation, and escrow | Technical | CAP-6.4 | 4 | 2 | M | 8 | I4 | Security engineer (human-owned crate) | In progress |
-| GAP-061 | Release workflow unexercised | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | Owner | Open |
+| GAP-061 | Release workflow unexercised | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | Owner | In progress |
 | GAP-062 | Releasability marking | Technical | CAP-6.6 | 3 | 2 | M | 6 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-063 | Interface conformance suite | Technical | CAP-7.1, CAP-7.2 | 3 | 6 | M | 18 | I4 | Services engineer | In progress |
 | GAP-064 | ASTERIX and STANAG 4676 codecs | Technical | CAP-7.2, CAP-1.1 | 4 | 9 | L | 36 | I2 | Services engineer | Open |
@@ -1145,12 +1145,12 @@ Counts: 91 gaps, 3 mission, 88 technical; 1 already covered by a plan in `../../
 
 - Type: Technical.
 - Capability: CAP-6.5 Supply chain.
-- Description: The CI, audit, and release workflows exist but have never run; the repository is not hosted. **D-10 amended 2026-09-07**: the host is GitHub at `https://github.com/WayneRoessling/gungnir` rather than a self-hosted GitLab, so the eight workflows under `.github/workflows/` are run where they stand rather than ported to another CI. The effort does not fall with the port, because the two things that actually gate this gap are untouched by the choice of forge: **the workspace is not under version control at all**, so there is no history to push, and `gpu-fusion.yml` needs a self-hosted runner labelled `gpu` because no hosted runner has one.
+- Description: **Hosted 2026-09-07.** The workspace was put under version control and pushed to `https://github.com/WayneRoessling/gungnir` as a single root commit of 1140 files. **What that settles and what it does not.** It settles the first line of this gap's action -- there was no repository, and now there is one -- and the push triggers the eight workflows for the first time. It settles nothing about whether they pass: no gate result is recorded here, because none has been read, and this entry will not claim a green build it has not seen. `gpu-fusion.yml` cannot pass yet in any case, because no self-hosted runner labelled `gpu` is registered to the repository. **Three things were kept out of the commit and are ignored**: the OpenSSH private key that was sitting in the working tree, the STANAG 4609 reference PDF (readable, not redistributable -- `../../design/external-standards.md` keeps that distinction), and `docs/business/` at the owner's instruction, which leaves 18 citations in 14 tracked documents pointing at a folder a clone does not have. The CI, audit, and release workflows exist but had never run, and until 2026-09-07 the repository was not hosted. **D-10 amended 2026-09-07**: the host is GitHub at `https://github.com/WayneRoessling/gungnir` rather than a self-hosted GitLab, so the eight workflows under `.github/workflows/` are run where they stand rather than ported to another CI. The effort does not fall with the port, because the two things that actually gate this gap are untouched by the choice of forge: **the workspace is not under version control at all**, so there is no history to push, and `gpu-fusion.yml` needs a self-hosted runner labelled `gpu` because no hosted runner has one.
 - Evidence: `../../gungnir-capabilities.md` §9 (the CI workflows only run once the repository is hosted with runners).
 - Severity: 3. Reach: 1 threads. Effort: M. Priority: 3.
 - Impact: No evidence that the gates pass; supply-chain assurance is on paper.
-- Closing action: Per D-10 as amended 2026-09-07: initialise the git repository and make the first commit (the owner's act -- the workspace is not under version control), push to `https://github.com/WayneRoessling/gungnir`, register a self-hosted runner labelled `gpu` for `gpu-fusion.yml`, run the eight workflows under `.github/workflows/` as they stand, fix what fails, and publish the first signed build to the GitHub Container Registry.
-- Target: I2. Owner: Owner. Status: Open.
+- Closing action: Per D-10 as amended 2026-09-07. **Done**: the repository is initialised, committed and pushed to `https://github.com/WayneRoessling/gungnir` (2026-09-07). **Remaining**: read the first workflow results and fix what fails, register a self-hosted runner labelled `gpu` for `gpu-fusion.yml`, run the eight workflows under `.github/workflows/` as they stand, fix what fails, and publish the first signed build to the GitHub Container Registry.
+- Target: I2. Owner: Owner. Status: In progress.
 - Reference: `../../release-governance.md`.
 - Depends on: D-10.
 

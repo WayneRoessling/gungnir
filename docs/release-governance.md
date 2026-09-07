@@ -70,7 +70,8 @@ the owner outside the workspace. No configuration baseline names one -- a baseli
 not carry key material or a path to it -- and the release workflow's publish step reads
 its token from the CI environment.
 
-Two things the amendment did not change. The workspace is not yet a git repository, so
-the first step of GAP-061 is an initial commit rather than a push. And the evidence
+The repository was created and pushed on 2026-09-07, which is the first line of
+GAP-061 and not the rest of it: no gate result is recorded anywhere yet, because none
+has been read. And the evidence
 package above is published with the code if the repository is public, which is the
 owner's call and is not fixed here.
