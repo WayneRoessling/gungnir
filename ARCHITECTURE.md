@@ -107,7 +107,7 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-fusion-async` | `track`, `rfs`, `track-fusion`, `core` (r), `filters` (r), `association` (r) |
 | `gungnir-allocation` | `core` |
 | `gungnir-scenario` | `core`, `coord`, `fusion-async` |
-| `gungnir-oracle` | `filters`, `association`, `rfs`, `scenario`, `testkit` |
+| `gungnir-oracle` | `filters`, `association`, `rfs`, `scenario` (dev: `testkit`) |
 | `gungnir-fuzz` (excluded from the default build) | `association`, `ingest`, `model` |
 | `gungnir-tracking-service` | `core`, `coord`, `filters`, `association`, `track`, `rfs`, `track-fusion`, `fusion-async`, `model` |
 | `gungnir-intercept-service` | `core`, `coord`, `allocation`, `model` |

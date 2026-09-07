@@ -320,9 +320,21 @@ unlisted edge in a legal direction passes silently.
 
 It surfaced on 2026-09-07, when the UAF generator ran in CI for the first time (GAP-061,
 "release workflow unexercised") and the view it regenerated from the manifests showed an edge
-the table did not. That is the gap worth noting: **no test in the workspace compares the
-manifests against `ARCHITECTURE.md`'s table**, so the next undeclared edge in a legal
-direction will be found the same way, by a generated view disagreeing, or not at all.
+the table did not.
+
+**That gap is closed the same day.** `gungnir-app/tests/dependency_graph.rs` gained
+`the_manifests_and_architecture_md_agree_on_every_edge`, which parses §7's table and §7.1's
+graph back out of `ARCHITECTURE.md` and compares both against the manifests, in both
+directions: an edge in a `Cargo.toml` that the document does not list, an edge the document
+lists that no manifest carries, and a crate documented in neither place. Only production
+`[dependencies]` are compared, because both documents mark dev-only edges separately.
+
+It was checked against the fault it exists for, rather than only against a passing tree:
+deleting `security` from the `gungnir-remote` row reproduces this entry's finding and fails
+the test by name. It also found one further disagreement on its first run -- §7's table
+listed `testkit` for `gungnir-oracle` as though it were a production dependency when it is a
+`[dev-dependencies]` entry, which the table now marks `(dev: ...)` the way §7.1 already
+marked `gungnir-collab`'s and `gungnir-mission`'s.
 
 ## Traceability
 
