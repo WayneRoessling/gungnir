@@ -16,8 +16,12 @@
 //! [`RemoteTrackingService::outbox_len`] keeps counting. That is store-and-forward doing
 //! exactly what §8.4 says, against a link that will not take a write yet.
 //!
-//! There is no TLS (GAP-060), so a node serves loopback only and an `https` endpoint is
-//! refused rather than downgraded.
+//! **Corrected 2026-09-07: TLS exists.** An `https` endpoint speaks mutual TLS --
+//! `link`'s own module comment describes it in full -- and only an `https` endpoint
+//! with no pinned trust roots is refused rather than downgraded; `http` still means
+//! loopback in the clear. GAP-060's remaining scope is key custody (the passphrase-
+//! sealed keystore and the escrow record, GAP-084), not the handshake, which
+//! `gungnir-api/tests/mutual_tls.rs` gates today.
 
 pub mod endpoint;
 pub mod identity;
