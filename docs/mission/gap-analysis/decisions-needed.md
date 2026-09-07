@@ -87,6 +87,58 @@ outcomes are also in `../../../ARCHITECTURE.md` §10; mission outcomes in `../mi
 
 ## Consequences for the register
 
+- D-05, D-11, and D-12 created engineering items: GAP-068 (roles in code), GAP-069
+  (`uuid` v7), GAP-070 (display vocabulary).
+- D-07 moved GAP-036 (fires) from I4 to I3 and put fires deconfliction in the policy
+  model; the fires handoff message is defined in I3 and delivered over the transport
+  with GAP-040 in I4.
+- D-10 changed GAP-061 from running the GitHub workflows to porting them to GitLab CI
+  on self-hosted runners; effort S to M. **Amended 2026-09-07 to GitHub at
+  `github.com/WayneRoessling/gungnir`**: the port is gone and the eight workflows stay
+  where they are, but the effort stays M, because what gates the gap is not the port. The
+  workspace is not a git repository, so the gap starts with an initial commit, and
+  `gpu-fusion.yml` still needs a self-hosted runner labelled `gpu`. **On 2026-09-07 that
+  workflow was made dormant** (manual dispatch only): with no runner registered, every
+  pull request touching the two crates it watched queued a job that failed a day later,
+  and the job itself ran zero tests, because the GPU path and its tests are GAP-024's
+  and are not built. It now fails a run that executed nothing, so the runner alone
+  cannot pass it.
+- D-13 fixed the closing action of GAP-021 without a new dependency edge.
+- D-01 confirms that no gap is out of scope; every I4 item is release content.
+- Plan 07 (test-track suite, 2026-09-04) delivered the catalogue, class profiles,
+  sensor models, scenario library, reference generator, and ten validated sample sets;
+  GAP-046 moves to In progress and GAP-076 covers the remaining integration.
+- Plan 06 (UX designs, 2026-09-04) added GAP-071 to GAP-074 (replay, reports, and
+  configuration panels; the status strip; the evidence card, commander summary, and
+  theme additions; the usability test rounds) and raised D-17 (docking and
+  multi-window), resolved the same day.
+- Plan 09 (ML model integration, 2026-09-04) added GAP-077 to GAP-080: the
+  `gungnir-ml` crate and the inference-runtime sign-off, model manifests as
+  `gungnir-modelops` baselines, the dataset pipeline, and the first two models.
+- Plan 08 (AI agent integration, 2026-09-04) answered D-14 and kept GAP-044 as the
+  single assistant item; the crate, the providers, the tools, the panel, and the
+  evaluation harness are all inside it.
+- Plan 11 (design gap closure, 2026-09-05) reviewed the design gaps and applied four
+  corrections: GAP-052 is retyped Mission because nothing is designed; the CAP-6.1
+  coverage row is refreshed now that D-02 is decided; GAP-084 is filed for key custody
+  and GAP-060 narrowed to ciphers; GAP-026 is cross-listed on CAP-5.6.
+- Plan 11 also closed the design gaps themselves: twenty-two design notes in
+ `../../design/` name a component, its types, its edges, its behaviour, and its
+ verification row for each. Twenty-three gaps are retyped Mission to Technical
+ because they are now designed and awaiting implementation, and twenty-two
+ capabilities reach full design coverage. The notes are first drafts awaiting
+ the owner and the reviewers.
+- D-18 (2026-09-05) signed off the API transport stack, the last decision
+  standing between the decided contract and the code, so GAP-041's closing action is now
+  implementation alone. The owner moved GAP-041 from I4 to I2 on 2026-09-05: it carries
+  severity 5 across six mission threads, which is higher than most of I3, and until it
+  exists only the disconnected profile can be exercised and MT-10 cannot run end to end.
+  GAP-050, GAP-063, and GAP-065 inherit both changes through their dependency on it.
+- D-19 (2026-09-05) signed off `egui_tiles` 0.10 as the docking crate, closing the
+  last open §2.9 question. It enters a member manifest under GAP-075.
+- Plan 10 (TOGAF ADM, 2026-09-04) ran the first compliance assessment against the
+  code and added GAP-081 to GAP-083: automating the five mechanical contract checks,
+  proving no `todo!()` is reachable, and making requirement identifiers traceable.
 - D-34's licence gate was **run for the first time on 2026-09-07**, in the licensing
   review that followed the decision, and failed twice, both on the `deny.toml` comment's
   claim that `OpenSSL` had been the only entry that mattered. `epaint_default_fonts`,
@@ -163,61 +215,9 @@ outcomes are also in `../../../ARCHITECTURE.md` §10; mission outcomes in `../mi
   dropped D-35 to D-38, which the renumbering commit `34796a6` had just added. The
   rebase of the licensing review restored D-34, since it is that review's subject.
   **D-35 to D-38 are still missing here** and belong to the theme tranche that owns
-  them; `docs/ux/design-system.md` still cites them.
+  them; `../../ux/design-system.md` still cites them.
 - D-34's one engineering item is **closed 2026-09-07**: `gungnir-app` displays the
   Appropriate Legal Notices as PN-21, so the section 7(b) interface requirement now
   reaches a derivative under AGPL section 5(d). PN-21 is the twenty-first panel and is
-  in `docs/ux/information-architecture.md` §3 and `ux-to-code-map.md` §1; it is in no
+  in `../../ux/information-architecture.md` §3 and `ux-to-code-map.md` §1; it is in no
   role's layout by design, and two tests hold that open.
-- D-05, D-11, and D-12 created engineering items: GAP-068 (roles in code), GAP-069
-  (`uuid` v7), GAP-070 (display vocabulary).
-- D-07 moved GAP-036 (fires) from I4 to I3 and put fires deconfliction in the policy
-  model; the fires handoff message is defined in I3 and delivered over the transport
-  with GAP-040 in I4.
-- D-10 changed GAP-061 from running the GitHub workflows to porting them to GitLab CI
-  on self-hosted runners; effort S to M. **Amended 2026-09-07 to GitHub at
-  `github.com/WayneRoessling/gungnir`**: the port is gone and the eight workflows stay
-  where they are, but the effort stays M, because what gates the gap is not the port. The
-  workspace is not a git repository, so the gap starts with an initial commit, and
-  `gpu-fusion.yml` still needs a self-hosted runner labelled `gpu`. **On 2026-09-07 that
-  workflow was made dormant** (manual dispatch only): with no runner registered, every
-  pull request touching the two crates it watched queued a job that failed a day later,
-  and the job itself ran zero tests, because the GPU path and its tests are GAP-024's
-  and are not built. It now fails a run that executed nothing, so the runner alone
-  cannot pass it.
-- D-13 fixed the closing action of GAP-021 without a new dependency edge.
-- D-01 confirms that no gap is out of scope; every I4 item is release content.
-- Plan 07 (test-track suite, 2026-09-04) delivered the catalogue, class profiles,
-  sensor models, scenario library, reference generator, and ten validated sample sets;
-  GAP-046 moves to In progress and GAP-076 covers the remaining integration.
-- Plan 06 (UX designs, 2026-09-04) added GAP-071 to GAP-074 (replay, reports, and
-  configuration panels; the status strip; the evidence card, commander summary, and
-  theme additions; the usability test rounds) and raised D-17 (docking and
-  multi-window), resolved the same day.
-- Plan 09 (ML model integration, 2026-09-04) added GAP-077 to GAP-080: the
-  `gungnir-ml` crate and the inference-runtime sign-off, model manifests as
-  `gungnir-modelops` baselines, the dataset pipeline, and the first two models.
-- Plan 08 (AI agent integration, 2026-09-04) answered D-14 and kept GAP-044 as the
-  single assistant item; the crate, the providers, the tools, the panel, and the
-  evaluation harness are all inside it.
-- Plan 11 (design gap closure, 2026-09-05) reviewed the design gaps and applied four
-  corrections: GAP-052 is retyped Mission because nothing is designed; the CAP-6.1
-  coverage row is refreshed now that D-02 is decided; GAP-084 is filed for key custody
-  and GAP-060 narrowed to ciphers; GAP-026 is cross-listed on CAP-5.6.
-- Plan 11 also closed the design gaps themselves: twenty-two design notes in
- `../../design/` name a component, its types, its edges, its behaviour, and its
- verification row for each. Twenty-three gaps are retyped Mission to Technical
- because they are now designed and awaiting implementation, and twenty-two
- capabilities reach full design coverage. The notes are first drafts awaiting
- the owner and the reviewers.
-- D-18 (2026-09-05) signed off the API transport stack, the last decision
-  standing between the decided contract and the code, so GAP-041's closing action is now
-  implementation alone. The owner moved GAP-041 from I4 to I2 on 2026-09-05: it carries
-  severity 5 across six mission threads, which is higher than most of I3, and until it
-  exists only the disconnected profile can be exercised and MT-10 cannot run end to end.
-  GAP-050, GAP-063, and GAP-065 inherit both changes through their dependency on it.
-- D-19 (2026-09-05) signed off `egui_tiles` 0.10 as the docking crate, closing the
-  last open §2.9 question. It enters a member manifest under GAP-075.
-- Plan 10 (TOGAF ADM, 2026-09-04) ran the first compliance assessment against the
-  code and added GAP-081 to GAP-083: automating the five mechanical contract checks,
-  proving no `todo!()` is reachable, and making requirement identifiers traceable.
