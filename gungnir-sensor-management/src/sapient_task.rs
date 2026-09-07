@@ -281,7 +281,11 @@ mod ulid {
             *slot = CROCKFORD[(v & 0x1F) as usize];
             v >>= 5;
         }
-        String::from_utf8(chars.to_vec()).expect("Crockford alphabet is ASCII")
+        // Every byte comes from `CROCKFORD`, which is ASCII by construction, so this
+        // can never fail to decode; built through `char::from(u8)` instead of
+        // `String::from_utf8(..).expect(..)` so that invariant does not need an
+        // unreachable panic to hold (CLAUDE.md: no unwrap/expect outside tests and main).
+        chars.iter().map(|&b| char::from(b)).collect()
     }
 
     /// `mission time` (Unix seconds) as an RFC 3339 UTC instant, whole seconds. The
