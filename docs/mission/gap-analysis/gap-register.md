@@ -102,6 +102,7 @@ drafting agent's proposals for the owner and the engineering reviewer to confirm
 | GAP-090 | The friendly set is only the friendlies a sensor detected | Technical | CAP-3.8, CAP-4.5 | 4 | 3 | M | 12 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-091 | No exchange bearer for a participant that holds no machine identity | Technical | CAP-7.4, CAP-1.6 | 4 | 5 | L | 20 | I3 | Services engineer | Open |
 | GAP-092 | The journal budget's debug cost was attributed to runner I/O; it is the encode | Technical | CAP-5.10 | 2 | 10 | S | 20 | I2 | Services engineer | Closed |
+| GAP-093 | Gate 6 never saves a baseline, so it compares nothing and cannot fail | Technical | CAP-5.10 | 3 | 10 | S | 30 | I2 | Services engineer | Closed |
 
 Counts: 91 gaps, 3 mission, 88 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
@@ -647,6 +648,19 @@ Counts: 91 gaps, 3 mission, 88 technical; 1 already covered by a plan in `../../
 - Target: I2. Owner: Services engineer. Status: Closed.
 - Reference: `../../performance-budgets.md`.
 - Depends on: GAP-085.
+
+**GAP-093 Gate 6 never saves a baseline, so it compares nothing and cannot fail**
+
+- Type: Technical.
+- Capability: CAP-5.10 Performance budgets.
+- Description: The three faults fixed on 2026-09-07 left the workflow able to run, and it does. It still cannot compare anything. `bench-regression.yml` triggers on `pull_request` alone, while the branch that writes the baseline and the `actions/cache/save` step that preserves it are both guarded on `github.ref == 'refs/heads/main'`. In a `pull_request` event `github.ref` is `refs/pull/<n>/merge`, so **neither guard has ever been true and `--save-baseline main` has never executed**. The cache the restore step reads is therefore always empty, `--baseline-lenient` skips every comparison, and the threshold step reports zero compared and exits 0.
+- Evidence: run 34124967440, the first green Gate 6 in this repository, printing "compared 0 benchmark(s); 12 had no baseline to compare against"; `gh run list --workflow bench-regression.yml --branch main` returning no runs at all, including for the merge of pull request 1.
+- Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
+- Impact: **This is the same defect as the glob that matched nothing, wearing a different hat.** That one was fixed on the grounds that a gate reporting success while comparing zero benchmarks is worse than one that fails noisily; the trigger reproduces exactly that outcome one layer out. Gate 6 is now green on every pull request, will stay green against a regression of any size, and looks like working regression cover. Nothing in the comparison logic is wrong -- it is never given anything to compare.
+- Closing action: **Closed 2026-09-07.** `push: branches: [main]` added, which is the whole of the fix: it makes the main half of the existing branch reachable and lets the save step run. Two adjustments came with it. The save guard gained `github.event_name == 'push'`, because `github.ref` on its own would also match a `pull_request` targeting main on some event shapes. And the cache key became `criterion-baseline-main-${{ github.sha }}` with a `criterion-baseline-main-` restore prefix, because **a cache key is immutable**: one fixed key would have accepted the first save and silently discarded every later one, freezing the baseline at the day it landed -- a slower version of the same "looks green, means nothing" failure. The first push to main after this merges writes the first baseline; the pull request after that is the first one this gate can actually fail.
+- Target: I2. Owner: Services engineer. Status: Closed.
+- Reference: `../../../.github/workflows/bench-regression.yml`; `../../../benches/README.md`.
+- Depends on: GAP-061.
 
 **GAP-042 Warning function**
 
