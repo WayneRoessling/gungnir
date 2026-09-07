@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-allocation"
 version.workspace = true
@@ -19,7 +23,7 @@ workspace = true
 nalgebra.workspace = true
 thiserror.workspace = true
 serde.workspace = true
-gungnir-core = { path = "../gungnir-core" }
+gungnir-core = { path = "../gungnir-core", version = "0.1.0" }
 
 [dev-dependencies]
 # The oracle fixture for the §1 allocation row is JSON, read only by the differential
@@ -27,4 +31,4 @@ gungnir-core = { path = "../gungnir-core" }
 serde.workspace = true
 serde_json.workspace = true
 proptest.workspace = true
-gungnir-testkit = { path = "../gungnir-testkit" }
+gungnir-testkit = { path = "../gungnir-testkit", version = "0.1.0" }

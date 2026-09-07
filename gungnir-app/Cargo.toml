@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-app"
 version.workspace = true
@@ -15,15 +19,15 @@ nalgebra.workspace = true
 serde_json.workspace = true
 # Dev-only: the tick harness and the budget tests are fed from generated scenario
 # output at realistic scale, as benches/README.md requires. No runtime edge.
-gungnir-scenario = { path = "../gungnir-scenario" }
+gungnir-scenario = { path = "../gungnir-scenario", version = "0.1.0" }
 # Dev-only: the end-to-end failover test (GAP-050, the cross-layer reconciliation row)
 # runs a real node transport in the test process. The runtime edge stays through
 # gungnir-remote, which is the only crate the desktop speaks to a node through.
-gungnir-api = { path = "../gungnir-api" }
+gungnir-api = { path = "../gungnir-api", version = "0.1.0" }
 # The headless render probe, so the dock tree and the panels in it can be tested for
 # what they actually draw rather than for the views they were handed. Test-only: the
 # feature is off in an ordinary build.
-gungnir-ui = { path = "../gungnir-ui", features = ["harness"] }
+gungnir-ui = { path = "../gungnir-ui", version = "0.1.0", features = ["harness"] }
 
 [dependencies]
 eframe.workspace = true
@@ -41,46 +45,46 @@ sha2.workspace = true
 # GAP-023: the loader thread's channels are crossbeam's, held while a load is in flight.
 crossbeam-channel.workspace = true
 
-gungnir-tracking-service = { path = "../gungnir-tracking-service" }
-gungnir-intercept-service = { path = "../gungnir-intercept-service" }
-gungnir-remote = { path = "../gungnir-remote" }
+gungnir-tracking-service = { path = "../gungnir-tracking-service", version = "0.1.0" }
+gungnir-intercept-service = { path = "../gungnir-intercept-service", version = "0.1.0" }
+gungnir-remote = { path = "../gungnir-remote", version = "0.1.0" }
 # GAP-050: the reconciliation after an outage runs `gungnir_resilience::reconcile` on the
 # desktop, over its own journal and the node's history. `ARCHITECTURE.md` §7.1 draws
 # `gungnir-app ──► everything above it`, and this is the first dependent the crate has
 # had (docs/design/dependency-edges.md, edge (j)).
-gungnir-resilience = { path = "../gungnir-resilience" }
+gungnir-resilience = { path = "../gungnir-resilience", version = "0.1.0" }
 # GAP-010: cooperative reports become identification evidence on the desktop, and PN-04
 # shows what the engine holds and concludes. `ARCHITECTURE.md` §7.1 draws
 # `gungnir-app ──► everything above it`; the crate had no dependent before this.
-gungnir-identification = { path = "../gungnir-identification" }
+gungnir-identification = { path = "../gungnir-identification", version = "0.1.0" }
 # GAP-019, GAP-025: the identity resolver is constructed on the desktop, folded from the
 # retained sessions, and DN-19's order of battle is assembled through it. Same drawn
 # edge; the crate's only dependent before this was `gungnir-reporting`.
-gungnir-identity = { path = "../gungnir-identity" }
-gungnir-data = { path = "../gungnir-data" }
-gungnir-data-fusion = { path = "../gungnir-data-fusion" }
-gungnir-render = { path = "../gungnir-render" }
-gungnir-viewport3d = { path = "../gungnir-viewport3d" }
-gungnir-ui = { path = "../gungnir-ui" }
+gungnir-identity = { path = "../gungnir-identity", version = "0.1.0" }
+gungnir-data = { path = "../gungnir-data", version = "0.1.0" }
+gungnir-data-fusion = { path = "../gungnir-data-fusion", version = "0.1.0" }
+gungnir-render = { path = "../gungnir-render", version = "0.1.0" }
+gungnir-viewport3d = { path = "../gungnir-viewport3d", version = "0.1.0" }
+gungnir-ui = { path = "../gungnir-ui", version = "0.1.0" }
 
 # Productization layer (docs/gungnir-capabilities.md §5.1 / §7 Increment 1):
 # wired into AppState so it is a local *projection* of durable mission state
 # rather than the system of record itself -- see ARCHITECTURE.md §7.3 and §8.
-gungnir-model = { path = "../gungnir-model" }
-gungnir-config = { path = "../gungnir-config" }
-gungnir-mission = { path = "../gungnir-mission" }
-gungnir-eventing = { path = "../gungnir-eventing" }
-gungnir-store = { path = "../gungnir-store" }
-gungnir-time = { path = "../gungnir-time" }
-gungnir-ingest = { path = "../gungnir-ingest" }
-gungnir-observability = { path = "../gungnir-observability" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }
+gungnir-config = { path = "../gungnir-config", version = "0.1.0" }
+gungnir-mission = { path = "../gungnir-mission", version = "0.1.0" }
+gungnir-eventing = { path = "../gungnir-eventing", version = "0.1.0" }
+gungnir-store = { path = "../gungnir-store", version = "0.1.0" }
+gungnir-time = { path = "../gungnir-time", version = "0.1.0" }
+gungnir-ingest = { path = "../gungnir-ingest", version = "0.1.0" }
+gungnir-observability = { path = "../gungnir-observability", version = "0.1.0" }
 # GAP-055: the desktop draws the panels of the operator's role workspace rather than a
 # fixed side panel. `gungnir-workflow` owns `WorkspaceLayout::for_role` and is tested
 # against the plan 06 layout table; `gungnir-security` owns `Role`. Both edges are
 # downward from the binary, which `ARCHITECTURE.md` already describes as depending on
 # everything above it, and are drawn in its edge table in the same change.
-gungnir-workflow = { path = "../gungnir-workflow" }
-gungnir-security = { path = "../gungnir-security" }
+gungnir-workflow = { path = "../gungnir-workflow", version = "0.1.0" }
+gungnir-security = { path = "../gungnir-security", version = "0.1.0" }
 
 # GAP-038: the approval gate between a proposed plan and anything acting on it.
 # `ARCHITECTURE.md` §7.3 listed these as "not yet called from the tick"; `src/decisions.rs`
@@ -90,9 +94,9 @@ gungnir-security = { path = "../gungnir-security" }
 # already describes as depending on everything above it, and all three are drawn in that
 # table in the same change. The binary constructs them and reads their verdicts; it
 # implements no policy of its own, which is what keeps contract C-01 checkable in one place.
-gungnir-policy = { path = "../gungnir-policy" }
-gungnir-command = { path = "../gungnir-command" }
-gungnir-geo = { path = "../gungnir-geo" }
+gungnir-policy = { path = "../gungnir-policy", version = "0.1.0" }
+gungnir-command = { path = "../gungnir-command", version = "0.1.0" }
+gungnir-geo = { path = "../gungnir-geo", version = "0.1.0" }
 
 # GAP-071: PN-12 replays the journal, PN-13 folds it into a report. Both read the
 # journal this desktop already owns, so neither adds a new source of truth; they add a
@@ -107,30 +111,30 @@ egui_tiles.workspace = true
 
 # GAP-003: the desktop constructs the sensor registry from the baseline, shows it in
 # PN-10, and derives coverage from the modes in it rather than from configured ranges.
-gungnir-sensor-management = { path = "../gungnir-sensor-management" }
+gungnir-sensor-management = { path = "../gungnir-sensor-management", version = "0.1.0" }
 
 # GAP-006: the desktop reports coverage gaps along the declared approaches, which is
 # `gungnir_analytics::combined_coverage`. Downward from the binary, and the alternative
 # was reimplementing the sampling and grouping here -- which is the duplication DN-12
 # put the function in one place to avoid.
-gungnir-analytics = { path = "../gungnir-analytics" }
+gungnir-analytics = { path = "../gungnir-analytics", version = "0.1.0" }
 # GAP-026: the desktop scores tracks against the defended-asset list. The edge is
 # already drawn in ARCHITECTURE.md §7.1 -- `gungnir-app` reaches the productization
 # layer it hosts -- and nothing had constructed an assessor.
-gungnir-assessment = { path = "../gungnir-assessment" }
+gungnir-assessment = { path = "../gungnir-assessment", version = "0.1.0" }
 
 # GAP-086 / DN-24: the desktop constructs the algorithm-baseline registry from the
 # configuration and journals what is in force. `gungnir-modelops` had **no dependents at
 # all** before this. Downward from the binary, which ARCHITECTURE.md §7.1 already describes
 # as depending on everything above it, and drawn in its edge table in the same change.
-gungnir-modelops = { path = "../gungnir-modelops" }
+gungnir-modelops = { path = "../gungnir-modelops", version = "0.1.0" }
 # GAP-037 / DN-13: the desktop runs the sensor re-tasking planner against the coverage
 # inputs PN-11 already computes. `gungnir-decision` had **no dependents at all** before
 # this. Downward from the binary and drawn in ARCHITECTURE.md §7.1 in the same change.
-gungnir-decision = { path = "../gungnir-decision" }
+gungnir-decision = { path = "../gungnir-decision", version = "0.1.0" }
 
-gungnir-replay = { path = "../gungnir-replay" }
-gungnir-reporting = { path = "../gungnir-reporting" }
+gungnir-replay = { path = "../gungnir-replay", version = "0.1.0" }
+gungnir-reporting = { path = "../gungnir-reporting", version = "0.1.0" }
 
 # The library target carries `state` and `update`; the binary is eframe bootstrap
 # only. Splitting them is what lets the tick harness in benches/ and the budget

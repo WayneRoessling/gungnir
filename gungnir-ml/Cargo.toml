@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-ml"
 version.workspace = true
@@ -25,7 +29,7 @@ thiserror.workspace = true
 # The dataset's content hash (docs/ml/data-pipeline.md §5): a model card names the
 # dataset it was trained on by this.
 sha2.workspace = true
-gungnir-model = { path = "../gungnir-model" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }
 # The dataset's Arrow schema is a catalogue entry, so a dataset and the wire format share
 # one definition (docs/ml/data-pipeline.md §2). Edge (q) in ARCHITECTURE.md §7.1.
-gungnir-interop = { path = "../gungnir-interop" }
+gungnir-interop = { path = "../gungnir-interop", version = "0.1.0" }

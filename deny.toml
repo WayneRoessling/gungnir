@@ -1,24 +1,74 @@
 # cargo-deny configuration: the software-assurance half of release governance
-# (docs/release-governance.md). Run `cargo deny check` locally; release.yml runs it.
+# (docs/release-governance.md). Run `cargo deny check` locally; ci.yml runs the
+# licenses, bans and sources checks on every pull request, and release.yml runs all
+# four, advisories included, on every tag.
 
 [graph]
 all-features = false
+# Only the two targets a release builds (release.yml; ARCHITECTURE.md §8). Without this
+# cargo-deny evaluates every target rustc knows, which drags in slices of the graph no
+# binary ships: at the pinned versions the only one that mattered was
+# `webpki-root-certs` (CDLA-Permissive-2.0), which `rustls-platform-verifier` takes on
+# wasm32 alone. It is not on the allow-list and does not need to be; nothing here
+# compiles for wasm32.
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+]
 
 [advisories]
 version = 2
 yanked = "deny"
-
-# Nothing is ignored.
+# Unmaintained advisories carry no known defect; they say who will not be fixing one. An
+# entry here is a dated decision, with its reason, of one of two kinds: the crate never
+# reaches a shipped binary, so the response-time objective in
+# docs/release-governance.md is not engaged; or it does, but it touches no untrusted
+# input and has no upstream path, so the objective is engaged only when a defect is
+# actually published, at which point the entry comes out and the crate is replaced. The
+# history of each is against D-34 in docs/mission/gap-analysis/decisions-needed.md.
 #
-# Eight entries stood here between 2026-09-07 and this change and have been withdrawn
-# with the approach that produced them (GAP-094). Two of them accepted the quick-xml
-# advisories on the strength of a runtime guard in `gungnir-data`, and the justification
-# was **wrong**: it said quick-xml entered the graph through `vtkio` alone, which was
-# verified on a Windows host and is false on Linux, where `zbus_xml` brings 0.30.0 in
-# through the accessibility stack -- a path no guard in `gungnir-data` touches. An
-# acceptance resting on a false claim is a mute, which is the thing the entries
-# themselves warned against.
-ignore = []
+# Eight earlier entries (GAP-094, withdrawn on 2026-09-07 before this landed) rested on
+# a graph claim checked on one host, which Linux contradicted. Each entry below names
+# the path it covers, and `[graph] targets` above confines the check to the two release
+# targets, so the claim is about the graph cargo-deny actually evaluates.
+ignore = [
+    # ansi_term reaches only rs1090, an ADS-B test oracle in gungnir-interop's
+    # dev-dependencies (section 2.9). `cargo tree -e normal,build` names no path to it.
+    { id = "RUSTSEC-2021-0139", reason = "dev-only: rs1090 oracle, never linked into a binary (2026-09-07)" },
+    # paste is a proc-macro beneath accesskit_windows and nalgebra's simba. It runs in the
+    # compiler and contributes no code to the binary; the archived repository is the
+    # whole of the advisory.
+    { id = "RUSTSEC-2024-0436", reason = "proc-macro only, compile-time; no code of it is shipped (2026-09-07)" },
+    # quick-xml 0.30 under zbus_xml, under accesskit_unix, the Linux AT-SPI accessibility
+    # bridge egui-winit 0.29 uses. It exists only in gungnir-app compiled for Linux, which
+    # no release builds (release.yml ships gungnir-app for Windows and gungnir-node for
+    # Linux, and the node holds no eframe); cargo-deny still evaluates that combination
+    # because [graph] targets applies to every crate. Turning eframe's `accesskit`
+    # feature off would silence this by removing the Windows bridge too, which is a real
+    # accessibility loss on the shipped desktop, so the advisories are ignored instead.
+    # These ignores are by advisory id, which is all cargo-deny offers for a
+    # vulnerability, so they would also cover a *new* pre-0.41 quick-xml on a shipped
+    # target: cargo-deny prints which crates each ignore matched, and anything other
+    # than quick-xml 0.30.0 under accesskit_unix there means these entries must go. The
+    # vtkio copy (0.22) that these ids also covered was removed the same day by
+    # compiling vtkio's XML reader out (workspace Cargo.toml, vtkio row).
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.30 under accesskit_unix only: gungnir-app on Linux, which no release builds (2026-09-07)" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.30 under accesskit_unix only: gungnir-app on Linux, which no release builds (2026-09-07)" },
+    # cgmath is three-d's own vector and matrix type and ships in gungnir-app. It is pure
+    # arithmetic on values this program computes; it parses nothing and reads no input.
+    # There is no upstream path: it is not a feature, and three-d 0.19 depends on it
+    # too. It leaves when three-d drops it or three-d is replaced (ARCHITECTURE.md §9).
+    # Decided by the owner 2026-09-07.
+    { id = "RUSTSEC-2026-0196", reason = "cgmath: pure math on trusted data, no untrusted input, no upstream path while three-d keeps it (owner, 2026-09-07)" },
+    # ttf-parser sits under ab_glyph, under epaint, and ships in gungnir-app. It parses
+    # font files, which would matter if any came from outside; none do. The only fonts
+    # the program ever hands it are the four egui bundles by `include_bytes!`
+    # (epaint_default_fonts; see the [[licenses.exceptions]] entry), and no crate here
+    # builds a `FontDefinitions` or loads a font from disk. No upstream path until
+    # ab_glyph moves to ttf-parser's successor and egui takes that release; loading a
+    # user-supplied font before then would need this entry removed first.
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser: parses only the four fonts embedded at build time, never a file from outside; no upstream path until ab_glyph moves (owner, 2026-09-07)" },
+]
 
 # The workspace is AGPL-3.0-or-later, so every entry below must be one-way compatible
 # *into* AGPL-3.0. All of them are: the permissive licenses unconditionally, Apache-2.0
@@ -32,6 +82,10 @@ ignore = []
 # ISC` and `aws-lc-sys` 0.45.0 no longer carries an OpenSSL component, and no crate in
 # the resolved graph declares that license. Leaving the entry in place would have let a
 # future upgrade walk a GPL-incompatible license in silently.
+#
+# `Unicode-DFS-2016` stays on the list although no crate in the resolved graph declares
+# it any more (the ICU crates moved to `Unicode-3.0`); it is the license the FSF lists
+# as GPL-compatible and an older pin could bring it back.
 [licenses]
 version = 2
 allow = [
@@ -50,8 +104,246 @@ allow = [
 ]
 confidence-threshold = 0.9
 
+# The one non-code exception in the shipped graph, found 2026-09-07 by the licensing
+# review, when this gate was run for the first time and failed on it.
+#
+# `epaint_default_fonts` is egui's bundled font set, embedded into `gungnir-app` by
+# `include_bytes!` through egui 0.29's default `default_fonts` feature. Its code is
+# `MIT OR Apache-2.0`; the font files are not. Ubuntu-Light.ttf is under the Ubuntu Font
+# Licence 1.0 (no SPDX identifier, hence `LicenseRef-UFL-1.0`) and NotoEmoji-Regular.ttf
+# under the SIL Open Font License 1.1; Hack-Regular.ttf and emoji-icon-font.ttf are MIT.
+#
+# Neither font license is on the list above and neither should be: the FSF classes the
+# OFL as GPL-incompatible *for software*, and a Rust crate under it could not be linked
+# here. Fonts are a different case, and the licenses say so themselves. OFL section 1
+# permits the font to be "bundled, embedded, redistributed and/or sold with any
+# software", and UFL 1.0 carries the same clause; a font embedded as data does not make
+# the program a derivative of the font, so the AGPL binary and the fonts coexist the
+# way NOTICE describes the GPL-2.0 fixtures coexisting with the source: as an
+# aggregate. Both licenses do require that the font's copyright notice and license
+# text travel with it, which is one of the reasons release.yml generates
+# THIRD-PARTY-NOTICES.md with cargo-about and ships it beside the binaries.
+#
+# The exception is scoped to this one crate on purpose. A *code* crate that showed up
+# under OFL-1.1 must still fail this check.
+[[licenses.exceptions]]
+crate = "epaint_default_fonts"
+allow = ["OFL-1.1", "LicenseRef-UFL-1.0"]
+
+# The workspace's own crates are AGPL-3.0-or-later, which is deliberately *not* on the
+# allow-list: an AGPL or GPL crate from outside cannot be taken, because CLA.md section 4
+# needs every dependency to be relicensable for the commercial edition, and a global
+# `AGPL-3.0-or-later` entry would let one through silently. cargo-deny checks workspace
+# members against the same list, so each member is admitted here by name. Exceptions
+# take no glob, so the list is explicit; a new member crate fails this check until it is
+# added, which is the intended way to notice it. gungnir-fuzz is outside the workspace
+# graph and is not listed.
+[[licenses.exceptions]]
+crate = "gungnir-allocation"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-analytics"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-api"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-app"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-assessment"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-association"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-collab"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-command"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-config"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-coord"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-core"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-data"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-data-fusion"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-decision"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-eventing"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-filters"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-fusion-async"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-geo"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-identification"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-identity"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-ingest"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-intercept-service"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-interop"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-metrics"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-mission"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-ml"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-model"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-modelops"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-node"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-observability"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-oracle"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-policy"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-remote"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-render"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-replay"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-reporting"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-resilience"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-rfs"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-scenario"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-security"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-sensor-management"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-store"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-testkit"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-time"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-track"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-track-fusion"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-tracking-service"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-ui"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-viewport3d"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "gungnir-workflow"
+allow = ["AGPL-3.0-or-later"]
+
 [bans]
 multiple-versions = "warn"
+# `version = "*"` on a registry crate is refused. A path dependency without a version is
+# a wildcard too, which is why every intra-workspace edge carries `version = "0.1.0"`
+# beside its `path`: crates.io requires the same, and docs/gungnir-workspace-structure.md
+# records that publication is no longer blocked by the licence.
 wildcards = "deny"
 highlight = "all"
 

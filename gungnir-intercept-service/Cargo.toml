@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-intercept-service"
 version.workspace = true
@@ -20,7 +24,7 @@ nalgebra.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
-gungnir-core = { path = "../gungnir-core" }
-gungnir-coord = { path = "../gungnir-coord" }
-gungnir-allocation = { path = "../gungnir-allocation" }
-gungnir-model = { path = "../gungnir-model" }
+gungnir-core = { path = "../gungnir-core", version = "0.1.0" }
+gungnir-coord = { path = "../gungnir-coord", version = "0.1.0" }
+gungnir-allocation = { path = "../gungnir-allocation", version = "0.1.0" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }

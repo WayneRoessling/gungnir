@@ -6,12 +6,19 @@
 //! derive-scalar). `vtk-pure-rs` adopted only if its filter pipeline is needed
 //! beyond what filters.rs reasonably covers -- see source doc §1.4.
 //!
-//! **What loads (2026-09-06, GAP-023)**: legacy and XML files whose data set is
+//! **What loads (2026-09-06, GAP-023)**: legacy `.vtk` files whose data set is
 //! `POLYDATA`, read through `vtkio::Vtk::import`. Polygons of any arity are fanned into
 //! triangles; the first scalar point attribute becomes the scalar field. An
 //! `UNSTRUCTURED_GRID`, image, rectilinear or structured data set is refused by name
 //! rather than read as an empty mesh, because an empty mesh is a claim that the file
 //! held nothing.
+//!
+//! **XML VTK (`.vtp`, `.vtu`, ...) is refused by name since 2026-09-07.** vtkio's XML
+//! reader is compiled out (the workspace `Cargo.toml` vtkio row says why: its quick-xml
+//! 0.22 carries two open RUSTSEC advisories and no vtkio release is on a patched line),
+//! and a file with an XML extension gets an error that names the extension and the
+//! reason, not "unknown format". The `VertexNumbers::XML` arm below stays because the
+//! model type is not feature-gated; it is unreachable until the reader returns.
 
 pub mod filters;
 
@@ -119,6 +126,15 @@ fn triangulate(polys: &VertexNumbers, vertex_count: usize) -> Result<Vec<u32>, D
 pub fn load_vtk(path: &Path) -> Result<MeshData, DataError> {
     let vtk = vtkio::Vtk::import(path).map_err(|e| match e {
         vtkio::Error::IO(io) => DataError::Io(io.to_string()),
+        // With vtkio's `xml` feature off this is every extension but `.vtk`, and a
+        // missing extension. Name the cause: an operator handed a `.vtp` should learn
+        // that the XML reader is out, not that the file is unrecognised.
+        vtkio::Error::UnknownFileExtension(_) => parse(format!(
+            "{}: only legacy .vtk is read; the XML VTK reader (.vtp, .vtu, ...) is compiled \
+             out until vtkio moves off quick-xml 0.22 (RUSTSEC-2026-0194/0195; see the \
+             workspace Cargo.toml)",
+            path.display()
+        )),
         other => parse(other),
     })?;
     let DataSet::PolyData { pieces, .. } = vtk.data else {

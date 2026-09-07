@@ -23,8 +23,8 @@
 //! code where it was meant duplicating about 150 lines and letting the copies drift.
 //!
 //! `gungnir-remote` is where it went because it is the only crate **both binaries already
-//! depend on at runtime** that already carries `rustls`, `tokio-rustls` and
-//! `rustls-pemfile`, and because it already owns [`crate::LinkTls`] -- the type that
+//! depend on at runtime** that already carries `rustls` (PEM reading included) and
+//! `tokio-rustls`, and because it already owns [`crate::LinkTls`] -- the type that
 //! answers "who is this host". `gungnir-api` would have been a better fit still, but the
 //! desktop holds it as a dev-dependency only and `ARCHITECTURE.md` refuses that as a
 //! production edge.

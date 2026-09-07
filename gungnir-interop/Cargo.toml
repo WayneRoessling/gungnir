@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-interop"
 version.workspace = true
@@ -23,12 +27,12 @@ thiserror.workspace = true
 # GAP-063: the Arrow representation carries the two non-scalar provenance fields as JSON
 # text; the AIS fixture test reads gpsd's JSON decodes as its oracle (D-32).
 serde_json.workspace = true
-gungnir-model = { path = "../gungnir-model" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }
 
 [dev-dependencies]
 # The conformance suite round-trips envelopes (GAP-063). `gungnir-eventing` depends on
 # the model alone, so this dev-only edge adds no cycle.
-gungnir-eventing = { path = "../gungnir-eventing" }
+gungnir-eventing = { path = "../gungnir-eventing", version = "0.1.0" }
 # GAP-010: the two MIT Mode S decoders the ADS-B codec is gated against, because no
 # ADS-B specification is both free to obtain and permissively licensed
 # (docs/design/external-standards.md §4, docs/agentic-coding-standards.md §2.9).

@@ -27,6 +27,8 @@ pub mod peer;
 use gungnir_intercept_service::{InterceptService, PlanOutcome, PlanView, ResourceView};
 use gungnir_tracking_service::{DetectionView, MissionTime, TrackView, TrackingService};
 use link::NodeLink;
+use rustls::pki_types::pem::{self, PemObject};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteEndpoint {
@@ -156,7 +158,7 @@ impl rustls::client::ResolvesClientCert for IssuedClientCert {
 pub fn client_config(tls: &LinkTls) -> Result<rustls::ClientConfig, String> {
     let mut roots = rustls::RootCertStore::empty();
     for (i, pem) in tls.trust_roots_pem.iter().enumerate() {
-        for cert in rustls_pemfile::certs(&mut pem.as_bytes()) {
+        for cert in CertificateDer::pem_slice_iter(pem.as_bytes()) {
             let cert = cert.map_err(|e| format!("trust root {i} does not parse: {e}"))?;
             roots
                 .add(cert)
@@ -175,12 +177,15 @@ pub fn client_config(tls: &LinkTls) -> Result<rustls::ClientConfig, String> {
     match &tls.identity_pem {
         None => Ok(builder.with_no_client_auth()),
         Some(identity) => {
-            let certs: Vec<_> = rustls_pemfile::certs(&mut identity.as_bytes())
+            let certs: Vec<_> = CertificateDer::pem_slice_iter(identity.as_bytes())
                 .collect::<Result<_, _>>()
                 .map_err(|e| format!("the client certificate does not parse: {e}"))?;
-            let key = rustls_pemfile::private_key(&mut identity.as_bytes())
-                .map_err(|e| format!("the client key does not parse: {e}"))?
-                .ok_or_else(|| "the client identity holds no private key".to_owned())?;
+            // As in `gungnir-api`'s reader, the key's parse error is not forwarded: it can
+            // quote the offending line, and that line is key material.
+            let key = PrivateKeyDer::from_pem_slice(identity.as_bytes()).map_err(|e| match e {
+                pem::Error::NoItemsFound => "the client identity holds no private key".to_owned(),
+                _ => "the client key does not parse".to_owned(),
+            })?;
             builder
                 .with_client_auth_cert(certs, key)
                 .map_err(|e| format!("the client identity is not usable: {e}"))

@@ -4,14 +4,15 @@
 
 //! Mutual TLS for the v2 transport (GAP-060, D-02).
 //!
-//! Crates: `rustls`, `tokio-rustls` and `rustls-pemfile`, signed off under D-18 on
-//! 2026-09-05 and unused until now.
+//! Crates: `rustls` and `tokio-rustls`, signed off under D-18 on 2026-09-05 and unused
+//! until now. PEM is read with `rustls::pki_types::pem`, rustls's own type crate; it
+//! replaced `rustls-pemfile` on 2026-09-07 (RUSTSEC-2025-0134, unmaintained).
 //!
 //! # Which custody model this is
 //!
 //! DN-22 §5 gives three profiles genuinely different answers, and this is the **on-prem**
 //! one: the certificate chain and the private key are PEM files the host provides, and
-//! custody is the file's permissions. That is what §2.9's `rustls-pemfile` row describes
+//! custody is the file's permissions. That is what §2.9's `rustls` row describes
 //! -- "reads them; never holds or logs the key material".
 //!
 //! It is **not** the cloud answer. There, material never leaves a managed service and
@@ -31,6 +32,7 @@
 //! for a command-and-control surface on a defended network.
 
 use crate::ApiError;
+use rustls::pki_types::pem::{self, PemObject};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::WebPkiClientVerifier;
 use rustls::{RootCertStore, ServerConfig};
@@ -186,7 +188,7 @@ pub fn acceptor(paths: &TlsPaths) -> Result<TlsAcceptor, ApiError> {
 fn read_certificates(path: &Path) -> Result<Vec<CertificateDer<'static>>, ApiError> {
     let bytes = std::fs::read(path)
         .map_err(|e| ApiError::Transport(format!("could not read {}: {e}", path.display())))?;
-    rustls_pemfile::certs(&mut bytes.as_slice())
+    CertificateDer::pem_slice_iter(&bytes)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| ApiError::Transport(format!("{} is not valid PEM: {e}", path.display())))
 }
@@ -198,9 +200,14 @@ fn read_certificates(path: &Path) -> Result<Vec<CertificateDer<'static>>, ApiErr
 fn read_private_key(path: &Path) -> Result<PrivateKeyDer<'static>, ApiError> {
     let bytes = std::fs::read(path)
         .map_err(|e| ApiError::Transport(format!("could not read {}: {e}", path.display())))?;
-    rustls_pemfile::private_key(&mut bytes.as_slice())
-        .map_err(|_| ApiError::Transport(format!("{} is not a valid private key", path.display())))?
-        .ok_or_else(|| ApiError::Transport(format!("{} contains no private key", path.display())))
+    // The parse error is deliberately not forwarded: `pem::Error` can quote the line it
+    // failed on, and in a key file that line is key material.
+    PrivateKeyDer::from_pem_slice(&bytes).map_err(|e| match e {
+        pem::Error::NoItemsFound => {
+            ApiError::Transport(format!("{} contains no private key", path.display()))
+        }
+        _ => ApiError::Transport(format!("{} is not a valid private key", path.display())),
+    })
 }
 
 /// Who a connection is, as far as the transport can say (GAP-062, D-02).

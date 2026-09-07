@@ -391,9 +391,8 @@ records what each is *for*; the "Landed" column records where it actually is.
 | `tokio-tungstenite` | The desktop's WebSocket **client**, which axum's `ws` feature does not provide | `gungnir-remote` | 2026-09-05 |
 | `reqwest` (`json`, `rustls`, no default features) | The desktop's HTTP client. The feature is `rustls`, not `rustls-tls`: reqwest renamed it in 0.13 | `gungnir-remote` | 2026-09-05 |
 | `futures-util` (no default features) | The `Sink` and `Stream` traits `tokio-tungstenite`'s socket implements; sending and receiving a frame needs them in scope. **Added 2026-09-05 under GAP-041**, not part of D-18's original list: it was already in the tree beneath `tokio-tungstenite`, and this row is for naming it directly | `gungnir-remote` | 2026-09-05 |
-| `rustls` | TLS, including the client-certificate verification mutual TLS needs, and the client configuration the desktop's event stream is spoken over | `gungnir-api`, `gungnir-node`, `gungnir-remote` | 2026-09-06 (GAP-060, both sides) |
+| `rustls` | TLS, including the client-certificate verification mutual TLS needs, and the client configuration the desktop's event stream is spoken over. Also the PEM reader: `rustls::pki_types::pem` is rustls's own re-exported type crate, and it **reads certificates and keys; never holds or logs the key material** (`gungnir-security` owns custody, DN-22). It replaced `rustls-pemfile` on 2026-09-07 when RUSTSEC-2025-0134 marked that crate unmaintained, which removed a crate from the graph and added none | `gungnir-api`, `gungnir-node`, `gungnir-remote` | 2026-09-06 (GAP-060, both sides); PEM reader swap 2026-09-07 |
 | `tokio-rustls` | rustls over tokio streams: the node's acceptor, and the desktop's connector under `tokio-tungstenite` | `gungnir-api`, `gungnir-remote` | 2026-09-06 (GAP-060, both sides) |
-| `rustls-pemfile` | Reading certificates and keys from PEM. **Reads them; never holds or logs the key material** (`gungnir-security` owns custody, DN-22) | `gungnir-api`, `gungnir-remote` | 2026-09-06 (GAP-060, both sides) |
 | `tower-http` (`trace`, `limit`) | Request tracing and body-size limits on the node's HTTP surface, which is an untrusted-input boundary | `gungnir-node` | Not yet: GAP-060 |
 
 The existing `tokio` pin also gained the **`net`** feature on 2026-09-05, which is what
@@ -698,7 +697,7 @@ Five things are deliberate:
    shared by both oracles would be caught.
 
 **Signed off and not yet in a manifest**, which needs no further approval, only the work:
-`rustls`, `tokio-rustls`, `rustls-pemfile` and `tower-http` (D-18) enter under GAP-060.
+`rustls`, `tokio-rustls`, `rustls-pemfile` (since replaced by `rustls::pki_types::pem`) and `tower-http` (D-18) enter under GAP-060.
 The docking crate left this list on 2026-09-05: `egui_tiles` was signed off as D-19 and
 has its own subsection above.
 

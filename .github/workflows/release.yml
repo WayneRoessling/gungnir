@@ -26,6 +26,11 @@ jobs:
           toolchain: "1.98"
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-deny cargo-audit cargo-cyclonedx --locked
+      # cargo-about's binary is behind its `cli` feature; without it `cargo install` builds
+      # the library alone and the generate step below finds no command.
+      # Pinned to the version the notices template was verified against (about.toml
+      # records the cargo-about defect the template works around).
+      - run: cargo install cargo-about --version 0.9.2 --locked --features cli
       - name: License and advisory policy (deny.toml)
         run: cargo deny check
       - name: Advisory database
@@ -36,6 +41,19 @@ jobs:
         with:
           name: sbom
           path: "**/*.cdx.json"
+      # The permissive licenses on the allow-list, and the font licenses admitted for
+      # epaint_default_fonts, all require their notices to accompany a binary. The SBOM
+      # names identifiers, not notices; this file carries the texts (about.toml).
+      - name: Third-party notices (about.toml)
+        run: cargo about generate deploy/third-party-notices.hbs -o THIRD-PARTY-NOTICES.md --fail
+      - uses: actions/upload-artifact@v4
+        with:
+          name: licenses
+          path: |
+            LICENSE
+            LICENSE-ADDITIONAL-TERMS.md
+            NOTICE
+            THIRD-PARTY-NOTICES.md
 
   build:
     name: release build (${{ matrix.target }})

@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-node"
 version.workspace = true
@@ -13,25 +17,25 @@ tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 thiserror.workspace = true
-gungnir-model = { path = "../gungnir-model" }
-gungnir-config = { path = "../gungnir-config" }
-gungnir-mission = { path = "../gungnir-mission" }
-gungnir-eventing = { path = "../gungnir-eventing" }
-gungnir-store = { path = "../gungnir-store" }
-gungnir-time = { path = "../gungnir-time" }
-gungnir-ingest = { path = "../gungnir-ingest" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }
+gungnir-config = { path = "../gungnir-config", version = "0.1.0" }
+gungnir-mission = { path = "../gungnir-mission", version = "0.1.0" }
+gungnir-eventing = { path = "../gungnir-eventing", version = "0.1.0" }
+gungnir-store = { path = "../gungnir-store", version = "0.1.0" }
+gungnir-time = { path = "../gungnir-time", version = "0.1.0" }
+gungnir-ingest = { path = "../gungnir-ingest", version = "0.1.0" }
 # GAP-003: the node holds the same registry the desktop does, so the sensors a service
 # node knows about are the baseline's rather than implicit in the ingest allow-list.
-gungnir-sensor-management = { path = "../gungnir-sensor-management" }
-gungnir-tracking-service = { path = "../gungnir-tracking-service" }
-gungnir-intercept-service = { path = "../gungnir-intercept-service" }
-gungnir-api = { path = "../gungnir-api" }
+gungnir-sensor-management = { path = "../gungnir-sensor-management", version = "0.1.0" }
+gungnir-tracking-service = { path = "../gungnir-tracking-service", version = "0.1.0" }
+gungnir-intercept-service = { path = "../gungnir-intercept-service", version = "0.1.0" }
+gungnir-api = { path = "../gungnir-api", version = "0.1.0" }
 # GAP-009 (DN-16), edge (p) in ARCHITECTURE.md §7.1: a peer link is a client link to a
 # partner's node, and the client lives in gungnir-remote. The node binds one per peer
 # in the baseline whose endpoint is a node, as a machine under its own certificate.
-gungnir-remote = { path = "../gungnir-remote" }
+gungnir-remote = { path = "../gungnir-remote", version = "0.1.0" }
 # GAP-057: the node authenticates API callers against its own account store.
-gungnir-security = { path = "../gungnir-security" }
+gungnir-security = { path = "../gungnir-security", version = "0.1.0" }
 # GAP-057: `gungnir-node account add` reads and writes the account file, which is a JSON
 # array of {operator, role, phc} records (DN-23 §5). Dev-only until 2026-09-07, when the
 # provisioning path made it a runtime need. Not an ARCHITECTURE §7 edge -- serde_json is
@@ -42,25 +46,25 @@ rustls.workspace = true
 # same as the desktop. It is the system of record for every desktop connected to it, so
 # "what was this session running" has to be answerable from its journal. Downward from the
 # binary and drawn in ARCHITECTURE.md §7.1 in the same change.
-gungnir-modelops = { path = "../gungnir-modelops" }
+gungnir-modelops = { path = "../gungnir-modelops", version = "0.1.0" }
 # Edge (s), accepted by the owner as engineering reviewer 2026-09-06 (GAP-019): the node
 # resolves cross-session entity identity for the RECORD. Its journal is the authoritative
 # account of a mission (ARCHITECTURE.md §8.1), and a deployment whose desktops were not
 # connected for part of a watch has nowhere else the correlation could be made. It could
 # not be made here before GAP-011 closed, because the resolver needs tracks.
-gungnir-identity = { path = "../gungnir-identity" }
+gungnir-identity = { path = "../gungnir-identity", version = "0.1.0" }
 # GAP-028, the node half: the headless profile runs the policy chain on every fresh plan
 # and publishes the verdict, so a desktop reading this node sees the same denial it would
 # compute. `gungnir-geo` supplies the geofence service the chain reads -- the case
 # ARCHITECTURE.md §8 named ("a node needs gungnir-geo only if geofence policy is evaluated
 # server-side"). No queue: a decision is a person's act and nobody signs in to a node
 # (DN-23 §4, GAP-057). Edges (k) and (l) in ARCHITECTURE.md §7.1.
-gungnir-policy = { path = "../gungnir-policy" }
-gungnir-geo = { path = "../gungnir-geo" }
+gungnir-policy = { path = "../gungnir-policy", version = "0.1.0" }
+gungnir-geo = { path = "../gungnir-geo", version = "0.1.0" }
 # ARCHITECTURE.md §7.1 edge (g), GAP-006: the node computes the coverage report it
 # serves on `GET /v2/coverage`. There is nobody else to compute it.
-gungnir-analytics = { path = "../gungnir-analytics" }
-gungnir-observability = { path = "../gungnir-observability" }
+gungnir-analytics = { path = "../gungnir-analytics", version = "0.1.0" }
+gungnir-observability = { path = "../gungnir-observability", version = "0.1.0" }
 
 [[bin]]
 name = "gungnir-node"
@@ -79,7 +83,7 @@ criterion.workspace = true
 rand.workspace = true
 # Dev-only: the load harness is fed from generated scenario output at realistic rates,
 # as benches/README.md requires. No runtime edge (GAP-056).
-gungnir-scenario = { path = "../gungnir-scenario" }
+gungnir-scenario = { path = "../gungnir-scenario", version = "0.1.0" }
 
 [[bench]]
 name = "node_load"

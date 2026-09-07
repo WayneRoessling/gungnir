@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-rfs"
 version.workspace = true
@@ -20,7 +24,7 @@ nalgebra.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
-gungnir-track = { path = "../gungnir-track" }
+gungnir-track = { path = "../gungnir-track", version = "0.1.0" }
 
 [dev-dependencies]
 proptest.workspace = true
@@ -28,7 +32,7 @@ proptest.workspace = true
 # already-approved workspace dependency (agentic-coding-standards.md 2.9), dev-only.
 serde_json.workspace = true
 criterion.workspace = true
-gungnir-testkit = { path = "../gungnir-testkit" }
+gungnir-testkit = { path = "../gungnir-testkit", version = "0.1.0" }
 
 [[bench]]
 name = "phd_update_dense_swarm"

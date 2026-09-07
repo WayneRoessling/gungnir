@@ -716,9 +716,9 @@ from it, and `rust-toolchain.toml` pins the Rust 1.98 toolchain. The set as pinn
 | `thiserror` | 1 | Error enums in every crate | |
 | `crossbeam-channel` | 0.5 | Sync channels across the render boundary and the event bus | |
 | `eframe`, `egui` | 0.29 | Window shell and 2D panels | Runs with `Renderer::Glow`; the optional `wgpu` feature is off |
-| `three-d` | 0.18 | 3D viewport | Renders through OpenGL via `glow`, not through `wgpu` |
+| `three-d` | 0.18 | 3D viewport | Renders through OpenGL via `glow`, not through `wgpu`. Taken without its default `window` feature since 2026-09-07: the viewport draws into eframe's glow context and never opens a three-d window, and the feature carried a second `winit` (0.28) with `glutin` and `instant` (RUSTSEC-2024-0384). Its `cgmath` (RUSTSEC-2026-0196, unmaintained) is not a feature and is still a dependency of three-d 0.19, so it stays until three-d drops it or is replaced; 0.19 itself is ruled out by its move to `glow` 0.17 and `egui` 0.34, since the shared context needs eframe 0.29's `glow` 0.14 |
 | `wgpu` | 22 | Compute device in `gungnir-render`, used by `gungnir-data-fusion` | The same line eframe 0.29's optional wgpu feature uses, so enabling it never yields two versions |
-| `gltf`, `vtkio`, `las` | 1, 0.6, 0.9 | Asset, VTK, and LAS/LAZ I/O | `vtkio` pulls `nom` 3 and `quick-xml` 0.22, which rustc flags as future-incompatible; upgrade `vtkio` when a release drops them |
+| `gltf`, `vtkio`, `las` | 1, 0.6, 0.9 | Asset, VTK, and LAS/LAZ I/O | `vtkio` is taken without its default `xml` and `compression` features since 2026-09-07: its `quick-xml` 0.22 carries RUSTSEC-2026-0194/0195 and its `lz4_flex` 0.7 RUSTSEC-2026-0041, and no vtkio release is on a patched line (the 0.7.0 candidates pin quick-xml 0.36; the fix is 0.41). Only legacy `.vtk` loads; `gungnir-data` refuses an XML extension by name. It still pulls `nom` 3, which rustc flags as future-incompatible. Restore the features when a release moves |
 | `copc-rs`, `pasture-core`, `pasture-io` | not pinned | COPC and point-buffer I/O named in the 3D-data plan | Young crates; verify on crates.io and pin in the PR that first uses them |
 | `tiff` | 0.11 | GeoTIFF DEM raster decoding in `gungnir-data`; the geo tags are read by this project (GAP-023, D-25, 2026-09-06) | Replaces the plan's `oxigdal-3d`, which was never pinned |
 | `uuid` | not used | | `gungnir-model` uses a `u128` newtype instead; adopting `uuid` remains optional |
@@ -807,7 +807,8 @@ of a `wgpu`-native 3D layer, which this project did not adopt.
 26. API transport stack (D-18): `axum` with its `ws` feature for the node's HTTP surface
     and the WebSocket event stream, `tokio-tungstenite` for the desktop's WebSocket
     client, `reqwest` for its HTTP client, and `rustls`, `tokio-rustls`, and
-    `rustls-pemfile` for the mutual TLS item 17 requires, with `tower-http` for request
+    rustls's own `pki_types::pem` reader (which replaced `rustls-pemfile` on 2026-09-07)
+    for the mutual TLS item 17 requires, with `tower-http` for request
     tracing and body limits at that boundary. Recorded in
     `docs/agentic-coding-standards.md` §2.9, which carries the reasoning: rustls rather
     than `native-tls` so no system OpenSSL is needed and one TLS implementation appears in

@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-scenario"
 version.workspace = true
@@ -25,10 +29,10 @@ thiserror.workspace = true
 yaml_serde.workspace = true
 # GAP-016: the two JSON descriptors of a generated set (sensors.json, metadata.json).
 serde_json.workspace = true
-gungnir-core = { path = "../gungnir-core" }
-gungnir-coord = { path = "../gungnir-coord" }
-gungnir-fusion-async = { path = "../gungnir-fusion-async" }
+gungnir-core = { path = "../gungnir-core", version = "0.1.0" }
+gungnir-coord = { path = "../gungnir-coord", version = "0.1.0" }
+gungnir-fusion-async = { path = "../gungnir-fusion-async", version = "0.1.0" }
 
 [dev-dependencies]
 proptest.workspace = true
-gungnir-testkit = { path = "../gungnir-testkit" }
+gungnir-testkit = { path = "../gungnir-testkit", version = "0.1.0" }

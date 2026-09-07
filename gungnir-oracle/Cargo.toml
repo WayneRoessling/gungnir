@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-oracle"
 version.workspace = true
@@ -21,12 +25,12 @@ nalgebra.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
-gungnir-filters = { path = "../gungnir-filters" }
-gungnir-association = { path = "../gungnir-association" }
-gungnir-rfs = { path = "../gungnir-rfs" }
-gungnir-scenario = { path = "../gungnir-scenario" }
+gungnir-filters = { path = "../gungnir-filters", version = "0.1.0" }
+gungnir-association = { path = "../gungnir-association", version = "0.1.0" }
+gungnir-rfs = { path = "../gungnir-rfs", version = "0.1.0" }
+gungnir-scenario = { path = "../gungnir-scenario", version = "0.1.0" }
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
-gungnir-testkit = { path = "../gungnir-testkit" }
+gungnir-testkit = { path = "../gungnir-testkit", version = "0.1.0" }

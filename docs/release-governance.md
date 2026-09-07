@@ -11,7 +11,8 @@ materials, reproducible builds, signing, and artifact promotion. It is enforced 
 
 | Control | Mechanism | Where |
 |---|---|---|
-| Allowed licenses | `cargo deny check licenses` against the allow-list | `deny.toml` `[licenses]` |
+| Allowed licenses | `cargo deny check licenses` against the allow-list, evaluated for the two release targets only; one scoped exception admits the OFL-1.1 and Ubuntu Font Licence font data in `epaint_default_fonts`, which `gungnir-app` embeds. Runs on every pull request (`ci.yml`) and every release | `deny.toml` `[graph]`, `[licenses]`, `[[licenses.exceptions]]` |
+| Third-party notices | `cargo about generate` collects the license text and copyright notice of every crate linked into a release binary into `THIRD-PARTY-NOTICES.md`, shipped beside the binaries with `LICENSE`, `LICENSE-ADDITIONAL-TERMS.md` and `NOTICE`; the permissive licenses and both font licenses condition redistribution on exactly that, and an SBOM's identifiers do not satisfy it | `about.toml`, `deploy/third-party-notices.hbs`, `release.yml` `assurance` job |
 | Outbound license | `AGPL-3.0-or-later` plus §7 additional terms; every allow-list entry must be one-way compatible *into* it, so a denied license can make the workspace undistributable rather than merely unvetted | `LICENSE`, `LICENSE-ADDITIONAL-TERMS.md`, `Cargo.toml` `[workspace.package]` |
 | Relicensing rights | Contributors sign off (DCO) and grant Roessling Digital Solutions LLC the right to relicense, without which the commercial edition cannot ship | `CLA.md`, `CONTRIBUTING.md` |
 | Third-party material in-tree | Fixtures under `testdata/` are redistributed under their own licenses, never linked or shipped; each directory's `SOURCE.md` records origin and license, and the required license texts sit beside them | `NOTICE`, `testdata/*/SOURCE.md` |
@@ -21,7 +22,7 @@ materials, reproducible builds, signing, and artifact promotion. It is enforced 
 | SBOM | CycloneDX JSON for both binaries, attached to every release | `release.yml` `assurance` job |
 | Auditable binaries | `cargo auditable` embeds the dependency list in each binary for later scanning | `release.yml` `build` job |
 | Signing | Keyless Sigstore `cosign` signatures for every artifact | `release.yml` `sign` job |
-| Container image | Built from `deploy/node/Dockerfile`, unprivileged runtime user, pinned base images | `release.yml` `container` job |
+| Container image | Built from `deploy/node/Dockerfile`, unprivileged runtime user, pinned base images; carries `LICENSE`, `LICENSE-ADDITIONAL-TERMS.md` and `NOTICE` under `/usr/share/doc/gungnir/` because an image conveys object code (AGPL sections 4 and 6) | `release.yml` `container` job |
 | Toolchain pinning | `rust-toolchain.toml` pins the channel every job and developer uses | Repository root |
 
 ## Artifact promotion
@@ -39,7 +40,8 @@ materials, reproducible builds, signing, and artifact promotion. It is enforced 
 ## Compliance evidence
 
 Each release leaves, as CI artifacts: the `cargo deny` and `cargo audit` reports,
-the SBOM, the signatures, and the CI logs of every gate that ran. That set is the
+the SBOM, the `licenses` bundle (`LICENSE`, `LICENSE-ADDITIONAL-TERMS.md`, `NOTICE`,
+`THIRD-PARTY-NOTICES.md`), the signatures, and the CI logs of every gate that ran. That set is the
 evidence package a reviewer or accreditor asks for; nothing needs to be assembled
 by hand after the fact.
 

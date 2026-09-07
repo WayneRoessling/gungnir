@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-metrics"
 version.workspace = true
@@ -21,16 +25,16 @@ nalgebra.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
-gungnir-track = { path = "../gungnir-track" }
+gungnir-track = { path = "../gungnir-track", version = "0.1.0" }
 # The CLEAR MOT frame matching is a minimum-cost assignment, and this is the one the
 # oracle uses too (scipy's linear_sum_assignment); it is already gated against scipy.
 # gungnir-track already depends on gungnir-association, so the graph is unchanged in
 # shape -- see ARCHITECTURE.md section 7.1.
-gungnir-association = { path = "../gungnir-association" }
+gungnir-association = { path = "../gungnir-association", version = "0.1.0" }
 
 [dev-dependencies]
 # The py-motmetrics oracle fixture in testdata/oracles/metrics/ is JSON; serde_json is
 # an already-approved workspace dependency (agentic-coding-standards.md 2.9), dev-only.
 serde_json.workspace = true
 proptest.workspace = true
-gungnir-testkit = { path = "../gungnir-testkit" }
+gungnir-testkit = { path = "../gungnir-testkit", version = "0.1.0" }

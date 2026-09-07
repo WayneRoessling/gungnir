@@ -41,6 +41,7 @@ technical, then move the gap to Planned.
 | D-33 | Whether SD-16 (Cursor-on-Target) is in scope, and what it is pinned to | D-01 locked the release to the capabilities and crates then registered, and DN-25 adds a standard that was not among them. Three sub-questions: is SD-16 release content or a later increment; is the schema pinned now or with the codec; and is the protobuf framing pinned at a commit of a GPLv3 repository. Extended 2026-09-07 by a fourth: the type tree, which gives the `type` attribute its meaning and which the schema pin does not cover. | `../../design/DN-25-cursor-on-target.md`; `../../design/external-standards.md` §5 | Owner | GAP-090, GAP-091 | Resolved 2026-09-06 |
 | D-32 | Who verifies and pins AIS and ADS-B | `external-standards.md` §3 and §4 hold candidates with named unverified claims (the M.1371-5 to -6 layout delta, the gpsd logs' licence header, a permissively licensed 1090ES capture); D-24 said pin both, verify first, and left who does the verifying open. | `../../design/external-standards.md` §3, §4 | Owner | GAP-010 | Resolved 2026-09-06 |
 | D-28 | How MOP-37 gets its targets | The usability measure has no target because no session with participants has completed, and the test plan's round 1 was written for wireframes the built panels have outrun: run round 1 on the built panels, set provisional targets from the heuristic walkthrough, or leave it open until increment 3. | `../../ux/usability-test-plan.md` §7 | Owner with the plan 06 lead | GAP-074 | Resolved 2026-09-06 |
+| D-34 | The repository's licence | The workspace shipped `license = "UNLICENSED"` and no `LICENSE` file, so nothing said what a reader of the hosted repository may do with the code, and plan 01 §8's licence-plus-support model had no instrument behind it. Three sub-questions: which licence; whether crediting Roessling Digital Solutions LLC is a request or an enforceable term; and whether contributions can be relicensed commercially. | `../../plans/01-product-business-plan.md` §8; `../../gungnir-workspace-structure.md`; D-10 (visibility left open) | Owner | GAP-061 | Resolved 2026-09-07 |
 
 ## Outcomes
 
@@ -82,9 +83,92 @@ outcomes are also in `../../../ARCHITECTURE.md` §10; mission outcomes in `../mi
 | D-33 Whether SD-16 (Cursor-on-Target) is in scope, and what it is pinned to | **In scope; three artifacts, two of them pinned.** SD-16 is release content and not a later increment: GAP-090 and GAP-091 target I3 with the stream sink in I4, so under D-01's rule the release carries them. That is an addition to the scope lock, taken deliberately and recorded, not an exception granted quietly. **The schema is pinned now**, ahead of the codec rather than behind it: the CoT event schema version 2.0 (13 June 2003, MITRE case #11-3895, approved for public release), with the attributes the mapping depends on transcribed in `../../design/external-standards.md` §5.2 -- including the finding that `ce` and `le` carry no stated confidence level, so the mapping must declare which multiple of sigma it writes. **The protobuf framing is deliberately not pinned**: it carries no version and no date, its only identifier is a commit of a GPLv3 repository, and nothing in the first increment needs it because negotiation begins in XML. The licence question a commit-pin would raise is deferred with the pin rather than answered by taking it. Edge (s), `gungnir-remote` to `gungnir-interop`, accepted the same day by the owner as engineering reviewer and recorded in `../../design/dependency-edges.md` §13. **Extended 2026-09-07 at the owner's direction: the type tree is pinned too**, which the 2026-09-06 answer had left open and `../../design/external-standards.md` §5.6 had named as the gap. The specification of record is MITRE's *The Developer's Guide to Cursor on Target*, August 2005, case #06-0249, approved for public release and read rather than summarised; the pin this system acts on is the guide's own `friend` predicate, the anchored case-sensitive expression `^a-f-`, and nothing else -- the other affiliations are recorded and act on nothing, so pinning their letters would be pinning from memory. Two findings came back to DN-25 with it: affiliation exists only in the atoms branch, so a positional read would invent one for a chat message, and case is significant, upper case being MIL-STD-2525B and lower case a CoT extension. **MIL-STD-2525 is deliberately not the pin**: the guide records that CoT's atoms tree is 2525B pruned, so pinning any edition of 2525 would name the ancestor rather than the artifact. The official predicate file is unobtainable (it ships with a non-public debugger) and the permissively licensed type-mapping file is named at revision 1.80 rather than copied, because one predicate is all this system asks of a type. |
 | D-32 Who verifies and pins AIS and ADS-B | **The agent verifies and pins, the owner reviews** (the recommended option): fetch M.1371-6 from the ITU and diff the eight message tables in scope against -5; copy gpsd's five AIS logs under `testdata/ais/` with a `SOURCE.md` on §1.5's terms; pin M.1371-6 and ICAO Doc 9871 2nd edition Amendment 2 in `external-standards.md` with what was and was not confirmed. The AIS codec follows the pins; ADS-B waits for a capture the owner records. The owner reviews the note before any codec is written. Not yet done. **Done 2026-09-06**: M.1371-6 pinned after the two editions were compared table by table (identical for the eight types; two backward-compatible additions read); the gpsd captures copied with `SOURCE.md` and the contributor headers stripped; the AIS decoder built and gated on gpsd's decodes. ADS-B: Doc 9871 2nd edition with Amendment 2 pinned as the specification of record; no permissively licensed capture exists, so the fixture is the owner's self-recorded one (GAP-010). |
 | D-28 How MOP-37 gets its targets | **Round 1 on the built panels** (the recommended option): skip the wireframe round, run one participant per role against the rendered panels, and propose the MOP-37 targets from the measured values (median as target, worst case as floor, provisional under four sessions). The session package is written; the owner names participants and dates. Ten of sixteen tasks can run, six of those only once GAP-089 seeds the desktop with tracks and plans, and six tasks are round 2's because their panel is unbuilt or their write does not reach the desktop; those are reported as not run, never scored. |
+| D-34 The repository's licence | **AGPL-3.0-or-later, with additional terms under section 7, a commercial licence beside it, and a CLA.** Chosen over the permissive options because of what the deployment profiles are: under Apache-2.0 or MIT a competitor could run a modified `gungnir-node` as a hosted service for a customer, never convey a binary, and owe nothing — and `../../../ARCHITECTURE.md` §8 makes exactly that shape the normal deployment. AGPL section 13 closes it. **Attribution is a term, not a request**: section 7(b) requires the `NOTICE` text be preserved in the Appropriate Legal Notices of a derivative's interactive interface, 7(c) forbids misrepresenting origin and requires modified versions be marked as different, and 7(e) declines trademark rights — the last of these restoring a protection Apache-2.0 §6 would have given for free and AGPL's base text does not. All three are in `../../../LICENSE-ADDITIONAL-TERMS.md`. **The commercial half is the reason the CLA exists**: `../../../CLA.md` takes a relicensing grant, without which one outside contribution freezes the dual licence permanently. **Two consequences that are not licence text.** Section 5(d) makes the interface obligation conditional on Gungnir's own interface carrying the notices first, so `gungnir-app` needs an About panel displaying them or every future fork is released from the requirement — **built 2026-09-07 as PN-21**, opened from the status strip so that every role reaches it and none docks it (`WorkspaceLayout::ALWAYS_AVAILABLE`), with a render test asserting all four of section 0's elements reach the screen and `appropriate_legal_notices.rs` asserting the panel still says what `NOTICE` says. And `deny.toml`'s allow-list is now a distributability control rather than hygiene: `OpenSSL` was removed the same day, being the only GPL-incompatible entry on it, though nothing in the resolved graph declared it. **Landed 2026-09-07**: `LICENSE` (AGPL-3.0 verbatim), `LICENSE-ADDITIONAL-TERMS.md`, `NOTICE`, `CLA.md`, `license = "AGPL-3.0-or-later"` inherited by all 50 crates, and the three-line SPDX header on all 365 source files. `testdata/asterix/` stays GPL-2.0 as an aggregate and gained the `COPYING` its redistribution requires. **Not reviewed by counsel**; plan 01 §10 owes that pass, together with the export-control question D-10 left open when it declined to fix repository visibility. |
 
 ## Consequences for the register
 
+- D-34's licence gate was **run for the first time on 2026-09-07**, in the licensing
+  review that followed the decision, and failed twice, both on the `deny.toml` comment's
+  claim that `OpenSSL` had been the only entry that mattered. `epaint_default_fonts`,
+  which `gungnir-app` embeds, declares the SIL Open Font License and the Ubuntu Font
+  Licence for its font data, neither on the allow-list; and `webpki-root-certs`
+  (CDLA-Permissive-2.0) sat in the wasm32 slice of the graph that cargo-deny evaluates
+  by default and no binary builds. The first is admitted by a `[[licenses.exceptions]]`
+  scoped to that one crate, with the reasoning in `deny.toml`; the second is answered
+  by restricting `[graph] targets` to the two release targets. The same review found
+  that nothing shipped the notices the permissive licenses require to accompany a
+  binary: `about.toml` and `cargo about` now generate `THIRD-PARTY-NOTICES.md` in the
+  release, the node image carries the licence files, `ci.yml` runs the licence check on
+  every pull request, `gungnir-fuzz` (outside the workspace, so unable to inherit) now
+  states the licence, and `testdata/oracles`, `tracks`, `assets` and `scientific` gained
+  the `SOURCE.md` that `NOTICE` already said they had. Two further failures were the
+  gate's own shape rather than a third-party licence: cargo-deny holds the workspace's
+  crates to the same allow-list, and `AGPL-3.0-or-later` is deliberately not on it (a
+  global entry would admit an outside AGPL crate that CLA.md section 4 cannot accept),
+  so the fifty members are admitted by name in `[[licenses.exceptions]]`; and the
+  wildcard ban reads a versionless `path` dependency as a wildcard, so every
+  intra-workspace edge now carries `version = "0.1.0"`, which crates.io requires anyway.
+  With those, `cargo deny check licenses bans sources` passes. Every `Cargo.toml` now
+  carries the same three-line header as the source files (fifty-two manifests, the root
+  and `gungnir-fuzz` included). Consistency is one reason; the other is that cargo-about
+  looks for the licence expression *in the manifest text*, and a manifest that inherits
+  it through `license.workspace = true` has none, which sends cargo-about 0.9.2 down a
+  synthesised-manifest path with an offset bug that panics on any manifest containing a
+  non-ASCII character -- forty-two of them do, from the `§` citations. The header's SPDX
+  line is the text it finds. A second cargo-about defect, in its `LicenseRef` handling,
+  is recorded in `about.toml` with the template's workaround. **`cargo deny check
+  advisories`, which `release.yml` also runs, does not**: `vtkio` 0.6.3 pins `quick-xml`
+  0.22 and `lz4_flex` 0.7, both with open RUSTSEC vulnerabilities; the Linux
+  accessibility path under `eframe` (`accesskit_unix`, `zbus_xml`) carries `quick-xml`
+  0.30 with the same two; and six crates are flagged unmaintained (`ansi_term`,
+  `cgmath`, `instant`, `paste`, `rustls-pemfile`, `ttf-parser`). None is a licensing
+  matter; it is recorded here because the first tag will otherwise discover it, and it
+  is a dependency decision under §2.9, not something the licensing review could take.
+  **Acted on the same day for the unmaintained six**, after weighing forking against
+  replacing: `rustls-pemfile`, the only one of the six that was a direct dependency and
+  the only one parsing input on the mutual TLS path, was replaced by the PEM reader in
+  `rustls::pki_types::pem` (rustls's own re-exported type crate, so the graph lost a
+  crate, gained none, and no manifest names anything new); `ansi_term` (dev-only) and `paste` (a proc-macro, compile-time
+  only) are ignored in `deny.toml` with dated reasons; `instant` left the same day
+  with three-d's default `window` feature, which the viewport never used (it draws into
+  eframe's glow context; the feature carried a second winit, 0.28, and glutin beneath it);
+  `cgmath` is three-d's own math type, still a dependency of three-d 0.19, and stays
+  until three-d drops it or is replaced (0.19 is ruled out by its move to glow 0.17 and
+  egui 0.34 against eframe 0.29's glow 0.14); `ttf-parser` waits on egui's `ab_glyph`
+  moving to its successor. **The owner decided on 2026-09-07 to ignore both** rather
+  than hold releases on an upstream with no date: `cgmath` is pure math on data this
+  program computes, and `ttf-parser` parses only the four fonts embedded at build time
+  (nothing here builds a `FontDefinitions` or reads a font from disk), so neither sees
+  untrusted input, and neither has an upstream path. Both entries in `deny.toml` carry
+  that reason, and the second carries a condition: loading a user-supplied font would
+  need it removed first. Forking was rejected: the graph refuses git
+  dependencies, so a fork means vendoring, and owning a font parser with no upstream is
+  a larger accreditation question than the advisory it would close.
+  **The three vulnerabilities followed the same day.** `vtkio` 0.6.3's XML reader
+  (quick-xml 0.22: RUSTSEC-2026-0194 and -0195) and its appended-data codecs (lz4_flex
+  0.7: RUSTSEC-2026-0041) have no patched upstream, since even the 0.7.0 candidates pin
+  quick-xml 0.36 against a fix in 0.41, and a VTK file is operator-supplied input on the
+  node. Both features are compiled out: only legacy `.vtk` loads, `gungnir-data` refuses
+  an XML extension naming the reason, a test holds that wording, and the workspace
+  `Cargo.toml` says what restores them. GAP-023's "legacy and XML" therefore narrowed to
+  legacy on 2026-09-07; the XML half is owed to a vtkio release, not to this project.
+  The remaining quick-xml (0.30, under `accesskit_unix`, the Linux AT-SPI bridge) exists
+  only in `gungnir-app` compiled for Linux, which no release builds; its two advisory ids
+  are ignored in `deny.toml` with that reason and with the caveat that an id-level
+  ignore would also mask a new pre-0.41 quick-xml, which the ignore's own match report
+  is the check for. With those two ignores, `cargo deny check` passes all four checks
+  for the first time.
+- D-34's rows in both tables above were **lost on main on 2026-09-07** by commit
+  `0ac4d4b` (GAP-057), whose copy of this file predated the decision; the same commit
+  dropped D-35 to D-38, which the renumbering commit `34796a6` had just added. The
+  rebase of the licensing review restored D-34, since it is that review's subject.
+  **D-35 to D-38 are still missing here** and belong to the theme tranche that owns
+  them; `docs/ux/design-system.md` still cites them.
+- D-34's one engineering item is **closed 2026-09-07**: `gungnir-app` displays the
+  Appropriate Legal Notices as PN-21, so the section 7(b) interface requirement now
+  reaches a derivative under AGPL section 5(d). PN-21 is the twenty-first panel and is
+  in `docs/ux/information-architecture.md` §3 and `ux-to-code-map.md` §1; it is in no
+  role's layout by design, and two tests hold that open.
 - D-05, D-11, and D-12 created engineering items: GAP-068 (roles in code), GAP-069
   (`uuid` v7), GAP-070 (display vocabulary).
 - D-07 moved GAP-036 (fires) from I4 to I3 and put fires deconfliction in the policy

@@ -42,8 +42,9 @@ copc-rs = "0.5"
 pasture-core = "0.5"
 pasture-io = "0.5"
 
-# Scientific mesh / VTK
-vtkio = "0.6"
+# Scientific mesh / VTK. Legacy .vtk only since 2026-09-07: the XML reader's quick-xml
+# 0.22 carries open advisories (ARCHITECTURE.md §9, the vtkio row).
+vtkio = { version = "0.6", default-features = false }
 # vtk-pure-rs pulled in only if/when filter-pipeline needs (isosurfacing,
 # scalar-field derivation) exceed what a hand-rolled data/scientific/filters.rs
 # can reasonably cover — see 1.4.

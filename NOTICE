@@ -50,5 +50,25 @@ The GPL-2.0 fixtures in testdata/asterix/ and this AGPL-3.0 work coexist as an
 aggregate: they are separate works distributed together on one medium, not combined
 into a single program. Nothing in gungnir-interop derives from that decoder's source.
 
-Rust dependencies are permissively licensed and are checked against the allow-list in
-deny.toml on every release; see docs/release-governance.md.
+THIRD-PARTY MATERIAL IN THE BINARIES
+
+The Rust crates linked into gungnir-app and gungnir-node are under permissive licenses
+(MIT, Apache-2.0, the BSD variants, ISC, Zlib, Unicode-3.0, MPL-2.0, CC0-1.0, BSL-1.0),
+checked against the allow-list in deny.toml on every pull request and every release.
+Each of those licenses requires its copyright notice and text to accompany a binary
+that includes the crate; THIRD-PARTY-NOTICES.md, generated from Cargo.lock by
+cargo-about (about.toml) and shipped beside every release artifact, is where they are
+reproduced.
+
+gungnir-app also embeds egui's default fonts (crate epaint_default_fonts), which are
+not code and not under a code license:
+
+  Ubuntu-Light.ttf          Ubuntu Font Licence 1.0     Canonical Ltd
+  NotoEmoji-Regular.ttf     SIL Open Font License 1.1   Google Inc.
+  Hack-Regular.ttf          MIT                         Source Foundry Authors
+  emoji-icon-font.ttf       MIT                         John Slegers
+
+Both font licenses permit the font to be embedded in and redistributed with software
+of any license, and each requires its own text and copyright notice to travel with the
+font; THIRD-PARTY-NOTICES.md carries them. deny.toml admits the two font licenses for
+that one crate only. See docs/release-governance.md.

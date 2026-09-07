@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-analytics"
 version.workspace = true
@@ -18,13 +22,13 @@ workspace = true
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
-gungnir-coord = { path = "../gungnir-coord" }
-gungnir-data = { path = "../gungnir-data" }
-gungnir-geo = { path = "../gungnir-geo" }
+gungnir-coord = { path = "../gungnir-coord", version = "0.1.0" }
+gungnir-data = { path = "../gungnir-data", version = "0.1.0" }
+gungnir-geo = { path = "../gungnir-geo", version = "0.1.0" }
 # docs/design/dependency-edges.md: accepted by the engineering reviewer 2026-09-05
 # so `coverage_from_registry` can build coverage input from live sensor records.
-gungnir-model = { path = "../gungnir-model" }
-gungnir-sensor-management = { path = "../gungnir-sensor-management" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }
+gungnir-sensor-management = { path = "../gungnir-sensor-management", version = "0.1.0" }
 
 [dev-dependencies]
-gungnir-config = { path = "../gungnir-config" }
+gungnir-config = { path = "../gungnir-config", version = "0.1.0" }

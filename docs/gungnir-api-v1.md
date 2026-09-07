@@ -24,7 +24,8 @@ types, and is not part of the 2026-09-05 sign-off.
 
 The crates are `axum` (with its `ws` feature, which is the server side of the WebSocket),
 `tokio-tungstenite` for the desktop's client, `reqwest` for the desktop's HTTP client, and
-`rustls` with `tokio-rustls` and `rustls-pemfile` for the mutual TLS that D-02 requires of
+`rustls` with `tokio-rustls` (PEM reading is rustls's own `pki_types::pem`, which
+replaced `rustls-pemfile` on 2026-09-07) for the mutual TLS that D-02 requires of
 machine identities. `agentic-coding-standards.md` §2.9 records why each was chosen and
 which pins keep a single copy of each in the binary.
 
