@@ -1,6 +1,6 @@
 # Air platforms (plan 07 catalogue). See catalogue.yaml for the field definitions.
 domain: air
-reviewer: subject-matter reviewer (air defense), pending
+reviewer: owner, acting as subject-matter reviewer (air defense), approved 2026-09-07
 platforms:
   - id: shahed-136
     name: Shahed-136 / Geran-2 family

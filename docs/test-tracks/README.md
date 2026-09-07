@@ -7,10 +7,12 @@ observations, a scenario library aligned with the mission vignettes, the data
 format, a reference generator, and validation. Generated data lives under
 [`../../testdata/tracks/`](../../testdata/tracks/README.md).
 
-Status: first draft 2026-09-04. Ten sample sets are generated, validated, and
-committed, and they replay through the real ingest gateway in `cargo test`. No
-subject-matter reviewer has vetted the vehicle data yet, so every figure carries its
-source and confidence mark and none should be treated as authoritative.
+Status: first draft 2026-09-04, vehicle data reviewed and approved 2026-09-07. Ten
+sample sets are generated, validated, and committed, and they replay through the
+real ingest gateway in `cargo test`. The owner reviewed all three domain tables
+(air, land, sea) in `vehicle-catalogue.md` acting as the subject-matter reviewer
+(GAP-046) and approved them; every figure still carries its source and confidence
+mark, which the review did not remove and does not need to.
 
 Everything is open-source only; [`sourcing-and-legal.md`](sourcing-and-legal.md)
 governs every figure.

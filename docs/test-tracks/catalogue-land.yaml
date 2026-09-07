@@ -2,7 +2,7 @@
 # Land speed_mps ranges are cross-country minimum to road maximum; altitude is
 # terrain-following (0 above ground) in the generator.
 domain: land
-reviewer: subject-matter reviewer (land and fires), pending
+reviewer: owner, acting as subject-matter reviewer (land and fires), approved 2026-09-07
 platforms:
   - id: t-72
     name: T-72 / T-80 / T-90 family
