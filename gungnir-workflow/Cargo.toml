@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "Human factors & operator workflow: role-based workspace layouts, the alert acknowledgement/escalation lifecycle, annotations and cases -- turning a set of panels into a designed operator workflow. docs/gungnir-capabilities.md §5.6 -- Medium."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

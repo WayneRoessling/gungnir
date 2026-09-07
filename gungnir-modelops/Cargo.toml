@@ -6,6 +6,13 @@ license.workspace = true
 
 description = "Registry for selecting, tuning, comparing, validating, promoting, and rolling back filter/association configurations by mission profile. gungnir-capabilities.md §5.4 -- Medium."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

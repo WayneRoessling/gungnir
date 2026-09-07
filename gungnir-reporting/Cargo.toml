@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "Mission reports and export packages with provenance preserved: every figure traces back to the recorded event journal it was computed from. docs/gungnir-capabilities.md §5.6 -- Lower."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

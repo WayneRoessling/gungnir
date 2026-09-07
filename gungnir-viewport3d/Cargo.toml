@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "three-d scene setup, camera, streaming/scientific data bridges, and live track/intercept rendering, drawn into eframe's OpenGL (glow) context. Combines rust-3d-data-ecosystem-build-vs-adopt.md §2 with gungnir-model views -- see ARCHITECTURE.md §4-5 for why track rendering lives here rather than in a translation crate."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

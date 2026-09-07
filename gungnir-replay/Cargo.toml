@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "Deterministic session playback, timeline scrubbing, and recorded-data replay -- reads gungnir-store's event journal through a gungnir-time ReplayClockAuthority. docs/gungnir-capabilities.md §5.6 -- Lower."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

@@ -530,7 +530,12 @@ def gen_information_structure() -> None:
     write(UAF / "information" / "If-Sr.md", NL.join(L))
 
     P = ["@startuml If-Sr", "title If-Sr information structure: gungnir-model", "hide empty members", "skinparam classAttributeIconSize 0"]
-    names = {n for n, _, _ in types}
+    # Deterministic order, and the same order the classes above are emitted in. A set
+    # comprehension here made the emitted relationship lines follow Python's string hash
+    # order, which is randomised per process (PYTHONHASHSEED), so two runs of this
+    # generator produced the same relationships in different sequences and the CI diff
+    # check failed at random. `dict.fromkeys` dedupes while keeping first-seen order.
+    names = list(dict.fromkeys(n for n, _, _ in types))
     for name, kind, members in types:
         if kind == "enum":
             P.append(f"enum {name} <<InformationElement>> {{")
@@ -873,7 +878,7 @@ def check(elements, rels) -> list[str]:
     pattern = re.compile(r"\b(CAP-\d\.\d+|OA-\d\d|OP-\d\d|SV-\d\d|RS-[a-z0-9-]+|SD-\d\d|IE-\d\d|PT-\d\d|PJ-[A-Z0-9]+|AR-\d\d)\b")
     for src in glob.glob(str(UAF / "**" / "*.puml"), recursive=True) + glob.glob(str(UAF / "**" / "*.mmd"), recursive=True):
         text = read(Path(src))
-        for tok in set(pattern.findall(text)):
+        for tok in sorted(set(pattern.findall(text))):
             tok_norm = tok
             if tok_norm not in ids and tok_norm.replace("_", "-") not in ids:
                 problems.append(f"{os.path.relpath(src, UAF)}: {tok} is not in the registry")

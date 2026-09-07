@@ -6,6 +6,13 @@ license.workspace = true
 
 description = "File I/O for point cloud / VTK scientific mesh / terrain / glTF, per rust-3d-data-ecosystem-build-vs-adopt.md §1. No egui/three-d/wgpu dependency -- unit-testable with plain cargo test."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 

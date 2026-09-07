@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "App-facing facade over gungnir-allocation + gungnir-coord: turns current tracks + available resources into an intercept/tasking plan (gungnir-model PlanView). Kept separate from gungnir-tracking-service because it answers 'what should we do' rather than 'where are they' -- see ARCHITECTURE.md §2."
 
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
 [lints]
 workspace = true
 
