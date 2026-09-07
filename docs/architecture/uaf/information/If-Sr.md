@@ -60,6 +60,10 @@ Diagram: [`If-Sr.puml`](If-Sr.puml).
 | `EffectorReport` | enum | `Acknowledged { at: MissionTime, }`<br>`Executing { at: MissionTime, }`<br>`Completed { at: MissionTime, effective: bool, detail: String, }`<br>`Refused { at: MissionTime, reason: String, }` | `gungnir-model/src/handoff.rs` |
 | `HandoffError` | enum | `UnknownDecision(DecisionId)` | `gungnir-model/src/handoff.rs` |
 | `GlobalEntityId` | tuple struct | `pub u128` | `gungnir-model/src/identity.rs` |
+| `LaydownId` | tuple struct | `pub String` | `gungnir-model/src/laydown.rs` |
+| `SensorPlacement` | struct | `sensor: SensorId`<br>`position_enu: [f64; 3]`<br>`mode: SensorMode` | `gungnir-model/src/laydown.rs` |
+| `ResourcePlacement` | struct | `resource: ResourceId`<br>`position_enu: [f64; 3]` | `gungnir-model/src/laydown.rs` |
+| `Laydown` | struct | `id: LaydownId`<br>`intent: String`<br>`sensors: Vec<SensorPlacement>`<br>`resources: Vec<ResourcePlacement>`<br>`current: bool` | `gungnir-model/src/laydown.rs` |
 | `SensorMode` | enum | `Standby`<br>`Search`<br>`Track`<br>`Calibrating`<br>`Offline` | `gungnir-model/src/lib.rs` |
 | `SessionId` | tuple struct | `pub u64` | `gungnir-model/src/lib.rs` |
 | `SensorId` | tuple struct | `pub u32` | `gungnir-model/src/lib.rs` |
