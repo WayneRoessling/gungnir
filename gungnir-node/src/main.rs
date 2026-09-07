@@ -82,6 +82,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     runtime.block_on(run(config, node_cfg, handle))
 }
 
+/// The sensor positions the tracker needs to place an angular report (GAP-001, DN-27 §4).
+///
+/// Built from the baseline's own sensor list, which is where a deployment states where
+/// each sensor is. Without it every bearing and every range-azimuth-elevation report is
+/// refused, which is what happened until 2026-09-07.
+fn sensor_positions(config: &ConfigBaseline) -> gungnir_tracking_service::SensorPositions {
+    gungnir_tracking_service::SensorPositions::from_sensors(
+        config.sensors.iter().map(|s| (s.id, s.position)),
+    )
+}
+
 fn load_config(path: Option<String>) -> Result<ConfigBaseline, gungnir_config::ConfigError> {
     let Some(p) = path else {
         tracing::info!("no config path given; using the default baseline");
@@ -1022,13 +1033,18 @@ async fn run(
             tracing::info!(baseline = %baseline.id, "the promoted algorithm baseline is applied");
             LiveTrackingService::with_pipeline_settings(&handle, settings)
                 .with_staleness(config.policy.staleness.clone())
+                .with_sensor_positions(sensor_positions(&config))
                 .with_algorithm_baseline(&baseline.id)
         }
         Some((baseline, Err(err))) => {
             tracing::error!(baseline = %baseline.id, %err, "the promoted algorithm baseline is not applied; the tracker runs its default filter and stays ungoverned");
-            LiveTrackingService::new(&handle).with_staleness(config.policy.staleness.clone())
+            LiveTrackingService::new(&handle)
+                .with_staleness(config.policy.staleness.clone())
+                .with_sensor_positions(sensor_positions(&config))
         }
-        None => LiveTrackingService::new(&handle).with_staleness(config.policy.staleness.clone()),
+        None => LiveTrackingService::new(&handle)
+            .with_staleness(config.policy.staleness.clone())
+            .with_sensor_positions(sensor_positions(&config)),
     };
     let mut intercept = DpInterceptService::new(config.allocation_horizon);
     let resources = config.resource_views();

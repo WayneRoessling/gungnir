@@ -56,10 +56,21 @@ pub enum SubmitError {
     /// an open row and not a silent conversion. Inventing a range to make one fit is
     /// exactly what DN-27 §2 exists to forbid.
     #[error(
-        "the detection is a bearing or a polar report, and this service has no sensor \
-         position to place it from; it was refused rather than converted"
+        "the detection is a bearing or a polar report, and this service has no sensor position to place it from; it was refused rather than converted"
     )]
     NotAPosition,
+    /// The measurement needs the reporting sensor's position and the resolver does not
+    /// have that sensor.
+    ///
+    /// **Distinct from [`SubmitError::NotAPosition`] on purpose.** That one says the
+    /// service has no resolver at all; this one says it has one and the sensor is not in
+    /// it, which is a configuration fault with a name -- a feed reporting under a sensor
+    /// identifier the baseline never declared. Collapsing the two would send an operator
+    /// looking for missing wiring when the answer is a missing line in a baseline.
+    #[error(
+        "sensor {0} reported an angular measurement and no position is declared for it; the detection was refused rather than placed from a guessed position"
+    )]
+    UnknownSensorPosition(u32),
 }
 
 pub trait TrackingService: Send + Sync {
@@ -92,6 +103,86 @@ pub trait TrackingService: Send + Sync {
     /// buffer, no fusion divergence beyond budget). False while the pipeline is
     /// unimplemented, so the health panel never claims a working tracker.
     fn is_healthy(&self) -> bool;
+}
+
+/// Where each sensor measures from, in the local ENU frame.
+///
+/// **The piece GAP-001's closing action calls "the sensor-position resolver DN-27 needs
+/// before a bearing can reach the tracker at all".** `DetectionView` carries a `SensorId`
+/// and not a position, deliberately: a detection says who saw something, and where that
+/// sensor is belongs to the deployment rather than to the report. Something has to join
+/// the two, and until this existed nothing did, so every angular measurement was refused.
+///
+/// Held as data rather than read from configuration for the reason the pipeline settings
+/// and the staleness policy are: this crate may not depend on `gungnir-config`. Both
+/// binaries build it from the baseline's sensor list and hand it in.
+///
+/// **A sensor absent from this map is a refusal, never a default.** There is no origin
+/// fallback: placing a bearing from [0, 0, 0] because the sensor is unknown would draw a
+/// ray from the wrong place with no indication that anything was assumed, which is DN-27
+/// §2's prohibition wearing a different hat.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SensorPositions {
+    by_id: std::collections::HashMap<u32, [f64; 3]>,
+}
+
+impl SensorPositions {
+    /// Build from the deployment's sensors.
+    ///
+    /// A non-finite coordinate is dropped rather than stored: it could only place a
+    /// detection at a non-finite position, and the refusal that follows names the sensor.
+    #[must_use]
+    pub fn from_sensors(sensors: impl IntoIterator<Item = (u32, [f64; 3])>) -> Self {
+        Self {
+            by_id: sensors
+                .into_iter()
+                .filter(|(_, p)| p.iter().all(|v| v.is_finite()))
+                .collect(),
+        }
+    }
+
+    /// Where this sensor measures from, if the deployment declared it.
+    #[must_use]
+    pub fn get(&self, sensor: u32) -> Option<[f64; 3]> {
+        self.by_id.get(&sensor).copied()
+    }
+
+    /// How many sensors have a declared position.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.by_id.len()
+    }
+
+    /// Whether any sensor has a declared position.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.by_id.is_empty()
+    }
+}
+
+/// Place a range-azimuth-elevation report from the sensor that made it.
+///
+/// **This invents nothing.** A range, an azimuth and an elevation from a known point are
+/// a position; the conversion is arithmetic and DN-27 §2's prohibition does not reach it,
+/// because nothing is assumed. That prohibition is about a *bearing*, which has no range
+/// to convert.
+///
+/// Azimuth is `atan2(east, north)`: a compass bearing, zero at north, increasing to the
+/// east -- the convention `gungnir_model::Measurement` and
+/// `gungnir_filters::RangeAzimuthElevation` both state (DN-27 §4).
+#[must_use]
+pub fn place_polar(
+    sensor_enu: [f64; 3],
+    range_m: f64,
+    azimuth_rad: f64,
+    elevation_rad: f64,
+) -> [f64; 3] {
+    let horizontal = range_m * elevation_rad.cos();
+    [
+        sensor_enu[0] + horizontal * azimuth_rad.sin(),
+        sensor_enu[1] + horizontal * azimuth_rad.cos(),
+        sensor_enu[2] + range_m * elevation_rad.sin(),
+    ]
 }
 
 /// Reduce the canonical observation to the kinematic form the core consumes.
@@ -178,7 +269,9 @@ pub const UNGOVERNED_ALGORITHM_VERSION: &str = concat!(
 pub struct LiveTrackingService {
     tracks: Vec<TrackView>,
     /// `None` once [`LiveTrackingService::finish`] has ended the stream.
-    detection_tx: Option<Sender<Detection>>,
+    detection_tx: Option<Sender<gungnir_fusion_async::Submission>>,
+    /// Where each sensor measures from, so an angular report can be placed at all.
+    sensor_positions: SensorPositions,
     track_rx: Receiver<Vec<Track>>,
     pipeline_alive: bool,
     provenance: Provenance,
@@ -210,7 +303,8 @@ impl LiveTrackingService {
         runtime: &tokio::runtime::Handle,
         settings: gungnir_fusion_async::PipelineSettings,
     ) -> Self {
-        let (detection_tx, detection_rx) = crossbeam_channel::unbounded::<Detection>();
+        let (detection_tx, detection_rx) =
+            crossbeam_channel::unbounded::<gungnir_fusion_async::Submission>();
         let (track_tx, track_rx) = crossbeam_channel::unbounded::<Vec<Track>>();
         runtime.spawn(gungnir_fusion_async::ingest_with(
             detection_rx,
@@ -231,6 +325,7 @@ impl LiveTrackingService {
                 authentication: gungnir_model::SourceAuthentication::default(),
             },
             staleness: gungnir_model::StalenessSettings::default(),
+            sensor_positions: SensorPositions::default(),
             last_reported: std::collections::HashMap::new(),
         }
     }
@@ -258,6 +353,18 @@ impl LiveTrackingService {
     /// Passed in as data rather than read from configuration, because this crate may not
     /// depend on `gungnir-config`; both binaries hand it `config.policy.staleness`.
     #[must_use]
+    /// Supply the deployment's sensor positions, which is what lets an angular
+    /// measurement be placed (GAP-001, DN-27 §4).
+    ///
+    /// Without this the service has no way to turn "sensor 4 saw something at bearing
+    /// 037" into anything, and says so through [`SubmitError::NotAPosition`] rather than
+    /// placing it from an assumed origin.
+    #[must_use]
+    pub fn with_sensor_positions(mut self, positions: SensorPositions) -> Self {
+        self.sensor_positions = positions;
+        self
+    }
+
     pub fn with_staleness(mut self, staleness: gungnir_model::StalenessSettings) -> Self {
         self.staleness = staleness;
         self
@@ -274,6 +381,92 @@ impl LiveTrackingService {
     /// the sensors stopping.
     ///
     /// Submitting afterwards returns [`SubmitError::PipelineGone`], which is what it is.
+    /// Turn a canonical detection into what the pipeline accepts, or say why it cannot.
+    ///
+    /// Three measurement kinds and three answers, and the differences are the point.
+    ///
+    /// * A **position** goes straight in, as it always did.
+    /// * A **range, azimuth and elevation** is placed from the reporting sensor. That is
+    ///   arithmetic, not assumption: a range from a known point *is* a position, and
+    ///   DN-27 §2's prohibition does not reach it.
+    /// * A **bearing** is handed over as a bearing, and stays one. It reaches the tracker
+    ///   through `Submission::Bearing`, which the pipeline routes to `offer_bearing`, so
+    ///   DN-27 §5's rules apply: it may refine a track, it may not start one, and if it
+    ///   matches nothing it is retained and shown rather than dropped.
+    ///
+    /// Both angular kinds need the sensor's position and refuse without it, naming which
+    /// of the two reasons applies.
+    fn to_submission(
+        &self,
+        detection: &DetectionView,
+    ) -> Result<gungnir_fusion_async::Submission, SubmitError> {
+        use gungnir_model::Measurement;
+        match &detection.measurement {
+            Measurement::Position { .. } => to_core_detection(detection)
+                .map(gungnir_fusion_async::Submission::Position)
+                .ok_or(SubmitError::NotAPosition),
+            Measurement::RangeAzimuthElevation {
+                range_m,
+                azimuth_rad,
+                elevation_rad,
+                variance,
+            } => {
+                let sensor_enu = self.sensor_enu(detection.sensor.0)?;
+                let enu = place_polar(sensor_enu, *range_m, *azimuth_rad, *elevation_rad);
+                if !enu.iter().all(|v| v.is_finite()) {
+                    return Err(SubmitError::NotAPosition);
+                }
+                // **The stated variance does not survive this conversion**, and that is
+                // a limitation of `Detection` rather than a choice made here: it carries
+                // a position and no error, so the pipeline gates every detection with the
+                // measurement noise in its settings. Converting the range-azimuth-
+                // elevation variance properly needs the Jacobian of this transform and
+                // somewhere to put the result, which is the same missing field DN-27 §6
+                // describes for bearings. Recorded in GAP-001 rather than hidden; the
+                // bearing path does not have the problem, because `BearingDetection`
+                // carries its angular variance and the pipeline uses it.
+                let _ = variance;
+                Ok(gungnir_fusion_async::Submission::Position(Detection {
+                    sensor_id: detection.sensor.0,
+                    timestamp_s: detection.source_time.0,
+                    measurement: nalgebra::Vector3::new(enu[0], enu[1], enu[2]),
+                }))
+            }
+            Measurement::Bearing {
+                azimuth_rad,
+                elevation_rad,
+                azimuth_variance_rad2,
+                elevation_variance_rad2,
+            } => {
+                let sensor_enu = self.sensor_enu(detection.sensor.0)?;
+                Ok(gungnir_fusion_async::Submission::Bearing(
+                    gungnir_fusion_async::BearingDetection {
+                        sensor_id: detection.sensor.0,
+                        timestamp_s: detection.source_time.0,
+                        sensor_enu,
+                        azimuth_rad: *azimuth_rad,
+                        elevation_rad: *elevation_rad,
+                        azimuth_variance_rad2: *azimuth_variance_rad2,
+                        elevation_variance_rad2: *elevation_variance_rad2,
+                    },
+                ))
+            }
+        }
+    }
+
+    /// Where this sensor measures from, or the refusal that says why not.
+    fn sensor_enu(&self, sensor: u32) -> Result<[f64; 3], SubmitError> {
+        if self.sensor_positions.is_empty() {
+            // No resolver was supplied at all, which is the state every build was in
+            // before GAP-001's wiring: the service cannot place an angular report and
+            // says so, rather than placing it from the origin.
+            return Err(SubmitError::NotAPosition);
+        }
+        self.sensor_positions
+            .get(sensor)
+            .ok_or(SubmitError::UnknownSensorPosition(sensor))
+    }
+
     pub fn finish(&mut self) {
         self.detection_tx = None;
     }
@@ -301,9 +494,7 @@ impl LiveTrackingService {
 
 impl TrackingService for LiveTrackingService {
     fn submit_detection(&mut self, detection: DetectionView) -> Result<(), SubmitError> {
-        let Some(core) = to_core_detection(&detection) else {
-            return Err(SubmitError::NotAPosition);
-        };
+        let core = self.to_submission(&detection)?;
         if self
             .detection_tx
             .as_ref()
