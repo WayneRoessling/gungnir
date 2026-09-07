@@ -55,4 +55,8 @@ id_ed25519*
 # (plan 01). Excluded by the owner on 2026-09-07. Documents elsewhere in `docs/`
 # still cite this folder; those citations resolve on the drafting host and not in a
 # clone, which is a deliberate consequence of the exclusion rather than an oversight.
-/docs/business/
+# A directory excluded outright cannot have anything re-included from it -- git does
+# not descend into it -- so the contents are ignored and the one published file is
+# named back in.
+/docs/business/*
+!/docs/business/README.md
