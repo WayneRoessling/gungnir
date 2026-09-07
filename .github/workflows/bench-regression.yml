@@ -1,6 +1,35 @@
 # Gate 6: benchmark regression. Criterion results on the PR are compared against
-# the baseline stored from main; a p99 regression beyond the threshold fails the
-# job (docs/agentic-workflow.md, docs/agentic-coding-standards.md §2.6).
+# the baseline stored from main (docs/agentic-workflow.md,
+# docs/agentic-coding-standards.md §2.6).
+#
+# **Advisory since 2026-09-07, by the owner, and this is not a widened threshold.**
+# The threshold is unchanged at 10%. What changed is that a difference this job cannot
+# attribute to the code no longer fails it.
+#
+# The reason is in the measurement, not in the number. The baseline is saved from a run
+# on `main` on one `ubuntu-latest` instance and restored on a *different* instance for
+# the pull request, so every comparison is cross-machine. GitHub-hosted runners vary by
+# far more than 10% between instances, and the first three runs after this job was made
+# able to fail (GAP-093) each reported a different benchmark regressing on a branch that
+# touched none of its code:
+#
+#   * `claude/angular-detections-and-accounts`: node_journal/sync_every_envelope_50 3.485x
+#     -- fifty fsync calls, which is cloud-disk latency and nothing else
+#   * `claude/pin-cot-type-tree`: startup/to_first_frame 1.256x
+#   * `claude/agpl-licensing-review-95cf05`: a third one
+#
+# On the first of those, every *other* benchmark came out between 0.49x and 0.91x. A
+# whole set uniformly faster is the signature of a different machine, not of a change.
+# The same branch had passed the same job an hour earlier with no benchmark or journal
+# code touched in between.
+#
+# So the job still runs, still compares, and still prints every ratio and every
+# threshold breach. It does not fail the pull request on a number it cannot attribute.
+# **The exit is a runner, not a threshold**: set BENCH_REGRESSION_ENFORCE to 1 once this
+# runs on the self-hosted machine GAP-061 needs for gpu-fusion.yml, where the baseline
+# and the comparison come from the same hardware. Until then, a real regression is found
+# by a person reading these ratios, and this comment exists so that nobody reads the
+# green tick as evidence that performance was checked.
 name: bench-regression
 
 on:
@@ -16,8 +45,12 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Fail when any benchmark's p99 is slower than baseline by more than this fraction.
+  # Report a regression when any benchmark's p99 is slower than baseline by more than
+  # this fraction. Unchanged; see the header for why the job no longer fails on it.
   BENCH_REGRESSION_THRESHOLD: "0.10"
+  # 1 makes a reported regression fail the job. Set it once the comparison is
+  # same-machine; on GitHub-hosted runners it fails on runner variance.
+  BENCH_REGRESSION_ENFORCE: "0"
 
 jobs:
   bench:
@@ -89,7 +122,18 @@ jobs:
           print(f"compared {compared} benchmark(s); {skipped} had no baseline to compare against")
           if compared == 0:
               print("no baseline yet: this is expected until a run on main saves one")
-          sys.exit(1 if failed else 0)
+          # Advisory unless enforcement is switched on. The ratios above are the output;
+          # a regression is still named and still printed, and the only thing that changes
+          # is whether an unattributable cross-machine difference blocks a pull request.
+          enforce = os.environ.get("BENCH_REGRESSION_ENFORCE", "0") == "1"
+          if failed and not enforce:
+              print(
+                  "NOT FAILING: this comparison is cross-machine and cannot attribute the "
+                  "difference to the code. Read the ratios above rather than the exit "
+                  "status; see the header of this workflow. Set BENCH_REGRESSION_ENFORCE=1 "
+                  "when this runs on a single machine."
+              )
+          sys.exit(1 if (failed and enforce) else 0)
           PY
       - name: Save baseline (main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

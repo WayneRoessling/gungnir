@@ -29,12 +29,14 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 | 15 | GAP-010 Cooperative identity decoders | Technical | 24 | L | Services engineer | D-09 |
 | 16 | GAP-023 Data loaders per format | Technical | 24 | L | UI engineer |  |
 | 17 | GAP-008 Clock-skew detection across sources | Technical | 21 | M | Services engineer |  |
-| 18 | GAP-069 `uuid` v7 for `GlobalEntityId` | Technical | 10 | S | Services engineer | D-11 |
-| 19 | GAP-013 Track-to-track fusion and sensor registration | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
-| 20 | GAP-051 Session lifecycle in `gungnir-mission` | Technical | 6 | M | Services engineer |  |
-| 21 | GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | Technical | 4 | M | Owner | D-10 |
-| 22 | GAP-061 Release workflow unexercised | Technical | 3 | M | Owner | D-10 |
-| 23 | GAP-081 Architecture compliance checks not automated | Technical | 3 | M | Owner |  |
+| 18 | GAP-092 The journal budget's debug cost was attributed to runner I/O; it is the encode | Technical | 16 | S | Services engineer |  |
+| 19 | GAP-069 `uuid` v7 for `GlobalEntityId` | Technical | 10 | S | Services engineer | D-11 |
+| 20 | GAP-013 Track-to-track fusion and sensor registration | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
+| 21 | GAP-051 Session lifecycle in `gungnir-mission` | Technical | 6 | M | Services engineer |  |
+| 22 | GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | Technical | 4 | M | Owner | D-10 |
+| 23 | GAP-061 Release workflow unexercised | Technical | 3 | M | Owner | D-10 |
+| 24 | GAP-093 Gate 6 never saves a baseline, so it compares nothing and cannot fail | Technical | 24 | S | Services engineer | GAP-061 |
+| 25 | GAP-081 Architecture compliance checks not automated | Technical | 3 | M | Owner |  |
 
 ## I3: Close the decision loop. Closes the allocator, geometry, asset list, policy model, queue, and the panels that let a human decide in the product.
 
@@ -132,6 +134,6 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 
 | Increment | Gaps | Effort S / M / L / XL |
 |---|---|---|
-| I2 | 23 | 3 / 11 / 7 / 2 |
+| I2 | 25 | 5 / 11 / 7 / 2 |
 | I3 | 52 | 8 / 32 / 11 / 1 |
 | I4 | 17 | 0 / 8 / 8 / 1 |
