@@ -241,12 +241,6 @@ fn render_reconciliation_due(
 
 fn owning_gap(panel: PanelId) -> &'static str {
     match panel {
-        // Three entries were named for this panel in turn and none of them builds one:
-        // GAP-006 is the coverage-gap analytics function, GAP-026 the defended-asset
-        // list that supplies its content, GAP-045 its rehearsal records. It pointed at
-        // GAP-055 -- the entry that *tracks* unbuilt panels -- because that was the only
-        // honest answer until one was filed. GAP-087 is that entry (2026-09-05).
-        PanelId::Planning => "GAP-087",
         PanelId::Reconciliation => "GAP-050",
         PanelId::Assistant => "GAP-044",
         // Everything built, plus the viewport, never reaches this function.
@@ -265,6 +259,7 @@ fn owning_gap(panel: PanelId) -> &'static str {
         | PanelId::Requirements
         | PanelId::CoverageLayers
         | PanelId::InterceptPanel
+        | PanelId::Planning
         | PanelId::Alerts
         | PanelId::About
         | PanelId::SystemHealth => "built",
@@ -350,6 +345,9 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
         PanelId::ApprovalQueue => return render_approval_queue(ui, state),
         PanelId::SensorManagement => return render_sensor_management(ui, state),
         PanelId::CoverageLayers => return render_coverage_layers(ui, state),
+        PanelId::Planning => {
+            render_planning(ui, state);
+        }
         // The three sustainment panels are drawn by `main.rs`, which owns the state
         // they read: a replay cursor, the last report, and a candidate baseline all
         // outlive a frame, and `AppState` is not the place for a half-scrubbed replay.
@@ -680,15 +678,49 @@ fn render_coverage_layers(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAc
         .map(PanelAction::CoverageLayer)
 }
 
-/// Comparing one laydown with another needs the laydown options PN-16 draws (GAP-087).
-///
-/// That panel is blocked on something PN-11 cannot supply either: **the baseline carries one
-/// set of sensor and resource positions**, so there is no second laydown to compare against
-/// until a laydown concept exists in the schema.
+/// Loading a laydown option into this viewport for a visual before-and-after needs
+/// PN-16, which now compares laydowns as a table (GAP-087) but does not push one onto
+/// the map: that interaction was never part of DN-26's engineering (§6 lists a table
+/// row per laydown, not a viewport control), and adding it here would be scope PN-16's
+/// own design note never took. Tracked as the remaining item under GAP-087 rather than
+/// invented as a claim this comparison already draws.
 const LAYDOWN_COMPARISON: Unavailable<'static> = Unavailable {
     owner: "gungnir-ui",
     gap: "GAP-087",
 };
+
+/// PN-16, the planning panel: laydown options, compared (GAP-087,
+/// `docs/design/DN-26-laydown-options.md`).
+fn render_planning(ui: &mut egui::Ui, state: &AppState) {
+    use gungnir_ui::panels::planning::PlanningView;
+    use gungnir_ui::panels::unavailable::{Section, Unavailable};
+
+    let terrain_model = crate::sustainment::planning_terrain_model(state);
+    let rehearsal = Unavailable {
+        owner: "gungnir-tracking-service",
+        gap: "GAP-045",
+    };
+    let rows;
+    let empty_reason;
+    let laydowns = match crate::sustainment::planning_rows(state) {
+        crate::sustainment::PlanningRows::Rows(r) => {
+            rows = r;
+            Section::Present(&rows)
+        }
+        crate::sustainment::PlanningRows::Empty { reason } => {
+            empty_reason = reason;
+            Section::Empty {
+                reason: empty_reason,
+            }
+        }
+    };
+    let view = PlanningView {
+        laydowns,
+        terrain_model,
+        rehearsal,
+    };
+    gungnir_ui::panels::planning::render_planning(ui, &view);
+}
 
 /// PN-15. Requirements are real and the tasking is wired (GAP-005); no adapter
 /// carries the resulting command to a sensor (GAP-001).
@@ -1225,6 +1257,7 @@ pub fn is_implemented(panel: PanelId) -> bool {
             | PanelId::Requirements
             | PanelId::CoverageLayers
             | PanelId::InterceptPanel
+            | PanelId::Planning
             | PanelId::SystemHealth
             | PanelId::Alerts
             | PanelId::Viewport3d
@@ -1301,6 +1334,7 @@ mod tests {
             PanelId::Requirements,
             PanelId::CoverageLayers,
             PanelId::InterceptPanel,
+            PanelId::Planning,
             PanelId::SystemHealth,
             PanelId::Alerts,
         ] {

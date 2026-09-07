@@ -1480,6 +1480,193 @@ pub fn coverage_report(state: &AppState) -> Option<gungnir_analytics::CoverageRe
     })
 }
 
+/// A laydown's `CoverageVolume`s: the sensors it places that are searching or tracking,
+/// each with its position and mode taken from the laydown but its range looked up from
+/// the baseline's own sensor declaration.
+///
+/// A laydown places every sensor and resource it declares (DN-26 §4 rule 4), but a
+/// laydown's own placement carries no range or modality of its own -- those are the
+/// physical sensor's, unchanged by where a laydown puts it.
+fn laydown_coverage_volumes(
+    laydown: &gungnir_model::Laydown,
+    sensor_ranges: &std::collections::HashMap<u32, f64>,
+    min_elevation_rad: f64,
+) -> Vec<(gungnir_model::SensorId, gungnir_analytics::CoverageVolume)> {
+    laydown
+        .sensors
+        .iter()
+        .filter(|s| {
+            matches!(
+                s.mode,
+                gungnir_model::SensorMode::Search | gungnir_model::SensorMode::Track
+            )
+        })
+        .filter_map(|s| {
+            sensor_ranges.get(&s.sensor.0).map(|&max_range_m| {
+                (
+                    s.sensor,
+                    gungnir_analytics::CoverageVolume {
+                        sensor_enu: s.position_enu,
+                        max_range_m,
+                        min_elevation_rad,
+                    },
+                )
+            })
+        })
+        .collect()
+}
+
+/// PN-16's rows: one per declared laydown, or the reason there are none (GAP-087,
+/// `docs/design/DN-26-laydown-options.md` §5, §6).
+pub enum PlanningRows {
+    Rows(Vec<gungnir_ui::panels::planning::LaydownRow>),
+    Empty { reason: &'static str },
+}
+
+/// Coverage for every declared laydown, under one line-of-sight model for all of them
+/// (DN-26 §5's first rule), so a planner comparing options never reads a difference
+/// between models as a difference between laydowns.
+///
+/// Mirrors [`coverage_report`]'s own frame, approach and terrain-masking choices exactly,
+/// for the same reason PN-11 and this panel must agree: the current laydown's row here
+/// and PN-11's live picture are the same computation over the same inputs.
+#[must_use]
+pub fn planning_rows(state: &AppState) -> PlanningRows {
+    use gungnir_ui::panels::planning::{LaydownCoverage, LaydownRow};
+
+    if state.config.laydowns.is_empty() {
+        return PlanningRows::Empty {
+            reason: "This deployment has declared no laydown alternatives.",
+        };
+    }
+
+    let not_computed = |reason: &str| {
+        state
+            .config
+            .laydowns
+            .iter()
+            .map(|l| LaydownRow {
+                id: l.id.0.clone(),
+                intent: l.intent.clone(),
+                current: l.current,
+                coverage: LaydownCoverage::NotComputed {
+                    reason: reason.to_string(),
+                },
+            })
+            .collect()
+    };
+
+    let Some(frame) = local_frame(state) else {
+        return PlanningRows::Rows(not_computed(
+            "this deployment has declared no local frame origin",
+        ));
+    };
+    if state.config.approaches.is_empty() {
+        return PlanningRows::Rows(not_computed(
+            "no approach is declared to evaluate coverage along",
+        ));
+    }
+
+    let routes: Vec<Vec<[f64; 3]>> = state
+        .config
+        .approaches
+        .iter()
+        .map(|a| {
+            a.points
+                .iter()
+                .map(|[lat_rad, lon_rad, alt_m]| {
+                    frame.to_enu(gungnir_model::Geodetic {
+                        lat_rad: *lat_rad,
+                        lon_rad: *lon_rad,
+                        alt_m: *alt_m,
+                    })
+                })
+                .collect()
+        })
+        .collect();
+    let approaches: Vec<&[[f64; 3]]> = routes.iter().map(Vec::as_slice).collect();
+
+    let sensor_ranges: std::collections::HashMap<u32, f64> = state
+        .config
+        .sensors
+        .iter()
+        .map(|s| (s.id, s.max_range_m))
+        .collect();
+    let min_elevation_rad = state.config.analytics.coverage_min_elevation_rad;
+    let spacing = state.config.analytics.coverage_sample_spacing_m;
+
+    let terrain_masking_applied = !state.data.terrains.is_empty() && state.terrain.is_masking();
+    let parameters = gungnir_analytics::CoverageParameters {
+        sample_spacing_m: spacing,
+        terrain_masking_applied,
+    };
+
+    let report_for = |laydown: &gungnir_model::Laydown| -> gungnir_analytics::CoverageReport {
+        let volumes = laydown_coverage_volumes(laydown, &sensor_ranges, min_elevation_rad);
+        match state.data.terrains.first() {
+            Some(terrain) if terrain_masking_applied => gungnir_analytics::combined_coverage(
+                &volumes,
+                &gungnir_analytics::TerrainMaskLineOfSight {
+                    terrain,
+                    sample_spacing_m: spacing,
+                },
+                &approaches,
+                parameters,
+            ),
+            _ => gungnir_analytics::combined_coverage(
+                &volumes,
+                &gungnir_analytics::FlatTerrainLineOfSight,
+                &approaches,
+                parameters,
+            ),
+        }
+    };
+
+    let current_uncovered_m = state
+        .config
+        .laydowns
+        .iter()
+        .find(|l| l.current)
+        .map(|l| report_for(l).gap_length_m(gungnir_analytics::GapSeverity::Uncovered));
+
+    let rows = state
+        .config
+        .laydowns
+        .iter()
+        .map(|l| {
+            let report = report_for(l);
+            let uncovered_m = report.gap_length_m(gungnir_analytics::GapSeverity::Uncovered);
+            let delta_uncovered_m = if l.current {
+                None
+            } else {
+                current_uncovered_m.map(|current| uncovered_m - current)
+            };
+            LaydownRow {
+                id: l.id.0.clone(),
+                intent: l.intent.clone(),
+                current: l.current,
+                coverage: LaydownCoverage::Computed {
+                    gap_segments: report.gaps.len(),
+                    uncovered_m,
+                    delta_uncovered_m,
+                },
+            }
+        })
+        .collect();
+
+    PlanningRows::Rows(rows)
+}
+
+/// The terrain model label [`planning_rows`] computed under, for the panel's caption.
+#[must_use]
+pub fn planning_terrain_model(state: &AppState) -> &'static str {
+    if !state.data.terrains.is_empty() && state.terrain.is_masking() {
+        "terrain-masked line of sight"
+    } else {
+        "flat-terrain line of sight"
+    }
+}
+
 /// Why no sensor plan can be recommended, when none can (DN-13 §5, degradation).
 ///
 /// Four reasons, kept apart because they have four different fixes, and **none of them is

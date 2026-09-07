@@ -3,8 +3,10 @@
 Unblocks GAP-087, and through it GAP-020's approach corridors and GAP-045's rehearsal
 record. Status: **signed by the owner 2026-09-06, confirmed 2026-09-07** (the confirmation
 was needed because the signed status appeared on disk with nobody present to vouch for
-it; see GAP-087's register entry). `ConfigBaseline.laydowns` with its five refusals is
-**built (GAP-087, 2026-09-07)**; the panel over the existing coverage computation is not.
+it; see GAP-087's register entry). `ConfigBaseline.laydowns` with its five refusals and
+§6's options table are **both built (GAP-087, 2026-09-07)**; the rehearsal section, the
+gap-acceptance control, first-engagement range and the viewport push this note's own
+§7 and GAP-087's remaining item name are not.
 
 ## 1. The gap and what it blocks
 

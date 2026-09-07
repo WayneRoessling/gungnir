@@ -113,27 +113,27 @@ fn an_unbuilt_panel_draws_its_gap() {
     let mut sustainment = SustainmentState::default();
     let probe = RenderProbe::new();
 
-    // The planner has several unbuilt slots.
-    // PN-15 left this list when GAP-005 built it, PN-11 when GAP-007 did, and PN-18 when
-    // GAP-050's failover gave it a state to draw (2026-09-06).
-    for panel in [PanelId::Planning, PanelId::Assistant] {
-        let (_, frame) = probe.draw(|ui| {
-            let mut behavior = dock::PanelBehavior::new(&state, &mut sustainment);
-            behavior.draw_panel(ui, panel);
-        });
-        assert!(
-            frame.says("GAP-"),
-            "{} drew no gap reference: {}",
-            panel.pn(),
-            frame.joined()
-        );
-        assert!(
-            frame.says(panel.pn()),
-            "{} did not name itself: {}",
-            panel.pn(),
-            frame.joined()
-        );
-    }
+    // The assistant is the panel this list is down to.
+    // PN-15 left this list when GAP-005 built it, PN-11 when GAP-007 did, PN-18 when
+    // GAP-050's failover gave it a state to draw (2026-09-06), and PN-16 when GAP-087
+    // built the options table (2026-09-07).
+    let panel = PanelId::Assistant;
+    let (_, frame) = probe.draw(|ui| {
+        let mut behavior = dock::PanelBehavior::new(&state, &mut sustainment);
+        behavior.draw_panel(ui, panel);
+    });
+    assert!(
+        frame.says("GAP-"),
+        "{} drew no gap reference: {}",
+        panel.pn(),
+        frame.joined()
+    );
+    assert!(
+        frame.says(panel.pn()),
+        "{} did not name itself: {}",
+        panel.pn(),
+        frame.joined()
+    );
 }
 
 /// The approval queue in a real desktop draws the reason it is empty, and that reason
