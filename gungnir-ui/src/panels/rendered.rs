@@ -39,11 +39,13 @@ const REQUIREMENT_PERSISTENCE: Unavailable<'static> = Unavailable {
     gap: "GAP-005",
 };
 
-/// Comparing one laydown with another needs the planning surface, which no register
-/// entry builds; GAP-055 tracks the unbuilt panels.
+/// Loading a laydown option into the viewport for a visual before-and-after: PN-16
+/// (GAP-087) now compares laydowns as a table, but does not push one onto the map,
+/// which was never part of DN-26's own engineering and is tracked as GAP-087's
+/// remaining item rather than a separate entry.
 const LAYDOWN_COMPARISON: Unavailable<'static> = Unavailable {
     owner: "gungnir-ui",
-    gap: "GAP-055",
+    gap: "GAP-087",
 };
 
 /// PN-06's whole reason for existing: an empty queue that says *why*. The reason has to
@@ -2583,7 +2585,7 @@ fn the_comparison_control_names_the_gap_that_would_build_it() {
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &view));
-    assert!(frame.says("GAP-055"), "{}", frame.joined());
+    assert!(frame.says("GAP-087"), "{}", frame.joined());
 }
 
 /// PN-21 has to paint all four elements of AGPL section 0, not merely hold them.
@@ -2653,6 +2655,111 @@ fn the_about_panel_paints_every_appropriate_legal_notice() {
     // tell whether a modified build has honoured it.
     assert!(
         frame.says("https://example.invalid/gungnir"),
+        "{}",
+        frame.joined()
+    );
+}
+
+/// PN-16, the planning panel, actually paints the numbers a planner would read a
+/// laydown by -- not just that a view struct holds them (GAP-087).
+#[test]
+fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
+    use crate::panels::planning::{render_planning, LaydownCoverage, LaydownRow, PlanningView};
+
+    let rows = vec![
+        LaydownRow {
+            id: "current".into(),
+            intent: "cover the sea approach".into(),
+            current: true,
+            coverage: LaydownCoverage::Computed {
+                gap_segments: 1,
+                uncovered_m: 900.0,
+                delta_uncovered_m: None,
+            },
+        },
+        LaydownRow {
+            id: "west".into(),
+            intent: "weight the western flank".into(),
+            current: false,
+            coverage: LaydownCoverage::Computed {
+                gap_segments: 0,
+                uncovered_m: 400.0,
+                delta_uncovered_m: Some(-500.0),
+            },
+        },
+        LaydownRow {
+            id: "untested".into(),
+            intent: "a third option nobody has evaluated".into(),
+            current: false,
+            coverage: LaydownCoverage::NotComputed {
+                reason: "no terrain loaded for this sector".into(),
+            },
+        },
+    ];
+    let view = PlanningView {
+        laydowns: Section::Present(&rows),
+        terrain_model: "flat-terrain line of sight",
+        rehearsal: Unavailable {
+            owner: "gungnir-tracking-service",
+            gap: "GAP-045",
+        },
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| render_planning(ui, &view));
+
+    // The current laydown is named as such, and the terrain model every row was
+    // compared under is stated once rather than left for the reader to assume.
+    assert!(frame.says("current"), "{}", frame.joined());
+    assert!(
+        frame.says("flat-terrain line of sight"),
+        "{}",
+        frame.joined()
+    );
+
+    // A computed row's numbers reach the screen, not just the view struct.
+    assert!(frame.says("900"), "{}", frame.joined());
+    assert!(
+        frame.says("500 m less gap than today"),
+        "{}",
+        frame.joined()
+    );
+
+    // A row that could not be evaluated says why, and is not drawn as a zero.
+    assert!(frame.says("Not computed"), "{}", frame.joined());
+    assert!(frame.says("no terrain loaded"), "{}", frame.joined());
+
+    // DN-26 section 6 rule 4: no adoption path exists, and the panel says so rather
+    // than leaving an operator to infer it from the absence of a button.
+    assert!(
+        frame.says("moving a sensor is a physical act"),
+        "{}",
+        frame.joined()
+    );
+
+    // The rehearsal section is drawn as unavailable, naming a crate and a gap, not
+    // silently missing (GAP-045).
+    assert!(frame.says("GAP-045"), "{}", frame.joined());
+}
+
+/// An empty laydown table says why rather than drawing nothing (DN-26 section 8).
+#[test]
+fn planning_with_no_laydowns_declared_says_so() {
+    use crate::panels::planning::{render_planning, PlanningView};
+
+    let view = PlanningView {
+        laydowns: Section::Empty {
+            reason: "This deployment has declared no laydown alternatives.",
+        },
+        terrain_model: "flat-terrain line of sight",
+        rehearsal: Unavailable {
+            owner: "gungnir-tracking-service",
+            gap: "GAP-045",
+        },
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| render_planning(ui, &view));
+    assert!(
+        frame.says("declared no laydown alternatives"),
         "{}",
         frame.joined()
     );

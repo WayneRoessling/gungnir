@@ -13,6 +13,7 @@ pub mod decision_dialog;
 pub mod handoff;
 pub mod intercept_panel;
 pub mod not_implemented;
+pub mod planning;
 mod rendered;
 pub mod replay;
 pub mod reports;
