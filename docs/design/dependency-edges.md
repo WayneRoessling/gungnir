@@ -300,7 +300,8 @@ here they did not.
 | (t) remote → security | `identity.rs` builds a host's TLS identity from that host's own `KeyProvider`, so **the private half never leaves custody**: `rcgen` signs through the provider's `sign`, rustls presents the result over the same call, and no path in the module can produce a certificate over key material that has left a provider. It imports `KeyId`, `KeyProvider`, `KeyPurpose` and `SignatureScheme`, and nothing else. **The refused alternative was `gungnir-api`**, the better home on layering grounds, rejected because `gungnir-app` holds it as a **dev-dependency only** and `ARCHITECTURE.md` refuses a dev-dependency as a production edge. Leaving the code in `gungnir-node`, where it lived until 2026-09-06, was refused separately: the desktop needs the same identity (GAP-060), two binaries cannot depend on each other, so it would have meant roughly 150 duplicated lines with nothing holding the copies in step | `gungnir-remote/src/identity.rs`; `DN-22-key-management.md` amendment 1; D-29 |
 
 **Why `gungnir-remote` carries it.** It is the only crate **both binaries already depend on
-at runtime** that already holds `rustls`, `tokio-rustls` and `rustls-pemfile`, and it already
+at runtime** that already holds `rustls` (whose `pki_types::pem` replaced `rustls-pemfile`)
+and `tokio-rustls`, and it already
 owns `LinkTls` -- the type that answers *who is this host*. The two alternative homes are the
 ones ruled out above.
 

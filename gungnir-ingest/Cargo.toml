@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-ingest"
 version.workspace = true
@@ -21,13 +25,13 @@ nalgebra.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-gungnir-model = { path = "../gungnir-model" }
-gungnir-time = { path = "../gungnir-time" }
-gungnir-tracking-service = { path = "../gungnir-tracking-service" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }
+gungnir-time = { path = "../gungnir-time", version = "0.1.0" }
+gungnir-tracking-service = { path = "../gungnir-tracking-service", version = "0.1.0" }
 # Edge (i), drawn in ARCHITECTURE.md §7.1 (2026-09-06): the ASTERIX radar adapter uses the
 # Category 048 and 034 codecs. ARCHITECTURE.md §8.6 always described this edge; the
 # adapter is the first thing to need it.
-gungnir-interop = { path = "../gungnir-interop" }
+gungnir-interop = { path = "../gungnir-interop", version = "0.1.0" }
 
 [dev-dependencies]
 rand.workspace = true
@@ -35,4 +39,4 @@ rand.workspace = true
 # docs/verification-capability-table.md 1. The row names the ReplayAdapter, which
 # lives here, and the exported type is gungnir-model::DetectionView, which
 # gungnir-scenario deliberately does not depend on. No runtime edge; no cycle.
-gungnir-scenario = { path = "../gungnir-scenario" }
+gungnir-scenario = { path = "../gungnir-scenario", version = "0.1.0" }

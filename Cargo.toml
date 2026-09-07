@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [workspace]
 resolver = "2"
 members = [
@@ -124,11 +128,30 @@ yaml_serde = "0.10"
 # UI / rendering stack. eframe runs with Renderer::Glow (three-d needs the OpenGL
 # context); wgpu is compute-only and pinned to the line eframe 0.29's optional wgpu
 # feature would use, so enabling that feature never yields two wgpu versions.
+#
+# three-d is taken without its default `window` feature (2026-09-07). gungnir-viewport3d
+# draws into eframe's own glow context and never opens a three-d window, so the feature
+# bought nothing and cost a second winit (0.28, beside eframe's 0.30) with glutin, the
+# wayland and Android stacks, and `instant` (RUSTSEC-2024-0384, unmaintained) beneath it.
+# What three-d still pulls that is flagged is `cgmath` (RUSTSEC-2026-0196): it is
+# three-d's own math type, not a feature, and three-d 0.19 depends on it too, so it
+# leaves only when three-d drops it or three-d is replaced. 0.19 is not a candidate
+# either way: it moves to glow 0.17 and egui 0.34, and the shared OpenGL context needs
+# three-d's glow to be eframe 0.29's glow 0.14.
 eframe = "0.29"
 egui = "0.29"
-three-d = "0.18"
+three-d = { version = "0.18", default-features = false }
 wgpu = "22"
 gltf = "1"
+# Legacy `.vtk` only, since 2026-09-07. vtkio's default `xml` feature reads .vtp/.vtu and
+# the other XML VTK files through quick-xml 0.22, which carries RUSTSEC-2026-0194 and
+# RUSTSEC-2026-0195 (quadratic attribute checking; unbounded namespace allocation), and
+# no vtkio release is on a patched line: 0.6.3 pins 0.22, the 0.7.0 candidates pin 0.36,
+# and the fix is 0.41. The `compression` feature (lz4_flex 0.7, RUSTSEC-2026-0041; xz2;
+# flate2) serves only the XML reader's appended data and goes with it. A VTK file is
+# operator-supplied input on the node, so the exposure was real. The loader refuses an
+# XML extension by name (gungnir-data/src/scientific/mod.rs); restore both features in
+# the same commit that moves vtkio to a release on quick-xml >= 0.41.
 vtkio = { version = "0.6", default-features = false }
 las = { version = "0.9", features = ["laz-parallel"] }
 # GeoTIFF DEMs (GAP-023, decided 2026-09-06): the image-rs TIFF codec, pure Rust;
@@ -158,7 +181,9 @@ tokio-tungstenite = "0.29"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 rustls = "0.23"
 tokio-rustls = "0.26"
-rustls-pemfile = "2"
+# `rustls-pemfile` left this list on 2026-09-07 when RUSTSEC-2025-0134 marked it
+# unmaintained. PEM reading now comes from `rustls::pki_types::pem`, the type crate rustls
+# itself re-exports, so the graph lost a crate and gained none (§2.9, the rustls row).
 tower-http = { version = "0.6", features = ["trace", "limit"] }
 # The Sink and Stream traits tokio-tungstenite's socket implements. Already in the
 # tree as its own dependency; named directly because sending and receiving a frame

@@ -44,6 +44,11 @@ id_ed25519*
 *.pdf
 !docs/**/*.pdf
 
+# --- Generated in the release, not committed
+# `cargo about generate` writes the third-party notices from Cargo.lock in release.yml's
+# assurance job (about.toml); a local run leaves the same file here.
+/THIRD-PARTY-NOTICES.md
+
 # --- Editor and tool leavings
 .~lock.*#
 *.tmp

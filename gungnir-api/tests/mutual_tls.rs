@@ -16,6 +16,7 @@ use gungnir_api::tls::{acceptor, TlsListener, TlsPaths};
 use gungnir_api::transport::{serve_on_listener, NodeApi};
 use gungnir_api::v2::SnapshotResponse;
 use gungnir_model::SystemHealth;
+use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls::{ClientConfig, RootCertStore};
 use std::sync::Arc;
@@ -82,7 +83,7 @@ fn api() -> Arc<NodeApi> {
 /// Build a client that presents `identity`, trusting `roots`.
 fn client_config(roots_pem: &str, identity: Option<(&str, &str)>) -> ClientConfig {
     let mut roots = RootCertStore::empty();
-    for cert in rustls_pemfile::certs(&mut roots_pem.as_bytes()) {
+    for cert in CertificateDer::pem_slice_iter(roots_pem.as_bytes()) {
         roots.add(cert.expect("a certificate")).expect("added");
     }
     let builder = ClientConfig::builder().with_root_certificates(roots);
@@ -90,12 +91,11 @@ fn client_config(roots_pem: &str, identity: Option<(&str, &str)>) -> ClientConfi
         None => builder.with_no_client_auth(),
         Some((cert_pem, key_pem)) => {
             let certs: Vec<CertificateDer<'static>> =
-                rustls_pemfile::certs(&mut cert_pem.as_bytes())
+                CertificateDer::pem_slice_iter(cert_pem.as_bytes())
                     .collect::<Result<_, _>>()
                     .expect("certificates");
-            let key: PrivateKeyDer<'static> = rustls_pemfile::private_key(&mut key_pem.as_bytes())
-                .expect("readable")
-                .expect("a key");
+            let key: PrivateKeyDer<'static> =
+                PrivateKeyDer::from_pem_slice(key_pem.as_bytes()).expect("a key");
             builder.with_client_auth_cert(certs, key).expect("identity")
         }
     }

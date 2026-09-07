@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-tracking-service"
 version.workspace = true
@@ -21,22 +25,22 @@ thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 crossbeam-channel.workspace = true
-gungnir-core = { path = "../gungnir-core" }
-gungnir-coord = { path = "../gungnir-coord" }
-gungnir-filters = { path = "../gungnir-filters" }
-gungnir-association = { path = "../gungnir-association" }
-gungnir-track = { path = "../gungnir-track" }
-gungnir-rfs = { path = "../gungnir-rfs" }
-gungnir-track-fusion = { path = "../gungnir-track-fusion" }
-gungnir-fusion-async = { path = "../gungnir-fusion-async" }
-gungnir-model = { path = "../gungnir-model" }
+gungnir-core = { path = "../gungnir-core", version = "0.1.0" }
+gungnir-coord = { path = "../gungnir-coord", version = "0.1.0" }
+gungnir-filters = { path = "../gungnir-filters", version = "0.1.0" }
+gungnir-association = { path = "../gungnir-association", version = "0.1.0" }
+gungnir-track = { path = "../gungnir-track", version = "0.1.0" }
+gungnir-rfs = { path = "../gungnir-rfs", version = "0.1.0" }
+gungnir-track-fusion = { path = "../gungnir-track-fusion", version = "0.1.0" }
+gungnir-fusion-async = { path = "../gungnir-fusion-async", version = "0.1.0" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }
 
 [dev-dependencies]
 # The §2 whole-pipeline replay row names the five scenarios, so the test generates them
 # on a seeded generator. Dev-only; the graph test reads normal dependencies alone.
-gungnir-scenario = { path = "../gungnir-scenario" }
+gungnir-scenario = { path = "../gungnir-scenario", version = "0.1.0" }
 rand.workspace = true
-gungnir-oracle = { path = "../gungnir-oracle" }
+gungnir-oracle = { path = "../gungnir-oracle", version = "0.1.0" }
 # The plan-07 sample sets in testdata/tracks/samples/ are JSON lines, and GAP-076 asks
 # for one of them through this crate's replay; serde_json is an already-approved
 # workspace dependency (agentic-coding-standards.md §2.9) and this is a dev-dependency

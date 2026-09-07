@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-model"
 version.workspace = true
@@ -23,8 +27,8 @@ thiserror.workspace = true
 # a peer that receives an identity has to be able to read and write it, and the format is
 # part of what the identity *is*. No generator feature -- minting is `gungnir-identity`'s.
 uuid.workspace = true
-gungnir-core = { path = "../gungnir-core" }
-gungnir-coord = { path = "../gungnir-coord" }
+gungnir-core = { path = "../gungnir-core", version = "0.1.0" }
+gungnir-coord = { path = "../gungnir-coord", version = "0.1.0" }
 
 [dev-dependencies]
 serde_json.workspace = true

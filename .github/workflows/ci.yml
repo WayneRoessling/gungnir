@@ -9,6 +9,19 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # deny.toml is the distributability control for an AGPL workspace (docs/release-
+  # governance.md); a dependency under a license outside its allow-list has to fail the
+  # pull request that adds it, not the tag months later. Advisories are left to
+  # release.yml, so a new CVE in an unrelated crate does not block every PR.
+  deny:
+    name: cargo-deny (licenses, bans, sources)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses bans sources
+
   fmt-clippy-test:
     name: fmt, clippy, test
     runs-on: ubuntu-latest

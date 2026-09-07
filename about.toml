@@ -1,0 +1,78 @@
+# cargo-about configuration: collects the license text and copyright notice of every
+# crate linked into a release binary into THIRD-PARTY-NOTICES.md
+# (docs/release-governance.md). release.yml runs it in the assurance job:
+#
+#     cargo about generate deploy/third-party-notices.hbs -o THIRD-PARTY-NOTICES.md
+#
+# This is not the gate; deny.toml is. cargo-deny decides whether a license may be
+# linked into the AGPL workspace at all, and this file only decides what the notices
+# file says. So `accepted` is deny.toml's allow-list plus the two font licenses that
+# deny.toml admits for `epaint_default_fonts` alone; a crate that fails deny.toml never
+# reaches this step.
+#
+# Why the file exists: MIT, the BSD variants, ISC and Apache-2.0 all condition
+# redistribution in binary form on the copyright notice and license text accompanying
+# the binary, and the SIL Open Font License and Ubuntu Font Licence condition bundling
+# a font on the same. A CycloneDX SBOM names license identifiers, not notices, so it
+# does not satisfy that; this does.
+
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "MPL-2.0",
+    "CC0-1.0",
+    "BSL-1.0",
+    # Font data in epaint_default_fonts only; see deny.toml [[licenses.exceptions]].
+    "OFL-1.1",
+    "LicenseRef-UFL-1.0",
+    # The workspace's own crates. cargo-about lists every crate in the graph, members
+    # included, and has no way to leave publishable members out, so they appear in the
+    # notices under their own license with the AGPL text. deny.toml keeps AGPL *off* its
+    # allow-list (an outside AGPL crate cannot be taken, CLA.md section 4); this entry
+    # does not loosen that, because this file is not the gate.
+    "AGPL-3.0-or-later",
+]
+
+# Same two targets as deny.toml and release.yml. Dev-dependencies are excluded because
+# nothing in them is conveyed; build-dependencies are kept because a proc-macro or a
+# build script still contributes to what is built, and their notices cost nothing.
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+]
+ignore-dev-dependencies = true
+ignore-build-dependencies = false
+
+# The notices are built from the license files each crate ships; where a crate ships
+# none, cargo-about substitutes the canonical SPDX text for the identifier the crate
+# declares and says so with a warning. Either way the artifact is a function of
+# Cargo.lock and the crate sources, so two runs on the same lock agree.
+
+# epaint_default_fonts declares `(MIT OR Apache-2.0) AND OFL-1.1 AND LicenseRef-UFL-1.0`
+# and ships four license texts beside its fonts: OFL.txt, UFL.txt, Hack-Regular.txt (MIT
+# plus the Bitstream Vera notice) and emoji-icon-font-mit-license.txt. Left to itself,
+# cargo-about 0.9.2 recognises OFL.txt and the emoji MIT text, cannot classify the
+# combined Hack text, and warns that `LicenseRef-UFL-1.0` has no license file, because a
+# LicenseRef has no canonical text to fall back on.
+#
+# A `[epaint_default_fonts.clarify]` block naming those files is the documented answer
+# and was tried on 2026-09-07; it does not work in 0.9.2. The generator's LicenseRef
+# branch (src/generate.rs, "LicenseRef-* identifiers are project-specific") filters the
+# clarified files with the test inverted: it *drops* every file whose expression names
+# the LicenseRef and *keeps* every one that does not, so UFL.txt never appears and the
+# OFL and MIT texts are printed under the Ubuntu heading instead. Until that is fixed
+# upstream, deploy/third-party-notices.hbs carries the Ubuntu Font Licence and the Hack
+# notice as two fixed sections after the generated ones, copied verbatim from the crate
+# (SHA-256 2f0015108d68627bd788d313f529c21ff4da2c2c42a5e1f3883acc83480f9002 and
+# 47c0cccbeec7e8614548cc485588b28149e7874188df5f41b36efebcee285c87). They are pinned to
+# epaint_default_fonts 0.29.1: an egui upgrade that changes the bundled fonts changes
+# those two sections in the same commit, and a cargo-about release that fixes the
+# branch should replace them with the clarify block. release.yml pins cargo-about to
+# 0.9.2 so the output stays the one this was verified against.

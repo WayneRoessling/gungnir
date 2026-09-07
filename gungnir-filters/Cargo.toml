@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-filters"
 version.workspace = true
@@ -26,8 +30,8 @@ serde.workspace = true
 # explicit `&mut impl Rng` rather than reaching for a thread-local generator.
 rand.workspace = true
 rand_distr.workspace = true
-gungnir-core = { path = "../gungnir-core" }
-gungnir-coord = { path = "../gungnir-coord" }
+gungnir-core = { path = "../gungnir-core", version = "0.1.0" }
+gungnir-coord = { path = "../gungnir-coord", version = "0.1.0" }
 
 [dev-dependencies]
 proptest.workspace = true
@@ -35,7 +39,7 @@ criterion.workspace = true
 # The filterpy oracle fixture in testdata/oracles/filters/ is JSON; serde_json is an
 # already-approved workspace dependency (agentic-coding-standards.md 2.9), dev-only.
 serde_json.workspace = true
-gungnir-testkit = { path = "../gungnir-testkit" }
+gungnir-testkit = { path = "../gungnir-testkit", version = "0.1.0" }
 
 [[bench]]
 name = "ekf_predict_update"

@@ -72,6 +72,26 @@ fn a_vtk_file_that_is_not_polydata_or_not_vtk_is_refused() {
     ));
 }
 
+/// The XML VTK reader is compiled out (workspace `Cargo.toml`, vtkio row), so a `.vtp`
+/// is refused by name and reason, not read as garbage. When the reader returns this
+/// test is the one that changes: it should then load the file.
+#[test]
+fn an_xml_vtk_file_is_refused_by_name_while_the_reader_is_compiled_out() {
+    let vtp = scratch("surface.vtp");
+    std::fs::write(
+        &vtp,
+        "<?xml version=\"1.0\"?>\n<VTKFile type=\"PolyData\" version=\"0.1\"><PolyData/></VTKFile>\n",
+    )
+    .expect("write");
+    match scientific::load_vtk(&vtp) {
+        Err(DataError::Parse(reason)) => {
+            assert!(reason.contains("XML VTK reader"), "{reason}");
+            assert!(reason.contains("RUSTSEC-2026-0194"), "{reason}");
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
 #[test]
 fn the_triangle_asset_loads_with_its_normals_and_indices() {
     let mesh = assets::load_gltf(&fixture("assets", "triangle.gltf")).expect("loads");

@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-core"
 version.workspace = true
@@ -25,4 +29,4 @@ proptest.workspace = true
 # is an already-approved workspace dependency (agentic-coding-standards.md 2.9) and
 # this is a dev-dependency only, so no runtime edge changes.
 serde_json.workspace = true
-gungnir-testkit = { path = "../gungnir-testkit" }
+gungnir-testkit = { path = "../gungnir-testkit", version = "0.1.0" }

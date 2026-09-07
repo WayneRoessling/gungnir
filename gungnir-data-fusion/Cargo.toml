@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-data-fusion"
 version.workspace = true
@@ -25,7 +29,7 @@ nalgebra.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 wgpu.workspace = true
-gungnir-data = { path = "../gungnir-data" }
+gungnir-data = { path = "../gungnir-data", version = "0.1.0" }
 
 [dev-dependencies]
 proptest.workspace = true

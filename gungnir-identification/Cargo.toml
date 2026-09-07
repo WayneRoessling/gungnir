@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-identification"
 version.workspace = true
@@ -18,4 +22,4 @@ workspace = true
 
 [dependencies]
 serde.workspace = true
-gungnir-model = { path = "../gungnir-model" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }

@@ -1,8 +1,15 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
+# Excluded from the workspace (root Cargo.toml), so `license.workspace = true` is not
+# available here; the value is the workspace's, restated. See LICENSE-ADDITIONAL-TERMS.md.
+license = "AGPL-3.0-or-later"
 
 [package.metadata]
 cargo-fuzz = true

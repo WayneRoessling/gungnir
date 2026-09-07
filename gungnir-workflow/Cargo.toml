@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-workflow"
 version.workspace = true
@@ -18,14 +22,14 @@ workspace = true
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
-gungnir-model = { path = "../gungnir-model" }
-gungnir-security = { path = "../gungnir-security" }
-gungnir-observability = { path = "../gungnir-observability" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }
+gungnir-security = { path = "../gungnir-security", version = "0.1.0" }
+gungnir-observability = { path = "../gungnir-observability", version = "0.1.0" }
 # docs/design/dependency-edges.md: accepted by the engineering reviewer 2026-09-05.
 # Narrow by construction: the tasking case reads task state and never issues a
 # command, so exactly one crate can talk to a sensor.
-gungnir-sensor-management = { path = "../gungnir-sensor-management" }
+gungnir-sensor-management = { path = "../gungnir-sensor-management", version = "0.1.0" }
 # docs/design/dependency-edges.md: accepted 2026-09-05. The warning rule reads the
 # prediction to know when an obligation triggers; it is a rule about an obligation,
 # not a detector, so it belongs in a crate with tests rather than in a binary.
-gungnir-assessment = { path = "../gungnir-assessment" }
+gungnir-assessment = { path = "../gungnir-assessment", version = "0.1.0" }

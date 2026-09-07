@@ -44,7 +44,17 @@ make the commercial edition undistributable.
   (`gungnir-core`, `gungnir-model`) and are re-exported, never redefined.
 - **No new dependencies without sign-off.** The stack is fixed in
   `docs/agentic-coding-standards.md` §2 and §2.9. Propose additions in the PR
-  description with the problem they solve.
+  description with the problem they solve. `ci.yml` runs `cargo deny check licenses
+  bans sources` on every pull request, so a crate under a license outside
+  `deny.toml`'s allow-list fails the PR that adds it.
+- **A new workspace crate has three manifest obligations.** Its `Cargo.toml` opens
+  with the same three-line licence header as every source file (cargo-about reads the
+  licence from that line, since an inherited `license.workspace = true` has no text of
+  its own). Every intra-workspace
+  dependency carries `version = "0.1.0"` beside its `path` (crates.io requires it and
+  `deny.toml` treats a versionless path as a wildcard), and the crate's name goes on
+  the `[[licenses.exceptions]]` list in `deny.toml`, since the workspace's own
+  `AGPL-3.0-or-later` is deliberately not on the allow-list.
 - **No `unwrap()`/`expect()`** outside tests, `main()`, and debug-only invariant
   checks. Fallible functions return `Result` with a crate-local error enum.
 - **No execution without a decision record** (contract C-01). An engagement opens,

@@ -198,7 +198,7 @@ learns about TLS and this note keeps naming no library.
 
 **The certificate chain is not key material** and needs no custody: it is public by
 construction, so it is read from a PEM path like any other configuration file. That is
-what §2.9's `rustls-pemfile` row means by "reads them"; only the private half goes through
+what §2.9's `rustls` row means by "reads them"; only the private half goes through
 the provider.
 
 **A cost worth stating**: a signature per handshake means a round trip to a managed service

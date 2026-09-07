@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 [package]
 name = "gungnir-fusion-async"
 version.workspace = true
@@ -22,17 +26,17 @@ tracing.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 crossbeam-channel.workspace = true
-gungnir-track = { path = "../gungnir-track" }
-gungnir-rfs = { path = "../gungnir-rfs" }
-gungnir-track-fusion = { path = "../gungnir-track-fusion" }
+gungnir-track = { path = "../gungnir-track", version = "0.1.0" }
+gungnir-rfs = { path = "../gungnir-rfs", version = "0.1.0" }
+gungnir-track-fusion = { path = "../gungnir-track-fusion", version = "0.1.0" }
 # GAP-011, edge (r) in ARCHITECTURE.md §7.1: the pipeline drives an estimator and an
 # association gate per epoch, so it names the crates that own them rather than
 # reimplementing either. Both are already beneath this crate through `gungnir-track`;
 # what changes is that the manifest now says what the code imports.
-gungnir-core = { path = "../gungnir-core" }
-gungnir-filters = { path = "../gungnir-filters" }
-gungnir-association = { path = "../gungnir-association" }
+gungnir-core = { path = "../gungnir-core", version = "0.1.0" }
+gungnir-filters = { path = "../gungnir-filters", version = "0.1.0" }
+gungnir-association = { path = "../gungnir-association", version = "0.1.0" }
 
 [dev-dependencies]
 proptest.workspace = true
-gungnir-testkit = { path = "../gungnir-testkit" }
+gungnir-testkit = { path = "../gungnir-testkit", version = "0.1.0" }

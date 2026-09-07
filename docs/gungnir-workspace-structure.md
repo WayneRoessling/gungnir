@@ -12,6 +12,7 @@ gungnir-workspace/
 ├── Cargo.toml                      # workspace root: members, lint policy, shared dependency pins
 ├── rust-toolchain.toml             # pinned channel and components
 ├── deny.toml                       # cargo-deny license/advisory/source policy
+├── about.toml                      # cargo-about: third-party notices for the release binaries
 ├── README.md                       # orientation, status, suggested build order
 ├── ARCHITECTURE.md                 # technical reference, §1–§10
 ├── CONTRIBUTING.md                 # the rules that apply to any change

@@ -19,6 +19,7 @@ use gungnir_api::v2::{SnapshotResponse, WarningAcknowledgementRequest};
 use gungnir_model::{AssetId, MissionTime, SensorId, SystemHealth, TrackId};
 use gungnir_security::{hash_passphrase, Account, InMemoryAccountStore, OperatorId, TokenIssuer};
 use rcgen::{BasicConstraints, CertificateParams, DnType, IsCa, Issuer, KeyPair};
+use rustls::pki_types::pem::PemObject;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -98,7 +99,7 @@ impl Pki {
 
     fn roots(&self) -> rustls::RootCertStore {
         let mut roots = rustls::RootCertStore::empty();
-        for cert in rustls_pemfile::certs(&mut self.ca_pem.as_bytes()) {
+        for cert in rustls::pki_types::CertificateDer::pem_slice_iter(self.ca_pem.as_bytes()) {
             roots.add(cert.expect("pem")).expect("root");
         }
         roots

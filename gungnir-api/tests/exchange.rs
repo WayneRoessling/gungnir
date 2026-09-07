@@ -14,6 +14,7 @@
 //! The certificates are made here with `rcgen` (dev-only, D-22) and never written to the
 //! repository.
 
+use rustls::pki_types::pem::PemObject;
 use std::sync::Arc;
 
 use gungnir_api::tls::{self, TlsListener, TlsPaths};
@@ -102,7 +103,7 @@ impl Pki {
 
     fn roots(&self) -> rustls::RootCertStore {
         let mut roots = rustls::RootCertStore::empty();
-        for cert in rustls_pemfile::certs(&mut self.ca_pem.as_bytes()) {
+        for cert in rustls::pki_types::CertificateDer::pem_slice_iter(self.ca_pem.as_bytes()) {
             roots.add(cert.expect("pem")).expect("root");
         }
         roots
