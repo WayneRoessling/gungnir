@@ -256,6 +256,51 @@ no seam to plug into. `InMemorySensorRegistry::attach_adapter` is that seam. Not
 attaches one outside tests: GAP-001 brings the adapters, and until then every task stops
 at `Issued` and `has_adapter()` reports false rather than leaving it to be inferred.
 
+## 10. Amendment 2 (2026-09-07): the first `SensorControlAdapter`, and what it cannot say
+
+**Unsigned.** Written with the code, awaiting the owner.
+
+Item g of amendment 1 built the seam and said "GAP-001 brings the adapters." One does now:
+`gungnir_sensor_management::sapient_task::SapientTaskAdapter`, the outbound counterpart of
+`gungnir-ingest`'s SAPIENT spotter adapter, both pinned against the same ICD
+(`docs/design/external-standards.md` §7).
+
+**No new edge.** Building the JSON `Task` message needs `serde_json`, already a workspace
+dependency, and nothing `gungnir-ingest` owns; putting it in `gungnir-sensor-management`,
+where `SensorControlAdapter` is defined, means the edge §4 already argued stays the only
+one.
+
+**Three of `SensorCommand`'s four variants map cleanly onto SAPIENT's `Task.command`; the
+fourth does not, and is refused rather than guessed.** `Cue` becomes a single-point
+`LocationList` under `look_at`, since SAPIENT's `LocationOrRangeBearing` has no dedicated
+point variant and a `RangeBearingCone` would need the sensor's own position, which this
+crate does not hold. `Calibrate` becomes the `oneof`'s free-text `request`. `SetMode`
+becomes `mode_change`, also free text -- the ICD leaves ASM mode names to the deployment,
+so this adapter states its own and any receiver has to agree on them out of band regardless
+of what is chosen. `Search` **is refused**: a search area could be sent as a `Region`, but
+a `Region` also carries classification and behaviour filters `AssetExtent` says nothing
+about, and a `Task` with an empty filter list is not obviously the same request as "search
+this area." That is an interface agreement nobody has made, and this note does not make it
+either -- the adapter names the reason and refuses rather than sending a `Task` whose
+meaning would be guessed, the same discipline DN-27 §2 applies to a bearing.
+
+**Delivery, not transport, and the round trip is not built.** `issue` builds a
+well-formed `Task` and hands the JSON text to an injected sink; what carries it to a real
+SAPIENT node from there is the same open row the inbound adapter already carries; decoding
+binary protobuf needs a runtime this workspace has not admitted under §2.9. `TaskAck` is
+not parsed, so `SensorControl::acknowledge` -- item g's seam -- has no caller from this
+adapter yet. GAP-004's own closing action is a command reaching a sensor "over a specified
+interface rather than stopping at the node," which this settles; the acknowledgement
+reaching back is recorded as the next item rather than attempted here.
+
+**A `task_id` and a message `timestamp`, without a `ulid` or `chrono` dependency.** The
+ICD's `task_id` is annotated `is_ulid: true` and the envelope's `timestamp` needs an RFC
+3339 UTC instant; both are built by hand against public, well-known algorithms (a 48-bit
+timestamp plus 80-bit payload in Crockford base32; Howard Hinnant's `civil_from_days`, the
+inbound adapter's own `days_from_civil` run backwards) rather than by adding a crate for
+either. The encoder is checked against the published ULID specification's own worked
+example.
+
 ## Traceability
 
 GAP-004, GAP-005; CAP-1.3, CAP-2.12; D-08 for the endpoint model; depends on GAP-001 for

@@ -139,7 +139,10 @@ Two checks apply beyond the tracking core and are not numbered gates:
 
 - GPU point-cloud registration is validated against the pure-CPU reference on
   GPU-enabled runners (`gpu-fusion.yml`), never inside plain `cargo test`
-  (`rust-3d-data-ecosystem-build-vs-adopt.md` §3.6).
+  (`rust-3d-data-ecosystem-build-vs-adopt.md` §3.6). **Dormant, manual dispatch only,
+  since 2026-09-07**: the GPU path and its tests do not exist yet (the `gpu-tests`
+  feature is empty), and neither does the runner; both are GAP-024. The workflow fails
+  a run that executed zero tests, so it cannot pass on a runner alone.
 - End-to-end scenario replay through the service facades (detections in, UI-consumable
   state out) catches integration faults no single-crate oracle test can
   (`ARCHITECTURE.md` §6).
@@ -150,10 +153,9 @@ The non-core layers have draft pass criteria in `verification-capability-table.m
 ### Status of the gates
 
 The workflow files exist under `.github/workflows/` (`gungnir-workspace-structure.md`).
-They run once the repository is hosted with runners; `gpu-fusion.yml` additionally
-needs a self-hosted runner labelled `gpu`. Until then the reviewer agent and the human
-reviewer run the equivalent commands locally (`../CONTRIBUTING.md`) and say so in the
-PR description.
+They run on GitHub since 2026-09-07 (D-10 as amended). `gpu-fusion.yml` is the
+exception: it runs only on manual dispatch until GAP-024 delivers the GPU path, its
+tests, and a self-hosted runner labelled `gpu`.
 
 ## Review pipeline
 

@@ -2,7 +2,7 @@
 # Depth applies to the submarine class only; all sea classes are tracked at the
 # surface (altitude 0) for the surface picture.
 domain: sea
-reviewer: subject-matter reviewer (maritime), pending
+reviewer: owner, acting as subject-matter reviewer (maritime), approved 2026-09-07
 platforms:
   - id: magura-v5
     name: Magura V5

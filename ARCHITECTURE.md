@@ -303,7 +303,8 @@ crates; the workflow files that enforce them are under `.github/workflows/`
   `docs/rust-3d-data-ecosystem-build-vs-adopt.md` §3.6 specifies: a pure-CPU
   `cpu_reference` implementation validated with ordinary `cargo test`, and the GPU path
   validated separately on a GPU-enabled runner (`gpu-fusion.yml`, feature `gpu-tests`),
-  never forced into `cargo test`.
+  never forced into `cargo test`. Neither the GPU path nor a test behind that feature
+  exists yet (GAP-024), and the workflow is dormant until they do.
 - The service-layer traits are the natural seam for integration tests that replay a
   `gungnir-scenario` scenario through the whole pipeline (detections, tracking service,
   intercept service, UI-consumable state), something none of the per-module oracle tests

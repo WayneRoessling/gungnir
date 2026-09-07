@@ -4,6 +4,7 @@ Cross-tool verification matrix: Rust modules, target capabilities, Python/MATLAB
 
 §1 is the tracking core's matrix and is the source of truth for every pass criterion the crate doc comments restate. §2 is a draft for the other layers: the verification method is taken from the design documents, and every pass criterion that had no value was set by the owner on 2026-09-04 (D-16); the rows stay Draft until their tests exist. Row names in §1 are cited from Rust doc comments and must not be changed.
 
+| `gungnir-sensor-management` | Outbound SAPIENT tasking (CAP-1.3) | `gungnir-sensor-management/src/sapient_task.rs` `mod tests` and `mod ulid::tests`: each SensorCommand mapping, a refused Search, a refused unconfigured destination, dwell producing a task end time, and the ULID/RFC-3339 encoders against a published worked example | each deliverable command produces a well-formed Task message with the stated field mapping; Search and an unconfigured sensor are refused naming the reason; the ULID encoder reproduces the published specification's own example |
 ## 1. Tracking core
 
 The *Rust Module* column uses the module names from the original tracking design; `architecture.md` maps them to crates (`track-manager` is the crate `gungnir-track`, every other module is `gungnir-<module>`).
@@ -168,7 +169,7 @@ does the row's status move in `architecture.md`. Rows with no test are listed as
 | `gungnir-data` Loader correctness per format | `gungnir-data/tests/{dem,pointcloud,vtk_gltf}.rs` (LAS, DEM, VTK, glTF; COPC not yet) | |
 | `gungnir-data` Loading off the UI thread | `gungnir-app/tests/terrain.rs` (`spawn_loader`) | |
 | `gungnir-data-fusion` CPU ICP reference | `mod tests` in `gungnir-data-fusion/src/lib.rs` | |
-| `gungnir-data-fusion` GPU path against CPU reference | none: the GPU runner (GAP-024) | |
+| `gungnir-data-fusion` GPU path against CPU reference | none: neither the GPU path nor a test behind the `gpu-tests` feature exists, nor the GPU runner (GAP-024); `gpu-fusion.yml` is dormant and fails a run that executed zero tests | |
 | `gungnir-render` Single device, no per-frame resource creation | none | |
 | `gungnir-viewport3d` SSE and tileset traversal | `mod tests` in `gungnir-viewport3d/src/lib.rs` | |
 | `gungnir-viewport3d` Glyph rebuild only on change | `mod tests` in `gungnir-viewport3d/src/lib.rs` | |

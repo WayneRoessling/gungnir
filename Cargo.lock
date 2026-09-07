@@ -3218,6 +3218,7 @@ dependencies = [
  "gungnir-coord",
  "gungnir-model",
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
 ]
 
