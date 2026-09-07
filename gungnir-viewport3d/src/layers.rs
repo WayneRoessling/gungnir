@@ -607,7 +607,7 @@ mod tests {
         for (s, w) in strong_rgb.iter().zip(weak_rgb) {
             assert!(
                 s.abs_diff(*w) <= 1,
-                "confidence changed the hue, not only the opacity: {strong_rgb:?} vs                  {weak_rgb:?}"
+                "confidence changed the hue, not only the opacity: {strong_rgb:?} vs {weak_rgb:?}"
             );
         }
     }

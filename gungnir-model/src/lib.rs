@@ -63,6 +63,8 @@ impl SensorMode {
 }
 pub mod handoff;
 pub mod identity;
+// DN-26 (laydown options), GAP-087: the placements a deployment could adopt.
+pub mod laydown;
 pub mod plans;
 pub mod policy_settings;
 /// Mission profiles and algorithm-baseline identity (DN-24 §4).
@@ -97,6 +99,7 @@ pub use gungnir_core::{ResourceId, TrackId, TrackStatus};
 pub use handoff::{
     accept_report, DecisionAttribution, DeliveryState, EffectorReport, Handoff, HandoffError,
 };
+pub use laydown::{Laydown, LaydownId, ResourcePlacement, SensorPlacement};
 pub use plans::{
     DecisionId, DeconflictionCheck, DeconflictionKind, DeconflictionResult, FiresPlan, PlanKind,
 };
