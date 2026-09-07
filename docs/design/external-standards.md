@@ -567,23 +567,124 @@ Two rules follow, and they are the two §1.5 already sets for the GPL-licensed c
   is touching that tree, which is why §5.4 leaves the question open instead of answering it
   by habit.
 
-### 5.6 Fixture candidates
+### 5.6 The corpus: what it must hold, and why it has to be recorded
+
+**The cross-reference this subsection carried is stale, and the correction is worth more
+than the citation.** It read "recommended, exactly as for ADS-B (§4.3)". Section 4.3 no
+longer recommends a self-recording: two permissively licensed captures were found and
+copied on 2026-09-06, on the open-source-consensus route, and that is now the cheaper
+answer there.
+
+**That route does not transfer to this format, and the reason should be stated here rather
+than discovered halfway through the codec.** ADS-B decodes a *transmitter's* output, and
+every open-source ADS-B corpus is a recording of real transmitters, so a permissively
+licensed copy is real-world data with a licence attached. The permissive CoT candidates are
+recordings of nothing: `pytak` and `takproto` ship **test vectors their authors wrote** to
+exercise their own encoders. Gating a decoder on those measures agreement with two Python
+libraries' reading of the format, and for ADS-B the equivalent would still have been
+evidence about the world. Here it is evidence about a library. So the recording is not a
+preference over a cheaper route -- **it is the only route that yields client output at
+all** -- and §5.3's reading of the two libraries stands: a cross-check, never the oracle.
+
+#### What the corpus must hold
+
+Six items. Each is here because the mapping, a verification row, or a §5.2 consequence
+needs it, and the sixth exists because the corpus is otherwise recorded from one sender.
+
+| # | What to make the client emit | Why the corpus needs it |
+|---|---|---|
+| 1 | The client's own position, left running for several minutes | The self-report GAP-090 exists for. Several minutes, not several events, because the emission interval, the `stale` horizon and what a client repeats unchanged are all read from the capture rather than assumed |
+| 2 | The same client set to **each affiliation it offers** | **This is how the affiliation mapping gets pinned, and it is the item most likely to be skipped.** §5.1 pins the event schema; the *type tree* that gives the `type` attribute its meaning is a separate artifact and is **not** pinned here, so DN-25 §5 rule 3 -- only `Friendly` is acted on -- has no pinned definition today of which type strings are friendly. Recording a client set to each affiliation settles it from that client's own output instead of from a remembered convention, which is exactly the "confidently wrong" outcome GAP-064 exists to prevent |
+| 3 | A marker or point placed by hand | The simplest event that is not about the sender, and the one that shows what a client attaches to `detail` when it has little to say |
+| 4 | A chat message | §5.2's consequence 2 in the flesh: `detail` is unconstrained, so whatever arrives there is validated by us or by nobody |
+| 5 | A deletion, and an event left to expire | `stale` is mandatory (§5.2 consequence 3) and it is the sender's claim, not our policy. A decoder that has never seen an event go stale in a real stream has not met the case |
+| 6 | A **second client** on the same group | Two senders on one group is the ordinary deployment, and it is the only way the corpus shows what a mesh sink actually receives. `record_cot.py` says so out loud when it summarises a corpus with one sender |
+
+#### How to record it
+
+The mesh bearer is a UDP multicast group. PyTAK's configuration documentation gives the
+client default as `udp+wo://239.2.3.1:6969`, and **the capture is what confirms it** for
+the client actually used; the recorder takes `--group` and `--port` for the case where it
+does not. Nothing below needs a network, a server, or a certificate: a mesh client and one
+host.
+
+1. **A client** -- ATAK on a device or emulator, WinTAK, or iTAK -- on the same host or LAN
+   segment, configured for mesh rather than for a server.
+2. **`testdata/cot/tools/record_cot.py`**, written for this and standard-library only:
+
+   ```
+   python testdata/cot/tools/record_cot.py record --minutes 10
+   python testdata/cot/tools/record_cot.py summarize
+   ```
+
+   It joins the group, writes every datagram verbatim to `mesh.cotlog` with its receipt
+   time in a 24-byte framing header, and writes `mesh.manifest.json` with the per-datagram
+   sequence, receipt time, sender, length, SHA-256 and wire form. It **never decodes a
+   payload**: a recorder that parsed what it recorded would be a second decoder to keep
+   correct, and a wrong one would quietly corrupt the oracle. The wire form is decided by
+   the `0xbf` framing byte alone (§5.4), which is how the corpus can report whether the
+   client sent XML or protobuf without this repository decoding the latter.
+3. **Ten minutes of wall clock**, walking the six items in order and noting the time of
+   each, so `SOURCE.md` can say which datagrams are which.
+
+The recorder was exercised against loopback multicast on 2026-09-07 with synthetic
+datagrams that were then deleted: it joined the group, framed four datagrams, distinguished
+the two wire forms, read the log back, and reported the single sender. **That test proves
+the recorder, not the format.** No CoT has been recorded.
+
+#### What `SOURCE.md` must record
+
+The same discipline as `testdata/ais/` and `testdata/adsb/`, with the fields a recording
+has that a copy does not:
+
+- The **client and its exact version**, the platform it ran on, and the date. A capture
+  whose client version is unknown cannot be re-read later when a version changes behaviour.
+- The **group, port and interface**, and whether the group was loopback-scoped or on a LAN.
+- Which datagram ranges are which of the six items, by sequence number.
+- The **SHA-256 of `mesh.cotlog`**, the datagram count, the payload byte count, the wire
+  forms and the senders -- all of which `summarize` prints, so they are read back from the
+  file rather than typed from memory.
+- Whether sender addresses were stripped, and if so, why.
+- **What the corpus does not contain**, in the manner of `testdata/adsb/SOURCE.md`'s
+  account of its truncation: any of the six items that could not be produced, named, with
+  what each costs.
+
+#### The rule that makes it a fixture
+
+**Recorded, never authored.** Nothing under `testdata/cot/` may be hand-written CoT, and
+the recorder has no mode that would write any. A corpus authored by the same hand that
+writes the decoder passes against itself and fails against every real client, which is the
+whole of GAP-064's rule and the reason §1.5's conditions are worded around *origin* rather
+than around content. If the recording cannot be made, the directory stays as §5.7 leaves
+it and the codec waits.
+
+#### Candidates that are not the corpus
 
 | Candidate | What it is | Terms | Reading |
 |---|---|---|---|
-| **A self-recorded corpus** | A client on a loopback multicast group emitting its own position, a chat message, a marker and a route | None | **Recommended, exactly as for ADS-B (§4.3).** Provenance is the date, the client and its version in `SOURCE.md`; there is no licence question at all; and it is the only source that produces what a deployment will actually receive rather than what a library author expected it to |
-| `snstac/pytak` test data, <https://github.com/snstac/pytak> | Python TAK integration library | **Apache-2.0** | Usable under §1.5's recording conditions. Third-party-authored rather than client-emitted, so it is a decoder cross-check and not evidence about what a client sends |
+| `snstac/pytak` test data, <https://github.com/snstac/pytak> | Python TAK integration library | **Apache-2.0** | Copyable under §1.5's recording conditions, and useful: a second reading of the format to disagree with. Author-written rather than client-emitted, so it is a cross-check and never evidence about what a client sends |
 | `snstac/takproto` test data, <https://github.com/snstac/takproto> | Encoder and decoder for the protobuf payloads | **MIT** | The same reading, and relevant only once §5.4 is pinned |
+| The reference client and server repositories | The implementations themselves | **GPLv3** (§5.5) | Not a fixture source. §5.5's second rule covers their test data as well as their code |
 
-**Nothing has been copied.** GAP-091's closing action puts the corpus before the codec, in
-that order, for the reason §1.5 gives: a fixture with no recorded origin is not a fixture.
+**Nothing has been copied and nothing has been recorded.** GAP-091's closing action puts
+the corpus before the codec, in that order, for the reason §1.5 gives: a fixture with no
+recorded origin is not a fixture.
 
 ### 5.7 What is built
 
-**Nothing.** `gungnir-interop` has no CoT codec, the schema catalogue has no entry for it,
-and no binary opens a socket for it. GAP-090 and GAP-091 are open. This section exists so
-that the codec, when it is written, can name what it decodes -- GAP-064's rule, which is the
-rule this whole note was written to serve.
+**No codec, and no corpus.** `gungnir-interop` has no CoT codec, the schema catalogue has
+no entry for it, and no binary opens a socket for it. GAP-090 and GAP-091 are open. This
+section exists so that the codec, when it is written, can name what it decodes -- GAP-064's
+rule, which is the rule this whole note was written to serve.
+
+**One thing is built, and it is not a decoder.** `testdata/cot/tools/record_cot.py` is the
+recorder §5.6 specifies, standard-library only, exercised against loopback multicast on
+2026-09-07 and holding no data. `testdata/cot/SOURCE.md` says in its first line that the
+directory is empty and why, because an empty fixture directory with no note beside it reads
+as an oversight rather than as a state. Recording the corpus needs a TAK client, which is
+the one thing this workspace cannot supply itself -- the same shape of blocker as §4's ADS-B
+capture before the open-source route replaced it, and §5.6 explains why that route does not
+replace this one.
 
 ## 7. SAPIENT (UK Dstl; NATO STANREC 4869) -- **pinned 2026-09-06**
 

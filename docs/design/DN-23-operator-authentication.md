@@ -254,6 +254,54 @@ Gungnir operator token themselves, that is a different decision and should be ta
 Whatever is chosen must be one sign-off recorded in §2.9, with the duplicate-linkage check
 D-18's rows carry.
 
+## 10. Amendment 1 (2026-09-07): the account nobody could create
+
+**Unsigned.** Written with the code, awaiting the owner.
+
+This note gives the account file a format, gives `FileAccountStore` a file to read, and
+gives the node a reason to refuse callers when it has neither. What it never said is
+**who writes the file**.
+
+`hash_passphrase` produced the `phc` string §5 requires. Until 2026-09-07 it was called
+from tests in six crates and **from nowhere else** -- no binary, no example, no
+documented command. So a deployment following this note arrived at a node that warned
+`no caller authority` and had no way forward that did not involve writing Rust. The
+authentication half of GAP-057 was implemented and signed on 2026-09-06 and was, in the
+only sense that matters to a deployment, unreachable.
+
+That is the failure mode this workspace calls a silent stub seen from the other side:
+nothing claimed to work that did not. The node's warning was accurate the whole time.
+What was missing was the other end of the sentence.
+
+**`gungnir-node account add <file> <operator-id> <role> [--replace]`**, and
+`account list <file>`. Five rules, each of which is a refusal rather than a default:
+
+1. **The passphrase is read from standard input, never from an argument.** Arguments are
+   visible to every process on the host through the process table; a passphrase that
+   reaches argv is disclosed before it is hashed.
+2. **A duplicate operator is refused** unless `--replace` is passed, and the refusal says
+   so. Silently overwriting a credential is how an account is taken over, not how one is
+   provisioned.
+3. **A file that exists and does not parse is refused, not treated as empty.** Reading a
+   corrupt account file as "no accounts" would discard every account in it on the next
+   write.
+4. **An empty passphrase is refused and no file is created.**
+5. **A listing shows operator and role and never the hash**, which is the same rule PN-20
+   already follows.
+
+**Two limitations are stated rather than hidden.** Echo of a typed passphrase is not
+suppressed, because that needs a terminal crate no §2.9 decision admits; the documented
+usage pipes the passphrase in. And the file is set to owner-only on Unix while on Windows
+it inherits the directory's permissions -- the command says which of those happened
+instead of implying the stricter one.
+
+**What this does not do.** It does not remove an account, because the audit consequences
+of deleting a credential belong with the audit trail and PN-20's listing, and inventing
+them here would be a decision this note has not taken. It does not rotate the token
+signing key, which is `GUNGNIR_TOKEN_KEY` and DN-22's business. It does not create the
+first account automatically at start-up: a node that provisions itself is a node with a
+default credential.
+
 ## Traceability
 
 GAP-057; CAP-6.1, and CAP-6.2/CAP-6.3 through PN-20; D-02 for the mechanism, D-20 for the

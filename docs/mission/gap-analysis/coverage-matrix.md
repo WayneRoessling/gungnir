@@ -66,7 +66,7 @@ every part of the capability; implementation is what remains.
 | CAP-6.2 Authorize by role, class, layer | partial | partial | `role_permits` coarse matrix; per-class and per-layer refinements are gaps (`roles-and-stakeholders.md` §4) | GAP-068, GAP-058 |
 | CAP-6.3 Audit | full | partial | `gungnir-security` audit log; wiring pending | GAP-059 |
 | CAP-6.4 Data protection | full | none | `../../../ARCHITECTURE.md` §8.5 states the intent; no component or key management designed; a component is now named for every part of it by DN-22 (`../../design/`, first draft 2026-09-05) | GAP-060, GAP-084 |
-| CAP-6.5 Supply chain | full | partial | `deny.toml`, `release.yml`, `../../release-governance.md` | GAP-081, GAP-061 |
+| CAP-6.5 Supply chain | full | partial | `deny.toml`, `release.yml`, `../../release-governance.md` | GAP-081, GAP-061, GAP-094 |
 | CAP-6.6 Releasability | full | none | Open question in `../mission-analysis.md` §11; nothing designed; a component is now named for every part of it by DN-17 (`../../design/`, first draft 2026-09-05) | GAP-062 |
 | CAP-6.7 Untrusted input | full | partial | Gateway treats input as data; plan 08 covers free text | GAP-044, GAP-076 |
 | CAP-7.1 Versioned interface | full | partial | `../../gungnir-api-v1.md` contract; the read paths are served over HTTP and a WebSocket as of 2026-09-05 (GAP-041), loopback only and with the write paths refusing until a caller can be authenticated | GAP-041, GAP-063, GAP-066 |

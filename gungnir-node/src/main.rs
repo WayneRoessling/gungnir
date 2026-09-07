@@ -24,6 +24,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+mod account;
 mod auth;
 mod entities;
 
@@ -53,7 +54,26 @@ const HEALTH_LOG_INTERVAL: Duration = Duration::from_secs(10);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
-    let config = load_config(std::env::args().nth(1))?;
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
+    // `gungnir-node account ...` provisions the accounts this node authenticates
+    // against (GAP-057). It is a separate path rather than a flag on the running node
+    // because it must not start a server, open a journal, or bind a port: it reads one
+    // file, writes it back, and exits.
+    if args.first().map(String::as_str) == Some("account") {
+        match account::run(&args[1..]) {
+            Ok(said) => {
+                println!("{said}");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        }
+    }
+
+    let config = load_config(args.into_iter().next())?;
     let node_cfg = config.node.clone().unwrap_or_default();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

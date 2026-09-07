@@ -196,7 +196,7 @@ does the row's status move in `architecture.md`. Rows with no test are listed as
 | `gungnir-assessment` Risk scoring | `mod tests` in `gungnir-assessment/src/assets.rs` (MOP-28 monotonicity) | |
 | `gungnir-decision` Alternatives and what-if | `mod tests` in `gungnir-decision/src/lib.rs`; `gungnir-app/tests/sensor_plans.rs` | |
 | `gungnir-modelops` Promotion gating and rollback | `mod tests` in `gungnir-modelops/src/lib.rs`; `gungnir-app/tests/governance.rs` | |
-| `gungnir-security` Authentication, authorization, audit | `mod tests` in `gungnir-security/src/{authn,authz,audit,session}.rs`; `gungnir-app/tests/{authentication,audit_trail}.rs` | |
+| `gungnir-security` Authentication, authorization, audit | `mod tests` in `gungnir-security/src/{authn,authz,audit,session}.rs`; `gungnir-app/tests/{authentication,audit_trail}.rs`; `gungnir-node/tests/account_provisioning.rs` (the provisioning path: an account the binary creates is one the node authenticates; a duplicate, an empty passphrase, a corrupt file and an unknown role are each refused without changing the file) | |
 | `gungnir-api` Contract compatibility and authorization | `gungnir-remote/tests/transport.rs`; `gungnir-api/tests/{party,machine,mutual_tls}.rs` | |
 | `gungnir-observability` Health and alert correlation | `mod tests` in `gungnir-observability/src/lib.rs` | |
 | `gungnir-replay` Deterministic playback | `mod tests` in `gungnir-replay/src/lib.rs`; `gungnir-app/tests/sustainment.rs` | |
