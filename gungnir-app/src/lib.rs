@@ -32,6 +32,7 @@ pub mod handoffs;
 pub mod hazards;
 pub mod identity;
 pub mod keystore;
+pub mod launch_warning;
 pub mod laydown_rehearsal;
 pub mod node_tasks;
 pub mod peers;
