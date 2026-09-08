@@ -170,7 +170,25 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
         event: decided(5, true),
     })
     .expect("published");
-    until(&mut state, "the node's envelope to arrive", 5.0, |s| {
+    // 10 s, not the 5 s this carried until 2026-09-08, and the change is to the
+    // harness's liveness bound rather than to anything the test asserts: the check
+    // below is still that the envelope arrives and the link's sequence advances past
+    // it, unchanged. **5 s was the tightest deadline in this file for the operation
+    // with the most behind it** -- a sign-in, an established link and a subscribed
+    // event stream -- while the wait immediately above allows 10 s for the same class
+    // of loopback round trip and the reconciliation below allows 15 s. It duly failed
+    // three times on 2026-09-08, once on `main` itself (Actions run 34232995914) and
+    // once on each of two branches, and every failure printed the link already
+    // connected, so the path worked and only the clock ran out.
+    //
+    // **This is not a performance criterion being widened.** Nothing in
+    // `docs/verification-capability-table.md` names a delivery deadline, and the
+    // budget that does bound this -- detection to event-stream publish, p99 under
+    // 150 ms on-prem (`docs/performance-budgets.md`) -- is sixty times tighter than
+    // even the old value, so this number never measured latency and does not now. A
+    // regression to seconds is that budget's row to catch, and it should not be this
+    // test's job to fail slowly and blame the wrong thing.
+    until(&mut state, "the node's envelope to arrive", 10.0, |s| {
         s.link.as_ref().is_some_and(|l| l.last_seq() >= 1)
     });
 
