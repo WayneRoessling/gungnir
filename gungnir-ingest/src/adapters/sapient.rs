@@ -166,6 +166,74 @@ impl SapientSource for Box<dyn SapientSource> {
     }
 }
 
+/// A middleware's TCP port, read without blocking. Identical shape to
+/// `ais::TcpNmeaSource` and `adsb::TcpAvrSource`; the protobuf-JSON mapping this
+/// adapter reads is one whole message per line, exactly like NMEA sentences and AVR
+/// frames, so the framing (split on `\n`) is the same problem with the same answer.
+/// **Built 2026-09-07, GAP-001's wiring increment**: until then this type did not
+/// exist and both binaries would have had to hand-roll their own line reader, which is
+/// exactly the duplication `ais.rs` and `adsb.rs` already avoid by living here.
+#[derive(Debug)]
+pub struct TcpSapientSource {
+    stream: std::net::TcpStream,
+    partial: Vec<u8>,
+    description: String,
+}
+
+impl TcpSapientSource {
+    /// Connect to a middleware serving the protobuf-JSON mapping over TCP (Apex or
+    /// equivalent; see the module documentation on why JSON and not the binary wire
+    /// format).
+    ///
+    /// # Errors
+    ///
+    /// `IngestError::Io` when the connection cannot be made within `timeout`.
+    pub fn connect(
+        addr: std::net::SocketAddr,
+        timeout: std::time::Duration,
+    ) -> Result<Self, IngestError> {
+        let io = |e: std::io::Error| IngestError::Io(format!("sapient tcp {addr}: {e}"));
+        let stream = std::net::TcpStream::connect_timeout(&addr, timeout).map_err(io)?;
+        stream.set_nonblocking(true).map_err(io)?;
+        Ok(Self {
+            stream,
+            partial: Vec::new(),
+            description: format!("tcp:{addr}"),
+        })
+    }
+}
+
+impl SapientSource for TcpSapientSource {
+    fn take_messages(&mut self) -> Result<Vec<String>, IngestError> {
+        use std::io::Read;
+        let mut buf = [0u8; 4096];
+        loop {
+            match self.stream.read(&mut buf) {
+                Ok(0) => {
+                    return Err(IngestError::Io(format!(
+                        "{}: the middleware closed the connection",
+                        self.description
+                    )))
+                }
+                Ok(n) => self.partial.extend_from_slice(&buf[..n]),
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(IngestError::Io(format!("{}: {e}", self.description))),
+            }
+        }
+        let mut lines = Vec::new();
+        while let Some(at) = self.partial.iter().position(|&b| b == b'\n') {
+            let line: Vec<u8> = self.partial.drain(..=at).collect();
+            lines.push(String::from_utf8_lossy(&line).trim_end().to_string());
+        }
+        Ok(lines)
+    }
+
+    fn describe(&self) -> String {
+        self.description.clone()
+    }
+}
+
 /// A recorded session, released a batch per poll: a recording has no timing of its own,
 /// so a host chooses the pace. The same shape as the AIS adapter's recorded source, for
 /// the same reason.

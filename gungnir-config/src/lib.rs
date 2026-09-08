@@ -378,6 +378,69 @@ pub enum AisSource {
     File { path: String },
 }
 
+/// One 1090ES ADS-B receiver feed (GAP-010): the receiver's sensor identity and where
+/// its AVR-format frames come from.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AdsbFeedConfig {
+    pub name: String,
+    /// The receiver in the sensor list; its detections carry this identity.
+    pub sensor_id: u32,
+    pub source: AdsbSource,
+}
+
+/// Where an ADS-B feed's AVR lines come from. Same shape as [`AisSource`], kept as its
+/// own type because the two feeds are configured under their own names in the baseline
+/// and a reader should not have to know they happen to share a representation.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum AdsbSource {
+    /// A receiver serving AVR frames over TCP, `host:port` (`dump1090` and its
+    /// relatives' AVR port).
+    Tcp { addr: String },
+    /// A recording of AVR lines, one per line.
+    File { path: String },
+}
+
+/// One SAPIENT edge-node feed (GAP-001): a spotter, an acoustic array, or a passive-RF
+/// direction finder, all the same adapter and the same message shape
+/// (`gungnir_ingest::adapters::sapient`) and told apart only by which node type this
+/// feed is configured to accept.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SapientFeedConfig {
+    pub name: String,
+    /// The node in the sensor list; its siting (`SensorConfig::position`) is where the
+    /// adapter places a bearing's origin, exactly as a radar's position places its
+    /// range/azimuth/elevation reports.
+    pub sensor_id: u32,
+    pub node_type: SapientNodeType,
+    pub source: SapientSource,
+}
+
+/// Which of the three node types this feed is configured to accept. Deliberately one
+/// per feed rather than a set: a real deployment binds one adapter instance per feed
+/// and each feed is exactly one kind of node
+/// (`gungnir_ingest::adapters::sapient::ALL_ACCEPTED_NODE_TYPES`'s own documentation).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SapientNodeType {
+    Spotter,
+    Acoustic,
+    PassiveRf,
+}
+
+/// Where a SAPIENT feed's protobuf-JSON lines come from. Same shape as [`AisSource`]
+/// and [`AdsbSource`]; kept as its own type for the same reason.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum SapientSource {
+    /// A middleware serving the protobuf-JSON mapping over TCP, `host:port`
+    /// (`gungnir_ingest::adapters::sapient`'s own documentation on why JSON and not
+    /// the binary wire format).
+    Tcp { addr: String },
+    /// A recording of messages, one per line.
+    File { path: String },
+}
+
 /// A multicast group joined on an interface, both IPv4 dotted quads.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MulticastConfig {
@@ -803,6 +866,13 @@ pub struct ConfigBaseline {
     /// AIS receiver feeds bound at start (GAP-010). Empty means no cooperative source.
     #[serde(default)]
     pub ais_feeds: Vec<AisFeedConfig>,
+    /// ADS-B receiver feeds bound at start (GAP-010). Empty means no cooperative source.
+    #[serde(default)]
+    pub adsb_feeds: Vec<AdsbFeedConfig>,
+    /// SAPIENT edge-node feeds bound at start (GAP-001). Empty means no spotter,
+    /// acoustic, or passive-RF source.
+    #[serde(default)]
+    pub sapient_feeds: Vec<SapientFeedConfig>,
     /// Peer nodes consumed as sources (DN-16 §6, GAP-009).
     #[serde(default)]
     pub peers: Vec<PeerConfig>,
@@ -959,6 +1029,8 @@ impl Default for ConfigBaseline {
             sensors: Vec::new(),
             radar_feeds: Vec::new(),
             ais_feeds: Vec::new(),
+            adsb_feeds: Vec::new(),
+            sapient_feeds: Vec::new(),
             peers: Vec::new(),
             exchange: Vec::new(),
             machine_identities: Vec::new(),
@@ -1720,6 +1792,99 @@ fn validate_ais_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 if path.trim().is_empty() {
                     return Err(ConfigError::Invalid(format!(
                         "AIS feed {:?}: the recording path is empty",
+                        feed.name
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// GAP-010: an ADS-B feed names a receiver in the sensor list, once, and a source that
+/// parses. Same shape as [`validate_ais_feeds`], for the sibling feed type.
+fn validate_adsb_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    let mut names = std::collections::BTreeSet::new();
+    let mut receivers = std::collections::BTreeSet::new();
+    for feed in &baseline.adsb_feeds {
+        if !names.insert(feed.name.as_str()) {
+            return Err(ConfigError::Invalid(format!(
+                "ADS-B feed {:?} is declared twice",
+                feed.name
+            )));
+        }
+        if !baseline.sensors.iter().any(|s| s.id == feed.sensor_id) {
+            return Err(ConfigError::Invalid(format!(
+                "ADS-B feed {:?} names sensor {}, which is not in the sensor list",
+                feed.name, feed.sensor_id
+            )));
+        }
+        if !receivers.insert(feed.sensor_id) {
+            return Err(ConfigError::Invalid(format!(
+                "ADS-B feed {:?} names sensor {}, which another feed already speaks for",
+                feed.name, feed.sensor_id
+            )));
+        }
+        match &feed.source {
+            AdsbSource::Tcp { addr } => {
+                if addr.parse::<std::net::SocketAddr>().is_err() {
+                    return Err(ConfigError::Invalid(format!(
+                        "ADS-B feed {:?}: {addr:?} is not an ip:port",
+                        feed.name
+                    )));
+                }
+            }
+            AdsbSource::File { path } => {
+                if path.trim().is_empty() {
+                    return Err(ConfigError::Invalid(format!(
+                        "ADS-B feed {:?}: the recording path is empty",
+                        feed.name
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// GAP-001: a SAPIENT feed names a receiver in the sensor list, once, and a source that
+/// parses. Same shape as [`validate_ais_feeds`]; `node_type` needs no validation of its
+/// own, since the enum has no value the adapter would refuse.
+fn validate_sapient_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    let mut names = std::collections::BTreeSet::new();
+    let mut receivers = std::collections::BTreeSet::new();
+    for feed in &baseline.sapient_feeds {
+        if !names.insert(feed.name.as_str()) {
+            return Err(ConfigError::Invalid(format!(
+                "SAPIENT feed {:?} is declared twice",
+                feed.name
+            )));
+        }
+        if !baseline.sensors.iter().any(|s| s.id == feed.sensor_id) {
+            return Err(ConfigError::Invalid(format!(
+                "SAPIENT feed {:?} names sensor {}, which is not in the sensor list",
+                feed.name, feed.sensor_id
+            )));
+        }
+        if !receivers.insert(feed.sensor_id) {
+            return Err(ConfigError::Invalid(format!(
+                "SAPIENT feed {:?} names sensor {}, which another feed already speaks for",
+                feed.name, feed.sensor_id
+            )));
+        }
+        match &feed.source {
+            SapientSource::Tcp { addr } => {
+                if addr.parse::<std::net::SocketAddr>().is_err() {
+                    return Err(ConfigError::Invalid(format!(
+                        "SAPIENT feed {:?}: {addr:?} is not an ip:port",
+                        feed.name
+                    )));
+                }
+            }
+            SapientSource::File { path } => {
+                if path.trim().is_empty() {
+                    return Err(ConfigError::Invalid(format!(
+                        "SAPIENT feed {:?}: the recording path is empty",
                         feed.name
                     )));
                 }
@@ -2727,6 +2892,8 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     validate_terrain(baseline)?;
     validate_radar_feeds(baseline)?;
     validate_ais_feeds(baseline)?;
+    validate_adsb_feeds(baseline)?;
+    validate_sapient_feeds(baseline)?;
     validate_exchange(baseline)?;
     validate_machine_identities(baseline)?;
     for (class, weight) in &baseline.assessment.lethality_by_class {
@@ -3563,6 +3730,165 @@ mod tests {
             validate(&feed(vec![one(1, 7, 3), one(1, 7, 4)], "0.0.0.0:8600")),
             Err(ConfigError::Invalid(_))
         ));
+    }
+
+    #[test]
+    fn an_adsb_feed_needs_a_known_sensor_a_unique_name_and_a_parsing_source() {
+        let sensor = || SensorConfig {
+            id: 20,
+            modality: "ads-b".into(),
+            position: [0.9, 0.2, 30.0],
+            max_range_m: 400_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        };
+        let adsb = |sensor_id, source| ConfigBaseline {
+            sensors: vec![sensor()],
+            adsb_feeds: vec![AdsbFeedConfig {
+                name: "lhr".into(),
+                sensor_id,
+                source,
+            }],
+            ..ConfigBaseline::default()
+        };
+        validate(&adsb(
+            20,
+            AdsbSource::Tcp {
+                addr: "127.0.0.1:30003".into(),
+            },
+        ))
+        .expect("a tcp feed");
+        validate(&adsb(
+            20,
+            AdsbSource::File {
+                path: "testdata/adsb/lax-messages-first40000.txt".into(),
+            },
+        ))
+        .expect("a recorded feed");
+        assert!(matches!(
+            validate(&adsb(
+                21,
+                AdsbSource::Tcp {
+                    addr: "127.0.0.1:30003".into()
+                }
+            )),
+            Err(ConfigError::Invalid(_))
+        ));
+        assert!(matches!(
+            validate(&adsb(
+                20,
+                AdsbSource::Tcp {
+                    addr: "nowhere".into()
+                }
+            )),
+            Err(ConfigError::Invalid(_))
+        ));
+        assert!(matches!(
+            validate(&adsb(20, AdsbSource::File { path: "  ".into() })),
+            Err(ConfigError::Invalid(_))
+        ));
+        let mut two = adsb(
+            20,
+            AdsbSource::Tcp {
+                addr: "127.0.0.1:30003".into(),
+            },
+        );
+        two.adsb_feeds.push(AdsbFeedConfig {
+            name: "lhr".into(),
+            sensor_id: 20,
+            source: AdsbSource::Tcp {
+                addr: "127.0.0.1:30004".into(),
+            },
+        });
+        assert!(matches!(validate(&two), Err(ConfigError::Invalid(_))));
+    }
+
+    #[test]
+    fn a_sapient_feed_needs_a_known_sensor_a_unique_name_a_node_type_and_a_parsing_source() {
+        let sensor = || SensorConfig {
+            id: 30,
+            modality: "sapient".into(),
+            position: [0.9, 0.2, 2.0],
+            max_range_m: 5_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        };
+        let sapient = |sensor_id, node_type, source| ConfigBaseline {
+            sensors: vec![sensor()],
+            sapient_feeds: vec![SapientFeedConfig {
+                name: "op-1".into(),
+                sensor_id,
+                node_type,
+                source,
+            }],
+            ..ConfigBaseline::default()
+        };
+        for node_type in [
+            SapientNodeType::Spotter,
+            SapientNodeType::Acoustic,
+            SapientNodeType::PassiveRf,
+        ] {
+            validate(&sapient(
+                30,
+                node_type,
+                SapientSource::Tcp {
+                    addr: "127.0.0.1:40000".into(),
+                },
+            ))
+            .unwrap_or_else(|e| panic!("{node_type:?} is a valid feed: {e}"));
+        }
+        validate(&sapient(
+            30,
+            SapientNodeType::Spotter,
+            SapientSource::File {
+                path: "testdata/sapient/spotter-session.jsonl".into(),
+            },
+        ))
+        .expect("a recorded feed");
+        assert!(matches!(
+            validate(&sapient(
+                31,
+                SapientNodeType::Spotter,
+                SapientSource::Tcp {
+                    addr: "127.0.0.1:40000".into()
+                }
+            )),
+            Err(ConfigError::Invalid(_))
+        ));
+        assert!(matches!(
+            validate(&sapient(
+                30,
+                SapientNodeType::Spotter,
+                SapientSource::Tcp {
+                    addr: "nowhere".into()
+                }
+            )),
+            Err(ConfigError::Invalid(_))
+        ));
+        assert!(matches!(
+            validate(&sapient(
+                30,
+                SapientNodeType::Acoustic,
+                SapientSource::File { path: "  ".into() }
+            )),
+            Err(ConfigError::Invalid(_))
+        ));
+        let mut two = sapient(
+            30,
+            SapientNodeType::Spotter,
+            SapientSource::Tcp {
+                addr: "127.0.0.1:40000".into(),
+            },
+        );
+        two.sapient_feeds.push(SapientFeedConfig {
+            name: "op-1".into(),
+            sensor_id: 30,
+            node_type: SapientNodeType::Acoustic,
+            source: SapientSource::Tcp {
+                addr: "127.0.0.1:40001".into(),
+            },
+        });
+        assert!(matches!(validate(&two), Err(ConfigError::Invalid(_))));
     }
 
     #[test]
