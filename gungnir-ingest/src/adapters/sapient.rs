@@ -19,14 +19,14 @@
 //! that assumes a human observer: no default accuracy, no instrument-specific unit, no
 //! error model invented where the report states none. The registration gate is what
 //! encoded the restriction, not the measurement mapping underneath it, so widening the
-//! gate is the whole of this change. **Human-owned (the `gungnir-ingest` gateway); written
-//! and gated, not signed.**
+//! gate is the whole of this change. **Human-owned (the `gungnir-ingest` gateway),
+//! signed by the owner 2026-09-08.**
 //!
 //! **Extended again 2026-09-08, GAP-004: a `TaskAck` reader** ([`TaskAckReport`],
 //! [`TaskAckStatus`], [`TaskAckSink`], `handle_task_ack`, `parse_task_ack`). Reading a
 //! message off this same inbound stream is exactly what the rest of this file already
 //! does, so the addition sits on the same trust boundary the GAP-001 widening above does.
-//! **Human-owned (the `gungnir-ingest` gateway); written and gated, not signed.**
+//! **Human-owned (the `gungnir-ingest` gateway), signed by the owner 2026-09-08.**
 //!
 //! So a spotter, an acoustic array, or a passive-RF direction finder each need no design
 //! of our own: they need this adapter, accepting their node type, and the measurement
