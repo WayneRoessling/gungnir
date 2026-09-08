@@ -4744,19 +4744,32 @@ not by finding, for the time between whenever each item landed and this correcti
     reading this item as the recorded verification rather than a local one.
 
     **`gungnir-app::fusion::FusionBackend`** is the caller `GpuContext::new` had
-    none of before this: constructed once in `AppState::with_config_and_store`,
-    before anything else touches it, on the desktop's own runtime; falls back to
-    `CpuIcp` on `RenderError::NoAdapter` or any `GpuInit` failure and alerts rather
-    than degrading silently, per `rust-3d-data-ecosystem-build-vs-adopt.md` §3.6
-    rule 3. `Features::empty()`/`Limits::default()` needed no revisiting: every
-    kernel stays within the default limits (64-wide workgroups, no floating-point
-    atomics, at most seven storage-buffer bindings in any one pipeline against the
-    default limit of eight). `FusionBackend::engine_for` returns a `Box<dyn
-    PointCloudFusion>` -- whichever backend was actually constructed -- but nothing
-    in `update::tick` calls it: GAP-098 already found that no point cloud reaches
-    `DataStore.point_clouds`, so there is nothing to register against yet, and
-    building an engine against fabricated data to look more finished would be
-    exactly the fake wiring this document's own culture refuses. `gpu-fusion.yml`
+    none of before this, and it resolves lazily rather than at construction --
+    which is itself a second real bug this entry found and fixed, not a design
+    taken on faith. The first version constructed the device eagerly, inside
+    `AppState::with_config_and_store`, which every one of `gungnir-app`'s several
+    hundred integration tests calls to build the `AppState` it tests against: that
+    requested a real `wgpu` device on every single one of them, the same "never
+    inside plain `cargo test`" rule this gate exists to enforce for
+    `gungnir-data-fusion` -- and slow enough under the resulting contention that
+    `cargo test --workspace` looked hung on an unrelated test (`fires_deconfliction.rs`,
+    three tests, three assertions, normally 0.01 s; over 300 CPU-seconds with eager
+    construction still in place). `FusionBackend::new` now touches no `wgpu` API at
+    all; `FusionBackend::engine_for` is what actually calls `GpuContext::new`, the
+    first time any caller asks it for an engine, memoized from then on. Falls back
+    to `CpuIcp` on `RenderError::NoAdapter` or any `GpuInit` failure, per
+    `rust-3d-data-ecosystem-build-vs-adopt.md` §3.6 rule 3. `Features::empty()`/
+    `Limits::default()` needed no revisiting: every kernel stays within the default
+    limits (64-wide workgroups, no floating-point atomics, at most seven
+    storage-buffer bindings in any one pipeline against the default limit of
+    eight). `FusionBackend::engine_for` returns a `Box<dyn PointCloudFusion>` --
+    whichever backend was actually resolved -- but nothing in `update::tick` calls
+    it: GAP-098 already found that no point cloud reaches `DataStore.point_clouds`,
+    so there is nothing to register against yet, and building an engine against
+    fabricated data to look more finished would be exactly the fake wiring this
+    document's own culture refuses; today, in practice, no code path calls
+    `engine_for` at all, so no test in this workspace requests a `wgpu` device
+    outside the `gpu-tests`-gated differential tests that mean to. `gpu-fusion.yml`
     stays on `workflow_dispatch` permanently (D-10 as amended 2026-09-08); nothing
     here reopens that question.
 

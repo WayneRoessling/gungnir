@@ -7,11 +7,27 @@
 //! `gungnir_render::GpuContext::new` was never called by any binary before this
 //! change -- `ARCHITECTURE.md` §7.1 drew the `gungnir-app` -> `gungnir-render` and
 //! `gungnir-app` -> `gungnir-data-fusion` manifest edges, but no source file
-//! referenced either crate. [`FusionBackend::init`] is the caller: it constructs the
-//! compute device once, at start-up (`state::AppState::with_config_and_store`,
-//! before anything else touches it), and falls back to the CPU reference on
-//! `RenderError::NoAdapter` per `rust-3d-data-ecosystem-build-vs-adopt.md` §3.6 rule
-//! 3 -- a full, honest fallback, never a silently-degraded one.
+//! referenced either crate. [`FusionBackend`] is the caller.
+//!
+//! **Lazy, not eager, and that is load-bearing.** [`FusionBackend::new`] constructs
+//! nothing: it returns [`FusionBackend::Uninitialized`], touching no `wgpu` API at
+//! all. The compute device is requested only inside [`FusionBackend::engine_for`],
+//! the first time a caller actually asks for an engine, and the result is memoized
+//! from then on. This is not a style choice -- an earlier version of this module
+//! called `GpuContext::new` eagerly from `state::AppState::with_config_and_store`,
+//! which every one of `gungnir-app`'s several hundred integration tests calls to
+//! build the `AppState` it tests against. That made plain `cargo test` request a
+//! real `wgpu` device, over and over, from whatever test happened to run --
+//! violating the workspace-wide rule that GPU point-cloud registration is validated
+//! outside plain `cargo test`, never inside it (`docs/agentic-workflow.md`'s own
+//! description of `gungnir-data-fusion`'s two gates), and it was slow enough under
+//! the resulting contention to look like a hang. Lazy construction fixes both: no
+//! test that never calls `engine_for` ever touches a GPU, and `update::tick` does
+//! not call it either yet (see below), so today, in practice, nothing does.
+//!
+//! Falls back to the CPU reference on `RenderError::NoAdapter` per
+//! `rust-3d-data-ecosystem-build-vs-adopt.md` §3.6 rule 3 -- a full, honest
+//! fallback, never a silently-degraded one.
 //!
 //! **What this wires, and what it does not.** [`FusionBackend::engine_for`] is real,
 //! working code: given a target cloud, it returns a
@@ -35,10 +51,13 @@ use gungnir_data_fusion::{FusionError, GpuFusionEngine, PointCloudFusion};
 use gungnir_render::{GpuContext, RenderError};
 use std::sync::Arc;
 
-/// Which registration backend this desktop constructed at start-up, and why, if it
-/// fell back. Mirrors `gungnir_security::EncryptionStatus`'s shape: derived once at
-/// start-up, from what actually happened rather than from what was hoped for.
+/// Which registration backend this desktop is using, lazily resolved. Mirrors
+/// `gungnir_security::EncryptionStatus`'s shape once resolved: derived from what
+/// actually happened rather than from what was hoped for, never optimistic.
 pub enum FusionBackend {
+    /// No `wgpu` call has been made yet. [`FusionBackend::engine_for`] resolves
+    /// this to `Gpu` or `Cpu` on its first call and remembers the answer.
+    Uninitialized,
     /// A `wgpu` compute device was created; [`FusionBackend::engine_for`] returns a
     /// GPU-backed engine.
     Gpu {
@@ -51,21 +70,11 @@ pub enum FusionBackend {
 }
 
 impl FusionBackend {
-    /// Constructs the compute device once, blocking on the same runtime the rest of
-    /// the desktop's start-up already blocks on for embedded-service wiring
-    /// (`state::desktop_runtime`, `state::build_backends`).
+    /// Touches no `wgpu` API. See this module's doc comment for why construction is
+    /// deliberately inert.
     #[must_use]
-    pub fn init(runtime: &tokio::runtime::Handle) -> Self {
-        match runtime.block_on(GpuContext::new()) {
-            Ok(ctx) => Self::Gpu {
-                device: ctx.device,
-                queue: ctx.queue,
-            },
-            Err(RenderError::NoAdapter) => Self::Cpu {
-                reason: "no suitable GPU adapter".into(),
-            },
-            Err(RenderError::GpuInit(reason)) => Self::Cpu { reason },
-        }
+    pub fn new() -> Self {
+        Self::Uninitialized
     }
 
     #[must_use]
@@ -78,11 +87,32 @@ impl FusionBackend {
     #[must_use]
     pub fn status_text(&self) -> String {
         match self {
+            Self::Uninitialized => "GPU point-cloud registration: not yet probed".into(),
             Self::Gpu { .. } => "GPU point-cloud registration: compute device ready".into(),
             Self::Cpu { reason } => {
                 format!("GPU point-cloud registration unavailable ({reason}); CPU reference in use")
             }
         }
+    }
+
+    /// Resolves [`Self::Uninitialized`] to `Gpu` or `Cpu`, blocking on `runtime` the
+    /// same way the rest of the desktop's start-up blocks on it for embedded-service
+    /// wiring (`state::desktop_runtime`, `state::build_backends`). A no-op once
+    /// already resolved.
+    fn ensure_resolved(&mut self, runtime: &tokio::runtime::Handle) {
+        if !matches!(self, Self::Uninitialized) {
+            return;
+        }
+        *self = match runtime.block_on(GpuContext::new()) {
+            Ok(ctx) => Self::Gpu {
+                device: ctx.device,
+                queue: ctx.queue,
+            },
+            Err(RenderError::NoAdapter) => Self::Cpu {
+                reason: "no suitable GPU adapter".into(),
+            },
+            Err(RenderError::GpuInit(reason)) => Self::Cpu { reason },
+        };
     }
 
     /// Builds a registration engine for `target`: GPU-backed when one is available,
@@ -91,17 +121,25 @@ impl FusionBackend {
     /// behind [`PointCloudFusion`] (§3.5's dependency-inversion rule) so a caller
     /// depends on the trait, never on which concrete engine it got.
     ///
+    /// The first call against any given `FusionBackend` is the one that actually
+    /// requests a `wgpu` device (or decides there is none); `runtime` is only ever
+    /// blocked on that once.
+    ///
     /// # Errors
     ///
     /// Whatever the chosen engine's own constructor returns:
     /// [`FusionError::EmptyInput`] for an empty target, or on the GPU path,
     /// [`FusionError::GpuInit`] if the target's extent cannot be turned into a
-    /// usable spatial-hash grid (`gungnir_data_fusion::gpu::pipeline::GridGeometry`).
+    /// usable spatial-hash grid (`gungnir_data_fusion::gpu::pipeline::GridGeometry`),
+    /// or if this backend somehow remains `Uninitialized` after resolution was
+    /// attempted (never observed; guarded rather than assumed).
     pub fn engine_for(
-        &self,
+        &mut self,
+        runtime: &tokio::runtime::Handle,
         target: &PointBuffer,
         max_iterations: u32,
     ) -> Result<Box<dyn PointCloudFusion>, FusionError> {
+        self.ensure_resolved(runtime);
         match self {
             Self::Gpu { device, queue } => {
                 let engine = GpuFusionEngine::new(
@@ -113,7 +151,16 @@ impl FusionBackend {
                 Ok(Box::new(engine))
             }
             Self::Cpu { .. } => Ok(Box::new(CpuIcp::new(target.clone(), max_iterations))),
+            Self::Uninitialized => Err(FusionError::GpuInit(
+                "fusion backend did not resolve to a concrete backend".into(),
+            )),
         }
+    }
+}
+
+impl Default for FusionBackend {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -133,19 +180,38 @@ mod tests {
         }
     }
 
+    /// `FusionBackend::new` touches no `wgpu` API -- the whole point of making
+    /// resolution lazy -- so this is checkable without a runtime at all.
+    #[test]
+    fn new_is_uninitialized_and_touches_nothing() {
+        let backend = FusionBackend::new();
+        assert!(!backend.is_gpu());
+        assert!(matches!(backend, FusionBackend::Uninitialized));
+        assert_eq!(
+            backend.status_text(),
+            "GPU point-cloud registration: not yet probed"
+        );
+    }
+
     /// The CPU fallback path needs no GPU at all, so it is checkable in plain
-    /// `cargo test`: given `FusionBackend::Cpu`, `engine_for` returns a working
-    /// engine that steps without error.
+    /// `cargo test`: given `FusionBackend::Cpu` directly (bypassing resolution, so
+    /// this test needs no runtime either), `engine_for` returns a working engine
+    /// that steps without error.
     #[test]
     fn cpu_backend_builds_a_working_engine() {
-        let backend = FusionBackend::Cpu {
+        let mut backend = FusionBackend::Cpu {
             reason: "test: no adapter requested".into(),
         };
         assert!(!backend.is_gpu());
         assert!(backend.status_text().contains("CPU reference"));
 
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("a current-thread runtime for this test");
         let target = tiny_cloud();
-        let mut engine = backend.engine_for(&target, 10).expect("cpu engine builds");
+        let mut engine = backend
+            .engine_for(&runtime.handle().clone(), &target, 10)
+            .expect("cpu engine builds");
         let source = tiny_cloud();
         let result = engine.step(&source).expect("cpu engine steps");
         assert!(result.converged, "an aligned cloud converges at once");
@@ -156,15 +222,18 @@ mod tests {
     /// checked here on the CPU path, which needs no GPU to exercise.
     #[test]
     fn engine_for_refuses_to_build_against_nothing_on_the_cpu_path() {
-        let backend = FusionBackend::Cpu {
+        let mut backend = FusionBackend::Cpu {
             reason: "test".into(),
         };
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("a current-thread runtime for this test");
         let empty = PointBuffer::default();
         // `CpuIcp::new` does not itself refuse an empty target (it refuses at the
         // first `step`, matching `cpu_reference.rs`'s own tests); confirm that
         // remains true through this wrapper rather than assuming it.
         let mut engine = backend
-            .engine_for(&empty, 10)
+            .engine_for(&runtime.handle().clone(), &empty, 10)
             .expect("construction alone succeeds");
         assert!(matches!(
             engine.step(&tiny_cloud()),
