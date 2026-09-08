@@ -2101,4 +2101,199 @@ mod tests {
             other => panic!("expected an Acknowledged event: {other:?}"),
         }
     }
+
+    /// A `TrackingService` this test does not otherwise need: `IngestGateway::tick`
+    /// requires one to poll adapters at all, and what it does with a detection is not
+    /// this test's concern -- only that polling happens, so the SAPIENT adapter reads
+    /// the wire.
+    struct NoTrackingService;
+    impl gungnir_tracking_service::TrackingService for NoTrackingService {
+        fn submit_detection(
+            &mut self,
+            _detection: gungnir_model::DetectionView,
+        ) -> Result<(), gungnir_tracking_service::SubmitError> {
+            Ok(())
+        }
+        fn poll(&mut self, _now: gungnir_model::MissionTime) {}
+        fn tracks(&self) -> &[gungnir_model::TrackView] {
+            &[]
+        }
+        fn is_healthy(&self) -> bool {
+            true
+        }
+    }
+
+    /// **The SAPIENT loopback fixture US-09 needs** (`docs/ux/usability-round-1-
+    /// session.md`), proven against the real adapter rather than only written down.
+    ///
+    /// The test above proves the wire `taskId` is genuine by reading it off the
+    /// socket, then applies the ack by building a `TaskAckReport` directly and
+    /// pushing it into the sink -- `gungnir-app/tests/sapient_task_ack.rs` takes the
+    /// same shortcut. Neither ever writes a real `TaskAck` message back over the
+    /// wire, so `SapientDetectionAdapter::handle`'s own parsing of one
+    /// (`handle_task_ack`, `parse_task_ack`, reached through `take_messages`) is
+    /// never actually exercised end to end -- only the *application* of an
+    /// already-parsed ack is. Here the "sensor" writes a genuine `TaskAck` line back,
+    /// and `IngestGateway::tick` -- not a hand-populated sink -- is what puts it in
+    /// front of `apply_sapient_task_acks`. This is also, line for line, what a
+    /// standalone SAPIENT loopback fixture does: read a `Task`, answer with an
+    /// `Accepted` `TaskAck` naming the same `taskId`.
+    ///
+    /// **The connection must stay open**, which the first draft of this test got
+    /// wrong: closing the "sensor" side right after writing the ack made
+    /// `TcpSapientSource::take_messages` see end-of-file within the same read loop
+    /// that had just buffered the ack bytes, and it treats that as "the middleware
+    /// closed the connection" -- discarding what it had already buffered rather than
+    /// returning it, correctly, for a genuine mid-session disconnect. A real sensor
+    /// (or a real loopback fixture) keeps its connection open for the session, so
+    /// this one does too.
+    #[allow(clippy::too_many_lines)]
+    #[test]
+    fn a_task_ack_written_back_on_the_wire_is_read_by_the_real_adapter_and_applied() {
+        use gungnir_sensor_management::SensorControl;
+        use std::io::{BufRead, BufReader, Write};
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        // Accepts and reads the task on its own thread, but returns the live stream
+        // rather than dropping it: `TcpSapientSource::take_messages` treats a read
+        // that reaches EOF as "the middleware closed the connection" and discards
+        // whatever it had already buffered in the same call, exactly the way a real
+        // persistent SAPIENT connection would report a genuine disconnect. A
+        // real (or loopback-fixture) sensor keeps its connection open, so this one
+        // does too -- the ack is written from the main thread below, and the stream
+        // stays alive for the rest of the test.
+        let sensor = std::thread::spawn(move || -> (std::net::TcpStream, String) {
+            let (stream, _) = listener.accept().expect("accept");
+            let mut line = String::new();
+            BufReader::new(stream.try_clone().expect("clone a read handle"))
+                .read_line(&mut line)
+                .expect("read the task");
+            let value: serde_json::Value = serde_json::from_str(line.trim()).expect("valid json");
+            let wire_task_id = value["task"]["taskId"]
+                .as_str()
+                .expect("taskId")
+                .to_string();
+            (stream, wire_task_id)
+        });
+
+        let config = ConfigBaseline {
+            sensors: vec![gungnir_config::SensorConfig {
+                id: 9,
+                modality: "sapient".into(),
+                position: [0.9, 0.2, 2.0],
+                max_range_m: 5_000.0,
+                control_endpoint: Some("sapient".into()),
+                maintenance: Vec::new(),
+            }],
+            origin: Some([0.9, 0.2, 0.0]),
+            sapient_feeds: vec![gungnir_config::SapientFeedConfig {
+                name: "loopback-9".into(),
+                sensor_id: 9,
+                node_type: gungnir_config::SapientNodeType::Spotter,
+                source: gungnir_config::SapientSource::Tcp {
+                    addr: addr.to_string(),
+                },
+                destination_id: Some("3fa85f64-5717-4562-b3fc-2c963f66afa6".into()),
+            }],
+            sapient_node_id: Some("gungnir-node-test".into()),
+            ..ConfigBaseline::default()
+        };
+
+        let mut gateway = IngestGateway::new(Box::new(AllowListAuthenticator {
+            allowed: vec![SensorId(9)],
+        }));
+        let bound = bind_sapient_feeds(&config, &mut gateway, &[]);
+        assert_eq!(bound.task_adapters.len(), 1, "the one taskable feed");
+        assert_eq!(bound.task_ack_sinks.len(), 1, "its ack sink");
+
+        let mut sensors = build_registry(&config);
+        sensors.attach_adapter(Arc::new(SapientTaskRouter {
+            by_sensor: bound.task_adapters.into_iter().collect(),
+        }));
+        let local_task = sensors
+            .issue(
+                SensorId(9),
+                gungnir_model::SensorCommand::SetMode {
+                    mode: gungnir_model::SensorMode::Search,
+                },
+                None,
+                gungnir_model::MissionTime(2_000.0),
+            )
+            .expect("issued");
+
+        let (mut sensor_stream, wire_task_id) = sensor.join().expect("thread");
+        // The genuine wire message a real (or loopback-fixture) SAPIENT sensor
+        // answers with -- never hand-built into a `TaskAckReport` and pushed into
+        // the sink directly, the shortcut every other test in this file and in
+        // `sapient_task_ack.rs` takes. `sensor_stream` stays alive (bound to this
+        // name, not dropped) for the rest of the test, so the connection is still
+        // open when the gateway polls it below.
+        let ack = serde_json::json!({
+            "nodeId": "sapient-loopback-fixture",
+            "taskAck": {
+                "taskId": wire_task_id,
+                "taskStatus": "TASK_STATUS_ACCEPTED",
+            },
+        });
+        sensor_stream
+            .write_all(format!("{ack}\n").as_bytes())
+            .expect("write the ack");
+
+        // The real path: the gateway polls the adapter, and the adapter parses the
+        // wire message itself. Nothing here constructs a `TaskAckReport` by hand.
+        // `TcpSapientSource` reads a non-blocking socket, so the bytes the sensor
+        // thread already wrote (and joined on) can still be a tick or two from
+        // showing up on this side of a real loopback connection; retried briefly
+        // rather than ticked once, the same way the real node's own timer-driven
+        // loop would tick again rather than assume one poll must see everything.
+        let mut applied = false;
+        for _ in 0..50 {
+            gateway.tick(gungnir_model::MissionTime(2_001.0), &mut NoTrackingService);
+            if !bound.task_ack_sinks[0].lock().expect("lock").is_empty() {
+                applied = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(
+            applied,
+            "the wire ack for {wire_task_id} never reached the sink after retrying"
+        );
+
+        let bus = InProcessBus::new();
+        let events = bus.subscribe();
+        apply_sapient_task_acks(
+            &bound.task_ack_sinks,
+            &mut sensors,
+            &bus,
+            gungnir_model::MissionTime(2_002.0),
+        )
+        .expect("applied");
+
+        let task = sensors
+            .tasks()
+            .iter()
+            .find(|t| t.id == local_task)
+            .expect("recorded");
+        assert!(
+            matches!(
+                task.state,
+                gungnir_sensor_management::tasking::TaskState::Acknowledged { .. }
+            ),
+            "the genuine wire ack for {wire_task_id} was not applied: {:?}",
+            task.state
+        );
+        match events.try_recv().expect("published").event {
+            Event::SensorTask(gungnir_model::events::SensorTaskEvent::Acknowledged {
+                task,
+                sensor,
+                ..
+            }) => {
+                assert_eq!(task, local_task);
+                assert_eq!(sensor, SensorId(9));
+            }
+            other => panic!("expected an Acknowledged event: {other:?}"),
+        }
+    }
 }
