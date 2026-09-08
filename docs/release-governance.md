@@ -67,11 +67,18 @@ anything; the gate names and pass criteria do not change.
 
 `gpu-fusion.yml` needs a self-hosted runner labelled `gpu` registered to the repository.
 No hosted runner has a GPU, and that requirement belonged to the workflow rather than to
-the forge it ran on, so the amendment does not remove it. Since 2026-09-07 the workflow
-runs on manual dispatch only: a pull-request trigger queued a job that waited a day for
-the absent runner and then failed, and the job it would have run is empty, because the
-GPU path and its tests (GAP-024) do not exist yet. It fails a run that executed zero
-tests, so registering a runner alone cannot make it green.
+the forge it ran on, so the amendment does not remove it. **The runner was registered on
+2026-09-08** -- `gungnir-rtx-5060ti`, on the owner's workstation -- and the workflow
+**stays on manual dispatch permanently**, which since that date is a decision and not a
+wait (D-10 as amended). A dispatch job on a self-hosted runner is local execution with a
+recorded log: the compute is on the owner's GPU, and only a caller with write access can
+fire it, so no fork's pull request can reach the machine -- which a `pull_request`
+trigger on a public repository would allow. It still fails a run that executed zero
+tests, so the runner alone cannot make it green; the GPU path and its tests are GAP-024's
+and do not exist yet. The same validation runs without the forge -- `cargo test -p
+gungnir-data-fusion --features gpu-tests -- --ignored` on any GPU host -- and the
+workflow exists so that the result reaches the evidence package above without being
+assembled by hand.
 
 **No forge credential appears in this repository, and none can.** GitHub does not accept
 a password for git operations; access is a personal access token or an SSH key, held by

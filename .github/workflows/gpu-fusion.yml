@@ -2,13 +2,28 @@
 # GPU-enabled self-hosted runner (docs/rust-3d-data-ecosystem-build-vs-adopt.md
 # §3.6). Not one of the six numbered gates; never run inside plain `cargo test`.
 #
-# Dormant since 2026-09-07: manual dispatch only. It used to trigger on pull requests
-# touching gungnir-data-fusion or gungnir-render, and every such job waited a day for a
-# runner labelled `gpu` that is not registered, then failed. Two things have to exist
-# before the trigger comes back, and both are GAP-024's: the GPU registration path with
-# its `#[ignore]` tests behind the `gpu-tests` feature (today the feature is empty and
-# `--features gpu-tests -- --ignored` runs zero tests), and the runner. The last step
-# below fails a run that executed nothing, so a runner alone cannot turn this green.
+# Manual dispatch only, permanently, and by decision rather than by omission
+# (D-10 as amended 2026-09-08). It used to trigger on pull requests touching
+# gungnir-data-fusion or gungnir-render, and every such job waited a day for a runner
+# labelled `gpu` that was not registered, then failed.
+#
+# The runner exists as of 2026-09-08: `gungnir-rtx-5060ti`, labels
+# self-hosted/Windows/X64/gpu, on the owner's workstation (GAP-061). The trigger is
+# deliberately NOT restored with it. This repository is public and the runner is a
+# workstation, so a pull_request trigger would let a fork run its own code on that
+# machine; workflow_dispatch can only be fired by a caller with write access, so it
+# cannot. A dispatch job on a self-hosted runner is already local execution -- the
+# compute is on the owner's GPU -- and GitHub supplies the trigger and the log that
+# release-governance.md's evidence package is made of.
+#
+# This still cannot go green until GAP-024 writes the GPU path and its `#[ignore]`
+# tests behind the `gpu-tests` feature: today that feature is empty and
+# `--features gpu-tests -- --ignored` runs zero tests, and the last step below fails a
+# run that executed nothing. Fire it with `gh workflow run gpu-fusion.yml`.
+#
+# The same validation runs directly on any GPU host, no forge involved:
+#   cargo test -p gungnir-data-fusion --features gpu-tests -- --ignored
+# The workflow is the record, not the only route.
 name: gpu-fusion
 
 on:

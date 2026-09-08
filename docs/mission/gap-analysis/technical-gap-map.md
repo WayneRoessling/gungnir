@@ -134,7 +134,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-007 Coverage rendering on the map | CAP-1.4 | 2 | M | I3 | `../../verification-capability-table.md` §2, `gungnir-viewport3d` rows |
 | GAP-022 three-d scene attachment | CAP-2.10 | 3 | L | I3 | `../../../ARCHITECTURE.md` §10, three-d attachment |
 | GAP-023 Data loaders per format | CAP-2.10 | 3 | L | I2 | `../../verification-capability-table.md` §2, `gungnir-data` rows; `testdata/dem/SOURCE.md` |
-| GAP-024 Point-cloud registration, CPU reference and GPU | CAP-2.10 | 2 | L | I4 | `../../verification-capability-table.md` §2, `gungnir-data-fusion` rows |
+| GAP-024 Point-cloud registration, CPU reference and GPU | CAP-2.10 | 2 | L | I3 | `../../verification-capability-table.md` §2, `gungnir-data-fusion` rows; `rust-3d-data-ecosystem-build-vs-adopt.md` §3.4 and §3.6; GAP-061 (the runner, done); GAP-098 (what feeds and displays the result) |
 | GAP-038 Approval queue and decision panel | CAP-4.1 | 4 | M | I3 | `../../verification-capability-table.md` §2, `gungnir-ui` row |
 | GAP-070 Display vocabulary and override table | CAP-5.9 | 2 | S | I3 | Added to `../../../ARCHITECTURE.md` §10 by this register |
 | GAP-071 Replay, reports, and configuration editor panels | CAP-5.2, CAP-5.3, CAP-5.6 | 3 | M | I3 | `../../ux/ux-to-code-map.md` |
@@ -146,6 +146,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-055 Role workspaces in the UI | CAP-5.9 | 3 | L | I3 | `../../plans/06-ux-design-by-role.md` |
 | GAP-095 Night theme variant | CAP-5.9 | 2 | M | I4 | `../../../ARCHITECTURE.md` §10 item 89 (D-35 to D-38) |
 | GAP-096 Bearing-only detections never reach the operator | CAP-2.1, CAP-5.9 | 4 | M | I3 | `../../design/DN-27-bearing-only-detections.md` §5 rule 3 and §7; `../../ux/ux-to-code-map.md` PN-02, PN-08, PN-09; GAP-001 (the three feeds this makes visible); GAP-011 (whose entry recorded §7 unbuilt) |
+| GAP-098 No runtime point cloud: nothing loads one and nothing draws one | CAP-2.10 | 3 | M | I3 | `../../../ARCHITECTURE.md` §3 (the two contexts and the read-back); GAP-023 (the loaders, built); GAP-024 (the registration engine, unblocked and independent of this) |
 
 ### Verification and governance
 
