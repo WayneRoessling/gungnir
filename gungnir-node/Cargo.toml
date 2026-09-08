@@ -76,6 +76,11 @@ bench = false
 [dev-dependencies]
 # The identity test verifies the provider's signature with the public half.
 p256.workspace = true
+# Dev-only: the OS-keystore account-store test (GAP-057, D-39) cleans up the real
+# credential-manager entry it creates. The runtime edge stays through gungnir-security,
+# the only crate that writes one -- the same comment `gungnir-app`'s own copy of this
+# dependency carries for its own OS-keystore test.
+keyring.workspace = true
 # The entity-resolver tests build `TrackView`s, whose state and covariance are nalgebra
 # types the model owns. Dev-only: nothing in this binary constructs one at runtime.
 nalgebra.workspace = true

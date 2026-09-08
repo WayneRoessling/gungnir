@@ -1082,6 +1082,11 @@ fn account_listing(
                 .map(|s| s.listing())
                 .map_err(|e| e.to_string())
         }
+        AuthenticationProvider::OsKeystoreAccounts { .. } => Err(
+            "the operating-system-keystore account provider is for gungnir-node; the \
+             desktop uses local-accounts or no accounts (DN-23 §5)"
+                .into(),
+        ),
     }
 }
 
@@ -1112,6 +1117,17 @@ fn build_session_authority(
                         Box::new(InMemoryAccountStore::unavailable(err.to_string()))
                     }
                 }
+            }
+            AuthenticationProvider::OsKeystoreAccounts { .. } => {
+                alerts.push(
+                    "The operating-system-keystore account provider is for gungnir-node; \
+                     nobody can sign in to this desktop until local-accounts is configured \
+                     instead (DN-23 §5)."
+                        .into(),
+                );
+                Box::new(InMemoryAccountStore::unavailable(
+                    "the operating-system-keystore account provider is for gungnir-node",
+                ))
             }
         };
     // GAP-057: the lifetime the baseline names is enforced here; absent means the

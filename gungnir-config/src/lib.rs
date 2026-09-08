@@ -740,6 +740,16 @@ pub enum AuthenticationProvider {
     /// Local accounts in a JSON file of `{operator, role, phc}` records, relative to the
     /// data directory. The file holds hashed passphrases (PHC strings), never plaintext.
     LocalAccounts { accounts_path: String },
+    /// A node's accounts, sealed in one file in the data directory under a key the
+    /// operating system's own keystore holds (D-39, GAP-057;
+    /// `gungnir_security::EncryptedAccountStore`). `account` names which entry within
+    /// the keystore is this deployment's, exactly as `KeyProviderConfig::
+    /// OperatingSystemKeystore`'s `account` does for the desktop's keys. `gungnir-node`
+    /// only, and not guaranteed on every node: where the platform has no keystore this
+    /// process's own identity can reach, the store reports unavailable and the node
+    /// falls back to `SessionState::StoreUnavailable` exactly as it does for a
+    /// `LocalAccounts` file that will not open.
+    OsKeystoreAccounts { account: String },
 }
 
 /// Which custody model a deployment uses.
@@ -2792,22 +2802,39 @@ fn validate_policy(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
 /// for material to end up somewhere nobody is watching.
 fn validate_security(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     // DN-23 §5 rule 6: the baseline names where accounts live, never what they are.
-    if let AuthenticationProvider::LocalAccounts { accounts_path } =
-        &baseline.security.authentication.provider
-    {
-        if accounts_path.trim().is_empty() {
-            return Err(ConfigError::Invalid(
-                "security.authentication names local accounts with an empty path".into(),
-            ));
+    match &baseline.security.authentication.provider {
+        AuthenticationProvider::None => {}
+        AuthenticationProvider::LocalAccounts { accounts_path } => {
+            if accounts_path.trim().is_empty() {
+                return Err(ConfigError::Invalid(
+                    "security.authentication names local accounts with an empty path".into(),
+                ));
+            }
+            if gungnir_model::looks_like_key_material(accounts_path)
+                || accounts_path.contains("$argon2")
+            {
+                return Err(ConfigError::Invalid(
+                    "security.authentication.accounts_path looks like credential material; \
+                     the baseline names a file, never a secret (DN-23 §5 rule 6)"
+                        .into(),
+                ));
+            }
         }
-        if gungnir_model::looks_like_key_material(accounts_path)
-            || accounts_path.contains("$argon2")
-        {
-            return Err(ConfigError::Invalid(
-                "security.authentication.accounts_path looks like credential material; \
-                 the baseline names a file, never a secret (DN-23 §5 rule 6)"
-                    .into(),
-            ));
+        AuthenticationProvider::OsKeystoreAccounts { account } => {
+            if account.trim().is_empty() {
+                return Err(ConfigError::Invalid(
+                    "security.authentication names an operating-system keystore account \
+                     with an empty name"
+                        .into(),
+                ));
+            }
+            if gungnir_model::looks_like_key_material(account) || account.contains("$argon2") {
+                return Err(ConfigError::Invalid(
+                    "security.authentication.account looks like credential material; the \
+                     baseline names an account, never a secret (DN-23 §5 rule 6)"
+                        .into(),
+                ));
+            }
         }
     }
     if let Some(s) = baseline.security.authentication.session_lifetime_s {
@@ -3269,6 +3296,70 @@ mod tests {
         let json = serde_json::to_string(&baseline).expect("encoded");
         let back: ConfigBaseline = serde_json::from_str(&json).expect("decoded");
         assert_eq!(back.security, baseline.security);
+    }
+
+    /// GAP-057's node half: an operating-system-keystore-backed account provider names
+    /// an account, same as the key provider's own row, and validates.
+    #[test]
+    fn an_os_keystore_account_provider_validates() {
+        let baseline = ConfigBaseline {
+            security: SecurityConfig {
+                key_provider: KeyProviderConfig::default(),
+                authentication: AuthenticationConfig {
+                    provider: AuthenticationProvider::OsKeystoreAccounts {
+                        account: "gungnir-node".into(),
+                    },
+                    session_lifetime_s: None,
+                },
+                tls: TlsClientConfig::default(),
+                escrow: None,
+            },
+            ..ConfigBaseline::default()
+        };
+        assert!(validate(&baseline).is_ok());
+    }
+
+    /// DN-23 §5 rule 6: the baseline names an account, never nothing at all.
+    #[test]
+    fn an_empty_os_keystore_account_name_is_refused() {
+        let baseline = ConfigBaseline {
+            security: SecurityConfig {
+                key_provider: KeyProviderConfig::default(),
+                authentication: AuthenticationConfig {
+                    provider: AuthenticationProvider::OsKeystoreAccounts {
+                        account: "  ".into(),
+                    },
+                    session_lifetime_s: None,
+                },
+                tls: TlsClientConfig::default(),
+                escrow: None,
+            },
+            ..ConfigBaseline::default()
+        };
+        let message = validate(&baseline).expect_err("refused").to_string();
+        assert!(message.contains("empty name"), "{message}");
+    }
+
+    /// DN-23 §5 rule 6, checked the same way `KeyProviderConfig`'s account already is:
+    /// a value that looks like a secret is refused rather than trusted.
+    #[test]
+    fn an_os_keystore_account_name_that_looks_like_key_material_is_refused() {
+        let baseline = ConfigBaseline {
+            security: SecurityConfig {
+                key_provider: KeyProviderConfig::default(),
+                authentication: AuthenticationConfig {
+                    provider: AuthenticationProvider::OsKeystoreAccounts {
+                        account: "$argon2id$v=19$m=19456,t=2,p=1$abc$def".into(),
+                    },
+                    session_lifetime_s: None,
+                },
+                tls: TlsClientConfig::default(),
+                escrow: None,
+            },
+            ..ConfigBaseline::default()
+        };
+        let message = validate(&baseline).expect_err("refused").to_string();
+        assert!(message.contains("credential material"), "{message}");
     }
 
     /// A baseline written before this section existed still loads, defaulting to no

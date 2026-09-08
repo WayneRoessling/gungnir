@@ -26,8 +26,20 @@
 //! Nothing here writes key material to a configuration baseline. The file holds argon2
 //! PHC strings, which is what DN-22 §6 and DN-23 §5 rule 6 permit, and the node's token
 //! signing key stays in the environment where [`crate::auth`] reads it.
+//!
+//! **`add-os-keystore` and `list-os-keystore` (GAP-057's node half, D-39).** The same
+//! provisioning need, against `gungnir_security::EncryptedAccountStore` instead of a
+//! plaintext file: accounts sealed under a key the operating system's own keystore
+//! holds, rather than protected only by whatever file permissions the platform grants
+//! (Windows grants none -- see [`permissions_note`]). This path names a data directory
+//! and a keystore account rather than a file, and reaches the real backend on this
+//! machine every time it runs: there is no mock to redirect it to outside
+//! `gungnir-security`'s own tests, the same way provisioning a real file always writes
+//! a real file.
 
-use gungnir_security::{hash_passphrase, Account, OperatorId, Role};
+use gungnir_security::{
+    hash_passphrase, Account, EncryptedAccountStore, OperatorId, Role, SecurityError,
+};
 use std::fmt::Write as _;
 use std::io::Read;
 use std::path::Path;
@@ -51,6 +63,9 @@ pub enum AccountError {
     HashFailed(String),
     /// The file could not be written.
     WriteFailed(String),
+    /// The operating-system-keystore-backed store could not be reached at all: no
+    /// keystore on this platform, or the sealed file did not open under its secret.
+    StoreUnavailable(String),
 }
 
 impl std::fmt::Display for AccountError {
@@ -68,7 +83,7 @@ impl std::fmt::Display for AccountError {
             AccountError::FileUnreadable(why) => write!(f, "{why}"),
             AccountError::AlreadyExists(id) => write!(
                 f,
-                "operator {id} already has an account in this file. Pass --replace to \
+                "operator {id} already has an account in this store. Pass --replace to \
                  set a new passphrase for that operator; without it nothing is changed, \
                  because silently overwriting a credential is how an account is taken \
                  over rather than provisioned"
@@ -80,6 +95,9 @@ impl std::fmt::Display for AccountError {
             ),
             AccountError::HashFailed(why) => write!(f, "the passphrase was refused: {why}"),
             AccountError::WriteFailed(why) => write!(f, "the account file was not written: {why}"),
+            AccountError::StoreUnavailable(why) => {
+                write!(f, "the account store is unavailable: {why}")
+            }
         }
     }
 }
@@ -89,11 +107,18 @@ impl std::error::Error for AccountError {}
 const USAGE: &str = "\
 usage: gungnir-node account add <accounts.json> <operator-id> <role> [--replace]
        gungnir-node account list <accounts.json>
+       gungnir-node account add-os-keystore <data-dir> <keystore-account> <operator-id> <role> [--replace]
+       gungnir-node account list-os-keystore <data-dir> <keystore-account>
 
 The passphrase is read from standard input, never from an argument, because
 arguments are visible to every process on the host.
 
   printf '%s' 'the passphrase' | gungnir-node account add accounts.json 7 operator
+
+add-os-keystore and list-os-keystore seal the accounts in <data-dir> under a key the
+operating system's own keystore holds, naming <keystore-account> the way `add` names a
+file; where this machine has no reachable keystore they refuse, the same as a data
+directory that cannot be written.
 
 Roles: operator, supervisor, analyst, sensor-manager, administrator, commander,
        planner, security-officer";
@@ -244,6 +269,69 @@ pub fn list(path: &Path) -> Result<String, AccountError> {
     Ok(out.trim_end().to_string())
 }
 
+/// Add or replace one account in a node's operating-system-keystore-backed store
+/// (GAP-057's node half, D-39). This reaches the real keystore on this machine --
+/// there is no mock to redirect it to outside `gungnir-security`'s own tests.
+///
+/// # Errors
+///
+/// [`AccountError::StoreUnavailable`] when this platform has no reachable keystore or
+/// the sealed file does not open under its secret; [`AccountError::AlreadyExists`] when
+/// the operator already has an account and `replace` was not given.
+pub fn add_os_keystore(
+    dir: &Path,
+    keystore_account: &str,
+    operator: u64,
+    role: Role,
+    passphrase: &str,
+    replace: bool,
+) -> Result<String, AccountError> {
+    let store = EncryptedAccountStore::open_or_create(dir, keystore_account)
+        .map_err(|e| AccountError::StoreUnavailable(e.to_string()))?;
+    let phc = hash_passphrase(passphrase).map_err(|e| AccountError::HashFailed(e.to_string()))?;
+    match store.add(OperatorId(operator), role, phc, replace) {
+        Ok(()) => Ok(format!(
+            "provisioned operator {operator} as {role:?} in the operating-system keystore \
+             account {keystore_account:?} under {}",
+            dir.display()
+        )),
+        Err(SecurityError::Forbidden(_)) => Err(AccountError::AlreadyExists(operator)),
+        Err(e) => Err(AccountError::StoreUnavailable(e.to_string())),
+    }
+}
+
+/// List the accounts a node's operating-system-keystore-backed store holds: operator
+/// and role, never the hash.
+///
+/// # Errors
+///
+/// [`AccountError::StoreUnavailable`] when this platform has no reachable keystore or
+/// the sealed file does not open under its secret.
+pub fn list_os_keystore(dir: &Path, keystore_account: &str) -> Result<String, AccountError> {
+    let store = EncryptedAccountStore::open_or_create(dir, keystore_account)
+        .map_err(|e| AccountError::StoreUnavailable(e.to_string()))?;
+    let accounts = store
+        .listing()
+        .map_err(|e| AccountError::StoreUnavailable(e.to_string()))?;
+    if accounts.is_empty() {
+        return Ok(format!(
+            "the operating-system keystore account {keystore_account:?} under {} holds no \
+             accounts",
+            dir.display()
+        ));
+    }
+    let mut out = format!(
+        "the operating-system keystore account {keystore_account:?} under {} holds {} \
+         account(s):\n",
+        dir.display(),
+        accounts.len()
+    );
+    for (id, role) in &accounts {
+        let _ = writeln!(out, "  operator {} as {role:?}", id.0);
+    }
+    Ok(out.trim_end().to_string())
+}
+
 /// Run the `account` subcommand from the arguments after the word `account`.
 ///
 /// # Errors
@@ -274,6 +362,43 @@ pub fn run(args: &[String]) -> Result<String, AccountError> {
                 .get(1)
                 .ok_or_else(|| AccountError::Usage("account list needs a file path".into()))?;
             list(Path::new(path))
+        }
+        Some("add-os-keystore") => {
+            let dir = args.get(1).ok_or_else(|| {
+                AccountError::Usage("account add-os-keystore needs a data directory".into())
+            })?;
+            let keystore_account = args.get(2).ok_or_else(|| {
+                AccountError::Usage("account add-os-keystore needs a keystore account name".into())
+            })?;
+            let operator = args.get(3).ok_or_else(|| {
+                AccountError::Usage("account add-os-keystore needs an operator id".into())
+            })?;
+            let role = args.get(4).ok_or_else(|| {
+                AccountError::Usage("account add-os-keystore needs a role".into())
+            })?;
+            let operator: u64 = operator
+                .parse()
+                .map_err(|_| AccountError::BadOperatorId(operator.clone()))?;
+            let role = role_from_str(role)?;
+            let replace = args.iter().any(|a| a == "--replace");
+            let passphrase = passphrase_from_stdin()?;
+            add_os_keystore(
+                Path::new(dir),
+                keystore_account,
+                operator,
+                role,
+                &passphrase,
+                replace,
+            )
+        }
+        Some("list-os-keystore") => {
+            let dir = args.get(1).ok_or_else(|| {
+                AccountError::Usage("account list-os-keystore needs a data directory".into())
+            })?;
+            let keystore_account = args.get(2).ok_or_else(|| {
+                AccountError::Usage("account list-os-keystore needs a keystore account name".into())
+            })?;
+            list_os_keystore(Path::new(dir), keystore_account)
         }
         Some(other) => Err(AccountError::Usage(format!(
             "no such account command: {other}"

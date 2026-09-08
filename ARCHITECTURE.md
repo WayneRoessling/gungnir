@@ -3834,6 +3834,106 @@ not by finding, for the time between whenever each item landed and this correcti
     transport-identity persistence both named this same decision as their remaining item;
     the decision is taken and neither is built by this entry, which is D-39's alone.
 
+104. **GAP-057's node account store, D-39's remaining item claimed** (2026-09-08). Item
+    103 admitted `keyring` and built the desktop's half; this entry builds the other one
+    it named and left. `gungnir-security/src/account_store.rs::EncryptedAccountStore`
+    seals a node's `Vec<Account>` in one file under a key `os_keystore::wrapping_secret`
+    supplies -- the same sealed-file shape `keystore.rs::PersistentKeyProvider` uses for
+    key material, applied to an account list instead, and kept a separate type rather
+    than forced through that one's constructor because the two payloads have nothing
+    else in common. `os_keystore::wrapping_secret` gained a `service` parameter for
+    this: `NODE_KEYSTORE_SERVICE` ("gungnir-node-accounts") keeps a node's entries out
+    of the desktop's `gungnir-desktop-keystore` namespace, so the two never collide on
+    one machine. `AuthenticationProvider::OsKeystoreAccounts { account }` names the
+    provider in the baseline (DN-22 §6, DN-23 §5 rule 6: an account, never a secret,
+    checked at validation the same way `KeyProviderConfig::OperatingSystemKeystore`'s
+    already is); `gungnir-node/src/auth.rs::build_with_key` wires it in beside
+    `LocalAccounts`, and `gungnir-app`'s two account-provider matches gained an honest
+    "this provider is for gungnir-node" arm rather than a `todo!()`, since the desktop's
+    own row stays local accounts per DN-23 §5 and nothing asked it to gain a second one.
+    `gungnir-node account add-os-keystore`/`list-os-keystore` provision it, mirroring
+    `add`/`list`'s file-backed shape with a data directory and a keystore account in
+    place of a path.
+
+    **Item 103's "no operator login to unlock at" is about a different question than
+    this entry answers.** That objection is about the *key-provider* row: §5 assigns
+    `OperatingSystemKeystore` custody to an interactively logged-in desktop operator's
+    own session unlocking it, and a node has none to wait for -- its key-provider row
+    stays `ManagedService`, untouched by this entry. This entry is not "whose login
+    unlocks this"; it is "is a sealed file better than a plaintext one for accounts a
+    node already keeps somewhere" -- a node's own process identity (a Windows service
+    account's Credential Manager, a Linux keyring a systemd unit has been given access
+    to) can hold an entry with no human login involved at all, and the doc comment on
+    both the config variant and `account_store.rs` says as much rather than leaving the
+    tension unaddressed. Where no such facility is reachable, `wrapping_secret`'s own
+    error path fires and the node reports `AccountStoreUnavailable` -- honest, and the
+    same fallback `LocalAccounts` already has for a file that will not open.
+
+    **Verification.** Five unit tests in `account_store.rs` against a directly-supplied
+    secret (mirroring why `keystore.rs`'s own tests bypass the OS keystore too):
+    round-trip across a reopen and refusal under the wrong secret, add-without-replace
+    refused and with it overwrites, `assign_role` changes the role and leaves the hash,
+    an unknown operator is `None` rather than an error, and the file holds no legible
+    account. `gungnir-security/tests/account_store_os_keystore.rs` and a new test in
+    `gungnir-node/src/auth.rs` each carry one test against whatever backend the machine
+    running them actually has, honest either way, the same as item 103's own tests --
+    both passed for real against Windows Credential Manager on this development
+    machine, cleaning up the entry each created. Three `gungnir-config` tests cover the
+    new provider's validation: a valid account validates, an empty one is refused, and
+    one that looks like a PHC string is refused the same way `LocalAccounts`' path
+    already is.
+
+    **Dependency edges: none added.** `gungnir-node` already depended on
+    `gungnir-security` for `FileAccountStore`; `keyring.workspace = true` was added to
+    its `[dev-dependencies]` only, for the same real-backend test cleanup
+    `gungnir-app`'s identical dev-dependency already does, and carries the same comment.
+
+    **Human-owned crate touched: `gungnir-security`, the account-store type and the
+    `os_keystore` signature change, per `docs/agentic-workflow.md`. Written and gated,
+    not signed.** `gungnir-config`'s new variant and its validation, and the wiring in
+    `gungnir-node` and `gungnir-app`, are ordinary configuration and plumbing work
+    outside the identity path that crate scopes as human-owned; neither needed a
+    signature on its own account.
+
+105. **GAP-060's outbound half brought in line with its serving half** (2026-09-08).
+    `gungnir-node/src/main.rs::host_tls` -- what a node presents to a peer it connects
+    to -- called nothing but the `GUNGNIR_TLS_CERT`/`GUNGNIR_TLS_KEY` environment
+    fallback, while `spawn_tls_from_provider` had issued the node's *serving* identity
+    from its key provider since this gap's own earlier work. `host_tls` now also calls
+    `gungnir_remote::identity::issue_for_client("gungnir-node")` -- the exact function
+    `gungnir-app`'s `link_tls_for` already calls for the desktop's own outbound
+    identity, so this is porting an existing, tested pattern rather than writing a new
+    one -- and sets `LinkTls::issued` from it; the environment-PEM fallback is left in
+    place and still read, since `LinkTls`'s own rule is that the issued identity wins
+    when both are set. A failed issuance is logged and falls through to `identity_pem`
+    or to no client certificate, never a hard failure: a node's job is to run its
+    pipeline and journal it, and a peer link it cannot authenticate is a link it does
+    not make, not a reason to stop.
+
+    **What this does not do, named rather than left ambiguous.** `issue_for_client`
+    builds its own ephemeral `P256KeyProvider` internally, the same as
+    `spawn_tls_from_provider` already does for serving -- so this closes the
+    "provider-issued or not" gap between the two roles without closing the
+    "ephemeral or persistent" one either already had. Making either survive a restart
+    needs a `KeyProvider` this node keeps rather than builds fresh, which is a
+    `gungnir-security` change (generalising `PersistentKeyProvider::
+    open_or_create_via_os_keystore`'s hardcoded desktop service name, the same
+    generalisation item 104 already made for `wrapping_secret`) and a decision about
+    whether the node's serving and outbound roles should then share one persisted
+    identity or hold two -- real design surface, not a two-line fix, and deliberately
+    not taken here alongside GAP-057 in the same batch.
+
+    **Verification.** A new unit test in `gungnir-node/src/main.rs` (the crate's first
+    inline test module, `host_tls` being private to it) confirms an ephemeral provider
+    always issues, and that the configured trust roots thread through unchanged. No
+    dependency edge changed: `gungnir-remote::identity` was already public and already
+    a runtime dependency of `gungnir-node`.
+
+    **Not human-owned on its own account.** `gungnir-node` is not in
+    `docs/agentic-workflow.md`'s human-owned list; the function called
+    (`issue_for_client`) is `gungnir-remote` code already signed off under GAP-060's
+    own earlier D-29 work, unchanged here.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

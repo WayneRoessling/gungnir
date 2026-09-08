@@ -174,7 +174,10 @@ impl PersistentKeyProvider {
         account: &str,
         escrow: Option<EscrowPublicKey>,
     ) -> Result<Self, SecurityError> {
-        let secret = crate::os_keystore::wrapping_secret(account)?;
+        let secret = crate::os_keystore::wrapping_secret(
+            crate::os_keystore::DESKTOP_KEYSTORE_SERVICE,
+            account,
+        )?;
         Self::open_or_create(dir, &secret, escrow)
     }
 

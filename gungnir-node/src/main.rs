@@ -190,9 +190,17 @@ fn record_launch_warnings(
     Ok(())
 }
 
-/// What this host presents to a partner (D-02): the baseline's trust roots and, from the
-/// environment, the same certificate the node serves with. A provider-issued client
-/// identity is GAP-060's remaining half.
+/// What this host presents to a partner (D-02): an identity issued from its own key
+/// provider, preferred, and the environment-supplied certificate as a fallback for
+/// whichever half is missing (GAP-060).
+///
+/// **The provider is ephemeral, the same stated limit `spawn_tls_from_provider` already
+/// carries for the serving identity**: a new identity every start until a persistent
+/// keystore exists for the node (GAP-084's remaining `ManagedService` row, or the
+/// OS-keystore path GAP-057 admitted for this node's account store but has not yet been
+/// generalised to key material). Bringing the outbound half in line with the serving
+/// half -- both provider-issued -- is what this closes; making either survive a restart
+/// is not.
 fn host_tls(config: &ConfigBaseline) -> gungnir_remote::LinkTls {
     let identity_pem = match (
         std::env::var("GUNGNIR_TLS_CERT").ok(),
@@ -209,13 +217,16 @@ fn host_tls(config: &ConfigBaseline) -> gungnir_remote::LinkTls {
         }
         _ => None,
     };
+    // Issued wins over the PEM fallback (`LinkTls`'s own rule); reading both and letting
+    // `client_config` choose is the same shape `gungnir-app`'s `link_tls_for` uses.
+    let issued = gungnir_remote::identity::issue_for_client("gungnir-node")
+        .map_err(|err| {
+            tracing::warn!(%err, "this node could not issue its own peer-link identity");
+        })
+        .ok();
     gungnir_remote::LinkTls {
         trust_roots_pem: config.security.tls.trust_roots_pem.clone(),
-        // The node presents an issued identity when it SERVES (see `spawn_tls_from_provider`).
-        // This is the client half -- what it presents to a peer's node -- and it still takes
-        // the environment path. Bringing the two together is the rest of GAP-060 and is not
-        // done here rather than half-done silently.
-        issued: None,
+        issued,
         identity_pem,
     }
 }
@@ -1731,5 +1742,34 @@ impl gungnir_store::sealing::JournalSealer for EphemeralSealer {
         self.provider
             .unseal(&self.key, sealed)
             .map_err(|e| gungnir_store::StoreError::Sealing(e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// GAP-060: the node's outbound peer-link identity is provider-issued, the same as
+    /// its serving identity, rather than only ever coming from the environment.
+    #[test]
+    fn host_tls_issues_its_own_identity_and_carries_the_configured_trust_roots() {
+        let config = ConfigBaseline {
+            security: gungnir_config::SecurityConfig {
+                tls: gungnir_config::TlsClientConfig {
+                    trust_roots_pem: vec![
+                        "-----BEGIN CERTIFICATE-----fake-----END CERTIFICATE-----".into(),
+                    ],
+                },
+                ..gungnir_config::SecurityConfig::default()
+            },
+            ..ConfigBaseline::default()
+        };
+        let tls = host_tls(&config);
+        assert!(
+            tls.issued.is_some(),
+            "an ephemeral provider should always be able to issue"
+        );
+        assert!(tls.has_identity());
+        assert_eq!(tls.trust_roots_pem, config.security.tls.trust_roots_pem);
     }
 }

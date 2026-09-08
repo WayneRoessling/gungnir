@@ -302,6 +302,55 @@ signing key, which is `GUNGNIR_TOKEN_KEY` and DN-22's business. It does not crea
 first account automatically at start-up: a node that provisions itself is a node with a
 default credential.
 
+## 11. Amendment 2 (2026-09-08): the operating system's keystore for a node's own accounts
+
+**Written and gated, not signed.**
+
+Amendment 1 gave the node a way to write its account file; that file is still plaintext
+JSON with argon2-hashed passphrases, protected only by whatever the platform's file
+permissions grant -- owner-only on Unix, nothing on Windows, per
+[`permissions_note`](../../gungnir-node/src/account.rs). DN-22 amendment 4 admitted
+`keyring` and used it to seal the desktop's own key material; this amendment reaches the
+same crate for a node's account list instead, closing the remaining item both DN-22
+amendment 4 and `ARCHITECTURE.md` item 103 named and left.
+
+**One mechanism, two payloads, no shared constructor.** `gungnir_security::
+EncryptedAccountStore` seals a `Vec<Account>` in one file the same shape
+`PersistentKeyProvider`'s already does -- AES-256-GCM, a key argon2 derives from a
+string, that string from `os_keystore::wrapping_secret` -- and shares nothing else with
+it, because a P-256 key snapshot and an account list are typed for different things and
+forcing one through the other's constructor would be the wrong kind of reuse.
+`wrapping_secret` gained a `service` parameter for this: a node's entries live under
+`gungnir-node-accounts`, distinct from the desktop's `gungnir-desktop-keystore`, so the
+two never collide when both run on one machine.
+
+**Answering item 103's objection rather than ignoring it.** DN-22 amendment 4 assigned
+the OS-keystore key-provider row to the desktop alone because a node has no operator
+login to unlock it at. That objection is about *whose login* unlocks an entry meant to
+be unlocked at one; this amendment is not that mechanism reused for a second purpose, it
+is the same crate answering a different question -- whether a sealed file beats a
+plaintext one for accounts a node keeps somewhere regardless. A node's own process
+identity (a Windows service account's own Credential Manager, a Linux keyring a systemd
+unit has been given access to) can hold an entry with nobody logged in to anything, which
+is a narrower, real claim rather than a reuse of the one amendment 4 declined. Where no
+such facility is reachable -- a headless Linux host with no Secret Service session on
+its bus, the same case amendment 4's own tests document -- `wrapping_secret`'s error
+path fires and the node reports `SecurityError::AccountStoreUnavailable`, which is
+§5 rule 5's fallback and not a gap in coverage.
+
+**`AuthenticationProvider::OsKeystoreAccounts { account }`** joins `LocalAccounts` in
+the baseline, named and validated the same way (§5 rule 6: an account, never a secret;
+an empty name or a value shaped like a PHC string is refused). `gungnir-node account
+add-os-keystore <data-dir> <keystore-account> <operator-id> <role> [--replace]` and
+`account list-os-keystore <data-dir> <keystore-account>` provision it -- the same five
+rules amendment 1 lists, reached against the sealed store instead of the plaintext file.
+
+**The desktop was given a fourth arm, not a `todo!()`.** `gungnir-app`'s two
+account-provider matches (`account_listing`, `build_session_authority`) had to cover
+the new variant to keep compiling; both report "this provider is for gungnir-node" and
+fall back to `SessionState::StoreUnavailable`; the desktop's own row is unchanged, since
+nothing asked it to gain a second account-storage mechanism alongside `LocalAccounts`.
+
 ## Traceability
 
 GAP-057; CAP-6.1, and CAP-6.2/CAP-6.3 through PN-20; D-02 for the mechanism, D-20 for the
