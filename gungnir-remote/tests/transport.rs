@@ -22,10 +22,11 @@ use gungnir_model::{
     SystemHealth, TrackId, TrackStatus, TrackView,
 };
 use gungnir_remote::link::{Credential, ExchangeProductRecord};
-use gungnir_remote::{connect, RemoteEndpoint, RemoteError};
+use gungnir_remote::{connect, connect_with_link, RemoteEndpoint, RemoteError};
 use gungnir_security::{hash_passphrase, Account, InMemoryAccountStore, OperatorId, TokenIssuer};
 use gungnir_tracking_service::TrackingService;
 use std::sync::Arc;
+use tokio::sync::watch;
 
 #[allow(clippy::cast_precision_loss)]
 fn track(id: u64) -> TrackView {
@@ -162,6 +163,15 @@ async fn serve_cuttable(api: Arc<NodeApi>) -> (String, tokio::runtime::Runtime) 
 /// CI failures already carried (a shared runner doing something else), now seen without
 /// needing CI to reproduce it: this test is sensitive to how much CPU the rest of the
 /// suite is taking, not to anything in the code it exercises.
+///
+/// **`a_deleted_track_leaves_the_projection` no longer waits here (2026-09-08).** It was
+/// the one that actually failed, twice in CI and once locally, both paragraphs above --
+/// so it moved to `until_changed`, which waits on `NodeLink::changes()` instead of a
+/// fixed interval; see that function's own comment for why that removes the dependence
+/// on this bound without changing what either wait accepts as a pass. The rest of this
+/// file's waits keep this bound unchanged: none of them has shown this failure, and
+/// switching one to `until_changed` costs a `NodeLink` a caller may not be holding
+/// (`connect_with_link` returns one; `connect` alone does not).
 const PATIENCE: usize = 2_400;
 
 async fn until(mut check: impl FnMut() -> bool, what: &str) {
@@ -184,6 +194,38 @@ async fn until(mut check: impl FnMut() -> bool, what: &str) {
         "timed out waiting for {what} after {:.1}s",
         started.elapsed().as_secs_f64()
     );
+}
+
+/// How long [`until_changed`] waits for its condition before treating the link as
+/// deadlocked. Generous for the same reason [`PATIENCE`] is: what matters is that a
+/// real hang is still caught, not that a loaded machine finishes quickly. Unlike
+/// `PATIENCE`, this is not consumed by polling -- the wait wakes on the link's own
+/// change signal rather than a fixed interval, so raising it costs a passing run
+/// nothing.
+const CHANGE_PATIENCE: std::time::Duration = std::time::Duration::from_secs(60);
+/// Like [`until`], but driven by [`gungnir_remote::link::NodeLink::changes`] instead of
+/// a fixed polling interval.
+///
+/// `until` needs *every one* of up to 2,400 independent `sleep(25ms)` wake-ups to be
+/// scheduled promptly to finish inside its own budget, and `a_deleted_track_leaves_the_
+/// projection` is the test whose CI failures and local reproduction (see `until`'s own
+/// comment) showed that stops being true under a `cargo test --workspace` run
+/// competing for the same cores. `changes` is bumped by the link task itself whenever
+/// it mutates the projection, so this only needs that one task to be scheduled once per
+/// real change -- the thing actually being waited for, rather than a proxy for it.
+///
+/// `watch::Receiver::wait_for` calls `check` on the current value before it waits on
+/// anything, so a change that happened before this call is never missed.
+async fn until_changed(
+    changes: &mut watch::Receiver<u64>,
+    mut check: impl FnMut() -> bool,
+    what: &str,
+) {
+    let Ok(outcome) = tokio::time::timeout(CHANGE_PATIENCE, changes.wait_for(|_| check())).await
+    else {
+        panic!("timed out waiting for {what} after {CHANGE_PATIENCE:?}");
+    };
+    outcome.unwrap_or_else(|_| panic!("the link task ended while waiting for {what}"));
 }
 
 /// The whole point: a desktop connects to a node and gets the node's picture.
@@ -311,16 +353,38 @@ async fn events_published_after_connecting_reach_the_desktop() {
 
 /// A deleted track leaves the desktop's picture. A projection that only ever grew would
 /// show an operator tracks the node had dropped.
+///
+/// **Waits on `NodeLink::changes()` rather than `until`** for the two waits after the
+/// stream is confirmed following (see `until_changed`'s own comment): it was `until`'s
+/// full 2,400-iteration bound this test kept hitting, twice in CI and once locally,
+/// never when run alone.
+///
+/// That was not the whole story. Making the wait precise enough to fix (2026-09-08)
+/// exposed a second, previously-latent bug: publishing the deletion right after "the
+/// snapshot to arrive" races the same window
+/// `events_published_after_connecting_reach_the_desktop` documents -- `connected` is
+/// set before the event stream has subscribed, so an event published before the
+/// subscribe frame reaches the node reaches nobody, correctly and silently. Waking
+/// exactly when the projection changes observes "connected" at the earliest possible
+/// instant, which is also the instant furthest from the stream actually being
+/// subscribed, so this test went from occasionally racing that window (masked by
+/// `until`'s own 25ms polling grain, which usually gave the subscribe time to land
+/// first) to losing it consistently. It is fixed the way that test fixes it: a
+/// disposable sentinel, published until it is seen, proves the stream is following
+/// before the deletion this test is actually about is sent even once.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_deleted_track_leaves_the_projection() {
     let api = authenticating(snapshot(vec![track(1)]));
     let url = serve(Arc::clone(&api)).await;
 
     let handle = tokio::runtime::Handle::current();
-    let (mut tracking, _intercept) =
-        connect(&RemoteEndpoint::plain(url), credential(), &handle).expect("the link starts");
+    let (mut tracking, _intercept, link) =
+        connect_with_link(&RemoteEndpoint::plain(url), credential(), &handle)
+            .expect("the link starts");
+    let mut changes = link.changes();
 
-    until(
+    until_changed(
+        &mut changes,
         || {
             tracking.poll(MissionTime(0.0));
             tracking.tracks().len() == 1
@@ -329,14 +393,52 @@ async fn a_deleted_track_leaves_the_projection() {
     )
     .await;
 
+    // A sentinel, published until seen, proves the stream is following before the
+    // deletion below is sent even once -- see this test's own comment.
+    for seq in 1_000..1_100u64 {
+        api.publish_event(Envelope {
+            seq,
+            mission_time: MissionTime(0.0),
+            event: Event::Tracking(TrackingEvent::TrackInitiated(track(9_999))),
+        })
+        .expect("published");
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        tracking.poll(MissionTime(0.0));
+        if tracking.tracks().len() == 2 {
+            break;
+        }
+    }
+    assert_eq!(
+        tracking.tracks().len(),
+        2,
+        "the event stream never began following, so this test would have proved nothing"
+    );
+
     api.publish_event(Envelope {
-        seq: 1,
+        seq: 1_100,
+        mission_time: MissionTime(0.5),
+        event: Event::Tracking(TrackingEvent::TrackDeleted(TrackId(9_999))),
+    })
+    .expect("published");
+    until_changed(
+        &mut changes,
+        || {
+            tracking.poll(MissionTime(0.0));
+            tracking.tracks().len() == 1
+        },
+        "the sentinel to be withdrawn",
+    )
+    .await;
+
+    api.publish_event(Envelope {
+        seq: 1_101,
         mission_time: MissionTime(1.0),
         event: Event::Tracking(TrackingEvent::TrackDeleted(TrackId(1))),
     })
     .expect("published");
 
-    until(
+    until_changed(
+        &mut changes,
         || {
             tracking.poll(MissionTime(0.0));
             tracking.tracks().is_empty()
