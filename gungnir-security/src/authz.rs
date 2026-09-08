@@ -222,7 +222,7 @@ mod tests {
 
     /// §4's "Product release" row reads yes for Supervisor, Commander, and
     /// Intelligence analyst, and is blank for Operator, Sensor manager, and Analyst.
-    /// `role_permits` had granted only Commander and IntelligenceAnalyst since the
+    /// `role_permits` had granted only Commander and `IntelligenceAnalyst` since the
     /// initial commit, a discrepancy against the row flagged but not fixed in the
     /// GAP-065 commit. Investigated and signed by the owner 2026-09-08 -- see the
     /// comment on `Role::Supervisor`'s arm.
