@@ -134,7 +134,10 @@ fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_jou
         .map(|p| p.plan.id.0)
         .collect();
     for id in [1183, 1201, 1202, 1203, 1204, 1205, 1206] {
-        assert!(point_ids.contains(&id), "plan {id} should be queued by 75 s");
+        assert!(
+            point_ids.contains(&id),
+            "plan {id} should be queued by 75 s"
+        );
     }
     // **Not `assert_eq!(point_ids.len(), 7, ...)` -- that is GAP-097, not this seed.**
     // The live allocator re-proposes its own plan against resource 1 every tick once a
@@ -158,8 +161,14 @@ fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_jou
     let (oldest_two, rest): (Vec<u64>, Vec<u64>) = [1183_u64, 1201, 1202, 1203, 1204, 1205, 1206]
         .into_iter()
         .partition(|&id| id == 1201 || id == 1202);
-    let oldest_max = oldest_two.iter().map(|&id| remaining(id)).fold(f64::MIN, f64::max);
-    let rest_min = rest.iter().map(|&id| remaining(id)).fold(f64::MAX, f64::min);
+    let oldest_max = oldest_two
+        .iter()
+        .map(|&id| remaining(id))
+        .fold(f64::MIN, f64::max);
+    let rest_min = rest
+        .iter()
+        .map(|&id| remaining(id))
+        .fold(f64::MAX, f64::min);
     assert!(
         oldest_max < rest_min,
         "1201 and 1202 should be nearer expiry than every other queued plan"
@@ -172,7 +181,10 @@ fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_jou
         .iter()
         .find(|t| t.id.0 == 39)
         .expect("T-039");
-    assert!(t39.quality.is_stale, "T-039 goes stale after 65 s (US-03: 20 s after P-1183 appears at 45 s)");
+    assert!(
+        t39.quality.is_stale,
+        "T-039 goes stale after 65 s (US-03: 20 s after P-1183 appears at 45 s)"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -181,7 +193,8 @@ fn a_seed_whose_plans_are_not_sorted_by_at_s_is_refused_and_named() {
     // Round-1's own history: 1201 (at_s 0.0) once sat after 1183 (at_s 45.0) in the
     // array, which `tick`'s single cursor would have skipped until 45 s regardless of
     // its own earlier at_s. `load_seed` catches that before a session ever starts.
-    let dir = std::env::temp_dir().join(format!("gungnir-rehearsal-disorder-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("gungnir-rehearsal-disorder-{}", std::process::id()));
     let path = dir.join("disordered.json");
     std::fs::create_dir_all(&dir).expect("scratch dir");
     std::fs::write(
