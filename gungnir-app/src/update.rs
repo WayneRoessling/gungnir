@@ -107,13 +107,22 @@ pub fn tick(state: &mut AppState) {
         }
     };
     let mut submitted = None;
-    if outcome.is_fresh() && plan != state.last_plan {
+    // **Compared by id against `last_live_plan_id`, not by value against
+    // `state.last_plan` (GAP-097).** `state.last_plan` is what PN-04/PN-05 draw, and
+    // `rehearsal.rs`'s scripted plans write it too; comparing the live planner's own
+    // output against a field something else also writes means an unrelated scripted
+    // submission makes the very next unchanged live plan look new again.
+    // `DpInterceptService::fresh_plan` never reuses a `PlanId` for a different
+    // assignment, so the id alone -- tracked here and touched only by this step --
+    // answers "have I already announced this one" without that interference.
+    if outcome.is_fresh() && state.last_live_plan_id != Some(plan.id) {
         publish(
             state,
             now,
             Event::Intercept(InterceptEvent::PlanProposed(plan.clone())),
         );
         state.last_plan = plan.clone();
+        state.last_live_plan_id = Some(plan.id);
 
         // 3b. Policy, then the approval queue. A denied plan is recorded as denied and
         //     never queued; a plan that clears waits for a person. Neither path makes

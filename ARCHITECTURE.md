@@ -4218,6 +4218,58 @@ not by finding, for the time between whenever each item landed and this correcti
     dependency edge changed and no new external crate: only `gungnir-rfs`'s own
     `nalgebra` and `thiserror`, already reachable, are used.
 
+110. **GAP-097: an unchanged plan no longer floods its own approval queue**
+    (2026-09-08). `DpInterceptService::plan_with_rewards` minted a fresh `PlanId` and
+    `mission_time` on every successful solve regardless of whether the resource/track
+    assignment had changed, and `outcome()` reported `PlanOutcome::Fresh` from
+    `self.solver_ok` alone with no comparison to what it had already told a caller --
+    so `update::tick`'s own "publish only when the plan changes" gate (GAP-066) never
+    held once a solve succeeded, and a live desktop or node with one ready resource
+    and one track flooded its own approval queue at the tick rate. A new
+    `assignment_changed` compares the newly solved pairing against `self.last_plan` as
+    a **set** of `(ResourceId, TrackId)` pairs, not the ordered `Vec`
+    `solutions_with_geometry` returns (two solves of the same assignment need not
+    enumerate it in the same order) and not the full `InterceptSolutionView` (a moving
+    track's intercept point and time-to-intercept legitimately change every tick even
+    when the resource stays tasked to it, and comparing them would defeat the fix by
+    minting a new plan for that reason alone). `fresh_plan` is now called -- and
+    `self.last_plan` replaced, geometry included -- only when the set differs; an
+    unchanged assignment leaves the existing plan exactly as it was.
+
+    **A second, related defect surfaced while fixing the first.** `update::tick`'s
+    gate compared the live planner's output against `state.last_plan`, a field
+    `gungnir-app/src/rehearsal.rs`'s scripted plans also write so PN-04/PN-05 draw
+    whichever plan -- live or scripted -- was proposed most recently. A scripted
+    submission overwriting that field made the live planner's own already-unchanged
+    plan compare as new again on the very next tick, so the flood persisted in any
+    rehearsal even after the first fix. `AppState` gained `last_live_plan_id: Option<
+    PlanId>`, touched only by the live-planner step, compared by id rather than by
+    value against a field something else also writes; `DpInterceptService::fresh_plan`
+    never reuses a `PlanId` for a different assignment, so the id alone answers "have
+    I already announced this one" without being disturbed by what else wrote
+    `last_plan`. Seeded to `PlanId::default()` (`PlanId(0)`, which `next_plan_id`
+    starting at 1 never mints) rather than `None`, matching the starting point
+    `last_plan`'s own `PlanView::default()` already represented, so the very first
+    empty solve does not compare as a change either.
+
+    **Verification.** A new test in `gungnir-intercept-service` (an unmoving track, a
+    ready resource, fifty ticks, one plan throughout) pins the first fix directly.
+    `gungnir-app/tests/rehearsal.rs`'s plan-count assertion is tightened back to exact
+    per its own comment -- to **eight**, not the seven that comment had guessed before
+    either fix existed: none of the seven scripted plans task resource 1 against
+    track 39, so the live solver's own genuine, now-stable proposal for that pairing
+    is a legitimate eighth entry, not a leftover duplicate to eliminate. A companion
+    assertion checks the raw queue for duplicate ids as well as distinct ones, since a
+    distinct-id count alone would not have caught the second defect (it collapses
+    repeated ids on its own). `gungnir-app/tests/service_contracts.rs`'s existing
+    `the_desktop_proposes_nothing_while_the_allocator_is_unimplemented` caught the
+    `last_live_plan_id` seeding mistake on the first attempt (`None` compared unequal
+    to the very first empty plan's id and published once where it should not have),
+    confirming the corrected seed before this entry was written.
+
+    **Not human-owned.** Neither `gungnir-intercept-service` nor `gungnir-app` is on
+    the low-trust list; no dependency edge changed and no new external crate.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and
