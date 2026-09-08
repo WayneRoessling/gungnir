@@ -10,6 +10,7 @@
 pub mod cpu_reference;
 pub mod gpu;
 pub mod normals;
+pub mod point_to_plane;
 pub mod transform_solve;
 
 use gungnir_data::pointcloud::PointBuffer;
