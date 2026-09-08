@@ -18,12 +18,15 @@ use rustls::pki_types::pem::PemObject;
 use std::sync::Arc;
 
 use gungnir_api::tls::{self, TlsListener, TlsPaths};
-use gungnir_api::transport::{serve_on_listener, NodeApi};
-use gungnir_api::v2::{ExchangeProduct, ExchangeResponse, SnapshotResponse};
+use gungnir_api::transport::{serve_on_listener, AccountTokenAuthority, NodeApi};
+use gungnir_api::v2::{
+    ExchangeProduct, ExchangeResponse, PublishExchangeRequest, SnapshotResponse,
+};
 use gungnir_model::{
     ExchangeAgreement, ExchangeFormat, ExchangeItem, ExchangeSet, MissionTime, Releasability,
     SystemHealth,
 };
+use gungnir_security::{hash_passphrase, Account, InMemoryAccountStore, OperatorId, TokenIssuer};
 use rcgen::{BasicConstraints, CertificateParams, DnType, IsCa, Issuer, KeyPair};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -153,6 +156,78 @@ async fn get(pki: &Pki, addr: std::net::SocketAddr, party: &str, path: &str) -> 
     (status, body)
 }
 
+/// One HTTP/1.1 request over mutual TLS as `party`, optionally bearing a token and a
+/// body; the status and the body. Generalizes [`get`] for the write routes, which need a
+/// method, a token, and a body that a bare `GET` never does.
+async fn request(
+    pki: &Pki,
+    addr: std::net::SocketAddr,
+    party: &str,
+    method: &str,
+    path: &str,
+    bearer: Option<&str>,
+    body: Option<String>,
+) -> (u16, String) {
+    let (cert, key) = pki.client(party);
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(pki.roots())
+        .with_client_auth_cert(
+            vec![rustls::pki_types::CertificateDer::from(cert)],
+            rustls::pki_types::PrivateKeyDer::try_from(key).expect("key der"),
+        )
+        .expect("client config");
+    let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
+    let tcp = tokio::net::TcpStream::connect(addr).await.expect("connect");
+    let name = rustls::pki_types::ServerName::try_from("localhost").expect("name");
+    let mut stream = connector.connect(name, tcp).await.expect("handshake");
+    let body = body.unwrap_or_default();
+    let mut head = format!(
+        "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
+        body.len()
+    );
+    if let Some(token) = bearer {
+        use std::fmt::Write as _;
+        let _ = write!(head, "Authorization: Bearer {token}\r\n");
+    }
+    head.push_str("\r\n");
+    stream.write_all(head.as_bytes()).await.expect("write");
+    stream.write_all(body.as_bytes()).await.expect("write body");
+    let mut raw = Vec::new();
+    let _ = stream.read_to_end(&mut raw).await;
+    let text = String::from_utf8_lossy(&raw).into_owned();
+    let status: u16 = text
+        .split_whitespace()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .expect("status line");
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, b)| b.to_string())
+        .unwrap_or_default();
+    (status, body)
+}
+
+/// Sign in as `operator` and return the token.
+async fn token(pki: &Pki, addr: std::net::SocketAddr, operator: u64) -> String {
+    let (status, body) = request(
+        pki,
+        addr,
+        "desk-1",
+        "POST",
+        "/v2/session",
+        None,
+        Some(format!(
+            "{{\"operator\":{operator},\"passphrase\":\"{PASSPHRASE}\"}}"
+        )),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    serde_json::from_str::<serde_json::Value>(&body).expect("json")["token"]
+        .as_str()
+        .expect("token")
+        .to_owned()
+}
+
 fn product(id: &str, at: f64, releasability: Releasability) -> ExchangeProduct {
     ExchangeProduct {
         id: id.into(),
@@ -162,9 +237,28 @@ fn product(id: &str, at: f64, releasability: Releasability) -> ExchangeProduct {
     }
 }
 
+const PASSPHRASE: &str = "correct horse battery staple";
+/// Holds `PUBLISH_EXCHANGE` (GAP-065, written and gated, signed by the owner the same day).
+const COMMANDER: u64 = 70;
+/// Holds neither `PUBLISH_EXCHANGE` nor `RELEASE_PRODUCT`.
+const OPERATOR: u64 = 71;
+
 /// A deployment that sends `sector-north` all three items and `sector-east` health alone,
 /// and that holds three warnings, two handoffs, and no reports at all.
 fn api() -> Arc<NodeApi> {
+    let store = InMemoryAccountStore::new(vec![
+        Account {
+            operator: OperatorId(COMMANDER),
+            role: gungnir_security::Role::Commander,
+            phc: hash_passphrase(PASSPHRASE).expect("hashed"),
+        },
+        Account {
+            operator: OperatorId(OPERATOR),
+            role: gungnir_security::Role::Operator,
+            phc: hash_passphrase(PASSPHRASE).expect("hashed"),
+        },
+    ]);
+    let issuer = TokenIssuer::new(vec![9u8; 32], 300.0).expect("issuer");
     let api = Arc::new(
         NodeApi::new(SnapshotResponse::new(
             Vec::new(),
@@ -191,7 +285,11 @@ fn api() -> Arc<NodeApi> {
                     format: ExchangeFormat::Canonical,
                 },
             ],
-        }),
+        })
+        .with_callers(Arc::new(AccountTokenAuthority::new(
+            Box::new(store),
+            issuer,
+        ))),
     );
     api.publish_exchange(
         ExchangeItem::Warnings,
@@ -306,5 +404,140 @@ async fn an_item_this_deployment_publishes_nothing_for_says_so() {
             panic!("an unpublished item was reported as held: {products:?}")
         }
     }
+    let _ = std::fs::remove_dir_all(&pki.dir);
+}
+
+fn publish(products: Vec<ExchangeProduct>) -> String {
+    serde_json::to_string(&PublishExchangeRequest { products }).expect("json")
+}
+
+/// GAP-065, DN-18 §5 amendment 2: an operator holding `PUBLISH_EXCHANGE` replaces what
+/// this node holds for an item, and a covered party then reads the new set through the
+/// existing `GET` route -- the write path DN-18 amendment 1 said neither existed nor was
+/// decided.
+///
+/// **Replaces, not appends.** `api()` already publishes three warnings; posting one more
+/// leaves exactly the one just posted, which is [`gungnir_api::transport::NodeApi::publish_exchange`]'s
+/// own contract and not something a caller could tell from the write response alone.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_operator_holding_the_action_replaces_what_the_node_holds() {
+    let pki = Pki::new("publish");
+    let api = api();
+    let addr = serve(&pki, Arc::clone(&api)).await;
+    let commander = token(&pki, addr, COMMANDER).await;
+
+    let (status, body) = request(
+        &pki,
+        addr,
+        "desk-1",
+        "POST",
+        "/v2/exchange/warnings",
+        Some(&commander),
+        Some(publish(vec![product(
+            "asset-9/track-1",
+            30.0,
+            Releasability::AllPeers,
+        )])),
+    )
+    .await;
+    assert_eq!(status, 202, "{body}");
+
+    let (status, body) = get(&pki, addr, "sector-north", "/v2/exchange/warnings").await;
+    assert_eq!(status, 200, "{body}");
+    let (ids, withheld) = held(&body);
+    assert_eq!(
+        ids,
+        vec!["asset-9/track-1"],
+        "the posted set replaced the three warnings api() had published, not joined them"
+    );
+    assert_eq!(withheld, 0);
+    let _ = std::fs::remove_dir_all(&pki.dir);
+}
+
+/// An operator with no `PUBLISH_EXCHANGE` is refused, and nothing already held changes.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_operator_without_the_action_may_not_publish() {
+    let pki = Pki::new("forbidden");
+    let api = api();
+    let addr = serve(&pki, Arc::clone(&api)).await;
+    let operator = token(&pki, addr, OPERATOR).await;
+
+    let (status, body) = request(
+        &pki,
+        addr,
+        "desk-1",
+        "POST",
+        "/v2/exchange/warnings",
+        Some(&operator),
+        Some(publish(vec![product(
+            "asset-9/track-1",
+            30.0,
+            Releasability::AllPeers,
+        )])),
+    )
+    .await;
+    assert_eq!(status, 403, "{body}");
+    assert!(body.contains("may not publish to exchange"), "{body}");
+
+    let (status, body) = get(&pki, addr, "sector-north", "/v2/exchange/warnings").await;
+    assert_eq!(status, 200, "{body}");
+    let (ids, _) = held(&body);
+    assert_eq!(
+        ids,
+        vec!["asset-2/track-8", "asset-3/track-9"],
+        "the refused write changed nothing api() had already published"
+    );
+    let _ = std::fs::remove_dir_all(&pki.dir);
+}
+
+/// A body that will not parse is refused before anything already held changes, and a
+/// caller with neither a token nor a recognized machine role gets the same refusal every
+/// other write route gives it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_malformed_publish_changes_nothing_and_an_unauthenticated_one_is_refused() {
+    let pki = Pki::new("malformed");
+    let api = api();
+    let addr = serve(&pki, Arc::clone(&api)).await;
+    let commander = token(&pki, addr, COMMANDER).await;
+
+    let (status, body) = request(
+        &pki,
+        addr,
+        "desk-1",
+        "POST",
+        "/v2/exchange/handoffs",
+        Some(&commander),
+        Some("{\"products\":\"not a list\"}".to_string()),
+    )
+    .await;
+    assert_eq!(status, 400, "{body}");
+    let (status, body) = get(&pki, addr, "sector-north", "/v2/exchange/handoffs").await;
+    assert_eq!(status, 200, "{body}");
+    let (ids, withheld) = held(&body);
+    assert!(
+        ids.is_empty(),
+        "both handoffs api() published stay internal"
+    );
+    assert_eq!(withheld, 2, "unchanged from api()'s own two handoffs");
+
+    // No bearer token and no machine role for "desk-1": the same "no exchange agreement"
+    // refusal every other route gives an authenticated caller nobody has agreed with
+    // (DN-18 §5).
+    let (status, body) = request(
+        &pki,
+        addr,
+        "desk-1",
+        "POST",
+        "/v2/exchange/handoffs",
+        None,
+        Some(publish(vec![product(
+            "decision-9",
+            1.0,
+            Releasability::AllPeers,
+        )])),
+    )
+    .await;
+    assert_eq!(status, 403, "{body}");
+    assert!(body.contains("no exchange agreement"), "{body}");
     let _ = std::fs::remove_dir_all(&pki.dir);
 }

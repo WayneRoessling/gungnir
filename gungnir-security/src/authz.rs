@@ -27,7 +27,8 @@ pub trait Authorizer: Send + Sync {
 pub fn role_permits(role: Role, action: &str) -> bool {
     use actions::{
         APPLY_CONFIG, DECIDE_PLAN, EXPORT_REPORT, KEY_ESCROW_RECOVER, OVERRIDE_PLAN, PROMOTE_MODEL,
-        RELEASE_PRODUCT, SET_CONTROL_STATUS, SUBMIT_DETECTION, TASK_SENSOR, VIEW_PICTURE,
+        PUBLISH_EXCHANGE, RELEASE_PRODUCT, SET_CONTROL_STATUS, SUBMIT_DETECTION, TASK_SENSOR,
+        VIEW_PICTURE,
     };
     match role {
         Role::Administrator => true,
@@ -38,6 +39,11 @@ pub fn role_permits(role: Role, action: &str) -> bool {
         // control status, hold or cease, plan apply, and product release. Identity
         // declaration per class and coverage-gap acceptance have no coarse action yet
         // and stay with GAP-058's per-class refinement.
+        //
+        // PUBLISH_EXCHANGE (GAP-065, signed by the owner the same day): granted alongside
+        // RELEASE_PRODUCT on the judgment that whoever may mark a product releasable
+        // should be who may send it, matching the §4 row this change added in
+        // `docs/mission/roles-and-stakeholders.md`.
         Role::Commander => matches!(
             action,
             VIEW_PICTURE
@@ -46,12 +52,18 @@ pub fn role_permits(role: Role, action: &str) -> bool {
                 | SET_CONTROL_STATUS
                 | APPLY_CONFIG
                 | RELEASE_PRODUCT
+                | PUBLISH_EXCHANGE
                 | EXPORT_REPORT
         ),
         // Intelligence analyst: product release and reporting. Sensor tasking is a
         // *request* in §4, not authority, so TASK_SENSOR is deliberately absent.
+        // PUBLISH_EXCHANGE joins RELEASE_PRODUCT here for the same reason it joins it
+        // above (GAP-065, signed by the owner the same day).
         Role::IntelligenceAnalyst => {
-            matches!(action, VIEW_PICTURE | EXPORT_REPORT | RELEASE_PRODUCT)
+            matches!(
+                action,
+                VIEW_PICTURE | EXPORT_REPORT | RELEASE_PRODUCT | PUBLISH_EXCHANGE
+            )
         }
         // Planner: view only. §4 has no Planner row; rather than infer authority for a
         // role in an engagement chain, the owner set this to view-only on 2026-09-05.
@@ -169,6 +181,26 @@ mod tests {
             actions::ACKNOWLEDGE_HANDOVER,
             "a watch handover and a warned party are different acknowledgements"
         );
+    }
+
+    /// GAP-065 (signed by the owner the same day): `PUBLISH_EXCHANGE` sits with
+    /// `RELEASE_PRODUCT` on `Commander` and `IntelligenceAnalyst` and nowhere else,
+    /// matching the row `docs/mission/roles-and-stakeholders.md` §4 gained for it.
+    #[test]
+    fn publishing_to_exchange_is_held_wherever_product_release_is() {
+        for role in Role::ALL.iter().copied() {
+            assert_eq!(
+                role_permits(role, actions::PUBLISH_EXCHANGE),
+                role_permits(role, actions::RELEASE_PRODUCT),
+                "{role:?} holds one of release and publish and not the other"
+            );
+        }
+        assert!(role_permits(Role::Commander, actions::PUBLISH_EXCHANGE));
+        assert!(role_permits(
+            Role::IntelligenceAnalyst,
+            actions::PUBLISH_EXCHANGE
+        ));
+        assert!(!role_permits(Role::Operator, actions::PUBLISH_EXCHANGE));
     }
 
     #[test]

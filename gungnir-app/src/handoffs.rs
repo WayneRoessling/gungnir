@@ -19,7 +19,8 @@ use gungnir_command::DecisionRecord;
 use gungnir_eventing::Event;
 use gungnir_model::events::HandoffEvent;
 use gungnir_model::handoff::{DecisionAttribution, DeliveryState, Handoff};
-use gungnir_model::Releasability;
+use gungnir_model::{ExchangeItem, Releasability};
+use gungnir_remote::link::ExchangeProductRecord;
 
 /// One issued handoff and where its delivery stands.
 #[derive(Debug, Clone, PartialEq)]
@@ -253,6 +254,44 @@ pub fn issue_for(state: &mut AppState, record: &DecisionRecord) {
         delivery,
         reports: Vec::new(),
     });
+    publish_to_exchange(state);
+}
+
+/// Republish this desktop's whole current handoff set to its node for coalition exchange
+/// (GAP-065, DN-18 §5 amendment 2), if a node is linked. A no-op otherwise: with no link
+/// there is nowhere to queue to, the same reason `LinkControlAdapter::issue` refuses a
+/// sensor task at the door rather than holding it for a link that may never come.
+///
+/// **Every handoff, not only ones marked releasable.**
+/// `gungnir_api::transport::NodeApi::publish_exchange` holds what it is given and lets the
+/// node's own two gates -- the agreement and the marking, DN-18 §5 -- decide at serve time
+/// what a given party may see. Filtering by marking here as well would duplicate that
+/// decision on the desktop, which is the shortcut DN-18 §8's own verification criterion
+/// exists to catch: the criterion is that the marking gate is independent of the
+/// agreement gate, and it stops meaning that the moment a caller checks only one of them.
+///
+/// **Handoffs only, for now.** `gungnir_workflow::warning::Warning` carries no
+/// releasability field -- DN-17 §3's marked-types list does not name it, unlike
+/// `Handoff` -- and `gungnir_reporting::MissionReport` has no running collection on the
+/// desktop the way `state.handoffs` already is one. Wiring either is its own change, not
+/// a silent gap folded into this one: republishing a set that does not exist yet would be
+/// the "producer... faked to make the path look busier than it is"
+/// `gungnir-model/src/exchange.rs` already refuses to be.
+fn publish_to_exchange(state: &AppState) {
+    let Some(link) = state.link.clone() else {
+        return;
+    };
+    let products = state
+        .handoffs
+        .iter()
+        .map(|record| ExchangeProductRecord {
+            id: record.handoff.decision.0.to_string(),
+            at: record.handoff.issued,
+            releasability: record.handoff.releasability.clone(),
+            body: serde_json::to_value(&record.handoff).unwrap_or(serde_json::Value::Null),
+        })
+        .collect();
+    link.queue_exchange(ExchangeItem::Handoffs, products);
 }
 
 /// The handoff rows PN-06 and PN-20 draw (GAP-040).

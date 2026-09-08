@@ -247,6 +247,45 @@ fn pn20_draws_the_handoff_and_every_report_that_came_back() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// GAP-065, DN-18 §5 amendment 2: issuing a handoff republishes this desktop's whole
+/// current handoff set to a linked node, so a coalition partner's
+/// `GET /v2/exchange/handoffs` eventually serves it; with no link there is nothing to
+/// queue to and issuing still works.
+#[test]
+fn issuing_a_handoff_queues_the_whole_set_for_exchange_when_a_node_is_linked() {
+    use gungnir_app::handoffs::issue_for;
+    use gungnir_remote::link::NodeLink;
+
+    let (mut state, dir) = desktop("exchange", None);
+    // No link yet: issuing still works, and there is nothing to queue to.
+    issue_for(&mut state, &accepted());
+    assert_eq!(state.handoffs.len(), 1);
+
+    let link = NodeLink::scripted();
+    state.link = Some(link.clone());
+    let mut second = accepted();
+    second.id = DecisionId(2);
+    second.plan.id = PlanId(2);
+    issue_for(&mut state, &second);
+    assert_eq!(state.handoffs.len(), 2);
+
+    let p = link.read().expect("projection");
+    assert_eq!(
+        p.exchange_outbox.len(),
+        1,
+        "one republish for the one new handoff, issued while linked"
+    );
+    let batch = &p.exchange_outbox[0];
+    assert_eq!(batch.item, gungnir_model::ExchangeItem::Handoffs);
+    let ids: Vec<&str> = batch.products.iter().map(|p| p.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        vec!["1", "2"],
+        "the whole current set is republished, not only the newest handoff"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// A report naming a decision this desktop never handed off is rejected, and nothing is
 /// kept for PN-20 to draw: an effector report is an untrusted external input, and a
 /// rejected one is not part of the after-action account.

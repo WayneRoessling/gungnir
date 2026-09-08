@@ -50,6 +50,16 @@
 //! deciding, and reporting what they withheld. Tracks and health keep their existing
 //! doors, `/v2/snapshot` and `/v2/health`.
 //!
+//! **`POST` on those same three paths (GAP-065, DN-18 §5 amendment 2, human-owned,
+//! signed by the owner the same day) is the write path DN-18's own amendment 1 said
+//! neither existed nor was decided.** The caller is this deployment's own desktop,
+//! posting under its operator session token what it currently holds; the node replaces
+//! its held set for that item and the existing `GET` route serves it onward, still
+//! through both of §5's gates. Unlike the two routes above, this is not an outside party
+//! answering something -- it is this deployment telling its own node about itself -- so
+//! it takes `PUBLISH_EXCHANGE` rather than a machine identity, and it applies the
+//! replacement synchronously rather than queuing it for the node loop.
+//!
 //! A launch warning (GAP-009, DN-16 §5) takes no door of its own either: it is a message
 //! on the event stream, released to a party by the same two gates through
 //! [`NodeApi::releases`]. DN-16 §6 asked for no new endpoint on our side and it gets
@@ -812,10 +822,22 @@ pub fn router(api: Arc<NodeApi>) -> Router {
         )
         // DN-18's three items that had no door (GAP-065). Tracks and health keep theirs:
         // `/v2/snapshot` and `/v2/health` are already the two-gate paths for those, and a
-        // second door to the same picture is a second place the gates could differ.
-        .route("/v2/exchange/warnings", get(exchange_warnings))
-        .route("/v2/exchange/reports", get(exchange_reports))
-        .route("/v2/exchange/handoffs", get(exchange_handoffs))
+        // second door to the same picture is a second place the gates could differ. Each
+        // now carries both doors on the same path (GAP-065, DN-18 §5 amendment 2): `GET`
+        // for a partner reading what this deployment holds, `POST` for the desktop that
+        // holds it telling this node what that now is.
+        .route(
+            "/v2/exchange/warnings",
+            get(exchange_warnings).post(publish_warnings),
+        )
+        .route(
+            "/v2/exchange/reports",
+            get(exchange_reports).post(publish_reports),
+        )
+        .route(
+            "/v2/exchange/handoffs",
+            get(exchange_handoffs).post(publish_handoffs),
+        )
         .route("/v2/plans/{plan_id}/decision", post(refuse_decision))
         .with_state(api)
 }
@@ -1431,7 +1453,85 @@ async fn exchange_handoffs(
     serve_exchange(&api, &headers, &peer, ExchangeItem::Handoffs)
 }
 
-/// The three exchange routes, which differ only in the item (GAP-065).
+/// `POST /v2/exchange/warnings` (GAP-065, DN-18 §5 amendment 2).
+async fn publish_warnings(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+    body: Result<Json<v2::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    publish_exchange_item(&api, &headers, &peer, body, ExchangeItem::Warnings)
+}
+
+/// `POST /v2/exchange/reports` (GAP-065, DN-18 §5 amendment 2).
+async fn publish_reports(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+    body: Result<Json<v2::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    publish_exchange_item(&api, &headers, &peer, body, ExchangeItem::Reports)
+}
+
+/// `POST /v2/exchange/handoffs` (GAP-065, DN-18 §5 amendment 2).
+async fn publish_handoffs(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+    body: Result<Json<v2::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    publish_exchange_item(&api, &headers, &peer, body, ExchangeItem::Handoffs)
+}
+
+/// The three exchange publish routes, which differ only in the item (GAP-065, DN-18 §5
+/// amendment 2). **`gungnir-api` write path: human-owned, signed by the owner the same
+/// day** (`docs/agentic-workflow.md`).
+///
+/// The caller is this deployment's own desktop link, posting under its own operator
+/// session token to tell its node what it now holds -- the same caller [`task_sensor`]
+/// answers to, and unlike the caller [`effector_report`] and [`acknowledge_warning`]
+/// answer to: those are an outside party telling this deployment something happened,
+/// this is this deployment telling its own node something about itself. So there is no
+/// machine-identity path here and no queue for the node loop to drain: `publish_exchange`
+/// replaces the held set synchronously, and the handler answers as soon as it has.
+///
+/// **`PUBLISH_EXCHANGE` is not `RELEASE_PRODUCT`.** The action a caller must hold is the
+/// one for transmitting a product, not the one for marking it releasable in the first
+/// place; see the constant's own doc comment for why the two stay apart.
+fn publish_exchange_item(
+    api: &NodeApi,
+    headers: &axum::http::HeaderMap,
+    peer: &Peer,
+    body: Result<Json<v2::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
+    item: ExchangeItem,
+) -> Response {
+    let session = match operator_caller(api, headers, peer, "publishing to exchange") {
+        Ok(session) => session,
+        Err(response) => return response,
+    };
+    if !gungnir_security::authz::role_permits(
+        session.role,
+        gungnir_security::actions::PUBLISH_EXCHANGE,
+    ) {
+        return problem(
+            StatusCode::FORBIDDEN,
+            &format!(
+                "role {:?} may not publish to exchange ({})",
+                session.role,
+                gungnir_security::actions::PUBLISH_EXCHANGE
+            ),
+        );
+    }
+    let Ok(Json(request)) = body else {
+        return problem(StatusCode::BAD_REQUEST, "the products could not be decoded");
+    };
+    match api.publish_exchange(item, request.products) {
+        Ok(()) => StatusCode::ACCEPTED.into_response(),
+        Err(e) => problem(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// The three exchange read routes, which differ only in the item (GAP-065).
 ///
 /// **The agreement gate is answered before the products are read**, with a `403` naming
 /// the item, exactly as `/v2/health` answers a party whose agreement does not send health.

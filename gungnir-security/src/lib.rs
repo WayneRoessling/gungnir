@@ -165,6 +165,27 @@ pub mod actions {
     pub const ACKNOWLEDGE_WARNING: &str = "warning.acknowledge";
     /// Raising or lowering a releasability marking (docs/design/DN-17-releasability.md).
     pub const RELEASE_PRODUCT: &str = "product.release";
+    /// Posting a marked warning, report or handoff to this deployment's node so a
+    /// coalition partner's `GET /v2/exchange/{warnings,reports,handoffs}` can serve it
+    /// (docs/design/DN-18-coalition-exchange.md amendment 2, GAP-065).
+    ///
+    /// **Deliberately not [`RELEASE_PRODUCT`].** That action is raising or lowering the
+    /// marking itself; this one is transmitting a product that already carries whatever
+    /// marking it has. The same split as [`EFFECTOR_REPORT`] and [`ACKNOWLEDGE_WARNING`]:
+    /// two acts that touch the same product at different moments are two actions, not
+    /// one, because PN-17's "what was exchanged with whom" and PN-20's "marking changes
+    /// with the operator who made them" are two different audit facts a shared name
+    /// would blur into each other.
+    ///
+    /// **Signed by the owner the same day.** Granting this to `Commander` and
+    /// `IntelligenceAnalyst` in [`crate::authz::role_permits`] mirrors `RELEASE_PRODUCT`'s
+    /// existing grant on the reasoning that the roles trusted to mark a product
+    /// releasable are the roles trusted to send it, but that was this change's own
+    /// judgment call, not a read of an existing row: `docs/mission/roles-and-stakeholders.md`
+    /// §4 had no "publish to exchange" row before this change added one, per the
+    /// precedent [`crate::actions::ASSIGN_ROLE`]'s doc comment records for widening
+    /// authority.
+    pub const PUBLISH_EXCHANGE: &str = "exchange.publish";
     /// Conducting an after-action review: open, record, conclude, close, promote
     /// (DN-20 §6). Audited under this name (GAP-059; signed by the owner 2026-09-06);
     /// not yet in the role table.
@@ -199,6 +220,7 @@ pub mod actions {
         EFFECTOR_REPORT,
         ACKNOWLEDGE_WARNING,
         RELEASE_PRODUCT,
+        PUBLISH_EXCHANGE,
         CONDUCT_REVIEW,
         ACKNOWLEDGE_HANDOVER,
         KEY_ESCROW_RECOVER,
