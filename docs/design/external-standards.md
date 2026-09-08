@@ -895,12 +895,17 @@ interface agreement, and `github.com/opendroneid/specs` holds only early drafts 
 NATO ACCS ASTERIX categories 158 (strobe reports) and 160 (passive sensor data) are exactly
 on topic and are **not** available from the public ASTERIX site.
 
-## 8. Motion imagery: STANAG 4609 and the MISB family -- surveyed 2026-09-06, **not pinned**
+## 8. Motion imagery: STANAG 4609 and the MISB family -- surveyed 2026-09-06, the metadata half built 2026-09-08 against a secondary source, **still not pinned to the primary text**
 
-**Deliberately not pinned.** The specification is free and the survey below is complete,
-but the ISR video feed is a video transport carrying metadata rather than a detection
-message, so it belongs with the viewport work and not the gateway. Pinning it now would
-record a decision nobody is about to act on.
+**Still not pinned to MISB's own text**, and §8.2 says exactly why: the specification is
+free but the bot gateway below defeated every automated attempt to fetch it, this session
+included. What changed 2026-09-08 (GAP-099) is that the fixture decision §8.1 left open is
+made, and the metadata half of the feed -- platform position, orientation and sensor
+pointing, never the video itself -- is built and gated against it, with its tag semantics
+read from a permissively licensed secondary implementation rather than from MISB's text.
+That is a real decoder with a stated, checkable provenance, and it is not a pin: a pin is
+what happens when this workspace's own reading of the primary document is recorded, and
+that has still not occurred.
 
 **Free, public, and needing no account.** The live registry is the NSG Standards Registry;
 the old `gwg.nga.mil/misb/...` paths are dead and must not be cited.
@@ -938,6 +943,63 @@ tooling that checks these links must expect that.
 So the motion-imagery adapter is blocked on **a fixture decision**, not on a specification
 and not on an agreement: take the MIT binary, or synthesise a stream from the worked
 examples in ST 0601.
+
+**Decided 2026-09-08: the MIT binary.** `paretech/klvdata`'s worked example over
+`jmisb`'s synthetic generator, because a decode fixture needs to stay byte-identical
+across runs and a static file is the more direct fit than something a library
+generates fresh; copied to `testdata/misb/` with `SOURCE.md` on the terms §1.5 sets.
+
+### 8.2 What is built (2026-09-08)
+
+The UAS Datalink Local Set decoder, `gungnir-interop/src/misb0601/mod.rs`, for GAP-099.
+
+**What is and is not pinned, stated once more because it is the point of this
+section.** The 16-byte Universal Label and the generic BER short/long-form
+tag-length-value framing are independent public knowledge, verified from multiple
+sources that are not MISB. The seventeen tags this decoder interprets -- their
+numbers, and the domain/range a "mapped" numeric field linearly scales between -- are
+transcribed from `klvdata/misb0601.py` (`github.com/paretech/klvdata`, MIT, commit
+`79028b4ab4ce7192d1b7c04d2266fc31ac337511`), a secondary source, not from MISB's text,
+which the bot gateway above refused to serve to a scripted fetch again this session.
+Every decoded value this decoder produces for the vendored fixture was checked against
+klvdata's own Python, *run* against the identical bytes rather than read and
+paraphrased, and that run's output is the oracle `gungnir-interop/tests/
+misb0601_fixtures.rs` gates on. A future session that reaches ST 0601.19 itself (a
+browser session past the gateway, or a printed copy) should diff this tag table
+against it the way §1.6 diffed `asterix-specs` against the EUROCONTROL PDF; the
+secondary source governs nothing once the primary text is in hand.
+
+| Layer | What it does | What it does not do |
+|---|---|---|
+| `misb0601::decode_frame`, `read_ber_length`, `find_next_key` | The generic KLV framing: the 16-byte key, BER short/long-form length, bounds-checked reads that name what is missing rather than panicking, and a resynchronization search for a stream that has lost alignment | Assume a datagram boundary lines up with a frame boundary -- KLV rides an elementary stream, so a frame may arrive split across reads, which the adapter's own buffer resolves |
+| `misb0601::apply_tag`, the per-tag `mapped`/`as_string` helpers | Seventeen tags: Checksum, Precision Time Stamp, Mission ID, Platform Tail Number, Platform Heading/Pitch/Roll, Platform Designation, Image Source Sensor, Sensor Latitude/Longitude/True Altitude, Sensor Relative Azimuth/Elevation/Roll, Slant Range, Frame Center Latitude/Longitude/Elevation, and the LS Version Number, each cited by tag number in `Misb0601Frame`'s field docs | Interpret any other tag -- MISB ST 0601 defines upwards of ninety -- or a known tag encoded at a width outside 1, 2 or 4 bytes; both are carried in `Misb0601Frame::carried_raw` by tag number and raw bytes, never dropped and never guessed at. Interpret the nested ST 0102 Security Local Set (tag 48) |
+| `packet_checksum` | MISB ST 0601's additive checksum algorithm, reconstructed from `klvdata.common.packet_checksum` and confirmed against the maintainer's own description of its contract (`paretech/klvdata` issue 7, quoting MISB ST 0601.8-08's discard rule) | Decide whether a mismatched frame is discarded -- that is `gungnir_ingest::adapters::misb`'s job, not the codec's, matching how this workspace separates decoding a message from deciding to trust it |
+| `gungnir_model::UasPlatformReport`, `EnuPoint` | A platform's position, heading/pitch/roll, sensor-relative pointing, slant range, frame-centre ground point, and its free-text identity fields, as a report type in `gungnir-model` -- the report-shaped counterpart to AIS's and ADS-B's `CooperativeReport`, placed here rather than beside its adapter because its shape is closer to a `Measurement::Bearing`-style report than to a single identity claim | Assert that any of it is true. Nothing at the ingest boundary verifies a platform designation or an orientation angle any more than AIS verifies a vessel name |
+| `gungnir_ingest::adapters::misb::UasMetadataAdapter` (GAP-099, 2026-09-08) | Buffer a KLV byte stream from a TCP source or a recording, decode complete frames off the front, place a fix (Sensor Latitude/Longitude/[Altitude]) in the local ENU frame and emit it as a `DetectionView` through the real gateway exactly as every other feed's position does, hand every accepted frame's full report to a side-channel sink, and enforce MISB ST 0601.8-08's checksum-discard rule (a mismatched frame produces neither a detection nor a report, counted by name) | Decode, transport, or display the video itself -- out of scope by the design survey's own separation of a video transport from a detection message. Bind a live feed in either binary: no `misb_feeds` configuration entry exists yet in `gungnir-config`, so this is built and gated but not wired, the same distinction GAP-001's own history draws between its acoustic/passive-RF adapters being built and later being wired |
+
+**A genuine finding, not a guess, recorded rather than smoothed over**: the vendored
+fixture's own stated checksum (`0xAA43`) does not match what `packet_checksum` computes
+over its preceding bytes (`0x3E1E`). Every plausible alternative byte range was tried
+and none closes the gap, consistent with the fixture's own upstream test-suite comment
+that some errors in transcribing the original MISB worked example "may have been hand
+corrected". The decoder decodes the frame's fields regardless, since KLV framing does
+not depend on the checksum, and reports the mismatch on `Misb0601Frame::checksum_valid`
+rather than silently trusting or silently refusing a real, MIT-licensed worked example.
+
+`gungnir-sensor-management`'s node-type taxonomy needed no change for this: unlike
+SAPIENT's `registration.proto` node types (§7.2), `SensorRecord.modality` is a
+free-text `String`, so a deployment names this feed's modality in its own
+configuration without a code change here.
+
+Tests: 12 unit tests in `gungnir-interop::misb0601` (BER length forms, the linear-map
+arithmetic against the fixture's own heading bytes, an error sentinel read as absent,
+the checksum algorithm against hand-computed sums, a self-consistent hand-built frame,
+an unknown tag carried raw, truncation asking for more rather than erroring, and
+key-mismatch resynchronization) and 4 fixture tests in `gungnir-interop/tests/
+misb0601_fixtures.rs` against the vendored capture, gated on klvdata's own reading of
+the identical bytes and on the checksum mismatch itself. 4 unit tests on the adapter in
+`gungnir-ingest` and 2 tests running the vendored fixture and a hand-built well-formed
+frame through the real `IngestGateway` end to end (`gungnir-ingest/tests/misb_feed.rs`).
 
 ## 9. Radio direction finding: ASTERIX Category 205 -- surveyed 2026-09-06, **not pinned**
 

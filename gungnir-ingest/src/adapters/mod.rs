@@ -13,6 +13,10 @@
 pub mod adsb;
 pub mod ais;
 pub mod asterix;
+/// A UAS's own KLV metadata stream (GAP-099; MISB ST 0601;
+/// `docs/design/external-standards.md` §8 and §8.2) -- metadata only, never the
+/// video itself.
+pub mod misb;
 pub mod peer;
 pub mod recorded;
 /// The SAPIENT spotter feed: a person is an edge node (GAP-001's human half, GAP-004's

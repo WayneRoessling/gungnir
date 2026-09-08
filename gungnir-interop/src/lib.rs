@@ -14,6 +14,11 @@ pub mod adsb;
 pub mod ais;
 pub mod asterix;
 pub mod dataset;
+/// MISB ST 0601's UAS Datalink Local Set (GAP-099;
+/// `docs/design/external-standards.md` §8 and §8.2). Unlike `asterix` and `ais`, no
+/// primary specification text was obtainable -- the module doc comment says exactly
+/// what is and is not pinned.
+pub mod misb0601;
 
 pub use adsb::AdsbCodec;
 pub use ais::AisCodec;

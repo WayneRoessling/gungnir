@@ -4430,6 +4430,70 @@ not by finding, for the time between whenever each item landed and this correcti
     **Not human-owned.** None of `gungnir-config`, `gungnir-app` or
     `gungnir-viewport3d` is on the low-trust list.
 
+113. **GAP-099: a UAS's KLV metadata (MISB ST 0601) has an adapter** (2026-09-08),
+    the separate job GAP-001's own closing action pointed at: "ISR video is what
+    remains -- a separate MISB-shaped job whose only open question is a fixture."
+    `docs/design/external-standards.md` §8.1 had already named the fixture
+    (`paretech/klvdata`'s MIT-licensed worked example) and left it untaken; this item
+    takes it. `gungnir-interop/src/misb0601/mod.rs` decodes the UAS Datalink Local
+    Set's KLV framing (the 16-byte Universal Label and BER short/long-form length,
+    independent public knowledge) and seventeen tags -- platform heading/pitch/roll,
+    the platform's own position, the sensor's pointing relative to the platform and
+    its slant range, the ground point it is looking at, and four identity strings --
+    whose semantics are read from `klvdata/misb0601.py`, a secondary source, because
+    both NGA registry pages that carry MISB ST 0601 sit behind a bot gateway that
+    refused a scripted fetch again this session. Every decoded value is checked
+    against klvdata's own Python, run against the identical vendored bytes rather
+    than read and paraphrased, and that run's output is the oracle
+    `gungnir-interop/tests/misb0601_fixtures.rs` gates on. **A genuine finding,
+    stated rather than smoothed over**: the vendored fixture's own stated checksum
+    (`0xAA43`) does not match what this decoder's `packet_checksum` -- reconstructed
+    from `klvdata.common.packet_checksum` and confirmed against the maintainer's own
+    description of its contract, which quotes MISB ST 0601.8-08's checksum-discard
+    rule -- computes over its preceding bytes (`0x3E1E`). The decoder decodes the
+    frame's fields regardless, since KLV framing does not depend on the checksum, and
+    reports the mismatch on `Misb0601Frame::checksum_valid` rather than trusting or
+    refusing a real worked example over one field that does not arithmetically close.
+
+    `gungnir_model::UasPlatformReport` (with `EnuPoint`) is a new model type, the
+    report-shaped counterpart to AIS's and ADS-B's `CooperativeReport` but placed in
+    `gungnir-model` rather than beside its adapter, because its shape -- a position
+    plus an orientation plus a sensor-pointing angle -- is closer to a
+    `Measurement::Bearing`-style report than to a single identity claim.
+    `gungnir_ingest::adapters::misb::UasMetadataAdapter` buffers a KLV byte stream
+    (an elementary stream, not a self-delimited datagram, so a frame may arrive split
+    across reads), places a decoded fix in the local ENU frame and emits it as a
+    `DetectionView` through the real gateway exactly as every other feed's position
+    does, hands every accepted frame's full report to a side-channel sink, and
+    enforces MISB ST 0601.8-08's discard rule itself: a checksum-invalid frame
+    produces no detection and no report, counted by name rather than silently
+    accepted. No new dependency edge: `gungnir-ingest` already depends on
+    `gungnir-interop` (edge (i)) and `gungnir-model`.
+
+    **Deliberately not built**: video decode or display of any kind, out of scope by
+    the design survey's own separation of a video transport from a detection
+    message; a `misb_feeds` entry in `gungnir-config::ConfigBaseline` and a bound
+    socket in either binary, so this feed is built and gated but not yet wired into a
+    running deployment, the same distinction this register already draws for GAP-001's
+    acoustic and passive-RF halves; and independent confirmation against MISB's own
+    primary text, which stays blocked on the bot gateway `docs/design/
+    external-standards.md` §8 already recorded.
+
+    **Verification.** 12 unit tests in `gungnir-interop::misb0601` (BER length forms,
+    the linear-map arithmetic against the fixture's own heading bytes, an error
+    sentinel read as absent, the checksum algorithm against hand-computed sums, a
+    self-consistent hand-built frame, an unknown tag carried raw, truncation asking
+    for more rather than erroring, key-mismatch resynchronization) and 4 fixture
+    tests against the vendored capture (`testdata/misb/`, `SOURCE.md` recording the
+    commit, blob id, SHA-256, licence and the checksum finding, on the same
+    recording-conditions pattern as `testdata/ais/`). 4 unit tests on the adapter and
+    2 tests running the vendored fixture and a hand-built well-formed frame through
+    the real `IngestGateway` end to end.
+
+    **Human-owned and unsigned**: `gungnir-ingest` is the ingest gateway
+    `docs/agentic-workflow.md` names as the trust boundary for external data, so this
+    is written and gated, not self-signed, pending the owner's review.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

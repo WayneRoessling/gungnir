@@ -529,6 +529,29 @@ enum MaintenanceState <<InformationElement>> {
 class MissionTime <<InformationElement>> {
   pub f64
 }
+class EnuPoint <<InformationElement>> {
+  enu: [f64; 3]
+  elevation_reported: bool
+}
+class UasPlatformReport <<InformationElement>> {
+  sensor: SensorId
+  platform_position: Option<EnuPoint>
+  platform_heading_rad: Option<f64>
+  platform_pitch_rad: Option<f64>
+  platform_roll_rad: Option<f64>
+  sensor_relative_azimuth_rad: Option<f64>
+  sensor_relative_elevation_rad: Option<f64>
+  sensor_relative_roll_rad: Option<f64>
+  slant_range_m: Option<f64>
+  frame_center: Option<EnuPoint>
+  platform_designation: Option<String>
+  platform_tail_number: Option<String>
+  mission_id: Option<String>
+  image_source_sensor: Option<String>
+  uas_lds_version: Option<u8>
+  source_time: MissionTime
+  receipt_time: MissionTime
+}
 enum LayoutNode <<InformationElement>> {
   Panel { pn: String }
   Tabs { children: Vec<LayoutNode> }
@@ -784,6 +807,11 @@ MaintenanceWindow --> SensorId
 MaintenanceWindow --> MissionTime
 MaintenanceWindow --> MissionTime
 MaintenanceWindow --> MaintenanceState
+UasPlatformReport --> SensorId
+UasPlatformReport --> EnuPoint
+UasPlatformReport --> EnuPoint
+UasPlatformReport --> MissionTime
+UasPlatformReport --> MissionTime
 RoleLayout --> LayoutNode
 UiSettings --> RoleLayout
 Term --> Classification
