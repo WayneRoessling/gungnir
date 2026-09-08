@@ -5,12 +5,11 @@ here is real: the positions are the Vell estuary of the vignettes at a plausible
 the sensors and effectors are the laydown the vignettes describe, and the tracks are the
 three the task cards name. No licence attaches.
 
-**Held as of 2026-09-08: GAP-097 blocks every session below.** The live allocator
-re-proposes an unchanged assignment every tick once a track and a ready resource
-coexist, so the approval queue floods well past what either file scripts, on the desktop
-and on a node alike. See `docs/mission/gap-analysis/gap-register.md` GAP-097 and
-`docs/ux/usability-round-1-session.md`'s own hold notice. Nothing below runs until it
-closes.
+**Hold lifted 2026-09-08: GAP-097 is closed.** The live allocator no longer re-proposes
+an unchanged assignment every tick; `gungnir-app/tests/rehearsal.rs` exercises this same
+seed and baseline against the fix directly. See `docs/mission/gap-analysis/gap-
+register.md` GAP-097 and `docs/ux/usability-round-1-session.md`'s own note. Sessions may
+resume; US-09 still separately needs a SAPIENT loopback fixture, tracked on its own.
 
 | File | What it is |
 |---|---|

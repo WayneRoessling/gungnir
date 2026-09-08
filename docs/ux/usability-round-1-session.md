@@ -1,16 +1,18 @@
 # Usability round 1 on the built panels: session script and scoring sheet
 
-**Held as of 2026-09-08: no session in this document runs, seeded or node-backed, until
-GAP-097 closes.** Reviewing this document against the code two days after it was written
-found that three of its blocking gaps had since closed (GAP-050, GAP-057, GAP-041,
-GAP-004), which unblocks US-04, US-08, US-09 and part of US-15 -- but tracing the seed to
-confirm that before rewriting a single task card found instead that the live allocator
-now re-proposes an unchanged assignment every tick once GAP-029 closed (2026-09-06),
-flooding the approval queue at the redraw cadence, on the desktop and on a node alike.
-`docs/mission/gap-analysis/gap-register.md` GAP-097 has the trace and the fix. Round 1 is
-now **fourteen** tasks, §2, and §3 through §5 describe all fourteen, but do not run any
-of them -- seeded or node-backed -- until GAP-097 is closed and `gungnir-app/tests/rehearsal.rs`'s
-plan-count assertion is tightened back to exact per its own comment.
+**Hold lifted 2026-09-08: GAP-097 is closed.** Reviewing this document against the code
+two days after it was written found that three of its blocking gaps had since closed
+(GAP-050, GAP-057, GAP-041, GAP-004), which unblocks US-04, US-08, US-09 and part of
+US-15 -- but tracing the seed to confirm that before rewriting a single task card found
+instead that the live allocator was re-proposing an unchanged assignment every tick once
+GAP-029 closed (2026-09-06), flooding the approval queue at the redraw cadence, on the
+desktop and on a node alike. `docs/mission/gap-analysis/gap-register.md` GAP-097 has the
+trace and the fix, now applied: `DpInterceptService` mints a new plan only when the
+resource/track assignment actually changes, and `gungnir-app/tests/rehearsal.rs`'s
+plan-count assertion is tightened back to exact per its own comment. Round 1 is
+**fourteen** tasks, §2, and §3 through §5 describe all fourteen; group B and most of
+group D may now run. **US-09 is the one exception**: it still separately needs a SAPIENT
+loopback fixture nobody has written yet (§3), unrelated to GAP-097.
 
 Decided 2026-09-06 by the owner (D-28, GAP-074): round 1 runs against the **rendered
 panels**, not the wireframes, one participant per role, and its results become the
@@ -23,7 +25,7 @@ stated rather than worked around.
 | Item | Needed by | Note |
 |---|---|---|
 | One participant per role, eight in all; operators and supervisors first | session scheduling | From `../mission/mission-analysis.md` §11's reviewers or a customer's staff. **Supplied 2026-09-06: the owner, for all eight roles.** One person who also wrote the requirements is not eight users, so every measure from this round is provisional by §6's rule; the report (`reports/round-1-2026-09-06.md`) says so on each line |
-| Dates, and one moderator per session (a second person scribes) | scheduling | 75 minutes per session, §4; the operator, supervisor and sensor manager sessions carry a second slot the same day for US-04/US-08/US-09's node-backed setup once GAP-097 closes. **Supplied: 2026-09-06.** A single participant moderating themself has no scribe; the journal is the clock for decision latency and the sheet is filled after each task |
+| Dates, and one moderator per session (a second person scribes) | scheduling | 75 minutes per session, §4; the operator, supervisor and sensor manager sessions carry a second slot the same day for US-04/US-08's node-backed setup (US-09 too, once its own SAPIENT loopback fixture exists, §3). **Supplied: 2026-09-06.** A single participant moderating themself has no scribe; the journal is the clock for decision latency and the sheet is filled after each task |
 | The consent, recording and data-handling process of the moderator's organisation | before the first session | No real operational data; no participant names in this repository. The scoring sheet identifies a participant by role and session number only |
 | A machine with the desktop built from the tested revision, and the revision recorded on the sheet | each session | `cargo run -p gungnir-app`, with the session baseline from §3 |
 
@@ -38,11 +40,13 @@ document did not have -- it will very likely change again before the eight sessi
 | Group | Tasks | Why | What unblocks the rest |
 |---|---|---|---|
 | **A. Runs now, single desktop, no seed** | US-10 (state a requirement), US-11 (replay a recorded session and find a decision), US-12 (raid summary and the MOE-04 trace), US-13 (an invalid baseline in the editor) | The write path is wired and the panel is built; US-11 and US-12 need a recorded session, which §3's seed produces | Nothing |
-| **B. Needs the seeded session, single desktop** | US-01, US-02, US-05, US-06 (plans in the queue), US-03 (a track that goes stale), US-14 (evidence on a track) | No plan or track appears on an unseeded desktop from a laptop's own sensors, and a session needs the *same* picture in front of every participant regardless. GAP-089's `--rehearsal` driver puts the seed's tracks and plans through the real submit path | **GAP-097** must close first: the live planner (real since GAP-029, 2026-09-06) now re-proposes an unchanged assignment every tick on top of the seed's own scripted plans, flooding the queue |
-| **D. Newly unblocked (2026-09-06/08), each needs a setup beyond the single `--rehearsal` flag** | US-04 (Detached strip, continue under delegation), US-08 (KAL cell reconnects, one conflict) -- both need a real `gungnir-node` signed into and then lost; US-09 (re-task a sensor, coverage before/after, commit) -- needs a live SAPIENT acknowledgement loop the round-1 baseline does not yet configure; US-15 (compare laydowns, submit with a rehearsal) -- needs PN-16's own scenario rehearsal, single-process, no node | GAP-050 (failover and reconciliation), GAP-057 (desktop and node sign-in) and GAP-041/GAP-004 (sensor tasking transport and acknowledgement) all closed by 2026-09-07; GAP-045 landed PN-16's real rehearsal 2026-09-08 | US-04/US-08/US-09 run the same live planner as group B and are held on **GAP-097** too. US-09 additionally needs a SAPIENT loopback fixture nobody has written yet (§3). US-15 is not gated by GAP-097's queue flood as directly, but its rehearsal replay drives the same `update::tick`, so its own decision counts are suspect until GAP-097 closes too |
+| **B. Needs the seeded session, single desktop** | US-01, US-02, US-05, US-06 (plans in the queue), US-03 (a track that goes stale), US-14 (evidence on a track) | No plan or track appears on an unseeded desktop from a laptop's own sensors, and a session needs the *same* picture in front of every participant regardless. GAP-089's `--rehearsal` driver puts the seed's tracks and plans through the real submit path | Nothing further: **GAP-097** closed 2026-09-08. The live planner (real since GAP-029, 2026-09-06) had been re-proposing an unchanged assignment every tick on top of the seed's own scripted plans, flooding the queue; it now mints a new plan only when the assignment itself changes |
+| **D. Newly unblocked (2026-09-06/08), each needs a setup beyond the single `--rehearsal` flag** | US-04 (Detached strip, continue under delegation), US-08 (KAL cell reconnects, one conflict) -- both need a real `gungnir-node` signed into and then lost; US-09 (re-task a sensor, coverage before/after, commit) -- needs a live SAPIENT acknowledgement loop the round-1 baseline does not yet configure; US-15 (compare laydowns, submit with a rehearsal) -- needs PN-16's own scenario rehearsal, single-process, no node | GAP-050 (failover and reconciliation), GAP-057 (desktop and node sign-in) and GAP-041/GAP-004 (sensor tasking transport and acknowledgement) all closed by 2026-09-07; GAP-045 landed PN-16's real rehearsal 2026-09-08 | US-04/US-08 ran the same live planner as group B and are clear now that **GAP-097** is closed. **US-09 is not**: it still needs a SAPIENT loopback fixture nobody has written yet (§3), a separate gap from GAP-097. US-15's rehearsal replay drives the same `update::tick` group B did, so it is clear for the same reason group B is |
 | **C. Blocked by an unwired write or an undesigned control** | US-07 (set the area layer to Hold: `SET_CONTROL_STATUS` exists as an authorization constant with no caller anywhere in the UI -- no control-status write reaches the desktop), US-16 (accept a coverage gap with a warning obligation and an expiry: GAP-087's own text says the gap-acceptance control "is neither designed anywhere," not GAP-068 as an earlier draft of this table said -- GAP-068 (roles in code) closed 2026-09-05 and was never this task's blocker) | The panel draws nothing for the write, by the rule that a control which does not do the thing is worse than no control | An unfiled design decision for the gap-acceptance control (US-16) and a control-status write path (US-07); neither is scoped yet |
 
-**Round 1 is therefore fourteen tasks (groups A, B and D), once GAP-097 closes.** Group
+**Round 1 is therefore fourteen tasks (groups A, B and D).** Thirteen are session-ready
+now that GAP-097 is closed; US-09 alone waits on its own SAPIENT loopback fixture (§3).
+Group
 C's two tasks are round 2's, and the report says so per task rather than scoring a task
 the software could not present. The measures group C would have fed (decision latency
 under a status change, the gap-acceptance decision itself) are reported as **not
@@ -121,8 +125,9 @@ measured**, never as a value.
   fixtures), select laydown `b` in the options table, press Run, and read the rehearsal
   section's tracks-formed and decisions-raised counts once it finishes. This is GAP-045's
   mechanism, not GAP-089's, and it drives `update::tick` internally the same number of
-  times the fixture has detections for -- so its own decision counts are exposed to
-  GAP-097 exactly as the seeded tasks are, until that closes.
+  times the fixture has detections for -- so its own decision counts were exposed to
+  GAP-097 exactly as the seeded tasks were, and are clear for the same reason now that
+  GAP-097 is closed.
 
 ## 4. Moderator script
 
@@ -211,8 +216,8 @@ proposed as **provisional** and says so.
 
 ## Traceability
 
-GAP-074, GAP-089, GAP-097; GAP-050, GAP-057, GAP-041, GAP-004 (group D's blockers,
-closed); GAP-045, GAP-087 (PN-16's rehearsal, US-15); D-28; MOP-37
+GAP-074, GAP-089, GAP-097 (closed); GAP-050, GAP-057, GAP-041, GAP-004 (group D's
+blockers, closed); GAP-045, GAP-087 (PN-16's rehearsal, US-15); D-28; MOP-37
 (`../mission/capabilities/measures-catalogue.md`); MOE-04; `usability-test-plan.md` §1
 to §5; `information-architecture.md` for the panel ids; `task-analysis/` for the roles'
 tasks; principles 1 to 9 in `README.md`.
