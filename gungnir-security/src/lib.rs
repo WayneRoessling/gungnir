@@ -9,6 +9,7 @@
 //! requirement, not a later-stage hardening pass. Human-owned changes
 //! (agentic-workflow.md). Posture by deployment profile: ARCHITECTURE.md §8.5.
 
+pub mod account_store;
 pub mod asymmetric;
 pub mod audit;
 pub mod authn;
@@ -20,6 +21,7 @@ pub mod provider;
 pub mod session;
 pub mod token;
 
+pub use account_store::EncryptedAccountStore;
 pub use asymmetric::{
     EscrowOfficerKey, EscrowPublicKey, EscrowedKey, KeystoreSnapshot, P256KeyProvider,
     RecoveredDataKey,

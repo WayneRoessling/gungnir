@@ -214,3 +214,96 @@ fn listing_shows_operators_and_roles_and_never_the_hash() {
         "a listing must never repeat the hash: {said}"
     );
 }
+
+/// GAP-057's node half, D-39: `add-os-keystore`/`list-os-keystore` provision
+/// `EncryptedAccountStore` the same way `add`/`list` provision `FileAccountStore` --
+/// driving the binary itself, for the same reason the tests above do. Honest either
+/// way, the same rule `gungnir-security`'s own OS-keystore tests follow: where this
+/// machine has no reachable keystore, the first call refuses and names why, and that
+/// refusal is what the test then checks for instead of a round trip.
+#[test]
+fn an_os_keystore_account_created_by_the_binary_is_one_the_node_can_authenticate() {
+    let dir = scratch("os-keystore-roundtrip");
+    let data_dir = dir.to_string_lossy().into_owned();
+    let keystore_account = format!("node-cli-test-{}", std::process::id());
+
+    let (code, said, err) = run_account(
+        &[
+            "add-os-keystore",
+            data_dir.as_str(),
+            keystore_account.as_str(),
+            "7",
+            "operator",
+        ],
+        Some("correct horse"),
+    );
+    if code != 0 {
+        assert!(
+            err.contains("keystore"),
+            "an unrelated failure, not the documented no-keystore fallback: {err}"
+        );
+        return;
+    }
+    assert!(
+        said.contains("provisioned operator 7"),
+        "it must say what it did: {said}"
+    );
+
+    // A duplicate is refused without --replace, the same rule the plain-file store
+    // follows, and the original passphrase is left in force.
+    let (code, _, err) = run_account(
+        &[
+            "add-os-keystore",
+            data_dir.as_str(),
+            keystore_account.as_str(),
+            "7",
+            "operator",
+        ],
+        Some("second"),
+    );
+    assert_ne!(code, 0, "a duplicate must be refused");
+    assert!(
+        err.contains("--replace"),
+        "the refusal must say the way out: {err}"
+    );
+
+    let (code, said, _) = run_account(
+        &[
+            "list-os-keystore",
+            data_dir.as_str(),
+            keystore_account.as_str(),
+        ],
+        None,
+    );
+    assert_eq!(code, 0);
+    assert!(said.contains("operator 7 as Operator"), "{said}");
+    assert!(
+        !said.contains("$argon2"),
+        "a listing must never repeat the hash: {said}"
+    );
+
+    // **The point of the test.** The store opens it directly and the account
+    // authenticates, so the path from provisioning to authentication is closed rather
+    // than assumed, the same as the plain-file round trip above.
+    let store = gungnir_security::EncryptedAccountStore::open_or_create(&dir, &keystore_account)
+        .expect("the store opens it");
+    let issuer = gungnir_security::TokenIssuer::new(
+        b"a-signing-key-of-adequate-length-0123456789".to_vec(),
+        60.0,
+    )
+    .expect("issuer");
+    let authority = gungnir_api::transport::AccountTokenAuthority::new(Box::new(store), issuer);
+    assert!(
+        authority.sign_in(7, "correct horse", 0.0).is_ok(),
+        "the refused duplicate must have left the original passphrase in force"
+    );
+    assert!(
+        authority.sign_in(7, "wrong", 0.0).is_err(),
+        "a wrong passphrase must not sign in"
+    );
+
+    // Clean up the real keystore entry this test created.
+    let entry = keyring::v1::Entry::new("gungnir-node-accounts", &keystore_account)
+        .expect("the same entry");
+    let _ = entry.delete_credential();
+}

@@ -37,11 +37,18 @@
 
 use crate::SecurityError;
 
-/// The name this desktop's keystore entries live under. Fixed, the same reason
+/// The name the disconnected desktop's own keystore entries live under (D-39,
+/// `keystore.rs::PersistentKeyProvider`). Fixed, the same reason
 /// `keystore.rs::KEYSTORE_FILE` is fixed: the baseline names an account, never a path or
 /// a service string, and two names for the same thing would be two things to keep in
 /// sync for no benefit.
-const SERVICE: &str = "gungnir-desktop-keystore";
+///
+/// **Not the only service this module serves.** [`wrapping_secret`] takes its own
+/// service name as a parameter -- `gungnir-node`'s account store (GAP-057,
+/// `account_store.rs`) needs a wrapping secret from the identical mechanism under a
+/// different name, so the two never collide in the same OS keystore even when a node
+/// and a desktop share a machine.
+pub(crate) const DESKTOP_KEYSTORE_SERVICE: &str = "gungnir-desktop-keystore";
 
 /// Force the real platform-native backend as `keyring-core`'s process-wide default, the
 /// one time a process needs it done. Idempotent to call more than once: `store_status`
@@ -88,14 +95,18 @@ fn ensure_secret(entry: &keyring_core::Entry) -> Result<String, SecurityError> {
     }
 }
 
-/// The wrapping secret DN-22 §5's disconnected row names: unlocked at operator login
-/// rather than typed at sign-in, and otherwise exactly
-/// `PersistentKeyProvider::open_or_create`'s passphrase argument.
+/// A wrapping secret from the operating system's keystore: unlocked at operator login
+/// rather than typed at sign-in, and shaped exactly like
+/// `PersistentKeyProvider::open_or_create`'s passphrase argument, whatever `service` and
+/// `account` name.
 ///
-/// `account` names which secret within [`SERVICE`], so two deployments on one machine
-/// do not collide on the same keystore entry; the config baseline supplies it
-/// (`KeyProviderConfig::OperatingSystemKeystore { account }`) rather than this module
-/// inventing one, the same way the baseline names a mechanism and never a secret
+/// `service` separates the callers that share this mechanism (the desktop's own
+/// keystore, a node's account store) so they never collide on the same OS-keystore
+/// entry; `account` then separates deployments within one such service, so two
+/// deployments on one machine do not collide either. The config baseline supplies
+/// `account` rather than this module inventing one -- `KeyProviderConfig::
+/// OperatingSystemKeystore { account }`, `AuthenticationProvider::OsKeystoreAccounts {
+/// account }` -- the same way the baseline names a mechanism and never a secret
 /// (DN-22 §6).
 ///
 /// # Errors
@@ -103,9 +114,9 @@ fn ensure_secret(entry: &keyring_core::Entry) -> Result<String, SecurityError> {
 /// `KeyProviderUnavailable` when this platform has no reachable keystore -- DN-22 §5's
 /// fallback applies exactly as it does for a file that will not open: the desktop still
 /// starts and journals in the clear -- or the store refuses the operation.
-pub(crate) fn wrapping_secret(account: &str) -> Result<String, SecurityError> {
+pub(crate) fn wrapping_secret(service: &str, account: &str) -> Result<String, SecurityError> {
     ensure_real_backend()?;
-    let entry = keyring_core::Entry::new(SERVICE, account).map_err(|err| {
+    let entry = keyring_core::Entry::new(service, account).map_err(|err| {
         SecurityError::KeyProviderUnavailable(format!(
             "could not address the operating-system keystore: {err}"
         ))
@@ -130,7 +141,7 @@ mod tests {
         MOCK.call_once(|| {
             keyring_core::set_default_store(keyring_core::mock::Store::new().expect("mock store"));
         });
-        keyring_core::Entry::new(SERVICE, account).expect("mock entry")
+        keyring_core::Entry::new(DESKTOP_KEYSTORE_SERVICE, account).expect("mock entry")
     }
 
     #[test]

@@ -3151,6 +3151,7 @@ dependencies = [
  "gungnir-store",
  "gungnir-time",
  "gungnir-tracking-service",
+ "keyring",
  "nalgebra",
  "p256",
  "rand 0.8.8",
