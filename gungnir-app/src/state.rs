@@ -85,6 +85,9 @@ pub struct AppState {
     /// (track, ICAO address) pairs already submitted as evidence, same purpose as
     /// `cooperative.submitted` (GAP-010).
     pub adsb_submitted: std::collections::HashSet<(TrackId, u32)>,
+    /// The association memory between ADS-B reports and tracks, for the platform class
+    /// they declare (GAP-027); same purpose as `cooperative.by_track`, narrower.
+    pub adsb_cooperative: std::collections::HashMap<TrackId, crate::adsb::LastAdsbCooperative>,
     /// Each bound SAPIENT feed's counters, by name, for PN-09 (GAP-001).
     pub sapient_stats: Vec<(
         String,
@@ -513,6 +516,7 @@ impl AppState {
             adsb_sinks: adsb.reports,
             adsb_stats: adsb.stats,
             adsb_submitted: std::collections::HashSet::new(),
+            adsb_cooperative: std::collections::HashMap::new(),
             sapient_stats: sapient.stats,
             sapient_task_acks: sapient.task_acks,
             identification: gungnir_identification::EvidenceFusionEngine::with_settings(

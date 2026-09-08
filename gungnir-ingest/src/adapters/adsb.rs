@@ -215,6 +215,10 @@ pub struct CooperativeReport {
     /// From the identification message this receiver has heard for the address, if any.
     pub callsign: Option<String>,
     pub category_set: Option<char>,
+    /// The 3-bit subcategory within [`Self::category_set`] (GAP-027): under set A, 1-7
+    /// name a crewed-aircraft category (DO-260B); 0 is "no category information", kept
+    /// distinct from "no identification message heard at all" (`None`).
+    pub category_code: Option<u8>,
 }
 
 /// The queue a host drains for cooperative reports.
@@ -249,6 +253,7 @@ pub type AdsbStatsSink = Arc<Mutex<AdsbFeedStats>>;
 struct KnownAircraft {
     callsign: Option<String>,
     category_set: Option<char>,
+    category_code: Option<u8>,
 }
 
 /// One CPR frame retained, waiting for its pair.
@@ -418,6 +423,7 @@ impl<S: AvrSource> AdsbAdapter<S> {
                     receipt_time: now,
                     callsign: info.callsign,
                     category_set: info.category_set,
+                    category_code: info.category_code,
                 });
             }
             Err(cpr::CprError::ZoneDisagreement { .. }) => {
@@ -450,6 +456,7 @@ impl<S: AvrSource> AdsbAdapter<S> {
                 let entry = self.known.entry(address).or_default();
                 entry.callsign = Some(id.callsign.clone());
                 entry.category_set = id.category_set();
+                entry.category_code = Some(id.category_code);
             }
             _ => {}
         }
@@ -589,6 +596,54 @@ mod tests {
         assert!(
             reports[0].callsign.is_none(),
             "no identification message has been seen for this address yet"
+        );
+    }
+
+    /// GAP-027: `category_code`, the 3-bit crewed-aircraft subcategory, must reach
+    /// `CooperativeReport` alongside `category_set` and not be dropped at the cache the
+    /// way it used to be. Built from the decoded message type directly (not a raw AVR
+    /// frame): `gungnir-interop`'s own tests already establish that a real frame
+    /// decodes to this shape, so this is testing this adapter's cache and threading,
+    /// not the codec.
+    #[test]
+    fn an_identification_messages_category_code_reaches_the_next_report() {
+        use gungnir_interop::adsb::messages::Identification;
+        use gungnir_interop::adsb::ExtendedSquitter;
+
+        let sink = CooperativeSink::default();
+        let mut adapter = AdsbAdapter::new(
+            "lhr",
+            SensorId(30),
+            frame(),
+            RecordedAvrSource::from_lines(vec![], "test".into()),
+        )
+        .with_report_sink(sink.clone());
+        let address = IcaoAddress(0x00A2_AFE1);
+        let downlink = Downlink::ExtendedSquitter(ExtendedSquitter {
+            capability: 5,
+            address,
+            message: MeMessage::Identification(Identification {
+                type_code: 4, // category set A
+                category_code: 3,
+                callsign: "TEST1234".to_string(),
+            }),
+        });
+        let mut out = Vec::new();
+        adapter.handle(&downlink, MissionTime(1_000.0), &mut out);
+        assert!(out.is_empty(), "an identification message places nothing");
+
+        // Complete a CPR pair for the same address so a report is actually emitted.
+        adapter.source.lines.push_back(EVEN.to_string());
+        adapter.source.lines.push_back(ODD.to_string());
+        adapter.poll(MissionTime(1_001.0)).expect("polls");
+        let reports: Vec<CooperativeReport> = sink.lock().expect("sink").drain(..).collect();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].callsign.as_deref(), Some("TEST1234"));
+        assert_eq!(reports[0].category_set, Some('A'));
+        assert_eq!(
+            reports[0].category_code,
+            Some(3),
+            "the subcategory must survive alongside the set letter"
         );
     }
 
