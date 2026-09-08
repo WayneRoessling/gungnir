@@ -145,6 +145,15 @@ async fn serve_cuttable(api: Arc<NodeApi>) -> (String, tokio::runtime::Runtime) 
 /// against, so the bound is unchanged and the loop reports its own progress instead: a
 /// line every five seconds of one wait, so a third occurrence says how long it actually
 /// ran rather than only that it eventually gave up.
+///
+/// **Reproduced locally the same day, and it points at contention, not a defect.** This
+/// test failed at 76.93 s while `cargo test --workspace` ran every other crate's suite
+/// alongside it -- sixteen-plus test binaries competing for this machine's cores at once
+/// -- and passed all eighteen of this file's tests in 6.26 s run alone immediately after,
+/// on the same binary, same machine, nothing rebuilt. That is the same signature the two
+/// CI failures already carried (a shared runner doing something else), now seen without
+/// needing CI to reproduce it: this test is sensitive to how much CPU the rest of the
+/// suite is taking, not to anything in the code it exercises.
 const PATIENCE: usize = 2_400;
 
 async fn until(mut check: impl FnMut() -> bool, what: &str) {
