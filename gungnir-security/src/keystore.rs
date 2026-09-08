@@ -4,7 +4,10 @@
 
 //! A persistent keystore for the disconnected desktop (GAP-084; DN-22 amendment 3, §12).
 //!
-//! **Written and gated, not signed**: `gungnir-security` is human-owned.
+//! **Signed by the owner 2026-09-06** (`gungnir-security` is human-owned). The header
+//! here had not caught up with `ARCHITECTURE.md`'s own record of that day; corrected
+//! 2026-09-08 after the owner confirmed it directly, the same way DN-26's laydown
+//! signature needed a direct confirmation before this register could act on it.
 //!
 //! DN-22 §5's disconnected row says the operating system's keystore, unlocked at operator
 //! login. No crate in the approved stack reaches the OS keystore, and adding one is a
