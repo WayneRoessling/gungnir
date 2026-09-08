@@ -70,6 +70,17 @@ pub fn role_permits(role: Role, action: &str) -> bool {
         // The planning surfaces are read-and-draft, and there is no draft-plan action
         // in `actions` to grant. Widening this means adding the §4 row first.
         Role::Planner => matches!(action, VIEW_PICTURE),
+        // Supervisor: §4's "Product release" row reads yes for Supervisor, Commander,
+        // and Intelligence analyst alike; this arm granted only the latter two since
+        // the initial commit, with no comment recording a deliberate narrowing here
+        // (contrast the Planner arm above) or in DN-17-releasability.md, which designed
+        // RELEASE_PRODUCT without naming a role. Found 2026-09-08 as a discrepancy
+        // against §4, flagged but not fixed in the GAP-065 commit; closed here to match
+        // the row rather than narrow it. PUBLISH_EXCHANGE follows for the same reason
+        // it joins RELEASE_PRODUCT on Commander and IntelligenceAnalyst above: GAP-065's
+        // rule is whoever may release, may publish, so the §4 exchange row is amended
+        // to match rather than left as an exception with no stated reason. Human-owned
+        // (gungnir-security); signed by the owner 2026-09-08.
         Role::Supervisor => matches!(
             action,
             VIEW_PICTURE
@@ -79,6 +90,8 @@ pub fn role_permits(role: Role, action: &str) -> bool {
                 | TASK_SENSOR
                 | EXPORT_REPORT
                 | APPLY_CONFIG
+                | RELEASE_PRODUCT
+                | PUBLISH_EXCHANGE
         ),
         Role::Operator => matches!(action, VIEW_PICTURE | SUBMIT_DETECTION | DECIDE_PLAN),
         Role::SensorManager => matches!(action, VIEW_PICTURE | TASK_SENSOR | APPLY_CONFIG),
@@ -183,9 +196,12 @@ mod tests {
         );
     }
 
-    /// GAP-065 (signed by the owner the same day): `PUBLISH_EXCHANGE` sits with
-    /// `RELEASE_PRODUCT` on `Commander` and `IntelligenceAnalyst` and nowhere else,
-    /// matching the row `docs/mission/roles-and-stakeholders.md` §4 gained for it.
+    /// GAP-065 (signed by the owner the same day) tied `PUBLISH_EXCHANGE` to
+    /// `RELEASE_PRODUCT` by rule: whoever may release, may publish. Amended the same
+    /// day when the Supervisor/`RELEASE_PRODUCT` gap below was fixed and the rule
+    /// applied to it in turn, so the pair now holds on `Supervisor`, `Commander`, and
+    /// `IntelligenceAnalyst`, matching the row `docs/mission/roles-and-stakeholders.md`
+    /// §4 gained for it (also amended the same day).
     #[test]
     fn publishing_to_exchange_is_held_wherever_product_release_is() {
         for role in Role::ALL.iter().copied() {
@@ -195,12 +211,35 @@ mod tests {
                 "{role:?} holds one of release and publish and not the other"
             );
         }
-        assert!(role_permits(Role::Commander, actions::PUBLISH_EXCHANGE));
-        assert!(role_permits(
-            Role::IntelligenceAnalyst,
-            actions::PUBLISH_EXCHANGE
-        ));
+        for role in [Role::Supervisor, Role::Commander, Role::IntelligenceAnalyst] {
+            assert!(
+                role_permits(role, actions::PUBLISH_EXCHANGE),
+                "{role:?} holds \"yes\" in §4's coalition-exchange row"
+            );
+        }
         assert!(!role_permits(Role::Operator, actions::PUBLISH_EXCHANGE));
+    }
+
+    /// §4's "Product release" row reads yes for Supervisor, Commander, and
+    /// Intelligence analyst, and is blank for Operator, Sensor manager, and Analyst.
+    /// `role_permits` had granted only Commander and IntelligenceAnalyst since the
+    /// initial commit, a discrepancy against the row flagged but not fixed in the
+    /// GAP-065 commit. Investigated and signed by the owner 2026-09-08 -- see the
+    /// comment on `Role::Supervisor`'s arm.
+    #[test]
+    fn product_release_matches_the_section_4_row() {
+        for role in [Role::Supervisor, Role::Commander, Role::IntelligenceAnalyst] {
+            assert!(
+                role_permits(role, actions::RELEASE_PRODUCT),
+                "{role:?} holds \"yes\" in §4's Product release row"
+            );
+        }
+        for role in [Role::Operator, Role::SensorManager, Role::Analyst] {
+            assert!(
+                !role_permits(role, actions::RELEASE_PRODUCT),
+                "{role:?} is blank in §4's Product release row"
+            );
+        }
     }
 
     #[test]

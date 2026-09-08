@@ -65,8 +65,9 @@ fn authenticating(snapshot: SnapshotResponse) -> Arc<NodeApi> {
 }
 
 /// [`authenticating`], with the role a test needs instead of the Supervisor every other
-/// test in this file signs in as. GAP-065's exchange-publish test needs `Commander`, which
-/// holds `PUBLISH_EXCHANGE` where `Supervisor` does not.
+/// test in this file signs in as. GAP-065's exchange-publish test authenticates as
+/// `Commander`, one of three roles (`Supervisor`, `Commander`, `IntelligenceAnalyst`)
+/// that hold `PUBLISH_EXCHANGE` since the 2026-09-08 Supervisor/`RELEASE_PRODUCT` fix.
 fn authenticating_as(snapshot: SnapshotResponse, role: gungnir_security::Role) -> Arc<NodeApi> {
     let store = InMemoryAccountStore::new(vec![Account {
         operator: OperatorId(7),

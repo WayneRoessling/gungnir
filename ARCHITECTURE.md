@@ -3776,7 +3776,11 @@ not by finding, for the time between whenever each item landed and this correcti
     not `RELEASE_PRODUCT`, which is raising or lowering a marking rather than
     transmitting an already-marked one -- granted to `Commander` and
     `IntelligenceAnalyst`, with a proposed `docs/mission/roles-and-stakeholders.md` §4 row
-    rather than a silent widening. The caller shape mirrors `task_sensor`'s, not
+    rather than a silent widening. **Amended the same day**, when the pre-existing
+    Supervisor/`RELEASE_PRODUCT` gap against §4's "Product release" row was found and
+    fixed: the same "whoever may release, may publish" judgment now applies to
+    `Supervisor` too, so `PUBLISH_EXCHANGE` and the §4 exchange row both gained it
+    alongside `Commander` and `IntelligenceAnalyst`. The caller shape mirrors `task_sensor`'s, not
     `effector_report`'s: an operator's own session token, no machine identity, because a
     desktop posting to its own node is not an outside party answering something.
     Store-and-forward mirrors `gungnir-remote`'s existing
