@@ -157,7 +157,7 @@ Counts: 95 gaps, 3 mission, 92 technical; 1 already covered by a plan in `../../
 - Evidence: `../capabilities/capability-statements.md` CAP-1.3 considerations.
 - Severity: 4. Reach: 9 threads. Effort: L. Priority: 36.
 - Impact: MT-07 recovery and MT-03 camera cueing stop at the operator's screen. Reduced in consequence rather than closed on 2026-09-05: the screen now distinguishes what was asked from what is confirmed, so the stopping point is stated rather than mistaken for success.
-- Closing action: The owner signs DN-11 amendment 2. Then the wire transport for the SAPIENT JSON messages (a live connection to a node, or a middleware bridge, per the same open row the inbound adapter carries) and a `TaskAck` reader wired to `SensorControl::acknowledge`.
+- Closing action: DN-11 amendment 2 is signed (2026-09-07); what is left is the wire transport for the SAPIENT JSON messages (a live connection to a node, or a middleware bridge, per the same open row the inbound adapter carries) and a `TaskAck` reader wired to `SensorControl::acknowledge`.
 - Target: I3. Owner: Services engineer. Status: In progress.
 - Reference: `../../../ARCHITECTURE.md` §10 item 57.
 - Depends on: GAP-001, D-08.
