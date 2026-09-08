@@ -134,16 +134,48 @@ async fn serve_cuttable(api: Arc<NodeApi>) -> (String, tokio::runtime::Runtime) 
 /// the condition still has to become true. Only the patience for a loaded machine
 /// changes, and if this ever fires now it is a hang and not a slow runner. The loop exits
 /// the moment the condition holds, so a passing run costs no more than it did.
+///
+/// **It fired twice more on 2026-09-07** (runs 34157673139, 34160544059), both on `main`
+/// after a merge, both `a_deleted_track_leaves_the_projection`, both at the full
+/// 2,400-iteration bound. Reading `apply()`'s `TrackDeleted` arm and `run_link`'s select
+/// loop found no logic defect: the fold is a plain `retain`, and nothing between it and
+/// the socket read can stall past `HEARTBEAT_TIMEOUT` without marking the link
+/// unhealthy, which this test would see and fail on cleanly rather than hang. Raising the
+/// bound again on no diagnosis would repeat the mistake this comment already warns
+/// against, so the bound is unchanged and the loop reports its own progress instead: a
+/// line every five seconds of one wait, so a third occurrence says how long it actually
+/// ran rather than only that it eventually gave up.
+///
+/// **Reproduced locally the same day, and it points at contention, not a defect.** This
+/// test failed at 76.93 s while `cargo test --workspace` ran every other crate's suite
+/// alongside it -- sixteen-plus test binaries competing for this machine's cores at once
+/// -- and passed all eighteen of this file's tests in 6.26 s run alone immediately after,
+/// on the same binary, same machine, nothing rebuilt. That is the same signature the two
+/// CI failures already carried (a shared runner doing something else), now seen without
+/// needing CI to reproduce it: this test is sensitive to how much CPU the rest of the
+/// suite is taking, not to anything in the code it exercises.
 const PATIENCE: usize = 2_400;
 
 async fn until(mut check: impl FnMut() -> bool, what: &str) {
+    let started = std::time::Instant::now();
+    let mut last_report = started;
     for _ in 0..PATIENCE {
         if check() {
             return;
         }
+        if last_report.elapsed() >= std::time::Duration::from_secs(5) {
+            eprintln!(
+                "still waiting for {what}, {:.1}s elapsed",
+                started.elapsed().as_secs_f64()
+            );
+            last_report = std::time::Instant::now();
+        }
         tokio::time::sleep(std::time::Duration::from_millis(25)).await;
     }
-    panic!("timed out waiting for {what}");
+    panic!(
+        "timed out waiting for {what} after {:.1}s",
+        started.elapsed().as_secs_f64()
+    );
 }
 
 /// The whole point: a desktop connects to a node and gets the node's picture.

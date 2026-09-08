@@ -2658,69 +2658,87 @@ Three departures from DN-21 -- the shared types placed in `gungnir-model` rather
 
 ### Open
 
-- **The tracking math itself.** Still trait surfaces with `todo!()` or
-  `NotImplemented` bodies: the EKF, UKF, particle filter, IMM, square-root/UDU form and
-  RTS smoother in `gungnir-filters`; JPDA and MHT in `gungnir-association`; RFS;
-  track-to-track fusion and registration; the allocator; and the out-of-sequence
-  pipeline itself. `PIPELINE_IMPLEMENTED` stays false until that pipeline is real and
-  verified against its oracles. No longer among them: coordinate transforms, the motion
-  models, and the five-scenario generator (items 27 to 29); the linear Kalman filter,
-  the assignment solver, global nearest neighbour, and gating (item 33); and the track
-  lifecycle (item 34). What is left of the generator is reproducing
-  `docs/test-tracks/tools/gen_tracks.py` (plan 07) byte for byte.
-- **Intercept geometry.** `InterceptSolutionView.intercept_point` and
-  `time_to_intercept_s` are `None` until a closest-approach solver exists; the
-  geofence policy can only check solutions that carry a point.
-- **three-d attachment.** The scene is not yet created from eframe's GL context; the
-  2D fallback stands in.
-- **API transport.** The contract (item 12), the credentials (item 17), and now the
-  crates (item 26) are all decided; what is missing is the code. `gungnir_api::ApiServer::serve`
-  and `gungnir_remote::connect` still return `TransportNotImplemented`, so only the
-  disconnected profile can be exercised. Implementing them makes `gungnir-node` and
-  `gungnir-remote` connectable and gives mid-session failover a heartbeat (GAP-041,
-  GAP-050).
-- **Live protocol adapters and industry codecs.** `gungnir-ingest` has recorded and
-  simulated adapters and, since 2026-09-06, the ASTERIX radar adapter that feeds
-  `gungnir-interop`'s Category 048 (edition 1.32) and Category 034 (edition 1.29)
-  decoders from a UDP socket or a capture, tested end to end through the gateway.
-  Neither host registers it yet (no radar-feed configuration section), and its service
-  reports have no consumer. The STANAG 4676 codec returns `NotImplemented`.
-- **Performance harnesses.** The desktop tick harness exists (item 30); the node load
-  generator and the connectivity test do not, and the latter waits on the transport
-  (GAP-056). Of the four desktop budgets the harness measures, two are gates ("startup to
-  first frame" and, since item 32, journal append) and two are not the budgeted quantity
-  while the tracking stage is a stub.
-- **Cross-session identity correlation** (kinematic and classification similarity);
-  the resolver correlates by session track id only.
-- **Plan 05 gap register (2026-09-04).** `docs/mission/gap-analysis/gap-register.md`
-  carries 83 gaps against the mission capabilities, each with a closing action, a
-  target increment, and an owner; `docs/mission/gap-analysis/technical-gap-map.md`
-  maps every item above to the gaps that carry it. Engineering items the list above
-  does not name are tracked there by identifier: sensing and time (GAP-002 to
-  GAP-005, GAP-008, GAP-009, GAP-023); picture and identity (GAP-006, GAP-007,
-  GAP-012, GAP-014, GAP-017, GAP-018, GAP-020, GAP-021, GAP-024, GAP-025); the
-  decision loop (GAP-026 to GAP-028, GAP-030, GAP-032 to GAP-040, GAP-042, GAP-043);
-  sustainment and metrics (GAP-045, GAP-047 to GAP-049, GAP-051 to GAP-054); security (GAP-058 to
-  GAP-060, GAP-062); integration, verification, and the plans in execution (GAP-044,
-  GAP-046, GAP-055, GAP-061, GAP-063, GAP-065 to GAP-067); decisions D-01 to D-15,
-  resolved on 2026-09-04 (items 16 to 22 above and
-  `docs/mission/gap-analysis/decisions-needed.md`), added GAP-068 to GAP-070; D-16
-  (measure targets) was resolved the same day (item 24). Plan 06 (`docs/ux/`) added
-  GAP-071 to GAP-074 (the replay, reports, and configuration panels; the status
-  strip; the evidence card, commander summary, and theme additions; the usability
-  rounds) and raised D-17 (docking and multi-window), resolved the same day (item
-  25) and implemented under GAP-075. Plan 07 (`docs/test-tracks/`) delivered the
-  vehicle catalogue, class profiles, sensor models, scenario library, data format,
-  reference generator, and ten validated sample sets under `testdata/tracks/samples/`;
-  GAP-046 is in progress and GAP-076 covers seeding the fuzz corpus, the benchmark
-  inputs, and the end-to-end replay. Plan 09 (`docs/ml/`) added GAP-077 to GAP-080
-  (the `gungnir-ml` crate and the inference-runtime sign-off, model manifests as
-  `gungnir-modelops` baselines, the dataset pipeline, and the first two models);
-  plan 08 (`docs/ai/`) resolved D-14 and keeps GAP-044 as the single assistant item;
-  plan 10 (`docs/architecture/togaf/`) ran the first compliance assessment against
-  this workspace and added GAP-081 to GAP-083 (automating the five mechanical
-  contract checks, proving no `todo!()` is reachable, and making requirement
-  identifiers traceable).
+**Rewritten 2026-09-07, in the development-status review.** The seven bullets this
+section carried before that date named the tracking math, intercept geometry, the
+three-d attachment, the API transport, and cross-session identity as unbuilt; by
+2026-09-07 all of that was built, gated, and in five of those cases already recorded
+as such by later numbered items in this very section (92 to 94, 98, 100) that this
+list itself was never updated to agree with. The bullets below are what a reading of
+the code on that date actually found still open; nothing here was verified by
+re-reading the register alone.
+
+- **The tracking math's last filters.** `gungnir-rfs`'s CPHD cardinality distribution
+  and the GLMB/LMB labelled filters return `NotImplemented` naming themselves; the
+  Gaussian-mixture PHD they would extend is built and gated (item 94). Everything
+  else this bullet used to list -- the EKF, UKF, particle filter, IMM, square-root/UDU
+  form, RTS smoother, JPDA, MHT, track-to-track fusion and registration, the
+  allocator, and the out-of-sequence pipeline itself -- is built and gated;
+  `PIPELINE_IMPLEMENTED` has been `true` since 2026-09-06 (item 92, GAP-011). (GAP-015)
+- **The GPU point-cloud registration path.** `gungnir-data-fusion`'s CPU reference
+  ICP is built and tested (`src/cpu_reference.rs`, `src/transform_solve.rs`); the GPU
+  step returns `NotImplemented` naming the WGSL pipeline of §3.4 it waits on, and
+  `gpu-fusion.yml` is dormant for want of the self-hosted `gpu` runner that GAP-061
+  (closed) still needs registered to the repository. (GAP-024)
+- **Live protocol adapters beyond radar and the SAPIENT spotter.** ASTERIX (Category
+  048 edition 1.32, Category 034 edition 1.29) and SAPIENT spotter tasking and
+  detection are built and gated, and both hosts now register the configuration for
+  them (`ConfigBaseline.radar_feeds`; no longer true is this bullet's older claim
+  that neither host registers it). The STANAG 4676 codec still returns
+  `NotImplemented`. EO/IR, acoustic, passive-RF, and ISR-video each have a pinned
+  specification since 2026-09-06 (`docs/design/external-standards.md` §§7-9) and no
+  adapter yet -- the blocker moved from procurement to engineering the same day it
+  was found, per GAP-001. (GAP-001, GAP-064)
+- **Cross-session identity correlation on the node.** The desktop resolver is built
+  and wired, correlating by kinematic and classification similarity across sessions
+  (`gungnir_identity::similarity`) -- not by session track id alone, which is what
+  this bullet said until this rewrite and what the module's own doc comments said
+  until GAP-019 corrected them on 2026-09-06. The node has had tracks since GAP-011
+  closed and still has no resolver, because §7.1 draws no edge from `gungnir-node` to
+  `gungnir-identity`: a graph decision now, not a missing capability. (GAP-019 is
+  closed for the desktop half; the node half is this bullet)
+- **Plan 05 gap register, most recently updated 2026-09-07.**
+  `docs/mission/gap-analysis/gap-register.md` carries 95 gaps against the mission
+  capabilities, each with a closing action, a target increment, and an owner;
+  `docs/mission/gap-analysis/technical-gap-map.md` maps every item above to the gaps
+  that carry it. Engineering items the list above does not name are tracked there by
+  identifier: sensing and time (GAP-002 to GAP-005, GAP-008, GAP-009, GAP-023);
+  picture and identity (GAP-006, GAP-007, GAP-012, GAP-014, GAP-017, GAP-018,
+  GAP-020, GAP-021, GAP-024, GAP-025); the decision loop (GAP-026 to GAP-028,
+  GAP-030, GAP-032 to GAP-040, GAP-042, GAP-043); sustainment and metrics (GAP-045,
+  GAP-047 to GAP-049, GAP-051 to GAP-054); security (GAP-058 to GAP-060, GAP-062);
+  integration, verification, and the plans in execution (GAP-044, GAP-046, GAP-055,
+  GAP-061, GAP-063, GAP-065 to GAP-067); decisions D-01 to D-15, resolved on
+  2026-09-04 (items 16 to 22 above and `docs/mission/gap-analysis/decisions-needed.md`),
+  added GAP-068 to GAP-070; D-16 (measure targets) was resolved the same day (item
+  24). Plan 06 (`docs/ux/`) added GAP-071 to GAP-074 (the replay, reports, and
+  configuration panels; the status strip; the evidence card, commander summary, and
+  theme additions; the usability rounds) and raised D-17 (docking and multi-window),
+  resolved the same day (item 25) and implemented under GAP-075. Plan 07
+  (`docs/test-tracks/`) delivered the vehicle catalogue, class profiles, sensor
+  models, scenario library, data format, reference generator, and ten validated
+  sample sets under `testdata/tracks/samples/`; GAP-046 is in progress and GAP-076
+  covers seeding the fuzz corpus, the benchmark inputs, and the end-to-end replay.
+  Plan 09 (`docs/ml/`) added GAP-077 to GAP-080 (the `gungnir-ml` crate and the
+  inference-runtime sign-off, model manifests as `gungnir-modelops` baselines, the
+  dataset pipeline, and the first two models); plan 08 (`docs/ai/`) resolved D-14 and
+  keeps GAP-044 as the single assistant item; plan 10 (`docs/architecture/togaf/`)
+  ran the first compliance assessment against this workspace and added GAP-081 to
+  GAP-083 (automating the five mechanical contract checks, proving no `todo!()` is
+  reachable, and making requirement identifiers traceable). GAP-092 to GAP-095 and
+  D-35 to D-38 were restored to (D-35 to D-38) or added to (GAP-092 to GAP-095) the
+  generator on 2026-09-07: D-35 to D-38 had been dropped from `decisions-needed.md`
+  by an unrelated commit and are recovered here from `ARCHITECTURE.md` item 89's own
+  record of them; GAP-092 and GAP-093 were a second, separate loss the same commit
+  caused and were likewise recovered; GAP-094 and GAP-095 are new, the second because
+  the first collided with GAP-090's own renumbering (item 89, and this section's own
+  entry above).
+### Resolved on 2026-09-06
+
+**Heading added 2026-09-07.** Everything from here to item 101 was already dated
+2026-09-06 or 2026-09-07 and already described completed, signed work; none of it
+was open. It had no heading of its own and sat under `### Open` above by omission,
+not by finding, for the time between whenever each item landed and this correction.
+
 - **Plan 10 architecture governance (2026-09-04; signed 2026-09-05).** Seventeen
   architecture principles and seventeen contracts in
   `docs/architecture/togaf/preliminary/architecture-principles.md` and
@@ -3110,7 +3128,7 @@ Three departures from DN-21 -- the shared types placed in `gungnir-model` rather
     permissive state and takes the red, hold is the safe one.
 
     The decisions: D-35 keep the tokens as flat constants and file the night variant
-    as GAP-094 rather than thread a `Palette` value through 239 call sites now; D-36
+    as GAP-095 rather than thread a `Palette` value through 239 call sites now; D-36
     the selection halo stays white and the assignment line moves instead; D-37
     monospace for compared numerals; D-38 the blue-black viewport set and the
     coverage alpha at 80. The night variant and the dashed low-confidence frame remain
@@ -3119,10 +3137,22 @@ Three departures from DN-21 -- the shared types placed in `gungnir-model` rather
     These four were filed the same day as D-33 to D-36 and GAP-090; both numbers were
     taken the same day by an unrelated session's work (D-33 by the Cursor-on-Target
     scope decision, D-34 by the licensing decision, GAP-090 by the friendly-set gap
-    out of DN-25), so the theme decisions and gap were renumbered 2026-09-07 to the
-    numbers above, and this paragraph and `docs/ux/design-system.md` were re-pointed
-    to match. The lesson: a decision or gap number is only safe to cite once its row
-    is committed on `main`, not from the moment it is chosen in a working tree.
+    out of DN-25), so the theme decisions and gap were renumbered 2026-09-07 to D-35
+    to D-38 and GAP-094, and this paragraph and `docs/ux/design-system.md` were
+    re-pointed to match. The lesson: a decision or gap number is only safe to cite
+    once its row is committed on `main`, not from the moment it is chosen in a
+    working tree.
+
+    **The lesson held for exactly one round.** GAP-094 was itself taken the same day,
+    by an unrelated verification-and-governance gap (the advisories gate finding,
+    below), and nobody re-checked the renumbering after choosing it -- so the theme
+    variant was cited under a number two different gaps now claimed. Found in the
+    2026-09-07 development-status review, not by the process this section describes.
+    The night variant is GAP-095; `docs/ux/design-system.md` and
+    `docs/ux/ux-to-code-map.md` are re-pointed again, this paragraph is corrected in
+    place rather than left to describe a fix that did not hold, and the advisories
+    gap keeps GAP-094, being the one of the two actually committed to `main` under
+    that number.
 
 90. **A seventh ten: nine built, one closed** (2026-09-06). Built: GAP-016 (closed: the
     `gen_tracks.py` composition ported over `TrackLibrary` and `PythonRandom`, all ten
@@ -3450,9 +3480,15 @@ Three departures from DN-21 -- the shared types placed in `gungnir-model` rather
     edge drawn here that no manifest carries would be this document claiming something
     untrue. The change that adds the sink adds both in the same commit.
 
-96. **Two defects in the allocator, found by building on it and fixed** (2026-09-06);
+96A. **Two defects in the allocator, found by building on it and fixed** (2026-09-06);
     two more found and recorded unfixed. Both fixed ones were in code item 92 closed, and
     a closed entry is where a defect is least likely to be looked for.
+
+    *Numbering note, added 2026-09-07.* This item and the one above it were both
+    numbered 96. Fixed as "96A" rather than by renumbering everything from here on,
+    because items 97, 99, and 100 below are cited by number from elsewhere in this
+    section ("item 92's sign-off", "item 99"), and shifting them to close a numbering
+    gap would silently break every one of those citations for a cosmetic gain.
 
     **Plans named the wrong effector against the wrong track.** `solve_exact` is handed an
     anonymous reward matrix, so it cannot know identifiers, and it returned the winning

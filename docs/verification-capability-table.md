@@ -166,21 +166,21 @@ does the row's status move in `architecture.md`. Rows with no test are listed as
 | `gungnir-tracking-service` Whole-pipeline scenario replay | `gungnir-tracking-service/tests/whole_pipeline_replay.rs` (all five scenarios; 1e-6, the tightest §1 tolerance the pipeline exercises) | |
 | `gungnir-tracking-service` Non-blocking snapshot and health | `mod tests` in `gungnir-tracking-service/src/lib.rs`; p99 measured against a populated snapshot in `gungnir-app/tests/frame_budgets.rs` (2026-09-06: 13 tracks, both calls at 100 ns against the 1 ms criterion) | |
 | `gungnir-intercept-service` Plan determinism and degradation | `mod tests` in `gungnir-intercept-service/src/lib.rs` | |
-| `gungnir-data` Loader correctness per format | `gungnir-data/tests/{dem,pointcloud,vtk_gltf}.rs` (LAS, DEM, VTK, glTF; COPC not yet) | |
+| `gungnir-data` Loader correctness per format | `gungnir-data/tests/{dem,pointcloud,vtk_gltf}.rs` (LAS, DEM, VTK, glTF; **COPC's bounded reader landed 2026-09-07** through `las::copc` -- the refusal side is tested (a non-COPC file, malformed bounds, a missing file), the happy path is not: this workspace holds no COPC fixture of its own yet, so bounded reading against real octree-indexed points is unverified here, proven only by `las::copc::CopcReader`'s own doctest) | |
 | `gungnir-data` Loading off the UI thread | `gungnir-app/tests/terrain.rs` (`spawn_loader`) | |
-| `gungnir-data-fusion` CPU ICP reference | `mod tests` in `gungnir-data-fusion/src/lib.rs` | |
+| `gungnir-data-fusion` CPU ICP reference | `mod tests` in `gungnir-data-fusion/src/{cpu_reference,transform_solve}.rs` (corrected 2026-09-07: not `lib.rs`, which holds the trait and the `GpuFusionEngine` stub and carries no tests of its own) | |
 | `gungnir-data-fusion` GPU path against CPU reference | none: neither the GPU path nor a test behind the `gpu-tests` feature exists, nor the GPU runner (GAP-024); `gpu-fusion.yml` is dormant and fails a run that executed zero tests | |
 | `gungnir-render` Single device, no per-frame resource creation | none | |
-| `gungnir-viewport3d` SSE and tileset traversal | `mod tests` in `gungnir-viewport3d/src/lib.rs` | |
-| `gungnir-viewport3d` Glyph rebuild only on change | `mod tests` in `gungnir-viewport3d/src/lib.rs` | |
+| `gungnir-viewport3d` SSE and tileset traversal | none (corrected 2026-09-07: this row was listed as tested against `mod tests` in `lib.rs`, which does not exist; `screen_space_error` and tileset traversal live in `src/streaming/{sse,tileset}.rs` and neither file, nor any other in the crate, has a test of either) | |
+| `gungnir-viewport3d` Glyph rebuild only on change | `gungnir-viewport3d/src/tracks.rs` `mod tests` (corrected 2026-09-07: not `lib.rs`) | |
 | `gungnir-ui` No duplicate state; no allocation in `ui()` | `gungnir-app/tests/frame_budgets.rs` (the egui pass budget) | |
 | `gungnir-app` Backend switching | `gungnir-app/tests/failover.rs`, `failover_e2e.rs` (embedded and remote through one `AppState`) | |
 | `gungnir-model` Schema round-trip and versioning | `gungnir-interop/tests/conformance.rs`; `mod tests` in `gungnir-model` | |
 | `gungnir-eventing` Broadcast delivery and ordering | `mod tests` in `gungnir-eventing/src/lib.rs` | |
 | `gungnir-remote` Store-and-forward and honest connection state | `gungnir-remote/tests/transport.rs`, `tls_link.rs` | |
-| `gungnir-node` Headless loop | the node smoke run on every batch; `gungnir-node/tests/encryption_at_rest.rs` | |
+| `gungnir-node` Headless loop | none automated (corrected 2026-09-07, GAP-067 walk): "the node smoke run on every batch" is a person running the binary, not a test, and `encryption_at_rest.rs` gates journal sealing, not this row's own criterion (start, run ticks, interrupt, exit cleanly). No test asserts that sequence today | |
 | `gungnir-interop` Arrow round-trip; catalog negotiation; ASTERIX decode | `gungnir-interop/tests/{conformance,asterix_fixtures,ais_fixtures}.rs` | |
-| `gungnir-analytics` Line-of-sight and coverage | `mod tests` in `gungnir-analytics/src/{coverage,los}.rs` | |
+| `gungnir-analytics` Line-of-sight and coverage | `mod tests` in `gungnir-analytics/src/coverage.rs` (corrected 2026-09-07: no `los.rs` exists; `LineOfSight` and `FlatTerrainLineOfSight` are defined and tested in `coverage.rs`) | |
 | `gungnir-resilience` Bounded queue; reconciliation | `mod tests` in `gungnir-resilience/src/lib.rs`; `gungnir-app/tests/failover.rs` | |
 | `gungnir-collab` Authority arbitration; stale envelopes | `mod tests` in `gungnir-collab/src/lib.rs` | |
 | `gungnir-workflow` Role layouts; alert lifecycle | `mod tests` in `gungnir-workflow/src/lib.rs` | |
@@ -197,9 +197,9 @@ does the row's status move in `architecture.md`. Rows with no test are listed as
 | `gungnir-policy` No-go and authority enforcement | `mod tests` in `gungnir-policy/src/{lib,authority}.rs` | |
 | `gungnir-command` Decision recording | `mod tests` in `gungnir-command/src/lib.rs`; `gungnir-app/tests/no_execution_without_decision.rs` | |
 | `gungnir-assessment` Risk scoring | `mod tests` in `gungnir-assessment/src/assets.rs` (MOP-28 monotonicity) | |
-| `gungnir-decision` Alternatives and what-if | `mod tests` in `gungnir-decision/src/lib.rs`; `gungnir-app/tests/sensor_plans.rs` | |
+| `gungnir-decision` Alternatives and what-if | `mod tests` in `gungnir-decision/src/lib.rs`; `gungnir-app/tests/alternatives.rs` (corrected 2026-09-07, GAP-067 walk: not `sensor_plans.rs`, which tests DN-13 sensor re-tasking, GAP-037, and names neither `what_if` nor an alternative anywhere in it). This row also duplicates the already-gated §1 row of the same name below (`decision` Alternatives and what-if) -- worth the owner's eye on whether this draft row should be dropped rather than promoted | |
 | `gungnir-modelops` Promotion gating and rollback | `mod tests` in `gungnir-modelops/src/lib.rs`; `gungnir-app/tests/governance.rs` | |
-| `gungnir-security` Authentication, authorization, audit | `mod tests` in `gungnir-security/src/{authn,authz,audit,session}.rs`; `gungnir-app/tests/{authentication,audit_trail}.rs`; `gungnir-node/tests/account_provisioning.rs` (the provisioning path: an account the binary creates is one the node authenticates; a duplicate, an empty passphrase, a corrupt file and an unknown role are each refused without changing the file) | |
+| `gungnir-security` Authentication, authorization, audit | `mod tests` in `gungnir-security/src/{authz,audit,session}.rs`; `gungnir-app/tests/{authentication,audit_trail}.rs`; `gungnir-node/tests/account_provisioning.rs` (the provisioning path: an account the binary creates is one the node authenticates; a duplicate, an empty passphrase, a corrupt file and an unknown role are each refused without changing the file); corrected 2026-09-07 to drop `authn.rs`, a 14-line file holding only the `Authenticator` trait and a comment that the concrete mechanism is not yet chosen, with no tests of its own | |
 | `gungnir-api` Contract compatibility and authorization | `gungnir-remote/tests/transport.rs`; `gungnir-api/tests/{party,machine,mutual_tls}.rs` | |
 | `gungnir-observability` Health and alert correlation | `mod tests` in `gungnir-observability/src/lib.rs` | |
 | `gungnir-replay` Deterministic playback | `mod tests` in `gungnir-replay/src/lib.rs`; `gungnir-app/tests/sustainment.rs` | |

@@ -12,8 +12,9 @@ The requirements half followed the same day (GAP-005): §3's `CollectionRequirem
 §4's edge, §5's **Requirements** paragraph, and §7's PN-15 row are built, and the model
 gained the `priority` field §3 shows and this note's implementation had omitted.
 
-Where the implementation departs from this note, §9 records it: amendment 1, signed by
-the owner on 2026-09-05.
+Where the implementation departs from this note, §9 and §10 record it: amendment 1,
+signed by the owner on 2026-09-05, and amendment 2 (the first `SensorControlAdapter`),
+signed by the owner on 2026-09-07.
 
 What is **not** built: the delivery itself, which needs an adapter (GAP-001); the
 `POST /v2/sensors/{sensor_id}/task` endpoint, which needs the transport (GAP-041);
@@ -258,7 +259,7 @@ at `Issued` and `has_adapter()` reports false rather than leaving it to be infer
 
 ## 10. Amendment 2 (2026-09-07): the first `SensorControlAdapter`, and what it cannot say
 
-**Unsigned.** Written with the code, awaiting the owner.
+**Signed by the owner 2026-09-07.**
 
 Item g of amendment 1 built the seam and said "GAP-001 brings the adapters." One does now:
 `gungnir_sensor_management::sapient_task::SapientTaskAdapter`, the outbound counterpart of

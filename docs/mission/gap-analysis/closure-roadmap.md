@@ -101,34 +101,45 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 |---|---|---|---|---|---|---|
 | 1 | GAP-057 Authentication implementation | Technical | 40 | L | Security engineer (human-owned crate) | GAP-033, D-05 |
 | 2 | GAP-040 Effector handoff endpoint | Technical | 20 | M | Services engineer | GAP-041, D-08 |
-| 3 | GAP-009 Peer track and warning ingestion | Technical | 20 | L | Services engineer | GAP-041, D-08 |
-| 4 | GAP-065 Peer and coalition exchange | Technical | 20 | L | Services engineer | GAP-009, GAP-041, GAP-062, D-08 |
-| 5 | GAP-063 Interface conformance suite | Technical | 18 | M | Services engineer | GAP-041, GAP-064, D-09 |
-| 6 | GAP-044 Assistant integration | Mission | 18 | XL | Plan 08 lead | D-14 |
-| 7 | GAP-024 Point-cloud registration, CPU reference and GPU | Technical | 16 | L | Data engineer | GAP-023 |
-| 8 | GAP-014 Registration evidence into the tracker | Technical | 24 | M | Tracking engineer (human-owned crate) | GAP-013, GAP-024 |
-| 9 | GAP-077 `gungnir-ml` crate, inference runtime sign-off, and the dependency edge | Technical | 14 | L | Services engineer |  |
-| 10 | GAP-025 Pattern-of-life and order-of-battle products | Technical | 9 | L | Services engineer | GAP-019 |
-| 11 | GAP-084 Key custody, rotation, and escrow | Technical | 8 | M | Security engineer (human-owned crate) | D-02 |
-| 12 | GAP-060 Encryption in transit and at rest | Technical | 8 | L | Security engineer (human-owned crate) | D-10 |
-| 13 | GAP-050 Mid-session failover and reconciliation gate | Technical | 4 | M | Services engineer | GAP-041, D-03, D-15, GAP-057 |
-| 14 | GAP-078 Model manifests as `gungnir-modelops` baselines | Technical | 3 | M | Services engineer | GAP-053 |
-| 15 | GAP-080 First two models trained, evaluated, and promoted | Mission | 14 | L | Services engineer | GAP-077, GAP-078, GAP-079 |
-| 16 | GAP-049 After-action review workflow | Technical | 2 | M | Services engineer | GAP-047 |
-| 17 | GAP-054 Battle-rhythm support | Technical | 2 | M | Services engineer | GAP-047, GAP-044 |
+| 3 | GAP-095 Night theme variant | Technical | 20 | M | UI engineer | D-35 |
+| 4 | GAP-009 Peer track and warning ingestion | Technical | 20 | L | Services engineer | GAP-041, D-08 |
+| 5 | GAP-065 Peer and coalition exchange | Technical | 20 | L | Services engineer | GAP-009, GAP-041, GAP-062, D-08 |
+| 6 | GAP-063 Interface conformance suite | Technical | 18 | M | Services engineer | GAP-041, GAP-064, D-09 |
+| 7 | GAP-044 Assistant integration | Mission | 18 | XL | Plan 08 lead | D-14 |
+| 8 | GAP-024 Point-cloud registration, CPU reference and GPU | Technical | 16 | L | Data engineer | GAP-023 |
+| 9 | GAP-014 Registration evidence into the tracker | Technical | 24 | M | Tracking engineer (human-owned crate) | GAP-013, GAP-024 |
+| 10 | GAP-077 `gungnir-ml` crate, inference runtime sign-off, and the dependency edge | Technical | 14 | L | Services engineer |  |
+| 11 | GAP-025 Pattern-of-life and order-of-battle products | Technical | 9 | L | Services engineer | GAP-019 |
+| 12 | GAP-084 Key custody, rotation, and escrow | Technical | 8 | M | Security engineer (human-owned crate) | D-02 |
+| 13 | GAP-060 Encryption in transit and at rest | Technical | 8 | L | Security engineer (human-owned crate) | D-10 |
+| 14 | GAP-050 Mid-session failover and reconciliation gate | Technical | 4 | M | Services engineer | GAP-041, D-03, D-15, GAP-057 |
+| 15 | GAP-078 Model manifests as `gungnir-modelops` baselines | Technical | 3 | M | Services engineer | GAP-053 |
+| 16 | GAP-080 First two models trained, evaluated, and promoted | Mission | 14 | L | Services engineer | GAP-077, GAP-078, GAP-079 |
+| 17 | GAP-049 After-action review workflow | Technical | 2 | M | Services engineer | GAP-047 |
+| 18 | GAP-054 Battle-rhythm support | Technical | 2 | M | Services engineer | GAP-047, GAP-044 |
 
-## Critical path
+## Critical path (rewritten 2026-09-07, in the development-status review)
 
-- GAP-016 scenario generator and GAP-048 metrics, then GAP-011 the pipeline, gate every
-  Understand and Decide closure; they are I2's first work.
-- GAP-030 layers and costs, then GAP-029 the allocator and GAP-031 geometry, gate the
-  policy checks on geometry, GAP-028 wiring, GAP-038 the panel, and GAP-040 handoff.
-- GAP-052 policy configuration gates GAP-012, GAP-018, GAP-033, and through them
-  GAP-035 and GAP-058.
-- GAP-041 the transport gates GAP-009, GAP-040, GAP-050, GAP-057, GAP-060, GAP-063,
-  and GAP-065; D-02 gates GAP-041.
-- Decisions D-02, D-05, D-08, D-09, D-15, and D-16 are on the path of I3 work and are
-  the owner's first items.
+Every gap the previous version of this section named -- GAP-016, GAP-048, GAP-011,
+GAP-030, GAP-029, GAP-031, GAP-028, GAP-038, GAP-052, GAP-012, GAP-018, GAP-033,
+GAP-035, GAP-058, GAP-041 -- is Closed, and every decision it named (D-02, D-05,
+D-08, D-09, D-15, D-16) is Resolved. The path below is traced fresh from the
+`deps` still open in the register today, not carried forward from the section this
+replaces.
+- **GAP-064** (the STANAG 4676 codec; ASTERIX is done) gates **GAP-001** (live sensor
+  adapters, priority 45, the single highest-priority open gap), which gates **GAP-004**
+  (outbound sensor control). GAP-064 also gates **GAP-063** (interface conformance).
+- **GAP-061** (the self-hosted runner) gates **GAP-093** (Gate 6's threshold
+  enforcement) and is itself waited on by nothing else open.
+- **GAP-045** (scenario replay through the live pipeline) gates **GAP-087** (PN-16,
+  the planning panel), already in progress on the rest of its scope.
+- **GAP-023** (data loaders) gates **GAP-024** (GPU point-cloud registration); the
+  CPU reference side of GAP-024 is already built and gated.
+- **GAP-077**, **GAP-078**, and **GAP-079** (in progress) all feed **GAP-080** (the
+  first two trained models); none of the three has a gap of its own blocking it.
+- **GAP-067** (this table's own walk) is blocked on nothing: D-16 and D-10, its two
+  named decisions, are both Resolved. It is now purely a matter of the owner's time
+  against 43 rows, not a dependency.
 
 ## Counts
 
@@ -136,4 +147,4 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 |---|---|---|
 | I2 | 25 | 5 / 11 / 7 / 2 |
 | I3 | 52 | 8 / 32 / 11 / 1 |
-| I4 | 17 | 0 / 8 / 8 / 1 |
+| I4 | 18 | 0 / 9 / 8 / 1 |

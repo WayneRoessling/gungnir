@@ -119,7 +119,7 @@ DN-07's handoff path, all filtered by DN-17.
 The second criterion is the one that proves the two gates are independent, and it is the
 one an implementation shortcut would break by checking only the agreement.
 
-## 9. Amendment 1: the exchange endpoints §6 said would not exist (2026-09-06, unsigned)
+## 9. Amendment 1: the exchange endpoints §6 said would not exist (2026-09-06, **signed by the owner 2026-09-07**)
 
 **§6 says "Interface: no new endpoints." Three were added, and this records the
 divergence rather than leaving §6 to be read as still true.**

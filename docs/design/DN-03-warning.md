@@ -1,6 +1,6 @@
 # DN-03 Warning function
 
-Closes GAP-042. Status: first draft 2026-09-05; **implemented the same day** (`gungnir-workflow/src/warning.rs`) and **wired on 2026-09-06** through a ledger the desktop tick evaluates. Delivery to an `http` endpoint is real (GAP-040's transport); a refusal or silence fails loudly (§5). **Amendment 1 (§9) gives the pass-close trigger its distance, 2026-09-06, unsigned.**
+Closes GAP-042. Status: first draft 2026-09-05; **implemented the same day** (`gungnir-workflow/src/warning.rs`) and **wired on 2026-09-06** through a ledger the desktop tick evaluates. Delivery to an `http` endpoint is real (GAP-040's transport); a refusal or silence fails loudly (§5). **Amendment 1 (§9) gives the pass-close trigger its distance, and amendment 2 (§10) its due time, both signed by the owner 2026-09-06** (corrected 2026-09-07: this line had called amendment 1 unsigned a full day after §9's own header recorded the signature). **Amendment 3 (§11, how an acknowledgement arrives) is signed by the owner 2026-09-07.**
 
 ## 1. The gap and the thread step it blocks
 
@@ -167,7 +167,7 @@ that is not moving) keeps amendment 1's rule.
 Verification row (§8) unchanged in criterion; the ledger test
 `a_pass_close_warning_is_due_by_the_closest_approach` covers the due time.
 
-## 11. Amendment 3: how an acknowledgement arrives (2026-09-06, unsigned)
+## 11. Amendment 3: how an acknowledgement arrives (2026-09-06, **signed by the owner 2026-09-07**)
 
 §5 rule 2 says a warning stands until the party acknowledges it. Until 2026-09-06 nothing
 in the workspace could receive an acknowledgement: `WarningState::Acknowledged` existed,

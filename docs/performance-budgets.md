@@ -53,7 +53,7 @@ These are already gates in `verification-capability-table.md` §1 and are repeat
 here only so the budgets read as one set: zero PSD violations and zero NaN/Inf over
 10⁵+ cycles (Scenario 5), and the per-row tolerances against the named oracles.
 
-## What has been measured (2026-09-05)
+## What has been measured (2026-09-05, updated 2026-09-07)
 
 The desktop tick harness exists: `gungnir-app/benches/app_tick.rs` for the `criterion`
 measurement and `gungnir-app/tests/frame_budgets.rs` for the assertions (GAP-056). The
@@ -61,12 +61,26 @@ figures below are from this development machine, release profile except where no
 
 | Budget | Value | Measured | Gate? |
 |---|---|---|---|
-| Per-frame `update()` | p99 under 4 ms | ~20 µs per frame (300 frames in 6.1 ms); debug-profile p99 533 µs, worst 3.32 ms | **No.** The tracking stage is a stub, so this is a floor, not the budgeted quantity. |
-| `tracks()` / `is_healthy()` | p99 under 1 ms | ~0.6 ns each | **No.** The snapshot is empty while `PIPELINE_IMPLEMENTED` is false, so it is not "at Scenario 4 track counts". |
-| Journal append per frame | under 1 ms for 50 envelopes | **157 µs release; median 400 µs debug over 9 runs on this machine, 1.84 ms debug on a shared CI runner** | **Yes**, since GAP-085 — **in the release profile only** since 2026-09-07; see the note below. |
-| Startup to first frame | under 3 s | 16.5 ms release, 12.5 ms debug (excludes eframe window creation) | **Yes.** |
+| Per-frame `update()` | p99 under 4 ms | ~20 µs per frame (300 frames in 6.1 ms) on 2026-09-05, before the tracking stage was real; **22.3 µs p99, 375.3 µs worst over 3,000 frames, measured 2026-09-07** | **No.** Corrected 2026-09-07: the tracking stage stopped being a stub on 2026-09-06 (GAP-011), and this is now a measurement of the budgeted quantity. It stays ungated because promoting a Draft row is the owner's row-by-row walk (GAP-067, D-16), not a change a test can make alone. |
+| `tracks()` / `is_healthy()` | p99 under 1 ms | ~0.6 ns each on 2026-09-05, against an empty snapshot; **100 ns each against a 36-track snapshot, measured 2026-09-07** | **No.** Corrected 2026-09-07: the snapshot has been populated since `PIPELINE_IMPLEMENTED` went true (GAP-011); same reason as above for staying ungated. |
+| Journal append per frame | under 1 ms for 50 envelopes | **157 µs release (2026-09-05); 98.9 µs median, 875.4 µs worst over 9 runs, measured 2026-09-07** — see the timing-variance caution below | **Yes**, since GAP-085 — **in the release profile only** since 2026-09-07; see the note below. |
+| Startup to first frame | under 3 s | 16.5 ms release (2026-09-05); 15.8 ms best of 3, measured 2026-09-07 | **Yes.** |
 
-Three notes on those figures.
+All 2026-09-07 figures are release-profile, this development machine, from
+`cargo test -p gungnir-app --test frame_budgets --release`. This is an 8 P-core,
+12 E-core machine and the debug-profile discussion below has already found a
+roughly 2x split between core classes on this same journal test; read any of these
+numbers as an order of magnitude, not a regression baseline, unless it was measured
+controlling for which core class ran it.
+
+Four notes on those figures.
+
+**The two rows corrected 2026-09-07 were never wrong about their own day.** The
+2026-09-05 figures accurately described a codebase where the tracking stage did
+nothing; `README.md`, `ARCHITECTURE.md` §10, and this table's own "Gate?" column
+went stale the day GAP-011 closed and nobody had come back to update the reason
+column to match, three lines above one another all still saying "stub" a full day
+after the thing they described stopped existing.
 
 **The journal budget was the one failure, and it is fixed.** Before GAP-085,
 `FileEventJournal::append` opened the session file, wrote one line, and closed it once

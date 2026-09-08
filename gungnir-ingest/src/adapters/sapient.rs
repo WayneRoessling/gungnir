@@ -2,15 +2,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! A SAPIENT spotter as a source: the human half of GAP-001 and the sensor half of
-//! GAP-004 (`docs/design/external-standards.md` §7,
+//! SAPIENT edge nodes as a source: the human, acoustic and passive-RF thirds of GAP-001,
+//! and the sensor half of GAP-004 (`docs/design/external-standards.md` §7,
 //! `docs/design/DN-27-bearing-only-detections.md` §4 and §5).
 //!
-//! **A person with a compass is an edge node.** SAPIENT's node taxonomy has
-//! `NODE_TYPE_HUMAN = 9`, "a human acting as part of a SAPIENT system (such as a spotter
-//! or guard)", and a spotter's application registers as one and then emits ordinary
-//! `DetectionReport` messages. So a spotter needs no design of our own: it needs this
-//! adapter and the measurement shape DN-27 §4 added, and nothing else.
+//! **A person with a compass is an edge node, and so is an acoustic array or an RF
+//! direction finder.** SAPIENT's node taxonomy names `NODE_TYPE_HUMAN` ("a human acting
+//! as part of a SAPIENT system, such as a spotter or guard"), `NODE_TYPE_ACOUSTIC`, and
+//! `NODE_TYPE_PASSIVE_RF` among its node types, and every one of the three emits the same
+//! `DetectionReport` message this adapter already reads: a bearing, a lased range, or a
+//! Cartesian location, each with its own stated error. **Extended 2026-09-07, GAP-001**:
+//! until then this adapter accepted only `NODE_TYPE_HUMAN` and named the other two rather
+//! than deciding anything about them (`another_node_type_is_named_rather_than_accepted`,
+//! now renamed to cover what changed). Reading the mapping code that decision guarded --
+//! `map`, `range_bearing`, `location`, `source_time` -- found nothing in any of the four
+//! that assumes a human observer: no default accuracy, no instrument-specific unit, no
+//! error model invented where the report states none. The registration gate is what
+//! encoded the restriction, not the measurement mapping underneath it, so widening the
+//! gate is the whole of this change. **Human-owned (the `gungnir-ingest` gateway); written
+//! and gated, not signed.**
+//!
+//! So a spotter, an acoustic array, or a passive-RF direction finder each need no design
+//! of our own: they need this adapter, accepting their node type, and the measurement
+//! shape DN-27 §4 added.
 //!
 //! # The specification this is written against
 //!
@@ -38,7 +52,7 @@
 //! # Nothing is dropped without being counted and named
 //!
 //! Every message, every field and every enumerated value this build does not understand
-//! increments a named counter in [`SpotterFeedStats::unhandled`], keyed by what it was.
+//! increments a named counter in [`SapientFeedStats::unhandled`], keyed by what it was.
 //! A feed that produces no detections therefore says *why* -- an unregistered node, a
 //! magnetic datum with no declination to correct it, a coordinate system in feet -- and
 //! not merely that the count is zero.
@@ -85,8 +99,31 @@ use serde_json::Value;
 /// `docs/design/external-standards.md` §7 is the pin.
 pub const ICD_EDITION: &str = "SAPIENT ICD v7 DSTL/PUB145591 2023-02-01 / BSI Flex 335 v2.0";
 
-/// The node type this adapter accepts, verbatim from `registration.proto` v2.0.
+/// The human/spotter node type, verbatim from `registration.proto` v2.0.
 pub const SPOTTER_NODE_TYPE: &str = "NODE_TYPE_HUMAN";
+
+/// The acoustic node type (an array reporting a bearing or a triangulated location),
+/// verbatim from `registration.proto` v2.0. Named in `docs/design/external-standards.md`
+/// §7, quoted there directly from the ICD; not independently re-verified against the
+/// document in this change, which does not have a copy to check it against.
+pub const ACOUSTIC_NODE_TYPE: &str = "NODE_TYPE_ACOUSTIC";
+
+/// The passive-RF node type (a direction finder reporting a bearing), verbatim from
+/// `registration.proto` v2.0. Same provenance and same caveat as
+/// [`ACOUSTIC_NODE_TYPE`].
+pub const PASSIVE_RF_NODE_TYPE: &str = "NODE_TYPE_PASSIVE_RF";
+
+/// The three node types whose `DetectionReport` this adapter maps identically: a
+/// spotter's compass and eyes, an acoustic array, and a passive-RF direction finder all
+/// report a bearing, a lased range, or a Cartesian location, each with its own stated
+/// error, and none of `map`, `range_bearing`, `location`, or `source_time` reads the
+/// node type at all. Listed together for tests that exercise all three the same way;
+/// [`SapientDetectionAdapter::new`] still takes exactly one, because a real deployment
+/// binds one adapter instance per feed and each feed is exactly one kind of node -- an
+/// instance that accepted any of the three would let a misconfigured feed pass silently
+/// as whichever one it happened to declare.
+pub const ALL_ACCEPTED_NODE_TYPES: [&str; 3] =
+    [SPOTTER_NODE_TYPE, ACOUSTIC_NODE_TYPE, PASSIVE_RF_NODE_TYPE];
 
 /// How far a reported timestamp may sit from the receipt time before this adapter stops
 /// believing the two are on the same clock, seconds.
@@ -194,23 +231,24 @@ impl SapientSource for RecordedSapientSource {
 /// keyed by what was not understood, so a feed producing nothing says which of the
 /// dozen possible causes it was.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SpotterFeedStats {
+pub struct SapientFeedStats {
     /// Lines read, whatever they turned out to be.
     pub messages: u64,
     /// Lines that were not JSON, or were not an object.
     pub undecodable: u64,
-    /// Registrations accepted, each from a node declaring [`SPOTTER_NODE_TYPE`].
+    /// Registrations accepted, each from a node declaring the type this adapter instance
+    /// was built to accept ([`SapientDetectionAdapter::new`]).
     pub registered: u64,
     /// Detection reports that became a `Measurement::Bearing`: a direction and no range,
-    /// which is what a spotter without a rangefinder produces.
+    /// which is what a node with no rangefinder produces.
     pub bearings: u64,
-    /// Detection reports that became a `Measurement::RangeAzimuthElevation`: the spotter
-    /// lased a range, so the report is polar and **stays polar** (DN-27 §4 and §6).
+    /// Detection reports that became a `Measurement::RangeAzimuthElevation`: a lased or
+    /// triangulated range, so the report is polar and **stays polar** (DN-27 §4 and §6).
     pub ranged: u64,
     /// Detection reports that became a `Measurement::Position`: the report carried a
     /// Cartesian `Location` rather than a `RangeBearing`.
     pub positions: u64,
-    /// Detection reports refused, for a reason named in [`SpotterFeedStats::unhandled`].
+    /// Detection reports refused, for a reason named in [`SapientFeedStats::unhandled`].
     pub refused: u64,
     /// Everything this build did not understand, keyed by what it was.
     ///
@@ -219,14 +257,14 @@ pub struct SpotterFeedStats {
     pub unhandled: BTreeMap<String, u64>,
 }
 
-impl SpotterFeedStats {
+impl SapientFeedStats {
     fn note(&mut self, what: impl Into<String>) {
         *self.unhandled.entry(what.into()).or_default() += 1;
     }
 }
 
 /// The counters as of the last poll, for a host to read.
-pub type SpotterStatsSink = Arc<Mutex<SpotterFeedStats>>;
+pub type SapientFeedStatsSink = Arc<Mutex<SapientFeedStats>>;
 
 /// What a node said about itself when it registered.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -236,38 +274,48 @@ struct RegisteredNode {
     icd_version: Option<String>,
 }
 
-/// A SAPIENT edge node that is a person: the spotter adapter.
+/// A SAPIENT edge node reporting detections: a spotter, an acoustic array, or a
+/// passive-RF direction finder, one instance per feed and one node type per instance
+/// (see [`ALL_ACCEPTED_NODE_TYPES`] for why one and not a set).
 ///
 /// `sensor` is the identity the gateway admits this feed under, and `frame` places any
 /// geodetic position it reports. A bearing needs neither, because a bearing is not a
-/// place -- but it does need the spotter's own position, which is
-/// [`SpotterAdapter::observer_enu`], because a direction from an unknown point is not a
-/// measurement of anything.
-pub struct SpotterAdapter<S: SapientSource> {
+/// place -- but it does need the reporting node's own position, which is
+/// [`SapientDetectionAdapter::observer_enu`], because a direction from an unknown point
+/// is not a measurement of anything.
+pub struct SapientDetectionAdapter<S: SapientSource> {
     name: String,
     sensor: SensorId,
     frame: LocalFrame,
     observer_enu: [f64; 3],
     source: S,
+    /// The one node type this instance accepts, e.g. [`SPOTTER_NODE_TYPE`].
+    accepted_node_type: &'static str,
     /// Node id to what it registered as. A detection from a node not in here is counted
-    /// and refused: SAPIENT's registration is what says a report is a person's, and
-    /// accepting reports from an unregistered node would make the node type decorative.
+    /// and refused: SAPIENT's registration is what says a report is this node type's,
+    /// and accepting reports from an unregistered node would make the node type
+    /// decorative.
     registered: HashMap<String, RegisteredNode>,
-    stats: SpotterFeedStats,
-    stats_sink: Option<SpotterStatsSink>,
+    stats: SapientFeedStats,
+    stats_sink: Option<SapientFeedStatsSink>,
 }
 
-impl<S: SapientSource> SpotterAdapter<S> {
-    /// `observer_enu` is where the spotter is standing, in the local frame. It is
+impl<S: SapientSource> SapientDetectionAdapter<S> {
+    /// `observer_enu` is where the reporting node is sited, in the local frame. It is
     /// required rather than optional because every bearing this adapter produces is a
     /// direction *from* it, and `gungnir_model::DetectionView` carries a `SensorId` and
     /// no position.
+    ///
+    /// `accepted_node_type` is the one SAPIENT node type this instance registers, e.g.
+    /// [`SPOTTER_NODE_TYPE`], [`ACOUSTIC_NODE_TYPE`], or [`PASSIVE_RF_NODE_TYPE`]. A
+    /// node declaring any other type is counted and named, never accepted.
     pub fn new(
         name: impl Into<String>,
         sensor: SensorId,
         frame: LocalFrame,
         observer_enu: [f64; 3],
         source: S,
+        accepted_node_type: &'static str,
     ) -> Self {
         let name = name.into();
         Self {
@@ -276,21 +324,22 @@ impl<S: SapientSource> SpotterAdapter<S> {
             frame,
             observer_enu,
             source,
+            accepted_node_type,
             registered: HashMap::new(),
-            stats: SpotterFeedStats::default(),
+            stats: SapientFeedStats::default(),
             stats_sink: None,
         }
     }
 
     /// Publish the counters at the end of every poll.
     #[must_use]
-    pub fn with_stats_sink(mut self, sink: SpotterStatsSink) -> Self {
+    pub fn with_stats_sink(mut self, sink: SapientFeedStatsSink) -> Self {
         self.stats_sink = Some(sink);
         self
     }
 
     #[must_use]
-    pub fn stats(&self) -> SpotterFeedStats {
+    pub fn stats(&self) -> SapientFeedStats {
         self.stats.clone()
     }
 
@@ -377,12 +426,13 @@ impl<S: SapientSource> SpotterAdapter<S> {
             self.stats.note("registration-without-node-type");
             return;
         }
-        if !types.contains(&SPOTTER_NODE_TYPE) {
-            // Acoustic and passive-RF nodes are the same message set and the same
-            // measurement shape, and they are the other two halves of GAP-001. They are
-            // named rather than accepted here because this adapter states a spotter's
-            // provenance and a spotter's error model, and an acoustic array's are not
-            // the same claim.
+        if !types.contains(&self.accepted_node_type) {
+            // A node declaring a type other than the one this instance was built for is
+            // named rather than accepted, never guessed into the wrong feed: a real
+            // deployment binds one adapter instance per feed, and a feed that is
+            // configured as an acoustic array should not silently start accepting a
+            // passive-RF node's registration just because the mapping code underneath
+            // would have handled it the same way.
             for declared in types {
                 self.stats.note(format!("node-type:{declared}"));
             }
@@ -620,7 +670,7 @@ impl<S: SapientSource> SpotterAdapter<S> {
     }
 }
 
-impl<S: SapientSource> ProtocolAdapter for SpotterAdapter<S> {
+impl<S: SapientSource> ProtocolAdapter for SapientDetectionAdapter<S> {
     fn name(&self) -> &str {
         &self.name
     }
@@ -725,13 +775,17 @@ mod tests {
         })
     }
 
-    fn adapter(lines: Vec<String>) -> SpotterAdapter<RecordedSapientSource> {
-        SpotterAdapter::new(
+    fn adapter(
+        lines: Vec<String>,
+        accepted_node_type: &'static str,
+    ) -> SapientDetectionAdapter<RecordedSapientSource> {
+        SapientDetectionAdapter::new(
             "op-1",
             SensorId(21),
             frame(),
             [0.0, 0.0, 2.0],
             RecordedSapientSource::from_lines(lines, "test".into()),
+            accepted_node_type,
         )
     }
 
@@ -760,7 +814,10 @@ mod tests {
 
     #[test]
     fn a_spotter_registers_and_its_bearing_becomes_a_bearing() {
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), bearing_report()]);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), bearing_report()],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
         assert!(a.is_registered(NODE));
         assert_eq!(out.len(), 1);
@@ -792,7 +849,10 @@ mod tests {
     /// shape of the uncertainty.
     #[test]
     fn a_lased_range_becomes_a_polar_report_and_not_a_flattened_position() {
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), ranged_report()]);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), ranged_report()],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(1_692_008_523.0)).expect("polls");
         assert_eq!(out.len(), 1);
         match out[0].measurement {
@@ -817,7 +877,7 @@ mod tests {
     /// because it looked like a detection.
     #[test]
     fn a_detection_from_an_unregistered_node_is_refused_and_named() {
-        let mut a = adapter(vec![bearing_report()]);
+        let mut a = adapter(vec![bearing_report()], SPOTTER_NODE_TYPE);
         let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
         assert!(out.is_empty());
         let stats = a.stats();
@@ -828,11 +888,17 @@ mod tests {
         );
     }
 
-    /// A node of another type is named by that type, so a deployment can see it has
-    /// pointed an acoustic array at the spotter adapter.
+    /// A node of a type this instance was not built for is named by that type, so a
+    /// deployment can see it has pointed an acoustic array at an adapter configured for
+    /// spotters -- extended 2026-09-07 with the acoustic and passive-RF types
+    /// themselves, from GAP-001's finding that the mismatch this test guards is about
+    /// configuration, not about the two node types being unsupported.
     #[test]
     fn another_node_type_is_named_rather_than_accepted() {
-        let mut a = adapter(vec![registration("NODE_TYPE_ACOUSTIC"), bearing_report()]);
+        let mut a = adapter(
+            vec![registration("NODE_TYPE_ACOUSTIC"), bearing_report()],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
         assert!(out.is_empty());
         assert!(!a.is_registered(NODE));
@@ -848,6 +914,84 @@ mod tests {
         );
     }
 
+    /// The other direction of the same rule: an instance built for acoustic nodes
+    /// refuses a spotter's registration, named by the type it actually declared.
+    #[test]
+    fn an_instance_built_for_one_node_type_refuses_a_different_one() {
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), bearing_report()],
+            ACOUSTIC_NODE_TYPE,
+        );
+        let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
+        assert!(out.is_empty());
+        assert!(!a.is_registered(NODE));
+        assert_eq!(
+            a.stats()
+                .unhandled
+                .get(&format!("node-type:{SPOTTER_NODE_TYPE}")),
+            Some(&1)
+        );
+    }
+
+    /// GAP-001's finding, checked directly: an acoustic array registers and its bearing
+    /// maps exactly as a spotter's would, because `map` and `range_bearing` read the
+    /// report, never the node type. Extended 2026-09-07.
+    #[test]
+    fn an_acoustic_array_registers_and_its_bearing_becomes_a_bearing() {
+        let mut a = adapter(
+            vec![registration(ACOUSTIC_NODE_TYPE), bearing_report()],
+            ACOUSTIC_NODE_TYPE,
+        );
+        let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
+        assert!(a.is_registered(NODE));
+        assert_eq!(out.len(), 1);
+        match out[0].measurement {
+            Measurement::Bearing { azimuth_rad, .. } => {
+                assert!((azimuth_rad - 37.0_f64.to_radians()).abs() < 1e-12);
+            }
+            ref other => panic!("a bearing report must be a bearing: {other:?}"),
+        }
+        let stats = a.stats();
+        assert_eq!((stats.registered, stats.bearings, stats.refused), (1, 1, 0));
+        assert!(stats.unhandled.is_empty(), "{:?}", stats.unhandled);
+    }
+
+    /// The same again for a passive-RF direction finder, with a lased-shaped ranged
+    /// report this time so both report kinds are proven for both new node types between
+    /// this test and the one above.
+    #[test]
+    fn a_passive_rf_node_registers_and_its_ranged_report_stays_polar() {
+        let mut a = adapter(
+            vec![registration(PASSIVE_RF_NODE_TYPE), ranged_report()],
+            PASSIVE_RF_NODE_TYPE,
+        );
+        let out = a.poll(MissionTime(1_692_008_523.0)).expect("polls");
+        assert!(a.is_registered(NODE));
+        assert_eq!(out.len(), 1);
+        match out[0].measurement {
+            Measurement::RangeAzimuthElevation { range_m, .. } => {
+                assert!((range_m - 1_450.0).abs() < 1e-9);
+            }
+            ref other => panic!("a ranged report must stay polar: {other:?}"),
+        }
+        let stats = a.stats();
+        assert_eq!((stats.registered, stats.ranged, stats.refused), (1, 1, 0));
+        assert!(stats.unhandled.is_empty(), "{:?}", stats.unhandled);
+    }
+
+    /// [`ALL_ACCEPTED_NODE_TYPES`] names the three types this module documents as
+    /// mapped identically; this is the check that the list and the gate agree, so
+    /// adding a fourth type to one and not the other fails here rather than shipping
+    /// silently out of step.
+    #[test]
+    fn every_listed_node_type_is_independently_acceptable() {
+        for node_type in ALL_ACCEPTED_NODE_TYPES {
+            let mut a = adapter(vec![registration(node_type), bearing_report()], node_type);
+            let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
+            assert_eq!(out.len(), 1, "{node_type} did not register and report");
+        }
+    }
+
     /// A magnetic bearing is refused with the reason, not silently taken as true north.
     /// Rotating a bearing by an unknown declination is DN-27 §2's failure in another
     /// coordinate.
@@ -856,7 +1000,10 @@ mod tests {
         let report = format!(
             r#"{{"timestamp":"2023-08-14T10:22:02.000000Z","nodeId":"{NODE}","detectionReport":{{"rangeBearing":{{"azimuth":37.0,"azimuthError":1.0,"coordinateSystem":"RANGE_BEARING_COORDINATE_SYSTEM_DEGREES_M","datum":"RANGE_BEARING_DATUM_MAGNETIC"}}}}}}"#
         );
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), report]);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), report],
+            SPOTTER_NODE_TYPE,
+        );
         assert!(a
             .poll(MissionTime(1_692_008_522.0))
             .expect("polls")
@@ -876,7 +1023,10 @@ mod tests {
         let report = format!(
             r#"{{"timestamp":"2023-08-14T10:22:02.000000Z","nodeId":"{NODE}","detectionReport":{{"rangeBearing":{{"azimuth":37.0,"coordinateSystem":"RANGE_BEARING_COORDINATE_SYSTEM_DEGREES_M","datum":"RANGE_BEARING_DATUM_TRUE"}}}}}}"#
         );
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), report]);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), report],
+            SPOTTER_NODE_TYPE,
+        );
         assert!(a
             .poll(MissionTime(1_692_008_522.0))
             .expect("polls")
@@ -896,7 +1046,10 @@ mod tests {
         let report = format!(
             r#"{{"timestamp":"2023-08-14T10:22:02.000000Z","nodeId":"{NODE}","detectionReport":{{"rangeBearing":{{"azimuth":37.0,"azimuthError":1.0,"coordinateSystem":"RANGE_BEARING_COORDINATE_SYSTEM_UNSPECIFIED","datum":"RANGE_BEARING_DATUM_TRUE"}}}}}}"#
         );
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), report]);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), report],
+            SPOTTER_NODE_TYPE,
+        );
         assert!(a
             .poll(MissionTime(1_692_008_522.0))
             .expect("polls")
@@ -916,7 +1069,10 @@ mod tests {
         let status = format!(
             r#"{{"timestamp":"2023-08-14T10:22:02.000000Z","nodeId":"{NODE}","statusReport":{{"reportId":"S1"}}}}"#
         );
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), status]);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), status],
+            SPOTTER_NODE_TYPE,
+        );
         assert!(a
             .poll(MissionTime(1_692_008_522.0))
             .expect("polls")
@@ -930,11 +1086,14 @@ mod tests {
     /// A line that is not JSON is counted, and the feed carries on.
     #[test]
     fn a_broken_line_is_counted_and_the_feed_carries_on() {
-        let mut a = adapter(vec![
-            registration(SPOTTER_NODE_TYPE),
-            "{not json".to_string(),
-            bearing_report(),
-        ]);
+        let mut a = adapter(
+            vec![
+                registration(SPOTTER_NODE_TYPE),
+                "{not json".to_string(),
+                bearing_report(),
+            ],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
         assert_eq!(out.len(), 1);
         assert_eq!(a.stats().undecodable, 1);
@@ -945,13 +1104,19 @@ mod tests {
     /// substitution written down when it is not.
     #[test]
     fn a_timestamp_on_another_clock_is_not_believed() {
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), bearing_report()]);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), bearing_report()],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
         assert!((out[0].source_time.0 - 1_692_008_522.340_051).abs() < 1e-6);
         assert!(out[0].provenance.conversion_loss.is_none());
 
         // A replayed session, whose mission time is seconds since the session started.
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), bearing_report()]);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), bearing_report()],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(42.0)).expect("polls");
         assert_eq!(out[0].source_time, MissionTime(42.0));
         assert!(out[0]

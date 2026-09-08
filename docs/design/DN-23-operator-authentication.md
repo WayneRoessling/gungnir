@@ -256,7 +256,7 @@ D-18's rows carry.
 
 ## 10. Amendment 1 (2026-09-07): the account nobody could create
 
-**Unsigned.** Written with the code, awaiting the owner.
+**Signed by the owner 2026-09-07.**
 
 This note gives the account file a format, gives `FileAccountStore` a file to read, and
 gives the node a reason to refuse callers when it has neither. What it never said is

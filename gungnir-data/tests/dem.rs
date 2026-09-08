@@ -223,6 +223,7 @@ fn state<T>(r: &Result<T, DataError>) -> String {
 fn describe(result: &LoadResult) -> String {
     match result {
         LoadResult::PointCloud(r) => format!("point cloud: {}", state(r)),
+        LoadResult::CopcBounded(r) => format!("copc: {}", state(r)),
         LoadResult::VtkMesh(r) => format!("vtk: {}", state(r)),
         LoadResult::Terrain(r) => format!("terrain: {}", state(r)),
         LoadResult::GltfAsset(r) => format!("gltf: {}", state(r)),

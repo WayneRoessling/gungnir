@@ -8,6 +8,9 @@
 //! `recorded` and `simulated` exist so the full gateway path can be exercised with
 //! no real sensor connected.
 
+/// A 1090ES receiver: the codec has been decoded and gated since 2026-09-06 (GAP-010)
+/// and had no adapter of its own until this one (2026-09-07).
+pub mod adsb;
 pub mod ais;
 pub mod asterix;
 pub mod peer;
