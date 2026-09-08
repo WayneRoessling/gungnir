@@ -66,12 +66,16 @@
 //! binary protobuf needs a runtime this workspace has not admitted under §2.9. The
 //! binary bearer is that adapter's open row and is this one's too.
 //!
-//! **`TaskAck` is not parsed.** GAP-004's closing action is "a command issued on a
-//! desktop then reaches a sensor over a specified interface rather than stopping at the
-//! node" -- reaching the sensor correctly formed, not yet the round trip back.
-//! `SensorControl::acknowledge` already exists as the abstract mechanism a parsed
-//! `TaskAck` would call; wiring a `TaskAck` reader to it is a natural next step and is
-//! recorded rather than attempted here.
+//! **`TaskAck` parsing is `gungnir-ingest`'s (2026-09-07), not this crate's.** A `TaskAck`
+//! arrives on the same inbound stream `gungnir-ingest`'s SAPIENT adapter already reads,
+//! and this crate has no edge to `gungnir-ingest` to read a stream with (siblings in
+//! `ARCHITECTURE.md` §7.1, and adding one to make this convenient is exactly the edge
+//! that rule exists to refuse). What this crate contributes instead is
+//! [`decode_task_id`], the inverse of the ULID `task_id` [`SapientTaskAdapter::issue`]
+//! mints: a caller that holds both crates -- `gungnir-app`, `gungnir-node` -- decodes a
+//! parsed `TaskAck`'s wire `task_id` back to the [`gungnir_model::SensorTaskId`]
+//! [`crate::SensorControl::acknowledge`]/[`crate::SensorControl::fail`] takes, with no
+//! stored correlation table on either side of the round trip.
 
 use crate::tasking::{SensorCommand, SensorControlAdapter, SensorTask};
 use crate::{SensorManagementError, SensorMode};
@@ -273,6 +277,34 @@ mod ulid {
         encode(timestamp_ms, payload)
     }
 
+    /// The inverse of [`task_id`]: the 64-bit task id folded into a ULID string's
+    /// payload, or `None` for anything that is not a 26-character string over
+    /// [`CROCKFORD`] -- including a foreign ULID this adapter never minted, since a
+    /// task id we did not fold in is not this function's to recover.
+    pub(super) fn decode_task_id(s: &str) -> Option<u64> {
+        let value = decode(s)?;
+        let payload_80 = value & ((1u128 << 80) - 1);
+        Some((payload_80 >> 32) as u64)
+    }
+
+    /// The inverse of [`encode`]: 26 Crockford base32 characters, most significant
+    /// first, back to the 128-bit value they came from. The top character of a validly
+    /// encoded value only ever carries its low 3 bits (`26 * 5 = 130` bits encode a
+    /// 128-bit value, so the first symbol's top 2 bits are always zero); reconstructing
+    /// by repeated `(value << 5) | digit` relies on exactly that and needs no separate
+    /// case for the first character.
+    fn decode(s: &str) -> Option<u128> {
+        if s.len() != 26 {
+            return None;
+        }
+        let mut value: u128 = 0;
+        for b in s.bytes() {
+            let digit = CROCKFORD.iter().position(|&c| c == b)?;
+            value = (value << 5) | u128::try_from(digit).ok()?;
+        }
+        Some(value)
+    }
+
     fn encode(timestamp_ms: u64, payload_80: u128) -> String {
         let value: u128 = (u128::from(timestamp_ms) << 80) | (payload_80 & ((1u128 << 80) - 1));
         let mut chars = [0u8; 26];
@@ -377,7 +409,57 @@ mod ulid {
             // rejects outright on length.
             assert_eq!(rfc3339(978_404_645.0), "2001-01-02T03:04:05Z");
         }
+
+        #[test]
+        fn decode_recovers_the_task_id_folded_into_a_freshly_minted_ulid() {
+            let id = task_id(MissionTime(1_700_000_000.123), 424_242, 7);
+            assert_eq!(decode_task_id(&id), Some(424_242));
+        }
+
+        #[test]
+        fn decode_ignores_the_sequence_number_the_task_id_was_folded_alongside() {
+            let a = task_id(MissionTime(1_700_000_000.0), 9, 0);
+            let b = task_id(MissionTime(1_700_000_000.0), 9, 5);
+            assert_eq!(decode_task_id(&a), Some(9));
+            assert_eq!(decode_task_id(&b), Some(9));
+        }
+
+        #[test]
+        fn decode_refuses_a_string_of_the_wrong_length() {
+            assert_eq!(decode_task_id("TOOSHORT"), None);
+        }
+
+        #[test]
+        fn decode_refuses_a_character_outside_the_crockford_alphabet() {
+            // 'I', 'L', 'O', 'U' are deliberately excluded from Crockford base32.
+            let mut id = task_id(MissionTime(1_700_000_000.0), 1, 0);
+            id.replace_range(5..6, "U");
+            assert_eq!(decode_task_id(&id), None);
+        }
+
+        #[test]
+        fn the_published_ulid_specs_own_example_round_trips() {
+            // The spec's example ULID, decoded and re-encoded, reproduces itself byte
+            // for byte -- the companion check to `the_encoder_reproduces_the_published_
+            // ulid_specs_own_example` above, which only pins the timestamp half.
+            let example = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+            let value = decode(example).expect("a valid 26-character Crockford string");
+            let timestamp_ms = (value >> 80) as u64;
+            let payload = value & ((1u128 << 80) - 1);
+            assert_eq!(encode(timestamp_ms, payload), example);
+        }
     }
+}
+
+/// Recover the local task id [`SapientTaskAdapter::issue`] folded into a SAPIENT-shaped
+/// ULID `taskId`, from a `TaskAck` a `gungnir-ingest` reader parsed off the wire.
+/// `None` for a string that is not a validly-shaped 26-character Crockford ULID --
+/// including one this adapter never issued, since a task id we did not mint is not this
+/// crate's to translate, and `SensorControl::acknowledge`/`fail` would refuse an
+/// unrecognised `SensorTaskId` anyway.
+#[must_use]
+pub fn decode_task_id(wire_task_id: &str) -> Option<crate::tasking::SensorTaskId> {
+    ulid::decode_task_id(wire_task_id).map(crate::tasking::SensorTaskId)
 }
 
 #[cfg(test)]

@@ -14,15 +14,15 @@
 //! both say when something is hidden, and the panel says what each layer *would* show if
 //! it were on -- a count an operator can read without turning it back on.
 //!
-//! # What is not here
+//! # Before-and-after comparison (GAP-087)
 //!
-//! **Before-and-after comparison.** The information architecture lists it against this
-//! panel, and it means comparing two laydowns, which needs the laydown options PN-16
-//! draws. **No register entry builds that panel**, which is a finding rather than a
-//! deferral; GAP-055 tracks the unbuilt panels. A control that compared the current
-//! picture with itself would be a control that did nothing.
+//! The information architecture lists this against PN-11, and it means putting a
+//! laydown option's sensors and resources on the map, which needs an option selected
+//! on PN-16 first. So the status line here is not a toggle -- there is nothing to turn
+//! on or off from this panel -- it is a report of what PN-16's own selection is doing,
+//! the same way [`draw_hazard_currency`] reports the hazard layer's staleness rather
+//! than controlling it.
 
-use crate::panels::unavailable::{draw_unavailable, Unavailable};
 use crate::theme;
 use egui::{RichText, Ui};
 
@@ -63,6 +63,23 @@ pub enum NothingToDraw<'a> {
     Because { reason: &'a str },
 }
 
+/// What PN-16's own selection is doing to the map, for the status line here to report
+/// (GAP-087). Not a toggle: there is nothing to turn on or off from this panel, only a
+/// selection made on PN-16 to reflect.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LaydownComparison<'a> {
+    /// No option is selected on PN-16.
+    NothingSelected,
+    /// Previewing this option: its own words for what it is for, and how much it
+    /// places, so an operator can tell a preview with nothing in it from one that has
+    /// not loaded.
+    Showing {
+        intent: &'a str,
+        sensors: usize,
+        resources: usize,
+    },
+}
+
 /// Everything PN-11 draws.
 // Four independent toggles are four bools; see `gungnir_viewport3d::CoverageLayers`.
 #[allow(clippy::struct_excessive_bools)]
@@ -75,8 +92,8 @@ pub struct CoverageLayersView<'a> {
     pub counts: LayerCounts,
     pub hazards: HazardCurrency,
     pub coverage: NothingToDraw<'a>,
-    /// Comparing two laydowns, which needs the planning surface.
-    pub comparison: Unavailable<'a>,
+    /// The before-and-after preview PN-16's selection is driving on the map.
+    pub comparison: LaydownComparison<'a>,
 }
 
 /// What the operator toggled this frame.
@@ -161,8 +178,35 @@ pub fn render_coverage_layers(ui: &mut Ui, view: &CoverageLayersView<'_>) -> Opt
     }
 
     ui.separator();
-    draw_unavailable(ui, view.comparison);
+    draw_laydown_comparison(ui, view.comparison);
     action
+}
+
+/// The before-and-after preview's status: what PN-16 has selected, or that nothing is.
+fn draw_laydown_comparison(ui: &mut Ui, comparison: LaydownComparison<'_>) {
+    ui.label(RichText::new("Laydown preview").small().strong());
+    match comparison {
+        LaydownComparison::NothingSelected => {
+            ui.label(
+                RichText::new("No option selected on PN-16.")
+                    .small()
+                    .color(theme::MUTED_TEXT_COLOR),
+            );
+        }
+        LaydownComparison::Showing {
+            intent,
+            sensors,
+            resources,
+        } => {
+            ui.label(
+                RichText::new(format!(
+                    "Previewing \"{intent}\": {sensors} sensor(s), {resources} resource(s)."
+                ))
+                .small()
+                .color(theme::MUTED_TEXT_COLOR),
+            );
+        }
+    }
 }
 
 /// DN-14 §5: the layer is static and says so, with the baseline version it came from.

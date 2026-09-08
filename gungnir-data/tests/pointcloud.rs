@@ -90,16 +90,71 @@ fn corrupt_files_are_errors_never_panics() {
     ));
 }
 
+/// A real COPC file, its own octree hierarchy queried through the happy path.
+///
+/// `testdata/pointcloud/autzen-classified.copc.laz` (`SOURCE.md`): a public,
+/// CC-BY-4.0, real LIDAR capture -- not authored for this test, and not the `las`
+/// crate's own doctest fixture either, so this is a second, independent confirmation
+/// that `load_copc_bounded`'s query reaches a real hierarchy rather than one shaped to
+/// match this function's own assumptions. The bounds are a round-number 100 x 100 m box
+/// with a generous z range, chosen from the file's own reported bounds
+/// (`testdata/pointcloud/SOURCE.md`) rather than from what the query happens to return,
+/// so the count below is a real check and not a tautology.
+#[test]
+fn a_bounded_query_recovers_points_from_a_real_copc_hierarchy() {
+    let cloud = pointcloud::load_copc_bounded(
+        &fixture("autzen-classified.copc.laz"),
+        [637_200.0, 851_100.0, 400.0, 637_300.0, 851_200.0, 620.0],
+    )
+    .expect("a real COPC file with points in this box");
+    assert_eq!(cloud.positions.len(), 4767);
+    assert!(
+        (cloud.origin[0] - 635_577.79).abs() < 0.01
+            && (cloud.origin[1] - 848_882.15).abs() < 0.01
+            && (cloud.origin[2] - 406.14).abs() < 0.01,
+        "origin is the file's own minimum bound, not the query box: {:?}",
+        cloud.origin
+    );
+    let [min, max] = cloud.bounds().expect("4767 points have bounds");
+    // The query box, not the file's: every returned point is inside what was asked
+    // for, and the box was wide enough on x and y that the returned points do not
+    // fill it exactly on z (the ground and the low vegetation above it stop well
+    // short of 620 m).
+    let query_box = [
+        [637_200.0, 637_300.0],
+        [851_100.0, 851_200.0],
+        [400.0, 620.0],
+    ];
+    for axis in 0..3 {
+        let (got_min, got_max) = (min[axis], max[axis]);
+        let [box_min, box_max]: [f64; 2] = query_box[axis];
+        assert!(
+            got_min >= box_min - 0.01 && got_max <= box_max + 0.01,
+            "axis {axis}: [{got_min}, {got_max}] outside the query box [{box_min}, {box_max}]"
+        );
+    }
+    assert!(cloud.intensity.is_some());
+    let classification = cloud.classification.as_deref().expect("classification");
+    // Ground (2), high vegetation (5), overhead structure (19), and car (65): a real
+    // classification, not four points that happen to be ground.
+    let mut counts = std::collections::BTreeMap::new();
+    for &c in classification {
+        *counts.entry(c).or_insert(0u32) += 1;
+    }
+    assert_eq!(
+        counts,
+        std::collections::BTreeMap::from([(0, 2), (2, 4499), (5, 114), (19, 8), (65, 144)]),
+        "classification counts changed: {counts:?}"
+    );
+}
+
 /// **What this proves, and what it does not.** `load_copc_bounded` is implemented
 /// against `las::copc::CopcReader`, whose own doctest (`las-0.11.1/src/copc.rs`) reads
 /// real points from a real COPC file through the same `query` call this function makes.
-/// This workspace holds no COPC fixture of its own yet -- vendoring one needs the same
-/// licence and provenance check every other fixture here has had, which this change did
-/// not do -- so what these tests can prove without one is the refusal side: a plain
-/// LAZ/LAS file (no COPC info VLR, no hierarchy EVLR) is refused by name rather than
-/// silently read as if it were bounded, and malformed bounds are refused before the
-/// file is even opened. The happy path -- bounded points recovered from a real COPC
-/// file -- is the next test to add, not a claim this one makes.
+/// The test above is a second, independent confirmation against a different file. What
+/// remains here is the refusal side: a plain LAZ/LAS file (no COPC info VLR, no
+/// hierarchy EVLR) is refused by name rather than silently read as if it were bounded,
+/// and malformed bounds are refused before the file is even opened.
 #[test]
 fn a_plain_laz_file_has_no_copc_hierarchy_and_is_refused_by_name() {
     match pointcloud::load_copc_bounded(&fixture("five-points.las"), [0.0, 0.0, 0.0, 1.0, 1.0, 1.0])

@@ -90,6 +90,9 @@ pub struct AppState {
         String,
         gungnir_ingest::adapters::sapient::SapientFeedStatsSink,
     )>,
+    /// Every bound SAPIENT feed's `TaskAck` sink, drained each frame (GAP-004): the
+    /// inbound half of the outbound-tasking round trip `sapient_task.rs` issues.
+    pub sapient_task_acks: Vec<gungnir_ingest::adapters::sapient::TaskAckSink>,
     /// The identification engine, fed by cooperative evidence and governed by the
     /// baseline's thresholds (GAP-010, GAP-018, DN-08 §5).
     pub identification: gungnir_identification::EvidenceFusionEngine,
@@ -331,6 +334,11 @@ pub struct AppState {
     /// closes rather than showing the last state of a track that no longer exists.
     selected_track: Option<TrackId>,
 
+    /// Which laydown option PN-16 has selected for PN-11's before-and-after preview
+    /// (GAP-087's own remaining item). Session state, not baseline: a comparison an
+    /// operator is drawing now, not a fact about the deployment.
+    selected_laydown: Option<gungnir_model::LaydownId>,
+
     pub(crate) journal: FileEventJournal,
     pub(crate) journal_rx: Receiver<Envelope>,
     pub journal_failed: bool,
@@ -491,6 +499,7 @@ impl AppState {
             adsb_stats: adsb.stats,
             adsb_submitted: std::collections::HashSet::new(),
             sapient_stats: sapient.stats,
+            sapient_task_acks: sapient.task_acks,
             identification: gungnir_identification::EvidenceFusionEngine::with_settings(
                 identification_settings,
             ),
@@ -556,6 +565,7 @@ impl AppState {
             selected_approval: None,
             dialog: gungnir_ui::panels::decision_dialog::DecisionDialogState::default(),
             selected_track: None,
+            selected_laydown: None,
             journal,
             journal_rx,
             journal_failed: false,
@@ -728,6 +738,21 @@ impl AppState {
     /// Select a track, or clear the selection by re-clicking the selected row.
     pub fn select_track(&mut self, id: TrackId) {
         self.selected_track = if self.selected_track == Some(id) {
+            None
+        } else {
+            Some(id)
+        };
+    }
+
+    /// The laydown option PN-11 is drawing a before-and-after preview of.
+    #[must_use]
+    pub fn selected_laydown(&self) -> Option<&gungnir_model::LaydownId> {
+        self.selected_laydown.as_ref()
+    }
+
+    /// Select a laydown option, or clear the selection by re-clicking the selected row.
+    pub fn select_laydown(&mut self, id: gungnir_model::LaydownId) {
+        self.selected_laydown = if self.selected_laydown.as_ref() == Some(&id) {
             None
         } else {
             Some(id)

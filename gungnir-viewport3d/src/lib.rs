@@ -197,6 +197,10 @@ fn draw_layers(
     // Predicted lines have no toggle: a prediction the operator cannot see is the case
     // DN-02 §5 warns about, and an empty list draws nothing.
     layers::draw_predictions_2d(painter, rect, &state.view, layers.predictions);
+    // The laydown preview has no toggle either, for the same reason: selecting an
+    // option on PN-16 is what turns it on, and there is nothing to hide when nothing
+    // is selected (GAP-087).
+    layers::draw_laydown_preview_2d(painter, rect, &state.view, layers.laydown_preview);
     // **A hidden layer and an empty one look identical.** Saying which is the whole
     // reason PN-11's toggles are safe to have: without this, turning coverage off would
     // make the map claim a sector nobody had measured.
