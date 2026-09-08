@@ -48,7 +48,16 @@ use crate::SecurityError;
 /// `account_store.rs`) needs a wrapping secret from the identical mechanism under a
 /// different name, so the two never collide in the same OS keystore even when a node
 /// and a desktop share a machine.
-pub(crate) const DESKTOP_KEYSTORE_SERVICE: &str = "gungnir-desktop-keystore";
+///
+/// **Public since 2026-09-08 (GAP-060's remaining slice).**
+/// `PersistentKeyProvider::open_or_create_via_os_keystore` gained the same `service`
+/// parameter `wrapping_secret` already had, because it too now backs more than one
+/// purpose (the desktop's own keystore here, and a node's and a desktop's TLS identity
+/// in `gungnir-remote::identity`) and can no longer bake in a single fixed name the way
+/// `EncryptedAccountStore` still does for its one purpose. `gungnir-app`, the one
+/// caller outside this crate, needs this constant to keep naming the same service
+/// rather than growing its own copy of the string.
+pub const DESKTOP_KEYSTORE_SERVICE: &str = "gungnir-desktop-keystore";
 
 /// Force the real platform-native backend as `keyring-core`'s process-wide default, the
 /// one time a process needs it done. Idempotent to call more than once: `store_status`
@@ -137,16 +146,20 @@ mod tests {
     // cannot race over which default is installed.
     static MOCK: Once = Once::new();
 
-    fn mock_entry(account: &str) -> keyring_core::Entry {
+    // `service` is a parameter here for the same reason it is one on `wrapping_secret`
+    // itself: this module now backs more than the desktop's own keystore, and
+    // `two_different_services_for_the_same_account_do_not_share_a_secret` below is the
+    // test that exists to prove those services stay independent.
+    fn mock_entry(service: &str, account: &str) -> keyring_core::Entry {
         MOCK.call_once(|| {
             keyring_core::set_default_store(keyring_core::mock::Store::new().expect("mock store"));
         });
-        keyring_core::Entry::new(DESKTOP_KEYSTORE_SERVICE, account).expect("mock entry")
+        keyring_core::Entry::new(service, account).expect("mock entry")
     }
 
     #[test]
     fn a_first_run_generates_and_stores_a_secret() {
-        let entry = mock_entry("first-run");
+        let entry = mock_entry(DESKTOP_KEYSTORE_SERVICE, "first-run");
         let secret = ensure_secret(&entry).expect("generated");
         assert_eq!(secret.len(), 64, "32 bytes hex-encoded: {secret}");
         assert_eq!(
@@ -158,7 +171,7 @@ mod tests {
 
     #[test]
     fn a_second_call_returns_the_stored_secret_rather_than_generating_another() {
-        let entry = mock_entry("second-call");
+        let entry = mock_entry(DESKTOP_KEYSTORE_SERVICE, "second-call");
         let first = ensure_secret(&entry).expect("generated");
         let second = ensure_secret(&entry).expect("reused");
         assert_eq!(
@@ -172,12 +185,41 @@ mod tests {
         assert_ne!(generate_secret(), generate_secret());
     }
 
+    /// The property the `service` parameter exists for (2026-09-08, GAP-060's
+    /// remaining slice): the same account name under two different services must not
+    /// address the same secret, the way `NODE_KEYSTORE_SERVICE` already keeps a node's
+    /// accounts out of the desktop's own keystore. `"gungnir-node-tls-identity"` is a
+    /// literal here rather than an imported constant because it is `gungnir-remote`'s
+    /// own, private to that crate's `identity.rs`; this test only needs *a* second
+    /// service name, not that specific one.
+    #[test]
+    fn two_different_services_for_the_same_account_do_not_share_a_secret() {
+        let a = mock_entry(DESKTOP_KEYSTORE_SERVICE, "shared-account-name");
+        let b = mock_entry("gungnir-node-tls-identity", "shared-account-name");
+        let secret_a = ensure_secret(&a).expect("generated for service a");
+        let secret_b = ensure_secret(&b).expect("generated for service b");
+        assert_ne!(
+            secret_a, secret_b,
+            "the same account under two different services must not collide"
+        );
+        assert_eq!(
+            ensure_secret(&a).expect("reused"),
+            secret_a,
+            "service a is unaffected by service b existing"
+        );
+        assert_eq!(
+            ensure_secret(&b).expect("reused"),
+            secret_b,
+            "service b is unaffected by service a existing"
+        );
+    }
+
     /// A fault distinct from "nothing stored yet" -- a locked store, say -- must not be
     /// read as first-run and overwritten with a fresh secret, which would orphan
     /// whatever the real entry already protects.
     #[test]
     fn a_fault_other_than_missing_is_reported_and_never_treated_as_first_run() {
-        let entry = mock_entry("fault");
+        let entry = mock_entry(DESKTOP_KEYSTORE_SERVICE, "fault");
         let mock: &keyring_core::mock::Cred =
             entry.as_any().downcast_ref().expect("mock credential");
         mock.set_error(keyring_core::Error::NoStorageAccess("locked".into()));

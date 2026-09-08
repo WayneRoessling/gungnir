@@ -237,11 +237,13 @@ fn connect_if_remote(state: &mut AppState, operator: u64, passphrase: &str) {
 
 /// What the link trusts and who this desktop is (GAP-060).
 ///
-/// The roots are the baseline's. The identity is read from `GUNGNIR_TLS_CERT` and
-/// `GUNGNIR_TLS_KEY`, the same development fallback the node uses, because a baseline
-/// may not name key material or a path to it; a desktop identity issued through the key
-/// provider (DN-22) is GAP-060's remaining half. Either variable unset means no identity,
-/// which an `https` node refuses at the handshake and the strip reports.
+/// The roots are the baseline's. The identity is issued from this desktop's own key
+/// provider -- persistent when `security.key_provider` is `OperatingSystemKeystore`
+/// (2026-09-08, GAP-060's remaining slice: see [`link_tls_for`]), ephemeral otherwise
+/// -- with `GUNGNIR_TLS_CERT`/`GUNGNIR_TLS_KEY` -- the same development fallback the
+/// node uses, because a baseline may not name key material or a path to it -- as the
+/// fallback for whichever half is missing. Neither available means no identity, which
+/// an `https` node refuses at the handshake and the strip reports.
 pub fn link_tls(state: &AppState) -> gungnir_remote::LinkTls {
     link_tls_for(&state.config)
 }
@@ -275,9 +277,30 @@ pub fn link_tls_for(config: &gungnir_config::ConfigBaseline) -> gungnir_remote::
     // One call, in the crate that owns the type: see `gungnir_remote::identity`. The
     // desktop deliberately does not build the certified key itself, because it would need
     // a `rustls` dependency of its own to name a value it only passes along.
-    let issued = gungnir_remote::identity::issue_for_client("gungnir-app")
-        .map_err(|err| tracing::warn!(%err, "this desktop could not issue its own identity"))
-        .ok();
+    //
+    // Persistent only when this deployment already opted into the operating system's
+    // keystore for its own journal key (2026-09-08, GAP-060's remaining slice).
+    // `issue_desktop_outbound_identity` does real disk and OS-keystore I/O, unlike the
+    // purely in-memory ephemeral path below it -- and this function is called on every
+    // `AppState` built (`build_ingest`'s peer links, every reconnect attempt), so
+    // attempting it unconditionally would touch the real keystore, and leave an entry
+    // in it, for every desktop and every test that never asked for persistence,
+    // `KeyProviderConfig::None` (the default) among them. A desktop that has opted in
+    // gets the same custody model for its TLS identity as for its journal key; one that
+    // has not stays on the ephemeral path exactly as it always was, and
+    // `issue_desktop_outbound_identity`'s own honest fallback still covers a keystore
+    // that turns out to be unreachable despite being configured.
+    let issued = match &config.security.key_provider {
+        gungnir_config::KeyProviderConfig::OperatingSystemKeystore { .. } => {
+            gungnir_remote::identity::issue_desktop_outbound_identity(
+                std::path::Path::new(&config.data_dir),
+                "gungnir-app",
+            )
+        }
+        _ => gungnir_remote::identity::issue_for_client("gungnir-app"),
+    }
+    .map_err(|err| tracing::warn!(%err, "this desktop could not issue its own identity"))
+    .ok();
     if issued.is_some() {
         if identity_pem.is_some() {
             tracing::info!(

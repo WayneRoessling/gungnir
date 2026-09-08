@@ -32,6 +32,17 @@
 //! argon2 comes from: a high-entropy secret `os_keystore` generates once and the
 //! platform's own credential manager holds from then on, rather than a passphrase typed
 //! at every sign-in. **Human-owned; written and gated, not signed.**
+//!
+//! **Generalised 2026-09-08 (GAP-060's remaining slice): `service` is now a parameter
+//! of [`PersistentKeyProvider::open_or_create_via_os_keystore`], not a name it bakes in
+//! internally.** Until then the desktop's own keystore was the only thing this
+//! constructor built, so it always addressed [`crate::DESKTOP_KEYSTORE_SERVICE`]
+//! without being asked. `gungnir-remote::identity` now opens a `PersistentKeyProvider`
+//! the same way for a node's serving identity and for a desktop's outbound one, each
+//! under its own service name, so a single fixed name stopped being correct -- the
+//! same reason `crate::os_keystore::wrapping_secret` itself took `service` as a
+//! parameter when GAP-057's node account store needed a second name under the
+//! identical mechanism. **Human-owned; written and gated, not signed.**
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -160,9 +171,20 @@ impl PersistentKeyProvider {
     /// Open the keystore in `dir`, or create it, using a secret the operating system's
     /// own keystore holds instead of a typed passphrase (DN-22 §5; D-39).
     ///
-    /// `account` distinguishes this desktop's secret from another deployment's on the
-    /// same machine, exactly as `dir` distinguishes their keystore files; the config
-    /// baseline supplies it (`KeyProviderConfig::OperatingSystemKeystore { account }`).
+    /// **`service` generalised 2026-09-08 (GAP-060's remaining slice), the same way
+    /// GAP-057 generalised [`crate::os_keystore::wrapping_secret`] itself.** Before
+    /// this, the desktop's own keystore was this constructor's only caller and the
+    /// service name was fixed to it internally; now `gungnir-remote::identity` also
+    /// opens a `PersistentKeyProvider` this way for a node's and a desktop's TLS
+    /// identity, under their own service names, so the name can no longer be baked in
+    /// the way it still is for `EncryptedAccountStore` (which has exactly one purpose).
+    /// `service` and `account` together name the entry in the operating system's
+    /// keystore -- `service` separates the purposes that share this mechanism, exactly
+    /// as [`crate::os_keystore::wrapping_secret`]'s own `service` parameter does, and
+    /// `account` then separates deployments within one such service, the way `dir`
+    /// separates their keystore files. The desktop's own caller passes
+    /// [`crate::DESKTOP_KEYSTORE_SERVICE`]; the config baseline supplies `account`
+    /// (`KeyProviderConfig::OperatingSystemKeystore { account }`).
     ///
     /// # Errors
     ///
@@ -171,13 +193,11 @@ impl PersistentKeyProvider {
     /// anyway and journal in the clear (DN-22 §5).
     pub fn open_or_create_via_os_keystore(
         dir: &Path,
+        service: &str,
         account: &str,
         escrow: Option<EscrowPublicKey>,
     ) -> Result<Self, SecurityError> {
-        let secret = crate::os_keystore::wrapping_secret(
-            crate::os_keystore::DESKTOP_KEYSTORE_SERVICE,
-            account,
-        )?;
+        let secret = crate::os_keystore::wrapping_secret(service, account)?;
         Self::open_or_create(dir, &secret, escrow)
     }
 

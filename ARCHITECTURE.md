@@ -4270,6 +4270,107 @@ not by finding, for the time between whenever each item landed and this correcti
     **Not human-owned.** Neither `gungnir-intercept-service` nor `gungnir-app` is on
     the low-trust list; no dependency edge changed and no new external crate.
 
+111. **GAP-060's own remaining item: the OS keystore generalised to a TLS identity**
+    (2026-09-08). Item 105 named exactly what was left -- `PersistentKeyProvider::
+    open_or_create_via_os_keystore` hardcoded the desktop's own service name, and item
+    104's `wrapping_secret` generalisation was the pattern to mirror rather than
+    invent again. It now takes `service` as a parameter the same way: `gungnir-
+    security/src/keystore.rs` no longer bakes in `DESKTOP_KEYSTORE_SERVICE`
+    internally, and the constant itself became `pub` (re-exported from the crate
+    root) so `gungnir-app`'s one external caller keeps naming the same string rather
+    than growing its own copy.
+
+    **Two new identities, two new service names, wired where item 105 left off.**
+    `gungnir-remote/src/identity.rs` gained `issue_node_serving_identity` and
+    `issue_desktop_outbound_identity`, each opening a `PersistentKeyProvider` under
+    its own operating-system-keystore service (`gungnir-node-tls-identity`,
+    `gungnir-desktop-tls-identity` -- distinct from `gungnir-node-accounts` and
+    `gungnir-desktop-keystore`, four purposes and four names now) in its own
+    `tls-identity` subdirectory of the deployment's data directory, since
+    `PersistentKeyProvider::open_or_create`'s file name (`keystore.sealed`) is fixed
+    and two unrelated keystores sharing one directory would overwrite each other's
+    file under two different wrapping keys. `gungnir-node/src/main.rs::
+    spawn_tls_from_provider` (the node's serving identity, written beside the journal
+    as `node-identity.pem` for operators to pin) and `gungnir-app/src/session.rs::
+    link_tls_for` (the desktop's outbound identity) call these instead of building an
+    ephemeral provider directly, so each survives a restart when the keystore is
+    reachable.
+
+    **A cost found and fixed within this same entry, not carried into it: attempting
+    the persistent path is not free, and `link_tls_for` is called far more often than
+    "this desktop is connecting to a node."** It also runs for every peer link
+    `build_ingest` binds and every reconnect attempt, which means every `AppState`
+    this workspace's own test suite builds -- unconditionally issuing a persistent
+    identity there would touch the real operating-system keystore, and leave an entry
+    in it, for every one of them. Running the full suite once this way left about 190
+    real Windows Credential Manager entries behind, `KeyProviderConfig::None` desktops
+    included, none of which had asked for persistence at all. `link_tls_for` now
+    attempts the persistent path only when `security.key_provider` is already
+    `OperatingSystemKeystore` -- the one existing signal for "this deployment already
+    uses the OS keystore," reused rather than duplicated, so a desktop's TLS identity
+    gets the same custody model as its journal key and nothing else changes shape for
+    everyone who has not opted in. `gungnir-app/tests/encryption_status.rs`'s two
+    `OperatingSystemKeystore` tests now clean up the second real entry this leaves
+    behind on a reachable machine, the same way they already cleaned up the first;
+    re-running the full suite after the gate confirmed none left behind.
+    `spawn_tls_from_provider` carries no equivalent gate, because it has no
+    deployment-wide configuration to read (it is driven by environment variables) and
+    is reached only along a narrow, already-deliberately-configured path that this
+    workspace's own tests do not exercise routinely.
+
+    **Falls back honestly, and only ever fails when the fallback also does.** An
+    unreachable keystore is logged as a fallback and the same ephemeral
+    `issue_for_client` path issues instead -- DN-22 §5's disconnected-fallback rule
+    ("an unavailable keystore yields an honest unencrypted state... never a
+    claimed-but-absent encryption") applied to a TLS identity rather than to journal
+    encryption. A caller sees an error only when the ephemeral path also fails,
+    which for it means `rcgen` refusing the names -- the same condition that already
+    made `issue_for_client` fail before either function tried a keystore at all.
+
+    **What this deliberately still does not do, named rather than left ambiguous.**
+    Item 105 posed the standing question of whether the node's serving and outbound
+    roles should share one persisted identity or hold two, and called it real design
+    surface rather than a two-line fix. This entry answers neither half of it:
+    `host_tls`'s call to `issue_for_client` for the node's own peer-link identity is
+    untouched and stays ephemeral, so the node presents a persisted identity when
+    accepting connections and a fresh one every start when making them, exactly as
+    unresolved as it was before this entry. Picking either -- persisting the outbound
+    half too, or unifying it with the serving one -- remains not this change's to
+    decide.
+
+    **Verification.** Two new inline unit tests in `gungnir-security/src/
+    os_keystore.rs` confirm `wrapping_secret`'s existing `service` parameter keeps two
+    services from sharing a secret under the same account (against the mock store);
+    seven new inline unit tests in `gungnir-remote/src/identity.rs` cover a
+    `PersistentKeyProvider` issuing the same identity (the same key, the same public
+    half) across a reopen under the same passphrase -- `issue()`'s second
+    instantiation of its `KeyProvider` generic, after `P256KeyProvider` -- both new
+    functions falling back to a working ephemeral identity when the keystore
+    directory cannot even be created (a file standing where a directory belongs,
+    deterministic on every platform, independent of whether this machine has a
+    reachable keystore), the four service names being pairwise distinct, and,
+    separately, the real backend round-tripping the same key on this development
+    machine's Windows Credential Manager or the documented fallback firing --
+    reachable here, and it did round-trip for real. `gungnir-security/tests/
+    os_keystore.rs` and `gungnir-app/src/state.rs`'s one call site were updated for
+    the new `service` parameter and otherwise unchanged. `gungnir-app/tests/
+    encryption_status.rs`'s two `OperatingSystemKeystore` tests gained cleanup for the
+    second real keystore entry this entry's own gate now creates alongside the
+    existing journal-key one on a reachable machine; the full workspace suite was run
+    twice, once before the gate (confirming the roughly 190-entry cost above) and once
+    after (confirming none left).
+
+    **Dependency edges: none added.** `gungnir-remote` already depended on
+    `gungnir-security` at runtime (item 64); no crate gained `keyring` or
+    `keyring-core` directly, so §2.9's "Used by" column for both is unchanged.
+
+    **Human-owned crates touched: `gungnir-security` (the generalised constructor
+    and constant) and `gungnir-remote/src/identity.rs` (the low-trust-listed
+    transport-identity path, `docs/agentic-workflow.md`). Written and gated, not
+    signed.** `gungnir-node/src/main.rs` and `gungnir-app/src/session.rs` are
+    ordinary wiring at the two call sites, outside what either policy scopes as
+    human-owned on its own account.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and
