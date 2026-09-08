@@ -4069,6 +4069,57 @@ not by finding, for the time between whenever each item landed and this correcti
     verification gate's other half, built ahead of the GPU path it will validate
     (GAP-061, whose own self-hosted GPU runner is not yet registered either).
 
+108. **GAP-009's outbound launch warning: `LaunchWarningEvent::Issued` gets its producer**
+    (2026-09-08, DN-16 §10). `gungnir_model::events::LaunchWarningEvent::Issued`'s own
+    doc comment named it unbuilt -- "nothing in this workspace issues one... a producer
+    was not invented to make the path look built." `gungnir-app/src/launch_warning.rs::
+    declare` is that producer: a manual operator action, since nothing in the ingest path
+    can detect "something launched" on its own, the same reason `requirements.rs::
+    state_requirement` is manual for a different fact nothing else observes. It is gated
+    on `gungnir_security::actions::RELEASE_PRODUCT` rather than a new action -- GAP-065's
+    own reasoning applies unchanged: whoever may mark a product releasable is who may
+    send one, so `Role::Commander` and `Role::IntelligenceAnalyst` both already qualify.
+    `id` is this deployment's own serial, continued past whatever the journal recovered
+    (`AppState::next_launch_warning_id`); `at` is read from `state.clock` at the moment
+    of declaration, never taken from the caller. A declared warning publishes
+    `Event::LaunchWarning(LaunchWarningEvent::Issued(..))` to the event bus and
+    republishes the whole issued list to the exchange queue GAP-065 built
+    (`ExchangeItem::Warnings`), the same unfiltered-at-source, gated-at-serve shape
+    `handoffs.rs::issue_for` already uses.
+
+    **Recovery is a straight append.** Unlike a requirement or a handoff, a launch
+    warning has no lifecycle -- once issued it is never withdrawn, amended, or answered
+    -- so `launch_warning::recover` folds every `Issued` event across journal sessions
+    oldest-first with no fold-by-id, structurally rather than by a check that could be
+    forgotten. `AppState` recovers the issued list and a `Recovered` outcome
+    (`NothingIssued`/`FromJournal`/`Unreadable`) alongside `next_launch_warning`, mirroring
+    `recover_requirements_or_alert`.
+
+    **Kept apart from DN-03's warnings**, the same rule DN-16 §9 already states: this
+    module never touches `gungnir_workflow::warning::Warning`, an obligation this
+    deployment owes an asset and raised only by `WarningLedger::evaluate`.
+    `LaunchWarningReport` is a claim about the world outside this deployment, and DN-18's
+    entry (item 102) had wrongly named `Warning` as the type still needing a
+    releasability field when `LaunchWarningReport` already had one from DN-16 §9
+    (amendment 1, signed 2026-09-07) -- corrected in the gap register alongside this.
+
+    **What this does not do.** No wireframe assigns a control for `declare`, so an
+    operator has no caller for it outside tests; the producer exists and the panel does
+    not, named rather than left to be discovered as a silent gap.
+
+    **Verification.** `gungnir-app/tests/launch_warning.rs`, seven tests against a real
+    `AppState` and a real journal: the `Forbidden`/`EmptyDescription` refusals record
+    nothing, two declarations get distinct ids, a declared warning survives a restart
+    read back through a fresh `FileEventJournal`, and a second desktop life continues the
+    id serial rather than colliding with the first. The last two install a
+    `ReplayClockAuthority` rather than the real wall clock, the same reason
+    `anomalies.rs` does: an exact-equality comparison across a save-and-reopen round trip
+    cannot tolerate two wall-clock reads at `f64` precision landing on different ticks.
+
+    **Not human-owned.** `gungnir-app` is not on the low-trust list; `RELEASE_PRODUCT` is
+    reused rather than defined, so no `gungnir-security` edge is touched, and nothing
+    here reaches `gungnir-api`. No dependency edge changed.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

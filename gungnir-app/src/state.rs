@@ -245,6 +245,16 @@ pub struct AppState {
     /// The most recent refused requirement action, shown by PN-15.
     pub requirement_error: Option<String>,
 
+    /// Launch warnings this deployment has declared (GAP-009), recovered from the
+    /// journal at start-up the same way [`Self::requirements`] is: an append-only
+    /// record, since a declared warning is never withdrawn or amended.
+    pub issued_launch_warnings: Vec<gungnir_model::LaunchWarningReport>,
+    /// Where the list came from, so an empty one can say which kind of empty it is.
+    pub launch_warnings_recovered: crate::launch_warning::Recovered,
+    /// Serial for [`AppState::next_launch_warning_id`]. Private for the same reason
+    /// `next_requirement` is.
+    next_launch_warning: u64,
+
     /// The baseline file this desktop loaded, when it loaded one (GAP-071).
     ///
     /// `None` when it started from the built-in default, which is not the same as a
@@ -443,6 +453,8 @@ impl AppState {
 
         let (requirements, recovered, next_requirement) =
             recover_requirements_or_alert(&journal, &mut alerts);
+        let (issued_launch_warnings, launch_warnings_recovered, next_launch_warning) =
+            recover_launch_warnings_or_alert(&journal, &mut alerts);
 
         // GAP-086: the registry the baseline describes, built through the real promotion
         // state machine. A deployment whose promoted candidate fails the gate does not stop
@@ -576,6 +588,9 @@ impl AppState {
             recovered,
             next_requirement,
             requirement_error: None,
+            issued_launch_warnings,
+            launch_warnings_recovered,
+            next_launch_warning,
             config_store,
             audit: InMemoryAuditLog::new(),
             approvals: InMemoryApprovalWorkflow::with_settings(decision_settings),
@@ -660,6 +675,15 @@ impl AppState {
     pub fn next_requirement_id(&mut self) -> gungnir_model::RequirementId {
         self.next_requirement += 1;
         gungnir_model::RequirementId(self.next_requirement)
+    }
+
+    /// Take the next launch-warning identifier (GAP-009). A plain per-deployment
+    /// serial, the same shape [`Self::next_requirement_id`] is, since a
+    /// `LaunchWarningReport.id` needs only local uniqueness -- a peer disambiguates by
+    /// its own name alongside it (`PeerLaunchWarning::peer`), not by this string alone.
+    pub fn next_launch_warning_id(&mut self) -> String {
+        self.next_launch_warning += 1;
+        format!("launch-warning-{}", self.next_launch_warning)
     }
 
     /// The role this desktop is signed in as.
@@ -1184,6 +1208,31 @@ fn recover_requirements(
     let (requirements, recovered) = crate::requirements::recover(journal);
     let next = requirements.iter().map(|r| r.id.0).max().unwrap_or(0);
     (requirements, recovered, next)
+}
+
+/// Launch warnings declared in earlier sessions (GAP-009): recovered the same way
+/// requirements are, and for the same reason -- a warning declared on Monday is still
+/// on the record on Tuesday. A journal that cannot be read for them is an alert.
+fn recover_launch_warnings_or_alert(
+    journal: &FileEventJournal,
+    alerts: &mut Vec<String>,
+) -> (
+    Vec<gungnir_model::LaunchWarningReport>,
+    crate::launch_warning::Recovered,
+    u64,
+) {
+    let (issued, recovered) = crate::launch_warning::recover(journal);
+    if let crate::launch_warning::Recovered::Unreadable { reason } = &recovered {
+        alerts.push(format!(
+            "Issued launch warnings could not be recovered ({reason}); what this \
+             deployment has already declared is unknown"
+        ));
+    }
+    // Append-only and never updated by id (unlike a requirement), so the count
+    // recovered is exactly the serial to continue from.
+    #[allow(clippy::cast_possible_truncation)]
+    let next = issued.len() as u64;
+    (issued, recovered, next)
 }
 
 /// The gateway with its allow-list and radar adapters (GAP-001), the radar feeds' service

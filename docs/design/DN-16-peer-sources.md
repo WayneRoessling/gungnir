@@ -1,10 +1,11 @@
 # DN-16 Peer track and warning ingestion
 
-Closes GAP-009. Status: first draft, 2026-09-05. **Corrected 2026-09-08: this line said
-"design only; no code exists" long after it stopped being true.** §3's `PeerOrigin` and
-`PeerSourceAdapter` are built (`gungnir-model/src/exchange.rs`, `gungnir-ingest/src/
-adapters/peer.rs`), and §9's launch-warning types are built and signed. What remains is GAP-009's
-own: no code constructs a `LaunchWarningReport`, because no producer exists.
+Closes GAP-009. Status: first draft, 2026-09-05. **Corrected 2026-09-08, again: the line
+below said the producer was what remained, and §10 (amendment 2) is that producer.** §3's
+`PeerOrigin` and `PeerSourceAdapter` are built (`gungnir-model/src/exchange.rs`,
+`gungnir-ingest/src/adapters/peer.rs`), §9's launch-warning types are built and signed, and
+§10 gives `LaunchWarningReport` its one caller: `gungnir-app/src/launch_warning.rs::declare`,
+a manual operator action gated on `RELEASE_PRODUCT`.
 
 ## 1. The gap and the thread step it blocks
 
@@ -170,6 +171,60 @@ canonical model made by the crate that publishes it rather than by a note, so it
 made here. **A warning received from one peer is never forwarded to another**, whatever
 the agreement says: a partner able to read our inbound warnings can read our peer list off
 the stream.
+
+## 10. Amendment 2: the outbound producer (2026-09-08)
+
+§9 gave `LaunchWarningReport` a shape and an exchange gate; nothing built the one thing
+that constructs one. The type's own doc comment said as much: "nothing in this workspace
+issues one... a producer was not invented to make the path look built." This closes that.
+
+**No automation exists to detect "something launched."** There is no sensor, no
+algorithm, nothing in the ingest path that could raise a launch warning on its own --
+unlike DN-03's asset-obligation warnings, which `WarningLedger::evaluate` raises from a
+tracked picture the deployment already holds. A launch warning is a claim about the world
+outside this deployment, sourced from wherever an operator's own situational awareness
+comes from off-system. So `gungnir-app/src/launch_warning.rs::declare` is a manual
+operator action, the same shape `requirements.rs::state_requirement` already is for a
+different fact nothing else observes: a person asserting something the system did not
+detect on its own. It was not automated because nothing was invented to look automated
+where nothing exists to drive it.
+
+**Gated on `RELEASE_PRODUCT`, not a new action.** A launch warning is an intelligence
+product meant for a peer, exactly the case GAP-065 reasoned about when it granted
+`PUBLISH_EXCHANGE` alongside `RELEASE_PRODUCT`: whoever may mark a product releasable is
+who may send one. `declare` reuses that grant rather than minting
+`DECLARE_LAUNCH_WARNING`, keeping one action for one kind of decision instead of two names
+for the same authority. `Role::Commander` and `Role::IntelligenceAnalyst` both hold it.
+
+**`id` and `at` are never taken from the caller.** `id` is this deployment's own serial,
+continued past whatever the journal recovered (`AppState::next_launch_warning_id`, the
+same recovery-continues-the-serial shape `requirements.rs` already uses); `at` is the
+clock at the moment of declaration, not a time the operator could set to something that
+had already passed. A blank or whitespace-only `what` is refused before either is issued.
+
+**Recovery is a straight append, never an update by id.** Unlike a requirement or a
+handoff, a launch warning has no lifecycle -- once issued it is never withdrawn, amended,
+or answered -- so `launch_warning::recover` folds every `Issued` event across sessions
+oldest-first with no fold-by-id, and says so structurally rather than by a check that
+could be forgotten.
+
+**Republished to the exchange on every declaration**, the same shape
+`handoffs.rs::issue_for`/`publish_to_exchange` already use for `Handoffs`: the whole
+issued list, unfiltered by marking, since `NodeApi::exchange_for` applies that gate per
+party at serve time.
+
+**No UI panel is assigned.** `declare` is reachable from `gungnir-app`'s library surface;
+no wireframe names a launch-warning declaration control, and inventing one was not this
+note's decision to make. An operator today would need a caller this workspace does not
+yet provide one for outside tests -- recorded so the gap is visible rather than implied
+closed by the producer existing.
+
+**Not human-owned, and so not signed.** `gungnir-app` is not on the low-trust list;
+`RELEASE_PRODUCT` is reused rather than defined, so no `gungnir-security` edge is touched;
+nothing here reaches `gungnir-api`. The engineering stands on its own tests
+(`gungnir-app/tests/launch_warning.rs`) rather than on a signature, the same way GAP-065
+recorded its outbox and producer as "ordinary transport and wiring work" separately from
+the one new action that did need the owner's sign-off.
 
 ## Traceability
 

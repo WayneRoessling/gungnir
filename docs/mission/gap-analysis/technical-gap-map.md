@@ -118,7 +118,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 
 | Gap | Capability | Sev | Effort | Target | Tracked in |
 |---|---|---|---|---|---|
-| GAP-009 Peer track and warning ingestion | CAP-1.6 | 4 | L | I4 | Added to `../../../ARCHITECTURE.md` §10 by this register |
+| GAP-009 Peer track and warning ingestion | CAP-1.6 | 4 | L | I4 | `../../design/DN-16-peer-sources.md` §10 |
 | GAP-040 Effector handoff endpoint | CAP-4.4 | 4 | M | I4 | `../../verification-capability-table.md` §2, `gungnir-api` handoff row |
 | GAP-041 API transport | CAP-7.1, CAP-7.3, CAP-5.4 | 5 | L | I2 | `../../../ARCHITECTURE.md` §10 item 59 |
 | GAP-050 Mid-session failover and reconciliation gate | CAP-5.4 | 4 | M | I4 | `../../verification-capability-table.md` §2, cross-layer reconciliation row |
