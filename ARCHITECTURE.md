@@ -4120,6 +4120,81 @@ not by finding, for the time between whenever each item landed and this correcti
     reused rather than defined, so no `gungnir-security` edge is touched, and nothing
     here reaches `gungnir-api`. No dependency edge changed.
 
+109. **GAP-015's Gaussian-mixture CPHD filter, written and gated, not signed**
+    (2026-09-08). `gungnir-rfs::CphdFilter`'s own stub doc comment named exactly this
+    gap: `PhdFilter::cardinality` is a mean and nothing more, and a CPHD propagates the
+    whole distribution over the target count. `predict` is the PHD's own intensity
+    predict (survival scaling and births are the same step regardless of which filter
+    carries the mixture) plus a cardinality half: the prior distribution binomially
+    thinned by `p_S`, convolved with a Poisson birth count whose mean is the summed
+    weight of this scan's births -- a named modelling choice, since the birth
+    components carry no separate count distribution of their own. `update` is the
+    closed-form Gaussian-mixture CPHD recursion (Vo, Vo and Cantoni, "Analytic
+    Implementations of the Cardinalized Probability Hypothesis Density Filter", IEEE
+    TSP 55(7), 2007): every candidate component's mean and covariance is identical to
+    `PhdFilter::update`'s own Kalman-updated candidates, and what CPHD changes is the
+    weight -- a cardinality-derived correction computed from the elementary symmetric
+    functions of the detections' predictive likelihoods against the prior cardinality
+    distribution, rather than PHD's simple normalisation by clutter plus the summed
+    weights. `extract_tracks` commits to the strongest components up to the
+    cardinality distribution's mode, the standard CPHD extraction, rather than
+    reusing PHD's per-component threshold on a filter that now knows more than a mean.
+
+    **The recursion was re-derived, not transcribed, and independently checked before
+    any Rust was written.** Vo-Vo-Cantoni's closed form is dense enough that copying
+    it from memory carries real risk of a subtle index or exponent error surviving
+    into gated code; it was instead rebuilt from the basic multi-object likelihood
+    (the probability of observing a given measurement set under a hypothesised target
+    count, summed over every association and marginalised through the mixture's own
+    conjugacy) and checked four ways before being trusted with a fixture: against a
+    literal brute-force enumeration of every target-to-measurement association,
+    independent of the elementary-symmetric-function bookkeeping the closed form
+    uses; against the identity that an updated intensity's integral must equal the
+    updated cardinality distribution's mean, which any correct posterior satisfies by
+    construction; against reducing exactly to the plain GM-PHD update when the
+    cardinality prior is Poisson, since the PHD filter is the CPHD filter restricted
+    to that one assumption; and, as the property this filter exists for rather than
+    an algebraic check, a 500-trial Monte Carlo comparison showing materially lower
+    cardinality-estimate variance than PHD under frequent missed detections.
+
+    **No library oracle exists for this row, confirmed rather than assumed.** Section
+    2 named Stone Soup's GM-CPHD; Stone Soup 1.9.1 -- the same pinned version already
+    driven for real for the PHD row beside this one -- has no CPHD updater at all,
+    checked by import (`stonesoup.updater.pointprocess` exports only `PHDUpdater`).
+    Unlike the PHD row, where the library exists and was found to disagree, there is
+    nothing here to disagree with or agree with. `testdata/oracles/tools/
+    gen_cphd_fixtures.py` carries the re-derivation and all four checks above,
+    running at import time and refusing to write a fixture if any of them fail;
+    `gungnir-rfs/tests/cphd_diff.rs` asserts the worst brute-force disagreement stays
+    recorded in the fixture, the same role the PHD fixture's Stone Soup disagreement
+    fields play, so a regeneration cannot quietly drop the evidence.
+
+    **Corrected alongside this**: `docs/verification-capability-table.md`'s §1 row
+    had been narrowed to "PHD filter" when CPHD was not yet built, even though the
+    crate's own module doc comment had always cited it as "PHD / CPHD filter" -- the
+    row name is restored to match what the code already cited, per this table's own
+    rule that row names are cited from the doc comments rather than the other way
+    round. `docs/gungnir-capabilities.md`'s business-facing description of this row
+    also still named Stone Soup as the intended verification method for both filters;
+    corrected to name what actually verified each.
+
+    **Verification.** `gungnir-rfs/tests/cphd_diff.rs` (three tests: the closed form
+    against three multi-scan, multi-target scenes to the row's 1e-3 tolerance on
+    cardinality mean and intensity and exact agreement on cardinality mode; the
+    cross-check evidence stays recorded; the fixture exercises real merging) plus
+    seven new inline unit tests covering construction, the cardinality distribution
+    summing to one across scans with clutter and missed detections, convergence and
+    fade of the cardinality mode, and the Monte Carlo variance comparison against
+    `PhdFilter` over the same scripted detection stream.
+
+    **Human-owned crate, and so written and gated rather than signed.**
+    `gungnir-rfs` is reached by `docs/agentic-workflow.md`'s numerical-stability
+    clause the same way `gungnir-filters`, `gungnir-association` and
+    `gungnir-track-fusion` already are (item 94's own record); this entry stands on
+    its verification rather than a signature, pending the owner's review. No
+    dependency edge changed and no new external crate: only `gungnir-rfs`'s own
+    `nalgebra` and `thiserror`, already reachable, are used.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

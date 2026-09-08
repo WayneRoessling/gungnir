@@ -12,13 +12,21 @@
 //!
 //! # What is built here, and what is not
 //!
-//! **Built and gated: the Gaussian-mixture PHD filter** ([`PhdFilter`]).
+//! **Built and gated: the Gaussian-mixture PHD filter** ([`PhdFilter`]) **and the
+//! Gaussian-mixture CPHD filter** ([`CphdFilter`], GAP-009's sibling row GAP-015).
 //!
 //! **Not built, and returning an explicit error rather than a plausible answer**: the
-//! CPHD's separate cardinality distribution ([`CphdFilter`]), and the labelled filters
-//! [`GlmbFilter`] and [`LmbFilter`]. Each is its own §2 row and each will want its own
-//! oracle comparison. They are named individually rather than behind one "not
-//! implemented" so a reader can tell which of the four this build has.
+//! labelled filters [`GlmbFilter`] and [`LmbFilter`]. Each is its own §2 row and each
+//! will want its own oracle comparison. They are named individually rather than behind
+//! one "not implemented" so a reader can tell which of the four this build has.
+//!
+//! **The CPHD build is written and gated, not signed.** It is reached by
+//! `docs/agentic-workflow.md`'s numerical-stability clause the same way the PHD filter
+//! is (`ARCHITECTURE.md` §10), and its own oracle -- there being no library one; see
+//! [`CphdFilter`]'s doc comment -- is this crate's own hand derivation, independently
+//! checked against a brute-force enumeration and against known reductions before any
+//! Rust was written. That is real verification, not a substitute for the owner's
+//! review this class of code still needs before it is signed.
 //!
 //! # What a PHD filter is, and why the cardinality is the interesting output
 //!
@@ -142,29 +150,524 @@ pub struct PhdFilter {
 
 /// Cardinalized PHD: the PHD plus an explicit distribution over the target count.
 ///
-/// **Not implemented.** The PHD's cardinality estimate is the sum of the intensity
-/// weights, which is its *mean* and nothing more; a CPHD propagates the whole
-/// distribution, which is what makes it far less prone to the PHD's characteristic
-/// cardinality swings when detections are missed. That is a separate §2 row with its own
-/// oracle and it has not been written.
+/// The PHD's cardinality estimate ([`PhdFilter::cardinality`]) is the sum of the
+/// intensity weights, which is that distribution's *mean* and nothing more; a mean of
+/// 2.4 does not say whether the truth is "almost always 2, sometimes 3" or "often 0,
+/// occasionally 5" -- two beliefs a commander would act on very differently. A CPHD
+/// propagates the whole distribution ([`Self::cardinality_distribution`]), which is also
+/// what makes it far less prone to the PHD's characteristic cardinality swings when
+/// detections are missed (`gungnir-rfs/tests/cphd_diff.rs` measures this directly rather
+/// than asserting it).
+///
+/// # No library oracle exists for this row
+///
+/// `docs/verification-capability-table.md` §2 named Stone Soup's GM-CPHD as the
+/// intended oracle. Stone Soup 1.9.1 -- the pinned version, already driven for real for
+/// the PHD row next to this one -- has no CPHD updater at all: `stonesoup.updater.
+/// pointprocess` exports `PHDUpdater` and nothing else, checked directly rather than
+/// assumed from the package's name. So unlike the PHD row, where the library exists and
+/// was found to disagree, here there is no library implementation to compare against,
+/// confirmed rather than skipped.
+///
+/// The oracle is therefore this crate's own derivation, in
+/// `testdata/oracles/tools/gen_cphd_fixtures.py`, built and checked in four
+/// independent ways before being trusted to gate anything: against a literal
+/// brute-force enumeration of every target-to-measurement association (not the same
+/// elementary-symmetric-function bookkeeping the closed form uses, so an error in that
+/// bookkeeping would not be repeated by the check); against the identity that the
+/// updated intensity's integral must equal the updated cardinality distribution's mean,
+/// which any correct PHD/CPHD posterior satisfies by construction; against reducing to
+/// the plain GM-PHD update exactly when the cardinality prior is Poisson, since the PHD
+/// filter is the CPHD filter restricted to that assumption; and against a Monte Carlo
+/// comparison showing materially lower cardinality-estimate variance than PHD under
+/// frequent missed detections, which is the property this filter exists for rather than
+/// an incidental one.
+///
+/// # The birth cardinality distribution
+///
+/// [`Self::predict`] needs a count distribution for however many targets are born this
+/// scan, and `births` supplies Gaussian shapes, not a count distribution. This filter
+/// assumes the birth count is **Poisson, with mean equal to the summed weight of
+/// `births`** -- the same distributional family the clutter model already assumes
+/// elsewhere in this filter, and the standard choice in the CPHD literature. A birth
+/// intensity summing to 0.6 predicts a birth count centred there, not a certainty of
+/// exactly zero or exactly one.
 #[derive(Debug, Clone)]
 pub struct CphdFilter {
+    /// The intensity, in the same Gaussian-mixture representation [`PhdFilter`] uses.
+    /// Once [`Self::update`] has run, this mixture's own weights sum to the posterior
+    /// cardinality *mean* only -- [`Self::cardinality_distribution`] is where the rest
+    /// of what this filter knows about the count lives.
     pub phd: PhdFilter,
+    /// `cardinality_dist[n]` is the probability there are exactly `n` targets, for `n`
+    /// from 0 to this filter's truncation bound ([`Self::max_cardinality`]).
     pub cardinality_dist: Vec<f64>,
 }
 
 impl CphdFilter {
+    /// An empty CPHD: no targets, certain of it (`cardinality_dist == [1.0, 0.0, ...]`).
+    ///
+    /// `max_cardinality` truncates the cardinality distribution's support. The update
+    /// and predict steps below cost `O(max_cardinality)` work per detection, so this is
+    /// a real budget, not a formality; the scenes this crate is validated against
+    /// (`docs/scenario-crate-narrative.md` Scenario 4) top out at a few dozen targets, so
+    /// a bound comfortably above that is generous without being unbounded.
+    ///
     /// # Errors
     ///
-    /// Always. See the type's own documentation: this is a distinct filter, not a
-    /// setting on the PHD, and pretending the PHD's weight sum is a cardinality
-    /// distribution would be the silent stub `CLAUDE.md` forbids.
-    pub fn cardinality_distribution(&self) -> Result<&[f64], RfsError> {
-        Err(RfsError::NotImplemented {
-            what: "the CPHD's cardinality distribution",
-            waiting_on: "its own §2 row and a Stone Soup GM-CPHD oracle comparison",
+    /// [`RfsError::MalformedScene`] when `settings` do not describe a scene (the same
+    /// check [`PhdFilter::new`] makes), or when `max_cardinality` is 0 -- a distribution
+    /// over target counts that admits only zero, forever, is not one.
+    pub fn new(
+        settings: PhdSettings,
+        h: SMatrix<f64, M, N>,
+        r: SMatrix<f64, M, M>,
+        max_cardinality: usize,
+    ) -> Result<Self, RfsError> {
+        if max_cardinality == 0 {
+            return Err(RfsError::MalformedScene {
+                what: "a cardinality distribution truncated to zero targets is not one",
+            });
+        }
+        let phd = PhdFilter::new(settings, h, r)?;
+        let mut cardinality_dist = vec![0.0; max_cardinality + 1];
+        cardinality_dist[0] = 1.0;
+        Ok(Self {
+            phd,
+            cardinality_dist,
         })
     }
+
+    /// The truncation bound: [`Self::cardinality_distribution`] holds this many entries
+    /// past zero.
+    #[must_use]
+    pub fn max_cardinality(&self) -> usize {
+        self.cardinality_dist.len().saturating_sub(1)
+    }
+
+    /// The full posterior distribution over the target count: `[n]` is the probability
+    /// there are exactly `n` targets, `n` from 0 to [`Self::max_cardinality`].
+    #[must_use]
+    pub fn cardinality_distribution(&self) -> &[f64] {
+        &self.cardinality_dist
+    }
+
+    /// The distribution's mean -- comparable to [`PhdFilter::cardinality`], and enough
+    /// for a caller that only wants a point estimate rather than the whole shape.
+    #[must_use]
+    pub fn cardinality_mean(&self) -> f64 {
+        self.cardinality_dist
+            .iter()
+            .enumerate()
+            .map(|(n, p)| {
+                #[allow(clippy::cast_precision_loss)]
+                let n = n as f64;
+                n * p
+            })
+            .sum()
+    }
+
+    /// The most probable target count: the mode of [`Self::cardinality_distribution`],
+    /// and what [`Self::extract_tracks`] commits to.
+    #[must_use]
+    pub fn cardinality_map(&self) -> usize {
+        self.cardinality_dist
+            .iter()
+            .enumerate()
+            .fold((0_usize, f64::NEG_INFINITY), |(best_n, best_p), (n, &p)| {
+                if p > best_p {
+                    (n, p)
+                } else {
+                    (best_n, best_p)
+                }
+            })
+            .0
+    }
+
+    /// Propagate the intensity and the cardinality distribution forward together.
+    ///
+    /// The intensity half is exactly [`PhdFilter::predict`] -- survival at `p_S` through
+    /// the motion model, births at full weight -- because the Gaussian-mixture predict
+    /// step does not depend on the cardinality distribution; only the update couples
+    /// them. The cardinality half binomially thins the current distribution by `p_S`
+    /// (each of however many targets survives independently) and convolves the result
+    /// with the birth cardinality distribution the type's own documentation names.
+    ///
+    /// # Errors
+    ///
+    /// [`RfsError::NotFinite`] for a birth component that is not a number, from the same
+    /// check [`PhdFilter::predict`] makes.
+    pub fn predict<Motion>(
+        &mut self,
+        motion: &Motion,
+        dt: f64,
+        births: &[GaussianComponent],
+    ) -> Result<(), RfsError>
+    where
+        Motion: MotionModel<N>,
+    {
+        self.phd.predict(motion, dt, births)?;
+        let birth_mean: f64 = births.iter().map(|c| c.weight).sum();
+        self.cardinality_dist = predict_cardinality(
+            &self.cardinality_dist,
+            self.phd.settings.probability_of_survival,
+            birth_mean,
+        );
+        Ok(())
+    }
+
+    /// Update the intensity and the cardinality distribution together with this scan's
+    /// detections.
+    ///
+    /// This is the Gaussian-mixture CPHD update (Vo, Vo and Cantoni, "Analytic
+    /// Implementations of the Cardinalized Probability Hypothesis Density Filter", IEEE
+    /// Transactions on Signal Processing 55(7), 2007), re-derived and independently
+    /// checked in `testdata/oracles/tools/gen_cphd_fixtures.py` rather than transcribed
+    /// -- see [`Self`]'s own doc comment for what checked it. Every candidate
+    /// component's *shape* (mean and covariance) is identical to [`PhdFilter::update`]'s:
+    /// a missed-detection candidate is unmoved, and a candidate matched to detection `z`
+    /// is the standard Kalman update of that component by `z`. What CPHD changes is the
+    /// *weight*: instead of PHD's per-detection normalisation by `clutter + Σ weights`,
+    /// every missed-detection candidate is scaled by one cardinality-derived factor and
+    /// every `z`-matched candidate by another (and each detection can get its own),
+    /// computed from the elementary symmetric functions of the detections' predictive
+    /// likelihoods against the prior cardinality distribution.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`PhdFilter::update`] for a malformed detection or a singular
+    /// innovation covariance, plus [`RfsError::MalformedScene`] when the prior
+    /// cardinality distribution and `p_D` are jointly inconsistent with this scan ever
+    /// having been observed (only reachable at `p_D`'s extreme, and named here rather
+    /// than dividing by the zero it would otherwise produce).
+    // One cohesive derivation (see the module and type doc comments for the maths);
+    // splitting it at an arbitrary line count would scatter the tightly coupled local
+    // state (`prepared`, `q`, `xi`, the two `Lambda` tables) across function
+    // boundaries rather than make it clearer.
+    #[allow(clippy::too_many_lines)]
+    pub fn update(&mut self, detections: &[SVector<f64, M>]) -> Result<(), RfsError> {
+        for z in detections {
+            if !z.iter().all(|v| v.is_finite()) {
+                return Err(RfsError::NotFinite {
+                    what: "a detection",
+                });
+            }
+        }
+
+        let settings = self.phd.settings;
+        let n_max = self.max_cardinality();
+        let total_weight: f64 = self.phd.intensity_components.iter().map(|c| c.weight).sum();
+
+        // Per component, the same Kalman-update quantities `PhdFilter::update` prepares:
+        // gain, innovation inverse and its Cholesky determinant (for the likelihood
+        // normaliser), the updated covariance (shared by every detection, since the
+        // linear-Gaussian posterior covariance does not depend on which measurement is
+        // used), and the predicted measurement.
+        let mut prepared = Vec::with_capacity(self.phd.intensity_components.len());
+        for component in &self.phd.intensity_components {
+            let pht = component.cov * self.phd.h.transpose();
+            let s = self.phd.h * pht + self.phd.r;
+            let Some(s_inv) = s.try_inverse() else {
+                return Err(RfsError::SingularCovariance {
+                    what: "an innovation covariance",
+                });
+            };
+            let Some(chol) = s.cholesky() else {
+                return Err(RfsError::SingularCovariance {
+                    what: "an innovation covariance",
+                });
+            };
+            let determinant: f64 = chol.l().diagonal().iter().map(|d| d * d).product();
+            let k = pht * s_inv;
+            let i_kh = SMatrix::<f64, N, N>::identity() - k * self.phd.h;
+            let cov = symmetrize(
+                &(i_kh * component.cov * i_kh.transpose() + k * self.phd.r * k.transpose()),
+            );
+            prepared.push((k, s_inv, determinant, cov, self.phd.h * component.mean));
+        }
+
+        #[allow(clippy::cast_precision_loss)]
+        let m_dim = M as f64;
+        let likelihood_at = |z: &SVector<f64, M>,
+                             s_inv: &SMatrix<f64, M, M>,
+                             determinant: f64,
+                             predicted_z: &SVector<f64, M>|
+         -> f64 {
+            let y = z - predicted_z;
+            let quadratic = (y.transpose() * s_inv * y)[(0, 0)];
+            let normaliser = ((2.0 * std::f64::consts::PI).powf(m_dim) * determinant).sqrt();
+            (-0.5 * quadratic).exp() / normaliser
+        };
+
+        // q_j: the predictive likelihood of detection j under the NORMALISED mixture --
+        // zero, rather than an undefined 0/0, when there is no believed intensity at
+        // all to predict anything.
+        let q: Vec<f64> = detections
+            .iter()
+            .map(|z| {
+                if total_weight <= 0.0 {
+                    return 0.0;
+                }
+                self.phd
+                    .intensity_components
+                    .iter()
+                    .zip(&prepared)
+                    .map(|(c, (_, s_inv, determinant, _, predicted_z))| {
+                        (c.weight / total_weight)
+                            * likelihood_at(z, s_inv, *determinant, predicted_z)
+                    })
+                    .sum()
+            })
+            .collect();
+        let xi: Vec<f64> = q.iter().map(|&qj| qj / settings.clutter_density).collect();
+
+        let e_full = elementary_symmetric(&xi);
+        let e_leave_one_out = elementary_symmetric_leave_one_out(&xi);
+
+        let lambda = |n: usize, e: &[f64]| -> f64 {
+            let r_max = n.min(e.len() - 1);
+            // n and r are cardinalities bounded by `max_cardinality`, nowhere near
+            // i32::MAX in any scene this filter is meant for.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            (0..=r_max)
+                .map(|r| {
+                    falling_factorial(n, r)
+                        * (1.0 - settings.probability_of_detection).powi((n - r) as i32)
+                        * settings.probability_of_detection.powi(r as i32)
+                        * e[r]
+                })
+                .sum()
+        };
+
+        let lam: Vec<f64> = (0..=n_max).map(|n| lambda(n, &e_full)).collect();
+        let lam_leave_one_out: Vec<Vec<f64>> = e_leave_one_out
+            .iter()
+            .map(|e| (0..=n_max).map(|n| lambda(n, e)).collect())
+            .collect();
+
+        let z_norm: f64 = self
+            .cardinality_dist
+            .iter()
+            .zip(&lam)
+            .map(|(p, l)| p * l)
+            .sum();
+        if !z_norm.is_finite() || z_norm <= 0.0 {
+            return Err(RfsError::MalformedScene {
+                what: "no cardinality is consistent with this scan under the prior and p_D",
+            });
+        }
+
+        let posterior_cardinality: Vec<f64> = self
+            .cardinality_dist
+            .iter()
+            .zip(&lam)
+            .map(|(p, l)| p * l / z_norm)
+            .collect();
+
+        #[allow(clippy::cast_precision_loss)]
+        let weighted_shift = |lam_at: &[f64]| -> f64 {
+            self.cardinality_dist
+                .iter()
+                .enumerate()
+                .map(|(n, &p)| {
+                    if n == 0 {
+                        0.0
+                    } else {
+                        n as f64 * p * lam_at[n - 1]
+                    }
+                })
+                .sum()
+        };
+        let a = weighted_shift(&lam);
+        let b: Vec<f64> = lam_leave_one_out
+            .iter()
+            .map(|lam_j| weighted_shift(lam_j))
+            .collect();
+
+        let mut updated =
+            Vec::with_capacity(self.phd.intensity_components.len() * (1 + detections.len()));
+        if total_weight > 0.0 {
+            let miss_scale =
+                (1.0 - settings.probability_of_detection) * (a / z_norm) / total_weight;
+            for component in &self.phd.intensity_components {
+                updated.push(GaussianComponent {
+                    weight: component.weight * miss_scale,
+                    ..*component
+                });
+            }
+            for (j, z) in detections.iter().enumerate() {
+                let det_scale = settings.probability_of_detection * (b[j] / z_norm)
+                    / (total_weight * settings.clutter_density);
+                for (component, (k, s_inv, determinant, cov, predicted_z)) in
+                    self.phd.intensity_components.iter().zip(&prepared)
+                {
+                    let lik = likelihood_at(z, s_inv, *determinant, predicted_z);
+                    let y = z - predicted_z;
+                    updated.push(GaussianComponent {
+                        weight: component.weight * lik * det_scale,
+                        mean: component.mean + k * y,
+                        cov: *cov,
+                    });
+                }
+            }
+        }
+
+        self.phd.intensity_components = updated;
+        self.phd.prune_and_merge();
+        self.cardinality_dist = posterior_cardinality;
+        Ok(())
+    }
+
+    /// Commit to a target set: the [`Self::cardinality_map`] strongest components,
+    /// exactly the number the cardinality distribution's mode says there are.
+    ///
+    /// **Not [`PhdFilter::extract_tracks`]'s per-component threshold.** That rule is the
+    /// right one for a filter whose only cardinality knowledge is a mean; this filter
+    /// knows the whole distribution, and committing to its mode's count directly is the
+    /// standard CPHD extraction rather than an arbitrary per-component cutoff applied to
+    /// a filter that has more to say. The identifiers are minted fresh every call for
+    /// the same reason [`PhdFilter::extract_tracks`]'s are: this is still a PHD-family
+    /// filter, and it carries no identity across scans.
+    ///
+    /// # Errors
+    ///
+    /// [`RfsError::MalformedScene`] if a component's weight is not finite.
+    pub fn extract_tracks(&self) -> Result<Vec<Track>, RfsError> {
+        let mut components: Vec<&GaussianComponent> =
+            self.phd.intensity_components.iter().collect();
+        for component in &components {
+            if !component.weight.is_finite() {
+                return Err(RfsError::MalformedScene {
+                    what: "a component's weight is not finite",
+                });
+            }
+        }
+        components.sort_by(|a, b| b.weight.total_cmp(&a.weight));
+        let count = self.cardinality_map().min(components.len());
+        Ok(components
+            .into_iter()
+            .take(count)
+            .enumerate()
+            .map(|(index, component)| Track {
+                id: TrackId(u64::try_from(index).unwrap_or(u64::MAX)),
+                status: TrackStatus::Confirmed,
+                state: component.mean,
+                covariance: component.cov,
+                misses_since_update: 0,
+                hits: 1,
+            })
+            .collect())
+    }
+}
+
+/// The predicted cardinality distribution: `previous` binomially thinned by
+/// `p_survival` (each target survives independently), convolved with a Poisson birth
+/// distribution of mean `birth_mean`. `previous.len() - 1` is the truncation bound,
+/// carried through unchanged.
+fn predict_cardinality(previous: &[f64], p_survival: f64, birth_mean: f64) -> Vec<f64> {
+    let n_max = previous.len() - 1;
+    let mut thinned = vec![0.0; n_max + 1];
+    for (l, &p_l) in previous.iter().enumerate() {
+        if p_l == 0.0 {
+            continue;
+        }
+        #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+        for (j, slot) in thinned.iter_mut().enumerate().take(l + 1) {
+            let term = binomial(l, j)
+                * p_survival.powi(j as i32)
+                * (1.0 - p_survival).powi((l - j) as i32)
+                * p_l;
+            *slot += term;
+        }
+    }
+    let birth = poisson_pmf(birth_mean, n_max);
+    let mut out = vec![0.0; n_max + 1];
+    for (n, slot) in out.iter_mut().enumerate() {
+        for j in 0..=n {
+            *slot += birth[n - j] * thinned[j];
+        }
+    }
+    out
+}
+
+/// The Poisson PMF at `0..=n_max`, built by the standard ratio recursion
+/// (`p(n) = p(n-1) * mean / n`) rather than raw factorials, so it stays finite for a
+/// truncation bound where `n_max!` would not.
+fn poisson_pmf(mean: f64, n_max: usize) -> Vec<f64> {
+    let mut out = vec![0.0; n_max + 1];
+    out[0] = (-mean).exp();
+    for n in 1..=n_max {
+        #[allow(clippy::cast_precision_loss)]
+        let n_f = n as f64;
+        out[n] = out[n - 1] * mean / n_f;
+    }
+    out
+}
+
+/// `n` choose `k`, by the standard iterative ratio (`C(n,k) = C(n,k-1)*(n-k+1)/k`)
+/// rather than raw factorials, and exploiting `C(n,k) = C(n,n-k)` so the loop runs over
+/// whichever of `k`, `n - k` is smaller.
+fn binomial(n: usize, k: usize) -> f64 {
+    if k > n {
+        return 0.0;
+    }
+    let k = k.min(n - k);
+    let mut result = 1.0;
+    #[allow(clippy::cast_precision_loss)]
+    for i in 0..k {
+        result *= (n - i) as f64 / (i + 1) as f64;
+    }
+    result
+}
+
+/// The falling factorial `n! / (n - r)!`; zero for `r > n`, matching the convention that
+/// more targets can be assigned to detections than exist.
+fn falling_factorial(n: usize, r: usize) -> f64 {
+    if r > n {
+        return 0.0;
+    }
+    #[allow(clippy::cast_precision_loss)]
+    (0..r).fold(1.0, |acc, k| acc * (n - k) as f64)
+}
+
+/// The elementary symmetric functions `e[0]..e[values.len()]` of `values`
+/// (`e[0] == 1`, `e[r] == 0` past `values.len()`), by the standard `O(n^2)` dynamic
+/// program: each value is folded in from the top index down, so a slot is updated from
+/// the previous value's contribution before it is read for the current one.
+fn elementary_symmetric(values: &[f64]) -> Vec<f64> {
+    let mut e = vec![1.0];
+    for &v in values {
+        e.push(0.0);
+        for r in (1..e.len()).rev() {
+            e[r] += e[r - 1] * v;
+        }
+    }
+    e
+}
+
+/// [`elementary_symmetric`] of `values` with each index left out in turn, in
+/// `O(len(values)^2)` total rather than `O(len(values)^3)` from recomputing per index.
+///
+/// `E(x) = Π(1 + v_i x)` factors as `(1 + v_j x) · Q_j(x)`, and `Q_j`'s coefficients --
+/// exactly the leave-`j`-out elementary symmetric functions -- come from one pass of
+/// synthetic division of `E` by `(1 + v_j x)`: matching the coefficient of `x^k` on both
+/// sides of `E(x) = Q_j(x) + v_j x Q_j(x)` gives `e_k = q_k + v_j q_{k-1}`, so
+/// `q_k = e_k - v_j q_{k-1}`, computed forward from `q_0 = e_0 = 1`.
+fn elementary_symmetric_leave_one_out(values: &[f64]) -> Vec<Vec<f64>> {
+    let e = elementary_symmetric(values);
+    let m = values.len();
+    (0..m)
+        .map(|j| {
+            let mut q = vec![0.0; m];
+            if m > 0 {
+                q[0] = 1.0;
+            }
+            for k in 1..m {
+                q[k] = e[k] - values[j] * q[k - 1];
+            }
+            q
+        })
+        .collect()
 }
 
 /// Generalized Labeled Multi-Bernoulli: PHD-style set filtering that also carries target
@@ -701,11 +1204,6 @@ mod tests {
             }
         );
         assert!(LmbFilter.labelled_tracks().is_err());
-        let cphd = CphdFilter {
-            phd: filter(),
-            cardinality_dist: Vec::new(),
-        };
-        assert!(cphd.cardinality_distribution().is_err());
     }
 
     #[test]
@@ -736,6 +1234,266 @@ mod tests {
             RfsError::NotFinite {
                 what: "a detection"
             }
+        );
+    }
+
+    fn cphd(max_cardinality: usize) -> CphdFilter {
+        CphdFilter::new(
+            PhdSettings::default(),
+            position_h(),
+            SMatrix::<f64, M, M>::identity() * 25.0,
+            max_cardinality,
+        )
+        .expect("valid settings")
+    }
+
+    #[test]
+    fn a_new_cphd_is_certain_of_zero_targets() {
+        let filter = cphd(10);
+        assert_eq!(filter.cardinality_distribution(), {
+            let mut expected = vec![0.0; 11];
+            expected[0] = 1.0;
+            expected
+        });
+        assert!((filter.cardinality_mean() - 0.0).abs() < f64::EPSILON);
+        assert_eq!(filter.cardinality_map(), 0);
+        assert!(filter.extract_tracks().expect("valid").is_empty());
+    }
+
+    #[test]
+    fn a_cardinality_truncated_to_zero_targets_is_refused() {
+        let err = CphdFilter::new(
+            PhdSettings::default(),
+            position_h(),
+            SMatrix::<f64, M, M>::identity(),
+            0,
+        )
+        .unwrap_err();
+        assert!(matches!(err, RfsError::MalformedScene { .. }));
+    }
+
+    /// A basic probability-theory invariant: whatever predict and update do, the result
+    /// must still be a distribution. This is checked over several scans of a
+    /// multi-target scene with genuine clutter and missed detections, not just on the
+    /// starting point-mass, since that is where a bookkeeping error would show up.
+    #[test]
+    fn the_cardinality_distribution_always_sums_to_one() {
+        let mut filter = cphd(20);
+        let motion = ConstantVelocity { sigma_a_sq: 1.0 };
+        let truth = [[0.0, 0.0, 100.0], [300.0, 0.0, 100.0], [0.0, 400.0, 100.0]];
+        for scan in 0..15 {
+            let births = if scan == 0 {
+                truth.iter().map(|p| birth(*p, 0.4)).collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+            filter.predict(&motion, 1.0, &births).expect("finite");
+            // Every other scan, one target goes unreported -- exactly the situation a
+            // plain PHD estimate swings under and a CPHD should not lose track of.
+            let detections: Vec<_> = if scan % 2 == 0 {
+                truth.iter().map(|p| detection(*p)).collect()
+            } else {
+                truth[1..].iter().map(|p| detection(*p)).collect()
+            };
+            filter.update(&detections).expect("valid");
+            let total: f64 = filter.cardinality_distribution().iter().sum();
+            assert!(
+                (total - 1.0).abs() < 1e-9,
+                "scan {scan}: cardinality distribution sums to {total}, not 1"
+            );
+            assert!(
+                filter.cardinality_distribution().iter().all(|&p| p >= 0.0),
+                "scan {scan}: a negative probability in {:?}",
+                filter.cardinality_distribution()
+            );
+        }
+    }
+
+    /// The same headline property [`the_cardinality_converges_to_the_number_of_targets`]
+    /// checks for the PHD, restated for the CPHD's own point estimate: the mode of the
+    /// full distribution, not the mixture's weight sum.
+    #[test]
+    fn the_cardinality_map_converges_to_the_number_of_targets() {
+        let mut filter = cphd(15);
+        let motion = ConstantVelocity { sigma_a_sq: 1.0 };
+        let truth = [[0.0, 0.0, 100.0], [300.0, 0.0, 100.0], [0.0, 400.0, 100.0]];
+        for scan in 0..25 {
+            let births = if scan == 0 {
+                truth.iter().map(|p| birth(*p, 0.4)).collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+            filter.predict(&motion, 1.0, &births).expect("finite");
+            let detections: Vec<_> = truth.iter().map(|p| detection(*p)).collect();
+            filter.update(&detections).expect("valid");
+        }
+        assert_eq!(
+            filter.cardinality_map(),
+            3,
+            "three targets, cardinality mode estimated as {}",
+            filter.cardinality_map()
+        );
+        let tracks = filter.extract_tracks().expect("valid");
+        assert_eq!(tracks.len(), 3, "extracted {} tracks", tracks.len());
+    }
+
+    /// The other half of the same property: a target that stops being detected must
+    /// fade from the cardinality distribution, not persist in it forever.
+    #[test]
+    fn a_target_that_stops_being_detected_fades_from_the_cardinality_distribution() {
+        let mut filter = cphd(10);
+        let motion = ConstantVelocity { sigma_a_sq: 1.0 };
+        filter
+            .predict(&motion, 1.0, &[birth([0.0, 0.0, 100.0], 0.5)])
+            .expect("finite");
+        for _ in 0..12 {
+            filter.predict(&motion, 1.0, &[]).expect("finite");
+            filter
+                .update(&[detection([0.0, 0.0, 100.0])])
+                .expect("valid");
+        }
+        assert_eq!(
+            filter.cardinality_map(),
+            1,
+            "the target never established: cardinality mode {}",
+            filter.cardinality_map()
+        );
+        for _ in 0..40 {
+            filter.predict(&motion, 1.0, &[]).expect("finite");
+            filter.update(&[]).expect("valid");
+        }
+        assert_eq!(
+            filter.cardinality_map(),
+            0,
+            "the target did not fade after forty missed scans: cardinality mode {}",
+            filter.cardinality_map()
+        );
+        assert!(
+            filter.extract_tracks().expect("valid").is_empty(),
+            "a faded target was still extracted as a track"
+        );
+    }
+
+    /// A tiny deterministic PRNG so the trial-based comparison below can run many
+    /// independent scenarios without a `rand` dependency this crate does not otherwise
+    /// need. `SplitMix64` (Steele, Lea and Flood, 2014): fast, well distributed, and short
+    /// enough to read in full.
+    struct SplitMix64(u64);
+
+    impl SplitMix64 {
+        fn next_u64(&mut self) -> u64 {
+            self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = self.0;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        }
+
+        /// Uniform in `[0, 1)`.
+        fn next_unit(&mut self) -> f64 {
+            #[allow(clippy::cast_precision_loss)]
+            let out = (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64;
+            out
+        }
+    }
+
+    /// The property [`CphdFilter`]'s own doc comment claims: under frequent missed
+    /// detections, its cardinality *estimate* swings far less from trial to trial than
+    /// the PHD's does, because it tracks the whole distribution rather than only its
+    /// mean. This is what CAP-2.4 -- "estimate the number of targets... when tracks
+    /// cannot be separated" -- is actually about, so it is measured directly across many
+    /// independent trials rather than inferred from the update algebra being
+    /// self-consistent. Both filters see the *same* missed-detection pattern and the
+    /// same noise per trial (one `SplitMix64` stream per trial, replayed identically for
+    /// both filters), so the comparison isolates what the two filters do with identical
+    /// evidence.
+    #[test]
+    fn cphd_shows_less_cardinality_swing_than_phd_under_frequent_missed_detections() {
+        const TRIALS: u64 = 500;
+        let h = position_h();
+        let r = SMatrix::<f64, M, M>::identity() * 25.0;
+        let motion = ConstantVelocity { sigma_a_sq: 1.0 };
+        // Everything but `probability_of_detection` stays at the calibrated default
+        // this file's own other tests already prove sensible at this covariance scale
+        // (`heavier_clutter_lowers_the_cardinality_estimate` demonstrates the default
+        // `clutter_density` of 1e-6 is neither so small it is inert nor so large it
+        // swamps a genuine detection's likelihood, which is a real, sharp effect in a
+        // 3-D Gaussian at this scale: a clutter density picked without checking it
+        // against `1 / sqrt((2*pi)^3 * det(S))` for this problem's actual covariance is
+        // how the first draft of this test made every scan look like a miss regardless
+        // of whether one occurred, at `clutter_density = 2e-3`).
+        let settings = PhdSettings {
+            probability_of_detection: 0.55, // deliberately low: misses are frequent
+            ..PhdSettings::default()
+        };
+
+        // Stationary, matching `birth`'s own zero-velocity convention: what is under
+        // test is the response to missed detections and clutter, which a moving target
+        // would also exercise but only if its birth component's velocity matched the
+        // motion exactly -- a second way to get this test wrong that a stationary
+        // target sidesteps entirely.
+        let true_pos = [0.0, 0.0, 100.0];
+
+        let run = |seed: u64, use_cphd: bool| -> f64 {
+            let mut rng = SplitMix64(seed);
+            let mut phd = PhdFilter::new(settings, h, r).expect("valid");
+            let mut cphd = CphdFilter::new(settings, h, r, 15).expect("valid");
+            for scan in 0..30 {
+                let births = if scan == 0 {
+                    vec![birth(true_pos, 0.9)]
+                } else {
+                    Vec::new()
+                };
+                if use_cphd {
+                    cphd.predict(&motion, 1.0, &births).expect("finite");
+                } else {
+                    phd.predict(&motion, 1.0, &births).expect("finite");
+                }
+                let mut detections = Vec::new();
+                if rng.next_unit() < settings.probability_of_detection {
+                    // Within about two standard deviations of R (std-dev 5).
+                    let noise = (rng.next_unit() * 2.0 - 1.0) * 10.0;
+                    detections.push(detection([true_pos[0] + noise, true_pos[1], true_pos[2]]));
+                }
+                if rng.next_unit() < 0.3 {
+                    // Tens of standard deviations away: a genuine outlier, not a
+                    // plausible reading of the real target.
+                    let noise = (rng.next_unit() * 2.0 - 1.0) * 150.0;
+                    detections.push(detection([true_pos[0] + noise, true_pos[1], true_pos[2]]));
+                }
+                if use_cphd {
+                    cphd.update(&detections).expect("valid");
+                } else {
+                    phd.update(&detections).expect("valid");
+                }
+            }
+            if use_cphd {
+                cphd.cardinality_mean()
+            } else {
+                phd.cardinality()
+            }
+        };
+
+        let cphd_estimates: Vec<f64> = (0..TRIALS).map(|seed| run(seed, true)).collect();
+        let phd_estimates: Vec<f64> = (0..TRIALS).map(|seed| run(seed, false)).collect();
+
+        let variance = |xs: &[f64]| -> f64 {
+            #[allow(clippy::cast_precision_loss)]
+            let n = xs.len() as f64;
+            let mean = xs.iter().sum::<f64>() / n;
+            xs.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n
+        };
+        let cphd_var = variance(&cphd_estimates);
+        let phd_var = variance(&phd_estimates);
+
+        // The measured ratio at these seeds and this scenario is close to 0.62 (a 500-
+        // and a 150-trial run agree to within a few percent, so this is the scenario's
+        // real effect size, not sampling noise); 0.8 leaves comfortable room without
+        // being so loose the assertion stops meaning anything.
+        assert!(
+            cphd_var < phd_var * 0.8,
+            "CPHD should show materially lower cardinality-estimate variance than PHD \
+             under frequent missed detections: CPHD {cphd_var}, PHD {phd_var}"
         );
     }
 }
