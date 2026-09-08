@@ -557,6 +557,70 @@ Four things are deliberate:
    put on `tonic`. What the sign-off unblocked is the decision, which is what GAP-060's
    remaining half was waiting on.
 
+#### OS keystore (signed off 2026-09-08, D-39)
+
+DN-22 amendment 3 (§12) named the condition exactly: the passphrase-sealed keystore
+stands "until a §2.9 decision admits an OS-keystore crate." GAP-084's action said the
+same thing from the register's side, and GAP-057's and GAP-060's remaining items both
+reduce to this same decision seen from authentication and from transport identity.
+
+| Crate | Used for | Used by | Landed |
+|---|---|---|---|
+| `keyring` (`v1`, no default features) | `KeyProvider`'s persistent custody unlocked at operator login rather than a typed passphrase (DN-22 §5): Windows Credential Manager, macOS Keychain, or Linux Secret Service, chosen by target and reached through the crate's own backward-compatible `v1::Entry` facade | `gungnir-security` | 2026-09-08 |
+| `keyring-core` (no features; `keyring`'s own dependency, named directly) | Production's route to the store `keyring` selected, addressed directly because `v1::Entry` cannot be redirected to a test double (point 2 below); its always-on `mock` module -- a platform-independent, in-memory credential store needing no feature flag, unlike the fancier `sample` store `keyring`'s `cli` feature would pull -- is then the same route a test takes to a store that needs no real Secret Service session, which a headless Linux CI runner does not have | `gungnir-security` (a normal dependency, not test-only) | 2026-09-08 |
+
+Four things are deliberate:
+
+1. **`default-features = false`, `v1` only.** `keyring`'s `cli` feature (off by default,
+   named here so nobody reaches for it later without reading this) exists for the crate's
+   own demonstration binary: it pulls every platform backend regardless of target,
+   `keyring-core`'s fancier `sample` store, and `dbus-secret-service-keyring-store` with a
+   **vendored OpenSSL** -- none of which a library dependency wants. `v1` pulls exactly
+   the three backends DN-22 §5 needs (Windows, macOS, Linux) and nothing to demonstrate
+   them with.
+2. **`v1::Entry`, not `keyring_core::Entry`, in production code -- and the reason is
+   mechanical, not stylistic.** `v1::Entry::new`'s first call latches the real
+   platform-native store as `keyring-core`'s process-wide default and never checks whether
+   one is already set, so whichever caller creates the first entry in a process decides
+   the backend for every entry after it. A test that wants the mock store cannot go
+   through `v1::Entry` at all -- it has already lost the race to the real backend the
+   moment any `v1::Entry` exists in that binary. `gungnir-security/src/os_keystore.rs`
+   therefore forces the real backend once (`keyring::v1::Entry::store_status()`, which is
+   exactly what that method exists for) and then talks to `keyring_core::Entry` directly,
+   so its tests can install `keyring_core::mock::Store` first instead and exercise the
+   same code path a production caller does. This is the pattern `keyring-core`'s own test
+   suite (`src/mock.rs`) uses for the identical reason.
+3. **Checked for duplicate linkage on 2026-09-08, and the finding did not come back
+   clean, which is worth recording precisely rather than rounding off.** On the Windows
+   target -- both binaries' primary target today -- `cargo tree -p gungnir-security -d`
+   shows no duplicate beneath `keyring` at all: the only repeated package anywhere in the
+   crate's tree is `syn` (v2 for `thiserror-impl`/`tracing-attributes`, v3 for
+   `serde_derive`), pre-existing and build-time only, the same finding D-18 recorded.
+   **On the Linux x86_64 target the Secret Service backend costs two real duplicates.**
+   `zbus-secret-service-keyring-store` pulls `secret-service` 5.2.0, which depends on a
+   newer generation of RustCrypto than D-20/D-22 pinned for the rest of the workspace --
+   a second `aes` (0.9.3 beside 0.8.4), `digest` (0.11.3 beside 0.10.7), `hmac` (0.13.0
+   beside 0.12.1), `sha2` (0.11.0 beside 0.10.9), `cipher`, `cpufeatures`, `const-oid` and
+   `block-buffer` -- because the Secret Service D-Bus protocol encrypts its own session
+   and `secret-service` brings the crypto for that, independent of whatever the rest of
+   this workspace already pins. **And `zbus` itself duplicates, which an earlier review of
+   this decision believed it would not**: `gungnir-app`'s accessibility stack
+   (`accesskit_unix` on Linux, reached through `eframe`) already carries `zbus` 4.4.0, and
+   `zbus-secret-service-keyring-store` pulls `zbus` 5.19.0 -- a second major version, not a
+   reused one. Checking found this wrong before it was written down as right rather than
+   after, which is the entire point of checking. **Accepted for now, on Linux only,
+   because neither duplicate is this workspace's to fix**: the RustCrypto generation is
+   `secret-service`'s own pin, and the `zbus` version is `accesskit_unix`'s and
+   `zbus-secret-service-keyring-store`'s respective pins, not a choice available from
+   `keyring`'s feature set. Neither package appears on the Windows or macOS target at all,
+   since neither the native credential-manager nor the Keychain backend touches D-Bus.
+4. **`gungnir-app` only, not `gungnir-node`.** DN-22 §5 assigns the operating system's
+   keystore to the disconnected desktop specifically, the same row `PassphraseSealedFile`
+   answers; the node's own row is `ManagedService`, unbuilt for the same reason it always
+   was. `gungnir-node/src/main.rs`'s `seal_journal` therefore keeps no arm for
+   `KeyProviderConfig::OperatingSystemKeystore`, exactly as it already keeps none for
+   `PassphraseSealedFile`.
+
 #### gRPC as the second transport (signed off 2026-09-05, D-21)
 
 Rule 5 below and D-18 both left `tonic` a later question. The owner took it on 2026-09-05.

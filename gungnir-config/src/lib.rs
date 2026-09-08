@@ -770,7 +770,10 @@ pub enum KeyProviderConfig {
     /// the clear and says so.
     PassphraseSealedFile,
     /// The operating system's keystore on this machine, unlocked at operator login
-    /// (DN-22 §5, the disconnected desktop).
+    /// (DN-22 §5, the disconnected desktop; D-39, GAP-084). `account` names which
+    /// secret within the keystore is this deployment's, the way `dir` names which file
+    /// is `PassphraseSealedFile`'s. `gungnir-app` only: `gungnir-node` has no operator
+    /// login to unlock at.
     OperatingSystemKeystore { account: String },
     /// A managed key service, off-host, which seals and signs and never releases
     /// material (DN-22 §5, the cloud node).
@@ -780,9 +783,9 @@ pub enum KeyProviderConfig {
 impl KeyProviderConfig {
     /// Whether a provider for this exists yet.
     ///
-    /// The two persistent profiles are designed and unbuilt. Saying so at validation
-    /// means a deployment learns it at start-up rather than discovering an unencrypted
-    /// journal later.
+    /// One persistent profile is still designed and unbuilt (`ManagedService`, the cloud
+    /// node's row). Saying so at validation means a deployment learns it at start-up
+    /// rather than discovering an unencrypted journal later.
     #[must_use]
     pub fn is_implemented(&self) -> bool {
         matches!(
@@ -790,6 +793,7 @@ impl KeyProviderConfig {
             KeyProviderConfig::None
                 | KeyProviderConfig::Ephemeral
                 | KeyProviderConfig::PassphraseSealedFile
+                | KeyProviderConfig::OperatingSystemKeystore { .. }
         )
     }
 
@@ -799,9 +803,9 @@ impl KeyProviderConfig {
         match self {
             KeyProviderConfig::None
             | KeyProviderConfig::Ephemeral
-            | KeyProviderConfig::PassphraseSealedFile => None,
-            KeyProviderConfig::OperatingSystemKeystore { .. }
-            | KeyProviderConfig::ManagedService { .. } => Some("GAP-084"),
+            | KeyProviderConfig::PassphraseSealedFile
+            | KeyProviderConfig::OperatingSystemKeystore { .. } => None,
+            KeyProviderConfig::ManagedService { .. } => Some("GAP-084"),
         }
     }
 
@@ -3181,29 +3185,44 @@ mod tests {
     /// learns it at start-up rather than discovering an unencrypted journal later.
     #[test]
     fn an_unbuilt_provider_is_refused_at_validation() {
-        for provider in [
-            KeyProviderConfig::OperatingSystemKeystore {
-                account: "gungnir".into(),
+        let provider = KeyProviderConfig::ManagedService {
+            endpoint: "https://kms.example.gov".into(),
+            key_ring: "journal".into(),
+        };
+        let baseline = ConfigBaseline {
+            security: SecurityConfig {
+                key_provider: provider.clone(),
+                authentication: AuthenticationConfig::default(),
+                tls: TlsClientConfig::default(),
+                escrow: None,
             },
-            KeyProviderConfig::ManagedService {
-                endpoint: "https://kms.example.gov".into(),
-                key_ring: "journal".into(),
+            ..ConfigBaseline::default()
+        };
+        let message = validate(&baseline).expect_err("refused").to_string();
+        assert!(message.contains("designed and not built"), "{message}");
+        assert_eq!(provider.owning_gap(), Some("GAP-084"));
+        assert!(!provider.is_implemented());
+    }
+
+    /// D-39: the OS keystore is no longer designed-and-unbuilt, unlike its sibling
+    /// persistent profile above.
+    #[test]
+    fn the_os_keystore_provider_validates_now_that_d_39_admitted_the_crate() {
+        let provider = KeyProviderConfig::OperatingSystemKeystore {
+            account: "gungnir".into(),
+        };
+        let baseline = ConfigBaseline {
+            security: SecurityConfig {
+                key_provider: provider.clone(),
+                authentication: AuthenticationConfig::default(),
+                tls: TlsClientConfig::default(),
+                escrow: None,
             },
-        ] {
-            let baseline = ConfigBaseline {
-                security: SecurityConfig {
-                    key_provider: provider.clone(),
-                    authentication: AuthenticationConfig::default(),
-                    tls: TlsClientConfig::default(),
-                    escrow: None,
-                },
-                ..ConfigBaseline::default()
-            };
-            let message = validate(&baseline).expect_err("refused").to_string();
-            assert!(message.contains("designed and not built"), "{message}");
-            assert_eq!(provider.owning_gap(), Some("GAP-084"));
-            assert!(!provider.is_implemented());
-        }
+            ..ConfigBaseline::default()
+        };
+        assert!(validate(&baseline).is_ok());
+        assert!(provider.is_implemented());
+        assert_eq!(provider.owning_gap(), None);
     }
 
     /// The default is no custody, which is the honest state of every deployment that has

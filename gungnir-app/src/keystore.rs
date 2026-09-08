@@ -22,9 +22,12 @@ use gungnir_store::StoreError;
 
 use crate::state::AppState;
 
-struct KeystoreSealer {
-    provider: Arc<PersistentKeyProvider>,
-    key: KeyId,
+/// Reused by `state.rs` for the OS-keystore provider (D-39): both it and the
+/// passphrase-sealed file behind [`unlock`] wrap the same [`PersistentKeyProvider`] the
+/// same way, so one sealer type serves either.
+pub(crate) struct KeystoreSealer {
+    pub(crate) provider: Arc<PersistentKeyProvider>,
+    pub(crate) key: KeyId,
 }
 
 impl JournalSealer for KeystoreSealer {
@@ -47,6 +50,63 @@ pub fn escrow_record_name(key: &KeyId) -> String {
     format!("escrow-journal-v{}.json", key.version)
 }
 
+/// The baseline's escrow public key, or `None` with an alert if it names one this build
+/// cannot use. Shared by [`unlock`] and `state.rs`'s `build_encryption`: both open a
+/// [`PersistentKeyProvider`] and both need the same answer to "is an officer configured".
+pub(crate) fn escrow_from_config(
+    config: &gungnir_config::ConfigBaseline,
+    alerts: &mut Vec<String>,
+) -> Option<EscrowPublicKey> {
+    match &config.security.escrow {
+        Some(e) => match EscrowPublicKey::from_pem(&e.public_key_pem) {
+            Ok(key) => Some(key),
+            Err(err) => {
+                alerts.push(format!(
+                    "the escrow public key in the baseline is unusable ({err}); journal keys \
+                     will not be escrowed"
+                ));
+                None
+            }
+        },
+        None => None,
+    }
+}
+
+/// Wrap `key` to the officer configured in `escrow`, if any, and write the record beside
+/// the journal in `dir`. Shared by [`unlock`] and `state.rs`'s `build_encryption`: escrow
+/// is a property of the journal key, not of which provider is unlocking it, so both
+/// persistent providers need it done the same way.
+pub(crate) fn write_escrow_record(
+    provider: &PersistentKeyProvider,
+    key: KeyId,
+    dir: &std::path::Path,
+    alerts: &mut Vec<String>,
+) {
+    if !provider.escrow_configured() {
+        return;
+    }
+    match provider.escrow_wrap(&key) {
+        Ok(record) => {
+            let path = dir.join(escrow_record_name(&key));
+            match serde_json::to_string(&record)
+                .map_err(|e| e.to_string())
+                .and_then(|text| std::fs::write(&path, text).map_err(|e| e.to_string()))
+            {
+                Ok(()) => alerts.push(format!(
+                    "journal key v{} escrowed to the security officer ({})",
+                    key.version,
+                    path.display()
+                )),
+                Err(err) => alerts.push(format!(
+                    "the escrow record could not be written ({err}); the journal key is not \
+                     recoverable without this desktop"
+                )),
+            }
+        }
+        Err(err) => alerts.push(format!("escrow failed: {err}")),
+    }
+}
+
 /// Open the keystore with the passphrase a sign-in just verified. Nothing happens for a
 /// baseline that names another provider.
 pub fn unlock(state: &mut AppState, passphrase: &str) {
@@ -57,19 +117,7 @@ pub fn unlock(state: &mut AppState, passphrase: &str) {
     {
         return;
     }
-    let escrow = match &state.config.security.escrow {
-        Some(e) => match EscrowPublicKey::from_pem(&e.public_key_pem) {
-            Ok(key) => Some(key),
-            Err(err) => {
-                state.alerts.push(format!(
-                    "the escrow public key in the baseline is unusable ({err}); journal keys \
-                     will not be escrowed"
-                ));
-                None
-            }
-        },
-        None => None,
-    };
+    let escrow = escrow_from_config(&state.config, &mut state.alerts);
     let dir = std::path::PathBuf::from(&state.config.data_dir);
     let provider = match PersistentKeyProvider::open_or_create(&dir, passphrase, escrow) {
         Ok(p) => Arc::new(p),
@@ -95,28 +143,7 @@ pub fn unlock(state: &mut AppState, passphrase: &str) {
             return;
         }
     };
-    if provider.escrow_configured() {
-        match provider.escrow_wrap(&key) {
-            Ok(record) => {
-                let path = dir.join(escrow_record_name(&key));
-                match serde_json::to_string(&record)
-                    .map_err(|e| e.to_string())
-                    .and_then(|text| std::fs::write(&path, text).map_err(|e| e.to_string()))
-                {
-                    Ok(()) => state.alerts.push(format!(
-                        "journal key v{} escrowed to the security officer ({})",
-                        key.version,
-                        path.display()
-                    )),
-                    Err(err) => state.alerts.push(format!(
-                        "the escrow record could not be written ({err}); the journal key is not \
-                         recoverable without this desktop"
-                    )),
-                }
-            }
-            Err(err) => state.alerts.push(format!("escrow failed: {err}")),
-        }
-    }
+    write_escrow_record(&provider, key, &dir, &mut state.alerts);
     state.journal.seal_with(Box::new(KeystoreSealer {
         provider: Arc::clone(&provider),
         key,

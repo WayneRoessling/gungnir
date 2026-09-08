@@ -46,6 +46,7 @@ technical, then move the gap to Planned.
 | D-36 | Selection halo colour: white, or a fourth map colour | The review proposed a cyan selection halo so a selected glyph reads faster; DS-04 already reserves white as the one colour nothing else on the map uses, and the assignment line sat only ten units from the friendly frame's blue. | `../../../ARCHITECTURE.md` §10 item 89; `../../ux/design-system.md` DS-04 | Owner | None blocking | Resolved 2026-09-06 |
 | D-37 | Compared numerals: monospace, or the proportional face | Time remaining, scores, positions, speeds, ages and evidence weights are numbers an operator compares down a column; the proportional face has no tabular figures, so a column of them does not line up. | `../../../ARCHITECTURE.md` §10 item 89; `../../ux/design-system.md` DS-05 | Owner | None blocking | Resolved 2026-09-06 |
 | D-38 | Viewport surface colour and coverage-ring alpha | The same review's colour pass covered the viewport surfaces (`VIEWPORT_BACKGROUND`, the grid) and `COVERAGE_MAX_ALPHA` alongside the chrome tokens D-35 to D-37 settle. | `../../../ARCHITECTURE.md` §10 item 89; `../../ux/design-system.md` DS-01 | Owner | None blocking | Resolved 2026-09-06 |
+| D-39 | OS-keystore crate | Which crate reaches the operating system's keystore behind `KeyProvider`'s persistent custody, the condition DN-22 amendment 3 (§12) named for retiring the passphrase-sealed file: "until a §2.9 decision admits an OS-keystore crate." The same decision closes GAP-057's and GAP-060's remaining items, both of which reduce to it from authentication and transport identity respectively. | `../../design/DN-22-key-management.md` §12; `agentic-coding-standards.md` §2.9 | Owner with the security engineer | GAP-057, GAP-060, GAP-084 | Resolved 2026-09-08 |
 
 ## Outcomes
 
@@ -92,6 +93,7 @@ outcomes are also in `../../../ARCHITECTURE.md` §10; mission outcomes in `../mi
 | D-36 Selection halo colour: white, or a fourth map colour | **The halo stays white; the assignment line moves instead.** DS-04's rule holds -- white is reserved for selection and drawn by nothing else on the map -- and the line that sat too close to the friendly frame's blue is teal now, so the five colours sharing the map stay pairwise apart rather than the halo gaining a sixth. |
 | D-37 Compared numerals: monospace, or the proportional face | **Monospace, through `theme::numeral`.** Every compared numeral -- time remaining, scores, positions, speeds, ages, evidence weights -- is set in egui's monospace face at body size so a column of them lines up; DS-05 gained a 16 pt size for a panel's title and nothing else, declining the six-size scale the same review proposed. |
 | D-38 Viewport surface colour and coverage-ring alpha | **The blue-black viewport set and the coverage alpha, both already built.** `VIEWPORT_BACKGROUND` (8, 16, 24), `VIEWPORT_GRID_COLOR` (31, 56, 70), and `COVERAGE_MAX_ALPHA` at 80 stood unchanged by the review; recorded as its own decision because item 89 filed all four viewport and theme questions from one pass and this one needed no further code. |
+| D-39 OS-keystore crate | **`keyring` 4.2.0, `v1` feature only.** Backward-compatible, auto-selecting per target: Windows Credential Manager, macOS Keychain, Linux Secret Service. Recorded in `agentic-coding-standards.md` §2.9 with the duplicate-linkage check, which found two real ones on the Linux target alone (a second RustCrypto generation and a second `zbus`, both `secret-service`'s and `zbus-secret-service-keyring-store`'s own pins, neither this workspace's to fix) and none on Windows or macOS. Built the same day as `PersistentKeyProvider::open_or_create_via_os_keystore` in `gungnir-security`, wired into `gungnir-app`'s `build_encryption` alongside the existing passphrase-sealed file; not wired into `gungnir-node`, which DN-22 §5 never assigned this row to. Human-owned code (`gungnir-security`, `gungnir-app`); written and gated, not signed. |
 
 ## Consequences for the register
 
@@ -222,8 +224,10 @@ outcomes are also in `../../../ARCHITECTURE.md` §10; mission outcomes in `../mi
   `0ac4d4b` (GAP-057), whose copy of this file predated the decision; the same commit
   dropped D-35 to D-38, which the renumbering commit `34796a6` had just added. The
   rebase of the licensing review restored D-34, since it is that review's subject.
-  **D-35 to D-38 are still missing here** and belong to the theme tranche that owns
-  them; `../../ux/design-system.md` still cites them.
+  **Restored 2026-09-07** by commit `a6bc70f`, which came after this paragraph was
+  first written and left the paragraph itself saying they were still missing;
+  corrected 2026-09-08 on finding the two disagreed. They belong to the theme tranche
+  that owns them; `../../ux/design-system.md` also cites them.
 - D-34's one engineering item is **closed 2026-09-07**: `gungnir-app` displays the
   Appropriate Legal Notices as PN-21, so the section 7(b) interface requirement now
   reaches a derivative under AGPL section 5(d). PN-21 is the twenty-first panel and is

@@ -28,6 +28,10 @@ gungnir-api = { path = "../gungnir-api", version = "0.1.0" }
 # what they actually draw rather than for the views they were handed. Test-only: the
 # feature is off in an ordinary build.
 gungnir-ui = { path = "../gungnir-ui", version = "0.1.0", features = ["harness"] }
+# Dev-only: the OS-keystore encryption test (D-39) cleans up the real credential-manager
+# entry it creates. The runtime edge stays through gungnir-security, the only crate that
+# writes one.
+keyring.workspace = true
 
 [dependencies]
 eframe.workspace = true

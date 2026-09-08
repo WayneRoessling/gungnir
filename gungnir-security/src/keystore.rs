@@ -21,6 +21,17 @@
 //! The passphrase is the account passphrase (DN-23), used here to derive a wrapping key
 //! with a salt of its own, so the stored PHC verifier and the wrapping key share nothing
 //! but their input.
+//!
+//! **Extended 2026-09-08, D-39: the operating system's keystore as an alternative
+//! source for the same wrapping key.** §5's disconnected row actually names the OS
+//! keystore, unlocked at operator login; the passphrase-sealed file above was this
+//! profile's answer only "until a §2.9 decision admits an OS-keystore crate" (amendment
+//! 3), and that decision is now taken. [`PersistentKeyProvider::open_or_create_via_os_keystore`]
+//! reuses every byte of the mechanism above -- the same file, the same argon2-derived
+//! wrapping key, the same escrow wiring -- and differs only in where the string fed to
+//! argon2 comes from: a high-entropy secret `os_keystore` generates once and the
+//! platform's own credential manager holds from then on, rather than a passphrase typed
+//! at every sign-in. **Human-owned; written and gated, not signed.**
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -144,6 +155,27 @@ impl PersistentKeyProvider {
         };
         this.persist()?;
         Ok(this)
+    }
+
+    /// Open the keystore in `dir`, or create it, using a secret the operating system's
+    /// own keystore holds instead of a typed passphrase (DN-22 §5; D-39).
+    ///
+    /// `account` distinguishes this desktop's secret from another deployment's on the
+    /// same machine, exactly as `dir` distinguishes their keystore files; the config
+    /// baseline supplies it (`KeyProviderConfig::OperatingSystemKeystore { account }`).
+    ///
+    /// # Errors
+    ///
+    /// `KeyProviderUnavailable` when this platform has no reachable keystore, in which
+    /// case the caller's fallback is the same as for a file that will not open: start
+    /// anyway and journal in the clear (DN-22 §5).
+    pub fn open_or_create_via_os_keystore(
+        dir: &Path,
+        account: &str,
+        escrow: Option<EscrowPublicKey>,
+    ) -> Result<Self, SecurityError> {
+        let secret = crate::os_keystore::wrapping_secret(account)?;
+        Self::open_or_create(dir, &secret, escrow)
     }
 
     fn persist(&self) -> Result<(), SecurityError> {

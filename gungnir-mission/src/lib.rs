@@ -482,8 +482,9 @@ mod tests {
         let invalid = ConfigBaseline {
             allocation_horizon: 10,
             security: gungnir_config::SecurityConfig {
-                key_provider: gungnir_config::KeyProviderConfig::OperatingSystemKeystore {
-                    account: "gungnir".into(),
+                key_provider: gungnir_config::KeyProviderConfig::ManagedService {
+                    endpoint: "https://kms.example.gov".into(),
+                    key_ring: "journal".into(),
                 },
                 authentication: gungnir_config::AuthenticationConfig::default(),
                 tls: gungnir_config::TlsClientConfig::default(),
