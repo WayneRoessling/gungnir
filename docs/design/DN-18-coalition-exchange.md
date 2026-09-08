@@ -185,6 +185,15 @@ existing row: `docs/mission/roles-and-stakeholders.md` §4 gained a proposed "Pu
 coalition exchange" row for this rather than being widened silently, per the precedent
 `ASSIGN_ROLE`'s own doc comment already set for authority.
 
+**Amended the same day: `Supervisor` joins the other two.** `role_permits` had granted
+`RELEASE_PRODUCT` to `Commander` and `IntelligenceAnalyst` alone since the initial commit,
+missing `Supervisor` despite §4's original "Product release" row reading `yes` for it too
+-- a pre-existing discrepancy this amendment's own PUBLISH_EXCHANGE grant unwittingly
+mirrored, found and fixed the same day. Applying this section's own judgment ("whoever may
+mark a product releasable is who may send it") to the corrected `RELEASE_PRODUCT` set
+extends `PUBLISH_EXCHANGE`, and the §4 exchange row, to `Supervisor` as well; a
+`role_permits` test now pins the two actions to always agree per role, for every role.
+
 **The caller is this deployment's own desktop, not an outside party.** `task_sensor`'s
 shape, not `effector_report`'s: `operator_caller` and `role_permits`, no machine-identity
 path, because a desktop posting to its own node is not the same fact as a peer answering
@@ -219,10 +228,11 @@ and `MissionReport` publishing would still need even once wired here; the lossy-
 round-trips (GAP-064) and the interop suite (GAP-063) are unaffected by this amendment and
 remain GAP-065's own open items.
 
-**Signature scope.** `gungnir-security` (the `PUBLISH_EXCHANGE` action and its two role
-grants) and the `gungnir-api` write path are human-owned (`docs/agentic-workflow.md`); both
-are signed by the owner the same day this amendment was written. `gungnir-remote`'s outbox
-and `gungnir-app`'s producer are ordinary transport and wiring work and carry no signature
+**Signature scope.** `gungnir-security` (the `PUBLISH_EXCHANGE` action and its role
+grants, now three: `Commander`, `IntelligenceAnalyst`, and `Supervisor`) and the
+`gungnir-api` write path are human-owned (`docs/agentic-workflow.md`); both are signed by
+the owner the same day this amendment was written. `gungnir-remote`'s outbox and
+`gungnir-app`'s producer are ordinary transport and wiring work and carry no signature
 requirement of their own.
 
 ## Traceability
