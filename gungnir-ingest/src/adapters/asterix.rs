@@ -27,8 +27,11 @@
 //! the public capture, and `tests/asterix_seeds.rs` checks the corpus still decodes.
 
 use crate::{DetectionView, IngestError, ProtocolAdapter};
-use gungnir_interop::asterix::{cat034, cat048, data_blocks, RadarSite};
-use gungnir_interop::{AsterixCat034Codec, AsterixCat048Codec, InteropError, RadarServiceReport};
+use gungnir_interop::asterix::{cat034, cat048, cat205, data_blocks, RadarSite};
+use gungnir_interop::{
+    AsterixCat034Codec, AsterixCat048Codec, AsterixCat205Codec, DfSite, InteropError,
+    RadarServiceReport,
+};
 use gungnir_model::{Geodetic, LocalFrame, MissionTime, SensorId};
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt::Write as _;
@@ -92,6 +95,32 @@ pub struct RadarBinding {
     pub sensor: SensorId,
     /// Antenna position; the adapter puts it in the local frame for the codecs.
     pub position: Geodetic,
+}
+
+/// One direction finder a feed is allowed to speak for: its ASTERIX identity, the
+/// sensor it is in the registry, where it stands, and the angular accuracy its own
+/// Interface Control Document states (GAP-100; `gungnir_interop::asterix::cat205`'s
+/// module documentation explains why the wire format itself carries none). Not part of
+/// [`FeedSpec`] yet -- deferred here the same way GAP-001's Category 034 half deferred
+/// its own host-configuration wiring ("untouched here because another change was in
+/// those files"): a deployment reaches this through [`AsterixFeedAdapter::with_df_sites`]
+/// until a `ConfigBaseline` section names direction finders the way `radars` already
+/// names radars.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DfBinding {
+    pub sac: u8,
+    pub sic: u8,
+    pub sensor: SensorId,
+    /// Antenna position; the adapter puts it in the local frame for the codec, the
+    /// same as [`RadarBinding::position`]. `cat205::DfSite` does not use it in today's
+    /// mapping (`Measurement::Bearing` has no position field), but it is required here
+    /// for the same reason a radar's is: a deployment states where its sensor stands
+    /// rather than this adapter guessing.
+    pub position: Geodetic,
+    /// The direction finder's stated one-sigma bearing accuracy, radians, from its own
+    /// Interface Control Document. **Never invented**: see `cat205::DfSite`'s own
+    /// documentation.
+    pub azimuth_sigma_rad: f64,
 }
 
 /// Where datagrams come from. Non-blocking by contract: a poll must return with
@@ -197,9 +226,13 @@ pub struct AsterixFeedStats {
     pub datagrams: u64,
     pub blocks_cat048: u64,
     pub blocks_cat034: u64,
+    /// GAP-100: Category 205 (Radio Direction Finder Reports) blocks seen.
+    pub blocks_cat205: u64,
     pub detections: u64,
     pub service_reports: u64,
-    /// Valid Category 048 records that are not observations (`TYP = 0`, no position).
+    /// Valid Category 048 or 205 records that are not observations (048's `TYP = 0`;
+    /// 205's position message types and detection-end reports -- see
+    /// `cat205::AsterixCat205Codec::map`).
     pub not_detections: u64,
     /// Datagrams whose block framing failed; every block in them is lost.
     pub malformed_datagrams: u64,
@@ -217,6 +250,10 @@ pub struct AsterixFeedAdapter<S: DatagramSource> {
     source: S,
     cat048: AsterixCat048Codec,
     cat034: AsterixCat034Codec,
+    /// GAP-100. Empty (the `Default` codec) until [`Self::with_df_sites`] is called;
+    /// an empty codec decodes Category 205 blocks losslessly and attributes none, the
+    /// same honest-empty state `radars` gives `cat048`/`cat034` when nothing is bound.
+    cat205: AsterixCat205Codec,
     buf: Vec<u8>,
     service_reports: VecDeque<RadarServiceReport>,
     stats: AsterixFeedStats,
@@ -306,6 +343,7 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
             source,
             cat048: AsterixCat048Codec::new(sites.clone()),
             cat034: AsterixCat034Codec::new(sites),
+            cat205: AsterixCat205Codec::default(),
             buf: vec![0; MAX_DATAGRAM],
             service_reports: VecDeque::new(),
             stats: AsterixFeedStats::default(),
@@ -331,6 +369,28 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
     #[must_use]
     pub fn with_stats_sink(mut self, sink: FeedStatsSink) -> Self {
         self.stats_sink = Some(sink);
+        self
+    }
+
+    /// Configure the direction finders this feed's Category 205 blocks may be
+    /// attributed to (GAP-100). `frame` is the same local frame `new` took; it is
+    /// re-supplied rather than stored because nothing else on this adapter keeps one.
+    /// A binding list with no entries (the default before this is ever called) means
+    /// every Category 205 report is counted `unknown_radar` -- the same honest-empty
+    /// state an unconfigured `radars` list gives Category 048 and 034.
+    #[must_use]
+    pub fn with_df_sites(mut self, df_sites: &[DfBinding], frame: &LocalFrame) -> Self {
+        let sites: Vec<DfSite> = df_sites
+            .iter()
+            .map(|b| DfSite {
+                sac: b.sac,
+                sic: b.sic,
+                sensor: b.sensor,
+                origin_enu_m: frame.to_enu(b.position),
+                azimuth_sigma_rad: b.azimuth_sigma_rad,
+            })
+            .collect();
+        self.cat205 = AsterixCat205Codec::new(sites);
         self
     }
 
@@ -396,6 +456,22 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
                                 }
                             }
                         }
+                        Err(err) => self.count_decode_error(&err),
+                    }
+                }
+                205 => {
+                    self.stats.blocks_cat205 += 1;
+                    match cat205::decode_block(&block) {
+                        Ok(record) => match self.cat205.map(&record, receipt_time) {
+                            Ok(cat205::Mapped::Detection(d)) => {
+                                self.stats.detections += 1;
+                                detections.push(d);
+                            }
+                            Ok(cat205::Mapped::NotADetection(_)) => {
+                                self.stats.not_detections += 1;
+                            }
+                            Err(err) => self.count_map_error(&err),
+                        },
                         Err(err) => self.count_decode_error(&err),
                     }
                 }
@@ -535,6 +611,58 @@ mod tests {
             s.malformed_datagrams + s.malformed_blocks + s.unknown_radar,
             0
         );
+    }
+
+    /// One Category 205 Sensor Data Report: FSPEC flags FRN 1 (I205/010), 3 (I205/000)
+    /// and 9 (I205/070) -- `0xA1, 0x40`. SAC 50 SIC 6, message type 5, local bearing
+    /// 90.00 deg (9000 x 0.01 = `0x2328`).
+    fn cat205_datagram() -> Vec<u8> {
+        vec![0xCD, 0x00, 0x0A, 0xA1, 0x40, 50, 6, 0x05, 0x23, 0x28]
+    }
+
+    fn df_binding() -> DfBinding {
+        DfBinding {
+            sac: 50,
+            sic: 6,
+            sensor: SensorId(21),
+            position: Geodetic {
+                lat_rad: 0.9,
+                lon_rad: 0.2,
+                alt_m: 30.0,
+            },
+            azimuth_sigma_rad: 1.5_f64.to_radians(),
+        }
+    }
+
+    #[test]
+    fn routes_category_205_blocks_when_df_sites_are_configured() {
+        let source = ReplayDatagramSource::new(vec![cat205_datagram()]);
+        let mut adapter = AsterixFeedAdapter::new("test", source, &frame(), &[])
+            .with_df_sites(&[df_binding()], &frame());
+        let detections = adapter.poll(MissionTime(43_205.0)).expect("polls");
+        assert_eq!(detections.len(), 1);
+        assert_eq!(detections[0].sensor, SensorId(21));
+        match detections[0].measurement {
+            gungnir_model::Measurement::Bearing { azimuth_rad, .. } => {
+                assert!((azimuth_rad - 90.0_f64.to_radians()).abs() < 1e-6);
+            }
+            ref other => panic!("expected a bearing, got {other:?}"),
+        }
+        assert!(detections[0].measurement.is_finite());
+        let s = adapter.stats();
+        assert_eq!(s.blocks_cat205, 1);
+        assert_eq!(s.detections, 1);
+        assert_eq!(s.unknown_radar, 0);
+    }
+
+    #[test]
+    fn category_205_reports_from_an_unconfigured_site_are_counted_unknown() {
+        let source = ReplayDatagramSource::new(vec![cat205_datagram()]);
+        let mut adapter = AsterixFeedAdapter::new("test", source, &frame(), &[]);
+        let detections = adapter.poll(MissionTime(0.0)).expect("polls");
+        assert!(detections.is_empty());
+        assert_eq!(adapter.stats().blocks_cat205, 1);
+        assert_eq!(adapter.stats().unknown_radar, 1);
     }
 
     #[test]

@@ -2,27 +2,35 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! Conformance of the Category 048 decoder against real radar output.
+//! Conformance of the Category 048 and 034 decoders against real radar output, and of
+//! the Category 205 decoder against a hand-built fixture (no real capture exists for
+//! it -- `testdata/asterix/SOURCE.md`'s Category 205 section says what was checked).
 //!
-//! The fixtures under `testdata/asterix/` are public captures whose origin, commit,
-//! and hashes are in `testdata/asterix/SOURCE.md`; their use was decided 2026-09-06
-//! (`docs/design/external-standards.md` §1.5). The decoder is built to edition 1.32;
-//! the edition the capture was produced under is not recorded by its source, so
-//! these tests check that every block reads and that what it says is physically
-//! plausible, not that any field equals a value known from elsewhere.
+//! The Category 048/034 fixtures under `testdata/asterix/` are public captures whose
+//! origin, commit, and hashes are in `testdata/asterix/SOURCE.md`; their use was
+//! decided 2026-09-06 (`docs/design/external-standards.md` §1.5). Those decoders are
+//! built to editions 1.32 and 1.29; the edition the capture was produced under is not
+//! recorded by its source, so those tests check that every block reads and that what
+//! it says is physically plausible, not that any field equals a value known from
+//! elsewhere. `cat205.raw` is different in kind: it is synthesized from the
+//! specification's own byte tables (GAP-100), so its test below checks field values
+//! against the exact counts that built the file, which is the "known-correct" this
+//! fixture can honestly offer.
 
 use gungnir_interop::asterix::cat034;
 use gungnir_interop::asterix::cat048::{decode_block, decode_records, Mapped, Record, ReportType};
+use gungnir_interop::asterix::cat205;
 use gungnir_interop::asterix::data_blocks;
 use gungnir_interop::{
-    AsterixCat034Codec, AsterixCat048Codec, DetectionCodec, InteropError, RadarSite, ServiceEvent,
-    ServiceMessageCodec,
+    AsterixCat034Codec, AsterixCat048Codec, AsterixCat205Codec, DetectionCodec, DfSite,
+    InteropError, RadarSite, ServiceEvent, ServiceMessageCodec,
 };
 use gungnir_model::{MissionTime, SensorId};
 use std::collections::BTreeSet;
 
 const CAT048_RAW: &[u8] = include_bytes!("../../testdata/asterix/cat048.raw");
 const CAT034_RAW: &[u8] = include_bytes!("../../testdata/asterix/cat034.raw");
+const CAT205_RAW: &[u8] = include_bytes!("../../testdata/asterix/cat205.raw");
 const PCAP: &[u8] = include_bytes!("../../testdata/asterix/cat_034_048.pcap");
 
 /// The UDP payloads of a little-endian libpcap capture over Ethernet and IPv4, with
@@ -333,6 +341,113 @@ fn truncated_and_corrupted_blocks_never_panic() {
                 let _ = decode_records(&m);
                 let _ = cat034::decode_records(&m);
             }
+        }
+    }
+}
+
+/// The Category 205 fixture (`testdata/asterix/SOURCE.md`'s Category 205 section):
+/// field-for-field against the exact counts the fixture was built from, since it is a
+/// hand-built record and not a real capture -- the "known-correct" values are simply
+/// the specification's own decoding rule applied to the counts documented there.
+#[test]
+fn category_205_fixture_decodes_to_the_documented_values() {
+    let recs = cat205::decode_records(CAT205_RAW).expect("cat205.raw decodes");
+    assert_eq!(
+        recs.len(),
+        1,
+        "one data block, one record (edition 1.0 §4.4)"
+    );
+    let r = &recs[0];
+    assert_eq!(
+        r.data_source,
+        Some(gungnir_interop::asterix::cat048::DataSource { sac: 99, sic: 1 })
+    );
+    assert_eq!(r.message_type, Some(cat205::MessageType::SensorDataReport));
+    assert!((r.time_of_day_s.expect("I205/030") - 43_200.0).abs() < 1e-9);
+    assert_eq!(r.report_number, Some(1));
+    assert_eq!(r.radio_channel_name.as_deref(), Some("121.500"));
+    assert!((r.local_bearing_deg.expect("I205/070") - 45.0).abs() < 1e-9);
+    assert!(
+        r.system_bearing_deg.is_none(),
+        "type 5 never carries I205/080"
+    );
+    assert!((r.signal_level_dbuv.expect("I205/180") - 55.0).abs() < 1e-9);
+    assert_eq!(r.signal_quality, Some(200));
+    assert!((r.signal_elevation_deg.expect("I205/200") - 12.5).abs() < 1e-9);
+    assert!(
+        r.carried_raw.is_empty(),
+        "the fixture carries no implementation-dependent item"
+    );
+}
+
+#[test]
+fn category_205_fixture_maps_to_a_bearing_with_the_configured_site_accuracy() {
+    let site = DfSite {
+        sac: 99,
+        sic: 1,
+        sensor: SensorId(41),
+        origin_enu_m: [0.0; 3],
+        azimuth_sigma_rad: 3.0_f64.to_radians(),
+    };
+    let codec = AsterixCat205Codec::new(vec![site]);
+    let receipt = MissionTime(20_500.0 * 86_400.0 + 43_205.0);
+    let dets = codec.decode(CAT205_RAW, receipt).expect("maps");
+    assert_eq!(dets.len(), 1);
+    let d = &dets[0];
+    assert_eq!(d.sensor, SensorId(41));
+    assert!((d.source_time.0 - (20_500.0 * 86_400.0 + 43_200.0)).abs() < 1e-6);
+    match d.measurement {
+        gungnir_model::Measurement::Bearing {
+            azimuth_rad,
+            elevation_rad,
+            azimuth_variance_rad2,
+            ..
+        } => {
+            assert!((azimuth_rad - 45.0_f64.to_radians()).abs() < 1e-9);
+            // I205/200 decodes (previous test) but has no stated error anywhere in
+            // this category, so it never reaches the measurement.
+            assert!(elevation_rad.is_none());
+            let sigma = 3.0_f64.to_radians();
+            assert!((azimuth_variance_rad2 - sigma * sigma).abs() < 1e-18);
+        }
+        ref other => panic!("expected a bearing, got {other:?}"),
+    }
+    assert!(d.measurement.is_finite());
+    assert!(
+        d.provenance
+            .conversion_loss
+            .as_deref()
+            .is_some_and(|s| s.contains("elevation")),
+        "the dropped elevation is recorded, not silently discarded"
+    );
+    assert_eq!(d.provenance.algorithm_version, "asterix.cat205/ed1.0");
+}
+
+#[test]
+fn category_205_unconfigured_site_is_refused_not_guessed() {
+    let codec = AsterixCat205Codec::default();
+    assert!(matches!(
+        codec.decode(CAT205_RAW, MissionTime(0.0)),
+        Err(InteropError::UnknownRadar {
+            sac: 99,
+            sic: 1,
+            ..
+        })
+    ));
+}
+
+/// The fuzz row's promise in miniature for the new category, the same property
+/// `truncated_and_corrupted_blocks_never_panic` establishes for 048 and 034.
+#[test]
+fn category_205_truncated_and_corrupted_fixture_never_panics() {
+    for n in 0..CAT205_RAW.len() {
+        let _ = cat205::decode_records(&CAT205_RAW[..n]);
+    }
+    for i in 0..CAT205_RAW.len() {
+        for flip in [0x01u8, 0x80, 0xFF] {
+            let mut m = CAT205_RAW.to_vec();
+            m[i] ^= flip;
+            let _ = cat205::decode_records(&m);
         }
     }
 }

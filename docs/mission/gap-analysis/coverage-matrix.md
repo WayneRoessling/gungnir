@@ -17,7 +17,7 @@ every part of the capability; implementation is what remains.
 
 | Capability | Design | Implementation | Evidence | Gaps |
 |---|---|---|---|---|
-| CAP-1.1 Ingest observations | full | partial | `gungnir-ingest` gateway and adapter trait; `gungnir-interop` codec boundary; `DetectionView` carries provenance | GAP-001, GAP-064, GAP-099 |
+| CAP-1.1 Ingest observations | full | partial | `gungnir-ingest` gateway and adapter trait; `gungnir-interop` codec boundary; `DetectionView` carries provenance | GAP-001, GAP-064, GAP-099, GAP-100 |
 | CAP-1.2 Validate and quarantine | full | partial | `IngestGateway` validation and quarantine; `gungnir-security` authentication trait | GAP-002 |
 | CAP-1.3 Sensor modes and tasking | full | partial | Registry, modes, coverage regions, and the outbound control path are built as of 2026-09-05 (GAP-003, GAP-004): a command is recorded, published, and swept for acknowledgement, and a requested mode is kept apart from the confirmed one. No adapter carries a command to a real sensor (GAP-001) and collection requirements are built and tasked from PN-15 but the list is not rebuilt at startup (GAP-005); DN-11 (`../../design/`) names a component for every remaining part | GAP-003, GAP-004, GAP-005 |
 | CAP-1.4 Coverage and gaps | full | partial | Coverage volumes in `gungnir-analytics`; gap detection as a function and map rendering of coverage are not designed; a component is now named for every part of it by DN-12 (`../../design/`, first draft 2026-09-05) | GAP-006, GAP-007 |
@@ -70,7 +70,7 @@ every part of the capability; implementation is what remains.
 | CAP-6.6 Releasability | full | none | Open question in `../mission-analysis.md` §11; nothing designed; a component is now named for every part of it by DN-17 (`../../design/`, first draft 2026-09-05) | GAP-062 |
 | CAP-6.7 Untrusted input | full | partial | Gateway treats input as data; plan 08 covers free text | GAP-044, GAP-076 |
 | CAP-7.1 Versioned interface | full | partial | `../../gungnir-api-v1.md` contract; the read paths are served over HTTP and a WebSocket as of 2026-09-05 (GAP-041), loopback only and with the write paths refusing until a caller can be authenticated | GAP-041, GAP-063, GAP-066 |
-| CAP-7.2 Interop standards | full | partial | `SchemaCatalog` with Arrow; codecs pending | GAP-069, GAP-063, GAP-064 |
+| CAP-7.2 Interop standards | full | partial | `SchemaCatalog` with Arrow; codecs pending | GAP-069, GAP-063, GAP-064, GAP-100 |
 | CAP-7.3 Three profiles | full | partial | `../../../ARCHITECTURE.md` §8 profiles; both binaries run | GAP-041 |
 | CAP-7.4 Peer and coalition exchange | full | none | API and interop provide the mechanism; releasability and peer merge are not designed; a component is now named for every part of it by DN-18 (`../../design/`, first draft 2026-09-05) | GAP-065, GAP-091 |
 

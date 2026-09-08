@@ -55,6 +55,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-008 Clock-skew detection across sources | CAP-1.5 | 3 | M | I2 | `../../verification-capability-table.md` §2, `gungnir-time` row |
 | GAP-010 Cooperative identity decoders | CAP-1.7 | 4 | L | I2 | `../../design/external-standards.md` |
 | GAP-099 ISR video metadata (MISB ST 0601 KLV) has no adapter | CAP-1.1 | 3 | M | I3 | `../../design/external-standards.md` §8 and §8.2; GAP-001 (the closing action this gap is drawn from) |
+| GAP-100 ASTERIX Category 205 direction-finder bearings | CAP-7.2, CAP-1.1 | 3 | M | I3 | `../../../ARCHITECTURE.md` §10 item 114; GAP-001 (the survey and the sibling feeds); GAP-064 (the ASTERIX/STANAG codec family this extends); GAP-096 (why a bearing produced here is not yet shown) |
 
 ### Productization: picture and identity
 

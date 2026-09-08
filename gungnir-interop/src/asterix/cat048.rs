@@ -363,7 +363,7 @@ fn parse_record(cur: &mut Cursor<'_>) -> Result<Record, InteropError> {
                 r.flight_level = Some(FlightLevel {
                     validated: v & 0x8000 == 0,
                     garbled: v & 0x4000 != 0,
-                    level: f64::from(sign_extend(v & 0x3FFF, 14)) / 4.0,
+                    level: f64::from(sign_extend(u32::from(v) & 0x3FFF, 14)) / 4.0,
                 });
             }
             7 => r.plot_characteristics = Some(parse_plot_characteristics(cur)?),
@@ -436,7 +436,7 @@ fn parse_record(cur: &mut Cursor<'_>) -> Result<Record, InteropError> {
             18 => raw(&mut r, "I048/100", cur.take(4, "I048/100")?),
             19 => {
                 let v = cur.u16("I048/110")?;
-                r.height_3d_ft = Some(f64::from(sign_extend(v & 0x3FFF, 14)) * 25.0);
+                r.height_3d_ft = Some(f64::from(sign_extend(u32::from(v) & 0x3FFF, 14)) * 25.0);
             }
             20 => r.doppler = Some(parse_doppler(cur)?),
             21 => raw(&mut r, "I048/230", cur.take(2, "I048/230")?),
@@ -515,7 +515,7 @@ fn parse_doppler(cur: &mut Cursor<'_>) -> Result<RadialDoppler, InteropError> {
     let mut d = RadialDoppler::default();
     if p & 0x80 != 0 {
         let v = cur.u16("I048/120 CAL")?;
-        d.calculated = Some((v & 0x8000 != 0, sign_extend(v & 0x03FF, 10)));
+        d.calculated = Some((v & 0x8000 != 0, sign_extend(u32::from(v) & 0x03FF, 10)));
     }
     if p & 0x40 != 0 {
         let rep = cur.u8("I048/120 REP")?;
