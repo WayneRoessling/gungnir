@@ -135,6 +135,22 @@ pub struct AppState {
         crossbeam_channel::Receiver<gungnir_data::LoadResult>,
     )>,
     pub last_plan: PlanView,
+    /// The id of the last plan `update::tick`'s own live-planner step (3) has already
+    /// published and submitted, distinct from [`Self::last_plan`] (GAP-097).
+    ///
+    /// **Why a separate field.** [`Self::last_plan`] is what PN-04/PN-05 draw as the
+    /// current recommendation, and `rehearsal.rs`'s scripted plans legitimately write
+    /// it too, so an operator sees whichever plan -- live or scripted -- was proposed
+    /// most recently. But that means comparing the live planner's fresh output
+    /// against `last_plan` to decide "has this already been announced" answers a
+    /// different question than it looks like: right after a scripted plan writes
+    /// `last_plan`, the live planner's own unchanged assignment compares unequal to
+    /// it and gets resubmitted, even though nothing about the live plan itself
+    /// changed. `gungnir_intercept_service::DpInterceptService::fresh_plan` never
+    /// reuses a [`gungnir_model::PlanId`] for a different assignment, so comparing
+    /// only the id -- tracked here, touched only by the live-planner step -- answers
+    /// the actual question without being disturbed by what else wrote `last_plan`.
+    pub last_live_plan_id: Option<gungnir_model::PlanId>,
     /// The recommendation and its policy-checked alternatives for [`Self::last_plan`]
     /// (GAP-032), regenerated when the plan changes rather than every frame because each
     /// alternative is another allocator solve.
@@ -549,6 +565,14 @@ impl AppState {
             loader: None,
             resources: config.resource_views(),
             last_plan: PlanView::default(),
+            // `PlanId::default()` is `PlanId(0)`, which `DpInterceptService::next_plan_id`
+            // (starting at 1) never mints -- it is the id of `PlanView::default()` alone,
+            // the same starting plan `last_plan` above is seeded with. Seeding this field
+            // to match rather than to `None` keeps the very first empty solve from
+            // comparing as "new": both fields start at the same point the empty solve
+            // itself produces, exactly as the single `last_plan` field did before this one
+            // existed.
+            last_live_plan_id: Some(gungnir_model::PlanId::default()),
             alternatives: Vec::new(),
             what_if: None,
             what_if_for: None,

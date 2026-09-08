@@ -322,7 +322,18 @@ impl DpInterceptService {
                     // The adequate list, in the order the matrix rows were built from.
                     &ready,
                 );
-                self.last_plan = self.fresh_plan(now, solutions, policy.value);
+                // **GAP-097.** A solve that confirms the same resource/track pairs
+                // already in `self.last_plan` is not a new recommendation, and must
+                // not become one: `update::tick`'s "publish only when the plan
+                // changes" gate (GAP-066) compares the whole `PlanView`, so minting a
+                // fresh id and `mission_time` here every tick made that gate never
+                // hold once a solve succeeded, flooding the approval queue with the
+                // same pairing at the tick rate. Only a genuinely different
+                // assignment gets a new id and timestamp; an unchanged one keeps the
+                // plan -- geometry included -- exactly as it was.
+                if Self::assignment_changed(&self.last_plan, &solutions) {
+                    self.last_plan = self.fresh_plan(now, solutions, policy.value);
+                }
             }
             Err(AllocationError::NotImplemented) => {
                 self.solver_ok = false;
@@ -358,6 +369,31 @@ impl DpInterceptService {
             policy_value: value,
             releasability: gungnir_model::Releasability::default(),
         }
+    }
+
+    /// Whether `solutions` names a different set of resource/track pairings than
+    /// `plan` already holds (GAP-097).
+    ///
+    /// Compared as a **set**, not the ordered `Vec` `solutions_with_geometry`
+    /// returns, since two solves of the identical assignment are not guaranteed to
+    /// enumerate the pairs in the same order. Compared by **the pairing alone**, not
+    /// the geometry riding along with it: a moving track's intercept point and
+    /// time-to-intercept legitimately change every tick even when the resource stays
+    /// tasked to the same track, and comparing the full `InterceptSolutionView`
+    /// would defeat the fix by minting a new plan for that reason alone.
+    fn assignment_changed(plan: &PlanView, solutions: &[InterceptSolutionView]) -> bool {
+        let pairs = |solutions: &[InterceptSolutionView]| -> std::collections::HashSet<(ResourceId, TrackId)> {
+            solutions.iter().map(|s| (s.resource, s.track)).collect()
+        };
+        let existing = match &plan.kind {
+            gungnir_model::PlanKind::Intercept { solutions } => pairs(solutions),
+            // This service never constructs a `Fires` plan, so `last_plan` is never
+            // one; treated as "no prior pairing" rather than assumed unreachable,
+            // since a plan a caller substituted in some other way is still data,
+            // not a broken invariant to panic over.
+            gungnir_model::PlanKind::Fires(_) => std::collections::HashSet::new(),
+        };
+        existing != pairs(solutions)
     }
 }
 
@@ -644,5 +680,37 @@ mod tests {
         let outcome = svc.plan(MissionTime(1.0), &[track(1)], &[resource(1, false)]);
         assert!(outcome.plan().expect("a plan").is_empty());
         assert!(svc.is_healthy(), "nothing was attempted, so nothing failed");
+    }
+
+    /// **GAP-097's own closing action**: an unmoving track and a ready resource,
+    /// solved over many ticks, must keep the same plan -- same id, same
+    /// `mission_time` -- throughout. Before the fix, every successful solve minted a
+    /// fresh id regardless of whether the pairing changed, which is what flooded the
+    /// approval queue with duplicates of the same recommendation at the tick rate.
+    #[test]
+    fn an_unchanged_assignment_keeps_the_same_plan_over_many_ticks() {
+        let mut svc = DpInterceptService::new(10);
+        let tracks = [track(1)];
+        let resources = [resource(1, true)];
+
+        let outcome = svc.plan(MissionTime(1.0), &tracks, &resources);
+        assert!(outcome.is_fresh(), "{outcome:?}");
+        let first = outcome.plan().expect("a plan").clone();
+        assert!(
+            !first.is_empty(),
+            "one ready resource and one track should pair into a real plan"
+        );
+
+        for tick in 2..50_u32 {
+            let now = MissionTime(f64::from(tick));
+            let outcome = svc.plan(now, &tracks, &resources);
+            assert!(outcome.is_fresh(), "tick {tick}: {outcome:?}");
+            let plan = outcome.plan().expect("a plan");
+            assert_eq!(
+                *plan, first,
+                "tick {tick}: an unchanged resource/track pairing must not mint a \
+                 new plan"
+            );
+        }
     }
 }
