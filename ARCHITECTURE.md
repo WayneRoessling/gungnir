@@ -2679,12 +2679,15 @@ re-reading the register alone.
   step returns `NotImplemented` naming the WGSL pipeline of §3.4 it waits on, and
   `gpu-fusion.yml` is dormant for want of the self-hosted `gpu` runner that GAP-061
   (closed) still needs registered to the repository. (GAP-024)
-- **Live protocol adapters beyond radar and the SAPIENT spotter.** ASTERIX (Category
-  048 edition 1.32, Category 034 edition 1.29) and SAPIENT spotter tasking and
-  detection are built and gated, and both hosts now register the configuration for
-  them (`ConfigBaseline.radar_feeds`; no longer true is this bullet's older claim
-  that neither host registers it). The STANAG 4676 codec still returns
-  `NotImplemented`. EO/IR, acoustic, passive-RF, and ISR-video each have a pinned
+- **Live protocol adapters beyond radar.** ASTERIX (Category 048 edition 1.32,
+  Category 034 edition 1.29), SAPIENT spotter tasking and detection, and -- since
+  2026-09-07 -- the SAPIENT acoustic and passive-RF node types are all built and
+  gated: one adapter (`SapientDetectionAdapter`) gated by an `accepted_node_type`
+  rather than three separate ones, since all three node types share SAPIENT's wire
+  shape. Both hosts register the configuration for all of them
+  (`ConfigBaseline.radar_feeds`, `ConfigBaseline.sapient_feeds`; no longer true is
+  this bullet's older claim that neither host registers it). The STANAG 4676 codec
+  still returns `NotImplemented`. EO/IR and ISR-video each have a pinned
   specification since 2026-09-06 (`docs/design/external-standards.md` §§7-9) and no
   adapter yet -- the blocker moved from procurement to engineering the same day it
   was found, per GAP-001. (GAP-001, GAP-064)
