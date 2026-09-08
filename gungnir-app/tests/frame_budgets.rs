@@ -16,13 +16,13 @@
 //! |---|---|---|
 //! | Startup to first frame, under 3 s | **yes** | Every stage it covers is implemented. |
 //! | Journal append, under 1 ms for 50 envelopes | **yes** since GAP-085 | Implemented, and now meets its budget under the D-04 desktop profile. |
-//! | Per-frame `update()`, p99 under 4 ms | no | The tracking stage is a stub; the number is not the budgeted quantity. |
+//! | Per-frame `update()`, p99 under 4 ms | no | Corrected 2026-09-07: the tracking stage has not been a stub since `PIPELINE_IMPLEMENTED` went true (GAP-011, 2026-09-06); the number below is now the budgeted quantity. It stays ungated because promoting a Draft row to gated is the owner's walk (GAP-067), not a test's. |
 //! | `tracks()`/`is_healthy()`, p99 under 1 ms | no | Measured against a populated snapshot since 2026-09-06 (GAP-011). Promoting the row is the owner's walk (GAP-067), not a test's. |
 //!
 //! The two ungated rows are measured and printed anyway, so the figures are on the
-//! record and the gate is a one-line change the day the pipeline lands. They are not
-//! asserted, because an assertion that passed on an absent stage would be a test
-//! claiming a subsystem works when it does not.
+//! record and gating them is a one-line change once GAP-067 confirms each criterion.
+//! They are not asserted here, because asserting ahead of that confirmation is the
+//! same shortcut D-16 reserves for the owner, not for a test.
 
 use gungnir_app::state::AppState;
 use gungnir_app::update;
