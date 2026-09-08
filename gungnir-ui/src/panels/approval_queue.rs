@@ -90,11 +90,11 @@ impl Verdict<'_> {
         }
     }
 
-    fn color(&self) -> egui::Color32 {
+    fn color(&self, palette: &theme::Palette) -> egui::Color32 {
         match self {
-            Verdict::Approved => theme::CLASS_NEUTRAL_COLOR,
-            Verdict::RequiresHumanApproval => theme::WARNING_COLOR,
-            Verdict::Denied { .. } => theme::CLASS_HOSTILE_COLOR,
+            Verdict::Approved => palette.class_neutral_color,
+            Verdict::RequiresHumanApproval => palette.warning_color,
+            Verdict::Denied { .. } => palette.class_hostile_color,
         }
     }
 }
@@ -218,7 +218,11 @@ pub struct ApprovalQueueView<'a> {
 }
 
 /// Render the queue. Returns the item the operator clicked this frame, if any.
-pub fn render_approval_queue(ui: &mut Ui, view: &ApprovalQueueView<'_>) -> Option<PendingId> {
+pub fn render_approval_queue(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &ApprovalQueueView<'_>,
+) -> Option<PendingId> {
     ui.heading("Approval queue");
 
     if !view.may_decide {
@@ -227,49 +231,51 @@ pub fn render_approval_queue(ui: &mut Ui, view: &ApprovalQueueView<'_>) -> Optio
                 "{} holds no decision authority; this queue is read-only.",
                 view.role
             ))
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
         );
     }
 
     let mut clicked = None;
     if view.rows.is_empty() {
-        draw_empty(ui, view.empty_because);
+        draw_empty(ui, palette, view.empty_because);
     } else {
-        ui.label(RichText::new(format!("{} waiting", view.rows.len())).color(theme::WARNING_COLOR));
-        draw_order(ui, view.order);
+        ui.label(
+            RichText::new(format!("{} waiting", view.rows.len())).color(palette.warning_color),
+        );
+        draw_order(ui, palette, view.order);
         egui::Grid::new("approval_queue")
             .striped(true)
             .show(ui, |ui| {
                 draw_header(ui);
                 for row in view.rows {
-                    if draw_row(ui, row, view.selected == Some(row.id)) {
+                    if draw_row(ui, palette, row, view.selected == Some(row.id)) {
                         clicked = Some(row.id);
                     }
                 }
             });
     }
     // Drawn after both branches on purpose: see `draw_undelivered`.
-    draw_undelivered(ui, view);
+    draw_undelivered(ui, palette, view);
     clicked
 }
 
 /// What the order an operator is scanning actually is.
-fn draw_order(ui: &mut Ui, order: QueueOrder<'_>) {
+fn draw_order(ui: &mut Ui, palette: &theme::Palette, order: QueueOrder<'_>) {
     match order {
         QueueOrder::TimeThenPriority => {
             ui.label(
                 RichText::new("Ordered by time remaining, then priority.")
-                    .color(theme::MUTED_TEXT_COLOR)
-                    .size(theme::SMALL_FONT_SIZE),
+                    .color(palette.muted_text_color())
+                    .size(palette.small_font_size),
             );
         }
         QueueOrder::TimeOnly { priority } => {
             ui.label(
                 RichText::new("Ordered by time remaining only.")
-                    .color(theme::MUTED_TEXT_COLOR)
-                    .size(theme::SMALL_FONT_SIZE),
+                    .color(palette.muted_text_color())
+                    .size(palette.small_font_size),
             );
-            draw_unavailable(ui, priority);
+            draw_unavailable(ui, palette, priority);
         }
     }
 }
@@ -284,7 +290,7 @@ fn draw_order(ui: &mut Ui, order: QueueOrder<'_>) {
 /// The section is silent when nothing is waiting. A standing "all handoffs delivered"
 /// line on a build where nothing can be delivered would be read past within a shift, and
 /// the day it disappeared nobody would notice.
-fn draw_undelivered(ui: &mut Ui, view: &ApprovalQueueView<'_>) {
+fn draw_undelivered(ui: &mut Ui, palette: &theme::Palette, view: &ApprovalQueueView<'_>) {
     let mut waiting = view
         .handoffs
         .iter()
@@ -301,11 +307,11 @@ fn draw_undelivered(ui: &mut Ui, view: &ApprovalQueueView<'_>) {
              when an effector has it -- including the ones that travel by voice, which \
              need no chasing and are not finished either.",
         )
-        .color(theme::MUTED_TEXT_COLOR)
-        .size(theme::SMALL_FONT_SIZE),
+        .color(palette.muted_text_color())
+        .size(palette.small_font_size),
     );
     for row in waiting {
-        draw_undelivered_row(ui, row, view.now);
+        draw_undelivered_row(ui, palette, row, view.now);
     }
 }
 
@@ -315,7 +321,12 @@ fn draw_undelivered(ui: &mut Ui, view: &ApprovalQueueView<'_>) {
 /// -- it has to be, because "manual" on its own is the word an operator reads as done --
 /// and a column wide enough for it pushes the columns after it out of a docked pane,
 /// where egui stops painting them and the panel silently loses its last field.
-fn draw_undelivered_row(ui: &mut Ui, row: &HandoffRow<'_>, now: MissionTime) {
+fn draw_undelivered_row(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    row: &HandoffRow<'_>,
+    now: MissionTime,
+) {
     // The endpoint's own name where there is one, and the act where there is not: an
     // operator reading this is looking for what they have to do next.
     let destination = row
@@ -330,20 +341,20 @@ fn draw_undelivered_row(ui: &mut Ui, row: &HandoffRow<'_>, now: MissionTime) {
     );
     ui.label(
         RichText::new(handoff::delivery_sentence(row, now))
-            .color(handoff::delivery_color(row.delivery)),
+            .color(handoff::delivery_color(palette, row.delivery)),
     );
-    ui.add_space(theme::ROW_SPACING);
+    ui.add_space(palette.row_spacing);
 }
 
 /// The empty case, which is the one this panel exists to get right.
-fn draw_empty(ui: &mut Ui, because: EmptyBecause<'_>) {
+fn draw_empty(ui: &mut Ui, palette: &theme::Palette, because: EmptyBecause<'_>) {
     let text = RichText::new(because.sentence());
     if because.means_nothing_to_decide() {
-        ui.label(text.color(theme::MUTED_TEXT_COLOR));
+        ui.label(text.color(palette.muted_text_color()));
     } else {
         // Not muted: an operator scanning a quiet screen has to see that the quiet is
         // upstream silence rather than an absence of work.
-        ui.label(text.color(theme::WARNING_COLOR));
+        ui.label(text.color(palette.warning_color));
     }
 }
 
@@ -361,60 +372,66 @@ fn draw_header(ui: &mut Ui) {
     ui.end_row();
 }
 
-fn draw_row(ui: &mut Ui, row: &QueueRow<'_>, selected: bool) -> bool {
+fn draw_row(ui: &mut Ui, palette: &theme::Palette, row: &QueueRow<'_>, selected: bool) -> bool {
     let clicked = ui
         .selectable_label(selected, format!("#{}", row.plan_id))
         .clicked();
     ui.label(row.assignments.to_string());
-    ui.label(RichText::new(row.verdict.label()).color(row.verdict.color()));
-    draw_time_remaining(ui, row.time_remaining);
-    draw_authority(ui, row);
+    ui.label(RichText::new(row.verdict.label()).color(row.verdict.color(palette)));
+    draw_time_remaining(ui, palette, row.time_remaining);
+    draw_authority(ui, palette, row);
     match row.escalated_from {
         Some(from) => {
-            ui.label(RichText::new(format!("escalated from {from}")).color(theme::WARNING_COLOR));
+            ui.label(RichText::new(format!("escalated from {from}")).color(palette.warning_color));
         }
         None => {
-            ui.label(RichText::new("--").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("--").color(palette.muted_text_color()));
         }
     }
     ui.end_row();
     clicked
 }
 
-fn draw_time_remaining(ui: &mut Ui, remaining: TimeRemaining<'_>) {
+fn draw_time_remaining(ui: &mut Ui, palette: &theme::Palette, remaining: TimeRemaining<'_>) {
     match remaining {
         TimeRemaining::Seconds(s) => {
             #[allow(clippy::cast_possible_truncation)]
             let s32 = s as f32;
-            let color = if s32 <= theme::TIME_REMAINING_CRITICAL_S {
-                theme::CLASS_HOSTILE_COLOR
-            } else if s32 <= theme::TIME_REMAINING_WARN_S {
-                theme::WARNING_COLOR
+            let color = if s32 <= palette.time_remaining_critical_s {
+                palette.class_hostile_color
+            } else if s32 <= palette.time_remaining_warn_s {
+                palette.warning_color
             } else {
-                theme::MUTED_TEXT_COLOR
+                palette.muted_text_color()
             };
-            ui.label(theme::numeral(format!("{s:.0} s")).color(color).strong());
+            ui.label(
+                theme::numeral(palette, format!("{s:.0} s"))
+                    .color(color)
+                    .strong(),
+            );
         }
         TimeRemaining::NoExpiryConfigured => {
             // Not a blank and not a warning: this is a setting the deployment chose,
             // and DN-10 makes it mean the item is preserved until somebody decides it.
-            ui.label(RichText::new("no expiry (preserved)").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("no expiry (preserved)").color(palette.muted_text_color()));
         }
         TimeRemaining::NotTracked { gap } => {
-            ui.label(RichText::new(format!("not tracked ({gap})")).color(theme::MUTED_TEXT_COLOR));
+            ui.label(
+                RichText::new(format!("not tracked ({gap})")).color(palette.muted_text_color()),
+            );
         }
     }
 }
 
-fn draw_authority(ui: &mut Ui, row: &QueueRow<'_>) {
+fn draw_authority(ui: &mut Ui, palette: &theme::Palette, row: &QueueRow<'_>) {
     if !row.may_decide {
-        ui.label(RichText::new("must go up").color(theme::WARNING_COLOR));
+        ui.label(RichText::new("must go up").color(palette.warning_color));
     } else if row.pre_delegated {
         // Named rather than hidden: a pre-delegated case still produces a record, and
         // an operator should know which of their decisions were pre-authorized.
-        ui.label(RichText::new("pre-delegated").color(theme::CLASS_NEUTRAL_COLOR));
+        ui.label(RichText::new("pre-delegated").color(palette.class_neutral_color));
     } else {
-        ui.label(RichText::new("yours to decide").color(theme::MUTED_TEXT_COLOR));
+        ui.label(RichText::new("yours to decide").color(palette.muted_text_color()));
     }
 }
 

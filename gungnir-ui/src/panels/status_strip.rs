@@ -262,7 +262,7 @@ pub struct StatusStripView<'a> {
 /// The operator line. Nobody signed in is drawn in the warning colour because every
 /// decision taken now goes on the record unattributed (DN-23 §5); an expired session
 /// says so in the same colour rather than vanishing into "nobody".
-fn draw_operator(ui: &mut Ui, line: OperatorLine<'_>) {
+fn draw_operator(ui: &mut Ui, palette: &theme::Palette, line: OperatorLine<'_>) {
     match line {
         OperatorLine::SignedIn {
             operator,
@@ -272,7 +272,7 @@ fn draw_operator(ui: &mut Ui, line: OperatorLine<'_>) {
             Some(s) if s <= 0.0 => {
                 ui.label(
                     RichText::new(format!("Operator {operator} ({role}) session lapsing"))
-                        .color(theme::WARNING_COLOR),
+                        .color(palette.warning_color),
                 );
             }
             Some(s) => {
@@ -288,7 +288,7 @@ fn draw_operator(ui: &mut Ui, line: OperatorLine<'_>) {
         OperatorLine::NobodySignedIn => {
             ui.label(
                 RichText::new("Nobody signed in: decisions are unattributed")
-                    .color(theme::WARNING_COLOR),
+                    .color(palette.warning_color),
             );
         }
         OperatorLine::Expired { operator } => {
@@ -296,12 +296,12 @@ fn draw_operator(ui: &mut Ui, line: OperatorLine<'_>) {
                 RichText::new(format!(
                     "Operator {operator}'s session expired; sign in again"
                 ))
-                .color(theme::WARNING_COLOR),
+                .color(palette.warning_color),
             );
         }
         OperatorLine::StoreUnavailable => {
             ui.label(
-                RichText::new("No account store: nobody can sign in").color(theme::ALERT_COLOR),
+                RichText::new("No account store: nobody can sign in").color(palette.alert_color),
             );
         }
     }
@@ -343,11 +343,11 @@ pub fn format_clock(t: MissionTime) -> String {
 }
 
 /// One health dot with its hover text.
-fn health_dot(ui: &mut Ui, name: &str, ok: bool, reason_when_bad: &str) {
+fn health_dot(ui: &mut Ui, palette: &theme::Palette, name: &str, ok: bool, reason_when_bad: &str) {
     let (mark, colour) = if ok {
-        ("●", theme::HEALTHY_COLOR)
+        ("●", palette.healthy_color())
     } else {
-        ("●", theme::ALERT_COLOR)
+        ("●", palette.alert_color)
     };
     let response = ui.label(RichText::new(mark).color(colour).strong());
     let tooltip = if ok {
@@ -363,16 +363,16 @@ fn health_dot(ui: &mut Ui, name: &str, ok: bool, reason_when_bad: &str) {
 ///
 /// A strip that announced "encrypted" on every frame would train an operator to stop
 /// reading it; the case that matters is the one where it is off.
-fn draw_encryption(ui: &mut Ui, state: EncryptionState<'_>) {
+fn draw_encryption(ui: &mut Ui, palette: &theme::Palette, state: EncryptionState<'_>) {
     match state.warning() {
         None => {
-            ui.label(RichText::new("journal encrypted").color(theme::HEALTHY_COLOR));
+            ui.label(RichText::new("journal encrypted").color(palette.healthy_color()));
         }
         Some(warning) => {
             ui.label(RichText::new(warning).color(if state.is_fault() {
-                theme::ALERT_COLOR
+                palette.alert_color
             } else {
-                theme::WARNING_COLOR
+                palette.warning_color
             }));
         }
     }
@@ -384,18 +384,18 @@ fn draw_encryption(ui: &mut Ui, state: EncryptionState<'_>) {
 /// frame would be read past. The case that matters is the one where plans made now will
 /// not be applied, and that case is drawn loudly because nothing else on the strip
 /// explains why the approval queue has stopped filling.
-fn draw_validity(ui: &mut Ui, validity: BaselineValidity) {
+fn draw_validity(ui: &mut Ui, palette: &theme::Palette, validity: BaselineValidity) {
     match validity {
         // Nothing drawn: no window was configured, which is the ordinary case and not a
         // state anybody needs told about.
         BaselineValidity::NoWindowConfigured => {}
         BaselineValidity::InForce { until: None } => {
-            ui.label(RichText::new("baseline in force").color(theme::HEALTHY_COLOR));
+            ui.label(RichText::new("baseline in force").color(palette.healthy_color()));
         }
         BaselineValidity::InForce { until: Some(t) } => {
             ui.label(
                 RichText::new(format!("baseline valid until {}", format_clock(t)))
-                    .color(theme::HEALTHY_COLOR),
+                    .color(palette.healthy_color()),
             );
         }
         BaselineValidity::NotYet { from } => {
@@ -404,7 +404,7 @@ fn draw_validity(ui: &mut Ui, validity: BaselineValidity) {
                     "baseline not in force until {}: plans are superseded",
                     format_clock(from)
                 ))
-                .color(theme::ALERT_COLOR),
+                .color(palette.alert_color),
             );
         }
         BaselineValidity::Expired { since } => {
@@ -413,7 +413,7 @@ fn draw_validity(ui: &mut Ui, validity: BaselineValidity) {
                     "baseline expired {}: plans are superseded",
                     format_clock(since)
                 ))
-                .color(theme::ALERT_COLOR),
+                .color(palette.alert_color),
             );
         }
     }
@@ -424,28 +424,30 @@ fn draw_validity(ui: &mut Ui, validity: BaselineValidity) {
 /// Drawn beside a connected node and never beside a detached one: once the link is
 /// declared gone the detached line already says so, and a second number would be
 /// competing with it.
-fn draw_freshness(ui: &mut Ui, freshness: LinkFreshness) {
+fn draw_freshness(ui: &mut Ui, palette: &theme::Palette, freshness: LinkFreshness) {
     match freshness {
         LinkFreshness::NeverHeard => {
-            ui.label(RichText::new("nothing heard yet").color(theme::WARNING_COLOR));
+            ui.label(RichText::new("nothing heard yet").color(palette.warning_color));
         }
         LinkFreshness::Heard { age_s } => {
-            ui.label(RichText::new(format!("heard {age_s:.1} s ago")).color(theme::HEALTHY_COLOR));
+            ui.label(
+                RichText::new(format!("heard {age_s:.1} s ago")).color(palette.healthy_color()),
+            );
         }
         LinkFreshness::Overdue { age_s } => {
             ui.label(
                 RichText::new(format!("nothing heard for {age_s:.1} s"))
-                    .color(theme::ALERT_COLOR)
+                    .color(palette.alert_color)
                     .strong(),
             );
         }
     }
 }
 
-fn draw_backend(ui: &mut Ui, backend: BackendStatus<'_>) {
+fn draw_backend(ui: &mut Ui, palette: &theme::Palette, backend: BackendStatus<'_>) {
     match backend {
         BackendStatus::Embedded => {
-            ui.label(RichText::new("Embedded").color(theme::HEALTHY_COLOR));
+            ui.label(RichText::new("Embedded").color(palette.healthy_color()));
         }
         BackendStatus::Node {
             endpoint,
@@ -455,8 +457,8 @@ fn draw_backend(ui: &mut Ui, backend: BackendStatus<'_>) {
             freshness,
         } => {
             if connected {
-                ui.label(RichText::new(format!("Node {endpoint}")).color(theme::HEALTHY_COLOR));
-                draw_freshness(ui, freshness);
+                ui.label(RichText::new(format!("Node {endpoint}")).color(palette.healthy_color()));
+                draw_freshness(ui, palette, freshness);
             } else {
                 // The counts are the point: an operator needs to know submissions are
                 // being held, and how many have already been lost.
@@ -464,7 +466,7 @@ fn draw_backend(ui: &mut Ui, backend: BackendStatus<'_>) {
                     RichText::new(format!(
                         "Detached from {endpoint}, {queued} queued, {dropped} dropped"
                     ))
-                    .color(theme::ALERT_COLOR)
+                    .color(palette.alert_color)
                     .strong(),
                 );
             }
@@ -473,22 +475,25 @@ fn draw_backend(ui: &mut Ui, backend: BackendStatus<'_>) {
 }
 
 /// The health element: one dot per service, each with the reason it is down.
-fn draw_health(ui: &mut Ui, health: SystemHealth) {
+fn draw_health(ui: &mut Ui, palette: &theme::Palette, health: SystemHealth) {
     ui.label("Health");
     health_dot(
         ui,
+        palette,
         "Tracking",
         health.tracking_healthy,
         "the tracking pipeline is not running",
     );
     health_dot(
         ui,
+        palette,
         "Intercept",
         health.intercept_healthy,
         "the intercept service reported unhealthy",
     );
     health_dot(
         ui,
+        palette,
         "Ingest",
         health.ingest_healthy,
         "no adapter has delivered within the expected interval",
@@ -496,16 +501,21 @@ fn draw_health(ui: &mut Ui, health: SystemHealth) {
 }
 
 /// The weapons control status element: one chip per effector layer.
-fn draw_control_status(ui: &mut Ui, lines: &[ControlStatusLine], vocabulary: &Vocabulary) {
+fn draw_control_status(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    lines: &[ControlStatusLine],
+    vocabulary: &Vocabulary,
+) {
     if lines.is_empty() {
-        ui.label(RichText::new("Control status unknown").color(theme::MUTED_TEXT_COLOR));
+        ui.label(RichText::new("Control status unknown").color(palette.muted_text_color()));
         return;
     }
     for line in lines {
         let colour = match line.status {
-            WeaponsControlStatus::Free => theme::ALERT_COLOR,
-            WeaponsControlStatus::Tight => theme::WARNING_COLOR,
-            WeaponsControlStatus::Hold => theme::HEALTHY_COLOR,
+            WeaponsControlStatus::Free => palette.alert_color,
+            WeaponsControlStatus::Tight => palette.warning_color,
+            WeaponsControlStatus::Hold => palette.healthy_color(),
         };
         let chip = ui.label(
             RichText::new(format!(
@@ -527,7 +537,12 @@ fn draw_control_status(ui: &mut Ui, lines: &[ControlStatusLine], vocabulary: &Vo
 }
 
 /// The delegation element: the pre-delegated authorities in force (D-15).
-fn draw_delegations(ui: &mut Ui, delegations: &[DelegationLine<'_>], vocabulary: &Vocabulary) {
+fn draw_delegations(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    delegations: &[DelegationLine<'_>],
+    vocabulary: &Vocabulary,
+) {
     if delegations.is_empty() {
         ui.label("No delegation");
         return;
@@ -556,12 +571,12 @@ fn draw_delegations(ui: &mut Ui, delegations: &[DelegationLine<'_>], vocabulary:
             }
             (None, None) => format!("{} delegated to {}", d.action, d.role),
         };
-        ui.label(RichText::new(text).color(theme::WARNING_COLOR));
+        ui.label(RichText::new(text).color(palette.warning_color));
     }
 }
 
 /// The alert element, which can say that it does not know the states.
-fn draw_alerts(ui: &mut Ui, alerts: AlertSummary) {
+fn draw_alerts(ui: &mut Ui, palette: &theme::Palette, alerts: AlertSummary) {
     match alerts {
         AlertSummary::ByState {
             new,
@@ -573,7 +588,7 @@ fn draw_alerts(ui: &mut Ui, alerts: AlertSummary) {
             ));
         }
         AlertSummary::Unclassified { total } => {
-            ui.label(RichText::new(format!("Alerts {total}")).color(theme::MUTED_TEXT_COLOR))
+            ui.label(RichText::new(format!("Alerts {total}")).color(palette.muted_text_color()))
                 .on_hover_text(
                     "The desktop carries a flat alert list; lifecycle states are not \
                      tracked yet, so new, acknowledged and escalated counts are not \
@@ -606,7 +621,7 @@ pub enum CoverageStatus<'a> {
     NotPlaceable { setting: &'a str },
 }
 
-fn draw_coverage(ui: &mut Ui, coverage: CoverageStatus<'_>) {
+fn draw_coverage(ui: &mut Ui, palette: &theme::Palette, coverage: CoverageStatus<'_>) {
     match coverage {
         CoverageStatus::Measured {
             uncovered_segments,
@@ -614,9 +629,9 @@ fn draw_coverage(ui: &mut Ui, coverage: CoverageStatus<'_>) {
             terrain_masking,
         } => {
             let colour = if uncovered_segments > 0 {
-                theme::ALERT_COLOR
+                palette.alert_color
             } else {
-                theme::HEALTHY_COLOR
+                palette.healthy_color()
             };
             ui.label(
                 RichText::new(format!(
@@ -626,7 +641,7 @@ fn draw_coverage(ui: &mut Ui, coverage: CoverageStatus<'_>) {
                 .color(colour),
             );
             if !terrain_masking {
-                ui.label(RichText::new("(flat terrain)").color(theme::WARNING_COLOR))
+                ui.label(RichText::new("(flat terrain)").color(palette.warning_color))
                     .on_hover_text(
                         "No terrain model was available, so coverage was computed on flat \
                      ground. That is optimistic: a valley the sensor cannot see into is \
@@ -635,14 +650,14 @@ fn draw_coverage(ui: &mut Ui, coverage: CoverageStatus<'_>) {
             }
         }
         CoverageStatus::NoApproaches => {
-            ui.label(RichText::new("Coverage not measured").color(theme::MUTED_TEXT_COLOR))
+            ui.label(RichText::new("Coverage not measured").color(palette.muted_text_color()))
                 .on_hover_text(
                     "No approach axes are declared, so there is nothing to measure \
                      coverage along. This is not the same as full coverage.",
                 );
         }
         CoverageStatus::NotPlaceable { setting } => {
-            ui.label(RichText::new("Coverage unplaceable").color(theme::MUTED_TEXT_COLOR))
+            ui.label(RichText::new("Coverage unplaceable").color(palette.muted_text_color()))
                 .on_hover_text(format!(
                     "Approaches are declared but this deployment has no local frame \
                      origin ({setting}), so they cannot be placed in the picture."
@@ -656,17 +671,17 @@ fn draw_coverage(ui: &mut Ui, coverage: CoverageStatus<'_>) {
 /// The elements are drawn left to right in the order
 /// `docs/ux/information-architecture.md` §2 lists them, each by its own function so
 /// that the order is visible here and the detail is not.
-pub fn render_status_strip(ui: &mut Ui, view: &StatusStripView<'_>) {
+pub fn render_status_strip(ui: &mut Ui, palette: &theme::Palette, view: &StatusStripView<'_>) {
     ui.horizontal_wrapped(|ui| {
-        draw_backend(ui, view.backend);
+        draw_backend(ui, palette, view.backend);
         ui.separator();
-        draw_encryption(ui, view.encryption);
+        draw_encryption(ui, palette, view.encryption);
         ui.separator();
         // Drawn immediately after encryption and before the session, because both answer
         // "is what I am doing being recorded and honoured?" and neither is visible
         // anywhere else on the strip.
         if !matches!(view.validity, BaselineValidity::NoWindowConfigured) {
-            draw_validity(ui, view.validity);
+            draw_validity(ui, palette, view.validity);
             ui.separator();
         }
         // Only when the deployment has a choice to have made (DN-24 §9).
@@ -679,7 +694,7 @@ pub fn render_status_strip(ui: &mut Ui, view: &StatusStripView<'_>) {
         if let Some(rehearsal) = view.rehearsal {
             ui.label(
                 RichText::new(rehearsal.to_uppercase())
-                    .color(theme::ALERT_COLOR)
+                    .color(palette.alert_color)
                     .strong(),
             );
             ui.separator();
@@ -690,12 +705,12 @@ pub fn render_status_strip(ui: &mut Ui, view: &StatusStripView<'_>) {
                 ui.label(format!("Session {} {}", s.id, s.state));
             }
             None => {
-                ui.label(RichText::new("No session").color(theme::WARNING_COLOR));
+                ui.label(RichText::new("No session").color(palette.warning_color));
             }
         }
         ui.separator();
 
-        draw_operator(ui, view.operator);
+        draw_operator(ui, palette, view.operator);
         ui.separator();
 
         ui.label(format!(
@@ -705,18 +720,18 @@ pub fn render_status_strip(ui: &mut Ui, view: &StatusStripView<'_>) {
         ));
         ui.separator();
 
-        draw_health(ui, view.health);
+        draw_health(ui, palette, view.health);
         ui.separator();
 
-        draw_control_status(ui, view.control_status, view.vocabulary);
+        draw_control_status(ui, palette, view.control_status, view.vocabulary);
         ui.separator();
 
-        draw_delegations(ui, view.delegations, view.vocabulary);
+        draw_delegations(ui, palette, view.delegations, view.vocabulary);
         ui.separator();
 
-        draw_coverage(ui, view.coverage);
+        draw_coverage(ui, palette, view.coverage);
         ui.separator();
-        draw_alerts(ui, view.alerts);
+        draw_alerts(ui, palette, view.alerts);
         ui.separator();
 
         ui.label(RichText::new(view.role).strong());

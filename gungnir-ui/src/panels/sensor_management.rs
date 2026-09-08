@@ -86,12 +86,12 @@ impl TaskProgress<'_> {
         matches!(self, TaskProgress::Issued | TaskProgress::Sent)
     }
 
-    fn color(&self) -> egui::Color32 {
+    fn color(&self, palette: &theme::Palette) -> egui::Color32 {
         match self {
-            TaskProgress::Issued | TaskProgress::Sent => theme::WARNING_COLOR,
-            TaskProgress::Acknowledged => theme::CLASS_NEUTRAL_COLOR,
+            TaskProgress::Issued | TaskProgress::Sent => palette.warning_color,
+            TaskProgress::Acknowledged => palette.class_neutral_color,
             TaskProgress::Failed { .. } | TaskProgress::Unacknowledged => {
-                theme::CLASS_HOSTILE_COLOR
+                palette.class_hostile_color
             }
         }
     }
@@ -172,15 +172,16 @@ pub enum SensorAction {
 /// Render the sensor management panel.
 pub fn render_sensor_management(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &SensorManagementView<'_>,
 ) -> Option<SensorAction> {
     ui.heading("Sensors");
-    let recommended = draw_recommendations(ui, view);
+    let recommended = draw_recommendations(ui, palette, view);
 
     if view.sensors.is_empty() {
         ui.label(
             RichText::new("No sensors are configured in the baseline in force.")
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
         return None;
     }
@@ -193,9 +194,9 @@ pub fn render_sensor_management(
             view.sensors.len()
         ))
         .color(if contributing == 0 {
-            theme::WARNING_COLOR
+            palette.warning_color
         } else {
-            theme::MUTED_TEXT_COLOR
+            palette.muted_text_color()
         }),
     );
 
@@ -212,13 +213,13 @@ pub fn render_sensor_management(
                 view.sensors.len()
             )
         })
-        .color(theme::MUTED_TEXT_COLOR),
+        .color(palette.muted_text_color()),
     );
 
     if !view.may_task {
         ui.label(
             RichText::new(format!("{} may not change a sensor's mode.", view.role))
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
     }
     ui.separator();
@@ -242,7 +243,7 @@ pub fn render_sensor_management(
             }
             ui.end_row();
             for sensor in view.sensors {
-                if let Some(a) = draw_row(ui, view, sensor) {
+                if let Some(a) = draw_row(ui, palette, view, sensor) {
                     action = Some(a);
                 }
             }
@@ -254,23 +255,24 @@ pub fn render_sensor_management(
         // missed.
         ui.label(
             RichText::new(format!("Last request refused: {error}"))
-                .color(theme::CLASS_HOSTILE_COLOR),
+                .color(palette.class_hostile_color),
         );
     }
-    draw_unavailable(ui, view.control_path);
+    draw_unavailable(ui, palette, view.control_path);
     ui.label(
         RichText::new(
             "A command is recorded and published here. No adapter carries it to a \
              sensor, so nothing acknowledges and every command times out.",
         )
-        .color(theme::WARNING_COLOR)
-        .size(theme::SMALL_FONT_SIZE),
+        .color(palette.warning_color)
+        .size(palette.small_font_size),
     );
     action.or(recommended)
 }
 
 fn draw_row(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &SensorManagementView<'_>,
     sensor: &SensorRow<'_>,
 ) -> Option<SensorAction> {
@@ -288,8 +290,8 @@ fn draw_row(
                     "(asked: {})",
                     view.vocabulary.sensor_mode(requested)
                 ))
-                .color(theme::WARNING_COLOR)
-                .size(theme::SMALL_FONT_SIZE),
+                .color(palette.warning_color)
+                .size(palette.small_font_size),
             );
         }
     });
@@ -303,17 +305,17 @@ fn draw_row(
     }
 
     if sensor.contributing {
-        ui.label(RichText::new("contributing").color(theme::CLASS_NEUTRAL_COLOR));
+        ui.label(RichText::new("contributing").color(palette.class_neutral_color));
     } else {
-        ui.label(RichText::new("none").color(theme::MUTED_TEXT_COLOR));
+        ui.label(RichText::new("none").color(palette.muted_text_color()));
     }
 
     match sensor.task {
         Some(task) => {
-            ui.label(RichText::new(task.phrase()).color(task.color()));
+            ui.label(RichText::new(task.phrase()).color(task.color(palette)));
         }
         None => {
-            ui.label(RichText::new("no command issued").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("no command issued").color(palette.muted_text_color()));
         }
     }
 
@@ -403,20 +405,24 @@ fn draw_mode_buttons(
 /// could be evaluated, which is not. Accepting a plan issues the command through the same
 /// path the mode buttons use, so it is authorized and recorded like any other tasking
 /// (DN-13 rule 4).
-fn draw_recommendations(ui: &mut Ui, view: &SensorManagementView<'_>) -> Option<SensorAction> {
+fn draw_recommendations(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &SensorManagementView<'_>,
+) -> Option<SensorAction> {
     let mut action = None;
     ui.separator();
     ui.strong("Re-tasking recommendations");
     match view.recommendations {
         Err(reason) => {
             ui.label(
-                RichText::new(format!("Not evaluated: {reason}")).color(theme::MUTED_TEXT_COLOR),
+                RichText::new(format!("Not evaluated: {reason}")).color(palette.muted_text_color()),
             );
         }
         Ok([]) => {
             ui.label(
                 RichText::new("No mode change improves coverage along the declared approaches.")
-                    .color(theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
             );
         }
         Ok(lines) => {

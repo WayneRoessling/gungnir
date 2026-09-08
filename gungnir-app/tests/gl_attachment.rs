@@ -75,7 +75,7 @@ fn the_three_dimensional_scene_is_the_default_and_can_be_turned_off() {
 fn attaching_without_a_context_is_an_error_not_a_panic() {
     // `SceneRenderer` holds GPU handles and is not `Debug`, so the error is matched
     // rather than unwrapped.
-    match gungnir_viewport3d::gl::SceneRenderer::attach(None) {
+    match gungnir_viewport3d::gl::SceneRenderer::attach(None, gungnir_ui::theme::Palette::day()) {
         Ok(_) => panic!("attaching succeeded with no GL context"),
         Err(err) => {
             assert!(

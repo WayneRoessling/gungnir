@@ -162,47 +162,50 @@ pub fn reject_enabled(state: &DecisionDialogState) -> bool {
 /// Render the dialog. Returns a choice only when the operator clicks one.
 pub fn render_decision_dialog(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &DecisionDialogView<'_>,
     state: &mut DecisionDialogState,
 ) -> Option<DecisionChoice> {
     state.reconcile(view.degraded);
 
     ui.heading(format!("Decide plan #{}", view.row.plan_id));
-    draw_plan(ui, view);
+    draw_plan(ui, palette, view);
     ui.separator();
-    draw_rationale(ui, view);
+    draw_rationale(ui, palette, view);
     ui.separator();
-    draw_alternatives(ui, view);
+    draw_alternatives(ui, palette, view);
     ui.separator();
-    draw_degraded(ui, view, state);
+    draw_degraded(ui, palette, view, state);
     ui.separator();
-    draw_attribution(ui, view.operator);
+    draw_attribution(ui, palette, view.operator);
     ui.separator();
-    draw_controls(ui, view, state)
+    draw_controls(ui, palette, view, state)
 }
 
-fn draw_plan(ui: &mut Ui, view: &DecisionDialogView<'_>) {
+fn draw_plan(ui: &mut Ui, palette: &theme::Palette, view: &DecisionDialogView<'_>) {
     ui.label(format!("{} assignments", view.row.assignments));
-    ui.label(RichText::new(verdict_sentence(view.row.verdict)).color(theme::WARNING_COLOR));
+    ui.label(RichText::new(verdict_sentence(view.row.verdict)).color(palette.warning_color));
     match view.row.time_remaining {
-        TimeRemaining::Seconds(s) => ui.label(theme::numeral(format!("{s:.0} s remaining"))),
+        TimeRemaining::Seconds(s) => {
+            ui.label(theme::numeral(palette, format!("{s:.0} s remaining")))
+        }
         TimeRemaining::NoExpiryConfigured => ui.label(
             RichText::new("No expiry configured: this item is preserved until decided.")
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         ),
         TimeRemaining::NotTracked { gap } => ui.label(
             RichText::new(format!(
                 "Time remaining is not tracked in this build ({gap}); do not read this \
                  as an item with no deadline."
             ))
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
         ),
     };
     match view.cost {
         Ok(c) => {
             ui.label(format!("Expected cost {c:.2}"));
         }
-        Err(u) => draw_unavailable(ui, u),
+        Err(u) => draw_unavailable(ui, palette, u),
     }
 
     // The chain that produced the verdict. A verdict is only as good as the engines
@@ -214,16 +217,16 @@ fn draw_plan(ui: &mut Ui, view: &DecisionDialogView<'_>) {
         } else {
             format!("Checked by: {}", view.engines.join(", "))
         })
-        .color(theme::MUTED_TEXT_COLOR)
-        .size(theme::SMALL_FONT_SIZE),
+        .color(palette.muted_text_color())
+        .size(palette.small_font_size),
     );
     for caveat in view.caveats {
         // Warning-coloured rather than muted: an operator reading a clean verdict has
         // to see which of its checks could not have failed.
         ui.label(
             RichText::new(format!("Could not fail: {caveat}"))
-                .color(theme::WARNING_COLOR)
-                .size(theme::SMALL_FONT_SIZE),
+                .color(palette.warning_color)
+                .size(palette.small_font_size),
         );
     }
 }
@@ -238,18 +241,18 @@ fn verdict_sentence(verdict: Verdict<'_>) -> String {
     }
 }
 
-fn draw_rationale(ui: &mut Ui, view: &DecisionDialogView<'_>) {
+fn draw_rationale(ui: &mut Ui, palette: &theme::Palette, view: &DecisionDialogView<'_>) {
     ui.strong("Why this plan");
     match view.rationale {
         Ok(text) => {
             ui.label(text);
         }
-        Err(u) => draw_unavailable(ui, u),
+        Err(u) => draw_unavailable(ui, palette, u),
     }
 }
 
-fn draw_alternatives(ui: &mut Ui, view: &DecisionDialogView<'_>) {
-    if view.alternatives.draw_header(ui, "Alternatives") {
+fn draw_alternatives(ui: &mut Ui, palette: &theme::Palette, view: &DecisionDialogView<'_>) {
+    if view.alternatives.draw_header(ui, palette, "Alternatives") {
         if let Some(alts) = view.alternatives.items() {
             for a in alts {
                 ui.label(format!(
@@ -263,19 +266,24 @@ fn draw_alternatives(ui: &mut Ui, view: &DecisionDialogView<'_>) {
     }
 }
 
-fn draw_degraded(ui: &mut Ui, view: &DecisionDialogView<'_>, state: &mut DecisionDialogState) {
+fn draw_degraded(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &DecisionDialogView<'_>,
+    state: &mut DecisionDialogState,
+) {
     ui.strong("Conditions");
     if view.degraded.is_empty() {
         ui.label(
             RichText::new("Every subsystem this dialog checks is reporting healthy.")
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
         return;
     }
     for d in view.degraded {
         ui.label(
             RichText::new(format!("{}: {}", d.subsystem, d.detail))
-                .color(theme::CLASS_HOSTILE_COLOR),
+                .color(palette.class_hostile_color),
         );
     }
     ui.checkbox(
@@ -284,7 +292,7 @@ fn draw_degraded(ui: &mut Ui, view: &DecisionDialogView<'_>, state: &mut Decisio
     );
 }
 
-fn draw_attribution(ui: &mut Ui, operator: OperatorIdentity<'_>) {
+fn draw_attribution(ui: &mut Ui, palette: &theme::Palette, operator: OperatorIdentity<'_>) {
     match operator {
         OperatorIdentity::Authenticated(id) => {
             ui.label(format!("This decision will be recorded against {id}."));
@@ -296,7 +304,7 @@ fn draw_attribution(ui: &mut Ui, operator: OperatorIdentity<'_>) {
                      desktop has selected the {role} role but nobody is signed in \
                      ({gap}). The record names the decision, not the person."
                 ))
-                .color(theme::WARNING_COLOR),
+                .color(palette.warning_color),
             );
         }
     }
@@ -306,6 +314,7 @@ fn draw_attribution(ui: &mut Ui, operator: OperatorIdentity<'_>) {
 /// of the module documentation.
 fn draw_controls(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &DecisionDialogView<'_>,
     state: &mut DecisionDialogState,
 ) -> Option<DecisionChoice> {
@@ -316,7 +325,7 @@ fn draw_controls(
     if !reject_enabled(state) {
         ui.label(
             RichText::new("A rejection is recorded with its reason; enter one to reject.")
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
     }
     if ui
@@ -334,17 +343,19 @@ fn draw_controls(
     } else {
         ui.label(
             RichText::new("Overriding needs a higher authority than this role holds.")
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
     }
 
     ui.separator();
     if !view.may_accept {
-        ui.label(RichText::new("This role may not accept a plan.").color(theme::MUTED_TEXT_COLOR));
+        ui.label(
+            RichText::new("This role may not accept a plan.").color(palette.muted_text_color()),
+        );
     } else if !accept_enabled(view, state) {
         ui.label(
             RichText::new("Acknowledge the degraded conditions before accepting.")
-                .color(theme::WARNING_COLOR),
+                .color(palette.warning_color),
         );
     }
     if ui

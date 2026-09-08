@@ -1223,6 +1223,17 @@ impl ConfigBaseline {
         (declared.len() == 1).then(|| declared.remove(0))
     }
 
+    /// The colour variant this deployment starts in (D-35, DS-07; GAP-095).
+    ///
+    /// Falls back to [`gungnir_model::ThemeVariant::default`] (day) rather than
+    /// panicking on a baseline this method is handed before `validate` has run;
+    /// `validate` is what actually refuses an unrecognised spelling, so by the time a
+    /// promoted baseline reaches this, the fallback never fires.
+    #[must_use]
+    pub fn theme_variant(&self) -> gungnir_model::ThemeVariant {
+        gungnir_model::ThemeVariant::parse(&self.ui.theme).unwrap_or_default()
+    }
+
     /// True when this baseline may be promoted at `now`. A baseline outside its
     /// window may still be read, replayed, and inspected
     /// (docs/design/DN-08-policy-configuration.md §5).
@@ -2358,6 +2369,15 @@ pub fn validate_panel_id(pn: &str) -> bool {
 }
 
 fn validate_ui(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    // D-35, GAP-095: an unrecognised spelling is refused rather than silently
+    // defaulted to day, the same rule `AssetConfig::priority` follows above.
+    if gungnir_model::ThemeVariant::parse(&baseline.ui.theme).is_none() {
+        return Err(ConfigError::Invalid(format!(
+            "ui.theme names an unknown variant {:?}; only \"day\" or \"night\" are \
+             recognised (D-35, GAP-095)",
+            baseline.ui.theme
+        )));
+    }
     for (role, layout) in &baseline.ui.layouts {
         validate_layout_node(role, &layout.main)?;
 
@@ -3549,6 +3569,7 @@ mod tests {
         let mut baseline = ConfigBaseline {
             ui: UiSettings {
                 scene_3d: false,
+                theme: "day".to_owned(),
                 layouts: BTreeMap::from([(
                     "Operator".to_owned(),
                     RoleLayout {
@@ -3589,6 +3610,7 @@ mod tests {
         let baseline = ConfigBaseline {
             ui: UiSettings {
                 scene_3d: false,
+                theme: "day".to_owned(),
                 layouts: BTreeMap::from([(
                     "Operator".to_owned(),
                     RoleLayout {
@@ -3635,6 +3657,7 @@ mod tests {
             let baseline = ConfigBaseline {
                 ui: UiSettings {
                     scene_3d: false,
+                    theme: "day".to_owned(),
                     layouts: BTreeMap::from([(
                         "Operator".to_owned(),
                         RoleLayout {
@@ -5617,5 +5640,82 @@ mod authentication_tests {
             ..ConfigBaseline::default()
         };
         assert!(validate(&bad).is_err(), "a PHC string passed as a path");
+    }
+}
+
+/// D-35, GAP-095: `ui.theme` names the night variant, validated and defaulted the
+/// same way `AssetConfig::priority` is.
+#[cfg(test)]
+mod theme_tests {
+    use super::*;
+    use gungnir_model::ThemeVariant;
+
+    #[test]
+    fn day_and_night_both_validate() {
+        for spelling in ["day", "night", "Night", " day "] {
+            let baseline = ConfigBaseline {
+                ui: UiSettings {
+                    theme: spelling.to_owned(),
+                    ..UiSettings::default()
+                },
+                ..ConfigBaseline::default()
+            };
+            validate(&baseline).unwrap_or_else(|e| panic!("{spelling:?} should validate: {e}"));
+        }
+    }
+
+    /// The default baseline (no `ui` section at all) resolves to day, and `validate`
+    /// agrees it is a recognised spelling.
+    #[test]
+    fn the_default_baseline_is_day() {
+        let baseline = ConfigBaseline::default();
+        assert_eq!(baseline.theme_variant(), ThemeVariant::Day);
+        validate(&baseline).expect("the default baseline validates");
+    }
+
+    /// D-35's own rule, enforced rather than asserted: an unrecognised spelling is
+    /// refused with a reason that names the bad value, not silently defaulted to day.
+    #[test]
+    fn an_unrecognized_theme_is_refused_with_a_clear_reason() {
+        let baseline = ConfigBaseline {
+            ui: UiSettings {
+                theme: "dusk".to_owned(),
+                ..UiSettings::default()
+            },
+            ..ConfigBaseline::default()
+        };
+        let err = validate(&baseline).expect_err("an unknown variant must be refused");
+        let message = err.to_string();
+        assert!(
+            message.contains("dusk"),
+            "the reason should name the offending value: {message}"
+        );
+        assert!(
+            message.contains("day") && message.contains("night"),
+            "the reason should say what is recognised instead: {message}"
+        );
+    }
+
+    /// `theme_variant` mirrors `AssetPriority::parse(..).unwrap_or_default()`: a
+    /// convenience for a baseline already known to validate, not a second silent
+    /// default for a bad one -- `validate` above is what actually refuses that.
+    #[test]
+    fn theme_variant_resolves_the_parsed_setting() {
+        let day = ConfigBaseline {
+            ui: UiSettings {
+                theme: "day".to_owned(),
+                ..UiSettings::default()
+            },
+            ..ConfigBaseline::default()
+        };
+        let night = ConfigBaseline {
+            ui: UiSettings {
+                theme: "night".to_owned(),
+                ..UiSettings::default()
+            },
+            ..ConfigBaseline::default()
+        };
+        assert_eq!(day.theme_variant(), ThemeVariant::Day);
+        assert_eq!(night.theme_variant(), ThemeVariant::Night);
     }
 }

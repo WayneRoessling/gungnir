@@ -180,6 +180,7 @@ fn a_configured_arrangement_is_what_reaches_the_screen() {
         data_dir: dir.to_string_lossy().into_owned(),
         ui: UiSettings {
             scene_3d: false,
+            theme: "day".to_owned(),
             layouts: BTreeMap::from([(
                 "Operator".to_owned(),
                 RoleLayout {
@@ -270,6 +271,7 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
     let (_, frame) = probe.draw(|ui| {
         gungnir_viewport3d::render(
             ui,
+            &state.palette,
             &mut state.viewport,
             &[],
             &gungnir_model::PlanView::default(),
@@ -328,6 +330,7 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
     let (_, frame) = probe.draw(|ui| {
         gungnir_viewport3d::render(
             ui,
+            &placed.palette,
             &mut placed.viewport,
             &[],
             &gungnir_model::PlanView::default(),
@@ -456,6 +459,7 @@ fn coverage_gaps_are_reported_along_the_declared_approaches() {
     let (_, frame) = probe.draw(|ui| {
         gungnir_viewport3d::render(
             ui,
+            &state.palette,
             &mut state.viewport,
             &[],
             &gungnir_model::PlanView::default(),

@@ -106,14 +106,18 @@ pub enum LayerAction {
 }
 
 /// Render the coverage layer controls.
-pub fn render_coverage_layers(ui: &mut Ui, view: &CoverageLayersView<'_>) -> Option<LayerAction> {
+pub fn render_coverage_layers(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &CoverageLayersView<'_>,
+) -> Option<LayerAction> {
     let mut action = None;
     ui.heading("Coverage layers");
 
     if let NothingToDraw::Because { reason } = view.coverage {
         // The controls still draw, because an operator should be able to see what they
         // would toggle; but the reason comes first, since toggling will change nothing.
-        ui.label(RichText::new(reason).color(theme::WARNING_COLOR));
+        ui.label(RichText::new(reason).color(palette.warning_color));
         ui.separator();
     }
 
@@ -149,7 +153,7 @@ pub fn render_coverage_layers(ui: &mut Ui, view: &CoverageLayersView<'_>) -> Opt
     {
         action = Some(LayerAction::ShowHazards(hazards));
     }
-    draw_hazard_currency(ui, view.hazards, view.counts.hazards);
+    draw_hazard_currency(ui, palette, view.hazards, view.counts.hazards);
 
     let mut geofences = view.geofences_visible;
     if ui
@@ -173,24 +177,28 @@ pub fn render_coverage_layers(ui: &mut Ui, view: &CoverageLayersView<'_>) -> Opt
                 "A hidden layer is not an empty one: the map is not showing everything \
                  it has.",
             )
-            .color(theme::WARNING_COLOR),
+            .color(palette.warning_color),
         );
     }
 
     ui.separator();
-    draw_laydown_comparison(ui, view.comparison);
+    draw_laydown_comparison(ui, palette, view.comparison);
     action
 }
 
 /// The before-and-after preview's status: what PN-16 has selected, or that nothing is.
-fn draw_laydown_comparison(ui: &mut Ui, comparison: LaydownComparison<'_>) {
+fn draw_laydown_comparison(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    comparison: LaydownComparison<'_>,
+) {
     ui.label(RichText::new("Laydown preview").small().strong());
     match comparison {
         LaydownComparison::NothingSelected => {
             ui.label(
                 RichText::new("No option selected on PN-16.")
                     .small()
-                    .color(theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
             );
         }
         LaydownComparison::Showing {
@@ -203,14 +211,19 @@ fn draw_laydown_comparison(ui: &mut Ui, comparison: LaydownComparison<'_>) {
                     "Previewing \"{intent}\": {sensors} sensor(s), {resources} resource(s)."
                 ))
                 .small()
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
             );
         }
     }
 }
 
 /// DN-14 §5: the layer is static and says so, with the baseline version it came from.
-fn draw_hazard_currency(ui: &mut Ui, currency: HazardCurrency, placed: usize) {
+fn draw_hazard_currency(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    currency: HazardCurrency,
+    placed: usize,
+) {
     let line = match currency.declared {
         0 => "No hazards are declared in this baseline. A clear harbour on the map is a \
               baseline that lists nothing, not a survey."
@@ -226,7 +239,11 @@ fn draw_hazard_currency(ui: &mut Ui, currency: HazardCurrency, placed: usize) {
             currency.baseline_version
         ),
     };
-    ui.label(RichText::new(line).small().color(theme::MUTED_TEXT_COLOR));
+    ui.label(
+        RichText::new(line)
+            .small()
+            .color(palette.muted_text_color()),
+    );
 }
 
 /// A layer's label, carrying what it would draw.

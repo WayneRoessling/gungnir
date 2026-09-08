@@ -114,6 +114,7 @@ pub enum SessionAction {
 /// act the host checks authority for and records.
 fn draw_assign_role(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &AuditView<'_>,
     draft: &mut SignInDraft,
 ) -> Option<SessionAction> {
@@ -126,7 +127,7 @@ fn draw_assign_role(
                  signed-in role does not hold.",
             )
             .small()
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
         );
     }
     ui.add_enabled_ui(view.can_assign_roles && store_ok, |ui| {
@@ -170,7 +171,7 @@ fn draw_assign_role(
 /// Every issued handoff, in issue order, delivered ones included -- see the module
 /// documentation for why this list is unfiltered where PN-06's is not. The panel does not
 /// reorder, so the sequence an administrator reads is the sequence the desktop recorded.
-fn draw_handoffs(ui: &mut Ui, view: &AuditView<'_>) {
+fn draw_handoffs(ui: &mut Ui, palette: &theme::Palette, view: &AuditView<'_>) {
     ui.separator();
     ui.strong("Handoffs");
     if view.handoffs.is_empty() {
@@ -179,7 +180,7 @@ fn draw_handoffs(ui: &mut Ui, view: &AuditView<'_>) {
         // to load.
         ui.label(
             RichText::new("Nothing has been handed off on this desktop.")
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
         return;
     }
@@ -187,11 +188,11 @@ fn draw_handoffs(ui: &mut Ui, view: &AuditView<'_>) {
         ui.label(
             RichText::new(handoff::NO_REPORTS_YET)
                 .small()
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
     }
     for row in view.handoffs {
-        draw_handoff_row(ui, row, view.now);
+        draw_handoff_row(ui, palette, row, view.now);
     }
 }
 
@@ -202,7 +203,7 @@ fn draw_handoffs(ui: &mut Ui, view: &AuditView<'_>) {
 /// rather than values, and a grid wide enough for them puts the columns after them
 /// outside the pane, where egui stops painting them -- so the field an administrator
 /// most needs, what came back, would be the one that disappeared.
-fn draw_handoff_row(ui: &mut Ui, row: &HandoffRow<'_>, now: MissionTime) {
+fn draw_handoff_row(ui: &mut Ui, palette: &theme::Palette, row: &HandoffRow<'_>, now: MissionTime) {
     let destination = row
         .endpoint
         .map_or_else(|| "by radio call".to_owned(), |e| format!("to {e}"));
@@ -225,11 +226,12 @@ fn draw_handoff_row(ui: &mut Ui, row: &HandoffRow<'_>, now: MissionTime) {
     ui.label(format!("Decided by {} ({}).", row.operator, row.role));
     ui.label(
         RichText::new(handoff::delivery_sentence(row, now))
-            .color(handoff::delivery_color(row.delivery)),
+            .color(handoff::delivery_color(palette, row.delivery)),
     );
     if row.reports.is_empty() {
         ui.label(
-            RichText::new(handoff::nothing_reported_sentence(row)).color(theme::MUTED_TEXT_COLOR),
+            RichText::new(handoff::nothing_reported_sentence(row))
+                .color(palette.muted_text_color()),
         );
     } else {
         // Every report, not the latest: an acknowledgement followed by a refusal is a
@@ -242,11 +244,15 @@ fn draw_handoff_row(ui: &mut Ui, row: &HandoffRow<'_>, now: MissionTime) {
             ));
         }
     }
-    ui.add_space(theme::ROW_SPACING);
+    ui.add_space(palette.row_spacing);
 }
 
 /// Who is signed in, or which of the three reasons nobody is; sign-out when somebody is.
-fn draw_session(ui: &mut Ui, session: &SessionLine) -> Option<SessionAction> {
+fn draw_session(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    session: &SessionLine,
+) -> Option<SessionAction> {
     let mut action = None;
     ui.strong("Session");
     match session {
@@ -267,7 +273,7 @@ fn draw_session(ui: &mut Ui, session: &SessionLine) -> Option<SessionAction> {
         SessionLine::NobodySignedIn => {
             ui.label(
                 RichText::new("Nobody is signed in. Decisions are recorded as unattributed.")
-                    .color(theme::WARNING_COLOR),
+                    .color(palette.warning_color),
             );
         }
         SessionLine::Expired { operator, at_s } => {
@@ -275,7 +281,7 @@ fn draw_session(ui: &mut Ui, session: &SessionLine) -> Option<SessionAction> {
                 RichText::new(format!(
                     "Operator {operator}'s session expired at {at_s:.0} s; sign in again."
                 ))
-                .color(theme::WARNING_COLOR),
+                .color(palette.warning_color),
             );
         }
         SessionLine::StoreUnavailable { reason } => {
@@ -284,7 +290,7 @@ fn draw_session(ui: &mut Ui, session: &SessionLine) -> Option<SessionAction> {
                     "The account store is unavailable: {reason}. Nobody can sign in; the \
                      desktop runs unattributed."
                 ))
-                .color(theme::WARNING_COLOR),
+                .color(palette.warning_color),
             );
         }
     }
@@ -295,13 +301,14 @@ fn draw_session(ui: &mut Ui, session: &SessionLine) -> Option<SessionAction> {
 /// Render the panel.
 pub fn render_audit(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &AuditView<'_>,
     draft: &mut SignInDraft,
 ) -> Option<SessionAction> {
     ui.heading("Audit and accounts");
     let mut action = None;
 
-    if let Some(a) = draw_session(ui, &view.session) {
+    if let Some(a) = draw_session(ui, palette, &view.session) {
         action = Some(a);
     }
 
@@ -331,10 +338,12 @@ pub fn render_audit(
     ui.strong("Accounts");
     match view.accounts {
         Err(reason) => {
-            ui.label(RichText::new(reason).color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new(reason).color(palette.muted_text_color()));
         }
         Ok([]) => {
-            ui.label(RichText::new("The store lists no accounts.").color(theme::MUTED_TEXT_COLOR));
+            ui.label(
+                RichText::new("The store lists no accounts.").color(palette.muted_text_color()),
+            );
         }
         Ok(accounts) => {
             for a in accounts {
@@ -342,7 +351,7 @@ pub fn render_audit(
             }
         }
     }
-    if let Some(a) = draw_assign_role(ui, view, draft) {
+    if let Some(a) = draw_assign_role(ui, palette, view, draft) {
         action = Some(a);
     }
     // DN-17 §7's PN-20 row (GAP-062): drawn as what it is. A marking is fixed by where
@@ -356,15 +365,15 @@ pub fn render_audit(
              follows its provenance. A change would appear in the audit log as an act.",
         )
         .small()
-        .color(theme::MUTED_TEXT_COLOR),
+        .color(palette.muted_text_color()),
     );
 
-    draw_handoffs(ui, view);
+    draw_handoffs(ui, palette, view);
 
     ui.separator();
     ui.strong("Audit log");
     if view.audit.is_empty() {
-        ui.label(RichText::new("Nothing recorded yet.").color(theme::MUTED_TEXT_COLOR));
+        ui.label(RichText::new("Nothing recorded yet.").color(palette.muted_text_color()));
     }
     egui::Grid::new("audit_log").striped(true).show(ui, |ui| {
         for line in view.audit.iter().rev().take(200) {

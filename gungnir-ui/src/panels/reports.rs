@@ -237,6 +237,7 @@ pub enum ReportsAction {
 /// Render the reports panel. `draft` is the review's scratch, held by the caller.
 pub fn render_reports(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &ReportsView<'_>,
     draft: &mut ReviewDraft,
 ) -> Option<ReportsAction> {
@@ -245,7 +246,7 @@ pub fn render_reports(
     let Some(session) = view.session else {
         ui.label(
             RichText::new("No session is open, so there is no journal to report on.")
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
         return None;
     };
@@ -254,8 +255,8 @@ pub fn render_reports(
             "Session {session}. Every figure below is a fold over that journal and can \
              be recomputed from it."
         ))
-        .color(theme::MUTED_TEXT_COLOR)
-        .size(theme::SMALL_FONT_SIZE),
+        .color(palette.muted_text_color())
+        .size(palette.small_font_size),
     );
     ui.separator();
 
@@ -271,49 +272,49 @@ pub fn render_reports(
                     "This session has recorded nothing yet, so there is nothing to \
                      report. That is not a failure and not a report of zeros.",
                 )
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
             );
         }
         None => {
-            ui.label(RichText::new("Not generated yet.").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("Not generated yet.").color(palette.muted_text_color()));
         }
-        Some(counts) => draw_counts(ui, view, counts),
+        Some(counts) => draw_counts(ui, palette, view, counts),
     }
 
     ui.separator();
     ui.strong("Measures");
     match view.measures {
-        Some(lines) => draw_measures(ui, lines),
+        Some(lines) => draw_measures(ui, palette, lines),
         None => {
-            ui.label(RichText::new("Not generated yet.").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("Not generated yet.").color(palette.muted_text_color()));
         }
     }
 
     ui.separator();
     ui.strong("Order of battle");
     match view.order_of_battle {
-        Some(line) => draw_order_of_battle(ui, line),
+        Some(line) => draw_order_of_battle(ui, palette, line),
         None => {
-            ui.label(RichText::new("Not generated yet.").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("Not generated yet.").color(palette.muted_text_color()));
         }
     }
 
     ui.separator();
     ui.strong("Pattern of life");
     match view.pattern_of_life {
-        Some(line) => draw_pattern_of_life(ui, line),
+        Some(line) => draw_pattern_of_life(ui, palette, line),
         None => {
-            ui.label(RichText::new("Not generated yet.").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("Not generated yet.").color(palette.muted_text_color()));
         }
     }
 
     ui.separator();
-    if let Some(a) = draw_review(ui, view.review, draft) {
+    if let Some(a) = draw_review(ui, palette, view.review, draft) {
         return Some(ReportsAction::Review(a));
     }
 
     ui.separator();
-    if let Some(a) = draw_export(ui, view) {
+    if let Some(a) = draw_export(ui, palette, view) {
         action = Some(a);
     }
     action
@@ -351,7 +352,7 @@ pub enum MeasureLineValue {
 
 /// DN-19: the product assembles evidence and the analyst concludes, so the line says
 /// what it rests on and what it does not cover.
-fn draw_order_of_battle(ui: &mut Ui, line: OrderOfBattleLine<'_>) {
+fn draw_order_of_battle(ui: &mut Ui, palette: &theme::Palette, line: OrderOfBattleLine<'_>) {
     ui.label(format!(
         "Version {} over {} session(s): {} entit{}, {} seen across sessions, {} track(s) \
          unattributed.",
@@ -363,13 +364,13 @@ fn draw_order_of_battle(ui: &mut Ui, line: OrderOfBattleLine<'_>) {
         line.unattributed
     ));
     if let Some(caveat) = line.caveat {
-        ui.label(RichText::new(caveat).color(theme::WARNING_COLOR));
+        ui.label(RichText::new(caveat).color(palette.warning_color));
     }
 }
 
 /// The denominator is drawn with the figure, never after it: an activity chart read
 /// without the sessions it came out of is the one that gets quoted as a habit.
-fn draw_pattern_of_life(ui: &mut Ui, line: PatternOfLifeLine<'_>) {
+fn draw_pattern_of_life(ui: &mut Ui, palette: &theme::Palette, line: PatternOfLifeLine<'_>) {
     match line.busiest {
         Some((hour, count)) => ui.label(format!(
             "Activity in {} of {} session(s); busiest hour {:02}:00 with {} sighting(s); \
@@ -381,15 +382,15 @@ fn draw_pattern_of_life(ui: &mut Ui, line: PatternOfLifeLine<'_>) {
                 "Nothing was seen in any of the {} session(s) queried.",
                 line.sessions
             ))
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
         ),
     };
     if let Some(caveat) = line.caveat {
-        ui.label(RichText::new(caveat).color(theme::WARNING_COLOR));
+        ui.label(RichText::new(caveat).color(palette.warning_color));
     }
 }
 
-fn draw_measures(ui: &mut Ui, lines: &[MeasureLine]) {
+fn draw_measures(ui: &mut Ui, palette: &theme::Palette, lines: &[MeasureLine]) {
     egui::Grid::new("report_measures")
         .striped(true)
         .num_columns(3)
@@ -410,25 +411,29 @@ fn draw_measures(ui: &mut Ui, lines: &[MeasureLine]) {
                     MeasureLineValue::NoInstances { of } => {
                         ui.label(
                             RichText::new(format!("no {of} in this session"))
-                                .color(theme::MUTED_TEXT_COLOR),
+                                .color(palette.muted_text_color()),
                         );
                     }
                     MeasureLineValue::NotComputable { reason } => {
                         ui.label(
                             RichText::new(format!("not computable: {reason}"))
-                                .color(theme::WARNING_COLOR),
+                                .color(palette.warning_color),
                         );
                     }
                 }
                 ui.label(
                     RichText::new(format!("target {}", line.target))
                         .small()
-                        .color(theme::MUTED_TEXT_COLOR),
+                        .color(palette.muted_text_color()),
                 );
                 ui.end_row();
                 if let Some(note) = &line.note {
                     ui.label("");
-                    ui.label(RichText::new(note).small().color(theme::MUTED_TEXT_COLOR));
+                    ui.label(
+                        RichText::new(note)
+                            .small()
+                            .color(palette.muted_text_color()),
+                    );
                     ui.label("");
                     ui.end_row();
                 }
@@ -440,6 +445,7 @@ fn draw_measures(ui: &mut Ui, lines: &[MeasureLine]) {
 /// moment, and holds what people concluded.
 fn draw_review(
     ui: &mut Ui,
+    palette: &theme::Palette,
     review: ReviewView<'_>,
     draft: &mut ReviewDraft,
 ) -> Option<ReviewAction> {
@@ -447,7 +453,7 @@ fn draw_review(
     let Some(case) = review.case else {
         return match review.cannot_open {
             Some(reason) => {
-                ui.label(RichText::new(reason).color(theme::MUTED_TEXT_COLOR));
+                ui.label(RichText::new(reason).color(palette.muted_text_color()));
                 None
             }
             None => ui
@@ -465,19 +471,20 @@ fn draw_review(
     ui.label(format!("Review of session {}, {state}.", case.session));
     let mut action = None;
     if case.findings.is_empty() {
-        ui.label(RichText::new("No findings recorded.").color(theme::MUTED_TEXT_COLOR));
+        ui.label(RichText::new("No findings recorded.").color(palette.muted_text_color()));
     }
     for f in case.findings {
-        if let Some(a) = draw_finding(ui, f, case.replay_open, draft) {
+        if let Some(a) = draw_finding(ui, palette, f, case.replay_open, draft) {
             action = Some(a);
         }
     }
-    action.or_else(|| draw_review_controls(ui, case, draft))
+    action.or_else(|| draw_review_controls(ui, palette, case, draft))
 }
 
 /// One finding: its kind, its moment (or that it has none), and its promotion.
 fn draw_finding(
     ui: &mut Ui,
+    palette: &theme::Palette,
     f: &FindingLine,
     replay_open: bool,
     draft: &mut ReviewDraft,
@@ -497,7 +504,7 @@ fn draw_finding(
             None => {
                 ui.label(
                     RichText::new("no moment recorded: an anecdote, not seekable")
-                        .color(theme::WARNING_COLOR),
+                        .color(palette.warning_color),
                 );
             }
         }
@@ -523,6 +530,7 @@ fn draw_finding(
 /// The controls the review's state allows.
 fn draw_review_controls(
     ui: &mut Ui,
+    palette: &theme::Palette,
     case: ReviewCaseView<'_>,
     draft: &mut ReviewDraft,
 ) -> Option<ReviewAction> {
@@ -561,7 +569,7 @@ fn draw_review_controls(
                         "{} action(s) still open; the review does not close over them.",
                         case.open_actions
                     ))
-                    .color(theme::WARNING_COLOR),
+                    .color(palette.warning_color),
                 );
             }
             if ui.button("Close review").clicked() {
@@ -577,7 +585,12 @@ fn draw_review_controls(
     action
 }
 
-fn draw_counts(ui: &mut Ui, view: &ReportsView<'_>, counts: &[CountLine<'_>]) {
+fn draw_counts(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &ReportsView<'_>,
+    counts: &[CountLine<'_>],
+) {
     ui.strong("Event counts");
     egui::Grid::new("report_counts")
         .striped(true)
@@ -589,8 +602,8 @@ fn draw_counts(ui: &mut Ui, view: &ReportsView<'_>, counts: &[CountLine<'_>]) {
                     Some(note) => {
                         ui.label(
                             RichText::new(note)
-                                .color(theme::MUTED_TEXT_COLOR)
-                                .size(theme::SMALL_FONT_SIZE),
+                                .color(palette.muted_text_color())
+                                .size(palette.small_font_size),
                         );
                     }
                     None => {
@@ -610,7 +623,7 @@ fn draw_counts(ui: &mut Ui, view: &ReportsView<'_>, counts: &[CountLine<'_>]) {
         _ => {
             ui.label(
                 RichText::new("The session recorded no events, so it covers no time.")
-                    .color(theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
             );
         }
     }
@@ -624,15 +637,19 @@ fn draw_counts(ui: &mut Ui, view: &ReportsView<'_>, counts: &[CountLine<'_>]) {
                 m.mota, m.motp, m.purity, m.fragmentation
             ));
         }
-        Err(u) => draw_unavailable(ui, u),
+        Err(u) => draw_unavailable(ui, palette, u),
     }
 }
 
-fn draw_export(ui: &mut Ui, view: &ReportsView<'_>) -> Option<ReportsAction> {
+fn draw_export(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &ReportsView<'_>,
+) -> Option<ReportsAction> {
     ui.strong("Export");
     match view.export {
         ExportState::Unavailable(u) => {
-            draw_unavailable(ui, u);
+            draw_unavailable(ui, palette, u);
             None
         }
         ExportState::Available {
@@ -642,14 +659,14 @@ fn draw_export(ui: &mut Ui, view: &ReportsView<'_>) -> Option<ReportsAction> {
         } => {
             ui.label(
                 RichText::new(format!("Written to {path}, marked {marking}."))
-                    .color(theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
             );
             // The marking is a fact about the file and travels inside it (GAP-062); the
             // inputs are what a reader checks it against.
             ui.label(
                 RichText::new(format!("Marking from {inputs}."))
-                    .color(theme::MUTED_TEXT_COLOR)
-                    .size(theme::SMALL_FONT_SIZE),
+                    .color(palette.muted_text_color())
+                    .size(palette.small_font_size),
             );
             let clicked = ui
                 .add_enabled(view.counts.is_some(), egui::Button::new("Export report"))
@@ -657,7 +674,7 @@ fn draw_export(ui: &mut Ui, view: &ReportsView<'_>) -> Option<ReportsAction> {
             if view.counts.is_none() {
                 ui.label(
                     RichText::new("Generate the report before exporting it.")
-                        .color(theme::MUTED_TEXT_COLOR),
+                        .color(palette.muted_text_color()),
                 );
             }
             if let Some(written) = view.last_export {

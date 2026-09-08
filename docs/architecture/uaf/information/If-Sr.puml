@@ -565,6 +565,11 @@ class RoleLayout <<InformationElement>> {
 class UiSettings <<InformationElement>> {
   layouts: BTreeMap<String, RoleLayout>
   scene_3d: bool
+  theme: String
+}
+enum ThemeVariant <<InformationElement>> {
+  Day
+  Night
 }
 enum Term <<InformationElement>> {
   Classification(Classification)

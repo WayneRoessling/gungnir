@@ -24,7 +24,7 @@ pub struct WarningLine {
 
 /// Warnings owed to assets, late and failed first. Draws nothing when there are none:
 /// an empty warning list is the normal state, not a report.
-pub fn render_warnings(ui: &mut egui::Ui, warnings: &[WarningLine]) {
+pub fn render_warnings(ui: &mut egui::Ui, palette: &theme::Palette, warnings: &[WarningLine]) {
     if warnings.is_empty() {
         return;
     }
@@ -44,21 +44,21 @@ pub fn render_warnings(ui: &mut egui::Ui, warnings: &[WarningLine]) {
             }
         );
         ui.label(RichText::new(text).color(if w.loud {
-            theme::ALERT_COLOR
+            palette.alert_color
         } else {
-            theme::WARNING_COLOR
+            palette.warning_color
         }));
     }
     ui.separator();
 }
 
-pub fn render_alert_list(ui: &mut egui::Ui, alerts: &[String]) {
+pub fn render_alert_list(ui: &mut egui::Ui, palette: &theme::Palette, alerts: &[String]) {
     ui.heading("Alerts");
     if alerts.is_empty() {
-        ui.label(RichText::new("No alerts").color(theme::MUTED_TEXT_COLOR));
+        ui.label(RichText::new("No alerts").color(palette.muted_text_color()));
         return;
     }
     for alert in alerts.iter().rev() {
-        ui.label(RichText::new(alert).color(theme::ALERT_COLOR));
+        ui.label(RichText::new(alert).color(palette.alert_color));
     }
 }

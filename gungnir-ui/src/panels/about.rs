@@ -106,42 +106,42 @@ pub struct AboutView<'a> {
 /// Draws no control and returns nothing: there is no action an operator can take here,
 /// and a panel that cannot be dismissed from inside itself cannot be dismissed by
 /// accident either.
-pub fn render_about(ui: &mut Ui, view: &AboutView<'_>) {
-    ui.label(RichText::new(PRODUCT).size(theme::TITLE_FONT_SIZE));
-    ui.label(RichText::new(format!("Version {}", view.version)).color(theme::MUTED_TEXT_COLOR));
-    ui.add_space(theme::PANEL_SPACING);
+pub fn render_about(ui: &mut Ui, palette: &theme::Palette, view: &AboutView<'_>) {
+    ui.label(RichText::new(PRODUCT).size(palette.title_font_size));
+    ui.label(RichText::new(format!("Version {}", view.version)).color(palette.muted_text_color()));
+    ui.add_space(palette.panel_spacing);
 
     // The copyright notice is drawn first and unmuted. It is element (1) of section 0
     // and the subject of the section 7(b) term; a derivative has to keep it here.
     ui.label(RichText::new(COPYRIGHT).strong());
-    ui.add_space(theme::ROW_SPACING);
+    ui.add_space(palette.row_spacing);
 
     // The remaining three of section 0's checklist, taken from the array rather than
     // relisted, so that a constant dropped from [`APPROPRIATE_LEGAL_NOTICES`] stops
     // reaching the screen and the test that walks the array catches it.
     for sentence in &APPROPRIATE_LEGAL_NOTICES[1..] {
         ui.label(*sentence);
-        ui.add_space(theme::ROW_SPACING);
+        ui.add_space(palette.row_spacing);
     }
 
-    ui.add_space(theme::PANEL_SPACING);
+    ui.add_space(palette.panel_spacing);
     ui.separator();
-    ui.add_space(theme::PANEL_SPACING);
+    ui.add_space(palette.panel_spacing);
 
-    ui.label(RichText::new(ADDITIONAL_TERMS).color(theme::TEXT_SECONDARY));
-    ui.add_space(theme::ROW_SPACING);
+    ui.label(RichText::new(ADDITIONAL_TERMS).color(palette.text_secondary));
+    ui.add_space(palette.row_spacing);
 
     // Section 13's offer is the modifier's to make, not ours; naming the upstream is
     // what lets an operator tell that this build is the unmodified one.
-    ui.label(RichText::new(format!("Source: {}", view.source_url)).color(theme::TEXT_SECONDARY));
-    ui.add_space(theme::ROW_SPACING);
+    ui.label(RichText::new(format!("Source: {}", view.source_url)).color(palette.text_secondary));
+    ui.add_space(palette.row_spacing);
     ui.label(
         RichText::new(
             "Test fixtures under testdata/ are third-party material under their own licences; \
              NOTICE lists each one.",
         )
-        .color(theme::MUTED_TEXT_COLOR)
-        .size(theme::SMALL_FONT_SIZE),
+        .color(palette.muted_text_color())
+        .size(palette.small_font_size),
     );
 }
 

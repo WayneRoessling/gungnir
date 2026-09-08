@@ -69,12 +69,12 @@ impl Progress {
         }
     }
 
-    fn color(self) -> egui::Color32 {
+    fn color(self, palette: &theme::Palette) -> egui::Color32 {
         match self {
-            Progress::Untasked => theme::MUTED_TEXT_COLOR,
-            Progress::Awaiting => theme::WARNING_COLOR,
-            Progress::Working => theme::CLASS_NEUTRAL_COLOR,
-            Progress::Stalled => theme::CLASS_HOSTILE_COLOR,
+            Progress::Untasked => palette.muted_text_color(),
+            Progress::Awaiting => palette.warning_color,
+            Progress::Working => palette.class_neutral_color,
+            Progress::Stalled => palette.class_hostile_color,
         }
     }
 }
@@ -118,12 +118,12 @@ impl Standing<'_> {
         matches!(self, Standing::Stated | Standing::Tasked { .. })
     }
 
-    fn color(&self) -> egui::Color32 {
+    fn color(&self, palette: &theme::Palette) -> egui::Color32 {
         match self {
-            Standing::Stated => theme::WARNING_COLOR,
-            Standing::Tasked { .. } => theme::CLASS_NEUTRAL_COLOR,
-            Standing::Satisfied { .. } => theme::CLASS_FRIENDLY_COLOR,
-            Standing::Declined { .. } | Standing::Lapsed => theme::MUTED_TEXT_COLOR,
+            Standing::Stated => palette.warning_color,
+            Standing::Tasked { .. } => palette.class_neutral_color,
+            Standing::Satisfied { .. } => palette.class_friendly_color,
+            Standing::Declined { .. } | Standing::Lapsed => palette.muted_text_color(),
         }
     }
 }
@@ -311,6 +311,7 @@ pub enum RequirementAction {
 /// Render the requirements panel.
 pub fn render_requirements(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &RequirementsView<'_>,
     draft: &mut Draft,
 ) -> Option<RequirementAction> {
@@ -320,7 +321,7 @@ pub fn render_requirements(
     let open = view.rows.iter().filter(|r| r.standing.is_open()).count();
     ui.label(
         RichText::new(format!("{} of {} still open.", open, view.rows.len()))
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
     );
     if !view.may_concur {
         ui.label(
@@ -330,7 +331,7 @@ pub fn render_requirements(
                  sensor manager concurs.",
                 view.role
             ))
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
         );
     }
     ui.separator();
@@ -338,13 +339,13 @@ pub fn render_requirements(
     if view.rows.is_empty() {
         ui.label(
             RichText::new(view.origin.empty_sentence()).color(if view.origin.is_fault() {
-                theme::CLASS_HOSTILE_COLOR
+                palette.class_hostile_color
             } else {
-                theme::MUTED_TEXT_COLOR
+                palette.muted_text_color()
             }),
         );
     } else {
-        draw_table(ui, view, draft);
+        draw_table(ui, palette, view, draft);
         // A partial list is worse than an empty one if nobody says it is partial.
         if let ListOrigin::Unreadable { reason } = view.origin {
             ui.label(
@@ -352,24 +353,24 @@ pub fn render_requirements(
                     "This list may be incomplete: the record could not be read past a \
                      point ({reason})."
                 ))
-                .color(theme::CLASS_HOSTILE_COLOR),
+                .color(palette.class_hostile_color),
             );
         }
     }
 
     ui.separator();
-    if let Some(a) = draw_actions(ui, view, draft) {
+    if let Some(a) = draw_actions(ui, palette, view, draft) {
         action = Some(a);
     }
 
     ui.separator();
-    if let Some(a) = draw_state_form(ui, view, draft) {
+    if let Some(a) = draw_state_form(ui, palette, view, draft) {
         action = Some(a);
     }
 
     ui.separator();
     if let Some(error) = view.last_error {
-        ui.label(RichText::new(format!("Refused: {error}")).color(theme::CLASS_HOSTILE_COLOR));
+        ui.label(RichText::new(format!("Refused: {error}")).color(palette.class_hostile_color));
     }
     if !view.operator_session {
         ui.label(
@@ -377,15 +378,20 @@ pub fn render_requirements(
                 "No operator session exists, so a concurrence records the role that \
                  acted and states that nobody was signed in. It does not name a person.",
             )
-            .color(theme::WARNING_COLOR)
-            .size(theme::SMALL_FONT_SIZE),
+            .color(palette.warning_color)
+            .size(palette.small_font_size),
         );
     }
-    draw_unavailable(ui, view.persistence);
+    draw_unavailable(ui, palette, view.persistence);
     action
 }
 
-fn draw_table(ui: &mut Ui, view: &RequirementsView<'_>, draft: &mut Draft) {
+fn draw_table(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &RequirementsView<'_>,
+    draft: &mut Draft,
+) {
     egui::Grid::new("requirements_table")
         .striped(true)
         .show(ui, |ui| {
@@ -418,16 +424,18 @@ fn draw_table(ui: &mut Ui, view: &RequirementsView<'_>, draft: &mut Draft) {
                 }
                 ui.label(priority_word(row.priority));
                 ui.label(row.title);
-                ui.label(RichText::new(row.standing.phrase()).color(row.standing.color()));
+                ui.label(RichText::new(row.standing.phrase()).color(row.standing.color(palette)));
                 // The collection column is only meaningful while the requirement is
                 // open: an answered one says how it was answered, not how it was worked.
                 if row.standing.is_open() {
-                    ui.label(RichText::new(row.progress.phrase()).color(row.progress.color()));
+                    ui.label(
+                        RichText::new(row.progress.phrase()).color(row.progress.color(palette)),
+                    );
                 } else {
-                    ui.label(RichText::new("--").color(theme::MUTED_TEXT_COLOR));
+                    ui.label(RichText::new("--").color(palette.muted_text_color()));
                 }
                 ui.label(row.tasks.to_string());
-                draw_due(ui, row);
+                draw_due(ui, palette, row);
                 ui.end_row();
             }
         });
@@ -443,23 +451,23 @@ fn priority_word(priority: AssetPriority) -> &'static str {
     }
 }
 
-fn draw_due(ui: &mut Ui, row: &RequirementRow<'_>) {
+fn draw_due(ui: &mut Ui, palette: &theme::Palette, row: &RequirementRow<'_>) {
     match row.time_remaining_s {
         // No needed-by time is a decision, not a blank: it means the requirement stands
         // until somebody closes it. Saying "none set" rather than leaving the cell empty
         // is the same rule PN-06 applies to an expiry.
         None => {
-            ui.label(RichText::new("no time set").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("no time set").color(palette.muted_text_color()));
         }
         Some(s) if s <= 0.0 => {
-            ui.label(RichText::new("overdue").color(theme::CLASS_HOSTILE_COLOR));
+            ui.label(RichText::new("overdue").color(palette.class_hostile_color));
         }
         Some(s) => {
             ui.label(
                 RichText::new(format!("{:.0} min", s / 60.0)).color(if s < 300.0 {
-                    theme::WARNING_COLOR
+                    palette.warning_color
                 } else {
-                    theme::MUTED_TEXT_COLOR
+                    palette.muted_text_color()
                 }),
             );
         }
@@ -474,6 +482,7 @@ fn draw_due(ui: &mut Ui, row: &RequirementRow<'_>) {
 #[allow(clippy::too_many_lines)]
 fn draw_actions(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &RequirementsView<'_>,
     draft: &mut Draft,
 ) -> Option<RequirementAction> {
@@ -481,7 +490,7 @@ fn draw_actions(
     let Some(id) = draft.selected else {
         ui.label(
             RichText::new("Select a requirement to task, decline, or answer it.")
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
         return None;
     };
@@ -492,7 +501,7 @@ fn draw_actions(
                 "This one is closed. A closed requirement is not reopened by tasking \
                  against it; state a new one.",
             )
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
         );
         return None;
     }
@@ -500,7 +509,7 @@ fn draw_actions(
     ui.horizontal(|ui| {
         ui.strong("Task a sensor:");
         if view.sensors.is_empty() {
-            ui.label(RichText::new("No sensors are configured.").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("No sensors are configured.").color(palette.muted_text_color()));
         }
         for sensor in view.sensors {
             // The same rule PN-10 applies: a sensor with no control endpoint cannot be
@@ -552,8 +561,8 @@ fn draw_actions(
         if draft.reason.trim().is_empty() {
             ui.label(
                 RichText::new("a reason is required")
-                    .color(theme::MUTED_TEXT_COLOR)
-                    .size(theme::SMALL_FONT_SIZE),
+                    .color(palette.muted_text_color())
+                    .size(palette.small_font_size),
             );
         }
     });
@@ -584,8 +593,8 @@ fn draw_actions(
             "A sensor acknowledging a task is not an answer; answering is a person's \
              judgement and always names its evidence.",
         )
-        .color(theme::MUTED_TEXT_COLOR)
-        .size(theme::SMALL_FONT_SIZE),
+        .color(palette.muted_text_color())
+        .size(palette.small_font_size),
     );
 
     action
@@ -594,6 +603,7 @@ fn draw_actions(
 /// The form for stating a new requirement.
 fn draw_state_form(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &RequirementsView<'_>,
     draft: &mut Draft,
 ) -> Option<RequirementAction> {
@@ -602,7 +612,7 @@ fn draw_state_form(
 
     let areas = match view.areas {
         Err(reason) => {
-            ui.label(RichText::new(reason.sentence()).color(theme::WARNING_COLOR));
+            ui.label(RichText::new(reason.sentence()).color(palette.warning_color));
             return None;
         }
         Ok(areas) => areas,
@@ -652,8 +662,8 @@ fn draw_state_form(
         if draft.within_minutes.trim().is_empty() {
             ui.label(
                 RichText::new("no deadline: it stands until somebody closes it")
-                    .color(theme::MUTED_TEXT_COLOR)
-                    .size(theme::SMALL_FONT_SIZE),
+                    .color(palette.muted_text_color())
+                    .size(palette.small_font_size),
             );
         }
     });
@@ -670,8 +680,8 @@ fn draw_state_form(
                 "That is not a number of minutes. Leave it blank for no deadline rather \
                  than stating one that would never lapse.",
             )
-            .color(theme::CLASS_HOSTILE_COLOR)
-            .size(theme::SMALL_FONT_SIZE),
+            .color(palette.class_hostile_color)
+            .size(palette.small_font_size),
         );
     }
 

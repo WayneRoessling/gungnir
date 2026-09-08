@@ -74,25 +74,31 @@ pub fn age_s(now: MissionTime, stamped: MissionTime) -> f64 {
 /// function stays a short list of calls to sub-sections.
 ///
 /// Returns the track the operator clicked this frame, if any.
-pub fn render_track_table(ui: &mut egui::Ui, view: &TrackTableView<'_>) -> Option<TrackId> {
+pub fn render_track_table(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    view: &TrackTableView<'_>,
+) -> Option<TrackId> {
     ui.heading("Tracks");
-    ui.label(RichText::new(format!("{} tracks", view.tracks.len())).color(theme::MUTED_TEXT_COLOR));
+    ui.label(
+        RichText::new(format!("{} tracks", view.tracks.len())).color(palette.muted_text_color()),
+    );
     if let Err(u) = view.scores {
-        draw_unavailable(ui, u);
+        draw_unavailable(ui, palette, u);
     }
     let mut clicked = None;
     egui::ScrollArea::vertical()
-        .max_height(theme::TRACK_TABLE_MAX_HEIGHT)
+        .max_height(palette.track_table_max_height)
         .show(ui, |ui| {
             egui::Grid::new("track_table").striped(true).show(ui, |ui| {
-                render_header(ui, view.scores.is_ok());
-                clicked = render_rows(ui, view);
+                render_header(ui, palette, view.scores.is_ok());
+                clicked = render_rows(ui, palette, view);
             });
         });
     clicked
 }
 
-fn render_header(ui: &mut egui::Ui, scores_available: bool) {
+fn render_header(ui: &mut egui::Ui, palette: &theme::Palette, scores_available: bool) {
     for heading in [
         "ID",
         "Status",
@@ -112,12 +118,16 @@ fn render_header(ui: &mut egui::Ui, scores_available: bool) {
     if scores_available {
         ui.strong("Score");
     } else {
-        ui.label(RichText::new("Score (n/a)").color(theme::MUTED_TEXT_COLOR));
+        ui.label(RichText::new("Score (n/a)").color(palette.muted_text_color()));
     }
     ui.end_row();
 }
 
-fn render_rows(ui: &mut egui::Ui, view: &TrackTableView<'_>) -> Option<TrackId> {
+fn render_rows(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    view: &TrackTableView<'_>,
+) -> Option<TrackId> {
     let mut clicked = None;
     for track in view.tracks {
         let [e, n, u] = track.position_enu();
@@ -129,25 +139,29 @@ fn render_rows(ui: &mut egui::Ui, view: &TrackTableView<'_>) -> Option<TrackId> 
             clicked = Some(track.id);
         }
         ui.label(
-            RichText::new(view.vocabulary.track_status(track.status))
-                .color(theme::track_color(track.status, track.quality.is_stale)),
+            RichText::new(view.vocabulary.track_status(track.status)).color(theme::track_color(
+                palette,
+                track.status,
+                track.quality.is_stale,
+            )),
         );
-        ui.label(theme::numeral(format!("{e:.1}")));
-        ui.label(theme::numeral(format!("{n:.1}")));
-        ui.label(theme::numeral(format!("{u:.1}")));
-        ui.label(theme::numeral(format!("{:.1}", track.speed_mps())));
+        ui.label(theme::numeral(palette, format!("{e:.1}")));
+        ui.label(theme::numeral(palette, format!("{n:.1}")));
+        ui.label(theme::numeral(palette, format!("{u:.1}")));
+        ui.label(theme::numeral(palette, format!("{:.1}", track.speed_mps())));
         ui.label(
             RichText::new(view.vocabulary.classification(track.classification))
-                .color(theme::classification_color(track.classification)),
+                .color(theme::classification_color(palette, track.classification)),
         );
         render_age(
             ui,
+            palette,
             age_s(view.now, track.mission_time),
             track.quality.is_stale,
         );
         match view.asset_for(track.id) {
             Some(resource) => ui.label(format!("R{resource}")),
-            None => ui.label(RichText::new("--").color(theme::MUTED_TEXT_COLOR)),
+            None => ui.label(RichText::new("--").color(palette.muted_text_color())),
         };
         // DN-17 §7: the marking on every row (GAP-062). An unmarked track reads
         // "internal", which is what it is.
@@ -159,11 +173,11 @@ fn render_rows(ui: &mut egui::Ui, view: &TrackTableView<'_>) -> Option<TrackId> 
                     parties.iter().cloned().collect::<Vec<_>>().join(", ")
                 }
             })
-            .size(theme::SMALL_FONT_SIZE),
+            .size(palette.small_font_size),
         );
         match view.score_for(track.id) {
-            Some(s) => ui.label(theme::numeral(format!("{s:.2}"))),
-            None => ui.label(RichText::new("--").color(theme::MUTED_TEXT_COLOR)),
+            Some(s) => ui.label(theme::numeral(palette, format!("{s:.2}"))),
+            None => ui.label(RichText::new("--").color(palette.muted_text_color())),
         };
         ui.end_row();
     }
@@ -175,10 +189,10 @@ fn render_rows(ui: &mut egui::Ui, view: &TrackTableView<'_>) -> Option<TrackId> 
 /// The colour follows `quality.is_stale` rather than a threshold invented here: the
 /// staleness rule is `gungnir-tracking-service`'s, and a second rule in the table would
 /// let the list disagree with the viewport about the same track.
-fn render_age(ui: &mut egui::Ui, age: f64, stale: bool) {
-    let text = theme::numeral(format!("{age:.1}"));
+fn render_age(ui: &mut egui::Ui, palette: &theme::Palette, age: f64, stale: bool) {
+    let text = theme::numeral(palette, format!("{age:.1}"));
     if stale {
-        ui.label(text.color(theme::TRACK_STALE_COLOR).strong());
+        ui.label(text.color(palette.track_stale_color).strong());
     } else {
         ui.label(text);
     }
