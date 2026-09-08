@@ -40,8 +40,8 @@ impl Unavailable<'_> {
 }
 
 /// Draw the unavailable sentence in the muted style every panel uses for it.
-pub fn draw_unavailable(ui: &mut Ui, u: Unavailable<'_>) {
-    ui.label(RichText::new(u.sentence()).color(theme::MUTED_TEXT_COLOR));
+pub fn draw_unavailable(ui: &mut Ui, palette: &theme::Palette, u: Unavailable<'_>) {
+    ui.label(RichText::new(u.sentence()).color(palette.muted_text_color()));
 }
 
 /// Either a list of items, or an honest account of why there is none.
@@ -64,20 +64,20 @@ impl<T> Section<'_, T> {
     /// Draw the section's heading and, when there is nothing to list, the reason.
     ///
     /// Returns whether the caller should go on to draw rows.
-    pub fn draw_header(&self, ui: &mut Ui, title: &str) -> bool {
+    pub fn draw_header(&self, ui: &mut Ui, palette: &theme::Palette, title: &str) -> bool {
         ui.strong(title);
         match self {
             Section::Present([]) => {
-                ui.label(RichText::new("None recorded.").color(theme::MUTED_TEXT_COLOR));
+                ui.label(RichText::new("None recorded.").color(palette.muted_text_color()));
                 false
             }
             Section::Present(_) => true,
             Section::Unavailable(u) => {
-                draw_unavailable(ui, *u);
+                draw_unavailable(ui, palette, *u);
                 false
             }
             Section::Empty { reason } => {
-                ui.label(RichText::new(*reason).color(theme::MUTED_TEXT_COLOR));
+                ui.label(RichText::new(*reason).color(palette.muted_text_color()));
                 false
             }
         }

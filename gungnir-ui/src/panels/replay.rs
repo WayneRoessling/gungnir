@@ -114,7 +114,11 @@ pub enum ReplayAction {
 }
 
 /// Render the replay timeline.
-pub fn render_replay(ui: &mut Ui, view: &ReplayView<'_>) -> Option<ReplayAction> {
+pub fn render_replay(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &ReplayView<'_>,
+) -> Option<ReplayAction> {
     ui.heading("Replay");
     // Drawn before anything else: it governs how everything below should be read.
     ui.label(
@@ -122,16 +126,16 @@ pub fn render_replay(ui: &mut Ui, view: &ReplayView<'_>) -> Option<ReplayAction>
             "Scrubbing moves a cursor through the recorded events. It does not rebuild \
              the picture: the viewport and the track table stay live.",
         )
-        .color(theme::WARNING_COLOR),
+        .color(palette.warning_color),
     );
-    draw_unavailable(ui, view.reconstruction);
+    draw_unavailable(ui, palette, view.reconstruction);
     ui.separator();
 
     let mut action = None;
     match view.open {
-        None => action = draw_picker(ui, view.sessions),
+        None => action = draw_picker(ui, palette, view.sessions),
         Some(open) => {
-            if let Some(a) = draw_open(ui, &open, view.rate) {
+            if let Some(a) = draw_open(ui, palette, &open, view.rate) {
                 action = Some(a);
             }
         }
@@ -139,10 +143,14 @@ pub fn render_replay(ui: &mut Ui, view: &ReplayView<'_>) -> Option<ReplayAction>
     action
 }
 
-fn draw_picker(ui: &mut Ui, sessions: &[SessionSummary]) -> Option<ReplayAction> {
+fn draw_picker(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    sessions: &[SessionSummary],
+) -> Option<ReplayAction> {
     ui.strong("Sessions in this journal");
     if sessions.is_empty() {
-        ui.label(RichText::new("No sessions recorded.").color(theme::MUTED_TEXT_COLOR));
+        ui.label(RichText::new("No sessions recorded.").color(palette.muted_text_color()));
         return None;
     }
     let mut action = None;
@@ -153,21 +161,28 @@ fn draw_picker(ui: &mut Ui, sessions: &[SessionSummary]) -> Option<ReplayAction>
             }
             match s.envelopes {
                 Some(n) => {
-                    ui.label(RichText::new(format!("{n} events")).color(theme::MUTED_TEXT_COLOR));
+                    ui.label(
+                        RichText::new(format!("{n} events")).color(palette.muted_text_color()),
+                    );
                 }
                 None => {
-                    ui.label(RichText::new("length not read").color(theme::MUTED_TEXT_COLOR));
+                    ui.label(RichText::new("length not read").color(palette.muted_text_color()));
                 }
             }
             if s.live {
-                ui.label(RichText::new("recording now").color(theme::WARNING_COLOR));
+                ui.label(RichText::new("recording now").color(palette.warning_color));
             }
         });
     }
     action
 }
 
-fn draw_open(ui: &mut Ui, open: &OpenReplay<'_>, rate: PlayRate) -> Option<ReplayAction> {
+fn draw_open(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    open: &OpenReplay<'_>,
+    rate: PlayRate,
+) -> Option<ReplayAction> {
     let mut action = None;
 
     ui.horizontal(|ui| {
@@ -179,7 +194,7 @@ fn draw_open(ui: &mut Ui, open: &OpenReplay<'_>, rate: PlayRate) -> Option<Repla
     if open.live {
         ui.label(
             RichText::new("This session is still recording, so its length grows while you scrub.")
-                .color(theme::WARNING_COLOR),
+                .color(palette.warning_color),
         );
     }
 
@@ -190,10 +205,10 @@ fn draw_open(ui: &mut Ui, open: &OpenReplay<'_>, rate: PlayRate) -> Option<Repla
     ui.label(format!("Replay clock {:.1} s", open.clock_s));
     match open.cursor_event {
         Some(text) => {
-            ui.label(RichText::new(text).size(theme::SMALL_FONT_SIZE));
+            ui.label(RichText::new(text).size(palette.small_font_size));
         }
         None => {
-            ui.label(RichText::new("At the end of the session.").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("At the end of the session.").color(palette.muted_text_color()));
         }
     }
 
@@ -209,7 +224,7 @@ fn draw_open(ui: &mut Ui, open: &OpenReplay<'_>, rate: PlayRate) -> Option<Repla
             action = Some(ReplayAction::SeekFraction(fraction));
         }
     } else {
-        ui.label(RichText::new("This session recorded nothing.").color(theme::MUTED_TEXT_COLOR));
+        ui.label(RichText::new("This session recorded nothing.").color(palette.muted_text_color()));
     }
 
     ui.horizontal(|ui| {

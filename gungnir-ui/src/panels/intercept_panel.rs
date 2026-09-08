@@ -20,6 +20,7 @@ pub struct WithheldLine<'a> {
 
 pub fn render_intercept_panel(
     ui: &mut egui::Ui,
+    palette: &theme::Palette,
     plan: &PlanView,
     withheld: &[WithheldLine<'_>],
     fires: &[FiresCheckLine<'_>],
@@ -27,12 +28,12 @@ pub fn render_intercept_panel(
     alternatives: &Alternatives<'_>,
 ) {
     ui.heading("Intercept plan");
-    render_summary(ui, plan);
+    render_summary(ui, palette, plan);
     render_solution_list(ui, plan);
-    render_fires(ui, plan, fires);
-    render_withheld(ui, withheld);
-    render_handoffs(ui, handoffs);
-    render_alternatives(ui, alternatives);
+    render_fires(ui, palette, plan, fires);
+    render_withheld(ui, palette, withheld);
+    render_handoffs(ui, palette, handoffs);
+    render_alternatives(ui, palette, alternatives);
 }
 
 /// One course of action beside the recommendation, as PN-05 lists it (GAP-032).
@@ -69,7 +70,11 @@ pub struct Alternatives<'a> {
 /// **A refused alternative is drawn, not filtered out.** An operator who cannot see that
 /// the obvious second option is barred by policy will ask for it on the radio, and the
 /// answer will arrive later than this line would have.
-fn render_alternatives(ui: &mut egui::Ui, alternatives: &Alternatives<'_>) {
+fn render_alternatives(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    alternatives: &Alternatives<'_>,
+) {
     if alternatives.options.is_empty() && alternatives.what_if.is_none() {
         return;
     }
@@ -77,26 +82,26 @@ fn render_alternatives(ui: &mut egui::Ui, alternatives: &Alternatives<'_>) {
         ui.separator();
         ui.label(RichText::new("Alternatives").strong());
         for option in alternatives.options {
-            render_course(ui, option);
+            render_course(ui, palette, option);
         }
     }
     if let Some(what_if) = &alternatives.what_if {
         ui.separator();
         ui.label(RichText::new("What if").strong());
-        render_course(ui, what_if);
+        render_course(ui, palette, what_if);
     }
 }
 
 /// One course of action: its verdict first, then the rationale that produced it.
-fn render_course(ui: &mut egui::Ui, course: &AlternativeLine<'_>) {
+fn render_course(ui: &mut egui::Ui, palette: &theme::Palette, course: &AlternativeLine<'_>) {
     let headline = format!("{} assignment(s): {}", course.assignments, course.verdict);
     let text = RichText::new(headline);
     ui.label(if course.denied {
-        text.color(theme::WARNING_COLOR)
+        text.color(palette.warning_color)
     } else {
         text
     });
-    ui.label(RichText::new(course.rationale).color(theme::MUTED_TEXT_COLOR));
+    ui.label(RichText::new(course.rationale).color(palette.muted_text_color()));
 }
 
 /// One issued handoff and where its delivery stands (DN-07 §7, GAP-040).
@@ -111,7 +116,7 @@ pub struct HandoffLine<'a> {
 
 /// **Manual delivery is stated plainly**, and an undelivered handoff is never shown as
 /// delivered.
-fn render_handoffs(ui: &mut egui::Ui, handoffs: &[HandoffLine<'_>]) {
+fn render_handoffs(ui: &mut egui::Ui, palette: &theme::Palette, handoffs: &[HandoffLine<'_>]) {
     if handoffs.is_empty() {
         return;
     }
@@ -132,7 +137,7 @@ fn render_handoffs(ui: &mut egui::Ui, handoffs: &[HandoffLine<'_>]) {
         ui.label(if h.delivered {
             text
         } else {
-            text.color(theme::WARNING_COLOR)
+            text.color(palette.warning_color)
         });
     }
 }
@@ -147,7 +152,12 @@ pub struct FiresCheckLine<'a> {
 
 /// A fires task: the target, its location error, the firing unit, and **every check with
 /// its result, failed ones as text and not colour alone** (DN-05 §7).
-fn render_fires(ui: &mut egui::Ui, plan: &PlanView, checks: &[FiresCheckLine<'_>]) {
+fn render_fires(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    plan: &PlanView,
+    checks: &[FiresCheckLine<'_>],
+) {
     let Some(fires) = plan.fires() else {
         return;
     };
@@ -158,7 +168,7 @@ fn render_fires(ui: &mut egui::Ui, plan: &PlanView, checks: &[FiresCheckLine<'_>
         fires.target.0, fires.location_error_m, fires.firing_unit.0
     ));
     if checks.is_empty() {
-        ui.label(RichText::new("Deconfliction checks not evaluated.").color(theme::WARNING_COLOR));
+        ui.label(RichText::new("Deconfliction checks not evaluated.").color(palette.warning_color));
         return;
     }
     for c in checks {
@@ -167,7 +177,7 @@ fn render_fires(ui: &mut egui::Ui, plan: &PlanView, checks: &[FiresCheckLine<'_>
         } else {
             ui.label(
                 RichText::new(format!("FAILED {}: {}", c.check, c.detail))
-                    .color(theme::WARNING_COLOR),
+                    .color(palette.warning_color),
             );
         }
     }
@@ -176,7 +186,7 @@ fn render_fires(ui: &mut egui::Ui, plan: &PlanView, checks: &[FiresCheckLine<'_>
 /// Resources not proposed, and why. **Drawn only when there are any**: a standing
 /// "nothing withheld" line would be read past, and the case that matters is the one where
 /// a resource with rounds in it is being held back on purpose.
-fn render_withheld(ui: &mut egui::Ui, withheld: &[WithheldLine<'_>]) {
+fn render_withheld(ui: &mut egui::Ui, palette: &theme::Palette, withheld: &[WithheldLine<'_>]) {
     if withheld.is_empty() {
         return;
     }
@@ -185,18 +195,18 @@ fn render_withheld(ui: &mut egui::Ui, withheld: &[WithheldLine<'_>]) {
     for w in withheld {
         ui.label(
             RichText::new(format!("Resource {}: {}", w.resource, w.reason))
-                .color(theme::WARNING_COLOR),
+                .color(palette.warning_color),
         );
     }
 }
 
-fn render_summary(ui: &mut egui::Ui, plan: &PlanView) {
+fn render_summary(ui: &mut egui::Ui, palette: &theme::Palette, plan: &PlanView) {
     ui.label(
         RichText::new(format!(
             "Plan #{} at t = {:.1} s, policy value {:.2}",
             plan.id.0, plan.mission_time.0, plan.policy_value
         ))
-        .color(theme::MUTED_TEXT_COLOR),
+        .color(palette.muted_text_color()),
     );
     if plan.is_empty() {
         ui.label(RichText::new("No assignments").italics());

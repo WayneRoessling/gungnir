@@ -159,8 +159,14 @@ fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
 /// A context with the operations theme installed, so the probe lays out with the same
 /// text styles and spacing as the desktop. A test that read a frame laid out in egui's
 /// stock style would be asserting on a screen nobody sees.
+///
+/// Always the day palette (GAP-095): this probe is for testing what a panel draws, not
+/// for testing the theme itself -- `gungnir-ui/src/theme.rs`'s own tests cover the
+/// night variant -- and a fixed, known palette keeps every test that reads colours off
+/// a rendered frame independent of which `ConfigBaseline` setting a real deployment
+/// might pick.
 fn themed_context() -> Context {
     let ctx = Context::default();
-    crate::theme::install_egui_theme(&ctx);
+    crate::theme::install_egui_theme(&ctx, &crate::theme::Palette::day());
     ctx
 }

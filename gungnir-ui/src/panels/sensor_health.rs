@@ -116,7 +116,11 @@ pub struct SensorHealthView<'a> {
     pub peers: &'a [PeerLine<'a>],
 }
 
-pub fn render_sensor_health(ui: &mut egui::Ui, view: &SensorHealthView<'_>) {
+pub fn render_sensor_health(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    view: &SensorHealthView<'_>,
+) {
     use crate::panels::status_strip::EncryptionState;
     let SensorHealthView {
         health,
@@ -131,9 +135,9 @@ pub fn render_sensor_health(ui: &mut egui::Ui, view: &SensorHealthView<'_>) {
     } = *view;
 
     ui.heading("System health");
-    render_indicator(ui, "Tracking pipeline", health.tracking_healthy);
-    render_indicator(ui, "Intercept planner", health.intercept_healthy);
-    render_indicator(ui, "Ingest gateway", health.ingest_healthy);
+    render_indicator(ui, palette, "Tracking pipeline", health.tracking_healthy);
+    render_indicator(ui, palette, "Intercept planner", health.intercept_healthy);
+    render_indicator(ui, palette, "Ingest gateway", health.ingest_healthy);
 
     // Encryption is not a fourth `SystemHealth` flag, because it has three states and
     // that struct has booleans. **Reporting whether encryption is active is a boolean
@@ -141,50 +145,50 @@ pub fn render_sensor_health(ui: &mut egui::Ui, view: &SensorHealthView<'_>) {
     // the two off states applies is what tells an administrator whether to act.
     ui.separator();
     match encryption {
-        EncryptionState::Active => render_indicator(ui, "Journal encryption", true),
+        EncryptionState::Active => render_indicator(ui, palette, "Journal encryption", true),
         EncryptionState::NotConfigured => {
-            render_indicator(ui, "Journal encryption", false);
+            render_indicator(ui, palette, "Journal encryption", false);
             ui.label(
                 egui::RichText::new("not configured for this deployment")
-                    .color(theme::MUTED_TEXT_COLOR)
-                    .size(theme::SMALL_FONT_SIZE),
+                    .color(palette.muted_text_color())
+                    .size(palette.small_font_size),
             );
         }
         EncryptionState::UnavailableWritingPlaintext { reason } => {
-            render_indicator(ui, "Journal encryption", false);
+            render_indicator(ui, palette, "Journal encryption", false);
             ui.label(
                 egui::RichText::new(format!(
                     "configured, and the keystore could not be reached: {reason}. The \
                      journal is being written in the clear."
                 ))
-                .color(theme::CLASS_HOSTILE_COLOR)
-                .size(theme::SMALL_FONT_SIZE),
+                .color(palette.class_hostile_color)
+                .size(palette.small_font_size),
             );
         }
     }
 
     // GAP-023: whether line of sight is masked against terrain, and if not, why not.
-    render_indicator(ui, "Terrain masking", terrain.masking);
+    render_indicator(ui, palette, "Terrain masking", terrain.masking);
     ui.label(
         egui::RichText::new(terrain.detail)
             .color(if terrain.masking {
-                theme::MUTED_TEXT_COLOR
+                palette.muted_text_color()
             } else {
-                theme::WARNING_COLOR
+                palette.warning_color
             })
-            .size(theme::SMALL_FONT_SIZE),
+            .size(palette.small_font_size),
     );
 
-    render_sensors(ui, sensors);
-    render_feeds(ui, feeds);
-    render_cooperative_feeds(ui, cooperative_feeds);
-    render_peers(ui, view.peers);
-    render_clocks(ui, clocks);
-    render_detectors(ui, detectors);
+    render_sensors(ui, palette, sensors);
+    render_feeds(ui, palette, feeds);
+    render_cooperative_feeds(ui, palette, cooperative_feeds);
+    render_peers(ui, palette, view.peers);
+    render_clocks(ui, palette, clocks);
+    render_detectors(ui, palette, detectors);
 }
 
 /// The AIS feeds (GAP-010): what the receiver heard and what became a placed report.
-fn render_peers(ui: &mut egui::Ui, peers: &[PeerLine<'_>]) {
+fn render_peers(ui: &mut egui::Ui, palette: &theme::Palette, peers: &[PeerLine<'_>]) {
     if peers.is_empty() {
         return;
     }
@@ -194,23 +198,27 @@ fn render_peers(ui: &mut egui::Ui, peers: &[PeerLine<'_>]) {
         let (text, colour) = if p.connected {
             (
                 format!("{}: linked to {}", p.name, p.endpoint),
-                theme::HEALTHY_COLOR,
+                palette.healthy_color(),
             )
         } else {
             (
                 format!("{}: not linked to {} ({})", p.name, p.endpoint, p.reason),
-                theme::WARNING_COLOR,
+                palette.warning_color,
             )
         };
         ui.label(
             RichText::new(text)
                 .color(colour)
-                .size(theme::SMALL_FONT_SIZE),
+                .size(palette.small_font_size),
         );
     }
 }
 
-fn render_cooperative_feeds(ui: &mut egui::Ui, feeds: &[CooperativeFeedLine<'_>]) {
+fn render_cooperative_feeds(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    feeds: &[CooperativeFeedLine<'_>],
+) {
     if feeds.is_empty() {
         return;
     }
@@ -220,7 +228,7 @@ fn render_cooperative_feeds(ui: &mut egui::Ui, feeds: &[CooperativeFeedLine<'_>]
         let (text, colour) = if f.sentences == 0 {
             (
                 format!("{}: bound, nothing received yet", f.name),
-                theme::WARNING_COLOR,
+                palette.warning_color,
             )
         } else {
             let text = format!(
@@ -228,16 +236,16 @@ fn render_cooperative_feeds(ui: &mut egui::Ui, feeds: &[CooperativeFeedLine<'_>]
                 f.name, f.sentences, f.positions, f.static_reports, f.not_decoded
             );
             let colour = if f.not_decoded > 0 {
-                theme::WARNING_COLOR
+                palette.warning_color
             } else {
-                theme::HEALTHY_COLOR
+                palette.healthy_color()
             };
             (text, colour)
         };
         ui.label(
             RichText::new(text)
                 .color(colour)
-                .size(theme::SMALL_FONT_SIZE),
+                .size(palette.small_font_size),
         );
     }
 }
@@ -245,7 +253,7 @@ fn render_cooperative_feeds(ui: &mut egui::Ui, feeds: &[CooperativeFeedLine<'_>]
 /// The radar feeds (GAP-001). A bound feed with nothing received is said in the
 /// warning colour: it is the state a wrong multicast group or a quiet radar produces,
 /// and it looks like health until somebody reads the number.
-fn render_feeds(ui: &mut egui::Ui, feeds: &[FeedLine<'_>]) {
+fn render_feeds(ui: &mut egui::Ui, palette: &theme::Palette, feeds: &[FeedLine<'_>]) {
     if feeds.is_empty() {
         return;
     }
@@ -255,7 +263,7 @@ fn render_feeds(ui: &mut egui::Ui, feeds: &[FeedLine<'_>]) {
         let (text, colour) = if f.datagrams == 0 {
             (
                 format!("{}: bound, nothing received yet", f.name),
-                theme::WARNING_COLOR,
+                palette.warning_color,
             )
         } else {
             let mut text = format!(
@@ -270,16 +278,16 @@ fn render_feeds(ui: &mut egui::Ui, feeds: &[FeedLine<'_>]) {
                     "; {} not decoded, {} from unknown radars",
                     f.not_decoded, f.unknown_radar
                 );
-                theme::WARNING_COLOR
+                palette.warning_color
             } else {
-                theme::HEALTHY_COLOR
+                palette.healthy_color()
             };
             (text, colour)
         };
         ui.label(
             RichText::new(text)
                 .color(colour)
-                .size(theme::SMALL_FONT_SIZE),
+                .size(palette.small_font_size),
         );
     }
 }
@@ -287,22 +295,22 @@ fn render_feeds(ui: &mut egui::Ui, feeds: &[FeedLine<'_>]) {
 /// Which anomaly detectors are running. **An unconfigured detector is listed as off**
 /// rather than left out, so its absence is visible (DN-15 §6); one that is configured and
 /// cannot evaluate in this build says why, rather than passing for running.
-fn render_detectors(ui: &mut egui::Ui, detectors: &[DetectorLine<'_>]) {
+fn render_detectors(ui: &mut egui::Ui, palette: &theme::Palette, detectors: &[DetectorLine<'_>]) {
     ui.separator();
     ui.label(RichText::new("Anomaly detectors").strong());
     for d in detectors {
         let (text, colour) = match d.state {
-            None => (format!("{}: off", d.name), theme::MUTED_TEXT_COLOR),
-            Some(None) => (format!("{}: running", d.name), theme::HEALTHY_COLOR),
+            None => (format!("{}: off", d.name), palette.muted_text_color()),
+            Some(None) => (format!("{}: running", d.name), palette.healthy_color()),
             Some(Some(reason)) => (
                 format!("{}: configured, cannot run: {reason}", d.name),
-                theme::CLASS_HOSTILE_COLOR,
+                palette.class_hostile_color,
             ),
         };
         ui.label(
             RichText::new(text)
                 .color(colour)
-                .size(theme::SMALL_FONT_SIZE),
+                .size(palette.small_font_size),
         );
     }
 }
@@ -311,17 +319,17 @@ fn render_detectors(ui: &mut egui::Ui, detectors: &[DetectorLine<'_>]) {
 ///
 /// **Says how many sources the figure covers**, because "no skew" across nothing is the
 /// statement this element used to make.
-fn render_clocks(ui: &mut egui::Ui, clocks: ClockSyncLine) {
+fn render_clocks(ui: &mut egui::Ui, palette: &theme::Palette, clocks: ClockSyncLine) {
     ui.separator();
     if clocks.sources_observed == 0 {
         ui.label(
             RichText::new("Clock sync: no source heard from yet")
-                .color(theme::MUTED_TEXT_COLOR)
-                .size(theme::SMALL_FONT_SIZE),
+                .color(palette.muted_text_color())
+                .size(palette.small_font_size),
         );
         return;
     }
-    render_indicator(ui, "Clock sync", clocks.sources_out_of_sync == 0);
+    render_indicator(ui, palette, "Clock sync", clocks.sources_out_of_sync == 0);
     let note = if clocks.sources_out_of_sync == 0 {
         format!(
             "{} source(s), largest skew {:.2} s",
@@ -336,11 +344,11 @@ fn render_clocks(ui: &mut egui::Ui, clocks: ClockSyncLine) {
     ui.label(
         RichText::new(note)
             .color(if clocks.sources_out_of_sync == 0 {
-                theme::MUTED_TEXT_COLOR
+                palette.muted_text_color()
             } else {
-                theme::CLASS_HOSTILE_COLOR
+                palette.class_hostile_color
             })
-            .size(theme::SMALL_FONT_SIZE),
+            .size(palette.small_font_size),
     );
 }
 
@@ -349,34 +357,34 @@ fn render_clocks(ui: &mut egui::Ui, clocks: ClockSyncLine) {
 /// Drawn after the three service flags because a sensor is a narrower question than
 /// "is the pipeline running", and an operator scanning this panel reads the wide ones
 /// first.
-fn render_sensors(ui: &mut egui::Ui, sensors: &[SensorHealthLine<'_>]) {
+fn render_sensors(ui: &mut egui::Ui, palette: &theme::Palette, sensors: &[SensorHealthLine<'_>]) {
     ui.separator();
     if sensors.is_empty() {
         // Not a blank: no sensors configured is a deployment state, and it is different
         // from every sensor being silent.
         ui.label(
             RichText::new("No sensors are configured for this deployment.")
-                .color(theme::MUTED_TEXT_COLOR)
-                .size(theme::SMALL_FONT_SIZE),
+                .color(palette.muted_text_color())
+                .size(palette.small_font_size),
         );
         return;
     }
     ui.label(RichText::new("Sensors").strong());
     for line in sensors {
         let (healthy, note, colour) = match line.presence {
-            SensorPresence::Radiating => (true, None, theme::MUTED_TEXT_COLOR),
+            SensorPresence::Radiating => (true, None, palette.muted_text_color()),
             SensorPresence::InMaintenance { until, reason } => (
                 true,
                 Some(format!(
                     "planned maintenance until {}: {reason}",
                     crate::panels::status_strip::format_clock(until)
                 )),
-                theme::MUTED_TEXT_COLOR,
+                palette.muted_text_color(),
             ),
             SensorPresence::Failed => (
                 false,
                 Some("off the air, with no maintenance window open".to_owned()),
-                theme::CLASS_HOSTILE_COLOR,
+                palette.class_hostile_color,
             ),
             SensorPresence::Overrun {
                 window_closed,
@@ -388,11 +396,12 @@ fn render_sensors(ui: &mut egui::Ui, sensors: &[SensorHealthLine<'_>]) {
                      at {}",
                     crate::panels::status_strip::format_clock(window_closed)
                 )),
-                theme::CLASS_HOSTILE_COLOR,
+                palette.class_hostile_color,
             ),
         };
         render_indicator(
             ui,
+            palette,
             &format!("Sensor {} ({})", line.id, line.modality),
             healthy,
         );
@@ -400,28 +409,28 @@ fn render_sensors(ui: &mut egui::Ui, sensors: &[SensorHealthLine<'_>]) {
             ui.label(
                 RichText::new(note)
                     .color(colour)
-                    .size(theme::SMALL_FONT_SIZE),
+                    .size(palette.small_font_size),
             );
         }
     }
 }
 
-fn render_indicator(ui: &mut egui::Ui, label: &str, healthy: bool) {
+fn render_indicator(ui: &mut egui::Ui, palette: &theme::Palette, label: &str, healthy: bool) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(
             egui::vec2(
-                theme::STATUS_DOT_RADIUS * 2.0,
-                theme::STATUS_DOT_RADIUS * 2.0,
+                palette.status_dot_radius * 2.0,
+                palette.status_dot_radius * 2.0,
             ),
             egui::Sense::hover(),
         );
         let color = if healthy {
-            theme::HEALTHY_COLOR
+            palette.healthy_color()
         } else {
-            theme::DEGRADED_COLOR
+            palette.degraded_color()
         };
         ui.painter()
-            .circle_filled(rect.center(), theme::STATUS_DOT_RADIUS, color);
+            .circle_filled(rect.center(), palette.status_dot_radius, color);
         ui.label(label);
         ui.label(RichText::new(if healthy { "OK" } else { "DEGRADED" }).color(color));
     });

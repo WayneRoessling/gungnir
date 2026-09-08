@@ -176,51 +176,53 @@ impl Default for ViewportState {
 /// things depending on which renderer was in front.
 fn draw_layers(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     state: &ViewportState,
     layers: layers::LayerInputs<'_>,
 ) {
     // Terrain goes under everything: it is the ground the rest is drawn on (GAP-023).
-    layers::draw_terrain_2d(painter, rect, &state.view, layers.terrain);
+    layers::draw_terrain_2d(painter, palette, rect, &state.view, layers.terrain);
     // Point clouds have no toggle either, the same reason predictions and the laydown
     // preview below do not: an empty slice already draws nothing, and there is no
     // separate "hidden" state to distinguish from that (GAP-098).
-    layers::draw_point_clouds_2d(painter, rect, &state.view, layers.point_clouds);
+    layers::draw_point_clouds_2d(painter, palette, rect, &state.view, layers.point_clouds);
     if state.layers.geofences {
-        layers::draw_geofences_2d(painter, rect, &state.view, layers.geofences);
+        layers::draw_geofences_2d(painter, palette, rect, &state.view, layers.geofences);
     }
     if state.layers.rings {
-        layers::draw_coverage_2d(painter, rect, &state.view, layers.coverage);
+        layers::draw_coverage_2d(painter, palette, rect, &state.view, layers.coverage);
     }
     if state.layers.gaps {
-        layers::draw_gaps_2d(painter, rect, &state.view, layers.gaps);
+        layers::draw_gaps_2d(painter, palette, rect, &state.view, layers.gaps);
     }
     if state.layers.hazards {
-        layers::draw_hazards_2d(painter, rect, &state.view, layers.hazards);
+        layers::draw_hazards_2d(painter, palette, rect, &state.view, layers.hazards);
     }
     // Predicted lines have no toggle: a prediction the operator cannot see is the case
     // DN-02 §5 warns about, and an empty list draws nothing.
-    layers::draw_predictions_2d(painter, rect, &state.view, layers.predictions);
+    layers::draw_predictions_2d(painter, palette, rect, &state.view, layers.predictions);
     // The laydown preview has no toggle either, for the same reason: selecting an
     // option on PN-16 is what turns it on, and there is nothing to hide when nothing
     // is selected (GAP-087).
-    layers::draw_laydown_preview_2d(painter, rect, &state.view, layers.laydown_preview);
+    layers::draw_laydown_preview_2d(painter, palette, rect, &state.view, layers.laydown_preview);
     // **A hidden layer and an empty one look identical.** Saying which is the whole
     // reason PN-11's toggles are safe to have: without this, turning coverage off would
     // make the map claim a sector nobody had measured.
     if state.layers.anything_hidden() {
         painter.text(
-            rect.left_bottom() + egui::vec2(theme::PANEL_SPACING, -theme::PANEL_SPACING),
+            rect.left_bottom() + egui::vec2(palette.panel_spacing, -palette.panel_spacing),
             egui::Align2::LEFT_BOTTOM,
             format!("layers hidden: {}", state.layers.hidden_names().join(", ")),
-            egui::FontId::proportional(theme::SMALL_FONT_SIZE),
-            theme::WARNING_COLOR,
+            egui::FontId::proportional(palette.small_font_size),
+            palette.warning_color,
         );
     }
 }
 
 pub fn draw_renderer_toggle(
     ui: &mut egui::Ui,
+    palette: &theme::Palette,
     rect: egui::Rect,
     state: &mut ViewportState,
 ) -> bool {
@@ -231,8 +233,8 @@ pub fn draw_renderer_toggle(
     let size = egui::vec2(36.0, 20.0);
     let corner = egui::Rect::from_min_size(
         egui::pos2(
-            rect.right() - size.x - theme::PANEL_SPACING,
-            rect.top() + theme::PANEL_SPACING,
+            rect.right() - size.x - palette.panel_spacing,
+            rect.top() + palette.panel_spacing,
         ),
         size,
     );
@@ -260,6 +262,7 @@ pub fn draw_renderer_toggle(
 /// Returns `None` when there is nothing to draw into.
 pub fn prepare_3d(
     ui: &mut egui::Ui,
+    palette: &theme::Palette,
     state: &mut ViewportState,
     tracks: &[TrackView],
     plan: &PlanView,
@@ -281,20 +284,20 @@ pub fn prepare_3d(
     // the ground plane, and drawing it here means it survives whatever the callback
     // does -- the same reason the status line is here (GAP-022 item 53).
     let painter = ui.painter_at(rect);
-    draw_layers(&painter, rect, state, layers);
+    draw_layers(&painter, palette, rect, state, layers);
 
     // The status line is drawn by egui over the callback's output, so it says what the
     // operator is looking at whether or not the GL draw produced anything.
     ui.painter_at(rect).text(
-        rect.left_top() + egui::vec2(theme::PANEL_SPACING, theme::PANEL_SPACING),
+        rect.left_top() + egui::vec2(palette.panel_spacing, palette.panel_spacing),
         egui::Align2::LEFT_TOP,
         format!(
             "three-d scene: {} tracks, {} assignments. Drag to pan, scroll to zoom.",
             state.glyphs.len(),
             plan.solutions().len()
         ),
-        egui::FontId::proportional(theme::SMALL_FONT_SIZE),
-        theme::VIEWPORT_TEXT_COLOR,
+        egui::FontId::proportional(palette.small_font_size),
+        palette.viewport_text_color,
     );
     Some(rect)
 }
@@ -304,6 +307,7 @@ pub fn prepare_3d(
 /// track set changed, and draws.
 pub fn render(
     ui: &mut egui::Ui,
+    palette: &theme::Palette,
     state: &mut ViewportState,
     tracks: &[TrackView],
     plan: &PlanView,
@@ -319,13 +323,13 @@ pub fn render(
     }
 
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 0.0, theme::VIEWPORT_BACKGROUND);
-    interaction::draw_grid(&painter, rect, &state.view);
+    painter.rect_filled(rect, 0.0, palette.viewport_background);
+    interaction::draw_grid(&painter, palette, rect, &state.view);
     // Coverage before the glyphs: it is context, and a ring must never sit on top of
     // the symbol an operator is looking at (GAP-007).
-    draw_layers(&painter, rect, state, layers);
-    tracks::draw_glyphs_2d(&painter, rect, &state.view, &state.glyphs);
-    tracks::draw_plan_2d(&painter, rect, &state.view, &state.glyphs, plan);
+    draw_layers(&painter, palette, rect, state, layers);
+    tracks::draw_glyphs_2d(&painter, palette, rect, &state.view, &state.glyphs);
+    tracks::draw_plan_2d(&painter, palette, rect, &state.view, &state.glyphs, plan);
 
     // Says which renderer is running and why, because those are different situations:
     // a deployment that opted out of the scene, and a desktop that could not attach one.
@@ -343,13 +347,13 @@ pub fn render(
         )
     };
     painter.text(
-        rect.left_top() + egui::vec2(theme::PANEL_SPACING, theme::PANEL_SPACING),
+        rect.left_top() + egui::vec2(palette.panel_spacing, palette.panel_spacing),
         egui::Align2::LEFT_TOP,
         status,
-        egui::FontId::proportional(theme::SMALL_FONT_SIZE),
-        theme::VIEWPORT_TEXT_COLOR,
+        egui::FontId::proportional(palette.small_font_size),
+        palette.viewport_text_color,
     );
 
     // Drawn from here too, or switching to the projection would be one-way.
-    draw_renderer_toggle(ui, rect, state);
+    draw_renderer_toggle(ui, palette, rect, state);
 }

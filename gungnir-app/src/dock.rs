@@ -32,7 +32,6 @@ use crate::state::AppState;
 use crate::sustainment::SustainmentState;
 use crate::workspace::PanelAction;
 use gungnir_model::LayoutNode;
-use gungnir_ui::theme;
 use gungnir_workflow::PanelId;
 
 /// One pane of the dock tree.
@@ -270,11 +269,11 @@ impl egui_tiles::Behavior<Pane> for PanelBehavior<'_> {
     // defaults, so the tab bar is the same surface as the window behind it, an active
     // tab is the panel it opens, and a tab title reads as text rather than as a button.
     fn tab_bar_height(&self, _style: &egui::Style) -> f32 {
-        theme::TAB_BAR_HEIGHT
+        self.state.palette.tab_bar_height
     }
 
     fn tab_bar_color(&self, _visuals: &egui::Visuals) -> egui::Color32 {
-        theme::APP_BACKGROUND
+        self.state.palette.app_background
     }
 
     fn tab_bg_color(
@@ -285,7 +284,7 @@ impl egui_tiles::Behavior<Pane> for PanelBehavior<'_> {
         state: &egui_tiles::TabState,
     ) -> egui::Color32 {
         if state.active {
-            theme::PANEL_BACKGROUND
+            self.state.palette.panel_background
         } else {
             egui::Color32::TRANSPARENT
         }
@@ -299,14 +298,20 @@ impl egui_tiles::Behavior<Pane> for PanelBehavior<'_> {
         state: &egui_tiles::TabState,
     ) -> egui::Stroke {
         if state.active {
-            egui::Stroke::new(theme::STROKE_HAIRLINE, theme::BORDER_SUBTLE)
+            egui::Stroke::new(
+                self.state.palette.stroke_hairline,
+                self.state.palette.border_subtle,
+            )
         } else {
             egui::Stroke::NONE
         }
     }
 
     fn tab_bar_hline_stroke(&self, _visuals: &egui::Visuals) -> egui::Stroke {
-        egui::Stroke::new(theme::STROKE_HAIRLINE, theme::BORDER_SUBTLE)
+        egui::Stroke::new(
+            self.state.palette.stroke_hairline,
+            self.state.palette.border_subtle,
+        )
     }
 
     fn tab_text_color(
@@ -317,14 +322,17 @@ impl egui_tiles::Behavior<Pane> for PanelBehavior<'_> {
         state: &egui_tiles::TabState,
     ) -> egui::Color32 {
         if state.active {
-            theme::TEXT_PRIMARY
+            self.state.palette.text_primary
         } else {
-            theme::TEXT_SECONDARY
+            self.state.palette.text_secondary
         }
     }
 
     fn drag_preview_stroke(&self, _visuals: &egui::Visuals) -> egui::Stroke {
-        egui::Stroke::new(theme::STROKE_EMPHASIS, theme::FOCUS_COLOR)
+        egui::Stroke::new(
+            self.state.palette.stroke_emphasis,
+            self.state.palette.focus_color,
+        )
     }
 }
 

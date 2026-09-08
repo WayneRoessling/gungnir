@@ -19,6 +19,7 @@
 use crate::harness::RenderProbe;
 use crate::panels::status_strip::{BaselineValidity, EncryptionState, OperatorLine};
 use crate::panels::unavailable::{Section, Unavailable};
+use crate::theme;
 use gungnir_model::Vocabulary;
 
 /// The defaults, which is what an unconfigured deployment shows.
@@ -66,7 +67,8 @@ fn the_empty_approval_queue_draws_its_reason() {
         now: gungnir_model::MissionTime(0.0),
     };
     let probe = RenderProbe::new();
-    let (clicked, frame) = probe.draw(|ui| render_approval_queue(ui, &view));
+    let (clicked, frame) =
+        probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &view));
 
     assert_eq!(
         clicked,
@@ -136,7 +138,7 @@ fn the_approval_queue_keeps_a_handoff_visible_until_it_is_delivered() {
         now: MissionTime(142.0),
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &view));
 
     assert!(
         frame.says("Decided, not yet delivered"),
@@ -200,7 +202,7 @@ fn the_approval_queue_is_silent_when_every_handoff_is_delivered() {
         now: MissionTime(142.0),
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &view));
     assert!(
         !frame.says("Decided, not yet delivered"),
         "an empty outstanding list drew a heading: {}",
@@ -255,7 +257,8 @@ fn the_decision_dialog_draws_accept_last() {
 
     let probe = RenderProbe::new();
     let mut state = DecisionDialogState::default();
-    let (choice, frame) = probe.draw(|ui| render_decision_dialog(ui, &view, &mut state));
+    let (choice, frame) =
+        probe.draw(|ui| render_decision_dialog(ui, &theme::Palette::day(), &view, &mut state));
 
     assert_eq!(
         choice,
@@ -331,7 +334,8 @@ fn a_degraded_decision_draws_why_accept_is_shut() {
 
     let probe = RenderProbe::new();
     let mut state = DecisionDialogState::default();
-    let (_, frame) = probe.draw(|ui| render_decision_dialog(ui, &view, &mut state));
+    let (_, frame) =
+        probe.draw(|ui| render_decision_dialog(ui, &theme::Palette::day(), &view, &mut state));
 
     assert!(
         frame.says("Acknowledge the degraded conditions"),
@@ -371,7 +375,7 @@ fn the_replay_panel_draws_that_it_does_not_rebuild_the_picture() {
         },
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_replay(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_replay(ui, &theme::Palette::day(), &view));
 
     assert!(
         frame.says("does not rebuild"),
@@ -468,7 +472,7 @@ fn the_reports_panel_draws_expiries_as_not_rejections() {
     };
     let probe = RenderProbe::new();
     let mut draft = ReviewDraft::default();
-    let (_, frame) = probe.draw(|ui| render_reports(ui, &view, &mut draft));
+    let (_, frame) = probe.draw(|ui| render_reports(ui, &theme::Palette::day(), &view, &mut draft));
 
     assert!(frame.says("not rejections"), "{}", frame.joined());
     // GAP-047: a computed measure shows its basis and target; a refused one its reason.
@@ -542,7 +546,7 @@ fn the_reports_panel_draws_the_pattern_of_life_with_its_denominator() {
     };
     let probe = RenderProbe::new();
     let mut draft = ReviewDraft::default();
-    let (_, frame) = probe.draw(|ui| render_reports(ui, &view, &mut draft));
+    let (_, frame) = probe.draw(|ui| render_reports(ui, &theme::Palette::day(), &view, &mut draft));
 
     assert!(frame.says("Pattern of life"), "{}", frame.joined());
     assert!(
@@ -564,7 +568,8 @@ fn the_reports_panel_draws_the_pattern_of_life_with_its_denominator() {
         }),
         ..view
     };
-    let (_, frame) = probe.draw(|ui| render_reports(ui, &quiet, &mut draft));
+    let (_, frame) =
+        probe.draw(|ui| render_reports(ui, &theme::Palette::day(), &quiet, &mut draft));
     assert!(
         frame.says("Nothing was seen in any of the 40 session(s)"),
         "{}",
@@ -612,7 +617,7 @@ fn the_config_editor_draws_when_an_apply_takes_effect() {
         },
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_config_editor(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_config_editor(ui, &theme::Palette::day(), &view));
 
     assert!(
         frame.says("until the desktop is restarted"),
@@ -650,7 +655,7 @@ fn the_track_table_draws_the_score_column_as_unavailable() {
         vocabulary: &vocab,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_track_table(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &view));
 
     assert!(
         frame.says("Score (n/a)"),
@@ -689,7 +694,7 @@ fn the_status_strip_draws_an_unclassified_alert_total() {
         operator: OperatorLine::NobodySignedIn,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &view));
 
     assert!(
         frame.says("Alerts 4"),
@@ -747,7 +752,7 @@ fn the_evidence_card_draws_which_crate_owes_each_section() {
         warnings: &[],
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_evidence_card(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_evidence_card(ui, &theme::Palette::day(), &view));
 
     for gap in ["GAP-010", "GAP-019", "GAP-028"] {
         assert!(
@@ -812,7 +817,7 @@ fn the_panels_survive_a_narrow_slot() {
         handoffs: &handoffs,
         now: MissionTime(142.0),
     };
-    let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &queue));
+    let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &queue));
     assert!(!frame.texts.is_empty(), "the queue drew nothing at 220 px");
     assert!(
         frame.says("Decided, not yet delivered"),
@@ -832,7 +837,7 @@ fn the_panels_survive_a_narrow_slot() {
         selected: None,
         vocabulary: &vocab,
     };
-    let (_, frame) = probe.draw(|ui| render_track_table(ui, &table));
+    let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &table));
     assert!(!frame.texts.is_empty(), "the table drew nothing at 220 px");
 }
 
@@ -883,7 +888,7 @@ fn the_track_table_draws_the_deployments_words() {
         vocabulary: &defaults,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_track_table(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &view));
     assert!(
         frame.says("Friend"),
         "the table drew no affiliation for a friendly track: {}",
@@ -903,7 +908,7 @@ fn the_track_table_draws_the_deployments_words() {
         vocabulary: &renamed,
         ..view
     };
-    let (_, frame) = probe.draw(|ui| render_track_table(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &view));
     assert!(
         frame.says("Blue"),
         "an override did not reach the screen: {}",
@@ -960,7 +965,7 @@ fn the_status_strip_draws_the_joint_control_status_terms() {
         operator: OperatorLine::NobodySignedIn,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &view));
 
     assert!(
         frame.says("Weapons free"),
@@ -1011,7 +1016,7 @@ fn a_requested_mode_is_drawn_beside_the_confirmed_one_not_instead_of_it() {
         last_error: None,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_sensor_management(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_sensor_management(ui, &theme::Palette::day(), &view));
 
     assert!(
         frame.says("asked:"),
@@ -1066,7 +1071,7 @@ fn commanding_and_recording_are_labelled_apart() {
         last_error: None,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_sensor_management(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_sensor_management(ui, &theme::Palette::day(), &view));
 
     assert!(
         frame.says("Command") && frame.says("Record observed"),
@@ -1133,7 +1138,7 @@ fn a_refusal_and_a_timeout_draw_as_different_things() {
         last_error: None,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_sensor_management(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_sensor_management(ui, &theme::Palette::day(), &view));
 
     assert!(
         frame.says("transmitter inhibited"),
@@ -1199,7 +1204,8 @@ fn a_tasked_requirement_does_not_draw_as_answered() {
     };
     let mut draft = Draft::default();
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_requirements(ui, &view, &mut draft));
+    let (_, frame) =
+        probe.draw(|ui| render_requirements(ui, &theme::Palette::day(), &view, &mut draft));
 
     assert!(
         frame.says("not yet answered"),
@@ -1266,7 +1272,8 @@ fn a_lapse_and_a_missing_deadline_each_draw_as_themselves() {
     };
     let mut draft = Draft::default();
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_requirements(ui, &view, &mut draft));
+    let (_, frame) =
+        probe.draw(|ui| render_requirements(ui, &theme::Palette::day(), &view, &mut draft));
 
     assert!(
         frame.says("nobody deciding"),
@@ -1330,7 +1337,8 @@ fn an_analyst_is_told_which_half_of_the_workflow_is_theirs() {
         ..Draft::default()
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_requirements(ui, &view, &mut draft));
+    let (_, frame) =
+        probe.draw(|ui| render_requirements(ui, &theme::Palette::day(), &view, &mut draft));
 
     assert!(
         frame.says("not authority they hold"),
@@ -1365,7 +1373,8 @@ fn with_no_areas_the_form_says_why_instead_of_offering_one() {
     };
     let mut draft = Draft::default();
     let probe = RenderProbe::new();
-    let (action, frame) = probe.draw(|ui| render_requirements(ui, &view, &mut draft));
+    let (action, frame) =
+        probe.draw(|ui| render_requirements(ui, &theme::Palette::day(), &view, &mut draft));
 
     // `Some(None)`: the panel drew and returned no action. `None` would mean it never
     // ran at all, which is a different failure.
@@ -1414,7 +1423,7 @@ fn the_status_strip_says_when_the_journal_is_not_encrypted() {
     };
 
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &base()));
+    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &base()));
     assert!(
         frame.says("not encrypted"),
         "an unencrypted journal drew nothing: {}",
@@ -1428,7 +1437,7 @@ fn the_status_strip_says_when_the_journal_is_not_encrypted() {
         },
         ..base()
     };
-    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &view));
     assert!(frame.says("keystore is locked"), "{}", frame.joined());
     assert!(frame.says("NOT encrypted"), "{}", frame.joined());
 
@@ -1437,7 +1446,7 @@ fn the_status_strip_says_when_the_journal_is_not_encrypted() {
         encryption: EncryptionState::Active,
         ..base()
     };
-    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &view));
     assert!(frame.says("journal encrypted"), "{}", frame.joined());
     assert!(!frame.says("not encrypted"), "{}", frame.joined());
 }
@@ -1471,7 +1480,8 @@ fn the_strip_says_who_is_signed_in_and_when_nobody_is() {
     };
     let probe = RenderProbe::new();
     let draw = |line| {
-        let (_, frame) = probe.draw(|ui| render_status_strip(ui, &base(line)));
+        let (_, frame) =
+            probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &base(line)));
         frame.joined()
     };
     let text = draw(OperatorLine::SignedIn {
@@ -1539,6 +1549,7 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
         let (_, frame) = probe.draw(|ui| {
             render_sensor_health(
                 ui,
+                &theme::Palette::day(),
                 &SensorHealthView {
                     health: &health,
                     encryption: EncryptionState::Active,
@@ -1693,7 +1704,8 @@ fn the_handover_says_when_nobody_has_taken_the_watch() {
 
     let probe = RenderProbe::new();
     let mut notes = String::new();
-    let (_, frame) = probe.draw(|ui| render_commander_summary(ui, &view, &mut notes));
+    let (_, frame) =
+        probe.draw(|ui| render_commander_summary(ui, &theme::Palette::day(), &view, &mut notes));
     let text = frame.joined();
     assert!(text.contains("Watch handover"), "{text}");
     assert!(
@@ -1717,7 +1729,8 @@ fn the_handover_says_when_nobody_has_taken_the_watch() {
         handover: Some(taken),
         ..view
     };
-    let (_, frame) = probe.draw(|ui| render_commander_summary(ui, &view, &mut notes));
+    let (_, frame) =
+        probe.draw(|ui| render_commander_summary(ui, &theme::Palette::day(), &view, &mut notes));
     let text = frame.joined();
     assert!(text.contains("Taken by Supervisor"), "{text}");
     assert!(!text.contains("this handover is incomplete"), "{text}");
@@ -1761,12 +1774,20 @@ fn the_status_strip_says_how_long_since_the_node_was_heard() {
     let probe = RenderProbe::new();
 
     let (_, frame) = probe.draw(|ui| {
-        render_status_strip(ui, &base(node(true, LinkFreshness::Heard { age_s: 0.8 })));
+        render_status_strip(
+            ui,
+            &theme::Palette::day(),
+            &base(node(true, LinkFreshness::Heard { age_s: 0.8 })),
+        );
     });
     assert!(frame.says("heard 0.8 s ago"), "{}", frame.joined());
 
     let (_, frame) = probe.draw(|ui| {
-        render_status_strip(ui, &base(node(true, LinkFreshness::Overdue { age_s: 5.2 })));
+        render_status_strip(
+            ui,
+            &theme::Palette::day(),
+            &base(node(true, LinkFreshness::Overdue { age_s: 5.2 })),
+        );
     });
     assert!(frame.says("nothing heard for 5.2 s"), "{}", frame.joined());
 
@@ -1774,6 +1795,7 @@ fn the_status_strip_says_how_long_since_the_node_was_heard() {
     let (_, frame) = probe.draw(|ui| {
         render_status_strip(
             ui,
+            &theme::Palette::day(),
             &base(node(false, LinkFreshness::Overdue { age_s: 40.0 })),
         );
     });
@@ -1805,7 +1827,7 @@ fn the_sensor_panel_tells_no_improvement_from_not_evaluated() {
     let probe = RenderProbe::new();
 
     let (_, frame) = probe.draw(|ui| {
-        render_sensor_management(ui, &base(Ok(&[])));
+        render_sensor_management(ui, &theme::Palette::day(), &base(Ok(&[])));
     });
     assert!(
         frame.says("No mode change improves coverage"),
@@ -1814,7 +1836,11 @@ fn the_sensor_panel_tells_no_improvement_from_not_evaluated() {
     );
 
     let (_, frame) = probe.draw(|ui| {
-        render_sensor_management(ui, &base(Err("no approaches are declared")));
+        render_sensor_management(
+            ui,
+            &theme::Palette::day(),
+            &base(Err("no approaches are declared")),
+        );
     });
     assert!(
         frame.says("Not evaluated: no approaches"),
@@ -1831,7 +1857,11 @@ fn the_sensor_panel_tells_no_improvement_from_not_evaluated() {
         redundancy_lost_m: 0.0,
     };
     let (_, frame) = probe.draw(|ui| {
-        render_sensor_management(ui, &base(Ok(std::slice::from_ref(&line))));
+        render_sensor_management(
+            ui,
+            &theme::Palette::day(),
+            &base(Ok(std::slice::from_ref(&line))),
+        );
     });
     assert!(frame.says("closes 1800 m"), "{}", frame.joined());
 }
@@ -1873,7 +1903,8 @@ fn outcomes_keep_track_inferred_and_corroborated_apart() {
     };
     let probe = RenderProbe::new();
     let mut notes = String::new();
-    let (_, frame) = probe.draw(|ui| render_commander_summary(ui, &view, &mut notes));
+    let (_, frame) =
+        probe.draw(|ui| render_commander_summary(ui, &theme::Palette::day(), &view, &mut notes));
     assert!(
         frame.says("0 corroborated, 2 track-inferred"),
         "{}",
@@ -1891,7 +1922,8 @@ fn outcomes_keep_track_inferred_and_corroborated_apart() {
         outcomes: Ok(OutcomeCounts::default()),
         ..view
     };
-    let (_, frame) = probe.draw(|ui| render_commander_summary(ui, &none, &mut notes));
+    let (_, frame) =
+        probe.draw(|ui| render_commander_summary(ui, &theme::Palette::day(), &none, &mut notes));
     assert!(
         frame.says("No engagements this session"),
         "{}",
@@ -1955,7 +1987,7 @@ fn the_review_section_tells_a_seekable_finding_from_an_anecdote() {
     };
     let probe = RenderProbe::new();
     let mut draft = ReviewDraft::default();
-    let (_, frame) = probe.draw(|ui| render_reports(ui, &view, &mut draft));
+    let (_, frame) = probe.draw(|ui| render_reports(ui, &theme::Palette::day(), &view, &mut draft));
     assert!(frame.says("at 120.0 s: seek"), "{}", frame.joined());
     assert!(
         frame.says("an anecdote, not seekable"),
@@ -1979,7 +2011,8 @@ fn the_review_section_tells_a_seekable_finding_from_an_anecdote() {
         order_of_battle: None,
         ..view
     };
-    let (_, frame) = probe.draw(|ui| render_reports(ui, &closed, &mut draft));
+    let (_, frame) =
+        probe.draw(|ui| render_reports(ui, &theme::Palette::day(), &closed, &mut draft));
     assert!(
         frame.says("no session is open to review"),
         "{}",
@@ -2024,7 +2057,8 @@ fn the_commander_summary_lists_the_most_exposed_assets() {
     };
     let probe = RenderProbe::new();
     let mut notes = String::new();
-    let (_, frame) = probe.draw(|ui| render_commander_summary(ui, &view, &mut notes));
+    let (_, frame) =
+        probe.draw(|ui| render_commander_summary(ui, &theme::Palette::day(), &view, &mut notes));
     assert!(
         frame.says("track 42: the harbour (priority high)"),
         "{}",
@@ -2036,7 +2070,8 @@ fn the_commander_summary_lists_the_most_exposed_assets() {
         exposure: Err("this deployment has declared no defended assets"),
         ..view
     };
-    let (_, frame) = probe.draw(|ui| render_commander_summary(ui, &unscored, &mut notes));
+    let (_, frame) = probe
+        .draw(|ui| render_commander_summary(ui, &theme::Palette::day(), &unscored, &mut notes));
     assert!(
         frame.says("declared no defended assets"),
         "{}",
@@ -2083,7 +2118,15 @@ fn the_intercept_panel_lists_fires_checks_with_failures_as_text() {
     ];
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| {
-        render_intercept_panel(ui, &plan, &[], &checks, &[], &Alternatives::default());
+        render_intercept_panel(
+            ui,
+            &theme::Palette::day(),
+            &plan,
+            &[],
+            &checks,
+            &[],
+            &Alternatives::default(),
+        );
     });
     assert!(
         frame.says("Target track 7, location error 40 m, firing unit 3"),
@@ -2127,6 +2170,7 @@ fn the_intercept_panel_draws_a_refused_alternative_with_its_denial() {
     let (_, frame) = probe.draw(|ui| {
         render_intercept_panel(
             ui,
+            &theme::Palette::day(),
             &PlanView::default(),
             &[],
             &[],
@@ -2195,7 +2239,8 @@ fn the_audit_panel_tells_the_three_reasons_apart() {
             can_sign_in: true,
             can_assign_roles: true,
         };
-        let (_, frame) = probe.draw(|ui| render_audit(ui, &view, &mut draft));
+        let (_, frame) =
+            probe.draw(|ui| render_audit(ui, &theme::Palette::day(), &view, &mut draft));
         assert!(frame.says(expect), "{}", frame.joined());
         assert!(
             frame.says("operator 7: SensorManager"),
@@ -2266,7 +2311,7 @@ fn the_audit_panel_draws_what_was_handed_off_and_what_came_back() {
     };
     let probe = RenderProbe::new();
     let mut draft = SignInDraft::default();
-    let (_, frame) = probe.draw(|ui| render_audit(ui, &view, &mut draft));
+    let (_, frame) = probe.draw(|ui| render_audit(ui, &theme::Palette::day(), &view, &mut draft));
 
     // To whom, when, and by whose decision.
     assert!(frame.says("battery-2"), "{}", frame.joined());
@@ -2332,7 +2377,7 @@ fn the_audit_panel_says_why_nothing_has_reported_back() {
     };
     let probe = RenderProbe::new();
     let mut draft = SignInDraft::default();
-    let (_, frame) = probe.draw(|ui| render_audit(ui, &view, &mut draft));
+    let (_, frame) = probe.draw(|ui| render_audit(ui, &theme::Palette::day(), &view, &mut draft));
     assert!(
         frame.says("D-08"),
         "the empty column named no reason: {}",
@@ -2380,7 +2425,7 @@ fn the_status_strip_says_when_the_baseline_is_not_in_force() {
 
     // The ordinary case draws nothing: almost no deployment configures a window, and an
     // element that said "baseline valid" on every frame would be read past.
-    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &base()));
+    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &base()));
     assert!(!frame.says("baseline"), "{}", frame.joined());
 
     let expired = StatusStripView {
@@ -2389,7 +2434,7 @@ fn the_status_strip_says_when_the_baseline_is_not_in_force() {
         },
         ..base()
     };
-    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &expired));
+    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &expired));
     assert!(frame.says("expired"), "{}", frame.joined());
     assert!(
         frame.says("superseded"),
@@ -2403,7 +2448,7 @@ fn the_status_strip_says_when_the_baseline_is_not_in_force() {
         },
         ..base()
     };
-    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &not_yet));
+    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &not_yet));
     assert!(frame.says("not in force until"), "{}", frame.joined());
     assert!(
         !frame.says("expired"),
@@ -2418,7 +2463,7 @@ fn the_status_strip_says_when_the_baseline_is_not_in_force() {
         },
         ..base()
     };
-    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &in_force));
+    let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &in_force));
     assert!(frame.says("valid until"), "{}", frame.joined());
     assert!(!frame.says("superseded"), "{}", frame.joined());
 }
@@ -2451,7 +2496,7 @@ fn hiding_a_layer_says_the_map_is_not_showing_everything() {
         geofences_visible: true,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &view));
 
     assert!(
         frame.says("A hidden layer is not an empty one"),
@@ -2468,7 +2513,7 @@ fn hiding_a_layer_says_the_map_is_not_showing_everything() {
         gaps_visible: true,
         ..view
     };
-    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &view));
     assert!(!frame.says("A hidden layer is not"), "{}", frame.joined());
 }
 
@@ -2498,7 +2543,7 @@ fn the_hazard_layer_states_its_currency() {
         geofences_visible: true,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &view));
     assert!(frame.says("Hazards and barriers (2)"), "{}", frame.joined());
     assert!(frame.says("baseline revision 7"), "{}", frame.joined());
     assert!(frame.says("static layer"), "{}", frame.joined());
@@ -2512,7 +2557,7 @@ fn the_hazard_layer_states_its_currency() {
         },
         ..view
     };
-    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &unplaced));
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &unplaced));
     assert!(frame.says("2 declared"), "{}", frame.joined());
     assert!(frame.says("0 placed"), "{}", frame.joined());
 }
@@ -2545,7 +2590,7 @@ fn an_empty_layer_and_a_hidden_one_read_differently() {
         geofences_visible: true,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &view));
 
     assert!(frame.says("nothing to draw"), "{}", frame.joined());
     assert!(frame.says("no local frame origin"), "{}", frame.joined());
@@ -2581,7 +2626,7 @@ fn the_comparison_status_says_nothing_is_selected_when_nothing_is() {
         geofences_visible: true,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &view));
     assert!(frame.says("No option selected"), "{}", frame.joined());
 }
 
@@ -2618,7 +2663,7 @@ fn the_comparison_status_names_the_selected_options_intent_and_counts() {
         geofences_visible: true,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &view));
     assert!(frame.says("weight the western flank"), "{}", frame.joined());
     assert!(frame.says("3 sensor"), "{}", frame.joined());
     assert!(frame.says("1 resource"), "{}", frame.joined());
@@ -2648,7 +2693,7 @@ fn the_about_panel_paints_every_appropriate_legal_notice() {
         source_url: "https://example.invalid/gungnir",
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_about(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_about(ui, &theme::Palette::day(), &view));
 
     for notice in APPROPRIATE_LEGAL_NOTICES {
         // Painted text wraps, so the whole sentence is not one drawn string. The first
@@ -2741,7 +2786,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
         selected: Some(&rows[1].id),
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_planning(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));
 
     // The current laydown is named as such, and the terrain model every row was
     // compared under is stated once rather than left for the reader to assume.
@@ -2792,7 +2837,7 @@ fn planning_with_no_laydowns_declared_says_so() {
         selected: None,
     };
     let probe = RenderProbe::new();
-    let (_, frame) = probe.draw(|ui| render_planning(ui, &view));
+    let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));
     assert!(
         frame.says("declared no laydown alternatives"),
         "{}",

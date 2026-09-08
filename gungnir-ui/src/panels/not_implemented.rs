@@ -25,12 +25,18 @@ use egui::{RichText, Ui};
 /// that will replace this. Both are shown deliberately: the reviewer checking whether
 /// the workspace matches plan 06 needs the first, and anyone asking when it will work
 /// needs the second.
-pub fn render_not_implemented(ui: &mut Ui, pn: &str, title: &str, gap: &str) {
+pub fn render_not_implemented(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    pn: &str,
+    title: &str,
+    gap: &str,
+) {
     ui.horizontal(|ui| {
         ui.label(
             RichText::new("NOT IMPLEMENTED")
                 .strong()
-                .color(theme::WARNING_COLOR),
+                .color(palette.warning_color),
         );
         ui.label(RichText::new(pn).monospace().weak());
     });

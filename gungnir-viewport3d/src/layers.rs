@@ -110,11 +110,12 @@ pub enum CoverageLayer<'a> {
 /// a ring must never sit on top of a symbol. The caller draws this before the glyphs.
 pub fn draw_coverage_2d(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     layer: CoverageLayer<'_>,
 ) {
-    draw_rings(painter, rect, view, layer);
+    draw_rings(painter, palette, rect, view, layer);
 }
 
 /// Gaps along the declared approaches (DN-12 §7).
@@ -128,6 +129,7 @@ pub fn draw_coverage_2d(
 /// the other by one sensor, because those call for different actions.
 pub fn draw_gaps_2d(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     gaps: &[GapPolyline<'_>],
@@ -139,14 +141,14 @@ pub fn draw_gaps_2d(
         }
         let stroke = egui::Stroke::new(
             if gap.uncovered {
-                theme::STROKE_GAP_UNCOVERED
+                palette.stroke_gap_uncovered
             } else {
-                theme::STROKE_GAP_PARTIAL
+                palette.stroke_gap_partial
             },
             if gap.uncovered {
-                theme::CLASS_HOSTILE_COLOR
+                palette.class_hostile_color
             } else {
-                theme::WARNING_COLOR
+                palette.warning_color
             },
         );
         if gap.uncovered {
@@ -244,7 +246,7 @@ pub fn terrain_stride(rows: u32, columns: u32) -> u32 {
 /// The colour of a height between the surface's lowest and highest: dark green low,
 /// pale brown high, translucent so tracks and rings stay legible over it.
 #[must_use]
-pub fn terrain_color(t: f32) -> egui::Color32 {
+pub fn terrain_color(palette: &theme::Palette, t: f32) -> egui::Color32 {
     let t = if t.is_finite() {
         t.clamp(0.0, 1.0)
     } else {
@@ -254,7 +256,7 @@ pub fn terrain_color(t: f32) -> egui::Color32 {
     let high = [176.0_f32, 150.0, 110.0];
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let mix = |i: usize| (low[i] + (high[i] - low[i]) * t) as u8;
-    egui::Color32::from_rgba_unmultiplied(mix(0), mix(1), mix(2), theme::TERRAIN_ALPHA)
+    egui::Color32::from_rgba_unmultiplied(mix(0), mix(1), mix(2), palette.terrain_alpha)
 }
 
 /// Draw the terrain as a shaded surface in the top-down view. Nothing is drawn for
@@ -262,6 +264,7 @@ pub fn terrain_color(t: f32) -> egui::Color32 {
 /// terrain is said (PN-09), and a label on every empty map would be noise.
 pub fn draw_terrain_2d(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     terrain: Option<TerrainLayer<'_>>,
@@ -299,7 +302,7 @@ pub fn draw_terrain_2d(
             let pos = view.project([f64::from(p[0]), f64::from(p[1]), 0.0], rect);
             #[allow(clippy::cast_possible_truncation)]
             let id = mesh.vertices.len() as u32;
-            mesh.colored_vertex(pos, terrain_color((p[2] - lo) / span));
+            mesh.colored_vertex(pos, terrain_color(palette, (p[2] - lo) / span));
             ids.push(Some(id));
         }
     }
@@ -349,13 +352,14 @@ pub fn point_cloud_stride(point_count: usize) -> usize {
 /// has loaded reads as a pair rather than as one undifferentiated cloud.
 pub fn draw_point_clouds_2d(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     clouds: &[PointCloudLayer<'_>],
 ) {
     const DOT_RADIUS: f32 = 1.5;
     for (index, cloud) in clouds.iter().enumerate() {
-        let color = point_cloud_color(index);
+        let color = point_cloud_color(palette, index);
         let stride = point_cloud_stride(cloud.positions.len());
         for p in cloud.positions.iter().step_by(stride) {
             let pos = view.project([f64::from(p[0]), f64::from(p[1]), 0.0], rect);
@@ -371,11 +375,11 @@ pub fn draw_point_clouds_2d(
 /// documents) get their own colours; anything past the pair repeats the target's rather
 /// than indexing past a fixed palette.
 #[must_use]
-pub fn point_cloud_color(index: usize) -> egui::Color32 {
+pub fn point_cloud_color(palette: &theme::Palette, index: usize) -> egui::Color32 {
     if index == 0 {
-        theme::POINT_CLOUD_SOURCE_COLOR
+        palette.point_cloud_source_color
     } else {
-        theme::POINT_CLOUD_TARGET_COLOR
+        palette.point_cloud_target_color
     }
 }
 
@@ -395,6 +399,7 @@ pub struct PredictedPath<'a> {
 /// the point (DN-02 §7).
 pub fn draw_predictions_2d(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     predictions: &[PredictedPath<'_>],
@@ -404,7 +409,7 @@ pub fn draw_predictions_2d(
         if points.len() < 2 {
             continue;
         }
-        let stroke = egui::Stroke::new(theme::STROKE_EMPHASIS, theme::WARNING_COLOR);
+        let stroke = egui::Stroke::new(palette.stroke_emphasis, palette.warning_color);
         for pair in points.windows(2) {
             let (a, b) = (pair[0], pair[1]);
             // Dashes: split each segment into thirds and draw the outer two.
@@ -442,6 +447,7 @@ pub struct LaydownPreview<'a> {
 /// not.
 pub fn draw_laydown_preview_2d(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     preview: Option<LaydownPreview<'_>>,
@@ -450,7 +456,7 @@ pub fn draw_laydown_preview_2d(
     let Some(preview) = preview else {
         return;
     };
-    let stroke = egui::Stroke::new(theme::STROKE_EMPHASIS, theme::LAYDOWN_PREVIEW_COLOR);
+    let stroke = egui::Stroke::new(palette.stroke_emphasis, palette.laydown_preview_color);
     for &enu in preview.sensors {
         painter.circle_stroke(view.project(enu, rect), MARKER_RADIUS, stroke);
     }
@@ -477,8 +483,8 @@ pub fn draw_laydown_preview_2d(
             view.project(label_at, rect) + egui::vec2(0.0, -2.0 * MARKER_RADIUS),
             egui::Align2::CENTER_BOTTOM,
             format!("Preview: {}", preview.intent),
-            egui::FontId::proportional(theme::SMALL_FONT_SIZE),
-            theme::LAYDOWN_PREVIEW_COLOR,
+            egui::FontId::proportional(palette.small_font_size),
+            palette.laydown_preview_color,
         );
     }
 }
@@ -497,6 +503,7 @@ pub struct GeofenceOutline<'a> {
 /// no-go fence and muted for one that marks without denying.
 pub fn draw_geofences_2d(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     fences: &[GeofenceOutline<'_>],
@@ -504,11 +511,11 @@ pub fn draw_geofences_2d(
     const SEGMENTS: usize = 64;
     for fence in fences {
         let colour = if fence.no_go {
-            theme::ALERT_COLOR
+            palette.alert_color
         } else {
-            theme::MUTED_TEXT_COLOR
+            palette.muted_text_color()
         };
-        let stroke = egui::Stroke::new(theme::STROKE_EMPHASIS, colour);
+        let stroke = egui::Stroke::new(palette.stroke_emphasis, colour);
         let points: Vec<egui::Pos2> = (0..=SEGMENTS)
             .map(|i| {
                 #[allow(clippy::cast_precision_loss)]
@@ -536,7 +543,7 @@ pub fn draw_geofences_2d(
             } else {
                 fence.name.to_string()
             },
-            egui::FontId::proportional(theme::SMALL_FONT_SIZE),
+            egui::FontId::proportional(palette.small_font_size),
             colour,
         );
     }
@@ -566,6 +573,7 @@ pub struct HazardOutline<'a> {
 /// mouth is a puzzle rather than a boom.
 pub fn draw_hazards_2d(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     hazards: &[HazardOutline<'_>],
@@ -579,7 +587,7 @@ pub fn draw_hazards_2d(
         if points.len() < 2 {
             continue;
         }
-        let stroke = egui::Stroke::new(theme::STROKE_HAZARD, theme::HAZARD_COLOR);
+        let stroke = egui::Stroke::new(palette.stroke_hazard, palette.hazard_color);
         if hazard.blocks_surface {
             painter.add(egui::Shape::line(points.clone(), stroke));
         } else {
@@ -592,17 +600,18 @@ pub fn draw_hazards_2d(
         // The label sits at the outline's first point; for a ring that is its eastmost
         // sample, for a boom one end.
         painter.text(
-            points[0] + egui::vec2(theme::PANEL_SPACING, -theme::PANEL_SPACING),
+            points[0] + egui::vec2(palette.panel_spacing, -palette.panel_spacing),
             egui::Align2::LEFT_BOTTOM,
             format!("{} ({})", hazard.name, hazard.kind),
-            egui::FontId::proportional(theme::SMALL_FONT_SIZE),
-            theme::HAZARD_COLOR,
+            egui::FontId::proportional(palette.small_font_size),
+            palette.hazard_color,
         );
     }
 }
 
 fn draw_rings(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     layer: CoverageLayer<'_>,
@@ -611,11 +620,11 @@ fn draw_rings(
         CoverageLayer::Circles { circles, nominal } => (circles, nominal),
         CoverageLayer::None(reason) => {
             painter.text(
-                rect.left_bottom() + egui::vec2(theme::PANEL_SPACING, -theme::PANEL_SPACING),
+                rect.left_bottom() + egui::vec2(palette.panel_spacing, -palette.panel_spacing),
                 egui::Align2::LEFT_BOTTOM,
                 reason.sentence(),
-                egui::FontId::proportional(theme::SMALL_FONT_SIZE),
-                theme::MUTED_TEXT_COLOR,
+                egui::FontId::proportional(palette.small_font_size),
+                palette.muted_text_color(),
             );
             return;
         }
@@ -623,13 +632,13 @@ fn draw_rings(
 
     if let Some(gap) = nominal {
         painter.text(
-            rect.left_bottom() + egui::vec2(theme::PANEL_SPACING, -theme::PANEL_SPACING),
+            rect.left_bottom() + egui::vec2(palette.panel_spacing, -palette.panel_spacing),
             egui::Align2::LEFT_BOTTOM,
             format!(
                 "Coverage shown is each sensor's configured range, not what it is covering now: sensor modes are not read ({gap})."
             ),
-            egui::FontId::proportional(theme::SMALL_FONT_SIZE),
-            theme::WARNING_COLOR,
+            egui::FontId::proportional(palette.small_font_size),
+            palette.warning_color,
         );
     }
 
@@ -644,7 +653,10 @@ fn draw_rings(
         painter.circle_stroke(
             center,
             radius_px,
-            egui::Stroke::new(theme::STROKE_HAIRLINE, coverage_color(circle.confidence)),
+            egui::Stroke::new(
+                palette.stroke_hairline,
+                coverage_color(palette, circle.confidence),
+            ),
         );
     }
 }
@@ -662,12 +674,12 @@ pub fn radius_in_pixels(radius_m: f64, view: &TopDownView) -> f32 {
 /// and a searching sensor's ring should look like a weaker claim than a tracking one's
 /// without an operator having to read a legend.
 #[must_use]
-pub fn coverage_color(confidence: f32) -> egui::Color32 {
-    let base = theme::COVERAGE_COLOR;
+pub fn coverage_color(palette: &theme::Palette, confidence: f32) -> egui::Color32 {
+    let base = palette.coverage_color;
     // `clamp` on a NaN returns NaN, and `NaN as u8` is 0 -- nothing drawn, which is the
     // right answer for a confidence nobody can read.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let alpha = (f32::from(theme::COVERAGE_MAX_ALPHA) * confidence.clamp(0.0, 1.0)) as u8;
+    let alpha = (f32::from(palette.coverage_max_alpha) * confidence.clamp(0.0, 1.0)) as u8;
     egui::Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), alpha)
 }
 
@@ -692,10 +704,11 @@ mod tests {
 
     #[test]
     fn terrain_colour_runs_low_to_high_and_tolerates_nan() {
-        let low = terrain_color(0.0);
-        let high = terrain_color(1.0);
+        let palette = theme::Palette::day();
+        let low = terrain_color(&palette, 0.0);
+        let high = terrain_color(&palette, 1.0);
         assert!(high.r() > low.r(), "higher ground is paler");
-        assert_eq!(terrain_color(f32::NAN), low);
+        assert_eq!(terrain_color(&palette, f32::NAN), low);
         assert!(low.a() < 255, "translucent, so tracks stay legible over it");
     }
 
@@ -717,10 +730,17 @@ mod tests {
     /// pair would look like one undifferentiated cloud rather than two.
     #[test]
     fn source_and_target_are_drawn_in_different_colours() {
-        assert_ne!(point_cloud_color(0), point_cloud_color(1));
+        let palette = theme::Palette::day();
+        assert_ne!(
+            point_cloud_color(&palette, 0),
+            point_cloud_color(&palette, 1)
+        );
         // Anything past the pair repeats the target's colour rather than panicking or
         // indexing a fixed palette out of bounds.
-        assert_eq!(point_cloud_color(1), point_cloud_color(2));
+        assert_eq!(
+            point_cloud_color(&palette, 1),
+            point_cloud_color(&palette, 2)
+        );
     }
 
     /// [`PointCloudLayer`] borrows straight from a loaded buffer's positions, the same
@@ -781,10 +801,11 @@ mod tests {
     /// would overstate what is known.
     #[test]
     fn lower_confidence_is_drawn_more_faintly() {
-        let strong = coverage_color(1.0);
-        let weak = coverage_color(0.7);
-        let none = coverage_color(0.0);
-        assert_eq!(strong.a(), theme::COVERAGE_MAX_ALPHA);
+        let palette = theme::Palette::day();
+        let strong = coverage_color(&palette, 1.0);
+        let weak = coverage_color(&palette, 0.7);
+        let none = coverage_color(&palette, 0.0);
+        assert_eq!(strong.a(), palette.coverage_max_alpha);
         assert!(weak.a() < strong.a());
         assert_eq!(none.a(), 0);
         // `Color32` stores premultiplied, so the way to compare hues is egui's own
@@ -808,10 +829,14 @@ mod tests {
     /// the value comes from another crate and a bad one must not corrupt the drawing.
     #[test]
     fn confidence_outside_the_range_is_clamped() {
-        assert_eq!(coverage_color(5.0).a(), theme::COVERAGE_MAX_ALPHA);
-        assert_eq!(coverage_color(-1.0).a(), 0);
+        let palette = theme::Palette::day();
         assert_eq!(
-            coverage_color(f32::NAN).a(),
+            coverage_color(&palette, 5.0).a(),
+            palette.coverage_max_alpha
+        );
+        assert_eq!(coverage_color(&palette, -1.0).a(), 0);
+        assert_eq!(
+            coverage_color(&palette, f32::NAN).a(),
             0,
             "NaN clamps to nothing drawn"
         );

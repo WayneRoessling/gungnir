@@ -92,9 +92,14 @@ pub fn grid_spacing_m(view: &TopDownView) -> f64 {
 }
 
 /// Draw a metric grid over `rect` for orientation.
-pub fn draw_grid(painter: &egui::Painter, rect: egui::Rect, view: &TopDownView) {
+pub fn draw_grid(
+    painter: &egui::Painter,
+    palette: &theme::Palette,
+    rect: egui::Rect,
+    view: &TopDownView,
+) {
     let spacing = grid_spacing_m(view);
-    let stroke = egui::Stroke::new(theme::STROKE_HAIRLINE, theme::VIEWPORT_GRID_COLOR);
+    let stroke = egui::Stroke::new(palette.stroke_hairline, palette.viewport_grid_color);
     let [min_e, min_n, _] = view.unproject(rect.left_bottom(), rect);
     let [max_e, max_n, _] = view.unproject(rect.right_top(), rect);
     let mut e = (min_e / spacing).floor() * spacing;

@@ -81,15 +81,20 @@ pub struct ExposureLine<'a> {
     pub time_to_impact_s: Option<f32>,
 }
 
-fn draw_exposure(ui: &mut Ui, exposure: Result<&[ExposureLine<'_>], &str>) {
+fn draw_exposure(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    exposure: Result<&[ExposureLine<'_>], &str>,
+) {
     ui.strong("Most exposed assets");
     match exposure {
         Err(reason) => {
-            ui.label(RichText::new(reason).color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new(reason).color(palette.muted_text_color()));
         }
         Ok([]) => {
             ui.label(
-                RichText::new("No track threatens a listed asset.").color(theme::MUTED_TEXT_COLOR),
+                RichText::new("No track threatens a listed asset.")
+                    .color(palette.muted_text_color()),
             );
         }
         Ok(lines) => {
@@ -139,7 +144,7 @@ impl OutcomeCounts {
 /// **The two evidence columns are never added together on screen.** A commander reading
 /// "3 effective" with two of them inferred from a track dropping out of the picture is
 /// reading a number the evidence does not support.
-fn draw_outcomes(ui: &mut Ui, counts: OutcomeCounts) {
+fn draw_outcomes(ui: &mut Ui, palette: &theme::Palette, counts: OutcomeCounts) {
     if counts.total() == 0 {
         ui.label("No engagements this session.");
         return;
@@ -165,7 +170,7 @@ fn draw_outcomes(ui: &mut Ui, counts: OutcomeCounts) {
                  does not say which.",
             )
             .small()
-            .color(theme::WARNING_COLOR),
+            .color(palette.warning_color),
         );
     }
 }
@@ -221,10 +226,10 @@ pub struct CommanderSummaryView<'a> {
 /// passed in rather than held here.
 /// GAP-042: warnings owed in the period; late and failed are the two a commander has to
 /// act on.
-fn draw_warnings(ui: &mut Ui, warnings: WarningCounts) {
+fn draw_warnings(ui: &mut Ui, palette: &theme::Palette, warnings: WarningCounts) {
     ui.strong("Warnings");
     if warnings.open == 0 {
-        ui.label(egui::RichText::new("none owed").color(theme::MUTED_TEXT_COLOR));
+        ui.label(egui::RichText::new("none owed").color(palette.muted_text_color()));
     } else {
         ui.label(
             egui::RichText::new(format!(
@@ -232,9 +237,9 @@ fn draw_warnings(ui: &mut Ui, warnings: WarningCounts) {
                 warnings.open, warnings.late, warnings.failed
             ))
             .color(if warnings.late + warnings.failed > 0 {
-                theme::ALERT_COLOR
+                palette.alert_color
             } else {
-                theme::WARNING_COLOR
+                palette.warning_color
             }),
         );
     }
@@ -243,6 +248,7 @@ fn draw_warnings(ui: &mut Ui, warnings: WarningCounts) {
 
 pub fn render_commander_summary(
     ui: &mut Ui,
+    palette: &theme::Palette,
     view: &CommanderSummaryView<'_>,
     notes: &mut String,
 ) -> Option<HandoverAction> {
@@ -251,7 +257,9 @@ pub fn render_commander_summary(
     // Drawn first when it is open: at a shift change this is what the panel is for, and
     // burying it under the queue statistics would make the one time-critical thing on the
     // screen the thing you scroll to.
-    let action = view.handover.and_then(|h| draw_handover(ui, &h, notes));
+    let action = view
+        .handover
+        .and_then(|h| draw_handover(ui, palette, &h, notes));
 
     ui.strong("Approval queue");
     match view.queue {
@@ -263,11 +271,11 @@ pub fn render_commander_summary(
             if q.expired > 0 {
                 ui.label(
                     RichText::new("Expired windows are not rejections: nobody decided.")
-                        .color(theme::WARNING_COLOR),
+                        .color(palette.warning_color),
                 );
             }
         }
-        Err(u) => draw_unavailable(ui, u),
+        Err(u) => draw_unavailable(ui, palette, u),
     }
     ui.separator();
 
@@ -278,14 +286,14 @@ pub fn render_commander_summary(
             ui.label(format!("{} assignments", p.assignments));
         }
         None => {
-            ui.label(RichText::new("No plan proposed.").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("No plan proposed.").color(palette.muted_text_color()));
         }
     }
     ui.separator();
 
     ui.strong("Delegations in force");
     if view.delegations.is_empty() {
-        ui.label(RichText::new("None.").color(theme::MUTED_TEXT_COLOR));
+        ui.label(RichText::new("None.").color(palette.muted_text_color()));
     } else {
         for d in view.delegations {
             let text = match (d.layer, d.class) {
@@ -306,17 +314,17 @@ pub fn render_commander_summary(
                 (None, Some(c)) => format!("{} delegated to {} [{c}]", d.action, d.role),
                 (None, None) => format!("{} delegated to {}", d.action, d.role),
             };
-            ui.label(RichText::new(text).color(theme::WARNING_COLOR));
+            ui.label(RichText::new(text).color(palette.warning_color));
         }
     }
     ui.separator();
 
     ui.strong("Accepted coverage gaps");
-    draw_warnings(ui, view.warnings);
+    draw_warnings(ui, palette, view.warnings);
 
     match view.accepted_gaps {
         Ok([]) => {
-            ui.label(RichText::new("None accepted.").color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new("None accepted.").color(palette.muted_text_color()));
         }
         Ok(gaps) => {
             for g in gaps {
@@ -326,16 +334,16 @@ pub fn render_commander_summary(
                 ));
             }
         }
-        Err(u) => draw_unavailable(ui, u),
+        Err(u) => draw_unavailable(ui, palette, u),
     }
     ui.separator();
 
-    draw_exposure(ui, view.exposure);
+    draw_exposure(ui, palette, view.exposure);
 
     ui.strong("Outcomes");
     match view.outcomes {
-        Ok(counts) => draw_outcomes(ui, counts),
-        Err(u) => draw_unavailable(ui, u),
+        Ok(counts) => draw_outcomes(ui, palette, counts),
+        Err(u) => draw_unavailable(ui, palette, u),
     }
     ui.separator();
 
@@ -345,7 +353,7 @@ pub fn render_commander_summary(
                 "Delegate and accept-gap controls need gungnir-command wired to the \
                  desktop; none is drawn.",
             )
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
         );
     }
 
@@ -357,7 +365,12 @@ pub fn render_commander_summary(
 /// **The acknowledgement is the point.** MOE-13 counts handovers taken inside the window,
 /// so the state that matters here is not what happened on the watch -- that is assembled
 /// and shown -- but whether somebody has said, by name, that they now have it.
-fn draw_handover(ui: &mut Ui, h: &HandoverView<'_>, notes: &mut String) -> Option<HandoverAction> {
+fn draw_handover(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    h: &HandoverView<'_>,
+    notes: &mut String,
+) -> Option<HandoverAction> {
     let mut action = None;
     ui.separator();
     ui.strong("Watch handover");
@@ -379,7 +392,7 @@ fn draw_handover(ui: &mut Ui, h: &HandoverView<'_>, notes: &mut String) -> Optio
     // Named, never blank. A section this build cannot assemble must not look like a
     // section that was assembled and found nothing.
     for u in h.not_assembled {
-        draw_unavailable(ui, *u);
+        draw_unavailable(ui, palette, *u);
     }
 
     if let Some((who, at)) = h.acknowledged_by {
@@ -388,7 +401,7 @@ fn draw_handover(ui: &mut Ui, h: &HandoverView<'_>, notes: &mut String) -> Optio
                 "Taken by {who} at {}",
                 crate::panels::status_strip::format_clock(at)
             ))
-            .color(theme::HEALTHY_COLOR),
+            .color(palette.healthy_color()),
         );
     } else {
         {
@@ -403,17 +416,17 @@ fn draw_handover(ui: &mut Ui, h: &HandoverView<'_>, notes: &mut String) -> Optio
                 "Nothing on this watch is outstanding."
             };
             ui.label(RichText::new(warning).color(if h.outstanding_work {
-                theme::WARNING_COLOR
+                palette.warning_color
             } else {
-                theme::MUTED_TEXT_COLOR
+                palette.muted_text_color()
             }));
             if ui.button("Acknowledge and take the watch").clicked() {
                 action = Some(HandoverAction::Acknowledge);
             }
             ui.label(
                 RichText::new("Not acknowledged: this handover is incomplete.")
-                    .color(theme::WARNING_COLOR)
-                    .size(theme::SMALL_FONT_SIZE),
+                    .color(palette.warning_color)
+                    .size(palette.small_font_size),
             );
         }
     }

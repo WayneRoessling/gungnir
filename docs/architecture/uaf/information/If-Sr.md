@@ -116,7 +116,8 @@ Diagram: [`If-Sr.puml`](If-Sr.puml).
 | `UasPlatformReport` | struct | `sensor: SensorId`<br>`platform_position: Option<EnuPoint>`<br>`platform_heading_rad: Option<f64>`<br>`platform_pitch_rad: Option<f64>`<br>`platform_roll_rad: Option<f64>`<br>`sensor_relative_azimuth_rad: Option<f64>`<br>`sensor_relative_elevation_rad: Option<f64>`<br>`sensor_relative_roll_rad: Option<f64>`<br>`slant_range_m: Option<f64>`<br>`frame_center: Option<EnuPoint>`<br>`platform_designation: Option<String>`<br>`platform_tail_number: Option<String>`<br>`mission_id: Option<String>`<br>`image_source_sensor: Option<String>`<br>`uas_lds_version: Option<u8>`<br>`source_time: MissionTime`<br>`receipt_time: MissionTime` | `gungnir-model/src/uas_platform.rs` |
 | `LayoutNode` | enum | `Panel { pn: String }`<br>`Tabs { children: Vec<LayoutNode> }`<br>`Horizontal { children: Vec<LayoutNode>, shares: Vec<f32>, }`<br>`Vertical { children: Vec<LayoutNode>, shares: Vec<f32>, }` | `gungnir-model/src/ui_settings.rs` |
 | `RoleLayout` | struct | `main: LayoutNode`<br>`detached: Vec<String>` | `gungnir-model/src/ui_settings.rs` |
-| `UiSettings` | struct | `layouts: BTreeMap<String, RoleLayout>`<br>`scene_3d: bool` | `gungnir-model/src/ui_settings.rs` |
+| `UiSettings` | struct | `layouts: BTreeMap<String, RoleLayout>`<br>`scene_3d: bool`<br>`theme: String` | `gungnir-model/src/ui_settings.rs` |
+| `ThemeVariant` | enum | `Day`<br>`Night` | `gungnir-model/src/ui_settings.rs` |
 | `Term` | enum | `Classification(Classification)`<br>`TrackStatus(TrackStatus)`<br>`Layer(EffectorLayer)`<br>`ControlStatus(WeaponsControlStatus)`<br>`SensorMode(SensorMode)` | `gungnir-model/src/vocabulary.rs` |
 | `Vocabulary` | struct | `overrides: BTreeMap<String, String>` | `gungnir-model/src/vocabulary.rs` |
 

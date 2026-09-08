@@ -106,12 +106,12 @@ pub fn delivery_label(delivery: &DeliveryState) -> &'static str {
 /// it -- silence and refusal -- are drawn as trouble, and they are drawn as different
 /// degrees of it, because a refusal is an answer and silence is not.
 #[must_use]
-pub fn delivery_color(delivery: &DeliveryState) -> Color32 {
+pub fn delivery_color(palette: &theme::Palette, delivery: &DeliveryState) -> Color32 {
     match delivery {
-        DeliveryState::Manual => theme::TEXT_PRIMARY,
-        DeliveryState::Delivered { .. } => theme::MUTED_TEXT_COLOR,
-        DeliveryState::Undelivered { .. } => theme::WARNING_COLOR,
-        DeliveryState::Refused { .. } => theme::ALERT_COLOR,
+        DeliveryState::Manual => palette.text_primary,
+        DeliveryState::Delivered { .. } => palette.muted_text_color(),
+        DeliveryState::Undelivered { .. } => palette.warning_color,
+        DeliveryState::Refused { .. } => palette.alert_color,
     }
 }
 
@@ -290,10 +290,11 @@ mod tests {
     /// second.
     #[test]
     fn manual_delivery_is_never_drawn_as_an_error() {
+        let palette = theme::Palette::day();
         let manual = DeliveryState::Manual;
         assert_eq!(delivery_label(&manual), "by voice");
-        assert_ne!(delivery_color(&manual), theme::ALERT_COLOR);
-        assert_ne!(delivery_color(&manual), theme::WARNING_COLOR);
+        assert_ne!(delivery_color(&palette, &manual), palette.alert_color);
+        assert_ne!(delivery_color(&palette, &manual), palette.warning_color);
         let sentence = delivery_sentence(&row(None, &manual), MissionTime(200.0));
         assert!(sentence.contains("not a fault"), "{sentence}");
         assert!(
@@ -314,7 +315,11 @@ mod tests {
         let silent = DeliveryState::Undelivered {
             since: MissionTime(120.0),
         };
-        assert_ne!(delivery_color(&refused), delivery_color(&silent));
+        let palette = theme::Palette::day();
+        assert_ne!(
+            delivery_color(&palette, &refused),
+            delivery_color(&palette, &silent)
+        );
         let sentence = delivery_sentence(&row(Some("battery-2"), &refused), MissionTime(200.0));
         assert!(sentence.contains("unit not ready"), "{sentence}");
         assert!(

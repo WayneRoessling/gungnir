@@ -4494,6 +4494,105 @@ not by finding, for the time between whenever each item landed and this correcti
     `docs/agentic-workflow.md` names as the trust boundary for external data, so this
     is written and gated, not self-signed, pending the owner's review.
 
+116. **GAP-095: the night theme variant, and the flat theme tokens become a threaded
+    `Palette`** (2026-09-08, D-35). D-35 deferred exactly this: turning
+    `gungnir-ui/src/theme.rs`'s tokens from `Color32` constants read by name into a
+    swappable value was its own tranche, not a corollary of the theme review that
+    raised the question. This is that tranche, built.
+
+    **The tokens.** `theme::Palette` is a `Copy` struct with one field per DS-01
+    token -- geometry, typography, stroke widths, the chrome, track lifecycle and
+    health, and the viewport, exactly as `design-system.md`'s four tables list them.
+    `Palette::day()` is a `const fn` reproducing the values the constants held;
+    `Palette::night()` is the built half of D-35's remaining action, not merely a
+    second `const` set: it scales the chrome's eight surface, text and interaction
+    hues (`app_background` through `focus_color`) to 70 percent of their day WCAG
+    relative luminance -- decoded to linear light, scaled, and re-encoded through two
+    new private functions, `srgb_to_linear`/`linear_to_srgb`, factored out of
+    `relative_luminance`'s own decode step rather than duplicated -- scales the grid
+    (`viewport_grid_color`) darker still at that same 70 percent factor applied a
+    second time (49 percent of day), and leaves `alert_color` (and its
+    `degraded_color` alias) untouched, D-35's one pinned exception. Everything else
+    DS-01 lists -- lifecycle, classification, coverage, hazard, selection, geometry --
+    is outside the scope either document names and is copied from `day` unchanged; a
+    new test, `palette_variant_tests::everything_outside_the_named_scope_is_identical`,
+    asserts every one of those fields by name so a future change to `night()` cannot
+    silently widen what it touches.
+
+    **The setting.** `gungnir_model::UiSettings` gained `theme: String` (default
+    `"day"`) and a new `ThemeVariant` enum with a `parse` method, the same split
+    `AssetConfig::priority` already uses so the baseline stays a readable string and
+    an unrecognised spelling is a validation failure rather than a silent default.
+    `gungnir-config`'s `validate_ui` rejects anything `ThemeVariant::parse` does not
+    recognise, naming the bad value and what is accepted; `ConfigBaseline::
+    theme_variant()` resolves the validated string for a caller, mirroring
+    `AssetPriority::parse(..).unwrap_or_default()`'s own fallback-only-after-
+    validation shape. `AppState::palette` resolves `Palette::for_variant` from it
+    once, in the constructor, before `config` moves into the struct; nothing
+    reassigns the field afterward, and no control anywhere sets it a second time --
+    D-35's requirement that a shift in the picture's colours never be a mid-session
+    surprise holds because there is no code path left that could cause one, not
+    because nothing tries.
+
+    **The threading, and why it is explicit rather than a global.**
+    `rust-ui-architecture-coding-standards.md` §2 forbids a global mutable static and
+    requires state to be threaded explicitly; a 239-call-site token set (the theme
+    review's own count) is exactly the scale a global would have tempted. It was not
+    239: grepping `theme::` across `gungnir-ui`, `gungnir-app` and
+    `gungnir-viewport3d` before this change found 404 references spread over 29
+    files, which the register's GAP-095 row now records in place of the estimate.
+    Every one of them now either reads a `Palette` field directly or calls a theme
+    function that takes `&Palette` (`track_color`, `numeral`, `classification_color`,
+    `operations_visuals`, `install_egui_theme`); the resolved value is passed down
+    as an explicit parameter from `AppState::palette` through every panel function in
+    `gungnir-ui`, through `gungnir-app`'s `workspace.rs` and `main.rs`, through
+    `dock.rs`'s `PanelBehavior` (which reads `self.state.palette` inside the
+    `egui_tiles::Behavior` trait methods, whose signatures `egui_tiles` fixes and
+    which therefore cannot themselves take a new parameter), and through
+    `gungnir-viewport3d`'s `render`/`prepare_3d`/`draw_renderer_toggle` and the
+    `layers`/`tracks` drawing functions they call. `gungnir-viewport3d::gl::
+    SceneRenderer`, which draws through OpenGL rather than egui and so has no `Ui`
+    to carry a parameter through, holds the resolved `Palette` as a field instead,
+    set once in `attach` and read by `instances` on every `paint`. `cargo check
+    --workspace --all-targets` is clean, which is the actual claim behind "every
+    call site was converted": the compiler, not a recount, is what found each one
+    while the constants still existed to be removed out from under it.
+
+    **Scope, deliberately not exceeded.** No live theme switcher and no
+    settings-panel control were built or considered; D-35 and this entry both call
+    that out as the one thing that must not exist, since a variant that could change
+    mid-shift is the surprise D-35 forecloses. `theme.rs`'s own tests were extended
+    rather than replaced: the existing contrast, alias and pairwise-distinctness
+    checks now run against both `Palette::day()` and `Palette::night()` where the
+    property should hold for either, and three new tests
+    (`night_scales_the_chrome_hues_to_70_percent_luminance`,
+    `night_grid_is_darker_than_the_chrome_scaling`, `alert_color_never_varies`) pin
+    the exact transform DS-07 and D-35 describe, computed against real WCAG
+    luminance rather than asserted from the constants that produced them.
+
+    **Verification.** `cargo check --workspace --all-targets`, `cargo test
+    --workspace`, `cargo clippy --workspace --all-targets` (clean except two
+    pre-existing warnings this change did not touch: `gungnir-security/src/
+    authz.rs`'s missing backticks and `gungnir-app/src/sustainment.rs`'s
+    too-many-lines function) and `cargo fmt --check` all pass; `cargo test -p
+    gungnir-app --test architecture_compliance` passes, including
+    `no_unwrap_or_expect_outside_tests_and_main` and
+    `every_shared_type_has_exactly_one_definition`. One pre-existing clippy
+    threshold needed a new `#[allow(clippy::too_many_arguments)]`, on
+    `gungnir-app::workspace::render_reconciliation_due`, which the new `palette`
+    parameter took from seven arguments to eight; the same allowance already exists
+    on three functions in `gungnir-association` and `gungnir-scenario` for the same
+    reason.
+
+    **Dependency edges: none added.** `gungnir-ui`, `gungnir-app` and
+    `gungnir-viewport3d` already depended on `gungnir-model` (for `ThemeVariant`) and
+    on each other exactly as `ARCHITECTURE.md` §4 and §7.1 already draw; no crate
+    gained a new edge, and no crate was added to `[workspace.dependencies]`.
+
+    **Human-owned crates touched: none.** `gungnir-ui`, `gungnir-app`,
+    `gungnir-viewport3d`, `gungnir-model` and `gungnir-config` are not on
+    `docs/agentic-workflow.md`'s list.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

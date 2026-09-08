@@ -88,16 +88,16 @@ pub struct EvidenceCardView<'a> {
 }
 
 /// Render the evidence card for the selected track.
-pub fn render_evidence_card(ui: &mut Ui, view: &EvidenceCardView<'_>) {
+pub fn render_evidence_card(ui: &mut Ui, palette: &theme::Palette, view: &EvidenceCardView<'_>) {
     let t = view.track;
     ui.heading(format!("Track {}", t.id.0));
 
-    draw_identity(ui, t, view.vocabulary);
+    draw_identity(ui, palette, t, view.vocabulary);
     ui.separator();
-    draw_kinematics(ui, t);
+    draw_kinematics(ui, palette, t);
     ui.separator();
 
-    if view.evidence.draw_header(ui, "Identity evidence") {
+    if view.evidence.draw_header(ui, palette, "Identity evidence") {
         if let Section::Present(lines) = view.evidence {
             egui::Grid::new("evidence_grid")
                 .striped(true)
@@ -109,12 +109,12 @@ pub fn render_evidence_card(ui: &mut Ui, view: &EvidenceCardView<'_>) {
                     ui.end_row();
                     for e in lines {
                         ui.label(e.kind);
-                        ui.label(RichText::new(e.source).size(theme::SMALL_FONT_SIZE));
+                        ui.label(RichText::new(e.source).size(palette.small_font_size));
                         ui.label(
                             RichText::new(view.vocabulary.classification(e.supports))
-                                .color(theme::classification_color(e.supports)),
+                                .color(theme::classification_color(palette, e.supports)),
                         );
-                        ui.label(theme::numeral(format!("{:.2}", e.weight)));
+                        ui.label(theme::numeral(palette, format!("{:.2}", e.weight)));
                         ui.end_row();
                     }
                 });
@@ -122,7 +122,7 @@ pub fn render_evidence_card(ui: &mut Ui, view: &EvidenceCardView<'_>) {
     }
     ui.separator();
 
-    if view.lineage.draw_header(ui, "Identity lineage") {
+    if view.lineage.draw_header(ui, palette, "Identity lineage") {
         if let Section::Present(lines) = view.lineage {
             for l in lines {
                 ui.label(format!(
@@ -134,7 +134,7 @@ pub fn render_evidence_card(ui: &mut Ui, view: &EvidenceCardView<'_>) {
     }
     ui.separator();
 
-    if view.factors.draw_header(ui, "Threat factors") {
+    if view.factors.draw_header(ui, palette, "Threat factors") {
         if let Section::Present(lines) = view.factors {
             for f in lines {
                 ui.label(format!("{}: {:+.2}", f.name, f.contribution));
@@ -143,12 +143,12 @@ pub fn render_evidence_card(ui: &mut Ui, view: &EvidenceCardView<'_>) {
     }
     ui.separator();
 
-    if view.approach.draw_header(ui, "Approach") {
+    if view.approach.draw_header(ui, palette, "Approach") {
         if let Section::Present(lines) = view.approach {
             if lines.is_empty() {
                 ui.label(
                     RichText::new("Approaches no declared asset within the horizon.")
-                        .color(theme::MUTED_TEXT_COLOR),
+                        .color(palette.muted_text_color()),
                 );
             }
             for a in lines {
@@ -175,9 +175,9 @@ pub fn render_evidence_card(ui: &mut Ui, view: &EvidenceCardView<'_>) {
                     w.asset, w.state, w.channel, w.remaining_s
                 ))
                 .color(if w.loud {
-                    theme::ALERT_COLOR
+                    palette.alert_color
                 } else {
-                    theme::WARNING_COLOR
+                    palette.warning_color
                 }),
             );
         }
@@ -192,18 +192,18 @@ pub fn render_evidence_card(ui: &mut Ui, view: &EvidenceCardView<'_>) {
                 "No designation control: recording a declaration needs \
                  gungnir-identification wired to the desktop.",
             )
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
         );
     }
 }
 
 /// Affiliation, confidence and releasability: what the card is chiefly about.
-fn draw_identity(ui: &mut Ui, t: &TrackView, vocabulary: &Vocabulary) {
+fn draw_identity(ui: &mut Ui, palette: &theme::Palette, t: &TrackView, vocabulary: &Vocabulary) {
     ui.horizontal(|ui| {
         ui.strong("Classification");
         ui.label(
             RichText::new(vocabulary.classification(t.classification))
-                .color(theme::classification_color(t.classification))
+                .color(theme::classification_color(palette, t.classification))
                 .strong(),
         );
         ui.label(
@@ -211,8 +211,8 @@ fn draw_identity(ui: &mut Ui, t: &TrackView, vocabulary: &Vocabulary) {
                 "{} frame",
                 theme::frame_label(theme::classification_frame(t.classification))
             ))
-            .color(theme::MUTED_TEXT_COLOR)
-            .size(theme::SMALL_FONT_SIZE),
+            .color(palette.muted_text_color())
+            .size(palette.small_font_size),
         );
     });
     ui.label(format!(
@@ -230,13 +230,13 @@ fn draw_identity(ui: &mut Ui, t: &TrackView, vocabulary: &Vocabulary) {
             format!("Releasable to {}", names.join(", "))
         }
     };
-    ui.label(RichText::new(releasability).color(theme::WARNING_COLOR));
+    ui.label(RichText::new(releasability).color(palette.warning_color));
     // Where it came from (DN-17 §7's PN-04 row, GAP-062): the marking is fixed by the
     // data's origin, so the origin is named beside it.
     ui.label(
         RichText::new(origin_line(t))
-            .color(theme::MUTED_TEXT_COLOR)
-            .size(theme::SMALL_FONT_SIZE),
+            .color(palette.muted_text_color())
+            .size(palette.small_font_size),
     );
 }
 
@@ -270,7 +270,7 @@ pub fn origin_line(t: &TrackView) -> String {
 }
 
 /// Position, speed, uncertainty and freshness.
-fn draw_kinematics(ui: &mut Ui, t: &TrackView) {
+fn draw_kinematics(ui: &mut Ui, palette: &theme::Palette, t: &TrackView) {
     let [e, n, u] = t.position_enu();
     ui.label(format!("Position {e:.0}, {n:.0}, {u:.0} m ENU"));
     ui.label(format!("Speed {:.1} m/s", t.speed_mps()));
@@ -279,7 +279,7 @@ fn draw_kinematics(ui: &mut Ui, t: &TrackView) {
     if t.quality.is_stale {
         ui.label(
             RichText::new("STALE")
-                .color(theme::TRACK_STALE_COLOR)
+                .color(palette.track_stale_color)
                 .strong(),
         );
     }
@@ -311,6 +311,7 @@ mod tests {
     /// falls back to a colour alone.
     #[test]
     fn every_classification_has_a_frame_and_colour() {
+        let palette = theme::Palette::day();
         for c in [
             Classification::Hostile,
             Classification::Friendly,
@@ -318,7 +319,7 @@ mod tests {
             Classification::Unknown,
         ] {
             let _ = theme::classification_frame(c);
-            let _ = theme::classification_color(c);
+            let _ = theme::classification_color(&palette, c);
         }
     }
 }

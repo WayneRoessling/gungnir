@@ -9,8 +9,8 @@ use gungnir_model::TrackStatus;
 use gungnir_ui::theme;
 
 /// Normalized RGBA for a three-d material, from the shared egui palette.
-pub fn track_rgba(status: TrackStatus, stale: bool) -> [f32; 4] {
-    let c = theme::track_color(status, stale);
+pub fn track_rgba(palette: &theme::Palette, status: TrackStatus, stale: bool) -> [f32; 4] {
+    let c = theme::track_color(palette, status, stale);
     [
         f32::from(c.r()) / 255.0,
         f32::from(c.g()) / 255.0,
@@ -26,7 +26,7 @@ mod tests {
 
     #[test]
     fn rgba_is_normalized() {
-        let c = track_rgba(TrackStatus::Confirmed, false);
+        let c = track_rgba(&theme::Palette::day(), TrackStatus::Confirmed, false);
         assert!(c.iter().all(|v| (0.0..=1.0).contains(v)));
         assert_eq!(c[3], 1.0);
     }

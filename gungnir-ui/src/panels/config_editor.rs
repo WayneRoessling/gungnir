@@ -86,21 +86,24 @@ pub enum Validation<'a> {
 }
 
 impl Validation<'_> {
-    fn draw(&self, ui: &mut Ui, what: &str) {
+    fn draw(&self, ui: &mut Ui, palette: &theme::Palette, what: &str) {
         match self {
             Validation::Valid => {
-                ui.label(RichText::new(format!("{what}: valid")).color(theme::CLASS_NEUTRAL_COLOR));
+                ui.label(
+                    RichText::new(format!("{what}: valid")).color(palette.class_neutral_color),
+                );
             }
             Validation::Invalid { reason } => {
                 ui.label(
                     RichText::new(format!("{what}: invalid -- {reason}"))
-                        .color(theme::CLASS_HOSTILE_COLOR)
+                        .color(palette.class_hostile_color)
                         .strong(),
                 );
             }
             Validation::NotRun => {
                 ui.label(
-                    RichText::new(format!("{what}: not validated")).color(theme::MUTED_TEXT_COLOR),
+                    RichText::new(format!("{what}: not validated"))
+                        .color(palette.muted_text_color()),
                 );
             }
         }
@@ -174,7 +177,11 @@ pub enum ConfigAction {
 }
 
 /// Render the configuration editor.
-pub fn render_config_editor(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<ConfigAction> {
+pub fn render_config_editor(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &ConfigEditorView<'_>,
+) -> Option<ConfigAction> {
     ui.heading("Configuration");
     ui.label(format!(
         "Baseline schema version {}, content revision {}",
@@ -182,33 +189,33 @@ pub fn render_config_editor(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<
     ));
     match view.validity {
         Some(window) => {
-            ui.label(RichText::new(format!("Valid {window}")).color(theme::MUTED_TEXT_COLOR));
+            ui.label(RichText::new(format!("Valid {window}")).color(palette.muted_text_color()));
         }
         None => {
             ui.label(
                 RichText::new("No validity window: this baseline is always promotable.")
-                    .color(theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
             );
         }
     }
-    view.in_force.draw(ui, "Baseline in force");
+    view.in_force.draw(ui, palette, "Baseline in force");
     ui.separator();
 
-    draw_sections(ui, view.sections);
+    draw_sections(ui, palette, view.sections);
     ui.separator();
 
-    draw_profiles(ui, view.profiles);
+    draw_profiles(ui, palette, view.profiles);
     ui.separator();
 
-    let mut action = draw_candidate(ui, view);
+    let mut action = draw_candidate(ui, palette, view);
     ui.separator();
-    if let Some(a) = draw_apply(ui, view) {
+    if let Some(a) = draw_apply(ui, palette, view) {
         action = Some(a);
     }
     ui.separator();
-    draw_audit(ui, view.audit);
+    draw_audit(ui, palette, view.audit);
     ui.separator();
-    draw_unavailable(ui, view.editing);
+    draw_unavailable(ui, palette, view.editing);
     action
 }
 
@@ -217,7 +224,7 @@ pub fn render_config_editor(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<
 /// Read-only. Promoting from a panel needs an authority check and a confirmation surface,
 /// and PN-07 provides one for plans while nothing provides one for this -- **a button that
 /// appeared to put a configuration into force and did not would be worse than none.**
-fn draw_profiles(ui: &mut Ui, profiles: GovernedProfiles<'_>) {
+fn draw_profiles(ui: &mut Ui, palette: &theme::Palette, profiles: GovernedProfiles<'_>) {
     ui.strong("Algorithm baselines");
     let lines = match profiles {
         GovernedProfiles::NothingDeclared => {
@@ -225,7 +232,7 @@ fn draw_profiles(ui: &mut Ui, profiles: GovernedProfiles<'_>) {
                 RichText::new(
                     "This deployment declares no algorithm configuration, so nothing governs which filter it runs.",
                 )
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
             );
             return;
         }
@@ -234,7 +241,7 @@ fn draw_profiles(ui: &mut Ui, profiles: GovernedProfiles<'_>) {
                 RichText::new(format!(
                     "The declared configuration was refused, so nothing is in force: {reason}"
                 ))
-                .color(theme::CLASS_HOSTILE_COLOR),
+                .color(palette.class_hostile_color),
             );
             return;
         }
@@ -243,7 +250,7 @@ fn draw_profiles(ui: &mut Ui, profiles: GovernedProfiles<'_>) {
                 RichText::new(
                     "One configuration and no profiles declared; read as the default profile.",
                 )
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
             );
             lines
         }
@@ -251,7 +258,7 @@ fn draw_profiles(ui: &mut Ui, profiles: GovernedProfiles<'_>) {
             match active {
                 Some(a) => ui.label(format!("Operating in profile {a}")),
                 None => {
-                    ui.label(RichText::new("No profile is active.").color(theme::WARNING_COLOR))
+                    ui.label(RichText::new("No profile is active.").color(palette.warning_color))
                 }
             };
             lines
@@ -266,23 +273,24 @@ fn draw_profiles(ui: &mut Ui, profiles: GovernedProfiles<'_>) {
                 ui.label(line.name);
                 ui.label(format!("{} gate {:.2}", line.filter, line.gate_threshold));
                 if line.promoted {
-                    ui.label(RichText::new("in force").color(theme::HEALTHY_COLOR));
+                    ui.label(RichText::new("in force").color(palette.healthy_color()));
                 } else {
-                    ui.label(RichText::new("candidate").color(theme::MUTED_TEXT_COLOR));
+                    ui.label(RichText::new("candidate").color(palette.muted_text_color()));
                 }
                 // Absent is "nobody wrote down what validated it", which is a different
                 // thing from "it was not validated" and must not read as the second.
                 match line.validated_by {
                     Some(by) => ui.label(by),
-                    None => ui
-                        .label(RichText::new("no validation recorded").color(theme::WARNING_COLOR)),
+                    None => ui.label(
+                        RichText::new("no validation recorded").color(palette.warning_color),
+                    ),
                 };
                 ui.end_row();
             }
         });
 }
 
-fn draw_sections(ui: &mut Ui, sections: &[ConfigSection<'_>]) {
+fn draw_sections(ui: &mut Ui, palette: &theme::Palette, sections: &[ConfigSection<'_>]) {
     ui.strong("Sections");
     egui::Grid::new("config_sections")
         .striped(true)
@@ -299,15 +307,19 @@ fn draw_sections(ui: &mut Ui, sections: &[ConfigSection<'_>]) {
                 }
                 ui.label(
                     RichText::new(s.summary)
-                        .color(theme::MUTED_TEXT_COLOR)
-                        .size(theme::SMALL_FONT_SIZE),
+                        .color(palette.muted_text_color())
+                        .size(palette.small_font_size),
                 );
                 ui.end_row();
             }
         });
 }
 
-fn draw_candidate(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<ConfigAction> {
+fn draw_candidate(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &ConfigEditorView<'_>,
+) -> Option<ConfigAction> {
     ui.strong("Candidate");
     let mut action = None;
     ui.horizontal(|ui| {
@@ -322,7 +334,7 @@ fn draw_candidate(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<ConfigActi
         None => {
             ui.label(
                 RichText::new("Nothing loaded; the desktop is showing the baseline in force.")
-                    .color(theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
             );
         }
         Some(c) => {
@@ -330,7 +342,7 @@ fn draw_candidate(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<ConfigActi
                 "{} (schema version {}, revision {})",
                 c.path, c.version, c.revision
             ));
-            c.validation.draw(ui, "Candidate");
+            c.validation.draw(ui, palette, "Candidate");
             if ui.button("Discard").clicked() {
                 action = Some(ConfigAction::DiscardCandidate);
             }
@@ -339,13 +351,17 @@ fn draw_candidate(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<ConfigActi
     action
 }
 
-fn draw_apply(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<ConfigAction> {
+fn draw_apply(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &ConfigEditorView<'_>,
+) -> Option<ConfigAction> {
     ui.strong("Apply");
     match view.apply {
         ApplyState::NotPermitted { role } => {
             ui.label(
                 RichText::new(format!("{role} may not apply a configuration baseline."))
-                    .color(theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
             );
             None
         }
@@ -355,7 +371,7 @@ fn draw_apply(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<ConfigAction> 
                     "This desktop started from the built-in default baseline, so there \
                      is no file to write. Set {env_var} to a baseline file."
                 ))
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
             );
             None
         }
@@ -368,7 +384,7 @@ fn draw_apply(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<ConfigAction> 
                      audit trail. The running session keeps the baseline it started \
                      with until the desktop is restarted.",
                 )
-                .color(theme::WARNING_COLOR),
+                .color(palette.warning_color),
             );
             let ready = matches!(
                 view.candidate,
@@ -386,7 +402,7 @@ fn draw_apply(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<ConfigAction> 
                         "Load a candidate and validate it before applying: an invalid \
                          or unvalidated baseline is not applied.",
                     )
-                    .color(theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
                 );
             }
             clicked.then_some(ConfigAction::Apply)
@@ -394,12 +410,12 @@ fn draw_apply(ui: &mut Ui, view: &ConfigEditorView<'_>) -> Option<ConfigAction> 
     }
 }
 
-fn draw_audit(ui: &mut Ui, audit: &[AuditLine<'_>]) {
+fn draw_audit(ui: &mut Ui, palette: &theme::Palette, audit: &[AuditLine<'_>]) {
     ui.strong("Configuration audit");
     if audit.is_empty() {
         ui.label(
             RichText::new("No configuration action has been taken this session.")
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
         return;
     }

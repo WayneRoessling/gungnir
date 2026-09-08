@@ -116,18 +116,22 @@ pub enum PlanningAction {
 }
 
 /// Render PN-16.
-pub fn render_planning(ui: &mut Ui, view: &PlanningView<'_>) -> Option<PlanningAction> {
+pub fn render_planning(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &PlanningView<'_>,
+) -> Option<PlanningAction> {
     ui.heading("Planning: laydown options");
 
     ui.label(
         RichText::new(format!("Coverage compared under: {}", view.terrain_model))
             .small()
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
     );
     ui.separator();
 
     let mut action = None;
-    if view.laydowns.draw_header(ui, "Laydown options") {
+    if view.laydowns.draw_header(ui, palette, "Laydown options") {
         let rows = view.laydowns.items().unwrap_or_default();
         egui::Grid::new("planning_laydown_options")
             .num_columns(4)
@@ -165,7 +169,7 @@ pub fn render_planning(ui: &mut Ui, view: &PlanningView<'_>) -> Option<PlanningA
                         LaydownCoverage::NotComputed { reason } => {
                             ui.label(
                                 RichText::new(format!("Not computed: {reason}"))
-                                    .color(theme::WARNING_COLOR),
+                                    .color(palette.warning_color),
                             );
                         }
                     }
@@ -180,10 +184,12 @@ pub fn render_planning(ui: &mut Ui, view: &PlanningView<'_>) -> Option<PlanningA
                             delta_uncovered_m: None,
                             ..
                         } => {
-                            ui.label(RichText::new("-- (current)").color(theme::MUTED_TEXT_COLOR));
+                            ui.label(
+                                RichText::new("-- (current)").color(palette.muted_text_color()),
+                            );
                         }
                         LaydownCoverage::NotComputed { .. } => {
-                            ui.label(RichText::new("--").color(theme::MUTED_TEXT_COLOR));
+                            ui.label(RichText::new("--").color(palette.muted_text_color()));
                         }
                     }
                     ui.end_row();
@@ -198,13 +204,13 @@ pub fn render_planning(ui: &mut Ui, view: &PlanningView<'_>) -> Option<PlanningA
                  the options.",
             )
             .small()
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
         );
     }
 
     ui.separator();
     ui.strong("Rehearsal");
-    if let Some(a) = draw_rehearsal(ui, view) {
+    if let Some(a) = draw_rehearsal(ui, palette, view) {
         action = Some(a);
     }
 
@@ -215,17 +221,21 @@ pub fn render_planning(ui: &mut Ui, view: &PlanningView<'_>) -> Option<PlanningA
              with its own authority chain.",
         )
         .small()
-        .color(theme::MUTED_TEXT_COLOR),
+        .color(palette.muted_text_color()),
     );
     action
 }
 
-fn draw_rehearsal(ui: &mut Ui, view: &PlanningView<'_>) -> Option<PlanningAction> {
+fn draw_rehearsal(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &PlanningView<'_>,
+) -> Option<PlanningAction> {
     let Some(selected) = view.selected else {
         ui.label(
             RichText::new("Select a laydown option above to rehearse it.")
                 .small()
-                .color(theme::MUTED_TEXT_COLOR),
+                .color(palette.muted_text_color()),
         );
         return None;
     };
@@ -252,7 +262,7 @@ fn draw_rehearsal(ui: &mut Ui, view: &PlanningView<'_>) -> Option<PlanningAction
     ui.label(
         RichText::new(format!("under {}", selected.0))
             .small()
-            .color(theme::MUTED_TEXT_COLOR),
+            .color(palette.muted_text_color()),
     );
 
     match view.rehearsal {
@@ -263,14 +273,14 @@ fn draw_rehearsal(ui: &mut Ui, view: &PlanningView<'_>) -> Option<PlanningAction
             ui.label(
                 RichText::new("No laydown selected.")
                     .small()
-                    .color(theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
             );
         }
         RehearsalSection::NotYetRun => {
             ui.label(
                 RichText::new("Not yet rehearsed.")
                     .small()
-                    .color(theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
             );
         }
         RehearsalSection::Ran(summary) => {

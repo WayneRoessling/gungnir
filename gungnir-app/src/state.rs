@@ -187,6 +187,11 @@ pub struct AppState {
     /// system of record.
     pub mission: Option<Mission>,
     pub config: ConfigBaseline,
+    /// The colour variant this session draws with (D-35, DS-07; GAP-095), resolved
+    /// once from `config.ui.theme` when this state was built. **Never reassigned**:
+    /// there is no per-session toggle, so a panel reading this always sees the
+    /// baseline's own choice, not a mid-shift change nothing could have made.
+    pub palette: gungnir_ui::theme::Palette,
     pub events: Box<dyn EventBus>,
     pub health: SystemHealth,
     pub clock: Box<dyn TimeAuthority>,
@@ -537,6 +542,12 @@ impl AppState {
         // Cloned before `config` moves into the struct: the workflow is timed by the
         // baseline in force, so the two cannot disagree about when an item expires.
         let decision_settings = config.policy.decisions.clone();
+        // D-35, GAP-095: resolved once, before `config` moves into the struct below,
+        // from the baseline's `ui.theme`. `AppState` is the single source of truth
+        // this is threaded down from (rust-ui-architecture-coding-standards.md §2);
+        // nothing ever assigns this field a second time, which is what keeps the
+        // variant in force for the life of the session rather than a per-shift toggle.
+        let palette = gungnir_ui::theme::Palette::for_variant(config.theme_variant());
 
         Ok(Self {
             tracking,
@@ -591,6 +602,7 @@ impl AppState {
             viewport: ViewportState::new(),
             mission: Some(mission),
             config,
+            palette,
             events: Box::new(events),
             health: SystemHealth::default(),
             clock: Box::new(clock),

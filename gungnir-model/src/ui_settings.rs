@@ -215,6 +215,17 @@ pub struct UiSettings {
     /// runtime without editing a baseline or restarting.
     #[serde(default = "default_scene_3d")]
     pub scene_3d: bool,
+    /// Which colour variant the chrome renders (D-35, DS-07; GAP-095): `"day"` or
+    /// `"night"`, parsed by [`ThemeVariant::parse`].
+    ///
+    /// A string here, the same split `AssetConfig::priority` uses (`gungnir-config`):
+    /// the schema stays readable and an unrecognised spelling is refused by validation
+    /// rather than silently defaulted to day. **Baseline-only, unlike `scene_3d`
+    /// above**: D-35 requires that a shift in the picture's colours never be a
+    /// mid-session surprise, so there is deliberately no runtime switch and nothing in
+    /// the UI may change this while a session is running. Read once at start-up.
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 /// `true`: see [`UiSettings::scene_3d`].
@@ -222,11 +233,46 @@ fn default_scene_3d() -> bool {
     true
 }
 
+/// `"day"`: see [`UiSettings::theme`].
+fn default_theme() -> String {
+    "day".to_owned()
+}
+
 impl Default for UiSettings {
     fn default() -> Self {
         Self {
             layouts: BTreeMap::new(),
             scene_3d: default_scene_3d(),
+            theme: default_theme(),
+        }
+    }
+}
+
+/// Which colour variant the chrome renders (D-35, DS-07; GAP-095).
+///
+/// The night variant is the same hues as day at reduced luminance for low-light or
+/// red-light operation, with `ALERT_COLOR` pinned unchanged across both (D-35: a
+/// critical alert must read the same regardless of which is in force). Chosen once,
+/// from [`UiSettings::theme`], at start-up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ThemeVariant {
+    #[default]
+    Day,
+    Night,
+}
+
+impl ThemeVariant {
+    /// Parses the baseline's spelling. An unknown string is an error rather than a
+    /// default: D-35 pins the choice to what the deployment declared, in a
+    /// `ConfigBaseline` a person reviews, not to a guess (`gungnir-config` validation
+    /// rejects anything else).
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "day" => Some(ThemeVariant::Day),
+            "night" => Some(ThemeVariant::Night),
+            _ => None,
         }
     }
 }
@@ -307,6 +353,7 @@ mod tests {
     fn the_arrangement_round_trips_through_json() {
         let settings = UiSettings {
             scene_3d: false,
+            theme: "night".to_owned(),
             layouts: BTreeMap::from([(
                 "Operator".to_owned(),
                 RoleLayout {
@@ -347,5 +394,27 @@ mod tests {
         );
         let off: UiSettings = serde_json::from_str(r#"{"scene_3d":false}"#).expect("parses");
         assert!(!off.scene_3d, "a deployment can opt out");
+        assert_eq!(
+            parsed.theme, "day",
+            "the theme variant defaults to day (D-35, GAP-095)"
+        );
+    }
+
+    /// D-35: only "day" and "night" are recognised, case-insensitively and trimmed
+    /// like the rest of this file's string-backed settings; anything else is `None`
+    /// for `gungnir-config` validation to refuse rather than default.
+    #[test]
+    fn theme_variant_parses_the_two_recognised_spellings() {
+        assert_eq!(ThemeVariant::parse("day"), Some(ThemeVariant::Day));
+        assert_eq!(ThemeVariant::parse("night"), Some(ThemeVariant::Night));
+        assert_eq!(ThemeVariant::parse(" Night "), Some(ThemeVariant::Night));
+        assert_eq!(ThemeVariant::parse("DAY"), Some(ThemeVariant::Day));
+        assert_eq!(ThemeVariant::parse("dusk"), None);
+        assert_eq!(ThemeVariant::parse(""), None);
+    }
+
+    #[test]
+    fn theme_variant_defaults_to_day() {
+        assert_eq!(ThemeVariant::default(), ThemeVariant::Day);
     }
 }

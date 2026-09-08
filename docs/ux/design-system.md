@@ -1,11 +1,15 @@
 # Design system
 
 Status: first draft 2026-09-04; second revision 2026-09-06, when the theme became an
-installed style rather than a set of constants the panels drew on egui's stock grey.
-Built on `gungnir-ui/src/theme.rs`: the constants that exist are the tokens, and
-`install_egui_theme` hands egui's own chrome the same tokens. Nothing here replaces
-an existing constant's *name*, so `gungnir-viewport3d::materials` keeps reading the
-same palette; several values changed on 2026-09-06 and the table says which.
+installed style rather than a set of constants the panels drew on egui's stock grey;
+third revision 2026-09-08 (GAP-095), when the tokens became fields of a `Palette`
+value so a night variant could exist. Built on `gungnir-ui/src/theme.rs`: the tokens
+are `Palette`'s fields (`palette.app_background`, and so on -- lower-cased from the
+constant names below, which this document keeps in their original case as the design
+vocabulary), and `install_egui_theme` hands egui's own chrome the same tokens from
+whichever `Palette` a deployment resolved at start-up. Nothing here replaces an
+existing token's *name*, so `gungnir-viewport3d::materials` keeps reading the same
+palette; several values changed on 2026-09-06 and the table says which.
 
 ## DS-01 Tokens that exist (`gungnir-ui::theme`)
 
@@ -182,12 +186,25 @@ installer (`theme::install_egui_theme`, called once from `gungnir-app`'s creatio
 closure and from the headless render probe) gives egui's chrome these surfaces, so
 the frame around the picture is the same operations-room surface as the picture.
 
-A "night" variant is proposed as a second token set: the same hues at 70 percent
-luminance, `ALERT_COLOR` unchanged, grid darker still. Switching is a configuration
-baseline setting, not a per-session toggle, so a shift does not inherit a surprise.
-**Not built**: it is GAP-095 (filed 2026-09-06 as GAP-090, renumbered the same day to GAP-094 when GAP-090 was taken by an unrelated gap out of DN-25, and renumbered again 2026-09-07 on discovering GAP-094 was by then also carrying the advisories-gate gap -- a second collision this document did not catch, found and fixed in review rather than at the time). The 2026-09-06 decision (D-35, filed that day as D-33 and renumbered for the same reason) was to keep the tokens
-as flat constants until the variant is scheduled, because a `Palette` value threaded
-through the 239 call sites across three crates is its own tranche.
+A "night" variant exists as a second `Palette` value, `theme::Palette::night()`: the
+chrome's surface, text and interaction hues (`APP_BACKGROUND` through `FOCUS_COLOR`)
+at 70 percent of their day WCAG relative luminance, `ALERT_COLOR` unchanged, the grid
+(`VIEWPORT_GRID_COLOR`) darker still at that same factor applied twice (49 percent of
+day). Everything else this table lists -- lifecycle, classification, coverage,
+hazard, selection, geometry -- is outside that scope and is the same value in both.
+Switching is a `ConfigBaseline` setting (`UiSettings::theme`, `"day"` or `"night"`,
+validated by `gungnir-config` and resolved once into `AppState::palette` at
+start-up), not a per-session toggle: there is no control anywhere that changes it
+once a session has started, so a shift never inherits a surprise. **Built
+2026-09-08**, GAP-095 (filed 2026-09-06 as GAP-090, renumbered the same day to
+GAP-094 when GAP-090 was taken by an unrelated gap out of DN-25, and renumbered again
+2026-09-07 on discovering GAP-094 was by then also carrying the advisories-gate gap
+-- a second collision this document did not catch, found and fixed in review rather
+than at the time). The 2026-09-06 decision (D-35, filed that day as D-33 and
+renumbered for the same reason) had kept the tokens as flat constants until the
+variant was scheduled, because threading a `Palette` value through the call sites
+across three crates -- 404 of them, by GAP-095's own count, not the 239 estimated at
+the time -- was its own tranche; GAP-095 is that tranche.
 
 ## DS-08 Iconography for the strip and panels
 
@@ -208,9 +225,15 @@ The surface, text and interaction tokens, the stroke tokens, `numeral`,
 operator a removed track might still be there) and the dock's tab-bar hooks in
 `gungnir-app/src/dock.rs`.
 
-Still not built: the night variant (GAP-095), and the dashed low-confidence frame,
-which needs the policy margin `gungnir-policy` owns; a threshold invented in the
-viewport would mark tracks low-confidence against a rule nobody set.
+The night variant, the `Palette` struct that carries both it and the day values, and
+the `ConfigBaseline` setting that picks between them were built 2026-09-08 (GAP-095,
+ARCHITECTURE.md §10 item 112): every call site that used to read a flat constant now
+reads a `Palette` field or calls a theme function taking `&Palette`, threaded
+explicitly from `AppState::palette` rather than through a global.
+
+Still not built: the dashed low-confidence frame, which needs the policy margin
+`gungnir-policy` owns; a threshold invented in the viewport would mark tracks
+low-confidence against a rule nobody set.
 
 ## Traceability
 

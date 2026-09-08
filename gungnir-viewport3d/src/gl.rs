@@ -74,6 +74,10 @@ pub enum AttachError {
 pub struct SceneRenderer {
     context: three_d::Context,
     glyph_mesh: three_d::Gm<three_d::InstancedMesh, three_d::ColorMaterial>,
+    /// The palette resolved from `ConfigBaseline` at start-up (D-35, GAP-095), carried
+    /// here because the OpenGL draw path has no `egui::Ui` to read it from the way the
+    /// 2D projection's functions do. Set once, in `attach`, and never reassigned.
+    palette: theme::Palette,
 }
 
 impl SceneRenderer {
@@ -83,7 +87,10 @@ impl SceneRenderer {
     /// exactly one and it belongs to the window. Returns an error rather than panicking:
     /// a desktop that cannot attach must fall back to the 2D projection and say so, not
     /// die at startup over a rendering feature.
-    pub fn attach(gl: Option<Arc<three_d::context::Context>>) -> Result<Self, AttachError> {
+    pub fn attach(
+        gl: Option<Arc<three_d::context::Context>>,
+        palette: theme::Palette,
+    ) -> Result<Self, AttachError> {
         let gl = gl.ok_or(AttachError::NoGlContext)?;
         let context = three_d::Context::from_gl_context(gl)
             .map_err(|e| AttachError::Rejected(e.to_string()))?;
@@ -102,6 +109,7 @@ impl SceneRenderer {
         Ok(Self {
             context,
             glyph_mesh,
+            palette,
         })
     }
 
@@ -120,7 +128,7 @@ impl SceneRenderer {
         let camera = camera(view, viewport);
         self.glyph_mesh
             .geometry
-            .set_instances(&instances(glyphs, view));
+            .set_instances(&instances(&self.palette, glyphs, view));
         three_d::RenderTarget::screen(&self.context, viewport.width, viewport.height).render(
             &camera,
             [&self.glyph_mesh],
@@ -150,7 +158,11 @@ const FOV_HALF_TAN: f32 = 0.414_213_57; // tan(22.5 degrees)
 // the drawing is narrowed.
 #[allow(clippy::cast_possible_truncation)]
 #[must_use]
-pub fn instances(glyphs: &[TrackGlyph], view: &TopDownView) -> three_d::Instances {
+pub fn instances(
+    palette: &theme::Palette,
+    glyphs: &[TrackGlyph],
+    view: &TopDownView,
+) -> three_d::Instances {
     let mut transformations = Vec::with_capacity(glyphs.len());
     let mut colors = Vec::with_capacity(glyphs.len());
     for glyph in glyphs {
@@ -158,7 +170,7 @@ pub fn instances(glyphs: &[TrackGlyph], view: &TopDownView) -> three_d::Instance
         transformations.push(three_d::Mat4::from_translation(three_d::vec3(
             e as f32, n as f32, u as f32,
         )));
-        let c = theme::track_color(glyph.status, glyph.stale);
+        let c = theme::track_color(palette, glyph.status, glyph.stale);
         colors.push(three_d::Srgba::new(c.r(), c.g(), c.b(), c.a()));
     }
     let _ = view;
@@ -249,7 +261,8 @@ mod tests {
             glyph(2, [-300.0, 0.0, 0.0], TrackStatus::Coasting, false),
         ];
         let view = TopDownView::default();
-        let instances = instances(&glyphs, &view);
+        let palette = theme::Palette::day();
+        let instances = instances(&palette, &glyphs, &view);
 
         assert_eq!(instances.transformations.len(), 2);
         for (i, expected) in [[100.0_f32, 200.0, 50.0], [-300.0, 0.0, 0.0]]
@@ -272,11 +285,12 @@ mod tests {
             glyph(1, [0.0; 3], TrackStatus::Confirmed, false),
             glyph(2, [0.0; 3], TrackStatus::Confirmed, true),
         ];
-        let instances = instances(&glyphs, &TopDownView::default());
+        let palette = theme::Palette::day();
+        let instances = instances(&palette, &glyphs, &TopDownView::default());
         let colors = instances.colors.expect("colours are set");
 
-        let fresh = theme::track_color(TrackStatus::Confirmed, false);
-        let stale = theme::track_color(TrackStatus::Confirmed, true);
+        let fresh = theme::track_color(&palette, TrackStatus::Confirmed, false);
+        let stale = theme::track_color(&palette, TrackStatus::Confirmed, true);
         assert_eq!(
             (colors[0].r, colors[0].g, colors[0].b),
             (fresh.r(), fresh.g(), fresh.b())
@@ -295,7 +309,7 @@ mod tests {
     /// origin, which would draw a track that does not exist.
     #[test]
     fn no_tracks_means_no_instances() {
-        let instances = instances(&[], &TopDownView::default());
+        let instances = instances(&theme::Palette::day(), &[], &TopDownView::default());
         assert!(instances.transformations.is_empty());
         assert_eq!(instances.colors.as_ref().map(Vec::len), Some(0));
         instances

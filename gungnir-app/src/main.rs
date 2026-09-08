@@ -55,21 +55,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         native_options,
         Box::new(move |cc| {
             // DS-07: egui's own chrome takes the theme tokens before the first frame,
-            // so the panels and the picture are one surface.
-            gungnir_ui::theme::install_egui_theme(&cc.egui_ctx);
+            // so the panels and the picture are one surface. D-35, GAP-095: `state`
+            // already resolved which variant is in force, once, from the baseline;
+            // there is no later call that could install a different one.
+            gungnir_ui::theme::install_egui_theme(&cc.egui_ctx, &state.palette);
             // GAP-022: attach three-d to the GL context eframe owns. A failure is
             // logged and the desktop carries on with the 2D projection: a rendering
             // feature must not stop the picture from coming up.
-            let scene = match gungnir_viewport3d::gl::SceneRenderer::attach(cc.gl.clone()) {
-                Ok(renderer) => {
-                    tracing::info!("three-d scene attached to the OpenGL context");
-                    Some(Arc::new(Mutex::new(renderer)))
-                }
-                Err(err) => {
-                    tracing::warn!(%err, "three-d scene not attached; using the 2D projection");
-                    None
-                }
-            };
+            let scene =
+                match gungnir_viewport3d::gl::SceneRenderer::attach(cc.gl.clone(), state.palette) {
+                    Ok(renderer) => {
+                        tracing::info!("three-d scene attached to the OpenGL context");
+                        Some(Arc::new(Mutex::new(renderer)))
+                    }
+                    Err(err) => {
+                        tracing::warn!(%err, "three-d scene not attached; using the 2D projection");
+                        None
+                    }
+                };
             // The session starts on whichever renderer the baseline asks for, and only
             // if one is actually attached: `use_3d` must never claim a renderer that is
             // not there.
@@ -211,7 +214,11 @@ impl App {
                         .on_hover_text("Copyright, licence and warranty notices")
                         .clicked();
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        gungnir_ui::panels::status_strip::render_status_strip(ui, &view);
+                        gungnir_ui::panels::status_strip::render_status_strip(
+                            ui,
+                            &self.state.palette,
+                            &view,
+                        );
                     });
                 });
             });
@@ -240,7 +247,11 @@ impl App {
             .collapsible(false)
             .default_width(ABOUT_WINDOW_WIDTH)
             .show(ctx, |ui| {
-                gungnir_ui::panels::about::render_about(ui, &gungnir_app::workspace::about_view());
+                gungnir_ui::panels::about::render_about(
+                    ui,
+                    &self.state.palette,
+                    &gungnir_app::workspace::about_view(),
+                );
             });
         self.about_open = open;
     }
@@ -254,7 +265,7 @@ impl App {
         let mut action = None;
         egui::SidePanel::left("dashboard")
             .resizable(true)
-            .default_width(gungnir_ui::theme::DASHBOARD_DEFAULT_WIDTH)
+            .default_width(self.state.palette.dashboard_default_width)
             .show(ctx, |ui| {
                 render_session_header(ui, &self.state);
                 ui.separator();
@@ -375,6 +386,7 @@ impl App {
                     gungnir_app::pointcloud::layers(&self.state.point_cloud, &self.state.data);
                 gungnir_viewport3d::render(
                     ui,
+                    &self.state.palette,
                     &mut self.state.viewport,
                     self.state.tracking.tracks(),
                     &self.state.last_plan,
@@ -566,6 +578,7 @@ impl App {
         let Some(scene) = self.scene.clone().filter(|_| self.state.viewport.use_3d) else {
             gungnir_viewport3d::render(
                 ui,
+                &self.state.palette,
                 &mut self.state.viewport,
                 self.state.tracking.tracks(),
                 &self.state.last_plan,
@@ -576,6 +589,7 @@ impl App {
 
         let Some(rect) = gungnir_viewport3d::prepare_3d(
             ui,
+            &self.state.palette,
             &mut self.state.viewport,
             self.state.tracking.tracks(),
             &self.state.last_plan,
@@ -608,7 +622,12 @@ impl App {
             rect,
             callback: Arc::new(callback),
         });
-        gungnir_viewport3d::draw_renderer_toggle(ui, rect, &mut self.state.viewport);
+        gungnir_viewport3d::draw_renderer_toggle(
+            ui,
+            &self.state.palette,
+            rect,
+            &mut self.state.viewport,
+        );
     }
 
     /// Apply what was clicked. Exhaustive on purpose: a new panel action must be given

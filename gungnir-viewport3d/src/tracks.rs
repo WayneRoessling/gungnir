@@ -73,12 +73,13 @@ const GLYPH_RADIUS_PX: f32 = 5.0;
 /// 2D fallback: circle at the position, one-sigma ellipse, heading vector, id label.
 pub fn draw_glyphs_2d(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     glyphs: &[TrackGlyph],
 ) {
     for g in glyphs {
-        let color = theme::track_color(g.status, g.stale);
+        let color = theme::track_color(palette, g.status, g.stale);
         let center = view.project(g.position, rect);
         let ellipse = egui::Rect::from_center_size(
             center,
@@ -88,10 +89,10 @@ pub fn draw_glyphs_2d(
             painter.rect_stroke(
                 ellipse,
                 ellipse.width().min(ellipse.height()) / 2.0,
-                egui::Stroke::new(theme::STROKE_HAIRLINE, color.gamma_multiply(0.5)),
+                egui::Stroke::new(palette.stroke_hairline, color.gamma_multiply(0.5)),
             );
         }
-        draw_classification_frame(painter, center, g, color);
+        draw_classification_frame(painter, palette, center, g, color);
         let head = view.project(
             [
                 g.position[0] + g.velocity[0] * HEADING_VECTOR_SECONDS,
@@ -102,13 +103,13 @@ pub fn draw_glyphs_2d(
         );
         painter.line_segment(
             [center, head],
-            egui::Stroke::new(theme::STROKE_EMPHASIS, color),
+            egui::Stroke::new(palette.stroke_emphasis, color),
         );
         painter.text(
             center + egui::vec2(GLYPH_RADIUS_PX + 2.0, -GLYPH_RADIUS_PX),
             egui::Align2::LEFT_BOTTOM,
             g.track_id.0.to_string(),
-            egui::FontId::monospace(theme::SMALL_FONT_SIZE),
+            egui::FontId::monospace(palette.small_font_size),
             color,
         );
     }
@@ -125,15 +126,16 @@ pub fn draw_glyphs_2d(
 /// the two encode different things and DS-03 keeps them separate.
 fn draw_classification_frame(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     center: egui::Pos2,
     glyph: &TrackGlyph,
     lifecycle_color: egui::Color32,
 ) {
-    let frame_color = theme::classification_color(glyph.classification);
+    let frame_color = theme::classification_color(palette, glyph.classification);
     // The policy margin belongs to `gungnir-policy` and is not wired to the viewport
     // yet; until it is, every frame is solid rather than guessing a threshold and
     // drawing some tracks as low-confidence when nobody has said what low means.
-    let stroke = egui::Stroke::new(theme::STROKE_EMPHASIS, frame_color);
+    let stroke = egui::Stroke::new(palette.stroke_emphasis, frame_color);
     let r = GLYPH_RADIUS_PX;
 
     match theme::classification_frame(glyph.classification) {
@@ -185,6 +187,7 @@ fn draw_classification_frame(
 /// point to draw a line to.
 pub fn draw_plan_2d(
     painter: &egui::Painter,
+    palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     glyphs: &[TrackGlyph],
@@ -197,8 +200,8 @@ pub fn draw_plan_2d(
                 p + egui::vec2(GLYPH_RADIUS_PX + 2.0, GLYPH_RADIUS_PX),
                 egui::Align2::LEFT_TOP,
                 format!("R{}", s.resource.0),
-                egui::FontId::monospace(theme::SMALL_FONT_SIZE),
-                theme::INTERCEPT_LINE_COLOR,
+                egui::FontId::monospace(palette.small_font_size),
+                palette.intercept_line_color,
             );
         }
     }

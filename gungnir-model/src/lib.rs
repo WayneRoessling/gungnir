@@ -124,7 +124,7 @@ pub use rhythm::{
 };
 pub use time::MissionTime;
 pub use uas_platform::{EnuPoint, UasPlatformReport};
-pub use ui_settings::{LayoutNode, RoleLayout, UiSettings};
+pub use ui_settings::{LayoutNode, RoleLayout, ThemeVariant, UiSettings};
 pub use vocabulary::{Term, Vocabulary};
 
 use nalgebra::{SMatrix, SVector};

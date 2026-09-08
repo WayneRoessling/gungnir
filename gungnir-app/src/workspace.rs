@@ -84,7 +84,7 @@ fn render_reconciliation(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAct
         ReconciliationView::NothingDue => {
             ui.label(
                 egui::RichText::new("No outage this session; nothing to reconcile.")
-                    .color(gungnir_ui::theme::MUTED_TEXT_COLOR),
+                    .color(state.palette.muted_text_color()),
             );
         }
         ReconciliationView::OutageOngoing { endpoint, since } => {
@@ -94,7 +94,7 @@ fn render_reconciliation(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAct
                      taken now are this desktop's and will need reconciling when it answers.",
                     since.0
                 ))
-                .color(gungnir_ui::theme::ALERT_COLOR),
+                .color(state.palette.alert_color),
             );
         }
         ReconciliationView::Due {
@@ -107,6 +107,7 @@ fn render_reconciliation(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAct
         } => {
             return render_reconciliation_due(
                 ui,
+                &state.palette,
                 &endpoint,
                 (from, to),
                 local_decisions,
@@ -130,8 +131,14 @@ fn render_outbox(ui: &mut egui::Ui, outbox: Option<crate::failover::OutboxView>)
 }
 
 /// The outage has ended: the merge, its conflicts, and the switch (GAP-050, D-15).
+// GAP-095 added `palette`, the eighth genuinely distinct piece this draws from; each
+// of the eight is used once and grouping them into a struct purely to satisfy the
+// lint would be a wrapper nobody else needs (agentic-coding-standards.md: no
+// speculative abstractions).
+#[allow(clippy::too_many_arguments)]
 fn render_reconciliation_due(
     ui: &mut egui::Ui,
+    palette: &gungnir_ui::theme::Palette,
     endpoint: &str,
     (from, to): (gungnir_model::MissionTime, gungnir_model::MissionTime),
     local_decisions: usize,
@@ -147,7 +154,7 @@ fn render_reconciliation_due(
                  decision(s) recorded here meanwhile.",
             from.0, to.0
         ))
-        .color(gungnir_ui::theme::WARNING_COLOR),
+        .color(palette.warning_color),
     );
     match reconciliation {
         None => {
@@ -161,8 +168,7 @@ fn render_reconciliation_due(
             ));
             if r.conflicts.is_empty() {
                 ui.label(
-                    egui::RichText::new("No conflicting decision.")
-                        .color(gungnir_ui::theme::HEALTHY_COLOR),
+                    egui::RichText::new("No conflicting decision.").color(palette.healthy_color()),
                 );
             } else {
                 ui.label(
@@ -171,7 +177,7 @@ fn render_reconciliation_due(
                              through the workflow, not here:",
                         r.conflicts.len()
                     ))
-                    .color(gungnir_ui::theme::ALERT_COLOR),
+                    .color(palette.alert_color),
                 );
                 for c in &r.conflicts {
                     ui.horizontal(|ui| {
@@ -209,14 +215,14 @@ fn render_reconciliation_due(
                             "the node's"
                         }
                     ))
-                    .color(gungnir_ui::theme::MUTED_TEXT_COLOR),
+                    .color(palette.muted_text_color()),
                 );
             }
         }
         Some(Err(reason)) => {
             ui.label(
                 egui::RichText::new(format!("The node's half is unavailable: {reason}"))
-                    .color(gungnir_ui::theme::ALERT_COLOR),
+                    .color(palette.alert_color),
             );
         }
     }
@@ -225,7 +231,7 @@ fn render_reconciliation_due(
             "The desktop stays embedded until somebody has seen this and asks for the \
                  node back (D-15).",
         )
-        .color(gungnir_ui::theme::MUTED_TEXT_COLOR),
+        .color(palette.muted_text_color()),
     );
     if ui
         .add_enabled(
@@ -430,6 +436,7 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
                 .map(|(course, verdict)| alternative_line(verdict, course));
             gungnir_ui::panels::intercept_panel::render_intercept_panel(
                 ui,
+                &state.palette,
                 &state.last_plan,
                 &withheld,
                 &fires,
@@ -444,8 +451,8 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
         PanelId::Alerts => {
             // GAP-042: warnings owed, late and failed first (DN-03 §7), above the alerts.
             let warnings = crate::warnings::lines(state, None);
-            gungnir_ui::panels::alerts::render_warnings(ui, &warnings);
-            gungnir_ui::panels::alerts::render_alert_list(ui, &state.alerts);
+            gungnir_ui::panels::alerts::render_warnings(ui, &state.palette, &warnings);
+            gungnir_ui::panels::alerts::render_alert_list(ui, &state.palette, &state.alerts);
         }
         // PN-01 is drawn as a top strip by main.rs, not as a docked side panel; a slot
         // for it here would draw it twice.
@@ -461,11 +468,11 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
         // properly in either case: falling through to the not-implemented placeholder
         // would report the one panel the licence requires as missing.
         PanelId::About => {
-            gungnir_ui::panels::about::render_about(ui, &about_view());
+            gungnir_ui::panels::about::render_about(ui, &state.palette, &about_view());
         }
         // Everything else is designed and not built. Say so rather than drawing
         // nothing: see the module documentation.
-        other => render_not_implemented(ui, other.pn(), other.title(), owning_gap(other)),
+        other => render_not_implemented(ui, &state.palette, other.pn(), other.title(), owning_gap(other)),
     }
     None
 }
@@ -550,6 +557,7 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
         .collect();
     gungnir_ui::panels::sensor_health::render_sensor_health(
         ui,
+        &state.palette,
         &gungnir_ui::panels::sensor_health::SensorHealthView {
             health: &state.health,
             encryption: crate::status::encryption_state(&state.encryption),
@@ -580,7 +588,8 @@ fn render_track_table(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction
         selected: state.selected_track(),
         vocabulary: &state.config.vocabulary,
     };
-    gungnir_ui::panels::track_table::render_track_table(ui, &view).map(PanelAction::SelectTrack)
+    gungnir_ui::panels::track_table::render_track_table(ui, &state.palette, &view)
+        .map(PanelAction::SelectTrack)
 }
 
 /// PN-10. The registry is real (GAP-003); nothing here reaches a sensor (GAP-004).
@@ -629,14 +638,14 @@ fn render_sensor_management(ui: &mut egui::Ui, state: &AppState) -> Option<Panel
         vocabulary: &state.config.vocabulary,
         last_error: state.sensor_error.as_deref(),
     };
-    gungnir_ui::panels::sensor_management::render_sensor_management(ui, &view).map(|action| {
-        match action {
+    gungnir_ui::panels::sensor_management::render_sensor_management(ui, &state.palette, &view).map(
+        |action| match action {
             SensorAction::Command { sensor, mode } => PanelAction::CommandSensorMode(sensor, mode),
             SensorAction::RecordObserved { sensor, mode } => {
                 PanelAction::RecordSensorMode(sensor, mode)
             }
-        }
-    })
+        },
+    )
 }
 
 /// PN-11. Which coverage layers the viewport draws (GAP-007).
@@ -695,7 +704,7 @@ fn render_coverage_layers(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAc
         coverage,
         comparison,
     };
-    gungnir_ui::panels::coverage_layers::render_coverage_layers(ui, &view)
+    gungnir_ui::panels::coverage_layers::render_coverage_layers(ui, &state.palette, &view)
         .map(PanelAction::CoverageLayer)
 }
 
@@ -727,7 +736,7 @@ fn render_planning(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
         rehearsal_scenario: state.rehearsal_scenario(),
         selected: state.selected_laydown(),
     };
-    match gungnir_ui::panels::planning::render_planning(ui, &view)? {
+    match gungnir_ui::panels::planning::render_planning(ui, &state.palette, &view)? {
         PlanningAction::SelectLaydown(id) => Some(PanelAction::SelectLaydown(id)),
         PlanningAction::PickScenario(s) => Some(PanelAction::PickRehearsalScenario(s)),
         PlanningAction::RunRehearsal(s) => Some(PanelAction::RunRehearsal(s)),
@@ -793,7 +802,7 @@ pub fn render_requirements(
             }
         },
     };
-    gungnir_ui::panels::requirements::render_requirements(ui, &view, draft)
+    gungnir_ui::panels::requirements::render_requirements(ui, &state.palette, &view, draft)
         .map(PanelAction::Requirement)
 }
 
@@ -808,7 +817,7 @@ fn render_approval_queue(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAct
     let handoffs = crate::handoffs::rows(state);
     let role_name = format!("{:?}", state.role());
     let view = crate::decisions::queue_view(state, &rows, &handoffs, &role_name);
-    gungnir_ui::panels::approval_queue::render_approval_queue(ui, &view)
+    gungnir_ui::panels::approval_queue::render_approval_queue(ui, &state.palette, &view)
         .map(PanelAction::SelectApproval)
 }
 
@@ -881,7 +890,7 @@ pub fn render_decision_dialog(
         may_accept: row.may_decide,
         may_override: crate::decisions::may_override(state.role()),
     };
-    gungnir_ui::panels::decision_dialog::render_decision_dialog(ui, &view, dialog)
+    gungnir_ui::panels::decision_dialog::render_decision_dialog(ui, &state.palette, &view, dialog)
         .map(|choice| PanelAction::Decide(id, choice))
 }
 
@@ -973,7 +982,7 @@ pub fn render_replay(
     sessions: &[gungnir_ui::panels::replay::SessionSummary],
 ) -> Option<PanelAction> {
     let view = crate::sustainment::replay_view(state, replay, sessions);
-    gungnir_ui::panels::replay::render_replay(ui, &view).map(PanelAction::Replay)
+    gungnir_ui::panels::replay::render_replay(ui, &state.palette, &view).map(PanelAction::Replay)
 }
 
 /// PN-13. Counts folded from the journal; the measures catalogue is not computed.
@@ -995,7 +1004,7 @@ pub fn render_audit(
     let audit = crate::sustainment::audit_lines(state);
     let handoffs = crate::handoffs::rows(state);
     let view = crate::session::audit_view(state, &accounts, &audit, &handoffs);
-    gungnir_ui::panels::audit::render_audit(ui, &view, &mut sustainment.sign_in)
+    gungnir_ui::panels::audit::render_audit(ui, &state.palette, &view, &mut sustainment.sign_in)
         .map(PanelAction::Session)
 }
 
@@ -1013,8 +1022,13 @@ pub fn render_reports(
         .unwrap_or_default();
     let mut view = crate::sustainment::reports_view(state, &sustainment.reports);
     view.review = crate::review::review_view(state, sustainment, &lines);
-    gungnir_ui::panels::reports::render_reports(ui, &view, &mut sustainment.review_draft)
-        .map(PanelAction::Reports)
+    gungnir_ui::panels::reports::render_reports(
+        ui,
+        &state.palette,
+        &view,
+        &mut sustainment.review_draft,
+    )
+    .map(PanelAction::Reports)
 }
 
 /// PN-14. Validate is real, apply persists and audits, editing is not built.
@@ -1041,7 +1055,8 @@ pub fn render_config_editor(
         validity.as_deref(),
         profiles,
     );
-    gungnir_ui::panels::config_editor::render_config_editor(ui, &view).map(PanelAction::Config)
+    gungnir_ui::panels::config_editor::render_config_editor(ui, &state.palette, &view)
+        .map(PanelAction::Config)
 }
 
 /// PN-04. Opens on selection; with nothing selected it says so rather than drawing an
@@ -1115,7 +1130,7 @@ fn render_track_detail(ui: &mut egui::Ui, state: &AppState) {
     };
     ui.label(
         egui::RichText::new(crate::cooperative::decision_sentence(state, id))
-            .color(gungnir_ui::theme::MUTED_TEXT_COLOR),
+            .color(state.palette.muted_text_color()),
     );
     // GAP-019: the lineage the resolver holds for this track, across sessions.
     let lineage_owned = crate::identity::lineage_lines(state, id);
@@ -1146,7 +1161,7 @@ fn render_track_detail(ui: &mut egui::Ui, state: &AppState) {
         designation_available: false,
         vocabulary: &state.config.vocabulary,
     };
-    gungnir_ui::panels::track_detail::render_evidence_card(ui, &view);
+    gungnir_ui::panels::track_detail::render_evidence_card(ui, &state.palette, &view);
 }
 
 /// PN-17. Two of the five sections are real: the plan in force and the delegations,
@@ -1242,8 +1257,13 @@ pub fn render_commander_summary(
             failed: state.warnings.failed_count(),
         },
     };
-    gungnir_ui::panels::commander_summary::render_commander_summary(ui, &view, notes)
-        .map(PanelAction::Handover)
+    gungnir_ui::panels::commander_summary::render_commander_summary(
+        ui,
+        &state.palette,
+        &view,
+        notes,
+    )
+    .map(PanelAction::Handover)
 }
 
 /// Whether this panel has a real implementation behind it today.
