@@ -182,6 +182,10 @@ fn draw_layers(
 ) {
     // Terrain goes under everything: it is the ground the rest is drawn on (GAP-023).
     layers::draw_terrain_2d(painter, rect, &state.view, layers.terrain);
+    // Point clouds have no toggle either, the same reason predictions and the laydown
+    // preview below do not: an empty slice already draws nothing, and there is no
+    // separate "hidden" state to distinguish from that (GAP-098).
+    layers::draw_point_clouds_2d(painter, rect, &state.view, layers.point_clouds);
     if state.layers.geofences {
         layers::draw_geofences_2d(painter, rect, &state.view, layers.geofences);
     }

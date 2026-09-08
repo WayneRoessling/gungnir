@@ -178,6 +178,10 @@ pub struct LayerInputs<'a> {
     /// The terrain surface, when a DEM is placed (GAP-023). `None` draws no ground and
     /// claims none.
     pub terrain: Option<TerrainLayer<'a>>,
+    /// The configured point-cloud pair, once both files have loaded (GAP-098). Empty
+    /// until then -- a lone cloud is not the pair registration needs, so drawing one
+    /// while the other is still loading or failed would show a claim nothing backs.
+    pub point_clouds: &'a [PointCloudLayer<'a>],
     /// The laydown option PN-16 has selected for a before-and-after preview (GAP-087),
     /// or `None` when nothing is selected.
     pub laydown_preview: Option<LaydownPreview<'a>>,
@@ -195,6 +199,24 @@ pub struct TerrainLayer<'a> {
     pub positions: &'a [[f32; 3]],
     pub rows: u32,
     pub columns: u32,
+}
+
+/// One loaded point cloud as the viewport draws it (GAP-098).
+///
+/// Borrowed from `gungnir_data::pointcloud::PointBuffer` by the caller rather than that
+/// type itself, the same reason [`TerrainLayer`] borrows from `TerrainMesh`: the drawing
+/// does not depend on the loader's shape.
+///
+/// **Positions are relative to the cloud's own origin, not placed against the
+/// deployment's ENU origin.** `PointBuffer` carries no parsed CRS -- unlike a DEM's
+/// `GridCrs`, nothing here reads a LAS file's own coordinate reference system and
+/// nothing rejects one that contradicts `PointCloudConfig::frame` -- so there is no
+/// placement step to mirror `TerrainMesh::placed()`. Drawing the raw, origin-relative
+/// positions is the honest choice: it shows the cloud's real shape and extent rather
+/// than a claimed alignment with the rest of the picture that nothing has computed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PointCloudLayer<'a> {
+    pub positions: &'a [[f32; 3]],
 }
 
 /// The most vertices a frame shades. A 1 000 by 1 000 DEM has a million; the picture
@@ -298,6 +320,62 @@ pub fn draw_terrain_2d(
     }
     if !mesh.indices.is_empty() {
         painter.add(egui::Shape::mesh(mesh));
+    }
+}
+
+/// The most points a frame draws per cloud, the same reasoning as
+/// [`TERRAIN_VERTEX_BUDGET`]: a bounded COPC query alone can return several thousand
+/// points, egui should not be asked to place all of them every frame, and a stride
+/// through the array (never a truncation) keeps the sampled cloud's shape whole rather
+/// than showing only whichever points happened to load first.
+pub const POINT_CLOUD_VERTEX_BUDGET: usize = 20_000;
+
+/// Stride that brings a cloud's point count under the budget.
+#[must_use]
+pub fn point_cloud_stride(point_count: usize) -> usize {
+    if point_count <= POINT_CLOUD_VERTEX_BUDGET {
+        return 1;
+    }
+    point_count.div_ceil(POINT_CLOUD_VERTEX_BUDGET)
+}
+
+/// Draw the configured point-cloud pair (GAP-098). Nothing is drawn for an empty slice,
+/// and nothing is written either, the same convention [`draw_terrain_2d`] follows: the
+/// health panel is not this crate's to draw, so the absence of a pair is said there
+/// rather than as a label on every empty map.
+///
+/// Source and target are drawn in different colours -- the only way this view
+/// distinguishes them, since neither carries a name past this point -- so a pair that
+/// has loaded reads as a pair rather than as one undifferentiated cloud.
+pub fn draw_point_clouds_2d(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    view: &TopDownView,
+    clouds: &[PointCloudLayer<'_>],
+) {
+    const DOT_RADIUS: f32 = 1.5;
+    for (index, cloud) in clouds.iter().enumerate() {
+        let color = point_cloud_color(index);
+        let stride = point_cloud_stride(cloud.positions.len());
+        for p in cloud.positions.iter().step_by(stride) {
+            let pos = view.project([f64::from(p[0]), f64::from(p[1]), 0.0], rect);
+            if rect.contains(pos) {
+                painter.circle_filled(pos, DOT_RADIUS, color);
+            }
+        }
+    }
+}
+
+/// The source cloud (index 0) and the target (index 1, and every index after it, which
+/// only arises if a caller hands this more than the pair `LayerInputs::point_clouds`
+/// documents) get their own colours; anything past the pair repeats the target's rather
+/// than indexing past a fixed palette.
+#[must_use]
+pub fn point_cloud_color(index: usize) -> egui::Color32 {
+    if index == 0 {
+        theme::POINT_CLOUD_SOURCE_COLOR
+    } else {
+        theme::POINT_CLOUD_TARGET_COLOR
     }
 }
 
@@ -619,6 +697,54 @@ mod tests {
         assert!(high.r() > low.r(), "higher ground is paler");
         assert_eq!(terrain_color(f32::NAN), low);
         assert!(low.a() < 255, "translucent, so tracks stay legible over it");
+    }
+
+    /// A small cloud is drawn whole; a large one is decimated to the budget, never
+    /// truncated to whichever points happened to load first.
+    #[test]
+    fn a_point_cloud_is_decimated_by_stride_to_the_vertex_budget() {
+        assert_eq!(point_cloud_stride(100), 1);
+        assert_eq!(point_cloud_stride(POINT_CLOUD_VERTEX_BUDGET), 1);
+        let count = POINT_CLOUD_VERTEX_BUDGET * 10 + 3;
+        let stride = point_cloud_stride(count);
+        assert!(stride >= 10, "{stride}");
+        let kept = count.div_ceil(stride);
+        assert!(kept <= POINT_CLOUD_VERTEX_BUDGET, "{kept}");
+        assert_eq!(point_cloud_stride(0), 1);
+    }
+
+    /// The source and target of a pair must not be drawn the same colour, or a loaded
+    /// pair would look like one undifferentiated cloud rather than two.
+    #[test]
+    fn source_and_target_are_drawn_in_different_colours() {
+        assert_ne!(point_cloud_color(0), point_cloud_color(1));
+        // Anything past the pair repeats the target's colour rather than panicking or
+        // indexing a fixed palette out of bounds.
+        assert_eq!(point_cloud_color(1), point_cloud_color(2));
+    }
+
+    /// [`PointCloudLayer`] borrows straight from a loaded buffer's positions, the same
+    /// way [`TerrainLayer`] borrows a mesh's -- constructing one is exercised here since
+    /// the crate this borrows from (`gungnir-data`) is a dependency this one already has,
+    /// and an actual GL draw cannot be asserted without a window.
+    #[test]
+    fn a_point_cloud_layer_borrows_a_buffers_positions_without_copying_them() {
+        let buffer = gungnir_data::pointcloud::PointBuffer {
+            positions: vec![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+            ..gungnir_data::pointcloud::PointBuffer::default()
+        };
+        let layer = PointCloudLayer {
+            positions: &buffer.positions,
+        };
+        assert_eq!(layer.positions.len(), 2);
+        #[allow(clippy::float_cmp)]
+        {
+            assert_eq!(layer.positions[1], [4.0, 5.0, 6.0]);
+        }
+        assert!(std::ptr::eq(
+            layer.positions.as_ptr(),
+            buffer.positions.as_ptr()
+        ));
     }
 
     fn circle(sensor: u32, radius_m: f64, confidence: f32) -> CoverageCircle {

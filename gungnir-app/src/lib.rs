@@ -36,6 +36,7 @@ pub mod launch_warning;
 pub mod laydown_rehearsal;
 pub mod node_tasks;
 pub mod peers;
+pub mod pointcloud;
 pub mod prediction;
 pub mod radar;
 pub mod rehearsal;
