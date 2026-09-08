@@ -2696,6 +2696,20 @@ re-reading the register alone.
   pinned, passed over because SAPIENT's node type already covers passive-RF more
   cheaply (§9). EO/IR has no survey and no pinned specification at all -- nothing
   in `external-standards.md` names it. (GAP-001, GAP-064)
+- **Bearing-only detections do not reach the operator.** DN-27's tracker half is built
+  and gated: a bearing is a separate type, no function anywhere accepts one and
+  initiates a track, and one that gates into an existing track refines it. §7, the
+  display, is unbuilt -- and the chain stops earlier than the drawing.
+  `FusionPipeline::retained_bearings` and the pipeline's five bearing counters have no
+  caller outside `gungnir-fusion-async`'s own tests, no view carries a retained
+  bearing, `gungnir-app` holds `SapientFeedStatsSink` values it never reads, and
+  `SensorHealthView` has lines for radar, AIS and peer feeds and none for a spotter,
+  acoustic or passive-RF one. So an acoustic array's ordinary output -- a direction
+  with no range, which DN-27 §5 rule 3 calls exactly the report an operator most needs
+  -- is journaled, replayable, and invisible in the picture. Four `pipeline.rs` doc
+  comments stated the drawing in the present tense; corrected 2026-09-08 and signed by
+  the owner the same day, they now say the bearing is retained for a caller to draw and
+  name the gap as the reason none does. (GAP-096)
 - **Cross-session identity correlation on the node.** The desktop resolver is built
   and wired, correlating by kinematic and classification similarity across sessions
   (`gungnir_identity::similarity`) -- not by session track id alone, which is what
@@ -2704,8 +2718,8 @@ re-reading the register alone.
   closed and still has no resolver, because §7.1 draws no edge from `gungnir-node` to
   `gungnir-identity`: a graph decision now, not a missing capability. (GAP-019 is
   closed for the desktop half; the node half is this bullet)
-- **Plan 05 gap register, most recently updated 2026-09-07.**
-  `docs/mission/gap-analysis/gap-register.md` carries 95 gaps against the mission
+- **Plan 05 gap register, most recently updated 2026-09-08.**
+  `docs/mission/gap-analysis/gap-register.md` carries 96 gaps against the mission
   capabilities, each with a closing action, a target increment, and an owner;
   `docs/mission/gap-analysis/technical-gap-map.md` maps every item above to the gaps
   that carry it. Engineering items the list above does not name are tracked there by
@@ -2739,7 +2753,9 @@ re-reading the register alone.
   record of them; GAP-092 and GAP-093 were a second, separate loss the same commit
   caused and were likewise recovered; GAP-094 and GAP-095 are new, the second because
   the first collided with GAP-090's own renumbering (item 89, and this section's own
-  entry above).
+  entry above). GAP-096 was added 2026-09-08 from a trace of the whole
+  bearing path and is the bullet above; it is the first item in I3's order, priority
+  40, and nothing blocks it.
 ### Resolved on 2026-09-06
 
 **Heading added 2026-09-07.** Everything from here to item 101 was already dated
