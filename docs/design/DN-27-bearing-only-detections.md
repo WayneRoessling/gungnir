@@ -12,7 +12,7 @@ was built, so a reader is not left comparing a specification against a guess:
 | §5 rule 1 | `gungnir_fusion_async::{BearingDetection, FusionPipeline::offer_bearing}`, with `gungnir_filters::{BearingOnly, AzimuthElevation}` for the update. The prohibition is a **type boundary**: no function takes a bearing and creates a track | A bearing is applied at the pipeline's current cursor, not retrodicted; one outside the reorder horizon is refused and counted |
 | §5 rule 2, §6 | `gungnir_coord::cross_bearings`, refusing below `DEFAULT_MINIMUM_CROSSING_ANGLE_RAD` (15 degrees, chosen there with its reason) | Nothing calls it yet: the pairing that would feed it is §9's open row |
 | §5 rule 3 | `PipelineSettings::bearing_retention_s`, `FusionPipeline::retained_bearings` | -- |
-| §7 the display | **Not built.** No ray is drawn; `gungnir-ui` and `gungnir-viewport3d` are untouched | The whole of §7 |
+| §7 the display | **Not built.** No ray is drawn; `gungnir-ui` and `gungnir-viewport3d` are untouched. **GAP-096 owns it, filed 2026-09-08**, which also found that `FusionPipeline::retained_bearings` has no caller outside this crate's tests, so the chain stops before the drawing does | The whole of §7 |
 | §8 migration | All six producers, plus the Arrow codec and the committed test-track sample sets, which §8 did not list and which also carry the shape | -- |
 | §10 verification | The three rows, in `../verification-capability-table.md` §1, all passing | -- |
 | The spotter adapter | `gungnir_ingest::adapters::sapient`, registering `NODE_TYPE_HUMAN` (`external-standards.md` §7) | The **binary** SAPIENT wire format: the adapter reads the protobuf JSON mapping, because a protobuf runtime is not in the workspace dependency set |

@@ -195,7 +195,9 @@ pub struct PipelineSettings {
     ///
     /// A direction with no track behind it is the acoustic array's ordinary output when
     /// something is out there that the radar cannot see, and it is exactly the report an
-    /// operator most needs -- so it is retained and shown as a ray rather than dropped.
+    /// operator most needs -- so it is retained for a caller to draw rather than
+    /// dropped. **Nothing draws one yet** (GAP-096): DN-27 §7 is unbuilt, and
+    /// [`FusionPipeline::retained_bearings`] has no caller outside this crate's tests.
     /// It is a lifetime and not a hold-forever, because a bearing is a statement about
     /// one instant and a picture full of hour-old directions is not a picture.
     pub bearing_retention_s: f64,
@@ -377,7 +379,8 @@ pub struct PipelineStats {
     pub bearings_updated: u64,
     /// Bearings that matched no track and were retained for
     /// [`PipelineSettings::bearing_retention_s`] (DN-27 §5 rule 3). **Retained is not
-    /// dropped**: the report stays in the picture as a ray.
+    /// dropped**: the report is kept for a caller to draw as a ray. No caller draws one
+    /// yet (GAP-096), so this counter is what the report amounts to today.
     pub bearings_retained: u64,
     /// Retained bearings whose lifetime ran out.
     pub bearings_expired: u64,
@@ -693,7 +696,8 @@ impl FusionPipeline {
             );
         }
 
-        // Rule 3: a bearing that updates nothing is retained and shown, not dropped.
+        // Rule 3: a bearing that updates nothing is retained for a caller to draw,
+        // not dropped -- and no caller draws one yet (GAP-096).
         let until_s = bearing.timestamp_s + self.settings.bearing_retention_s;
         self.retained.push(RetainedBearing {
             bearing: *bearing,
@@ -704,7 +708,9 @@ impl FusionPipeline {
     }
 
     /// The bearings that matched no track and are still inside their lifetime
-    /// (DN-27 §5 rule 3). Drawn as rays, never as symbols (§7).
+    /// (DN-27 §5 rule 3). **To be drawn as rays, never as symbols** (§7) -- by a caller
+    /// that does not exist yet: nothing outside this crate's own tests calls this, which
+    /// is the whole of GAP-096.
     #[must_use]
     pub fn retained_bearings(&self) -> &[RetainedBearing] {
         &self.retained
