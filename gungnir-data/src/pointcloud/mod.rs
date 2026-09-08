@@ -24,6 +24,12 @@ pub struct PointBuffer {
     pub positions: Vec<[f32; 3]>,
     pub intensity: Option<Vec<f32>>,
     pub classification: Option<Vec<u8>>,
+    /// Unit surface normal per point, in the same frame as `positions`. `None` until
+    /// something estimates one (GAP-024): no loader here computes it, because a normal
+    /// is a claim about the local surface a bare position is not, and inventing one
+    /// silently is exactly what `gungnir-data-fusion`'s point-to-plane path must not
+    /// rest on.
+    pub normals: Option<Vec<[f32; 3]>>,
     /// What `positions` are relative to, in the file's own frame.
     pub origin: [f64; 3],
 }
@@ -91,6 +97,7 @@ pub fn load_las(path: &Path) -> Result<PointBuffer, DataError> {
         positions,
         intensity: Some(intensity),
         classification: Some(classification),
+        normals: None,
         origin,
     })
 }
@@ -179,6 +186,7 @@ pub fn load_copc_bounded(path: &Path, bounds: [f32; 6]) -> Result<PointBuffer, D
         positions,
         intensity: Some(intensity),
         classification: Some(classification),
+        normals: None,
         origin,
     })
 }

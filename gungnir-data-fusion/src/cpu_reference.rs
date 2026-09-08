@@ -6,11 +6,13 @@
 //! step 1): no `wgpu` types at all, unit-tested against known synthetic transforms and
 //! the degenerate cases. Also the runtime fallback for headless configurations.
 //!
-//! **Point-to-point, not point-to-plane.** `PointBuffer` carries no normals, and a normal
-//! estimated here from a handful of neighbours would be a guess the GPU path would then
-//! be validated against. The correspondence is the nearest target point by brute force,
-//! which is `O(n·m)` per iteration and correct; a spatial index is an optimisation for
-//! when a cloud is large enough to need one, and the reference should stay legible.
+//! **Point-to-point, not point-to-plane.** `PointBuffer::normals` exists now
+//! (`crate::normals`, GAP-024), but nothing here reads it: switching this reference to
+//! point-to-plane is its own linearised solve, not a corollary of normals existing, and
+//! the GPU path this reference validates is still point-to-point too. The correspondence
+//! is the nearest target point by brute force, which is `O(n·m)` per iteration and
+//! correct; a spatial index is an optimisation for when a cloud is large enough to need
+//! one, and the reference should stay legible.
 
 use crate::transform_solve::{apply, rigid_transform_between};
 use crate::{FusionError, FusionStepResult, PointCloudFusion};

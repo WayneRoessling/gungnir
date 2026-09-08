@@ -1469,7 +1469,7 @@ calls it in its tick loop.
 | `gungnir-replay` | Productization / Validate | Deterministic session playback | Lower | Implemented and tested |
 | `gungnir-reporting` | Productization / Validate | Mission reports and export | Lower | Implemented and tested |
 | `gungnir-data` | 3D data ecosystem | Point cloud/VTK/terrain/glTF I/O | Core | Loader surface; background loader thread |
-| `gungnir-data-fusion` | 3D data ecosystem | GPU point-cloud registration | Core | Trait surface; CPU reference and GPU pipeline pending |
+| `gungnir-data-fusion` | 3D data ecosystem | GPU point-cloud registration | Core | CPU reference built and tested: point-to-point ICP (Kabsch), plus per-point normal estimation since 2026-09-07. Point-to-plane and the GPU pipeline are pending (GAP-024); the GPU path also waits on the self-hosted runner (GAP-061) |
 | `gungnir-remote` | Deployment | Remote backends over `gungnir-api` | High | Store-and-forward implemented and tested; transport pending |
 | `gungnir-node` | Deployment | Headless service-node binary, Linux container | High | Runnable; journals and reports health; no network endpoints yet |
 | `gungnir-render` | UI/rendering | Headless wgpu compute device | Core | `GpuContext::new` implemented; egui-over-wgpu path inactive |
