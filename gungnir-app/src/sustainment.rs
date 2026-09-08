@@ -1184,14 +1184,19 @@ pub fn asset_assessor(state: &AppState) -> Option<gungnir_assessment::AssetListA
             .collect(),
     };
     let anchors = gungnir_assessment::assets::anchor_list(&list, |geodetic| frame.to_enu(geodetic));
+    // GAP-027: the declared platform class, weighed by the baseline's table -- AIS's
+    // surface classes and ADS-B's crewed-aircraft class. A track associates with at
+    // most one cooperative source, so the two maps do not contend for a key; where
+    // they somehow did, the later insertion (ADS-B) would win, and neither is wrong.
+    let mut class_weights = crate::cooperative::class_weights(state);
+    class_weights.extend(crate::adsb::class_weights(state));
     Some(
         gungnir_assessment::AssetListAssessor::new(
             state.config.version,
             anchors,
             state.config.assessment.max_range_m,
         )
-        // GAP-027: the declared platform class, weighed by the baseline's table.
-        .with_class_weights(crate::cooperative::class_weights(state)),
+        .with_class_weights(class_weights),
     )
 }
 

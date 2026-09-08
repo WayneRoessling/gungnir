@@ -14,11 +14,23 @@
 //! `cooperative.rs` does for AIS.
 //!
 //! Association is by proximity, same gate and same reasoning as AIS
-//! ([`crate::cooperative::ASSOCIATION_GATE_M`]). This module does not duplicate a
-//! platform-class lethality mapping the way AIS's ship-type table does (GAP-027): no
-//! mission capability names one for aircraft categories, and inventing a mapping table
-//! nobody asked for is not this change's decision to make.
+//! ([`crate::cooperative::ASSOCIATION_GATE_M`]).
+//!
+//! **A platform-class mapping, narrower than AIS's (GAP-027).** This module used to
+//! decline one outright: "no mission capability names one for aircraft categories."
+//! That overstated it -- `docs/mission/air-defense-and-counter-uas.md` §2 names
+//! "Crewed aircraft and helicopters" as its own threat class and says, in the same
+//! row, "Identification is critical: friendly aircraft share the space." A
+//! cooperatively squawking ADS-B contact answers exactly that question. What the
+//! mission does *not* name is a way to tell a large transport from a fighter from a
+//! rotorcraft by lethality -- so unlike AIS's `surface.*` table, which spans the full
+//! ITU-R M.1371-6 ship-type range, [`platform_class_of_category`] collapses every
+//! crewed-aircraft subcategory (DO-260B category set A, codes 1-7) into the one class
+//! the mission actually distinguishes: `air.crewed`. Set A code 0 ("no category
+//! information") and every other category set stay unmapped, `None`, rather than a
+//! guess dressed as a class.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use gungnir_config::{AdsbSource, ConfigBaseline};
@@ -28,7 +40,7 @@ use gungnir_ingest::adapters::adsb::{
     TcpAvrSource,
 };
 use gungnir_ingest::IngestGateway;
-use gungnir_model::{Classification, Geodetic, LocalFrame, SensorId, TrackId};
+use gungnir_model::{Classification, Geodetic, LocalFrame, MissionTime, SensorId, TrackId};
 
 use crate::state::AppState;
 
@@ -37,6 +49,50 @@ use crate::state::AppState;
 pub struct BoundAdsbFeeds {
     pub reports: Vec<CooperativeSink>,
     pub stats: Vec<(String, AdsbStatsSink)>,
+}
+
+/// The last cooperative report associated with a track, for the platform class it
+/// declares. Narrower than AIS's `LastCooperative`: no disagreement check is built
+/// here, because nothing asked for one and inventing it would be its own decision.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LastAdsbCooperative {
+    pub address: u32,
+    pub at: MissionTime,
+    /// The platform class the report declares (GAP-027), from the ADS-B category, when
+    /// an identification message carried one.
+    pub platform_class: Option<String>,
+}
+
+/// The platform class an ADS-B category declares, as an `air.*` class id the
+/// baseline's lethality table can name. Only category set A's crewed-aircraft codes
+/// (DO-260B, 1-7) are mapped, collapsed to one class rather than split by size or
+/// performance, because that is the one distinction
+/// `docs/mission/air-defense-and-counter-uas.md` §2 draws for cooperative aircraft
+/// ("Crewed aircraft and helicopters"). Code 0 ("no category information") and every
+/// other category set yield `None` rather than a guess.
+#[must_use]
+pub fn platform_class_of_category(category_set: char, category_code: u8) -> Option<&'static str> {
+    match (category_set, category_code) {
+        ('A', 1..=7) => Some("air.crewed"),
+        _ => None,
+    }
+}
+
+/// The class lethality per track for the assessor (GAP-027), the ADS-B half of
+/// [`crate::cooperative::class_weights`]: the declared class looked up in the
+/// baseline's table. A track with no declared class, or a class the table does not
+/// list, is absent and weighs 1.0 there.
+#[must_use]
+pub fn class_weights(state: &AppState) -> HashMap<TrackId, f64> {
+    state
+        .adsb_cooperative
+        .iter()
+        .filter_map(|(track, last)| {
+            let class = last.platform_class.as_deref()?;
+            let weight = state.config.assessment.lethality_by_class.get(class)?;
+            Some((*track, *weight))
+        })
+        .collect()
 }
 
 fn open_source(source: &AdsbSource) -> Result<Box<dyn AvrSource>, String> {
@@ -141,6 +197,18 @@ fn associate(state: &mut AppState, tracks: &[(TrackId, [f64; 3])], report: &Coop
     let Some((track, _separation_m)) = nearest else {
         return;
     };
+    state.adsb_cooperative.insert(
+        track,
+        LastAdsbCooperative {
+            address: report.address.0,
+            at: report.receipt_time,
+            platform_class: report
+                .category_set
+                .zip(report.category_code)
+                .and_then(|(set, code)| platform_class_of_category(set, code))
+                .map(ToOwned::to_owned),
+        },
+    );
     if state.adsb_submitted.insert((track, report.address.0)) {
         let label = match &report.callsign {
             Some(callsign) => format!("ADS-B {:06X} ({})", report.address.0, callsign.trim()),
@@ -176,4 +244,38 @@ pub fn feed_lines(
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_crewed_aircraft_subcategory_under_set_a_maps_to_one_class() {
+        for code in 1..=7u8 {
+            assert_eq!(
+                platform_class_of_category('A', code),
+                Some("air.crewed"),
+                "category A{code}"
+            );
+        }
+    }
+
+    #[test]
+    fn no_category_information_and_every_other_set_are_unmapped() {
+        assert_eq!(
+            platform_class_of_category('A', 0),
+            None,
+            "0 is \"no category information\", not a class"
+        );
+        for set in ['B', 'C', 'D'] {
+            for code in 0..=7u8 {
+                assert_eq!(
+                    platform_class_of_category(set, code),
+                    None,
+                    "the mission names no class for set {set}"
+                );
+            }
+        }
+    }
 }
