@@ -467,6 +467,35 @@ impl TrackView {
     }
 }
 
+/// A bearing that matched no track, projected for a caller to draw
+/// (docs/design/DN-27-bearing-only-detections.md §5 rule 3, §7; GAP-096).
+///
+/// The sibling of [`TrackView`] for the other thing a sensor can report: `TrackView` is
+/// a place, and this is a direction with no place attached. **It carries no position
+/// field on purpose** -- the same reason [`Measurement::Bearing`] has none -- so nothing
+/// downstream can average, gate, or draw this as a point without first inventing a
+/// range, which is exactly what DN-27 §2 forbids. `gungnir-tracking-service` projects
+/// `gungnir_fusion_async::RetainedBearing` into this; `LiveTrackingService::bearing_rays`
+/// is where a caller reads the current set, alongside `tracks()`.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct BearingRayView {
+    /// Which sensor reported it.
+    pub sensor: SensorId,
+    /// Where the bearing was measured from, local ENU metres.
+    pub origin_enu: [f64; 3],
+    /// `atan2(east, north)`: zero at north, increasing to the east (DN-27 §4).
+    pub azimuth_rad: f64,
+    /// `None` when the sensor reported none. **Not the same as a zero elevation**: zero
+    /// means the horizon (DN-27 §4).
+    pub elevation_rad: Option<f64>,
+    /// Angular one-sigma error of the azimuth, radians: what a drawn ray widens with,
+    /// because a fixed positional error would be wrong at every range but one
+    /// (DN-27 §6).
+    pub azimuth_one_sigma_rad: f64,
+    /// Mission time after which this ray is dropped (DN-27 §5 rule 3).
+    pub valid_until: MissionTime,
+}
+
 /// A taskable resource as the intercept planner and the UI see it.
 ///
 /// `layer`, `cost`, and `magazine` are what the cheapest-adequate rule reads

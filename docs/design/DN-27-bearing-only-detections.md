@@ -12,17 +12,23 @@ was built, so a reader is not left comparing a specification against a guess:
 | §5 rule 1 | `gungnir_fusion_async::{BearingDetection, FusionPipeline::offer_bearing}`, with `gungnir_filters::{BearingOnly, AzimuthElevation}` for the update. The prohibition is a **type boundary**: no function takes a bearing and creates a track | A bearing is applied at the pipeline's current cursor, not retrodicted; one outside the reorder horizon is refused and counted |
 | §5 rule 2, §6 | `gungnir_coord::cross_bearings`, refusing below `DEFAULT_MINIMUM_CROSSING_ANGLE_RAD` (15 degrees, chosen there with its reason) | Nothing calls it yet: the pairing that would feed it is §9's open row |
 | §5 rule 3 | `PipelineSettings::bearing_retention_s`, `FusionPipeline::retained_bearings` | -- |
-| §7 the display | **Not built.** No ray is drawn; `gungnir-ui` and `gungnir-viewport3d` are untouched. **GAP-096 owns it, filed 2026-09-08**, which also found that `FusionPipeline::retained_bearings` has no caller outside this crate's tests, so the chain stops before the drawing does | The whole of §7 |
+| §7 the display | **Built 2026-09-08, GAP-096.** `gungnir_tracking_service::project_bearing_ray` carries `FusionPipeline::retained_bearings` out as `gungnir_model::BearingRayView`; `gungnir_viewport3d::tracks::draw_bearing_rays_2d` draws each as a widening, non-terminating wedge; PN-08 alerts once per newly retained bearing (`gungnir-app/src/bearings.rs`); PN-09 carries the spotter/acoustic/passive-RF feed line and the pipeline's five counters | The three-d GL scene draws no glyphs for anything yet, tracks included (GAP-022), so a ray is drawn in the 2D projection at parity with a track rather than as true three-d geometry; `gungnir-remote`'s connected profile does not carry a bearing or the counters over the v2 wire |
 | §8 migration | All six producers, plus the Arrow codec and the committed test-track sample sets, which §8 did not list and which also carry the shape | -- |
 | §10 verification | The three rows, in `../verification-capability-table.md` §1, all passing | -- |
 | The spotter adapter | `gungnir_ingest::adapters::sapient`, registering `NODE_TYPE_HUMAN` (`external-standards.md` §7) | The **binary** SAPIENT wire format: the adapter reads the protobuf JSON mapping, because a protobuf runtime is not in the workspace dependency set |
 
-**One thing built here is not wired**, and saying so is the point of this row:
-`gungnir-tracking-service` refuses a bearing with `SubmitError::NotAPosition` rather than
-offering it to `FusionPipeline::offer_bearing`, because a bearing needs the reporting
-sensor's position in the local frame and `DetectionView` carries a `SensorId` and no
-position. Nothing in this workspace resolves one for that service. So the gateway accepts
-a spotter's bearing, the record keeps it, and no track is refined by one yet.
+**Corrected 2026-09-08: this row was stale.** It used to say `gungnir-tracking-service`
+refused every bearing with `SubmitError::NotAPosition` rather than offering it to
+`FusionPipeline::offer_bearing`, because a bearing needs the reporting sensor's position
+in the local frame and `DetectionView` carries a `SensorId` and no position, and nothing
+in this workspace resolved one for that service. That was true when this note was signed
+and stopped being true the next day: **GAP-001's closing action built the resolver**
+(`gungnir_tracking_service::SensorPositions`, `with_sensor_positions`, 2026-09-07), so a
+bearing whose sensor has a declared position now reaches `offer_bearing` as a
+`BearingDetection` and is offered under DN-27 §5's three rules; only a bearing from a
+sensor the deployment never declared a position for still refuses, under
+`SubmitError::NotAPosition` or `UnknownSensorPosition` depending on which of the two is
+missing. GAP-096 is what reads that path's output, not what built it.
 
 ## 1. The gap, and why it blocks three feeds rather than one
 

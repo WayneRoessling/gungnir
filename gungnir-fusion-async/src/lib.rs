@@ -112,6 +112,39 @@ impl From<BearingDetection> for Submission {
 /// How often the ingest loop re-polls its inbound channel while idle.
 const IDLE_POLL: Duration = Duration::from_millis(10);
 
+/// Everything one pass through [`ingest_with`]'s loop produced, bundled into one
+/// channel message rather than sent as three (GAP-096).
+///
+/// **Written and gated, not signed by the owner**: this crate is human-owned
+/// (`docs/agentic-workflow.md`), and this struct and the channel type change below are
+/// the mechanical part of wiring [`FusionPipeline::retained_bearings`] and
+/// [`FusionPipeline::stats`] out to a caller -- the four `pipeline.rs` doc comments this
+/// gap corrected were signed 2026-09-08, this was not.
+///
+/// Bundled on purpose rather than sent over a second channel: `tracks`, the retained
+/// bearings and the stats are all read from the same pipeline at the same instant inside
+/// this loop, with no `.await` between them. A poller draining two independent channels
+/// could see a track snapshot from one epoch next to a bearing snapshot from another,
+/// which is the same kind of skew [`TimedTrack`] exists to keep out of a single track.
+#[derive(Debug, Clone, Default)]
+pub struct PipelineSnapshot {
+    pub tracks: Vec<TimedTrack>,
+    /// [`FusionPipeline::retained_bearings`] at the same instant as `tracks`
+    /// (DN-27 §5 rule 3).
+    pub retained_bearings: Vec<RetainedBearing>,
+    /// [`FusionPipeline::stats`] at the same instant as `tracks`.
+    pub stats: PipelineStats,
+}
+
+/// Read every part of `pipeline`'s current output into one [`PipelineSnapshot`].
+fn snapshot_output(pipeline: &FusionPipeline) -> PipelineSnapshot {
+    PipelineSnapshot {
+        tracks: pipeline.timed_snapshot(),
+        retained_bearings: pipeline.retained_bearings().to_vec(),
+        stats: pipeline.stats(),
+    }
+}
+
 /// Whether this build has an out-of-sequence, multi-rate pipeline behind
 /// [`ingest`]. `gungnir-tracking-service` reports `is_healthy() == false` while this
 /// is false, so no dashboard can claim a working tracker before one exists.
@@ -132,8 +165,8 @@ const IDLE_POLL: Duration = Duration::from_millis(10);
 pub const PIPELINE_IMPLEMENTED: bool = true;
 
 /// The ingest task: buffers out-of-order/late detections from multiple sensors,
-/// reconciles them onto a common fused timeline, and emits a track snapshot on `out`
-/// after every epoch it processes.
+/// reconciles them onto a common fused timeline, and emits a [`PipelineSnapshot`] on
+/// `out` after every epoch it processes.
 ///
 /// The default settings are used; [`ingest_with`] takes a deployment's.
 ///
@@ -146,7 +179,7 @@ pub const PIPELINE_IMPLEMENTED: bool = true;
 /// The inbound channel is a `crossbeam` channel because it is the boundary with the
 /// synchronous render/UI thread (§2.2); it is polled with `try_recv` plus a yield
 /// rather than a blocking `recv`, which would stall the executor thread.
-pub async fn ingest(rx: Receiver<Submission>, out: Sender<Vec<TimedTrack>>) {
+pub async fn ingest(rx: Receiver<Submission>, out: Sender<PipelineSnapshot>) {
     ingest_with(rx, out, PipelineSettings::default()).await;
 }
 
@@ -158,7 +191,7 @@ pub async fn ingest(rx: Receiver<Submission>, out: Sender<Vec<TimedTrack>>) {
 /// session, and a replay would then end short of the recording it replayed.
 pub async fn ingest_with(
     rx: Receiver<Submission>,
-    out: Sender<Vec<TimedTrack>>,
+    out: Sender<PipelineSnapshot>,
     settings: PipelineSettings,
 ) {
     let mut pipeline = FusionPipeline::new(settings);
@@ -172,7 +205,7 @@ pub async fn ingest_with(
                 if let Err(err) = pipeline.push(det) {
                     tracing::warn!(%err, "detection refused by the reorder buffer");
                 }
-                if pipeline.run_ready() > 0 && out.send(pipeline.timed_snapshot()).is_err() {
+                if pipeline.run_ready() > 0 && out.send(snapshot_output(&pipeline)).is_err() {
                     tracing::warn!("track consumer is gone; stopping the pipeline");
                     return;
                 }
@@ -206,7 +239,7 @@ pub async fn ingest_with(
                 // Doing it here rather than on a timer keeps it on the same clock the
                 // bearings themselves carry.
                 pipeline.expire_bearings(bearing.timestamp_s);
-                if out.send(pipeline.timed_snapshot()).is_err() {
+                if out.send(snapshot_output(&pipeline)).is_err() {
                     tracing::warn!("track consumer is gone; stopping the pipeline");
                     return;
                 }
@@ -216,7 +249,7 @@ pub async fn ingest_with(
         }
     }
     if pipeline.flush() > 0 {
-        let _ = out.send(pipeline.timed_snapshot());
+        let _ = out.send(snapshot_output(&pipeline));
     }
     tracing::info!(
         stats = ?pipeline.stats(),

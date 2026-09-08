@@ -11,7 +11,9 @@
 
 use crate::interaction::TopDownView;
 use gungnir_model::Classification;
-use gungnir_model::{InterceptSolutionView, PlanView, TrackId, TrackStatus, TrackView};
+use gungnir_model::{
+    BearingRayView, InterceptSolutionView, PlanView, TrackId, TrackStatus, TrackView,
+};
 use gungnir_ui::theme;
 use gungnir_ui::theme::ClassificationFrame;
 
@@ -181,6 +183,97 @@ fn draw_classification_frame(
     painter.circle_filled(center, r * 0.35, lifecycle_color);
 }
 
+/// A bearing that matched no track, as the viewport draws it (DN-27 §7; GAP-096).
+///
+/// **Deliberately carries no `position` field.** [`TrackGlyph`] has one because a track
+/// is a place; this has an origin and a direction because a bearing is not one -- the
+/// same distinction `gungnir_model::Measurement` draws by giving its `Bearing` variant
+/// no position at all (DN-27 §2). Drawing code that only ever sees this type structurally
+/// cannot mistake it for a point.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BearingRayGlyph {
+    pub origin: [f64; 3],
+    pub azimuth_rad: f64,
+    /// Angular one-sigma (DN-27 §6): what the drawn wedge widens with.
+    pub azimuth_one_sigma_rad: f64,
+}
+
+/// Rebuild bearing-ray glyphs from the current retained set.
+pub fn update_bearing_ray_glyphs(rays: &[BearingRayView]) -> Vec<BearingRayGlyph> {
+    rays.iter()
+        .map(|r| BearingRayGlyph {
+            origin: r.origin_enu,
+            azimuth_rad: r.azimuth_rad,
+            azimuth_one_sigma_rad: r.azimuth_one_sigma_rad,
+        })
+        .collect()
+}
+
+/// True when the glyph set no longer matches the retained set, so the caller rebuilds
+/// (mirrors [`glyphs_need_rebuild`]).
+#[allow(clippy::float_cmp)]
+pub fn bearing_glyphs_need_rebuild(glyphs: &[BearingRayGlyph], rays: &[BearingRayView]) -> bool {
+    glyphs.len() != rays.len()
+        || glyphs.iter().zip(rays).any(|(g, r)| {
+            g.origin != r.origin_enu
+                || g.azimuth_rad != r.azimuth_rad
+                || g.azimuth_one_sigma_rad != r.azimuth_one_sigma_rad
+        })
+}
+
+/// How far a ray reaches at the view's current scale (DN-27 §7: "does not terminate").
+///
+/// A fixed metre distance would visibly stop inside the view at some zoom levels and
+/// float outside it at others; reaching twice the rectangle's longer side guarantees the
+/// drawn ray always runs past the visible edge, at any pan or zoom, without claiming a
+/// range nobody measured.
+fn ray_reach_m(view: &TopDownView, rect: egui::Rect) -> f64 {
+    view.meters_per_px * f64::from(rect.width().max(rect.height()).max(1.0)) * 2.0
+}
+
+/// The ENU point `reach_m` out from `origin` along `azimuth_rad`, in this system's
+/// bearing convention (`atan2(east, north)`; DN-27 §4).
+fn ray_far_point(origin: [f64; 3], azimuth_rad: f64, reach_m: f64) -> [f64; 3] {
+    [
+        origin[0] + reach_m * azimuth_rad.sin(),
+        origin[1] + reach_m * azimuth_rad.cos(),
+        origin[2],
+    ]
+}
+
+/// 2D fallback: a wedge from the origin along the azimuth, its two edges spread by
+/// `azimuth_one_sigma_rad` either side and reaching past the visible rectangle
+/// (DN-27 §7). **Never a point or a filled circle** -- that is what a track glyph is,
+/// and the two must not be drawable by the same code path.
+pub fn draw_bearing_rays_2d(
+    painter: &egui::Painter,
+    palette: &theme::Palette,
+    rect: egui::Rect,
+    view: &TopDownView,
+    glyphs: &[BearingRayGlyph],
+) {
+    let reach = ray_reach_m(view, rect);
+    let stroke = egui::Stroke::new(palette.stroke_hairline, palette.bearing_ray_color);
+    for g in glyphs {
+        let origin = view.project(g.origin, rect);
+        let left = view.project(
+            ray_far_point(g.origin, g.azimuth_rad - g.azimuth_one_sigma_rad, reach),
+            rect,
+        );
+        let right = view.project(
+            ray_far_point(g.origin, g.azimuth_rad + g.azimuth_one_sigma_rad, reach),
+            rect,
+        );
+        painter.add(egui::Shape::convex_polygon(
+            vec![origin, left, right],
+            palette.bearing_ray_color.gamma_multiply(0.12),
+            egui::Stroke::NONE,
+        ));
+        painter.line_segment([origin, left], stroke);
+        painter.line_segment([origin, right], stroke);
+    }
+}
+
 /// 2D fallback for the plan: label each assigned track with its resource. Resource
 /// positions are geodetic and the intercept geometry is not yet computed, so the
 /// pairing is shown as text at the track until `InterceptSolutionView` carries a
@@ -260,5 +353,77 @@ mod tests {
         let moved = vec![track(1, 11.0)];
         assert!(glyphs_need_rebuild(&glyphs, &moved));
         assert!(glyphs_need_rebuild(&glyphs, &[]));
+    }
+
+    fn bearing_ray(sensor: u32, azimuth_rad: f64, one_sigma_rad: f64) -> BearingRayView {
+        BearingRayView {
+            sensor: gungnir_model::SensorId(sensor),
+            origin_enu: [100.0, -50.0, 3.0],
+            azimuth_rad,
+            elevation_rad: None,
+            azimuth_one_sigma_rad: one_sigma_rad,
+            valid_until: MissionTime(60.0),
+        }
+    }
+
+    /// GAP-096: the glyph carries an origin and a direction, never a `position` field --
+    /// see [`BearingRayGlyph`]'s own documentation for why that is the point.
+    #[test]
+    fn bearing_ray_glyph_carries_origin_azimuth_and_sigma() {
+        let glyphs = update_bearing_ray_glyphs(&[bearing_ray(4, 0.6, 0.02)]);
+        assert_eq!(glyphs[0].origin, [100.0, -50.0, 3.0]);
+        assert_eq!(glyphs[0].azimuth_rad, 0.6);
+        assert_eq!(glyphs[0].azimuth_one_sigma_rad, 0.02);
+    }
+
+    #[test]
+    fn bearing_ray_glyphs_rebuild_only_on_change() {
+        let rays = vec![bearing_ray(4, 0.6, 0.02)];
+        let glyphs = update_bearing_ray_glyphs(&rays);
+        assert!(!bearing_glyphs_need_rebuild(&glyphs, &rays));
+        let turned = vec![bearing_ray(4, 0.9, 0.02)];
+        assert!(bearing_glyphs_need_rebuild(&glyphs, &turned));
+        assert!(bearing_glyphs_need_rebuild(&glyphs, &[]));
+    }
+
+    /// DN-27 §7: a ray "does not terminate". Proved the only way a fixed-length line
+    /// segment can: its drawn far end must land outside the visible rectangle at every
+    /// scale, rather than at some fixed metre distance that would visibly stop inside
+    /// the view once the operator zoomed out past it.
+    #[test]
+    fn a_bearing_ray_reaches_past_the_visible_rectangle_at_any_zoom() {
+        let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 300.0));
+        for meters_per_px in [0.1, 1.0, 10.0, 500.0, 5_000.0] {
+            let view = TopDownView {
+                meters_per_px,
+                ..TopDownView::default()
+            };
+            let reach = ray_reach_m(&view, rect);
+            let far = ray_far_point([0.0, 0.0, 0.0], 0.7, reach);
+            let projected = view.project(far, rect);
+            assert!(
+                !rect.contains(projected),
+                "at {meters_per_px} m/px the ray's far point {projected:?} is still \
+                 inside the {rect:?} it was drawn into"
+            );
+        }
+    }
+
+    /// DN-27 §7: a ray "widens with the angular error". A larger one-sigma must spread
+    /// the two boundary lines further apart at the same distance out.
+    #[test]
+    fn a_bearing_ray_widens_with_its_angular_error() {
+        let origin = [0.0, 0.0, 0.0];
+        let azimuth_rad = 0.3;
+        let reach = 10_000.0;
+        let spread = |one_sigma_rad: f64| {
+            let left = ray_far_point(origin, azimuth_rad - one_sigma_rad, reach);
+            let right = ray_far_point(origin, azimuth_rad + one_sigma_rad, reach);
+            ((left[0] - right[0]).powi(2) + (left[1] - right[1]).powi(2)).sqrt()
+        };
+        assert!(
+            spread(0.2) > spread(0.01),
+            "a larger angular one-sigma must widen the drawn wedge"
+        );
     }
 }

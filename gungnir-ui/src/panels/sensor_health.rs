@@ -89,6 +89,36 @@ pub struct CooperativeFeedLine<'a> {
     pub not_decoded: u64,
 }
 
+/// One bound spotter/acoustic/passive-RF feed's counters (GAP-001, GAP-096): what a
+/// SAPIENT node reported. Every message is in one of `bearings`, `ranged`, `positions`
+/// or `refused`, the same accounting `FeedLine` gives a radar's datagrams.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BearingFeedLine<'a> {
+    pub name: &'a str,
+    pub messages: u64,
+    /// Detections that became a `Measurement::Bearing`: direction and no range.
+    pub bearings: u64,
+    /// Detections that became a `Measurement::RangeAzimuthElevation`: a lased or
+    /// triangulated range, which stays polar (DN-27 §4).
+    pub ranged: u64,
+    /// Detections that became a `Measurement::Position`.
+    pub positions: u64,
+    pub refused: u64,
+}
+
+/// The pipeline's own bearing counters (DN-27 §5 rule 3; GAP-096): what happened to
+/// every bearing offered to `FusionPipeline::offer_bearing`, across every feed. Shown
+/// once rather than once per feed, because the pipeline is one thing every feed's
+/// bearings pass through, not a property of any single feed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BearingPipelineLine {
+    pub offered: u64,
+    pub updated: u64,
+    pub retained: u64,
+    pub expired: u64,
+    pub refused: u64,
+}
+
 /// One peer link (GAP-009): a partner's node, linked or not, and why not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PeerLine<'a> {
@@ -114,6 +144,11 @@ pub struct SensorHealthView<'a> {
     pub cooperative_feeds: &'a [CooperativeFeedLine<'a>],
     /// The peer links (GAP-009). Empty means none configured.
     pub peers: &'a [PeerLine<'a>],
+    /// The spotter/acoustic/passive-RF feeds the baseline bound (GAP-001, GAP-096);
+    /// empty when none is configured.
+    pub bearing_feeds: &'a [BearingFeedLine<'a>],
+    /// The pipeline's own bearing counters (GAP-096), read alongside `bearing_feeds`.
+    pub bearing_pipeline: BearingPipelineLine,
 }
 
 pub fn render_sensor_health(
@@ -132,6 +167,8 @@ pub fn render_sensor_health(
         feeds,
         cooperative_feeds,
         peers: _,
+        bearing_feeds,
+        bearing_pipeline,
     } = *view;
 
     ui.heading("System health");
@@ -182,6 +219,7 @@ pub fn render_sensor_health(
     render_sensors(ui, palette, sensors);
     render_feeds(ui, palette, feeds);
     render_cooperative_feeds(ui, palette, cooperative_feeds);
+    render_bearing_feeds(ui, palette, bearing_feeds, bearing_pipeline);
     render_peers(ui, palette, view.peers);
     render_clocks(ui, palette, clocks);
     render_detectors(ui, palette, detectors);
@@ -248,6 +286,65 @@ fn render_cooperative_feeds(
                 .size(palette.small_font_size),
         );
     }
+}
+
+/// The spotter/acoustic/passive-RF feeds (GAP-001, GAP-096): what each SAPIENT node
+/// reported, and beside them, what the pipeline did with the bearings among them.
+///
+/// **This is the line that did not exist.** Before GAP-096, `sapient_stats` was written
+/// in `gungnir-app`'s state every frame and read by nothing (docs/design/
+/// DN-27-bearing-only-detections.md §7's status table), so a bound spotter feed and an
+/// unbound one looked identical here: neither had a line.
+fn render_bearing_feeds(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    feeds: &[BearingFeedLine<'_>],
+    pipeline: BearingPipelineLine,
+) {
+    if feeds.is_empty() {
+        return;
+    }
+    ui.separator();
+    ui.label(RichText::new("Spotter / acoustic / passive-RF feeds").strong());
+    for f in feeds {
+        let (text, colour) = if f.messages == 0 {
+            (
+                format!("{}: bound, nothing received yet", f.name),
+                palette.warning_color,
+            )
+        } else {
+            let text = format!(
+                "{}: {} messages, {} bearings, {} ranged, {} positions, {} refused",
+                f.name, f.messages, f.bearings, f.ranged, f.positions, f.refused
+            );
+            let colour = if f.refused > 0 {
+                palette.warning_color
+            } else {
+                palette.healthy_color()
+            };
+            (text, colour)
+        };
+        ui.label(
+            RichText::new(text)
+                .color(colour)
+                .size(palette.small_font_size),
+        );
+    }
+    // The pipeline's own counters (GAP-096): pipeline-wide rather than any one feed's,
+    // so drawn once beside the feeds rather than repeated on each of their lines.
+    ui.label(
+        RichText::new(format!(
+            "Bearing pipeline: {} offered, {} updated a track, {} retained, {} expired, \
+             {} refused",
+            pipeline.offered,
+            pipeline.updated,
+            pipeline.retained,
+            pipeline.expired,
+            pipeline.refused
+        ))
+        .color(palette.muted_text_color())
+        .size(palette.small_font_size),
+    );
 }
 
 /// The radar feeds (GAP-001). A bound feed with nothing received is said in the

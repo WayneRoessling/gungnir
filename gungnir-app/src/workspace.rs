@@ -555,6 +555,10 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
             reason: &p.reason,
         })
         .collect();
+    // GAP-096: the spotter/acoustic/passive-RF feeds, and the pipeline's own tally of
+    // what happened to the bearings among what every bound feed reported.
+    let bearing_feeds = crate::sapient::bearing_feed_lines(state);
+    let bearing_pipeline = crate::sapient::bearing_pipeline_line(state);
     gungnir_ui::panels::sensor_health::render_sensor_health(
         ui,
         &state.palette,
@@ -575,6 +579,8 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
             feeds: &feeds,
             cooperative_feeds: &cooperative_feeds,
             peers: &peers,
+            bearing_feeds: &bearing_feeds,
+            bearing_pipeline,
         },
     );
 }

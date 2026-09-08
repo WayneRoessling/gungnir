@@ -28,9 +28,11 @@ pub use gungnir_fusion_async::Detection;
 /// making every host depend on `gungnir-fusion-async`: the hosts speak to the pipeline
 /// through this facade, which is the whole point of `ARCHITECTURE.md` §2.
 pub use gungnir_fusion_async::{
-    FilterSelection, ImmBaselineFields, PipelineSettings, UnsupportedFilter,
+    FilterSelection, ImmBaselineFields, PipelineSettings, PipelineStats, UnsupportedFilter,
 };
-pub use gungnir_model::{DetectionView, MissionTime, SensorId, TrackId, TrackStatus, TrackView};
+pub use gungnir_model::{
+    BearingRayView, DetectionView, MissionTime, SensorId, TrackId, TrackStatus, TrackView,
+};
 pub use registration::RegistrationLedger;
 
 /// The one trait `gungnir-app::AppState`, `gungnir-node`, and `gungnir-viewport3d`
@@ -100,6 +102,30 @@ pub trait TrackingService: Send + Sync {
     /// Non-blocking snapshot of current tracks (confirmed + coasting). Cheap to call
     /// every frame from `update()` per the UI standards' immediate-mode rule.
     fn tracks(&self) -> &[TrackView];
+
+    /// Bearings that matched no track and are still inside their lifetime
+    /// (docs/design/DN-27-bearing-only-detections.md §5 rule 3; GAP-096), alongside
+    /// [`tracks`](Self::tracks). To be drawn as rays, never as symbols (DN-27 §7).
+    ///
+    /// **Defaulted to empty rather than made required.** A backend with no pipeline of
+    /// its own behind it -- `gungnir-remote`'s connected profile, and every test double
+    /// in this workspace's own test suites -- has nothing to report, and an empty slice
+    /// says exactly that rather than a health flag claiming a capability the backend
+    /// does not carry. [`LiveTrackingService`] is the one override.
+    fn bearing_rays(&self) -> &[BearingRayView] {
+        &[]
+    }
+
+    /// The underlying pipeline's own counters (GAP-096): how many bearings were
+    /// offered, updated a track, were retained, expired, or were refused
+    /// (`gungnir_fusion_async::PipelineStats`'s five bearing fields), for PN-09.
+    ///
+    /// `PipelineStats::default()` wherever a backend has no pipeline to report from --
+    /// the same honesty rule as [`bearing_rays`](Self::bearing_rays), and for the same
+    /// reason.
+    fn pipeline_stats(&self) -> PipelineStats {
+        PipelineStats::default()
+    }
 
     /// True if the underlying pipeline is running and reporting (no stalled OOS
     /// buffer, no fusion divergence beyond budget). False while the pipeline is
@@ -260,6 +286,27 @@ pub fn project_track(
     }
 }
 
+/// Project one retained bearing into the canonical view (GAP-096; DN-27 §5 rule 3).
+///
+/// Arithmetic, not interpretation: every field on [`gungnir_model::BearingRayView`] is
+/// carried straight across from `gungnir_fusion_async::RetainedBearing`, with the
+/// azimuth variance turned into the one-sigma a drawn ray widens with. Nothing here
+/// invents a position -- there is no field to put one in.
+#[must_use]
+pub fn project_bearing_ray(
+    retained: &gungnir_fusion_async::RetainedBearing,
+) -> gungnir_model::BearingRayView {
+    let bearing = &retained.bearing;
+    gungnir_model::BearingRayView {
+        sensor: gungnir_model::SensorId(bearing.sensor_id),
+        origin_enu: bearing.sensor_enu,
+        azimuth_rad: bearing.azimuth_rad,
+        elevation_rad: bearing.elevation_rad,
+        azimuth_one_sigma_rad: bearing.azimuth_variance_rad2.sqrt(),
+        valid_until: MissionTime(retained.until_s),
+    }
+}
+
 /// What `Provenance::algorithm_version` says while nothing governs this service.
 ///
 /// **This used to be the crate version**, which answers a different question than the one
@@ -282,11 +329,19 @@ pub const UNGOVERNED_ALGORITHM_VERSION: &str = concat!(
 /// host's tokio runtime.
 pub struct LiveTrackingService {
     tracks: Vec<TrackView>,
+    /// Bearings that matched no track, projected for [`TrackingService::bearing_rays`]
+    /// (GAP-096). Replaced wholesale on every snapshot, exactly as `tracks` is: the
+    /// pipeline's own `retained` set is already the current one, so there is nothing to
+    /// merge.
+    bearing_rays: Vec<gungnir_model::BearingRayView>,
+    /// The pipeline's own counters as of the last snapshot, for
+    /// [`TrackingService::pipeline_stats`] (GAP-096).
+    pipeline_stats: gungnir_fusion_async::PipelineStats,
     /// `None` once [`LiveTrackingService::finish`] has ended the stream.
     detection_tx: Option<Sender<gungnir_fusion_async::Submission>>,
     /// Where each sensor measures from, so an angular report can be placed at all.
     sensor_positions: SensorPositions,
-    track_rx: Receiver<Vec<gungnir_fusion_async::TimedTrack>>,
+    track_rx: Receiver<gungnir_fusion_async::PipelineSnapshot>,
     pipeline_alive: bool,
     provenance: Provenance,
     /// The staleness policy in force (GAP-012). `Default` is a zero limit, which
@@ -320,7 +375,7 @@ impl LiveTrackingService {
         let (detection_tx, detection_rx) =
             crossbeam_channel::unbounded::<gungnir_fusion_async::Submission>();
         let (track_tx, track_rx) =
-            crossbeam_channel::unbounded::<Vec<gungnir_fusion_async::TimedTrack>>();
+            crossbeam_channel::unbounded::<gungnir_fusion_async::PipelineSnapshot>();
         runtime.spawn(gungnir_fusion_async::ingest_with(
             detection_rx,
             track_tx,
@@ -328,6 +383,8 @@ impl LiveTrackingService {
         ));
         Self {
             tracks: Vec::new(),
+            bearing_rays: Vec::new(),
+            pipeline_stats: gungnir_fusion_async::PipelineStats::default(),
             detection_tx: Some(detection_tx),
             track_rx,
             pipeline_alive: true,
@@ -543,7 +600,7 @@ impl TrackingService for LiveTrackingService {
     }
 
     fn poll(&mut self, now: MissionTime) {
-        let mut latest: Option<Vec<gungnir_fusion_async::TimedTrack>> = None;
+        let mut latest: Option<gungnir_fusion_async::PipelineSnapshot> = None;
         loop {
             match self.track_rx.try_recv() {
                 Ok(snapshot) => latest = Some(snapshot),
@@ -560,7 +617,17 @@ impl TrackingService for LiveTrackingService {
             }
         }
         if let Some(snapshot) = latest {
-            self.apply_snapshot(&snapshot, now);
+            self.apply_snapshot(&snapshot.tracks, now);
+            // GAP-096: the retained set and the counters are the pipeline's own state at
+            // the same instant as the tracks above (`PipelineSnapshot`'s whole reason to
+            // exist), replaced wholesale rather than merged -- exactly as `apply_snapshot`
+            // replaces `self.tracks`.
+            self.bearing_rays = snapshot
+                .retained_bearings
+                .iter()
+                .map(project_bearing_ray)
+                .collect();
+            self.pipeline_stats = snapshot.stats;
         } else {
             // No new snapshot: only staleness ages against the last report. A track's
             // `mission_time` stays exactly what it was -- the pipeline has not moved it,
@@ -576,6 +643,14 @@ impl TrackingService for LiveTrackingService {
 
     fn tracks(&self) -> &[TrackView] {
         &self.tracks
+    }
+
+    fn bearing_rays(&self) -> &[gungnir_model::BearingRayView] {
+        &self.bearing_rays
+    }
+
+    fn pipeline_stats(&self) -> gungnir_fusion_async::PipelineStats {
+        self.pipeline_stats
     }
 
     fn is_healthy(&self) -> bool {
@@ -912,5 +987,103 @@ mod tests {
             !svc.is_healthy(),
             "the pipeline is gone; health must not claim otherwise"
         );
+    }
+
+    /// Row: DN-27 §10's shape, one more (GAP-096). A bearing offered to a pipeline
+    /// holding no track appears in `bearing_rays()` with the fields it was offered
+    /// under, and is gone once its lifetime has passed.
+    ///
+    /// The expiry half is proved by offering a **second** bearing whose own source time
+    /// is past the first one's `valid_until`, because that is what actually ages a
+    /// retained bearing out: `FusionPipeline::expire_bearings` runs on every offer, not
+    /// on a timer (see its doc comment), so nothing would age the first one out on its
+    /// own without something else arriving.
+    #[test]
+    fn a_retained_bearing_appears_in_the_view_and_leaves_it_once_expired() {
+        fn bearing_detection(t: f64, azimuth_rad: f64) -> DetectionView {
+            DetectionView {
+                sensor: SensorId(7),
+                source_time: MissionTime(t),
+                receipt_time: MissionTime(t),
+                measurement: gungnir_model::Measurement::Bearing {
+                    azimuth_rad,
+                    elevation_rad: Some(0.1),
+                    azimuth_variance_rad2: 4e-4,
+                    elevation_variance_rad2: Some(1e-4),
+                },
+                provenance: Provenance::default(),
+            }
+        }
+
+        let settings = PipelineSettings {
+            bearing_retention_s: 5.0,
+            ..PipelineSettings::default()
+        };
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let mut svc = LiveTrackingService::with_pipeline_settings(runtime.handle(), settings)
+            .with_sensor_positions(SensorPositions::from_sensors([(7, [100.0, 200.0, 5.0])]));
+
+        svc.submit_detection(bearing_detection(10.0, 0.6))
+            .expect("a bearing with a known sensor position is accepted");
+
+        // The pipeline task processes this asynchronously; poll for it to land, bounded
+        // so a pipeline that never answers fails here rather than hanging (the same
+        // idiom `gungnir-app/tests/frame_budgets.rs` uses for the same reason).
+        for _ in 0..2_000 {
+            svc.poll(MissionTime(10.0));
+            if !svc.bearing_rays().is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let rays = svc.bearing_rays().to_vec();
+        assert_eq!(
+            rays.len(),
+            1,
+            "the bearing did not surface in bearing_rays(): {rays:?}"
+        );
+        let ray = rays[0];
+        assert_eq!(ray.sensor, SensorId(7));
+        assert_eq!(ray.origin_enu, [100.0, 200.0, 5.0]);
+        assert!((ray.azimuth_rad - 0.6).abs() < 1e-12, "{ray:?}");
+        assert_eq!(ray.elevation_rad, Some(0.1));
+        assert!(
+            (ray.azimuth_one_sigma_rad - 4e-4_f64.sqrt()).abs() < 1e-12,
+            "the one-sigma must be the square root of the stated variance: {ray:?}"
+        );
+        assert!(
+            (ray.valid_until.0 - 15.0).abs() < 1e-9,
+            "10.0 s plus the 5 s retention: {ray:?}"
+        );
+
+        // Past the first bearing's `valid_until`; matches nothing either, so it is what
+        // replaces the first in the pipeline's retained set.
+        svc.submit_detection(bearing_detection(20.0, 1.2))
+            .expect("a bearing with a known sensor position is accepted");
+        for _ in 0..2_000 {
+            svc.poll(MissionTime(20.0));
+            if svc
+                .bearing_rays()
+                .iter()
+                .all(|r| (r.azimuth_rad - 0.6).abs() > 1e-9)
+            {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let rays_after = svc.bearing_rays();
+        assert!(
+            rays_after
+                .iter()
+                .all(|r| (r.azimuth_rad - 0.6).abs() > 1e-9),
+            "the first bearing is still in the view after its lifetime passed: {rays_after:?}"
+        );
+
+        drop(svc);
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
     }
 }

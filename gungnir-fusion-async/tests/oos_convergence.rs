@@ -31,7 +31,7 @@
 
 use gungnir_fusion_async::{
     ingest_with, run_batch, Detection, FilterSelection, FusionPipeline, PipelineSettings,
-    Submission, TimedTrack,
+    PipelineSnapshot, Submission, TimedTrack,
 };
 use gungnir_track::{Track, TrackStatus};
 use nalgebra::SVector;
@@ -158,7 +158,7 @@ async fn out_of_order_arrival_converges_on_the_offline_batch() {
     );
 
     let (detection_tx, detection_rx) = crossbeam_channel::unbounded::<Submission>();
-    let (track_tx, track_rx) = crossbeam_channel::unbounded::<Vec<TimedTrack>>();
+    let (track_tx, track_rx) = crossbeam_channel::unbounded::<PipelineSnapshot>();
     let task = tokio::spawn(ingest_with(detection_rx, track_tx, settings));
     for detection in arrival_order(&detections) {
         detection_tx
@@ -170,9 +170,9 @@ async fn out_of_order_arrival_converges_on_the_offline_batch() {
     drop(detection_tx);
     task.await.expect("the ingest task ran to completion");
 
-    let mut last = Vec::new();
+    let mut last: Vec<TimedTrack> = Vec::new();
     while let Ok(snapshot) = track_rx.try_recv() {
-        last = snapshot;
+        last = snapshot.tracks;
     }
     assert!(!last.is_empty(), "the async path emitted a final snapshot");
     let last: Vec<Track> = last.into_iter().map(|t| t.track).collect();
@@ -199,7 +199,7 @@ async fn out_of_order_arrival_converges_on_the_offline_batch_with_imm_selected()
     assert_eq!(batch.len(), 2, "two targets, two tracks: {batch:#?}");
 
     let (detection_tx, detection_rx) = crossbeam_channel::unbounded::<Submission>();
-    let (track_tx, track_rx) = crossbeam_channel::unbounded::<Vec<TimedTrack>>();
+    let (track_tx, track_rx) = crossbeam_channel::unbounded::<PipelineSnapshot>();
     let task = tokio::spawn(ingest_with(detection_rx, track_tx, settings));
     for detection in arrival_order(&detections) {
         detection_tx
@@ -209,9 +209,9 @@ async fn out_of_order_arrival_converges_on_the_offline_batch_with_imm_selected()
     drop(detection_tx);
     task.await.expect("the ingest task ran to completion");
 
-    let mut last = Vec::new();
+    let mut last: Vec<TimedTrack> = Vec::new();
     while let Ok(snapshot) = track_rx.try_recv() {
-        last = snapshot;
+        last = snapshot.tracks;
     }
     assert!(!last.is_empty(), "the async path emitted a final snapshot");
     let last: Vec<Track> = last.into_iter().map(|t| t.track).collect();

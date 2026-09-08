@@ -274,6 +274,7 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
             &state.palette,
             &mut state.viewport,
             &[],
+            &[],
             &gungnir_model::PlanView::default(),
             gungnir_viewport3d::layers::LayerInputs {
                 coverage: layer,
@@ -332,6 +333,7 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
             ui,
             &placed.palette,
             &mut placed.viewport,
+            &[],
             &[],
             &gungnir_model::PlanView::default(),
             gungnir_viewport3d::layers::LayerInputs {
@@ -461,6 +463,7 @@ fn coverage_gaps_are_reported_along_the_declared_approaches() {
             ui,
             &state.palette,
             &mut state.viewport,
+            &[],
             &[],
             &gungnir_model::PlanView::default(),
             gungnir_viewport3d::layers::LayerInputs {

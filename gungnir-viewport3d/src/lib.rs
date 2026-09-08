@@ -50,7 +50,7 @@ pub mod scientific;
 pub mod streaming;
 pub mod tracks;
 
-use gungnir_model::{PlanView, TrackView};
+use gungnir_model::{BearingRayView, PlanView, TrackView};
 use gungnir_ui::theme;
 
 /// Everything the viewport owns across frames: the 3D camera, the static scene,
@@ -119,6 +119,8 @@ pub struct ViewportState {
     pub camera: three_d::Camera,
     pub scene: scene::Scene,
     pub glyphs: Vec<tracks::TrackGlyph>,
+    /// Retained bearings, drawn as rays rather than glyphs (DN-27 §7; GAP-096).
+    pub bearing_rays: Vec<tracks::BearingRayGlyph>,
     pub view: interaction::TopDownView,
     /// True once a three-d context has been created from eframe's GL context.
     pub gl_ready: bool,
@@ -147,6 +149,7 @@ impl ViewportState {
             ),
             scene: scene::Scene::default(),
             glyphs: Vec::new(),
+            bearing_rays: Vec::new(),
             view: interaction::TopDownView::default(),
             gl_ready: false,
             use_3d: false,
@@ -265,6 +268,7 @@ pub fn prepare_3d(
     palette: &theme::Palette,
     state: &mut ViewportState,
     tracks: &[TrackView],
+    bearing_rays: &[BearingRayView],
     plan: &PlanView,
     layers: layers::LayerInputs<'_>,
 ) -> Option<egui::Rect> {
@@ -279,12 +283,19 @@ pub fn prepare_3d(
     if tracks::glyphs_need_rebuild(&state.glyphs, tracks) {
         state.glyphs = tracks::update_track_symbols(tracks);
     }
+    if tracks::bearing_glyphs_need_rebuild(&state.bearing_rays, bearing_rays) {
+        state.bearing_rays = tracks::update_bearing_ray_glyphs(bearing_rays);
+    }
 
     // Coverage is drawn by egui rather than in the GL pass: it is a flat overlay on
     // the ground plane, and drawing it here means it survives whatever the callback
-    // does -- the same reason the status line is here (GAP-022 item 53).
+    // does -- the same reason the status line is here (GAP-022 item 53). Bearing rays
+    // join it for the same reason: there is no GL geometry for anything yet, tracks
+    // included (GAP-022's own open item), so this overlay is where a ray is drawn until
+    // there is.
     let painter = ui.painter_at(rect);
     draw_layers(&painter, palette, rect, state, layers);
+    tracks::draw_bearing_rays_2d(&painter, palette, rect, &state.view, &state.bearing_rays);
 
     // The status line is drawn by egui over the callback's output, so it says what the
     // operator is looking at whether or not the GL draw produced anything.
@@ -292,8 +303,9 @@ pub fn prepare_3d(
         rect.left_top() + egui::vec2(palette.panel_spacing, palette.panel_spacing),
         egui::Align2::LEFT_TOP,
         format!(
-            "three-d scene: {} tracks, {} assignments. Drag to pan, scroll to zoom.",
+            "three-d scene: {} tracks, {} bearing rays, {} assignments. Drag to pan, scroll to zoom.",
             state.glyphs.len(),
+            state.bearing_rays.len(),
             plan.solutions().len()
         ),
         egui::FontId::proportional(palette.small_font_size),
@@ -310,6 +322,7 @@ pub fn render(
     palette: &theme::Palette,
     state: &mut ViewportState,
     tracks: &[TrackView],
+    bearing_rays: &[BearingRayView],
     plan: &PlanView,
     layers: layers::LayerInputs<'_>,
 ) {
@@ -321,13 +334,19 @@ pub fn render(
     if tracks::glyphs_need_rebuild(&state.glyphs, tracks) {
         state.glyphs = tracks::update_track_symbols(tracks);
     }
+    if tracks::bearing_glyphs_need_rebuild(&state.bearing_rays, bearing_rays) {
+        state.bearing_rays = tracks::update_bearing_ray_glyphs(bearing_rays);
+    }
 
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, palette.viewport_background);
     interaction::draw_grid(&painter, palette, rect, &state.view);
     // Coverage before the glyphs: it is context, and a ring must never sit on top of
-    // the symbol an operator is looking at (GAP-007).
+    // the symbol an operator is looking at (GAP-007). A bearing ray is context in the
+    // same sense -- a direction with no measured position -- so it is drawn here too,
+    // under the tracks it has not (yet) been folded into (DN-27 §7).
     draw_layers(&painter, palette, rect, state, layers);
+    tracks::draw_bearing_rays_2d(&painter, palette, rect, &state.view, &state.bearing_rays);
     tracks::draw_glyphs_2d(&painter, palette, rect, &state.view, &state.glyphs);
     tracks::draw_plan_2d(&painter, palette, rect, &state.view, &state.glyphs, plan);
 
@@ -335,14 +354,16 @@ pub fn render(
     // a deployment that opted out of the scene, and a desktop that could not attach one.
     let status = if state.gl_ready {
         format!(
-            "Top-down projection ({} tracks, {} assignments). The three-d scene is attached; use the control in the corner to switch. Drag to pan, scroll to zoom.",
+            "Top-down projection ({} tracks, {} bearing rays, {} assignments). The three-d scene is attached; use the control in the corner to switch. Drag to pan, scroll to zoom.",
             state.glyphs.len(),
+            state.bearing_rays.len(),
             plan.solutions().len()
         )
     } else {
         format!(
-            "Top-down projection ({} tracks, {} assignments). No three-d scene is attached, so there is nothing to switch to. Drag to pan, scroll to zoom.",
+            "Top-down projection ({} tracks, {} bearing rays, {} assignments). No three-d scene is attached, so there is nothing to switch to. Drag to pan, scroll to zoom.",
             state.glyphs.len(),
+            state.bearing_rays.len(),
             plan.solutions().len()
         )
     };

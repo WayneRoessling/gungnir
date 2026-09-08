@@ -202,6 +202,56 @@ fn apply_task_ack(state: &mut AppState, report: &TaskAckReport, now: MissionTime
     }
 }
 
+/// PN-09's line per bound spotter/acoustic/passive-RF feed (GAP-096), the same shape
+/// [`crate::radar::feed_lines`] gives a radar feed: what arrived and what did not
+/// become a usable measurement, so a feed that is bound and silent is told apart from
+/// one that is talking and unreadable.
+///
+/// `refused` combines [`gungnir_ingest::adapters::sapient::SapientFeedStats::refused`]
+/// and `undecodable`, the same way `radar::feed_lines`' own `not_decoded` folds three
+/// separate radar failure counters into one column: two different reasons a message did
+/// not become a measurement, read together as one figure on a health line, with
+/// `unhandled`'s own detail available to whoever needs to tell them apart.
+#[must_use]
+pub fn bearing_feed_lines(
+    state: &AppState,
+) -> Vec<gungnir_ui::panels::sensor_health::BearingFeedLine<'_>> {
+    state
+        .sapient_stats
+        .iter()
+        .map(|(name, sink)| {
+            let s = sink.lock().map(|s| s.clone()).unwrap_or_default();
+            gungnir_ui::panels::sensor_health::BearingFeedLine {
+                name,
+                messages: s.messages,
+                bearings: s.bearings,
+                ranged: s.ranged,
+                positions: s.positions,
+                refused: s.refused + s.undecodable,
+            }
+        })
+        .collect()
+}
+
+/// The pipeline's own bearing counters for PN-09 (GAP-096), read from
+/// `tracking.pipeline_stats()` rather than accumulated here: the pipeline is the one
+/// thing that actually knows what happened to a bearing after this desktop handed it
+/// off, and a second count kept in `gungnir-app` would be a second, potentially
+/// diverging, opinion about the same five numbers.
+#[must_use]
+pub fn bearing_pipeline_line(
+    state: &AppState,
+) -> gungnir_ui::panels::sensor_health::BearingPipelineLine {
+    let counters = state.tracking.pipeline_stats();
+    gungnir_ui::panels::sensor_health::BearingPipelineLine {
+        offered: counters.bearings_offered,
+        updated: counters.bearings_updated,
+        retained: counters.bearings_retained,
+        expired: counters.bearings_expired,
+        refused: counters.bearings_refused,
+    }
+}
+
 fn reason_text(reasons: &[String]) -> String {
     if reasons.is_empty() {
         "no reason given".to_string()
