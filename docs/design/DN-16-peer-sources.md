@@ -126,7 +126,7 @@ our own move to `/v2` does not strand a peer.
 |---|---|---|---|
 | CAP-1.6 Peer early warning | Two nodes in one test process, one feeding the other, plus fault injection | A peer track never carries a quality higher than its assigned value; peer age is present on every peer-sourced track; a malformed peer track is quarantined with a reason and does not enter the picture; an uncertain correlation leaves both tracks visible; a launch warning creates an alert and no track | Generated peer streams; TT-01 and TT-02 replayed as the peer's picture |
 
-## 9. Amendment 1: the launch-warning type, and which exchange item gates it (2026-09-06, unsigned)
+## 9. Amendment 1: the launch-warning type, and which exchange item gates it (2026-09-06, **signed by the owner 2026-09-07**)
 
 §5 says what a launch warning **is** and what it must never do. §3 names the types this
 note owns and does not name one for it, and §5 names no `ExchangeItem` under which it may

@@ -1,10 +1,10 @@
 # DN-27 Bearing-only detections
 
 Unblocks the acoustic, passive-RF and spotter halves of GAP-001, and the sensor-side half
-of GAP-004. Status: **proposed 2026-09-06, unsigned.**
+of GAP-004. Status: **proposed 2026-09-06; signed by the owner 2026-09-07.**
 
-**Built 2026-09-06 and gated; still unsigned, and the note is unchanged below.** What was
-built, so a reader is not left comparing a specification against a guess:
+**Built 2026-09-06 and gated; signed 2026-09-07, and the note is unchanged below.** What
+was built, so a reader is not left comparing a specification against a guess:
 
 | Section | Where it landed | What is *not* there |
 |---|---|---|
