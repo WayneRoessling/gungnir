@@ -280,6 +280,7 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
                 geofences: &[],
                 predictions: &[],
                 terrain: None,
+                laydown_preview: None,
             },
         );
     });
@@ -336,6 +337,7 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
                 geofences: &[],
                 predictions: &[],
                 terrain: None,
+                laydown_preview: None,
             },
         );
     });
@@ -462,6 +464,7 @@ fn coverage_gaps_are_reported_along_the_declared_approaches() {
                 geofences: &[],
                 predictions: &[],
                 terrain: None,
+                laydown_preview: None,
             },
         );
     });

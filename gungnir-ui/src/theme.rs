@@ -215,6 +215,15 @@ pub const HAZARD_COLOR: Color32 = Color32::from_rgb(190, 120, 220);
 /// other viewport element uses, which is the property a halo needs.
 pub const SELECTION_HALO_COLOR: Color32 = Color32::from_rgb(240, 240, 240);
 
+/// A laydown option previewed on the map (GAP-087): neither a track's own status
+/// colours nor coverage blue nor hazard purple, because a proposed placement is none of
+/// those things -- it is a hypothetical, and the picture must not read it as anything
+/// currently true. Checked pairwise against the rest of the map's family below; picked
+/// distinct from `INTERCEPT_LINE_COLOR` in particular; a cyan close to it (as
+/// `FOCUS_COLOR`, meant for UI chrome rather than the map, is) would have read as an
+/// engagement line.
+pub const LAYDOWN_PREVIEW_COLOR: Color32 = Color32::from_rgb(230, 100, 200);
+
 /// Seconds of time remaining at which a decision surface warns, and at which it
 /// becomes critical (DS-05). Read by the decision dialog and the approval queue.
 pub const TIME_REMAINING_WARN_S: f32 = 30.0;
@@ -613,6 +622,7 @@ mod surface_tests {
             ("CLASS_NEUTRAL_COLOR", CLASS_NEUTRAL_COLOR),
             ("COVERAGE_COLOR", COVERAGE_COLOR),
             ("SELECTION_HALO_COLOR", SELECTION_HALO_COLOR),
+            ("LAYDOWN_PREVIEW_COLOR", LAYDOWN_PREVIEW_COLOR),
         ];
         for (i, (a_name, a)) in family.iter().enumerate() {
             for (b_name, b) in &family[i + 1..] {

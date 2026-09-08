@@ -178,6 +178,9 @@ pub struct LayerInputs<'a> {
     /// The terrain surface, when a DEM is placed (GAP-023). `None` draws no ground and
     /// claims none.
     pub terrain: Option<TerrainLayer<'a>>,
+    /// The laydown option PN-16 has selected for a before-and-after preview (GAP-087),
+    /// or `None` when nothing is selected.
+    pub laydown_preview: Option<LaydownPreview<'a>>,
 }
 
 /// The placed terrain as the viewport draws it: the grid's vertices in local ENU metres.
@@ -336,6 +339,69 @@ pub fn draw_predictions_2d(
                 painter.circle_stroke(*end, 4.0, stroke);
             }
         }
+    }
+}
+
+/// One laydown option's sensor and resource positions, previewed on the map for a
+/// visual before-and-after against the current picture -- GAP-087's own remaining item,
+/// the "comparison" `gungnir-ui`'s coverage-layer controls named as unavailable until
+/// now. `None` when PN-16 has no option selected: no toggle exists for this layer, the
+/// same "an empty list draws nothing" shape [`PredictedPath`] uses, because a preview
+/// with nothing selected to preview is not a state an operator turns on or off.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LaydownPreview<'a> {
+    /// The option's own words for what it is for (`gungnir_model::laydown::Laydown::intent`).
+    pub intent: &'a str,
+    pub sensors: &'a [[f64; 3]],
+    pub resources: &'a [[f64; 3]],
+}
+
+/// Draw a laydown preview: a hollow circle per sensor position, a hollow diamond per
+/// resource position, both in the one hue no other layer draws on the map, so a
+/// proposed placement is never mistaken for the live picture's own sensors and
+/// resources. The label is the option's own intent, not its bare identifier, because
+/// "cover the sea approach" tells a reader what they are looking at and "west-2" does
+/// not.
+pub fn draw_laydown_preview_2d(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    view: &TopDownView,
+    preview: Option<LaydownPreview<'_>>,
+) {
+    const MARKER_RADIUS: f32 = 7.0;
+    let Some(preview) = preview else {
+        return;
+    };
+    let stroke = egui::Stroke::new(theme::STROKE_EMPHASIS, theme::LAYDOWN_PREVIEW_COLOR);
+    for &enu in preview.sensors {
+        painter.circle_stroke(view.project(enu, rect), MARKER_RADIUS, stroke);
+    }
+    for &enu in preview.resources {
+        let p = view.project(enu, rect);
+        let points = vec![
+            p + egui::vec2(0.0, -MARKER_RADIUS),
+            p + egui::vec2(MARKER_RADIUS, 0.0),
+            p + egui::vec2(0.0, MARKER_RADIUS),
+            p + egui::vec2(-MARKER_RADIUS, 0.0),
+        ];
+        painter.add(egui::Shape::convex_polygon(
+            points,
+            egui::Color32::TRANSPARENT,
+            stroke,
+        ));
+    }
+    if let Some(&label_at) = preview
+        .sensors
+        .first()
+        .or_else(|| preview.resources.first())
+    {
+        painter.text(
+            view.project(label_at, rect) + egui::vec2(0.0, -2.0 * MARKER_RADIUS),
+            egui::Align2::CENTER_BOTTOM,
+            format!("Preview: {}", preview.intent),
+            egui::FontId::proportional(theme::SMALL_FONT_SIZE),
+            theme::LAYDOWN_PREVIEW_COLOR,
+        );
     }
 }
 

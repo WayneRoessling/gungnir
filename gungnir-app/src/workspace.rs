@@ -332,6 +332,9 @@ pub enum PanelAction {
     SwitchBack,
     /// PN-18: a person keeps one side of a conflicting decision (GAP-050, D-03).
     ResolveConflict(gungnir_model::PlanId, bool),
+    /// PN-16: preview this laydown option on PN-11, or clear the preview if it is
+    /// already selected (GAP-087's own remaining item).
+    SelectLaydown(gungnir_model::LaydownId),
 }
 
 /// Draw one panel of the role's workspace.
@@ -345,9 +348,7 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
         PanelId::ApprovalQueue => return render_approval_queue(ui, state),
         PanelId::SensorManagement => return render_sensor_management(ui, state),
         PanelId::CoverageLayers => return render_coverage_layers(ui, state),
-        PanelId::Planning => {
-            render_planning(ui, state);
-        }
+        PanelId::Planning => return render_planning(ui, state),
         // The three sustainment panels are drawn by `main.rs`, which owns the state
         // they read: a replay cursor, the last report, and a candidate baseline all
         // outlive a frame, and `AppState` is not the place for a half-scrubbed replay.
@@ -638,7 +639,9 @@ fn render_sensor_management(ui: &mut egui::Ui, state: &AppState) -> Option<Panel
 /// Reads exactly what the viewport reads, so the panel's counts and the map cannot
 /// disagree about how much there is to draw or why there is nothing.
 fn render_coverage_layers(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
-    use gungnir_ui::panels::coverage_layers::{CoverageLayersView, LayerCounts, NothingToDraw};
+    use gungnir_ui::panels::coverage_layers::{
+        CoverageLayersView, LaydownComparison, LayerCounts, NothingToDraw,
+    };
     use gungnir_viewport3d::layers::CoverageLayer;
 
     let circles = crate::sustainment::coverage_circles(state);
@@ -651,6 +654,15 @@ fn render_coverage_layers(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAc
         .unwrap_or_default();
 
     let placed = crate::hazards::placed(state);
+    let preview = crate::sustainment::laydown_preview(state);
+    let comparison = match &preview {
+        Some(p) => LaydownComparison::Showing {
+            intent: &p.intent,
+            sensors: p.sensor_positions.len(),
+            resources: p.resource_positions.len(),
+        },
+        None => LaydownComparison::NothingSelected,
+    };
 
     let reason;
     let coverage = match &layer {
@@ -676,26 +688,15 @@ fn render_coverage_layers(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAc
             baseline_version: state.hazards.baseline_version,
         },
         coverage,
-        comparison: LAYDOWN_COMPARISON,
+        comparison,
     };
     gungnir_ui::panels::coverage_layers::render_coverage_layers(ui, &view)
         .map(PanelAction::CoverageLayer)
 }
 
-/// Loading a laydown option into this viewport for a visual before-and-after needs
-/// PN-16, which now compares laydowns as a table (GAP-087) but does not push one onto
-/// the map: that interaction was never part of DN-26's engineering (§6 lists a table
-/// row per laydown, not a viewport control), and adding it here would be scope PN-16's
-/// own design note never took. Tracked as the remaining item under GAP-087 rather than
-/// invented as a claim this comparison already draws.
-const LAYDOWN_COMPARISON: Unavailable<'static> = Unavailable {
-    owner: "gungnir-ui",
-    gap: "GAP-087",
-};
-
 /// PN-16, the planning panel: laydown options, compared (GAP-087,
 /// `docs/design/DN-26-laydown-options.md`).
-fn render_planning(ui: &mut egui::Ui, state: &AppState) {
+fn render_planning(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
     use gungnir_ui::panels::planning::PlanningView;
     use gungnir_ui::panels::unavailable::{Section, Unavailable};
 
@@ -722,8 +723,9 @@ fn render_planning(ui: &mut egui::Ui, state: &AppState) {
         laydowns,
         terrain_model,
         rehearsal,
+        selected: state.selected_laydown(),
     };
-    gungnir_ui::panels::planning::render_planning(ui, &view);
+    gungnir_ui::panels::planning::render_planning(ui, &view).map(PanelAction::SelectLaydown)
 }
 
 /// PN-15. Requirements are real and the tasking is wired (GAP-005); no adapter
@@ -1354,14 +1356,10 @@ mod tests {
     fn every_declared_unavailability_names_a_crate_and_a_gap() {
         // `ALTERNATIVES` used to be in this list and was retired with GAP-032: PN-07 now
         // draws the options the allocator actually returned, so declaring the section
-        // unavailable would tell an operator to wait for work that is done.
-        for u in [
-            ASSESSMENT,
-            COVERAGE,
-            CONTROL_PATH,
-            REQUIREMENT_PERSISTENCE,
-            LAYDOWN_COMPARISON,
-        ] {
+        // unavailable would tell an operator to wait for work that is done. `LAYDOWN_
+        // COMPARISON` left the same way with GAP-087: PN-11's status line now reports a
+        // real selection rather than declaring the whole comparison unbuilt.
+        for u in [ASSESSMENT, COVERAGE, CONTROL_PATH, REQUIREMENT_PERSISTENCE] {
             assert!(u.owner.starts_with("gungnir-"), "{u:?}");
             assert!(u.gap.starts_with("GAP-"), "{u:?}");
             // The entry has to be one somebody could go and read. A well-formed

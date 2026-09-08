@@ -1546,7 +1546,7 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
             .laydowns
             .iter()
             .map(|l| LaydownRow {
-                id: l.id.0.clone(),
+                id: l.id.clone(),
                 intent: l.intent.clone(),
                 current: l.current,
                 coverage: LaydownCoverage::NotComputed {
@@ -1642,7 +1642,7 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
                 current_uncovered_m.map(|current| uncovered_m - current)
             };
             LaydownRow {
-                id: l.id.0.clone(),
+                id: l.id.clone(),
                 intent: l.intent.clone(),
                 current: l.current,
                 coverage: LaydownCoverage::Computed {
@@ -1655,6 +1655,30 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
         .collect();
 
     PlanningRows::Rows(rows)
+}
+
+/// The selected laydown's sensor and resource positions, owned so a caller can borrow
+/// slices from it into `gungnir_viewport3d::layers::LaydownPreview` (GAP-087's own
+/// remaining item).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LaydownPreviewData {
+    pub intent: String,
+    pub sensor_positions: Vec<[f64; 3]>,
+    pub resource_positions: Vec<[f64; 3]>,
+}
+
+/// `None` when nothing is selected on PN-16, or when the selection no longer names a
+/// laydown this baseline declares -- a reload could remove one mid-session, and a
+/// stale preview of a placement that no longer exists is worse than none.
+#[must_use]
+pub fn laydown_preview(state: &AppState) -> Option<LaydownPreviewData> {
+    let id = state.selected_laydown()?;
+    let laydown = state.config.laydowns.iter().find(|l| &l.id == id)?;
+    Some(LaydownPreviewData {
+        intent: laydown.intent.clone(),
+        sensor_positions: laydown.sensors.iter().map(|s| s.position_enu).collect(),
+        resource_positions: laydown.resources.iter().map(|r| r.position_enu).collect(),
+    })
 }
 
 /// The terrain model label [`planning_rows`] computed under, for the panel's caption.

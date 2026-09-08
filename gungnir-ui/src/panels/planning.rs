@@ -28,6 +28,7 @@
 use crate::panels::unavailable::{draw_unavailable, Section, Unavailable};
 use crate::theme;
 use egui::{RichText, Ui};
+use gungnir_model::LaydownId;
 
 /// One laydown's coverage answer, or the reason it has none (DN-26 §5).
 #[derive(Debug, Clone, PartialEq)]
@@ -50,7 +51,7 @@ pub enum LaydownCoverage {
 /// One row of the options table.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LaydownRow {
-    pub id: String,
+    pub id: LaydownId,
     pub intent: String,
     /// True for exactly one row: the placement actually in force.
     pub current: bool,
@@ -67,10 +68,16 @@ pub struct PlanningView<'a> {
     pub terrain_model: &'a str,
     /// The rehearsal section: always unbuilt today (GAP-045).
     pub rehearsal: Unavailable<'a>,
+    /// Which option, if any, PN-11 is drawing a before-and-after preview of
+    /// (GAP-087's own remaining item). Clicking the selected option again clears it,
+    /// the same toggle-by-reclick rule PN-03's track selection uses.
+    pub selected: Option<&'a LaydownId>,
 }
 
-/// Render PN-16.
-pub fn render_planning(ui: &mut Ui, view: &PlanningView<'_>) {
+/// Render PN-16. Returns the option an operator clicked this frame, for the caller to
+/// toggle into (or out of) `AppState`'s selection -- the same shape PN-03's track table
+/// returns a click as.
+pub fn render_planning(ui: &mut Ui, view: &PlanningView<'_>) -> Option<LaydownId> {
     ui.heading("Planning: laydown options");
 
     ui.label(
@@ -80,6 +87,7 @@ pub fn render_planning(ui: &mut Ui, view: &PlanningView<'_>) {
     );
     ui.separator();
 
+    let mut clicked = None;
     if view.laydowns.draw_header(ui, "Laydown options") {
         let rows = view.laydowns.items().unwrap_or_default();
         egui::Grid::new("planning_laydown_options")
@@ -94,11 +102,16 @@ pub fn render_planning(ui: &mut Ui, view: &PlanningView<'_>) {
 
                 for row in rows {
                     let label = if row.current {
-                        format!("{} (current)", row.id)
+                        format!("{} (current)", row.id.0)
                     } else {
-                        row.id.clone()
+                        row.id.0.clone()
                     };
-                    ui.label(label);
+                    if ui
+                        .selectable_label(view.selected == Some(&row.id), label)
+                        .clicked()
+                    {
+                        clicked = Some(row.id.clone());
+                    }
                     ui.label(&row.intent);
                     match &row.coverage {
                         LaydownCoverage::Computed {
@@ -163,6 +176,7 @@ pub fn render_planning(ui: &mut Ui, view: &PlanningView<'_>) {
         .small()
         .color(theme::MUTED_TEXT_COLOR),
     );
+    clicked
 }
 
 /// The signed difference, in metres, worded so a reader does not have to interpret the
@@ -226,6 +240,7 @@ mod tests {
             },
             terrain_model: "flat terrain",
             rehearsal: rehearsal(),
+            selected: None,
         };
         // `draw_header` is exercised through the widget test harness elsewhere
         // (`gungnir-ui --features harness`); this pins the state the view carries.

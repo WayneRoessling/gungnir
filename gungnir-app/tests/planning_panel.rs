@@ -7,7 +7,7 @@
 //! declared laydowns says so rather than drawing an empty table.
 
 use gungnir_app::state::AppState;
-use gungnir_app::sustainment::{planning_rows, PlanningRows};
+use gungnir_app::sustainment::{laydown_preview, planning_rows, PlanningRows};
 use gungnir_config::ConfigBaseline;
 use gungnir_model::laydown::{Laydown, LaydownId, ResourcePlacement, SensorPlacement};
 use gungnir_model::{ResourceId, SensorId, SensorMode};
@@ -94,7 +94,7 @@ fn the_current_laydown_has_no_difference_against_itself_and_an_alternative_does(
 
     let current = rows
         .iter()
-        .find(|r| r.id == "current")
+        .find(|r| r.id == LaydownId("current".into()))
         .expect("current row");
     assert!(current.current);
     match &current.coverage {
@@ -109,7 +109,7 @@ fn the_current_laydown_has_no_difference_against_itself_and_an_alternative_does(
 
     let moved = rows
         .iter()
-        .find(|r| r.id == "moved-away")
+        .find(|r| r.id == LaydownId("moved-away".into()))
         .expect("alternative row");
     assert!(!moved.current);
     match &moved.coverage {
@@ -124,6 +124,61 @@ fn the_current_laydown_has_no_difference_against_itself_and_an_alternative_does(
         }
         LaydownCoverage::NotComputed { reason } => panic!("expected computed: {reason}"),
     }
+}
+
+/// Selecting an option previews exactly its own sensors and resources (GAP-087's own
+/// remaining item) -- not the current laydown's, and not a mix of the two.
+#[test]
+fn selecting_a_laydown_previews_its_own_sensors_and_resources() {
+    let mut config = base_config();
+    config.laydowns = vec![
+        laydown("current", true, vec![placed(1, [0.0, 0.0, 10.0])]),
+        laydown("moved-away", false, vec![placed(1, [-1.0e7, 0.0, 10.0])]),
+    ];
+    gungnir_config::validate(&config).expect("valid");
+    let mut state = AppState::with_config(config).expect("starts");
+
+    assert!(laydown_preview(&state).is_none(), "nothing is selected yet");
+
+    state.select_laydown(LaydownId("moved-away".into()));
+    let preview = laydown_preview(&state).expect("a declared laydown is selected");
+    assert_eq!(preview.intent, "cover the eastern approach");
+    assert_eq!(preview.sensor_positions, vec![[-1.0e7, 0.0, 10.0]]);
+    assert_eq!(preview.resource_positions, vec![[0.0, 0.0, 0.0]]);
+}
+
+/// Re-selecting the previewed option clears it, the same toggle-by-reclick rule PN-03's
+/// track selection uses.
+#[test]
+fn reclicking_the_selected_laydown_clears_the_preview() {
+    let mut config = base_config();
+    config.laydowns = vec![laydown("current", true, vec![placed(1, [0.0, 0.0, 10.0])])];
+    gungnir_config::validate(&config).expect("valid");
+    let mut state = AppState::with_config(config).expect("starts");
+
+    state.select_laydown(LaydownId("current".into()));
+    assert!(laydown_preview(&state).is_some());
+    state.select_laydown(LaydownId("current".into()));
+    assert!(
+        laydown_preview(&state).is_none(),
+        "re-clicking the selected option must clear it"
+    );
+}
+
+/// A selection naming a laydown this baseline no longer declares -- a reload could
+/// remove one mid-session -- previews nothing rather than a stale placement.
+#[test]
+fn a_selection_naming_no_declared_laydown_previews_nothing() {
+    let mut config = base_config();
+    config.laydowns = vec![laydown("current", true, vec![placed(1, [0.0, 0.0, 10.0])])];
+    gungnir_config::validate(&config).expect("valid");
+    let mut state = AppState::with_config(config).expect("starts");
+
+    state.select_laydown(LaydownId("never-declared".into()));
+    assert!(
+        laydown_preview(&state).is_none(),
+        "a selection naming no declared laydown must not preview a stale one"
+    );
 }
 
 #[test]

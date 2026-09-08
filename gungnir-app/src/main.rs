@@ -362,6 +362,15 @@ impl App {
                         uncertainty_drawable: p.uncertainty_drawable,
                     })
                     .collect();
+                let preview = sustainment::laydown_preview(&self.state);
+                let laydown_preview =
+                    preview
+                        .as_ref()
+                        .map(|p| gungnir_viewport3d::layers::LaydownPreview {
+                            intent: &p.intent,
+                            sensors: &p.sensor_positions,
+                            resources: &p.resource_positions,
+                        });
                 gungnir_viewport3d::render(
                     ui,
                     &mut self.state.viewport,
@@ -374,6 +383,7 @@ impl App {
                         geofences: &geofences,
                         predictions: &predictions,
                         terrain: gungnir_app::terrain::layer(&self.state.terrain, &self.state.data),
+                        laydown_preview,
                     },
                 );
                 None
@@ -526,6 +536,16 @@ impl App {
                 uncertainty_drawable: p.uncertainty_drawable,
             })
             .collect();
+        // GAP-087: the selected laydown's preview, on whichever renderer is running.
+        let preview = sustainment::laydown_preview(&self.state);
+        let laydown_preview =
+            preview
+                .as_ref()
+                .map(|p| gungnir_viewport3d::layers::LaydownPreview {
+                    intent: &p.intent,
+                    sensors: &p.sensor_positions,
+                    resources: &p.resource_positions,
+                });
 
         let layers = gungnir_viewport3d::layers::LayerInputs {
             coverage,
@@ -534,6 +554,7 @@ impl App {
             geofences: &geofences,
             predictions: &predictions,
             terrain: gungnir_app::terrain::layer(&self.state.terrain, &self.state.data),
+            laydown_preview,
         };
         let Some(scene) = self.scene.clone().filter(|_| self.state.viewport.use_3d) else {
             gungnir_viewport3d::render(
@@ -668,6 +689,7 @@ impl App {
                         .push(format!("conflict not resolved: {reason}"));
                 }
             }
+            PanelAction::SelectLaydown(id) => self.state.select_laydown(id),
         }
     }
 

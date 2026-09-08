@@ -39,14 +39,11 @@ const REQUIREMENT_PERSISTENCE: Unavailable<'static> = Unavailable {
     gap: "GAP-005",
 };
 
-/// Loading a laydown option into the viewport for a visual before-and-after: PN-16
-/// (GAP-087) now compares laydowns as a table, but does not push one onto the map,
-/// which was never part of DN-26's own engineering and is tracked as GAP-087's
-/// remaining item rather than a separate entry.
-const LAYDOWN_COMPARISON: Unavailable<'static> = Unavailable {
-    owner: "gungnir-ui",
-    gap: "GAP-087",
-};
+/// The status these tests give PN-11's laydown-preview line when they are not
+/// exercising it directly: nothing selected, the state every one of these fixtures is
+/// in unless a test says otherwise.
+const LAYDOWN_COMPARISON: crate::panels::coverage_layers::LaydownComparison<'static> =
+    crate::panels::coverage_layers::LaydownComparison::NothingSelected;
 
 /// PN-06's whole reason for existing: an empty queue that says *why*. The reason has to
 /// be on screen, not merely in the view struct.
@@ -2557,10 +2554,10 @@ fn an_empty_layer_and_a_hidden_one_read_differently() {
     assert!(!frame.says("A hidden layer is not"), "{}", frame.joined());
 }
 
-/// Comparing two laydowns needs the planning surface, and the panel names the gap
-/// rather than offering a control that would do nothing.
+/// With no option selected on PN-16, the preview line says so rather than showing a
+/// stale or invented comparison (GAP-087).
 #[test]
-fn the_comparison_control_names_the_gap_that_would_build_it() {
+fn the_comparison_status_says_nothing_is_selected_when_nothing_is() {
     use crate::panels::coverage_layers::{
         render_coverage_layers, CoverageLayersView, HazardCurrency, LayerCounts, NothingToDraw,
     };
@@ -2585,7 +2582,46 @@ fn the_comparison_control_names_the_gap_that_would_build_it() {
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &view));
-    assert!(frame.says("GAP-087"), "{}", frame.joined());
+    assert!(frame.says("No option selected"), "{}", frame.joined());
+}
+
+/// Selecting an option on PN-16 reaches this status line with its own words for what
+/// it is for, and how much it places -- not a bare identifier, and not silently
+/// nothing (GAP-087).
+#[test]
+fn the_comparison_status_names_the_selected_options_intent_and_counts() {
+    use crate::panels::coverage_layers::{
+        render_coverage_layers, CoverageLayersView, HazardCurrency, LaydownComparison, LayerCounts,
+        NothingToDraw,
+    };
+
+    let view = CoverageLayersView {
+        rings_visible: true,
+        gaps_visible: true,
+        hazards_visible: true,
+        counts: LayerCounts {
+            rings: 1,
+            gaps: 0,
+            hazards: 0,
+            geofences: 0,
+        },
+        hazards: HazardCurrency {
+            declared: 0,
+            baseline_version: 1,
+        },
+        coverage: NothingToDraw::Available,
+        comparison: LaydownComparison::Showing {
+            intent: "weight the western flank",
+            sensors: 3,
+            resources: 1,
+        },
+        geofences_visible: true,
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &view));
+    assert!(frame.says("weight the western flank"), "{}", frame.joined());
+    assert!(frame.says("3 sensor"), "{}", frame.joined());
+    assert!(frame.says("1 resource"), "{}", frame.joined());
 }
 
 /// PN-21 has to paint all four elements of AGPL section 0, not merely hold them.
@@ -2665,10 +2701,11 @@ fn the_about_panel_paints_every_appropriate_legal_notice() {
 #[test]
 fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
     use crate::panels::planning::{render_planning, LaydownCoverage, LaydownRow, PlanningView};
+    use gungnir_model::LaydownId;
 
     let rows = vec![
         LaydownRow {
-            id: "current".into(),
+            id: LaydownId("current".into()),
             intent: "cover the sea approach".into(),
             current: true,
             coverage: LaydownCoverage::Computed {
@@ -2678,7 +2715,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
             },
         },
         LaydownRow {
-            id: "west".into(),
+            id: LaydownId("west".into()),
             intent: "weight the western flank".into(),
             current: false,
             coverage: LaydownCoverage::Computed {
@@ -2688,7 +2725,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
             },
         },
         LaydownRow {
-            id: "untested".into(),
+            id: LaydownId("untested".into()),
             intent: "a third option nobody has evaluated".into(),
             current: false,
             coverage: LaydownCoverage::NotComputed {
@@ -2703,6 +2740,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
             owner: "gungnir-tracking-service",
             gap: "GAP-045",
         },
+        selected: Some(&rows[1].id),
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_planning(ui, &view));
@@ -2755,6 +2793,7 @@ fn planning_with_no_laydowns_declared_says_so() {
             owner: "gungnir-tracking-service",
             gap: "GAP-045",
         },
+        selected: None,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_planning(ui, &view));
