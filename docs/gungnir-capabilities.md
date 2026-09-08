@@ -380,14 +380,21 @@ function directly rather than maintaining individual identities.
 where target count itself is uncertain — PHD/CPHD answers "how many objects are
 there" as well as "where are they."
 
-*How it's verified:* Same birth/clutter/detection model vs. Stone Soup's
-GM-PHD/GM-CPHD and MATLAB's `trackerPHD`; intensity function and cardinality
-compared.
+*How it's verified:* Both filters are built and gated (2026-09-06 PHD, 2026-09-08
+CPHD). Stone Soup 1.9.1, the pinned library this row originally planned to verify
+against, turned out not to be usable for either half, for two different reasons:
+its PHD updater disagrees with the textbook recursion (a confirmed defect in its
+mixture-reduction step), and it has no CPHD updater at all. Both rows are gated
+against this crate's own hand-derived recursions instead -- the PHD one checked
+against the textbook Vo-Ma paper, the CPHD one independently checked against a
+brute-force enumeration of every possible detection-to-target association before
+being trusted.
 
 *Definition of done:* Weights within 1e-3; exact cardinality where unambiguous.
 
-*Data used:* Scenario-crate dense-swarm scenario, supplemented by Stone Soup example
-scenarios and DARPA/ONR RFS challenge / Vo et al. companion data where available.
+*Data used:* Scenario-crate dense-swarm scenario, replayed against the hand-derived
+recursions above rather than the Stone Soup example scenarios originally planned,
+since the library itself is not the oracle for either filter.
 
 *Risk if wrong:* A cardinality-estimation error is business-visible — it means the
 product reports the wrong *number* of objects present.
@@ -1431,7 +1438,7 @@ calls it in its tick loop.
 | `gungnir-filters` | Tracking core | KF/EKF/UKF/PF/IMM/sqrt-UDU/RTS | Foundational | **Linear KF implemented and gated 2026-09-05** (Joseph form, agreeing with filterpy to 9.1e-13); the other six are trait surfaces, and the EKF bench is still a placeholder |
 | `gungnir-association` | Tracking core | NN/GNN, Hungarian/JV, gating, JPDA, MHT | Foundational | **Hungarian/JV, GNN, and chi-square gating implemented and gated 2026-09-05** against scipy; the assignment bench is real and the fuzz target now drives the solver. JPDA and MHT are trait surfaces |
 | `gungnir-track` | Tracking core | Track lifecycle | Foundational | **Implemented and gated 2026-09-05**: init/confirm/coast/delete agreeing with Stone Soup on every confirm and delete step index |
-| `gungnir-rfs` | Tracking core | PHD/CPHD, GLMB/LMB | Foundational | Trait surface; bench placeholder |
+| `gungnir-rfs` | Tracking core | PHD/CPHD, GLMB/LMB | Foundational | **PHD implemented and gated 2026-09-06, CPHD implemented and gated 2026-09-08** (§1 above); GLMB/LMB are trait surfaces, and the dense-swarm bench is still a placeholder |
 | `gungnir-fusion-async` | Tracking core | OOS/multi-rate fusion, concurrency | Foundational | Ingest task runs and drains; pipeline not implemented (`PIPELINE_IMPLEMENTED = false`) |
 | `gungnir-track-fusion` | Tracking core | Track-to-track CI fusion, registration/bias | Foundational | Trait surface |
 | `gungnir-allocation` | Tracking core | Bellman/DP resource assignment | Foundational | Returns `NotImplemented`; degenerate inputs tested |
