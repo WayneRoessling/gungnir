@@ -46,3 +46,12 @@ serde_json.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 tracing.workspace = true
+# D-39, GAP-084: the operating system's keystore (DN-22 §5). See the workspace
+# manifest's comment for why `v1` and why `default-features = false`.
+keyring.workspace = true
+# `keyring`'s own dependency, named directly (not just reached through `keyring`)
+# because `os_keystore.rs` addresses `keyring_core::Entry` itself in production code --
+# `v1::Entry` cannot be redirected to a test double, so production goes through the type
+# it wraps instead. A normal dependency for that reason, not a test-only one; its tests
+# reach the same crate's always-on `mock` module. See the workspace manifest's comment.
+keyring-core.workspace = true

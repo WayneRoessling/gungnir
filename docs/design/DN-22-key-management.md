@@ -1,6 +1,6 @@
 # DN-22 Key custody, rotation, and escrow
 
-Closes GAP-084, filed by plan 11 finding F-3. Status: **signed off by the owner 2026-09-05**, with **amendment 1 (§9) signed the same day** after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11), signed by the owner 2026-09-06**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12), signed by the owner 2026-09-06**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate.
+Closes GAP-084, filed by plan 11 finding F-3. Status: **signed off by the owner 2026-09-05**, with **amendment 1 (§9) signed the same day** after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11), signed by the owner 2026-09-06**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12), signed by the owner 2026-09-06**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08, written and gated, not signed**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in.
 **Human-owned and signed**: `gungnir-security` is a low-trust crate and this note decides
 who can read what. The owner signed it on 2026-09-05.
 
@@ -351,6 +351,60 @@ was signed and the other was not, because a signature on an implementation says 
 does what it says and a signature on a design says the design is the right one; recording
 the first as though it were the second is how a note nobody agreed to becomes the thing
 later work cites.
+
+## 13. Amendment 4 -- the operating system's keystore, the row §5 actually named (2026-09-08, **written and gated, not signed**)
+
+**Raised by D-39.** §5's disconnected row never named a passphrase-sealed file; it named
+"the operating system's keystore, unlocked at operator login." Amendment 3 built the
+file because no crate reached the OS keystore and said so in its own text -- "until a
+§2.9 decision admits an OS-keystore crate." `docs/agentic-coding-standards.md` §2.9
+records that decision: `keyring` 4.2.0, `v1` feature.
+
+**The mechanism changes what supplies one string, not the custody model.**
+`PersistentKeyProvider` already does everything this row needs -- one sealed file, an
+AES-256-GCM-wrapped `P256KeyProvider` snapshot, a wrapping key argon2 derives from a
+string and the file's own salt. Amendment 3 got that string from an operator typing a
+passphrase at sign-in. This amendment gets the same shape of string -- 32 random bytes,
+hex-encoded, argon2's cost against it buying nothing beyond what it already buys against
+a human passphrase, since it is fed through unchanged -- from Windows Credential
+Manager, macOS Keychain, or Linux Secret Service, generated once and read back
+thereafter with no prompt. One file format, one set of tests, for either source.
+
+**Unlocked at login, not at sign-in, and that is the entire point of admitting this
+crate at all.** `gungnir-app`'s `build_encryption` opens it at start, the way
+`Ephemeral` already does, rather than waiting for `unlock`'s sign-in event the
+passphrase-sealed file needs: the OS session being unlocked already **is** the login §5
+means, so there is nothing further to wait for. A desktop configured this way therefore
+encrypts from its first frame, which no other persistent profile can claim.
+
+**`gungnir-app` only.** §5 assigns this row to the disconnected desktop specifically;
+`gungnir-node` has no operator login to unlock at; its row is `ManagedService`, still
+unbuilt for the reason it always was.
+
+**What DN-22 §6 already required, applied here rather than restated**: the baseline
+names a mechanism (`security.key_provider: operating-system-keystore`) and an account,
+never a secret. The account distinguishes one deployment's entry from another's on the
+same machine, exactly as `dir` already distinguishes their keystore files.
+
+**Verification.** `gungnir-security/src/os_keystore.rs`'s own tests, against
+`keyring-core`'s always-on mock store: a first run generates and stores a secret, a
+second returns the one already stored, two generated secrets differ, and a fault
+distinct from "nothing stored yet" is reported rather than read as first-run and
+overwritten. `gungnir-security/tests/os_keystore.rs` and
+`gungnir-app/tests/encryption_status.rs` each carry one test against whatever backend
+the machine running them actually has, honest either way: where one is reachable the
+secret round-trips for real and the entry is cleaned up; where none is reachable (a
+headless Linux CI runner with no Secret Service session) the function's own error path
+is what fires, which is §5's fallback and not a gap in coverage.
+
+**Human-owned; written and gated, not signed.** The mechanism this amendment describes
+and the code behind it (`gungnir-security/src/os_keystore.rs`,
+`PersistentKeyProvider::open_or_create_via_os_keystore`, and the wiring in
+`gungnir-app/src/state.rs`) are put to the owner together rather than kept apart the way
+amendment 3's design and code were: amendment 3 was a real design decision the owner
+could have taken differently, where this one is D-39 with no room left for a different
+shape once the crate was chosen -- the string source changes, the reviewed and signed
+custody model does not.
 
 ## Traceability
 

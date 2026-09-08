@@ -421,7 +421,7 @@ impl AppState {
         // The provider the baseline names, and what actually came of trying.
         // **Reported from `is_sealing`, not from the configuration**: a status derived
         // from what was asked for would say "encrypted" about a journal that is not.
-        let encryption = build_encryption(&config, &mut journal, &mut alerts);
+        let (encryption, keystore) = build_encryption(&config, &mut journal, &mut alerts);
 
         let (requirements, recovered, next_requirement) =
             recover_requirements_or_alert(&journal, &mut alerts);
@@ -503,7 +503,7 @@ impl AppState {
             identification: gungnir_identification::EvidenceFusionEngine::with_settings(
                 identification_settings,
             ),
-            keystore: None,
+            keystore,
             expiry_announced: None,
             pipeline,
             link: None,
@@ -840,24 +840,35 @@ fn load_config() -> Result<(ConfigBaseline, Option<FileConfigStore>), ConfigErro
 /// A console that refused to run because a keystore was missing would be a worse failure
 /// than one that runs and says what it cannot do, and one that claimed encryption it was
 /// not performing would be worse than both.
+///
+/// Returns the persistent provider alongside the status when one was actually opened
+/// (D-39's OS-keystore path, unlike `Ephemeral`'s `InProcessKeyProvider`, produces the
+/// same `PersistentKeyProvider` type `AppState.keystore` holds), so the caller can wire
+/// it in for later use the same way a passphrase sign-in already does.
 fn build_encryption(
     config: &ConfigBaseline,
     journal: &mut FileEventJournal,
     alerts: &mut Vec<String>,
-) -> gungnir_security::EncryptionStatus {
+) -> (
+    gungnir_security::EncryptionStatus,
+    Option<std::sync::Arc<gungnir_security::PersistentKeyProvider>>,
+) {
     use gungnir_config::KeyProviderConfig;
     use gungnir_security::{EncryptionStatus, KeyPurpose};
 
     match &config.security.key_provider {
-        KeyProviderConfig::None => EncryptionStatus::NotConfigured,
+        KeyProviderConfig::None => (EncryptionStatus::NotConfigured, None),
 
         // DN-22 amendment 3: the keystore opens at sign-in, not at start. Until then the
         // journal is plaintext and the strip says so, which is §5's fallback rule.
-        KeyProviderConfig::PassphraseSealedFile => EncryptionStatus::UnavailableWritingPlaintext {
-            reason: "the keystore is sealed under the operator's passphrase and opens at sign-in; \
-                     nobody has signed in"
-                .into(),
-        },
+        KeyProviderConfig::PassphraseSealedFile => (
+            EncryptionStatus::UnavailableWritingPlaintext {
+                reason: "the keystore is sealed under the operator's passphrase and opens at \
+                         sign-in; nobody has signed in"
+                    .into(),
+            },
+            None,
+        ),
 
         KeyProviderConfig::Ephemeral => {
             let mut provider = gungnir_security::InProcessKeyProvider::new();
@@ -873,20 +884,69 @@ fn build_encryption(
                  cannot be read after the application closes."
                     .into(),
             );
-            EncryptionStatus::Active {
-                provider: "ephemeral".into(),
-            }
+            (
+                EncryptionStatus::Active {
+                    provider: "ephemeral".into(),
+                },
+                None,
+            )
         }
 
-        // Validation refuses these, so reaching here means a baseline bypassed it. Say
+        // D-39: unlocked at operator login rather than typed at sign-in, so unlike
+        // `PassphraseSealedFile` this opens right here at start.
+        KeyProviderConfig::OperatingSystemKeystore { account } => {
+            let escrow = crate::keystore::escrow_from_config(config, alerts);
+            let dir = std::path::PathBuf::from(&config.data_dir);
+            let provider =
+                match gungnir_security::PersistentKeyProvider::open_or_create_via_os_keystore(
+                    &dir, account, escrow,
+                ) {
+                    Ok(p) => std::sync::Arc::new(p),
+                    Err(err) => {
+                        let reason = format!("the operating-system keystore did not open: {err}");
+                        alerts.push(format!("Journal encryption is off: {reason}"));
+                        return (
+                            EncryptionStatus::UnavailableWritingPlaintext { reason },
+                            None,
+                        );
+                    }
+                };
+            let key = match provider.active_or_generate(KeyPurpose::JournalAtRest) {
+                Ok(key) => key,
+                Err(err) => {
+                    let reason = format!("no journal key: {err}");
+                    alerts.push(format!("Journal encryption is off: {reason}"));
+                    return (
+                        EncryptionStatus::UnavailableWritingPlaintext { reason },
+                        None,
+                    );
+                }
+            };
+            crate::keystore::write_escrow_record(&provider, key, &dir, alerts);
+            journal.seal_with(Box::new(crate::keystore::KeystoreSealer {
+                provider: std::sync::Arc::clone(&provider),
+                key,
+            }));
+            (
+                EncryptionStatus::Active {
+                    provider: "os-keystore".into(),
+                },
+                Some(provider),
+            )
+        }
+
+        // Validation refuses this, so reaching here means a baseline bypassed it. Say
         // so and write in the clear rather than pretending either way.
-        other => {
+        other @ KeyProviderConfig::ManagedService { .. } => {
             let reason = format!(
                 "the configured key provider is designed and not built ({})",
                 other.owning_gap().unwrap_or("GAP-084")
             );
             alerts.push(format!("Journal encryption is off: {reason}"));
-            EncryptionStatus::UnavailableWritingPlaintext { reason }
+            (
+                EncryptionStatus::UnavailableWritingPlaintext { reason },
+                None,
+            )
         }
     }
 }

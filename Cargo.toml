@@ -269,6 +269,31 @@ uuid = { version = "1", default-features = false, features = ["std", "serde"] }
 # which reports the crate does not exist.
 p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pem"] }
 
+# D-39, signed off 2026-09-08: the operating system's keystore (DN-22 §5, amendment 3's
+# "until a §2.9 decision admits an OS-keystore crate"). `v1` is the crate's own
+# backward-compatible, auto-selecting facade -- `Entry::new(service, user)` picks Windows
+# Credential Manager, macOS Keychain, or Linux Secret Service by target and needs nothing
+# named here. `default-features = false` because the crate's `cli` feature (off by default
+# but worth naming so nobody adds it later without reading this) pulls a demonstration CLI,
+# every platform backend regardless of target, and a vendored OpenSSL under
+# `dbus-secret-service-keyring-store` -- none of which a library dependency wants.
+keyring = { version = "4.2.0", default-features = false, features = ["v1"] }
+
+# `keyring`'s own dependency, at the version it resolves to; named directly because
+# `v1::Entry::new` latches the real platform-native backend as `keyring-core`'s default
+# on its first call and never checks whether one is already set, so a test that wants
+# the always-on, feature-free `mock` module (unlike the fancier `sample` store `cli`
+# above would pull) cannot go through `v1::Entry` -- it has already lost the race to the
+# real backend the moment one exists in that process. Production code in
+# `gungnir-security/src/os_keystore.rs` therefore forces the real backend once through
+# `v1`'s own one-time installer and then addresses `keyring_core::Entry` directly for
+# everything after, the type `v1::Entry` itself wraps; its tests install
+# `keyring_core::mock::Store` first instead and reach the identical code path, the same
+# way `keyring-core`'s own test suite does. A normal dependency, not a test-only one, for
+# that reason -- it is production's route to the store `keyring` selected, not only a
+# test's route to a substitute for it.
+keyring-core = { version = "1.0.0", default-features = false }
+
 # Test-only. Mutual TLS cannot be verified without certificates, and a private key checked
 # into the repository would be key material in the repository whatever the comment above it
 # said. **Never a normal dependency of any member**: it belongs in [dev-dependencies].

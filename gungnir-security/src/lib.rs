@@ -15,6 +15,7 @@ pub mod authn;
 pub mod authz;
 pub mod keys;
 pub mod keystore;
+mod os_keystore;
 pub mod provider;
 pub mod session;
 pub mod token;

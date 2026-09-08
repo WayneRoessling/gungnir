@@ -3813,6 +3813,27 @@ not by finding, for the time between whenever each item landed and this correcti
     introduce and does not resolve, since fixing it is its own authorization decision.
     Flagged for the owner separately rather than folded into this one's signature.
 
+103. **The operating system's keystore, D-39.** DN-22 amendment 3 (item 84's design) built
+    a passphrase-sealed file for the disconnected desktop's persistent custody "until a
+    §2.9 decision admits an OS-keystore crate" -- the row §5 actually names. That decision
+    is `keyring` 4.2.0, `v1` feature (`docs/agentic-coding-standards.md` §2.9, "OS
+    keystore"), and DN-22 amendment 4 (§13) builds the provider against it:
+    `gungnir-security/src/os_keystore.rs` gets a high-entropy secret from the platform's
+    own credential store -- Windows Credential Manager, macOS Keychain, Linux Secret
+    Service -- and feeds it through `PersistentKeyProvider::open_or_create`'s existing
+    argon2/AES-256-GCM mechanism unchanged, so one file format serves either source of the
+    wrapping string. `gungnir-app`'s `build_encryption` opens it at start rather than
+    waiting for a sign-in, because the OS session being unlocked already is the login §5
+    means. `gungnir-node` is not wired, since §5 assigns this row to the desktop alone and
+    the node has no operator login to unlock at. **Checked, not assumed, and the check did
+    not come back clean**: on Linux the Secret Service backend duplicates a generation of
+    RustCrypto and duplicates `zbus` itself against the copy `gungnir-app`'s accessibility
+    stack already carries (5.19.0 beside 4.4.0) -- neither this workspace's pin to change,
+    both recorded rather than hidden. Windows and macOS carry neither duplicate. Human-owned
+    code; written and gated, not signed. GAP-057's node account store and GAP-060's
+    transport-identity persistence both named this same decision as their remaining item;
+    the decision is taken and neither is built by this entry, which is D-39's alone.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and
