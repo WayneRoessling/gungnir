@@ -20,6 +20,7 @@
 pub mod adsb;
 pub mod anomaly;
 pub mod audit;
+pub mod bearings;
 pub mod cooperative;
 pub mod decisions;
 pub mod deliveries;

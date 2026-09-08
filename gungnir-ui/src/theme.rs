@@ -187,6 +187,8 @@ pub struct Palette {
     pub point_cloud_source_color: Color32,
     /// The target cloud of the same pair (GAP-098).
     pub point_cloud_target_color: Color32,
+    /// A bearing-only detection's ray (DN-27 §7, GAP-096).
+    pub bearing_ray_color: Color32,
     /// Seconds of time remaining at which a decision surface warns, and at which it
     /// becomes critical (DS-05).
     pub time_remaining_warn_s: f32,
@@ -257,6 +259,7 @@ impl Palette {
             laydown_preview_color: Color32::from_rgb(230, 100, 200),
             point_cloud_source_color: Color32::from_rgb(224, 168, 62),
             point_cloud_target_color: Color32::from_rgb(120, 140, 220),
+            bearing_ray_color: Color32::from_rgb(210, 150, 40),
             time_remaining_warn_s: 30.0,
             time_remaining_critical_s: 10.0,
         }
@@ -824,6 +827,7 @@ mod surface_tests {
             ("coverage_color", day.coverage_color),
             ("selection_halo_color", day.selection_halo_color),
             ("laydown_preview_color", day.laydown_preview_color),
+            ("bearing_ray_color", day.bearing_ray_color),
         ];
         for (i, (a_name, a)) in family.iter().enumerate() {
             for (b_name, b) in &family[i + 1..] {
@@ -1032,6 +1036,9 @@ mod palette_variant_tests {
         assert_eq!(day.hazard_color, night.hazard_color);
         assert_eq!(day.selection_halo_color, night.selection_halo_color);
         assert_eq!(day.laydown_preview_color, night.laydown_preview_color);
+        assert_eq!(day.point_cloud_source_color, night.point_cloud_source_color);
+        assert_eq!(day.point_cloud_target_color, night.point_cloud_target_color);
+        assert_eq!(day.bearing_ray_color, night.bearing_ray_color);
         assert_eq!(day.time_remaining_warn_s, night.time_remaining_warn_s);
         assert_eq!(
             day.time_remaining_critical_s,

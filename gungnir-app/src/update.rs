@@ -58,6 +58,12 @@ pub fn tick(state: &mut AppState) {
 
     // 2. Tracking: pull pipeline output into the snapshot.
     state.tracking.poll(now);
+    // 2d. A bearing that matched no track is retained by the pipeline and shown, not
+    //     dropped (DN-27 §5 rule 3): the tick after it first appears in
+    //     `tracking.bearing_rays()` raises one alert, because it classifies without
+    //     localising and DN-27 §7 places that case on the alert list rather than on the
+    //     map (GAP-096).
+    crate::bearings::tick(state);
 
     // 1a. What the radars said about themselves this frame (GAP-064), after the
     //     gateway has polled the adapters that queue it.

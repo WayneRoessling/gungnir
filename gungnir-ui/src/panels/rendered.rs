@@ -1563,6 +1563,8 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
                     feeds,
                     cooperative_feeds: &[],
                     peers: &[],
+                    bearing_feeds: &[],
+                    bearing_pipeline: crate::panels::sensor_health::BearingPipelineLine::default(),
                 },
             );
         });
@@ -1648,6 +1650,110 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
     assert!(
         text.contains("cannot run: no cooperative decoder"),
         "{text}"
+    );
+}
+
+/// **GAP-096: the line that did not exist.** Before this, `sapient_stats` was written
+/// every frame and read by nothing, and the pipeline's five bearing counters had no
+/// consumer either -- so a bound spotter/acoustic/passive-RF feed and an unbound one
+/// looked identical on this panel: neither drew a line. Proves both halves land on
+/// screen from synthetic `SapientFeedStats`-shaped and `PipelineStats`-shaped state: a
+/// feed's own counters, and the pipeline's, drawn beside it.
+#[test]
+fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
+    use crate::panels::sensor_health::{
+        render_sensor_health, BearingFeedLine, BearingPipelineLine, ClockSyncLine, SensorHealthView,
+    };
+    use crate::panels::status_strip::EncryptionState;
+
+    let health = gungnir_model::SystemHealth::default();
+    let probe = RenderProbe::new();
+
+    // Nothing bound: no line at all, exactly as a radar or an AIS feed draws none.
+    let (_, frame) = probe.draw(|ui| {
+        render_sensor_health(
+            ui,
+            &theme::Palette::day(),
+            &SensorHealthView {
+                health: &health,
+                encryption: EncryptionState::Active,
+                sensors: &[],
+                clocks: ClockSyncLine {
+                    sources_observed: 0,
+                    sources_out_of_sync: 0,
+                    max_skew_s: 0.0,
+                },
+                detectors: &[],
+                terrain: crate::panels::sensor_health::TerrainLine {
+                    masking: false,
+                    detail: "no terrain configured",
+                },
+                feeds: &[],
+                cooperative_feeds: &[],
+                peers: &[],
+                bearing_feeds: &[],
+                bearing_pipeline: BearingPipelineLine::default(),
+            },
+        );
+    });
+    assert!(
+        !frame.says("Spotter / acoustic / passive-RF"),
+        "an unconfigured deployment must not draw a bearing feed section: {}",
+        frame.joined()
+    );
+
+    // A spotter feed that has reported, and the pipeline's own tally of what happened
+    // to the bearings among what every bound feed reported.
+    let (_, frame) = probe.draw(|ui| {
+        render_sensor_health(
+            ui,
+            &theme::Palette::day(),
+            &SensorHealthView {
+                health: &health,
+                encryption: EncryptionState::Active,
+                sensors: &[],
+                clocks: ClockSyncLine {
+                    sources_observed: 0,
+                    sources_out_of_sync: 0,
+                    max_skew_s: 0.0,
+                },
+                detectors: &[],
+                terrain: crate::panels::sensor_health::TerrainLine {
+                    masking: false,
+                    detail: "no terrain configured",
+                },
+                feeds: &[],
+                cooperative_feeds: &[],
+                peers: &[],
+                bearing_feeds: &[BearingFeedLine {
+                    name: "north-ridge-spotter",
+                    messages: 40,
+                    bearings: 37,
+                    ranged: 1,
+                    positions: 0,
+                    refused: 2,
+                }],
+                bearing_pipeline: BearingPipelineLine {
+                    offered: 37,
+                    updated: 5,
+                    retained: 30,
+                    expired: 12,
+                    refused: 2,
+                },
+            },
+        );
+    });
+    let text = frame.joined();
+    assert!(
+        text.contains("north-ridge-spotter: 40 messages, 37 bearings"),
+        "the feed's own counters did not reach the screen: {text}"
+    );
+    assert!(
+        text.contains(
+            "Bearing pipeline: 37 offered, 5 updated a track, 30 retained, \
+                        12 expired, 2 refused"
+        ),
+        "the pipeline's five bearing counters did not reach the screen: {text}"
     );
 }
 

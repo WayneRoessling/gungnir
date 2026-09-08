@@ -4629,6 +4629,72 @@ not by finding, for the time between whenever each item landed and this correcti
     wiring in; a bearing this adapter produces does not yet reach an operator's screen,
     which is GAP-096 and not this gap's to fix.
 
+115. **GAP-096: a retained bearing reaches the operator** (2026-09-08). Of the three
+    things that can happen to a bearing offered to `FusionPipeline::offer_bearing`
+    (DN-27 §5), the one rule 3 calls "exactly the report an operator most needs" --
+    matching no track, retained for `bearing_retention_s` -- had no path to any screen:
+    `retained_bearings()` had no caller outside `gungnir-fusion-async`'s own tests, and
+    `PipelineStats`' five bearing counters and `gungnir-app`'s `sapient_stats` were each
+    written and read by nothing.
+
+    `gungnir_model::BearingRayView` (sensor, origin in the local ENU frame, azimuth,
+    optional elevation, angular one-sigma, valid-until) is `gungnir_tracking_service::
+    project_bearing_ray`'s projection of `RetainedBearing`, read through two new,
+    defaulted `TrackingService` methods -- `bearing_rays`, `pipeline_stats` -- so
+    `gungnir-remote`'s connected-profile backend and every existing test double answer
+    with an honest empty set rather than needing a change none of them asked for.
+    `gungnir_viewport3d::tracks::draw_bearing_rays_2d` draws each as a wedge from the
+    sensor along the azimuth, its edges spread by the one-sigma and reaching twice the
+    visible rectangle's longer side so it runs past the edge at any pan or zoom instead
+    of stopping at a fixed distance nobody measured (DN-27 §7's "does not terminate"),
+    wired into both `render` and `prepare_3d`'s overlay -- at parity with tracks, not
+    behind them, since the three-d GL scene draws no glyphs for anything yet either
+    (item 53's open row). `gungnir-app/src/bearings.rs::tick` alerts PN-08 once per
+    bearing newly appearing in `bearing_rays()`, naming the sensor and the azimuth and
+    nothing the sensor did not report -- DN-27 §7's own "a gunshot, bearing 037" names
+    what an acoustic sensor could classify, not a field `Measurement::Bearing` has, and
+    the alert does not invent one. PN-09's `SensorHealthView` gains `bearing_feeds`
+    (one line per bound SAPIENT feed, off the `SapientFeedStatsSink` values `sapient.rs`
+    already held) and `bearing_pipeline` (the five counters, read live).
+
+    **One change inside `gungnir-fusion-async` beyond this gap's own doc-comment
+    correction (2026-09-08, signed the same day): written and gated, not signed.**
+    `FusionPipeline` runs inside `ingest_with`'s spawned task, reachable only through
+    the channel it sends snapshots on, so exposing `retained_bearings()` and `stats()`
+    to `LiveTrackingService` needed the channel to carry more than `Vec<TimedTrack>`.
+    `ingest`/`ingest_with` now send a `PipelineSnapshot { tracks, retained_bearings,
+    stats }`, all three read from the pipeline at the same point in the loop with no
+    `.await` between them -- bundled into one message rather than a second channel so a
+    poller can never see a track snapshot from one epoch beside a bearing snapshot from
+    another, the same reasoning `TimedTrack` already carries its own estimate time for.
+    No pipeline rule changed; only what already crossed an existing channel boundary
+    does. `gungnir-fusion-async/tests/oos_convergence.rs` updated its channel type to
+    match and is otherwise unchanged.
+
+    **Verification.** `gungnir-tracking-service::tests::
+    a_retained_bearing_appears_in_the_view_and_leaves_it_once_expired`: a bearing
+    offered to a real `LiveTrackingService` holding no track surfaces in `bearing_rays()`
+    with the fields it was offered under (polled in a bounded retry loop, the idiom
+    `gungnir-app/tests/frame_budgets.rs` already uses for the same async-pipeline
+    reason), and a second bearing offered past the first one's `valid_until` ages it out
+    -- the fourth row in `docs/verification-capability-table.md` §1, in DN-27 §10's own
+    shape. `gungnir-viewport3d::tracks`'s own tests prove the drawn far point lands
+    outside the visible rectangle at every scale tried and that the wedge widens as the
+    one-sigma grows; `gungnir-ui`'s render-probe suite (`panels/rendered.rs`) proves
+    PN-09's new feed line and pipeline counters actually reach the screen from synthetic
+    state, and a new `BEARING_RAY_COLOR` theme constant passes the existing contrast and
+    pairwise-distinctness gates. `cargo test --workspace` and `cargo clippy --workspace
+    --all-targets` are unchanged elsewhere.
+
+    **Left open, named rather than folded in.** `gungnir-remote`'s connected profile
+    carries neither a bearing nor the pipeline's counters over the v2 wire, so a
+    node-backed desktop draws no ray and no bearing health line even where the node's
+    own pipeline is retaining bearings; the defaulted trait methods make that an honest
+    gap rather than a wrong answer, but a gap it stays, and neither DN-27 nor this
+    entry's own closing action named the wire contract. `gungnir_coord::cross_bearings`
+    still has no caller (DN-27 §5 rule 2), unchanged by this entry, as GAP-001's own
+    closing action already recorded.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

@@ -335,6 +335,14 @@ class TrackView <<InformationElement>> {
   mission_time: MissionTime
   releasability: Releasability
 }
+class BearingRayView <<InformationElement>> {
+  sensor: SensorId
+  origin_enu: [f64; 3]
+  azimuth_rad: f64
+  elevation_rad: Option<f64>
+  azimuth_one_sigma_rad: f64
+  valid_until: MissionTime
+}
 class ResourceView <<InformationElement>> {
   id: ResourceId
   position: Geodetic
@@ -769,6 +777,8 @@ TrackView --> Provenance
 TrackView --> Quality
 TrackView --> MissionTime
 TrackView --> Releasability
+BearingRayView --> SensorId
+BearingRayView --> MissionTime
 ResourceView --> EffectorLayer
 ResourceView --> RelativeCost
 ResourceView --> Magazine

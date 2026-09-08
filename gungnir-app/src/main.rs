@@ -389,6 +389,7 @@ impl App {
                     &self.state.palette,
                     &mut self.state.viewport,
                     self.state.tracking.tracks(),
+                    self.state.tracking.bearing_rays(),
                     &self.state.last_plan,
                     gungnir_viewport3d::layers::LayerInputs {
                         coverage,
@@ -581,6 +582,7 @@ impl App {
                 &self.state.palette,
                 &mut self.state.viewport,
                 self.state.tracking.tracks(),
+                self.state.tracking.bearing_rays(),
                 &self.state.last_plan,
                 layers,
             );
@@ -592,6 +594,7 @@ impl App {
             &self.state.palette,
             &mut self.state.viewport,
             self.state.tracking.tracks(),
+            self.state.tracking.bearing_rays(),
             &self.state.last_plan,
             layers,
         ) else {

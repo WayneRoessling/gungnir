@@ -98,6 +98,10 @@ pub struct AppState {
     /// Every bound SAPIENT feed's `TaskAck` sink, drained each frame (GAP-004): the
     /// inbound half of the outbound-tasking round trip `sapient_task.rs` issues.
     pub sapient_task_acks: Vec<gungnir_ingest::adapters::sapient::TaskAckSink>,
+    /// `tracking.bearing_rays()` as of the previous tick, so `bearings::tick` can tell a
+    /// newly retained bearing from one already on the alert list (GAP-096). Not the
+    /// picture: `tracking.bearing_rays()` is what PN-02 and PN-09 read live, every frame.
+    pub last_bearing_rays: Vec<gungnir_model::BearingRayView>,
     /// The identification engine, fed by cooperative evidence and governed by the
     /// baseline's thresholds (GAP-010, GAP-018, DN-08 §5).
     pub identification: gungnir_identification::EvidenceFusionEngine,
@@ -568,6 +572,7 @@ impl AppState {
             adsb_cooperative: std::collections::HashMap::new(),
             sapient_stats: sapient.stats,
             sapient_task_acks: sapient.task_acks,
+            last_bearing_rays: Vec::new(),
             identification: gungnir_identification::EvidenceFusionEngine::with_settings(
                 identification_settings,
             ),
