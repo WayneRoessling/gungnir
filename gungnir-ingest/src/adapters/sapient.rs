@@ -318,6 +318,9 @@ pub struct SapientFeedStats {
     pub positions: u64,
     /// Detection reports refused, for a reason named in [`SapientFeedStats::unhandled`].
     pub refused: u64,
+    /// `TaskAck` messages parsed and handed to a host's `TaskAckSink`, if one is
+    /// attached (GAP-004): the outbound-tasking round trip's inbound half.
+    pub task_acks: u64,
     /// Everything this build did not understand, keyed by what it was.
     ///
     /// A `BTreeMap` so a health line lists the reasons in a stable order and two runs of
@@ -333,6 +336,38 @@ impl SapientFeedStats {
 
 /// The counters as of the last poll, for a host to read.
 pub type SapientFeedStatsSink = Arc<Mutex<SapientFeedStats>>;
+
+/// A `TaskAck`'s status (`task_ack.proto`'s `TaskStatus`, pinned alongside `task.proto`
+/// at `github.com/dstl/SAPIENT-Proto-Files/bsi_flex_335_v2_0/`). `TASK_STATUS_UNSPECIFIED`
+/// has no variant here: it is the proto's own zero value for a field the schema marks
+/// mandatory, so an ack reporting it is refused as malformed rather than represented as
+/// a fifth status meaning nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskAckStatus {
+    Accepted,
+    Rejected,
+    Completed,
+    Failed,
+}
+
+/// One `TaskAck`, parsed off the wire.
+///
+/// `task_id` is the wire-form ULID string, deliberately **not** decoded to a local
+/// `SensorTaskId` here: this crate has no edge to `gungnir-sensor-management`, which owns
+/// both that type and the ULID scheme's inverse (`ARCHITECTURE.md` §7.1 lists them as
+/// siblings). A caller holding both crates -- `gungnir-app`, `gungnir-node` -- calls
+/// `gungnir_sensor_management::sapient_task::decode_task_id` on this field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskAckReport {
+    pub task_id: String,
+    pub status: TaskAckStatus,
+    /// Reasons given for a rejection or a failure; empty for an acceptance or a
+    /// completion, which need none.
+    pub reasons: Vec<String>,
+}
+
+/// Every `TaskAck` this adapter has read since a host last drained it.
+pub type TaskAckSink = Arc<Mutex<VecDeque<TaskAckReport>>>;
 
 /// What a node said about itself when it registered.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -366,6 +401,7 @@ pub struct SapientDetectionAdapter<S: SapientSource> {
     registered: HashMap<String, RegisteredNode>,
     stats: SapientFeedStats,
     stats_sink: Option<SapientFeedStatsSink>,
+    task_ack_sink: Option<TaskAckSink>,
 }
 
 impl<S: SapientSource> SapientDetectionAdapter<S> {
@@ -396,6 +432,7 @@ impl<S: SapientSource> SapientDetectionAdapter<S> {
             registered: HashMap::new(),
             stats: SapientFeedStats::default(),
             stats_sink: None,
+            task_ack_sink: None,
         }
     }
 
@@ -403,6 +440,15 @@ impl<S: SapientSource> SapientDetectionAdapter<S> {
     #[must_use]
     pub fn with_stats_sink(mut self, sink: SapientFeedStatsSink) -> Self {
         self.stats_sink = Some(sink);
+        self
+    }
+
+    /// Hand every `TaskAck` this adapter reads to a host through `sink`, for GAP-004's
+    /// outbound round trip: a task issued through `SapientTaskAdapter` and acknowledged
+    /// on this same inbound stream.
+    #[must_use]
+    pub fn with_task_ack_sink(mut self, sink: TaskAckSink) -> Self {
+        self.task_ack_sink = Some(sink);
         self
     }
 
@@ -440,6 +486,10 @@ impl<S: SapientSource> SapientDetectionAdapter<S> {
             self.register(&node_id, registration);
             return;
         }
+        if let Some(task_ack) = message.get("taskAck") {
+            self.handle_task_ack(task_ack);
+            return;
+        }
         let Some(report) = message.get("detectionReport") else {
             // Every other member of `SapientMessage.content`: status reports, tasks,
             // alerts, acknowledgements and errors. Named individually so a feed that is
@@ -447,7 +497,6 @@ impl<S: SapientSource> SapientDetectionAdapter<S> {
             let kind = [
                 "statusReport",
                 "task",
-                "taskAck",
                 "alert",
                 "alertAck",
                 "error",
@@ -520,6 +569,22 @@ impl<S: SapientSource> SapientDetectionAdapter<S> {
             },
         );
         self.stats.registered += 1;
+    }
+
+    /// One `TaskAck`: parsed and handed to the sink, or counted and named if the wire
+    /// did not honour `task_ack.proto`'s two mandatory fields.
+    fn handle_task_ack(&mut self, task_ack: &Value) {
+        if let Some(report) = parse_task_ack(task_ack) {
+            self.stats.task_acks += 1;
+            if let Some(sink) = &self.task_ack_sink {
+                if let Ok(mut queue) = sink.lock() {
+                    queue.push_back(report);
+                }
+            }
+        } else {
+            self.stats.refused += 1;
+            self.stats.note("task-ack-missing-a-mandatory-field");
+        }
     }
 
     /// One `DetectionReport` as a `DetectionView`, or the name of what stopped it.
@@ -770,6 +835,38 @@ impl<S: SapientSource> ProtocolAdapter for SapientDetectionAdapter<S> {
         }
         Ok(out)
     }
+}
+
+/// One `TaskAck` (`task_ack.proto`), in the pinned protobuf-JSON mapping: `taskId` and
+/// `taskStatus` are both marked mandatory in the schema, so either missing -- or a
+/// `taskStatus` of `TASK_STATUS_UNSPECIFIED`, the schema's own zero value for a field
+/// that was not actually set -- refuses the whole message rather than reporting half of
+/// it.
+fn parse_task_ack(value: &Value) -> Option<TaskAckReport> {
+    let task_id = value.get("taskId")?.as_str()?.to_owned();
+    let status = match value.get("taskStatus")?.as_str()? {
+        "TASK_STATUS_ACCEPTED" => TaskAckStatus::Accepted,
+        "TASK_STATUS_REJECTED" => TaskAckStatus::Rejected,
+        "TASK_STATUS_COMPLETED" => TaskAckStatus::Completed,
+        "TASK_STATUS_FAILED" => TaskAckStatus::Failed,
+        _ => return None,
+    };
+    let reasons = value
+        .get("reason")
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    Some(TaskAckReport {
+        task_id,
+        status,
+        reasons,
+    })
 }
 
 /// A JSON number, whichever of protobuf JSON's two spellings it arrived in: the mapping
@@ -1208,5 +1305,124 @@ mod tests {
         assert_eq!(unix_seconds("2023-08-14T10:22:02+01:00"), None);
         assert_eq!(unix_seconds("14/08/2023"), None);
         assert_eq!(unix_seconds(""), None);
+    }
+
+    fn task_ack(task_id: &str, status: &str, reasons: &[&str]) -> String {
+        let reason_array = serde_json::to_string(reasons).expect("a slice of &str serialises");
+        format!(
+            r#"{{"timestamp":"2023-08-14T10:22:04.000000Z","nodeId":"{NODE}","taskAck":{{"taskId":"{task_id}","taskStatus":"{status}","reason":{reason_array}}}}}"#
+        )
+    }
+
+    /// A `TaskAck` reaches the sink parsed, counted, and does not itself become a
+    /// detection (GAP-004's inbound half).
+    #[test]
+    fn an_accepted_task_ack_reaches_the_sink_and_produces_no_detection() {
+        let sink = TaskAckSink::default();
+        let mut a = adapter(
+            vec![task_ack(
+                "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "TASK_STATUS_ACCEPTED",
+                &[],
+            )],
+            SPOTTER_NODE_TYPE,
+        )
+        .with_task_ack_sink(sink.clone());
+        let out = a.poll(MissionTime(1_692_008_524.0)).expect("polls");
+        assert!(out.is_empty(), "a TaskAck is not a detection");
+        assert_eq!(a.stats().task_acks, 1);
+        let queued = sink.lock().expect("not poisoned");
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].task_id, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(queued[0].status, TaskAckStatus::Accepted);
+        assert!(queued[0].reasons.is_empty());
+    }
+
+    /// Every `TaskStatus` variant this build recognises maps to its own
+    /// `TaskAckStatus`, and a rejection's reasons travel with it.
+    #[test]
+    fn every_recognised_task_status_maps_to_its_own_variant_and_reasons_travel_with_a_rejection() {
+        let sink = TaskAckSink::default();
+        let mut a = adapter(
+            vec![
+                task_ack("01ARZ3NDEKTSV4RRFFQ69G5FA1", "TASK_STATUS_ACCEPTED", &[]),
+                task_ack(
+                    "01ARZ3NDEKTSV4RRFFQ69G5FA2",
+                    "TASK_STATUS_REJECTED",
+                    &["no rangefinder on this node"],
+                ),
+                task_ack("01ARZ3NDEKTSV4RRFFQ69G5FA3", "TASK_STATUS_COMPLETED", &[]),
+                task_ack(
+                    "01ARZ3NDEKTSV4RRFFQ69G5FA4",
+                    "TASK_STATUS_FAILED",
+                    &["lost line of sight"],
+                ),
+            ],
+            SPOTTER_NODE_TYPE,
+        )
+        .with_task_ack_sink(sink.clone());
+        a.poll(MissionTime(1_692_008_524.0)).expect("polls");
+        let queued = sink.lock().expect("not poisoned");
+        assert_eq!(queued.len(), 4);
+        assert_eq!(queued[0].status, TaskAckStatus::Accepted);
+        assert_eq!(queued[1].status, TaskAckStatus::Rejected);
+        assert_eq!(queued[1].reasons, vec!["no rangefinder on this node"]);
+        assert_eq!(queued[2].status, TaskAckStatus::Completed);
+        assert_eq!(queued[3].status, TaskAckStatus::Failed);
+        assert_eq!(queued[3].reasons, vec!["lost line of sight"]);
+    }
+
+    /// `TASK_STATUS_UNSPECIFIED` is the schema's zero value for a mandatory field that
+    /// was not actually set: refused, not represented as a fifth status.
+    #[test]
+    fn an_unspecified_task_status_is_refused_rather_than_a_fifth_variant() {
+        let sink = TaskAckSink::default();
+        let mut a = adapter(
+            vec![task_ack(
+                "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "TASK_STATUS_UNSPECIFIED",
+                &[],
+            )],
+            SPOTTER_NODE_TYPE,
+        )
+        .with_task_ack_sink(sink.clone());
+        a.poll(MissionTime(1_692_008_524.0)).expect("polls");
+        assert!(sink.lock().expect("not poisoned").is_empty());
+        assert_eq!(a.stats().refused, 1);
+        assert_eq!(
+            a.stats()
+                .unhandled
+                .get("task-ack-missing-a-mandatory-field"),
+            Some(&1)
+        );
+    }
+
+    /// A `TaskAck` with no `taskId` is refused the same way: half a mandatory pair is
+    /// not enough to act on.
+    #[test]
+    fn a_task_ack_missing_its_task_id_is_refused() {
+        let malformed = format!(
+            r#"{{"timestamp":"2023-08-14T10:22:04.000000Z","nodeId":"{NODE}","taskAck":{{"taskStatus":"TASK_STATUS_ACCEPTED"}}}}"#
+        );
+        let mut a = adapter(vec![malformed], SPOTTER_NODE_TYPE);
+        a.poll(MissionTime(1_692_008_524.0)).expect("polls");
+        assert_eq!(a.stats().refused, 1);
+    }
+
+    /// With no sink attached, a `TaskAck` is still parsed and counted -- an adapter
+    /// built without `with_task_ack_sink` (every existing caller, until GAP-004's
+    /// binaries are updated) does not panic or leak the message into `unhandled`.
+    #[test]
+    fn a_task_ack_with_no_sink_attached_is_still_counted_and_does_not_panic() {
+        let mut a = adapter(
+            vec![task_ack(
+                "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "TASK_STATUS_ACCEPTED",
+                &[],
+            )],
+            SPOTTER_NODE_TYPE,
+        );
+        a.poll(MissionTime(1_692_008_524.0)).expect("polls");
+        assert_eq!(a.stats().task_acks, 1);
     }
 }

@@ -90,6 +90,9 @@ pub struct AppState {
         String,
         gungnir_ingest::adapters::sapient::SapientFeedStatsSink,
     )>,
+    /// Every bound SAPIENT feed's `TaskAck` sink, drained each frame (GAP-004): the
+    /// inbound half of the outbound-tasking round trip `sapient_task.rs` issues.
+    pub sapient_task_acks: Vec<gungnir_ingest::adapters::sapient::TaskAckSink>,
     /// The identification engine, fed by cooperative evidence and governed by the
     /// baseline's thresholds (GAP-010, GAP-018, DN-08 §5).
     pub identification: gungnir_identification::EvidenceFusionEngine,
@@ -491,6 +494,7 @@ impl AppState {
             adsb_stats: adsb.stats,
             adsb_submitted: std::collections::HashSet::new(),
             sapient_stats: sapient.stats,
+            sapient_task_acks: sapient.task_acks,
             identification: gungnir_identification::EvidenceFusionEngine::with_settings(
                 identification_settings,
             ),
