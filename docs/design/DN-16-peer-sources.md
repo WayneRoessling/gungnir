@@ -1,6 +1,10 @@
 # DN-16 Peer track and warning ingestion
 
-Closes GAP-009. Status: first draft, 2026-09-05. **Design only; no code exists.**
+Closes GAP-009. Status: first draft, 2026-09-05. **Corrected 2026-09-08: this line said
+"design only; no code exists" long after it stopped being true.** §3's `PeerOrigin` and
+`PeerSourceAdapter` are built (`gungnir-model/src/exchange.rs`, `gungnir-ingest/src/
+adapters/peer.rs`), and §9's launch-warning types are built and signed. What remains is GAP-009's
+own: no code constructs a `LaunchWarningReport`, because no producer exists.
 
 ## 1. The gap and the thread step it blocks
 
@@ -17,6 +21,9 @@ is the whole reason not to add a special path: a peer feed is the least trustwor
 the system has, because it is remote, delayed, and written by somebody else's software.
 
 ## 3. Types
+
+**Built, `gungnir-model/src/exchange.rs` and `gungnir-ingest/src/adapters/peer.rs`.** This
+section names no type for a launch warning, which is what §9 (amendment 1) adds.
 
 In `gungnir-model`:
 
