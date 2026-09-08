@@ -44,7 +44,7 @@ use gungnir_model::events::{InterceptEvent, TrackingEvent};
 use gungnir_model::DetectionView;
 use gungnir_tracking_service::TrackView;
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 use crate::{LinkTls, RemoteEndpoint, RemoteError};
 // The Sink and Stream halves of the WebSocket. Named here because sending and receiving
@@ -184,6 +184,9 @@ pub const LAUNCH_WARNING_CAPACITY: usize = 256;
 #[derive(Debug, Clone)]
 pub struct NodeLink {
     projection: Arc<Mutex<Projection>>,
+    /// Bumped by the link task every time it mutates the projection, including a
+    /// disconnect. See [`NodeLink::changes`].
+    revision: watch::Receiver<u64>,
     /// Dropped when the last service is dropped, which is what stops the task.
     _shutdown: Arc<mpsc::Sender<()>>,
 }
@@ -195,8 +198,13 @@ impl NodeLink {
     #[must_use]
     pub fn scripted() -> Self {
         let (shutdown_tx, _shutdown_rx) = mpsc::channel::<()>(1);
+        // No task ever sends on this, so `changes()` on a scripted link reports the
+        // channel closed rather than hanging: correct enough, since nothing scripts a
+        // link and then waits on it to change itself.
+        let (_revision_tx, revision_rx) = watch::channel(0u64);
         Self {
             projection: Arc::new(Mutex::new(Projection::default())),
+            revision: revision_rx,
             _shutdown: Arc::new(shutdown_tx),
         }
     }
@@ -220,6 +228,24 @@ impl NodeLink {
     #[must_use]
     pub fn connected(&self) -> bool {
         self.read().is_some_and(|p| p.connected)
+    }
+
+    /// A receiver that changes every time the link task mutates the projection or its
+    /// connection state, for a caller that wants to wait on the next mutation instead
+    /// of polling the projection on a fixed interval.
+    ///
+    /// **For tests, and nothing on the live path reads this** -- the frame loop still
+    /// reads the projection synchronously, exactly as the module documentation
+    /// describes. It exists because a fixed-interval poll loop needs *every one* of a
+    /// few thousand wake-ups to be scheduled promptly to finish inside its own budget,
+    /// and under a `cargo test --workspace` run competing for the same cores, that
+    /// stopped being true for `a_deleted_track_leaves_the_projection` (flaky in CI
+    /// twice, reproduced locally once; see that test and `tests/transport.rs`'s
+    /// `until`). Waiting on this instead needs the *link task* to be scheduled once per
+    /// real change, which is the thing the test is actually waiting for.
+    #[must_use]
+    pub fn changes(&self) -> watch::Receiver<u64> {
+        self.revision.clone()
     }
 
     /// The token the last sign-in issued, if the link has signed in.
@@ -555,16 +581,29 @@ fn start_with(
     let urls = urls(endpoint)?;
     let tls = endpoint.tls.clone();
     let projection = Arc::new(Mutex::new(Projection::default()));
+    let (revision_tx, revision_rx) = watch::channel(0u64);
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
 
     let task_projection = Arc::clone(&projection);
     handle.spawn(async move {
         loop {
-            if let Err(err) = run_link(&urls, &tls, credential.as_ref(), &task_projection).await {
+            if let Err(err) = run_link(
+                &urls,
+                &tls,
+                credential.as_ref(),
+                &task_projection,
+                &revision_tx,
+            )
+            .await
+            {
                 set_disconnected(&task_projection, &err);
             } else {
                 set_disconnected(&task_projection, "the node closed the stream");
             }
+            // A disconnect is itself a change a waiter on `changes()` needs to see,
+            // rather than sitting out the rest of its own patience for a projection
+            // update that stopped coming.
+            revision_tx.send_modify(|r| *r = r.wrapping_add(1));
             tokio::select! {
                 // A closed channel means every service was dropped, so stop.
                 _ = shutdown_rx.recv() => return,
@@ -575,6 +614,7 @@ fn start_with(
 
     Ok(NodeLink {
         projection,
+        revision: revision_rx,
         _shutdown: Arc::new(shutdown_tx),
     })
 }
@@ -598,6 +638,7 @@ async fn run_link(
     tls: &LinkTls,
     credential: Option<&Credential>,
     projection: &Arc<Mutex<Projection>>,
+    revision: &watch::Sender<u64>,
 ) -> Result<(), String> {
     let client = http_client(tls)?;
     let token = match credential {
@@ -661,6 +702,7 @@ async fn run_link(
         p.last_heard = Some(std::time::Instant::now());
         p.last_seq
     };
+    revision.send_modify(|r| *r = r.wrapping_add(1));
 
     let mut socket = open_stream(urls, tls).await?;
 
@@ -697,6 +739,10 @@ async fn run_link(
                 handle_frame(next, projection)?;
             }
         }
+        // Unconditional rather than only after a confirmed mutation: a spurious wake
+        // costs a waiter one extra predicate check, and that is far cheaper than a
+        // second place this function could forget to signal a real one.
+        revision.send_modify(|r| *r = r.wrapping_add(1));
     }
 }
 
