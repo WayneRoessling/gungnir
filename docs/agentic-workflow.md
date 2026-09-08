@@ -154,8 +154,11 @@ The non-core layers have draft pass criteria in `verification-capability-table.m
 
 The workflow files exist under `.github/workflows/` (`gungnir-workspace-structure.md`).
 They run on GitHub since 2026-09-07 (D-10 as amended). `gpu-fusion.yml` is the
-exception: it runs only on manual dispatch until GAP-024 delivers the GPU path, its
-tests, and a self-hosted runner labelled `gpu`.
+exception, in two ways. Its runner exists as of 2026-09-08 -- `gungnir-rtx-5060ti`, the
+owner's workstation -- but the GPU path and its tests are still GAP-024's, so it cannot
+pass yet. And it runs on manual dispatch **permanently**, by decision: dispatch on a
+self-hosted runner is local execution with a recorded log, and only a caller with write
+access can fire it, which a `pull_request` trigger on a public repository would undo.
 
 ## Review pipeline
 

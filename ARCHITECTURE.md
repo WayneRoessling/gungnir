@@ -2674,11 +2674,24 @@ re-reading the register alone.
   form, RTS smoother, JPDA, MHT, track-to-track fusion and registration, the
   allocator, and the out-of-sequence pipeline itself -- is built and gated;
   `PIPELINE_IMPLEMENTED` has been `true` since 2026-09-06 (item 92, GAP-011). (GAP-015)
-- **The GPU point-cloud registration path.** `gungnir-data-fusion`'s CPU reference
-  ICP is built and tested (`src/cpu_reference.rs`, `src/transform_solve.rs`); the GPU
-  step returns `NotImplemented` naming the WGSL pipeline of §3.4 it waits on, and
-  `gpu-fusion.yml` is dormant for want of the self-hosted `gpu` runner that GAP-061
-  (closed) still needs registered to the repository. (GAP-024)
+- **The GPU point-cloud registration path, and the compute context that has never
+  been created.** `gungnir-data-fusion`'s CPU reference ICP is built and tested
+  (`src/cpu_reference.rs`, `src/transform_solve.rs`); the GPU step returns
+  `NotImplemented` naming the WGSL pipeline of §3.4 it waits on, and the four
+  `shaders/*.wgsl` files hold that section's stage comments and no code. Reviewed end
+  to end 2026-09-08, the path is inert further back than the shaders:
+  `GpuContext::new` has **no caller** -- neither `gungnir-app` nor `gungnir-viewport3d`
+  references `gungnir_render` or `gungnir_data_fusion` in source, though §7.1 draws
+  both manifest edges -- so no `wgpu` device exists at run time and the only GPU work
+  the application does is the viewport's OpenGL drawing (§9). The `gpu-tests` feature
+  is declared and empty, so `gpu-fusion.yml` would run zero tests and fails such a run
+  on purpose. **The `gpu` runner is registered as of 2026-09-08** (`gungnir-rtx-5060ti`,
+  on the drafting host's RTX 5060 Ti), which was GAP-061's remaining item, and the
+  workflow **stays on manual dispatch permanently** (D-10 as amended the same day):
+  dispatch on a self-hosted runner is local execution with a recorded log, and only a
+  caller with write access can fire it, which a `pull_request` trigger on a public
+  repository would undo. It stays dormant until GAP-024 writes the tests. (GAP-024, and
+  GAP-098 for the input and display path that would make the result reachable)
 - **Live protocol adapters beyond radar.** ASTERIX (Category 048 edition 1.32,
   Category 034 edition 1.29), SAPIENT spotter tasking and detection, and -- since
   2026-09-07 -- the SAPIENT acoustic and passive-RF node types are all built and
@@ -2719,7 +2732,7 @@ re-reading the register alone.
   `gungnir-identity`: a graph decision now, not a missing capability. (GAP-019 is
   closed for the desktop half; the node half is this bullet)
 - **Plan 05 gap register, most recently updated 2026-09-08.**
-  `docs/mission/gap-analysis/gap-register.md` carries 96 gaps against the mission
+  `docs/mission/gap-analysis/gap-register.md` carries 98 gaps against the mission
   capabilities, each with a closing action, a target increment, and an owner;
   `docs/mission/gap-analysis/technical-gap-map.md` maps every item above to the gaps
   that carry it. Engineering items the list above does not name are tracked there by
@@ -2755,7 +2768,17 @@ re-reading the register alone.
   the first collided with GAP-090's own renumbering (item 89, and this section's own
   entry above). GAP-096 was added 2026-09-08 from a trace of the whole
   bearing path and is the bullet above; it is the first item in I3's order, priority
-  40, and nothing blocks it.
+  40, and nothing blocks it. GAP-097 (an unchanged plan re-proposed and
+  re-queued every tick) and GAP-098 were both added the same day, by separate changes
+  that each claimed the number 097 within hours of each other while neither was on
+  `main` -- the collision this list already records for GAP-090, GAP-094 and GAP-095,
+  and for the same reason. GAP-097 kept the number, being the owner-confirmed claim
+  already cited from D-28, GAP-074 and the CAP-3.3 coverage row; GAP-098 is the
+  younger one and moved. **The count above had also fallen behind**: it read 96 when
+  GAP-097 landed and 97 when GAP-098 did, and is corrected to 98 here rather than by
+  whoever noticed it next. GAP-098 came out of the GPU review, which also rewrote
+  GAP-024's closing action as five items, moved it from I4 to I3 without touching its
+  severity, and removed its GAP-023 dependency so the WGSL work is unblocked.
 ### Resolved on 2026-09-06
 
 **Heading added 2026-09-07.** Everything from here to item 101 was already dated

@@ -47,7 +47,7 @@ end today; the connected profiles are scaffolded but not connectable (GAP-041).
 | AR-04 Sensor feeds | per deployment | adapters per sensor class (GAP-001) |
 | AR-05 Peer C2 nodes | per deployment | through the API and interop formats |
 | AR-06 Effector systems | per deployment | handoff (GAP-040) |
-| AR-07 Build and release infrastructure | GitHub (`WayneRoessling/gungnir`), GitHub Actions, a self-hosted `gpu` runner, GitHub Container Registry (D-10, amended 2026-09-07) | GAP-061 |
+| AR-07 Build and release infrastructure | GitHub (`WayneRoessling/gungnir`), GitHub Actions, a self-hosted `gpu` runner on the owner's workstation (registered 2026-09-08; manual dispatch only), GitHub Container Registry (D-10, amended 2026-09-07 and 2026-09-08) | GAP-061 |
 
 ## Elements used
 

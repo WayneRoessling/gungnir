@@ -14,7 +14,7 @@ Decisions applied to every plan (confirmed 2026-09-04):
 | Architecture tooling | Markdown plus PlantUML and Mermaid in the repository, with a text-based element registry so UAF and TOGAF content share one model |
 | AI and ML runtime | Claude API in connected profiles, open-weight local models in disconnected and air-gapped profiles, behind one provider trait; ML inference through ONNX Runtime in Rust |
 | Scope | Locked 2026-09-04 (D-01): everything ships in one release through increment 4; the register in `../mission/gap-analysis/` is the work list. Plan 01 records the revenue consequence and asks whether to revisit it (D-B2) |
-| Hosting | GitHub at `https://github.com/WayneRoessling/gungnir`, GitHub Actions, and the GitHub Container Registry (D-10, amended 2026-09-07); the eight workflows under `.github/workflows/` stay where they are, `gpu-fusion.yml` needs a self-hosted `gpu` runner, and GAP-061 starts with the initial commit |
+| Hosting | GitHub at `https://github.com/WayneRoessling/gungnir`, GitHub Actions, and the GitHub Container Registry (D-10, amended 2026-09-07); the eight workflows under `.github/workflows/` stay where they are, `gpu-fusion.yml` runs on its self-hosted `gpu` runner by manual dispatch only (registered 2026-09-08; D-10 as amended), and GAP-061 starts with the initial commit |
 | Further decisions | D-02 to D-18 (credentials, rules, budgets, roles, releasability, fires, agreements, sources, `uuid`, vocabulary, anomaly home, assistant egress, delegation, open targets, docking, and the API transport stack) recorded in `../mission/gap-analysis/decisions-needed.md` |
 
 ## The plans
