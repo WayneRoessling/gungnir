@@ -23,9 +23,24 @@ pub enum RenderError {
 
 /// Owns the single `wgpu::Device`/`Queue` for the whole application --
 /// `gungnir-data-fusion` borrows from here rather than creating its own.
+///
+/// **`Arc`, not a bare `wgpu::Device`/`Queue`.** `gungnir_data_fusion::GpuFusionEngine`
+/// needs to hold onto the device and queue for its own lifetime (one ICP registration
+/// can span many `step` calls), and `wgpu::Device`/`Queue` implement neither `Copy`
+/// nor `Clone` in this workspace's pinned `wgpu` 22 (each wraps a `Box<Data>` that is
+/// not itself shareable) -- only their internal `Arc<C>` context is. A caller that
+/// stored both this `GpuContext` and a `GpuFusionEngine<'a>` borrowing from it in one
+/// struct (`gungnir-app::AppState`, per ARCHITECTURE.md §7.3) would be self-referential,
+/// which safe Rust cannot express without pinning or a crate this workspace does not
+/// carry. Wrapping the two fields in `Arc` here instead means "lend the device" is a
+/// cheap, ordinary clone of a shared handle rather than a lifetime the borrow checker
+/// has to thread through every struct that ever touches fusion -- and it changes
+/// nothing about there being exactly one `wgpu::Device` in the process (§3, §9):
+/// cloning an `Arc<Device>` does not create a second GPU device, it shares the same
+/// one.
 pub struct GpuContext {
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
+    pub device: std::sync::Arc<wgpu::Device>,
+    pub queue: std::sync::Arc<wgpu::Queue>,
 }
 
 impl GpuContext {
@@ -54,6 +69,9 @@ impl GpuContext {
             )
             .await
             .map_err(|e| RenderError::GpuInit(e.to_string()))?;
-        Ok(Self { device, queue })
+        Ok(Self {
+            device: std::sync::Arc::new(device),
+            queue: std::sync::Arc::new(queue),
+        })
     }
 }

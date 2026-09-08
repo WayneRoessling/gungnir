@@ -2819,6 +2819,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "wgpu",
 ]
 
 [[package]]
@@ -2923,6 +2924,7 @@ dependencies = [
  "nalgebra",
  "proptest",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
  "wgpu",
 ]

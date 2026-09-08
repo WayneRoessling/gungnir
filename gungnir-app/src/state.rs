@@ -417,6 +417,13 @@ pub struct AppState {
     /// The runtime the embedded services and the node link run on. Reachable so a
     /// sign-in can establish the link (GAP-057) and a sign-out can drop it.
     pub runtime: tokio::runtime::Runtime,
+    /// The point-cloud registration backend this desktop constructed at start-up
+    /// (GAP-024): GPU-backed when `gungnir_render::GpuContext::new` found an
+    /// adapter, the CPU reference otherwise. Not yet called from the tick: no point
+    /// cloud reaches `DataStore.point_clouds` (GAP-098), so there is nothing for
+    /// `fusion.engine_for` to register against yet. `crate::fusion`'s own doc
+    /// comment has the full reasoning for constructing the device now regardless.
+    pub fusion: crate::fusion::FusionBackend,
 }
 
 impl AppState {
@@ -454,6 +461,18 @@ impl AppState {
     ) -> Result<Self, AppError> {
         let runtime = desktop_runtime()?;
         let mut alerts = Vec::new();
+        // GAP-024: the compute device is constructed once, here, before anything
+        // else touches it. No point cloud reaches `DataStore.point_clouds` yet
+        // (GAP-098), so nothing calls `fusion.engine_for` from the tick -- this is
+        // the same "wired, not yet called" shape as the productization crates
+        // `AppState`'s own doc comment lists, not a claim that registration runs.
+        let fusion = crate::fusion::FusionBackend::init(runtime.handle());
+        if let crate::fusion::FusionBackend::Cpu { reason } = &fusion {
+            alerts.push(format!(
+                "GPU point-cloud registration unavailable ({reason}); the CPU reference \
+                 would be used instead once a target cloud exists to register against"
+            ));
+        }
         let hazards = crate::hazards::layer_from_config(&config)?;
         // GAP-057: the session authority and the account listing the baseline names,
         // built before the baseline is moved into the state.
@@ -658,6 +677,7 @@ impl AppState {
             journal_rx,
             journal_failed: false,
             runtime,
+            fusion,
         })
     }
 

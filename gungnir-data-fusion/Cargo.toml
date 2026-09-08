@@ -33,3 +33,9 @@ gungnir-data = { path = "../gungnir-data", version = "0.1.0" }
 
 [dev-dependencies]
 proptest.workspace = true
+# GAP-024: `tests/gpu_vs_cpu.rs` (`gpu-tests` feature) blocks on `wgpu`'s async
+# adapter/device request the same way `gungnir-app` blocks on `GpuContext::new`
+# (`state.rs`'s `desktop_runtime`) -- already an approved workspace dependency
+# (`docs/agentic-coding-standards.md` §2.9), not a new one; this is a dev-only,
+# per-crate reference to it, no new `[workspace.dependencies]` entry.
+tokio.workspace = true
