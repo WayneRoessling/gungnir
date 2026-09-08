@@ -116,7 +116,7 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-node` | `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `sensor-management`, `tracking-service`, `intercept-service`, `api`, `analytics` (g), `security`, `observability`, `modelops` (h), `policy` (k), `geo` (l), `remote` (p), `identity` (s) |
 | `gungnir-ui` | `model` |
 | `gungnir-viewport3d` | `data`, `data-fusion`, `model`, `ui` (theme only) |
-| `gungnir-app` | Both facades, `remote`, `data`, `data-fusion`, `render`, `viewport3d`, `ui`, `workflow`, `security`, `policy`, `command`, `geo`, `replay`, `reporting`, `analytics`, `sensor-management`, `assessment`, `modelops` (h), `decision` (i), `resilience` (m), `identification` (n), `identity` (o), `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `observability` |
+| `gungnir-app` | Both facades, `remote`, `data`, `data-fusion`, `render`, `viewport3d`, `ui`, `workflow`, `security`, `policy`, `command`, `geo`, `replay`, `reporting`, `analytics`, `sensor-management`, `assessment`, `modelops` (h), `decision` (i), `resilience` (m), `identification` (n), `identity` (o), `coord` (u), `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `observability` |
 
 The productization-layer edges are listed in §7.1.
 

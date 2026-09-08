@@ -2780,6 +2780,7 @@ dependencies = [
  "gungnir-assessment",
  "gungnir-command",
  "gungnir-config",
+ "gungnir-coord",
  "gungnir-data",
  "gungnir-data-fusion",
  "gungnir-decision",

@@ -337,6 +337,17 @@ listed `testkit` for `gungnir-oracle` as though it were a production dependency 
 `[dev-dependencies]` entry, which the table now marks `(dev: ...)` the way §7.1 already
 marked `gungnir-collab`'s and `gungnir-mission`'s.
 
+## 15. Edge (u) -- `gungnir-app` to `gungnir-coord` (2026-09-08, GAP-045)
+
+| Edge | What it is | Evidence |
+|---|---|---|
+| (u) app → coord | A laydown's sensor and resource placements are local ENU offsets from the deployment's origin (`gungnir-model::laydown`, DN-26 §4); `ConfigBaseline.resources` and `.sensors` take geodetic positions. Building a rehearsal's own throwaway configuration from a candidate laydown needs the one conversion between them, and `gungnir-coord::Wgs84` (`agentic-coding-standards.md` §1.3's oracle-comparable transform surface) is where every other geodetic/ENU conversion in the workspace already lives. Downward from the binary to a foundational crate with no workspace dependencies of its own; `gungnir-app` had no edge to it before | `gungnir-app/src/laydown_rehearsal.rs`; `gungnir-app/tests/laydown_rehearsal.rs` |
+
+**Not yet put to the owner.** Unlike the lettered edges above, this one has not been
+individually reviewed; it is recorded here in the same change that adds it to the
+manifest, per §5's rule that the two land together, so the review has something
+concrete to look at rather than a bare Cargo.toml line.
+
 ## Traceability
 
 The five notes that add edges: DN-03, DN-11, DN-12, DN-13, DN-19. The four that refuse

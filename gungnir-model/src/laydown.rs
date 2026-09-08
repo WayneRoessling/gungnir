@@ -103,6 +103,38 @@ impl Laydown {
     }
 }
 
+/// One of the ten committed test-track scenarios (`docs/test-tracks/scenario-library.md`),
+/// naming which fixture a rehearsal replayed a laydown against (GAP-045).
+///
+/// Lives here rather than beside the rehearsal harness that reads the fixture files,
+/// because `gungnir-ui` draws PN-16's rehearsal control and picks this from a list, and
+/// `gungnir-ui` depends on this crate and nothing that reads a filesystem.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+pub struct TestTrackNumber(pub u8);
+
+impl TestTrackNumber {
+    /// The ten committed scenarios, in order, for a picker to offer.
+    pub const ALL: [TestTrackNumber; 10] = [
+        TestTrackNumber(1),
+        TestTrackNumber(2),
+        TestTrackNumber(3),
+        TestTrackNumber(4),
+        TestTrackNumber(5),
+        TestTrackNumber(6),
+        TestTrackNumber(7),
+        TestTrackNumber(8),
+        TestTrackNumber(9),
+        TestTrackNumber(10),
+    ];
+
+    #[must_use]
+    pub fn label(self) -> String {
+        format!("TT-{:02}", self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

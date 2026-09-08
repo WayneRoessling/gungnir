@@ -200,7 +200,7 @@ uses:
   - {from: RS-analytics, to: [RS-coord, RS-data, RS-geo, RS-model, RS-sensor-management]}
   - {from: RS-analytics, to: [RS-config], kind: dev}
   - {from: RS-api, to: [RS-model, RS-eventing, RS-security, RS-tracking-service, RS-intercept-service, RS-analytics]}
-  - {from: RS-app, to: [RS-tracking-service, RS-intercept-service, RS-remote, RS-resilience, RS-identification, RS-identity, RS-data, RS-data-fusion, RS-render, RS-viewport3d, RS-ui, RS-model, RS-config, RS-mission, RS-eventing, RS-store, RS-time, RS-ingest, RS-observability, RS-workflow, RS-security, RS-policy, RS-command, RS-geo, RS-sensor-management, RS-analytics, RS-assessment, RS-modelops, RS-decision, RS-replay, RS-reporting]}
+  - {from: RS-app, to: [RS-coord, RS-tracking-service, RS-intercept-service, RS-remote, RS-resilience, RS-identification, RS-identity, RS-data, RS-data-fusion, RS-render, RS-viewport3d, RS-ui, RS-model, RS-config, RS-mission, RS-eventing, RS-store, RS-time, RS-ingest, RS-observability, RS-workflow, RS-security, RS-policy, RS-command, RS-geo, RS-sensor-management, RS-analytics, RS-assessment, RS-modelops, RS-decision, RS-replay, RS-reporting]}
   - {from: RS-app, to: [RS-scenario, RS-api, RS-ui], kind: dev}
   - {from: RS-assessment, to: [RS-model]}
   - {from: RS-association, to: [RS-filters]}

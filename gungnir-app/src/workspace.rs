@@ -335,6 +335,11 @@ pub enum PanelAction {
     /// PN-16: preview this laydown option on PN-11, or clear the preview if it is
     /// already selected (GAP-087's own remaining item).
     SelectLaydown(gungnir_model::LaydownId),
+    /// PN-16: rehearse the selected laydown against a named test-track scenario
+    /// (GAP-045).
+    RunRehearsal(gungnir_model::TestTrackNumber),
+    /// PN-16: change which scenario the rehearsal picker offers to run next.
+    PickRehearsalScenario(gungnir_model::TestTrackNumber),
 }
 
 /// Draw one panel of the role's workspace.
@@ -697,14 +702,10 @@ fn render_coverage_layers(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAc
 /// PN-16, the planning panel: laydown options, compared (GAP-087,
 /// `docs/design/DN-26-laydown-options.md`).
 fn render_planning(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
-    use gungnir_ui::panels::planning::PlanningView;
-    use gungnir_ui::panels::unavailable::{Section, Unavailable};
+    use gungnir_ui::panels::planning::{PlanningAction, PlanningView};
+    use gungnir_ui::panels::unavailable::Section;
 
     let terrain_model = crate::sustainment::planning_terrain_model(state);
-    let rehearsal = Unavailable {
-        owner: "gungnir-tracking-service",
-        gap: "GAP-045",
-    };
     let rows;
     let empty_reason;
     let laydowns = match crate::sustainment::planning_rows(state) {
@@ -722,10 +723,15 @@ fn render_planning(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
     let view = PlanningView {
         laydowns,
         terrain_model,
-        rehearsal,
+        rehearsal: state.rehearsal_section(),
+        rehearsal_scenario: state.rehearsal_scenario(),
         selected: state.selected_laydown(),
     };
-    gungnir_ui::panels::planning::render_planning(ui, &view).map(PanelAction::SelectLaydown)
+    match gungnir_ui::panels::planning::render_planning(ui, &view)? {
+        PlanningAction::SelectLaydown(id) => Some(PanelAction::SelectLaydown(id)),
+        PlanningAction::PickScenario(s) => Some(PanelAction::PickRehearsalScenario(s)),
+        PlanningAction::RunRehearsal(s) => Some(PanelAction::RunRehearsal(s)),
+    }
 }
 
 /// PN-15. Requirements are real and the tasking is wired (GAP-005); no adapter

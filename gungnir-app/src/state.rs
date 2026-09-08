@@ -339,6 +339,21 @@ pub struct AppState {
     /// operator is drawing now, not a fact about the deployment.
     selected_laydown: Option<gungnir_model::LaydownId>,
 
+    /// Which scenario PN-16's rehearsal picker currently offers to run (GAP-045).
+    /// Session state, the same as the selection above; `TestTrackNumber(1)` is not a
+    /// claim that TT-01 is somehow the default rehearsal, only that a picker needs an
+    /// initial value and the first scenario is as good as any to start on.
+    rehearsal_scenario: gungnir_model::TestTrackNumber,
+
+    /// The last rehearsal run for each laydown that has one (GAP-045). Session state,
+    /// like the selection above: a rehearsal is a real tick loop this desktop actually
+    /// ran, not a fact recorded in the baseline, and it is gone the way any other
+    /// unsaved comparison is.
+    pub rehearsal_records: std::collections::HashMap<
+        gungnir_model::LaydownId,
+        crate::laydown_rehearsal::RehearsalRecord,
+    >,
+
     pub(crate) journal: FileEventJournal,
     pub(crate) journal_rx: Receiver<Envelope>,
     pub journal_failed: bool,
@@ -566,6 +581,8 @@ impl AppState {
             dialog: gungnir_ui::panels::decision_dialog::DecisionDialogState::default(),
             selected_track: None,
             selected_laydown: None,
+            rehearsal_scenario: gungnir_model::TestTrackNumber(1),
+            rehearsal_records: std::collections::HashMap::new(),
             journal,
             journal_rx,
             journal_failed: false,
@@ -757,6 +774,85 @@ impl AppState {
         } else {
             Some(id)
         };
+    }
+
+    #[must_use]
+    pub fn rehearsal_scenario(&self) -> gungnir_model::TestTrackNumber {
+        self.rehearsal_scenario
+    }
+
+    pub fn pick_rehearsal_scenario(&mut self, scenario: gungnir_model::TestTrackNumber) {
+        self.rehearsal_scenario = scenario;
+    }
+
+    /// PN-16's rehearsal section for whichever laydown is selected right now (GAP-045).
+    #[must_use]
+    pub fn rehearsal_section(&self) -> gungnir_ui::panels::planning::RehearsalSection {
+        use gungnir_ui::panels::planning::{RehearsalSection, RehearsalSummary};
+        let Some(id) = self.selected_laydown() else {
+            return RehearsalSection::NothingSelected;
+        };
+        match self.rehearsal_records.get(id) {
+            Some(record) => RehearsalSection::Ran(RehearsalSummary {
+                scenario: record.scenario,
+                tracks_formed: record.tracks_formed,
+                decisions_raised: record.decisions_raised,
+                decisions_expired: record.decisions_expired,
+            }),
+            None => RehearsalSection::NotYetRun,
+        }
+    }
+
+    /// Run a rehearsal of `laydown` against `scenario` and record it, or alert why not
+    /// (GAP-045). `laydown` must be one this baseline declares; an id naming none is an
+    /// alert, not a panic -- the panel can only ever offer a laydown that already
+    /// exists, but state should not assume its own caller got that right.
+    ///
+    /// `testdata_root` follows the same convention as this desktop's journal: relative
+    /// to the working directory the binary was launched from
+    /// (`docs/agentic-workflow.md`'s "both journal to `./gungnir-journal`"), here
+    /// `./testdata`. **Not yet addressed**: whether a packaged release bundles
+    /// `testdata/tracks/samples/` beside the binary, which is a release-packaging
+    /// question this change does not answer.
+    pub fn run_rehearsal(
+        &mut self,
+        scenario: gungnir_model::TestTrackNumber,
+        laydown_id: &gungnir_model::LaydownId,
+    ) {
+        let Some(laydown) = self
+            .config
+            .laydowns
+            .iter()
+            .find(|l| &l.id == laydown_id)
+            .cloned()
+        else {
+            self.alerts.push(format!(
+                "rehearsal not run: {laydown_id} is not a laydown this baseline declares"
+            ));
+            return;
+        };
+        match crate::laydown_rehearsal::run(
+            std::path::Path::new("testdata"),
+            scenario,
+            &laydown,
+            &self.config.resources,
+        ) {
+            Ok(record) => {
+                self.alerts.push(format!(
+                    "rehearsal of {} under {}: {} track(s) formed, {} decision(s) raised \
+                     ({} expired)",
+                    laydown_id,
+                    scenario.label(),
+                    record.tracks_formed,
+                    record.decisions_raised,
+                    record.decisions_expired
+                ));
+                self.rehearsal_records.insert(laydown_id.clone(), record);
+            }
+            Err(err) => self
+                .alerts
+                .push(format!("rehearsal of {laydown_id} did not run: {err}")),
+        }
     }
 
     /// Switch role, rebuilding the workspace with it.

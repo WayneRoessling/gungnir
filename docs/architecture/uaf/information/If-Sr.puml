@@ -281,6 +281,9 @@ class Laydown <<InformationElement>> {
   resources: Vec<ResourcePlacement>
   current: bool
 }
+class TestTrackNumber <<InformationElement>> {
+  pub u8
+}
 enum SensorMode <<InformationElement>> {
   Standby
   Search
