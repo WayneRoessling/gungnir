@@ -35,8 +35,8 @@
 
 use gungnir_api::v2::{
     ExchangeProduct, HistoryResponse, PublishExchangeRequest, SensorTaskRequest,
-    SensorTaskResponse, SessionRequest, SessionResponse, SnapshotResponse,
-    SubmitDetectionRequest, SubscribeRequest,
+    SensorTaskResponse, SessionRequest, SessionResponse, SnapshotResponse, SubmitDetectionRequest,
+    SubscribeRequest,
 };
 use gungnir_eventing::{Envelope, Event};
 use gungnir_intercept_service::PlanView;
@@ -314,7 +314,8 @@ impl NodeLink {
         products: Vec<ExchangeProductRecord>,
     ) {
         if let Ok(mut p) = self.projection.lock() {
-            p.exchange_outbox.push_back(OutboundExchange { item, products });
+            p.exchange_outbox
+                .push_back(OutboundExchange { item, products });
         }
     }
 
@@ -1094,8 +1095,14 @@ mod tests {
             exchange_url(&urls, gungnir_model::ExchangeItem::Handoffs),
             Some(urls.exchange_handoffs.as_str())
         );
-        assert_eq!(exchange_url(&urls, gungnir_model::ExchangeItem::Tracks), None);
-        assert_eq!(exchange_url(&urls, gungnir_model::ExchangeItem::Health), None);
+        assert_eq!(
+            exchange_url(&urls, gungnir_model::ExchangeItem::Tracks),
+            None
+        );
+        assert_eq!(
+            exchange_url(&urls, gungnir_model::ExchangeItem::Health),
+            None
+        );
     }
 
     /// GAP-065: queuing hands the whole batch to the outbox, oldest first, and does not
@@ -1114,7 +1121,10 @@ mod tests {
         );
         let p = link.read().expect("projection");
         assert_eq!(p.exchange_outbox.len(), 1);
-        assert_eq!(p.exchange_outbox[0].item, gungnir_model::ExchangeItem::Handoffs);
+        assert_eq!(
+            p.exchange_outbox[0].item,
+            gungnir_model::ExchangeItem::Handoffs
+        );
         assert_eq!(p.exchange_outbox[0].products[0].id, "decision-1");
     }
 

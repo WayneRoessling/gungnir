@@ -19,7 +19,9 @@ use std::sync::Arc;
 
 use gungnir_api::tls::{self, TlsListener, TlsPaths};
 use gungnir_api::transport::{serve_on_listener, AccountTokenAuthority, NodeApi};
-use gungnir_api::v2::{ExchangeProduct, ExchangeResponse, PublishExchangeRequest, SnapshotResponse};
+use gungnir_api::v2::{
+    ExchangeProduct, ExchangeResponse, PublishExchangeRequest, SnapshotResponse,
+};
 use gungnir_model::{
     ExchangeAgreement, ExchangeFormat, ExchangeItem, ExchangeSet, MissionTime, Releasability,
     SystemHealth,
@@ -512,7 +514,10 @@ async fn a_malformed_publish_changes_nothing_and_an_unauthenticated_one_is_refus
     let (status, body) = get(&pki, addr, "sector-north", "/v2/exchange/handoffs").await;
     assert_eq!(status, 200, "{body}");
     let (ids, withheld) = held(&body);
-    assert!(ids.is_empty(), "both handoffs api() published stay internal");
+    assert!(
+        ids.is_empty(),
+        "both handoffs api() published stay internal"
+    );
     assert_eq!(withheld, 2, "unchanged from api()'s own two handoffs");
 
     // No bearer token and no machine role for "desk-1": the same "no exchange agreement"
@@ -525,7 +530,11 @@ async fn a_malformed_publish_changes_nothing_and_an_unauthenticated_one_is_refus
         "POST",
         "/v2/exchange/handoffs",
         None,
-        Some(publish(vec![product("decision-9", 1.0, Releasability::AllPeers)])),
+        Some(publish(vec![product(
+            "decision-9",
+            1.0,
+            Releasability::AllPeers,
+        )])),
     )
     .await;
     assert_eq!(status, 403, "{body}");
