@@ -17,7 +17,7 @@ every part of the capability; implementation is what remains.
 
 | Capability | Design | Implementation | Evidence | Gaps |
 |---|---|---|---|---|
-| CAP-1.1 Ingest observations | full | partial | `gungnir-ingest` gateway and adapter trait; `gungnir-interop` codec boundary; `DetectionView` carries provenance | GAP-001, GAP-064 |
+| CAP-1.1 Ingest observations | full | partial | `gungnir-ingest` gateway and adapter trait; `gungnir-interop` codec boundary; `DetectionView` carries provenance | GAP-001, GAP-064, GAP-099 |
 | CAP-1.2 Validate and quarantine | full | partial | `IngestGateway` validation and quarantine; `gungnir-security` authentication trait | GAP-002 |
 | CAP-1.3 Sensor modes and tasking | full | partial | Registry, modes, coverage regions, and the outbound control path are built as of 2026-09-05 (GAP-003, GAP-004): a command is recorded, published, and swept for acknowledgement, and a requested mode is kept apart from the confirmed one. No adapter carries a command to a real sensor (GAP-001) and collection requirements are built and tasked from PN-15 but the list is not rebuilt at startup (GAP-005); DN-11 (`../../design/`) names a component for every remaining part | GAP-003, GAP-004, GAP-005 |
 | CAP-1.4 Coverage and gaps | full | partial | Coverage volumes in `gungnir-analytics`; gap detection as a function and map rendering of coverage are not designed; a component is now named for every part of it by DN-12 (`../../design/`, first draft 2026-09-05) | GAP-006, GAP-007 |

@@ -112,6 +112,8 @@ Diagram: [`If-Sr.puml`](If-Sr.puml).
 | `MaintenanceWindow` | struct | `sensor: SensorId`<br>`from: MissionTime`<br>`to: MissionTime`<br>`reason: String`<br>`state: MaintenanceState` | `gungnir-model/src/rhythm.rs` |
 | `MaintenanceState` | enum | `Planned`<br>`Active`<br>`Completed`<br>`Overrun` | `gungnir-model/src/rhythm.rs` |
 | `MissionTime` | tuple struct | `pub f64` | `gungnir-model/src/time.rs` |
+| `EnuPoint` | struct | `enu: [f64; 3]`<br>`elevation_reported: bool` | `gungnir-model/src/uas_platform.rs` |
+| `UasPlatformReport` | struct | `sensor: SensorId`<br>`platform_position: Option<EnuPoint>`<br>`platform_heading_rad: Option<f64>`<br>`platform_pitch_rad: Option<f64>`<br>`platform_roll_rad: Option<f64>`<br>`sensor_relative_azimuth_rad: Option<f64>`<br>`sensor_relative_elevation_rad: Option<f64>`<br>`sensor_relative_roll_rad: Option<f64>`<br>`slant_range_m: Option<f64>`<br>`frame_center: Option<EnuPoint>`<br>`platform_designation: Option<String>`<br>`platform_tail_number: Option<String>`<br>`mission_id: Option<String>`<br>`image_source_sensor: Option<String>`<br>`uas_lds_version: Option<u8>`<br>`source_time: MissionTime`<br>`receipt_time: MissionTime` | `gungnir-model/src/uas_platform.rs` |
 | `LayoutNode` | enum | `Panel { pn: String }`<br>`Tabs { children: Vec<LayoutNode> }`<br>`Horizontal { children: Vec<LayoutNode>, shares: Vec<f32>, }`<br>`Vertical { children: Vec<LayoutNode>, shares: Vec<f32>, }` | `gungnir-model/src/ui_settings.rs` |
 | `RoleLayout` | struct | `main: LayoutNode`<br>`detached: Vec<String>` | `gungnir-model/src/ui_settings.rs` |
 | `UiSettings` | struct | `layouts: BTreeMap<String, RoleLayout>`<br>`scene_3d: bool` | `gungnir-model/src/ui_settings.rs` |

@@ -54,6 +54,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-005 Collection requirements and tasking workflow | CAP-1.3, CAP-2.12 | 3 | M | I3 | `../../../ARCHITECTURE.md` §10 item 58 |
 | GAP-008 Clock-skew detection across sources | CAP-1.5 | 3 | M | I2 | `../../verification-capability-table.md` §2, `gungnir-time` row |
 | GAP-010 Cooperative identity decoders | CAP-1.7 | 4 | L | I2 | `../../design/external-standards.md` |
+| GAP-099 ISR video metadata (MISB ST 0601 KLV) has no adapter | CAP-1.1 | 3 | M | I3 | `../../design/external-standards.md` §8 and §8.2; GAP-001 (the closing action this gap is drawn from) |
 
 ### Productization: picture and identity
 
