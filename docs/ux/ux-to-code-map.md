@@ -75,10 +75,15 @@ with the same tokens through `egui_tiles::Behavior`'s colour hooks; the status s
 four private colours were removed in favour of the theme's; `theme::numeral` sets
 compared numbers in the monospace face (DS-05); and the contrast tests run against
 every surface, which raised `ALERT_COLOR` and `TRACK_DELETED_COLOR` to meet the rule.
-**Still open:** the night variant as a second constant set selected by a baseline
-setting (GAP-095, deferred by D-35), and the dashed low-confidence frame, which needs
-the policy margin `gungnir-policy` owns rather than a threshold invented in the
-viewport.
+On 2026-09-08 the tokens became fields of `theme::Palette` (GAP-095, ARCHITECTURE.md
+§10 item 112): `Palette::night()` is the second value DS-07 proposed, selected by
+`UiSettings::theme` (a `ConfigBaseline` setting, validated by `gungnir-config`) and
+resolved once into `AppState::palette` at start-up; every call site the constants
+used to reach directly now reads a `Palette` field or calls a theme function taking
+`&Palette`, threaded from there rather than through a global.
+
+**Still open:** the dashed low-confidence frame, which needs the policy margin
+`gungnir-policy` owns rather than a threshold invented in the viewport.
 
 ## 5. Engineering items filed (2026-09-04)
 
