@@ -5,7 +5,7 @@
 /.venv-oracles/
 /target-alt/
 **/target/
-/gungnir-journal/
+gungnir-journal/
 *.jsonl
 !docs/**/*.jsonl
 !testdata/tracks/samples/**/*.jsonl
