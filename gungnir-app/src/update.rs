@@ -76,6 +76,11 @@ pub fn tick(state: &mut AppState) {
     //     stalls a frame, and refused by name if its frame is not the picture's.
     crate::terrain::poll(state);
 
+    // 1b'. The configured point-cloud pair, if one is loading (GAP-098): same
+    //      off-frame loader pattern as terrain, on its own channel so the two never
+    //      contend over one loader thread.
+    crate::pointcloud::poll(state);
+
     // 2a. A seeded session (GAP-089): the mark once, then the plans and alerts the
     //     schedule brings due, through the same chain a live plan takes.
     crate::rehearsal::tick(state);

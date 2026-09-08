@@ -224,6 +224,18 @@ pub const SELECTION_HALO_COLOR: Color32 = Color32::from_rgb(240, 240, 240);
 /// engagement line.
 pub const LAYDOWN_PREVIEW_COLOR: Color32 = Color32::from_rgb(230, 100, 200);
 
+/// The source cloud of a registration pair (GAP-098): amber, so it does not read as any
+/// of the four `CLASS_*` classification colours (a point cloud is raw survey data, not
+/// a classified entity) and does not blend into the green-to-brown terrain shading it
+/// may be drawn over.
+pub const POINT_CLOUD_SOURCE_COLOR: Color32 = Color32::from_rgb(224, 168, 62);
+/// The target cloud of the same pair: periwinkle, distinct from the source colour above,
+/// from `CLASS_FRIENDLY_COLOR`'s more cyan blue, and from `COVERAGE_COLOR`'s darker
+/// teal -- close enough in family that the pair still reads as "the same kind of thing,
+/// twice" the way `COVERAGE_COLOR` and `CLASS_FRIENDLY_COLOR` already coexist as two
+/// blues in different visual roles.
+pub const POINT_CLOUD_TARGET_COLOR: Color32 = Color32::from_rgb(120, 140, 220);
+
 /// Seconds of time remaining at which a decision surface warns, and at which it
 /// becomes critical (DS-05). Read by the decision dialog and the approval queue.
 pub const TIME_REMAINING_WARN_S: f32 = 30.0;

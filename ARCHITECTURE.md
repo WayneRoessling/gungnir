@@ -4371,6 +4371,65 @@ not by finding, for the time between whenever each item landed and this correcti
     ordinary wiring at the two call sites, outside what either policy scopes as
     human-owned on its own account.
 
+112. **GAP-098: a point cloud can be configured, loaded, and drawn, end to end**
+    (2026-09-08). The capability §3 describes -- `gungnir-data`'s loaders, the CPU
+    read-back into the viewport's GL context -- had no way in and no way out: no
+    configuration field named a point cloud, the only `LoadRequest` either binary sent
+    was `Terrain`, and `gungnir-viewport3d` held no point-cloud layer. All three
+    closed the same day they were filed; GAP-024's registration engine is untouched
+    and still independent, with deliberately no edge between the two gaps.
+
+    `gungnir_config::PointCloudConfig` (`source`, `target`, `frame`) sits beside
+    `TerrainConfig`; each half is a `PointCloudFileConfig` naming a path and, for a
+    COPC file, the bounds its bounded reader needs. `validate_point_cloud` refuses a
+    COPC file with no bounds, bounds on a file that is not COPC (checked by the
+    `*.copc.laz` suffix convention, since `Path::extension` only ever returns
+    `"laz"`), an unknown extension, or a frame other than `"local-enu"` -- the same
+    shape of check `validate_terrain` already made for the DEM, narrower here because
+    the loader never reads a LAS file's own CRS, so there is no tag to contradict.
+    `gungnir_app::pointcloud` mirrors `terrain.rs` module for module: `start` sends
+    both requests to a loader channel of its own, kept apart from `terrain`'s so a
+    configured terrain and a configured pair load independently rather than
+    contending over one channel, and `poll` drains results without blocking a frame,
+    called from `update::tick` beside `terrain::poll`. The pair is all-or-nothing --
+    `data.point_clouds.len()` at the moment a result arrives is what tells
+    `apply_result` whether it is the source's or the target's, resting on
+    `spawn_loader`'s single worker thread draining one request channel strictly in
+    order (so results arrive in the order they were sent), and a cloud that loaded
+    before its partner failed is discarded rather than kept as a lone, unusable
+    entry. `gungnir_viewport3d::layers::PointCloudLayer` sits beside `TerrainLayer`,
+    borrowing a loaded buffer's positions the same way; `draw_point_clouds_2d`
+    decimates to a 20,000-point budget and draws the source and target in two new
+    theme colours so a loaded pair reads as a pair rather than one cloud.
+
+    **Positions are drawn relative to the cloud's own origin, not placed against the
+    deployment's ENU origin.** `PointBuffer` carries no parsed CRS -- unlike a DEM's
+    `GridCrs`, nothing here reads a LAS file's coordinate reference system -- so there
+    is no placement step to mirror `TerrainMesh::placed()`. The limitation is named on
+    `PointCloudLayer`'s own doc comment rather than closed over with an invented
+    alignment, the same choice `terrain.rs` makes for a DEM whose tags contradict
+    `"local-enu"`. PN-09's health panel is not touched: the viewport layer is the
+    reachability proof the closing action asked for, and a status line was never one
+    of its three pieces.
+
+    **Verification.** Reuses GAP-023's own vendored fixtures rather than adding a
+    third: `testdata/pointcloud/five-points.las` (5 points) as source, and the real
+    Autzen COPC hierarchy bounded to the same box `gungnir-data/tests/pointcloud.rs`'s
+    own happy-path test already queries (4767 points) as target.
+    `gungnir-app/tests/pointcloud.rs` drives a real desktop tick to a loaded pair and
+    checks both failure directions of the all-or-nothing rule (a missing source
+    discards nothing and names its own path; a missing target discards the source
+    that had already loaded); a `gungnir-config` test covers the validation rule's
+    every acceptance and refusal; a `gungnir-viewport3d` test constructs a
+    `PointCloudLayer` from a populated `PointBuffer` and confirms it borrows rather
+    than copies (`std::ptr::eq` on the two slices). Eleven new tests, all passing; the
+    rest of `cargo test --workspace` stays green. No dependency edge changed and no
+    new external crate: `gungnir-viewport3d` already depended on `gungnir-data` (§3,
+    §7.1), and `gungnir-app` already depended on both.
+
+    **Not human-owned.** None of `gungnir-config`, `gungnir-app` or
+    `gungnir-viewport3d` is on the low-trust list.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

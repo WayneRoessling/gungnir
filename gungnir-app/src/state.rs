@@ -68,6 +68,8 @@ pub struct AppState {
     pub rehearsal: Option<crate::rehearsal::Rehearsal>,
     /// Where the configured terrain stands (GAP-023).
     pub terrain: crate::terrain::TerrainStatus,
+    /// Where the configured point-cloud pair stands (GAP-098).
+    pub point_cloud: crate::pointcloud::PointCloudStatus,
     /// The radar feeds' service observations, drained each frame (GAP-064).
     pub service_sinks: Vec<gungnir_ingest::adapters::asterix::ServiceObservationSink>,
     /// Each bound feed's counters, by name, for PN-09 (GAP-001).
@@ -131,6 +133,13 @@ pub struct AppState {
     pub pending_warnings: Vec<crate::deliveries::PendingWarning>,
     /// The loader thread, while a load is in flight.
     pub loader: Option<(
+        crossbeam_channel::Sender<gungnir_data::LoadRequest>,
+        crossbeam_channel::Receiver<gungnir_data::LoadResult>,
+    )>,
+    /// The point-cloud pair's own loader thread (GAP-098), separate from [`Self::loader`]
+    /// so a configured terrain and a configured point-cloud pair can load at once
+    /// instead of contending over one channel.
+    pub pointcloud_loader: Option<(
         crossbeam_channel::Sender<gungnir_data::LoadRequest>,
         crossbeam_channel::Receiver<gungnir_data::LoadResult>,
     )>,
@@ -536,6 +545,7 @@ impl AppState {
             warnings: gungnir_workflow::warning::WarningLedger::default(),
             rehearsal: None,
             terrain: crate::terrain::TerrainStatus::NotConfigured,
+            point_cloud: crate::pointcloud::PointCloudStatus::NotConfigured,
             service_sinks: feeds.observations,
             feed_stats: feeds.stats,
             ais_sinks: ais.reports,
@@ -563,6 +573,7 @@ impl AppState {
             pending_handoffs: Vec::new(),
             pending_warnings: Vec::new(),
             loader: None,
+            pointcloud_loader: None,
             resources: config.resource_views(),
             last_plan: PlanView::default(),
             // `PlanId::default()` is `PlanId(0)`, which `DpInterceptService::next_plan_id`

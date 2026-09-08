@@ -483,6 +483,45 @@ fn default_terrain_frame() -> String {
     "local-enu".to_string()
 }
 
+/// One point-cloud file a deployment names (GAP-098): a LAS/LAZ path, or a COPC path
+/// with the octree bounds to read within it.
+///
+/// `copc_bounds` is required exactly when `path` is a COPC file (`*.copc.laz`) and
+/// refused otherwise: a plain LAS/LAZ read has no bounded query to apply them to, so a
+/// bound on a non-COPC entry is a contradiction rather than an ignored extra.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PointCloudFileConfig {
+    pub path: String,
+    /// `[min_x, min_y, min_z, max_x, max_y, max_z]` in the file's own frame, the same
+    /// shape `LoadRequest::CopcBounded` takes.
+    #[serde(default)]
+    pub copc_bounds: Option<[f32; 6]>,
+}
+
+/// The point-cloud pair a deployment configures (GAP-098): `source` is registered onto
+/// `target` (`gungnir-data-fusion::CpuIcp`, GAP-024 -- independent of this and gated on
+/// synthetic clouds of its own). Two files are named because registration needs a target
+/// as well as a source and no sensor in this workspace produces a cloud; naming one file
+/// and inventing something to align it to would be the fiction this baseline's other
+/// optional fields are written to avoid.
+///
+/// `frame` mirrors [`TerrainConfig::frame`]: today only `"local-enu"` is accepted. The
+/// reason is narrower here than for terrain -- the loader does not read a LAS file's own
+/// CRS at all, so there is no tag to contradict the declaration and check it against the
+/// way [`TerrainConfig`]'s DEM loader does; the field exists so a real projection, when
+/// one is added, has somewhere to be declared instead of being assumed silently.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PointCloudConfig {
+    pub source: PointCloudFileConfig,
+    pub target: PointCloudFileConfig,
+    #[serde(default = "default_pointcloud_frame")]
+    pub frame: String,
+}
+
+fn default_pointcloud_frame() -> String {
+    "local-enu".to_string()
+}
+
 /// A defended asset as the baseline states it (docs/design/DN-01-defended-assets.md).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AssetConfig {
@@ -956,6 +995,11 @@ pub struct ConfigBaseline {
     /// terrain, which the coverage report marks as optimistic.
     #[serde(default)]
     pub terrain: Option<TerrainConfig>,
+    /// The point-cloud pair to load, if any (GAP-098). Absent means no runtime point
+    /// cloud, which is a different statement from one being configured and failing to
+    /// load -- the desktop's own load status says which.
+    #[serde(default)]
+    pub point_cloud: Option<PointCloudConfig>,
     /// Per-role window arrangement (D-17, GAP-075). Absent means every role uses the
     /// default order `gungnir_workflow::WorkspaceLayout::for_role` produces.
     #[serde(default)]
@@ -1077,6 +1121,7 @@ impl Default for ConfigBaseline {
             policy: PolicySettings::default(),
             assessment: AssessmentConfig::default(),
             terrain: None,
+            point_cloud: None,
             ui: UiSettings::default(),
             vocabulary: Vocabulary::default(),
             analytics: AnalyticsConfig::default(),
@@ -2036,6 +2081,74 @@ fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     Ok(())
 }
 
+/// GAP-098: each of the pair names a file the loader reads, a COPC file carries the
+/// bounds its bounded reader needs and a plain LAS/LAZ file carries none, and the pair
+/// declares a frame the desktop can place. Existence is not checked here, the same
+/// reason `validate_terrain` does not: a baseline is validated on machines that do not
+/// hold the file, and the loader reports a missing one at start.
+fn validate_point_cloud(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    let Some(pc) = &baseline.point_cloud else {
+        return Ok(());
+    };
+    validate_point_cloud_file(&pc.source, "point_cloud.source")?;
+    validate_point_cloud_file(&pc.target, "point_cloud.target")?;
+    if pc.frame != "local-enu" {
+        return Err(ConfigError::Invalid(format!(
+            "point_cloud.frame {:?} is not supported; only \"local-enu\" is, because no \
+             projection library is in the approved stack",
+            pc.frame
+        )));
+    }
+    Ok(())
+}
+
+/// One file of a [`PointCloudConfig`] pair, checked under `field` (`"point_cloud.source"`
+/// or `"point_cloud.target"`) so a refusal names which half of the pair is wrong.
+fn validate_point_cloud_file(file: &PointCloudFileConfig, field: &str) -> Result<(), ConfigError> {
+    let extension = std::path::Path::new(&file.path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    if !matches!(extension.as_deref(), Some("las" | "laz")) {
+        return Err(ConfigError::Invalid(format!(
+            "{field}.path {:?} is not a LAS (.las) or LAZ/COPC (.laz) file",
+            file.path
+        )));
+    }
+    // COPC is a hierarchy laid out inside a `.laz` file, not a distinct extension, so
+    // the convention `*.copc.laz` -- not `Path::extension`, which would just say "laz"
+    // -- is what tells a bounded file from a plain one.
+    let is_copc = file.path.to_ascii_lowercase().ends_with(".copc.laz");
+    match (is_copc, file.copc_bounds) {
+        (true, None) => Err(ConfigError::Invalid(format!(
+            "{field}.path {:?} is a COPC file and needs {field}.copc_bounds to read a bounded \
+             region from it",
+            file.path
+        ))),
+        (false, Some(bounds)) => Err(ConfigError::Invalid(format!(
+            "{field}.copc_bounds {bounds:?} is set on {:?}, which is not a COPC file (its name \
+             does not end \".copc.laz\"); a plain LAS/LAZ read has no bounded query to apply \
+             them to",
+            file.path
+        ))),
+        (true, Some(bounds)) => {
+            let [min_x, min_y, min_z, max_x, max_y, max_z] = bounds;
+            if !bounds.iter().all(|v| v.is_finite()) {
+                return Err(ConfigError::Invalid(format!(
+                    "{field}.copc_bounds {bounds:?} are not all finite"
+                )));
+            }
+            if min_x > max_x || min_y > max_y || min_z > max_z {
+                return Err(ConfigError::Invalid(format!(
+                    "{field}.copc_bounds {bounds:?} has a minimum past its own maximum"
+                )));
+            }
+            Ok(())
+        }
+        (false, None) => Ok(()),
+    }
+}
+
 /// DN-07 §6: a resource's handoff endpoint names an entry in the endpoint table.
 fn validate_handoff_endpoints(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     for r in &baseline.resources {
@@ -2965,6 +3078,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     validate_geofences(baseline)?;
     validate_handoff_endpoints(baseline)?;
     validate_terrain(baseline)?;
+    validate_point_cloud(baseline)?;
     validate_radar_feeds(baseline)?;
     validate_ais_feeds(baseline)?;
     validate_adsb_feeds(baseline)?;
@@ -4213,6 +4327,87 @@ mod tests {
             frame: "EPSG:32633".into(),
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
+    }
+
+    #[test]
+    fn a_point_cloud_pair_needs_known_formats_bounds_only_on_copc_and_the_local_frame() {
+        let file = |path: &str, bounds: Option<[f32; 6]>| PointCloudFileConfig {
+            path: path.into(),
+            copc_bounds: bounds,
+        };
+        let mut b = ConfigBaseline {
+            point_cloud: Some(PointCloudConfig {
+                source: file("clouds/a.las", None),
+                target: file("clouds/b.copc.laz", Some([0.0, 0.0, 0.0, 1.0, 1.0, 1.0])),
+                frame: "local-enu".into(),
+            }),
+            ..ConfigBaseline::default()
+        };
+        validate(&b).expect("a LAS source and a bounded COPC target are valid");
+
+        // Neither format nor extension is enough on its own: a `.laz` file with no
+        // `.copc.laz` suffix is plain LAZ and must carry no bounds.
+        let Some(pc) = &mut b.point_cloud else {
+            unreachable!("just set")
+        };
+        pc.target = file("clouds/b.laz", None);
+        validate(&b).expect("a plain LAZ target with no bounds is valid");
+
+        // An unknown extension is refused on either half of the pair.
+        let mut wrong_extension = b.clone();
+        wrong_extension.point_cloud.as_mut().unwrap().source = file("clouds/a.ply", None);
+        assert!(matches!(
+            validate(&wrong_extension),
+            Err(ConfigError::Invalid(_))
+        ));
+
+        // A COPC file with no bounds is refused (nothing to query the octree with).
+        let mut copc_no_bounds = b.clone();
+        copc_no_bounds.point_cloud.as_mut().unwrap().target = file("clouds/b.copc.laz", None);
+        assert!(matches!(
+            validate(&copc_no_bounds),
+            Err(ConfigError::Invalid(_))
+        ));
+
+        // Bounds on a non-COPC file are refused (nothing bounded reads them).
+        let mut bounds_on_plain = b.clone();
+        bounds_on_plain.point_cloud.as_mut().unwrap().target =
+            file("clouds/b.laz", Some([0.0, 0.0, 0.0, 1.0, 1.0, 1.0]));
+        assert!(matches!(
+            validate(&bounds_on_plain),
+            Err(ConfigError::Invalid(_))
+        ));
+
+        // Non-finite and inverted bounds are refused the same way the runtime reader
+        // refuses them, at validation time rather than only when the loader runs.
+        let mut nan_bounds = b.clone();
+        nan_bounds.point_cloud.as_mut().unwrap().target = file(
+            "clouds/b.copc.laz",
+            Some([f32::NAN, 0.0, 0.0, 1.0, 1.0, 1.0]),
+        );
+        assert!(matches!(
+            validate(&nan_bounds),
+            Err(ConfigError::Invalid(_))
+        ));
+        let mut inverted_bounds = b.clone();
+        inverted_bounds.point_cloud.as_mut().unwrap().target =
+            file("clouds/b.copc.laz", Some([5.0, 0.0, 0.0, 1.0, 1.0, 1.0]));
+        assert!(matches!(
+            validate(&inverted_bounds),
+            Err(ConfigError::Invalid(_))
+        ));
+
+        // An unsupported frame is refused even when both files are otherwise valid.
+        let mut wrong_frame = b.clone();
+        wrong_frame.point_cloud.as_mut().unwrap().frame = "EPSG:32633".into();
+        assert!(matches!(
+            validate(&wrong_frame),
+            Err(ConfigError::Invalid(_))
+        ));
+
+        // No point-cloud entry at all is the common case and must not be refused.
+        b.point_cloud = None;
+        validate(&b).expect("no point cloud configured is valid");
     }
 
     #[test]

@@ -371,6 +371,8 @@ impl App {
                             sensors: &p.sensor_positions,
                             resources: &p.resource_positions,
                         });
+                let point_clouds =
+                    gungnir_app::pointcloud::layers(&self.state.point_cloud, &self.state.data);
                 gungnir_viewport3d::render(
                     ui,
                     &mut self.state.viewport,
@@ -383,6 +385,7 @@ impl App {
                         geofences: &geofences,
                         predictions: &predictions,
                         terrain: gungnir_app::terrain::layer(&self.state.terrain, &self.state.data),
+                        point_clouds: &point_clouds,
                         laydown_preview,
                     },
                 );
@@ -546,6 +549,9 @@ impl App {
                     sensors: &p.sensor_positions,
                     resources: &p.resource_positions,
                 });
+        // GAP-098: the configured point-cloud pair, on whichever renderer is running.
+        let point_clouds =
+            gungnir_app::pointcloud::layers(&self.state.point_cloud, &self.state.data);
 
         let layers = gungnir_viewport3d::layers::LayerInputs {
             coverage,
@@ -554,6 +560,7 @@ impl App {
             geofences: &geofences,
             predictions: &predictions,
             terrain: gungnir_app::terrain::layer(&self.state.terrain, &self.state.data),
+            point_clouds: &point_clouds,
             laydown_preview,
         };
         let Some(scene) = self.scene.clone().filter(|_| self.state.viewport.use_3d) else {
