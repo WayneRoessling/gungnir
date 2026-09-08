@@ -18,6 +18,7 @@
 
 pub mod cat034;
 pub mod cat048;
+pub mod cat205;
 
 use crate::InteropError;
 use gungnir_model::SensorId;
@@ -237,10 +238,13 @@ impl<'a> Cursor<'a> {
 }
 
 /// Sign-extend the low `bits` bits of `raw` (two's complement fields narrower
-/// than their octets, such as the 14-bit flight level in I048/090).
-pub(crate) fn sign_extend(raw: u16, bits: u32) -> i32 {
+/// than their octets, such as the 14-bit flight level in I048/090 or the 24-bit
+/// Cartesian coordinates of I205/060). `raw` is `u32` rather than `u16` so one
+/// function covers both widths; a caller with a 16-bit field widens it with
+/// `u32::from` first, which is lossless.
+pub(crate) fn sign_extend(raw: u32, bits: u32) -> i32 {
     let shift = 32 - bits;
-    let widened = i32::from(raw) << shift;
+    let widened = i32::from_ne_bytes(raw.to_ne_bytes()) << shift;
     widened >> shift
 }
 

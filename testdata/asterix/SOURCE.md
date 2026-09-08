@@ -92,3 +92,62 @@ The 100 datagrams and the two standalone blocks are the `asterix_feed` fuzz corp
   payload at byte 42 of each packet; the `.raw` files are bare data blocks.
 - Re-verify the hashes above before trusting a copy that has passed through anything
   other than version control.
+
+## Category 205 (`cat205.raw`, added 2026-09-08, GAP-100)
+
+**`cat205.raw` is not a capture. It is a hand-built record, and this section says so
+plainly rather than letting it pass for one.** No real-world Category 205 recording
+exists to vendor:
+
+- EUROCONTROL publishes no sample recordings for any ASTERIX category, Category 205
+  included (`docs/design/external-standards.md` §1.5 already established this for
+  Categories 048 and 034; the same is true here).
+- The `CroatiaControlLtd/asterix` repository that supplied `cat048.raw` and `cat034.raw`
+  carries a Category 205 field **definition** (`install/config/asterix_cat205_1_0.xml`,
+  for its own decoder to read) but no file under `asterix/sample_data/` for the
+  category: that directory holds only `cat034.raw`, `cat048.raw`, `cat062cat065.raw`,
+  `cat_034_048.pcap` and `cat_062_065.pcap`, checked 2026-09-08.
+- `asterix-specs` (`docs/design/external-standards.md` §1.4) carries only the edition
+  1.0 specification itself in machine-readable form, no sample messages.
+
+So the fixture is synthesized directly from the specification's own byte-layout
+tables, the same discipline `docs/design/DN-27-bearing-only-detections.md` and
+`docs/design/external-standards.md` apply throughout this workspace: documented,
+honest about its origin, and never presented as a real-world capture.
+
+| Field | Value |
+|---|---|
+| File | `cat205.raw` |
+| Bytes | 27 |
+| SHA-256 | `342d6750c860984484630d64f44afad40a461e005eca7e34b6e966c80db18305` |
+| Origin | Hand-built 2026-09-08 against EUROCONTROL-SPEC-0149-31 edition 1.0 §5, fetched and read in full from `https://www.eurocontrol.int/sites/default/files/2020-03/eurocontrol-cat205p31ed10.pdf` |
+| Licence | None -- an original, minimal test value, not a derivative of any third party's data |
+
+**What it holds.** One data block, one record (Category 205 forbids blocking more than
+one record per block, edition 1.0 §4.4), a Message Type 5 "Sensor Data Report" with
+FSPEC flagging FRN 1, 3, 4, 5, 6, 9, 19, 20, 21:
+
+| Item | Field | Wire count | Decoded value |
+|---|---|---|---|
+| I205/010 | Data Source Identifier | `0x63 0x01` | SAC 99, SIC 1 |
+| I205/000 | Message Type | `0x05` | 5 (Sensor Data Report) |
+| I205/030 | Time of Day | `0x54 0x60 0x00` | 43 200.0 s (12:00:00 UTC) -- the same count `gungnir-interop/src/asterix/cat048.rs`'s own hand-built fixture uses for the same time, by construction |
+| I205/040 | Report Number | `0x01` | 1 |
+| I205/090 | Radio Channel Name | `"121.500"` | `"121.500"` (seven ASCII octets, carried verbatim) |
+| I205/070 | Local Bearing | `0x11 0x94` (4500) | 45.00 deg, LSB 0.01 deg |
+| I205/180 | Signal Level | `0x15 0x7C` (5500) | 55.00 dBµV, LSB 0.01 |
+| I205/190 | Signal Quality | `0xC8` (200) | 200 / 255 |
+| I205/200 | Signal Elevation | `0x04 0xE2` (1250) | 12.50 deg, LSB 0.01 deg |
+
+Every count above is the specification's own encoding rule applied by hand (§5.2 of the
+primary PDF, cross-checked against `asterix-specs`' cat205 cat-1.0 machine-readable UAP,
+which agrees on the field order and lengths in Table 3); "known-correct" here means
+"the specification's stated LSB and byte order applied to a chosen count", not a value
+taken from any other decoder, since none exists to compare against. The field-by-field
+table above **is** the worked reasoning, not a summary of it.
+
+`gungnir-interop/src/asterix/cat205.rs`'s own unit tests build and decode the identical
+27 bytes inline (`hand_built_block`), so the crate's fast unit-test coverage and this
+on-disk fixture describe the same record; `gungnir-interop/tests/asterix_fixtures.rs`
+reads this file with `include_bytes!` for the integration-level "reads a fixture off
+disk" case, the same role `cat048.raw`/`cat034.raw` play for their categories.

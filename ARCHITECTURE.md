@@ -4593,6 +4593,42 @@ not by finding, for the time between whenever each item landed and this correcti
     `gungnir-viewport3d`, `gungnir-model` and `gungnir-config` are not on
     `docs/agentic-workflow.md`'s list.
 
+114. **GAP-100: ASTERIX Category 205 direction-finder bearings, decoded and adapted**
+    (2026-09-08). `docs/design/external-standards.md` §9 pinned EUROCONTROL-SPEC-0149-31
+    edition 1.0 the same day, fetched and read in full; `gungnir-interop/src/asterix/
+    cat205.rs` decodes every standard-UAP item Table 3 defines, typed where the
+    specification fixes a meaning and carried raw where its own §4.6 calls an item
+    "implementation dependent" (I205/100, /120, /170), the same treatment Category 048
+    already gives items it does not interpret. **The one design question the survey
+    called "the real work"**: no message type in this category states an angular error
+    for a bearing at all, so `DfSite::azimuth_sigma_rad` is the deployment's own stated
+    accuracy from that direction finder's Interface Control Document, supplied by the
+    caller and never invented -- the same refusal `gungnir_ingest::adapters::sapient`'s
+    `range_bearing` already makes and the same rule the gateway's own validation
+    enforces regardless. The decoded bearing becomes `gungnir_model::Measurement::
+    Bearing`, DN-27's type, confirmed present and unchanged on `main` before this was
+    built rather than assumed. Message types 1 and 3 (the processing system's own
+    already-resolved position) decode losslessly but are deliberately not mapped:
+    turning either into this deployment's local frame needs `gungnir-geo`, which this
+    crate may not depend on. `gungnir_ingest::adapters::asterix::AsterixFeedAdapter`
+    gained a third category arm and an opt-in `with_df_sites` builder, so no existing
+    call site changed. No real Category 205 capture exists anywhere to vendor (checked:
+    neither EUROCONTROL, the `CroatiaControlLtd/asterix` repository, nor `asterix-specs`
+    carries one), so `testdata/asterix/cat205.raw` is hand-built directly from the
+    specification's own byte tables and documented as exactly that in
+    `testdata/asterix/SOURCE.md`'s new Category 205 section. Category 129 (UAS
+    Identification Reports), surveyed alongside 205 in the same note, is deliberately
+    not built here: a different report shape that would not share this gap's one hard
+    question. 42 new tests across `gungnir-interop` (the codec, its fixture, and the
+    catalogue's own conformance and wire-coverage declarations) and `gungnir-ingest`
+    (adapter routing), all passing; no regression elsewhere.
+
+    **Human-owned crate touched (`gungnir-ingest`, the low-trust gateway); written and
+    gated, not signed.** Host configuration wiring (`ConfigBaseline`, `gungnir-app`,
+    `gungnir-node`) is deferred, the same shape GAP-001 deferred Category 034's host
+    wiring in; a bearing this adapter produces does not yet reach an operator's screen,
+    which is GAP-096 and not this gap's to fix.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

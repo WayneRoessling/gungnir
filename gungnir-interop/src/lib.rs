@@ -24,6 +24,7 @@ pub use adsb::AdsbCodec;
 pub use ais::AisCodec;
 pub use asterix::cat034::{AsterixCat034Codec, RadarServiceReport, ServiceEvent};
 pub use asterix::cat048::AsterixCat048Codec;
+pub use asterix::cat205::{AsterixCat205Codec, DfSite};
 pub use asterix::RadarSite;
 
 use arrow::array::{Array, ArrayRef, Float64Array, StringArray, UInt32Array};
@@ -67,9 +68,10 @@ pub enum InteropError {
         found: u8,
         offset: usize,
     },
-    /// A report from a radar the codec was not configured with (`RadarSite`). The
-    /// report is not attributed to a guessed sensor.
-    #[error("{codec}: report from SAC {sac} SIC {sic}, which no configured radar site matches")]
+    /// A report from a site the codec was not configured with (a radar's `RadarSite`
+    /// or, since Category 205, a direction finder's `DfSite`). The report is not
+    /// attributed to a guessed sensor.
+    #[error("{codec}: report from SAC {sac} SIC {sic}, which no configured site matches")]
     UnknownRadar {
         codec: &'static str,
         sac: u8,
@@ -173,6 +175,14 @@ impl SchemaCatalog {
                     name: "asterix.cat034".into(),
                     version: 1,
                     kind: SchemaKind::AsterixCategory(34),
+                },
+                // Pinned 2026-09-08 in docs/design/external-standards.md §9 (GAP-100):
+                // Category 205, Radio Direction Finder Reports, edition 1.0. Decodes
+                // (`asterix::cat205`); does not encode, for the same reason 048 does not.
+                SchemaEntry {
+                    name: "asterix.cat205".into(),
+                    version: 1,
+                    kind: SchemaKind::AsterixCategory(205),
                 },
                 SchemaEntry {
                     name: "stanag.4676".into(),
@@ -559,6 +569,16 @@ mod tests {
         assert_eq!(
             c.lookup("asterix.cat034").map(|e| &e.kind),
             Some(&SchemaKind::AsterixCategory(34))
+        );
+    }
+
+    /// GAP-100: the build declares Category 205 too, once it decodes.
+    #[test]
+    fn catalog_lists_category_205() {
+        let c = SchemaCatalog::builtin();
+        assert_eq!(
+            c.lookup("asterix.cat205").map(|e| &e.kind),
+            Some(&SchemaKind::AsterixCategory(205))
         );
     }
 

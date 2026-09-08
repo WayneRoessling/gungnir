@@ -1001,31 +1001,99 @@ the identical bytes and on the checksum mismatch itself. 4 unit tests on the ada
 `gungnir-ingest` and 2 tests running the vendored fixture and a hand-built well-formed
 frame through the real `IngestGateway` end to end (`gungnir-ingest/tests/misb_feed.rs`).
 
-## 9. Radio direction finding: ASTERIX Category 205 -- surveyed 2026-09-06, **not pinned**
+## 9. Radio direction finding: ASTERIX Category 205 -- surveyed 2026-09-06, **pinned and built 2026-09-08 (GAP-100)**
 
-**Deliberately not pinned, and it is the cheaper option that was passed over on purpose.**
-Category 205 would be nearly free to add given the existing ASTERIX decoder, but it
-advances one feed where §7's pin advances three, and a deployment that brings a direction
-finder speaking Category 205 can have this pinned then. The survey stands so that decision
-costs nothing to revisit.
+**Surveyed as the cheaper option passed over on purpose, then taken.** The 2026-09-06
+survey found Category 205 nearly free to add given the existing ASTERIX decoder, but left
+it unpinned because it advances one feed where §7's SAPIENT pin advances three. GAP-100
+took it up 2026-09-08: the bearing-only decision this section always said it needed
+(§7.3, DN-27) was confirmed built and unchanged on `main` first, per that gap's own
+instruction to check rather than assume before writing a second bearing representation.
 
 The cheapest of all of these, because §1 already pins documents from the same family under
 the same terms.
 
+### 9.1 What is pinned
+
 **EUROCONTROL-SPEC-0149-31, ASTERIX Part 31, Category 205, Radio Direction Finder
-Reports**, Edition 1.0, 2020-03-17, 41 pp, ISBN 978-2-87497-028-3. The document's own
+Reports**, Edition **1.0**, 2020-03-17, 41 pp, ISBN 978-2-87497-028-3. The document's own
 status page reads "Released Issue", "Intended for: General Public", "Accessible via:
 Internet". Free PDF at
-`https://www.eurocontrol.int/sites/default/files/2020-03/eurocontrol-cat205p31ed10.pdf`.
+`https://www.eurocontrol.int/sites/default/files/2020-03/eurocontrol-cat205p31ed10.pdf`,
+fetched and read in full for GAP-100 rather than assumed from this survey's own summary.
 
 Its data items are a direction-finder report and nothing else: `I205/070` local bearing,
 `I205/080` system bearing, `I205/090` radio channel name, `I205/100` quality of
 measurement, `I205/110` estimated uncertainty, `I205/120` contributing sensors, and both
 geodetic and Cartesian position. Adjacent and also free: **Category 129, UAS
-Identification Reports**, Edition 1.2, 2019-06-12.
+Identification Reports**, Edition 1.2, 2019-06-12 -- surveyed the same day as 205 but
+**not pinned and not built under GAP-100**: it is a different report shape
+(identification, not a bearing) that would not share Category 205's one hard design
+question (9.2 below), and forcing it into the same change would not have simplified
+verifying that question's answer. It remains open for a future gap.
 
-**Nothing new has to be licensed to use it.** What is needed is the same bearing-only
-decision §7.3 names.
+**One nuance this pin has that Category 048 and 034's did not.** Edition 1.0 itself cites
+Part I edition **2.4** (24 October 2016) in its own bibliography, not the edition 3.1
+§1.6 pinned and `gungnir-interop`'s shared ASTERIX framing already implements. The two
+editions agree on the data block, record and FSPEC structure that framing depends on,
+checked by hand against edition 1.0's own §4.4 diagram; a difference elsewhere in Part I
+between 2.4 and 3.1 would not be caught by that comparison and has not been separately
+checked. Cross-checked against `asterix-specs`' cat205 edition-1.0 machine-readable UAP
+per §1.4's own rule (to cross-check, never as the authority): the two agree on field order
+and lengths.
+
+**Nothing new has to be licensed to use it.** What was needed was the same bearing-only
+decision §7.3 names, and it was already built and signed (DN-27) before this section's
+survey was written.
+
+### 9.2 What is built (2026-09-08)
+
+`gungnir-interop/src/asterix/cat205.rs` decodes every standard-UAP item Table 3 defines,
+typed where edition 1.0 fixes a meaning and carried raw and named where its own §4.6
+calls an item "implementation dependent" (`I205/100`, `/120`, `/170`) -- the same
+treatment §1.8 already gives items Category 048 does not interpret. `AsterixCat205Codec`
+maps a **Sensor Data Report** or a **System Bearing Report** (message types 5 and 2, the
+two that carry a bearing) to `Measurement::Bearing`.
+
+**The one design question, and it is the same one this section always pointed at.** No
+message type in this category states an *angular* error for a bearing: `I205/110`
+Estimated Uncertainty is a positional radius and Table 2 marks it never-present for the
+message type that pairs a bearing with a position, and `I205/100` carries no fixed unit at
+all. So the codec cannot honestly read a variance off the wire and does not invent one:
+`DfSite::azimuth_sigma_rad` is the deployment's own stated accuracy from that direction
+finder's Interface Control Document, supplied by the caller the way `RadarSite::
+origin_enu_m` already is, and never defaulted -- the same refusal
+`gungnir_ingest::adapters::sapient`'s `range_bearing` makes for an unstated azimuth error,
+and the same rule the gateway's own validation enforces regardless. A site with no stated
+accuracy is simply not configured, the same as an unbound radar. `I205/200` Signal
+Elevation decodes but never reaches the measurement for the identical reason: no companion
+error exists anywhere in this category, so it is dropped with the loss recorded rather
+than given an invented one.
+
+**Deliberately not mapped**: message types 1 and 3, the RDF processing system's own
+already-resolved position in WGS-84 or an unnamed Cartesian frame. Converting either to
+this deployment's local ENU needs `gungnir-geo`, which this crate may not depend on
+(`ARCHITECTURE.md` §7), and trusting an unnamed Cartesian frame to already be this
+deployment's would be exactly the unstated-convention error DN-27 §4 warns against. Both
+decode losslessly and map to a named `Mapped::NotADetection`.
+
+`gungnir_ingest::adapters::asterix::AsterixFeedAdapter` gained a third category arm and an
+opt-in `with_df_sites` builder (`DfBinding` mirroring `RadarBinding`), so no existing call
+site changed; `ConfigBaseline`/`gungnir-app`/`gungnir-node` host configuration wiring is
+deliberately deferred, the same shape §1.8's own table records for Category 034's host
+wiring at the time it landed. No real Category 205 capture exists anywhere to vendor
+(checked: EUROCONTROL publishes none, `CroatiaControlLtd/asterix` carries only a
+field-definition XML for this category and no sample data, `asterix-specs` carries only
+the specification), so `testdata/asterix/cat205.raw` is hand-built directly from edition
+1.0's own byte tables and documented as exactly that, never as a real-world recording, in
+`testdata/asterix/SOURCE.md`'s Category 205 section.
+
+Tests: six unit tests in the codec (the hand-built record at the specification's own
+least significant bits, the no-blocking rule, a reserved FRN, truncation at every length),
+four fixture tests in `gungnir-interop/tests/asterix_fixtures.rs` against the hand-built
+capture, the catalogue's own conformance and wire-coverage declarations in
+`gungnir-interop/tests/conformance.rs`, and two adapter-routing tests in
+`gungnir-ingest/src/adapters/asterix.rs`.
 
 ## 6. Consequences for GAP-064, GAP-010 and GAP-091
 
