@@ -814,7 +814,10 @@ mod tests {
 
     #[test]
     fn a_spotter_registers_and_its_bearing_becomes_a_bearing() {
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), bearing_report()], SPOTTER_NODE_TYPE);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), bearing_report()],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
         assert!(a.is_registered(NODE));
         assert_eq!(out.len(), 1);
@@ -846,7 +849,10 @@ mod tests {
     /// shape of the uncertainty.
     #[test]
     fn a_lased_range_becomes_a_polar_report_and_not_a_flattened_position() {
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), ranged_report()], SPOTTER_NODE_TYPE);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), ranged_report()],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(1_692_008_523.0)).expect("polls");
         assert_eq!(out.len(), 1);
         match out[0].measurement {
@@ -889,7 +895,10 @@ mod tests {
     /// configuration, not about the two node types being unsupported.
     #[test]
     fn another_node_type_is_named_rather_than_accepted() {
-        let mut a = adapter(vec![registration("NODE_TYPE_ACOUSTIC"), bearing_report()], SPOTTER_NODE_TYPE);
+        let mut a = adapter(
+            vec![registration("NODE_TYPE_ACOUSTIC"), bearing_report()],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
         assert!(out.is_empty());
         assert!(!a.is_registered(NODE));
@@ -917,7 +926,9 @@ mod tests {
         assert!(out.is_empty());
         assert!(!a.is_registered(NODE));
         assert_eq!(
-            a.stats().unhandled.get(&format!("node-type:{SPOTTER_NODE_TYPE}")),
+            a.stats()
+                .unhandled
+                .get(&format!("node-type:{SPOTTER_NODE_TYPE}")),
             Some(&1)
         );
     }
@@ -989,7 +1000,10 @@ mod tests {
         let report = format!(
             r#"{{"timestamp":"2023-08-14T10:22:02.000000Z","nodeId":"{NODE}","detectionReport":{{"rangeBearing":{{"azimuth":37.0,"azimuthError":1.0,"coordinateSystem":"RANGE_BEARING_COORDINATE_SYSTEM_DEGREES_M","datum":"RANGE_BEARING_DATUM_MAGNETIC"}}}}}}"#
         );
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), report], SPOTTER_NODE_TYPE);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), report],
+            SPOTTER_NODE_TYPE,
+        );
         assert!(a
             .poll(MissionTime(1_692_008_522.0))
             .expect("polls")
@@ -1009,7 +1023,10 @@ mod tests {
         let report = format!(
             r#"{{"timestamp":"2023-08-14T10:22:02.000000Z","nodeId":"{NODE}","detectionReport":{{"rangeBearing":{{"azimuth":37.0,"coordinateSystem":"RANGE_BEARING_COORDINATE_SYSTEM_DEGREES_M","datum":"RANGE_BEARING_DATUM_TRUE"}}}}}}"#
         );
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), report], SPOTTER_NODE_TYPE);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), report],
+            SPOTTER_NODE_TYPE,
+        );
         assert!(a
             .poll(MissionTime(1_692_008_522.0))
             .expect("polls")
@@ -1029,7 +1046,10 @@ mod tests {
         let report = format!(
             r#"{{"timestamp":"2023-08-14T10:22:02.000000Z","nodeId":"{NODE}","detectionReport":{{"rangeBearing":{{"azimuth":37.0,"azimuthError":1.0,"coordinateSystem":"RANGE_BEARING_COORDINATE_SYSTEM_UNSPECIFIED","datum":"RANGE_BEARING_DATUM_TRUE"}}}}}}"#
         );
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), report], SPOTTER_NODE_TYPE);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), report],
+            SPOTTER_NODE_TYPE,
+        );
         assert!(a
             .poll(MissionTime(1_692_008_522.0))
             .expect("polls")
@@ -1049,7 +1069,10 @@ mod tests {
         let status = format!(
             r#"{{"timestamp":"2023-08-14T10:22:02.000000Z","nodeId":"{NODE}","statusReport":{{"reportId":"S1"}}}}"#
         );
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), status], SPOTTER_NODE_TYPE);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), status],
+            SPOTTER_NODE_TYPE,
+        );
         assert!(a
             .poll(MissionTime(1_692_008_522.0))
             .expect("polls")
@@ -1063,11 +1086,14 @@ mod tests {
     /// A line that is not JSON is counted, and the feed carries on.
     #[test]
     fn a_broken_line_is_counted_and_the_feed_carries_on() {
-        let mut a = adapter(vec![
-            registration(SPOTTER_NODE_TYPE),
-            "{not json".to_string(),
-            bearing_report(),
-        ], SPOTTER_NODE_TYPE);
+        let mut a = adapter(
+            vec![
+                registration(SPOTTER_NODE_TYPE),
+                "{not json".to_string(),
+                bearing_report(),
+            ],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
         assert_eq!(out.len(), 1);
         assert_eq!(a.stats().undecodable, 1);
@@ -1078,13 +1104,19 @@ mod tests {
     /// substitution written down when it is not.
     #[test]
     fn a_timestamp_on_another_clock_is_not_believed() {
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), bearing_report()], SPOTTER_NODE_TYPE);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), bearing_report()],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(1_692_008_522.0)).expect("polls");
         assert!((out[0].source_time.0 - 1_692_008_522.340_051).abs() < 1e-6);
         assert!(out[0].provenance.conversion_loss.is_none());
 
         // A replayed session, whose mission time is seconds since the session started.
-        let mut a = adapter(vec![registration(SPOTTER_NODE_TYPE), bearing_report()], SPOTTER_NODE_TYPE);
+        let mut a = adapter(
+            vec![registration(SPOTTER_NODE_TYPE), bearing_report()],
+            SPOTTER_NODE_TYPE,
+        );
         let out = a.poll(MissionTime(42.0)).expect("polls");
         assert_eq!(out[0].source_time, MissionTime(42.0));
         assert!(out[0]

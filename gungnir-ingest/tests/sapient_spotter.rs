@@ -19,7 +19,9 @@
 //! the assertions below check the variant of every measurement and the name of every
 //! refusal, not the totals.
 
-use gungnir_ingest::adapters::sapient::{RecordedSapientSource, SapientDetectionAdapter, SPOTTER_NODE_TYPE};
+use gungnir_ingest::adapters::sapient::{
+    RecordedSapientSource, SapientDetectionAdapter, SPOTTER_NODE_TYPE,
+};
 use gungnir_ingest::{IngestGateway, ProtocolAdapter, SourceAuthenticator};
 use gungnir_model::events::IngestEvent;
 use gungnir_model::{Geodetic, LocalFrame, Measurement, MissionTime, SensorId, TrackView};
@@ -47,7 +49,14 @@ const SPOTTER: SensorId = SensorId(21);
 
 fn adapter_over(path: &std::path::Path) -> SapientDetectionAdapter<RecordedSapientSource> {
     let source = RecordedSapientSource::open(path).expect("the fixture is readable");
-    SapientDetectionAdapter::new("op-1", SPOTTER, frame(), [0.0, 0.0, 2.0], source, SPOTTER_NODE_TYPE)
+    SapientDetectionAdapter::new(
+        "op-1",
+        SPOTTER,
+        frame(),
+        [0.0, 0.0, 2.0],
+        source,
+        SPOTTER_NODE_TYPE,
+    )
 }
 
 /// The constructed spotter session: one registration, three reports that map, and three
@@ -159,7 +168,14 @@ fn the_vendored_upstream_samples_are_refused_for_stated_reasons() {
         vec![one_line(&registration), one_line(&detection)],
         "vendored".into(),
     );
-    let mut adapter = SapientDetectionAdapter::new("op-1", SPOTTER, frame(), [0.0, 0.0, 2.0], source, SPOTTER_NODE_TYPE);
+    let mut adapter = SapientDetectionAdapter::new(
+        "op-1",
+        SPOTTER,
+        frame(),
+        [0.0, 0.0, 2.0],
+        source,
+        SPOTTER_NODE_TYPE,
+    );
     let detections = adapter.poll(MissionTime(1_692_008_527.0)).expect("polls");
     assert!(detections.is_empty(), "{detections:#?}");
 
@@ -291,7 +307,14 @@ fn only_a_human_node_registers_with_the_spotter_adapter() {
         .map(|l| l.replace(SPOTTER_NODE_TYPE, "NODE_TYPE_ACOUSTIC"))
         .collect();
     let source = RecordedSapientSource::from_lines(swapped, "swapped".into());
-    let mut adapter = SapientDetectionAdapter::new("op-1", SPOTTER, frame(), [0.0, 0.0, 2.0], source, SPOTTER_NODE_TYPE);
+    let mut adapter = SapientDetectionAdapter::new(
+        "op-1",
+        SPOTTER,
+        frame(),
+        [0.0, 0.0, 2.0],
+        source,
+        SPOTTER_NODE_TYPE,
+    );
     let detections = adapter.poll(MissionTime(1_692_008_527.0)).expect("polls");
     assert!(detections.is_empty(), "{detections:#?}");
     let stats = adapter.stats();

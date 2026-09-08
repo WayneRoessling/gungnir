@@ -102,10 +102,8 @@ fn corrupt_files_are_errors_never_panics() {
 /// file -- is the next test to add, not a claim this one makes.
 #[test]
 fn a_plain_laz_file_has_no_copc_hierarchy_and_is_refused_by_name() {
-    match pointcloud::load_copc_bounded(
-        &fixture("five-points.las"),
-        [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-    ) {
+    match pointcloud::load_copc_bounded(&fixture("five-points.las"), [0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+    {
         Err(DataError::Parse(message)) => {
             assert!(
                 message.to_lowercase().contains("copc"),
