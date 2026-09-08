@@ -2687,10 +2687,15 @@ re-reading the register alone.
   shape. Both hosts register the configuration for all of them
   (`ConfigBaseline.radar_feeds`, `ConfigBaseline.sapient_feeds`; no longer true is
   this bullet's older claim that neither host registers it). The STANAG 4676 codec
-  still returns `NotImplemented`. EO/IR and ISR-video each have a pinned
-  specification since 2026-09-06 (`docs/design/external-standards.md` §§7-9) and no
-  adapter yet -- the blocker moved from procurement to engineering the same day it
-  was found, per GAP-001. (GAP-001, GAP-064)
+  still returns `NotImplemented`. **This bullet's older claim that EO/IR and
+  ISR-video each have a pinned specification is corrected 2026-09-07**: motion
+  imagery (STANAG 4609/MISB, the ISR-video feed) is surveyed and *deliberately not
+  pinned*, since it is a video-transport concern for the viewport rather than a
+  detection message for the gateway (`docs/design/external-standards.md` §8); a
+  passive-RF alternative over ASTERIX Category 205 is surveyed and likewise not
+  pinned, passed over because SAPIENT's node type already covers passive-RF more
+  cheaply (§9). EO/IR has no survey and no pinned specification at all -- nothing
+  in `external-standards.md` names it. (GAP-001, GAP-064)
 - **Cross-session identity correlation on the node.** The desktop resolver is built
   and wired, correlating by kinematic and classification similarity across sessions
   (`gungnir_identity::similarity`) -- not by session track id alone, which is what
