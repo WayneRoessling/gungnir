@@ -128,6 +128,7 @@ the sensor manager together with the supervisor (planning).
 | Plan apply | | yes | yes | | | |
 | Model promotion | | concur | | | yes | |
 | Product release | | yes | yes | | | yes |
+| Publish to coalition exchange (GAP-065; confirmed by the owner 2026-09-08) | | | yes | | | yes |
 | Accept coverage gap | | | yes | | | |
 | Recover an escrowed journal key (D-30) | | | | | | | (the security officer alone; a column of its own would be one cell) |
 | Reconciliation conflict resolution | | yes | yes | | | |

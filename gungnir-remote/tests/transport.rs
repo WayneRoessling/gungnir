@@ -13,15 +13,15 @@
 //! Before GAP-041 that claim rested on nothing, because `connect` returned an error.
 
 use gungnir_api::transport::{AccountTokenAuthority, NodeApi};
-use gungnir_api::v2::SnapshotResponse;
+use gungnir_api::v2::{ExchangeResponse, SnapshotResponse};
 use gungnir_eventing::{Envelope, Event};
 use gungnir_intercept_service::InterceptService;
 use gungnir_model::events::{InterceptEvent, TrackingEvent};
 use gungnir_model::{
-    Classification, MissionTime, PlanView, Provenance, Quality, Releasability, SystemHealth,
-    TrackId, TrackStatus, TrackView,
+    Classification, ExchangeItem, MissionTime, PlanView, Provenance, Quality, Releasability,
+    SystemHealth, TrackId, TrackStatus, TrackView,
 };
-use gungnir_remote::link::Credential;
+use gungnir_remote::link::{Credential, ExchangeProductRecord};
 use gungnir_remote::{connect, RemoteEndpoint, RemoteError};
 use gungnir_security::{hash_passphrase, Account, InMemoryAccountStore, OperatorId, TokenIssuer};
 use gungnir_tracking_service::TrackingService;
@@ -61,9 +61,16 @@ fn credential() -> Credential {
 /// Every route but `POST /v2/session` needs a token, so a test that did not sign in
 /// would be testing the refusal rather than the contract.
 fn authenticating(snapshot: SnapshotResponse) -> Arc<NodeApi> {
+    authenticating_as(snapshot, gungnir_security::Role::Supervisor)
+}
+
+/// [`authenticating`], with the role a test needs instead of the Supervisor every other
+/// test in this file signs in as. GAP-065's exchange-publish test needs `Commander`, which
+/// holds `PUBLISH_EXCHANGE` where `Supervisor` does not.
+fn authenticating_as(snapshot: SnapshotResponse, role: gungnir_security::Role) -> Arc<NodeApi> {
     let store = InMemoryAccountStore::new(vec![Account {
         operator: OperatorId(7),
-        role: gungnir_security::Role::Supervisor,
+        role,
         phc: hash_passphrase(PASSPHRASE).expect("hashed"),
     }]);
     let issuer = TokenIssuer::new(vec![3u8; 32], 300.0).expect("issuer");
@@ -923,4 +930,78 @@ async fn a_detection_submitted_while_linked_reaches_the_node() {
     let queued = api.take_submissions();
     assert_eq!(queued.len(), 1);
     assert_eq!(queued[0].sensor, gungnir_model::SensorId(3));
+}
+
+/// Store-and-forward end to end for exchange publishing (GAP-065, DN-18 §5 amendment 2):
+/// a batch queued on the link reaches the node under the link's own token and replaces
+/// what it holds, closing the half of DN-18 amendment 1 that said neither a write path
+/// nor its store-and-forward had been built.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_queued_exchange_batch_reaches_the_node_and_replaces_what_it_holds() {
+    let api = authenticating_as(snapshot(Vec::new()), gungnir_security::Role::Commander);
+    let url = serve(Arc::clone(&api)).await;
+    let handle = tokio::runtime::Handle::current();
+    let link = gungnir_remote::link::start(&RemoteEndpoint::plain(url), credential(), &handle)
+        .expect("the link starts");
+    until(|| link.connected(), "the link to report connected").await;
+
+    link.queue_exchange(
+        ExchangeItem::Handoffs,
+        vec![ExchangeProductRecord {
+            id: "decision-1".into(),
+            at: MissionTime(3.0),
+            releasability: Releasability::AllPeers,
+            body: serde_json::json!({ "decision": 1 }),
+        }],
+    );
+    until(
+        || {
+            matches!(
+                api.exchange_all(ExchangeItem::Handoffs),
+                Some(ExchangeResponse::Held { ref products, .. }) if products.len() == 1
+            )
+        },
+        "the node to hold the published batch",
+    )
+    .await;
+    match api.exchange_all(ExchangeItem::Handoffs).expect("held") {
+        ExchangeResponse::Held { products, .. } => {
+            assert_eq!(products.len(), 1);
+            assert_eq!(products[0].id, "decision-1");
+        }
+        other @ ExchangeResponse::NotHeld { .. } => panic!("expected held, got {other:?}"),
+    }
+
+    // A second, disjoint batch replaces rather than joins the first -- the same
+    // contract `NodeApi::publish_exchange` documents from the write side.
+    link.queue_exchange(
+        ExchangeItem::Handoffs,
+        vec![ExchangeProductRecord {
+            id: "decision-2".into(),
+            at: MissionTime(4.0),
+            releasability: Releasability::AllPeers,
+            body: serde_json::json!({ "decision": 2 }),
+        }],
+    );
+    until(
+        || {
+            matches!(
+                api.exchange_all(ExchangeItem::Handoffs),
+                Some(ExchangeResponse::Held { ref products, .. })
+                    if products.first().is_some_and(|p| p.id == "decision-2")
+            )
+        },
+        "the second batch to replace the first",
+    )
+    .await;
+    match api.exchange_all(ExchangeItem::Handoffs).expect("held") {
+        ExchangeResponse::Held { products, .. } => {
+            assert_eq!(
+                products.len(),
+                1,
+                "the second batch replaced the first rather than joining it"
+            );
+        }
+        other @ ExchangeResponse::NotHeld { .. } => panic!("expected held, got {other:?}"),
+    }
 }

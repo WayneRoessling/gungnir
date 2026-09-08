@@ -3764,6 +3764,51 @@ not by finding, for the time between whenever each item landed and this correcti
     stated no version was refused, which is the guard working on a real caller rather than
     a hypothetical one.
 
+### Resolved on 2026-09-08
+
+102. **GAP-065's write path, its store-and-forward, and one producer** (2026-09-08,
+    DN-18 §5 amendment 2). Amendment 1 (item 95) built the three
+    `GET /v2/exchange/{warnings,reports,handoffs}` routes and stopped at a decision: "a
+    write path by which a desktop posts marked products to its node, or a desktop-hosted
+    transport." The write path is chosen and built: `POST` on the same three paths,
+    taking the same `ExchangeProduct` list `publish_exchange` already accepted from tests
+    alone, gated by a new `gungnir_security::actions::PUBLISH_EXCHANGE` -- deliberately
+    not `RELEASE_PRODUCT`, which is raising or lowering a marking rather than
+    transmitting an already-marked one -- granted to `Commander` and
+    `IntelligenceAnalyst`, with a proposed `docs/mission/roles-and-stakeholders.md` §4 row
+    rather than a silent widening. The caller shape mirrors `task_sensor`'s, not
+    `effector_report`'s: an operator's own session token, no machine identity, because a
+    desktop posting to its own node is not an outside party answering something.
+    Store-and-forward mirrors `gungnir-remote`'s existing
+    `task_outbox`/`queue_task`/`flush_tasks` exactly, for the reason that pattern exists:
+    `OutboundExchange` and `ExchangeProductRecord` are built from `gungnir-model` types
+    alone, so `gungnir-app` queues a batch without gaining the production edge to
+    `gungnir-api` that §7.1 refuses it, and `flush_exchange`, which already lives where
+    the edge exists, converts the record to the wire type. One producer is wired,
+    honestly scoped: `gungnir-app/src/handoffs.rs` republishes this desktop's whole
+    handoff set on every new one, unfiltered by marking because `NodeApi::exchange_for`
+    already applies that gate per party at serve time; `Warning` and `MissionReport` are
+    not wired, because the first carries no releasability field DN-17 never gave it and
+    the second has no running desktop collection to republish from, and neither gap was
+    papered over to make the path look more finished than it is.
+
+    **Dependency edges: none added.** `gungnir-remote` already depended on `gungnir-api`
+    for the wire contract; `gungnir-app`'s existing dev-only dependency on `gungnir-api`
+    (the end-to-end failover test) is untouched, and no production edge was added.
+
+    **Human-owned crates touched: `gungnir-security` (the new action and its two role
+    grants) and the `gungnir-api` write path, per `docs/agentic-workflow.md`. Signed by
+    the owner the same day.** `gungnir-remote`'s outbox is ordinary transport work outside
+    the identity path `docs/agentic-workflow.md` scopes as human-owned in that crate, and
+    `gungnir-app`'s producer is wiring, not logic; neither needed a signature.
+
+    **One finding, not acted on here.**
+    `docs/mission/roles-and-stakeholders.md` §4 already lists `Supervisor` as holding
+    "Product release", and `gungnir_security::authz::role_permits` does not grant
+    `Supervisor` `RELEASE_PRODUCT` -- a pre-existing discrepancy this change did not
+    introduce and does not resolve, since fixing it is its own authorization decision.
+    Flagged for the owner separately rather than folded into this one's signature.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

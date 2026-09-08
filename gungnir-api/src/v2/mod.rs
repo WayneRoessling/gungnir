@@ -279,6 +279,21 @@ pub enum ExchangeResponse {
     NotHeld { item: ExchangeItem, reason: String },
 }
 
+/// `POST /v2/exchange/{warnings,reports,handoffs}` (DN-18 §5 amendment 2, GAP-065): the
+/// desktop that holds an item posts what it currently holds, and the node replaces its
+/// held set for that item with this list.
+///
+/// **A replacement, not an addition.** [`crate::transport::NodeApi::publish_exchange`]
+/// overwrites rather
+/// than appends, so the caller sends its whole current set each time -- the same
+/// contract [`ExchangeResponse::Held`]'s own doc comment describes from the read side.
+/// The item is not a field here: it is already in the path, exactly as the three `GET`
+/// routes this shares a path with take no item field either.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PublishExchangeRequest {
+    pub products: Vec<ExchangeProduct>,
+}
+
 /// An operator's decision on a plan the node proposed.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ApprovalRequest {

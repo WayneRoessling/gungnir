@@ -123,7 +123,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-041 API transport | CAP-7.1, CAP-7.3, CAP-5.4 | 5 | L | I2 | `../../../ARCHITECTURE.md` §10 item 59 |
 | GAP-050 Mid-session failover and reconciliation gate | CAP-5.4 | 4 | M | I4 | `../../verification-capability-table.md` §2, cross-layer reconciliation row |
 | GAP-064 ASTERIX and STANAG 4676 codecs | CAP-7.2, CAP-1.1 | 4 | L | I2 | `../../../ARCHITECTURE.md` §10 item 81; `../../design/handoff-2026-09-06-radar-feed.md`; `../../verification-capability-table.md` §2, `gungnir-interop` row |
-| GAP-065 Peer and coalition exchange | CAP-7.4 | 4 | L | I4 | Added to `../../../ARCHITECTURE.md` §10 by this register |
+| GAP-065 Peer and coalition exchange | CAP-7.4 | 4 | L | I4 | `../../design/DN-18-coalition-exchange.md` amendment 2 |
 | GAP-091 No exchange bearer for a participant that holds no machine identity | CAP-7.4, CAP-1.6 | 4 | L | I3 | `../../design/DN-25-cursor-on-target.md`; `../../design/external-standards.md` §5 |
 
 ### UI and data ecosystem

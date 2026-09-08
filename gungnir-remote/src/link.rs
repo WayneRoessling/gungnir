@@ -34,8 +34,9 @@
 //! never upgraded: what the operator wrote is what is spoken.
 
 use gungnir_api::v2::{
-    HistoryResponse, SensorTaskRequest, SensorTaskResponse, SessionRequest, SessionResponse,
-    SnapshotResponse, SubmitDetectionRequest, SubscribeRequest,
+    ExchangeProduct, HistoryResponse, PublishExchangeRequest, SensorTaskRequest,
+    SensorTaskResponse, SessionRequest, SessionResponse, SnapshotResponse,
+    SubmitDetectionRequest, SubscribeRequest,
 };
 use gungnir_eventing::{Envelope, Event};
 use gungnir_intercept_service::PlanView;
@@ -110,6 +111,12 @@ pub struct Projection {
     /// node's answer to each.
     pub task_outbox: std::collections::VecDeque<OutboundTask>,
     pub task_outcomes: Vec<TaskOutcome>,
+    /// This desktop's current held sets for exchange, waiting to replace what the node
+    /// holds (GAP-065, DN-18 §5 amendment 2). Store-and-forward like `task_outbox`: an
+    /// unreachable node leaves a batch queued for the next tick rather than dropping it.
+    /// No outcome queue beside it, unlike `task_outbox`'s `task_outcomes` -- a publish
+    /// generates no node-issued identifier for anything here to wait on.
+    pub exchange_outbox: std::collections::VecDeque<OutboundExchange>,
     /// When the node was last heard from at all -- an envelope, a heartbeat, the
     /// snapshot (D-23).
     ///
@@ -134,6 +141,31 @@ pub struct OutboundTask {
 pub struct TaskOutcome {
     pub local: gungnir_model::SensorTaskId,
     pub outcome: Result<gungnir_model::SensorTaskId, String>,
+}
+
+/// What this desktop currently holds for one exchange item, on its way to replace what
+/// the node holds (GAP-065, DN-18 §5 amendment 2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutboundExchange {
+    pub item: gungnir_model::ExchangeItem,
+    pub products: Vec<ExchangeProductRecord>,
+}
+
+/// One product within an [`OutboundExchange`] (GAP-065).
+///
+/// Mirrors `gungnir_api::v2::ExchangeProduct` field for field rather than reusing it --
+/// the same choice [`OutboundTask`] makes against `SensorTaskRequest`. `gungnir-app` has
+/// no production edge to `gungnir-api` (`gungnir-app/Cargo.toml`: the dependency is
+/// dev-only, for an end-to-end test), so the type a desktop producer builds has to come
+/// from `gungnir-model` and standard types alone; `flush_exchange`, which lives in this
+/// crate and already depends on `gungnir-api` for the wire contract, is where a record
+/// becomes the request the node actually reads.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExchangeProductRecord {
+    pub id: String,
+    pub at: gungnir_model::MissionTime,
+    pub releasability: gungnir_model::Releasability,
+    pub body: serde_json::Value,
 }
 
 /// How many host-bound envelopes the link holds before dropping the oldest.
@@ -267,6 +299,25 @@ impl NodeLink {
             .unwrap_or_default()
     }
 
+    /// Hand this desktop's current held set for `item` to the link, to replace what the
+    /// node holds (GAP-065, DN-18 §5 amendment 2).
+    ///
+    /// **A replacement, not an addition**, mirroring
+    /// `gungnir_api::transport::NodeApi::publish_exchange`'s own contract: `products` is
+    /// this producer's whole current set for `item`, not a diff against what was queued
+    /// before. Queuing a fresher batch does not remove an older one already in flight for
+    /// the same item; both are sent in order, and since each is a full replacement the
+    /// node's held set still converges on the last one applied.
+    pub fn queue_exchange(
+        &self,
+        item: gungnir_model::ExchangeItem,
+        products: Vec<ExchangeProductRecord>,
+    ) {
+        if let Ok(mut p) = self.projection.lock() {
+            p.exchange_outbox.push_back(OutboundExchange { item, products });
+        }
+    }
+
     /// Queue a detection for the node (§8.4). Taken whether or not the node answers;
     /// a full outbox drops its oldest and counts the drop.
     pub fn queue_outbound(&self, detection: DetectionView) {
@@ -322,6 +373,12 @@ struct Urls {
     history: String,
     detections: String,
     tasks: String,
+    /// The three write doors DN-18 §5 amendment 2 added (GAP-065): one item per URL,
+    /// exactly as the node's own routes are three concrete paths rather than one
+    /// parameterized by item.
+    exchange_warnings: String,
+    exchange_reports: String,
+    exchange_handoffs: String,
     /// True for an `https` endpoint: the stream is `wss` over our own TLS stream.
     tls: bool,
     host: String,
@@ -375,6 +432,9 @@ fn urls(endpoint: &RemoteEndpoint) -> Result<Urls, RemoteError> {
         session: format!("{base}/v2/session"),
         snapshot: format!("{base}/v2/snapshot"),
         tasks: format!("{base}/v2/sensors"),
+        exchange_warnings: format!("{base}/v2/exchange/warnings"),
+        exchange_reports: format!("{base}/v2/exchange/reports"),
+        exchange_handoffs: format!("{base}/v2/exchange/handoffs"),
         events: format!("{scheme}://{rest}/v2/events"),
         tls,
         host,
@@ -630,6 +690,7 @@ async fn run_link(
             _ = forward.tick() => {
                 flush_outbox(&client, urls, &token, projection).await;
                 flush_tasks(&client, urls, &token, projection).await;
+                flush_exchange(&client, urls, &token, projection).await;
             }
             next = tokio::time::timeout(gungnir_api::transport::HEARTBEAT_TIMEOUT, socket.next()) => {
                 handle_frame(next, projection)?;
@@ -725,6 +786,76 @@ async fn flush_tasks(
                 local: task.local,
                 outcome,
             });
+        }
+    }
+}
+
+/// `Warnings`, `Reports` and `Handoffs` are the three items DN-18 §5 amendment 2 gave a
+/// write door; `Tracks` and `Health` keep `/v2/snapshot` and `/v2/health` and are never
+/// queued by anything this crate builds. `None` rather than a fourth URL nothing would
+/// ever use, so a caller error shows up as a dropped batch and a warning instead of a
+/// silently wrong URL.
+fn exchange_url(urls: &Urls, item: gungnir_model::ExchangeItem) -> Option<&str> {
+    match item {
+        gungnir_model::ExchangeItem::Warnings => Some(&urls.exchange_warnings),
+        gungnir_model::ExchangeItem::Reports => Some(&urls.exchange_reports),
+        gungnir_model::ExchangeItem::Handoffs => Some(&urls.exchange_handoffs),
+        gungnir_model::ExchangeItem::Tracks | gungnir_model::ExchangeItem::Health => None,
+    }
+}
+
+/// Deliver the queued exchange publishes, oldest first (GAP-065, DN-18 §5 amendment 2).
+/// Each is a full replacement of the node's held set for its item -- see
+/// [`NodeLink::queue_exchange`] -- so applying them in order and stopping at the first
+/// refusal is enough to converge the node's held set on this desktop's own, the same
+/// store-and-forward rule [`flush_outbox`] and [`flush_tasks`] follow.
+async fn flush_exchange(
+    client: &reqwest::Client,
+    urls: &Urls,
+    token: &str,
+    projection: &Arc<Mutex<Projection>>,
+) {
+    for _ in 0..16 {
+        let Some(batch) = projection
+            .lock()
+            .ok()
+            .and_then(|p| p.exchange_outbox.front().cloned())
+        else {
+            return;
+        };
+        let Some(url) = exchange_url(urls, batch.item) else {
+            tracing::warn!(
+                "{:?} has no exchange publish route; dropping the queued batch",
+                batch.item
+            );
+            if let Ok(mut p) = projection.lock() {
+                p.exchange_outbox.pop_front();
+            }
+            continue;
+        };
+        let request = PublishExchangeRequest {
+            products: batch
+                .products
+                .iter()
+                .map(|p| ExchangeProduct {
+                    id: p.id.clone(),
+                    at: p.at,
+                    releasability: p.releasability.clone(),
+                    body: p.body.clone(),
+                })
+                .collect(),
+        };
+        let accepted = with_token(client.post(url), token)
+            .json(&request)
+            .send()
+            .await
+            .is_ok_and(|r| r.status().is_success());
+        if !accepted {
+            // Unreachable or refused: keep it queued and try again next tick.
+            return;
+        }
+        if let Ok(mut p) = projection.lock() {
+            p.exchange_outbox.pop_front();
         }
     }
 }
@@ -940,6 +1071,51 @@ mod tests {
         let urls = urls(&endpoint("http://127.0.0.1:7410")).expect("valid");
         assert_eq!(urls.snapshot, "http://127.0.0.1:7410/v2/snapshot");
         assert_eq!(urls.events, "ws://127.0.0.1:7410/v2/events");
+    }
+
+    /// GAP-065, DN-18 §5 amendment 2: the three write doors, one URL apiece; `Tracks` and
+    /// `Health` have none, since they keep `/v2/snapshot` and `/v2/health`.
+    #[test]
+    fn the_three_exchange_items_with_a_write_door_each_resolve_and_the_other_two_do_not() {
+        let urls = urls(&endpoint("http://127.0.0.1:7410")).expect("valid");
+        assert_eq!(
+            urls.exchange_warnings,
+            "http://127.0.0.1:7410/v2/exchange/warnings"
+        );
+        assert_eq!(
+            exchange_url(&urls, gungnir_model::ExchangeItem::Warnings),
+            Some(urls.exchange_warnings.as_str())
+        );
+        assert_eq!(
+            exchange_url(&urls, gungnir_model::ExchangeItem::Reports),
+            Some(urls.exchange_reports.as_str())
+        );
+        assert_eq!(
+            exchange_url(&urls, gungnir_model::ExchangeItem::Handoffs),
+            Some(urls.exchange_handoffs.as_str())
+        );
+        assert_eq!(exchange_url(&urls, gungnir_model::ExchangeItem::Tracks), None);
+        assert_eq!(exchange_url(&urls, gungnir_model::ExchangeItem::Health), None);
+    }
+
+    /// GAP-065: queuing hands the whole batch to the outbox, oldest first, and does not
+    /// touch a batch already queued for a different item.
+    #[test]
+    fn queueing_an_exchange_batch_appends_to_the_outbox() {
+        let link = NodeLink::scripted();
+        link.queue_exchange(
+            gungnir_model::ExchangeItem::Handoffs,
+            vec![ExchangeProductRecord {
+                id: "decision-1".into(),
+                at: gungnir_model::MissionTime(1.0),
+                releasability: gungnir_model::Releasability::AllPeers,
+                body: serde_json::json!({"decision": 1}),
+            }],
+        );
+        let p = link.read().expect("projection");
+        assert_eq!(p.exchange_outbox.len(), 1);
+        assert_eq!(p.exchange_outbox[0].item, gungnir_model::ExchangeItem::Handoffs);
+        assert_eq!(p.exchange_outbox[0].products[0].id, "decision-1");
     }
 
     #[test]
