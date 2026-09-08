@@ -2679,15 +2679,23 @@ re-reading the register alone.
   step returns `NotImplemented` naming the WGSL pipeline of §3.4 it waits on, and
   `gpu-fusion.yml` is dormant for want of the self-hosted `gpu` runner that GAP-061
   (closed) still needs registered to the repository. (GAP-024)
-- **Live protocol adapters beyond radar and the SAPIENT spotter.** ASTERIX (Category
-  048 edition 1.32, Category 034 edition 1.29) and SAPIENT spotter tasking and
-  detection are built and gated, and both hosts now register the configuration for
-  them (`ConfigBaseline.radar_feeds`; no longer true is this bullet's older claim
-  that neither host registers it). The STANAG 4676 codec still returns
-  `NotImplemented`. EO/IR, acoustic, passive-RF, and ISR-video each have a pinned
-  specification since 2026-09-06 (`docs/design/external-standards.md` §§7-9) and no
-  adapter yet -- the blocker moved from procurement to engineering the same day it
-  was found, per GAP-001. (GAP-001, GAP-064)
+- **Live protocol adapters beyond radar.** ASTERIX (Category 048 edition 1.32,
+  Category 034 edition 1.29), SAPIENT spotter tasking and detection, and -- since
+  2026-09-07 -- the SAPIENT acoustic and passive-RF node types are all built and
+  gated: one adapter (`SapientDetectionAdapter`) gated by an `accepted_node_type`
+  rather than three separate ones, since all three node types share SAPIENT's wire
+  shape. Both hosts register the configuration for all of them
+  (`ConfigBaseline.radar_feeds`, `ConfigBaseline.sapient_feeds`; no longer true is
+  this bullet's older claim that neither host registers it). The STANAG 4676 codec
+  still returns `NotImplemented`. **This bullet's older claim that EO/IR and
+  ISR-video each have a pinned specification is corrected 2026-09-07**: motion
+  imagery (STANAG 4609/MISB, the ISR-video feed) is surveyed and *deliberately not
+  pinned*, since it is a video-transport concern for the viewport rather than a
+  detection message for the gateway (`docs/design/external-standards.md` §8); a
+  passive-RF alternative over ASTERIX Category 205 is surveyed and likewise not
+  pinned, passed over because SAPIENT's node type already covers passive-RF more
+  cheaply (§9). EO/IR has no survey and no pinned specification at all -- nothing
+  in `external-standards.md` names it. (GAP-001, GAP-064)
 - **Cross-session identity correlation on the node.** The desktop resolver is built
   and wired, correlating by kinematic and classification similarity across sessions
   (`gungnir_identity::similarity`) -- not by session track id alone, which is what

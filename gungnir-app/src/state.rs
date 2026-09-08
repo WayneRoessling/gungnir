@@ -78,6 +78,18 @@ pub struct AppState {
     pub ais_stats: Vec<(String, gungnir_ingest::adapters::ais::AisStatsSink)>,
     /// The association memory between cooperative reports and tracks (GAP-010).
     pub cooperative: crate::cooperative::CooperativeState,
+    /// The ADS-B feeds' cooperative reports, drained each frame (GAP-010).
+    pub adsb_sinks: Vec<gungnir_ingest::adapters::adsb::CooperativeSink>,
+    /// Each bound ADS-B feed's counters, by name, for PN-09 (GAP-010).
+    pub adsb_stats: Vec<(String, gungnir_ingest::adapters::adsb::AdsbStatsSink)>,
+    /// (track, ICAO address) pairs already submitted as evidence, same purpose as
+    /// `cooperative.submitted` (GAP-010).
+    pub adsb_submitted: std::collections::HashSet<(TrackId, u32)>,
+    /// Each bound SAPIENT feed's counters, by name, for PN-09 (GAP-001).
+    pub sapient_stats: Vec<(
+        String,
+        gungnir_ingest::adapters::sapient::SapientFeedStatsSink,
+    )>,
     /// The identification engine, fed by cooperative evidence and governed by the
     /// baseline's thresholds (GAP-010, GAP-018, DN-08 §5).
     pub identification: gungnir_identification::EvidenceFusionEngine,
@@ -447,7 +459,7 @@ impl AppState {
         }
         tracing::info!(session = mission.session.0, journal = %journal.root().display(), "opened live session");
 
-        let (ingest, feeds, ais, endpoint_client, peers) =
+        let (ingest, feeds, ais, adsb, sapient, endpoint_client, peers) =
             build_ingest(&config, runtime.handle(), &mut alerts);
         let identification_settings = config.policy.identification.clone();
 
@@ -475,6 +487,10 @@ impl AppState {
             ais_sinks: ais.reports,
             ais_stats: ais.stats,
             cooperative: crate::cooperative::CooperativeState::default(),
+            adsb_sinks: adsb.reports,
+            adsb_stats: adsb.stats,
+            adsb_submitted: std::collections::HashSet::new(),
+            sapient_stats: sapient.stats,
             identification: gungnir_identification::EvidenceFusionEngine::with_settings(
                 identification_settings,
             ),
@@ -991,6 +1007,8 @@ fn build_ingest(
     IngestGateway,
     crate::radar::BoundFeeds,
     crate::cooperative::BoundAisFeeds,
+    crate::adsb::BoundAdsbFeeds,
+    crate::sapient::BoundSapientFeeds,
     Option<gungnir_remote::endpoint::EndpointClient>,
     Vec<crate::peers::BoundPeer>,
 ) {
@@ -1015,6 +1033,12 @@ fn build_ingest(
     // sink the tick drains into the registry (GAP-064).
     let feeds = crate::radar::bind_feeds(config, &mut ingest, alerts);
     let ais = crate::cooperative::bind_feeds(config, &mut ingest, alerts);
+    // GAP-010: an ADS-B adapter per configured feed, on the same shape as AIS above.
+    let adsb = crate::adsb::bind_feeds(config, &mut ingest, alerts);
+    // GAP-001: a SAPIENT adapter per configured feed (spotter, acoustic, or
+    // passive-RF); its detections enter the gateway like a radar's, not like AIS's or
+    // ADS-B's cooperative reports.
+    let sapient = crate::sapient::bind_feeds(config, &mut ingest, alerts);
     // GAP-040: the endpoint transport, trusting what the baseline pins (GAP-060).
     let endpoint_client = match gungnir_remote::endpoint::EndpointClient::new(
         runtime.clone(),
@@ -1030,7 +1054,7 @@ fn build_ingest(
             None
         }
     };
-    (ingest, feeds, ais, endpoint_client, peers)
+    (ingest, feeds, ais, adsb, sapient, endpoint_client, peers)
 }
 
 /// The embedded tracker, filtering as the promoted algorithm baseline says (GAP-053,

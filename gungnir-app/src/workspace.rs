@@ -527,7 +527,11 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
             .collect();
     let terrain_line = state.terrain.line();
     let feeds = crate::radar::feed_lines(state);
-    let cooperative_feeds = crate::cooperative::feed_lines(state);
+    // AIS and ADS-B are both cooperative-identity feeds (transponders reporting their
+    // own position); each feed's own name is what distinguishes one from the other on
+    // the panel, exactly as two AIS receivers are told apart today.
+    let mut cooperative_feeds = crate::cooperative::feed_lines(state);
+    cooperative_feeds.extend(crate::adsb::feed_lines(state));
     let peers_owned = crate::peers::peer_lines(&state.peer_links);
     let peers: Vec<gungnir_ui::panels::sensor_health::PeerLine<'_>> = peers_owned
         .iter()

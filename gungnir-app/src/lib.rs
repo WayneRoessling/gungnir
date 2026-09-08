@@ -17,6 +17,7 @@
 //! the binary has always had, and `main.rs` now uses them through this target rather
 //! than declaring them itself, so there is exactly one copy of each.
 
+pub mod adsb;
 pub mod anomaly;
 pub mod audit;
 pub mod cooperative;
@@ -39,6 +40,7 @@ pub mod rehearsal;
 pub mod requirements;
 pub mod review;
 pub mod rhythm;
+pub mod sapient;
 pub mod session;
 pub mod state;
 pub mod status;

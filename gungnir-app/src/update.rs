@@ -68,6 +68,7 @@ pub fn tick(state: &mut AppState) {
     //      maintain.
     crate::peers::tick(state);
     crate::cooperative::tick(state);
+    crate::adsb::tick(state);
     crate::identity::tick(state);
 
     // 1b. The terrain, if one is loading (GAP-023): polled here so a slow file never

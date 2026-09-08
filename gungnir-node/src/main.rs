@@ -425,7 +425,159 @@ fn build_gateway(
             }
         }
     }
+    bind_adsb_feeds(config, &mut gateway, &sinks);
+    bind_sapient_feeds(config, &mut gateway, &sinks);
     (gateway, sinks, reports)
+}
+
+/// GAP-010: ADS-B receivers. Same reasoning and the same gap as AIS above: the codec
+/// is decoded and gated, detections are tracked, and the cooperative reports go to a
+/// sink nobody on the node fuses, because this binary has no edge to
+/// `gungnir-identification`. Split out of [`build_gateway`] so that function stays
+/// readable as a sequence of "bind this feed type" steps rather than growing a fourth
+/// inline block the same size as this one.
+fn bind_adsb_feeds(
+    config: &ConfigBaseline,
+    gateway: &mut IngestGateway,
+    sinks: &[gungnir_ingest::adapters::asterix::ServiceObservationSink],
+) {
+    if config.adsb_feeds.is_empty() {
+        return;
+    }
+    let Some(frame) = local_frame(config) else {
+        tracing::warn!(
+            feeds = config.adsb_feeds.len(),
+            "ADS-B feeds are configured and no local frame origin is declared: no \
+             receiver is bound"
+        );
+        return;
+    };
+    for feed in &config.adsb_feeds {
+        let source: Result<Box<dyn gungnir_ingest::adapters::adsb::AvrSource>, String> = match &feed
+            .source
+        {
+            gungnir_config::AdsbSource::Tcp { addr } => addr
+                .parse()
+                .map_err(|e| format!("{addr}: {e}"))
+                .and_then(|addr| {
+                    gungnir_ingest::adapters::adsb::TcpAvrSource::connect(
+                        addr,
+                        std::time::Duration::from_secs(3),
+                    )
+                    .map(|s| Box::new(s) as _)
+                    .map_err(|e| e.to_string())
+                }),
+            gungnir_config::AdsbSource::File { path } => {
+                gungnir_ingest::adapters::adsb::RecordedAvrSource::open(std::path::Path::new(path))
+                    .map(|s| Box::new(s.with_lines_per_poll(256)) as _)
+                    .map_err(|e| e.to_string())
+            }
+        };
+        match source {
+            Ok(source) => {
+                let adapter = gungnir_ingest::adapters::adsb::AdsbAdapter::new(
+                    feed.name.clone(),
+                    SensorId(feed.sensor_id),
+                    frame,
+                    source,
+                );
+                tracing::info!(feed = %feed.name, sensor = feed.sensor_id, "ADS-B feed bound; detections are tracked, and the cooperative reports are not fused here because this binary has no edge to the crate that fuses evidence (GAP-010)");
+                gateway.add_adapter(Box::new(adapter));
+                gateway.set_expected_adapters(config.sensors.len() + sinks.len() + 1);
+            }
+            Err(err) => {
+                tracing::error!(feed = %feed.name, %err, "ADS-B feed not bound");
+            }
+        }
+    }
+}
+
+/// GAP-001: SAPIENT edge nodes. Unlike AIS/ADS-B these are detection sources, not
+/// cooperative-identity ones (`gungnir-app/src/sapient.rs`'s module documentation), so
+/// there is no evidence-fusion edge to be missing here: a bound feed's detections are
+/// tracked exactly like a radar's. Split out of [`build_gateway`] for the same reason
+/// as [`bind_adsb_feeds`].
+fn bind_sapient_feeds(
+    config: &ConfigBaseline,
+    gateway: &mut IngestGateway,
+    sinks: &[gungnir_ingest::adapters::asterix::ServiceObservationSink],
+) {
+    if config.sapient_feeds.is_empty() {
+        return;
+    }
+    let Some(frame) = local_frame(config) else {
+        tracing::warn!(
+            feeds = config.sapient_feeds.len(),
+            "SAPIENT feeds are configured and no local frame origin is declared: no \
+             node is bound, because a bearing's origin cannot be placed without one"
+        );
+        return;
+    };
+    for feed in &config.sapient_feeds {
+        let Some(sensor) = config.sensors.iter().find(|s| s.id == feed.sensor_id) else {
+            tracing::error!(
+                feed = %feed.name,
+                sensor = feed.sensor_id,
+                "SAPIENT feed names a sensor not in the sensor list"
+            );
+            continue;
+        };
+        let observer_enu = frame.to_enu(gungnir_model::Geodetic {
+            lat_rad: sensor.position[0],
+            lon_rad: sensor.position[1],
+            alt_m: sensor.position[2],
+        });
+        let node_type = match feed.node_type {
+            gungnir_config::SapientNodeType::Spotter => {
+                gungnir_ingest::adapters::sapient::SPOTTER_NODE_TYPE
+            }
+            gungnir_config::SapientNodeType::Acoustic => {
+                gungnir_ingest::adapters::sapient::ACOUSTIC_NODE_TYPE
+            }
+            gungnir_config::SapientNodeType::PassiveRf => {
+                gungnir_ingest::adapters::sapient::PASSIVE_RF_NODE_TYPE
+            }
+        };
+        let source: Result<Box<dyn gungnir_ingest::adapters::sapient::SapientSource>, String> =
+            match &feed.source {
+                gungnir_config::SapientSource::Tcp { addr } => addr
+                    .parse()
+                    .map_err(|e| format!("{addr}: {e}"))
+                    .and_then(|addr| {
+                        gungnir_ingest::adapters::sapient::TcpSapientSource::connect(
+                            addr,
+                            std::time::Duration::from_secs(3),
+                        )
+                        .map(|s| Box::new(s) as _)
+                        .map_err(|e| e.to_string())
+                    }),
+                gungnir_config::SapientSource::File { path } => {
+                    gungnir_ingest::adapters::sapient::RecordedSapientSource::open(
+                        std::path::Path::new(path),
+                    )
+                    .map(|s| Box::new(s) as _)
+                    .map_err(|e| e.to_string())
+                }
+            };
+        match source {
+            Ok(source) => {
+                let adapter = gungnir_ingest::adapters::sapient::SapientDetectionAdapter::new(
+                    feed.name.clone(),
+                    SensorId(feed.sensor_id),
+                    frame,
+                    observer_enu,
+                    source,
+                    node_type,
+                );
+                tracing::info!(feed = %feed.name, sensor = feed.sensor_id, node_type, "SAPIENT feed bound");
+                gateway.add_adapter(Box::new(adapter));
+                gateway.set_expected_adapters(config.sensors.len() + sinks.len() + 1);
+            }
+            Err(err) => {
+                tracing::error!(feed = %feed.name, %err, "SAPIENT feed not bound");
+            }
+        }
+    }
 }
 
 /// The deployment's local frame, when it has declared one.
