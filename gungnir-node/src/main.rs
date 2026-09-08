@@ -326,6 +326,7 @@ fn build_gateway(
     IngestGateway,
     Vec<gungnir_ingest::adapters::asterix::ServiceObservationSink>,
     FeedReports,
+    BoundSapientFeeds,
 ) {
     let mut gateway = IngestGateway::new(Box::new(AllowListAuthenticator {
         // DN-16 §5: a peer is a source and is admitted like one, under its own id.
@@ -437,8 +438,8 @@ fn build_gateway(
         }
     }
     bind_adsb_feeds(config, &mut gateway, &sinks);
-    bind_sapient_feeds(config, &mut gateway, &sinks);
-    (gateway, sinks, reports)
+    let sapient = bind_sapient_feeds(config, &mut gateway, &sinks);
+    (gateway, sinks, reports, sapient)
 }
 
 /// GAP-010: ADS-B receivers. Same reasoning and the same gap as AIS above: the codec
@@ -503,18 +504,76 @@ fn bind_adsb_feeds(
     }
 }
 
+/// What binding the SAPIENT feeds produced beyond the gateway adapters themselves
+/// (GAP-004): every feed's `TaskAck` sink, to drain each tick, and a `sensor ->
+/// adapter` pair for every feed a `destination_id` names, to attach to the registry.
+#[derive(Default)]
+struct BoundSapientFeeds {
+    task_ack_sinks: Vec<gungnir_ingest::adapters::sapient::TaskAckSink>,
+    task_adapters: Vec<(
+        u32,
+        Arc<dyn gungnir_sensor_management::tasking::SensorControlAdapter>,
+    )>,
+}
+
+/// Routes a task to the adapter bound to that sensor's own SAPIENT connection
+/// (GAP-004). Built because `InMemorySensorRegistry::attach_adapter` holds one
+/// adapter for the whole registry, and a node's SAPIENT feeds are one TCP connection
+/// per sensor -- the same shape the inbound side already binds -- not one shared
+/// middleware for all of them.
+struct SapientTaskRouter {
+    by_sensor: std::collections::HashMap<
+        u32,
+        Arc<dyn gungnir_sensor_management::tasking::SensorControlAdapter>,
+    >,
+}
+
+impl gungnir_sensor_management::tasking::SensorControlAdapter for SapientTaskRouter {
+    fn issue(
+        &self,
+        task: &gungnir_sensor_management::tasking::SensorTask,
+    ) -> Result<(), gungnir_sensor_management::SensorManagementError> {
+        match self.by_sensor.get(&task.sensor.0) {
+            Some(adapter) => adapter.issue(task),
+            None => Err(gungnir_sensor_management::SensorManagementError::Refused {
+                sensor: task.sensor,
+                reason: format!(
+                    "sensor {} has no SAPIENT task adapter attached",
+                    task.sensor.0
+                ),
+            }),
+        }
+    }
+}
+
 /// GAP-001: SAPIENT edge nodes. Unlike AIS/ADS-B these are detection sources, not
 /// cooperative-identity ones (`gungnir-app/src/sapient.rs`'s module documentation), so
 /// there is no evidence-fusion edge to be missing here: a bound feed's detections are
 /// tracked exactly like a radar's. Split out of [`build_gateway`] for the same reason
 /// as [`bind_adsb_feeds`].
+///
+/// **GAP-004: the node's half of outbound tasking.** Every feed's `TaskAck`s are read
+/// (`with_task_ack_sink`), the desktop's own wiring since the reader was built. A feed
+/// whose source is `Tcp` and whose `destination_id` is configured also gets a
+/// `SapientTaskAdapter`, its sink an independent handle to that same connection
+/// (`TcpSapientSource::sink`) -- extracted here, before the source is erased to `Box<dyn
+/// SapientSource>` for the gateway, because there is nowhere left to reach the concrete
+/// type from after that. Validation already refuses a `destination_id` without
+/// `sapient_node_id` or over a `File` source, so neither case is re-checked here.
+///
+/// Long on purpose, the same reason `run`'s own allow states: the sequence -- resolve
+/// the sensor, connect the source, extract a task sink from it if one is wanted,
+/// build the detection adapter over it -- is one feed's worth of setup, and splitting
+/// it would put a single feed's binding in two places for no reader's benefit.
+#[allow(clippy::too_many_lines)]
 fn bind_sapient_feeds(
     config: &ConfigBaseline,
     gateway: &mut IngestGateway,
     sinks: &[gungnir_ingest::adapters::asterix::ServiceObservationSink],
-) {
+) -> BoundSapientFeeds {
+    let mut bound = BoundSapientFeeds::default();
     if config.sapient_feeds.is_empty() {
-        return;
+        return bound;
     }
     let Some(frame) = local_frame(config) else {
         tracing::warn!(
@@ -522,7 +581,7 @@ fn bind_sapient_feeds(
             "SAPIENT feeds are configured and no local frame origin is declared: no \
              node is bound, because a bearing's origin cannot be placed without one"
         );
-        return;
+        return bound;
     };
     for feed in &config.sapient_feeds {
         let Some(sensor) = config.sensors.iter().find(|s| s.id == feed.sensor_id) else {
@@ -559,8 +618,30 @@ fn bind_sapient_feeds(
                             addr,
                             std::time::Duration::from_secs(3),
                         )
-                        .map(|s| Box::new(s) as _)
                         .map_err(|e| e.to_string())
+                        .and_then(|tcp| {
+                            if let Some(destination_id) = &feed.destination_id {
+                                let Some(node_id) = &config.sapient_node_id else {
+                                    // Unreachable once validated; refused rather than
+                                    // silently untasked if it somehow is not.
+                                    return Err(
+                                        "a destination_id is set with no sapient_node_id"
+                                            .to_string(),
+                                    );
+                                };
+                                let sink = tcp.sink().map_err(|e| e.to_string())?;
+                                let adapter = gungnir_sensor_management::sapient_task::SapientTaskAdapter::new(
+                                    node_id.clone(),
+                                    gungnir_sensor_management::sapient_task::SapientDestinations::from_sensors([(
+                                        feed.sensor_id,
+                                        destination_id.clone(),
+                                    )]),
+                                    move |json: String| sink.send(json),
+                                );
+                                bound.task_adapters.push((feed.sensor_id, Arc::new(adapter)));
+                            }
+                            Ok(Box::new(tcp) as _)
+                        })
                     }),
                 gungnir_config::SapientSource::File { path } => {
                     gungnir_ingest::adapters::sapient::RecordedSapientSource::open(
@@ -572,6 +653,7 @@ fn bind_sapient_feeds(
             };
         match source {
             Ok(source) => {
+                let task_ack_sink = gungnir_ingest::adapters::sapient::TaskAckSink::default();
                 let adapter = gungnir_ingest::adapters::sapient::SapientDetectionAdapter::new(
                     feed.name.clone(),
                     SensorId(feed.sensor_id),
@@ -579,8 +661,10 @@ fn bind_sapient_feeds(
                     observer_enu,
                     source,
                     node_type,
-                );
-                tracing::info!(feed = %feed.name, sensor = feed.sensor_id, node_type, "SAPIENT feed bound");
+                )
+                .with_task_ack_sink(task_ack_sink.clone());
+                bound.task_ack_sinks.push(task_ack_sink);
+                tracing::info!(feed = %feed.name, sensor = feed.sensor_id, node_type, taskable = feed.destination_id.is_some(), "SAPIENT feed bound");
                 gateway.add_adapter(Box::new(adapter));
                 gateway.set_expected_adapters(config.sensors.len() + sinks.len() + 1);
             }
@@ -589,6 +673,7 @@ fn bind_sapient_feeds(
             }
         }
     }
+    bound
 }
 
 /// The deployment's local frame, when it has declared one.
@@ -816,6 +901,108 @@ fn issue_api_tasks(
         }
         // A dropped receiver means the route timed out; nothing to answer.
         let _ = pending.reply.send(answer);
+    }
+    Ok(())
+}
+
+/// Read every bound SAPIENT feed's `TaskAck`s and apply them to the registry
+/// (GAP-004): the node's own reader, the same shape `gungnir-app/src/sapient.rs`'s
+/// `apply_task_ack` applies on the desktop. **Unlike the desktop's reader, this one
+/// publishes `SensorTaskEvent`**: the desktop's record has no further audience, but
+/// this node is the system of record for every desktop connected to it (the same
+/// reason `issue_api_tasks` above publishes `Issued`/`Failed`), so an acknowledgement
+/// or a rejection has to reach a connected desktop's own stream, not just this
+/// process's registry.
+fn apply_sapient_task_acks(
+    sinks: &[gungnir_ingest::adapters::sapient::TaskAckSink],
+    sensors: &mut InMemorySensorRegistry,
+    bus: &InProcessBus,
+    now: gungnir_model::MissionTime,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use gungnir_ingest::adapters::sapient::TaskAckStatus;
+    use gungnir_model::events::SensorTaskEvent;
+    use gungnir_sensor_management::SensorControl;
+
+    let mut drained = Vec::new();
+    for sink in sinks {
+        if let Ok(mut queue) = sink.lock() {
+            drained.extend(queue.drain(..));
+        }
+    }
+    for report in drained {
+        let Some(task) = gungnir_sensor_management::sapient_task::decode_task_id(&report.task_id)
+        else {
+            tracing::warn!(
+                task_id = %report.task_id,
+                "a SAPIENT TaskAck named a task id this node did not mint; ignored"
+            );
+            continue;
+        };
+        let Some(sensor) = sensors
+            .tasks()
+            .iter()
+            .find(|t| t.id == task)
+            .map(|t| t.sensor)
+        else {
+            tracing::warn!(
+                task = task.0,
+                "a SAPIENT TaskAck named a task this node has no record of; ignored"
+            );
+            continue;
+        };
+        match report.status {
+            TaskAckStatus::Accepted => match sensors.acknowledge(task, now) {
+                Ok(()) => {
+                    bus.publish(
+                        now,
+                        Event::SensorTask(SensorTaskEvent::Acknowledged {
+                            task,
+                            sensor,
+                            at: now,
+                        }),
+                    )?;
+                }
+                Err(err) => {
+                    tracing::warn!(task = task.0, sensor = sensor.0, %err, "a SAPIENT TaskAck could not be applied");
+                }
+            },
+            TaskAckStatus::Rejected => {
+                let reason = if report.reasons.is_empty() {
+                    "rejected".to_string()
+                } else {
+                    report.reasons.join("; ")
+                };
+                match sensors.fail(task, reason.clone()) {
+                    Ok(()) => {
+                        bus.publish(
+                            now,
+                            Event::SensorTask(SensorTaskEvent::Failed {
+                                task,
+                                sensor,
+                                reason,
+                                at: now,
+                            }),
+                        )?;
+                    }
+                    Err(err) => {
+                        tracing::warn!(task = task.0, sensor = sensor.0, %err, "a SAPIENT TaskAck could not be applied");
+                    }
+                }
+            }
+            // Same rule the desktop's own reader states: the registry's task lifecycle
+            // has no state past Acknowledged/Failed for a task the sensor already
+            // accepted, so calling acknowledge/fail again for the ordinary
+            // accept-then-finish sequence a bounded task produces would return
+            // TaskClosed for no defect at all. Logged, not applied.
+            TaskAckStatus::Completed | TaskAckStatus::Failed => {
+                tracing::info!(
+                    task = task.0,
+                    sensor = sensor.0,
+                    status = ?report.status,
+                    "a SAPIENT TaskAck reported a post-acceptance outcome"
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -1326,8 +1513,19 @@ async fn run(
         tracing::warn!("no algorithm configuration is in force");
     }
 
-    let (mut gateway, service_sinks, feed_reports) = build_gateway(&config, &handle);
+    let (mut gateway, service_sinks, feed_reports, sapient) = build_gateway(&config, &handle);
     let mut sensors = build_registry(&config);
+    // GAP-004: attach the SAPIENT task adapters bound above, one per taskable feed,
+    // routed by sensor id since the registry holds a single adapter slot for all of
+    // them (`InMemorySensorRegistry::attach_adapter`) and a node's SAPIENT feeds are
+    // one connection per sensor, not one shared middleware.
+    if !sapient.task_adapters.is_empty() {
+        let count = sapient.task_adapters.len();
+        sensors.attach_adapter(Arc::new(SapientTaskRouter {
+            by_sensor: sapient.task_adapters.into_iter().collect(),
+        }));
+        tracing::info!(sensors = count, "SAPIENT task adapters attached");
+    }
 
     // GAP-041: the v2 read paths are served. The write paths are routed and refuse,
     // because nothing can authenticate a caller (GAP-057, GAP-060), and only loopback is
@@ -1481,6 +1679,7 @@ async fn run(
             bus.publish(now, Event::Ingest(event))?;
         }
         issue_api_tasks(&api, &mut sensors, &bus, now)?;
+        apply_sapient_task_acks(&sapient.task_ack_sinks, &mut sensors, &bus, now)?;
         record_effector_reports(&api, &bus, now)?;
         record_warning_acknowledgements(&api, &bus, now)?;
         // GAP-009, DN-16 §5: what the peers said that was not a track. After the
@@ -1771,5 +1970,135 @@ mod tests {
         );
         assert!(tls.has_identity());
         assert_eq!(tls.trust_roots_pem, config.security.tls.trust_roots_pem);
+    }
+
+    /// GAP-004, both directions. Outbound: a SAPIENT feed with a `destination_id` gets
+    /// a task adapter whose sink writes onto its own connection, attached to the
+    /// registry and reachable through `SensorControl::issue` -- the whole path from
+    /// configuration to a real socket, not just the pieces in isolation. Inbound: a
+    /// `TaskAck` against the wire `taskId` that issue produced is acknowledged and
+    /// published as `SensorTaskEvent::Acknowledged`.
+    ///
+    /// Long on purpose: splitting outbound from inbound would duplicate the whole
+    /// setup (listener, config, gateway, registry, adapter) just to lose the one
+    /// thing worth proving together -- that the ack is applied against the *same*
+    /// wire task id the issue actually produced, never a hand-encoded one.
+    #[allow(clippy::too_many_lines)]
+    #[test]
+    fn a_taskable_sapient_feed_issues_a_real_task_and_applies_its_ack() {
+        use gungnir_sensor_management::SensorControl;
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let accepted = std::thread::spawn(move || {
+            use std::io::{BufRead, BufReader};
+            let (stream, _) = listener.accept().expect("accept");
+            let mut line = String::new();
+            BufReader::new(stream).read_line(&mut line).expect("read");
+            line
+        });
+
+        let config = ConfigBaseline {
+            sensors: vec![gungnir_config::SensorConfig {
+                id: 7,
+                modality: "sapient".into(),
+                position: [0.9, 0.2, 2.0],
+                max_range_m: 5_000.0,
+                control_endpoint: Some("sapient".into()),
+                maintenance: Vec::new(),
+            }],
+            origin: Some([0.9, 0.2, 0.0]),
+            sapient_feeds: vec![gungnir_config::SapientFeedConfig {
+                name: "spotter-7".into(),
+                sensor_id: 7,
+                node_type: gungnir_config::SapientNodeType::Spotter,
+                source: gungnir_config::SapientSource::Tcp {
+                    addr: addr.to_string(),
+                },
+                destination_id: Some("3fa85f64-5717-4562-b3fc-2c963f66afa6".into()),
+            }],
+            sapient_node_id: Some("gungnir-node-test".into()),
+            ..ConfigBaseline::default()
+        };
+
+        let mut gateway = IngestGateway::new(Box::new(AllowListAuthenticator {
+            allowed: vec![SensorId(7)],
+        }));
+        let bound = bind_sapient_feeds(&config, &mut gateway, &[]);
+        assert_eq!(bound.task_adapters.len(), 1, "the one taskable feed");
+
+        let mut sensors = build_registry(&config);
+        sensors.attach_adapter(Arc::new(SapientTaskRouter {
+            by_sensor: bound.task_adapters.into_iter().collect(),
+        }));
+        let local_task = sensors
+            .issue(
+                SensorId(7),
+                gungnir_model::SensorCommand::SetMode {
+                    mode: gungnir_model::SensorMode::Search,
+                },
+                None,
+                gungnir_model::MissionTime(1_000.0),
+            )
+            .expect("issued");
+
+        let line = accepted.join().expect("thread");
+        let value: serde_json::Value = serde_json::from_str(line.trim()).expect("valid json");
+        assert_eq!(value["nodeId"], "gungnir-node-test");
+        assert_eq!(
+            value["destinationId"],
+            "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        );
+        assert_eq!(value["task"]["command"]["modeChange"], "search");
+
+        // The other direction: a TaskAck against the wire taskId this issue itself
+        // produced (never hand-encoded), the same rule
+        // `gungnir-app/tests/sapient_task_ack.rs` already follows.
+        let wire_task_id = value["task"]["taskId"]
+            .as_str()
+            .expect("taskId")
+            .to_string();
+        let ack_sink = gungnir_ingest::adapters::sapient::TaskAckSink::default();
+        ack_sink.lock().expect("lock").push_back(
+            gungnir_ingest::adapters::sapient::TaskAckReport {
+                task_id: wire_task_id,
+                status: gungnir_ingest::adapters::sapient::TaskAckStatus::Accepted,
+                reasons: Vec::new(),
+            },
+        );
+        let bus = InProcessBus::new();
+        let events = bus.subscribe();
+        apply_sapient_task_acks(
+            &[ack_sink],
+            &mut sensors,
+            &bus,
+            gungnir_model::MissionTime(1_001.0),
+        )
+        .expect("applied");
+
+        let task = sensors
+            .tasks()
+            .iter()
+            .find(|t| t.id == local_task)
+            .expect("recorded");
+        assert!(
+            matches!(
+                task.state,
+                gungnir_sensor_management::tasking::TaskState::Acknowledged { .. }
+            ),
+            "{:?}",
+            task.state
+        );
+        match events.try_recv().expect("published").event {
+            Event::SensorTask(gungnir_model::events::SensorTaskEvent::Acknowledged {
+                task,
+                sensor,
+                ..
+            }) => {
+                assert_eq!(task, local_task);
+                assert_eq!(sensor, SensorId(7));
+            }
+            other => panic!("expected an Acknowledged event: {other:?}"),
+        }
     }
 }

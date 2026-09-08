@@ -28,6 +28,17 @@
 //! does, so the addition sits on the same trust boundary the GAP-001 widening above does.
 //! **Human-owned (the `gungnir-ingest` gateway), signed by the owner 2026-09-08.**
 //!
+//! **Extended again 2026-09-08, GAP-004: [`TcpSapientSource::sink`], the wire transport
+//! `SapientTaskAdapter`'s own documentation had left open.** That adapter hands a task's
+//! JSON to an injected `Fn(String)`, deliberately never opening a socket itself; what
+//! carries the bytes the rest of the way was unbuilt. The middleware connection this
+//! file already holds for reading is the answer rather than a second one: SAPIENT's
+//! wire is one TCP session per middleware, not read-only by anything in the ICD, so
+//! `TcpStream::try_clone` gives an independent handle to the *same* connection for
+//! writing, one JSON object per line outbound exactly as `take_messages` reads them
+//! inbound. **Human-owned (the `gungnir-ingest` gateway); written and gated, not
+//! signed.**
+//!
 //! So a spotter, an acoustic array, or a passive-RF direction finder each need no design
 //! of our own: they need this adapter, accepting their node type, and the measurement
 //! shape DN-27 §4 added.
@@ -206,6 +217,72 @@ impl TcpSapientSource {
             partial: Vec::new(),
             description: format!("tcp:{addr}"),
         })
+    }
+
+    /// An outbound handle to this same connection, for a [`SapientTaskAdapter`][adapter]
+    /// sink -- an independent handle to the identical socket
+    /// (`TcpStream::try_clone`), not a second connection: cheap, and the two
+    /// directions do not contend, since a duplex TCP stream's own reads and writes are
+    /// already independent.
+    ///
+    /// [adapter]: gungnir_sensor_management::sapient_task::SapientTaskAdapter
+    ///
+    /// # Errors
+    ///
+    /// `IngestError::Io` when the platform refuses to duplicate the socket handle.
+    pub fn sink(&self) -> Result<TcpTaskSink, IngestError> {
+        let stream = self.stream.try_clone().map_err(|e| {
+            IngestError::Io(format!(
+                "{}: cloning the connection for tasking: {e}",
+                self.description
+            ))
+        })?;
+        Ok(TcpTaskSink {
+            stream: Mutex::new(stream),
+            description: self.description.clone(),
+        })
+    }
+}
+
+/// An outbound handle to a [`TcpSapientSource`]'s connection. `Mutex`-wrapped because
+/// [`SapientTaskAdapter`][adapter] requires `Fn(String) + Send + Sync`, and more than
+/// one task for the sensor this connection serves may be issued concurrently.
+///
+/// [adapter]: gungnir_sensor_management::sapient_task::SapientTaskAdapter
+pub struct TcpTaskSink {
+    stream: Mutex<std::net::TcpStream>,
+    description: String,
+}
+
+impl TcpTaskSink {
+    /// Write one task message and a trailing newline, the same framing
+    /// [`TcpSapientSource::take_messages`] reads inbound.
+    ///
+    /// Takes `&self`, not `&mut self`: the whole reason to exist is to be captured by
+    /// value in an `Fn(String)` closure, called from `&self` methods only.
+    ///
+    /// Errors are logged rather than returned, because `SapientTaskAdapter`'s sink is
+    /// `Fn(String)` and cannot propagate one -- the adapter always reports the task
+    /// `Issued` once the sink is called, which is accurate: the bytes left this
+    /// process; what the middleware or the sensor did with them is what a `TaskAck`
+    /// (or its absence) reports, not this call.
+    pub fn send(&self, mut json: String) {
+        use std::io::Write;
+        json.push('\n');
+        let Ok(mut stream) = self.stream.lock() else {
+            tracing::error!(
+                sink = %self.description,
+                "the task sink's connection lock is poisoned"
+            );
+            return;
+        };
+        if let Err(e) = stream.write_all(json.as_bytes()) {
+            tracing::error!(
+                sink = %self.description,
+                %e,
+                "a SAPIENT task could not be written to the connection"
+            );
+        }
     }
 }
 
@@ -1430,5 +1507,37 @@ mod tests {
         );
         a.poll(MissionTime(1_692_008_524.0)).expect("polls");
         assert_eq!(a.stats().task_acks, 1);
+    }
+
+    /// GAP-004: `TcpTaskSink::send` writes onto the *same* connection
+    /// `TcpSapientSource::take_messages` reads, one JSON object per line -- verified
+    /// against a real socket rather than assumed, the same way this is the only test
+    /// in this module (or `ais.rs`/`adsb.rs`'s equivalents) to open one at all.
+    #[test]
+    fn the_task_sink_writes_one_line_onto_the_same_connection_the_source_reads() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let accepted = std::thread::spawn(move || {
+            use std::io::Read;
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut buf = Vec::new();
+            // The client closes after sending, which ends this read.
+            stream.read_to_end(&mut buf).expect("read");
+            buf
+        });
+
+        let source =
+            TcpSapientSource::connect(addr, std::time::Duration::from_secs(3)).expect("connect");
+        let sink = source.sink().expect("sink");
+        sink.send(r#"{"nodeId":"gungnir-node-1","task":{}}"#.to_string());
+        drop(source);
+        drop(sink);
+
+        let received = accepted.join().expect("thread");
+        assert_eq!(
+            received,
+            b"{\"nodeId\":\"gungnir-node-1\",\"task\":{}}\n".to_vec(),
+            "one JSON object and a trailing newline, the framing take_messages reads"
+        );
     }
 }

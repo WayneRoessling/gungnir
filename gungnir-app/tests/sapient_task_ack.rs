@@ -57,6 +57,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
                     .to_string_lossy()
                     .into_owned(),
             },
+            destination_id: None,
         }],
         sensor_task_ack_window_s: 10.0,
         ..ConfigBaseline::default()
