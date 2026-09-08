@@ -4008,6 +4008,67 @@ not by finding, for the time between whenever each item landed and this correcti
     `gungnir_sensor_management::sapient_task` was already reachable from
     `gungnir-node`.
 
+107. **GAP-024's point-to-plane CPU reference** (2026-09-08). `cpu_reference.rs`'s own
+    documentation had been explicit that point-to-plane is a distinct linearised
+    solve, not a corollary of `PointBuffer::normals` existing; `gungnir-data-fusion::
+    point_to_plane` is that solve. A small rotation `R = I + [ω]×` and translation `t`
+    minimising the summed squared point-to-plane distance is linear in six unknowns
+    via the scalar triple product identity `n·(ω×p) = ω·(p×n)`, giving normal
+    equations `A x = b` (`A` the 6×6 sum of `[p×n; n][p×n; n]ᵀ` over every
+    correspondence); the solved rotation vector becomes a rotation through
+    `UnitQuaternion::from_scaled_axis` -- the true exponential map, not the
+    non-orthogonal `I + [ω]×` the linearisation itself used to reach a linear problem.
+    `CpuIcpPointToPlane` drives it the way `CpuIcp` drives Kabsch: correspond by
+    nearest point, solve, compose, judge convergence: it refuses at construction when
+    the target carries no normals, rather than estimating one itself (`PointBuffer::
+    normals`'s own documentation names exactly this as the thing this crate's
+    point-to-plane path must not rest on) -- and stores the normals it takes out of
+    the target as a plain field rather than re-deriving their presence from an
+    `Option` on every `step`, since doing the latter needed an `expect` this
+    workspace's own rule forbids outside tests and `main` (caught by
+    `architecture_compliance.rs`'s own scan, not assumed clean).
+
+    **A degeneracy check earns its place with a real example, not a hypothetical
+    one.** Below a `1e-6` ratio of `A`'s smallest to largest eigenvalue -- the same
+    shape of check `normals.rs` already uses for collinearity -- no rotation is
+    determined by the data, the common case being every normal pointing the same way
+    (a plane, or near enough). `cpu_reference.rs`'s and `normals.rs`'s own shared test
+    surface (`z = sin(1.3x+0.7y)*0.4`) turned out to **be** that case for this solve
+    specifically: `cond(A)` came out above `10^17` in the independent Python check
+    below, several `f32` epsilons past useless, even though the identical surface is
+    perfectly fine for `estimate_normals`'s own per-point PCA -- a local computation
+    that never sums curvature information globally the way assembling `A` does. A
+    second sinusoidal term at a different frequency and orientation
+    (`+ cos(0.9x−1.7y)*0.25`) breaks the near-planarity and brings `cond(A)` to about
+    280; this module's own tests use that surface instead, rather than the one two
+    sibling files already share.
+
+    **Verified independently in Python** (`numpy`, not committed -- the same
+    disclosure `normals.rs` makes about its own check): a hand-built single
+    correspondence gives the exact `a`/`c` vector the formula predicts by hand; a
+    36-point correspondence set under a known small transform solves to within 0.5%
+    of the transform's inverse in one linearisation, with the point-to-plane residual
+    falling from a mean of 0.054 m to 1.8e-8 m after one further re-linearisation --
+    the Newton-like quadratic convergence a correctly linearised least-squares
+    problem should show.
+
+    **Verification.** 22 tests in the crate, all passing (was 15): the hand-checked
+    single correspondence, a repeated correspondence correctly refused as degenerate
+    (proving the check is not vacuous), fewer than six correspondences refused as
+    `EmptyInput`, a known small transform recovered in one solve and by the full ICP
+    loop to 2 mm, a target with no normals refused at construction, empty overlap,
+    and an aligned cloud. No dependency edge changed and no new external crate:
+    `nalgebra`'s fixed-size `SMatrix`/`SVector` and `.symmetric_eigen()`/`.cholesky()`
+    were already reachable, the same crate `normals.rs` and `transform_solve.rs`
+    already exercise for their own decompositions.
+
+    **Agent-assisted with a mandatory verification gate, not human-owned.**
+    `docs/agentic-workflow.md` places `gungnir-data-fusion`'s CPU ICP reference and
+    GPU registration pipeline under Medium-risk ("the GPU path is gated on agreement
+    with the CPU reference"), not the Low-trust/human-owned list; this entry is that
+    verification gate's other half, built ahead of the GPU path it will validate
+    (GAP-061, whose own self-hosted GPU runner is not yet registered either).
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and
