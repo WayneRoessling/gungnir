@@ -3895,6 +3895,45 @@ not by finding, for the time between whenever each item landed and this correcti
     outside the identity path that crate scopes as human-owned; neither needed a
     signature on its own account.
 
+105. **GAP-060's outbound half brought in line with its serving half** (2026-09-08).
+    `gungnir-node/src/main.rs::host_tls` -- what a node presents to a peer it connects
+    to -- called nothing but the `GUNGNIR_TLS_CERT`/`GUNGNIR_TLS_KEY` environment
+    fallback, while `spawn_tls_from_provider` had issued the node's *serving* identity
+    from its key provider since this gap's own earlier work. `host_tls` now also calls
+    `gungnir_remote::identity::issue_for_client("gungnir-node")` -- the exact function
+    `gungnir-app`'s `link_tls_for` already calls for the desktop's own outbound
+    identity, so this is porting an existing, tested pattern rather than writing a new
+    one -- and sets `LinkTls::issued` from it; the environment-PEM fallback is left in
+    place and still read, since `LinkTls`'s own rule is that the issued identity wins
+    when both are set. A failed issuance is logged and falls through to `identity_pem`
+    or to no client certificate, never a hard failure: a node's job is to run its
+    pipeline and journal it, and a peer link it cannot authenticate is a link it does
+    not make, not a reason to stop.
+
+    **What this does not do, named rather than left ambiguous.** `issue_for_client`
+    builds its own ephemeral `P256KeyProvider` internally, the same as
+    `spawn_tls_from_provider` already does for serving -- so this closes the
+    "provider-issued or not" gap between the two roles without closing the
+    "ephemeral or persistent" one either already had. Making either survive a restart
+    needs a `KeyProvider` this node keeps rather than builds fresh, which is a
+    `gungnir-security` change (generalising `PersistentKeyProvider::
+    open_or_create_via_os_keystore`'s hardcoded desktop service name, the same
+    generalisation item 104 already made for `wrapping_secret`) and a decision about
+    whether the node's serving and outbound roles should then share one persisted
+    identity or hold two -- real design surface, not a two-line fix, and deliberately
+    not taken here alongside GAP-057 in the same batch.
+
+    **Verification.** A new unit test in `gungnir-node/src/main.rs` (the crate's first
+    inline test module, `host_tls` being private to it) confirms an ephemeral provider
+    always issues, and that the configured trust roots thread through unchanged. No
+    dependency edge changed: `gungnir-remote::identity` was already public and already
+    a runtime dependency of `gungnir-node`.
+
+    **Not human-owned on its own account.** `gungnir-node` is not in
+    `docs/agentic-workflow.md`'s human-owned list; the function called
+    (`issue_for_client`) is `gungnir-remote` code already signed off under GAP-060's
+    own earlier D-29 work, unchanged here.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and
