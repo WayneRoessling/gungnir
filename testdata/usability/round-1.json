@@ -30,5 +30,33 @@
   ],
   "hazards": [
     { "name": "harbour boom", "kind": "boom", "shape": "polyline", "points": [[0.9599, 0.2094, 0.0], [0.9599, 0.2095, 0.0]], "blocks_surface": true }
+  ],
+  "laydowns": [
+    {
+      "id": "current",
+      "intent": "the deployment as sited",
+      "sensors": [
+        { "sensor": 1, "position_enu": [0.0, 0.0, 25.0], "mode": "Search" },
+        { "sensor": 2, "position_enu": [5718.534, 1081.604, 27.35], "mode": "Search" }
+      ],
+      "resources": [
+        { "resource": 1, "position_enu": [0.0, 0.0, 0.0] },
+        { "resource": 2, "position_enu": [5718.507, 1081.599, -2.649] }
+      ],
+      "current": true
+    },
+    {
+      "id": "b",
+      "intent": "move the area-layer battery toward the upper Vell approach, ahead of R2's scheduled maintenance window",
+      "sensors": [
+        { "sensor": 1, "position_enu": [0.0, 0.0, 25.0], "mode": "Search" },
+        { "sensor": 2, "position_enu": [5718.534, 1081.604, 27.35], "mode": "Search" }
+      ],
+      "resources": [
+        { "resource": 1, "position_enu": [0.0, 0.0, 0.0] },
+        { "resource": 2, "position_enu": [2000.0, 1400.0, -1.0] }
+      ],
+      "current": false
+    }
   ]
 }

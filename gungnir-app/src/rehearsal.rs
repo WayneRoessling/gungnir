@@ -65,6 +65,15 @@ pub struct SeedAlert {
 }
 
 /// The seed file.
+///
+/// **`tracks`, `plans` and `alerts` must each be sorted by ascending `at_s`.** [`tick`]
+/// advances a single cursor through each list and stops at the first entry not yet due
+/// -- it does not scan ahead -- so an entry with an earlier `at_s` placed after one with
+/// a later `at_s` is silently skipped until the earlier entries in front of it become
+/// due too. `load_seed` refuses a seed that is not sorted this way, naming the field and
+/// the first pair out of order, because a moderator hand-editing `at_s` (`SOURCE.md`'s
+/// own documented way to retime a task) has no other way to notice the mistake before a
+/// live session.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Seed {
     pub name: String,
@@ -78,6 +87,21 @@ pub struct Seed {
     /// readiness (US-02).
     #[serde(default)]
     pub resources_not_ready: Vec<u32>,
+}
+
+/// The first out-of-order pair in a sequence of `at_s` values, if any: `(index, prev,
+/// this)`, `index` being the later entry's position.
+fn first_disorder(at_s: impl Iterator<Item = f64>) -> Option<(usize, f64, f64)> {
+    let mut prev: Option<(usize, f64)> = None;
+    for (i, t) in at_s.enumerate() {
+        if let Some((_, p)) = prev {
+            if t < p {
+                return Some((i, p, t));
+            }
+        }
+        prev = Some((i, t));
+    }
+    None
 }
 
 /// Why a rehearsal could not be installed.
@@ -194,6 +218,23 @@ pub fn load_seed(path: &std::path::Path) -> Result<(Seed, String), RehearsalErro
         path: path.display().to_string(),
         reason: e.to_string(),
     })?;
+    let malformed = |field: &str, i: usize, prev: f64, this: f64| RehearsalError::Malformed {
+        path: path.display().to_string(),
+        reason: format!(
+            "{field} is not sorted by ascending at_s: entry {i} ({this}) comes after \
+             {prev}, so `tick`'s single cursor would skip it until the entries in front \
+             of it become due"
+        ),
+    };
+    if let Some((i, prev, this)) = first_disorder(seed.tracks.iter().map(|t| t.at_s)) {
+        return Err(malformed("tracks", i, prev, this));
+    }
+    if let Some((i, prev, this)) = first_disorder(seed.plans.iter().map(|p| p.at_s)) {
+        return Err(malformed("plans", i, prev, this));
+    }
+    if let Some((i, prev, this)) = first_disorder(seed.alerts.iter().map(|a| a.at_s)) {
+        return Err(malformed("alerts", i, prev, this));
+    }
     let hash = format!("{:x}", sha2::Sha256::digest(&bytes));
     Ok((seed, hash))
 }

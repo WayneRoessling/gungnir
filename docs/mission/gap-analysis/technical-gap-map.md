@@ -88,6 +88,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-043 Engagement tracking and effect assessment | CAP-4.6 | 4 | L | I3 | Added to `../../../ARCHITECTURE.md` §10 by this register |
 | GAP-088 Geofences have no configuration source | CAP-3.6 | 4 | S | I3 | `../../verification-capability-table.md` §2, `gungnir-policy` row |
 | GAP-090 The friendly set is only the friendlies a sensor detected | CAP-3.8, CAP-4.5 | 4 | M | I3 | `../../design/DN-25-cursor-on-target.md`; `../../design/DN-05-fires.md` §5 |
+| GAP-097 An unchanged plan is re-proposed and re-queued every tick | CAP-3.3 | 4 | M | I3 | `../../ux/usability-round-1-session.md` §2, §3; GAP-074, GAP-089, GAP-045 |
 
 ### Productization: sustainment
 

@@ -7,8 +7,10 @@
       "position_enu": [9000.0, 4000.0, 300.0],
       "velocity_mps": [-45.0, -20.0, 0.0],
       "classification": "Unknown",
-      "stale_after_s": 80.0
+      "stale_after_s": 65.0
     },
+    { "id": 51, "at_s": 0.0, "position_enu": [10500.0, 2500.0, 150.0], "velocity_mps": [-30.0, -10.0, 0.0], "classification": "Unknown" },
+    { "id": 52, "at_s": 5.0, "position_enu": [10200.0, 2700.0, 160.0], "velocity_mps": [-28.0, -9.0, 0.0], "classification": "Unknown" },
     {
       "id": 41,
       "at_s": 20.0,
@@ -22,11 +24,21 @@
       "position_enu": [11800.0, 1900.0, 140.0],
       "velocity_mps": [-37.0, -7.0, 0.0],
       "classification": "Unknown"
-    }
+    },
+    { "id": 53, "at_s": 50.0, "position_enu": [9900.0, 2900.0, 170.0], "velocity_mps": [-27.0, -8.0, 0.0], "classification": "Unknown" },
+    { "id": 54, "at_s": 58.0, "position_enu": [9600.0, 3100.0, 180.0], "velocity_mps": [-26.0, -7.0, 0.0], "classification": "Unknown" },
+    { "id": 55, "at_s": 65.0, "position_enu": [9300.0, 3300.0, 190.0], "velocity_mps": [-25.0, -6.0, 0.0], "classification": "Unknown" },
+    { "id": 56, "at_s": 75.0, "position_enu": [9000.0, 3500.0, 200.0], "velocity_mps": [-24.0, -5.0, 0.0], "classification": "Unknown" }
   ],
   "plans": [
+    { "id": 1201, "at_s": 0.0, "resource": 1, "track": 51 },
+    { "id": 1202, "at_s": 5.0, "resource": 1, "track": 52 },
     { "id": 1181, "at_s": 30.0, "resource": 2, "track": 39 },
-    { "id": 1183, "at_s": 45.0, "resource": 1, "track": 41 }
+    { "id": 1183, "at_s": 45.0, "resource": 1, "track": 41 },
+    { "id": 1203, "at_s": 50.0, "resource": 1, "track": 53 },
+    { "id": 1204, "at_s": 58.0, "resource": 1, "track": 54 },
+    { "id": 1205, "at_s": 65.0, "resource": 1, "track": 55 },
+    { "id": 1206, "at_s": 75.0, "resource": 1, "track": 56 }
   ],
   "alerts": [
     { "at_s": 55.0, "text": "sensor 2: track update rate dropped to 0.4 Hz" },
