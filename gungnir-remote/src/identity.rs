@@ -28,7 +28,57 @@
 //! answers "who is this host". `gungnir-api` would have been a better fit still, but the
 //! desktop holds it as a dev-dependency only and `ARCHITECTURE.md` refuses that as a
 //! production edge.
+//!
+//! # Persistent identities (2026-09-08, GAP-060's remaining slice; human-owned per
+//! `docs/agentic-workflow.md` -- written and gated, not signed)
+//!
+//! [`issue_for_client`] and [`issue`] build a fresh ephemeral `P256KeyProvider` (the
+//! node's serving identity in `gungnir-node/src/main.rs::spawn_tls_from_provider`) or
+//! take one already built (`issue`, called with an ephemeral one by
+//! `issue_for_client`): either way, a new identity every process start. Now that D-39
+//! admits an OS-keystore crate and `gungnir_security::PersistentKeyProvider::
+//! open_or_create_via_os_keystore` takes `service` as a parameter rather than baking in
+//! the desktop's own name, [`issue_node_serving_identity`] and
+//! [`issue_desktop_outbound_identity`] issue the same two identities from a persistent
+//! provider backed by it instead, so each survives a restart.
+//!
+//! **Two identities, two service names, never one decision away from colliding.**
+//! `NODE_TLS_IDENTITY_SERVICE` and `DESKTOP_TLS_IDENTITY_SERVICE` are as distinct from
+//! each other as they are from `gungnir-node-accounts` (GAP-057) and
+//! `gungnir-desktop-keystore` (GAP-084/D-39) -- four purposes, four names, one
+//! mechanism. **What this deliberately does not do**: the node's own outbound
+//! (peer-link) identity, `host_tls`'s call to [`issue_for_client`], is untouched and
+//! stays ephemeral. Whether that identity should ever persist too, and whether it
+//! should then be the *same* identity as the node's serving one or a third, separately
+//! named entry, is real design surface the register leaves open; this module answers
+//! neither question, because ARCHITECTURE.md item 105 already named it as deliberately
+//! not taken and it is not this change's to decide either.
+//!
+//! **Honest either way, never a silent downgrade.** Each persistent function falls
+//! back to the same ephemeral issuance [`issue_for_client`] already used, logged as a
+//! fallback rather than left to look like the persistent path succeeded -- DN-22 §5's
+//! disconnected-fallback rule ("an unavailable keystore yields an honest unencrypted
+//! state ... never a claimed-but-absent encryption") applied to a TLS identity instead
+//! of to journal encryption. A caller only ever sees an error when *both* the
+//! persistent and the ephemeral path fail, which for the ephemeral path means `rcgen`
+//! itself refused the names -- the same condition that already made [`issue_for_client`]
+//! fail before this module could try a keystore at all.
+//!
+//! **Whether to attempt the persistent path at all is the caller's decision, not this
+//! module's.** [`issue_node_serving_identity`] and [`issue_desktop_outbound_identity`]
+//! always try; `gungnir-app/src/session.rs::link_tls_for` only calls the desktop one
+//! when `security.key_provider` is already `OperatingSystemKeystore`, and calls
+//! [`issue_for_client`] directly otherwise. That gate exists because attempting the
+//! persistent path does real disk and operating-system-keystore I/O where the
+//! ephemeral path is purely in memory, and `link_tls_for` runs on every `AppState`
+//! built (every peer link, every reconnect) -- unconditionally attempting it would
+//! touch the real keystore, and leave an entry in it, for every desktop and every test
+//! that never asked for persistence, `KeyProviderConfig::None` (the default) among
+//! them. `spawn_tls_from_provider` (the node's serving identity) has no equivalent
+//! deployment-wide switch to read and is reached only along a narrow, already
+//! deliberately-configured path, so it carries no such gate.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use gungnir_security::{KeyId, KeyProvider, KeyPurpose, SignatureScheme};
@@ -199,25 +249,187 @@ pub fn issue<P: KeyProvider + 'static>(
 ///
 /// When the provider cannot report its public half, or `rcgen` refuses the name.
 pub fn issue_for_client(common_name: &str) -> Result<Arc<rustls::sign::CertifiedKey>, String> {
+    Ok(as_certified_key(issue_ephemeral(
+        vec!["localhost".to_owned()],
+        common_name,
+    )?))
+}
+
+/// A fresh identity from a new ephemeral in-process provider, over `names` -- the
+/// logic [`issue_for_client`] always ran, factored out so
+/// [`issue_persistent_or_ephemeral`] can fall back to exactly the same path rather
+/// than a second copy of it.
+fn issue_ephemeral(names: Vec<String>, common_name: &str) -> Result<HostIdentity, String> {
     use gungnir_security::{KeyPurpose, P256KeyProvider};
     let mut provider = P256KeyProvider::new();
     let key = provider.generate(KeyPurpose::TransportIdentity);
     let spki = provider
         .public_key_der(&key)
         .map_err(|e| format!("the key provider gave no public half: {e}"))?;
-    let identity = issue(
-        Arc::new(provider),
-        key,
-        spki,
-        vec!["localhost".to_owned()],
-        common_name,
-    )?;
-    Ok(Arc::new(rustls::sign::CertifiedKey::new(
+    issue(Arc::new(provider), key, spki, names, common_name)
+}
+
+/// [`HostIdentity`] wrapped as a `CertifiedKey`, ready for [`crate::LinkTls::issued`].
+fn as_certified_key(identity: HostIdentity) -> Arc<rustls::sign::CertifiedKey> {
+    Arc::new(rustls::sign::CertifiedKey::new(
         vec![rustls::pki_types::CertificateDer::from(
             identity.certificate_der,
         )],
         identity.key,
-    )))
+    ))
+}
+
+/// The name a node's TLS-identity keystore entries live under in the operating
+/// system's keystore (D-39; GAP-060's remaining slice) -- distinct from
+/// `gungnir-node-accounts` (GAP-057's node account store) and from
+/// `DESKTOP_TLS_IDENTITY_SERVICE` below, so none of the three collide on one machine.
+const NODE_TLS_IDENTITY_SERVICE: &str = "gungnir-node-tls-identity";
+
+/// As [`NODE_TLS_IDENTITY_SERVICE`], for the desktop's own outbound identity --
+/// distinct from `gungnir-desktop-keystore` (the desktop's journal-key custody,
+/// GAP-084/D-39), which is a different key for a different purpose reached through the
+/// identical mechanism.
+const DESKTOP_TLS_IDENTITY_SERVICE: &str = "gungnir-desktop-tls-identity";
+
+/// The subdirectory a persistent TLS-identity keystore lives in, under whatever data
+/// directory the caller passes. `PersistentKeyProvider::open_or_create`'s file name
+/// (`keystore.sealed`) is fixed, so two unrelated keystores cannot share one directory
+/// without overwriting each other's file under two different wrapping keys; a
+/// dedicated subdirectory keeps this one out of the way of
+/// `KeyProviderConfig::OperatingSystemKeystore`'s own use of the same mechanism
+/// directly against the data directory for a completely different key (the desktop's
+/// journal key).
+const TLS_IDENTITY_SUBDIR: &str = "tls-identity";
+
+/// A stable operating-system-keystore account for `data_dir`'s deployment: its own
+/// canonical path where one is obtainable, or the path exactly as given otherwise (for
+/// instance, before the directory exists). Two deployments configured with different
+/// data directories on one machine therefore never collide, the same property
+/// `KeyProviderConfig::OperatingSystemKeystore`'s config-supplied `account` gives the
+/// desktop's journal key -- derived here instead of asked for again, since nothing
+/// about a TLS identity's account needs an operator's own choice the way an escrow
+/// officer or a passphrase does.
+///
+/// **A stated limit, not a hidden one**: every deployment on one machine sharing
+/// literally the same configured data directory still shares one persisted TLS
+/// identity for that role, the same way they would already share one journal and one
+/// `keystore.sealed`. Nothing in this workspace configures two deployments that way
+/// today, and this module invents no new configuration to guard against it.
+fn account_for(data_dir: &Path) -> String {
+    std::fs::canonicalize(data_dir).map_or_else(
+        |_| data_dir.display().to_string(),
+        |p| p.display().to_string(),
+    )
+}
+
+/// Open (or create) the persistent keystore backing a TLS identity: its own
+/// subdirectory of `data_dir`, under `service`'s entry in the operating system's
+/// keystore. No escrow -- escrow recovers sealed data for a party who lacks the key
+/// that sealed it (DN-22 §11), and a signing key has nothing sealed to recover.
+fn persistent_provider(
+    data_dir: &Path,
+    service: &str,
+) -> Result<Arc<gungnir_security::PersistentKeyProvider>, String> {
+    let keystore_dir = data_dir.join(TLS_IDENTITY_SUBDIR);
+    std::fs::create_dir_all(&keystore_dir)
+        .map_err(|e| format!("creating {}: {e}", keystore_dir.display()))?;
+    let account = account_for(data_dir);
+    let provider = gungnir_security::PersistentKeyProvider::open_or_create_via_os_keystore(
+        &keystore_dir,
+        service,
+        &account,
+        None,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(Arc::new(provider))
+}
+
+/// Issue `names`' identity from a persistent, OS-keystore-backed provider under
+/// `service` when one is reachable; fall back to a fresh ephemeral one, honestly
+/// logged as a fallback, when it is not. See the module's own doc section for why this
+/// never silently claims persistence it does not have.
+fn issue_persistent_or_ephemeral(
+    data_dir: &Path,
+    service: &str,
+    names: Vec<String>,
+    common_name: &str,
+) -> Result<HostIdentity, String> {
+    let attempt = persistent_provider(data_dir, service).and_then(|provider| {
+        let key = provider
+            .active_or_generate(KeyPurpose::TransportIdentity)
+            .map_err(|e| format!("no transport key: {e}"))?;
+        let spki = provider
+            .public_key_der(&key)
+            .map_err(|e| format!("no public half: {e}"))?;
+        issue(provider, key, spki, names.clone(), common_name)
+    });
+    match attempt {
+        Ok(identity) => {
+            tracing::info!(
+                service,
+                "this identity is persisted in the operating-system keystore and will \
+                 survive a restart"
+            );
+            Ok(identity)
+        }
+        Err(err) => {
+            tracing::warn!(
+                service,
+                %err,
+                "could not issue this identity from the operating-system keystore; \
+                 issuing an ephemeral one instead, which will not survive a restart"
+            );
+            issue_ephemeral(names, common_name)
+        }
+    }
+}
+
+/// The node's serving identity (`gungnir-node/src/main.rs::spawn_tls_from_provider`),
+/// issued from a persistent, OS-keystore-backed provider so the certificate written
+/// beside the journal for operators to pin (`node-identity.pem`) is the same
+/// certificate after a restart -- falling back to a fresh ephemeral one, honestly, when
+/// the keystore is unreachable (GAP-060's remaining slice; D-39).
+///
+/// **Not the node's peer-link (outbound) identity**, which [`issue_for_client`] still
+/// issues ephemerally at every call in `gungnir-node/src/main.rs::host_tls`: see the
+/// module doc section above for why this deliberately does not change that.
+///
+/// `data_dir` is the node's own data directory (`NodeConfig::data_dir`); `names` are
+/// the DNS names or IP addresses this node is reached as.
+///
+/// # Errors
+///
+/// Only when the ephemeral fallback also fails -- `rcgen` refusing `names` -- since a
+/// failure to reach the keystore itself is handled by falling back rather than
+/// propagated.
+pub fn issue_node_serving_identity(
+    data_dir: &Path,
+    names: Vec<String>,
+    common_name: &str,
+) -> Result<HostIdentity, String> {
+    issue_persistent_or_ephemeral(data_dir, NODE_TLS_IDENTITY_SERVICE, names, common_name)
+}
+
+/// The desktop's outbound identity (`gungnir-app/src/session.rs::link_tls_for`),
+/// issued from a persistent, OS-keystore-backed provider so the identity a node sees
+/// from this desktop survives a restart -- falling back to a fresh ephemeral one,
+/// honestly, when the keystore is unreachable (GAP-060's remaining slice; D-39).
+///
+/// `data_dir` is the desktop's own data directory (`ConfigBaseline::data_dir`).
+///
+/// # Errors
+///
+/// As [`issue_node_serving_identity`].
+pub fn issue_desktop_outbound_identity(
+    data_dir: &Path,
+    common_name: &str,
+) -> Result<Arc<rustls::sign::CertifiedKey>, String> {
+    Ok(as_certified_key(issue_persistent_or_ephemeral(
+        data_dir,
+        DESKTOP_TLS_IDENTITY_SERVICE,
+        vec!["localhost".to_owned()],
+        common_name,
+    )?))
 }
 
 #[cfg(test)]
@@ -274,5 +486,189 @@ mod tests {
             "gungnir-node",
         )
         .is_err());
+    }
+
+    fn scratch_dir(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!(
+            "gungnir-remote-identity-{name}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).expect("dir");
+        d
+    }
+
+    /// `PersistentKeyProvider` is `issue()`'s second instantiation of `P: KeyProvider`
+    /// (the first, `P256KeyProvider`, is what every test above already exercises) --
+    /// this proves the generic bound holds for it too, and that the key it hands back
+    /// is the *same* one across a reopen, which is the entire point of using it here
+    /// rather than an ephemeral provider. Uses `open_or_create`'s plain-passphrase
+    /// path, not the OS keystore: what this test checks is downstream of
+    /// `wrapping_secret` producing a stable string, not that mechanism itself, which
+    /// `gungnir-security`'s own tests already cover.
+    #[test]
+    fn a_persistent_provider_issues_the_same_identity_across_a_reopen() {
+        use gungnir_security::PersistentKeyProvider;
+        let dir = scratch_dir("persistent-reopen");
+
+        let first =
+            PersistentKeyProvider::open_or_create(&dir, "correct horse", None).expect("created");
+        let key = first
+            .active_or_generate(KeyPurpose::TransportIdentity)
+            .expect("key");
+        let spki = first.public_key_der(&key).expect("spki");
+        let identity_one = issue(
+            Arc::new(first),
+            key,
+            spki.clone(),
+            vec!["localhost".into()],
+            "gungnir-node",
+        )
+        .expect("issued once");
+        assert!(identity_one.certificate_pem.contains("BEGIN CERTIFICATE"));
+
+        // Reopened under the same passphrase: the same key comes back rather than a
+        // fresh one, so a second issuance is over the same public half.
+        let again =
+            PersistentKeyProvider::open_or_create(&dir, "correct horse", None).expect("reopened");
+        let key_again = again
+            .active_or_generate(KeyPurpose::TransportIdentity)
+            .expect("key");
+        assert_eq!(key_again, key, "the same key, not a freshly generated one");
+        let spki_again = again.public_key_der(&key_again).expect("spki");
+        assert_eq!(spki_again, spki, "and so the same public half");
+        let identity_two = issue(
+            Arc::new(again),
+            key_again,
+            spki_again,
+            vec!["localhost".into()],
+            "gungnir-node",
+        )
+        .expect("issued again");
+        assert!(identity_two.certificate_pem.contains("BEGIN CERTIFICATE"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The fallback DN-22 §5 requires: when the persistent path cannot even be opened,
+    /// the node's serving identity is still issued -- ephemerally, honestly logged as
+    /// such -- rather than the call failing outright. A file standing where a
+    /// directory belongs forces `persistent_provider`'s `create_dir_all` to fail
+    /// deterministically, on every platform, without depending on whether this
+    /// machine happens to have a reachable operating-system keystore.
+    #[test]
+    fn issue_node_serving_identity_falls_back_to_an_ephemeral_identity_when_the_keystore_directory_cannot_be_created(
+    ) {
+        let path = std::env::temp_dir().join(format!(
+            "gungnir-remote-identity-blocked-node-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(&path, b"not a directory").expect("file standing in for a directory");
+
+        let identity = issue_node_serving_identity(
+            &path,
+            vec!["127.0.0.1".into(), "localhost".into()],
+            "gungnir-node",
+        )
+        .expect("the ephemeral fallback still issues");
+        assert!(identity.certificate_pem.contains("BEGIN CERTIFICATE"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// As the node's serving identity above, for the desktop's outbound one.
+    #[test]
+    fn issue_desktop_outbound_identity_falls_back_to_an_ephemeral_identity_when_the_keystore_directory_cannot_be_created(
+    ) {
+        let path = std::env::temp_dir().join(format!(
+            "gungnir-remote-identity-blocked-desktop-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(&path, b"not a directory").expect("file standing in for a directory");
+
+        let certified = issue_desktop_outbound_identity(&path, "gungnir-app")
+            .expect("the ephemeral fallback still issues");
+        assert!(!certified.cert.is_empty());
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The two persisted identities never share a service name, so the same account
+    /// (the same `data_dir`) addresses two independent operating-system-keystore
+    /// entries rather than one.
+    #[test]
+    fn the_node_and_desktop_tls_identity_services_are_distinct_from_each_other_and_from_the_account_store_and_desktop_keystore(
+    ) {
+        let names = [
+            NODE_TLS_IDENTITY_SERVICE,
+            DESKTOP_TLS_IDENTITY_SERVICE,
+            "gungnir-node-accounts",
+            "gungnir-desktop-keystore",
+        ];
+        for (i, a) in names.iter().enumerate() {
+            for b in &names[i + 1..] {
+                assert_ne!(a, b, "two OS-keystore purposes must never share a name");
+            }
+        }
+    }
+
+    /// `persistent_provider` against whatever operating-system keystore this machine
+    /// actually has (DN-22 §5; D-39) -- honest either way, the rule
+    /// `gungnir-security/tests/os_keystore.rs` also follows. Unlike that crate's own
+    /// tests, this one needs no separate binary: nothing in `gungnir-remote`'s test
+    /// suite installs `keyring_core`'s mock store as the process default, so there is
+    /// no race over which backend `keyring::v1::Entry` latches for this process.
+    ///
+    /// **No cleanup of the operating-system-keystore entry itself, and that is a
+    /// stated trade-off.** Deleting it needs `keyring::v1::Entry` directly, the way
+    /// `gungnir-security`'s own OS-keystore tests do; `gungnir-remote` depends on
+    /// `gungnir-security`'s `PersistentKeyProvider`, which exposes no delete, and
+    /// gaining a direct `keyring` dependency only for a test's teardown is not this
+    /// change's to decide. A fixed directory name (not process-id-derived) is used
+    /// instead, so repeated runs reuse and overwrite one entry rather than minting a
+    /// new one to leave behind every time -- the directory itself is still removed.
+    #[test]
+    fn the_real_backend_round_trips_the_same_key_or_the_documented_fallback_fires() {
+        let dir = std::env::temp_dir().join("gungnir-remote-identity-persistence-fixture-c176c2");
+        let _ = std::fs::create_dir_all(&dir);
+
+        match persistent_provider(&dir, NODE_TLS_IDENTITY_SERVICE) {
+            Ok(first) => {
+                let key = first
+                    .active_or_generate(KeyPurpose::TransportIdentity)
+                    .expect("key");
+                let spki = first.public_key_der(&key).expect("spki");
+                drop(first);
+
+                // Reopened: the OS keystore handed back the same secret it stored the
+                // first time, so the same key comes back rather than a fresh one.
+                let again = persistent_provider(&dir, NODE_TLS_IDENTITY_SERVICE)
+                    .expect("reopened under the same OS-held secret");
+                let key_again = again
+                    .active_or_generate(KeyPurpose::TransportIdentity)
+                    .expect("key");
+                assert_eq!(key_again, key, "the same key, not a freshly generated one");
+                assert_eq!(
+                    again.public_key_der(&key_again).expect("spki"),
+                    spki,
+                    "and so the same public half"
+                );
+            }
+            Err(err) => {
+                // DN-22 §5's fallback: refused honestly rather than treated as a
+                // reason to invent a key. `issue_node_serving_identity` and
+                // `issue_desktop_outbound_identity` recover from exactly this by
+                // issuing ephemerally, covered deterministically by this module's own
+                // fallback tests above without depending on this machine's backend.
+                assert!(
+                    err.contains("keystore") || err.contains("credential"),
+                    "an unrelated failure, not the documented no-keystore fallback: {err}"
+                );
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -16,6 +16,20 @@ fn desktop(name: &str, provider: KeyProviderConfig) -> (AppState, std::path::Pat
     desktop_with_escrow(name, provider, None)
 }
 
+/// The account `gungnir_remote::identity::issue_desktop_outbound_identity` derives for
+/// `dir`'s deployment (its own canonical path), mirrored here only so a test can name
+/// the same operating-system-keystore entry for cleanup that function creates -- the
+/// same reason the tests below already know `gungnir-desktop-keystore`'s
+/// config-supplied account. Building an `AppState` for `KeyProviderConfig::
+/// OperatingSystemKeystore` reaches `link_tls_for` too (GAP-060's remaining slice), so
+/// on a machine with a reachable keystore this now leaves a second entry
+/// (`gungnir-desktop-tls-identity`) beside the journal-key one unless a test cleans it
+/// up the same way.
+fn tls_identity_account(dir: &std::path::Path) -> String {
+    std::fs::canonicalize(dir)
+        .map_or_else(|_| dir.display().to_string(), |p| p.display().to_string())
+}
+
 fn desktop_with_escrow(
     name: &str,
     provider: KeyProviderConfig,
@@ -123,6 +137,13 @@ fn the_os_keystore_provider_encrypts_from_start_or_says_plainly_why_not() {
             let entry = keyring::v1::Entry::new("gungnir-desktop-keystore", &account)
                 .expect("the same entry the provider created");
             let _ = entry.delete_credential();
+            // GAP-060's remaining slice: this `AppState` also issued an outbound TLS
+            // identity through the same reachable keystore, under a different service.
+            let _ = keyring::v1::Entry::new(
+                "gungnir-desktop-tls-identity",
+                &tls_identity_account(&dir),
+            )
+            .and_then(|e| e.delete_credential());
         }
         EncryptionStatus::UnavailableWritingPlaintext { reason } => {
             assert!(!reason.is_empty());
@@ -161,6 +182,11 @@ fn the_os_keystore_provider_escrows_the_journal_key_same_as_the_passphrase_file(
     let cleanup = || {
         let _ = keyring::v1::Entry::new("gungnir-desktop-keystore", &account)
             .and_then(|e| e.delete_credential());
+        // GAP-060's remaining slice: as above, a second entry under a different
+        // service for the outbound TLS identity this `AppState` also issued.
+        let _ =
+            keyring::v1::Entry::new("gungnir-desktop-tls-identity", &tls_identity_account(&dir))
+                .and_then(|e| e.delete_credential());
         let _ = std::fs::remove_dir_all(&dir);
     };
 

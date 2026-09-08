@@ -194,13 +194,17 @@ fn record_launch_warnings(
 /// provider, preferred, and the environment-supplied certificate as a fallback for
 /// whichever half is missing (GAP-060).
 ///
-/// **The provider is ephemeral, the same stated limit `spawn_tls_from_provider` already
-/// carries for the serving identity**: a new identity every start until a persistent
-/// keystore exists for the node (GAP-084's remaining `ManagedService` row, or the
-/// OS-keystore path GAP-057 admitted for this node's account store but has not yet been
-/// generalised to key material). Bringing the outbound half in line with the serving
-/// half -- both provider-issued -- is what this closes; making either survive a restart
-/// is not.
+/// **The provider is ephemeral, and deliberately still is (2026-09-08).** The
+/// OS-keystore path GAP-057 admitted for this node's account store has since been
+/// generalised to key material (GAP-060's remaining slice: `PersistentKeyProvider::
+/// open_or_create_via_os_keystore` now takes `service` as a parameter), and
+/// `spawn_tls_from_provider` uses that generalisation for the node's *serving*
+/// identity. This function -- the node's own outbound, peer-link identity -- was left
+/// untouched on purpose: whether it should persist too, and whether it should then be
+/// the *same* identity as the serving one or a third, separately named entry, is real
+/// design surface the register leaves open (ARCHITECTURE.md item 105), and closing it
+/// silently by picking one here is not this change's to do. So this remains a new
+/// identity every start, exactly as before.
 fn host_tls(config: &ConfigBaseline) -> gungnir_remote::LinkTls {
     let identity_pem = match (
         std::env::var("GUNGNIR_TLS_CERT").ok(),
@@ -1223,6 +1227,13 @@ async fn spawn_transport(
 /// Serve with mutual TLS under an identity the node's key provider issues (D-29,
 /// GAP-060): a self-signed certificate over the provider's transport key, signed through
 /// custody, written beside the journal as `node-identity.pem` for operators to pin.
+///
+/// **Persistent since 2026-09-08 (GAP-060's remaining slice), when the operating
+/// system's keystore is reachable.** `issue_node_serving_identity` opens a
+/// `PersistentKeyProvider` under `identity_dir` first, so a restart keeps the same
+/// certificate operators already pinned; an unreachable keystore falls back to a fresh
+/// ephemeral identity, logged as a fallback by that function rather than here, exactly
+/// the honest-or-nothing rule DN-22 §5 already applies to journal encryption.
 async fn spawn_tls_from_provider(
     addr: SocketAddr,
     client_ca: &str,
@@ -1230,28 +1241,21 @@ async fn spawn_tls_from_provider(
     handle: &tokio::runtime::Handle,
     identity_dir: &std::path::Path,
 ) {
-    let mut provider = gungnir_security::P256KeyProvider::new();
-    let key = provider.generate(gungnir_security::KeyPurpose::TransportIdentity);
-    let spki = match provider.public_key_der(&key) {
-        Ok(spki) => spki,
-        Err(err) => {
-            tracing::error!(%err, "the provider gave no public key; not serving");
-            return;
-        }
-    };
     let names = vec![addr.ip().to_string(), "localhost".to_string()];
     // Moved to `gungnir-remote` on 2026-09-06 (GAP-060) so the desktop can issue one the
     // same way. The node used to own this; two binaries cannot depend on each other, so
     // leaving it here meant a second copy on the desktop that would drift.
-    let identity =
-        match gungnir_remote::identity::issue(Arc::new(provider), key, spki, names, "gungnir-node")
-        {
-            Ok(identity) => identity,
-            Err(err) => {
-                tracing::error!(%err, "the node's identity could not be issued; not serving");
-                return;
-            }
-        };
+    let identity = match gungnir_remote::identity::issue_node_serving_identity(
+        identity_dir,
+        names,
+        "gungnir-node",
+    ) {
+        Ok(identity) => identity,
+        Err(err) => {
+            tracing::error!(%err, "the node's identity could not be issued; not serving");
+            return;
+        }
+    };
     let pem_path = identity_dir.join("node-identity.pem");
     match std::fs::write(&pem_path, &identity.certificate_pem) {
         Ok(()) => {
@@ -1261,10 +1265,6 @@ async fn spawn_tls_from_provider(
             tracing::warn!(%err, "the node identity could not be written; clients must pin it another way");
         }
     }
-    tracing::warn!(
-        "the node's TLS identity lives in process memory (the ephemeral provider): it is a \
-         new identity every start until a persistent keystore exists (GAP-084)"
-    );
     let acceptor = match gungnir_api::tls::acceptor_with_key(
         identity.certificate_der,
         identity.key,

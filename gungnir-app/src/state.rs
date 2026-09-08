@@ -1047,7 +1047,10 @@ fn build_encryption(
             let dir = std::path::PathBuf::from(&config.data_dir);
             let provider =
                 match gungnir_security::PersistentKeyProvider::open_or_create_via_os_keystore(
-                    &dir, account, escrow,
+                    &dir,
+                    gungnir_security::DESKTOP_KEYSTORE_SERVICE,
+                    account,
+                    escrow,
                 ) {
                     Ok(p) => std::sync::Arc::new(p),
                     Err(err) => {

@@ -15,6 +15,11 @@
 //! own error path is what fires, which is DN-22 §5's stated fallback and not a gap in
 //! coverage: the fallback is exactly the thing this test would otherwise have no way to
 //! exercise on such a runner.
+//!
+//! `open_or_create_via_os_keystore` took a `service` parameter 2026-09-08 (GAP-060's
+//! remaining slice), so this test names `gungnir_security::DESKTOP_KEYSTORE_SERVICE`
+//! explicitly rather than relying on a default that no longer exists; the constant
+//! keeps this test and the desktop's own call site naming the same string.
 
 use gungnir_security::{KeyProvider, KeyPurpose, PersistentKeyProvider};
 
@@ -30,7 +35,12 @@ fn the_real_backend_round_trips_or_leaves_the_desktop_honestly_unencrypted() {
     let account = format!("integration-test-{}", std::process::id());
     let d = dir("round-trip");
 
-    match PersistentKeyProvider::open_or_create_via_os_keystore(&d, &account, None) {
+    match PersistentKeyProvider::open_or_create_via_os_keystore(
+        &d,
+        gungnir_security::DESKTOP_KEYSTORE_SERVICE,
+        &account,
+        None,
+    ) {
         Ok(first) => {
             let key = first
                 .active_or_generate(KeyPurpose::JournalAtRest)
@@ -40,15 +50,21 @@ fn the_real_backend_round_trips_or_leaves_the_desktop_honestly_unencrypted() {
 
             // The same account reopens the same file: the OS keystore handed back the
             // same secret it stored the first time, unlocked at login with no prompt.
-            let again = PersistentKeyProvider::open_or_create_via_os_keystore(&d, &account, None)
-                .expect("reopened under the same OS-held secret");
+            let again = PersistentKeyProvider::open_or_create_via_os_keystore(
+                &d,
+                gungnir_security::DESKTOP_KEYSTORE_SERVICE,
+                &account,
+                None,
+            )
+            .expect("reopened under the same OS-held secret");
             assert_eq!(again.unseal(&key, &sealed).expect("opens"), b"real backend");
 
             // Clean up what this test put in the real keystore. `keyring`'s v1 facade is
             // already the process default by now (opening the provider forced it), so
             // this reaches the same entry `wrapping_secret` created.
-            let entry = keyring::v1::Entry::new("gungnir-desktop-keystore", &account)
-                .expect("the same entry");
+            let entry =
+                keyring::v1::Entry::new(gungnir_security::DESKTOP_KEYSTORE_SERVICE, &account)
+                    .expect("the same entry");
             entry.delete_credential().expect("cleaned up");
         }
         Err(err) => {

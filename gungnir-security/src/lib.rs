@@ -31,6 +31,13 @@ pub use authn::Authenticator;
 pub use authz::{Authorizer, StaticRoleAuthorizer};
 pub use keys::SignatureScheme;
 pub use keystore::{PersistentKeyProvider, KEYSTORE_FILE};
+// `os_keystore` itself stays private; this one name is public because
+// `PersistentKeyProvider::open_or_create_via_os_keystore` takes `service` as a
+// parameter now (2026-09-08, GAP-060's remaining slice, the same generalisation
+// GAP-057 made for `wrapping_secret`), and `gungnir-app` -- the desktop's own keystore,
+// the one caller of that constructor outside this crate -- needs to keep naming the
+// same service rather than growing its own copy of the string.
+pub use os_keystore::DESKTOP_KEYSTORE_SERVICE;
 pub use provider::InProcessKeyProvider;
 pub use session::{
     audit_attempt, audit_sign_out, hash_passphrase, verify_account, Account, AccountStore,
