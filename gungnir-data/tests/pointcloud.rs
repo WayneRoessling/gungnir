@@ -90,6 +90,83 @@ fn corrupt_files_are_errors_never_panics() {
     ));
 }
 
+/// **What this proves, and what it does not.** `load_copc_bounded` is implemented
+/// against `las::copc::CopcReader`, whose own doctest (`las-0.11.1/src/copc.rs`) reads
+/// real points from a real COPC file through the same `query` call this function makes.
+/// This workspace holds no COPC fixture of its own yet -- vendoring one needs the same
+/// licence and provenance check every other fixture here has had, which this change did
+/// not do -- so what these tests can prove without one is the refusal side: a plain
+/// LAZ/LAS file (no COPC info VLR, no hierarchy EVLR) is refused by name rather than
+/// silently read as if it were bounded, and malformed bounds are refused before the
+/// file is even opened. The happy path -- bounded points recovered from a real COPC
+/// file -- is the next test to add, not a claim this one makes.
+#[test]
+fn a_plain_laz_file_has_no_copc_hierarchy_and_is_refused_by_name() {
+    match pointcloud::load_copc_bounded(
+        &fixture("five-points.las"),
+        [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+    ) {
+        Err(DataError::Parse(message)) => {
+            assert!(
+                message.to_lowercase().contains("copc"),
+                "expected the refusal to name what was missing: {message}"
+            );
+        }
+        other => panic!(
+            "a file with no COPC hierarchy must be refused, not read: {}",
+            describe(&other)
+        ),
+    }
+}
+
+#[test]
+fn non_finite_or_inverted_bounds_are_refused_before_the_file_is_opened() {
+    for bad in [
+        [f32::NAN, 0.0, 0.0, 1.0, 1.0, 1.0],
+        [0.0, 0.0, 0.0, f32::INFINITY, 1.0, 1.0],
+        // min_x (5.0) past max_x (1.0): inverted on one axis is still inverted.
+        [5.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+    ] {
+        match pointcloud::load_copc_bounded(&fixture("absent.copc.laz"), bad) {
+            Err(DataError::Parse(message)) => {
+                assert!(message.contains(&format!("{bad:?}")), "{message}");
+            }
+            other => panic!("{bad:?}: expected a parse error, got {}", describe(&other)),
+        }
+    }
+}
+
+#[test]
+fn a_missing_copc_file_is_an_io_error() {
+    assert!(matches!(
+        pointcloud::load_copc_bounded(&fixture("absent.copc.laz"), [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]),
+        Err(DataError::Io(_))
+    ));
+}
+
+#[test]
+fn the_loader_thread_dispatches_a_copc_bounded_request() {
+    let (requests, results) = gungnir_data::spawn_loader();
+    requests
+        .send(LoadRequest::CopcBounded(
+            fixture("five-points.las"),
+            [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+        ))
+        .expect("loader alive");
+    match results
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .expect("a result")
+    {
+        // Dispatch is what this test proves; the file is deliberately not a COPC one,
+        // so a named refusal (not a hang, not a panic) is the right outcome here.
+        LoadResult::CopcBounded(Err(DataError::Parse(message))) => {
+            assert!(message.to_lowercase().contains("copc"), "{message}");
+        }
+        LoadResult::CopcBounded(other) => panic!("expected a named refusal: {}", describe(&other)),
+        _ => panic!("wrong result kind"),
+    }
+}
+
 #[test]
 fn the_loader_thread_dispatches_point_clouds() {
     let (requests, results) = gungnir_data::spawn_loader();

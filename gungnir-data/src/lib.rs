@@ -19,6 +19,10 @@ use std::path::PathBuf;
 
 pub enum LoadRequest {
     PointCloud(PathBuf),
+    /// A COPC file, and the `[min_x, min_y, min_z, max_x, max_y, max_z]` bounds to read
+    /// within it -- its own request shape, since a bounded read needs the bounds the
+    /// other loaders have no equivalent of.
+    CopcBounded(PathBuf, [f32; 6]),
     VtkMesh(PathBuf),
     Terrain(PathBuf),
     GltfAsset(PathBuf),
@@ -26,6 +30,7 @@ pub enum LoadRequest {
 
 pub enum LoadResult {
     PointCloud(Result<pointcloud::PointBuffer, DataError>),
+    CopcBounded(Result<pointcloud::PointBuffer, DataError>),
     VtkMesh(Result<scientific::MeshData, DataError>),
     Terrain(Result<geospatial::TerrainMesh, DataError>),
     GltfAsset(Result<assets::StaticMesh, DataError>),
@@ -73,6 +78,9 @@ pub fn spawn_loader() -> (
             let result = match request {
                 LoadRequest::PointCloud(path) => {
                     LoadResult::PointCloud(pointcloud::load_las(&path))
+                }
+                LoadRequest::CopcBounded(path, bounds) => {
+                    LoadResult::CopcBounded(pointcloud::load_copc_bounded(&path, bounds))
                 }
                 LoadRequest::VtkMesh(path) => LoadResult::VtkMesh(scientific::load_vtk(&path)),
                 LoadRequest::Terrain(path) => LoadResult::Terrain(geospatial::load_dem(&path)),

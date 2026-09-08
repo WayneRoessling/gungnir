@@ -153,7 +153,12 @@ gltf = "1"
 # XML extension by name (gungnir-data/src/scientific/mod.rs); restore both features in
 # the same commit that moves vtkio to a release on quick-xml >= 0.41.
 vtkio = { version = "0.6", default-features = false }
-las = { version = "0.9", features = ["laz-parallel"] }
+las = { version = "0.11", features = ["laz-parallel"] }
+# Bumped from 0.9 to 0.11 (2026-09-07, GAP-023): 0.11.1 added `las::copc`, a bounded COPC
+# reader, in the crate this workspace already depends on -- no new dependency, and `las`
+# is already named among the governed UI-stack crates in
+# `docs/agentic-coding-standards.md` §2.9. `copc-rs`, named there as unpinned, is not
+# needed for bounded COPC reading and was not added.
 # GeoTIFF DEMs (GAP-023, decided 2026-09-06): the image-rs TIFF codec, pure Rust;
 # gungnir-data owns the three GeoTIFF tags itself (§2.9, "Terrain").
 tiff = "0.11"
