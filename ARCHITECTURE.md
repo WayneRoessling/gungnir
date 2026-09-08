@@ -3950,6 +3950,64 @@ not by finding, for the time between whenever each item landed and this correcti
     (`issue_for_client`) is `gungnir-remote` code already signed off under GAP-060's
     own earlier D-29 work, unchanged here.
 
+106. **GAP-004's node half: a SAPIENT task adapter attached, and its own open row
+    closed** (2026-09-08). The desktop side of outbound SAPIENT tasking was built and
+    signed 2026-09-08 (`SapientTaskAdapter`, the `TaskAck` reader); the node had
+    neither an adapter attached nor a way to read a `TaskAck` back, so a task issued
+    through it stopped at `NotControllable`. `gungnir-node/src/main.rs::
+    bind_sapient_feeds` now builds a `SapientTaskAdapter` for every feed whose source
+    is `Tcp` and whose new `destination_id` config field is set, its sink an
+    independent handle to that same feed's own connection
+    (`TcpSapientSource::sink`, extracted before the source is erased to `Box<dyn
+    SapientSource>` for the gateway, since there is nowhere left to reach the concrete
+    type afterward); a new `SapientTaskRouter` dispatches by sensor id, because
+    `InMemorySensorRegistry::attach_adapter` holds one adapter for the whole registry
+    and a node's SAPIENT feeds are one connection per sensor, not one shared
+    middleware. `apply_sapient_task_acks` reads every feed's `TaskAck`s each tick, the
+    same shape `gungnir-app/src/sapient.rs::apply_task_ack` already has on the
+    desktop, but publishes `SensorTaskEvent::Acknowledged`/`Failed` where the
+    desktop's own reader does not -- this node is the system of record for every
+    desktop connected to it, and the desktop's local record has no further audience.
+
+    **The wire transport itself -- named "an open row" by this gap, by GAP-004's own
+    register entry, and by `sapient_task.rs`'s own doc comment -- turned out to
+    already be decided.** `TcpSapientSource`'s own documentation already states what
+    it connects to: "a middleware serving the protobuf-JSON mapping over TCP." Reading
+    outbound and writing outbound are the same connection, not two decisions;
+    `TcpStream::try_clone` gives an independent handle to it, and `TcpTaskSink` writes
+    one JSON object and a newline, the exact framing `take_messages` already reads.
+    Closing the row needed no new design, no new dependency, and no new agreement --
+    just noticing the inbound side had already made the choice this row asked for.
+
+    **Configuration: two fields, validated together.** `SapientFeedConfig` gains
+    `destination_id: Option<String>` (`Task.destinationId`, which sensor a task on
+    this feed's connection is for); `ConfigBaseline` gains a new top-level
+    `sapient_node_id: Option<String>` (`Task.nodeId`, this deployment's own SAPIENT
+    identity, sibling to `sapient_feeds` since both binaries could in principle read
+    it, though only the node constructs a `SapientTaskAdapter` today). A
+    `destination_id` with no `sapient_node_id`, an empty one, or one over a `File`
+    source (nothing live to write to) are each refused at validation instead of
+    surfacing as a runtime construction failure.
+
+    **Verification.** One test in `gungnir-node/src/main.rs`'s own inline test module
+    drives the whole path against a real `TcpListener`: `bind_sapient_feeds` builds
+    the adapter, `SensorControl::issue` reaches it through the router, the listener
+    receives the exact wire JSON (`nodeId`, `destinationId`, the mapped command), and
+    a `TaskAck` built from that same wire `taskId` (never hand-encoded, the same rule
+    the desktop's own `sapient_task_ack.rs` test already follows) is acknowledged and
+    published as `SensorTaskEvent::Acknowledged`. `TcpTaskSink` is verified against a
+    real socket independently in `gungnir-ingest/src/adapters/sapient.rs`; three
+    `gungnir-config` tests cover the new fields' validation rules.
+
+    **Human-owned crate touched: `gungnir-ingest`, `TcpSapientSource::sink` and
+    `TcpTaskSink`, the same trust boundary this gap's own earlier `TaskAck` reader
+    sits on, per `docs/agentic-workflow.md`. Written and gated, not signed.** The
+    config fields and the `gungnir-node` wiring are ordinary configuration and
+    plumbing work outside the identity path that crate scopes as human-owned; neither
+    needed a signature on its own account. No dependency edge changed:
+    `gungnir_sensor_management::sapient_task` was already reachable from
+    `gungnir-node`.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

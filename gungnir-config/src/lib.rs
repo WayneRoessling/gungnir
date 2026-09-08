@@ -414,6 +414,14 @@ pub struct SapientFeedConfig {
     pub sensor_id: u32,
     pub node_type: SapientNodeType,
     pub source: SapientSource,
+    /// This sensor's own SAPIENT identity (`Task.destinationId`), for a node to task
+    /// it through (GAP-004). `None` means the feed is read-only: detections and
+    /// `TaskAck`s are still read, but no `SensorControlAdapter` is attached for it,
+    /// since there is nowhere to address a task. Only meaningful with
+    /// [`ConfigBaseline::sapient_node_id`] also set; validation refuses one without
+    /// the other.
+    #[serde(default)]
+    pub destination_id: Option<String>,
 }
 
 /// Which of the three node types this feed is configured to accept. Deliberately one
@@ -887,6 +895,12 @@ pub struct ConfigBaseline {
     /// acoustic, or passive-RF source.
     #[serde(default)]
     pub sapient_feeds: Vec<SapientFeedConfig>,
+    /// This deployment's own SAPIENT identity (`Task.nodeId`), presented on every
+    /// outbound task (GAP-004). `None` means no SAPIENT feed may declare a
+    /// `destination_id`, since a task would have nowhere honest to say it came from;
+    /// validation enforces this.
+    #[serde(default)]
+    pub sapient_node_id: Option<String>,
     /// Peer nodes consumed as sources (DN-16 §6, GAP-009).
     #[serde(default)]
     pub peers: Vec<PeerConfig>,
@@ -1045,6 +1059,7 @@ impl Default for ConfigBaseline {
             ais_feeds: Vec::new(),
             adsb_feeds: Vec::new(),
             sapient_feeds: Vec::new(),
+            sapient_node_id: None,
             peers: Vec::new(),
             exchange: Vec::new(),
             machine_identities: Vec::new(),
@@ -1902,7 +1917,36 @@ fn validate_sapient_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> 
                         feed.name
                     )));
                 }
+                if feed.destination_id.is_some() {
+                    return Err(ConfigError::Invalid(format!(
+                        "SAPIENT feed {:?} names a destination_id over a recorded source, \
+                         which nothing can be tasked through",
+                        feed.name
+                    )));
+                }
             }
+        }
+        if let Some(destination_id) = &feed.destination_id {
+            if destination_id.trim().is_empty() {
+                return Err(ConfigError::Invalid(format!(
+                    "SAPIENT feed {:?} names an empty destination_id",
+                    feed.name
+                )));
+            }
+            if baseline.sapient_node_id.is_none() {
+                return Err(ConfigError::Invalid(format!(
+                    "SAPIENT feed {:?} names a destination_id, but sapient_node_id is not \
+                     set: an outbound task would have nowhere honest to say it came from",
+                    feed.name
+                )));
+            }
+        }
+    }
+    if let Some(node_id) = &baseline.sapient_node_id {
+        if node_id.trim().is_empty() {
+            return Err(ConfigError::Invalid(
+                "sapient_node_id is set and empty".into(),
+            ));
         }
     }
     Ok(())
@@ -3930,6 +3974,7 @@ mod tests {
                 sensor_id,
                 node_type,
                 source,
+                destination_id: None,
             }],
             ..ConfigBaseline::default()
         };
@@ -3997,8 +4042,83 @@ mod tests {
             source: SapientSource::Tcp {
                 addr: "127.0.0.1:40001".into(),
             },
+            destination_id: None,
         });
         assert!(matches!(validate(&two), Err(ConfigError::Invalid(_))));
+    }
+
+    #[test]
+    fn a_sapient_destination_id_needs_a_node_id_a_live_source_and_is_never_empty() {
+        let sensor = || SensorConfig {
+            id: 30,
+            modality: "sapient".into(),
+            position: [0.9, 0.2, 2.0],
+            max_range_m: 5_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        };
+        let with_destination = |destination_id, node_id, source| ConfigBaseline {
+            sensors: vec![sensor()],
+            sapient_feeds: vec![SapientFeedConfig {
+                name: "op-1".into(),
+                sensor_id: 30,
+                node_type: SapientNodeType::Spotter,
+                source,
+                destination_id,
+            }],
+            sapient_node_id: node_id,
+            ..ConfigBaseline::default()
+        };
+        let tcp = || SapientSource::Tcp {
+            addr: "127.0.0.1:40000".into(),
+        };
+
+        validate(&with_destination(
+            Some("3fa85f64-5717-4562-b3fc-2c963f66afa6".into()),
+            Some("gungnir-node-1".into()),
+            tcp(),
+        ))
+        .expect("a destination with a node id over a live source validates");
+
+        let message = validate(&with_destination(
+            Some("3fa85f64-5717-4562-b3fc-2c963f66afa6".into()),
+            None,
+            tcp(),
+        ))
+        .expect_err("a destination without a node id is refused")
+        .to_string();
+        assert!(message.contains("sapient_node_id is not"), "{message}");
+
+        let message = validate(&with_destination(
+            Some("  ".into()),
+            Some("gungnir-node-1".into()),
+            tcp(),
+        ))
+        .expect_err("an empty destination_id is refused")
+        .to_string();
+        assert!(message.contains("empty destination_id"), "{message}");
+
+        let message = validate(&with_destination(
+            Some("3fa85f64-5717-4562-b3fc-2c963f66afa6".into()),
+            Some("gungnir-node-1".into()),
+            SapientSource::File {
+                path: "testdata/sapient/spotter-session.jsonl".into(),
+            },
+        ))
+        .expect_err("a destination over a recorded source is refused")
+        .to_string();
+        assert!(message.contains("recorded source"), "{message}");
+
+        let message = validate(&ConfigBaseline {
+            sapient_node_id: Some("  ".into()),
+            ..ConfigBaseline::default()
+        })
+        .expect_err("an empty sapient_node_id is refused")
+        .to_string();
+        assert!(
+            message.contains("sapient_node_id is set and empty"),
+            "{message}"
+        );
     }
 
     #[test]
