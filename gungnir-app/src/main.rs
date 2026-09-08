@@ -690,6 +690,14 @@ impl App {
                 }
             }
             PanelAction::SelectLaydown(id) => self.state.select_laydown(id),
+            PanelAction::PickRehearsalScenario(scenario) => {
+                self.state.pick_rehearsal_scenario(scenario);
+            }
+            PanelAction::RunRehearsal(scenario) => {
+                if let Some(id) = self.state.selected_laydown().cloned() {
+                    self.state.run_rehearsal(scenario, &id);
+                }
+            }
         }
     }
 

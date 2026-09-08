@@ -2736,10 +2736,8 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
     let view = PlanningView {
         laydowns: Section::Present(&rows),
         terrain_model: "flat-terrain line of sight",
-        rehearsal: Unavailable {
-            owner: "gungnir-tracking-service",
-            gap: "GAP-045",
-        },
+        rehearsal: crate::panels::planning::RehearsalSection::NotYetRun,
+        rehearsal_scenario: gungnir_model::TestTrackNumber(1),
         selected: Some(&rows[1].id),
     };
     let probe = RenderProbe::new();
@@ -2774,9 +2772,9 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
         frame.joined()
     );
 
-    // The rehearsal section is drawn as unavailable, naming a crate and a gap, not
+    // The rehearsal section says a laydown is selected and not yet rehearsed, not
     // silently missing (GAP-045).
-    assert!(frame.says("GAP-045"), "{}", frame.joined());
+    assert!(frame.says("Not yet rehearsed"), "{}", frame.joined());
 }
 
 /// An empty laydown table says why rather than drawing nothing (DN-26 section 8).
@@ -2789,10 +2787,8 @@ fn planning_with_no_laydowns_declared_says_so() {
             reason: "This deployment has declared no laydown alternatives.",
         },
         terrain_model: "flat-terrain line of sight",
-        rehearsal: Unavailable {
-            owner: "gungnir-tracking-service",
-            gap: "GAP-045",
-        },
+        rehearsal: crate::panels::planning::RehearsalSection::NothingSelected,
+        rehearsal_scenario: gungnir_model::TestTrackNumber(1),
         selected: None,
     };
     let probe = RenderProbe::new();

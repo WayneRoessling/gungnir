@@ -79,6 +79,7 @@ RS_api --> RS_security
 RS_api --> RS_tracking_service
 RS_api --> RS_intercept_service
 RS_api --> RS_analytics
+RS_app --> RS_coord
 RS_app --> RS_tracking_service
 RS_app --> RS_intercept_service
 RS_app --> RS_remote

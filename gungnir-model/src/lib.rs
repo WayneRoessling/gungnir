@@ -99,7 +99,7 @@ pub use gungnir_core::{ResourceId, TrackId, TrackStatus};
 pub use handoff::{
     accept_report, DecisionAttribution, DeliveryState, EffectorReport, Handoff, HandoffError,
 };
-pub use laydown::{Laydown, LaydownId, ResourcePlacement, SensorPlacement};
+pub use laydown::{Laydown, LaydownId, ResourcePlacement, SensorPlacement, TestTrackNumber};
 pub use plans::{
     DecisionId, DeconflictionCheck, DeconflictionKind, DeconflictionResult, FiresPlan, PlanKind,
 };

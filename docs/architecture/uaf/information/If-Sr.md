@@ -64,6 +64,7 @@ Diagram: [`If-Sr.puml`](If-Sr.puml).
 | `SensorPlacement` | struct | `sensor: SensorId`<br>`position_enu: [f64; 3]`<br>`mode: SensorMode` | `gungnir-model/src/laydown.rs` |
 | `ResourcePlacement` | struct | `resource: ResourceId`<br>`position_enu: [f64; 3]` | `gungnir-model/src/laydown.rs` |
 | `Laydown` | struct | `id: LaydownId`<br>`intent: String`<br>`sensors: Vec<SensorPlacement>`<br>`resources: Vec<ResourcePlacement>`<br>`current: bool` | `gungnir-model/src/laydown.rs` |
+| `TestTrackNumber` | tuple struct | `pub u8` | `gungnir-model/src/laydown.rs` |
 | `SensorMode` | enum | `Standby`<br>`Search`<br>`Track`<br>`Calibrating`<br>`Offline` | `gungnir-model/src/lib.rs` |
 | `SessionId` | tuple struct | `pub u64` | `gungnir-model/src/lib.rs` |
 | `SensorId` | tuple struct | `pub u32` | `gungnir-model/src/lib.rs` |

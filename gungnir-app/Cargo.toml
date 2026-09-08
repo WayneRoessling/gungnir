@@ -18,7 +18,10 @@ rand.workspace = true
 nalgebra.workspace = true
 serde_json.workspace = true
 # Dev-only: the tick harness and the budget tests are fed from generated scenario
-# output at realistic scale, as benches/README.md requires. No runtime edge.
+# output at realistic scale, as benches/README.md requires. No runtime edge:
+# `gungnir-scenario/Cargo.toml` states outright that this crate is never a normal
+# dependency of a production crate, and `gungnir-app/tests/dependency_graph.rs`
+# enforces it (`scenario_misuse`, only `Layer::Verifier` crates may reach it).
 gungnir-scenario = { path = "../gungnir-scenario", version = "0.1.0" }
 # Dev-only: the end-to-end failover test (GAP-050, the cross-layer reconciliation row)
 # runs a real node transport in the test process. The runtime edge stays through
@@ -48,6 +51,11 @@ nalgebra.workspace = true
 sha2.workspace = true
 # GAP-023: the loader thread's channels are crossbeam's, held while a load is in flight.
 crossbeam-channel.workspace = true
+# GAP-045: a laydown's resource placements are local ENU offsets (DN-26 §4); building a
+# rehearsal's own configuration needs them as the geodetic positions `ResourceConfig`
+# takes. `gungnir-coord` is `agentic-coding-standards.md` §1.3's oracle-comparable
+# transform surface and has no dependents in this binary before this.
+gungnir-coord = { path = "../gungnir-coord", version = "0.1.0" }
 
 gungnir-tracking-service = { path = "../gungnir-tracking-service", version = "0.1.0" }
 gungnir-intercept-service = { path = "../gungnir-intercept-service", version = "0.1.0" }
