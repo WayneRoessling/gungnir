@@ -351,6 +351,67 @@ ort = { version = "2.0.0-rc.13", default-features = false, features = ["load-dyn
 # said. **Never a normal dependency of any member**: it belongs in [dev-dependencies].
 rcgen = { version = "0.14", default-features = false, features = ["pem", "aws_lc_rs"] }
 
+# D-42, signed off 2026-09-08: the cloud node's `ManagedService` custody profile
+# (DN-22 §5's third row, designed by DN-22 amendment 5 §14). AWS and Azure are the two
+# targets the owner named; GCP KMS and HashiCorp Vault are explicitly out of scope.
+#
+# **The master key never enters this process, and that is the whole point.** These crates
+# wrap and unwrap a locally generated data key and sign with a private half that stays in
+# the provider's HSM. `seal`/`unseal` never call them -- see amendment 5 for why the
+# journal durability budget forbids a network round trip per envelope.
+#
+# `aws-config` is named here although D-42's text named only `aws-sdk-kms`: the default
+# credential chain -- environment, web identity token (EKS IRSA), container credentials,
+# EC2 IMDS -- lives in `aws-config`, not in the service crate, and DN-22 §6's rule that no
+# secret appears in a baseline is exactly what that chain exists to satisfy. Recorded in
+# §2.9 as an addition to the decision rather than folded in silently.
+# `sso` and `credentials-process` are off: both are developer-workstation credential
+# sources (an interactive SSO login, an external helper process), not deployment ones, and
+# `sso` alone pulls two further service SDKs.
+aws-config = { version = "1.12", default-features = false, features = [
+    "default-https-client",
+    "rt-tokio",
+    "behavior-version-latest",
+] }
+aws-sdk-kms = { version = "1.118", default-features = false, features = [
+    "default-https-client",
+    "rt-tokio",
+    "behavior-version-latest",
+] }
+
+# Azure Key Vault. **`azure_security_keyvault_keys`, never `azure_security_keyvault`**: the
+# latter is the older, unofficial crate of a nearly identical name, last released 0.21.0 in
+# October 2024, which Microsoft has said will not be updated now that the official
+# per-service crates exist. `_keys` is the key-custody one; `_secrets` and `_certificates`
+# are different services and this profile wants neither.
+#
+# D-42 and §2.9 both recorded this crate as "pre-1.0, 0.9.0". **That is no longer true and
+# the caveat is retired**: checked 2026-09-08 against crates.io, it reached 1.0.0 on
+# 2026-05-13 and is 1.0.1, MIT, so the "a pre-1.0 API may still move" warning the decision
+# attached to it no longer applies. `azure_identity` is pinned to 1.0.0, its latest stable;
+# 1.1.0-beta.1 exists and a prerelease is not something this workspace pins.
+#
+# `azure_identity`'s `client_certificate` feature is deliberately off: it pulls `openssl`,
+# a second TLS stack beside the rustls one the workspace already links, and a managed
+# identity needs no client certificate. Its `tokio` feature is off for the same shape of
+# reason -- it exists to shell out to the Azure CLI for a developer's credential, which is
+# `credentials-process` on the AWS side and equally not a deployment credential source.
+azure_identity = { version = "1.0.0", default-features = false }
+azure_security_keyvault_keys = { version = "1.0.1", default-features = false }
+# `azure_core`'s own types appear in both crates' public signatures (the credential trait
+# object, `azure_core::Error`), so the code names it directly rather than reaching it
+# through a re-export path that is not guaranteed to stay. Both crates above default to
+# `azure_core/default`; default features are off on all three and the transport named here
+# instead, because `azure_core`'s default adds `reqwest_gzip` and `reqwest_deflate` -- two
+# compression stacks a key-wrap request measured in hundreds of bytes has no use for.
+# `reqwest_rustls` keeps Azure on the same TLS implementation as the rest of the workspace
+# rather than pulling a second one.
+azure_core = { version = "1.1.0", default-features = false, features = [
+    "reqwest",
+    "reqwest_rustls",
+    "tokio",
+] }
+
 # ADS-B differential oracles (GAP-010, decided 2026-09-06; docs/agentic-coding-standards.md
 # §2.9, "ADS-B oracles"). Two independently written MIT Rust Mode S decoders, used to gate
 # `gungnir_interop::adsb` over the vendored captures because no ADS-B specification is both

@@ -16,6 +16,7 @@ pub mod authn;
 pub mod authz;
 pub mod keys;
 pub mod keystore;
+pub mod managed_service;
 mod os_keystore;
 pub mod provider;
 pub mod session;
@@ -31,6 +32,14 @@ pub use authn::Authenticator;
 pub use authz::{Authorizer, StaticRoleAuthorizer};
 pub use keys::SignatureScheme;
 pub use keystore::{PersistentKeyProvider, KEYSTORE_FILE};
+// DN-22 amendment 5 (§14), D-42, GAP-084: the cloud node's custody profile. The trait is
+// public because the seam is the point -- `gungnir-node` builds one of the two SDK-backed
+// services and hands it in, and a test builds a fake, and the provider above cannot tell
+// which is underneath.
+pub use managed_service::{
+    AwsKmsKeyService, AzureKeyVaultKeyService, CloudKeyService, ManagedServiceKeyProvider,
+    WRAPPED_SECRET_FILE,
+};
 // `os_keystore` itself stays private; this one name is public because
 // `PersistentKeyProvider::open_or_create_via_os_keystore` takes `service` as a
 // parameter now (2026-09-08, GAP-060's remaining slice, the same generalisation

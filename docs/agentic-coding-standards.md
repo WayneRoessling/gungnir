@@ -760,31 +760,79 @@ must re-run `cargo deny` expecting new crates to appear.
 #### Cloud KMS for the ManagedService custody profile (signed off 2026-09-08, D-42)
 
 GAP-084 built the disconnected desktop's OS-keystore custody (D-39) but the cloud
-deployment profile's equivalent, `ManagedService`, has never been designed: DN-22 §5
-names the row and stops. The owner named AWS and Azure as the two targets to support on
+deployment profile's equivalent, `ManagedService`, had never been designed: DN-22 §5
+named the row and stopped. The owner named AWS and Azure as the two targets to support on
 2026-09-08; neither GCP KMS nor HashiCorp Vault is in scope, and a deployment needing
-either is a future decision, not a gap in this one.
+either is a future decision, not a gap in this one. **The design that was owed before any
+code is DN-22 amendment 5 (§14)**, written the same day, and the crates below landed
+against it rather than ahead of it.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
-| `aws-sdk-kms` | `ManagedService`'s AWS KMS backend | `gungnir-security` | Not yet: no gap builds it |
-| `azure_security_keyvault_keys` (pre-1.0, `0.9.0`) | `ManagedService`'s Azure Key Vault backend | `gungnir-security` | Not yet: no gap builds it |
-| `azure_identity` | Authentication for `azure_security_keyvault_keys` | `gungnir-security` | Not yet: no gap builds it |
+| `aws-sdk-kms` 1.118.0 (Apache-2.0; no default features, `default-https-client` + `rt-tokio` + `behavior-version-latest`) | `ManagedService`'s AWS KMS backend: wrapping a data key, and signing with a private half that never leaves the service | `gungnir-security` | 2026-09-08 |
+| `aws-config` 1.12.0 (Apache-2.0; same three features) | The default credential chain -- environment, web identity token, container credentials, EC2 IMDS -- so no credential appears in a baseline | `gungnir-security` | 2026-09-08 |
+| `azure_security_keyvault_keys` 1.0.1 (MIT; no default features) | `ManagedService`'s Azure Key Vault backend, the same two operations | `gungnir-security` | 2026-09-08 |
+| `azure_identity` 1.0.0 (MIT; no default features) | `ManagedIdentityCredential`, which resolves to the managed identity assigned to the host -- **not** `DefaultAzureCredential`, which 1.0 removed (see point 5) | `gungnir-security` | 2026-09-08 |
+| `azure_core` 1.1.0 (MIT; `reqwest` + `reqwest_rustls` + `tokio`) | Both Azure crates' shared error and credential types, named directly because they appear in the signatures this code calls | `gungnir-security` | 2026-09-08 |
 
-Two things about this one:
+Six things about this one, four of which were found by checking rather than assumed:
 
 1. **`azure_security_keyvault_keys`, never the older `azure_security_keyvault`.**
    The two names are easy to confuse: `azure_security_keyvault` is an earlier, unofficial
    crate of a similar name that Microsoft has said will not be updated further now that
    the official per-service crates (`_keys`, `_secrets`, `_certificates`) exist.
    `_keys` specifically is the one this workspace wants -- key custody, not secret or
-   certificate storage.
-2. **`0.9.0` is pre-1.0, and that is recorded rather than smoothed over.** A pre-1.0
-   crate's API may still move under a later dependency bump; `aws-sdk-kms` (Apache-2.0,
-   maintained by AWS directly) carries no equivalent caveat. **Not yet designed at all**:
-   `ManagedService` itself has no DN-22 amendment describing its shape, so building
-   against these two crates needs that design note first, the same discipline every other
-   custody profile in DN-22 already had before its own code.
+   certificate storage. Confirmed on checking: the older crate's last release is 0.21.0
+   from October 2024 and it has not moved since.
+2. **The "pre-1.0" caveat this decision recorded is retired, because it is no longer
+   true.** D-42 and the first draft of this row both said `azure_security_keyvault_keys`
+   was "pre-1.0 at 0.9.0" and warned that its API might still move. Checked against
+   crates.io on 2026-09-08 when the crate was actually added: it reached 1.0.0 on
+   2026-05-13 and is now **1.0.1**, so the warning no longer applies and carrying it
+   forward would have been recording a stale fact as a current one. `azure_identity` is
+   pinned at **1.0.0**, its latest stable; a 1.1.0-beta.1 exists and this workspace does
+   not pin prereleases.
+3. **`aws-config` is an addition to D-42, not something it named**, and is called out
+   rather than folded in. The decision named `aws-sdk-kms`, which is the service client
+   and carries no credential resolution at all; the default chain that lets DN-22 §6's
+   "no secret in a baseline" rule actually hold lives in `aws-config`. It is the same
+   crate AWS's own documentation pairs with every service SDK, so this is the decision's
+   evident intent rather than a widening of it -- but the owner's signature should know
+   it is there. Its `sso` and `credentials-process` default features are **off**: both
+   are developer-workstation credential sources (an interactive SSO login, an external
+   helper process), not deployment ones, and `sso` alone pulls two further service SDKs.
+4. **Duplicate linkage checked 2026-09-08, and it is not clean.** Comparing the lockfile
+   before and after: 40 packages added (789 to 829), and exactly **two crates that had
+   one version now have two** -- `http` (0.2.12 beside the workspace's 1.5.0) and
+   `http-body` (0.4.6 beside 1.1.0). Both come from `aws-smithy-runtime-api`, which
+   exposes the `http` 0.2 request and response types in its own public API alongside the
+   1.x ones; it is the AWS SDK's pin and not reachable from any feature this workspace
+   can set. **Unlike the ADS-B oracles' duplicates (§2.9, "ADS-B oracles"), these are
+   normal dependencies and are linked into the shipped binaries**, which is the honest
+   way to state it. Everything else shares: one `hyper` 1.11.1, one `rustls` 0.23.43, one
+   `tokio` 1.53.1, one `tower` 0.5.3, one `reqwest` 0.13.4, and no second `aws-lc-rs` --
+   the workspace already carried that whole stack for `axum` and `reqwest`, so the AWS
+   and Azure clients cost no new TLS implementation and no new native build. `deny.toml`
+   sets `multiple-versions = "warn"`, so this is a warning and not a gate; it is recorded
+   here so the next person reads it as accepted rather than unnoticed.
+   `cargo deny check licenses bans sources advisories` passes all four.
+5. **A cost worth stating: every crate that depends on `gungnir-security` now links
+   these.** That is `gungnir-api`, `gungnir-app`, `gungnir-collab`, `gungnir-node`,
+   `gungnir-remote` and `gungnir-workflow` -- including the desktop, whose own custody
+   row is the operating system's keystore and which refuses `ManagedService` by name.
+   Putting the backends behind a Cargo feature that only `gungnir-node` enables would
+   fix that, and was **not** done: `KeyProviderConfig::is_implemented` is consulted by
+   `gungnir-config`'s validation, and a feature would make it answer differently
+   depending on which binary was built, so a baseline valid on the node would be refused
+   on the desktop. A build-configuration policy that makes validation build-dependent is
+   a worse trade than a larger desktop binary, but it is the owner's call to revisit.
+6. **`DefaultAzureCredential` does not exist in `azure_identity` 1.0**, which is worth
+   recording because every piece of Azure documentation and every pre-1.0 example still
+   names it. The 1.0 release split that chain into `DeveloperToolsCredential` and
+   `ManagedIdentityCredential`, and a deployment wants the second. Reaching for the old
+   name would simply not have compiled; reaching for the developer half would have been
+   worse than that, because it authenticates from an engineer's own signed-in Azure CLI
+   session and so works on a workstation and fails on a node.
 
 #### gRPC as the second transport (signed off 2026-09-05, D-21)
 

@@ -972,17 +972,61 @@ pub enum KeyProviderConfig {
     /// is `PassphraseSealedFile`'s. `gungnir-app` only: `gungnir-node` has no operator
     /// login to unlock at.
     OperatingSystemKeystore { account: String },
-    /// A managed key service, off-host, which seals and signs and never releases
-    /// material (DN-22 §5, the cloud node).
-    ManagedService { endpoint: String, key_ring: String },
+    /// A managed key service, off-host, which wraps this node's data key and signs with
+    /// a private half that never leaves it (DN-22 §5's cloud row, designed by amendment
+    /// 5, §14; D-42; GAP-084). `gungnir-node` only: §5 assigns this row to the cloud
+    /// node, and the desktop's is the operating system's keystore.
+    ///
+    /// **No credential appears here, and none may.** The process authenticates as
+    /// whatever the cloud account granted the host it runs on -- an AWS IAM role through
+    /// the SDK's default chain, or an Azure managed identity -- which is DN-22 §6's rule
+    /// and the reason `aws-config` and `azure_identity` are in the stack at all
+    /// (amendment 5 §14g).
+    ManagedService {
+        /// Which key service. **Named and never inferred**: a region string and a vault
+        /// URL are distinguishable by eye, and guessing between two clouds from the shape
+        /// of a string is the kind of confidently-wrong inference this system forbids
+        /// everywhere else.
+        cloud: ManagedKeyService,
+        /// The AWS region, or the Azure vault URL.
+        endpoint: String,
+        /// The AWS key ARN or alias, or the Azure key name within the vault.
+        ///
+        /// **Named `key_id` and not `key_ring`**, which this variant carried while it was
+        /// unbuildable: a key ring is a term from Google Cloud's key hierarchy, a service
+        /// D-42 explicitly put out of scope, and neither AWS nor Azure has one. Nothing is
+        /// migrated because nothing could ever have been deployed (amendment 5 §14g).
+        key_id: String,
+    },
+}
+
+/// Which cloud key service holds a `ManagedService` deployment's master key (D-42).
+///
+/// Two, because the owner named two. A deployment wanting Google Cloud KMS or
+/// `HashiCorp` Vault is a new decision and a new variant, not a string this enum would have to guess
+/// at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ManagedKeyService {
+    /// AWS Key Management Service.
+    Aws,
+    /// Azure Key Vault.
+    Azure,
 }
 
 impl KeyProviderConfig {
     /// Whether a provider for this exists yet.
     ///
-    /// One persistent profile is still designed and unbuilt (`ManagedService`, the cloud
-    /// node's row). Saying so at validation means a deployment learns it at start-up
-    /// rather than discovering an unencrypted journal later.
+    /// **All five are built as of 2026-09-08**, `ManagedService` last (DN-22 amendment 5,
+    /// §14; D-42). The method stays rather than becoming a constant `true`: it is the
+    /// hook a sixth custody profile would be added behind, and deleting it would mean the
+    /// next one is refused at run time instead of at validation, which is the whole thing
+    /// it exists to prevent.
+    ///
+    /// **Deliberately not build-dependent.** Putting the cloud backends behind a Cargo
+    /// feature only `gungnir-node` enabled would shrink the desktop binary and make this
+    /// answer differ between binaries, so a baseline valid on the node would be refused on
+    /// the desktop. Recorded in `docs/agentic-coding-standards.md` §2.9 as the trade it is.
     #[must_use]
     pub fn is_implemented(&self) -> bool {
         matches!(
@@ -991,18 +1035,22 @@ impl KeyProviderConfig {
                 | KeyProviderConfig::Ephemeral
                 | KeyProviderConfig::PassphraseSealedFile
                 | KeyProviderConfig::OperatingSystemKeystore { .. }
+                | KeyProviderConfig::ManagedService { .. }
         )
     }
 
-    /// The register entry that will build this one.
+    /// The register entry that will build this one, for a profile still unbuilt.
+    ///
+    /// `None` for every variant since 2026-09-08. Kept for the same reason
+    /// [`KeyProviderConfig::is_implemented`] is.
     #[must_use]
     pub fn owning_gap(&self) -> Option<&'static str> {
         match self {
             KeyProviderConfig::None
             | KeyProviderConfig::Ephemeral
             | KeyProviderConfig::PassphraseSealedFile
-            | KeyProviderConfig::OperatingSystemKeystore { .. } => None,
-            KeyProviderConfig::ManagedService { .. } => Some("GAP-084"),
+            | KeyProviderConfig::OperatingSystemKeystore { .. }
+            | KeyProviderConfig::ManagedService { .. } => None,
         }
     }
 
@@ -1013,8 +1061,10 @@ impl KeyProviderConfig {
             | KeyProviderConfig::Ephemeral
             | KeyProviderConfig::PassphraseSealedFile => Vec::new(),
             KeyProviderConfig::OperatingSystemKeystore { account } => vec![account.as_str()],
-            KeyProviderConfig::ManagedService { endpoint, key_ring } => {
-                vec![endpoint.as_str(), key_ring.as_str()]
+            KeyProviderConfig::ManagedService {
+                endpoint, key_id, ..
+            } => {
+                vec![endpoint.as_str(), key_id.as_str()]
             }
         }
     }
@@ -3325,6 +3375,28 @@ fn validate_security(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             provider.owning_gap().unwrap_or("GAP-084")
         )));
     }
+    // DN-22 amendment 5 (f), and **the only custody profile that carries this rule**.
+    //
+    // §11 lets a deployment escrow nothing and have PN-09 say so, and for every other
+    // profile that stays true. This one is the exception because §5's safeguard against
+    // the note's own worst outcome -- destroying a key that still protects retained data
+    // -- is *absent* here rather than merely unused: `may_destroy` is a local check, and
+    // deleting the master key is an act in the cloud provider's own console that this
+    // system can neither refuse, require an override for, nor even observe until an
+    // unwrap fails. The escrow record is wrapped to a key the cloud account does not hold
+    // and is written beside the journal, so it is the one thing that survives that
+    // deletion.
+    if matches!(provider, KeyProviderConfig::ManagedService { .. })
+        && baseline.security.escrow.is_none()
+    {
+        return Err(ConfigError::Invalid(
+            "a managed-service deployment must name security.escrow: the master key can \
+             be destroyed from the cloud account, where may_destroy cannot reach it, and \
+             the escrow record is then the only way the journal is ever read again \
+             (DN-22 amendment 5 f)"
+                .into(),
+        ));
+    }
     Ok(())
 }
 
@@ -3628,9 +3700,10 @@ mod tests {
         let baseline = ConfigBaseline {
             security: SecurityConfig {
                 key_provider: KeyProviderConfig::ManagedService {
-                    endpoint: "kms.example".into(),
+                    cloud: ManagedKeyService::Aws,
+                    endpoint: "eu-west-2".into(),
                     // Somebody pasting the key itself where a resource name belongs.
-                    key_ring: "0123456789abcdef0123456789abcdef0123456789abcdef".into(),
+                    key_id: "0123456789abcdef0123456789abcdef0123456789abcdef".into(),
                 },
                 authentication: AuthenticationConfig::default(),
                 tls: TlsClientConfig::default(),
@@ -3649,49 +3722,92 @@ mod tests {
         );
     }
 
+    /// A managed-service baseline, complete: an officer, a region, and a key ARN.
+    ///
+    /// Shared by the tests below because DN-22 amendment 5 (f) makes the escrow section
+    /// mandatory for this profile, so "a valid one" is no longer a one-liner.
+    fn managed_service_baseline(provider: KeyProviderConfig) -> ConfigBaseline {
+        ConfigBaseline {
+            security: SecurityConfig {
+                key_provider: provider,
+                authentication: AuthenticationConfig::default(),
+                tls: TlsClientConfig::default(),
+                escrow: Some(EscrowConfig {
+                    holder: 7,
+                    public_key_pem: "-----BEGIN PUBLIC KEY-----
+MFkw
+-----END PUBLIC KEY-----"
+                        .into(),
+                }),
+            },
+            ..ConfigBaseline::default()
+        }
+    }
+
     /// A resource path is a **reference** to where material lives, which is exactly what
     /// a baseline should contain. Flagging it would make the check unusable.
     #[test]
     fn a_key_service_resource_path_is_not_mistaken_for_material() {
-        let baseline = ConfigBaseline {
-            security: SecurityConfig {
-                key_provider: KeyProviderConfig::ManagedService {
-                    endpoint: "https://kms.example.gov/v1".into(),
-                    key_ring: "projects/gungnir/locations/eu/keyRings/journal".into(),
-                },
-                authentication: AuthenticationConfig::default(),
-                tls: TlsClientConfig::default(),
-                escrow: None,
-            },
-            ..ConfigBaseline::default()
-        };
-        // Refused for being unbuilt, not for looking like a key -- which is the point.
-        let message = validate(&baseline).expect_err("unbuilt").to_string();
-        assert!(!message.contains("looks like key material"), "{message}");
-        assert!(message.contains("GAP-084"), "{message}");
+        let baseline = managed_service_baseline(KeyProviderConfig::ManagedService {
+            cloud: ManagedKeyService::Aws,
+            endpoint: "eu-west-2".into(),
+            key_id: "arn:aws:kms:eu-west-2:123456789012:key/1234abcd-12ab-34cd-56ef".into(),
+        });
+        // An ARN is long and has hex in it, which is exactly the shape a key-material
+        // heuristic might trip on. It must not, and the profile is now built, so this
+        // whole baseline validates rather than merely failing for a different reason.
+        validate(&baseline).expect("a key ARN is a reference, not key material");
     }
 
-    /// A provider that is designed and unbuilt is refused at validation, so a deployment
-    /// learns it at start-up rather than discovering an unencrypted journal later.
+    /// **The profile is built as of 2026-09-08** (DN-22 amendment 5, §14; D-42), so it
+    /// validates where it used to be refused as designed-and-unbuilt -- the same
+    /// transition D-39 made for the operating system's keystore two rows above.
     #[test]
-    fn an_unbuilt_provider_is_refused_at_validation() {
-        let provider = KeyProviderConfig::ManagedService {
-            endpoint: "https://kms.example.gov".into(),
-            key_ring: "journal".into(),
-        };
-        let baseline = ConfigBaseline {
-            security: SecurityConfig {
-                key_provider: provider.clone(),
-                authentication: AuthenticationConfig::default(),
-                tls: TlsClientConfig::default(),
-                escrow: None,
+    fn the_managed_service_provider_validates_now_that_amendment_5_designed_it() {
+        for provider in [
+            KeyProviderConfig::ManagedService {
+                cloud: ManagedKeyService::Aws,
+                endpoint: "eu-west-2".into(),
+                key_id: "alias/gungnir-journal".into(),
             },
-            ..ConfigBaseline::default()
-        };
+            KeyProviderConfig::ManagedService {
+                cloud: ManagedKeyService::Azure,
+                endpoint: "https://a-vault.vault.azure.net".into(),
+                key_id: "gungnir-journal".into(),
+            },
+        ] {
+            assert!(provider.is_implemented(), "{provider:?}");
+            assert_eq!(provider.owning_gap(), None, "{provider:?}");
+            validate(&managed_service_baseline(provider.clone()))
+                .unwrap_or_else(|e| panic!("{provider:?} should validate: {e}"));
+        }
+    }
+
+    /// **DN-22 amendment 5 (f), and the rule no other custody profile carries.** A
+    /// managed-service deployment cannot enforce `may_destroy` against a master key its
+    /// cloud account can delete, so the escrow record is the only thing that survives
+    /// that deletion, and a baseline that names no officer is refused rather than
+    /// started.
+    #[test]
+    fn a_managed_service_baseline_without_escrow_is_refused() {
+        let mut baseline = managed_service_baseline(KeyProviderConfig::ManagedService {
+            cloud: ManagedKeyService::Aws,
+            endpoint: "eu-west-2".into(),
+            key_id: "alias/gungnir-journal".into(),
+        });
+        validate(&baseline).expect("valid with an officer");
+
+        baseline.security.escrow = None;
         let message = validate(&baseline).expect_err("refused").to_string();
-        assert!(message.contains("designed and not built"), "{message}");
-        assert_eq!(provider.owning_gap(), Some("GAP-084"));
-        assert!(!provider.is_implemented());
+        assert!(message.contains("security.escrow"), "{message}");
+        assert!(message.contains("may_destroy"), "{message}");
+
+        // And the rule reaches **only** this profile: §11 still lets every other one
+        // escrow nothing and have PN-09 say so.
+        baseline.security.key_provider = KeyProviderConfig::OperatingSystemKeystore {
+            account: "gungnir".into(),
+        };
+        validate(&baseline).expect("the OS keystore still needs no escrow section");
     }
 
     /// D-39: the OS keystore is no longer designed-and-unbuilt, unlike its sibling

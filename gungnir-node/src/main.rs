@@ -1543,7 +1543,11 @@ async fn run(
     // GAP-060: the node seals its journal the way the desktop does (DN-22 §5), and says
     // what it is doing. An ephemeral key on a node is a system of record that cannot be
     // read after restart; it is allowed because the baseline said so, and warned about.
-    let encryption = seal_journal(&config, &mut journal);
+    let encryption = seal_journal(
+        &config,
+        std::path::Path::new(&node_cfg.data_dir),
+        &mut journal,
+    );
     match &encryption {
         gungnir_security::EncryptionStatus::Active { provider } => {
             tracing::info!(%provider, "journal encryption active");
@@ -2010,6 +2014,11 @@ fn geo_service_from(config: &ConfigBaseline) -> gungnir_geo::InMemoryGeoService 
 /// so the twenty lines are here too rather than reached through a new edge.
 fn seal_journal(
     config: &ConfigBaseline,
+    // The same directory the journal itself was opened from. Passed in rather than read
+    // back off `config.node`, which is an `Option` the caller has already resolved --
+    // resolving it a second time here could disagree with where the journal actually is,
+    // and the keystore must sit beside the journal it protects.
+    data_dir: &std::path::Path,
     journal: &mut FileEventJournal,
 ) -> gungnir_security::EncryptionStatus {
     use gungnir_config::KeyProviderConfig;
@@ -2031,12 +2040,143 @@ fn seal_journal(
                 provider: "ephemeral".into(),
             }
         }
+        // DN-22 §5's cloud row, designed by amendment 5 (§14) and built 2026-09-08
+        // (D-42). **The node and not the desktop**: §5 assigns this row to the cloud
+        // node, exactly as it assigns the operating system's keystore to the disconnected
+        // desktop, and `gungnir-app` keeps refusing this one by name for the same reason
+        // this binary keeps no arm for `OperatingSystemKeystore`.
+        KeyProviderConfig::ManagedService {
+            cloud,
+            endpoint,
+            key_id,
+        } => {
+            let service: Arc<dyn gungnir_security::CloudKeyService> = match cloud {
+                gungnir_config::ManagedKeyService::Aws => {
+                    Arc::new(gungnir_security::AwsKmsKeyService::new(endpoint, key_id))
+                }
+                gungnir_config::ManagedKeyService::Azure => Arc::new(
+                    gungnir_security::AzureKeyVaultKeyService::new(endpoint, key_id),
+                ),
+            };
+            // Validation refuses a managed-service baseline with no escrow section
+            // (amendment 5 f), so this is `Some` on any baseline that got here; an
+            // unusable PEM is still reported rather than silently dropping escrow.
+            let escrow = config.security.escrow.as_ref().and_then(|e| {
+                gungnir_security::EscrowPublicKey::from_pem(&e.public_key_pem)
+                    .map_err(|err| {
+                        tracing::error!(
+                            "the escrow public key in the baseline is unusable ({err}); the                              journal key will not be recoverable without this node"
+                        );
+                    })
+                    .ok()
+            });
+            let dir = data_dir.to_path_buf();
+
+            // The one network call on the start path. A failure here is DN-22 §7's
+            // stated-unencrypted condition and not a reason to refuse to start: a node
+            // that would not run because a cloud service was unreachable would be a
+            // worse failure than one that runs and says what it cannot do.
+            let provider = match gungnir_security::ManagedServiceKeyProvider::open_or_create(
+                &dir, service, escrow,
+            ) {
+                Ok(provider) => provider,
+                Err(err) => {
+                    let reason = format!("the managed key service did not open: {err}");
+                    tracing::warn!("journal encryption is off: {reason}");
+                    return EncryptionStatus::UnavailableWritingPlaintext { reason };
+                }
+            };
+            let key = match provider.active_or_generate(KeyPurpose::JournalAtRest) {
+                Ok(key) => key,
+                Err(err) => {
+                    let reason = format!("no journal key: {err}");
+                    tracing::warn!("journal encryption is off: {reason}");
+                    return EncryptionStatus::UnavailableWritingPlaintext { reason };
+                }
+            };
+            let described = provider.describe();
+            write_escrow_record(&provider, key, &dir);
+            journal.seal_with(Box::new(ManagedServiceSealer {
+                provider: Arc::new(provider),
+                key,
+            }));
+            tracing::info!("journal sealed under {described}");
+            EncryptionStatus::Active {
+                provider: "managed-service".into(),
+            }
+        }
+
+        // Every remaining variant is a profile DN-22 §5 assigns to the desktop, not to a
+        // node. A wildcard rather than named arms, and this is a **known weakness**: a
+        // sixth variant would land here silently rather than failing to compile, which is
+        // how `ManagedService` sat unbuilt here without anything pointing at it.
         other => EncryptionStatus::UnavailableWritingPlaintext {
             reason: format!(
-                "the configured key provider is designed and not built ({})",
-                other.owning_gap().unwrap_or("GAP-084")
+                "the configured key provider is not one a node holds ({})",
+                other
+                    .owning_gap()
+                    .unwrap_or("DN-22 §5 assigns it to the disconnected desktop")
             ),
         },
+    }
+}
+
+/// Wrap the journal key to the security officer and write the record beside the journal
+/// (DN-22 §11; amendment 5 f).
+///
+/// The node's copy of what `gungnir-app`'s `keystore::write_escrow_record` does for the
+/// desktop, for the reason [`seal_journal`]'s own comment already gives: the two binaries
+/// share no crate that depends on both `gungnir-store` and `gungnir-security`. **The file
+/// name must match the desktop's**, because one recovery tool reads both.
+fn write_escrow_record(
+    provider: &gungnir_security::ManagedServiceKeyProvider,
+    key: gungnir_security::KeyId,
+    dir: &std::path::Path,
+) {
+    if !provider.escrow_configured() {
+        tracing::error!(
+            "no escrow officer: this node's journal cannot be recovered if the cloud              account destroys the master key (DN-22 amendment 5 f)"
+        );
+        return;
+    }
+    let path = dir.join(format!("escrow-journal-v{}.json", key.version));
+    match provider
+        .escrow_wrap(&key)
+        .map_err(|e| e.to_string())
+        .and_then(|record| serde_json::to_string(&record).map_err(|e| e.to_string()))
+        .and_then(|text| std::fs::write(&path, text).map_err(|e| e.to_string()))
+    {
+        Ok(()) => tracing::info!(
+            "journal key v{} escrowed to the security officer ({})",
+            key.version,
+            path.display()
+        ),
+        Err(err) => tracing::error!(
+            "the escrow record could not be written ({err}); the journal key is not              recoverable without this node"
+        ),
+    }
+}
+
+/// Seals the journal with a key the cloud key service unlocked. Local AES-256-GCM: the
+/// service is not called here, which is the whole of DN-22 amendment 5 (a).
+struct ManagedServiceSealer {
+    provider: Arc<gungnir_security::ManagedServiceKeyProvider>,
+    key: gungnir_security::KeyId,
+}
+
+impl gungnir_store::sealing::JournalSealer for ManagedServiceSealer {
+    fn seal(&self, plaintext: &[u8]) -> Result<Vec<u8>, gungnir_store::StoreError> {
+        use gungnir_security::KeyProvider;
+        self.provider
+            .seal(&self.key, plaintext)
+            .map_err(|e| gungnir_store::StoreError::Sealing(e.to_string()))
+    }
+
+    fn unseal(&self, sealed: &[u8]) -> Result<Vec<u8>, gungnir_store::StoreError> {
+        use gungnir_security::KeyProvider;
+        self.provider
+            .unseal(&self.key, sealed)
+            .map_err(|e| gungnir_store::StoreError::Sealing(e.to_string()))
     }
 }
 
