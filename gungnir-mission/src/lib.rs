@@ -470,9 +470,17 @@ mod tests {
     /// A baseline that does not validate is **recorded as an objection, not refused.**
     ///
     /// Refusing here would decide something the host has already decided: the desktop
-    /// deliberately starts under a key provider that is designed and not built, journals
-    /// in the clear and says so, because a console that will not open protects nobody.
-    /// What this crate owes the review is that the objection is still there afterwards.
+    /// deliberately starts under a key provider it cannot use, journals in the clear and
+    /// says so, because a console that will not open protects nobody. What this crate
+    /// owes the review is that the objection is still there afterwards.
+    ///
+    /// **The invalid baseline changed 2026-09-08** (DN-22 amendment 5, §14f). It used to
+    /// be a `ManagedService` provider refused as designed-and-unbuilt; that profile is
+    /// built now, so the refusal this test needs is the new rule that came with it -- a
+    /// managed-service deployment must name a security officer, because its master key
+    /// can be destroyed from the cloud account where `may_destroy` cannot reach it. What
+    /// is under test here is unchanged: *some* invalid baseline, recorded rather than
+    /// refused.
     #[test]
     fn a_baseline_that_does_not_validate_is_recorded_rather_than_refused() {
         let root = dir("invalid");
@@ -483,8 +491,9 @@ mod tests {
             allocation_horizon: 10,
             security: gungnir_config::SecurityConfig {
                 key_provider: gungnir_config::KeyProviderConfig::ManagedService {
-                    endpoint: "https://kms.example.gov".into(),
-                    key_ring: "journal".into(),
+                    cloud: gungnir_config::ManagedKeyService::Aws,
+                    endpoint: "eu-west-2".into(),
+                    key_id: "alias/gungnir-journal".into(),
                 },
                 authentication: gungnir_config::AuthenticationConfig::default(),
                 tls: gungnir_config::TlsClientConfig::default(),
@@ -502,7 +511,7 @@ mod tests {
             .baseline_objection
             .as_deref()
             .expect("a baseline that does not validate was recorded as if it did");
-        assert!(objection.contains("key provider"), "{objection}");
+        assert!(objection.contains("security.escrow"), "{objection}");
 
         // And it survives to disk, which is where the review reads it.
         let reopened = manager.load(mission.session).expect("loaded");

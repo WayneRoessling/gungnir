@@ -82,22 +82,39 @@ fn the_ephemeral_provider_encrypts_and_warns_that_the_journal_dies_with_it() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// **The failure DN-22 §5 cares about most.** A provider that is designed and not built
+/// **The failure DN-22 §5 cares about most.** A provider this desktop does not hold
 /// leaves the journal in the clear, and the desktop **starts**, reports the fault, and
 /// does not claim encryption.
+///
+/// **Rewritten 2026-09-08 with DN-22 amendment 5 (§14h).** Until then this asserted that
+/// `ManagedService` was refused as designed-and-unbuilt, quoting GAP-084. It is built
+/// now, and the refusal here is a different fact that happens to look the same from
+/// outside: §5's table assigns a managed key service to the cloud node, so the arm lives
+/// in `gungnir-node`'s `seal_journal` and this desktop declines it by profile. The
+/// property under test -- **a desktop that cannot encrypt starts, says so, and never
+/// claims otherwise** -- is unchanged, which is why the test kept its shape while its
+/// reason changed.
 #[test]
-fn an_unbuilt_provider_leaves_the_desktop_running_and_honest() {
+fn a_provider_this_desktop_does_not_hold_leaves_it_running_and_honest() {
     let (state, dir) = desktop(
-        "unbuilt",
+        "not-the-desktops-row",
         KeyProviderConfig::ManagedService {
-            endpoint: "https://kms.example.gov".into(),
-            key_ring: "journal".into(),
+            cloud: gungnir_config::ManagedKeyService::Aws,
+            endpoint: "eu-west-2".into(),
+            key_id: "alias/gungnir-journal".into(),
         },
     );
 
     match &state.encryption {
         EncryptionStatus::UnavailableWritingPlaintext { reason } => {
-            assert!(reason.contains("GAP-084"), "{reason}");
+            assert!(
+                reason.contains("cloud node"),
+                "the operator must be told which profile owns this row: {reason}"
+            );
+            assert!(
+                !reason.contains("not built"),
+                "the profile is built; the desktop simply does not hold it: {reason}"
+            );
         }
         other => panic!("expected an honest unencrypted state, got {other:?}"),
     }
