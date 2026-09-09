@@ -16,7 +16,7 @@
 # tests directory (GAP-082) -- it was designed as a *central* harness and never populated.
 # Meanwhile the differential suite this project actually built lives **distributed across
 # the crates it verifies**: 16 `tests/*_diff.rs` targets in 9 crates, driving 50 tests
-# against 21 checked-in fixtures under `testdata/oracles/`, generated offline by the 13
+# against 19 checked-in fixtures under `testdata/oracles/`, generated offline by the 13
 # pinned Python oracles in `testdata/oracles/tools/` (filterpy, pymap3d, Stone Soup, scipy,
 # motmetrics; provenance in `testdata/oracles/SOURCE.md`). They pass, and they have been
 # passing all along inside the ordinary `fmt, clippy, test` job.
