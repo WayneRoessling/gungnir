@@ -3538,10 +3538,15 @@ not by finding, for the time between whenever each item landed and this correcti
     carried as friendly, so an empty friendly set means both "no friendly is there" and "no
     friendly was detected", and today those are the same value.
 
-    **Edge (s), `gungnir-remote` to `gungnir-interop`, is accepted** (`dependency-edges.md`
-    §13) and is **not** in a manifest and **not** drawn in §7.1: no code needs it yet, and an
+    **Edge (v), `gungnir-remote` to `gungnir-interop`, is accepted** (`dependency-edges.md`
+    §16) and is **not** in a manifest and **not** drawn in §7.1: no code needs it yet, and an
     edge drawn here that no manifest carries would be this document claiming something
-    untrue. The change that adds the sink adds both in the same commit.
+    untrue. The change that adds the sink adds both in the same commit. **Relabelled from
+    (s)/§13, 2026-09-09**: that label collided with item 98's real, already-drawn
+    `gungnir-node` to `gungnir-identity` edge, the same letter under a duplicate `## 13.`
+    heading in `dependency-edges.md` -- a genuine defect in the design's own supporting
+    ledger, found reviewing DN-25 for the owner's sign-off on it and fixed before that
+    signature, doc-only and touching no manifest or drawn graph.
 
     **Three pins after all (2026-09-08, D-33 e, f, g).** Reading the reference client's
     own source rather than its documents showed that "nothing in the first increment needs

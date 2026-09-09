@@ -44,8 +44,9 @@ asks for are collected in §7; everything before that is evidence.
 Read before anything below, so this note does not restate it: DN-25 (the design, three
 verification rows agreed), `external-standards.md` §5 (schema 2.0 pinned; type tree pinned;
 `friend` is `^a-f-`; protobuf deliberately unpinned), `testdata/cot/SOURCE.md` and
-`testdata/cot/tools/record_cot.py` (the recorder, exercised, holding nothing), edge (s)
-accepted in `dependency-edges.md` §13, and GAP-091's 2026-09-08 note that the one blocker is
+`testdata/cot/tools/record_cot.py` (the recorder, exercised, holding nothing), edge (v)
+accepted in `dependency-edges.md` §16 (relabelled 2026-09-09 from (s)/§13; see §16's own
+note), and GAP-091's 2026-09-08 note that the one blocker is
 a client to record from. `ExchangeFormat` in `gungnir-model/src/exchange.rs` still has three
 variants; `gungnir-interop` has no `cot` module; no binary opens a socket for it.
 
@@ -287,7 +288,8 @@ senders without any account and tests §4.1's iTAK question in passing.
    in the same change as the codec per the versioning rule DN-25 cites.
 6. **Feed** in `gungnir-ingest` on edge (i), behind the gateway, both wire forms, with the
    stale and quality rules of DN-16; CAP-1.6's row.
-7. **Mesh sink** in `gungnir-remote` behind edge (s), drawn in `ARCHITECTURE.md` §7.1 in the
+7. **Mesh sink** in `gungnir-remote` behind edge (v) (relabelled 2026-09-09 from (s);
+   `dependency-edges.md` §16), drawn in `ARCHITECTURE.md` §7.1 in the
    same commit; the marking ceiling of DN-25 §5 rule 1; CAP-7.4's mesh row.
 8. **`gungnir-policy`** (human-owned): DN-05 rule 1's three states; CAP-3.8's row.
 9. **I4, stream sink:** OpenTAKServer as the harness, installed by CI as test infrastructure

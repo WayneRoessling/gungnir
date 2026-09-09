@@ -99,7 +99,7 @@ one crate can talk to a sensor.
 | `gungnir-ingest` to `gungnir-interop` | GAP-001 | 2026-09-06 | Yes, as (j) |
 | `gungnir-app` to `gungnir-identification` | GAP-010 | 2026-09-06 | Yes, as (n) |
 | `gungnir-app` to `gungnir-identity` | GAP-019, GAP-025 | 2026-09-06 | Yes, as (o) |
-| `gungnir-remote` to `gungnir-interop` | DN-25, GAP-091 | **No: accepted 2026-09-06, no code yet** | Not yet; §7.1 gains (s) in the change that adds the sink |
+| `gungnir-remote` to `gungnir-interop` | DN-25, GAP-091 | **No: accepted 2026-09-06, no code yet** | Not yet; §7.1 gains (v) in the change that adds the sink (§16, correcting a collision with the real (s) below -- see §16's own note) |
 | `gungnir-remote` to `gungnir-security` | GAP-060, D-29 | 2026-09-06, with the `identity.rs` move out of `gungnir-node` | Yes, as (t) -- **the entry is dated 2026-09-07; the manifest line is older, see §14** |
 
 **All five are in manifests and drawn.** The acyclicity check was re-run with the full set
@@ -267,15 +267,25 @@ One dev-only edge was added and is not drawn, per the convention for `gungnir-sc
 names the five scenarios. `ARCHITECTURE.md` §7.1's list of dev-dependents was updated in
 the same change.
 
-## 13. Edge (s) -- **accepted by the owner as engineering reviewer, 2026-09-06**
+## 16. Edge (v) -- **accepted by the owner as engineering reviewer, 2026-09-06; relabelled 2026-09-09**
 
 `gungnir-remote` to `gungnir-interop`, for DN-25's outbound Cursor-on-Target sink. Accepted
 ahead of the code rather than with it, because DN-25 is a design-only note and it had to say
 which crate owns the sink before it could say anything else about it.
 
+**Relabelled from (s) to (v), and from §13 to §16, 2026-09-09.** This section and §13 below
+were both numbered 13 and both named their edge (s) -- a genuine collision found reviewing
+DN-25 for the owner's design sign-off, between this still-unbuilt edge and §13's real,
+already-drawn `gungnir-node` to `gungnir-identity` (`dependency_graph.rs` hardcodes that one
+as `"(s)"`; ARCHITECTURE.md §10 item 98 is where it closed). (s) is legitimately item 98's;
+this section keeps its 2026-09-06 acceptance date but takes the next letter and number
+actually free, following (u) at §15. No manifest or drawing changes: this edge is still not
+in either, exactly as it was under its old label, so nothing here contradicts a graph anyone
+has already checked in.
+
 | Edge | What it is | Evidence |
 |---|---|---|
-| (s) remote → interop | The sink encodes a view as an SD-16 payload and writes it to a socket. `endpoint.rs` and `peer.rs` already own outbound connections, their retries and their refusal counts, and DN-07's handoff proved that is where an outbound path belongs. The refused alternative was to leave encoding in `gungnir-interop` and give the socket to each host binary, the shape the ASTERIX adapter has: that would put a socket, a retry loop and a refusal count into both `gungnir-app` and `gungnir-node`, duplicating what one crate already has, and it was refused for that reason rather than on layering grounds | `DN-25-cursor-on-target.md` §2, §4 |
+| (v) remote → interop | The sink encodes a view as an SD-16 payload and writes it to a socket. `endpoint.rs` and `peer.rs` already own outbound connections, their retries and their refusal counts, and DN-07's handoff proved that is where an outbound path belongs. The refused alternative was to leave encoding in `gungnir-interop` and give the socket to each host binary, the shape the ASTERIX adapter has: that would put a socket, a retry loop and a refusal count into both `gungnir-app` and `gungnir-node`, duplicating what one crate already has, and it was refused for that reason rather than on layering grounds | `DN-25-cursor-on-target.md` §2, §4 |
 
 **Direction and depth.** The same direction as edge (j), `gungnir-ingest` to
 `gungnir-interop`, in a manifest since 2026-09-06. `gungnir-interop` depends on
@@ -287,7 +297,7 @@ nothing in `gungnir-interop`'s subtree can reach `gungnir-remote`.
 Acceptance and existence are different things, and §4a's row says which this is. The graph in
 §7.1 describes manifests; an edge drawn there that no manifest carries would be the graph
 claiming something untrue, which is the one thing that document may not do. The change that
-adds the sink adds the manifest line and draws (s) in the same commit, per §5's rule.
+adds the sink adds the manifest line and draws (v) in the same commit, per §5's rule.
 
 ## 14. Edge (t) -- `gungnir-remote` to `gungnir-security` (recorded 2026-09-07; GAP-060, D-29)
 
