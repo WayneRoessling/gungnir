@@ -4187,8 +4187,8 @@ not by finding, for the time between whenever each item landed and this correcti
     reused rather than defined, so no `gungnir-security` edge is touched, and nothing
     here reaches `gungnir-api`. No dependency edge changed.
 
-109. **GAP-015's Gaussian-mixture CPHD filter, written and gated, not signed**
-    (2026-09-08). `gungnir-rfs::CphdFilter`'s own stub doc comment named exactly this
+109. **GAP-015's Gaussian-mixture CPHD filter, written and gated; signed 2026-09-09
+    after review found and closed a numerical instability** (2026-09-08). `gungnir-rfs::CphdFilter`'s own stub doc comment named exactly this
     gap: `PhdFilter::cardinality` is a mean and nothing more, and a CPHD propagates the
     whole distribution over the target count. `predict` is the PHD's own intensity
     predict (survival scaling and births are the same step regardless of which filter
@@ -4254,13 +4254,67 @@ not by finding, for the time between whenever each item landed and this correcti
     fade of the cardinality mode, and the Monte Carlo variance comparison against
     `PhdFilter` over the same scripted detection stream.
 
-    **Human-owned crate, and so written and gated rather than signed.**
+    **Found in review before signing (2026-09-09): the leave-one-out elementary
+    symmetric functions were numerically unstable in exactly the regime this filter
+    exists for.** `elementary_symmetric_leave_one_out` -- and `esf_leave_one_out`, its
+    twin in the generator -- computed the leave-`j`-out functions by forward synthetic
+    division, `q_k = e_k - v_j q_{k-1}`, for `O(m^2)` rather than `O(m^3)`. Deflating a
+    polynomial by a root is stable from only one end, and that is the wrong end
+    whenever `v_j` is the *largest* value: a well-matched target's `xi = q/kappa` of
+    order 60 among clutter returns at 1e-3. Measured, not argued: on that vector with
+    twelve clutter values the recurrence is 12x off at `k = 4` and returns `+1e6` where
+    the truth is `1e-36` at `k = 12`, with four sign changes. In the filter, at default
+    settings, one target with twelve clutter returns on a 55 m ring and a thin prior
+    gave a mixture weight sum of 1726 against a cardinality mean of 1.02 -- the
+    oracle's own first identity, broken 1700x -- and with fifteen returns under a fat
+    prior the target's weight collapsed to 0.045 while `extract_tracks` committed to a
+    birth component 35 km away, the cardinality half (which uses only the stable full
+    functions) still saying one target. Negative garbage was pruned as sub-threshold
+    and positive garbage kept, so nothing failed loudly. Nothing existing could see
+    it: the fixture's three scenes feed the truth positions verbatim as detections,
+    with no clutter and no misses, and the generator shared the recurrence -- it
+    failed its own docstring identity `sum_j xi_j e_r(xi_{-j}) = (r+1) e_{r+1}(xi)` by
+    a relative 7.8e40 on the same vector. Both sides now recompute the dynamic program
+    per left-out index, which only adds non-negative products and cannot cancel;
+    `m^3` per scan is well under a millisecond at any clutter rate this filter is
+    meant for. The abandoned recurrence is kept in both test modules and asserted to
+    fail, so the reason for the cubic cost is executable rather than remembered.
+    Three unit tests were added (the identity on the adversarial vector, the old
+    recurrence's failure, and the intensity-integral identity plus track placement in
+    the clutter/fat-prior regime -- every scene that broke now agrees to 2e-16 and
+    puts its one track on the target), the generator's `_self_check` gained the same
+    identity as its third, and the fixture gained a fourth case -- one target, twelve
+    random clutter returns in a 45-90 m annulus every scan from a SplitMix64 stream
+    both sides replay bit for bit, one broad birth of weight 2 far away every scan to
+    keep the prior's tail fat, and a clutter density of 1e-5 the case declares for
+    itself -- with `cphd_diff.rs` gating its presence. Two drafts of that case were
+    wrong and were corrected before landing, both measured rather than noticed. A
+    fixed ring of returns recurring at the same twelve positions every scan is
+    indistinguishable from twelve stationary targets, and the oracle correctly
+    converged on fifteen. Then, under the shared 1e-6 clutter density, every
+    random-clutter scene tried ran away too, because twelve returns where the model
+    expects a fifth of one cannot all be clutter -- which is why a case carrying real
+    clutter has to declare a density its own scans are consistent with, and which
+    exposed that the two properties the case needs pull against each other: the
+    instability's visible garbage scales with the target's likelihood ratio to
+    clutter, and the smaller that ratio is made to keep the scene honest, the less a
+    regression shows (eight returns at 1e-5: a relative 1e-7, invisible at the row's
+    1e-3). The chosen scene reads as one target -- cardinality mode 1 on every scan
+    but the two in which the target is still being confirmed, the mean settling at
+    1.21 with the unconfirmed birth intensity's residual -- while the abandoned
+    recurrence, swapped back into the oracle, moves its intensity at the target probe
+    by a relative 3e-2 from scan 6 on: a reintroduced recurrence fails the row
+    thirtyfold. Regenerating the fixture left the three original cases unchanged to
+    within 2e-16.
+
+    **Human-owned crate: signed by the owner 2026-09-09, over the corrected code.**
     `gungnir-rfs` is reached by `docs/agentic-workflow.md`'s numerical-stability
     clause the same way `gungnir-filters`, `gungnir-association` and
-    `gungnir-track-fusion` already are (item 94's own record); this entry stands on
-    its verification rather than a signature, pending the owner's review. No
-    dependency edge changed and no new external crate: only `gungnir-rfs`'s own
-    `nalgebra` and `thiserror`, already reachable, are used.
+    `gungnir-track-fusion` already are (item 94's own record); the signature covers
+    the update recursion, the cardinality predict, and the elementary-symmetric-
+    function helpers as they stand after the correction above. No dependency edge
+    changed and no new external crate: only `gungnir-rfs`'s own `nalgebra` and
+    `thiserror`, already reachable, are used.
 
 110. **GAP-097: an unchanged plan no longer floods its own approval queue**
     (2026-09-08). `DpInterceptService::plan_with_rewards` minted a fresh `PlanId` and

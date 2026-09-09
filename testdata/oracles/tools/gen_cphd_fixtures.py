@@ -69,6 +69,16 @@ plain GM-PHD update's weights exactly, since the PHD filter IS the CPHD filter
 restricted to that one assumption. Both are asserted in `_self_check()` below, which
 runs at import time -- if either fails, generating a fixture from this file is refused.
 
+A THIRD IDENTITY, AND A FOURTH CASE, 2026-09-09. Review before signing found that
+`esf_leave_one_out` -- in this file and in its Rust twin -- computed the leave-j-out
+functions by forward synthetic division, which is unstable exactly when Xi_j is the
+largest value: a well-matched target among clutter. The three original cases feed the
+truth positions verbatim as detections, with no clutter and no misses, so they never
+reached that regime and could not have caught it; `_self_check` now asserts the
+leave-one-out identity on an adversarial vector (and keeps the abandoned recurrence,
+shown failing), and `one_target_in_annulus_clutter_with_per_scan_births` gates the
+regime against gungnir-rfs directly. See `esf_leave_one_out`'s own docstring for the numbers.
+
 WHAT IS AND IS NOT COMPARED, unchanged from the PHD row: intensity as a function (its
 integral and its value at fixed probe points), never as a component list, because two
 correct filters that prune and merge in a different order carry the same intensity in a
@@ -162,9 +172,22 @@ def esf(values):
 
 
 def esf_leave_one_out(values):
-    """`esf` with each index left out, via synthetic division of the elementary
-    symmetric generating function E(x) = prod(1 + v_i x) by (1 + v_j x) -- see the
-    module docstring's Rust-side twin, elementary_symmetric_leave_one_out."""
+    """`esf` with each index left out, by re-running the dynamic program on the other
+    m-1 values -- O(m^3) in all, and deliberately NOT the O(m^2) synthetic division of
+    E(x) = prod(1 + v_i x) by (1 + v_j x) this replaced on 2026-09-09. That forward
+    recurrence, q_k = e_k - v_j q_{k-1}, is unstable exactly when v_j is the LARGEST
+    value: deflating a polynomial by a root is stable from only one end, and that is
+    the wrong end for a well-matched target's Xi among small clutter Xi's. Measured:
+    for Xi = [60] + [1e-3]*12 it fails the identity below by a relative 7.8e40 and
+    returns -1.7e4 as an elementary symmetric function of non-negative inputs. The
+    dynamic program only adds non-negative products, so it cannot cancel; `_self_check`
+    asserts the identity on that vector and keeps the abandoned recurrence to show it
+    failing. Rust-side twin: gungnir-rfs's elementary_symmetric_leave_one_out."""
+    return [esf(values[:j] + values[j + 1 :]) for j in range(len(values))]
+
+
+def _synthetic_division_leave_one_out(values):
+    """The abandoned O(m^2) recurrence, kept only so `_self_check` can show it failing."""
     e = esf(values)
     m = len(values)
     out = []
@@ -309,7 +332,7 @@ def cardinality_predict(previous, p_survival, birth_mean, n_max):
     return out
 
 
-def reference_gm_cphd(scans, births_per_scan, n_max=N_MAX):
+def reference_gm_cphd(scans, births_per_scan, n_max=N_MAX, kappa=CLUTTER):
     """The full multi-scan CPHD recursion: predict (intensity exactly as GM-PHD,
     cardinality by binomial thinning convolved with a Poisson birth count) then the
     closed-form update above, every scan."""
@@ -327,7 +350,7 @@ def reference_gm_cphd(scans, births_per_scan, n_max=N_MAX):
         p_n = cardinality_predict(p_n, PROB_SURVIVAL, birth_mean, n_max)
         components.extend(births)
 
-        p_n, updated = cphd_update(components, p_n, detections, PROB_DETECT, CLUTTER, h, r_cov, n_max)
+        p_n, updated = cphd_update(components, p_n, detections, PROB_DETECT, kappa, h, r_cov, n_max)
         components = prune_and_merge(updated)
 
         per_scan.append((list(p_n), components))
@@ -411,6 +434,34 @@ def _self_check():
     if any(abs(x - y) > 1e-6 for x, y in zip(a, b)):
         raise AssertionError("CPHD with a Poisson prior does not reduce to plain GM-PHD")
 
+    # Identity 3 (2026-09-09): the leave-one-out functions on one dominant value among
+    # many small ones -- sum_j Xi_j e_r(Xi_{-j}) == (r+1) e_{r+1}(Xi), every value
+    # non-negative -- which the synthetic-division recurrence this file used to carry
+    # breaks by tens of orders of magnitude, and which the direct recomputation must
+    # satisfy to machine precision. The recurrence is kept and shown failing so the
+    # reason for the cubic cost cannot be forgotten.
+    def _loo_identity_worst(xi, loo):
+        e = esf(xi)
+        worst_here = 0.0
+        for r in range(len(xi)):
+            lhs = sum(xi[j] * loo[j][r] for j in range(len(xi)))
+            rhs = (r + 1) * e[r + 1]
+            worst_here = max(worst_here, abs(lhs - rhs) / abs(rhs))
+        return worst_here
+
+    for clutter in (12, 15):
+        xi_adv = [60.0] + [1e-3] * clutter
+        direct = esf_leave_one_out(xi_adv)
+        if any(v < 0.0 for q in direct for v in q):
+            raise AssertionError("a leave-one-out elementary symmetric function went negative")
+        if _loo_identity_worst(xi_adv, direct) > 1e-12:
+            raise AssertionError("leave-one-out ESFs break their identity on a dominant value")
+        if _loo_identity_worst(xi_adv, _synthetic_division_leave_one_out(xi_adv)) < 1e6:
+            raise AssertionError(
+                "the abandoned synthetic-division recurrence has become stable on the "
+                "adversarial vector; re-derive before ever switching back to it"
+            )
+
     # Cross-check: closed form vs. brute-force association enumeration.
     worst = 0.0
     for _ in range(40):
@@ -437,18 +488,79 @@ def _self_check():
 LAMBDA_CROSS_CHECK = _self_check()
 
 
-def build_case(name, truth, scan_count, birth_scans, n_max=N_MAX):
+class SplitMix64:
+    """SplitMix64 with the standard constants, bit-identical to cphd_diff.rs's own;
+    `next_unit` is (z >> 11) / 2^53, exact in both languages. A tiny shared stream is
+    what lets both sides draw the same random clutter without sharing a library."""
+
+    MASK = (1 << 64) - 1
+
+    def __init__(self, seed):
+        self.state = seed & self.MASK
+
+    def next_u64(self):
+        self.state = (self.state + 0x9E3779B97F4A7C15) & self.MASK
+        z = self.state
+        z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & self.MASK
+        z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & self.MASK
+        return z ^ (z >> 31)
+
+    def next_unit(self):
+        return (self.next_u64() >> 11) / float(1 << 53)
+
+
+def clutter_seed(scan, t):
+    return 0x5EED + 1000 * scan + t
+
+
+def annulus_clutter(center, radius_min, radius_max, count, scan, t):
+    """`count` clutter returns uniform in the annulus [radius_min, radius_max] around
+    `center` at its height, from a SplitMix64 stream seeded by scan and truth index.
+    Genuinely random rather than a fixed ring: a return that recurred at the same
+    position every scan would be indistinguishable from a stationary target, and a
+    first draft of this case with a fixed ring did exactly that, converging on
+    fifteen targets for a one-target scene."""
+    rng = SplitMix64(clutter_seed(scan, t))
+    out = []
+    for _ in range(count):
+        r = radius_min + (radius_max - radius_min) * rng.next_unit()
+        angle = 2.0 * math.pi * rng.next_unit()
+        out.append([center[0] + r * math.cos(angle), center[1] + r * math.sin(angle), center[2]])
+    return out
+
+
+def build_case(name, truth, scan_count, birth_scans, n_max=N_MAX, clutter_annulus=None,
+               per_scan_births=(), clutter_density=None):
+    """`clutter_annulus=(radius_min, radius_max, count)` adds that much random clutter
+    around every truth position on every scan; `per_scan_births` is a list of
+    `([x, y, z], weight)` broad births added on EVERY scan, on top of the truth births
+    at `birth_scans`; `clutter_density` overrides the shared CLUTTER for this case
+    alone, so a case can carry a clutter rate its own scans are consistent with
+    without moving the three original, clutter-free cases. Together these put a scan
+    into the regime the leave-one-out ESFs are unstable in (one dominant Xi among many
+    small ones, under a fat cardinality prior); the original cases never reach it."""
     scans, births_per_scan = [], []
     for scan in range(scan_count):
-        scans.append([list(p) for p in truth])
+        detections = [list(p) for p in truth]
+        if clutter_annulus is not None:
+            radius_min, radius_max, count = clutter_annulus
+            for t, p in enumerate(truth):
+                detections.extend(annulus_clutter(p, radius_min, radius_max, count, scan, t))
+        scans.append(detections)
+        births = []
         if scan in birth_scans:
-            births_per_scan.append(
-                [(0.4, np.array(list(p) + [0.0, 0.0, 0.0]), np.diag(BIRTH_COV)) for p in truth]
+            births.extend(
+                (0.4, np.array(list(p) + [0.0, 0.0, 0.0]), np.diag(BIRTH_COV)) for p in truth
             )
-        else:
-            births_per_scan.append([])
+        births.extend(
+            (w, np.array(list(pos) + [0.0, 0.0, 0.0]), np.diag(BIRTH_COV))
+            for pos, w in per_scan_births
+        )
+        births_per_scan.append(births)
 
-    per_scan_result = reference_gm_cphd(scans, births_per_scan, n_max)
+    per_scan_result = reference_gm_cphd(
+        scans, births_per_scan, n_max, CLUTTER if clutter_density is None else clutter_density
+    )
 
     probes = [list(p) for p in truth]
     probes.append([sum(p[0] for p in truth) / len(truth) + 1500.0, 0.0, 0.0])
@@ -466,7 +578,7 @@ def build_case(name, truth, scan_count, birth_scans, n_max=N_MAX):
             }
         )
 
-    return {
+    case = {
         "name": name,
         "truth": [list(p) for p in truth],
         "scan_count": scan_count,
@@ -474,6 +586,18 @@ def build_case(name, truth, scan_count, birth_scans, n_max=N_MAX):
         "probes": probes,
         "per_scan": per_scan,
     }
+    # Only emitted when set, so the three original cases' JSON is unchanged.
+    if clutter_annulus is not None:
+        case["clutter_annulus"] = {
+            "radius_min": clutter_annulus[0],
+            "radius_max": clutter_annulus[1],
+            "count": clutter_annulus[2],
+        }
+    if per_scan_births:
+        case["per_scan_births"] = [[list(pos), w] for pos, w in per_scan_births]
+    if clutter_density is not None:
+        case["clutter_density"] = clutter_density
+    return case
 
 
 def main():
@@ -484,6 +608,32 @@ def main():
         build_case("one_target", [[0.0, 0.0, 100.0]], 15, {0}),
         build_case("six_targets_reborn_midway",
                    [[i * 150.0, 0.0, 100.0] for i in range(6)], 24, {0, 12}),
+        # The regime that broke the leave-one-out ESFs (2026-09-09): one target, 12
+        # random clutter returns in a 45-90 m annulus around it every scan (small
+        # but non-zero likelihood against the target's own component), one broad birth
+        # of weight 2.0 far away every scan to keep the cardinality prior's tail
+        # fat, and a clutter density of 1e-5 this case's own scans are consistent with.
+        # Before the fix, a single scan of this shape put 1700x the correct weight on
+        # the target with a thin prior, and extracted a track 35 km away with a fat
+        # one. A first draft used a fixed ring of twelve returns and four births of
+        # weight 1.0 per scan under the shared 1e-6 clutter density, and the oracle
+        # correctly concluded those were targets: returns recurring at fixed positions
+        # are stationary targets, and twelve returns where the model expects a fifth
+        # of one cannot all be clutter. Measured before landing (a sweep of candidate
+        # scenes, each run twice, with the abandoned recurrence swapped back in for
+        # the second run): this scene keeps cardinality mode 1 on every scan but
+        # the two in which the target is still being confirmed, with the corrected
+        # functions, and the recurrence moves the intensity at the target
+        # probe by a relative 3e-2 from scan 6 on, against cphd_diff.rs's 1e-3
+        # tolerance -- so a reintroduced recurrence fails this case thirtyfold. Fewer
+        # returns or a thinner birth prior kept the scene honest but blind (8 returns:
+        # 1e-7), and the shared clutter density kept it sensitive but dishonest;
+        # the two pull against each other, since the visible garbage scales with the
+        # target's likelihood ratio to clutter.
+        build_case("one_target_in_annulus_clutter_with_per_scan_births",
+                   [[0.0, 0.0, 100.0]], 20, {0}, clutter_annulus=(45, 90, 12),
+                   per_scan_births=[([20_000.0, 20_000.0, 100.0], 2.0)],
+                   clutter_density=1e-5),
     ]
     payload = {
         "oracle": (

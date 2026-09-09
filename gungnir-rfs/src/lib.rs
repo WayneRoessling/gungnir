@@ -645,27 +645,44 @@ fn elementary_symmetric(values: &[f64]) -> Vec<f64> {
     e
 }
 
-/// [`elementary_symmetric`] of `values` with each index left out in turn, in
-/// `O(len(values)^2)` total rather than `O(len(values)^3)` from recomputing per index.
+/// [`elementary_symmetric`] of `values` with each index left out in turn, by running
+/// the `O(m^2)` dynamic program once per index: `O(m^3)` in all.
 ///
-/// `E(x) = Π(1 + v_i x)` factors as `(1 + v_j x) · Q_j(x)`, and `Q_j`'s coefficients --
-/// exactly the leave-`j`-out elementary symmetric functions -- come from one pass of
-/// synthetic division of `E` by `(1 + v_j x)`: matching the coefficient of `x^k` on both
-/// sides of `E(x) = Q_j(x) + v_j x Q_j(x)` gives `e_k = q_k + v_j q_{k-1}`, so
-/// `q_k = e_k - v_j q_{k-1}`, computed forward from `q_0 = e_0 = 1`.
+/// **Deliberately not the `O(m^2)` synthetic-division shortcut this replaced
+/// (2026-09-09, found in review before signing).** `E(x) = Π(1 + v_i x)` factors as
+/// `(1 + v_j x) · Q_j(x)`, and `Q_j`'s coefficients are exactly the leave-`j`-out
+/// functions, so one forward pass of `q_k = e_k - v_j q_{k-1}` from `q_0 = 1` appears
+/// to deliver them in `O(m)` per index. It does -- when `v_j` is small. Deflating a
+/// polynomial by one of its roots is stable from only one end, and the forward pass is
+/// the wrong end whenever `v_j` is the *largest* value: each step subtracts two
+/// nearly-equal numbers, and the error grows by roughly `v_j / (the others)` per step.
+/// That is precisely the well-matched-target-among-clutter case, where `ξ_j = q_j / κ`
+/// is of order 60 for the target's own detection and 1e-3 for each clutter return.
+/// Measured on that vector with twelve clutter values: the recurrence is 12× off at
+/// `k = 4` and returns `+1.0e6` where the true value is `1.0e-36` at `k = 12`, with four
+/// sign changes on the way. Fed to [`CphdFilter::update`] at default settings, that gave
+/// the target's component a weight of 1726 against a cardinality mean of 1.02, and
+/// with fifteen clutter returns and a fat cardinality prior it collapsed the target's
+/// weight to 0.045 and had [`CphdFilter::extract_tracks`] commit to a birth component
+/// 35 km away instead. The cardinality half uses only the full functions and was never
+/// affected, so the filter's two halves disagreed silently: negative garbage was
+/// pruned as sub-threshold, positive garbage was kept.
+///
+/// The dynamic program only ever *adds* products of non-negative inputs, so there is no
+/// cancellation to go wrong. `m` is the number of detections in one scan, and `m^3`
+/// multiply-adds per scan is well under a millisecond at any clutter rate this filter
+/// is meant for. The test module keeps the abandoned recurrence and asserts that it
+/// fails, so the reason for the cubic cost is executable rather than remembered.
 fn elementary_symmetric_leave_one_out(values: &[f64]) -> Vec<Vec<f64>> {
-    let e = elementary_symmetric(values);
-    let m = values.len();
-    (0..m)
+    (0..values.len())
         .map(|j| {
-            let mut q = vec![0.0; m];
-            if m > 0 {
-                q[0] = 1.0;
-            }
-            for k in 1..m {
-                q[k] = e[k] - values[j] * q[k - 1];
-            }
-            q
+            let rest: Vec<f64> = values
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != j)
+                .map(|(_, v)| *v)
+                .collect();
+            elementary_symmetric(&rest)
         })
         .collect()
 }
@@ -1495,5 +1512,168 @@ mod tests {
             "CPHD should show materially lower cardinality-estimate variance than PHD \
              under frequent missed detections: CPHD {cphd_var}, PHD {phd_var}"
         );
+    }
+
+    /// The leave-one-out elementary symmetric functions on the vector that broke the
+    /// synthetic-division shortcut (`elementary_symmetric_leave_one_out`'s own doc
+    /// comment): one well-matched target's `xi` of 60 among twelve clutter returns at
+    /// 1e-3, and again among fifteen. Every value must be non-negative -- each is a sum
+    /// of products of non-negative inputs -- and the whole set must satisfy
+    /// `sum_j xi_j e_r(xi_{-j}) == (r + 1) e_{r+1}(xi)`, the identity relating them to
+    /// the full functions, which is also what the CPHD update's single normalising
+    /// constant rests on (`gen_cphd_fixtures.py`'s module docstring).
+    #[test]
+    fn the_leave_one_out_elementary_symmetric_functions_survive_one_dominant_value() {
+        for clutter in [12_usize, 15] {
+            let mut xi = vec![60.0];
+            xi.extend(std::iter::repeat_n(1e-3, clutter));
+            let e = elementary_symmetric(&xi);
+            let loo = elementary_symmetric_leave_one_out(&xi);
+            assert_eq!(loo.len(), xi.len());
+            for (j, q) in loo.iter().enumerate() {
+                assert_eq!(q.len(), xi.len(), "leaving out index {j}");
+                assert!(
+                    q.iter().all(|&v| v >= 0.0),
+                    "leaving out index {j} produced a negative value in {q:?}"
+                );
+            }
+            for r in 0..xi.len() {
+                let lhs: f64 = (0..xi.len()).map(|j| xi[j] * loo[j][r]).sum();
+                #[allow(clippy::cast_precision_loss)]
+                let rhs = (r + 1) as f64 * e[r + 1];
+                let rel = ((lhs - rhs) / rhs).abs();
+                assert!(
+                    rel < 1e-12,
+                    "{clutter} clutter, r = {r}: identity off by a relative {rel:e} \
+                     ({lhs:e} vs {rhs:e})"
+                );
+            }
+        }
+    }
+
+    /// The `O(m^2)` recurrence `elementary_symmetric_leave_one_out` abandoned, kept so
+    /// the reason stays executable: on the same vector it fails the identity above by
+    /// more than a factor of a million and returns negative values. On a benign vector
+    /// it agrees to machine precision, which is why it looked safe.
+    fn synthetic_division_leave_one_out(values: &[f64]) -> Vec<Vec<f64>> {
+        let e = elementary_symmetric(values);
+        let m = values.len();
+        (0..m)
+            .map(|j| {
+                let mut q = vec![0.0; m];
+                if m > 0 {
+                    q[0] = 1.0;
+                }
+                for k in 1..m {
+                    q[k] = e[k] - values[j] * q[k - 1];
+                }
+                q
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_synthetic_division_recurrence_this_replaced_is_unstable_and_stays_replaced() {
+        let benign = [0.5, 0.3, 0.2, 0.1, 0.05];
+        for (a, b) in synthetic_division_leave_one_out(&benign)
+            .iter()
+            .flatten()
+            .zip(elementary_symmetric_leave_one_out(&benign).iter().flatten())
+        {
+            assert!((a - b).abs() <= 1e-12 * b.abs().max(1.0), "{a} vs {b}");
+        }
+
+        let mut xi = vec![60.0];
+        xi.extend(std::iter::repeat_n(1e-3, 12));
+        let e = elementary_symmetric(&xi);
+        let unstable = synthetic_division_leave_one_out(&xi);
+        let worst_rel = (0..xi.len())
+            .map(|r| {
+                let lhs: f64 = (0..xi.len()).map(|j| xi[j] * unstable[j][r]).sum();
+                #[allow(clippy::cast_precision_loss)]
+                let rhs = (r + 1) as f64 * e[r + 1];
+                ((lhs - rhs) / rhs).abs()
+            })
+            .fold(0.0, f64::max);
+        assert!(
+            worst_rel > 1e6,
+            "the recurrence has become stable on this vector (worst relative {worst_rel:e}); \
+             if that is real, re-derive before switching back to it"
+        );
+        assert!(
+            unstable[0].iter().any(|&v| v < 0.0),
+            "expected a negative leave-one-out value from the recurrence: {:?}",
+            unstable[0]
+        );
+        assert!(elementary_symmetric_leave_one_out(&xi)[0]
+            .iter()
+            .all(|&v| v >= 0.0));
+    }
+
+    /// The oracle's own first identity, brought into this crate for the regime the
+    /// fixture's clean scenes do not reach: an updated intensity's integral (the
+    /// mixture's weight sum) must equal the updated cardinality distribution's mean,
+    /// because both are the same posterior's first moment. Checked on the scene that
+    /// broke the synthetic-division recurrence -- one well-matched target, a ring of
+    /// clutter returns close enough to carry small but non-zero likelihood, and a fat
+    /// cardinality prior from broad births that scan. Before the fix the twelve-clutter
+    /// thin-prior case gave a weight sum of 1726 against a mean of 1.02, and the
+    /// fifteen-clutter fat-prior case extracted its one track 35 km from the target.
+    #[test]
+    fn the_intensity_integral_equals_the_cardinality_mean_under_clutter_and_a_fat_prior() {
+        let motion = ConstantVelocity { sigma_a_sq: 1.0 };
+        let target = [0.0, 0.0, 100.0];
+        for (clutter, broad_birth_weight) in [(12_usize, 0.0), (12, 1.0), (15, 1.0), (8, 1.0)] {
+            let mut filter = cphd(20);
+            let mut births = vec![birth(target, 0.9)];
+            if broad_birth_weight > 0.0 {
+                for i in 0..4_i32 {
+                    let x = 20_000.0 + 5_000.0 * f64::from(i);
+                    births.push(birth([x, 20_000.0, 100.0], broad_birth_weight));
+                }
+            }
+            filter.predict(&motion, 1.0, &births).expect("finite");
+            let mut detections = vec![detection(target)];
+            for i in 0..clutter {
+                #[allow(clippy::cast_precision_loss)]
+                let angle = i as f64 * 2.0 * std::f64::consts::PI / clutter as f64 + 0.1;
+                #[allow(clippy::cast_precision_loss)]
+                let radius = 55.0 * (1.0 + 0.05 * (i % 3) as f64);
+                detections.push(detection([
+                    radius * angle.cos(),
+                    radius * angle.sin(),
+                    100.0,
+                ]));
+            }
+            filter.update(&detections).expect("valid");
+
+            let weight_sum: f64 = filter
+                .phd
+                .intensity_components
+                .iter()
+                .map(|c| c.weight)
+                .sum();
+            let mean = filter.cardinality_mean();
+            assert!(
+                (weight_sum - mean).abs() < 1e-9,
+                "{clutter} clutter, broad births {broad_birth_weight}: weight sum {weight_sum} \
+                 vs cardinality mean {mean}"
+            );
+            let tracks = filter.extract_tracks().expect("valid");
+            assert_eq!(
+                tracks.len(),
+                1,
+                "{clutter} clutter: {} tracks",
+                tracks.len()
+            );
+            let distance = ((tracks[0].state[0] - target[0]).powi(2)
+                + (tracks[0].state[1] - target[1]).powi(2))
+            .sqrt();
+            assert!(
+                distance < 30.0,
+                "{clutter} clutter, broad births {broad_birth_weight}: the extracted track is \
+                 {distance:.1} m from the only target"
+            );
+        }
     }
 }
