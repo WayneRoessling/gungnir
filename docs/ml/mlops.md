@@ -5,20 +5,31 @@ model artefacts.
 
 ## 1. The governance gap this plan found
 
-`gungnir-modelops` today governs **algorithm configuration**, not model artefacts. Its
-`ModelBaseline` holds a `TrackingConfig` with a mission profile and a `PromotionState`
-of `Candidate`, `Validated`, `Promoted`, or `RolledBack`. That state machine is exactly
-what a learned model needs, but the payload is not.
+`gungnir-modelops` used to govern **algorithm configuration** only, not model artefacts.
+Its `ModelBaseline` held a `TrackingConfig` with a mission profile and a `PromotionState`
+of `Candidate`, `Validated`, `Promoted`, or `RolledBack`. That state machine was exactly
+what a learned model needed, but the payload was not there.
 
-Two options, and the recommendation:
+Two options were on the table, and the recommendation is what got built:
 
 | Option | Effect |
 |---|---|
-| **Extend `ModelBaseline` with an optional model manifest** (recommended) | One registry, one promotion state machine, one audit trail for "what is in force". The tracking configuration and the model set are promoted together, which matches reality: they are the algorithm in force |
+| **Extend `ModelBaseline` with an optional model manifest** (recommended, built 2026-09-08) | One registry, one promotion state machine, one audit trail for "what is in force". The tracking configuration and the model set are promoted together, which matches reality: they are the algorithm in force |
 | A parallel registry for models | Two state machines and two answers to "what is running", which is how a deployment ends up with a promoted model against a rolled-back configuration |
 
-Filed as GAP-078. Until it lands, models cannot be promoted through the existing
-governance and must not be enabled in a deployment.
+**Built 2026-09-08 (GAP-078), alongside GAP-077's runtime rather than before it, per this
+gap's own closing action.** `ModelBaseline` gained `model: Option<ModelArtifactManifest>`
+-- name, semantic version, SHA-256, and an `EvaluationRecord` of gates passed with
+evidence -- validated structurally by `InMemoryModelRegistry::validate` (every stated
+field non-empty, the hash exactly 64 lowercase hex characters, at least one gate
+recorded) and promoted, rolled back, and audited through the very `PromotionState`
+machine §3 below describes, never a second one. **This closes the governance gap, not
+the deployment one**: nothing in `gungnir-app` or `gungnir-node` ever constructs a
+`ModelBaseline` with `model: Some(_)` today, because `gungnir-config`'s schema has no
+model-manifest field for a baseline file to name one from, and no model exists yet to
+name (GAP-080, open by design). A model can now be promoted through this governance the
+moment one exists to promote; enabling one in a deployment is still the separate,
+audited, off-by-default configuration change §3 always required.
 
 ## 2. Versioning
 
