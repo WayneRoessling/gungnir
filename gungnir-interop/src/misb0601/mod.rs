@@ -76,12 +76,16 @@
 //! (Frame Center Latitude/Longitude/Elevation), and the LS version number. Every
 //! other tag -- MISB ST 0601 defines upwards of ninety -- is carried in
 //! [`Misb0601Frame::carried_raw`] by tag number and raw bytes, never dropped and
-//! never guessed at. A known tag whose value does not fit this decoder's supported
-//! widths (1, 2 or 4 bytes for a mapped numeric field, valid UTF-8 for a string) is
-//! carried the same way rather than assumed: the widths implemented are exactly the
-//! ones the vendored fixture and klvdata's own tag table use, and a producer that
-//! encodes a field more compactly than that is a real MISB possibility this decoder
-//! does not yet claim to read.
+//! never guessed at. A known tag whose value is not the width its table entry fixes
+//! (2 octets for the platform angles and the two altitudes, 4 for the latitudes,
+//! longitudes, sensor-relative angles and slant range -- the widths klvdata's tag table
+//! and the vendored fixture use; valid UTF-8 for a string) is carried the same way
+//! rather than scaled as if it were. **Made strict 2026-09-09, in review before the
+//! adapter was signed**: until then any 1-, 2- or 4-octet value was scaled by the
+//! tag's fixed domain, so a 2-octet latitude would have decoded as a value near zero
+//! degrees instead of being carried raw as this paragraph already promised. A producer
+//! that encodes a field more compactly than its fixed width is a real MISB possibility
+//! this decoder does not claim to read.
 //!
 //! Out of scope entirely: the video essence, MPEG-2 transport stream demultiplexing
 //! (ST 1402), the nested Security Local Set (Tag 48, ST 0102), and every tag this
@@ -309,20 +313,33 @@ fn linear_map(src: f64, src_min: f64, src_max: f64, dst_min: f64, dst_max: f64) 
     slope * (src - src_min) + dst_min
 }
 
-/// One MISB "mapped" element: an integer read at the field's own domain, linearly
-/// scaled onto its stated range, with `error` (when the field has one) read back as
-/// `None` rather than as a data point. Mirrors `klvdata.common.bytes_to_float`.
-fn mapped(item: &[u8], signed: bool, domain: (i64, i64), range: (f64, f64)) -> Option<f64> {
-    mapped_with_error(item, signed, domain, range, None)
+/// One MISB "mapped" element: an integer of exactly `width` octets read at the field's
+/// own domain, linearly scaled onto its stated range, with `error` (when the field has
+/// one) read back as `None` rather than as a data point. Mirrors
+/// `klvdata.common.bytes_to_float`, except that an item of any other width is `None`
+/// -- carried raw by the caller -- rather than scaled by a domain that assumes the
+/// fixed width (the module doc comment's "Scope").
+fn mapped(
+    item: &[u8],
+    width: usize,
+    signed: bool,
+    domain: (i64, i64),
+    range: (f64, f64),
+) -> Option<f64> {
+    mapped_with_error(item, width, signed, domain, range, None)
 }
 
 fn mapped_with_error(
     item: &[u8],
+    width: usize,
     signed: bool,
     domain: (i64, i64),
     range: (f64, f64),
     error: Option<i64>,
 ) -> Option<f64> {
+    if item.len() != width {
+        return None;
+    }
     let raw = read_be_i64(item, signed)?;
     if error == Some(raw) {
         return None;
@@ -375,15 +392,29 @@ fn apply_tag(frame: &mut Misb0601Frame, tag: u8, item: &[u8]) {
         4 => set_opt(&mut frame.platform_tail_number, as_string(item)),
         5 => set_opt(
             &mut frame.platform_heading_deg,
-            mapped(item, false, (0, 65_535), (0.0, 360.0)),
+            mapped(item, 2, false, (0, 65_535), (0.0, 360.0)),
         ),
         6 => set_opt(
             &mut frame.platform_pitch_deg,
-            mapped_with_error(item, true, (-32_767, 32_767), (-20.0, 20.0), Some(-32_768)),
+            mapped_with_error(
+                item,
+                2,
+                true,
+                (-32_767, 32_767),
+                (-20.0, 20.0),
+                Some(-32_768),
+            ),
         ),
         7 => set_opt(
             &mut frame.platform_roll_deg,
-            mapped_with_error(item, true, (-32_767, 32_767), (-50.0, 50.0), Some(-32_768)),
+            mapped_with_error(
+                item,
+                2,
+                true,
+                (-32_767, 32_767),
+                (-50.0, 50.0),
+                Some(-32_768),
+            ),
         ),
         10 => set_opt(&mut frame.platform_designation, as_string(item)),
         11 => set_opt(&mut frame.image_source_sensor, as_string(item)),
@@ -391,6 +422,7 @@ fn apply_tag(frame: &mut Misb0601Frame, tag: u8, item: &[u8]) {
             &mut frame.sensor_latitude_deg,
             mapped_with_error(
                 item,
+                4,
                 true,
                 (-2_147_483_647, 2_147_483_647),
                 (-90.0, 90.0),
@@ -401,6 +433,7 @@ fn apply_tag(frame: &mut Misb0601Frame, tag: u8, item: &[u8]) {
             &mut frame.sensor_longitude_deg,
             mapped_with_error(
                 item,
+                4,
                 true,
                 (-2_147_483_647, 2_147_483_647),
                 (-180.0, 180.0),
@@ -409,16 +442,17 @@ fn apply_tag(frame: &mut Misb0601Frame, tag: u8, item: &[u8]) {
         ),
         15 => set_opt(
             &mut frame.sensor_true_altitude_m,
-            mapped(item, false, (0, 65_535), (-900.0, 19_000.0)),
+            mapped(item, 2, false, (0, 65_535), (-900.0, 19_000.0)),
         ),
         18 => set_opt(
             &mut frame.sensor_relative_azimuth_deg,
-            mapped(item, false, (0, 4_294_967_295), (0.0, 360.0)),
+            mapped(item, 4, false, (0, 4_294_967_295), (0.0, 360.0)),
         ),
         19 => set_opt(
             &mut frame.sensor_relative_elevation_deg,
             mapped_with_error(
                 item,
+                4,
                 true,
                 (-2_147_483_647, 2_147_483_647),
                 (-180.0, 180.0),
@@ -427,16 +461,17 @@ fn apply_tag(frame: &mut Misb0601Frame, tag: u8, item: &[u8]) {
         ),
         20 => set_opt(
             &mut frame.sensor_relative_roll_deg,
-            mapped(item, false, (0, 4_294_967_295), (0.0, 360.0)),
+            mapped(item, 4, false, (0, 4_294_967_295), (0.0, 360.0)),
         ),
         21 => set_opt(
             &mut frame.slant_range_m,
-            mapped(item, false, (0, 4_294_967_295), (0.0, 5_000_000.0)),
+            mapped(item, 4, false, (0, 4_294_967_295), (0.0, 5_000_000.0)),
         ),
         23 => set_opt(
             &mut frame.frame_center_latitude_deg,
             mapped_with_error(
                 item,
+                4,
                 true,
                 (-2_147_483_647, 2_147_483_647),
                 (-90.0, 90.0),
@@ -447,6 +482,7 @@ fn apply_tag(frame: &mut Misb0601Frame, tag: u8, item: &[u8]) {
             &mut frame.frame_center_longitude_deg,
             mapped_with_error(
                 item,
+                4,
                 true,
                 (-2_147_483_647, 2_147_483_647),
                 (-180.0, 180.0),
@@ -455,7 +491,7 @@ fn apply_tag(frame: &mut Misb0601Frame, tag: u8, item: &[u8]) {
         ),
         25 => set_opt(
             &mut frame.frame_center_elevation_m,
-            mapped(item, false, (0, 65_535), (-900.0, 19_000.0)),
+            mapped(item, 2, false, (0, 65_535), (-900.0, 19_000.0)),
         ),
         65 => match item {
             [v] => set_opt(&mut frame.uas_lds_version, Some(*v)),
@@ -595,7 +631,7 @@ mod tests {
     fn the_heading_worked_example_matches_klvdatas_own_reading() {
         // Tag 5, raw bytes 0x71 0xC2, from the vendored fixture. klvdata's own
         // PlatformHeadingAngle(value).value on these bytes is 159.97436484321355.
-        let v = mapped(&[0x71, 0xC2], false, (0, 65_535), (0.0, 360.0));
+        let v = mapped(&[0x71, 0xC2], 2, false, (0, 65_535), (0.0, 360.0));
         assert!((v.expect("present") - 159.974_364_843_213_55).abs() < 1e-9);
     }
 
@@ -605,6 +641,7 @@ mod tests {
         assert_eq!(
             mapped_with_error(
                 &[0x80, 0x00],
+                2,
                 true,
                 (-32_767, 32_767),
                 (-20.0, 20.0),
@@ -674,5 +711,30 @@ mod tests {
         buf.extend_from_slice(&[0, 0]);
         assert_eq!(find_next_key(&buf, 0), Some(5));
         assert_eq!(find_next_key(&buf, 6), None);
+    }
+
+    /// The width rule the module doc comment promises (2026-09-09): a known tag at a
+    /// width its table entry does not fix is carried raw, never scaled by a domain
+    /// that assumed the fixed width. Before this, a 2-octet Sensor Latitude decoded as
+    /// a value near zero degrees.
+    #[test]
+    fn a_known_tag_at_the_wrong_width_is_carried_raw_not_scaled() {
+        // Tag 13 at 2 octets instead of 4, Tag 5 at its correct 2 octets beside it.
+        let value: [u8; 8] = [13, 2, 0x40, 0x00, 5, 2, 0x80, 0x00];
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&UDS_KEY);
+        bytes.push(u8::try_from(value.len()).expect("short-form"));
+        bytes.extend_from_slice(&value);
+        let (frame, consumed) = decode_frame(&bytes).expect("frames");
+        assert_eq!(consumed, bytes.len());
+        assert_eq!(
+            frame.sensor_latitude_deg, None,
+            "a 2-octet latitude is not a latitude"
+        );
+        assert_eq!(frame.carried_raw, vec![(13, vec![0x40, 0x00])]);
+        let heading = frame
+            .platform_heading_deg
+            .expect("the correctly sized tag decodes");
+        assert!((heading - 360.0 * 32_768.0 / 65_535.0).abs() < 1e-9);
     }
 }

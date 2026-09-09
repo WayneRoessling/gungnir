@@ -4605,9 +4605,40 @@ not by finding, for the time between whenever each item landed and this correcti
     2 tests running the vendored fixture and a hand-built well-formed frame through
     the real `IngestGateway` end to end.
 
-    **Human-owned and unsigned**: `gungnir-ingest` is the ingest gateway
-    `docs/agentic-workflow.md` names as the trust boundary for external data, so this
-    is written and gated, not self-signed, pending the owner's review.
+    **Found in review before signing (2026-09-09): one corrupt length byte stalled the
+    feed for good.** `UasMetadataAdapter::poll` treated every `Truncated` frame as one
+    to wait for, and a BER long-form length is allowed to promise anything up to
+    2^64 bytes -- so a single corrupt length byte at the front of the buffer made
+    every later frame part of a frame that never completed. Probed rather than argued:
+    twenty valid frames queued behind a header claiming four gigabytes produced nothing
+    across two hundred polls, with no error, no resynchronization, and a buffer that
+    only grew, while the feed looked alive. The adapter now bounds the frame it will
+    wait for (`MAX_FRAME_BYTES`, 65 535 -- its own stated bound, since ST 0601 sets
+    none, and far above any real local set) and treats a header past it exactly like a
+    malformed frame: counted and resynchronized past, so the frames behind it decode.
+    A plausible-but-wrong length is a different case and stays one: the next frame's
+    first bytes are read as the tail of the mangled one, the mangled local set then
+    fails to parse, and resynchronization recovers at the next key, losing exactly the
+    one frame; a test now pins that too. Two smaller findings closed in the same
+    review: a fix with no Sensor True Altitude was placed at 0 m in the local frame
+    with the baseline's 30 m vertical sigma and nothing in its provenance saying so,
+    where `cat048::map` records "no height in report" for the identical situation --
+    the adapter now names the missing axis as a conversion loss; and the codec's own
+    doc comment promised that a known tag at an unsupported width is carried raw,
+    while `mapped` scaled any 1-, 2- or 4-octet item by the tag's fixed domain, so a
+    2-octet latitude decoded as a value near zero degrees -- `apply_tag` now fixes each
+    tag's width and carries any other raw, as promised (klvdata's own Python shares
+    the laxity, so the fixture oracle was never affected). Four tests added across the
+    adapter and the codec.
+
+    **Human-owned: signed by the owner 2026-09-09, over the corrected code.**
+    `gungnir-ingest` is the ingest gateway `docs/agentic-workflow.md` names as the
+    trust boundary for external data; the signature covers the adapter's buffering,
+    resynchronization, discard rule and mapping as they stand after the corrections
+    above. The tag semantics remain a secondary source's reading of MISB
+    (`docs/design/external-standards.md` §8.2), and the signature does not change
+    that: it says the adapter does what it says, not that the primary text has been
+    read.
 
 116. **GAP-095: the night theme variant, and the flat theme tokens become a threaded
     `Palette`** (2026-09-08, D-35). D-35 deferred exactly this: turning
@@ -4738,11 +4769,37 @@ not by finding, for the time between whenever each item landed and this correcti
     catalogue's own conformance and wire-coverage declarations) and `gungnir-ingest`
     (adapter routing), all passing; no regression elsewhere.
 
-    **Human-owned crate touched (`gungnir-ingest`, the low-trust gateway); written and
-    gated, not signed.** Host configuration wiring (`ConfigBaseline`, `gungnir-app`,
-    `gungnir-node`) is deferred, the same shape GAP-001 deferred Category 034's host
-    wiring in; a bearing this adapter produces does not yet reach an operator's screen,
-    which is GAP-096 and not this gap's to fix.
+    **Reviewed before signing (2026-09-09) against the primary text itself.** The
+    one thing that would have made every bearing wrong -- its scale -- was checked
+    against the specification rather than the codec's own tests, and the specification
+    turned out to disagree with itself: edition 1.0's Table 1, its summary of least
+    significant bits, lists I205/070 and I205/080 at 0.1 degrees, while the item
+    definitions §5.2.8 and §5.2.9 both state `LSB = 0.01deg`, clockwise from
+    geographical north, `0.00 <= THETA < 360.00`, and `asterix-specs`' transcription
+    carries 1/100. The item definitions govern, the codec follows them, and the
+    discrepancy is now recorded in the codec's module documentation and in
+    `external-standards.md` §9.2 so that a later reader checking against the summary
+    table does not "correct" a correct decoder. The same review found that nothing
+    enforced those stated ranges: a count of 36 000 or more decoded to a bearing of
+    360 degrees or beyond and passed through, because the gateway's validation bounds
+    a bearing's variance, not its angle. The codec now refuses I205/070 and /080 at or
+    past 36 000 counts and I205/200 outside plus or minus 9 000, as malformed, with
+    tests at both sides of each bound. Not changed, and stated: a System Bearing Report
+    (type 2) carries its own origin -- I205/050 or /060 is "the position of the
+    bearing starting point, i.e. the position of the respective RDF sensor" -- and the
+    codec attributes the bearing to the one `DfSite` configured for the report's
+    SAC/SIC instead, which is the RDF *system*'s identity; that per-report origin is
+    decoded and not used, because `Measurement::Bearing` has no origin field, and it
+    is the open item DN-27 already names rather than a claim this codec makes falsely.
+    When the pipeline resolves a bearing's origin, a type-2 report should supply its
+    own.
+
+    **Human-owned crate touched (`gungnir-ingest`, the low-trust gateway); signed by
+    the owner 2026-09-09.** Host configuration wiring (`ConfigBaseline`, `gungnir-app`,
+    `gungnir-node`) was deferred at first, the same shape GAP-001 deferred Category
+    034's host wiring in, and given later the same day (`external-standards.md`
+    §9.2); a bearing this adapter produces reaches the operator through GAP-096 (item
+    115).
 
 115. **GAP-096: a retained bearing reaches the operator** (2026-09-08). Of the three
     things that can happen to a bearing offered to `FusionPipeline::offer_bearing`

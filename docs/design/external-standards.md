@@ -1169,6 +1169,18 @@ acceptances and every refusal path, two `gungnir-node` tests, and two
 a hand-built, well-formed frame reaches the real gateway as an accepted detection, and
 one with no local frame origin binds nothing.
 
+**Reviewed before signing, 2026-09-09.** One corrupt BER length byte stalled the adapter
+for good: every later frame became part of a frame that never completed, with no error
+and a buffer that only grew. The adapter now bounds the frame it will wait for
+(`MAX_FRAME_BYTES`, its own stated bound since ST 0601 sets none) and resynchronizes past
+a header promising more, and it records a missing Sensor True Altitude as a conversion
+loss on the placed fix rather than carrying the baseline's vertical sigma for an axis
+nobody measured. The codec's fixed tag widths were made strict, so a known tag at another
+width is carried raw as its documentation already promised rather than scaled by the
+fixed width's domain. The adapter was signed by the owner the same day
+(`ARCHITECTURE.md` §10 item 113); the tag semantics remain this secondary source's
+reading, and the primary text remains unpinned.
+
 ## 9. Radio direction finding and UAS identification: ASTERIX Categories 205 and 129 -- surveyed 2026-09-06, both pinned and built 2026-09-08 (GAP-100, GAP-101)
 
 **Surveyed as the cheaper option passed over on purpose, then taken.** The 2026-09-06
@@ -1265,6 +1277,19 @@ four fixture tests in `gungnir-interop/tests/asterix_fixtures.rs` against the ha
 capture, the catalogue's own conformance and wire-coverage declarations in
 `gungnir-interop/tests/conformance.rs`, and two adapter-routing tests in
 `gungnir-ingest/src/adapters/asterix.rs`.
+
+**Reviewed before signing, 2026-09-09.** The bearing's scale was checked against the
+primary PDF itself rather than the codec's own tests, and the PDF disagrees with itself:
+its Table 1, the summary of least significant bits, lists I205/070 and I205/080 at
+0.1 degrees, while the item definitions §5.2.8 and §5.2.9 both state `LSB = 0.01deg`,
+"in clock-wise notation, starting with 0 degrees for the geographical North", with
+`0.00 deg <= THETA < 360.00 deg`; `asterix-specs`' transcription carries 1/100. The item
+definitions govern and the codec follows them; the summary table is the typo, recorded
+here and in the codec's module documentation so nobody corrects the decoder against the
+wrong table. The same review added the range refusals those definitions state -- a bearing
+at or past 36 000 counts, a signal elevation outside plus or minus 9 000 -- since the
+gateway's validation bounds a bearing's variance and not its angle. The adapter's
+Category 205 arm was signed by the owner the same day (`ARCHITECTURE.md` §10 item 114).
 
 ### 9.3 Category 129, UAS Identification and Target Reports -- pinned and built 2026-09-08 (GAP-101)
 

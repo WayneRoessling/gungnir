@@ -30,6 +30,17 @@
 //! is the authority `docs/design/external-standards.md` §1.4 already establishes for
 //! this family. They agree.
 //!
+//! **One discrepancy inside the primary text itself, recorded so a later reader does
+//! not "correct" this decoder the wrong way (2026-09-09, found in review before the
+//! adapter was signed).** Edition 1.0's own Table 1, its summary of least significant
+//! bits, lists I205/070 and I205/080 at 0.1 degrees; the item definitions §5.2.8 and
+//! §5.2.9 both state `LSB = 0.01deg`, "in clock-wise notation, starting with 0 degrees
+//! for the geographical North", with `0.00 deg <= THETA < 360.00 deg`, and
+//! `asterix-specs`' transcription carries 1/100. The item definitions govern; this
+//! decoder follows them, and the same review added the range refusals below that
+//! those definitions state and nothing downstream (`gungnir_ingest::gateway`'s
+//! validation bounds a bearing's variance, not its angle) would otherwise enforce.
+//!
 //! **What this module does and does not decode.** The lossless layer
 //! ([`decode_records`]) types every standard-UAP item Table 3 defines except three the
 //! specification itself calls out (§4.6) as "implementation dependent" -- I205/100
@@ -283,8 +294,8 @@ fn parse_record(cur: &mut Cursor<'_>) -> Result<Record, InteropError> {
             6 => r.radio_channel_name = Some(parse_radio_channel_name(cur)?),
             7 => r.position_wgs84 = Some(parse_wgs84(cur, "I205/050")?),
             8 => r.position_cartesian = Some(parse_cartesian(cur, "I205/060")?),
-            9 => r.local_bearing_deg = Some(f64::from(cur.u16("I205/070")?) * 0.01),
-            10 => r.system_bearing_deg = Some(f64::from(cur.u16("I205/080")?) * 0.01),
+            9 => r.local_bearing_deg = Some(parse_bearing(cur, "I205/070")?),
+            10 => r.system_bearing_deg = Some(parse_bearing(cur, "I205/080")?),
             11 => raw(&mut r, "I205/100", cur.take(1, "I205/100")?),
             12 => r.estimated_uncertainty_m = Some(f64::from(cur.u8("I205/110")?) * 100.0),
             13 => {
@@ -304,7 +315,7 @@ fn parse_record(cur: &mut Cursor<'_>) -> Result<Record, InteropError> {
             18 => raw(&mut r, "I205/170", cur.take(1, "I205/170")?),
             19 => r.signal_level_dbuv = Some(f64::from(cur.i16("I205/180")?) * 0.01),
             20 => r.signal_quality = Some(cur.u8("I205/190")?),
-            21 => r.signal_elevation_deg = Some(f64::from(cur.i16("I205/200")?) * 0.01),
+            21 => r.signal_elevation_deg = Some(parse_signal_elevation(cur)?),
             22 => raw(&mut r, "I205/SP", cur.explicit("I205/SP")?),
             23..=28 => {
                 return Err(cur.error(format!(
@@ -323,6 +334,37 @@ fn raw(r: &mut Record, item: &'static str, octets: &[u8]) {
         item,
         octets: octets.to_vec(),
     });
+}
+
+/// I205/070 and I205/080 (§5.2.8, §5.2.9): an unsigned 16-bit count at 0.01 degrees,
+/// clockwise from geographical north, which the specification bounds to
+/// `0.00 <= THETA < 360.00`. A count at or past 36 000 is outside what the edition
+/// defines and is refused as malformed rather than wrapped or passed on -- the
+/// gateway's own validation bounds a bearing's variance, not its angle, so nothing
+/// downstream would catch it (2026-09-09).
+fn parse_bearing(cur: &mut Cursor<'_>, item: &'static str) -> Result<f64, InteropError> {
+    let raw = cur.u16(item)?;
+    if raw >= 36_000 {
+        return Err(cur.error(format!(
+            "{item} = {raw} x 0.01 deg is outside the 0 <= THETA < 360 deg range edition \
+             {EDITION} states"
+        )));
+    }
+    Ok(f64::from(raw) * 0.01)
+}
+
+/// I205/200 (§5.2.21): a signed 16-bit count at 0.01 degrees, which the specification
+/// bounds to `-90.00 <= ELEVATION <= 90.00`; refused outside it for the same reason as
+/// [`parse_bearing`].
+fn parse_signal_elevation(cur: &mut Cursor<'_>) -> Result<f64, InteropError> {
+    let raw = cur.i16("I205/200")?;
+    if !(-9_000..=9_000).contains(&raw) {
+        return Err(cur.error(format!(
+            "I205/200 = {raw} x 0.01 deg is outside the -90 <= ELEVATION <= 90 deg range \
+             edition {EDITION} states"
+        )));
+    }
+    Ok(f64::from(raw) * 0.01)
 }
 
 /// I205/050 and I205/130 (§5.2.6, §5.2.14): two 32-bit two's complement fields, LSB
@@ -787,5 +829,44 @@ mod tests {
             AsterixCat205Codec::default().encode(&[]),
             Err(InteropError::NotImplemented(CODEC_NAME))
         ));
+    }
+
+    /// The hand-built block with one two-octet item's bytes replaced, so a range test
+    /// changes exactly the item under test and nothing else.
+    fn with_item_bytes(from: [u8; 2], to: [u8; 2]) -> Vec<u8> {
+        let mut b = hand_built_block();
+        let at = b
+            .windows(2)
+            .position(|w| w == from)
+            .expect("the item's bytes are in the hand-built block");
+        b[at..at + 2].copy_from_slice(&to);
+        b
+    }
+
+    /// §5.2.8: `0.00 deg <= THETA < 360.00 deg`. 35 999 counts is the last value the
+    /// edition defines; 36 000 is refused, not wrapped to zero and not passed on as a
+    /// 360-degree bearing nothing downstream would question (2026-09-09).
+    #[test]
+    fn a_bearing_at_or_past_360_degrees_is_refused_as_the_edition_bounds_it() {
+        let last_defined = with_item_bytes([0x11, 0x94], [0x8C, 0x9F]);
+        let recs = decode_records(&last_defined).expect("359.99 deg decodes");
+        assert!((recs[0].local_bearing_deg.expect("bearing") - 359.99).abs() < 1e-9);
+
+        let past = with_item_bytes([0x11, 0x94], [0x8C, 0xA0]);
+        let err = decode_records(&past).expect_err("360.00 deg is outside the edition");
+        assert!(matches!(err, InteropError::Malformed { .. }), "{err}");
+        assert!(err.to_string().contains("I205/070"), "{err}");
+    }
+
+    /// §5.2.21: `-90.00 deg <= ELEVATION <= 90.00 deg`, refused outside it.
+    #[test]
+    fn a_signal_elevation_outside_ninety_degrees_is_refused() {
+        let at_the_bound = with_item_bytes([0x04, 0xE2], [0xDC, 0xD8]); // -9000
+        let recs = decode_records(&at_the_bound).expect("-90.00 deg decodes");
+        assert!((recs[0].signal_elevation_deg.expect("elev") + 90.0).abs() < 1e-9);
+
+        let past = with_item_bytes([0x04, 0xE2], [0x23, 0x29]); // 9001
+        let err = decode_records(&past).expect_err("90.01 deg is outside the edition");
+        assert!(err.to_string().contains("I205/200"), "{err}");
     }
 }
