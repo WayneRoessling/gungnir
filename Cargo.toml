@@ -40,7 +40,7 @@ members = [
 
     "gungnir-identity",           # Understand / High
     "gungnir-identification",     # Understand / Medium
-    "gungnir-ml",                 # Understand / Medium  (model traits, fake model, dataset extraction; no runtime, GAP-077)
+    "gungnir-ml",                 # Understand / Medium  (model traits, fake model, OnnxModel runtime, dataset extraction; GAP-077)
     "gungnir-geo",                # Understand / Medium
     "gungnir-analytics",          # Understand / Medium  (line-of-sight, viewshed, coverage volumes)
 
@@ -293,6 +293,31 @@ keyring = { version = "4.2.0", default-features = false, features = ["v1"] }
 # that reason -- it is production's route to the store `keyring` selected, not only a
 # test's route to a substitute for it.
 keyring-core = { version = "1.0.0", default-features = false }
+
+# ONNX Runtime inference (D-40, signed off 2026-09-08; docs/agentic-coding-standards.md
+# §2.9, "ONNX inference runtime"). GAP-077's `Model` trait needed a real backend; `ort`'s
+# own default `download-binaries` feature fetches prebuilt ONNX Runtime binaries from
+# pyke's CDN, refused for the same third-party-binary-telemetry reason this stack refuses
+# one anywhere else.
+#
+# `default-features = false` plus `load-dynamic` rather than a compile-time static link
+# against a from-source build: `load-dynamic` turns linking off entirely
+# (`ort-sys/disable-linking`) and instead `dlopen`s `libonnxruntime`/`onnxruntime.dll` the
+# first time a `Session` is actually built, from the path `ORT_DYLIB_PATH` names at
+# runtime. Building this workspace therefore needs no C++ toolchain, no cmake, and no
+# network fetch of a binary -- checked 2026-09-08 by `cargo check -p gungnir-ml`
+# succeeding on a machine with no cmake, clang or gcc installed at all. Building ONNX
+# Runtime from source is still exactly what D-40 asked for; `load-dynamic` only moves
+# *when* that has to happen, from every contributor's `cargo check` to whichever
+# deployment step actually needs a working `libonnxruntime` to run inference -- which is
+# GAP-080's own unbuilt half (training a model to run), not this one's.
+#
+# `api-27`, the crate's own default ONNX Runtime C API version, is named explicitly
+# because `default-features = false` turns that off too. `ndarray` is deliberately not
+# enabled: `Tensor::from_array` and `try_extract_tensor` both have a raw
+# `(shape, Vec<f32>)` / `(&Shape, &[f32])` path that needs it, so the crate gains no
+# numeric-array dependency it would use nowhere else.
+ort = { version = "2.0.0-rc.13", default-features = false, features = ["load-dynamic", "api-27"] }
 
 # Test-only. Mutual TLS cannot be verified without certificates, and a private key checked
 # into the repository would be key material in the repository whatever the comment above it

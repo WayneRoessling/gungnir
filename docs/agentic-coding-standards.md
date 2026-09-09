@@ -629,30 +629,67 @@ and `docs/ml/architecture.md`'s own condition for a native ML dependency -- a se
 reviewer appointed for it -- had not been met. The owner un-deferred it on 2026-09-08 on
 their own authority as the reviewer the deferral named, ahead of a model actually
 existing, because Plan 09's own schedule needs the runtime question settled before
-GAP-080 can plan around it.
+GAP-080 can plan around it. Built the same day: `onnx::OnnxModel`, a real `Model`
+implementor over `ort::session::Session`, landed behind a Cargo feature that is off by
+default for a reason found while building it (point 2 below), not a placeholder for one
+found later.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
-| `ort` (default features disabled; `download-binaries` specifically refused) | The `Model` trait's real backend: loading and running an ONNX graph | `gungnir-ml` | Not yet: no gap builds it |
+| `ort` `2.0.0-rc.13` (MIT OR Apache-2.0; default features disabled, `["load-dynamic", "api-27"]` enabled) | The `Model` trait's real backend: loading and running an ONNX graph, through `OnnxModel` | `gungnir-ml`, behind its own `onnx-runtime` feature (off by default) | 2026-09-08 |
 
-Two things about this one:
+Three things about this one:
 
 1. **`ort` over `tract`, for op coverage, not for safety.** `tract` is a pure-Rust
    ONNX-subset interpreter and would have sidestepped a native dependency entirely, but
    nobody has checked whether Plan 09's intended models fit inside that subset, and `ort`
    wraps the real ONNX Runtime with the full operator set. If a future gap finds `tract`
    covers what is actually needed, revisiting this pin costs nothing that has been built
-   yet -- nothing has.
-2. **`download-binaries` is refused, not merely left off by default.** That feature
-   fetches a prebuilt ONNX Runtime from a third-party CDN, and those binaries may carry
-   telemetry -- not acceptable in this system regardless of convenience. Whoever builds
-   GAP-077's runtime must build ONNX Runtime from source instead, the same shape of
-   native-dependency handling this stack already gives `rcgen` (§2.9 point 2) and
-   `vtkio` (GAP-023): a build-time cost accepted in exchange for not trusting a binary
-   this project did not build. **Not yet checked**: `ort`'s exact resolved version, its
-   duplicate-linkage footprint against the rest of the workspace, and whether a C++
-   toolchain needs adding to `ci.yml` for the from-source build -- all owed by GAP-077's
-   own implementation, not decided here.
+   yet beyond `OnnxModel` itself.
+2. **`download-binaries` is refused; `load-dynamic` was chosen over a from-source static
+   link, and the reason is sharper than build time.** `download-binaries` fetches a
+   prebuilt ONNX Runtime from pyke's own CDN, refused for the same third-party-binary-
+   telemetry reason this stack refuses one anywhere else. The straightforward
+   alternative -- disable it and statically link an ONNX Runtime built from source --
+   was rejected for a checked reason, not a theoretical one: it would require a C++
+   toolchain and `cmake` on every contributor's machine and every `fmt-clippy-test` CI
+   run just to run `cargo check`, and `ci.yml`'s `ubuntu-latest` job installs neither
+   today. `load-dynamic` instead disables linking entirely (`ort-sys/disable-linking`)
+   and `dlopen`s `libonnxruntime`/`onnxruntime.dll` the first time a `Session` is built,
+   from `ORT_DYLIB_PATH` at runtime -- **confirmed 2026-09-08 by `cargo check -p
+   gungnir-ml --features onnx-runtime` succeeding on a machine with no cmake, clang or
+   gcc installed at all**, so building this workspace needs neither toolchain regardless
+   of whether the feature is on. Building ONNX Runtime from source is still exactly what
+   D-40 asked for; `load-dynamic` only moves *when* that has to happen, from every
+   contributor's `cargo check` to whichever deployment step actually supplies a working
+   `libonnxruntime` -- unbuilt, and belonging to GAP-080 or a packaging gap after it, not
+   this one.
+3. **The `onnx-runtime` feature is off by default because of a defect found while
+   integrating it, not out of excess caution.** `ort` 2.0.0-rc.13's global `ort::api()`
+   accessor is documented ("May panic if ... Loading the ONNX Runtime dynamic library
+   fails") and confirmed by reproduction to **panic** -- not return a `Result` -- when
+   `load-dynamic` cannot load a compatible ONNX Runtime, which is every environment this
+   change has run in (this workspace's own CI included: `ubuntu-latest` has no
+   `libonnxruntime.so` anywhere on its default search path, and neither does any
+   contributor machine by default). Reproduced twice on this change's own development
+   machine, against a wrong-version system `onnxruntime.dll` (1.17.1) it found on the
+   default search path with `ORT_DYLIB_PATH` unset: the panic poisons an internal global
+   mutex that `ort`'s own atexit handler locks again on process exit, which panics a
+   second time in a context that cannot unwind and hard-aborts the process
+   (`STATUS_STACK_BUFFER_OVERRUN`) -- reproduced identically with `OnnxModel::load`'s own
+   `catch_unwind` wrapper in place, which stops the panic from escaping that one call but
+   cannot undo the poisoning. A test that calls into real `ort` at all, pass or fail,
+   risks taking the whole test binary down with it at exit; `gungnir-ml`'s `onnx-runtime`
+   feature (`Cargo.toml`) keeps that call out of every default `cargo test --workspace`
+   run, and `onnx.rs`'s own test module explains in a comment why it deliberately adds no
+   round-trip test even behind the feature. **No CI job enables this feature today**:
+   real inference is real, compiling, reviewed code, and it is not exercised anywhere
+   until a gap supplies both a working `libonnxruntime` and a reason to risk the process
+   on it -- which is also why `cargo tree -p gungnir-ml --features onnx-runtime -d`
+   (checked 2026-09-08) is the honest form of the duplicate-linkage check here: `ort`,
+   `ort-sys` and `libloading` add no duplicate package to the graph at all; the `syn`
+   (D-18, D-39) and `hashbrown` (already beneath `arrow`/`indexmap`, independent of this
+   change) duplicates it reports both pre-exist this dependency.
 
 #### Coordinate reference system projection (signed off 2026-09-08, D-41)
 

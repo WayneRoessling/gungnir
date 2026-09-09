@@ -21,9 +21,11 @@ through their existing traits rather than depending on the crate. A build withou
 
 **The crate and its edge exist as of 2026-09-06** (`gungnir-ml`, edge (q) in
 `ARCHITECTURE.md` §7.1, with a second edge to `gungnir-interop` for the dataset schema the
-catalogue names). The runtime does not: §3's sign-off stays deferred, and `ModelSet::load`
-refuses with that reason. The consumers' edges are still not drawn; nothing depends on the
-crate until GAP-080 promotes a model.
+catalogue names). **The runtime is built as of 2026-09-08** (§3): `OnnxModel` is a real
+`Model` over `ort::session::Session`, behind a Cargo feature off by default for a reason
+§3 explains, and `ModelSet::load` reports which named models loaded and which failed and
+why rather than refusing every one outright. The consumers' edges are still not drawn;
+nothing depends on the crate until GAP-080 promotes a model.
 
 ## 2. Surface
 
@@ -95,15 +97,44 @@ Alternatives considered and why not, recorded so the choice can be revisited:
 | `burn` | Same, plus it is a training framework and the training happens in Python |
 | `tract` | Pure-Rust ONNX inference with no native dependency, which is genuinely appealing for the disconnected profile; slower on the desktop and with narrower operator coverage. **Worth reconsidering** if the native ONNX Runtime dependency proves awkward to ship under the release-governance gates |
 
-`ort` is not in the workspace dependencies and is not signed off. Adding it is a §2.9
-entry (GAP-077) and brings a native library into a workspace that has none, which the
-security reviewer should see before it lands.
+**`ort` is in the workspace dependencies and signed off as of 2026-09-08** (D-40;
+`agentic-coding-standards.md` §2.9, "ONNX inference runtime"), the owner acting as the
+security reviewer this section named. Pinned `2.0.0-rc.13`, default features off,
+`load-dynamic` rather than a from-source static link: no C++ toolchain is needed to
+compile this workspace either way, but `load-dynamic` also needs no ONNX Runtime binary
+present at all until a `Session` is actually built, `dlopen`ing
+`libonnxruntime`/`onnxruntime.dll` from `ORT_DYLIB_PATH` at that point instead of linking
+one in at compile time.
 
-**Deliberately deferred, 2026-09-05.** The owner was walked this decision alongside the
-other outstanding sign-offs and chose to defer it rather than sign a runtime now, for
-three stated reasons: GAP-077 targets increment 4, no model has been trained so nothing
-needs a runtime yet, and the security reviewer this section names has not been appointed.
-`tract` remains the alternative worth reconsidering when the decision is taken, precisely
+**Only two of the three profile rows above are built, and only on the CPU execution
+provider.** `OnnxModel` (`gungnir-ml/src/onnx.rs`) registers no execution provider beyond
+whatever `ort` selects with none named, which is CPU; the GPU-ordered-provider row (CUDA,
+DirectML) is recorded here as a target, not built, and needs `ort`'s own `cuda`/
+`directml` features plus whatever native SDKs they pull, which is a separate, larger
+review this change does not open.
+
+**Real, compiling, and gated off by default for a reason found while building it.**
+`OnnxModel` sits behind `gungnir-ml`'s own `onnx-runtime` Cargo feature, off in the
+workspace default, because `ort` 2.0.0-rc.13's `load-dynamic` path **panics** -- rather
+than returning a `Result` -- when no compatible ONNX Runtime library is reachable, which
+is every environment this change has run in, and that panic has been confirmed (not
+theorised) to leave the process unable to exit cleanly afterwards.
+`agentic-coding-standards.md` §2.9 carries the full account, including what was checked
+and what was reproduced. No gap yet enables the feature anywhere, including in CI: this is the
+compiling, reviewed shape of the real backend, not yet the running one, which needs both
+a working ONNX Runtime binary and a trained model (GAP-080) neither of which exist yet.
+
+`tract` remains the alternative worth reconsidering if that turns out to matter more than
+op coverage: a pure-Rust interpreter cannot panic on a missing native library, because it
+has none to be missing. Nothing built for GAP-077 depends on `ort` specifically enough to
+make revisiting this pin expensive.
+
+**Formerly deliberately deferred, 2026-09-05 to 2026-09-08.** The owner was first walked
+this decision alongside the other outstanding sign-offs and chose to defer it rather than
+sign a runtime then, for three stated reasons: GAP-077 targeted increment 4, no model had
+been trained so nothing needed a runtime yet, and the security reviewer this section
+names had not been appointed. `tract` remained the alternative worth reconsidering when
+the decision was taken, precisely
 because it avoids the native dependency. This is recorded so the absence reads as a
 decision rather than as an oversight.
 

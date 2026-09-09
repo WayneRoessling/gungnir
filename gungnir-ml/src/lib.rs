@@ -8,10 +8,23 @@
 //! feature batch into outputs and never fabricates a value on failure; a
 //! [`FeatureExtractor`] turns model views into the features a model was trained on and
 //! carries the schema version it does it with; a [`ModelSet`] is what a deployment has
-//! loaded and, honestly, what it has not. **There is no inference runtime here.** The
-//! sign-off was deferred by the owner on 2026-09-05 (§3), so [`ModelSet::load`] refuses
-//! with the reason and every consumer that holds an `Option<&dyn Model>` works without
-//! one. [`FakeModel`] exists so the consumers can be tested without a runtime (§7).
+//! loaded and, honestly, what it has not. **The inference runtime is built as of
+//! 2026-09-08 (D-40; `agentic-coding-standards.md` §2.9, "ONNX inference runtime"),
+//! behind the `onnx-runtime` feature, off by default.** [`onnx::OnnxModel`] is the real
+//! [`Model`], backed by `ort::session::Session`; with the feature on, [`ModelSet::load`]
+//! tries to build one per manifest entry and reports, per model, which loaded and which
+//! failed and why. **The feature is off by default because of what was found building
+//! it, not because it fails to compile**: `ort` 2.0.0-rc.13's `load-dynamic` path panics
+//! -- and can hard-abort the process from an atexit handler afterwards -- rather than
+//! returning a `Result` when no compatible ONNX Runtime library is reachable, which is
+//! every environment this change has run in. Compiling `gungnir-ml` with the feature on
+//! costs no C++ toolchain and no network fetch either way (checked 2026-09-08); the gate
+//! is about never letting default `cargo test` call into code that can crash the whole
+//! test binary, not about build time. See `onnx`'s own module documentation and
+//! `agentic-coding-standards.md` §2.9 for the full account. Every consumer still holds an
+//! `Option<&dyn Model>` and works without one: no gap yet wires a consumer to this crate
+//! (GAP-080 trains the first model there would be something to wire to). [`FakeModel`]
+//! exists so the consumers can be tested without a runtime (§7).
 //!
 //! `dataset` is the other half of plan 09 that needs no runtime: the extraction from a
 //! test-track set into the Arrow rows `docs/ml/data-pipeline.md` §2 documents, split by
@@ -24,6 +37,8 @@
 
 pub mod dataset;
 pub mod features;
+#[cfg(feature = "onnx-runtime")]
+pub mod onnx;
 
 use gungnir_model::TrackId;
 
@@ -41,6 +56,8 @@ pub enum MlError {
     },
     #[error("model {model}: artefact hash does not match its manifest")]
     ArtefactHashMismatch { model: String },
+    #[error("model {model}: artefact unavailable: {reason}")]
+    ArtefactUnavailable { model: String, reason: String },
     #[error("no inference runtime: {0}")]
     RuntimeUnavailable(String),
     #[error("inference failed: {0}")]
@@ -212,13 +229,22 @@ impl ModelSetHealth {
 }
 
 /// One line of a model manifest (`docs/ml/architecture.md` §5): what a deployment
-/// declares it has. The artefact itself is not read here, because nothing can run it.
+/// declares it has.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ModelManifestEntry {
     pub name: String,
+    /// Semantic, `major.minor.patch` (`docs/ml/mlops.md` §2). `name`@`version` together
+    /// are ML-01's evidence-source string, `"ml:model-name@version"` (`use-cases.md`).
+    pub version: String,
     pub file: String,
     pub sha256: String,
     pub signature: InputSignature,
+    /// The class each output column names, in column order. Stated here rather than
+    /// read from the ONNX graph: a graph's own metadata does not reliably carry semantic
+    /// class labels, and inventing them from the file would be exactly the kind of
+    /// unpopulated field `docs/ml/mlops.md`'s GAP-078 closing action warns against.
+    #[serde(default)]
+    pub output_classes: Vec<String>,
 }
 
 /// The models a deployment has. Empty by default: every model is off until a
@@ -244,24 +270,101 @@ impl ModelSet {
         Self::default()
     }
 
-    /// Load what the manifest names.
+    /// Load what the manifest names. With the `onnx-runtime` feature on, each entry's
+    /// artefact is read from disk, verified against its stated SHA-256
+    /// (`docs/ml/architecture.md` §5), and handed to `onnx::OnnxModel::load`; without it
+    /// (the workspace default -- `agentic-coding-standards.md` §2.9, "ONNX inference
+    /// runtime"), every entry fails with [`MlError::RuntimeUnavailable`] naming the
+    /// feature rather than attempting a load that cannot succeed. Either way, one
+    /// entry's failure is recorded in [`Self::health`] and does not stop the rest of the
+    /// manifest from loading: honest, per-model health is the entire reason
+    /// [`ModelSetHealth`] exists, and a single missing artefact must not read as every
+    /// model being absent.
     ///
     /// # Errors
     ///
-    /// Always, today: [`MlError::RuntimeUnavailable`], because no inference runtime is
-    /// signed off (`docs/ml/architecture.md` §3, deferred 2026-09-05). The health of the
-    /// set the caller keeps instead records every named model as failed for that reason,
-    /// so `SystemHealth` can say which models are missing rather than behaving as though
-    /// the models said nothing interesting.
+    /// [`MlError::ManifestInvalid`] when the manifest itself is malformed -- today, two
+    /// entries sharing one name, which would make [`Self::get`] and this set's own
+    /// health ambiguous about which entry it refers to. A model that individually fails
+    /// to load is not a `load` error; see [`Self::health`] for which model and why.
     pub fn load(manifest: &[ModelManifestEntry]) -> Result<Self, MlError> {
-        let reason = "no inference runtime is signed off (GAP-077; deferred by the owner \
-                      2026-09-05, docs/ml/architecture.md §3)";
-        let _ = manifest;
-        Err(MlError::RuntimeUnavailable(reason.to_owned()))
+        let mut seen = std::collections::HashSet::new();
+        for entry in manifest {
+            if !seen.insert(entry.name.as_str()) {
+                return Err(MlError::ManifestInvalid(format!(
+                    "duplicate model name in manifest: {}",
+                    entry.name
+                )));
+            }
+        }
+
+        let mut models: Vec<Box<dyn Model>> = Vec::new();
+        let mut health = Vec::with_capacity(manifest.len());
+        for entry in manifest {
+            match Self::load_one(entry) {
+                Ok(model) => {
+                    health.push((
+                        entry.name.clone(),
+                        ModelStatus::Loaded {
+                            version: model.version().to_owned(),
+                        },
+                    ));
+                    models.push(model);
+                }
+                Err(e) => {
+                    health.push((
+                        entry.name.clone(),
+                        ModelStatus::Failed {
+                            reason: e.to_string(),
+                        },
+                    ));
+                }
+            }
+        }
+        Ok(Self {
+            models,
+            health: ModelSetHealth { models: health },
+        })
     }
 
-    /// The set a deployment keeps when [`load`](Self::load) refused: nothing loaded,
-    /// every named model failed with the reason.
+    /// One manifest entry, hash-verified then handed to the runtime. Split out of
+    /// [`Self::load`] so one entry's failure is a `?` rather than a per-entry closure.
+    #[cfg(feature = "onnx-runtime")]
+    fn load_one(entry: &ModelManifestEntry) -> Result<Box<dyn Model>, MlError> {
+        let bytes = std::fs::read(&entry.file).map_err(|e| MlError::ArtefactUnavailable {
+            model: entry.name.clone(),
+            reason: format!("reading {}: {e}", entry.file),
+        })?;
+        onnx::OnnxModel::verify_hash(&entry.name, &entry.sha256, &bytes)?;
+        let model = onnx::OnnxModel::load(
+            &entry.name,
+            &entry.version,
+            entry.signature.clone(),
+            entry.output_classes.clone(),
+            &bytes,
+        )?;
+        Ok(Box::new(model))
+    }
+
+    /// The `onnx-runtime` feature is off (the workspace default). Refuse plainly rather
+    /// than attempt a load this build cannot possibly satisfy -- `ort` is not even
+    /// compiled in, let alone reachable at runtime (`agentic-coding-standards.md` §2.9,
+    /// "ONNX inference runtime": the feature is off because of a checked panic-on-missing-
+    /// runtime defect in `ort` 2.0.0-rc.13's `load-dynamic` path, not because this cannot
+    /// build).
+    #[cfg(not(feature = "onnx-runtime"))]
+    fn load_one(entry: &ModelManifestEntry) -> Result<Box<dyn Model>, MlError> {
+        let _ = entry;
+        Err(MlError::RuntimeUnavailable(
+            "this build was compiled without the `onnx-runtime` feature (gungnir-ml's \
+             Cargo.toml; agentic-coding-standards.md §2.9, \"ONNX inference runtime\")"
+                .to_owned(),
+        ))
+    }
+
+    /// The set a deployment keeps when nothing can even be attempted -- e.g. no manifest
+    /// source is configured -- rather than calling [`Self::load`] with an empty list:
+    /// nothing loaded, every named model failed with the given reason.
     #[must_use]
     pub fn unavailable(manifest: &[ModelManifestEntry], reason: &str) -> Self {
         Self {
@@ -347,20 +450,48 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn a_load_refuses_for_want_of_a_runtime_and_health_says_which_models_are_missing() {
-        let manifest = vec![ModelManifestEntry {
-            name: "ml-01".into(),
-            file: "ml-01.onnx".into(),
+    fn manifest_entry(name: &str) -> ModelManifestEntry {
+        ModelManifestEntry {
+            name: name.into(),
+            version: "1.0.0".into(),
+            file: format!("does-not-exist-{name}.onnx"),
             sha256: "00".into(),
             signature: signature(),
-        }];
-        let err = ModelSet::load(&manifest).expect_err("no runtime");
-        assert!(matches!(err, MlError::RuntimeUnavailable(_)));
-        let set = ModelSet::unavailable(&manifest, &err.to_string());
+            output_classes: vec!["hostile".into()],
+        }
+    }
+
+    /// A missing artefact (or no `ORT_DYLIB_PATH`, which every environment this crate has
+    /// actually run in also lacks) is health, not a whole-set refusal: `load` itself
+    /// still succeeds, and the one entry that could not be built is named as failed.
+    /// This is the direct successor of the test this crate had before a runtime existed
+    /// at all, when `load` had no honest way to succeed for *any* manifest.
+    #[test]
+    fn load_reports_a_missing_artefact_in_health_rather_than_refusing_the_whole_set() {
+        let manifest = vec![manifest_entry("ml-01")];
+        let set =
+            ModelSet::load(&manifest).expect("a missing artefact is health, not a load error");
         assert!(set.get("ml-01").is_none());
         assert_eq!(set.health().failed(), 1);
         assert_eq!(set.health().loaded(), 0);
         assert_eq!(ModelSet::empty().health().models.len(), 0);
+    }
+
+    #[test]
+    fn load_refuses_a_manifest_with_a_duplicate_name() {
+        let manifest = vec![manifest_entry("ml-01"), manifest_entry("ml-01")];
+        assert!(matches!(
+            ModelSet::load(&manifest),
+            Err(MlError::ManifestInvalid(_))
+        ));
+    }
+
+    #[test]
+    fn unavailable_marks_every_named_model_failed_with_the_given_reason() {
+        let manifest = vec![manifest_entry("ml-01")];
+        let set = ModelSet::unavailable(&manifest, "no manifest source configured");
+        assert!(set.get("ml-01").is_none());
+        assert_eq!(set.health().failed(), 1);
+        assert_eq!(set.health().loaded(), 0);
     }
 }
