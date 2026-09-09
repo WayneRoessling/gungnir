@@ -112,9 +112,19 @@ one exception.
 | `peers: Vec<PeerConfig>` (GAP-009, 2026-09-06) | DN-16 | Empty; source ids that are no sensor's, quality in 0..=1, positive age |
 | `assets[].warning_within_m` (GAP-042, 2026-09-06) | DN-03 amendment 1 | Absent, impact only; needs the lead time and channel, and must be positive |
 | `security.key_provider: "passphrase-sealed-file"` (GAP-084, 2026-09-06) | DN-22 amendment 3 | A value, not a section: the keystore file lives beside the journal and opens with the operator's passphrase at sign-in |
+| `misb_feeds: Vec<MisbFeedConfig>` (GAP-099, 2026-09-08) | external standards §8 | Empty, no ISR platform telemetry; a feed name or a receiver claimed twice, a sensor that is not in the sensor list, an unparseable `ip:port`, an empty recording path |
+| `radar_feeds[].df_sites: Vec<DfSiteConfig>` (GAP-100, 2026-09-08) | external standards §9.1 | Empty, every Category 205 report counted `unknown_radar`; SAC/SIC and the sensor named for position, so an unknown sensor, a SAC/SIC or a sensor bound twice, and an `azimuth_sigma_rad` that is not finite and positive are all rejected -- never defaulted, since edition 1.0 carries no usable angular error on the wire. **A feed must now bind a radar or a direction finder**; one that binds neither is rejected |
 
 **`resources[].layer` is the only mandatory addition.** It is mandatory because MOE-03 is
 defined by it, and defaulting it would silently corrupt the product's headline measure.
+
+**ASTERIX Category 129's UAS gateways are deliberately not in this table yet.** GAP-101
+(2026-09-08) built the codec, `gungnir_model::UasIdentificationReport`, and the adapter arm,
+but added no baseline section: a deployment names a gateway's SAC/SIC by calling
+`AsterixFeedAdapter::with_uas_sites` from code, not by configuring it. There is no row
+because there is no field -- the same host-wiring gap GAP-100 left open for Category 205 and
+closed the same week, and the first item of GAP-101's own closing action in
+`gap-register.md`.
 
 ## 5. The defaults doctrine
 
