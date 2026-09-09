@@ -300,3 +300,44 @@ fn the_position_path_is_unchanged() {
     assert_eq!(tracks[0].status, TrackStatus::Confirmed);
     assert!((tracks[0].state[3] - 100.0).abs() < 5.0);
 }
+
+/// A position ages the retained set on its own clock, not only another bearing
+/// (2026-09-09, found in review before item 115 was signed). A bearing retained at
+/// 10 s under a 5 s lifetime, followed by nothing but a position at 30 s, must be gone
+/// from the snapshot that follows -- before this, `ingest_with` expired only on the
+/// bearing arm, so a busy radar beside a quiet acoustic feed carried the last unmatched
+/// bearing in every snapshot for the rest of the session.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_position_ages_the_retained_set_on_its_own_clock() {
+    let settings = PipelineSettings {
+        bearing_retention_s: 5.0,
+        ..PipelineSettings::default()
+    };
+    let (submit, rx) = crossbeam_channel::unbounded::<gungnir_fusion_async::Submission>();
+    let (out, snapshots) = crossbeam_channel::unbounded::<gungnir_fusion_async::PipelineSnapshot>();
+    let task = tokio::spawn(gungnir_fusion_async::ingest_with(rx, out, settings));
+
+    submit
+        .send(bearing(10.0, [0.0, 0.0, 0.0], 0.6).into())
+        .expect("the ingest task is running");
+    // Far from any track a bearing could have refined, and 15 s past the bearing's
+    // `until_s` of 15.0.
+    submit
+        .send(position(30.0, [5_000.0, 5_000.0, 0.0]).into())
+        .expect("the ingest task is running");
+    drop(submit);
+    task.await.expect("the ingest task ran to completion");
+
+    let mut last = None;
+    while let Ok(snapshot) = snapshots.try_recv() {
+        last = Some(snapshot);
+    }
+    let last = last.expect("the flush emits a final snapshot");
+    assert!(
+        last.retained_bearings.is_empty(),
+        "a bearing retained until 15.0 s survived a position at 30.0 s: {:?}",
+        last.retained_bearings
+    );
+    assert_eq!(last.stats.bearings_retained, 1);
+    assert_eq!(last.stats.bearings_expired, 1, "{:?}", last.stats);
+}
