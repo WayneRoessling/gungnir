@@ -89,9 +89,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Built from the baseline's own sensor list, which is where a deployment states where
 /// each sensor is. Without it every bearing and every range-azimuth-elevation report is
 /// refused, which is what happened until 2026-09-07.
+///
+/// **Geodetic in, ENU out (GAP-104).** `SensorConfig::position` is
+/// `[lat_rad, lon_rad, alt_m]`; `SensorPositions` is metres in the local ENU frame. From
+/// 2026-09-07 this handed the one straight to the other, which type-checks and placed
+/// every sensor a metre or two from the ENU origin. So the conversion goes through
+/// [`local_frame`], the same one this binary already converts sensor coverage with.
+///
+/// **No origin is a refusal, not a fallback.** A deployment that declared no origin has
+/// no frame to convert into and there is no sound default for one, so this yields an
+/// empty map -- and an empty map refuses every angular report by name
+/// (`SubmitError::NotAPosition`) instead of placing a detection somewhere plausible and
+/// wrong. It warns, because a silent refusal of every bearing looks exactly like no
+/// angular feed reporting.
 fn sensor_positions(config: &ConfigBaseline) -> gungnir_tracking_service::SensorPositions {
-    gungnir_tracking_service::SensorPositions::from_sensors(
-        config.sensors.iter().map(|s| (s.id, s.position)),
+    let Some(frame) = local_frame(config) else {
+        if !config.sensors.is_empty() {
+            tracing::warn!(
+                "no local frame origin is declared, so no sensor has a position in \
+                 the tracking frame; every bearing and range-azimuth-elevation \
+                 report will be refused"
+            );
+        }
+        return gungnir_tracking_service::SensorPositions::default();
+    };
+    gungnir_tracking_service::SensorPositions::from_geodetic(
+        &frame,
+        config.sensors.iter().map(|s| {
+            (
+                s.id,
+                gungnir_model::Geodetic {
+                    lat_rad: s.position[0],
+                    lon_rad: s.position[1],
+                    alt_m: s.position[2],
+                },
+            )
+        }),
     )
 }
 
@@ -2864,5 +2897,66 @@ mod tests {
         bind_misb_feeds(&config, &mut gateway, &[]);
         let events = gateway.tick(gungnir_model::MissionTime(1_000.0), &mut NoTrackingService);
         assert!(events.is_empty(), "{events:#?}");
+    }
+
+    fn geodetic_sensor(
+        id: u32,
+        lat_deg: f64,
+        lon_deg: f64,
+        alt_m: f64,
+    ) -> gungnir_config::SensorConfig {
+        gungnir_config::SensorConfig {
+            id,
+            modality: "eo-ir".into(),
+            position: [lat_deg.to_radians(), lon_deg.to_radians(), alt_m],
+            max_range_m: 5_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        }
+    }
+
+    /// GAP-104: the node's own construction path puts a sensor where the baseline
+    /// declared it, in ENU metres -- the same claim, and the same defect, as the
+    /// desktop's `state::tests::sensor_positions_are_converted_into_the_local_frame`.
+    ///
+    /// Two binaries built this map from the same two lines and both skipped the
+    /// conversion, so both are pinned. A sensor a hundredth of a degree north and two
+    /// hundredths east of a 55 N origin is about 1.7 km away; unconverted it sat 0.98 m
+    /// from the origin, and every bearing and polar report from it was placed there.
+    #[test]
+    fn sensor_positions_are_converted_into_the_local_frame() {
+        let config = ConfigBaseline {
+            origin: Some([55.0_f64.to_radians(), 12.0_f64.to_radians(), 0.0]),
+            sensors: vec![geodetic_sensor(4, 55.01, 12.02, 0.0)],
+            ..ConfigBaseline::default()
+        };
+        let enu = sensor_positions(&config)
+            .get(4)
+            .expect("the sensor is stored");
+        assert!(
+            (enu[0] - 1279.564).abs() < 0.5 && (enu[1] - 1113.419).abs() < 0.5,
+            "east and north are the declared offset in metres: {enu:?}"
+        );
+        assert!(
+            enu[0].hypot(enu[1]) > 1_000.0,
+            "and not the ~1 m that geodetic radians read as ENU metres produce: {enu:?}"
+        );
+    }
+
+    /// No declared origin is no frame, so no sensor has a position: the node hands the
+    /// service an empty map, which refuses every angular report by name rather than
+    /// placing a detection at a guessed origin. It warns as it does so; the desktop's
+    /// half of this pins the operator-facing message, which there is an alert.
+    #[test]
+    fn without_an_origin_the_node_places_no_sensor_at_all() {
+        let config = ConfigBaseline {
+            origin: None,
+            sensors: vec![geodetic_sensor(4, 55.01, 12.02, 0.0)],
+            ..ConfigBaseline::default()
+        };
+        assert!(
+            sensor_positions(&config).is_empty(),
+            "a sensor must not be placed in a frame the deployment never declared"
+        );
     }
 }

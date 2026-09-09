@@ -155,10 +155,15 @@ pub struct SensorPositions {
 }
 
 impl SensorPositions {
-    /// Build from the deployment's sensors.
+    /// Build from positions **already in the local ENU frame**, metres.
     ///
     /// A non-finite coordinate is dropped rather than stored: it could only place a
     /// detection at a non-finite position, and the refusal that follows names the sensor.
+    ///
+    /// A deployment states where its sensors are geodetically, not in ENU, so a binary
+    /// building this from its baseline wants [`from_geodetic`](Self::from_geodetic)
+    /// instead. This constructor stays because the pipeline's own tests, and anything
+    /// holding a laydown that is already local, have ENU in hand and nothing to convert.
     #[must_use]
     pub fn from_sensors(sensors: impl IntoIterator<Item = (u32, [f64; 3])>) -> Self {
         Self {
@@ -167,6 +172,36 @@ impl SensorPositions {
                 .filter(|(_, p)| p.iter().all(|v| v.is_finite()))
                 .collect(),
         }
+    }
+
+    /// Build from the deployment's sensors, converting each into `frame`.
+    ///
+    /// **This is the constructor a binary wants**, because a deployment declares where a
+    /// sensor is geodetically and this map is ENU metres. The two are both three numbers,
+    /// so handing geodetic radians to [`from_sensors`](Self::from_sensors) compiles and
+    /// is wrong in a way nothing downstream can detect: a latitude of about one radian
+    /// becomes one metre east, so every sensor lands within a couple of metres of the ENU
+    /// origin, every bearing is drawn from there instead of from the sensor, and every
+    /// range-azimuth-elevation report is placed beside the origin rather than beside the
+    /// thing that saw it. Both binaries did exactly that from 2026-09-07 until GAP-104
+    /// closed it, which is why this takes a [`gungnir_model::Geodetic`] and not a bare
+    /// `[f64; 3]`: the mistake is now a type error rather than a silent one.
+    ///
+    /// A deployment that has declared no origin has no frame, and `gungnir-model`'s
+    /// `frame` module says why there is no sound default for one. Such a caller has
+    /// nothing to pass here and hands the service an empty map instead, which refuses
+    /// every angular report rather than placing it at a guessed origin -- the same rule
+    /// as the type-level one above, one level up.
+    #[must_use]
+    pub fn from_geodetic(
+        frame: &gungnir_model::LocalFrame,
+        sensors: impl IntoIterator<Item = (u32, gungnir_model::Geodetic)>,
+    ) -> Self {
+        Self::from_sensors(
+            sensors
+                .into_iter()
+                .map(|(id, position)| (id, frame.to_enu(position))),
+        )
     }
 
     /// Where this sensor measures from, if the deployment declared it.

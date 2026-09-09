@@ -214,3 +214,117 @@ fn a_polar_report_that_would_place_a_detection_nowhere_is_refused() {
         "a non-finite range must not produce a non-finite position inside the tracker"
     );
 }
+
+/// GAP-104: a sensor's declared geodetic position reaches the map as **metres in the
+/// local ENU frame**, not as the radians it was written in.
+///
+/// `SensorConfig::position` is `[lat_rad, lon_rad, alt_m]` and this map is ENU metres.
+/// Both are three `f64`, so passing the one for the other compiles, and both binaries did
+/// from 2026-09-07 until this closed: a latitude near 55 degrees is about 0.96 radians,
+/// so every sensor landed about a metre from the ENU origin. That is the failure this
+/// pins -- a metre versus the sixteen hundred the deployment actually declared.
+#[test]
+fn a_geodetic_sensor_position_becomes_enu_metres_not_radians() {
+    let frame = gungnir_model::LocalFrame::new(gungnir_model::Geodetic {
+        lat_rad: 55.0_f64.to_radians(),
+        lon_rad: 12.0_f64.to_radians(),
+        alt_m: 0.0,
+    });
+    // A hundredth of a degree north and two hundredths east of the origin: about 1.11 km
+    // and 1.28 km respectively at this latitude.
+    let p = SensorPositions::from_geodetic(
+        &frame,
+        [(
+            4_u32,
+            gungnir_model::Geodetic {
+                lat_rad: 55.01_f64.to_radians(),
+                lon_rad: 12.02_f64.to_radians(),
+                alt_m: 0.0,
+            },
+        )],
+    );
+    let enu = p.get(4).expect("the sensor is stored");
+    assert!(
+        (enu[0] - 1279.564).abs() < 0.5,
+        "east is the converted metres: {enu:?}"
+    );
+    assert!(
+        (enu[1] - 1113.419).abs() < 0.5,
+        "north is the converted metres: {enu:?}"
+    );
+    assert!(
+        enu[2].abs() < 1.0,
+        "at the origin's altitude, and a shade below it over 1.7 km of curvature: {enu:?}"
+    );
+    // The claim that fails loudly under the defect, stated on its own so a future reader
+    // sees what was actually wrong: the sensor is a kilometre and a half away, not one
+    // metre. Unconverted, this sensor sat at (0.9601, 0.2098, 0.0).
+    let from_origin = enu[0].hypot(enu[1]);
+    assert!(
+        from_origin > 1_000.0,
+        "a sensor 1.7 km from the origin must not be placed beside it ({from_origin} m); \
+         that is geodetic radians being read as ENU metres"
+    );
+}
+
+/// The frame's origin is the ENU origin, and the altitude axis survives the conversion:
+/// a sensor on a 250 m mast at the origin is at (0, 0, 250), not at the origin's radians.
+#[test]
+fn a_sensor_at_the_origin_is_at_zero_with_its_height_kept() {
+    let origin = gungnir_model::Geodetic {
+        lat_rad: 55.0_f64.to_radians(),
+        lon_rad: 12.0_f64.to_radians(),
+        alt_m: 0.0,
+    };
+    let frame = gungnir_model::LocalFrame::new(origin);
+    let p = SensorPositions::from_geodetic(
+        &frame,
+        [(
+            7_u32,
+            gungnir_model::Geodetic {
+                alt_m: 250.0,
+                ..origin
+            },
+        )],
+    );
+    let enu = p.get(7).expect("the sensor is stored");
+    assert!(
+        enu[0].abs() < 1e-6 && enu[1].abs() < 1e-6,
+        "the origin is the origin: {enu:?}"
+    );
+    assert!((enu[2] - 250.0).abs() < 1e-6, "up is the mast: {enu:?}");
+}
+
+/// And the converted position is what a polar report is actually placed from, which is
+/// the whole point of the map: the defect did not merely store a wrong number, it drew
+/// every range-azimuth-elevation detection beside the ENU origin.
+#[test]
+fn a_polar_report_is_placed_from_the_converted_position() {
+    let frame = gungnir_model::LocalFrame::new(gungnir_model::Geodetic {
+        lat_rad: 55.0_f64.to_radians(),
+        lon_rad: 12.0_f64.to_radians(),
+        alt_m: 0.0,
+    });
+    let p = SensorPositions::from_geodetic(
+        &frame,
+        [(
+            4_u32,
+            gungnir_model::Geodetic {
+                lat_rad: 55.01_f64.to_radians(),
+                lon_rad: 12.02_f64.to_radians(),
+                alt_m: 0.0,
+            },
+        )],
+    );
+    let sensor = p.get(4).expect("the sensor is stored");
+    // 500 m due north of the sensor, level.
+    let enu = place_polar(sensor, 500.0, 0.0, 0.0);
+    assert!(
+        (enu[1] - (sensor[1] + 500.0)).abs() < 1e-9,
+        "the range is added to the sensor's own northing, not to the origin's: {enu:?}"
+    );
+    assert!(
+        (enu[0] - 1279.564).abs() < 0.5,
+        "and it is still east of the origin by the sensor's own easting: {enu:?}"
+    );
+}

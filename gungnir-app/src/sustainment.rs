@@ -1435,7 +1435,21 @@ pub fn coverage_circles(state: &AppState) -> Vec<CoverageCircle> {
 /// The local ENU frame this deployment declared, if it declared one.
 #[must_use]
 pub fn local_frame(state: &AppState) -> Option<gungnir_model::LocalFrame> {
-    state.config.origin.map(|[lat_rad, lon_rad, alt_m]| {
+    local_frame_of(&state.config)
+}
+
+/// The same frame, from the baseline alone.
+///
+/// Split out for construction (GAP-104): `state::sensor_positions` needs the frame to put
+/// the baseline's geodetic sensor positions into ENU, and it runs while the `AppState`
+/// [`local_frame`] asks is still being built. One definition rather than two, so the
+/// desktop cannot end up with a map drawn against one origin and a tracker against
+/// another.
+#[must_use]
+pub fn local_frame_of(
+    config: &gungnir_config::ConfigBaseline,
+) -> Option<gungnir_model::LocalFrame> {
+    config.origin.map(|[lat_rad, lon_rad, alt_m]| {
         gungnir_model::LocalFrame::new(gungnir_model::Geodetic {
             lat_rad,
             lon_rad,

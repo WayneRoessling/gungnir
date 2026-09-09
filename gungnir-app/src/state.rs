@@ -1343,9 +1343,37 @@ fn recover_launch_warnings_or_alert(
 /// Built from the baseline's own sensor list, which is where a deployment states where
 /// each sensor is. Without it every bearing and every range-azimuth-elevation report is
 /// refused, which is what happened until 2026-09-07.
+///
+/// **Geodetic in, ENU out (GAP-104).** `SensorConfig::position` is
+/// `[lat_rad, lon_rad, alt_m]`; `SensorPositions` is metres in the local ENU frame. From
+/// 2026-09-07 this handed the one straight to the other, which type-checks and placed
+/// every sensor a metre or two from the ENU origin. So the conversion goes through the
+/// deployment's `LocalFrame`, the same way every other geodetic thing the desktop draws
+/// does (`sustainment::coverage_circles`, `sustainment::bearing_rays`).
+///
+/// **No origin is a refusal, not a fallback.** A deployment that declared no origin has
+/// no frame to convert into and there is no sound default for one, so this yields an
+/// empty map -- and an empty map refuses every angular report by name
+/// (`SubmitError::NotAPosition`) instead of drawing a ray from a guessed place. That is
+/// the answer `NoSensorPlan::NoLocalFrame` already gives when coverage is asked for
+/// without an origin. [`tracking_service`] says so in an alert, because a silent refusal
+/// of every bearing would look exactly like no bearings arriving.
 fn sensor_positions(config: &ConfigBaseline) -> gungnir_tracking_service::SensorPositions {
-    gungnir_tracking_service::SensorPositions::from_sensors(
-        config.sensors.iter().map(|s| (s.id, s.position)),
+    let Some(frame) = crate::sustainment::local_frame_of(config) else {
+        return gungnir_tracking_service::SensorPositions::default();
+    };
+    gungnir_tracking_service::SensorPositions::from_geodetic(
+        &frame,
+        config.sensors.iter().map(|s| {
+            (
+                s.id,
+                gungnir_model::Geodetic {
+                    lat_rad: s.position[0],
+                    lon_rad: s.position[1],
+                    alt_m: s.position[2],
+                },
+            )
+        }),
     )
 }
 
@@ -1498,7 +1526,17 @@ fn tracking_service(
     pipeline: gungnir_tracking_service::PipelineSettings,
     alerts: &mut Vec<String>,
 ) -> LiveTrackingService {
-    let _ = alerts;
+    // GAP-104: without an origin there is no local frame, so no sensor has an ENU
+    // position and every bearing and polar report is refused. Said out loud, because on
+    // screen that is indistinguishable from no angular feed reporting at all.
+    if config.origin.is_none() && !config.sensors.is_empty() {
+        alerts.push(
+            "No local frame origin is declared, so no sensor has a position in the \
+             tracking frame; every bearing and range-azimuth-elevation report \
+             will be refused. Set `origin` in the baseline."
+                .into(),
+        );
+    }
     let staleness = config.policy.staleness.clone();
     let service = LiveTrackingService::with_pipeline_settings(runtime, pipeline)
         .with_staleness(staleness)
@@ -1555,16 +1593,123 @@ fn build_backends(
         Box::new(tracking_service(runtime, config, pipeline, alerts)),
         // GAP-031: the planner solves geometry in the deployment's frame, when it has one.
         Box::new(
-            DpInterceptService::new(config.allocation_horizon).with_local_frame(config.origin.map(
-                |[lat_rad, lon_rad, alt_m]| {
-                    gungnir_model::LocalFrame::new(gungnir_model::Geodetic {
-                        lat_rad,
-                        lon_rad,
-                        alt_m,
-                    })
-                },
-            )),
+            DpInterceptService::new(config.allocation_horizon)
+                .with_local_frame(crate::sustainment::local_frame_of(config)),
         ),
         BackendConfig::Embedded,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn geodetic_sensor(
+        id: u32,
+        lat_deg: f64,
+        lon_deg: f64,
+        alt_m: f64,
+    ) -> gungnir_config::SensorConfig {
+        gungnir_config::SensorConfig {
+            id,
+            modality: "eo-ir".into(),
+            position: [lat_deg.to_radians(), lon_deg.to_radians(), alt_m],
+            max_range_m: 5_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        }
+    }
+
+    /// GAP-104: the desktop's own construction path puts a sensor where the deployment
+    /// declared it, in ENU metres.
+    ///
+    /// This is the call `build_backends` makes, not a re-implementation of it. The defect
+    /// it pins was invisible to `gungnir-tracking-service`'s tests, which hand ENU in
+    /// directly: it lived in the join between a geodetic `SensorConfig::position` and an
+    /// ENU `SensorPositions`, and only the wiring crosses that boundary. A sensor a
+    /// hundredth of a degree north and two hundredths east of a 55 N origin is about
+    /// 1.7 km away; unconverted it sat 0.98 m from the origin, so every bearing from it
+    /// was drawn from the wrong place and every polar report landed beside the origin.
+    #[test]
+    fn sensor_positions_are_converted_into_the_local_frame() {
+        let config = ConfigBaseline {
+            origin: Some([55.0_f64.to_radians(), 12.0_f64.to_radians(), 0.0]),
+            sensors: vec![geodetic_sensor(4, 55.01, 12.02, 0.0)],
+            ..ConfigBaseline::default()
+        };
+        let enu = sensor_positions(&config)
+            .get(4)
+            .expect("the sensor is stored");
+        assert!(
+            (enu[0] - 1279.564).abs() < 0.5 && (enu[1] - 1113.419).abs() < 0.5,
+            "east and north are the declared offset in metres: {enu:?}"
+        );
+        assert!(
+            enu[0].hypot(enu[1]) > 1_000.0,
+            "and not the ~1 m that geodetic radians read as ENU metres produce: {enu:?}"
+        );
+    }
+
+    /// A deployment with no declared origin has no frame, so no sensor has a position and
+    /// the map is empty -- which the service turns into a named refusal of every angular
+    /// report (`SubmitError::NotAPosition`) rather than a ray drawn from a guess. Same
+    /// answer `NoSensorPlan::NoLocalFrame` gives when coverage is asked for without one.
+    #[test]
+    fn without_an_origin_no_sensor_has_a_position_and_the_desktop_says_so() {
+        let config = ConfigBaseline {
+            origin: None,
+            sensors: vec![geodetic_sensor(4, 55.01, 12.02, 0.0)],
+            ..ConfigBaseline::default()
+        };
+        assert!(
+            sensor_positions(&config).is_empty(),
+            "a sensor must not be placed in a frame the deployment never declared"
+        );
+
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let mut alerts = Vec::new();
+        let _ = tracking_service(
+            runtime.handle(),
+            &config,
+            gungnir_tracking_service::PipelineSettings::default(),
+            &mut alerts,
+        );
+        // The exact sentence, not a substring: this is operator-facing text, and it is
+        // assembled from a continued string literal, which is the kind of thing that
+        // silently grows a run of spaces in the middle when it is edited badly.
+        assert_eq!(
+            alerts,
+            vec![
+                "No local frame origin is declared, so no sensor has a position in the \
+                  tracking frame; every bearing and range-azimuth-elevation report \
+                  will be refused. Set `origin` in the baseline."
+                    .to_string()
+            ],
+            "the operator is told, once and in one readable sentence: refusing every \
+             bearing silently looks exactly like no bearings arriving"
+        );
+    }
+
+    /// A deployment that declares an origin and no sensors is not a fault and raises
+    /// nothing: there is simply nothing to place.
+    #[test]
+    fn a_deployment_with_no_sensors_raises_no_frame_alert() {
+        let config = ConfigBaseline {
+            origin: None,
+            sensors: Vec::new(),
+            ..ConfigBaseline::default()
+        };
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let mut alerts = Vec::new();
+        let _ = tracking_service(
+            runtime.handle(),
+            &config,
+            gungnir_tracking_service::PipelineSettings::default(),
+            &mut alerts,
+        );
+        assert!(
+            !alerts.iter().any(|a| a.contains("origin")),
+            "no sensors means nothing needs a frame: {alerts:?}"
+        );
+    }
 }
