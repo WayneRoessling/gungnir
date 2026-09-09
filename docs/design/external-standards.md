@@ -1248,14 +1248,16 @@ decode losslessly and map to a named `Mapped::NotADetection`.
 
 `gungnir_ingest::adapters::asterix::AsterixFeedAdapter` gained a third category arm and an
 opt-in `with_df_sites` builder (`DfBinding` mirroring `RadarBinding`), so no existing call
-site changed; `ConfigBaseline`/`gungnir-app`/`gungnir-node` host configuration wiring is
-deliberately deferred, the same shape §1.8's own table records for Category 034's host
-wiring at the time it landed. No real Category 205 capture exists anywhere to vendor
-(checked: EUROCONTROL publishes none, `CroatiaControlLtd/asterix` carries only a
-field-definition XML for this category and no sample data, `asterix-specs` carries only
-the specification), so `testdata/asterix/cat205.raw` is hand-built directly from edition
-1.0's own byte tables and documented as exactly that, never as a real-world recording, in
-`testdata/asterix/SOURCE.md`'s Category 205 section.
+site changed; `ConfigBaseline`/`gungnir-app`/`gungnir-node` host configuration wiring was
+deliberately deferred at first, the same shape §1.8's own table records for Category 034's
+host wiring at the time it landed -- and was given later the same day (2026-09-08, GAP-100):
+`RadarFeedConfig::df_sites` names a direction finder in the baseline, and `bind_feed` calls
+`with_df_sites` unconditionally, an empty list being a no-op. No real Category 205 capture
+exists anywhere to vendor (checked: EUROCONTROL publishes none, `CroatiaControlLtd/asterix`
+carries only a field-definition XML for this category and no sample data, `asterix-specs`
+carries only the specification), so `testdata/asterix/cat205.raw` is hand-built directly
+from edition 1.0's own byte tables and documented as exactly that, never as a real-world
+recording, in `testdata/asterix/SOURCE.md`'s Category 205 section.
 
 Tests: six unit tests in the codec (the hand-built record at the specification's own
 least significant bits, the no-blocking rule, a reserved FRN, truncation at every length),
@@ -1351,13 +1353,16 @@ its one receiving gateway, the same shape one AIS or ADS-B receiver already gets
 `gungnir_ingest::adapters::asterix::AsterixFeedAdapter` gained a fourth category arm and
 an opt-in `with_uas_sites` builder (`UasBinding`, leaner than `RadarBinding`/`DfBinding`
 because nothing this category maps needs a receiver position), so no existing call site
-changed; `ConfigBaseline`/`gungnir-app`/`gungnir-node` host configuration wiring is
-deliberately deferred, the identical shape 9.2 deferred for Category 205's own host
-wiring. No real Category 129 capture exists anywhere to vendor (checked the same three
-places 9.2 checked for Category 205, this section's own paragraph above has what was
-found), so `testdata/asterix/cat129.raw` is hand-built directly from edition 1.2's own
-byte tables and documented as exactly that in `testdata/asterix/SOURCE.md`'s Category
-129 section.
+changed; `ConfigBaseline`/`gungnir-app`/`gungnir-node` host configuration wiring was
+deliberately deferred at first, the identical shape 9.2 deferred for Category 205's own
+host wiring, and was given the same day (2026-09-08, GAP-101): `RadarFeedConfig::uas_sites`
+names a gateway's SAC/SIC and the sensor it takes its identity from -- and nothing else,
+since this category needs no receiver position -- and `bind_feed` calls `with_uas_sites`
+unconditionally, an empty list being a no-op. No real Category 129 capture exists anywhere
+to vendor (checked the same three places 9.2 checked for Category 205, this section's own
+paragraph above has what was found), so `testdata/asterix/cat129.raw` is hand-built
+directly from edition 1.2's own byte tables and documented as exactly that in
+`testdata/asterix/SOURCE.md`'s Category 129 section.
 
 Tests: eight unit tests in the codec (the hand-built record at the specification's own
 least significant bits, the mapping and its recorded losses, the ARC label offset, the
