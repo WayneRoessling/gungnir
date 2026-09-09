@@ -34,6 +34,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-029 Allocator | CAP-3.3 | 5 | XL | I3 | `../../../ARCHITECTURE.md` §10, the tracking math itself |
 | GAP-031 Intercept geometry solver | CAP-3.4 | 5 | L | I3 | `gungnir-intercept-service/src/geometry.rs`; `../../design/DN-04-effector-model.md` §9 |
 | GAP-048 Tracking metrics | CAP-5.3, CAP-2.1 | 3 | M | I2 | `../../verification-capability-table.md` §1, metrics rows |
+| GAP-103 `solve_assignment` returns an infinite total on an all-finite cost matrix | CAP-2.1 | 2 | S | I2 | `../../verification-capability-table.md` §1 (Hungarian / Jonker-Volgenant); `../../../ARCHITECTURE.md` §10 Open; GAP-061 (the fuzz-nightly gate whose first successful run found this); GAP-076 (the fuzz corpus that feeds it) |
 
 ### Service facades and wiring
 
@@ -57,7 +58,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-099 ISR video metadata (MISB ST 0601 KLV) has no adapter | CAP-1.1 | 3 | M | I3 | `../../design/external-standards.md` §8 and §8.2; GAP-001 (the closing action this gap is drawn from) |
 | GAP-100 ASTERIX Category 205 direction-finder bearings | CAP-7.2, CAP-1.1 | 3 | M | I3 | `../../../ARCHITECTURE.md` §10 item 114; GAP-001 (the survey and the sibling feeds); GAP-064 (the ASTERIX/STANAG codec family this extends); GAP-096 (why a bearing produced here is not yet shown) |
 | GAP-101 ASTERIX Category 129 UAS identification reports | CAP-1.7 | 3 | M | I3 | `../../../ARCHITECTURE.md` §10 item 114; GAP-001 (the survey and the sibling feeds); GAP-064 (the ASTERIX/STANAG codec family this extends); GAP-100 (the sibling gap this one was left open beside, and the pattern it mirrors) |
-| GAP-103 Sensor positions reached the tracker as geodetic radians | CAP-1.1, CAP-2.1 | 4 | S | I2 | `../../../ARCHITECTURE.md` §10 item 121; GAP-001 (whose closing action built the resolver this defeated); GAP-096 (whose bearing rays are drawn from this position); `../../design/DN-27-bearing-only-detections.md` §2 |
+| GAP-104 Sensor positions reached the tracker as geodetic radians | CAP-1.1, CAP-2.1 | 4 | S | I2 | `../../../ARCHITECTURE.md` §10 item 121; GAP-001 (whose closing action built the resolver this defeated); GAP-096 (whose bearing rays are drawn from this position); `../../design/DN-27-bearing-only-detections.md` §2 |
 
 ### Productization: picture and identity
 

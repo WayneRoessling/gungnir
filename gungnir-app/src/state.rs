@@ -1344,7 +1344,7 @@ fn recover_launch_warnings_or_alert(
 /// each sensor is. Without it every bearing and every range-azimuth-elevation report is
 /// refused, which is what happened until 2026-09-07.
 ///
-/// **Geodetic in, ENU out (GAP-103).** `SensorConfig::position` is
+/// **Geodetic in, ENU out (GAP-104).** `SensorConfig::position` is
 /// `[lat_rad, lon_rad, alt_m]`; `SensorPositions` is metres in the local ENU frame. From
 /// 2026-09-07 this handed the one straight to the other, which type-checks and placed
 /// every sensor a metre or two from the ENU origin. So the conversion goes through the
@@ -1526,7 +1526,7 @@ fn tracking_service(
     pipeline: gungnir_tracking_service::PipelineSettings,
     alerts: &mut Vec<String>,
 ) -> LiveTrackingService {
-    // GAP-103: without an origin there is no local frame, so no sensor has an ENU
+    // GAP-104: without an origin there is no local frame, so no sensor has an ENU
     // position and every bearing and polar report is refused. Said out loud, because on
     // screen that is indistinguishable from no angular feed reporting at all.
     if config.origin.is_none() && !config.sensors.is_empty() {
@@ -1620,7 +1620,7 @@ mod tests {
         }
     }
 
-    /// GAP-103: the desktop's own construction path puts a sensor where the deployment
+    /// GAP-104: the desktop's own construction path puts a sensor where the deployment
     /// declared it, in ENU metres.
     ///
     /// This is the call `build_backends` makes, not a re-implementation of it. The defect

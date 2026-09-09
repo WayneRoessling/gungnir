@@ -14,7 +14,7 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 |---|---|---|---|---|---|---|
 | 1 | GAP-064 ASTERIX and STANAG 4676 codecs | Technical | 36 | L | Services engineer | D-09 |
 | 2 | GAP-001 Live sensor adapters | Technical | 45 | XL | Services engineer | GAP-064, D-08 |
-| 3 | GAP-103 Sensor positions reached the tracker as geodetic radians | Technical | 36 | S | Services engineer | GAP-001 |
+| 3 | GAP-104 Sensor positions reached the tracker as geodetic radians | Technical | 36 | S | Services engineer | GAP-001 |
 | 4 | GAP-016 Scenario generator | Technical | 32 | L | Tracking engineer (human-owned crate) |  |
 | 5 | GAP-056 Performance harnesses | Technical | 32 | M | Services engineer | GAP-016, D-04 |
 | 6 | GAP-046 Test-track suite | Mission | 32 | L | Plan 07 lead | GAP-016 |
@@ -31,13 +31,14 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 | 17 | GAP-023 Data loaders per format | Technical | 24 | L | UI engineer |  |
 | 18 | GAP-008 Clock-skew detection across sources | Technical | 21 | M | Services engineer |  |
 | 19 | GAP-092 The journal budget's debug cost was attributed to runner I/O; it is the encode | Technical | 16 | S | Services engineer |  |
-| 20 | GAP-069 `uuid` v7 for `GlobalEntityId` | Technical | 10 | S | Services engineer | D-11 |
-| 21 | GAP-013 Track-to-track fusion and sensor registration | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
-| 22 | GAP-051 Session lifecycle in `gungnir-mission` | Technical | 6 | M | Services engineer |  |
-| 23 | GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | Technical | 4 | M | Owner | D-10 |
-| 24 | GAP-061 Release workflow unexercised | Technical | 3 | M | Owner | D-10 |
-| 25 | GAP-093 Gate 6 never saves a baseline, so it compares nothing and cannot fail | Technical | 24 | S | Services engineer | GAP-061 |
-| 26 | GAP-081 Architecture compliance checks not automated | Technical | 3 | M | Owner |  |
+| 20 | GAP-103 `solve_assignment` returns an infinite total on an all-finite cost matrix | Technical | 16 | S | Tracking engineer (human-owned crate) | D-43 |
+| 21 | GAP-069 `uuid` v7 for `GlobalEntityId` | Technical | 10 | S | Services engineer | D-11 |
+| 22 | GAP-013 Track-to-track fusion and sensor registration | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
+| 23 | GAP-051 Session lifecycle in `gungnir-mission` | Technical | 6 | M | Services engineer |  |
+| 24 | GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | Technical | 4 | M | Owner | D-10 |
+| 25 | GAP-061 Release workflow unexercised | Technical | 3 | M | Owner | D-10 |
+| 26 | GAP-093 Gate 6 never saves a baseline, so it compares nothing and cannot fail | Technical | 24 | S | Services engineer | GAP-061 |
+| 27 | GAP-081 Architecture compliance checks not automated | Technical | 3 | M | Owner |  |
 
 ## I3: Close the decision loop. Closes the allocator, geometry, asset list, policy model, queue, and the panels that let a human decide in the product.
 
@@ -159,6 +160,6 @@ replaces.
 
 | Increment | Gaps | Effort S / M / L / XL |
 |---|---|---|
-| I2 | 26 | 6 / 11 / 7 / 2 |
+| I2 | 27 | 7 / 11 / 7 / 2 |
 | I3 | 60 | 8 / 39 / 12 / 1 |
 | I4 | 17 | 0 / 9 / 7 / 1 |

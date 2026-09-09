@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// each sensor is. Without it every bearing and every range-azimuth-elevation report is
 /// refused, which is what happened until 2026-09-07.
 ///
-/// **Geodetic in, ENU out (GAP-103).** `SensorConfig::position` is
+/// **Geodetic in, ENU out (GAP-104).** `SensorConfig::position` is
 /// `[lat_rad, lon_rad, alt_m]`; `SensorPositions` is metres in the local ENU frame. From
 /// 2026-09-07 this handed the one straight to the other, which type-checks and placed
 /// every sensor a metre or two from the ENU origin. So the conversion goes through
@@ -2915,7 +2915,7 @@ mod tests {
         }
     }
 
-    /// GAP-103: the node's own construction path puts a sensor where the baseline
+    /// GAP-104: the node's own construction path puts a sensor where the baseline
     /// declared it, in ENU metres -- the same claim, and the same defect, as the
     /// desktop's `state::tests::sensor_positions_are_converted_into_the_local_frame`.
     ///

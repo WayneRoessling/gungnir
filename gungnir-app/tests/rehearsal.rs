@@ -510,3 +510,27 @@ fn moving_round_1s_forward_radar_trades_redundancy_and_does_not_create_coverage(
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn the_report_records_the_hash_of_the_seed_as_committed() {
+    // The moderator writes the Seed SHA-256 from the report's session table into the
+    // scoring sheet, and it is the only record of which seed a session ran against.
+    // It had been wrong since 2026-09-08: the seed changed that day (T-039's staleness
+    // and US-06's six extra plans) and the table kept the pre-fix seed's `c0d9db40...`,
+    // so the hash a moderator copied down named a file `--rehearsal` no longer reads.
+    // Nothing pinned it, which is why nothing caught it -- the same shape of defect as
+    // the staleness assertion that ran at 85 s and so could not fail on the 80 s it was
+    // written to catch. This pins it: the report's recorded hash is compared against
+    // the seed on disk, so changing the seed without correcting the report fails here.
+    let (_, hash) = rehearsal::load_seed(&testdata("round-1-seed.json")).expect("seed loads");
+    let report =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/ux/reports/round-1-2026-09-06.md");
+    let text = std::fs::read_to_string(&report).expect("the round-1 report is committed");
+    assert!(
+        text.contains(&hash),
+        "`{}` does not record the committed seed's SHA-256 `{hash}`. The seed was \
+         changed without updating the report, so a moderator would write down a hash \
+         that does not match the file `--rehearsal` reads.",
+        report.display()
+    );
+}

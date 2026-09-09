@@ -1440,7 +1440,7 @@ pub fn local_frame(state: &AppState) -> Option<gungnir_model::LocalFrame> {
 
 /// The same frame, from the baseline alone.
 ///
-/// Split out for construction (GAP-103): `state::sensor_positions` needs the frame to put
+/// Split out for construction (GAP-104): `state::sensor_positions` needs the frame to put
 /// the baseline's geodetic sensor positions into ENU, and it runs while the `AppState`
 /// [`local_frame`] asks is still being built. One definition rather than two, so the
 /// desktop cannot end up with a map drawn against one origin and a tracker against
