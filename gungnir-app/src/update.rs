@@ -87,6 +87,14 @@ pub fn tick(state: &mut AppState) {
     //      contend over one loader thread.
     crate::pointcloud::poll(state);
 
+    // 1b''. Registration against that pair, once it is loaded (GAP-024): the caller
+    //       `crate::fusion::FusionBackend::engine_for` was missing until GAP-098 gave
+    //       it a real target to build against. Right after `poll` so a pair that
+    //       completes loading this tick is registered the same tick, not one frame
+    //       late; a no-op for an incomplete or absent pair (GAP-098's all-or-nothing
+    //       rule).
+    crate::pointcloud::register(state);
+
     // 2a. A seeded session (GAP-089): the mark once, then the plans and alerts the
     //     schedule brings due, through the same chain a live plan takes.
     crate::rehearsal::tick(state);

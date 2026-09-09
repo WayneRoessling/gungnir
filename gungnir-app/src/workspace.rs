@@ -576,6 +576,13 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
                 masking: state.terrain.is_masking(),
                 detail: &terrain_line,
             },
+            // GAP-024: which backend registered this tick's pair, and why, so a quiet
+            // GPU-to-CPU fallback never reads as the GPU path working (CLAUDE.md's
+            // rule against a health flag claiming more than what ran).
+            point_cloud_registration: crate::pointcloud::registration_line(
+                &state.point_cloud,
+                &state.fusion,
+            ),
             feeds: &feeds,
             cooperative_feeds: &cooperative_feeds,
             peers: &peers,

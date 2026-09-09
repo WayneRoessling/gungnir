@@ -64,6 +64,28 @@ pub struct TerrainLine<'a> {
     pub detail: &'a str,
 }
 
+/// Which backend is registering the configured point-cloud pair, and why (GAP-024,
+/// GAP-098). Four states, the same reason `PointCloudStatus`/`TerrainStatus` each use
+/// more than a boolean: collapsing "no pair" and "GPU" and "the CPU fallback" into one
+/// flag is exactly how an operator mistakes a quiet fallback for the GPU path working.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointCloudRegistrationLine<'a> {
+    /// No pair is configured, still loading, or failed to load (GAP-098's
+    /// all-or-nothing rule): none of those is a pair to register against.
+    NotConfigured,
+    /// A pair is loaded and this tick has not yet resolved which backend runs it.
+    /// Not expected to outlive a single tick in a running deployment
+    /// (`gungnir_app::pointcloud::register` resolves the backend the same tick a pair
+    /// finishes loading) -- named rather than folded into `NotConfigured` (a pair does
+    /// exist) or into either backend (neither has actually run yet).
+    Pending,
+    /// A pair is loaded and registration is running on the GPU path.
+    Gpu,
+    /// A pair is loaded; the GPU path was unavailable
+    /// (`RenderError::NoAdapter`/`GpuInit`), so this is the CPU reference, and why.
+    CpuFallback { reason: &'a str },
+}
+
 /// One bound radar feed's counters (GAP-001). Every datagram is in one of the columns:
 /// a feed that is bound and hears nothing shows zeros, one that hears an unreadable
 /// stream shows them under `not_decoded`, and neither passes for a working feed.
@@ -138,6 +160,9 @@ pub struct SensorHealthView<'a> {
     pub clocks: ClockSyncLine,
     pub detectors: &'a [DetectorLine<'a>],
     pub terrain: TerrainLine<'a>,
+    /// The point-cloud registration backend (GAP-024, GAP-098): GPU, the CPU fallback
+    /// and why, or that no pair is configured at all.
+    pub point_cloud_registration: PointCloudRegistrationLine<'a>,
     /// The radar feeds the baseline bound (GAP-001); empty when none is configured.
     pub feeds: &'a [FeedLine<'a>],
     /// The AIS feeds the baseline bound (GAP-010); empty when none is configured.
@@ -164,6 +189,7 @@ pub fn render_sensor_health(
         clocks,
         detectors,
         terrain,
+        point_cloud_registration,
         feeds,
         cooperative_feeds,
         peers: _,
@@ -216,6 +242,7 @@ pub fn render_sensor_health(
             .size(palette.small_font_size),
     );
 
+    render_point_cloud_registration(ui, palette, point_cloud_registration);
     render_sensors(ui, palette, sensors);
     render_feeds(ui, palette, feeds);
     render_cooperative_feeds(ui, palette, cooperative_feeds);
@@ -223,6 +250,43 @@ pub fn render_sensor_health(
     render_peers(ui, palette, view.peers);
     render_clocks(ui, palette, clocks);
     render_detectors(ui, palette, detectors);
+}
+
+/// The point-cloud registration backend (GAP-024): GPU, the CPU fallback and why, or
+/// that no pair is configured at all. **Never silent about a fallback** -- an operator
+/// who cannot tell the CPU reference from the GPU path apart would read a quietly
+/// degraded registration as the primary path working, exactly what this workspace's
+/// health flags exist to refuse (`gungnir_app::fusion::FusionBackend`'s own doc
+/// comment states the same rule for the engine this line reports on).
+fn render_point_cloud_registration(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    line: PointCloudRegistrationLine<'_>,
+) {
+    ui.separator();
+    let (text, colour) = match line {
+        PointCloudRegistrationLine::NotConfigured => (
+            "Point-cloud registration: no source/target pair configured".to_owned(),
+            palette.muted_text_color(),
+        ),
+        PointCloudRegistrationLine::Pending => (
+            "Point-cloud registration: pair loaded, backend not yet resolved".to_owned(),
+            palette.muted_text_color(),
+        ),
+        PointCloudRegistrationLine::Gpu => (
+            "Point-cloud registration: GPU path".to_owned(),
+            palette.healthy_color(),
+        ),
+        PointCloudRegistrationLine::CpuFallback { reason } => (
+            format!("Point-cloud registration: CPU fallback ({reason})"),
+            palette.warning_color,
+        ),
+    };
+    ui.label(
+        RichText::new(text)
+            .color(colour)
+            .size(palette.small_font_size),
+    );
 }
 
 /// The AIS feeds (GAP-010): what the receiver heard and what became a placed report.

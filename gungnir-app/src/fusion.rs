@@ -22,8 +22,14 @@
 //! outside plain `cargo test`, never inside it (`docs/agentic-workflow.md`'s own
 //! description of `gungnir-data-fusion`'s two gates), and it was slow enough under
 //! the resulting contention to look like a hang. Lazy construction fixes both: no
-//! test that never calls `engine_for` ever touches a GPU, and `update::tick` does
-//! not call it either yet (see below), so today, in practice, nothing does.
+//! test that never calls `engine_for` ever touches a GPU. `update::tick` calls it
+//! now, through `crate::pointcloud::register` (see below), but only once a real
+//! point-cloud pair has finished loading (GAP-098) -- so a test that configures no
+//! pair, which is every test in this crate outside two (`gungnir-app/tests/
+//! pointcloud.rs`'s real-fixture pair and `crate::pointcloud`'s own synthetic one),
+//! still never resolves this backend at all, and those two force the CPU path
+//! explicitly rather than let resolution touch a real device, the same way this
+//! module's own tests below do.
 //!
 //! Falls back to the CPU reference on `RenderError::NoAdapter` per
 //! `rust-3d-data-ecosystem-build-vs-adopt.md` §3.6 rule 3 -- a full, honest
@@ -34,16 +40,15 @@
 //! [`gungnir_data_fusion::GpuFusionEngine`] on the GPU path or a
 //! [`gungnir_data_fusion::cpu_reference::CpuIcp`] on the fallback, both behind the
 //! same [`PointCloudFusion`] trait object so a caller never has to know which it
-//! got. Nothing in `update::tick` calls it: no point cloud ever reaches
-//! `DataStore.point_clouds` today (GAP-098's own finding -- no configuration field
-//! names one, and the only `LoadRequest` either binary sends is `Terrain`), so there
-//! is no target to build an engine for. Constructing one anyway, against an empty or
-//! fabricated cloud, would be exactly the fake wiring this workspace's culture
-//! refuses: a registration engine reporting readiness for data it never received.
-//! This module is therefore in the same state several productization crates were
-//! before their own gaps closed -- wired and tested, waiting on a caller with real
-//! data -- and `AppState::fusion`'s doc comment says so rather than implying
-//! otherwise.
+//! got. **`crate::pointcloud::register` is that caller**, closed the same day
+//! GAP-098 gave it a real pair to build against: called from `update::tick` right
+//! after `crate::pointcloud::poll`, it builds an engine once a loaded source/target
+//! pair is sitting in `DataStore.point_clouds` and steps it one tick at a time from
+//! then on -- never against an empty or fabricated cloud, which would be exactly the
+//! fake wiring this workspace's culture refuses: a registration engine reporting
+//! readiness for data it never received. `AppState::fusion`'s own doc comment and
+//! `gungnir_ui::panels::sensor_health::PointCloudRegistrationLine` (PN-09) both name
+//! which backend actually ran, never implying more than what did.
 
 use gungnir_data::pointcloud::PointBuffer;
 use gungnir_data_fusion::cpu_reference::CpuIcp;
@@ -82,8 +87,12 @@ impl FusionBackend {
         matches!(self, Self::Gpu { .. })
     }
 
-    /// A human-readable line for a health panel, once one reads this field (no
-    /// panel does yet -- see this module's own doc comment).
+    /// A human-readable line for a health panel. PN-09's own line
+    /// (`gungnir_ui::panels::sensor_health::PointCloudRegistrationLine`, built by
+    /// `crate::pointcloud::registration_line`) matches this enum's variants directly
+    /// rather than calling this method, so it can colour the GPU path, the CPU
+    /// fallback and "no pair configured" differently; this is the plain-string form
+    /// for anything -- today, only this module's own tests -- that just wants one line.
     #[must_use]
     pub fn status_text(&self) -> String {
         match self {

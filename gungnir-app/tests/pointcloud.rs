@@ -6,7 +6,17 @@
 //! the render thread into `DataStore.point_clouds`, in that order; either failing
 //! leaves neither behind, since a lone cloud is not the pair registration needs
 //! (`gungnir-data-fusion::CpuIcp`, GAP-024, independent of this).
+//!
+//! **These tests force the CPU registration backend (GAP-024).** Once a pair
+//! completes loading, `update::tick` reaches `crate::pointcloud::register`, which
+//! calls `FusionBackend::engine_for` -- and this crate's own hard rule is that no
+//! test may let that resolve for real, since resolution asks a real `wgpu::Instance`
+//! for an adapter (`gungnir-app/src/fusion.rs`'s own doc comment has the full history
+//! of why). These tests are about the *load*, not the registration, so `desktop`
+//! pins the backend to `FusionBackend::Cpu` before the first tick, the same bypass
+//! `crate::fusion`'s own tests and `crate::pointcloud`'s own tests use.
 
+use gungnir_app::fusion::FusionBackend;
 use gungnir_app::pointcloud::PointCloudStatus;
 use gungnir_app::state::AppState;
 use gungnir_app::update;
@@ -31,7 +41,13 @@ fn desktop(name: &str, point_cloud: PointCloudConfig) -> (AppState, PathBuf) {
         ..ConfigBaseline::default()
     };
     gungnir_config::validate(&config).expect("valid");
-    (AppState::with_config(config).expect("starts"), dir)
+    let mut state = AppState::with_config(config).expect("starts");
+    // GAP-024: never let a real tick resolve a real `wgpu` device from a test that is
+    // only exercising the load (see this file's own module doc comment).
+    state.fusion = FusionBackend::Cpu {
+        reason: "test: forced CPU path (gungnir-app/tests/pointcloud.rs)".into(),
+    };
+    (state, dir)
 }
 
 fn plain(path: String) -> PointCloudFileConfig {
