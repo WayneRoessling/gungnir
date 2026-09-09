@@ -66,6 +66,43 @@ figures below are from this development machine, release profile except where no
 | Journal append per frame | under 1 ms for 50 envelopes | **157 µs release (2026-09-05); 98.9 µs median, 875.4 µs worst over 9 runs, measured 2026-09-07** — see the timing-variance caution below | **Yes**, since GAP-085 — **in the release profile only** since 2026-09-07; see the note below. |
 | Startup to first frame | under 3 s | 16.5 ms release (2026-09-05); 15.8 ms best of 3, measured 2026-09-07 | **Yes.** |
 
+### The dense-group mode is measured and is not budgeted (2026-09-08, GAP-015)
+
+`gungnir_fusion_async::dense_group` runs a `gungnir-rfs` PHD or CPHD beside the per-track
+filters for a scan past the association limit. It has no agreed budget row -- nobody has
+set one -- so what follows is a measurement, not a gate, and the mode is **off by
+default** (`PipelineSettings::dense_group` is `None`) because of it.
+
+Release profile, this development machine, 20 epochs of a raid of closely spaced targets,
+added to the epoch over the same pipeline with the mode disabled:
+
+| targets | mixture cap | reported count | added per epoch |
+|---|---|---|---|
+| 20 | 100 | 21.0 | 4.4 ms |
+| 20 | 400 (the default) | 21.1 | 6.3 ms |
+| 60 | 100 | 57.0 | 10.2 ms |
+| 200 | 100 | 85.5 | 36.6 ms |
+| 200 | 400 (the default) | 198.4 | 196.3 ms |
+| 200 | 600 | 208.1 | 249.4 ms |
+
+Two things follow, and both are recorded rather than resolved.
+
+**The cap is what decides whether a raid is counted or under-counted.** At 100
+components -- `gungnir_rfs::PhdSettings::default()`'s literature figure -- a 200-target
+raid is counted as 85, which is the under-count GAP-015 exists about, reproduced inside
+the filter built to fix it. The pipeline's default cap is therefore 400, sized from this
+document's own Scenario 4 figure of 200 tracks: one component per target plus one birth
+per detection.
+
+**Hundreds of milliseconds an epoch is past the per-frame budget above, and it lands on
+the `tokio` executor thread.** `docs/agentic-coding-standards.md` §2.2 names exactly this
+case -- "a PHD update over a large birth/clutter set" -- as needing `spawn_blocking`, and
+this build runs it inline. That is why the mode is off unless a deployment asks for it,
+and switching the default on waits on that plumbing (GAP-015).
+
+The caution below applies to these figures as much as to the ones above: they are an
+order of magnitude, not a regression baseline.
+
 All 2026-09-07 figures are release-profile, this development machine, from
 `cargo test -p gungnir-app --test frame_budgets --release`. This is an 8 P-core,
 12 E-core machine and the debug-profile discussion below has already found a
