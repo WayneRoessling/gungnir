@@ -77,6 +77,9 @@ pub mod requirements;
 /// than in one consumer so the design keeps its "no new edges" property.
 pub mod rhythm;
 pub mod time;
+/// What an ASTERIX Category 129 report says a UAS claims about itself (GAP-101), the
+/// report-shaped counterpart to AIS's and ADS-B's cooperative reports.
+pub mod uas_identification;
 /// A UAS platform's own KLV metadata (GAP-099), the report-shaped counterpart to
 /// AIS's and ADS-B's cooperative reports.
 pub mod uas_platform;
@@ -123,6 +126,7 @@ pub use rhythm::{
     ScheduledProduct,
 };
 pub use time::MissionTime;
+pub use uas_identification::{OperationalRisk, UasCertificationCategory, UasIdentificationReport};
 pub use uas_platform::{EnuPoint, UasPlatformReport};
 pub use ui_settings::{LayoutNode, RoleLayout, ThemeVariant, UiSettings};
 pub use vocabulary::{Term, Vocabulary};

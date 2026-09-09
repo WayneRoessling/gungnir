@@ -12,7 +12,7 @@
 use gungnir_config::ConfigBaseline;
 use gungnir_ingest::adapters::asterix::{
     bind_feed, DfBinding, FeedSinks, FeedSpec, FeedStatsSink, RadarBinding, ServiceObservationKind,
-    ServiceObservationSink,
+    ServiceObservationSink, UasBinding,
 };
 use gungnir_ingest::IngestGateway;
 use gungnir_model::{Geodetic, LocalFrame, SensorId};
@@ -25,6 +25,13 @@ use crate::state::AppState;
 /// own sensor list supplies the position, so a direction finder no sensor names is
 /// silently absent here the same way a radar with the same problem already is --
 /// `gungnir_config::validate` refuses that baseline before it would ever reach this.
+///
+/// `uas_sites` (GAP-101) is built the same way with one difference the category's own
+/// shape dictates: a `UasBinding` needs no position (`gungnir_ingest`'s own
+/// documentation on that type says why), so the sensor list is consulted only to
+/// confirm the named sensor exists. That check is kept rather than dropped as
+/// redundant, because the identity it carries is what the ingest gateway's own allow
+/// list admits a detection under.
 #[must_use]
 pub fn feed_specs(config: &ConfigBaseline) -> Vec<FeedSpec> {
     config
@@ -71,12 +78,23 @@ pub fn feed_specs(config: &ConfigBaseline) -> Vec<FeedSpec> {
                     })
                 })
                 .collect();
+            let uas_sites = f
+                .uas_sites
+                .iter()
+                .filter(|u| config.sensors.iter().any(|s| s.id == u.sensor_id))
+                .map(|u| UasBinding {
+                    sac: u.sac,
+                    sic: u.sic,
+                    sensor: SensorId(u.sensor_id),
+                })
+                .collect();
             Some(FeedSpec {
                 name: f.name.clone(),
                 bind_addr,
                 multicast,
                 radars,
                 df_sites,
+                uas_sites,
             })
         })
         .collect()
@@ -213,7 +231,7 @@ pub fn observe_services(state: &mut AppState) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gungnir_config::{DfSiteConfig, RadarFeedConfig, SensorConfig};
+    use gungnir_config::{DfSiteConfig, RadarFeedConfig, SensorConfig, UasSiteConfig};
     use gungnir_ingest::AllowListAuthenticator;
 
     fn df_sensor(id: u32) -> SensorConfig {
@@ -236,6 +254,27 @@ mod tests {
         }
     }
 
+    fn uas_sensor(id: u32) -> SensorConfig {
+        SensorConfig {
+            id,
+            modality: "uas-gateway".into(),
+            position: [0.9, 0.2, 12.0],
+            max_range_m: 20_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        }
+    }
+
+    /// The specification's own recommended `00/00` for an airborne-to-ground broadcast,
+    /// so this is the common single-gateway deployment rather than a contrived pair.
+    fn uas_site(sensor_id: u32) -> UasSiteConfig {
+        UasSiteConfig {
+            sensor_id,
+            sac: 0,
+            sic: 0,
+        }
+    }
+
     /// GAP-100: a direction finder named in `RadarFeedConfig::df_sites` reaches
     /// `FeedSpec::df_sites` as the exact `DfBinding` `bind_feed` will hand to
     /// `AsterixFeedAdapter::with_df_sites` -- SAC/SIC and accuracy carried straight
@@ -251,6 +290,7 @@ mod tests {
                 multicast: None,
                 radars: Vec::new(),
                 df_sites: vec![df_site(21)],
+                uas_sites: Vec::new(),
             }],
             ..ConfigBaseline::default()
         };
@@ -291,6 +331,7 @@ mod tests {
                 multicast: None,
                 radars: Vec::new(),
                 df_sites: vec![df_site(21)],
+                uas_sites: Vec::new(),
             }],
             ..ConfigBaseline::default()
         };
@@ -304,6 +345,74 @@ mod tests {
             bound.stats.len(),
             1,
             "the one feed, bound for its direction finder alone"
+        );
+    }
+
+    /// GAP-101: a UAS gateway named in `RadarFeedConfig::uas_sites` reaches
+    /// `FeedSpec::uas_sites` as the exact `UasBinding` `bind_feed` will hand to
+    /// `AsterixFeedAdapter::with_uas_sites` -- SAC/SIC and sensor carried straight
+    /// through, and no position, because this category resolves the UAS's own reported
+    /// one rather than a receiver-relative measurement. A feed naming only a UAS gateway
+    /// and no radar still produces one spec.
+    #[test]
+    fn feed_specs_carries_a_configured_uas_gateway_into_the_binding() {
+        let config = ConfigBaseline {
+            sensors: vec![uas_sensor(61)],
+            radar_feeds: vec![RadarFeedConfig {
+                name: "utm".into(),
+                bind_addr: "0.0.0.0:8601".into(),
+                multicast: None,
+                radars: Vec::new(),
+                df_sites: Vec::new(),
+                uas_sites: vec![uas_site(61)],
+            }],
+            ..ConfigBaseline::default()
+        };
+        let specs = feed_specs(&config);
+        assert_eq!(specs.len(), 1);
+        assert!(specs[0].radars.is_empty());
+        assert!(specs[0].df_sites.is_empty());
+        assert_eq!(
+            specs[0].uas_sites,
+            vec![UasBinding {
+                sac: 0,
+                sic: 0,
+                sensor: SensorId(61),
+            }]
+        );
+    }
+
+    /// GAP-101, "reachable at start-up": the desktop's real `bind_feeds` binds a feed
+    /// that names only a UAS gateway without an alert and registers it, exactly as it
+    /// already does for a radar-only and a direction-finder-only feed. `127.0.0.1:0` is
+    /// a real loopback bind (OS-assigned port), not a stub;
+    /// `bind_feed_wires_a_configured_uas_gateway_into_the_live_adapter` in
+    /// `gungnir-ingest` proves what that path builds actually attributes a report.
+    #[test]
+    fn bind_feeds_reaches_a_configured_uas_gateway_at_start_up() {
+        let config = ConfigBaseline {
+            sensors: vec![uas_sensor(61)],
+            origin: Some([0.9, 0.2, 0.0]),
+            radar_feeds: vec![RadarFeedConfig {
+                name: "utm".into(),
+                bind_addr: "127.0.0.1:0".into(),
+                multicast: None,
+                radars: Vec::new(),
+                df_sites: Vec::new(),
+                uas_sites: vec![uas_site(61)],
+            }],
+            ..ConfigBaseline::default()
+        };
+        let mut gateway = IngestGateway::new(Box::new(AllowListAuthenticator {
+            allowed: vec![SensorId(61)],
+        }));
+        let mut alerts = Vec::new();
+        let bound = bind_feeds(&config, &mut gateway, &mut alerts);
+        assert!(alerts.is_empty(), "unexpected alerts: {alerts:?}");
+        assert_eq!(
+            bound.stats.len(),
+            1,
+            "the one feed, bound for its UAS gateway alone"
         );
     }
 }
