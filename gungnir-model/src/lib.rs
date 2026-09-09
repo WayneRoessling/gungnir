@@ -496,6 +496,51 @@ pub struct BearingRayView {
     pub valid_until: MissionTime,
 }
 
+/// The pipeline's own counters, for a caller across a process boundary (GAP-096's wire
+/// contract): how many bearings were offered, updated a track, were retained, expired,
+/// or were refused, alongside the wider counters they sit next to on
+/// `gungnir_fusion_async::PipelineStats`.
+///
+/// **A field-for-field mirror, not that type itself.** `PipelineStats` is
+/// `gungnir-fusion-async`'s own type -- concurrency-correctness territory
+/// (`docs/agentic-workflow.md`'s low-trust tier) -- and carries no `serde`; GAP-096's
+/// local path never needed it to, since `LiveTrackingService::pipeline_stats` returns it
+/// directly to an in-process caller. Putting it on the wire is a `gungnir-api` concern
+/// layered above `gungnir-fusion-async` (`ARCHITECTURE.md` §7.1), not a reason to extend
+/// that crate's own surface, so this is a second, wire-facing type instead -- the same
+/// choice `gungnir_remote::link::ExchangeProductRecord` already makes against
+/// `gungnir_api::v2::ExchangeProduct` and for the same reason: a crate that cannot depend
+/// on the type's owner mirrors its fields rather than reaching for them.
+/// `gungnir_tracking_service::project_pipeline_stats` and `pipeline_stats_from_view`
+/// convert one into the other, the same shape `gungnir_tracking_service::project_bearing_ray`
+/// already describes for the bearing itself.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PipelineStatsView {
+    /// Detections taken into the reorder buffer.
+    pub accepted: u64,
+    /// Detections refused because their source time was already behind the processed
+    /// cursor.
+    pub too_late: u64,
+    /// Epochs processed.
+    pub epochs: u64,
+    /// Detections that updated an existing track.
+    pub associated: u64,
+    /// Detections that started a new tentative track. Positions only; DN-27 §5 rule 1
+    /// forbids a bearing from initiating one.
+    pub initiated: u64,
+    /// Bearings offered to the pipeline.
+    pub bearings_offered: u64,
+    /// Bearings that refined an existing track's estimate.
+    pub bearings_updated: u64,
+    /// Bearings that matched no track and were retained as a [`BearingRayView`]
+    /// (DN-27 §5 rule 3).
+    pub bearings_retained: u64,
+    /// Retained bearings whose lifetime ran out.
+    pub bearings_expired: u64,
+    /// Bearings refused before any of that.
+    pub bearings_refused: u64,
+}
+
 /// A taskable resource as the intercept planner and the UI see it.
 ///
 /// `layer`, `cost`, and `magazine` are what the cheapest-adequate rule reads

@@ -343,6 +343,18 @@ class BearingRayView <<InformationElement>> {
   azimuth_one_sigma_rad: f64
   valid_until: MissionTime
 }
+class PipelineStatsView <<InformationElement>> {
+  accepted: u64
+  too_late: u64
+  epochs: u64
+  associated: u64
+  initiated: u64
+  bearings_offered: u64
+  bearings_updated: u64
+  bearings_retained: u64
+  bearings_expired: u64
+  bearings_refused: u64
+}
 class ResourceView <<InformationElement>> {
   id: ResourceId
   position: Geodetic
