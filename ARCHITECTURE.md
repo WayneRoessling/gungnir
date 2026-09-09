@@ -4695,6 +4695,84 @@ not by finding, for the time between whenever each item landed and this correcti
     still has no caller (DN-27 §5 rule 2), unchanged by this entry, as GAP-001's own
     closing action already recorded.
 
+117. **GAP-024's WGSL pipeline, its GPU-vs-CPU tests, and `gungnir-app`'s caller for
+    `GpuContext::new`** (2026-09-08). The four `shaders/*.wgsl` files hold real
+    compute kernels now, not stage comments: `spatial_hash.wgsl` (a uniform-grid
+    spatial hash, atomic slot-claim into a fixed-capacity bucket, per
+    `rust-3d-data-ecosystem-build-vs-adopt.md` §3.4's own rationale for a grid over a
+    tree), `correspondence.wgsl` (apply the current estimate, then a 3x3x3-cell
+    nearest-neighbour search gated by distance and, when both clouds carry normals,
+    by angle), `reduction.wgsl` (a workgroup tree reduction of the Kabsch
+    cross-covariance's raw moments -- no floating-point atomics anywhere, since
+    neither WGSL nor this crate's `Features::empty()` descriptor guarantees one),
+    and `fuse_voxels.wgsl` (confidence-weighted voxel fusion, the one stage with no
+    CPU oracle to check against). The GPU path stays point-to-point (Kabsch),
+    calling `transform_solve::solve_rigid_transform` unmodified, so it is
+    differentially checkable against `CpuIcp` byte-for-byte; point-to-plane on the
+    GPU is a materially different reduction and stays a named follow-on rather than
+    something `GpuFusionEngine`'s name silently implies it already does.
+    `GpuFusionEngine` dropped its `<'a>` borrowed-device lifetime for owned
+    `Arc<wgpu::Device>`/`Arc<wgpu::Queue>` clones -- `gungnir-app::AppState` holding
+    both the device and an engine that borrows from it would be self-referential,
+    which safe Rust cannot express without a crate this workspace does not carry --
+    and `gungnir_render::GpuContext`'s two fields moved to the same `Arc` for the
+    same reason; still exactly one `wgpu::Device` in the process (§3, §9), since
+    cloning an `Arc` shares the handle rather than creating a second device.
+
+    **Verified two different ways, and the two are not the same claim.** All four
+    kernels parse and validate under `naga` -- the same front-end and validator
+    `wgpu::Device::create_shader_module` runs, reached through `wgpu`'s own
+    re-export, no new dependency -- in plain `cargo test`, no GPU needed
+    (`gungnir-data-fusion::gpu::validation`), and the raw-moment Kabsch
+    cross-covariance algebra is checked by hand against a direct centred
+    computation in the same suite. Separately, the four `#[ignore]`d `gpu-tests` in
+    `gungnir-data-fusion/tests/gpu_vs_cpu.rs` (`--features gpu-tests -- --ignored`)
+    passed against a real `wgpu` adapter the implementing agent's own execution
+    sandbox unexpectedly had -- `get_info()` names an NVIDIA GeForce RTX 5060 Ti
+    over Vulkan, the same model as the registered `gungnir-rtx-5060ti` runner --
+    within `verification-capability-table.md` §2's own bar (transform within 1e-3
+    m/rad, inlier ratio within 0.01 of `CpuIcp`'s result). That is real hardware
+    execution, not a simulation, and it is how a real bug got found and fixed
+    rather than shipped: the first version defaulted the spatial hash's cell size
+    to the target cloud's bounding-box diagonal, which crowded a 36-point test
+    cloud into one or two cells and silently dropped points past the fixed
+    per-cell capacity, caught because the simplest case -- a cloud registered
+    against itself -- failed to converge in one step. It is not, however, the
+    `gpu-fusion.yml` dispatch through GitHub Actions `docs/agentic-workflow.md`
+    calls this gate's recorded evidence; see the PR this change shipped in for
+    whether that dispatch was attempted on this branch and what it returned before
+    reading this item as the recorded verification rather than a local one.
+
+    **`gungnir-app::fusion::FusionBackend`** is the caller `GpuContext::new` had
+    none of before this, and it resolves lazily rather than at construction --
+    which is itself a second real bug this entry found and fixed, not a design
+    taken on faith. The first version constructed the device eagerly, inside
+    `AppState::with_config_and_store`, which every one of `gungnir-app`'s several
+    hundred integration tests calls to build the `AppState` it tests against: that
+    requested a real `wgpu` device on every single one of them, the same "never
+    inside plain `cargo test`" rule this gate exists to enforce for
+    `gungnir-data-fusion` -- and slow enough under the resulting contention that
+    `cargo test --workspace` looked hung on an unrelated test (`fires_deconfliction.rs`,
+    three tests, three assertions, normally 0.01 s; over 300 CPU-seconds with eager
+    construction still in place). `FusionBackend::new` now touches no `wgpu` API at
+    all; `FusionBackend::engine_for` is what actually calls `GpuContext::new`, the
+    first time any caller asks it for an engine, memoized from then on. Falls back
+    to `CpuIcp` on `RenderError::NoAdapter` or any `GpuInit` failure, per
+    `rust-3d-data-ecosystem-build-vs-adopt.md` §3.6 rule 3. `Features::empty()`/
+    `Limits::default()` needed no revisiting: every kernel stays within the default
+    limits (64-wide workgroups, no floating-point atomics, at most seven
+    storage-buffer bindings in any one pipeline against the default limit of
+    eight). `FusionBackend::engine_for` returns a `Box<dyn PointCloudFusion>` --
+    whichever backend was actually resolved -- but nothing in `update::tick` calls
+    it: GAP-098 already found that no point cloud reaches `DataStore.point_clouds`,
+    so there is nothing to register against yet, and building an engine against
+    fabricated data to look more finished would be exactly the fake wiring this
+    document's own culture refuses; today, in practice, no code path calls
+    `engine_for` at all, so no test in this workspace requests a `wgpu` device
+    outside the `gpu-tests`-gated differential tests that mean to. `gpu-fusion.yml`
+    stays on `workflow_dispatch` permanently (D-10 as amended 2026-09-08); nothing
+    here reopens that question.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

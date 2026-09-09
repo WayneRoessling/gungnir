@@ -27,6 +27,7 @@ pub mod deliveries;
 pub mod dock;
 pub mod engagements;
 pub mod failover;
+pub mod fusion;
 pub mod geofences;
 pub mod governance;
 pub mod handoffs;

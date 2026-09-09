@@ -417,6 +417,15 @@ pub struct AppState {
     /// The runtime the embedded services and the node link run on. Reachable so a
     /// sign-in can establish the link (GAP-057) and a sign-out can drop it.
     pub runtime: tokio::runtime::Runtime,
+    /// The point-cloud registration backend (GAP-024): resolves to GPU-backed or
+    /// the CPU reference the first time `fusion.engine_for` is actually called, not
+    /// at construction -- `crate::fusion`'s own doc comment explains why eagerly
+    /// requesting a `wgpu` device here, in the constructor every one of this
+    /// crate's integration tests calls, is exactly the mistake that module's design
+    /// avoids. Not yet called from the tick: no point cloud reaches
+    /// `DataStore.point_clouds` (GAP-098), so there is nothing for it to register
+    /// against yet, and in today's build no `wgpu` call happens at all.
+    pub fusion: crate::fusion::FusionBackend,
 }
 
 impl AppState {
@@ -454,6 +463,15 @@ impl AppState {
     ) -> Result<Self, AppError> {
         let runtime = desktop_runtime()?;
         let mut alerts = Vec::new();
+        // GAP-024: deliberately not constructed here. `crate::fusion::FusionBackend`
+        // resolves lazily, on `engine_for`'s first call, precisely so that building
+        // an `AppState` -- which every integration test in this crate does -- never
+        // requests a real `wgpu` device on its own. Nothing calls `engine_for` yet
+        // (GAP-098: no point cloud reaches `DataStore.point_clouds`), so today this
+        // is inert either way; the point is that it stays inert for every test that
+        // does not ask for it, rather than every test paying for a GPU probe it
+        // never uses.
+        let fusion = crate::fusion::FusionBackend::new();
         let hazards = crate::hazards::layer_from_config(&config)?;
         // GAP-057: the session authority and the account listing the baseline names,
         // built before the baseline is moved into the state.
@@ -658,6 +676,7 @@ impl AppState {
             journal_rx,
             journal_failed: false,
             runtime,
+            fusion,
         })
     }
 

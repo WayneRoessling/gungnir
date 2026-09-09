@@ -76,6 +76,11 @@ gungnir-identity = { path = "../gungnir-identity", version = "0.1.0" }
 gungnir-data = { path = "../gungnir-data", version = "0.1.0" }
 gungnir-data-fusion = { path = "../gungnir-data-fusion", version = "0.1.0" }
 gungnir-render = { path = "../gungnir-render", version = "0.1.0" }
+# GAP-024: `fusion::FusionBackend` names `wgpu::Device`/`Queue` directly (the types
+# `gungnir_render::GpuContext` and `gungnir_data_fusion::GpuFusionEngine` both share),
+# not a new workspace dependency (`ARCHITECTURE.md` §9), just this crate's first
+# direct reference to one it already depended on transitively through both.
+wgpu.workspace = true
 gungnir-viewport3d = { path = "../gungnir-viewport3d", version = "0.1.0" }
 gungnir-ui = { path = "../gungnir-ui", version = "0.1.0" }
 

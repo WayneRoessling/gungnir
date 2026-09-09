@@ -4,8 +4,18 @@
 
 //! wgpu compute pipeline setup. Owns no `wgpu::Device` -- one is passed in from
 //! `gungnir-render`, shared, never a second device (§3.3).
+//!
+//! - [`buffers`]: byte-packing and persistent-buffer helpers, GPU-independent.
+//! - [`params`]: the `IcpParams`/`VoxelParams` uniform structs shared with the WGSL
+//!   kernels below, and their hand-written byte layout.
+//! - [`pipeline`]: shader modules, compute pipelines, bind groups, dispatch and
+//!   readback -- the orchestration `crate::GpuFusionEngine` drives.
+//! - [`validation`]: offline WGSL parse/validate via `naga` (no GPU needed).
 
 pub mod buffers;
+pub mod params;
+pub mod pipeline;
+pub mod validation;
 
 pub const SPATIAL_HASH_SHADER: &str = include_str!("shaders/spatial_hash.wgsl");
 pub const CORRESPONDENCE_SHADER: &str = include_str!("shaders/correspondence.wgsl");
