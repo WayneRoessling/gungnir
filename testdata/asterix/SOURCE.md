@@ -151,3 +151,67 @@ table above **is** the worked reasoning, not a summary of it.
 on-disk fixture describe the same record; `gungnir-interop/tests/asterix_fixtures.rs`
 reads this file with `include_bytes!` for the integration-level "reads a fixture off
 disk" case, the same role `cat048.raw`/`cat034.raw` play for their categories.
+
+## Category 129 (`cat129.raw`, added 2026-09-08, GAP-101)
+
+**`cat129.raw` is not a capture either. It is a hand-built record**, for the identical
+reason `cat205.raw` is one, checked again rather than assumed to still hold:
+
+- EUROCONTROL publishes no sample recordings for any ASTERIX category (§1.5, repeated
+  by §9's own Category 205 section) -- checked again for Category 129 specifically
+  rather than assumed to follow the same rule by family resemblance.
+- The `CroatiaControlLtd/asterix` repository that supplied `cat048.raw`/`cat034.raw`,
+  and a field-definition XML for Category 205, carries **no file of any kind** for
+  Category 129 under `install/config/`: its listing there names categories 001, 002,
+  004, 008, 010, 011, 015, 019, 020, 021, 023, 025, 030, 031, 032, 034, 048, 062, 063,
+  065, 205, 240, 247 and 252, with no 129 among them -- checked 2026-09-08 against the
+  repository's own file listing.
+- `asterix-specs` (§1.4) does not carry Category 129 in its specification index at all
+  -- unlike Category 205, which it does carry (machine-readable, cross-checked in §9.1)
+  -- so there is no machine-readable transcription to generate a fixture from either.
+  Checked against the index page itself (`specs.html`), which lists every category the
+  project carries by number: 129 is absent from that list.
+
+So the fixture is synthesized directly from the specification's own byte-layout tables,
+the same discipline `cat205.raw` and `docs/design/DN-27-bearing-only-detections.md`
+apply throughout this workspace: documented, honest about its origin, and never
+presented as a real-world capture.
+
+| Field | Value |
+|---|---|
+| File | `cat129.raw` |
+| Bytes | 25 |
+| SHA-256 | `893224c04b6c76c6b1d7ef1ffdd04b583b9b777a1d42f73aa055c32087e71b94` |
+| Origin | Hand-built 2026-09-08 against EUROCONTROL-SPEC-0149-29 edition 1.2 §5, fetched and read in full from `https://www.eurocontrol.int/sites/default/files/2019-06/cat129p29ed12_0.pdf` |
+| Licence | None -- an original, minimal test value, not a derivative of any third party's data |
+
+**What it holds.** One data block, one record (Category 129 forbids blocking more than
+one record per block, edition 1.2 §4.4, the identical rule Category 205's own fixture
+exercises), carrying only the four items edition 1.2 requires in every record, with
+FSPEC flagging FRN 1, 6, 7, 8, 9 and 11:
+
+| Item | Field | Wire count | Decoded value |
+|---|---|---|---|
+| I129/010 | Data Source Identification | `0x00 0x00` | SAC 0, SIC 0 -- edition 1.2 §5.2.1's own recommended placeholder for an airborne-to-ground broadcast |
+| I129/050 | UAS Office Registration Country | `"US"` | `"US"` (two ASCII octets, ISO 3166-1 alpha-2) |
+| I129/070 | Time of Day | `0x54 0x60 0x00` | 43 200.0 s (12:00:00 UTC) -- the same count `cat048.raw`'s and `cat205.raw`'s own hand-built fixtures use for the same time, by construction |
+| I129/080 | Position in WGS-84 Coordinates | `0x03 0x8E 0x38 0xE3` `0xF8 0xE3 0x8E 0x39` | 9.999999907 deg N, 19.999999981 deg W (chosen two's complement counts landing within 4e-8 deg of 10 deg N, 20 deg W -- the LSB, 180/2^30 deg, does not divide either round value evenly) |
+| I129/090 | Altitude above Mean Sea Level | `0x00 0x13 0x88` (5000) | 500.0 m, LSB 0.1 m |
+| I129/110 | GNSS Signal Accuracy | `0x00 0x0C` (12) | 12 m, LSB 1 m |
+
+Every count above is the specification's own encoding rule applied by hand (§5.2 of the
+primary PDF); "known-correct" here means "the specification's stated LSB and byte order
+applied to a chosen count", not a value taken from any other decoder, since none exists
+to compare against for this category -- unlike Category 205, no `asterix-specs`
+cross-check of field order was possible either (checked and recorded above), so this
+fixture rests on the primary PDF alone, read with two independent text-extraction
+methods that agreed on every prose passage (`gungnir-interop/src/asterix/cat129.rs`'s
+own module documentation has the detail, including one genuine discrepancy the PDF's own
+UAP summary table and its detailed item description do not agree on). The field-by-field
+table above **is** the worked reasoning, not a summary of it.
+
+`gungnir-interop/src/asterix/cat129.rs`'s own unit tests build and decode the identical
+25 bytes inline (`hand_built_block`), so the crate's fast unit-test coverage and this
+on-disk fixture describe the same record; `gungnir-interop/tests/asterix_fixtures.rs`
+reads this file with `include_bytes!` for the integration-level "reads a fixture off
+disk" case, the same role `cat205.raw` plays for its category.

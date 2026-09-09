@@ -328,17 +328,12 @@ fn raw(r: &mut Record, item: &'static str, octets: &[u8]) {
 /// I205/050 and I205/130 (§5.2.6, §5.2.14): two 32-bit two's complement fields, LSB
 /// 180/2^25 degrees each.
 fn parse_wgs84(cur: &mut Cursor<'_>, item: &str) -> Result<WgsPosition, InteropError> {
-    let lat = read_i32(cur, &format!("{item} latitude"))?;
-    let lon = read_i32(cur, &format!("{item} longitude"))?;
+    let lat = cur.i32(&format!("{item} latitude"))?;
+    let lon = cur.i32(&format!("{item} longitude"))?;
     Ok(WgsPosition {
         latitude_deg: f64::from(lat) * WGS84_LSB_DEG,
         longitude_deg: f64::from(lon) * WGS84_LSB_DEG,
     })
-}
-
-fn read_i32(cur: &mut Cursor<'_>, what: &str) -> Result<i32, InteropError> {
-    let b = cur.take(4, what)?;
-    Ok(i32::from_be_bytes([b[0], b[1], b[2], b[3]]))
 }
 
 /// I205/060 and I205/140 (§5.2.7, §5.2.15): two 24-bit two's complement fields, LSB
