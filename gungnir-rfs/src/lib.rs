@@ -12,21 +12,43 @@
 //!
 //! # What is built here, and what is not
 //!
-//! **Built and gated: the Gaussian-mixture PHD filter** ([`PhdFilter`]) **and the
-//! Gaussian-mixture CPHD filter** ([`CphdFilter`], GAP-009's sibling row GAP-015).
+//! **Built and gated: the Gaussian-mixture PHD filter** ([`PhdFilter`]), **the
+//! Gaussian-mixture CPHD filter** ([`CphdFilter`]) **and the labelled multi-Bernoulli
+//! filter** ([`LmbFilter`]).
 //!
 //! **Not built, and returning an explicit error rather than a plausible answer**: the
-//! labelled filters [`GlmbFilter`] and [`LmbFilter`]. Each is its own §2 row and each
-//! will want its own oracle comparison. They are named individually rather than behind
-//! one "not implemented" so a reader can tell which of the four this build has.
+//! full δ-GLMB ([`GlmbFilter`]). It is named separately from [`LmbFilter`] rather than
+//! folded into it, because [`LmbFilter`] implements the LMB *approximation* to it and
+//! naming a type for a filter it does not implement is how a reader ends up believing
+//! the build has something it does not.
 //!
-//! **The CPHD build is written and gated, not signed.** It is reached by
+//! **The LMB build is written and gated, not signed. The CPHD build was signed by the
+//! owner on 2026-09-09**, after the review before signing found and closed a numerical
+//! instability in its leave-one-out elementary symmetric functions (see
+//! `elementary_symmetric_leave_one_out`'s own doc comment). Both are reached by
 //! `docs/agentic-workflow.md`'s numerical-stability clause the same way the PHD filter
-//! is (`ARCHITECTURE.md` §10), and its own oracle -- there being no library one; see
-//! [`CphdFilter`]'s doc comment -- is this crate's own hand derivation, independently
-//! checked against a brute-force enumeration and against known reductions before any
-//! Rust was written. That is real verification, not a substitute for the owner's
-//! review this class of code still needs before it is signed.
+//! is (`ARCHITECTURE.md` §10), and neither has a library oracle -- Stone Soup 1.9.1 has
+//! no CPHD updater and no labelled filter at all, established by evidence in each
+//! generator rather than assumed. Each is gated against this crate's own hand
+//! derivation, independently checked before any Rust was written. That is real
+//! verification, not a substitute for the owner's review this class of code needs
+//! before it is signed -- which, for the CPHD, is exactly where the instability was
+//! found.
+//!
+//! # Identity is the whole difference between the two halves of this crate
+//!
+//! [`PhdFilter`] and [`CphdFilter`] answer *how many* and *where*. [`LmbFilter`] answers
+//! *which one is which*, and that is the only reason it is a separate row rather than a
+//! refinement: a PHD intensity of 1.0 at a point does not say it is the same target that
+//! was there last scan, and both PHD-family `extract_tracks` methods mint fresh
+//! identifiers every call and say so. [`LmbFilter::extract_tracks`] returns the
+//! Bernoulli's own label instead, issued once at birth and never reissued.
+//!
+//! The two halves are also for different scenes, and the code says which by refusing
+//! rather than by convention: exact association marginals are a permanent computation, so
+//! [`LmbFilter`] bounds the detections it will accept in one scan
+//! ([`RfsError::TooManyDetections`]) and the dense swarm past that bound stays the
+//! PHD/CPHD filters', which never form an association at all.
 //!
 //! # What a PHD filter is, and why the cardinality is the interesting output
 //!
@@ -687,40 +709,834 @@ fn elementary_symmetric_leave_one_out(values: &[f64]) -> Vec<Vec<f64>> {
         .collect()
 }
 
-/// Generalized Labeled Multi-Bernoulli: PHD-style set filtering that also carries target
-/// identity.
+/// Generalized Labeled Multi-Bernoulli: the full δ-GLMB, which carries the joint
+/// association hypotheses forward between scans instead of projecting them away.
 ///
-/// **Not implemented**, and it is the interesting one that is missing: identity across
-/// scans is exactly what [`PhdFilter`] does not provide.
+/// **Not implemented, and deliberately still named separately from what is.**
+/// [`LmbFilter`] is built and gated, and it is the LMB *approximation* to this filter:
+/// its single-scan update is the exact δ-GLMB update of an LMB prior, but it then
+/// projects the posterior back onto a product of independent Bernoullis, which discards
+/// the inter-label dependence a δ-GLMB keeps. What a δ-GLMB would add over it is
+/// therefore not accuracy within a scan -- there is none to add, the marginals are exact
+/// -- but memory of the dependence *across* scans.
+///
+/// That difference is measured rather than asserted:
+/// `testdata/oracles/tools/gen_lmb_fixtures.py` runs an untruncated δ-GLMB alongside the
+/// LMB over the same detections, and `gungnir-rfs/tests/lmb_diff.rs` asserts the fixture
+/// still carries the result. See [`LmbFilter`] for the numbers, which are a property of
+/// that scenario and not a general bound.
+///
+/// This type is kept as an explicit refusal rather than deleted because naming it is how
+/// a reader can tell which of the two this build has.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GlmbFilter;
-
-/// Labeled Multi-Bernoulli: a cheaper GLMB approximation. **Not implemented.**
-#[derive(Debug, Clone, Copy, Default)]
-pub struct LmbFilter;
 
 impl GlmbFilter {
     /// # Errors
     ///
-    /// Always, until the GLMB/LMB row is built.
+    /// Always. The full δ-GLMB is not built; [`LmbFilter`] is the built approximation to
+    /// it and says what it approximates.
     pub fn labelled_tracks(&self) -> Result<Vec<Track>, RfsError> {
         Err(RfsError::NotImplemented {
-            what: "labelled multi-Bernoulli filtering",
-            waiting_on: "the `rfs` GLMB/LMB row and its Stone Soup oracle",
+            what: "the full delta-GLMB filter, which keeps the joint association \
+                   hypotheses between scans",
+            waiting_on: "a hypothesis-truncation scheme (ranked assignment or Gibbs \
+                         sampling); `LmbFilter` is built and is the LMB approximation \
+                         to it",
         })
     }
 }
 
+/// A birth: where a new target may appear, and how strongly it is believed to be there.
+///
+/// The label is **not** a field. [`LmbFilter::predict`] mints it from the filter's own
+/// monotone counter, because a label chosen by a caller is a label that can be
+/// duplicated or reused, and this filter's entire contribution is that its identifiers
+/// mean something across scans.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LmbBirth {
+    /// `r`, the probability a target is actually there. A probability, unlike a
+    /// [`GaussianComponent`]'s weight.
+    pub existence: f64,
+    pub mean: SVector<f64, N>,
+    pub cov: SMatrix<f64, N, N>,
+}
+
+/// One labelled Bernoulli: a target that exists with probability `existence` and, if it
+/// exists, is distributed as `spatial`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LabelledBernoulli {
+    /// The identity. Allocated once at birth, carried unchanged for as long as this
+    /// Bernoulli lives, and never reused after it dies.
+    pub label: TrackId,
+    /// `r`, in `[0, 1]`. A probability of existence, **not** an expected count: a
+    /// [`GaussianComponent`]'s weight can exceed one and this cannot.
+    pub existence: f64,
+    /// The spatial density given existence, as a Gaussian mixture whose weights sum to
+    /// **one**. This is the sharpest structural difference from [`PhdFilter`], whose
+    /// mixture weights sum to the expected target count instead: here the count lives
+    /// entirely in `existence` and the mixture only says *where*.
+    pub spatial: Vec<GaussianComponent>,
+}
+
+/// How the labelled filter manages its Bernoullis, and what the scene looks like.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LmbSettings {
+    /// `p_S`, the probability a target present last scan is still present.
+    pub probability_of_survival: f64,
+    /// `p_D`, the probability a present target is detected.
+    pub probability_of_detection: f64,
+    /// `κ`, the clutter intensity per unit measurement volume.
+    pub clutter_density: f64,
+    /// A Bernoulli whose existence probability falls below this is dropped and its label
+    /// retired. Retired labels are never reissued.
+    pub existence_prune_threshold: f64,
+    /// Within one label's spatial density, a component holding less than this share of
+    /// the label's own mass is dropped. A share of a normalised density, not the PHD's
+    /// absolute intensity weight, which is why it is not that row's `1e-5`.
+    pub spatial_prune_threshold: f64,
+    /// Components within this squared Mahalanobis distance of a stronger one in the
+    /// same label are merged into it.
+    pub merge_distance: f64,
+    /// Each label's spatial mixture is truncated to this many components.
+    pub max_components_per_label: usize,
+    /// The filter keeps at most this many Bernoullis, strongest existence first.
+    ///
+    /// **This truncation is an approximation and the only one in the filter besides the
+    /// LMB projection itself**: a discarded Bernoulli is a target the filter has stopped
+    /// believing in on grounds of budget rather than evidence. It is bounded, not
+    /// silent -- the count is observable through [`LmbFilter::bernoullis`].
+    pub max_bernoullis: usize,
+    /// A Bernoulli is extracted as a track above this existence probability.
+    pub extraction_threshold: f64,
+    /// The largest number of detections in one scan this filter will accept.
+    ///
+    /// **Not a performance knob: a statement about what is exactly computable.** The
+    /// association marginals below are a permanent, whose exact evaluation is `#P`-hard;
+    /// this filter computes them exactly in `O(n · 2^m · m)` time and `O(n · 2^m)` space
+    /// for `n` Bernoullis and `m` detections, and refuses past the bound rather than
+    /// silently truncating the hypothesis space and reporting the result as if it were
+    /// exact. A scene denser than this is [`PhdFilter`]'s and [`CphdFilter`]'s regime,
+    /// where no association is formed at all.
+    ///
+    /// At the default 12 and 100 Bernoullis the two tables are about 3 MB each; the
+    /// settings validation refuses anything above 16, where they are 53 MB each.
+    pub max_detections_per_scan: usize,
+}
+
+impl Default for LmbSettings {
+    /// The same sky as [`PhdSettings::default`] -- survival, detection, clutter and
+    /// merge distance are shared, so the three `rfs` rows are validated against one
+    /// scene and differ only in the filter. The values here that have no PHD counterpart
+    /// are the ones the oracle fixture uses.
+    fn default() -> Self {
+        Self {
+            probability_of_survival: 0.99,
+            probability_of_detection: 0.95,
+            clutter_density: 1e-6,
+            existence_prune_threshold: 1e-4,
+            spatial_prune_threshold: 1e-6,
+            merge_distance: 4.0,
+            max_components_per_label: 20,
+            max_bernoullis: 100,
+            extraction_threshold: 0.5,
+            max_detections_per_scan: 12,
+        }
+    }
+}
+
+impl LmbSettings {
+    fn validate(&self) -> Result<(), RfsError> {
+        let probabilities_valid = (0.0..=1.0).contains(&self.probability_of_survival)
+            && (0.0..=1.0).contains(&self.probability_of_detection);
+        if !probabilities_valid {
+            return Err(RfsError::MalformedScene {
+                what: "the survival or detection probability is not a probability",
+            });
+        }
+        if !self.clutter_density.is_finite() || self.clutter_density <= 0.0 {
+            return Err(RfsError::MalformedScene {
+                what: "the clutter intensity must be finite and positive: every \
+                       detection's association weight is divided by it",
+            });
+        }
+        if self.max_components_per_label == 0 || self.max_bernoullis == 0 {
+            return Err(RfsError::MalformedScene {
+                what: "a filter truncated to no components or no Bernoullis represents \
+                       nothing",
+            });
+        }
+        if self.max_detections_per_scan > MAX_SUPPORTED_DETECTIONS {
+            return Err(RfsError::MalformedScene {
+                what: "the exact association marginals are exponential in the detection \
+                       count; this bound is past what the tables can be allocated for",
+            });
+        }
+        Ok(())
+    }
+}
+
+/// The hard ceiling on [`LmbSettings::max_detections_per_scan`]: `2^16` subsets times a
+/// hundred Bernoullis is already 53 MB per dynamic-programming table, and the next
+/// doubling is not a bound worth offering.
+const MAX_SUPPORTED_DETECTIONS: usize = 16;
+
+/// Index into an association-marginal row: the label does not exist.
+const ASSOCIATION_ABSENT: usize = 0;
+/// Index into an association-marginal row: the label exists and was not detected.
+const ASSOCIATION_MISSED: usize = 1;
+/// Index into an association-marginal row of detection `j`: `ASSOCIATION_FIRST + j`.
+const ASSOCIATION_FIRST_DETECTION: usize = 2;
+
+/// Labelled Multi-Bernoulli filter: a set filter that carries target **identity**.
+///
+/// # What this is, and what it is not
+///
+/// This is the LMB filter of Reuter, Vo, Vo and Dietmayer ("The Labeled Multi-Bernoulli
+/// Filter", IEEE Transactions on Signal Processing 62(12), 2014). It is **not** the full
+/// δ-GLMB; [`GlmbFilter`] is still an explicit refusal, and this type is deliberately
+/// not named for one it does not implement.
+///
+/// Its update is the **exact** δ-GLMB update of an LMB prior -- every association
+/// hypothesis, enumerated with no sampling, no ranked-assignment truncation and no
+/// gating -- followed by a moment-matched projection back onto an LMB. Precisely one
+/// thing is approximated by that projection, and it is worth stating exactly: the true
+/// posterior couples the labels (if label 1 took detection 3, label 2 cannot have), and
+/// an LMB is a product of independent Bernoullis. **Every per-label marginal is exact
+/// after a single update** -- existence probability, spatial density, and hence the PHD.
+/// The error is what the *next* scan inherits, because it starts from the projected
+/// product rather than the true joint.
+///
+/// That is measured, not asserted. `testdata/oracles/tools/gen_lmb_fixtures.py` runs an
+/// untruncated δ-GLMB beside this filter on the same detections and records the largest
+/// existence-probability disagreement per scan. On its two-target scene the gap is
+/// `1.1e-16` after the first update -- zero to machine precision, as the derivation
+/// requires -- then `5.2e-7` and `1.1e-4`. Those are that scenario's numbers, not a
+/// general bound.
+///
+/// # Why this is a separate row from [`PhdFilter`] rather than a refinement of it
+///
+/// A PHD intensity says "there is about one target here". It does not say it is the same
+/// target that was there last scan, and [`PhdFilter::extract_tracks`] says so by minting
+/// fresh identifiers every call. **This filter's [`TrackId`] is the Bernoulli's label**:
+/// allocated once at birth, carried unchanged for the Bernoulli's whole life, and never
+/// reissued after it dies. `gungnir-rfs/tests/lmb_label_continuity.rs` gates that
+/// property directly, including through a crossing where the two targets occupy the same
+/// point at the same scan.
+///
+/// # No library oracle exists for this row, established rather than assumed
+///
+/// `docs/verification-capability-table.md` named "Stone Soup GLMB (partial)". Stone Soup
+/// 1.9.1 -- the pinned version, already driven for real for the PHD row -- has **no GLMB
+/// and no LMB at all**: not partial, absent. Checked three ways in the generator, which
+/// refuses to run if any of them ever finds one: no module in the package is named for
+/// one; a regex scan of every `.py` file it ships finds **zero** source lines mentioning
+/// GLMB, LMB or labelled multi-Bernoulli; and all three plausible import paths raise
+/// `ModuleNotFoundError`. Its nearest neighbours are the *single-target*
+/// `BernoulliParticleUpdater` and the *unlabelled* `PHDUpdater`/`LCCUpdater`, neither of
+/// which is a labelled multi-target filter.
+///
+/// The oracle is therefore the generator's own derivation, whose association marginals
+/// are produced by **literal enumeration** of every association event -- the definition
+/// transcribed, with no bookkeeping to get wrong -- while this filter runs the fast
+/// dynamic program below. Five independent checks are run before any fixture is written;
+/// see the generator's module docstring for all five, and
+/// `gungnir-rfs/tests/lmb_diff.rs` for the ones re-asserted here.
+///
+/// # The scenes this filter is for
+///
+/// [`LmbSettings::max_detections_per_scan`] bounds it, because exact association
+/// marginals are a permanent computation. This filter is for the case where *which one
+/// is which* matters and there are few enough returns to answer it exactly; the dense
+/// swarm, where the association cannot be formed at all, is [`PhdFilter`]'s and
+/// [`CphdFilter`]'s. Past the bound this filter refuses rather than approximating
+/// quietly.
+/// Per label, per spatial component: the Kalman quantities [`LmbFilter::update`] reuses
+/// across every detection, and that component's likelihood for each of them.
+///
+/// The **prior** covariance is carried alongside the updated one because the
+/// missed-detection branch keeps the prior and every detection branch takes the update.
+/// Conflating the two would leave the filter right on cardinality and wrong on spread,
+/// which is the quiet kind of wrong -- it looks correct in every count-based test.
+struct Prepared {
+    weight: f64,
+    mean: SVector<f64, N>,
+    prior_cov: SMatrix<f64, N, N>,
+    gain: SMatrix<f64, N, M>,
+    updated_cov: SMatrix<f64, N, N>,
+    likelihoods: Vec<f64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LmbFilter {
+    bernoullis: Vec<LabelledBernoulli>,
+    settings: LmbSettings,
+    h: SMatrix<f64, M, N>,
+    r: SMatrix<f64, M, M>,
+    next_label: u64,
+    last_association: Vec<(TrackId, Vec<f64>)>,
+}
+
 impl LmbFilter {
+    /// An empty filter: no targets, no labels issued yet.
+    ///
     /// # Errors
     ///
-    /// Always, until the GLMB/LMB row is built.
-    pub fn labelled_tracks(&self) -> Result<Vec<Track>, RfsError> {
-        Err(RfsError::NotImplemented {
-            what: "labelled multi-Bernoulli filtering",
-            waiting_on: "the `rfs` GLMB/LMB row and its Stone Soup oracle",
+    /// [`RfsError::MalformedScene`] when the settings do not describe a scene.
+    pub fn new(
+        settings: LmbSettings,
+        h: SMatrix<f64, M, N>,
+        r: SMatrix<f64, M, M>,
+    ) -> Result<Self, RfsError> {
+        settings.validate()?;
+        Ok(Self {
+            bernoullis: Vec::new(),
+            settings,
+            h,
+            r,
+            next_label: 0,
+            last_association: Vec::new(),
         })
     }
+
+    /// The Bernoullis, in ascending label order.
+    #[must_use]
+    pub fn bernoullis(&self) -> &[LabelledBernoulli] {
+        &self.bernoullis
+    }
+
+    /// The labels currently alive, ascending. Two calls a scan apart returning the same
+    /// label mean the same target -- that is the whole promise of this filter.
+    #[must_use]
+    pub fn labels(&self) -> Vec<TrackId> {
+        self.bernoullis.iter().map(|b| b.label).collect()
+    }
+
+    /// This label's existence probability, or `None` if it is not alive.
+    #[must_use]
+    pub fn existence_of(&self, label: TrackId) -> Option<f64> {
+        self.bernoullis
+            .iter()
+            .find(|b| b.label == label)
+            .map(|b| b.existence)
+    }
+
+    /// The expected number of targets: the sum of the existence probabilities.
+    ///
+    /// Comparable to [`PhdFilter::cardinality`] and arrived at very differently -- there
+    /// it is the integral of an intensity, here it is the mean of a sum of independent
+    /// Bernoullis, which is also the point at which this filter's cardinality
+    /// distribution is a Poisson-binomial rather than the exact one a δ-GLMB would carry.
+    #[must_use]
+    pub fn cardinality(&self) -> f64 {
+        self.bernoullis.iter().map(|b| b.existence).sum()
+    }
+
+    /// The association marginals the last [`Self::update`] computed, per label as it
+    /// stood **before** that update (a label can be pruned by it).
+    ///
+    /// Each row is a probability distribution over `[does not exist, exists but was not
+    /// detected, produced detection 0, produced detection 1, ...]`. This is the
+    /// "label-to-track assignment" half of the row's own criterion, exposed so it can be
+    /// compared directly rather than inferred from where the means ended up -- and it is
+    /// the honest output when the answer is a tie: two targets at the same point at the
+    /// same scan produce a row of 0.5 and 0.5, not a fabricated certainty.
+    #[must_use]
+    pub fn last_association(&self) -> &[(TrackId, Vec<f64>)] {
+        &self.last_association
+    }
+
+    /// Propagate every Bernoulli forward, then admit this scan's births under **fresh
+    /// labels**.
+    ///
+    /// Survival thins the existence probability by `p_S` and leaves the spatial density's
+    /// mixture weights alone -- they are a normalised density, and thinning them would
+    /// double-count the survival that `existence` already carries. Each birth is issued
+    /// the next label from a monotone counter that is never rewound, so a label that has
+    /// been retired cannot come back attached to a different target.
+    ///
+    /// # Errors
+    ///
+    /// [`RfsError::NotFinite`] for a birth that is not a number, and
+    /// [`RfsError::MalformedScene`] for a birth whose existence is not a probability.
+    pub fn predict<Motion>(
+        &mut self,
+        motion: &Motion,
+        dt: f64,
+        births: &[LmbBirth],
+    ) -> Result<(), RfsError>
+    where
+        Motion: MotionModel<N>,
+    {
+        let f = motion.f(dt);
+        let q = motion.q(dt);
+        for bernoulli in &mut self.bernoullis {
+            bernoulli.existence *= self.settings.probability_of_survival;
+            for component in &mut bernoulli.spatial {
+                component.mean = f * component.mean;
+                let predicted = f * component.cov * f.transpose() + q;
+                component.cov = symmetrize(&predicted);
+            }
+        }
+        for birth in births {
+            if !birth.existence.is_finite()
+                || !birth.mean.iter().all(|v| v.is_finite())
+                || !birth.cov.iter().all(|v| v.is_finite())
+            {
+                return Err(RfsError::NotFinite { what: "a birth" });
+            }
+            if !(0.0..=1.0).contains(&birth.existence) {
+                return Err(RfsError::MalformedScene {
+                    what: "a birth's existence is not a probability",
+                });
+            }
+            let label = TrackId(self.next_label);
+            self.next_label = self.next_label.saturating_add(1);
+            self.bernoullis.push(LabelledBernoulli {
+                label,
+                existence: birth.existence,
+                spatial: vec![GaussianComponent {
+                    // The spatial density is normalised: all of the "how strongly do we
+                    // believe this" lives in `existence`, none of it here.
+                    weight: 1.0,
+                    mean: birth.mean,
+                    cov: birth.cov,
+                }],
+            });
+        }
+        self.bernoullis.sort_by_key(|b| b.label.0);
+        Ok(())
+    }
+
+    /// Update every Bernoulli with this scan's detections: the exact δ-GLMB update of the
+    /// current LMB, projected back onto an LMB.
+    ///
+    /// Per label `ℓ` and extended association `a ∈ {absent, missed, z_0 .. z_{m-1}}` the
+    /// unnormalised weight is
+    ///
+    /// ```text
+    /// u_ℓ(absent) = 1 - r_ℓ
+    /// u_ℓ(missed) = r_ℓ (1 - p_D)
+    /// u_ℓ(z_j)    = r_ℓ p_D q_ℓ(j) / κ,   q_ℓ(j) = <p_ℓ, g(z_j | ·)>
+    /// ```
+    ///
+    /// and the exact posterior over joint assignments is their product over labels,
+    /// normalised, restricted to assignments injective on the detections. Only the
+    /// per-label marginals of that posterior are needed, and this crate's own
+    /// `association_marginals` computes them exactly. The projection then sets
+    /// `r̂_ℓ = 1 - P(a_ℓ = absent)` and mixes each label's missed-detection branch (which
+    /// keeps the **prior** covariance) with one Kalman-updated branch per detection,
+    /// weighted by that detection's marginal.
+    ///
+    /// An unassigned detection is clutter and contributes weight 1 here, because the
+    /// clutter density it would contribute is exactly the one already divided out of
+    /// every `u_ℓ(z_j)`.
+    ///
+    /// # Errors
+    ///
+    /// [`RfsError::NotFinite`] for a detection that is not a number;
+    /// [`RfsError::TooManyDetections`] past
+    /// [`LmbSettings::max_detections_per_scan`], which is a refusal to approximate
+    /// rather than a failure; [`RfsError::SingularCovariance`] for an innovation
+    /// covariance that cannot be inverted; and [`RfsError::MalformedScene`] when no
+    /// assignment of this scan has any weight at all, which no real scene produces and
+    /// which is named here rather than dividing by the zero it would otherwise give.
+    // One cohesive derivation (see this method's own doc comment for the maths); the
+    // per-component Kalman preparation, the association weights and the moment-matched
+    // projection read as three paragraphs of one argument, and splitting them at a line
+    // count would scatter `prepared`, `u` and `marginals` across function boundaries
+    // rather than make any of it clearer. The same judgement `CphdFilter::update` records.
+    #[allow(clippy::too_many_lines)]
+    pub fn update(&mut self, detections: &[SVector<f64, M>]) -> Result<(), RfsError> {
+        for z in detections {
+            if !z.iter().all(|v| v.is_finite()) {
+                return Err(RfsError::NotFinite {
+                    what: "a detection",
+                });
+            }
+        }
+        if detections.len() > self.settings.max_detections_per_scan {
+            return Err(RfsError::TooManyDetections {
+                detections: detections.len(),
+                limit: self.settings.max_detections_per_scan,
+            });
+        }
+        self.last_association.clear();
+        if self.bernoullis.is_empty() {
+            return Ok(());
+        }
+
+        let mut prepared: Vec<Vec<Prepared>> = Vec::with_capacity(self.bernoullis.len());
+        let mut u: Vec<Vec<f64>> = Vec::with_capacity(self.bernoullis.len());
+        #[allow(clippy::cast_precision_loss)]
+        let m_dim = M as f64;
+
+        for bernoulli in &self.bernoullis {
+            let mut per_component = Vec::with_capacity(bernoulli.spatial.len());
+            for component in &bernoulli.spatial {
+                let pht = component.cov * self.h.transpose();
+                let s = self.h * pht + self.r;
+                let Some(s_inv) = s.try_inverse() else {
+                    return Err(RfsError::SingularCovariance {
+                        what: "an innovation covariance",
+                    });
+                };
+                let Some(chol) = s.cholesky() else {
+                    return Err(RfsError::SingularCovariance {
+                        what: "an innovation covariance",
+                    });
+                };
+                let determinant: f64 = chol.l().diagonal().iter().map(|d| d * d).product();
+                let gain = pht * s_inv;
+                let i_kh = SMatrix::<f64, N, N>::identity() - gain * self.h;
+                let updated_cov = symmetrize(
+                    &(i_kh * component.cov * i_kh.transpose() + gain * self.r * gain.transpose()),
+                );
+                let predicted_z = self.h * component.mean;
+                let normaliser = ((2.0 * std::f64::consts::PI).powf(m_dim) * determinant).sqrt();
+                let likelihoods = detections
+                    .iter()
+                    .map(|z| {
+                        let y = z - predicted_z;
+                        let quadratic = (y.transpose() * s_inv * y)[(0, 0)];
+                        (-0.5 * quadratic).exp() / normaliser
+                    })
+                    .collect();
+                per_component.push(Prepared {
+                    weight: component.weight,
+                    mean: component.mean,
+                    prior_cov: component.cov,
+                    gain,
+                    updated_cov,
+                    likelihoods,
+                });
+            }
+
+            // The label's predictive likelihood for each detection, under its own
+            // normalised spatial density.
+            let q: Vec<f64> = (0..detections.len())
+                .map(|j| {
+                    per_component
+                        .iter()
+                        .map(|p| p.weight * p.likelihoods[j])
+                        .sum()
+                })
+                .collect();
+            let mut row = Vec::with_capacity(ASSOCIATION_FIRST_DETECTION + detections.len());
+            row.push(1.0 - bernoulli.existence);
+            row.push(bernoulli.existence * (1.0 - self.settings.probability_of_detection));
+            row.extend(q.iter().map(|qj| {
+                bernoulli.existence * self.settings.probability_of_detection * qj
+                    / self.settings.clutter_density
+            }));
+            u.push(row);
+            prepared.push(per_component);
+        }
+
+        let Some(marginals) = association_marginals(&u, detections.len()) else {
+            return Err(RfsError::MalformedScene {
+                what: "no assignment of this scan to these targets has any weight",
+            });
+        };
+
+        let mut updated = Vec::with_capacity(self.bernoullis.len());
+        for ((bernoulli, per_component), probability) in
+            self.bernoullis.iter().zip(&prepared).zip(marginals.iter())
+        {
+            self.last_association
+                .push((bernoulli.label, probability.clone()));
+
+            let existence = 1.0 - probability[ASSOCIATION_ABSENT];
+            if !existence.is_finite() || existence <= self.settings.existence_prune_threshold {
+                continue;
+            }
+
+            let mut mixture = Vec::with_capacity(per_component.len() * (1 + detections.len()));
+            let missed = probability[ASSOCIATION_MISSED];
+            if missed > 0.0 {
+                for p in per_component {
+                    mixture.push(GaussianComponent {
+                        weight: missed * p.weight,
+                        mean: p.mean,
+                        cov: p.prior_cov,
+                    });
+                }
+            }
+            for (j, z) in detections.iter().enumerate() {
+                let p_j = probability[ASSOCIATION_FIRST_DETECTION + j];
+                if p_j <= 0.0 {
+                    continue;
+                }
+                let q_j: f64 = per_component
+                    .iter()
+                    .map(|p| p.weight * p.likelihoods[j])
+                    .sum();
+                if q_j <= 0.0 {
+                    continue;
+                }
+                for p in per_component {
+                    let share = p.weight * p.likelihoods[j] / q_j;
+                    if share <= 0.0 {
+                        continue;
+                    }
+                    let y = z - self.h * p.mean;
+                    mixture.push(GaussianComponent {
+                        weight: p_j * share,
+                        mean: p.mean + p.gain * y,
+                        cov: p.updated_cov,
+                    });
+                }
+            }
+            if mixture.is_empty() {
+                continue;
+            }
+
+            // Kept before pruning, for the guard below.
+            let strongest = mixture.iter().copied().reduce(|best, candidate| {
+                if candidate.weight > best.weight {
+                    candidate
+                } else {
+                    best
+                }
+            });
+
+            // The mixture's mass is `existence` by construction; the spatial density is
+            // what is left after dividing that out, and it must integrate to one.
+            let mut spatial = prune_and_merge_mixture(
+                mixture,
+                self.settings.spatial_prune_threshold * existence,
+                self.settings.merge_distance,
+                self.settings.max_components_per_label,
+            );
+            if spatial.is_empty() {
+                // Not reachable at any configured threshold -- the mixture's mass is
+                // `existence` over at most `max_components_per_label * (1 + detections)`
+                // components, so the strongest is far above `1e-6 * existence`. It is
+                // guarded anyway because the alternative is *dropping the label*, and a
+                // label that disappears without its existence probability ever falling
+                // is a silent loss of identity: precisely the failure this filter exists
+                // to prevent, and one no cardinality-based test would notice.
+                spatial = strongest.into_iter().collect();
+            }
+            let mass: f64 = spatial.iter().map(|c| c.weight).sum();
+            if mass <= 0.0 || !mass.is_finite() {
+                continue;
+            }
+            let spatial = spatial
+                .into_iter()
+                .map(|c| GaussianComponent {
+                    weight: c.weight / mass,
+                    ..c
+                })
+                .collect();
+            updated.push(LabelledBernoulli {
+                label: bernoulli.label,
+                existence,
+                spatial,
+            });
+        }
+
+        if updated.len() > self.settings.max_bernoullis {
+            updated.sort_by(|a, b| b.existence.total_cmp(&a.existence));
+            updated.truncate(self.settings.max_bernoullis);
+        }
+        updated.sort_by_key(|b| b.label.0);
+        self.bernoullis = updated;
+        Ok(())
+    }
+
+    /// Commit to a target set: one track per Bernoulli above the extraction threshold,
+    /// **carrying its label as the [`TrackId`]**.
+    ///
+    /// This is the one place in this crate where a returned identifier means something
+    /// across scans. [`PhdFilter::extract_tracks`] and [`CphdFilter::extract_tracks`]
+    /// both mint fresh identifiers every call and document that they do, because a PHD
+    /// intensity carries no identity; here the identifier *is* the Bernoulli's label,
+    /// issued once at birth and never reissued.
+    ///
+    /// `hits` is not a hit count -- this filter keeps no such history -- and is reported
+    /// as 1 for every extracted track rather than fabricated. A consumer wanting a hit
+    /// history should count the scans in which [`Self::last_association`] shows the
+    /// label associated to a detection.
+    ///
+    /// # Errors
+    ///
+    /// [`RfsError::MalformedScene`] if an existence probability is not finite, which
+    /// means the filter state is already broken.
+    ///
+    /// **Returns a `Result` rather than an empty `Vec`**, for the reason
+    /// [`PhdFilter::extract_tracks`] gives: an empty track set is a claim that nothing is
+    /// out there, and it is the most dangerous empty in this system.
+    pub fn extract_tracks(&self) -> Result<Vec<Track>, RfsError> {
+        let mut out = Vec::new();
+        for bernoulli in &self.bernoullis {
+            if !bernoulli.existence.is_finite() {
+                return Err(RfsError::MalformedScene {
+                    what: "an existence probability is not finite",
+                });
+            }
+            if bernoulli.existence <= self.settings.extraction_threshold {
+                continue;
+            }
+            let mut mean = SVector::<f64, N>::zeros();
+            for component in &bernoulli.spatial {
+                mean += component.mean * component.weight;
+            }
+            let mut covariance = SMatrix::<f64, N, N>::zeros();
+            for component in &bernoulli.spatial {
+                let d = component.mean - mean;
+                covariance += (component.cov + d * d.transpose()) * component.weight;
+            }
+            out.push(Track {
+                id: bernoulli.label,
+                status: TrackStatus::Confirmed,
+                state: mean,
+                covariance: symmetrize(&covariance),
+                misses_since_update: 0,
+                hits: 1,
+            });
+        }
+        Ok(out)
+    }
+}
+
+/// The exact per-label association marginals of the δ-GLMB posterior of an LMB prior.
+///
+/// `u[l]` is label `l`'s extended-association weight vector, indexed by
+/// [`ASSOCIATION_ABSENT`], [`ASSOCIATION_MISSED`] and
+/// `ASSOCIATION_FIRST_DETECTION + j`. Returns one probability distribution per label, or
+/// `None` when no assignment has any weight.
+///
+/// # The algorithm, and why it is not the enumeration the oracle uses
+///
+/// The normalising sum runs over every assignment vector injective on the detections,
+/// which is a permanent -- `#P`-hard in general, and there is no polynomial exact
+/// algorithm to reach for. What there is, is a dynamic program whose state is the **set
+/// of detections already consumed**, which is exponential in the detections only:
+///
+/// ```text
+/// F[l][S] = weight of assignments of labels 0..l-1 consuming EXACTLY the set S
+/// B[l][S] = weight of assignments of labels l..n-1 consuming ANY SUBSET of S
+/// ```
+///
+/// with `c_l = u_l(absent) + u_l(missed)` the weight of label `l` consuming no detection.
+/// Label `l` takes detection `j` exactly when some prefix consumed a set `S` without
+/// `j` and the suffix consumed a subset of what remains, which is the marginal below.
+/// `absent` and `missed` have identical combinatorial structure, so they are summed
+/// together and split in proportion afterwards.
+///
+/// The oracle in `testdata/oracles/tools/gen_lmb_fixtures.py` deliberately does **not**
+/// use this recursion: it enumerates every association event literally, and a third
+/// implementation there transposes the index order (a dynamic program over detections
+/// whose state is the set of labels consumed) to check the normaliser a third way. All
+/// three agree to `2.5e-15` relative, which is the evidence that this program's
+/// bookkeeping is right; a shared derivation could not have provided it.
+///
+/// # Scaling
+///
+/// Each label's weight vector is divided by its own largest entry first. Scaling one
+/// label scales every joint assignment weight by the same factor, so the marginals are
+/// unchanged -- but the products taken across labels are not, and with `κ` at `1e-6` a
+/// per-label weight of order `1e4` raised to the number of labels overflows a `f64`
+/// long before the scene is interesting.
+fn association_marginals(u: &[Vec<f64>], detection_count: usize) -> Option<Vec<Vec<f64>>> {
+    let n = u.len();
+    let width = ASSOCIATION_FIRST_DETECTION + detection_count;
+    if n == 0 {
+        return Some(Vec::new());
+    }
+    let size = 1_usize.checked_shl(u32::try_from(detection_count).ok()?)?;
+    let full = size - 1;
+
+    let scaled: Vec<Vec<f64>> = u
+        .iter()
+        .map(|row| {
+            let peak = row.iter().copied().fold(0.0_f64, f64::max);
+            if peak > 0.0 && peak.is_finite() {
+                row.iter().map(|v| v / peak).collect()
+            } else {
+                row.clone()
+            }
+        })
+        .collect();
+    let c: Vec<f64> = scaled
+        .iter()
+        .map(|row| row[ASSOCIATION_ABSENT] + row[ASSOCIATION_MISSED])
+        .collect();
+
+    let mut forward = vec![vec![0.0_f64; size]; n + 1];
+    forward[0][0] = 1.0;
+    for l in 0..n {
+        // Split the borrow rather than index the same `Vec` twice: the recursion reads
+        // row `l` and writes row `l + 1`, which is a disjoint pair and not an aliasing
+        // question the reader should have to resolve for themselves.
+        let (head, tail) = forward.split_at_mut(l + 1);
+        let (previous, next) = (&head[l], &mut tail[0]);
+        for (s, &here) in previous.iter().enumerate() {
+            if here == 0.0 {
+                continue;
+            }
+            next[s] += here * c[l];
+            for j in 0..detection_count {
+                if s & (1 << j) != 0 {
+                    continue;
+                }
+                next[s | (1 << j)] += here * scaled[l][ASSOCIATION_FIRST_DETECTION + j];
+            }
+        }
+    }
+
+    let mut backward = vec![vec![0.0_f64; size]; n + 1];
+    backward[n].fill(1.0);
+    for l in (0..n).rev() {
+        let (head, tail) = backward.split_at_mut(l + 1);
+        let (current, next) = (&mut head[l], &tail[0]);
+        for (s, slot) in current.iter_mut().enumerate() {
+            let mut acc = next[s] * c[l];
+            for j in 0..detection_count {
+                if s & (1 << j) != 0 {
+                    acc += next[s & !(1 << j)] * scaled[l][ASSOCIATION_FIRST_DETECTION + j];
+                }
+            }
+            *slot = acc;
+        }
+    }
+
+    let total = backward[0][full];
+    if total <= 0.0 || !total.is_finite() {
+        return None;
+    }
+
+    let mut out = vec![vec![0.0_f64; width]; n];
+    for (l, row) in out.iter_mut().enumerate() {
+        let mut no_detection = 0.0;
+        for (s, &here) in forward[l].iter().enumerate() {
+            if here == 0.0 {
+                continue;
+            }
+            let rest = full & !s;
+            // Labels after `l` may use anything left over; `backward` is indexed by the
+            // set they are ALLOWED, not the set they consume, which is why `rest` and
+            // not an exact-set lookup appears here.
+            no_detection += here * c[l] * backward[l + 1][rest];
+            for j in 0..detection_count {
+                if s & (1 << j) != 0 {
+                    continue;
+                }
+                row[ASSOCIATION_FIRST_DETECTION + j] += here
+                    * scaled[l][ASSOCIATION_FIRST_DETECTION + j]
+                    * backward[l + 1][rest & !(1 << j)];
+            }
+        }
+        if c[l] > 0.0 {
+            row[ASSOCIATION_ABSENT] = no_detection * scaled[l][ASSOCIATION_ABSENT] / c[l];
+            row[ASSOCIATION_MISSED] = no_detection * scaled[l][ASSOCIATION_MISSED] / c[l];
+        }
+        for value in row.iter_mut() {
+            *value /= total;
+        }
+    }
+    Some(out)
 }
 
 /// What this crate cannot do, named rather than panicked (GAP-082).
@@ -740,6 +1556,19 @@ pub enum RfsError {
     /// A component or detection that is not finite.
     #[error("{what} is not finite")]
     NotFinite { what: &'static str },
+    /// More detections in one scan than [`LmbSettings::max_detections_per_scan`] allows.
+    ///
+    /// **A refusal, not a failure.** [`LmbFilter`] computes its association marginals
+    /// exactly, and doing so is exponential in the detection count; past the bound it
+    /// says so rather than truncating the hypothesis space and reporting an
+    /// approximation as though it were the exact answer. A scene this dense belongs to
+    /// [`PhdFilter`] or [`CphdFilter`], which form no association at all.
+    #[error(
+        "{detections} detections in one scan is past the exact-association bound of \
+         {limit}: a scene this dense is the PHD/CPHD filters' regime, not the labelled \
+         filter's"
+    )]
+    TooManyDetections { detections: usize, limit: usize },
 }
 
 impl PhdFilter {
@@ -909,10 +1738,35 @@ impl PhdFilter {
 
     /// Drop weak components, merge near-coincident ones, and truncate.
     fn prune_and_merge(&mut self) {
-        self.intensity_components
-            .retain(|c| c.weight > self.settings.prune_threshold && c.weight.is_finite());
+        let taken = std::mem::take(&mut self.intensity_components);
+        self.intensity_components = prune_and_merge_mixture(
+            taken,
+            self.settings.prune_threshold,
+            self.settings.merge_distance,
+            self.settings.max_components,
+        );
+    }
+}
 
-        let mut remaining = std::mem::take(&mut self.intensity_components);
+/// Drop components below `prune_threshold`, merge everything within `merge_distance`
+/// squared Mahalanobis of a stronger component into it, sort strongest first and
+/// truncate to `max_components`.
+///
+/// Split out of [`PhdFilter::prune_and_merge`] unchanged so [`LmbFilter`] can use the
+/// same mixture management on each label's spatial density: keeping a mixture to a
+/// workable size is the same operation whether the weights are an intensity's or a
+/// normalised density's, and having two copies of it would be two things to keep in
+/// agreement with the oracle generators, which share one implementation of it.
+fn prune_and_merge_mixture(
+    components: Vec<GaussianComponent>,
+    prune_threshold: f64,
+    merge_distance: f64,
+    max_components: usize,
+) -> Vec<GaussianComponent> {
+    let mut remaining = components;
+    remaining.retain(|c| c.weight > prune_threshold && c.weight.is_finite());
+
+    {
         let mut merged: Vec<GaussianComponent> = Vec::new();
         while !remaining.is_empty() {
             // Take the strongest component and absorb everything close to it. Strongest
@@ -942,7 +1796,7 @@ impl PhdFilter {
             remaining.retain(|c| {
                 let d = c.mean - leader.mean;
                 let distance = (d.transpose() * leader_inverse * d)[(0, 0)];
-                if distance <= self.settings.merge_distance {
+                if distance <= merge_distance {
                     group.push(*c);
                     false
                 } else {
@@ -953,10 +1807,12 @@ impl PhdFilter {
         }
 
         merged.sort_by(|a, b| b.weight.total_cmp(&a.weight));
-        merged.truncate(self.settings.max_components);
-        self.intensity_components = merged;
+        merged.truncate(max_components);
+        merged
     }
+}
 
+impl PhdFilter {
     /// Commit to a target set: one track per component above the extraction threshold,
     /// repeated for a component whose weight accounts for more than one target.
     ///
@@ -1211,16 +2067,23 @@ mod tests {
         );
     }
 
+    /// The refusal must name the *full δ-GLMB* and must not be worded so that a reader
+    /// concludes labelled filtering as a whole is missing -- `LmbFilter` is built, and
+    /// the point of keeping this type is to say precisely which of the two is not.
     #[test]
-    fn the_unbuilt_filters_say_so_by_name() {
-        assert_eq!(
-            GlmbFilter.labelled_tracks().unwrap_err(),
-            RfsError::NotImplemented {
-                what: "labelled multi-Bernoulli filtering",
-                waiting_on: "the `rfs` GLMB/LMB row and its Stone Soup oracle",
-            }
+    fn the_unbuilt_filter_is_the_full_glmb_and_says_so_by_name() {
+        let err = GlmbFilter.labelled_tracks().unwrap_err();
+        let RfsError::NotImplemented { what, waiting_on } = err else {
+            panic!("the delta-GLMB must refuse with NotImplemented, got {err}");
+        };
+        assert!(
+            what.contains("delta-GLMB"),
+            "the refusal must name the delta-GLMB, not labelled filtering in general: {what}"
         );
-        assert!(LmbFilter.labelled_tracks().is_err());
+        assert!(
+            waiting_on.contains("LmbFilter"),
+            "the refusal must point at the filter that IS built: {waiting_on}"
+        );
     }
 
     #[test]
@@ -1512,6 +2375,441 @@ mod tests {
             "CPHD should show materially lower cardinality-estimate variance than PHD \
              under frequent missed detections: CPHD {cphd_var}, PHD {phd_var}"
         );
+    }
+
+    // ------------------------------------------------------------------------------
+    // LmbFilter
+    // ------------------------------------------------------------------------------
+
+    fn lmb() -> LmbFilter {
+        LmbFilter::new(
+            LmbSettings::default(),
+            position_h(),
+            SMatrix::<f64, M, M>::identity() * 25.0,
+        )
+        .expect("valid settings")
+    }
+
+    fn lmb_birth(position: [f64; 3], velocity: [f64; 3]) -> LmbBirth {
+        let mut mean = SVector::<f64, N>::zeros();
+        for axis in 0..3 {
+            mean[axis] = position[axis];
+            mean[3 + axis] = velocity[axis];
+        }
+        LmbBirth {
+            existence: 0.4,
+            mean,
+            cov: SMatrix::<f64, N, N>::from_diagonal(&SVector::<f64, N>::from_column_slice(&[
+                100.0, 100.0, 100.0, 400.0, 400.0, 400.0,
+            ])),
+        }
+    }
+
+    /// The association marginals by literal enumeration of every extended assignment
+    /// vector, filtered for injectivity on the detections. Manifestly the definition,
+    /// with no bookkeeping to get wrong -- and deliberately not the recursion
+    /// [`association_marginals`] uses, so it is a second derivation rather than the same
+    /// one run twice. Feasible only for the tiny cases the tests below use.
+    fn marginals_by_brute_force(u: &[Vec<f64>], detections: usize) -> Vec<Vec<f64>> {
+        let n = u.len();
+        let width = ASSOCIATION_FIRST_DETECTION + detections;
+        let mut out = vec![vec![0.0_f64; width]; n];
+        let mut total = 0.0;
+        let mut assignment = vec![0_usize; n];
+        // Odometer over {0..width}^n.
+        loop {
+            let claimed: Vec<usize> = assignment
+                .iter()
+                .copied()
+                .filter(|a| *a >= ASSOCIATION_FIRST_DETECTION)
+                .collect();
+            let mut seen = claimed.clone();
+            seen.sort_unstable();
+            seen.dedup();
+            if seen.len() == claimed.len() {
+                let weight: f64 = assignment
+                    .iter()
+                    .enumerate()
+                    .map(|(l, &a)| u[l][a])
+                    .product();
+                if weight > 0.0 {
+                    total += weight;
+                    for (l, &a) in assignment.iter().enumerate() {
+                        out[l][a] += weight;
+                    }
+                }
+            }
+            let mut position = 0;
+            loop {
+                if position == n {
+                    for row in &mut out {
+                        for value in row.iter_mut() {
+                            *value /= total;
+                        }
+                    }
+                    return out;
+                }
+                assignment[position] += 1;
+                if assignment[position] < width {
+                    break;
+                }
+                assignment[position] = 0;
+                position += 1;
+            }
+        }
+    }
+
+    fn random_association_weights(rng: &mut SplitMix64, n: usize, m: usize) -> Vec<Vec<f64>> {
+        (0..n)
+            .map(|_| {
+                let r = 0.05 + rng.next_unit() * 0.9;
+                let mut row = vec![1.0 - r, r * (0.02 + rng.next_unit() * 0.48)];
+                row.extend((0..m).map(|_| r * (1e-3 + rng.next_unit() * 50.0)));
+                row
+            })
+            .collect()
+    }
+
+    /// The check that stands behind the whole filter: the `O(n · 2^m · m)` dynamic
+    /// program must agree with literal enumeration of every association event. The
+    /// oracle generator runs the same comparison in numpy against a third
+    /// implementation; this one keeps it inside the crate, so a change to the recursion
+    /// fails here without needing a fixture regenerated.
+    #[test]
+    fn the_association_marginals_match_a_brute_force_enumeration() {
+        let mut rng = SplitMix64(0xA55E_C1A7_1057);
+        let mut worst = 0.0_f64;
+        for trial in 0..200 {
+            let n = 1 + (trial % 4);
+            let m = trial % 4;
+            let u = random_association_weights(&mut rng, n, m);
+            let dp = association_marginals(&u, m).expect("a weighted scene");
+            let brute = marginals_by_brute_force(&u, m);
+            for (a, b) in dp.iter().zip(&brute) {
+                for (x, y) in a.iter().zip(b) {
+                    worst = worst.max((x - y).abs());
+                }
+            }
+        }
+        assert!(
+            worst < 1e-12,
+            "the association dynamic program disagrees with brute-force enumeration by \
+             {worst}"
+        );
+    }
+
+    /// Two invariants the enumeration cannot accidentally satisfy together: each label's
+    /// row is a probability distribution, and no detection is claimed by more than one
+    /// target in total. The second is what fails if the injectivity constraint is
+    /// dropped, and the first would still pass if it were.
+    #[test]
+    fn the_association_marginals_are_a_distribution_and_no_detection_is_double_spent() {
+        let mut rng = SplitMix64(0x1234_5678_9ABC);
+        for trial in 0..120 {
+            let n = 1 + (trial % 5);
+            let m = trial % 5;
+            let u = random_association_weights(&mut rng, n, m);
+            let marginals = association_marginals(&u, m).expect("a weighted scene");
+            for row in &marginals {
+                let sum: f64 = row.iter().sum();
+                assert!(
+                    (sum - 1.0).abs() < 1e-12,
+                    "a label's association marginals sum to {sum}, not 1"
+                );
+                assert!(
+                    row.iter().all(|p| *p >= 0.0),
+                    "a negative marginal in {row:?}"
+                );
+            }
+            for j in 0..m {
+                let claimed: f64 = marginals
+                    .iter()
+                    .map(|row| row[ASSOCIATION_FIRST_DETECTION + j])
+                    .sum();
+                assert!(
+                    claimed <= 1.0 + 1e-12,
+                    "detection {j} is claimed with total probability {claimed}, so the \
+                     injectivity constraint is not being applied"
+                );
+            }
+        }
+    }
+
+    /// With one label the joint sum is trivial and the update must equal the textbook
+    /// single-target Bernoulli filter. An exact reduction to a known simpler filter,
+    /// which is the check that catches an error in the normalisation that the
+    /// distribution invariants above would not.
+    #[test]
+    fn one_label_reduces_to_the_single_target_bernoulli_filter() {
+        let mut rng = SplitMix64(0xDEAD_BEEF_0F1E);
+        let mut worst = 0.0_f64;
+        for _ in 0..100 {
+            let r = 0.05 + rng.next_unit() * 0.9;
+            let p_d = 0.3 + rng.next_unit() * 0.65;
+            let kappa = 0.01 + rng.next_unit() * 2.0;
+            let m = (rng.next_u64() % 4) as usize;
+            let q: Vec<f64> = (0..m).map(|_| 1e-3 + rng.next_unit() * 3.0).collect();
+            let mut row = vec![1.0 - r, r * (1.0 - p_d)];
+            row.extend(q.iter().map(|qj| r * p_d * qj / kappa));
+            let marginals = association_marginals(&[row], m).expect("a weighted scene");
+            let got = 1.0 - marginals[0][ASSOCIATION_ABSENT];
+            // r(1 - pD + pD Σ q/κ) / (1 - r pD + r pD Σ q/κ)
+            let ratio: f64 = q.iter().map(|qj| qj / kappa).sum();
+            let want = r * (1.0 - p_d + p_d * ratio) / (1.0 - r * p_d + r * p_d * ratio);
+            worst = worst.max((got - want).abs() / want.abs().max(1e-12));
+        }
+        assert!(
+            worst < 1e-12,
+            "a one-label update does not equal the single-target Bernoulli filter: \
+             worst relative error {worst}"
+        );
+    }
+
+    /// A Bernoulli's spatial density is a probability density, unlike a PHD component's
+    /// weight, and every step must leave it integrating to one. This is the invariant
+    /// that separates the two representations, and getting it wrong would make existence
+    /// and position disagree about how much belief there is.
+    #[test]
+    fn every_labels_spatial_density_stays_normalised() {
+        let mut filter = lmb();
+        let motion = ConstantVelocity { sigma_a_sq: 1.0 };
+        let truth = [[0.0, 0.0, 100.0], [250.0, 0.0, 100.0]];
+        for scan in 0..12 {
+            let births = if scan == 0 {
+                truth
+                    .iter()
+                    .map(|p| lmb_birth(*p, [0.0, 0.0, 0.0]))
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+            filter.predict(&motion, 1.0, &births).expect("finite");
+            let detections: Vec<_> = truth.iter().map(|p| detection(*p)).collect();
+            filter.update(&detections).expect("valid");
+            for bernoulli in filter.bernoullis() {
+                let mass: f64 = bernoulli.spatial.iter().map(|c| c.weight).sum();
+                assert!(
+                    (mass - 1.0).abs() < 1e-9,
+                    "scan {scan}: label {:?}'s spatial density integrates to {mass}, not 1",
+                    bernoulli.label
+                );
+                assert!(
+                    (0.0..=1.0).contains(&bernoulli.existence),
+                    "scan {scan}: existence {} is not a probability",
+                    bernoulli.existence
+                );
+            }
+        }
+    }
+
+    /// The headline property, in miniature: a tracked target keeps its label, and a
+    /// target that appears later gets one never used before. The dedicated integration
+    /// test exercises this much harder; this one keeps the property inside the crate.
+    #[test]
+    fn a_tracked_label_persists_and_a_new_target_gets_an_unused_one() {
+        let mut filter = lmb();
+        let motion = ConstantVelocity { sigma_a_sq: 1.0 };
+        let first = [0.0, 0.0, 100.0];
+        let second = [400.0, 0.0, 100.0];
+        let mut seen_labels: Vec<TrackId> = Vec::new();
+        let mut first_label = None;
+        for scan in 0..14 {
+            let births = match scan {
+                0 => vec![lmb_birth(first, [0.0, 0.0, 0.0])],
+                6 => vec![lmb_birth(second, [0.0, 0.0, 0.0])],
+                _ => Vec::new(),
+            };
+            filter.predict(&motion, 1.0, &births).expect("finite");
+            let mut detections = vec![detection(first)];
+            if scan >= 6 {
+                detections.push(detection(second));
+            }
+            filter.update(&detections).expect("valid");
+            let labels = filter.labels();
+            if scan == 0 {
+                first_label = labels.first().copied();
+            }
+            assert!(
+                labels.contains(&first_label.expect("a label at scan 0")),
+                "scan {scan}: the first target's label disappeared; labels {labels:?}"
+            );
+            for label in labels {
+                if !seen_labels.contains(&label) {
+                    assert!(
+                        scan == 0 || scan == 6,
+                        "scan {scan}: label {label:?} appeared without a birth"
+                    );
+                    seen_labels.push(label);
+                }
+            }
+        }
+        assert_eq!(
+            seen_labels.len(),
+            2,
+            "two births should have issued exactly two labels, issued {seen_labels:?}"
+        );
+    }
+
+    /// A retired label must never come back. If it could, a consumer holding an
+    /// identifier across a gap would silently be handed a different target.
+    #[test]
+    fn a_retired_label_is_never_reissued() {
+        let mut filter = lmb();
+        let motion = ConstantVelocity { sigma_a_sq: 1.0 };
+        let position = [0.0, 0.0, 100.0];
+        filter
+            .predict(&motion, 1.0, &[lmb_birth(position, [0.0, 0.0, 0.0])])
+            .expect("finite");
+        filter.update(&[detection(position)]).expect("valid");
+        let original = filter.labels();
+        assert_eq!(original.len(), 1);
+
+        // Starve it until it is pruned.
+        for _ in 0..400 {
+            filter.predict(&motion, 1.0, &[]).expect("finite");
+            filter.update(&[]).expect("valid");
+            if filter.labels().is_empty() {
+                break;
+            }
+        }
+        assert!(
+            filter.labels().is_empty(),
+            "an undetected target never faded: {:?}",
+            filter
+                .bernoullis()
+                .iter()
+                .map(|b| b.existence)
+                .collect::<Vec<_>>()
+        );
+
+        filter
+            .predict(&motion, 1.0, &[lmb_birth(position, [0.0, 0.0, 0.0])])
+            .expect("finite");
+        filter.update(&[detection(position)]).expect("valid");
+        let reborn = filter.labels();
+        assert_eq!(reborn.len(), 1);
+        assert_ne!(
+            reborn[0], original[0],
+            "a retired label was reissued to a different target"
+        );
+    }
+
+    /// Past the bound the filter refuses rather than approximating. The alternative --
+    /// truncating the hypothesis space and returning the result as if it were exact --
+    /// is the failure mode this crate's whole approach exists to avoid.
+    #[test]
+    fn a_scan_past_the_exact_association_bound_is_refused_not_approximated() {
+        let settings = LmbSettings {
+            max_detections_per_scan: 4,
+            ..LmbSettings::default()
+        };
+        let mut filter = LmbFilter::new(
+            settings,
+            position_h(),
+            SMatrix::<f64, M, M>::identity() * 25.0,
+        )
+        .expect("valid");
+        let motion = ConstantVelocity { sigma_a_sq: 1.0 };
+        filter
+            .predict(
+                &motion,
+                1.0,
+                &[lmb_birth([0.0, 0.0, 100.0], [0.0, 0.0, 0.0])],
+            )
+            .expect("finite");
+        let detections: Vec<_> = (0..5)
+            .map(|i| detection([f64::from(i) * 50.0, 0.0, 100.0]))
+            .collect();
+        assert_eq!(
+            filter.update(&detections).unwrap_err(),
+            RfsError::TooManyDetections {
+                detections: 5,
+                limit: 4,
+            }
+        );
+    }
+
+    /// Settings that cannot be allocated for must be refused when they are set, not when
+    /// a scan happens to arrive.
+    #[test]
+    fn an_unsupportable_detection_bound_is_refused_at_construction() {
+        let err = LmbFilter::new(
+            LmbSettings {
+                max_detections_per_scan: MAX_SUPPORTED_DETECTIONS + 1,
+                ..LmbSettings::default()
+            },
+            position_h(),
+            SMatrix::<f64, M, M>::identity(),
+        )
+        .unwrap_err();
+        assert!(matches!(err, RfsError::MalformedScene { .. }));
+    }
+
+    /// A clutter intensity of zero would divide every association weight by zero. The
+    /// PHD filter tolerates it (its normalisation only adds the clutter term); this one
+    /// cannot, and says so rather than producing infinities.
+    #[test]
+    fn a_zero_clutter_intensity_is_refused() {
+        let err = LmbFilter::new(
+            LmbSettings {
+                clutter_density: 0.0,
+                ..LmbSettings::default()
+            },
+            position_h(),
+            SMatrix::<f64, M, M>::identity(),
+        )
+        .unwrap_err();
+        assert!(matches!(err, RfsError::MalformedScene { .. }));
+    }
+
+    /// When two targets are at the same point at the same scan, the honest answer is
+    /// that the filter cannot tell the two detections apart -- and it must say so, with
+    /// an even split, rather than committing to one. This is the case that distinguishes
+    /// a filter reporting its own uncertainty from one manufacturing certainty.
+    #[test]
+    fn coincident_targets_produce_an_even_association_split() {
+        let mut filter = lmb();
+        let motion = ConstantVelocity { sigma_a_sq: 1.0 };
+        filter
+            .predict(
+                &motion,
+                1.0,
+                &[
+                    lmb_birth([-40.0, 0.0, 100.0], [20.0, 0.0, 0.0]),
+                    lmb_birth([40.0, 0.0, 100.0], [-20.0, 0.0, 0.0]),
+                ],
+            )
+            .expect("finite");
+        // Scan 0: well separated.
+        filter
+            .update(&[
+                detection([-40.0, 0.0, 100.0]),
+                detection([40.0, 0.0, 100.0]),
+            ])
+            .expect("valid");
+        // Scans 1 and 2 bring them together at the same point.
+        for x in [20.0_f64, 0.0] {
+            filter.predict(&motion, 1.0, &[]).expect("finite");
+            filter
+                .update(&[detection([-x, 0.0, 100.0]), detection([x, 0.0, 100.0])])
+                .expect("valid");
+        }
+        let association = filter.last_association();
+        assert_eq!(association.len(), 2);
+        for (label, row) in association {
+            let to_first = row[ASSOCIATION_FIRST_DETECTION];
+            let to_second = row[ASSOCIATION_FIRST_DETECTION + 1];
+            assert!(
+                (to_first - to_second).abs() < 1e-9,
+                "label {label:?} at a coincident crossing should be an even split, got \
+                 {to_first} and {to_second}"
+            );
+            assert!(
+                to_first > 0.4,
+                "label {label:?} should still be confident it was detected at all: \
+                 {row:?}"
+            );
+        }
     }
 
     /// The leave-one-out elementary symmetric functions on the vector that broke the

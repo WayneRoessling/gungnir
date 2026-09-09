@@ -8,7 +8,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-description = "Registry for selecting, tuning, comparing, validating, promoting, and rolling back filter/association configurations by mission profile. gungnir-capabilities.md §5.4 -- Medium."
+description = "Registry for selecting, tuning, comparing, validating, promoting, and rolling back filter/association configurations by mission profile, and (GAP-078) the model artefact -- name, version, hash, evaluation record -- a baseline optionally carries alongside its tracking configuration through the same promotion state machine. gungnir-capabilities.md §5.4 -- Medium."
 
 [lib]
 # `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's

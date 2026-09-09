@@ -41,6 +41,50 @@ pub enum PromotionState {
     RolledBack,
 }
 
+/// A model artefact as this crate's promotion machinery governs it (GAP-078;
+/// `docs/ml/mlops.md` §1's recommended option, chosen over a parallel registry): carried
+/// by [`ModelBaseline`] alongside the tracking configuration so both are validated,
+/// promoted, and rolled back together, through the one state machine
+/// [`ModelBaseline::state`] already is -- "one registry, one promotion state machine,
+/// one audit trail for what is in force" (`mlops.md` §1). `PromotionState` is therefore
+/// not repeated here: it already lives on the baseline this type is a field of.
+///
+/// Deliberately does not depend on `gungnir-ml`: nothing in `ARCHITECTURE.md` draws that
+/// edge (`gungnir-ml` is documented as having no dependents at all, `docs/ml/
+/// architecture.md` §1), and this type is what governance needs to know about an
+/// artefact, not what `gungnir-ml::ModelSet::load` needs to load one -- the two crates
+/// describe the same artefact from different sides of the promotion boundary on
+/// purpose.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ModelArtifactManifest {
+    /// The model's own name, e.g. `"ml-01"` -- distinct from `ModelBaseline::id`'s
+    /// candidate name, which labels a tuning attempt, not a model.
+    pub name: String,
+    /// Semantic, `major.minor.patch` (`docs/ml/mlops.md` §2).
+    pub version: String,
+    /// The artefact's SHA-256, lowercase hex (`docs/ml/architecture.md` §5: the manifest
+    /// states this so a hash mismatch refuses the artefact before it reaches a runtime).
+    pub sha256: String,
+    pub evaluation: EvaluationRecord,
+}
+
+/// What a model showed before promotion was considered: the three gates
+/// `docs/ml/evaluation-and-verification.md` §1 names, offline, parity and shadow.
+/// Free-form gate names rather than one field per named gate, because this crate does
+/// not own the gate catalogue -- that document does, and a fourth gate added there must
+/// not need a schema change here.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EvaluationRecord {
+    /// Every gate this artefact has passed, e.g. `["offline", "parity"]`. Order is not
+    /// meaningful; membership is what `validate` checks.
+    pub gates_passed: Vec<String>,
+    /// Where the evaluation report lives -- a path, a report id, or a citation. Never
+    /// empty for a real record: an evaluation nobody can point to is indistinguishable
+    /// from one that did not happen, which is the invented-field failure GAP-078's own
+    /// closing action in the gap register warns against.
+    pub evidence: String,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ModelBaseline {
     /// Which candidate, in which profile.
@@ -50,6 +94,12 @@ pub struct ModelBaseline {
     /// What validated this candidate, when the baseline said (DN-24 §4).
     #[serde(default)]
     pub validated_by: Option<String>,
+    /// The model artefact this candidate promotes alongside its tracking configuration,
+    /// if it names one (GAP-078). `None` for every baseline before this field existed,
+    /// and for any baseline that governs tracking configuration only -- carrying no
+    /// model is a valid, common answer, not a missing one.
+    #[serde(default)]
+    pub model: Option<ModelArtifactManifest>,
 }
 
 pub trait ModelRegistry: Send + Sync {
@@ -111,6 +161,10 @@ impl InMemoryModelRegistry {
                 config: candidate.config.clone(),
                 state: PromotionState::Candidate,
                 validated_by: candidate.validated_by.clone(),
+                // `gungnir-config`'s schema carries no model manifest field (GAP-078's
+                // closing action builds the governance type and its validation, not a
+                // config-file producer for it -- no model exists yet to name, GAP-080).
+                model: None,
             });
         }
         for index in 0..registry.baselines.len() {
@@ -134,13 +188,18 @@ impl InMemoryModelRegistry {
     }
 
     /// Run the validation gates. Today the gate is structural (the config must be
-    /// valid under `gungnir-config`'s rules); the oracle-comparison gates from
+    /// valid under `gungnir-config`'s rules, and a model artefact if one is named must
+    /// be a real-shaped one -- GAP-078); the oracle-comparison gates from
     /// `verification-capability-table.md` §1 plug in here.
     ///
     /// # Errors
     ///
-    /// [`ModelOpsError::ValidationFailed`] when there is no such candidate, or when its
-    /// configuration is one no filter could run.
+    /// [`ModelOpsError::ValidationFailed`] when there is no such candidate, when its
+    /// configuration is one no filter could run, or when it names a model artefact this
+    /// crate cannot recognise as real (an empty name, version, or evidence citation, an
+    /// artefact hash that is not 64 lowercase hex characters, or no gate recorded as
+    /// passed at all -- `docs/ml/mlops.md` §1's own warning that an unpopulated field is
+    /// invented wrongly, made structural rather than left to convention).
     pub fn validate(&mut self, index: usize) -> Result<(), ModelOpsError> {
         let b = self
             .baselines
@@ -153,6 +212,34 @@ impl InMemoryModelRegistry {
                 "invalid tracking config for {}",
                 b.id
             )));
+        }
+        if let Some(model) = &b.model {
+            if model.name.trim().is_empty()
+                || model.version.trim().is_empty()
+                || model.evaluation.evidence.trim().is_empty()
+            {
+                return Err(ModelOpsError::ValidationFailed(format!(
+                    "model artefact for {} names an empty field",
+                    b.id
+                )));
+            }
+            let is_sha256_hex = model.sha256.len() == 64
+                && model
+                    .sha256
+                    .chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase());
+            if !is_sha256_hex {
+                return Err(ModelOpsError::ValidationFailed(format!(
+                    "model artefact for {} has a sha256 that is not 64 lowercase hex characters",
+                    b.id
+                )));
+            }
+            if model.evaluation.gates_passed.is_empty() {
+                return Err(ModelOpsError::ValidationFailed(format!(
+                    "model artefact for {} names no evaluation gate as passed",
+                    b.id
+                )));
+            }
         }
         b.state = PromotionState::Validated;
         Ok(())
@@ -253,6 +340,19 @@ mod tests {
             },
             state: PromotionState::Candidate,
             validated_by: None,
+            model: None,
+        }
+    }
+
+    fn model_artifact(sha256: &str, gates_passed: Vec<&str>) -> ModelArtifactManifest {
+        ModelArtifactManifest {
+            name: "ml-01".into(),
+            version: "1.0.0".into(),
+            sha256: sha256.into(),
+            evaluation: EvaluationRecord {
+                gates_passed: gates_passed.into_iter().map(str::to_owned).collect(),
+                evidence: "docs/ml/evaluation-and-verification.md run 2026-09-08".into(),
+            },
         }
     }
 
@@ -444,5 +544,111 @@ mod tests {
         assert!(r
             .promoted(&MissionProfile::new(MissionProfile::DEFAULT))
             .is_none());
+    }
+
+    // GAP-078: a model artefact is carried on `ModelBaseline` and promoted, validated,
+    // and rolled back through the same state machine as the tracking configuration
+    // beside it, rather than a parallel registry (`docs/ml/mlops.md` §1).
+
+    /// A baseline naming no model validates and promotes exactly as before GAP-078:
+    /// carrying no model is the common case (no model exists to promote yet, GAP-080),
+    /// not a degraded one.
+    #[test]
+    fn a_baseline_naming_no_model_is_unaffected_by_the_model_gate() {
+        let mut r = InMemoryModelRegistry::new();
+        r.register(baseline("ekf", "ekf"));
+        r.validate(0)
+            .expect("a config-only baseline still validates");
+        let b = r.candidates(&coastal())[0].clone();
+        r.promote(&b)
+            .expect("a config-only baseline still promotes");
+        assert!(r.promoted(&coastal()).expect("in force").model.is_none());
+    }
+
+    /// A real-shaped model artefact -- name, version, a 64-hex-character hash, and at
+    /// least one gate recorded passed with evidence -- validates and is promoted
+    /// alongside its tracking configuration in the one state machine.
+    #[test]
+    fn a_baseline_naming_a_well_formed_model_validates_and_promotes_with_it() {
+        let mut b = baseline("ekf", "ekf");
+        b.model = Some(model_artifact(&"a".repeat(64), vec!["offline", "parity"]));
+        let mut r = InMemoryModelRegistry::new();
+        r.register(b);
+        r.validate(0)
+            .expect("a well-formed model artefact validates");
+        let promoted = r.candidates(&coastal())[0].clone();
+        r.promote(&promoted).expect("promotes with its model");
+        let in_force = r.promoted(&coastal()).expect("in force");
+        let model = in_force
+            .model
+            .as_ref()
+            .expect("the model rode along with the baseline");
+        assert_eq!(model.name, "ml-01");
+        assert_eq!(model.evaluation.gates_passed, vec!["offline", "parity"]);
+    }
+
+    /// Each of the fields `docs/ml/mlops.md` §1 warns get invented wrongly when nothing
+    /// populates them -- name, version, hash shape, and evaluation evidence -- is
+    /// checked structurally, named individually so the fix is unambiguous.
+    #[test]
+    fn a_model_artefact_missing_any_stated_field_refuses_validation() {
+        let cases: Vec<ModelArtifactManifest> = vec![
+            ModelArtifactManifest {
+                name: String::new(),
+                ..model_artifact(&"a".repeat(64), vec!["offline"])
+            },
+            ModelArtifactManifest {
+                version: String::new(),
+                ..model_artifact(&"a".repeat(64), vec!["offline"])
+            },
+            ModelArtifactManifest {
+                evaluation: EvaluationRecord {
+                    evidence: String::new(),
+                    ..model_artifact(&"a".repeat(64), vec!["offline"]).evaluation
+                },
+                ..model_artifact(&"a".repeat(64), vec!["offline"])
+            },
+            // Too short.
+            model_artifact("abc123", vec!["offline"]),
+            // Right length, not hex.
+            model_artifact(&"z".repeat(64), vec!["offline"]),
+            // Uppercase hex is still refused: the manifest's own convention
+            // (`gungnir-ml`'s `format!("{:x}", ...)`) is always lowercase, and accepting
+            // both would let two manifests name the same artefact two different ways.
+            model_artifact(&"A".repeat(64), vec!["offline"]),
+            // No gate recorded passed at all.
+            model_artifact(&"a".repeat(64), vec![]),
+        ];
+        for model in cases {
+            let mut b = baseline("ekf", "ekf");
+            b.model = Some(model.clone());
+            let mut r = InMemoryModelRegistry::new();
+            r.register(b);
+            assert!(
+                matches!(r.validate(0), Err(ModelOpsError::ValidationFailed(_))),
+                "expected {model:?} to fail validation"
+            );
+        }
+    }
+
+    /// Two candidates in one profile, one naming a model and one not, are still
+    /// governed independently -- a model is a property of the candidate, not of the
+    /// profile.
+    #[test]
+    fn rollback_restores_the_previous_candidates_model_along_with_its_config() {
+        let mut r = InMemoryModelRegistry::new();
+        let mut with_model = baseline("with-model", "ekf");
+        with_model.model = Some(model_artifact(&"a".repeat(64), vec!["offline", "parity"]));
+        r.register(with_model);
+        r.register(baseline("without-model", "imm-cv-ct"));
+        r.validate(0).expect("validate with-model");
+        r.validate(1).expect("validate without-model");
+        let with_model = r.candidates(&coastal())[0].clone();
+        let without_model = r.candidates(&coastal())[1].clone();
+        r.promote(&with_model).expect("promote with-model");
+        r.promote(&without_model).expect("promote without-model");
+        assert!(r.promoted(&coastal()).expect("in force").model.is_none());
+        r.rollback(&coastal()).expect("rollback");
+        assert!(r.promoted(&coastal()).expect("restored").model.is_some());
     }
 }

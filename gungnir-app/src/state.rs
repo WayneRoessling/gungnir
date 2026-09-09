@@ -1154,13 +1154,18 @@ fn build_encryption(
             )
         }
 
-        // Validation refuses this, so reaching here means a baseline bypassed it. Say
-        // so and write in the clear rather than pretending either way.
-        other @ KeyProviderConfig::ManagedService { .. } => {
-            let reason = format!(
-                "the configured key provider is designed and not built ({})",
-                other.owning_gap().unwrap_or("GAP-084")
-            );
+        // **Built since 2026-09-08, and still refused here** (DN-22 amendment 5, §14h).
+        // The refusal is no longer "designed and not built" -- it is: §5's table assigns
+        // a managed key service to the **cloud node**, the way it assigns the operating
+        // system's keystore to this desktop, and `gungnir-node`'s `seal_journal` is where
+        // the arm for it lives. The exact mirror of that binary keeping no arm for
+        // `OperatingSystemKeystore`.
+        //
+        // A connected desktop wanting a cloud key service would be a change to §5's
+        // table, so it is a later question and not one to settle by quietly adding an arm.
+        KeyProviderConfig::ManagedService { .. } => {
+            let reason = "a managed key service is the cloud node's custody row (DN-22                           §5), not the desktop's; this desktop's row is the operating                           system's keystore"
+                .to_string();
             alerts.push(format!("Journal encryption is off: {reason}"));
             (
                 EncryptionStatus::UnavailableWritingPlaintext { reason },

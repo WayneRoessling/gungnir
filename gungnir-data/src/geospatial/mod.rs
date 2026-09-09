@@ -17,6 +17,14 @@
 //! and `TerrainMesh::from_grid` turns one into vertices for the viewport; a corrupt file
 //! is a `DataError`, never a panic (`verification-capability-table.md` §2, `gungnir-data`
 //! row). Terrain classification (GAP-082) stays unwritten and says so.
+//!
+//! **Real-world CRS conversion** (signed off 2026-09-08, D-41): a file's `GridCrs` no
+//! longer has to be `Unstated` or the deployment's own local frame. `crs::to_wgs84`
+//! (behind the `crs` feature) converts a geographic or projected CRS with a
+//! known EPSG code into WGS84 geographic via `proj`; `gungnir-app` carries the result
+//! the rest of the way to local ENU, since that step needs `gungnir-coord`, which this
+//! crate does not depend on. See the `crs` module below for the reasoning and the
+//! feature's CI-feasibility caveat.
 
 // "GeoTIFF" is a proper noun and not an identifier; the lint would have it in backticks.
 #![allow(clippy::doc_markdown)]
@@ -193,6 +201,61 @@ impl TerrainMesh {
         self.origin = [0.0, 0.0];
         self
     }
+
+    /// Every position's `[x, y]`, absolute in this mesh's own frame -- `origin` (kept in
+    /// full `f64`) plus each position's small `f32` offset -- in the same order as
+    /// `positions`. Reconstructing this way, rather than reading `positions` alone,
+    /// never rounds a UTM- or WGS84-scale absolute coordinate to `f32`; only the small
+    /// offset from a nearby origin ever was `f32` to begin with.
+    ///
+    /// Exists for a real-world-CRS conversion (GAP-023, D-41): a caller reprojects the
+    /// result (`geospatial::crs::to_wgs84`, or a further conversion this crate does not
+    /// hold, such as `gungnir_coord`'s geographic-to-local-ENU) and returns it through
+    /// [`Self::with_xy`], which is the only place a coordinate re-enters `f32`.
+    #[must_use]
+    pub fn absolute_positions_xy(&self) -> Vec<[f64; 2]> {
+        let [ox, oy] = self.origin;
+        self.positions
+            .iter()
+            .map(|p| [ox + f64::from(p[0]), oy + f64::from(p[1])])
+            .collect()
+    }
+
+    /// This mesh with its `[x, y]` replaced by `xy` (the same length and order as
+    /// `positions` -- `absolute_positions_xy`'s own order) and `crs` set to `new_crs`.
+    /// Height (`positions[_][2]`), `indices` and the grid shape (`rows`, `columns`) are
+    /// unchanged: only where a vertex sits moved, never which ones exist or how they
+    /// connect. `origin` becomes `[0.0, 0.0]`: `xy` is already absolute in whatever
+    /// frame the caller placed it into, with nothing left to fold in later --
+    /// `.placed()` on the result is a no-op, the same as it would be on any mesh whose
+    /// origin is already zero.
+    ///
+    /// # Errors
+    ///
+    /// When `xy.len()` does not equal `self.positions.len()`.
+    pub fn with_xy(&self, xy: &[[f64; 2]], new_crs: GridCrs) -> Result<Self, DataError> {
+        if xy.len() != self.positions.len() {
+            return Err(DataError::Parse(format!(
+                "{} coordinates for {} vertices",
+                xy.len(),
+                self.positions.len()
+            )));
+        }
+        let positions = self
+            .positions
+            .iter()
+            .zip(xy)
+            .map(|(p, &[x, y])| [relative_to_f32(x), relative_to_f32(y), p[2]])
+            .collect();
+        Ok(Self {
+            positions,
+            indices: self.indices.clone(),
+            origin: [0.0, 0.0],
+            crs: new_crs,
+            rows: self.rows,
+            columns: self.columns,
+        })
+    }
 }
 
 /// A cell offset within one grid is at most `columns * cell_size`, which is well inside
@@ -222,6 +285,139 @@ pub mod classification {
             what: "terrain classification",
             waiting_on: "GAP-082, a classification design over the loaded grid",
         })
+    }
+}
+
+/// Real-world coordinate reference system conversion for a DEM (GAP-023, D-41): behind
+/// the `crs` feature, off by default. `docs/agentic-coding-standards.md`
+/// §2.9's D-41 entry says why: `proj-sys` links `libproj`, built from its own vendored
+/// source (`bundled_proj`) with `cmake` and a C/C++ toolchain, a heavier and more
+/// environment-dependent build than the rest of this crate pays for by default -- no
+/// host this change could confirm build against had `cmake` or `libclang`, so this is
+/// verified in CI (a dedicated workflow), not by this crate's ordinary `cargo test`.
+///
+/// Deliberately stops at WGS84 geographic (EPSG:4326) rather than going the rest of the
+/// way to local ENU: this crate depends on no other workspace crate
+/// (`ARCHITECTURE.md`'s dependency table), so it cannot reach `gungnir_coord::Wgs84`,
+/// the oracle-verified tangent-plane transform every other geodetic thing in the system
+/// already goes through. `gungnir-app` (which already depends on both `gungnir-data`
+/// and `gungnir-coord`) carries a WGS84 result the rest of the way, using the
+/// deployment's own declared origin (`ConfigBaseline::origin`) -- the same origin
+/// everything else in the local picture is relative to, rather than a second one this
+/// module would otherwise have to invent.
+#[cfg(feature = "crs")]
+pub mod crs {
+    use crate::DataError;
+
+    /// WGS84 geographic, EPSG:4326: what [`to_wgs84`] converts into.
+    pub const WGS84_EPSG: u32 = 4326;
+
+    /// Reproject `points`, each stated in `source_epsg`, into WGS84 geographic degrees
+    /// (`[longitude, latitude]`) via PROJ.
+    ///
+    /// `Proj::new_known_crs` normalises **both** the input and the output coordinate
+    /// order to Longitude/Latitude or Easting/Northing, regardless of a CRS's own
+    /// authority-defined axis order (docs.rs, `proj::Proj::new_known_crs`: EPSG:4326's
+    /// own definition is Latitude, Longitude, and the crate overrides that so a caller
+    /// never has to remember to reverse it). That is what makes it correct to write
+    /// `points` here as `[longitude, latitude]` for a geographic `source_epsg` and
+    /// `[easting, northing]` for a projected one, with no separate case for either --
+    /// otherwise the classic swapped-axis bug this function exists to not have.
+    ///
+    /// # Errors
+    ///
+    /// `DataError::Parse` when `source_epsg` is not a coordinate reference system PROJ
+    /// recognises, when PROJ cannot otherwise build the transform, when a point is not
+    /// finite, or when a point falls outside the transform's domain.
+    pub fn to_wgs84(points: &[[f64; 2]], source_epsg: u32) -> Result<Vec<[f64; 2]>, DataError> {
+        let from = format!("EPSG:{source_epsg}");
+        let to = format!("EPSG:{WGS84_EPSG}");
+        let transformer = proj::Proj::new_known_crs(&from, &to, None).map_err(|e| {
+            DataError::Parse(format!(
+                "{from} is not a coordinate reference system PROJ recognises: {e}"
+            ))
+        })?;
+        points
+            .iter()
+            .map(|&[x, y]| {
+                if !(x.is_finite() && y.is_finite()) {
+                    return Err(DataError::Parse(format!(
+                        "point ({x}, {y}) in {from} is not finite"
+                    )));
+                }
+                let (lon, lat) = transformer.convert((x, y)).map_err(|e| {
+                    DataError::Parse(format!(
+                        "{from} point ({x}, {y}) did not convert to WGS84: {e}"
+                    ))
+                })?;
+                Ok([lon, lat])
+            })
+            .collect()
+    }
+}
+
+/// Independent of any Python or `pyproj` check (this crate's CI has no interpreter
+/// installed for the feature this gates): a closed-form point derived from the
+/// transverse Mercator projection's own construction, the same "hand-checked" spirit
+/// `gungnir-data-fusion/src/point_to_plane.rs` and `normals.rs` document for their own
+/// independent verification, just checkable from the projection's definition instead of
+/// re-running it in another language.
+// Two stacked outer attributes, not one combined `cfg(all(test, feature = "crs"))` and
+// not an inner `#![cfg(feature = "crs")]` either.
+//
+// Not combined, because `gungnir-app/tests/architecture_compliance.rs`'s unwrap-policy
+// scanner strips `#[cfg(test)]`-gated modules by matching that literal attribute and
+// brace-matching from the next `{`; a combined form would leave these tests'
+// `expect(...)` looking like production code. Stacking keeps the literal attribute, and
+// `#[cfg(feature = ...)]` carries no brace of its own for the scanner to trip over.
+//
+// Not inner, because mixing an inner attribute with the outer ones above it is
+// `clippy::mixed_attributes_style`, which is denied. That only ever fires with the
+// feature on, so it went unseen until `ci.yml`'s `proj-crs` job first ran clippy here.
+#[cfg(test)]
+#[cfg(feature = "crs")]
+mod crs_tests {
+    use super::crs::to_wgs84;
+
+    /// UTM zone 33N's central meridian is 15°E. On the central meridian, at every
+    /// latitude, the transverse Mercator's projected x-coordinate is exactly zero by
+    /// the projection's own left-right symmetry about that meridian; UTM's uniform
+    /// scale factor (0.9996) maps zero to zero, so the 500,000 m false easting is the
+    /// *only* contributor to easting there, for any ellipsoid the projection uses. The
+    /// same symmetry makes the meridional arc length from the equator, measured along
+    /// the central meridian, exactly zero at the equator itself, so northing there is
+    /// the false northing (0 m, northern hemisphere) alone. EPSG:32633 (500000, 0) must
+    /// therefore convert to WGS84 (15.0 deg E, 0.0 deg N) to within numerical precision
+    /// -- a fact of UTM's definition, not of this crate or of `proj`'s implementation.
+    #[test]
+    fn utm_33n_central_meridian_at_the_equator_is_15_east_0_north() {
+        let out = to_wgs84(&[[500_000.0, 0.0]], 32633).expect("PROJ knows EPSG:32633");
+        let [lon, lat] = out[0];
+        assert!((lon - 15.0).abs() < 1e-6, "longitude: {lon}");
+        assert!(lat.abs() < 1e-6, "latitude: {lat}");
+    }
+
+    /// A point already in WGS84 converted to WGS84 is unchanged: the identity case,
+    /// and a check that axis order is what the module documentation claims (longitude
+    /// first), not silently swapped.
+    #[test]
+    fn wgs84_to_wgs84_is_the_identity() {
+        let out = to_wgs84(&[[15.0, 47.0]], 4326).expect("EPSG:4326 is always known");
+        let [lon, lat] = out[0];
+        assert!((lon - 15.0).abs() < 1e-9, "longitude: {lon}");
+        assert!((lat - 47.0).abs() < 1e-9, "latitude: {lat}");
+    }
+
+    #[test]
+    fn an_unknown_epsg_code_is_refused_by_name() {
+        let err = to_wgs84(&[[0.0, 0.0]], 999_999_999).expect_err("no such CRS");
+        assert!(err.to_string().contains("999999999"), "{err}");
+    }
+
+    #[test]
+    fn a_non_finite_point_is_refused_before_proj_sees_it() {
+        let err = to_wgs84(&[[f64::NAN, 0.0]], 4326).expect_err("not finite");
+        assert!(err.to_string().contains("not finite"), "{err}");
     }
 }
 

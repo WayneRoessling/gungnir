@@ -23,10 +23,30 @@
 //!
 //! **Not in the pipeline yet, and named rather than implied**: the nonlinear
 //! estimators are not selected here beyond the CV/CT IMM (EKF, UKF and the particle and
-//! square-root forms are still unreachable from a baseline, DN-28 §6), random-finite-set
-//! filtering is not run (GAP-015), and track-to-track fusion across platforms is not run
-//! (GAP-013). A deployment gets single-sensor-per-detection sequential fusion with
-//! global assignment inside a scan, which is what the composition honestly provides.
+//! square-root forms are still unreachable from a baseline, DN-28 §6), and track-to-track
+//! fusion across platforms is not run (GAP-013). A deployment gets
+//! single-sensor-per-detection sequential fusion with global assignment inside a scan,
+//! which is what the composition honestly provides.
+//!
+//! # The dense-group mode
+//!
+//! Random-finite-set filtering **can** be run since GAP-015, but only for the scene the
+//! association above cannot resolve, **only as a count and a shape, never as tracks**,
+//! and **only where a deployment asks for it**: [`PipelineSettings::dense_group`] is
+//! `None` by default, for a measured cost that field records. When it is enabled and an
+//! epoch's scan is denser than the association limit this workspace already states --
+//! more than `gungnir_association::jpda::MAX_DETECTIONS` detections -- a `gungnir-rfs`
+//! PHD (or CPHD, if a deployment selects it) runs beside the per-track filters and
+//! reports [`DenseGroupEstimate`]. It carries no track identifier of any kind, because
+//! the filter behind it carries no identity; the labelled filters that would are
+//! GAP-015's remaining row and are not built. See [`crate::dense_group`] for the whole of
+//! that reasoning.
+//!
+//! **The mode adds output and changes none.** The per-track path above -- prediction,
+//! gating, assignment, the lifecycle, [`FusionPipeline::snapshot`] and
+//! [`FusionPipeline::timed_snapshot`] -- runs identically whether the mode is engaged,
+//! idle or configured away, which `tests/dense_group.rs` asserts by comparing the two
+//! runs field for field over a raid that engages it.
 //!
 //! # Out of sequence, and why a horizon rather than a re-filter
 //!
@@ -54,12 +74,14 @@
 //! further apart are separate epochs, each predicted forward to its own measurement
 //! time, which is the ordinary sequential treatment of asynchronous sensors.
 
+use crate::dense_group::{DenseGroupEstimate, DenseGroupSettings, DenseGroupState};
 use crate::{BearingDetection, Detection};
 use gungnir_association::{solve_assignment, ChiSquareGate, GlobalNearestNeighbor};
 use gungnir_core::{ConstantVelocity, CoordinatedTurn};
 use gungnir_filters::{
     AzimuthElevation, BearingOnly, Filter, Imm, KalmanFilter, MeasurementModel, ModeFilter,
 };
+use gungnir_rfs::GaussianComponent;
 use gungnir_track::{Track, TrackId, TrackManager};
 use nalgebra::{DMatrix, SMatrix, SVector};
 use std::collections::HashMap;
@@ -215,6 +237,37 @@ pub struct PipelineSettings {
     /// Initial mode probabilities over the same `[constant-velocity, coordinated-turn]`
     /// order, summing to one. Ignored unless `filter_selection` is `ImmCvCt`.
     pub imm_initial_mode_probabilities: [f64; 2],
+    /// The dense-group mode (GAP-015): a random-finite-set filter run beside the
+    /// per-track ones for a scan too dense to associate, reporting a count and a shape
+    /// and **never tracks**. `None` switches it off entirely.
+    ///
+    /// # `None` by default, and the reason is a measurement rather than caution
+    ///
+    /// An engaged PHD epoch was measured on this development machine, release profile, at
+    /// **about 6 ms added per epoch for a 20-target raid and about 200 ms for a
+    /// 200-target one** (`DenseGroupSettings::phd` records the whole table). The
+    /// per-frame budget in `docs/performance-budgets.md` is p99 under 4 ms, and the
+    /// pipeline runs on the `tokio` executor thread that `crate::ingest_with` owns.
+    /// Work of that size on that thread is precisely the case
+    /// `docs/agentic-coding-standards.md` §2.2 names -- "a PHD update over a large
+    /// birth/clutter set" -- as needing `tokio::task::spawn_blocking`, and this build
+    /// runs it inline.
+    ///
+    /// So a deployment turns it on knowing the cost, rather than every deployment paying
+    /// it unasked. **Switching the default on waits on that §2.2 plumbing**, which
+    /// restructures how `ingest_with` drives an epoch and is a change to the concurrency
+    /// shape of this crate for every deployment including the ones not using the mode --
+    /// the owner's call, recorded in GAP-015 rather than taken here.
+    ///
+    /// While it is `None` the mode costs nothing at all: `run_dense_group` returns on the
+    /// first line, before any comparison.
+    ///
+    /// **Not settable from a promoted baseline.** [`PipelineSettings::from_baseline`]
+    /// leaves it at the default: `gungnir-config`'s `TrackingConfig` has no vocabulary for
+    /// it, and inventing one here would put a field in the pipeline that no governance
+    /// record could account for. That plumbing is recorded as remaining in GAP-015 rather
+    /// than half-built.
+    pub dense_group: Option<DenseGroupSettings>,
 }
 
 impl Default for PipelineSettings {
@@ -240,6 +293,7 @@ impl Default for PipelineSettings {
             imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
             // Mostly constant-velocity to start, matching most targets most of the time.
             imm_initial_mode_probabilities: [0.9, 0.1],
+            dense_group: None,
         }
     }
 }
@@ -499,6 +553,23 @@ pub struct FusionPipeline {
     newest_seen_s: f64,
     /// Bearings that matched no track, kept for their stated lifetime (DN-27 §5 rule 3).
     retained: Vec<RetainedBearing>,
+    /// The dense-group filter, present only while the mode is engaged (GAP-015).
+    /// Owned here, on this pipeline's own task: no lock, no channel, no sharing.
+    dense: Option<DenseGroupState>,
+    /// What the dense-group mode reported for the **most recent epoch**, and nothing
+    /// older. Cleared at the start of every epoch and refilled only if the mode ran and
+    /// succeeded, so a caller can never be handed a group claim from an epoch that has
+    /// already passed.
+    dense_estimate: Option<DenseGroupEstimate>,
+    /// Consecutive epochs whose scan was below the engagement threshold while the
+    /// dense-group filter was running. The filter is released when this reaches
+    /// `settings.delete_after_misses`; see [`FusionPipeline::run_dense_group`].
+    dense_quiet_epochs: u32,
+    /// Epochs the dense-group filter refused (`gungnir_rfs::RfsError`). Kept here rather
+    /// than on [`PipelineStats`], whose fields are a wire contract
+    /// (`gungnir_model::PipelineStatsView`, GAP-096) that this change has no business
+    /// widening; reported through [`crate::PipelineSnapshot::dense_group_refusals`].
+    dense_refusals: u64,
     stats: PipelineStats,
 }
 
@@ -509,6 +580,8 @@ impl std::fmt::Debug for FusionPipeline {
             .field("buffered", &self.buffer.len())
             .field("retained_bearings", &self.retained.len())
             .field("cursor_s", &self.cursor_s)
+            .field("dense_group_engaged", &self.dense.is_some())
+            .field("dense_group_refusals", &self.dense_refusals)
             .field("stats", &self.stats)
             .finish_non_exhaustive()
     }
@@ -531,6 +604,10 @@ impl FusionPipeline {
             cursor_s: None,
             newest_seen_s: f64::NEG_INFINITY,
             retained: Vec::new(),
+            dense: None,
+            dense_estimate: None,
+            dense_quiet_epochs: 0,
+            dense_refusals: 0,
             stats: PipelineStats::default(),
         }
     }
@@ -716,6 +793,49 @@ impl FusionPipeline {
         &self.retained
     }
 
+    /// What the dense-group mode reported for the most recent epoch, if it ran (GAP-015).
+    ///
+    /// **`None` is the ordinary answer** and means the mode did not engage for that
+    /// epoch: the scan was resolvable, or the mode is switched off, or the filter refused
+    /// the scan. It is never a stale estimate from an earlier epoch -- see
+    /// [`DenseGroupEstimate::epoch_s`], which is the instant this is of.
+    ///
+    /// **What it is not**: tracks. See [`crate::dense_group`] for why a PHD or CPHD
+    /// intensity has no identity to give and why this type refuses to imply one.
+    #[must_use]
+    pub fn dense_group_estimate(&self) -> Option<&DenseGroupEstimate> {
+        self.dense_estimate.as_ref()
+    }
+
+    /// Whether the dense-group filter is currently running.
+    ///
+    /// True from the epoch the mode engaged until the epoch it was released, including
+    /// epochs in between whose own scan was not dense -- see
+    /// [`FusionPipeline::run_dense_group`] for why the filter is not torn down the first
+    /// time a raid's scan count dips.
+    #[must_use]
+    pub fn dense_group_engaged(&self) -> bool {
+        self.dense.is_some()
+    }
+
+    /// Epochs whose dense-group step was refused by the filter and produced no estimate.
+    ///
+    /// **Counted rather than only logged.** A refusal means the mode reported nothing for
+    /// an epoch it was engaged for, and a caller reading a run of `None`s has to be able
+    /// to tell "the scene was resolvable" from "the filter would not run".
+    ///
+    /// Two shapes of refusal, and they end differently. A refused *scan* releases the
+    /// filter and the mode engages again on the next dense epoch. A refused *settings*
+    /// object -- reachable only for a hand-built [`PipelineSettings`] the filters would
+    /// not accept -- switches the mode off for the rest of the session, because the
+    /// refusal is deterministic and retrying it every epoch would only fill the log.
+    /// [`FusionPipeline::settings`] then reports `dense_group: None`, so what the pipeline
+    /// says about itself stays true.
+    #[must_use]
+    pub fn dense_group_refusals(&self) -> u64 {
+        self.dense_refusals
+    }
+
     /// Drop retained bearings whose lifetime has run out at `now_s`.
     ///
     /// Called by [`FusionPipeline::offer_bearing`] on every offer; public so a host
@@ -873,6 +993,134 @@ impl FusionPipeline {
         for measurement in unassigned {
             self.initiate(&measurement, epoch_s);
         }
+
+        // Last, and reading `scan` rather than anything association produced: the
+        // dense-group mode exists because the association above stops being meaningful
+        // at this density, so deriving its input from that association's output would
+        // make it inherit the failure it is there to cover (GAP-015).
+        self.run_dense_group(&scan, epoch_s);
+    }
+
+    /// The dense-group mode for one epoch (GAP-015): engage, run, report, release.
+    ///
+    /// # When it engages
+    ///
+    /// When the epoch's scan holds more detections than the exact association in this
+    /// workspace will attempt: more than [`DenseGroupSettings::engage_above_detections`],
+    /// which defaults to `gungnir_association::jpda::MAX_DETECTIONS`. That constant is
+    /// that crate's own statement of where a scan stops being one exact association
+    /// problem, and GAP-015's Impact names raids "over the association limit" as the case
+    /// this mode is for. `MAX_TRACKS` sits beside it there and is deliberately **not** a
+    /// second trigger -- see [`DenseGroupSettings::engage_above_detections`] for why a
+    /// bound on combinatorial cost is not a statement about density.
+    ///
+    /// # Why it is not released the moment the scan thins
+    ///
+    /// Once engaged the filter keeps running until the scan has been below the threshold
+    /// for [`PipelineSettings::delete_after_misses`] consecutive epochs. A raid's scan
+    /// count fluctuates across any threshold, and tearing the filter down on the first dip
+    /// would throw away the intensity and restart the count from nothing, so the reported
+    /// count would swing for a reason that is an artefact of the trigger rather than a
+    /// fact about the sky.
+    ///
+    /// **The epoch count is the pipeline's own existing figure, not a new one.**
+    /// `delete_after_misses` is already this pipeline's answer to "how many consecutive
+    /// scans of contrary evidence before a belief is dropped", for a track; a group is
+    /// dropped on the same evidence.
+    ///
+    /// # A refusal produces no estimate rather than a stale one
+    ///
+    /// If the filter refuses the scan the estimate is dropped, the filter is released,
+    /// and [`FusionPipeline::dense_group_refusals`] counts it. Carrying the previous
+    /// epoch's estimate forward would be a group claim about an instant nothing observed.
+    fn run_dense_group(&mut self, scan: &[Detection], epoch_s: f64) {
+        // First, so that a pipeline with the mode switched off does no work at all here
+        // and not even a write: `dense_estimate` can only be `Some` if this ran.
+        let Some(settings) = self.settings.dense_group else {
+            return;
+        };
+        // The estimate is of this epoch or of nothing. Cleared before anything can refill
+        // it, so a refusal or a release below leaves no claim from an earlier epoch.
+        self.dense_estimate = None;
+
+        let dense = scan.len() > settings.engage_above_detections;
+        if self.dense.is_none() {
+            if !dense {
+                return;
+            }
+            let (h, r) = self.measurement_model();
+            match DenseGroupState::new(settings, h, r) {
+                Ok(state) => {
+                    tracing::info!(
+                        detections = scan.len(),
+                        filter = settings.filter.as_str(),
+                        "the scan is past the association limit; the dense-group filter \
+                         is engaged and reports a count, not tracks"
+                    );
+                    self.dense = Some(state);
+                }
+                Err(err) => {
+                    // Reachable only for hand-built settings; `DenseGroupSettings::default`
+                    // describes a scene. Counted rather than only logged, for the reason
+                    // `dense_group_refusals` gives.
+                    tracing::error!(%err, "the dense-group filter refused its own settings");
+                    self.dense_refusals = self.dense_refusals.saturating_add(1);
+                    self.settings.dense_group = None;
+                    return;
+                }
+            }
+        }
+
+        let births = self.dense_births(scan, settings.birth_weight);
+        let measurements: Vec<SVector<f64, 3>> = scan.iter().map(|d| d.measurement).collect();
+        let motion = ConstantVelocity {
+            sigma_a_sq: self.settings.process_noise_psd,
+        };
+        let Some(state) = self.dense.as_mut() else {
+            return;
+        };
+        if let Err(err) = state.step(motion, epoch_s, &births, &measurements) {
+            tracing::error!(%err, "the dense-group filter refused this scan; no group is reported");
+            self.dense_refusals = self.dense_refusals.saturating_add(1);
+            self.dense = None;
+            self.dense_quiet_epochs = 0;
+            return;
+        }
+        self.dense_estimate = Some(state.estimate(epoch_s, scan.len()));
+
+        if dense {
+            self.dense_quiet_epochs = 0;
+            return;
+        }
+        self.dense_quiet_epochs = self.dense_quiet_epochs.saturating_add(1);
+        if self.dense_quiet_epochs >= self.settings.delete_after_misses {
+            tracing::info!(
+                quiet_epochs = self.dense_quiet_epochs,
+                "the scan has not been dense for the deletion window; the dense-group \
+                 filter is released"
+            );
+            self.dense = None;
+            self.dense_quiet_epochs = 0;
+            self.dense_estimate = None;
+        }
+    }
+
+    /// One birth component per detection in the epoch, at
+    /// [`DenseGroupSettings::birth_weight`].
+    ///
+    /// The covariance is [`FusionPipeline::single_detection_covariance`] -- the same one
+    /// [`FusionPipeline::initiate`] gives a track started from a single detection, rather
+    /// than a second statement of the same prior that could drift from the first.
+    fn dense_births(&self, scan: &[Detection], weight: f64) -> Vec<GaussianComponent> {
+        let cov = self.single_detection_covariance();
+        scan.iter()
+            .map(|detection| {
+                let mut mean = SVector::<f64, 6>::zeros();
+                mean.fixed_rows_mut::<3>(0)
+                    .copy_from(&detection.measurement);
+                GaussianComponent { weight, mean, cov }
+            })
+            .collect()
     }
 
     /// Gate and assign one scan's detections to the live tracks.
@@ -956,11 +1204,7 @@ impl FusionPipeline {
     fn initiate(&mut self, measurement: &SVector<f64, 3>, epoch_s: f64) {
         let mut state = SVector::<f64, 6>::zeros();
         state.fixed_rows_mut::<3>(0).copy_from(measurement);
-        let mut covariance = SMatrix::<f64, 6, 6>::zeros();
-        for axis in 0..3 {
-            covariance[(axis, axis)] = self.settings.measurement_noise_var[axis];
-            covariance[(3 + axis, 3 + axis)] = self.settings.initial_velocity_var;
-        }
+        let covariance = self.single_detection_covariance();
         let id = self.manager.initiate(state, covariance);
         if let Some(filter) = self.new_filter(state, &covariance) {
             self.filters.insert(id, filter);
@@ -973,6 +1217,39 @@ impl FusionPipeline {
             tracing::error!(?id, "track initiated with no filter behind it");
         }
         self.stats.initiated = self.stats.initiated.saturating_add(1);
+    }
+
+    /// The position-only measurement model every sensor in
+    /// `docs/test-tracks/sensor-models.md` produces: `H` selecting position out of the
+    /// six-element state, and `R` from the deployment's own noise figures (DN-30 §5).
+    ///
+    /// One definition rather than one per caller. [`FusionPipeline::new_filter`] builds
+    /// the per-track estimators around it and [`FusionPipeline::run_dense_group`] builds
+    /// the random-finite-set filter around it, and a second copy of either would let the
+    /// dense-group mode drift onto a different sensor model than the tracks beside it.
+    fn measurement_model(&self) -> (SMatrix<f64, 3, 6>, SMatrix<f64, 3, 3>) {
+        let mut h = SMatrix::<f64, 3, 6>::zeros();
+        let mut r = SMatrix::<f64, 3, 3>::zeros();
+        for axis in 0..3 {
+            h[(axis, axis)] = 1.0;
+            r[(axis, axis)] = self.settings.measurement_noise_var[axis];
+        }
+        (h, r)
+    }
+
+    /// The covariance of a state known from exactly one position measurement: the
+    /// measurement's own noise on position, [`PipelineSettings::initial_velocity_var`] on
+    /// velocity, nothing off-diagonal.
+    ///
+    /// Shared by [`FusionPipeline::initiate`] and the dense-group mode's birth components
+    /// so the two cannot state the same prior differently.
+    fn single_detection_covariance(&self) -> SMatrix<f64, 6, 6> {
+        let mut covariance = SMatrix::<f64, 6, 6>::zeros();
+        for axis in 0..3 {
+            covariance[(axis, axis)] = self.settings.measurement_noise_var[axis];
+            covariance[(3 + axis, 3 + axis)] = self.settings.initial_velocity_var;
+        }
+        covariance
     }
 
     /// Build this pipeline's filter for a freshly initiated or bearing-refined track, per
@@ -990,14 +1267,7 @@ impl FusionPipeline {
         state: SVector<f64, 6>,
         covariance: &SMatrix<f64, 6, 6>,
     ) -> Option<TrackFilter> {
-        let mut h = SMatrix::<f64, 3, 6>::zeros();
-        for axis in 0..3 {
-            h[(axis, axis)] = 1.0;
-        }
-        let mut r = SMatrix::<f64, 3, 3>::zeros();
-        for axis in 0..3 {
-            r[(axis, axis)] = self.settings.measurement_noise_var[axis];
-        }
+        let (h, r) = self.measurement_model();
         match self.settings.filter_selection {
             FilterSelection::ConstantVelocity => {
                 Some(TrackFilter::ConstantVelocity(KalmanFilter::new(

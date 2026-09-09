@@ -18,6 +18,7 @@
 
 pub mod cat034;
 pub mod cat048;
+pub mod cat129;
 pub mod cat205;
 
 use crate::InteropError;
@@ -202,6 +203,13 @@ impl<'a> Cursor<'a> {
     pub fn u24(&mut self, what: &str) -> Result<u32, InteropError> {
         let b = self.take(3, what)?;
         Ok(u32::from_be_bytes([0, b[0], b[1], b[2]]))
+    }
+
+    /// A full 32-bit two's complement field (cat205's and cat129's own WGS-84
+    /// latitude/longitude counts; each category applies its own LSB on top).
+    pub fn i32(&mut self, what: &str) -> Result<i32, InteropError> {
+        let b = self.take(4, what)?;
+        Ok(i32::from_be_bytes([b[0], b[1], b[2], b[3]]))
     }
 
     /// A variable-length item: one octet, then one more for each set FX bit

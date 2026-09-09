@@ -346,8 +346,9 @@ pub enum MachineRole {
     },
 }
 
-/// One ASTERIX radar feed: a socket, the radars it may speak for, and (GAP-100) the
-/// direction finders it may attribute Category 205 bearings to. Not `Eq` now that
+/// One ASTERIX radar feed: a socket, the radars it may speak for, (GAP-100) the
+/// direction finders it may attribute Category 205 bearings to, and (GAP-101) the UAS
+/// gateways it may attribute Category 129 identification reports to. Not `Eq` now that
 /// `df_sites` carries a stated accuracy in radians (`DfSiteConfig`); every other field
 /// still would be.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -363,10 +364,18 @@ pub struct RadarFeedConfig {
     /// default for a feed that only carries radars) means every Category 205 report on
     /// this feed is counted `unknown_radar`, the same honest-empty state an
     /// unconfigured `radars` already gives Category 048 and 034. A feed must bind at
-    /// least one radar or one direction finder (`validate_radar_feeds`); nothing that
-    /// binds neither is worth a socket.
+    /// least one radar, one direction finder or one UAS gateway
+    /// (`validate_radar_feeds`); nothing that binds none of the three is worth a socket.
     #[serde(default)]
     pub df_sites: Vec<DfSiteConfig>,
+    /// UAS Identification and Target Report gateways this feed's Category 129 blocks may
+    /// be attributed to (GAP-101). Empty (the default before this was configurable, and
+    /// still the default for a feed that carries no UAS gateway) means every Category
+    /// 129 report on this feed is counted `unknown_radar` and attributed to nothing,
+    /// the same honest-empty state an unconfigured `df_sites` already gives Category
+    /// 205.
+    #[serde(default)]
+    pub uas_sites: Vec<UasSiteConfig>,
 }
 
 /// One AIS receiver feed (GAP-010, D-32): the receiver's sensor identity and where its
@@ -524,13 +533,91 @@ pub struct DfSiteConfig {
     pub azimuth_sigma_rad: f64,
 }
 
+/// One UAS Identification and Target Report gateway a feed's Category 129 blocks may be
+/// attributed to (GAP-101): which sensor its SAC/SIC pair is -- the identical lookup
+/// [`RadarBindingConfig`] and [`DfSiteConfig`] already make.
+///
+/// Leaner than both of those on purpose, and the reason is the category's own shape
+/// rather than an omission: `gungnir_interop::asterix::cat129::UasSite` carries no
+/// position because this category reports the *UAS's* own absolute position, not a range
+/// or a bearing that would need a receiving antenna's origin to resolve. So the sensor
+/// named here supplies only the identity a report is attributed under -- which is also
+/// why it must be in the baseline's own sensor list: the gateway admits a detection
+/// under that `SensorId` or not at all.
+///
+/// No check that `sac`/`sic` is non-zero, and that absence is deliberate: edition 1.2
+/// §5.2.1 *recommends* `00/00` for an airborne-to-ground broadcast
+/// (`gungnir_interop::asterix::cat129`'s own module documentation), so the common
+/// deployment is one entry at `(0, 0)` naming the single receiving gateway, and refusing
+/// that pair would refuse the specification's own recommended configuration.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct UasSiteConfig {
+    pub sensor_id: u32,
+    pub sac: u8,
+    pub sic: u8,
+}
+
+/// What a [`TerrainConfig::frame`] or [`PointCloudConfig::frame`] string means, parsed
+/// in one place so `validate_terrain` and the DEM loader's real-world-CRS conversion
+/// (GAP-023, D-41) read the same value the same way rather than each parsing the string
+/// afresh.
+///
+/// `TerrainConfig::frame` stays a plain `String` on the wire (schema-compatible with
+/// every baseline written before D-41, and consistent with how the rest of this file
+/// validates a string field rather than giving it a serde-level enum), but every reader
+/// of it should go through this type rather than compare against `"local-enu"` by hand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Frame {
+    /// The file was prepared in the deployment's local frame (metres east and north of
+    /// `ConfigBaseline::origin`); nothing to convert.
+    LocalEnu,
+    /// A real-world coordinate reference system, by its EPSG code -- geographic
+    /// (`4326` is WGS84) or projected (a UTM zone, for instance). D-41 chose full
+    /// projection support over a WGS84-only first step, so this is not restricted to
+    /// geographic codes.
+    Epsg(u32),
+}
+
+impl std::fmt::Display for Frame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Frame::LocalEnu => f.write_str("local-enu"),
+            Frame::Epsg(code) => write!(f, "EPSG:{code}"),
+        }
+    }
+}
+
+impl std::str::FromStr for Frame {
+    type Err = String;
+
+    /// `"local-enu"`, or `"epsg:<code>"` matched case-insensitively on the prefix (so
+    /// both `"EPSG:32633"` -- the casing this file's own error messages and
+    /// `gungnir-app`'s already use -- and `"epsg:32633"` parse) with an unsigned decimal
+    /// code after the colon. Anything else, including a negative or non-numeric code,
+    /// is refused by name rather than guessed at.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "local-enu" {
+            return Ok(Frame::LocalEnu);
+        }
+        let lower = s.to_ascii_lowercase();
+        let Some(code) = lower.strip_prefix("epsg:") else {
+            return Err(format!("{s:?} is not \"local-enu\" or \"epsg:<code>\""));
+        };
+        code.parse::<u32>()
+            .map(Frame::Epsg)
+            .map_err(|_| format!("{s:?}'s EPSG code is not an unsigned whole number"))
+    }
+}
+
 /// The terrain a deployment masks line of sight against (GAP-023).
 ///
-/// `frame` says what the file's coordinates are, and today the only value is
-/// `"local-enu"`: the DEM was prepared in the deployment's local frame (metres east and
-/// north of `origin`), because converting a projected or geographic DEM needs a
-/// projection library the approved stack does not hold. A file whose own tags contradict
-/// that is refused at load, by name.
+/// `frame` says what the file's coordinates are: `"local-enu"` (the DEM was prepared in
+/// the deployment's local frame, metres east and north of `origin`), or `"epsg:<code>"`
+/// naming the real-world coordinate reference system the file is actually in --
+/// geographic or projected -- which the loader converts to local ENU via `proj`
+/// (GAP-023, D-41). See [`Frame`]. A `GeoTIFF`'s own tags are read regardless of what
+/// `frame` declares; a mismatch between the two, or a file whose tags contradict a
+/// `"local-enu"` declaration, is refused at load, by name.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TerrainConfig {
     /// An ESRI ASCII grid (`.asc`) or a `GeoTIFF` (`.tif`, `.tiff`).
@@ -565,17 +652,64 @@ pub struct PointCloudFileConfig {
 /// and inventing something to align it to would be the fiction this baseline's other
 /// optional fields are written to avoid.
 ///
-/// `frame` mirrors [`TerrainConfig::frame`]: today only `"local-enu"` is accepted. The
-/// reason is narrower here than for terrain -- the loader does not read a LAS file's own
-/// CRS at all, so there is no tag to contradict the declaration and check it against the
-/// way [`TerrainConfig`]'s DEM loader does; the field exists so a real projection, when
-/// one is added, has somewhere to be declared instead of being assumed silently.
+/// `frame` says what the pair's coordinates **are**, not what they should become. Two
+/// forms are accepted (GAP-102, D-41):
+///
+/// * `"local-enu"` (the default): the files were prepared in the deployment's own local
+///   ENU metres and are drawn as they stand. Since GAP-102 the loader reads a LAS file's
+///   own CRS VLRs, so this is now a checkable claim rather than an unopposed one -- a
+///   file whose own tags declare a real-world system contradicts it and is refused by
+///   name, which is what [`TerrainConfig`]'s DEM path has always done and what this
+///   field previously could not.
+/// * `"epsg:<code>"`, case-insensitive on the prefix (`"epsg:32610"`, `"EPSG:2992"`):
+///   the files are in that coordinate reference system and are converted into the
+///   deployment's local ENU frame on load. This needs `ConfigBaseline::origin`, since a
+///   deployment with no declared origin has no local frame to convert into, and it needs
+///   a binary built with `gungnir-data`'s `crs` feature, since the conversion links
+///   `libproj`; a binary without it refuses the pair by name rather than drawing it in
+///   the wrong place.
+///
+/// **Whether the code names a system that exists is not decided here.** Validation runs
+/// on machines with no PROJ database -- the same reason a path's existence is not
+/// checked -- so this checks the shape of the declaration and the loader reports an
+/// unknown code. That split is deliberate: a baseline should fail on a typo it can see
+/// and not on a database it may not have.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PointCloudConfig {
     pub source: PointCloudFileConfig,
     pub target: PointCloudFileConfig,
     #[serde(default = "default_pointcloud_frame")]
     pub frame: String,
+}
+
+impl PointCloudConfig {
+    /// The EPSG code `frame` names, or `None` for `"local-enu"`.
+    ///
+    /// Only meaningful once [`validate`] has passed; an unvalidated baseline whose
+    /// `frame` is neither form also reads as `None`, which the loader treats as
+    /// "already local" -- the conservative direction, since the validator refuses that
+    /// baseline before any loader sees it.
+    #[must_use]
+    pub fn declared_epsg(&self) -> Option<u32> {
+        parse_epsg_frame(&self.frame)
+    }
+}
+
+/// `"epsg:<code>"` to its code, case-insensitive on the prefix. `None` for anything
+/// else, `"local-enu"` included.
+///
+/// Deliberately strict about what follows the colon: ASCII digits and nothing else. The
+/// digit check is not redundant with `u32::from_str`, which accepts a leading `+` --
+/// `"epsg:+32633"` would otherwise be a second spelling of one code, and a baseline that
+/// admits two spellings of the same thing is a baseline whose diffs stop meaning
+/// anything. Zero is refused because the EPSG register has no code 0: `GeoTIFF` uses it
+/// to mean "intentionally omitted", which is not a frame a file can be in.
+fn parse_epsg_frame(frame: &str) -> Option<u32> {
+    let (prefix, code) = frame.split_at_checked("epsg:".len())?;
+    if !prefix.eq_ignore_ascii_case("epsg:") || !code.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    code.parse::<u32>().ok().filter(|c| *c != 0)
 }
 
 fn default_pointcloud_frame() -> String {
@@ -892,17 +1026,61 @@ pub enum KeyProviderConfig {
     /// is `PassphraseSealedFile`'s. `gungnir-app` only: `gungnir-node` has no operator
     /// login to unlock at.
     OperatingSystemKeystore { account: String },
-    /// A managed key service, off-host, which seals and signs and never releases
-    /// material (DN-22 §5, the cloud node).
-    ManagedService { endpoint: String, key_ring: String },
+    /// A managed key service, off-host, which wraps this node's data key and signs with
+    /// a private half that never leaves it (DN-22 §5's cloud row, designed by amendment
+    /// 5, §14; D-42; GAP-084). `gungnir-node` only: §5 assigns this row to the cloud
+    /// node, and the desktop's is the operating system's keystore.
+    ///
+    /// **No credential appears here, and none may.** The process authenticates as
+    /// whatever the cloud account granted the host it runs on -- an AWS IAM role through
+    /// the SDK's default chain, or an Azure managed identity -- which is DN-22 §6's rule
+    /// and the reason `aws-config` and `azure_identity` are in the stack at all
+    /// (amendment 5 §14g).
+    ManagedService {
+        /// Which key service. **Named and never inferred**: a region string and a vault
+        /// URL are distinguishable by eye, and guessing between two clouds from the shape
+        /// of a string is the kind of confidently-wrong inference this system forbids
+        /// everywhere else.
+        cloud: ManagedKeyService,
+        /// The AWS region, or the Azure vault URL.
+        endpoint: String,
+        /// The AWS key ARN or alias, or the Azure key name within the vault.
+        ///
+        /// **Named `key_id` and not `key_ring`**, which this variant carried while it was
+        /// unbuildable: a key ring is a term from Google Cloud's key hierarchy, a service
+        /// D-42 explicitly put out of scope, and neither AWS nor Azure has one. Nothing is
+        /// migrated because nothing could ever have been deployed (amendment 5 §14g).
+        key_id: String,
+    },
+}
+
+/// Which cloud key service holds a `ManagedService` deployment's master key (D-42).
+///
+/// Two, because the owner named two. A deployment wanting Google Cloud KMS or
+/// `HashiCorp` Vault is a new decision and a new variant, not a string this enum would have to guess
+/// at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ManagedKeyService {
+    /// AWS Key Management Service.
+    Aws,
+    /// Azure Key Vault.
+    Azure,
 }
 
 impl KeyProviderConfig {
     /// Whether a provider for this exists yet.
     ///
-    /// One persistent profile is still designed and unbuilt (`ManagedService`, the cloud
-    /// node's row). Saying so at validation means a deployment learns it at start-up
-    /// rather than discovering an unencrypted journal later.
+    /// **All five are built as of 2026-09-08**, `ManagedService` last (DN-22 amendment 5,
+    /// §14; D-42). The method stays rather than becoming a constant `true`: it is the
+    /// hook a sixth custody profile would be added behind, and deleting it would mean the
+    /// next one is refused at run time instead of at validation, which is the whole thing
+    /// it exists to prevent.
+    ///
+    /// **Deliberately not build-dependent.** Putting the cloud backends behind a Cargo
+    /// feature only `gungnir-node` enabled would shrink the desktop binary and make this
+    /// answer differ between binaries, so a baseline valid on the node would be refused on
+    /// the desktop. Recorded in `docs/agentic-coding-standards.md` §2.9 as the trade it is.
     #[must_use]
     pub fn is_implemented(&self) -> bool {
         matches!(
@@ -911,18 +1089,22 @@ impl KeyProviderConfig {
                 | KeyProviderConfig::Ephemeral
                 | KeyProviderConfig::PassphraseSealedFile
                 | KeyProviderConfig::OperatingSystemKeystore { .. }
+                | KeyProviderConfig::ManagedService { .. }
         )
     }
 
-    /// The register entry that will build this one.
+    /// The register entry that will build this one, for a profile still unbuilt.
+    ///
+    /// `None` for every variant since 2026-09-08. Kept for the same reason
+    /// [`KeyProviderConfig::is_implemented`] is.
     #[must_use]
     pub fn owning_gap(&self) -> Option<&'static str> {
         match self {
             KeyProviderConfig::None
             | KeyProviderConfig::Ephemeral
             | KeyProviderConfig::PassphraseSealedFile
-            | KeyProviderConfig::OperatingSystemKeystore { .. } => None,
-            KeyProviderConfig::ManagedService { .. } => Some("GAP-084"),
+            | KeyProviderConfig::OperatingSystemKeystore { .. }
+            | KeyProviderConfig::ManagedService { .. } => None,
         }
     }
 
@@ -933,8 +1115,10 @@ impl KeyProviderConfig {
             | KeyProviderConfig::Ephemeral
             | KeyProviderConfig::PassphraseSealedFile => Vec::new(),
             KeyProviderConfig::OperatingSystemKeystore { account } => vec![account.as_str()],
-            KeyProviderConfig::ManagedService { endpoint, key_ring } => {
-                vec![endpoint.as_str(), key_ring.as_str()]
+            KeyProviderConfig::ManagedService {
+                endpoint, key_id, ..
+            } => {
+                vec![endpoint.as_str(), key_id.as_str()]
             }
         }
     }
@@ -2127,12 +2311,23 @@ fn validate_sapient_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> 
 /// plus the one check no other feed config needs: a stated accuracy no wire item
 /// supplies, so it cannot be range-checked against anything the format itself states,
 /// only against being a real number at all.
+///
+/// GAP-101: UAS gateways are validated the same shape again, and for the same reason
+/// get their own `BTreeSet`s -- `gungnir_interop::asterix::cat129::AsterixCat129Codec`
+/// holds its own site list, so a Category 129 SAC/SIC is never looked up against a
+/// radar's or a direction finder's. Nothing category-specific is added on top: unlike
+/// `azimuth_sigma_rad`, every field of `UasSiteConfig` is either a `u8` whose whole
+/// range the wire allows or the sensor id already checked here, and `00/00` is the
+/// specification's own recommended pair rather than a value to refuse (see
+/// [`UasSiteConfig`]).
 fn validate_radar_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     let mut names = std::collections::BTreeSet::new();
     let mut pairs = std::collections::BTreeSet::new();
     let mut bound = std::collections::BTreeSet::new();
     let mut df_pairs = std::collections::BTreeSet::new();
     let mut df_bound = std::collections::BTreeSet::new();
+    let mut uas_pairs = std::collections::BTreeSet::new();
+    let mut uas_bound = std::collections::BTreeSet::new();
     for feed in &baseline.radar_feeds {
         if !names.insert(feed.name.as_str()) {
             return Err(ConfigError::Invalid(format!(
@@ -2156,9 +2351,9 @@ fn validate_radar_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 }
             }
         }
-        if feed.radars.is_empty() && feed.df_sites.is_empty() {
+        if feed.radars.is_empty() && feed.df_sites.is_empty() && feed.uas_sites.is_empty() {
             return Err(ConfigError::Invalid(format!(
-                "radar feed {:?} binds no radar and no direction finder",
+                "radar feed {:?} binds no radar, no direction finder and no UAS gateway",
                 feed.name
             )));
         }
@@ -2211,13 +2406,53 @@ fn validate_radar_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 )));
             }
         }
+        validate_uas_sites(baseline, feed, &mut uas_pairs, &mut uas_bound)?;
+    }
+    Ok(())
+}
+
+/// GAP-101, split out of [`validate_radar_feeds`] rather than written inline beside the
+/// radar and direction-finder loops: adding a third list there took that function past
+/// `clippy::too_many_lines`, and a helper is the honest fix where an `allow` would only
+/// have hidden it. `pairs` and `bound` are the caller's own sets, threaded through so
+/// uniqueness still holds across every feed in the baseline and not merely within one,
+/// exactly as it does for the two lists above.
+fn validate_uas_sites(
+    baseline: &ConfigBaseline,
+    feed: &RadarFeedConfig,
+    pairs: &mut std::collections::BTreeSet<(u8, u8)>,
+    bound: &mut std::collections::BTreeSet<u32>,
+) -> Result<(), ConfigError> {
+    for u in &feed.uas_sites {
+        if !baseline.sensors.iter().any(|s| s.id == u.sensor_id) {
+            return Err(ConfigError::Invalid(format!(
+                "radar feed {:?} names UAS gateway sensor {}, which is not in the \
+                 sensor list",
+                feed.name, u.sensor_id
+            )));
+        }
+        if !pairs.insert((u.sac, u.sic)) {
+            return Err(ConfigError::Invalid(format!(
+                "radar feed {:?}: UAS gateway SAC/SIC {}/{} is bound twice",
+                feed.name, u.sac, u.sic
+            )));
+        }
+        if !bound.insert(u.sensor_id) {
+            return Err(ConfigError::Invalid(format!(
+                "radar feed {:?}: UAS gateway sensor {} is bound to two SAC/SIC pairs",
+                feed.name, u.sensor_id
+            )));
+        }
     }
     Ok(())
 }
 
 /// GAP-023: a terrain entry names a file of a format the loader reads, in a frame the
 /// desktop can place. Existence is not checked here: a baseline is validated on machines
-/// that do not hold the file, and the loader reports a missing one at start.
+/// that do not hold the file, and the loader reports a missing one at start. Nor is the
+/// EPSG code itself checked against PROJ's own database here -- `gungnir-config` has no
+/// dependency on `proj` (D-41 places that in `gungnir-data`), so an unrecognised code is
+/// caught the same place a missing file is: when the loader actually runs.
 fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     let Some(t) = &baseline.terrain else {
         return Ok(());
@@ -2232,12 +2467,8 @@ fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             t.path
         )));
     }
-    if t.frame != "local-enu" {
-        return Err(ConfigError::Invalid(format!(
-            "terrain.frame {:?} is not supported; only \"local-enu\" is, because no projection \
-             library is in the approved stack",
-            t.frame
-        )));
+    if let Err(reason) = t.frame.parse::<Frame>() {
+        return Err(ConfigError::Invalid(format!("terrain.frame {reason}")));
     }
     Ok(())
 }
@@ -2253,10 +2484,16 @@ fn validate_point_cloud(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     };
     validate_point_cloud_file(&pc.source, "point_cloud.source")?;
     validate_point_cloud_file(&pc.target, "point_cloud.target")?;
-    if pc.frame != "local-enu" {
+    // GAP-102 (D-41): `"local-enu"` is no longer the only frame. What is checked here is
+    // the *shape* of the declaration -- see `PointCloudConfig`'s own documentation for
+    // why whether the code names a real system is the loader's question and not this
+    // one's.
+    if pc.frame != "local-enu" && parse_epsg_frame(&pc.frame).is_none() {
         return Err(ConfigError::Invalid(format!(
-            "point_cloud.frame {:?} is not supported; only \"local-enu\" is, because no \
-             projection library is in the approved stack",
+            "point_cloud.frame {:?} is not a frame this deployment can read; it must be \
+             \"local-enu\" (the files are already in the deployment's local metres) or \
+             \"epsg:<code>\" with a non-zero EPSG code (the files are in that coordinate \
+             reference system and are converted on load)",
             pc.frame
         )));
     }
@@ -3191,6 +3428,28 @@ fn validate_security(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             provider.owning_gap().unwrap_or("GAP-084")
         )));
     }
+    // DN-22 amendment 5 (f), and **the only custody profile that carries this rule**.
+    //
+    // §11 lets a deployment escrow nothing and have PN-09 say so, and for every other
+    // profile that stays true. This one is the exception because §5's safeguard against
+    // the note's own worst outcome -- destroying a key that still protects retained data
+    // -- is *absent* here rather than merely unused: `may_destroy` is a local check, and
+    // deleting the master key is an act in the cloud provider's own console that this
+    // system can neither refuse, require an override for, nor even observe until an
+    // unwrap fails. The escrow record is wrapped to a key the cloud account does not hold
+    // and is written beside the journal, so it is the one thing that survives that
+    // deletion.
+    if matches!(provider, KeyProviderConfig::ManagedService { .. })
+        && baseline.security.escrow.is_none()
+    {
+        return Err(ConfigError::Invalid(
+            "a managed-service deployment must name security.escrow: the master key can \
+             be destroyed from the cloud account, where may_destroy cannot reach it, and \
+             the escrow record is then the only way the journal is ever read again \
+             (DN-22 amendment 5 f)"
+                .into(),
+        ));
+    }
     Ok(())
 }
 
@@ -3494,9 +3753,10 @@ mod tests {
         let baseline = ConfigBaseline {
             security: SecurityConfig {
                 key_provider: KeyProviderConfig::ManagedService {
-                    endpoint: "kms.example".into(),
+                    cloud: ManagedKeyService::Aws,
+                    endpoint: "eu-west-2".into(),
                     // Somebody pasting the key itself where a resource name belongs.
-                    key_ring: "0123456789abcdef0123456789abcdef0123456789abcdef".into(),
+                    key_id: "0123456789abcdef0123456789abcdef0123456789abcdef".into(),
                 },
                 authentication: AuthenticationConfig::default(),
                 tls: TlsClientConfig::default(),
@@ -3515,49 +3775,92 @@ mod tests {
         );
     }
 
+    /// A managed-service baseline, complete: an officer, a region, and a key ARN.
+    ///
+    /// Shared by the tests below because DN-22 amendment 5 (f) makes the escrow section
+    /// mandatory for this profile, so "a valid one" is no longer a one-liner.
+    fn managed_service_baseline(provider: KeyProviderConfig) -> ConfigBaseline {
+        ConfigBaseline {
+            security: SecurityConfig {
+                key_provider: provider,
+                authentication: AuthenticationConfig::default(),
+                tls: TlsClientConfig::default(),
+                escrow: Some(EscrowConfig {
+                    holder: 7,
+                    public_key_pem: "-----BEGIN PUBLIC KEY-----
+MFkw
+-----END PUBLIC KEY-----"
+                        .into(),
+                }),
+            },
+            ..ConfigBaseline::default()
+        }
+    }
+
     /// A resource path is a **reference** to where material lives, which is exactly what
     /// a baseline should contain. Flagging it would make the check unusable.
     #[test]
     fn a_key_service_resource_path_is_not_mistaken_for_material() {
-        let baseline = ConfigBaseline {
-            security: SecurityConfig {
-                key_provider: KeyProviderConfig::ManagedService {
-                    endpoint: "https://kms.example.gov/v1".into(),
-                    key_ring: "projects/gungnir/locations/eu/keyRings/journal".into(),
-                },
-                authentication: AuthenticationConfig::default(),
-                tls: TlsClientConfig::default(),
-                escrow: None,
-            },
-            ..ConfigBaseline::default()
-        };
-        // Refused for being unbuilt, not for looking like a key -- which is the point.
-        let message = validate(&baseline).expect_err("unbuilt").to_string();
-        assert!(!message.contains("looks like key material"), "{message}");
-        assert!(message.contains("GAP-084"), "{message}");
+        let baseline = managed_service_baseline(KeyProviderConfig::ManagedService {
+            cloud: ManagedKeyService::Aws,
+            endpoint: "eu-west-2".into(),
+            key_id: "arn:aws:kms:eu-west-2:123456789012:key/1234abcd-12ab-34cd-56ef".into(),
+        });
+        // An ARN is long and has hex in it, which is exactly the shape a key-material
+        // heuristic might trip on. It must not, and the profile is now built, so this
+        // whole baseline validates rather than merely failing for a different reason.
+        validate(&baseline).expect("a key ARN is a reference, not key material");
     }
 
-    /// A provider that is designed and unbuilt is refused at validation, so a deployment
-    /// learns it at start-up rather than discovering an unencrypted journal later.
+    /// **The profile is built as of 2026-09-08** (DN-22 amendment 5, §14; D-42), so it
+    /// validates where it used to be refused as designed-and-unbuilt -- the same
+    /// transition D-39 made for the operating system's keystore two rows above.
     #[test]
-    fn an_unbuilt_provider_is_refused_at_validation() {
-        let provider = KeyProviderConfig::ManagedService {
-            endpoint: "https://kms.example.gov".into(),
-            key_ring: "journal".into(),
-        };
-        let baseline = ConfigBaseline {
-            security: SecurityConfig {
-                key_provider: provider.clone(),
-                authentication: AuthenticationConfig::default(),
-                tls: TlsClientConfig::default(),
-                escrow: None,
+    fn the_managed_service_provider_validates_now_that_amendment_5_designed_it() {
+        for provider in [
+            KeyProviderConfig::ManagedService {
+                cloud: ManagedKeyService::Aws,
+                endpoint: "eu-west-2".into(),
+                key_id: "alias/gungnir-journal".into(),
             },
-            ..ConfigBaseline::default()
-        };
+            KeyProviderConfig::ManagedService {
+                cloud: ManagedKeyService::Azure,
+                endpoint: "https://a-vault.vault.azure.net".into(),
+                key_id: "gungnir-journal".into(),
+            },
+        ] {
+            assert!(provider.is_implemented(), "{provider:?}");
+            assert_eq!(provider.owning_gap(), None, "{provider:?}");
+            validate(&managed_service_baseline(provider.clone()))
+                .unwrap_or_else(|e| panic!("{provider:?} should validate: {e}"));
+        }
+    }
+
+    /// **DN-22 amendment 5 (f), and the rule no other custody profile carries.** A
+    /// managed-service deployment cannot enforce `may_destroy` against a master key its
+    /// cloud account can delete, so the escrow record is the only thing that survives
+    /// that deletion, and a baseline that names no officer is refused rather than
+    /// started.
+    #[test]
+    fn a_managed_service_baseline_without_escrow_is_refused() {
+        let mut baseline = managed_service_baseline(KeyProviderConfig::ManagedService {
+            cloud: ManagedKeyService::Aws,
+            endpoint: "eu-west-2".into(),
+            key_id: "alias/gungnir-journal".into(),
+        });
+        validate(&baseline).expect("valid with an officer");
+
+        baseline.security.escrow = None;
         let message = validate(&baseline).expect_err("refused").to_string();
-        assert!(message.contains("designed and not built"), "{message}");
-        assert_eq!(provider.owning_gap(), Some("GAP-084"));
-        assert!(!provider.is_implemented());
+        assert!(message.contains("security.escrow"), "{message}");
+        assert!(message.contains("may_destroy"), "{message}");
+
+        // And the rule reaches **only** this profile: §11 still lets every other one
+        // escrow nothing and have PN-09 say so.
+        baseline.security.key_provider = KeyProviderConfig::OperatingSystemKeystore {
+            account: "gungnir".into(),
+        };
+        validate(&baseline).expect("the OS keystore still needs no escrow section");
     }
 
     /// D-39: the OS keystore is no longer designed-and-unbuilt, unlike its sibling
@@ -4099,6 +4402,7 @@ mod tests {
                 multicast: None,
                 radars,
                 df_sites: Vec::new(),
+                uas_sites: Vec::new(),
             }],
             ..ConfigBaseline::default()
         };
@@ -4204,6 +4508,7 @@ mod tests {
                 multicast: None,
                 radars: Vec::new(),
                 df_sites,
+                uas_sites: Vec::new(),
             }],
             ..ConfigBaseline::default()
         };
@@ -4240,6 +4545,72 @@ mod tests {
             );
         }
         // A feed with neither a radar nor a direction finder is still refused.
+        assert!(matches!(
+            validate(&feed(Vec::new())),
+            Err(ConfigError::Invalid(_))
+        ));
+    }
+
+    /// GAP-101: a UAS Identification and Target Report gateway is validated the same
+    /// shape a radar and a direction finder already are (known sensor, unique SAC/SIC,
+    /// no sensor bound to two pairs). Nothing is checked on top of that, and the one
+    /// pair that might look suspect is checked here to be *accepted*: `00/00` is what
+    /// edition 1.2 §5.2.1 recommends for an airborne-to-ground broadcast, so refusing it
+    /// would refuse the specification's own recommended configuration
+    /// (`UasSiteConfig`'s own documentation).
+    #[test]
+    fn a_uas_gateway_needs_a_known_sensor_and_unique_pairs() {
+        let sensor = |id| SensorConfig {
+            id,
+            modality: "uas-gateway".into(),
+            position: [0.9, 0.2, 30.0],
+            max_range_m: 20_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        };
+        let one = |sensor_id, sac, sic| UasSiteConfig {
+            sensor_id,
+            sac,
+            sic,
+        };
+        let feed = |uas_sites: Vec<UasSiteConfig>| ConfigBaseline {
+            sensors: vec![sensor(61)],
+            radar_feeds: vec![RadarFeedConfig {
+                name: "utm".into(),
+                bind_addr: "0.0.0.0:8601".into(),
+                multicast: None,
+                radars: Vec::new(),
+                df_sites: Vec::new(),
+                uas_sites,
+            }],
+            ..ConfigBaseline::default()
+        };
+
+        // A feed naming only a UAS gateway, no radar and no direction finder, is valid:
+        // GAP-101 widens GAP-100's "or" to three, it does not add a second "both".
+        validate(&feed(vec![one(61, 10, 20)])).expect("a UAS-gateway-only feed");
+        // The specification's own recommended placeholder pair is configuration, not an
+        // error: this is the common single-gateway deployment.
+        validate(&feed(vec![one(61, 0, 0)])).expect("SAC/SIC 0/0 is the recommended pair");
+
+        // An unknown sensor is refused, the same as a radar's or a direction finder's
+        // would be -- and it matters more here than anywhere: the gateway admits a
+        // detection under this `SensorId` or not at all.
+        assert!(matches!(
+            validate(&feed(vec![one(99, 10, 20)])),
+            Err(ConfigError::Invalid(_))
+        ));
+        // The same SAC/SIC bound twice is refused.
+        assert!(matches!(
+            validate(&feed(vec![one(61, 10, 20), one(61, 10, 20)])),
+            Err(ConfigError::Invalid(_))
+        ));
+        // The same sensor bound to two SAC/SIC pairs is refused.
+        assert!(matches!(
+            validate(&feed(vec![one(61, 10, 20), one(61, 10, 21)])),
+            Err(ConfigError::Invalid(_))
+        ));
+        // A feed binding none of the three is still refused.
         assert!(matches!(
             validate(&feed(Vec::new())),
             Err(ConfigError::Invalid(_))
@@ -4625,7 +4996,7 @@ mod tests {
     }
 
     #[test]
-    fn a_terrain_entry_needs_a_known_format_and_the_local_frame() {
+    fn a_terrain_entry_needs_a_known_format_and_a_parseable_frame() {
         let mut b = ConfigBaseline {
             terrain: Some(TerrainConfig {
                 path: "dem/site.asc".into(),
@@ -4639,11 +5010,42 @@ mod tests {
             frame: "local-enu".into(),
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
+        // GAP-023, D-41: a real-world CRS by EPSG code is now accepted syntactically --
+        // both the codebase's own uppercase-EPSG casing and lowercase both parse -- and
+        // does not need a projection library to validate, only to load and convert.
         b.terrain = Some(TerrainConfig {
             path: "dem/site.tif".into(),
             frame: "EPSG:32633".into(),
         });
+        validate(&b).expect("a declared real-world CRS by EPSG code is valid");
+        b.terrain = Some(TerrainConfig {
+            path: "dem/site.tif".into(),
+            frame: "epsg:4326".into(),
+        });
+        validate(&b).expect("lowercase epsg: is accepted the same way");
+        // Neither "local-enu" nor "epsg:<code>" is still refused, whatever the reason.
+        b.terrain = Some(TerrainConfig {
+            path: "dem/site.tif".into(),
+            frame: "wgs84".into(),
+        });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
+        b.terrain = Some(TerrainConfig {
+            path: "dem/site.tif".into(),
+            frame: "epsg:not-a-number".into(),
+        });
+        assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
+    }
+
+    #[test]
+    fn frame_parses_and_displays_round_trip() {
+        assert_eq!("local-enu".parse(), Ok(Frame::LocalEnu));
+        assert_eq!("epsg:32633".parse(), Ok(Frame::Epsg(32633)));
+        assert_eq!("EPSG:32633".parse(), Ok(Frame::Epsg(32633)));
+        assert_eq!(Frame::LocalEnu.to_string(), "local-enu");
+        assert_eq!(Frame::Epsg(4326).to_string(), "EPSG:4326");
+        assert!("epsg:-1".parse::<Frame>().is_err(), "no negative EPSG code");
+        assert!("epsg:".parse::<Frame>().is_err(), "no code at all");
+        assert!("".parse::<Frame>().is_err());
     }
 
     #[test]
@@ -4714,13 +5116,54 @@ mod tests {
             Err(ConfigError::Invalid(_))
         ));
 
-        // An unsupported frame is refused even when both files are otherwise valid.
-        let mut wrong_frame = b.clone();
-        wrong_frame.point_cloud.as_mut().unwrap().frame = "EPSG:32633".into();
-        assert!(matches!(
-            validate(&wrong_frame),
-            Err(ConfigError::Invalid(_))
-        ));
+        // GAP-102 (D-41): a real-world CRS is now a frame this deployment can read,
+        // where before GAP-102 every one of these was refused. Both the prefix's case
+        // and a code of any length the register uses are accepted.
+        for frame in ["EPSG:32633", "epsg:2992", "Epsg:4326", "epsg:900913"] {
+            let mut declared = b.clone();
+            declared.point_cloud.as_mut().unwrap().frame = frame.into();
+            validate(&declared).unwrap_or_else(|e| panic!("{frame} should be valid: {e}"));
+            assert!(
+                declared
+                    .point_cloud
+                    .as_ref()
+                    .and_then(PointCloudConfig::declared_epsg)
+                    .is_some(),
+                "{frame} must read back as a code"
+            );
+        }
+
+        // What is still refused, and each for its own reason: a frame that is neither
+        // form; the prefix with nothing after it; a code that is not a number; a signed
+        // or spaced code, which `u32::from_str` refuses and this relies on it doing;
+        // and code 0, which GeoTIFF uses to mean "intentionally omitted" and which is
+        // therefore not a frame a file can be in.
+        for frame in [
+            "utm33n",
+            "epsg:",
+            "epsg:abc",
+            "epsg:+32633",
+            "epsg: 32633",
+            "epsg:32633 ",
+            "epsg:0",
+            "",
+        ] {
+            let mut wrong_frame = b.clone();
+            wrong_frame.point_cloud.as_mut().unwrap().frame = frame.into();
+            assert!(
+                matches!(validate(&wrong_frame), Err(ConfigError::Invalid(_))),
+                "{frame:?} should be refused"
+            );
+        }
+
+        // The default is unchanged: a pair that names no frame is local ENU, and reads
+        // back as naming no EPSG code at all.
+        assert_eq!(
+            b.point_cloud
+                .as_ref()
+                .and_then(PointCloudConfig::declared_epsg),
+            None
+        );
 
         // No point-cloud entry at all is the common case and must not be refused.
         b.point_cloud = None;

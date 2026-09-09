@@ -30,13 +30,14 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 | 16 | GAP-023 Data loaders per format | Technical | 24 | L | UI engineer |  |
 | 17 | GAP-008 Clock-skew detection across sources | Technical | 21 | M | Services engineer |  |
 | 18 | GAP-092 The journal budget's debug cost was attributed to runner I/O; it is the encode | Technical | 16 | S | Services engineer |  |
-| 19 | GAP-069 `uuid` v7 for `GlobalEntityId` | Technical | 10 | S | Services engineer | D-11 |
-| 20 | GAP-013 Track-to-track fusion and sensor registration | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
-| 21 | GAP-051 Session lifecycle in `gungnir-mission` | Technical | 6 | M | Services engineer |  |
-| 22 | GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | Technical | 4 | M | Owner | D-10 |
-| 23 | GAP-061 Release workflow unexercised | Technical | 3 | M | Owner | D-10 |
-| 24 | GAP-093 Gate 6 never saves a baseline, so it compares nothing and cannot fail | Technical | 24 | S | Services engineer | GAP-061 |
-| 25 | GAP-081 Architecture compliance checks not automated | Technical | 3 | M | Owner |  |
+| 19 | GAP-103 `solve_assignment` returns an infinite total on an all-finite cost matrix | Technical | 16 | S | Tracking engineer (human-owned crate) | D-43 |
+| 20 | GAP-069 `uuid` v7 for `GlobalEntityId` | Technical | 10 | S | Services engineer | D-11 |
+| 21 | GAP-013 Track-to-track fusion and sensor registration | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
+| 22 | GAP-051 Session lifecycle in `gungnir-mission` | Technical | 6 | M | Services engineer |  |
+| 23 | GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | Technical | 4 | M | Owner | D-10 |
+| 24 | GAP-061 Release workflow unexercised | Technical | 3 | M | Owner | D-10 |
+| 25 | GAP-093 Gate 6 never saves a baseline, so it compares nothing and cannot fail | Technical | 24 | S | Services engineer | GAP-061 |
+| 26 | GAP-081 Architecture compliance checks not automated | Technical | 3 | M | Owner |  |
 
 ## I3: Close the decision loop. Closes the allocator, geometry, asset list, policy model, queue, and the panels that let a human decide in the product.
 
@@ -59,47 +60,49 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 | 15 | GAP-100 ASTERIX Category 205 direction-finder bearings | Technical | 27 | M | Services engineer | GAP-001, GAP-064 |
 | 16 | GAP-039 No-execution-without-decision verification | Technical | 24 | S | Services engineer | GAP-028 |
 | 17 | GAP-098 No runtime point cloud: nothing loads one and nothing draws one | Technical | 24 | M | UI engineer |  |
-| 18 | GAP-022 three-d scene attachment | Technical | 24 | L | UI engineer |  |
-| 19 | GAP-070 Display vocabulary and override table | Technical | 20 | S | UI engineer | D-12 |
-| 20 | GAP-030 Effector layer and cost model | Technical | 20 | M | Services engineer |  |
-| 21 | GAP-029 Allocator | Technical | 25 | XL | Tracking engineer (human-owned crate) | GAP-011, GAP-030 |
-| 22 | GAP-097 An unchanged plan is re-proposed and re-queued every tick | Technical | 20 | M | Services engineer | GAP-029 |
-| 23 | GAP-074 Usability test rounds and MOP-37 targets | Technical | 30 | M | Plan 06 lead | D-16, GAP-089, GAP-097 |
-| 24 | GAP-043 Engagement tracking and effect assessment | Technical | 20 | L | Services engineer | GAP-028 |
-| 25 | GAP-026 Defended-asset list | Technical | 16 | M | Services engineer |  |
-| 26 | GAP-020 Trajectory prediction and closest point of approach | Technical | 20 | M | Services engineer | GAP-011, GAP-026 |
-| 27 | GAP-027 Lethality by class and asset weighting | Technical | 20 | M | Services engineer | GAP-026 |
-| 28 | GAP-024 Point-cloud registration, CPU reference and GPU | Technical | 16 | L | Data engineer |  |
-| 29 | GAP-031 Intercept geometry solver | Technical | 15 | L | Services engineer | GAP-030, GAP-029 |
-| 30 | GAP-006 Coverage-gap detection | Technical | 12 | M | Services engineer | GAP-003 |
-| 31 | GAP-032 Alternatives and what-if execution | Technical | 12 | M | Services engineer | GAP-029 |
-| 32 | GAP-042 Warning function | Technical | 12 | M | Services engineer | GAP-020, GAP-026, D-08 |
-| 33 | GAP-012 Staleness policy per class | Technical | 10 | S | Services engineer | GAP-052 |
-| 34 | GAP-019 Cross-session identity correlation | Technical | 9 | L | Services engineer | GAP-011 |
-| 35 | GAP-007 Coverage rendering on the map | Technical | 8 | M | UI engineer | GAP-022 |
-| 36 | GAP-035 Queue ordering and pre-delegation | Technical | 8 | M | Security engineer (human-owned crate) | GAP-027, D-15 |
-| 37 | GAP-037 Sensor re-tasking recommendation | Technical | 8 | M | Services engineer | GAP-003, GAP-006 |
-| 38 | GAP-015 Random finite set filters | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
-| 39 | GAP-021 Track and feed anomaly detection | Technical | 6 | M | Services engineer | D-13 |
-| 40 | GAP-062 Releasability marking | Technical | 6 | M | Security engineer (human-owned crate) | D-06 |
-| 41 | GAP-091 No exchange bearer for a participant that holds no machine identity | Technical | 20 | L | Services engineer | GAP-062, D-33 |
-| 42 | GAP-017 Static hazard and barrier layer | Technical | 4 | S | Services engineer |  |
-| 43 | GAP-067 Operational-readiness verification | Technical | 4 | L | Owner | D-16, D-10 |
-| 44 | GAP-045 Scenario replay through the live pipeline | Technical | 3 | M | Services engineer | GAP-011, GAP-046, GAP-051 |
-| 45 | GAP-087 PN-16, the planning panel | Technical | 30 | L | UI engineer | GAP-045 |
-| 46 | GAP-055 Role workspaces in the UI | Technical | 30 | L | UI engineer | D-05, D-12, GAP-087 |
-| 47 | GAP-072 Status strip on every layout | Technical | 32 | S | UI engineer | GAP-055 |
-| 48 | GAP-073 Evidence card, commander summary, table columns, and theme additions | Technical | 21 | M | UI engineer | GAP-055 |
-| 49 | GAP-038 Approval queue and decision panel | Technical | 20 | M | UI engineer | GAP-028, GAP-055 |
-| 50 | GAP-075 Docking and multi-window | Technical | 20 | M | UI engineer | D-17, GAP-055 |
-| 51 | GAP-071 Replay, reports, and configuration editor panels | Technical | 6 | M | UI engineer | GAP-055 |
-| 52 | GAP-047 Measures computed from the journal | Technical | 3 | M | Services engineer | GAP-048, D-16 |
-| 53 | GAP-036 Fires plan type and deconfliction | Technical | 3 | L | Security engineer (human-owned crate) | D-07, GAP-030 |
-| 54 | GAP-090 The friendly set is only the friendlies a sensor detected | Technical | 12 | M | Security engineer (human-owned crate) | GAP-036, GAP-091, D-08 |
-| 55 | GAP-079 Dataset pipeline from test tracks and journals | Technical | 2 | M | Services engineer | GAP-046 |
-| 56 | GAP-083 Requirement identifiers not traceable from code | Technical | 2 | M | Owner |  |
-| 57 | GAP-086 Mission profiles and candidate algorithm baselines in the schema | Technical | 2 | M | Services engineer |  |
-| 58 | GAP-053 Model governance not wired | Technical | 2 | S | Services engineer | GAP-011, GAP-086 |
+| 18 | GAP-102 A point cloud in a real-world CRS cannot be loaded | Technical | 24 | M | UI engineer | D-41 |
+| 19 | GAP-022 three-d scene attachment | Technical | 24 | L | UI engineer |  |
+| 20 | GAP-070 Display vocabulary and override table | Technical | 20 | S | UI engineer | D-12 |
+| 21 | GAP-030 Effector layer and cost model | Technical | 20 | M | Services engineer |  |
+| 22 | GAP-029 Allocator | Technical | 25 | XL | Tracking engineer (human-owned crate) | GAP-011, GAP-030 |
+| 23 | GAP-097 An unchanged plan is re-proposed and re-queued every tick | Technical | 20 | M | Services engineer | GAP-029 |
+| 24 | GAP-074 Usability test rounds and MOP-37 targets | Technical | 30 | M | Plan 06 lead | D-16, GAP-089, GAP-097 |
+| 25 | GAP-043 Engagement tracking and effect assessment | Technical | 20 | L | Services engineer | GAP-028 |
+| 26 | GAP-101 ASTERIX Category 129 UAS identification reports | Technical | 18 | M | Services engineer | GAP-001, GAP-064, GAP-100 |
+| 27 | GAP-026 Defended-asset list | Technical | 16 | M | Services engineer |  |
+| 28 | GAP-020 Trajectory prediction and closest point of approach | Technical | 20 | M | Services engineer | GAP-011, GAP-026 |
+| 29 | GAP-027 Lethality by class and asset weighting | Technical | 20 | M | Services engineer | GAP-026 |
+| 30 | GAP-024 Point-cloud registration, CPU reference and GPU | Technical | 16 | L | Data engineer |  |
+| 31 | GAP-031 Intercept geometry solver | Technical | 15 | L | Services engineer | GAP-030, GAP-029 |
+| 32 | GAP-006 Coverage-gap detection | Technical | 12 | M | Services engineer | GAP-003 |
+| 33 | GAP-032 Alternatives and what-if execution | Technical | 12 | M | Services engineer | GAP-029 |
+| 34 | GAP-042 Warning function | Technical | 12 | M | Services engineer | GAP-020, GAP-026, D-08 |
+| 35 | GAP-012 Staleness policy per class | Technical | 10 | S | Services engineer | GAP-052 |
+| 36 | GAP-019 Cross-session identity correlation | Technical | 9 | L | Services engineer | GAP-011 |
+| 37 | GAP-007 Coverage rendering on the map | Technical | 8 | M | UI engineer | GAP-022 |
+| 38 | GAP-035 Queue ordering and pre-delegation | Technical | 8 | M | Security engineer (human-owned crate) | GAP-027, D-15 |
+| 39 | GAP-037 Sensor re-tasking recommendation | Technical | 8 | M | Services engineer | GAP-003, GAP-006 |
+| 40 | GAP-015 Random finite set filters | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
+| 41 | GAP-021 Track and feed anomaly detection | Technical | 6 | M | Services engineer | D-13 |
+| 42 | GAP-062 Releasability marking | Technical | 6 | M | Security engineer (human-owned crate) | D-06 |
+| 43 | GAP-091 No exchange bearer for a participant that holds no machine identity | Technical | 20 | L | Services engineer | GAP-062, D-33 |
+| 44 | GAP-017 Static hazard and barrier layer | Technical | 4 | S | Services engineer |  |
+| 45 | GAP-067 Operational-readiness verification | Technical | 4 | L | Owner | D-16, D-10 |
+| 46 | GAP-045 Scenario replay through the live pipeline | Technical | 3 | M | Services engineer | GAP-011, GAP-046, GAP-051 |
+| 47 | GAP-087 PN-16, the planning panel | Technical | 30 | L | UI engineer | GAP-045 |
+| 48 | GAP-055 Role workspaces in the UI | Technical | 30 | L | UI engineer | D-05, D-12, GAP-087 |
+| 49 | GAP-072 Status strip on every layout | Technical | 32 | S | UI engineer | GAP-055 |
+| 50 | GAP-073 Evidence card, commander summary, table columns, and theme additions | Technical | 21 | M | UI engineer | GAP-055 |
+| 51 | GAP-038 Approval queue and decision panel | Technical | 20 | M | UI engineer | GAP-028, GAP-055 |
+| 52 | GAP-075 Docking and multi-window | Technical | 20 | M | UI engineer | D-17, GAP-055 |
+| 53 | GAP-071 Replay, reports, and configuration editor panels | Technical | 6 | M | UI engineer | GAP-055 |
+| 54 | GAP-047 Measures computed from the journal | Technical | 3 | M | Services engineer | GAP-048, D-16 |
+| 55 | GAP-036 Fires plan type and deconfliction | Technical | 3 | L | Security engineer (human-owned crate) | D-07, GAP-030 |
+| 56 | GAP-090 The friendly set is only the friendlies a sensor detected | Technical | 12 | M | Security engineer (human-owned crate) | GAP-036, GAP-091, D-08 |
+| 57 | GAP-079 Dataset pipeline from test tracks and journals | Technical | 2 | M | Services engineer | GAP-046 |
+| 58 | GAP-083 Requirement identifiers not traceable from code | Technical | 2 | M | Owner |  |
+| 59 | GAP-086 Mission profiles and candidate algorithm baselines in the schema | Technical | 2 | M | Services engineer |  |
+| 60 | GAP-053 Model governance not wired | Technical | 2 | S | Services engineer | GAP-011, GAP-086 |
 
 ## I4: Operationalize and scale. Closes the transport and everything that waits on it: peers, handoff, failover, authentication for callers, encryption, releasability.
 
@@ -156,6 +159,6 @@ replaces.
 
 | Increment | Gaps | Effort S / M / L / XL |
 |---|---|---|
-| I2 | 25 | 5 / 11 / 7 / 2 |
-| I3 | 58 | 8 / 37 / 12 / 1 |
+| I2 | 26 | 6 / 11 / 7 / 2 |
+| I3 | 60 | 8 / 39 / 12 / 1 |
 | I4 | 17 | 0 / 9 / 7 / 1 |

@@ -34,6 +34,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-029 Allocator | CAP-3.3 | 5 | XL | I3 | `../../../ARCHITECTURE.md` §10, the tracking math itself |
 | GAP-031 Intercept geometry solver | CAP-3.4 | 5 | L | I3 | `gungnir-intercept-service/src/geometry.rs`; `../../design/DN-04-effector-model.md` §9 |
 | GAP-048 Tracking metrics | CAP-5.3, CAP-2.1 | 3 | M | I2 | `../../verification-capability-table.md` §1, metrics rows |
+| GAP-103 `solve_assignment` returns an infinite total on an all-finite cost matrix | CAP-2.1 | 2 | S | I2 | `../../verification-capability-table.md` §1 (Hungarian / Jonker-Volgenant); `../../../ARCHITECTURE.md` §10 Open; GAP-061 (the fuzz-nightly gate whose first successful run found this); GAP-076 (the fuzz corpus that feeds it) |
 
 ### Service facades and wiring
 
@@ -56,6 +57,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-010 Cooperative identity decoders | CAP-1.7 | 4 | L | I2 | `../../design/external-standards.md` |
 | GAP-099 ISR video metadata (MISB ST 0601 KLV) has no adapter | CAP-1.1 | 3 | M | I3 | `../../design/external-standards.md` §8 and §8.2; GAP-001 (the closing action this gap is drawn from) |
 | GAP-100 ASTERIX Category 205 direction-finder bearings | CAP-7.2, CAP-1.1 | 3 | M | I3 | `../../../ARCHITECTURE.md` §10 item 114; GAP-001 (the survey and the sibling feeds); GAP-064 (the ASTERIX/STANAG codec family this extends); GAP-096 (why a bearing produced here is not yet shown) |
+| GAP-101 ASTERIX Category 129 UAS identification reports | CAP-1.7 | 3 | M | I3 | `../../../ARCHITECTURE.md` §10 item 114; GAP-001 (the survey and the sibling feeds); GAP-064 (the ASTERIX/STANAG codec family this extends); GAP-100 (the sibling gap this one was left open beside, and the pattern it mirrors) |
 
 ### Productization: picture and identity
 
@@ -149,6 +151,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-095 Night theme variant | CAP-5.9 | 2 | M | I4 | `../../../ARCHITECTURE.md` §10 item 89 (D-35 to D-38) |
 | GAP-096 Bearing-only detections never reach the operator | CAP-2.1, CAP-5.9 | 4 | M | I3 | `../../design/DN-27-bearing-only-detections.md` §5 rule 3 and §7; `../../ux/ux-to-code-map.md` PN-02, PN-08, PN-09; GAP-001 (the three feeds this makes visible); GAP-011 (whose entry recorded §7 unbuilt); `docs/gungnir-api-v1.md` (the v2 wire's compatibility rule this closure follows) |
 | GAP-098 No runtime point cloud: nothing loads one and nothing draws one | CAP-2.10 | 3 | M | I3 | `../../../ARCHITECTURE.md` §3 (the two contexts and the read-back); GAP-023 (the loaders and fixtures, reused rather than duplicated); GAP-024 (the registration engine, unblocked and independent of this) |
+| GAP-102 A point cloud in a real-world CRS cannot be loaded | CAP-2.10 | 3 | M | I3 | D-41 (the decision this builds); GAP-023 (the DEM half, the sibling doing the same work for terrain); GAP-098 (the point-cloud capability this extends, closed and not reopened); `docs/agentic-coding-standards.md` §2.9 |
 
 ### Verification and governance
 
@@ -156,7 +159,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 |---|---|---|---|---|---|
 | GAP-074 Usability test rounds and MOP-37 targets | CAP-5.9 | 3 | M | I3 | `../../ux/usability-test-plan.md` §7; `../../ux/usability-round-1-session.md` |
 | GAP-076 Test-track integration: fuzz corpus, benchmark inputs, end-to-end replay | CAP-5.2, CAP-5.10, CAP-6.7 | 3 | S | I2 | `../../plans/07-test-track-suite.md` |
-| GAP-077 `gungnir-ml` crate, inference runtime sign-off, and the dependency edge | CAP-2.6, CAP-5.7 | 2 | L | I4 | `../../plans/09-ml-model-integration.md`; D-40 |
+| GAP-077 `gungnir-ml` crate, inference runtime sign-off, and the dependency edge | CAP-2.6, CAP-5.7 | 2 | L | I4 | `../../plans/09-ml-model-integration.md`; `agentic-coding-standards.md` §2.9; D-40 |
 | GAP-078 Model manifests as `gungnir-modelops` baselines | CAP-5.7 | 3 | M | I4 | `docs/ml/mlops.md` |
 | GAP-079 Dataset pipeline from test tracks and journals | CAP-5.3, CAP-5.7 | 2 | M | I3 | `docs/ml/data-pipeline.md` |
 | GAP-081 Architecture compliance checks not automated | CAP-5.7, CAP-6.5 | 3 | M | I2 | `docs/architecture/togaf/phase-g-implementation-governance/architecture-contracts.md` |

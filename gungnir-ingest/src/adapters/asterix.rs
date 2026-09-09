@@ -27,12 +27,12 @@
 //! the public capture, and `tests/asterix_seeds.rs` checks the corpus still decodes.
 
 use crate::{DetectionView, IngestError, ProtocolAdapter};
-use gungnir_interop::asterix::{cat034, cat048, cat205, data_blocks, RadarSite};
+use gungnir_interop::asterix::{cat034, cat048, cat129, cat205, data_blocks, RadarSite};
 use gungnir_interop::{
-    AsterixCat034Codec, AsterixCat048Codec, AsterixCat205Codec, DfSite, InteropError,
-    RadarServiceReport,
+    AsterixCat034Codec, AsterixCat048Codec, AsterixCat129Codec, AsterixCat205Codec, DfSite,
+    InteropError, RadarServiceReport, UasSite,
 };
-use gungnir_model::{Geodetic, LocalFrame, MissionTime, SensorId};
+use gungnir_model::{Geodetic, LocalFrame, MissionTime, SensorId, UasIdentificationReport};
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt::Write as _;
 use std::io::ErrorKind;
@@ -44,6 +44,17 @@ const MAX_DATAGRAM: usize = 65_535;
 /// Datagrams one poll will take before yielding, so a flooding feed cannot hold the
 /// gateway's tick for ever.
 pub const MAX_DATAGRAMS_PER_POLL: usize = 4096;
+/// Per-axis variance stamped on a Category 129 report's position when it also becomes a
+/// `DetectionView` (GAP-101). The same restated-not-imported reasoning as
+/// `gungnir_ingest::adapters::ais`'s and `::adsb`'s own copy of this constant: this is
+/// the tracking baseline's own default measurement noise
+/// (`gungnir_fusion_async::PipelineSettings::measurement_noise_var`), which is the only
+/// stated accuracy this workspace has for a cooperatively-reported position. Category
+/// 129's own I129/110 GNSS accuracy is carried on `UasIdentificationReport` instead of
+/// folded in here, because none of AIS, ADS-B or MISB folds a per-message accuracy
+/// indicator into this variance either, and doing it only for this category would be a
+/// new, unreviewed pattern rather than a consistent one.
+const BASELINE_POSITION_VARIANCE_M2: [f64; 3] = [400.0, 400.0, 900.0];
 
 /// A feed as a host describes it, so both binaries build adapters the same way
 /// (GAP-001, handoff §4 step 2). Addresses are already validated by the baseline; a
@@ -59,6 +70,11 @@ pub struct FeedSpec {
     /// no Category 205 report on this feed is attributed to anything, the same
     /// honest-empty state an empty `radars` gives Category 048 and 034.
     pub df_sites: Vec<DfBinding>,
+    /// UAS Identification and Target Report gateways this feed's Category 129 blocks may
+    /// be attributed to (GAP-101), bound by [`bind_feed`] the same way `df_sites`
+    /// already is. Empty means no Category 129 report on this feed is attributed to
+    /// anything, the same honest-empty state an empty `df_sites` gives Category 205.
+    pub uas_sites: Vec<UasBinding>,
 }
 
 /// What a host keeps of a bound feed: the queue of service observations it drains and
@@ -74,10 +90,11 @@ pub struct FeedSinks {
 pub type FeedStatsSink = Arc<Mutex<AsterixFeedStats>>;
 
 /// Bind one feed and build its adapter with the sinks the host keeps. `spec.df_sites`
-/// (GAP-100) is applied through [`AsterixFeedAdapter::with_df_sites`] the same way
-/// `spec.radars` is applied through [`AsterixFeedAdapter::new`]; an empty list is a
-/// no-op, so a feed with no direction finder configured builds exactly the adapter it
-/// always did.
+/// (GAP-100) is applied through [`AsterixFeedAdapter::with_df_sites`] and
+/// `spec.uas_sites` (GAP-101) through [`AsterixFeedAdapter::with_uas_sites`], the same
+/// way `spec.radars` is applied through [`AsterixFeedAdapter::new`]; an empty list is a
+/// no-op in both cases, so a feed with no direction finder and no UAS gateway
+/// configured builds exactly the adapter it always did.
 ///
 /// # Errors
 ///
@@ -91,6 +108,7 @@ pub fn bind_feed(
     Ok(
         AsterixFeedAdapter::new(spec.name.clone(), source, frame, &spec.radars)
             .with_df_sites(&spec.df_sites, frame)
+            .with_uas_sites(&spec.uas_sites)
             .with_observation_sink(sinks.observations.clone())
             .with_stats_sink(sinks.stats.clone()),
     )
@@ -131,6 +149,27 @@ pub struct DfBinding {
     /// Interface Control Document. **Never invented**: see `cat205::DfSite`'s own
     /// documentation.
     pub azimuth_sigma_rad: f64,
+}
+
+/// One UAS Identification and Target Report gateway a feed is allowed to speak for: its
+/// ASTERIX identity and the sensor it is in the registry (GAP-101). Unlike
+/// [`RadarBinding`] and [`DfBinding`], no position: `cat129::UasSite` carries none, for
+/// the reason its own documentation gives (this category reports the UAS's own absolute
+/// position, not a range or bearing that would need a receiver origin to resolve). Part
+/// of [`FeedSpec`] (`uas_sites`) and applied by [`bind_feed`] through
+/// [`AsterixFeedAdapter::with_uas_sites`], the same host-configuration wiring GAP-100's
+/// Category 205 half also went without at first and was given later the same day; a
+/// `ConfigBaseline` section (`RadarFeedConfig::uas_sites`, in `gungnir-config`) names
+/// UAS gateways the way `RadarFeedConfig::radars` already names radars.
+///
+/// I129/010's own recommendation is `sac = 0, sic = 0` for an airborne-to-ground
+/// broadcast (`cat129`'s module documentation), so the common case is one binding at
+/// `(0, 0)` naming this deployment's one receiving gateway.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UasBinding {
+    pub sac: u8,
+    pub sic: u8,
+    pub sensor: SensorId,
 }
 
 /// Where datagrams come from. Non-blocking by contract: a poll must return with
@@ -238,8 +277,16 @@ pub struct AsterixFeedStats {
     pub blocks_cat034: u64,
     /// GAP-100: Category 205 (Radio Direction Finder Reports) blocks seen.
     pub blocks_cat205: u64,
+    /// GAP-101: Category 129 (UAS Identification and Target Reports) blocks seen.
+    pub blocks_cat129: u64,
     pub detections: u64,
     pub service_reports: u64,
+    /// GAP-101: Category 129 records mapped to a `UasIdentificationReport`. Every
+    /// mapped one also becomes a `DetectionView` counted under `detections`, so this is
+    /// a subset of it, kept apart because nothing else on this adapter says how many of
+    /// the detections came from a cooperative identity report rather than a radar plot
+    /// or a bearing.
+    pub uas_reports: u64,
     /// Valid Category 048 or 205 records that are not observations (048's `TYP = 0`;
     /// 205's position message types and detection-end reports -- see
     /// `cat205::AsterixCat205Codec::map`).
@@ -258,23 +305,42 @@ pub struct AsterixFeedStats {
 pub struct AsterixFeedAdapter<S: DatagramSource> {
     name: String,
     source: S,
+    /// The deployment's local frame (GAP-101): unlike a radar's or a direction finder's
+    /// fixed antenna, which is placed in ENU once at construction (`Self::new`,
+    /// `Self::with_df_sites`), a Category 129 report carries the *target's* own position
+    /// on every message, so the frame origin is needed again at every poll rather than
+    /// only once.
+    frame: LocalFrame,
     cat048: AsterixCat048Codec,
     cat034: AsterixCat034Codec,
     /// GAP-100. Empty (the `Default` codec) until [`Self::with_df_sites`] is called;
     /// an empty codec decodes Category 205 blocks losslessly and attributes none, the
     /// same honest-empty state `radars` gives `cat048`/`cat034` when nothing is bound.
     cat205: AsterixCat205Codec,
+    /// GAP-101. Empty until [`Self::with_uas_sites`] is called, the same honest-empty
+    /// convention as `cat205` above.
+    cat129: AsterixCat129Codec,
     buf: Vec<u8>,
     service_reports: VecDeque<RadarServiceReport>,
+    /// UAS identification reports mapped since the last drain (GAP-101), the same
+    /// queue-on-the-adapter shape `service_reports` already has.
+    uas_reports: VecDeque<UasIdentificationReport>,
     stats: AsterixFeedStats,
     /// SAC/SIC pairs already reported unknown, so a stray radar logs once, not per scan.
     unknown_seen: BTreeSet<(u8, u8)>,
     /// Where service observations go when a host wants them (GAP-064): the gateway
     /// owns the adapter, so the host keeps the other end of this and drains it.
     observation_sink: Option<ServiceObservationSink>,
+    /// Where UAS identification reports go when a host wants them (GAP-101), the same
+    /// shape as `observation_sink`.
+    uas_report_sink: Option<UasIdentificationSink>,
     /// Where the counters go at the end of every poll (GAP-001), for PN-09.
     stats_sink: Option<FeedStatsSink>,
 }
+
+/// The queue a host drains for UAS identification reports (GAP-101), the same shape
+/// `ServiceObservationSink` already has for service messages.
+pub type UasIdentificationSink = Arc<Mutex<VecDeque<UasIdentificationReport>>>;
 
 /// What a host learns from a radar's service messages, in this crate's words so a host
 /// need not depend on `gungnir-interop` to read it (the same inversion as the
@@ -351,14 +417,18 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
         Self {
             name: format!("asterix:{}:{}", name.into(), source.describe()),
             source,
+            frame: *frame,
             cat048: AsterixCat048Codec::new(sites.clone()),
             cat034: AsterixCat034Codec::new(sites),
             cat205: AsterixCat205Codec::default(),
+            cat129: AsterixCat129Codec::default(),
             buf: vec![0; MAX_DATAGRAM],
             service_reports: VecDeque::new(),
+            uas_reports: VecDeque::new(),
             stats: AsterixFeedStats::default(),
             unknown_seen: BTreeSet::new(),
             observation_sink: None,
+            uas_report_sink: None,
             stats_sink: None,
         }
     }
@@ -404,9 +474,47 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
         self
     }
 
+    /// Configure the UAS Identification and Target Report gateways this feed's
+    /// Category 129 blocks may be attributed to (GAP-101). Unlike
+    /// [`Self::with_df_sites`], this takes no `frame`: [`UasBinding`] carries no
+    /// position for [`cat129::UasSite`] to place in ENU (module documentation on
+    /// [`UasBinding`]), and the frame this adapter already stored (`Self::new`) is what
+    /// converts each *report's own* position at [`Self::handle_datagram`] time instead.
+    /// A binding list with no entries (the default before this is ever called) means
+    /// every Category 129 report is counted `unknown_radar` -- the same honest-empty
+    /// state an unconfigured `radars` list gives Category 048 and 034.
+    #[must_use]
+    pub fn with_uas_sites(mut self, uas_sites: &[UasBinding]) -> Self {
+        let sites: Vec<UasSite> = uas_sites
+            .iter()
+            .map(|b| UasSite {
+                sac: b.sac,
+                sic: b.sic,
+                sensor: b.sensor,
+            })
+            .collect();
+        self.cat129 = AsterixCat129Codec::new(sites);
+        self
+    }
+
+    /// Hand UAS identification reports to a host through `sink` at the end of every
+    /// poll (GAP-101). Without one they queue on the adapter for
+    /// [`Self::drain_uas_reports`], the same shape [`Self::with_observation_sink`] has
+    /// for service messages.
+    #[must_use]
+    pub fn with_uas_report_sink(mut self, sink: UasIdentificationSink) -> Self {
+        self.uas_report_sink = Some(sink);
+        self
+    }
+
     /// The service messages received since the last drain, in arrival order.
     pub fn drain_service_reports(&mut self) -> Vec<RadarServiceReport> {
         self.service_reports.drain(..).collect()
+    }
+
+    /// The UAS identification reports received since the last drain, in arrival order.
+    pub fn drain_uas_reports(&mut self) -> Vec<UasIdentificationReport> {
+        self.uas_reports.drain(..).collect()
     }
 
     pub fn source(&self) -> &S {
@@ -485,6 +593,21 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
                         Err(err) => self.count_decode_error(&err),
                     }
                 }
+                129 => {
+                    self.stats.blocks_cat129 += 1;
+                    match cat129::decode_block(&block) {
+                        Ok(record) => match self.cat129.map(&record, receipt_time) {
+                            Ok(report) => {
+                                self.stats.uas_reports += 1;
+                                self.stats.detections += 1;
+                                detections.push(self.uas_detection(&report));
+                                self.uas_reports.push_back(report);
+                            }
+                            Err(err) => self.count_map_error(&err),
+                        },
+                        Err(err) => self.count_decode_error(&err),
+                    }
+                }
                 other => {
                     self.stats.unsupported_category_blocks += 1;
                     tracing::debug!(adapter = %self.name, category = other, "block of a category this build does not decode");
@@ -492,6 +615,30 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
             }
         }
         detections
+    }
+
+    /// A UAS identification report's own claimed position (`Geodetic`, module
+    /// documentation on `gungnir_model::UasIdentificationReport` explains why it stays
+    /// geodetic through `gungnir-interop`) placed in this deployment's ENU frame and
+    /// stamped with the same baseline variance AIS, ADS-B and MISB ST 0601 already use
+    /// for a cooperatively-reported position (GAP-101).
+    fn uas_detection(&self, report: &UasIdentificationReport) -> DetectionView {
+        let enu = self.frame.to_enu(report.position);
+        DetectionView {
+            sensor: report.sensor,
+            source_time: report.source_time,
+            receipt_time: report.receipt_time,
+            measurement: gungnir_model::Measurement::Position {
+                enu: nalgebra::Vector3::new(enu[0], enu[1], enu[2]),
+                variance_m2: BASELINE_POSITION_VARIANCE_M2,
+            },
+            provenance: gungnir_model::Provenance {
+                source_sensor_ids: vec![report.sensor.0],
+                calibration_baseline_version: None,
+                algorithm_version: format!("{}/ed{}", cat129::CODEC_NAME, cat129::EDITION),
+                ..gungnir_model::Provenance::default()
+            },
+        }
     }
 
     fn count_decode_error(&mut self, err: &InteropError) {
@@ -550,6 +697,11 @@ impl<S: DatagramSource> ProtocolAdapter for AsterixFeedAdapter<S> {
                         .drain(..)
                         .map(|r| RadarServiceObservation::from(&r)),
                 );
+            }
+        }
+        if let Some(sink) = &self.uas_report_sink {
+            if let Ok(mut queue) = sink.lock() {
+                queue.extend(self.uas_reports.drain(..));
             }
         }
         if let Some(sink) = &self.stats_sink {
@@ -695,6 +847,7 @@ mod tests {
             multicast: None,
             radars: Vec::new(),
             df_sites: vec![df_binding()],
+            uas_sites: Vec::new(),
         };
         let mut adapter = bind_feed(&spec, &frame(), &FeedSinks::default())
             .expect("a loopback socket always binds");
@@ -715,6 +868,98 @@ mod tests {
         }
         assert_eq!(adapter.stats().blocks_cat205, 1);
         assert_eq!(adapter.stats().unknown_radar, 0);
+    }
+
+    /// A minimal Category 129 record carrying only the four mandatory items: FSPEC
+    /// flags FRN 1 (I129/010), 6 (I129/050), 7 (I129/070) and 8 (I129/080) --
+    /// `0x87, 0x80`. SAC 10 SIC 20, country "DE", time 12:00:00, position 0N 0E.
+    fn cat129_datagram() -> Vec<u8> {
+        vec![
+            0x81, 0x00, 0x14, 0x87, 0x80, 10, 20, b'D', b'E', 0x54, 0x60, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00,
+        ]
+    }
+
+    fn uas_binding() -> UasBinding {
+        UasBinding {
+            sac: 10,
+            sic: 20,
+            sensor: SensorId(61),
+        }
+    }
+
+    #[test]
+    fn routes_category_129_blocks_when_uas_sites_are_configured() {
+        let source = ReplayDatagramSource::new(vec![cat129_datagram()]);
+        let mut adapter =
+            AsterixFeedAdapter::new("test", source, &frame(), &[]).with_uas_sites(&[uas_binding()]);
+        let detections = adapter.poll(MissionTime(43_205.0)).expect("polls");
+        assert_eq!(detections.len(), 1);
+        assert_eq!(detections[0].sensor, SensorId(61));
+        assert!(matches!(
+            detections[0].measurement,
+            gungnir_model::Measurement::Position { .. }
+        ));
+        let reports = adapter.drain_uas_reports();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].sensor, SensorId(61));
+        assert_eq!(reports[0].registration_country, "DE");
+        assert!(adapter.drain_uas_reports().is_empty());
+        let s = adapter.stats();
+        assert_eq!(s.blocks_cat129, 1);
+        assert_eq!(s.uas_reports, 1);
+        assert_eq!(s.detections, 1);
+        assert_eq!(s.unknown_radar, 0);
+    }
+
+    /// GAP-101 host wiring: [`bind_feed`] -- the one function both `gungnir-app` and
+    /// `gungnir-node` call to build a live ASTERIX feed adapter -- forwards
+    /// `FeedSpec::uas_sites` into [`AsterixFeedAdapter::with_uas_sites`], exactly as it
+    /// already forwards `df_sites` into [`AsterixFeedAdapter::with_df_sites`]. The same
+    /// construction this test's Category 205 twin
+    /// (`bind_feed_wires_a_configured_direction_finder_into_the_live_adapter`) makes,
+    /// and for the same reasons: a real loopback socket on an OS-assigned port through
+    /// the real `bind_feed`, then `handle_datagram` directly rather than a UDP packet to
+    /// a port this test cannot otherwise discover -- `handle_datagram` never touches the
+    /// socket, so the codec and the gateway lookup `with_uas_sites` configured are both
+    /// really exercised.
+    #[test]
+    fn bind_feed_wires_a_configured_uas_gateway_into_the_live_adapter() {
+        let spec = FeedSpec {
+            name: "test".into(),
+            bind_addr: "127.0.0.1:0".parse().expect("loopback, any port"),
+            multicast: None,
+            radars: Vec::new(),
+            df_sites: Vec::new(),
+            uas_sites: vec![uas_binding()],
+        };
+        let mut adapter = bind_feed(&spec, &frame(), &FeedSinks::default())
+            .expect("a loopback socket always binds");
+        let detections = adapter.handle_datagram(&cat129_datagram(), MissionTime(43_205.0));
+        assert_eq!(detections.len(), 1);
+        assert_eq!(detections[0].sensor, SensorId(61));
+        assert!(matches!(
+            detections[0].measurement,
+            gungnir_model::Measurement::Position { .. }
+        ));
+        let reports = adapter.drain_uas_reports();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].sensor, SensorId(61));
+        assert_eq!(reports[0].registration_country, "DE");
+        assert_eq!(adapter.stats().blocks_cat129, 1);
+        assert_eq!(adapter.stats().uas_reports, 1);
+        assert_eq!(adapter.stats().unknown_radar, 0);
+    }
+
+    #[test]
+    fn category_129_reports_from_an_unconfigured_site_are_counted_unknown() {
+        let source = ReplayDatagramSource::new(vec![cat129_datagram()]);
+        let mut adapter = AsterixFeedAdapter::new("test", source, &frame(), &[]);
+        let detections = adapter.poll(MissionTime(0.0)).expect("polls");
+        assert!(detections.is_empty());
+        assert!(adapter.drain_uas_reports().is_empty());
+        assert_eq!(adapter.stats().blocks_cat129, 1);
+        assert_eq!(adapter.stats().unknown_radar, 1);
     }
 
     #[test]

@@ -8,16 +8,29 @@
 //! itself is owned by the host binary and handed in as a `Handle`. Channels, not
 //! Arc<Mutex<..>>, are the default for cross-task state per the same section.
 
+pub mod dense_group;
 pub mod pipeline;
+pub mod sync;
 
+// Gate 4's model checks (`.github/workflows/loom.yml`, GAP-061). Compiled only by
+// `cargo test --lib` under `--cfg loom`, which is the only configuration in which the
+// `loom` dependency exists at all: it is a dev-dependency, so it is linked into test
+// targets and nothing else. See `sync.rs` for why the cfg is `all(test, loom)`.
+#[cfg(all(test, loom))]
+mod loom_model;
+
+pub use dense_group::{DenseGroupEstimate, DenseGroupFilter, DenseGroupSettings, GroupComponent};
 pub use pipeline::{
     run_batch, BearingOutcome, BearingRefusal, FilterSelection, FusionPipeline, ImmBaselineFields,
     PipelineSettings, PipelineStats, PushError, RetainedBearing, TimedTrack, UnsupportedFilter,
     IMPLEMENTED_FILTERS,
 };
 
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
-use std::time::Duration;
+// The channel types come from `crate::sync` rather than straight from
+// `crossbeam-channel`: under `not(loom)` that module re-exports exactly these types, so
+// the signatures below are unchanged for every ordinary build and for every caller, and
+// under `--cfg loom` the same loop runs over a loom-instrumented channel (GAP-061).
+use crate::sync::{Receiver, Sender, TryRecvError};
 
 /// A raw detection as the tracking core consumes it. The canonical, provenance-bearing
 /// form is `gungnir_model::DetectionView`; `gungnir-tracking-service` converts.
@@ -109,9 +122,6 @@ impl From<BearingDetection> for Submission {
     }
 }
 
-/// How often the ingest loop re-polls its inbound channel while idle.
-const IDLE_POLL: Duration = Duration::from_millis(10);
-
 /// Everything one pass through [`ingest_with`]'s loop produced, bundled into one
 /// channel message rather than sent as three (GAP-096).
 ///
@@ -134,6 +144,25 @@ pub struct PipelineSnapshot {
     pub retained_bearings: Vec<RetainedBearing>,
     /// [`FusionPipeline::stats`] at the same instant as `tracks`.
     pub stats: PipelineStats,
+    /// What the dense-group mode reported for the most recent epoch (GAP-015), at the
+    /// same instant as `tracks`. `None` is the ordinary answer and means the scene was
+    /// resolvable.
+    ///
+    /// **This is not a second track list and must never be drawn as one.** It carries no
+    /// identifier of any kind, because the PHD or CPHD intensity behind it carries no
+    /// identity across scans; see [`crate::dense_group`] for the whole of that reasoning
+    /// and for what a labelled filter would have to add before any of it could be
+    /// presented as tracks. **Nothing reads this yet**: `gungnir-tracking-service` does
+    /// not project it, which is the same state `retained_bearings` was left in above.
+    pub dense_group: Option<DenseGroupEstimate>,
+    /// [`FusionPipeline::dense_group_refusals`] at the same instant as `tracks`: epochs
+    /// the dense-group filter refused, so a caller can tell a resolvable scene from a
+    /// filter that would not run.
+    ///
+    /// Not folded into [`PipelineStats`], whose fields are GAP-096's wire contract with
+    /// `gungnir_model::PipelineStatsView`; widening that contract is not this change's
+    /// business.
+    pub dense_group_refusals: u64,
 }
 
 /// Read every part of `pipeline`'s current output into one [`PipelineSnapshot`].
@@ -142,6 +171,8 @@ fn snapshot_output(pipeline: &FusionPipeline) -> PipelineSnapshot {
         tracks: pipeline.timed_snapshot(),
         retained_bearings: pipeline.retained_bearings().to_vec(),
         stats: pipeline.stats(),
+        dense_group: pipeline.dense_group_estimate().cloned(),
+        dense_group_refusals: pipeline.dense_group_refusals(),
     }
 }
 
@@ -158,10 +189,17 @@ fn snapshot_output(pipeline: &FusionPipeline) -> PipelineSnapshot {
 /// **What it does not claim.** The pipeline runs a constant-velocity Kalman filter per
 /// track, or, where a baseline names `imm-cv-ct` (DN-28), the CV/CT IMM over it -- one
 /// selection per pipeline instance (`PipelineSettings::filter_selection`), not per
-/// track. The remaining nonlinear estimators, random-finite-set filtering and
-/// track-to-track fusion are separate rows and separate gaps (GAP-011's remainder,
-/// GAP-015, GAP-013, DN-28 §6); this constant says a pipeline exists and produces
-/// tracks, not that every estimator in the capability table is in it.
+/// track. The remaining nonlinear estimators and track-to-track fusion are separate rows
+/// and separate gaps (GAP-011's remainder, GAP-013, DN-28 §6); this constant says a
+/// pipeline exists and produces tracks, not that every estimator in the capability table
+/// is in it.
+///
+/// **Random-finite-set filtering is in the pipeline since GAP-015, and this constant is
+/// still not a claim about it.** The dense-group mode ([`crate::dense_group`]) runs a
+/// PHD or CPHD for a scan past the association limit and reports a count and a shape.
+/// It produces **no tracks and no identities**, so nothing it reports is part of what
+/// this flag says the pipeline produces; the labelled filters that would carry identity
+/// are GAP-015's remaining row and are not built.
 pub const PIPELINE_IMPLEMENTED: bool = true;
 
 /// The ingest task: buffers out-of-order/late detections from multiple sensors,
@@ -244,7 +282,7 @@ pub async fn ingest_with(
                     return;
                 }
             }
-            Err(TryRecvError::Empty) => tokio::time::sleep(IDLE_POLL).await,
+            Err(TryRecvError::Empty) => crate::sync::idle_backoff().await,
             Err(TryRecvError::Disconnected) => break,
         }
     }

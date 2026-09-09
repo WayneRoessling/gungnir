@@ -7,9 +7,10 @@ group D): a minimal, generic "always accept" SAPIENT sensor, standing in for the
 one neither the desktop nor the node baseline is wired to.
 
 Run it, note the address it prints, and point a `sapient_feeds` entry at it in whichever
-baseline the session uses (`round-1.json` for the desktop, `round-1-node.json` for a
-node-backed setup) -- neither has one today, so adding it is a session-setup step this
-script does not do for you:
+baseline the session uses -- `round-1.json` for the desktop, or, for a node-backed
+setup, the node baseline the moderator writes from it during US-04's dry run (it is not
+a committed file; see `SOURCE.md`). Neither carries such an entry today, so adding it is
+a session-setup step this script does not do for you:
 
     "sapient_feeds": [{
         "name": "loopback",

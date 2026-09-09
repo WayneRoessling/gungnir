@@ -8,6 +8,8 @@
 //! crate the ecosystem decision table once named); `pasture-core` and `pasture-io` stay
 //! unpinned.
 
+pub mod crs;
+
 use std::path::Path;
 
 use crate::DataError;
@@ -30,8 +32,21 @@ pub struct PointBuffer {
     /// silently is exactly what `gungnir-data-fusion`'s point-to-plane path must not
     /// rest on.
     pub normals: Option<Vec<[f32; 3]>>,
-    /// What `positions` are relative to, in the file's own frame.
+    /// What `positions` are relative to, in the file's own frame -- or, after
+    /// [`crs::to_local_enu`] has run, in the deployment's local ENU frame.
     pub origin: [f64; 3],
+    /// What the file says its own coordinates are, read from its CRS VLRs (GAP-102).
+    ///
+    /// `None` means the file declared nothing, which is the common case for a LAS file
+    /// a tool wrote without knowing its own frame, and is what this crate's own
+    /// five-point fixture does. It is **not** a claim that the coordinates are local
+    /// ENU metres: `gungnir-app/src/pointcloud.rs` is where a baseline's `frame` and
+    /// this field are reconciled, exactly as `terrain.rs` reconciles a `GridCrs`
+    /// against a DEM's own.
+    ///
+    /// A cloud that has been converted into the local frame carries `None` again,
+    /// because the file's declaration is no longer true of its numbers.
+    pub crs: Option<crs::PointCloudCrs>,
 }
 
 impl PointBuffer {
@@ -99,6 +114,7 @@ pub fn load_las(path: &Path) -> Result<PointBuffer, DataError> {
         classification: Some(classification),
         normals: None,
         origin,
+        crs: crs::declared(&header, path)?,
     })
 }
 
@@ -188,5 +204,6 @@ pub fn load_copc_bounded(path: &Path, bounds: [f32; 6]) -> Result<PointBuffer, D
         classification: Some(classification),
         normals: None,
         origin,
+        crs: crs::declared(&header, path)?,
     })
 }

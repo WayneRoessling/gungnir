@@ -1002,6 +1002,40 @@ mod tests {
         assert_eq!(settings.measurement_noise_var, [625.0, 3600.0, 22500.0]);
     }
 
+    /// Block until the spawned ingest task has actually been dropped, or fail the test.
+    ///
+    /// `Runtime::shutdown_timeout` returning does **not** mean that has happened yet. It
+    /// returns either because it joined the runtime's threads or because its own budget
+    /// expired, and on the second path the task -- which owns the detection receiver --
+    /// is still alive when the call comes back. That is what made the `PipelineGone`
+    /// assertion below flaky (seen 2026-09-08 in a full `cargo test --workspace`:
+    /// `Ok(())` where `Err(PipelineGone)` was expected, passing 5/5 in isolation straight
+    /// afterwards). Confirmed by holding the worker past the timeout on purpose: the call
+    /// returned at 1.01 s, the hand-off straight after it was accepted, and the task was
+    /// not dropped for another second.
+    ///
+    /// The wait is on the real event rather than on a sleep long enough to hope for it.
+    /// While the service is alive the task cannot return on its own -- `ingest_with`
+    /// leaves its loop only when the detection channel disconnects, and the service still
+    /// holds that sender -- so the track channel reporting disconnected *is* the task's
+    /// drop. The deadline exists only so a task that never dies fails the test instead of
+    /// hanging it; it is not a window the assertion is allowed to pass inside.
+    fn wait_for_ingest_task_to_drop(track_rx: &Receiver<gungnir_fusion_async::PipelineSnapshot>) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            match track_rx.recv_timeout(std::time::Duration::from_millis(20)) {
+                // Whatever the pipeline published before it stopped. The disconnect is
+                // what this waits for, so keep draining.
+                Ok(_) => {}
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => return,
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => assert!(
+                    std::time::Instant::now() < deadline,
+                    "the ingest task still held its channels 30 s after the runtime shut down"
+                ),
+            }
+        }
+    }
+
     #[test]
     fn health_follows_the_pipeline_and_turns_false_when_it_stops() {
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -1023,12 +1057,29 @@ mod tests {
         assert!(svc.tracks().is_empty());
 
         // The pipeline stops with the runtime; the next hand-off fails and health
-        // follows it down.
+        // follows it down. The wait is for the ingest task to have actually been
+        // dropped, which `shutdown_timeout` returning does not establish -- see
+        // `wait_for_ingest_task_to_drop`.
         runtime.shutdown_timeout(std::time::Duration::from_secs(1));
-        assert_eq!(
-            svc.submit_detection(detection()),
-            Err(SubmitError::PipelineGone)
-        );
+        wait_for_ingest_task_to_drop(&svc.track_rx);
+
+        // The two channel ends are separate pieces of the same dropped future's state,
+        // and the drop order of a future's captured arguments is not specified, so the
+        // detection receiver may go an instant after the track sender did. Retry to a
+        // bounded deadline rather than depend on an order the language does not promise.
+        // **The criterion is unchanged**: a hand-off that keeps succeeding still fails
+        // the test, and the accepted result is still exactly `PipelineGone`.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let mut handed_off = svc.submit_detection(detection());
+        while handed_off.is_ok() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the pipeline is gone but detections were still accepted 30 s later"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            handed_off = svc.submit_detection(detection());
+        }
+        assert_eq!(handed_off, Err(SubmitError::PipelineGone));
         assert!(
             !svc.is_healthy(),
             "the pipeline is gone; health must not claim otherwise"

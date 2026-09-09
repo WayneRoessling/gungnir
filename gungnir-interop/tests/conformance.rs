@@ -43,10 +43,10 @@
 use std::path::{Path, PathBuf};
 
 use gungnir_interop::ais::{AisCodec, AisMessage};
-use gungnir_interop::asterix::{cat034, cat048, cat205, data_blocks};
+use gungnir_interop::asterix::{cat034, cat048, cat129, cat205, data_blocks};
 use gungnir_interop::{
     detections_to_record_batch, record_batch_to_detections, DetectionCodec, InteropError,
-    SchemaCatalog, SchemaKind, Stanag4676Codec,
+    SchemaCatalog, SchemaKind, Stanag4676Codec, UasIdentificationCodec,
 };
 use gungnir_model::identity::GlobalEntityId;
 use gungnir_model::{DetectionView, MissionTime, PlanView, TrackView};
@@ -111,6 +111,7 @@ fn track_from(i: u64, d: &DetectionView) -> TrackView {
 /// Each catalogue entry has a check, and the suite refuses to pass an entry it does
 /// not know how to check.
 #[test]
+#[allow(clippy::too_many_lines)]
 fn every_catalogue_entry_is_checked_against_a_corpus() {
     let catalogue = SchemaCatalog::builtin();
     let detections = detection_corpus();
@@ -186,6 +187,7 @@ fn every_catalogue_entry_is_checked_against_a_corpus() {
             (SchemaKind::AsterixCategory(48), _) => asterix_048_partially_decodes(),
             (SchemaKind::AsterixCategory(34), _) => asterix_034_decodes(),
             (SchemaKind::AsterixCategory(205), _) => asterix_205_decodes_and_maps(),
+            (SchemaKind::AsterixCategory(129), _) => asterix_129_decodes_and_maps(),
             (SchemaKind::Stanag(4676), _) => {
                 assert!(matches!(
                     Stanag4676Codec.decode(b"", MissionTime(0.0)),
@@ -273,6 +275,24 @@ fn asterix_205_decodes_and_maps() {
         dets[0].measurement,
         gungnir_model::Measurement::Bearing { .. }
     ));
+}
+
+/// The hand-built Category 129 fixture (GAP-101; no real capture exists --
+/// `testdata/asterix/SOURCE.md`'s Category 129 section says so): the record decodes,
+/// and maps to a UAS identification report once its gateway's SAC/SIC is configured.
+fn asterix_129_decodes_and_maps() {
+    let raw = std::fs::read(root().join("testdata/asterix/cat129.raw")).expect("fixture");
+    let records = cat129::decode_records(&raw).expect("decodes");
+    assert_eq!(records.len(), 1);
+    let site = gungnir_interop::UasSite {
+        sac: 0,
+        sic: 0,
+        sensor: gungnir_model::SensorId(1),
+    };
+    let codec = gungnir_interop::AsterixCat129Codec::new(vec![site]);
+    let reports = codec.decode(&raw, MissionTime(0.0)).expect("maps");
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].registration_country, "US");
 }
 
 /// The gpsd captures: every sentence of an in-scope type decodes, and every other type
@@ -444,7 +464,8 @@ fn wire_coverage(name: &str) -> Option<WireCoverage> {
         "gungnir.GlobalEntityId" => WireCoverage::NotCovered(
             "an identity is a value inside a document rather than a payload of its own, so it crosses the wire only as part of one that is checked",
         ),
-        "asterix.cat048" | "asterix.cat034" | "asterix.cat205" | "ais.m1371" | "adsb.1090es" => {
+        "asterix.cat048" | "asterix.cat034" | "asterix.cat205" | "asterix.cat129"
+        | "ais.m1371" | "adsb.1090es" => {
             WireCoverage::NotCovered(
                 "read from a sensor feed rather than from this transport; the decode is checked against the committed captures above, which is where the loss would be",
             )

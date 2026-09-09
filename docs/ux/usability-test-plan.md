@@ -117,6 +117,33 @@ task cards, the scoring sheet and the report template are in
 [`usability-round-1-session.md`](usability-round-1-session.md). Three things are stated
 there and repeated here because they bound what the round can measure:
 
+**Re-planned 2026-09-06 and again 2026-09-08 (D-28, GAP-074): round 1 is fourteen
+tasks, not ten.** Points 1 and 2 below record the split as D-28 first resolved it, and
+it moved twice afterwards as engineering closed the gaps it rested on. GAP-050, GAP-057
+and GAP-041/GAP-004 closed on 2026-09-07, which unblocked US-04, US-08 and US-09;
+GAP-045 landed PN-16's rehearsal on 2026-09-08, which unblocked US-15. Round 1 is
+therefore **fourteen of the sixteen**, and **US-07 and US-16 alone are round 2's** --
+their blockers, an unwired control-status write and an undesigned gap-acceptance
+control, are unchanged. The four late additions each need a session setup heavier than
+the seed's own flag, and each needs its own dry run before the first participant; the
+session document's §2 and §3 carry the current split and the setups, and are the version
+to run from. Point 3 is unaffected by any of this and still governs.
+
+**§4's task table is the wireframe-era definition and is not what a moderator reads.**
+It is kept as written because it records what each task was meant to measure when the
+round was designed, but the built panels have outrun some of it, and §5 of the session
+document holds the cards actually read aloud. US-15 is the clearest case: §4 asks the
+planner to "submit B with its rehearsal" and to have it "submitted with the record", and
+PN-16 draws no adoption control at all -- deliberately, per DN-26 §6 rule 4, because
+moving a sensor is a physical act with an authority chain this system does not model.
+The session card was corrected on 2026-09-08 to ask the planner to say the control is
+absent and why. §4's "laydowns A and B" moved the same day for a different reason:
+PN-16 reads coverage from sensor placements alone, so the two round-1 laydowns then
+declared -- which differ only in where a battery stands -- could not be told apart on
+the table §4 has them compared on. The owner's answer was to give the round a pair that
+differs in *siting*, and `round-1.json` now declares a third laydown `c`; the session
+card compares `current` with it. Read §4 for intent; run from the session document.
+
 1. **Ten of the sixteen tasks can run in round 1**, and four of those ten only once the
    live desktop can be seeded with tracks and plans. The tracker and the allocator both
    run as of 2026-09-06 (GAP-011, GAP-029), so the reason a round still needs a seed is
