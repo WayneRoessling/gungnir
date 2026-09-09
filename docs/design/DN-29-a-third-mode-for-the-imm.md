@@ -3,15 +3,18 @@
 Scopes the follow-up `docs/design/DN-28-imm-in-the-pipeline.md` §7 named and deliberately
 did not close: "the whole-scenario-1 acceptance question... a third IMM mode needs a
 heterogeneous-state-dimension redesign `Imm<N, M>` does not have, which is its own design
-note." This is that note. Status: **proposed 2026-09-07, unsigned. No code exists.**
+note." This is that note. Status: **proposed 2026-09-07; §5's recommendation signed by the
+owner 2026-09-09. No code exists.**
 
-This is a scoping document only, matching DN-28's own two-signature discipline (a signature
-on a design says the design is the right one to build; a signature on an implementation
-says the code does what it says): it names the problem, weighs two designs, recommends one,
-and states what is explicitly out of scope, so an owner can sign the shape of the work
-before anyone writes the `gungnir-core` or `gungnir-filters` diff. **Nothing here should be
-built until §5's recommendation is signed and §6's open questions are answered or
-explicitly deferred to the implementation PR's own verification gate.**
+This is a scoping document, matching DN-28's own two-signature discipline (a signature on
+a design says the design is the right one to build; a signature on an implementation says
+the code does what it says): it names the problem, weighs two designs, recommends one, and
+states what is explicitly out of scope, so an owner can sign the shape of the work before
+anyone writes the `gungnir-core` or `gungnir-filters` diff. **That signature is what is
+recorded here** -- the augmented-state design (§5) is the right one to build. It is not a
+signature on any code, because none exists yet: **the implementation still needs §6's
+three open questions answered or explicitly deferred to its own verification gate before
+that future diff is itself signed**, the identical two-step DN-28 went through.
 
 ## 1. The gap DN-28 left, stated precisely
 
@@ -138,7 +141,7 @@ lives. Third, nothing in this workspace's baselines needs a fourth mode at a thi
 dimension today, so building the general mechanism now is exactly the kind of unrequested
 generality `CLAUDE.md` asks not to design for.
 
-## 5. Recommendation
+## 5. Recommendation (signed by the owner 2026-09-09: this is the design to build)
 
 **§4a, the augmented-state IMM.** It needs zero changes to `gungnir-filters::Imm` or
 `ModeFilter`, both signed off under item 94 and exercised by `imm_diff.rs`'s oracle gate;
@@ -152,6 +155,12 @@ the same reason DN-28 §2 gave for scoping itself to the CV/CT pair rather than 
 item 94's blanket statement: the smaller, concrete case is not the general problem, and
 building the general mechanism to solve the concrete case is solving the wrong amount of
 problem.
+
+**The owner signed this recommendation on 2026-09-09, on its design merits alone**: no
+`gungnir-core`, `gungnir-filters`, or `gungnir-fusion-async` diff exists yet, and this
+signature does not stand in for the one that diff will need on its own account (per this
+note's own two-signature discipline, restated at the top). §6's three questions are
+unanswered as of this signature and remain the gate before any implementation lands.
 
 ## 6. The open numerical-stability question §5 still has to answer before sign-off
 
@@ -227,12 +236,14 @@ handling) exactly as DN-28 did, plus `gungnir-filters` only if §6's investigati
 inertness property does not hold as argued and some (still API-compatible) adjustment to
 `Imm`'s combination step is needed.
 
-Per `docs/agentic-workflow.md`, this is a design note only. An agent may draft the
-`gungnir-core`/`gungnir-filters`/`gungnir-fusion-async` diff once an owner signs §5's
-recommendation, but the mandatory verification gate has to include §6's three questions
-answered — either here in a signed amendment or in the implementation PR's own written
-argument — before the code is `main`-worthy, per the same low-trust-tier reasoning DN-28
-§8 stated for itself.
+Per `docs/agentic-workflow.md`, this was a design note only, and the precondition its own
+opening paragraph named — an owner's signature on §5's recommendation — is now met
+(2026-09-09). An agent may now draft the `gungnir-core`/`gungnir-filters`/
+`gungnir-fusion-async` diff on that basis, but the mandatory verification gate still has
+to include §6's three questions answered — either here in a signed amendment or in the
+implementation PR's own written argument — before the code is `main`-worthy, per the same
+low-trust-tier reasoning DN-28 §8 stated for itself. **Not requested this session**: the
+signature above covers the design only, and no implementation PR was asked for.
 
 ## Traceability
 
