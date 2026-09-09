@@ -203,8 +203,8 @@ fn every_point_of_the_real_cloud_converts_and_lands_inside_the_fixtures_own_boun
     let source = declared.proj_definition().expect("a WKT is a definition");
     let vertical = declared.vertical_unit_metres().expect("a VERT_CS");
 
-    let out = pointcloud::crs::to_local_enu(&cloud, &source, vertical, &passthrough)
-        .expect("converts");
+    let out =
+        pointcloud::crs::to_local_enu(&cloud, &source, vertical, &passthrough).expect("converts");
 
     assert_eq!(out.positions.len(), 4767, "no point is dropped");
     assert_eq!(out.intensity.as_ref().map(Vec::len), Some(4767));
@@ -261,5 +261,8 @@ fn an_unknown_crs_is_refused_by_name_rather_than_placed_somewhere_plausible() {
     let err = pointcloud::crs::to_local_enu(&one, "EPSG:999999", 1.0, &passthrough)
         .expect_err("999999 is not an EPSG code");
     let text = err.to_string();
-    assert!(text.contains("999999"), "the refusal names the code: {text}");
+    assert!(
+        text.contains("999999"),
+        "the refusal names the code: {text}"
+    );
 }

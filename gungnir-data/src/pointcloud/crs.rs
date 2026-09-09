@@ -23,11 +23,17 @@
 use crate::geospatial::GridCrs;
 use crate::DataError;
 
+/// `GTModelTypeGeoKey` value for a two-dimensional projected system.
+const MODEL_TYPE_PROJECTED: u16 = 1;
+/// `GTModelTypeGeoKey` value for a geographic two-dimensional system.
+const MODEL_TYPE_GEOGRAPHIC: u16 = 2;
+
 /// The coordinate reference system a LAS file declares for itself, in whichever of the
 /// two forms the LAS specification allows.
 ///
 /// Deliberately not `GridCrs`, and not an extension of it: a LAS 1.4 file declares its
-/// CRS as WKT, which carries a compound (horizontal + vertical) system that a GeoTIFF
+/// CRS as WKT, which carries a compound (horizontal + vertical) system that a
+/// `GeoTIFF`
 /// geokey directory reduced to one EPSG code cannot express. The geokey form *is*
 /// `GridCrs`, reused rather than redefined, because there it is the same set of keys
 /// read from the same spec.
@@ -36,7 +42,7 @@ pub enum PointCloudCrs {
     /// The LAS 1.4 WKT VLR: user id `LASF_Projection`, record 2112. The LAS 1.4
     /// specification names OGC WKT 1 here, which is what the parsing below assumes.
     Wkt(String),
-    /// The LAS 1.0-1.3 GeoTIFF geokey VLRs (records 34735/34736/34737), reduced to the
+    /// The LAS 1.0-1.3 `GeoTIFF` geokey VLRs (records 34735/34736/34737), reduced to
     /// EPSG code they name.
     Geokeys(GridCrs),
 }
@@ -51,10 +57,9 @@ impl PointCloudCrs {
     pub fn proj_definition(&self) -> Option<String> {
         match self {
             PointCloudCrs::Wkt(wkt) => Some(wkt.clone()),
-            PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(code) })
-            | PointCloudCrs::Geokeys(GridCrs::Geographic { epsg: Some(code) }) => {
-                Some(format!("EPSG:{code}"))
-            }
+            PointCloudCrs::Geokeys(
+                GridCrs::Projected { epsg: Some(code) } | GridCrs::Geographic { epsg: Some(code) },
+            ) => Some(format!("EPSG:{code}")),
             PointCloudCrs::Geokeys(_) => None,
         }
     }
@@ -107,10 +112,9 @@ impl PointCloudCrs {
     pub fn agrees_with_epsg(&self, epsg: u32) -> bool {
         match self {
             PointCloudCrs::Wkt(wkt) => wkt.contains(&format!("\"EPSG\",\"{epsg}\"")),
-            PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(code) })
-            | PointCloudCrs::Geokeys(GridCrs::Geographic { epsg: Some(code) }) => {
-                u32::from(*code) == epsg
-            }
+            PointCloudCrs::Geokeys(
+                GridCrs::Projected { epsg: Some(code) } | GridCrs::Geographic { epsg: Some(code) },
+            ) => u32::from(*code) == epsg,
             // A geokey directory that names no code contradicts nothing.
             PointCloudCrs::Geokeys(_) => true,
         }
@@ -189,7 +193,7 @@ fn balanced_node(s: &str) -> Option<&str> {
             ']' => {
                 depth -= 1;
                 if depth == 0 {
-                    return Some(&s[..open + i + 1]);
+                    return Some(&s[..=(open + i)]);
                 }
             }
             _ => {}
@@ -207,9 +211,12 @@ fn balanced_node(s: &str) -> Option<&str> {
 /// # Errors
 ///
 /// `DataError::Parse` when a geokey directory is present but malformed -- a truncated
-/// key directory, or one whose version header the GeoTIFF spec forbids. A file that
+/// key directory, or one whose version header the `GeoTIFF` spec forbids. A file that
 /// declares no CRS at all is `Ok(None)`, never an error.
-pub fn declared(header: &las::Header, path: &std::path::Path) -> Result<Option<PointCloudCrs>, DataError> {
+pub fn declared(
+    header: &las::Header,
+    path: &std::path::Path,
+) -> Result<Option<PointCloudCrs>, DataError> {
     if let Some(bytes) = header.get_wkt_crs_bytes() {
         // The VLR is a null-terminated, null-padded string. Lossy rather than strict:
         // a stray byte in a CRS description must not fail a load that is otherwise
@@ -220,17 +227,18 @@ pub fn declared(header: &las::Header, path: &std::path::Path) -> Result<Option<P
             return Ok(Some(PointCloudCrs::Wkt(text.to_string())));
         }
     }
-    let geo = header
-        .get_geotiff_crs()
-        .map_err(|e| DataError::Parse(format!("{}: its GeoTIFF CRS keys are malformed: {e}", path.display())))?;
+    let geo = header.get_geotiff_crs().map_err(|e| {
+        DataError::Parse(format!(
+            "{}: its GeoTIFF CRS keys are malformed: {e}",
+            path.display()
+        ))
+    })?;
     let Some(geo) = geo else {
         return Ok(None);
     };
-    // The same three keys `gungnir-data`'s GeoTIFF DEM reader already reduces to a
+    // The same three keys `gungnir-data`'s `GeoTIFF` DEM reader already reduces to a
     // `GridCrs` (`geospatial::georeference`), read here through the `las` crate's own
     // accessors rather than re-walking the key directory.
-    const MODEL_TYPE_PROJECTED: u16 = 1;
-    const MODEL_TYPE_GEOGRAPHIC: u16 = 2;
     let crs = match geo.get_gt_model_type_geo_key_value() {
         Some(MODEL_TYPE_PROJECTED) => GridCrs::Projected {
             epsg: geo.get_projected_crs_geo_key_value(),
@@ -271,7 +279,16 @@ pub fn declared(header: &las::Header, path: &std::path::Path) -> Result<Option<P
 /// also, for what it is worth, exactly what PROJ itself does when its optional
 /// vertical-datum grids are absent, which is the state a deployment that never fetches
 /// grids over the network is always in: the independent `pyproj` check recorded in
-/// `gungnir-data/tests/pointcloud.rs` returns the same unit-only height.
+/// `gungnir-data/tests/pointcloud_crs.rs` returns the same unit-only height.
+///
+/// # Performance
+///
+/// One `proj_trans` call per point, rather than `Proj::convert_array`'s one call for the
+/// whole slice. Deliberate at this size and worth revisiting at a larger one: a bounded
+/// COPC query returns thousands of points, where the difference is not measurable, and
+/// the per-point call is what lets a refusal name the coordinate that failed instead of
+/// only the file. A caller that ever converts a whole ten-million-point file should move
+/// to `convert_array` and give up that message.
 ///
 /// # Errors
 ///
@@ -298,9 +315,11 @@ pub fn to_local_enu(
         let x = f64::from(p[0]) + buffer.origin[0];
         let y = f64::from(p[1]) + buffer.origin[1];
         let z = f64::from(p[2]) + buffer.origin[2];
-        let (lon_deg, lat_deg) = transform
-            .convert((x, y))
-            .map_err(|e| DataError::Parse(format!("{source:?}: point ({x}, {y}) does not convert: {e}")))?;
+        let (lon_deg, lat_deg) = transform.convert((x, y)).map_err(|e| {
+            DataError::Parse(format!(
+                "{source:?}: point ({x}, {y}) does not convert: {e}"
+            ))
+        })?;
         geodetic.push([
             lat_deg.to_radians(),
             lon_deg.to_radians(),
@@ -392,7 +411,9 @@ mod tests {
     #[test]
     fn the_vertical_unit_is_read_from_vert_cs_and_not_from_the_horizontal_unit() {
         let crs = PointCloudCrs::Wkt(AUTZEN_WKT.to_string());
-        let factor = crs.vertical_unit_metres().expect("Autzen declares a VERT_CS");
+        let factor = crs
+            .vertical_unit_metres()
+            .expect("Autzen declares a VERT_CS");
         assert!(
             (factor - 0.304_800_609_601_219).abs() < 1e-15,
             "expected the US survey foot, got {factor}"
@@ -519,6 +540,10 @@ mod tests {
     /// ENU closure end up relative to their own minimum corner, with `origin` carrying
     /// that corner. This is what keeps an `f32` position honest after the frame change.
     #[test]
+    // Every value compared below is an exact sum or difference of the small decimals in
+    // this test's own input, so equality is the assertion that means something here; an
+    // epsilon would only hide a re-basing that had drifted.
+    #[allow(clippy::float_cmp)]
     fn a_converted_cloud_is_re_based_on_its_own_corner_so_f32_stays_exact() {
         let buffer = super::super::PointBuffer {
             positions: vec![[0.0; 3]; 3],
@@ -532,7 +557,11 @@ mod tests {
         // triple, so the expected output is arithmetic a reader can check by eye.
         let far = [400_000.0_f64, 6_000_000.0, 100.0];
         let enu = |g: [f64; 3]| [far[0] + g[0], far[1] + g[1], far[2] + g[2]];
-        let out = place_geodetic(&buffer, &[[0.0, 0.0, 0.0], [1.5, 2.5, 3.5], [-1.0, 4.0, 0.5]], &enu);
+        let out = place_geodetic(
+            &buffer,
+            &[[0.0, 0.0, 0.0], [1.5, 2.5, 3.5], [-1.0, 4.0, 0.5]],
+            &enu,
+        );
 
         assert_eq!(out.origin, [far[0] - 1.0, far[1], far[2]]);
         assert_eq!(out.positions[0], [1.0, 0.0, 0.0]);
@@ -540,11 +569,15 @@ mod tests {
         assert_eq!(out.positions[2], [0.0, 4.0, 0.5]);
         assert_eq!(out.intensity, buffer.intensity, "attributes ride along");
         assert_eq!(out.classification, buffer.classification);
-        assert_eq!(out.normals, None, "a normal does not survive a frame change");
+        assert_eq!(
+            out.normals, None,
+            "a normal does not survive a frame change"
+        );
         assert_eq!(out.crs, None, "the file's declaration is no longer true");
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn an_empty_cloud_places_to_an_origin_of_zero_rather_than_infinity() {
         let buffer = super::super::PointBuffer::default();
         let out = place_geodetic(&buffer, &[], &|g| g);

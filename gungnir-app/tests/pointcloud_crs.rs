@@ -47,7 +47,10 @@ fn a_local_enu_baseline_is_refused_when_the_file_declares_a_real_system() {
     let Placement::Refused(reason) = placement(None, Some(&autzen()), true) else {
         panic!("a declared CRS must contradict a local-enu claim");
     };
-    assert!(reason.contains("NAD83 / Oregon GIC Lambert (ft)"), "{reason}");
+    assert!(
+        reason.contains("NAD83 / Oregon GIC Lambert (ft)"),
+        "{reason}"
+    );
     assert!(reason.contains("epsg:<code>"), "{reason}");
 
     // The geokey form contradicts it just as well.
@@ -79,7 +82,10 @@ fn a_baseline_that_names_a_different_code_than_the_file_is_refused() {
         panic!("EPSG:32610 is not what this file declares");
     };
     assert!(reason.contains("32610"), "{reason}");
-    assert!(reason.contains("NAD83 / Oregon GIC Lambert (ft)"), "{reason}");
+    assert!(
+        reason.contains("NAD83 / Oregon GIC Lambert (ft)"),
+        "{reason}"
+    );
 }
 
 /// The happy path's *plan*: the file's own WKT is what PROJ is given, not the baseline's

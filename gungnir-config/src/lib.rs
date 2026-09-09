@@ -615,8 +615,8 @@ impl PointCloudConfig {
 /// digit check is not redundant with `u32::from_str`, which accepts a leading `+` --
 /// `"epsg:+32633"` would otherwise be a second spelling of one code, and a baseline that
 /// admits two spellings of the same thing is a baseline whose diffs stop meaning
-/// anything. Zero is refused because the EPSG register has no code 0: GeoTIFF uses it to
-/// mean "intentionally omitted", which is not a frame a file can be in.
+/// anything. Zero is refused because the EPSG register has no code 0: `GeoTIFF` uses it
+/// to mean "intentionally omitted", which is not a frame a file can be in.
 fn parse_epsg_frame(frame: &str) -> Option<u32> {
     let (prefix, code) = frame.split_at_checked("epsg:".len())?;
     if !prefix.eq_ignore_ascii_case("epsg:") || !code.bytes().all(|b| b.is_ascii_digit()) {
@@ -4810,7 +4810,9 @@ mod tests {
         // The default is unchanged: a pair that names no frame is local ENU, and reads
         // back as naming no EPSG code at all.
         assert_eq!(
-            b.point_cloud.as_ref().and_then(PointCloudConfig::declared_epsg),
+            b.point_cloud
+                .as_ref()
+                .and_then(PointCloudConfig::declared_epsg),
             None
         );
 

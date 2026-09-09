@@ -119,7 +119,10 @@ fn a_copc_target_that_declares_a_real_crs_is_refused_against_a_local_enu_baselin
     settle(&mut state);
     match &state.point_cloud {
         PointCloudStatus::Failed { path, reason } => {
-            assert!(path.contains("autzen"), "the target is what refused: {path}");
+            assert!(
+                path.contains("autzen"),
+                "the target is what refused: {path}"
+            );
             assert!(
                 reason.contains("NAD83 / Oregon GIC Lambert (ft)"),
                 "the refusal names what the file actually declares: {reason}"
@@ -147,6 +150,10 @@ fn a_copc_target_that_declares_a_real_crs_is_refused_against_a_local_enu_baselin
 /// at all -- which is what leaves a baseline's `frame: "local-enu"` unopposed, and so is
 /// the case where a pair still loads and is drawn.
 #[test]
+// The origin asserted below is the fixture's own recorded minimum bound, written exactly
+// as `testdata/pointcloud/SOURCE.md` states it; equality is the point, since the whole
+// claim is that the placement step left it untouched.
+#[allow(clippy::float_cmp)]
 fn a_pair_of_undeclared_files_still_loads_in_order() {
     let (mut state, dir) = desktop(
         "undeclared-pair",
@@ -172,7 +179,10 @@ fn a_pair_of_undeclared_files_still_loads_in_order() {
     assert_eq!(state.data.point_clouds.len(), 2, "source, then target");
     // Positions are unchanged by the placement step: an undeclared file is drawn exactly
     // as it was before GAP-102, relative to its own minimum bound.
-    assert_eq!(state.data.point_clouds[0].origin, [500_010.0, 6_000_019.0, 12.0]);
+    assert_eq!(
+        state.data.point_clouds[0].origin,
+        [500_010.0, 6_000_019.0, 12.0]
+    );
     assert_eq!(state.data.point_clouds[0].crs, None);
     // The viewport layer only ever reflects a complete pair (GAP-098's display piece).
     let layers = gungnir_app::pointcloud::layers(&state.point_cloud, &state.data);
