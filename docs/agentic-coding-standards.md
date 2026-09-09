@@ -629,30 +629,67 @@ and `docs/ml/architecture.md`'s own condition for a native ML dependency -- a se
 reviewer appointed for it -- had not been met. The owner un-deferred it on 2026-09-08 on
 their own authority as the reviewer the deferral named, ahead of a model actually
 existing, because Plan 09's own schedule needs the runtime question settled before
-GAP-080 can plan around it.
+GAP-080 can plan around it. Built the same day: `onnx::OnnxModel`, a real `Model`
+implementor over `ort::session::Session`, landed behind a Cargo feature that is off by
+default for a reason found while building it (point 2 below), not a placeholder for one
+found later.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
-| `ort` (default features disabled; `download-binaries` specifically refused) | The `Model` trait's real backend: loading and running an ONNX graph | `gungnir-ml` | Not yet: no gap builds it |
+| `ort` `2.0.0-rc.13` (MIT OR Apache-2.0; default features disabled, `["load-dynamic", "api-27"]` enabled) | The `Model` trait's real backend: loading and running an ONNX graph, through `OnnxModel` | `gungnir-ml`, behind its own `onnx-runtime` feature (off by default) | 2026-09-08 |
 
-Two things about this one:
+Three things about this one:
 
 1. **`ort` over `tract`, for op coverage, not for safety.** `tract` is a pure-Rust
    ONNX-subset interpreter and would have sidestepped a native dependency entirely, but
    nobody has checked whether Plan 09's intended models fit inside that subset, and `ort`
    wraps the real ONNX Runtime with the full operator set. If a future gap finds `tract`
    covers what is actually needed, revisiting this pin costs nothing that has been built
-   yet -- nothing has.
-2. **`download-binaries` is refused, not merely left off by default.** That feature
-   fetches a prebuilt ONNX Runtime from a third-party CDN, and those binaries may carry
-   telemetry -- not acceptable in this system regardless of convenience. Whoever builds
-   GAP-077's runtime must build ONNX Runtime from source instead, the same shape of
-   native-dependency handling this stack already gives `rcgen` (§2.9 point 2) and
-   `vtkio` (GAP-023): a build-time cost accepted in exchange for not trusting a binary
-   this project did not build. **Not yet checked**: `ort`'s exact resolved version, its
-   duplicate-linkage footprint against the rest of the workspace, and whether a C++
-   toolchain needs adding to `ci.yml` for the from-source build -- all owed by GAP-077's
-   own implementation, not decided here.
+   yet beyond `OnnxModel` itself.
+2. **`download-binaries` is refused; `load-dynamic` was chosen over a from-source static
+   link, and the reason is sharper than build time.** `download-binaries` fetches a
+   prebuilt ONNX Runtime from pyke's own CDN, refused for the same third-party-binary-
+   telemetry reason this stack refuses one anywhere else. The straightforward
+   alternative -- disable it and statically link an ONNX Runtime built from source --
+   was rejected for a checked reason, not a theoretical one: it would require a C++
+   toolchain and `cmake` on every contributor's machine and every `fmt-clippy-test` CI
+   run just to run `cargo check`, and `ci.yml`'s `ubuntu-latest` job installs neither
+   today. `load-dynamic` instead disables linking entirely (`ort-sys/disable-linking`)
+   and `dlopen`s `libonnxruntime`/`onnxruntime.dll` the first time a `Session` is built,
+   from `ORT_DYLIB_PATH` at runtime -- **confirmed 2026-09-08 by `cargo check -p
+   gungnir-ml --features onnx-runtime` succeeding on a machine with no cmake, clang or
+   gcc installed at all**, so building this workspace needs neither toolchain regardless
+   of whether the feature is on. Building ONNX Runtime from source is still exactly what
+   D-40 asked for; `load-dynamic` only moves *when* that has to happen, from every
+   contributor's `cargo check` to whichever deployment step actually supplies a working
+   `libonnxruntime` -- unbuilt, and belonging to GAP-080 or a packaging gap after it, not
+   this one.
+3. **The `onnx-runtime` feature is off by default because of a defect found while
+   integrating it, not out of excess caution.** `ort` 2.0.0-rc.13's global `ort::api()`
+   accessor is documented ("May panic if ... Loading the ONNX Runtime dynamic library
+   fails") and confirmed by reproduction to **panic** -- not return a `Result` -- when
+   `load-dynamic` cannot load a compatible ONNX Runtime, which is every environment this
+   change has run in (this workspace's own CI included: `ubuntu-latest` has no
+   `libonnxruntime.so` anywhere on its default search path, and neither does any
+   contributor machine by default). Reproduced twice on this change's own development
+   machine, against a wrong-version system `onnxruntime.dll` (1.17.1) it found on the
+   default search path with `ORT_DYLIB_PATH` unset: the panic poisons an internal global
+   mutex that `ort`'s own atexit handler locks again on process exit, which panics a
+   second time in a context that cannot unwind and hard-aborts the process
+   (`STATUS_STACK_BUFFER_OVERRUN`) -- reproduced identically with `OnnxModel::load`'s own
+   `catch_unwind` wrapper in place, which stops the panic from escaping that one call but
+   cannot undo the poisoning. A test that calls into real `ort` at all, pass or fail,
+   risks taking the whole test binary down with it at exit; `gungnir-ml`'s `onnx-runtime`
+   feature (`Cargo.toml`) keeps that call out of every default `cargo test --workspace`
+   run, and `onnx.rs`'s own test module explains in a comment why it deliberately adds no
+   round-trip test even behind the feature. **No CI job enables this feature today**:
+   real inference is real, compiling, reviewed code, and it is not exercised anywhere
+   until a gap supplies both a working `libonnxruntime` and a reason to risk the process
+   on it -- which is also why `cargo tree -p gungnir-ml --features onnx-runtime -d`
+   (checked 2026-09-08) is the honest form of the duplicate-linkage check here: `ort`,
+   `ort-sys` and `libloading` add no duplicate package to the graph at all; the `syn`
+   (D-18, D-39) and `hashbrown` (already beneath `arrow`/`indexmap`, independent of this
+   change) duplicates it reports both pre-exist this dependency.
 
 #### Coordinate reference system projection (signed off 2026-09-08, D-41)
 
@@ -666,82 +703,96 @@ it on 2026-09-08.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
-| `proj` 0.31.0 | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data`, behind its `crs-projection` feature (off by default) | 2026-09-08, GAP-023 (the DEM half only; GAP-098's point-cloud half is a separate change) |
-| `proj-sys` 0.27.0 (`proj`'s own dependency, binding `libproj` v9.6.2) | Builds `libproj` from the source it vendors in its own crate (`bundled_proj` feature; no network fetch at build time) | `gungnir-data`, same feature | 2026-09-08, GAP-023 |
+| `proj` 0.31 (`default-features = false`) | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data` | GAP-102 (point clouds) and GAP-023 (DEMs), 2026-09-08, **optional, behind that crate's default-off `crs` feature** |
+| `proj-sys` 0.27 (`proj`'s own dependency, binding `libproj` v9.6.x) | Finds a system `libproj` install or builds one from source when none is found -- the same two-path shape `vtkio`'s and `rcgen`'s own native dependencies already follow | `gungnir-data`, transitively | GAP-102 and GAP-023, with the same feature gate |
 
-`proj` and `libproj` are both permissively licensed (`proj`: MIT OR Apache-2.0;
-`libproj`: X/MIT, an OSGeo project), so this is a build-and-review cost, not a licensing
-one -- re-checked against crates.io and the crate's own repository on 2026-09-08 rather
-than assumed from the sentence above, which was already correct. **Full projection
+`proj` and `libproj` are both permissively licensed (`proj` and `proj-sys`:
+MIT OR Apache-2.0, confirmed on crates.io 2026-09-08; `libproj`: X/MIT, an OSGeo
+project), so this is a build-and-review cost, not a licensing one. **Full projection
 support was chosen over a WGS84-geographic-only first step**: a narrower cut would have
 left the common case of a projected DEM (UTM and similar) still refused, and
 `gungnir-coord`'s existing `Wgs84` tangent-plane conversion does not extend to a
-projected CRS regardless -- it solves a different problem (geographic lat/lon to a
-local tangent plane), not general reprojection.
+projected CRS regardless -- it solves a different problem (geographic lat/lon to a local
+tangent plane), not general reprojection.
 
-**GAP-023's half landed 2026-09-08, and answered what this entry left open.**
+**Three things this row left open were checked by GAP-102 (2026-09-08), by running the
+build rather than reading about it, and two of the answers constrain how the crate may be
+taken.**
 
-1. **`bundled_proj`, not `pkg_config` (now a deprecated no-op on `proj-sys` itself) or
-   the crate's default behaviour.** `proj-sys` unconditionally tries `pkg-config` first
-   regardless of that feature; `bundled_proj` instead builds PROJ 9.6.2 from the source
-   `proj-sys` vendors in its own crate (`PROJSRC/`, confirmed by reading the crate's own
-   `build.rs` and `Cargo.toml` from its repository rather than assumed) via `cmake` and
-   a C/C++ toolchain -- the same from-source-over-ambient-system-package choice this
-   stack already made for `ort` (D-40) and `rcgen`'s `aws_lc_rs` backend (point 2
-   above), and, unlike relying on whatever `libproj-dev` a Linux distribution happens to
-   package, guaranteed to be at least the 9.6.2 `proj` 0.31.0 requires. It also avoids
-   `buildtime_bindgen` (which needs `libclang`, found nowhere this change could check):
-   `proj-sys/src/bundled_bindings.rs`, checked into the crate and generated against the
-   exact PROJ version `PROJSRC/` bundles, covers the bundled build without it.
-2. **`proj-sys`'s build behaviour on a host with no system `libproj`, checked directly
-   rather than guessed at.** The change that added this feature ran
-   `cargo check -p gungnir-data --features crs-projection` on its own machine (Windows,
-   Visual Studio 2022 Community installed) and got a real, specific failure: `cmake` is
-   not installed, so `proj-sys`'s build script cannot drive the CMake build it correctly
-   selected (`-G "Visual Studio 17 2022"`, finding the same MSVC install `rustc` already
-   links against) -- confirmed by the build log itself, not inferred from a missing-tool
-   check alone. No `libclang`/`clang` was present either, but the build never reached
-   that step: `bundled_bindings.rs` (point 1) meant it did not need to. **This is
-   therefore a narrower gap than "cannot build on Windows"**: a host with `cmake`
-   installed alongside the toolchain this workspace already requires would likely get
-   substantially further, though this change did not have `cmake` available to confirm
-   that. `ci.yml`'s jobs all run on `ubuntu-latest` and never pass `--features`, so none
-   of them build this; `.github/workflows/crs-projection.yml` (new) installs `cmake` via
-   `apt-get` and is the first and only place this feature actually compiles and its
-   tests run, on every pull request that could plausibly touch it.
+1. **The build. `proj-sys` 0.27 cannot build `libproj` on `x86_64-pc-windows-msvc`,
+   which is the target `release.yml` ships `gungnir-app` for.** Its from-source path
+   passes `SQLITE3_INCLUDE_DIR` and `SQLITE3_LIBRARY`, which PROJ 9.6.2's own CMake
+   rejects by name in favour of `SQLite3_INCLUDE_DIR`/`SQLite3_LIBRARY`; it names the
+   library `libsqlite3.a`, a Unix filename MSVC does not produce; and PROJ's build
+   additionally requires the `sqlite3` command line binary, which nothing in the Rust
+   dependency chain supplies. On a Linux runner none of this bites, because
+   `apt-get install cmake pkg-config libsqlite3-dev sqlite3` satisfies all three by the
+   standard names. `proj-sys` does **not** need `libclang`: it ships pre-generated
+   bindings and runs `bindgen` only under its optional `buildtime_bindgen` feature.
+   **Consequence: every member takes `proj` as an optional dependency behind a
+   default-off feature**, so a default `cargo check`/`cargo test` stays green on every
+   developer machine, and `ci.yml`'s `proj-crs` job installs the native dependencies and
+   is the one place the conversion is actually exercised.
+2. **The high-level API is two-dimensional.** `proj` 0.31's `Proj::convert` sets the `z`
+   of every coordinate it hands `proj_trans` to `0.0`, so a height cannot be routed
+   through PROJ from this crate's public API at all. A caller therefore converts the
+   horizontal pair through PROJ and scales the vertical by the factor the file itself
+   declares, applying no vertical datum shift -- which is the same answer PROJ gives when
+   its optional vertical-datum grids are absent, and which
+   `gungnir-data/src/pointcloud/crs.rs` states in full rather than leaving to be
+   discovered.
+3. **A wrong or unsupported EPSG code is refused by name, and the refusal is split
+   across two places on purpose.** `validate_point_cloud` checks only the *shape* of the
+   declaration (`"local-enu"`, or `"epsg:<code>"` with a non-zero code), because a
+   baseline is validated on machines with no PROJ database -- the same reason it does not
+   check that a path exists -- and the loader, which has PROJ, is what reports a code no
+   register knows. `network` and `tiff` are also refused, not merely left off: they let
+   `libproj` fetch grid files over the internet at run time, which no deployment profile
+   in `ARCHITECTURE.md` §8 permits.
 
-   **That workflow's first run settles the open question: the bundled build works.**
-   `proj` 0.31.0 and PROJ 9.6.2 compiled from the vendored source on `ubuntu-latest`
-   with nothing installed beyond `cmake` -- no `libclang`, no system `libproj`, no
-   `pkg-config` -- in about four and a half minutes, and the tests ran against it. So
-   the only thing standing between this feature and the Windows desktop it is ultimately
-   for is `cmake` on that host, which is a package rather than a design problem.
-3. **`validate_terrain` accepts `frame: "epsg:<code>"` alongside `"local-enu"`**,
-   parsed through a new `gungnir_config::Frame` (`LocalEnu` or `Epsg(u32)`) so
-   validation and the DEM loader's conversion read the same value the same way. The
-   field itself stays a plain `String` on the wire -- schema-compatible with a baseline
-   written before D-41, and consistent with how the rest of this file validates a
-   string field rather than giving it a serde-level enum.
-4. **A wrong or unsupported EPSG code is refused by name**, as expected, but not by
-   `validate_terrain`: `gungnir-config` gained no dependency on `proj` (D-41 places that
-   in `gungnir-data` alone), so a baseline validates the same way it always has, on a
-   machine that may hold neither the DEM file nor PROJ's own data resources. The refusal
-   happens where the file is actually read: `gungnir-app`'s placement step reconciles
-   `frame`'s declared EPSG (or the absence of one) against the file's own tags, and
-   `gungnir_data::geospatial::crs::to_wgs84` reports a code PROJ does not recognise as a
-   named error rather than a panic.
-5. **Deliberately split across two crates, following D-41's own placement of `proj` in
-   `gungnir-data` alone.** `gungnir-data` depends on no other workspace crate
-   (`ARCHITECTURE.md`'s dependency table), so it converts a real-world CRS only as far
-   as WGS84 geographic (`geospatial::crs::to_wgs84`); `gungnir-app` (which already
-   depends on both `gungnir-data` and `gungnir-coord`, the latter since GAP-045) carries
-   the result the rest of the way to local ENU via `gungnir_coord::Wgs84` -- the same
-   oracle-verified tangent-plane transform every other geodetic quantity in the system
-   already goes through, using the deployment's own declared `ConfigBaseline::origin`,
-   rather than a second implementation of the same math or a second origin.
-6. **GAP-098 (point-cloud CRS) is untouched by this entry's landing.** `PointCloudConfig`
-   and `validate_point_cloud` still accept only `"local-enu"`; D-41 named both gaps as
-   unblocked, but GAP-023 and GAP-098 are separate changes, and this one is GAP-023's.
+**One governance note, since it is not obvious.** `deny.toml` sets
+`[graph] all-features = false`, so `cargo deny check licenses` does not evaluate an
+optional dependency's subtree: the `proj` tree is in `Cargo.lock` but is not covered by
+that gate while the feature is off. The licences above were therefore confirmed by hand
+against crates.io rather than by the gate, and a change that makes this feature default
+must re-run `cargo deny` expecting new crates to appear.
+
+**GAP-023's DEM half merged into this entry on 2026-09-09, and settled four more things.**
+
+1. **One feature, not two.** GAP-023 landed independently and first, taking `proj` as
+   `features = ["bundled_proj"]` behind a `gungnir-data` feature called `crs-projection`,
+   with its own `.github/workflows/crs-projection.yml`. That workflow's first run did
+   answer the question it was built for: PROJ 9.6.2 compiled from the source `proj-sys`
+   vendors, on `ubuntu-latest`, with nothing installed but `cmake` -- no `libclang`, no
+   system `libproj`, no `pkg-config` -- in about four and a half minutes, and the tests
+   ran against it. **The bundled path works, and was dropped anyway.** One library taken
+   two ways, behind two features, compiled by two CI jobs, is worse than the single spec
+   above, and `default-features = false`'s refusal of `network` and `tiff` (point 3) is
+   the property worth keeping. `ci.yml`'s `proj-crs` job absorbed the workflow, its DEM
+   test steps and its anti-vacuous-pass check together.
+2. **`validate_terrain` accepts `frame: "epsg:<code>"` alongside `"local-enu"`**, parsed
+   through `gungnir_config::Frame` (`LocalEnu` or `Epsg(u32)`) so validation and the DEM
+   loader's conversion read the same value the same way. The field stays a plain `String`
+   on the wire -- schema-compatible with a baseline written before D-41 -- and the refusal
+   of a code no register knows happens in the loader, which has PROJ, not in
+   `gungnir-config`, which must validate on machines that do not.
+3. **The DEM conversion is split across two crates, following D-41's placement of `proj`
+   in `gungnir-data` alone.** That crate depends on no other workspace crate
+   (`ARCHITECTURE.md`'s dependency table), so it converts only as far as WGS84 geographic
+   (`geospatial::crs::to_wgs84`); `gungnir-app` carries the result the rest of the way to
+   local ENU through `gungnir_coord::Wgs84`, the same oracle-verified tangent-plane
+   transform every other geodetic quantity already goes through, anchored on the
+   deployment's own `ConfigBaseline::origin`. A file already in plain geographic WGS84
+   therefore converts with the feature off, because that half links nothing native.
+4. **The first CI run failed on the test's arithmetic rather than on the conversion, and
+   the arithmetic is worth stating.** The fixture test asserted that two cells 30 m apart
+   in a UTM grid stay 30 m apart in local ENU. They do not, and must not: UTM's grid is
+   deliberately shrunk by k0 = 0.9996 on the central meridian, which is exactly where the
+   fixture sits, so 30 m of grid is 30 / 0.9996 = 30.0120 m of ground. The old assertion
+   was satisfied by precisely the bug it claimed to be a tripwire for. GAP-023's register
+   entry carries the full decomposition of the observed number; the transform itself was
+   not implicated.
+
 
 #### Cloud KMS for the ManagedService custody profile (signed off 2026-09-08, D-42)
 

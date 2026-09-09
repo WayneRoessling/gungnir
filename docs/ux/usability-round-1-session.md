@@ -19,14 +19,25 @@ baselines to it is a remaining session-setup step.
 more card-versus-build faults came out** -- the same reading that found GAP-097, applied
 to the cards GAP-097's own hold had not yet let anyone run. **US-15 asked for a submit
 control PN-16 deliberately does not draw, and for a coverage comparison that is zero by
-construction** for round-1's laydown pair; both are corrected in §3 and §5, and the
-second leaves an open scenario-design question for the owner rather than a fix. **The
+construction** for round-1's laydown pair; both are corrected in §3 and §5. **The
 node baseline US-04 and US-08 name was never a committed file**, though two documents
 wrote about it as though it were; §3 now says the moderator writes it. Separately, the
 seed hash the report records had been left at the pre-fix seed's value since the
 2026-09-08 seed correction, and `reports/round-1-2026-09-06.md` now carries the hash of
 the seed as committed. None of this is a measurement and none of it fills a field in
 the report: no session has run.
+
+**The scenario-design question the second of those left open was decided by the owner
+the same day, and round 1 now carries a laydown pair that differs in sensor siting.**
+`round-1.json` declares a third laydown, `c`, which places the same two radars as
+`current` and re-sites one of them; the card in §5 compares `current` with `c` and keeps
+`b` in front of the participant as the option that changes no coverage at all. Measured
+through `sustainment::planning_rows`, the call PN-16 draws from: `current` and `b` read
+two gap segments and 7 000 m of the upper Vell approach uncovered, `c` reads two
+segments and 1 750 m, so its difference column reads "5250 m less gap than today". §3
+sets out where the radar goes and what the move costs. **The seed file did not change
+and its hash does not move**: `c` is baseline content in `round-1.json`, and
+`round-1-seed.json` is byte-for-byte what the report already records.
 
 Decided 2026-09-06 by the owner (D-28, GAP-074): round 1 runs against the **rendered
 panels**, not the wireframes, one participant per role, and its results become the
@@ -72,12 +83,25 @@ measured**, never as a value.
 - **Baseline.** The Vell estuary laydown from the vignettes: two radars, one
   interceptor battery at the point layer with a reserve, the harbour and the plant as
   defended assets, one no-go geofence, the harbour boom as a hazard, and (added
-  2026-09-08 for US-15) two declared laydowns -- `current` (the deployment as sited) and
+  2026-09-08 for US-15) three declared laydowns -- `current` (the deployment as sited),
   `b` (the area-layer battery moved toward the upper Vell approach, ahead of R2's
-  scheduled maintenance window), and (added 2026-09-08 for US-15) one declared
+  scheduled maintenance window) and `c` (S2 moved forward to a south-shore site 10 km
+  up the upper Vell approach) -- and (added 2026-09-08 for US-15) one declared
   approach, the upper Vell axis itself, without which PN-16's coverage column computes
   nothing to compare. It lives at `testdata/usability/round-1.json`
   (GAP-089, landed), with a `SOURCE.md` beside it.
+- **`c` is the option US-15 compares `current` against, and it exists because the other
+  two cannot be compared.** PN-16 computes coverage from a laydown's *sensor* placements
+  alone, so `b` -- which moves a battery -- reads "same as today" no matter what else
+  changes. `c` places the same two radars and re-sites S2 from the plant, 5.8 km up the
+  estuary, to a shore site 10 km along the declared axis from its inner end, on the same
+  side of the axis and about the same 600 m back from it as the plant. The distance is a
+  siting rule rather than a chosen number: at 10 km S2 still reaches the inner end of the
+  axis with about 2 km of its 12 km range in hand, so it never stops seeing the water in
+  front of the harbour, and the axis midpoint at ~12 km is where that margin runs out.
+  Its resource placements are `current`'s exactly, so the three rows separate cleanly:
+  as sited, a battery moved, a radar moved. Nothing sits inside the no-go fence, which is
+  12 km west of the new site.
 - **Seed.** GAP-089's driver reads `testdata/usability/round-1-seed.json` and, on a
   schedule from session start, shows the tracks the tasks name (T-039 and the two inbound
   drones) from a scripted picture -- not from detections, because no pipeline turns a
@@ -161,31 +185,49 @@ measured**, never as a value.
   script around it.
 - **US-15 runs PN-16's own rehearsal, single desktop, no node, no `--rehearsal` flag.**
   Pick a scenario in PN-16's picker (any of the ten `testdata/tracks/samples/TT-0N-sample/`
-  fixtures), select laydown `b` in the options table, press Run, and read the rehearsal
+  fixtures), select laydown `c` in the options table, press Run, and read the rehearsal
   section's tracks-formed and decisions-raised counts once it finishes. This is GAP-045's
   mechanism, not GAP-089's, and it drives `update::tick` internally the same number of
   times the fixture has detections for -- so its own decision counts were exposed to
   GAP-097 exactly as the seeded tasks were, and are clear for the same reason now that
-  GAP-097 is closed. **Three faults in this card, found on 2026-09-08 by reading PN-16
-  against it rather than by running it, and named here rather than worked around. The
-  first is fixed in the baseline, the second is not fixable here, and the third is fixed
-  in §5's card:**
+  GAP-097 is closed. Note what a rehearsal of `c` can and cannot show: GAP-045's own
+  text says a laydown's *sensor* placements change nothing a run can report, because the
+  fixture's detections were captured against `gungnir-scenario`'s hardcoded geometry, so
+  the rehearsal reads on `c`'s resources -- which are `current`'s. The coverage
+  comparison, not the rehearsal, is where `c` differs. **Three faults in this card, found
+  on 2026-09-08 by reading PN-16 against it rather than by running it, and named here
+  rather than worked around. The first is fixed in the baseline, the second was fixed in
+  the baseline once the owner had ruled on it, and the third is fixed in §5's card:**
   - **The options table had nothing to compute.** `sustainment::planning_rows` returns
     `LaydownCoverage::NotComputed` for every row when the baseline declares no approach
-    to evaluate coverage along, and `round-1.json` declared none, so both laydowns would
+    to evaluate coverage along, and `round-1.json` declared none, so every laydown would
     have read "not computed" and the card's first success criterion could not have been
     met at all. `round-1.json` now declares the upper Vell approach -- the axis the
-    laydown intents and the no-go fence already name -- and both rows compute:
-    two gap segments and 7 000 m uncovered, pinned in `gungnir-app/tests/rehearsal.rs`.
-  - **The comparison between these two laydowns is zero by construction.** Coverage is
-    built from a laydown's *sensor* placements alone, and `current` and `b` place both
-    radars identically; `b` moves the area-layer battery and nothing else. So `b`'s
-    difference column reads exactly `0.0`, measured, not estimated. The card now asks
-    the planner to read both rows and account for the zero, which is a real question
-    about whether PN-16 makes clear what its coverage number is a function of. It is
-    **not** the question the card was written to ask, and making it that one means
-    giving round 1 a laydown pair that differs in sensor siting -- a scenario-design
-    decision for the owner, not one this document takes.
+    laydown intents and the no-go fence already name -- and every row computes, pinned
+    in `gungnir-app/tests/rehearsal.rs`.
+  - **The comparison between `current` and `b` is zero by construction, so a third
+    laydown was added.** Coverage is built from a laydown's *sensor* placements alone,
+    and `current` and `b` place both radars identically; `b` moves the area-layer
+    battery and nothing else. So `b`'s difference column reads exactly `0.0`, measured,
+    not estimated -- and a planner asked to compare those two on coverage is asked to
+    read a difference that cannot exist. That was a scenario-design decision rather
+    than a document edit, and **the owner took it on 2026-09-08: give round 1 a pair
+    that differs in sensor siting.** `round-1.json` now declares `c`, which places the
+    same two radars as `current` with S2 forward-sited (§3's baseline bullet has the
+    siting and its rule). Measured through the same `planning_rows` call: `current` and
+    `b` read two gap segments and 7 000 m uncovered, `c` reads two segments and 1 750 m,
+    difference `-5 250 m`. The card compares `current` with `c`.
+    **`b` stays, and stays in front of the participant.** Its zero is a true answer
+    about what the column measures, and it is the contrast that makes `c`'s number
+    readable: one option that moves a battery and changes no coverage, one that moves a
+    radar and changes it. `gungnir-app/tests/rehearsal.rs` pins all three rows and fails
+    if the pair ever collapses back to a zero difference.
+    **What the move costs is not on the panel.** Single-sensor approach rises from
+    2 500 m to 7 750 m, so the length the two radars do not cover twice is 9 500 m under
+    either laydown -- forward-siting converts dark approach into approach one radar
+    sees rather than creating coverage. PN-16 draws the uncovered column and not that
+    one, so a participant cannot be scored on noticing it; it is here for the moderator,
+    and for the debrief question about what the system did not show.
   - **There is no submit, by design.** `PlanningAction` offers `SelectLaydown`,
     `PickScenario` and `RunRehearsal` and nothing else, and PN-16 draws a line saying
     "Adopting a laydown is not done from here: moving a sensor is a physical act with
@@ -234,7 +276,7 @@ One card per task; the moderator reads only the **task** line. The rest is the s
 | US-04 | Operator | "At 02:03 the strip shows Detached." (the moderator kills the node at this cue) | The node link drops and PN-01 shows Detached | States which backend is now live (embedded fallback) and what is queued in the outbox from PN-18; says they can continue deciding under delegation while disconnected | PN-01, PN-18 | D |
 | US-08 | Supervisor | "The KAL cell reconnects with one conflict." (the moderator restarts the node with a contradicting decision on its record) | PN-18 shows a reconciliation due | Resolves the one conflict through PN-18 (keep this desktop's decision or the node's) with the role-rank arbitration explained; presses switch-back once the node answers | PN-18 | D |
 | US-09 | Sensor manager | "R1 is lost at 01:50. Re-task R2 to search, with coverage shown before and after." | Sensor 1 stops reporting | Commands R2 to Search through PN-10; states the coverage difference from PN-11; commits once acknowledged; reports the remaining gap | PN-10, PN-11 | D |
-| US-15 | Planner | "Compare the two laydown options and rehearse the alternative. Tell me what you would do next." | Card read | Both rows' coverage read from PN-16's table (`current` and `b`, two gap segments and 7 000 m each); `b`'s difference column read as zero and accounted for -- coverage answers for sensors, and `b` moves a battery; `b` selected and previewed in the viewport; its maintenance-window intent named; a scenario run and its tracks-formed and decisions-raised counts read; the participant states that there is no adopt or submit control and why | PN-16, PN-11 | D |
+| US-15 | Planner | "Compare the laydown options and rehearse the one you would take forward. Tell me what you would do next." | Card read | All three rows' coverage read from PN-16's table -- `current` and `b` at two gap segments and 7 000 m uncovered, `c` at two segments and 1 750 m; **`c` identified as the only option that changes coverage**, and its difference column ("5250 m less gap than today") read aloud; `b`'s zero accounted for -- coverage answers for sensors, and `b` moves a battery, so its maintenance-window intent is the reason to take it and not the table; `c` selected and previewed in the viewport and its forward-siting intent named; a scenario run on it and its tracks-formed and decisions-raised counts read; the participant states that there is no adopt or submit control and why | PN-16, PN-11 | D |
 
 Group C's cards (US-07, US-16) are held for round 2 and are not read in round 1.
 

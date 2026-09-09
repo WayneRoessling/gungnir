@@ -15,7 +15,7 @@
 //! D-41 (2026-09-08) closed that: `frame` also accepts `"epsg:<code>"`
 //! ([`gungnir_config::Frame`]), and [`place`] reconciles it against the file's own
 //! tags (`GridCrs`) and converts through `gungnir_data::geospatial::crs::to_wgs84`
-//! (behind the `crs-projection` feature; PROJ) and then `gungnir_coord::Wgs84` (always
+//! (behind the `crs` feature; PROJ) and then `gungnir_coord::Wgs84` (always
 //! available -- geographic-to-local-ENU needs no native dependency) using the
 //! deployment's own declared origin. A file whose tags still contradict what `frame`
 //! declares, or a real-world CRS this build was not compiled to convert, is refused by
@@ -192,7 +192,7 @@ pub fn poll(state: &mut AppState) {
 }
 
 /// WGS84 geographic, EPSG:4326 -- `gungnir_data::geospatial::crs::WGS84_EPSG` restated
-/// so this module's unconditional code does not need the `crs-projection` feature just
+/// so this module's unconditional code does not need the `crs` feature just
 /// to name the constant.
 const WGS84_EPSG: u32 = 4326;
 
@@ -229,7 +229,7 @@ fn place(
     let lon_lat_deg = if source_epsg == WGS84_EPSG {
         // Already geographic WGS84: what a GeoTIFF's own [x, y] already means for a
         // `GridCrs::Geographic` file (longitude, latitude, degrees), so there is
-        // nothing for PROJ to do, and this path needs no `crs-projection` feature.
+        // nothing for PROJ to do, and this path needs no `crs` feature.
         absolute
     } else {
         to_wgs84(&absolute, source_epsg)?
@@ -302,19 +302,19 @@ fn source_epsg(frame: Frame, crs: GridCrs) -> Result<Option<u32>, String> {
 /// Reproject `points` (`[longitude, latitude]` or `[easting, northing]`, matching
 /// `source_epsg`) into WGS84 geographic degrees.
 ///
-/// Behind the `crs-projection` feature (PROJ, GAP-023, D-41): the feature-off build
+/// Behind the `crs` feature (PROJ, GAP-023, D-41): the feature-off build
 /// below refuses by name instead, so this function's signature -- and every caller --
 /// is the same regardless of whether the feature is compiled in.
-#[cfg(feature = "crs-projection")]
+#[cfg(feature = "crs")]
 fn to_wgs84(points: &[[f64; 2]], source_epsg: u32) -> Result<Vec<[f64; 2]>, String> {
     gungnir_data::geospatial::crs::to_wgs84(points, source_epsg).map_err(|e| e.to_string())
 }
 
-#[cfg(not(feature = "crs-projection"))]
+#[cfg(not(feature = "crs"))]
 fn to_wgs84(_points: &[[f64; 2]], source_epsg: u32) -> Result<Vec<[f64; 2]>, String> {
     Err(format!(
         "terrain.frame declares EPSG:{source_epsg}; converting a real-world coordinate \
-         reference system other than WGS84 geographic needs the crs-projection feature, which \
+         reference system other than WGS84 geographic needs the crs feature, which \
          this build was not compiled with"
     ))
 }

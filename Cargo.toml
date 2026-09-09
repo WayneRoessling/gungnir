@@ -40,7 +40,7 @@ members = [
 
     "gungnir-identity",           # Understand / High
     "gungnir-identification",     # Understand / Medium
-    "gungnir-ml",                 # Understand / Medium  (model traits, fake model, dataset extraction; no runtime, GAP-077)
+    "gungnir-ml",                 # Understand / Medium  (model traits, fake model, OnnxModel runtime, dataset extraction; GAP-077)
     "gungnir-geo",                # Understand / Medium
     "gungnir-analytics",          # Understand / Medium  (line-of-sight, viewshed, coverage volumes)
 
@@ -162,24 +162,23 @@ las = { version = "0.11", features = ["laz-parallel"] }
 # GeoTIFF DEMs (GAP-023, decided 2026-09-06): the image-rs TIFF codec, pure Rust;
 # gungnir-data owns the three GeoTIFF tags itself (§2.9, "Terrain").
 tiff = "0.11"
-# Real-world CRS conversion for a DEM (GAP-023, signed off 2026-09-08, D-41): converts a
-# file's declared coordinate reference system -- geographic or projected -- into the
-# deployment's local-ENU frame. Behind `gungnir-data`'s `crs-projection` feature, off by
-# default (§2.9's D-41 entry).
+# Real-world coordinate reference systems for DEM and point-cloud files (D-41,
+# 2026-09-08; docs/agentic-coding-standards.md §2.9). `proj` 0.31 binds libproj 9.6.x
+# through `proj-sys` 0.27, which links a system libproj when pkg-config finds one at
+# >= 9.6.2 and builds it from source with cmake otherwise. Taken WITHOUT default
+# features: the default `geo-types` feature only adds trait impls for a geometry type
+# this workspace does not use, and `network`/`tiff` would let libproj fetch grid files
+# over the internet at runtime, which no deployment profile in ARCHITECTURE.md §8
+# permits. Every member that takes it does so as an OPTIONAL dependency behind a
+# default-off feature, because the native build is not available on every developer
+# machine -- see gungnir-data's `crs` feature for the whole of that reasoning.
 #
-# `bundled_proj` builds `libproj` from the source `proj-sys` vendors in its own crate
-# (`PROJSRC/`, no network fetch at build time) via `cmake` and a C/C++ toolchain, rather
-# than the crate's other path of linking a system install found through `pkg-config`.
-# Deliberately the from-source path even though a system `libproj` would build faster
-# when present: this workspace already makes that choice for `ort` (D-40) and for
-# `rcgen`'s `aws_lc_rs` backend (§2.9 point 2) -- a build-time cost accepted over
-# depending on a package this project did not build, of a version and provenance the
-# build cannot otherwise pin. `bundled_proj` also sidesteps needing `buildtime_bindgen`
-# (which needs `libclang`, absent from every host this change could confirm): the
-# vendored source's own pre-generated bindings (`proj-sys/src/bundled_bindings.rs`,
-# checked into the crate) cover it, since they were generated against the exact PROJ
-# version `PROJSRC/` bundles.
-proj = { version = "0.31", features = ["bundled_proj"] }
+# GAP-023 (the DEM half) first took this with `features = ["bundled_proj"]` behind a
+# separate `crs-projection` feature, and proved that path builds on `ubuntu-latest` with
+# nothing but `cmake`. Both halves converged on the single spec above when they merged:
+# one library, one feature, one CI job, and `default-features = false`'s refusal of
+# `network`/`tiff` kept rather than reintroduced.
+proj = { version = "0.31", default-features = false }
 
 # Docking for the role workspaces (signed off 2026-09-05, D-19;
 # docs/agentic-coding-standards.md §2.9). Pinned to 0.10 because that is the line that
@@ -311,6 +310,31 @@ keyring = { version = "4.2.0", default-features = false, features = ["v1"] }
 # that reason -- it is production's route to the store `keyring` selected, not only a
 # test's route to a substitute for it.
 keyring-core = { version = "1.0.0", default-features = false }
+
+# ONNX Runtime inference (D-40, signed off 2026-09-08; docs/agentic-coding-standards.md
+# §2.9, "ONNX inference runtime"). GAP-077's `Model` trait needed a real backend; `ort`'s
+# own default `download-binaries` feature fetches prebuilt ONNX Runtime binaries from
+# pyke's CDN, refused for the same third-party-binary-telemetry reason this stack refuses
+# one anywhere else.
+#
+# `default-features = false` plus `load-dynamic` rather than a compile-time static link
+# against a from-source build: `load-dynamic` turns linking off entirely
+# (`ort-sys/disable-linking`) and instead `dlopen`s `libonnxruntime`/`onnxruntime.dll` the
+# first time a `Session` is actually built, from the path `ORT_DYLIB_PATH` names at
+# runtime. Building this workspace therefore needs no C++ toolchain, no cmake, and no
+# network fetch of a binary -- checked 2026-09-08 by `cargo check -p gungnir-ml`
+# succeeding on a machine with no cmake, clang or gcc installed at all. Building ONNX
+# Runtime from source is still exactly what D-40 asked for; `load-dynamic` only moves
+# *when* that has to happen, from every contributor's `cargo check` to whichever
+# deployment step actually needs a working `libonnxruntime` to run inference -- which is
+# GAP-080's own unbuilt half (training a model to run), not this one's.
+#
+# `api-27`, the crate's own default ONNX Runtime C API version, is named explicitly
+# because `default-features = false` turns that off too. `ndarray` is deliberately not
+# enabled: `Tensor::from_array` and `try_extract_tensor` both have a raw
+# `(shape, Vec<f32>)` / `(&Shape, &[f32])` path that needs it, so the crate gains no
+# numeric-array dependency it would use nowhere else.
+ort = { version = "2.0.0-rc.13", default-features = false, features = ["load-dynamic", "api-27"] }
 
 # Test-only. Mutual TLS cannot be verified without certificates, and a private key checked
 # into the repository would be key material in the repository whatever the comment above it

@@ -13,11 +13,13 @@ description = "eframe desktop binary: bootstrap + AppState + update loop. The on
 workspace = true
 
 [features]
-# Real-world CRS conversion for a DEM (GAP-023, D-41): forwards to `gungnir-data`'s own
-# `crs-projection` feature, off by default for the same reason (§2.9's D-41 entry) --
-# `proj-sys` links `libproj`, built from source with `cmake` and a C/C++ toolchain, and
-# no host this change could confirm build against had either.
-crs-projection = ["gungnir-data/crs-projection"]
+# Real-world CRS support for the configured DEM and point-cloud pair (GAP-023, GAP-102,
+# D-41): forwards `gungnir-data`'s own `crs` feature, which is what links `libproj`. Off
+# by default for the reasons that feature's own comment gives -- chiefly that `proj-sys`
+# 0.27 cannot build libproj on Windows MSVC at all, which is the target `release.yml`
+# ships this binary for. Without it a baseline naming an `epsg:<code>` frame is refused
+# by name at load, never drawn in the wrong place.
+crs = ["gungnir-data/crs"]
 
 [dev-dependencies]
 criterion.workspace = true

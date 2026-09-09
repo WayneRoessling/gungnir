@@ -78,10 +78,47 @@ Both are byte-for-byte copies; nothing was truncated or otherwise edited.
 ## What the fixture holds, for the test that reads it
 
 LAS 1.4, extended point format (GPS time, colour, no waveform, no NIR), LAZ-compressed,
-10,653,336 points. File bounds (its own coordinate system, US survey feet per the
-original capture): x [635577.79, 639003.73], y [848882.15, 853537.66], z [406.14,
-615.26]. `gungnir-data/tests/pointcloud.rs`'s happy-path test queries the round-number
+10,653,336 points. File bounds (in its own coordinate system, below): x [635577.79,
+639003.73], y [848882.15, 853537.66], z [406.14, 615.26]. `gungnir-data/tests/pointcloud.rs`'s happy-path test queries the round-number
 box x [637200, 637300], y [851100, 851200], z [400, 620] -- chosen from these bounds,
 not from what the query happens to return -- and asserts the exact point count (4767)
 and classification breakdown (2 unclassified, 4499 ground, 114 high vegetation, 8
 overhead structure, 144 car) that box returns.
+
+### The coordinate reference system it declares (GAP-102)
+
+**This is the real-world CRS GAP-102 needed, and the reason no new fixture was
+authored for it.** The file carries a WKT VLR of its own -- `LASF_Projection`, record
+2112, 993 bytes, with bit 4 of the header's global encoding set as LAS 1.4 requires --
+and it declares a **compound** system:
+
+| Part | System | EPSG | Unit |
+|---|---|---|---|
+| Horizontal | NAD83 / Oregon GIC Lambert (ft) | 2992 | international foot, 0.3048 m (EPSG 9002) |
+| Vertical | NAVD88 height (ftUS) | 6360 | **US survey foot**, 1200/3937 m (EPSG 9003) |
+
+`gungnir-data/tests/pointcloud_crs.rs` reads all of this out of the file rather than
+trusting this table.
+
+**Two things about it are worth stating, because both are easy to get wrong.**
+
+First, **the two axes are not in the same foot.** The horizontal axes are international
+feet and the heights are US survey feet; the two differ by about two parts per million.
+An earlier version of this file said "US survey feet per the original capture" of the
+whole thing, which is right about the heights and wrong about the eastings and
+northings. The loader reads each from the node that declares it (`VERT_CS`'s own `UNIT`
+for the vertical), so a reader who takes the horizontal unit for both is the mistake the
+code is written to avoid.
+
+Second, **converting this file's heights does not give heights above the WGS-84
+ellipsoid.** NAVD88 is a gravity-related datum, and the separation between it and the
+ellipsoid in this part of Oregon is of the order of -22 m. `libproj` applies that
+separation only when it has the relevant vertical-datum grid, which a deployment that
+never fetches grids over the network does not; without it PROJ converts the unit and
+stops, and so does this workspace. `gungnir-data/src/pointcloud/crs.rs::to_local_enu`
+says the same thing at the point where it matters.
+
+The bounds above, put through that conversion, are longitude [-123.07498674,
+-123.06251260], latitude [44.04971882, 44.06278031], height [123.79171958,
+187.53162306] -- an independent `pyproj` computation, recorded in
+`gungnir-data/tests/pointcloud_crs.rs` with what it checked and to what tolerance.

@@ -20,7 +20,7 @@
 //!
 //! **Real-world CRS conversion** (signed off 2026-09-08, D-41): a file's `GridCrs` no
 //! longer has to be `Unstated` or the deployment's own local frame. `crs::to_wgs84`
-//! (behind the `crs-projection` feature) converts a geographic or projected CRS with a
+//! (behind the `crs` feature) converts a geographic or projected CRS with a
 //! known EPSG code into WGS84 geographic via `proj`; `gungnir-app` carries the result
 //! the rest of the way to local ENU, since that step needs `gungnir-coord`, which this
 //! crate does not depend on. See the `crs` module below for the reasoning and the
@@ -289,7 +289,7 @@ pub mod classification {
 }
 
 /// Real-world coordinate reference system conversion for a DEM (GAP-023, D-41): behind
-/// the `crs-projection` feature, off by default. `docs/agentic-coding-standards.md`
+/// the `crs` feature, off by default. `docs/agentic-coding-standards.md`
 /// §2.9's D-41 entry says why: `proj-sys` links `libproj`, built from its own vendored
 /// source (`bundled_proj`) with `cmake` and a C/C++ toolchain, a heavier and more
 /// environment-dependent build than the rest of this crate pays for by default -- no
@@ -305,7 +305,7 @@ pub mod classification {
 /// deployment's own declared origin (`ConfigBaseline::origin`) -- the same origin
 /// everything else in the local picture is relative to, rather than a second one this
 /// module would otherwise have to invent.
-#[cfg(feature = "crs-projection")]
+#[cfg(feature = "crs")]
 pub mod crs {
     use crate::DataError;
 
@@ -368,7 +368,7 @@ pub mod crs {
 // combined form would leave these tests' `expect(...)` looking like production code.
 #[cfg(test)]
 mod crs_tests {
-    #![cfg(feature = "crs-projection")]
+    #![cfg(feature = "crs")]
 
     use super::crs::to_wgs84;
 
