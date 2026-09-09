@@ -24,7 +24,7 @@ every part of the capability; implementation is what remains.
 | CAP-1.5 Time discipline | full | partial | `gungnir-time` clocks and late-data policy; `DetectionView` source and receipt time | GAP-008 |
 | CAP-1.6 Peer early warning | full | none | API snapshot and event stream exist for peers; no designed path that merges peer tracks as a source with visible staleness; a component is now named for every part of it by DN-16 (`../../design/`, first draft 2026-09-05) | GAP-009, GAP-091 |
 | CAP-1.7 Cooperative identity | full | none | Codec boundary in `gungnir-interop`; evidence model in `gungnir-identification` | GAP-010, GAP-101 |
-| CAP-2.1 Multi-sensor picture | full | partial | Tracking core trait surfaces, `gungnir-fusion-async`, `gungnir-tracking-service` facade | GAP-011, GAP-016, GAP-048, GAP-066, GAP-096 |
+| CAP-2.1 Multi-sensor picture | full | partial | Tracking core trait surfaces, `gungnir-fusion-async`, `gungnir-tracking-service` facade | GAP-011, GAP-016, GAP-048, GAP-066, GAP-096, GAP-103 |
 | CAP-2.2 Tracks through gaps | full | partial | `Quality` on `TrackView`; stale drawn muted; stale never allocated | GAP-011, GAP-012 |
 | CAP-2.3 Sensor registration | full | none | `gungnir-track-fusion` registration traits; integration with `gungnir-data-fusion` flagged as a risk in `../../gungnir-capabilities.md` §9 | GAP-013, GAP-014 |
 | CAP-2.4 Dense groups | full | none | `gungnir-rfs` PHD/CPHD and LMB traits | GAP-015 |
