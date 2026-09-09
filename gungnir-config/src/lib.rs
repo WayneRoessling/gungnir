@@ -598,17 +598,64 @@ pub struct PointCloudFileConfig {
 /// and inventing something to align it to would be the fiction this baseline's other
 /// optional fields are written to avoid.
 ///
-/// `frame` mirrors [`TerrainConfig::frame`]: today only `"local-enu"` is accepted. The
-/// reason is narrower here than for terrain -- the loader does not read a LAS file's own
-/// CRS at all, so there is no tag to contradict the declaration and check it against the
-/// way [`TerrainConfig`]'s DEM loader does; the field exists so a real projection, when
-/// one is added, has somewhere to be declared instead of being assumed silently.
+/// `frame` says what the pair's coordinates **are**, not what they should become. Two
+/// forms are accepted (GAP-102, D-41):
+///
+/// * `"local-enu"` (the default): the files were prepared in the deployment's own local
+///   ENU metres and are drawn as they stand. Since GAP-102 the loader reads a LAS file's
+///   own CRS VLRs, so this is now a checkable claim rather than an unopposed one -- a
+///   file whose own tags declare a real-world system contradicts it and is refused by
+///   name, which is what [`TerrainConfig`]'s DEM path has always done and what this
+///   field previously could not.
+/// * `"epsg:<code>"`, case-insensitive on the prefix (`"epsg:32610"`, `"EPSG:2992"`):
+///   the files are in that coordinate reference system and are converted into the
+///   deployment's local ENU frame on load. This needs `ConfigBaseline::origin`, since a
+///   deployment with no declared origin has no local frame to convert into, and it needs
+///   a binary built with `gungnir-data`'s `crs` feature, since the conversion links
+///   `libproj`; a binary without it refuses the pair by name rather than drawing it in
+///   the wrong place.
+///
+/// **Whether the code names a system that exists is not decided here.** Validation runs
+/// on machines with no PROJ database -- the same reason a path's existence is not
+/// checked -- so this checks the shape of the declaration and the loader reports an
+/// unknown code. That split is deliberate: a baseline should fail on a typo it can see
+/// and not on a database it may not have.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PointCloudConfig {
     pub source: PointCloudFileConfig,
     pub target: PointCloudFileConfig,
     #[serde(default = "default_pointcloud_frame")]
     pub frame: String,
+}
+
+impl PointCloudConfig {
+    /// The EPSG code `frame` names, or `None` for `"local-enu"`.
+    ///
+    /// Only meaningful once [`validate`] has passed; an unvalidated baseline whose
+    /// `frame` is neither form also reads as `None`, which the loader treats as
+    /// "already local" -- the conservative direction, since the validator refuses that
+    /// baseline before any loader sees it.
+    #[must_use]
+    pub fn declared_epsg(&self) -> Option<u32> {
+        parse_epsg_frame(&self.frame)
+    }
+}
+
+/// `"epsg:<code>"` to its code, case-insensitive on the prefix. `None` for anything
+/// else, `"local-enu"` included.
+///
+/// Deliberately strict about what follows the colon: ASCII digits and nothing else. The
+/// digit check is not redundant with `u32::from_str`, which accepts a leading `+` --
+/// `"epsg:+32633"` would otherwise be a second spelling of one code, and a baseline that
+/// admits two spellings of the same thing is a baseline whose diffs stop meaning
+/// anything. Zero is refused because the EPSG register has no code 0: `GeoTIFF` uses it
+/// to mean "intentionally omitted", which is not a frame a file can be in.
+fn parse_epsg_frame(frame: &str) -> Option<u32> {
+    let (prefix, code) = frame.split_at_checked("epsg:".len())?;
+    if !prefix.eq_ignore_ascii_case("epsg:") || !code.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    code.parse::<u32>().ok().filter(|c| *c != 0)
 }
 
 fn default_pointcloud_frame() -> String {
@@ -2334,10 +2381,16 @@ fn validate_point_cloud(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     };
     validate_point_cloud_file(&pc.source, "point_cloud.source")?;
     validate_point_cloud_file(&pc.target, "point_cloud.target")?;
-    if pc.frame != "local-enu" {
+    // GAP-102 (D-41): `"local-enu"` is no longer the only frame. What is checked here is
+    // the *shape* of the declaration -- see `PointCloudConfig`'s own documentation for
+    // why whether the code names a real system is the loader's question and not this
+    // one's.
+    if pc.frame != "local-enu" && parse_epsg_frame(&pc.frame).is_none() {
         return Err(ConfigError::Invalid(format!(
-            "point_cloud.frame {:?} is not supported; only \"local-enu\" is, because no \
-             projection library is in the approved stack",
+            "point_cloud.frame {:?} is not a frame this deployment can read; it must be \
+             \"local-enu\" (the files are already in the deployment's local metres) or \
+             \"epsg:<code>\" with a non-zero EPSG code (the files are in that coordinate \
+             reference system and are converted on load)",
             pc.frame
         )));
     }
@@ -4863,13 +4916,54 @@ mod tests {
             Err(ConfigError::Invalid(_))
         ));
 
-        // An unsupported frame is refused even when both files are otherwise valid.
-        let mut wrong_frame = b.clone();
-        wrong_frame.point_cloud.as_mut().unwrap().frame = "EPSG:32633".into();
-        assert!(matches!(
-            validate(&wrong_frame),
-            Err(ConfigError::Invalid(_))
-        ));
+        // GAP-102 (D-41): a real-world CRS is now a frame this deployment can read,
+        // where before GAP-102 every one of these was refused. Both the prefix's case
+        // and a code of any length the register uses are accepted.
+        for frame in ["EPSG:32633", "epsg:2992", "Epsg:4326", "epsg:900913"] {
+            let mut declared = b.clone();
+            declared.point_cloud.as_mut().unwrap().frame = frame.into();
+            validate(&declared).unwrap_or_else(|e| panic!("{frame} should be valid: {e}"));
+            assert!(
+                declared
+                    .point_cloud
+                    .as_ref()
+                    .and_then(PointCloudConfig::declared_epsg)
+                    .is_some(),
+                "{frame} must read back as a code"
+            );
+        }
+
+        // What is still refused, and each for its own reason: a frame that is neither
+        // form; the prefix with nothing after it; a code that is not a number; a signed
+        // or spaced code, which `u32::from_str` refuses and this relies on it doing;
+        // and code 0, which GeoTIFF uses to mean "intentionally omitted" and which is
+        // therefore not a frame a file can be in.
+        for frame in [
+            "utm33n",
+            "epsg:",
+            "epsg:abc",
+            "epsg:+32633",
+            "epsg: 32633",
+            "epsg:32633 ",
+            "epsg:0",
+            "",
+        ] {
+            let mut wrong_frame = b.clone();
+            wrong_frame.point_cloud.as_mut().unwrap().frame = frame.into();
+            assert!(
+                matches!(validate(&wrong_frame), Err(ConfigError::Invalid(_))),
+                "{frame:?} should be refused"
+            );
+        }
+
+        // The default is unchanged: a pair that names no frame is local ENU, and reads
+        // back as naming no EPSG code at all.
+        assert_eq!(
+            b.point_cloud
+                .as_ref()
+                .and_then(PointCloudConfig::declared_epsg),
+            None
+        );
 
         // No point-cloud entry at all is the common case and must not be refused.
         b.point_cloud = None;

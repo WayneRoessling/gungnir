@@ -150,6 +150,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-095 Night theme variant | CAP-5.9 | 2 | M | I4 | `../../../ARCHITECTURE.md` §10 item 89 (D-35 to D-38) |
 | GAP-096 Bearing-only detections never reach the operator | CAP-2.1, CAP-5.9 | 4 | M | I3 | `../../design/DN-27-bearing-only-detections.md` §5 rule 3 and §7; `../../ux/ux-to-code-map.md` PN-02, PN-08, PN-09; GAP-001 (the three feeds this makes visible); GAP-011 (whose entry recorded §7 unbuilt); `docs/gungnir-api-v1.md` (the v2 wire's compatibility rule this closure follows) |
 | GAP-098 No runtime point cloud: nothing loads one and nothing draws one | CAP-2.10 | 3 | M | I3 | `../../../ARCHITECTURE.md` §3 (the two contexts and the read-back); GAP-023 (the loaders and fixtures, reused rather than duplicated); GAP-024 (the registration engine, unblocked and independent of this) |
+| GAP-102 A point cloud in a real-world CRS cannot be loaded | CAP-2.10 | 3 | M | I3 | D-41 (the decision this builds); GAP-023 (the DEM half, the sibling doing the same work for terrain); GAP-098 (the point-cloud capability this extends, closed and not reopened); `docs/agentic-coding-standards.md` §2.9 |
 
 ### Verification and governance
 
