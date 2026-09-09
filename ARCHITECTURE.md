@@ -2731,8 +2731,30 @@ re-reading the register alone.
   closed and still has no resolver, because §7.1 draws no edge from `gungnir-node` to
   `gungnir-identity`: a graph decision now, not a missing capability. (GAP-019 is
   closed for the desktop half; the node half is this bullet)
+- **`solve_assignment`'s output contract is unstated, and a fuzz target found the
+  gap.** `gungnir_association::solve_assignment` checks that every *entry* of a cost
+  matrix is finite and promises nothing about the *total* it returns; on an all-finite
+  matrix with two entries near the representable limit the sum of the selected entries
+  overflows and the function returns `Ok` with `total_cost = -inf`.
+  `gungnir-fuzz`'s `cost_matrix_construction` target found this on its first successful
+  run (2026-09-08), against its own postcondition that a finite cost matrix yields a
+  finite total, and it was deliberately not fixed by the change that made that run
+  possible: numerical stability guarantees are low-trust in
+  `docs/agentic-workflow.md`, and the three available answers -- refuse such an input,
+  error on a non-finite total, or state that no finite total was ever promised -- are
+  mutually exclusive contract statements rather than one bug with one fix. The
+  behaviour is reproduced and measured in the register: the overflow is broad (31,679
+  of 200,000 all-finite extreme-magnitude matrices) but the *pairing* is sound in every
+  case tried, and in every overflowing case the brute-force optimum was itself not a
+  representable `f64` -- so the solver is reporting an unrepresentable optimum, not
+  mis-solving. No production caller can reach it: `gungnir-fusion-async`'s cost matrix
+  is bounded by its own gate threshold by construction. **fuzz-nightly fails on this
+  target every night until the contract is settled, which is the gate working**; the
+  postcondition is not to be weakened to silence it. (D-43 is the decision; GAP-103 is
+  the gap; `docs/verification-capability-table.md` §1 holds the row that must end up
+  saying so)
 - **Plan 05 gap register, most recently updated 2026-09-08.**
-  `docs/mission/gap-analysis/gap-register.md` carries 98 gaps against the mission
+  `docs/mission/gap-analysis/gap-register.md` carries 103 gaps against the mission
   capabilities, each with a closing action, a target increment, and an owner;
   `docs/mission/gap-analysis/technical-gap-map.md` maps every item above to the gaps
   that carry it. Engineering items the list above does not name are tracked there by
@@ -2775,10 +2797,19 @@ re-reading the register alone.
   and for the same reason. GAP-097 kept the number, being the owner-confirmed claim
   already cited from D-28, GAP-074 and the CAP-3.3 coverage row; GAP-098 is the
   younger one and moved. **The count above had also fallen behind**: it read 96 when
-  GAP-097 landed and 97 when GAP-098 did, and is corrected to 98 here rather than by
-  whoever noticed it next. GAP-098 came out of the GPU review, which also rewrote
-  GAP-024's closing action as five items, moved it from I4 to I3 without touching its
-  severity, and removed its GAP-023 dependency so the WGSL work is unblocked.
+  GAP-097 landed and 97 when GAP-098 did, and was corrected to 98 then rather than by
+  whoever noticed it next. **It had fallen behind again and reads 103 as of
+  2026-09-09**: GAP-099 (MISB ST 0601), GAP-100 (ASTERIX Category 205), GAP-101
+  (ASTERIX Category 129) and GAP-102 (the point-cloud CRS half of D-41) each landed
+  without moving it, and GAP-103 is the bullet above. The same correction, made the
+  same way, by the change that noticed it. **GAP-103 is also the fourth number
+  collision this list has had to record**, and it was resolved by the same rule: it
+  was filed as GAP-102 on 2026-09-08 while the point-cloud CRS gap was claiming that
+  number on a branch of its own, and moved to 103 on 2026-09-09 because the other one
+  was already merged and already cited from D-41's resolution. GAP-098 came out of the
+  GPU review, which also rewrote GAP-024's closing action as five items, moved it from
+  I4 to I3 without touching its severity, and removed its GAP-023 dependency so the
+  WGSL work is unblocked.
 ### Resolved on 2026-09-06
 
 **Heading added 2026-09-07.** Everything from here to item 101 was already dated
