@@ -125,17 +125,32 @@ impl From<BearingDetection> for Submission {
 /// Everything one pass through [`ingest_with`]'s loop produced, bundled into one
 /// channel message rather than sent as three (GAP-096).
 ///
-/// **Written and gated, not signed by the owner**: this crate is human-owned
-/// (`docs/agentic-workflow.md`), and this struct and the channel type change below are
-/// the mechanical part of wiring [`FusionPipeline::retained_bearings`] and
-/// [`FusionPipeline::stats`] out to a caller -- the four `pipeline.rs` doc comments this
-/// gap corrected were signed 2026-09-08, this was not.
+/// **Signed by the owner 2026-09-09.** This crate is human-owned
+/// (`docs/agentic-workflow.md`); this struct and the channel type change below were the
+/// mechanical part of wiring [`FusionPipeline::retained_bearings`] and
+/// [`FusionPipeline::stats`] out to a caller, written and gated 2026-09-08 and reviewed
+/// before signing. The bundling claim below is not only gated but model-checked:
+/// `loom_model::snapshot_fields_come_from_one_epoch` holds it over every interleaving of
+/// the outbound channel, and `loom_model::unbundled_publication_is_caught` proves the
+/// two-channel shape this replaced *does* skew under preemption. What the review found
+/// was elsewhere -- the retained bearings' lifetime was not honoured on screen; see
+/// [`FusionPipeline::expire_bearings`] -- and it was closed the same day.
 ///
 /// Bundled on purpose rather than sent over a second channel: `tracks`, the retained
 /// bearings and the stats are all read from the same pipeline at the same instant inside
 /// this loop, with no `.await` between them. A poller draining two independent channels
 /// could see a track snapshot from one epoch next to a bearing snapshot from another,
 /// which is the same kind of skew [`TimedTrack`] exists to keep out of a single track.
+///
+/// **What the channel does not bound, stated rather than implied.** The outbound channel
+/// is unbounded, one of these is sent per submission the loop processes, and each is a
+/// full copy of the picture -- every live track, every retained bearing. A consumer that
+/// keeps polling sees at most one poll's worth of them queued and applies only the
+/// newest (`LiveTrackingService::poll`'s drain-to-latest); a consumer that stops polling
+/// accumulates them until it polls again, and GAP-096 made each one larger. That is the
+/// same shape the channel had when it carried `Vec<TimedTrack>` alone, and coalescing at
+/// the producer would be a design change (§2.2's channels-by-default rule), not this
+/// entry's; it is named here so the cost is known rather than discovered.
 #[derive(Debug, Clone, Default)]
 pub struct PipelineSnapshot {
     pub tracks: Vec<TimedTrack>,
@@ -240,6 +255,12 @@ pub async fn ingest_with(
     loop {
         match rx.try_recv() {
             Ok(Submission::Position(det)) => {
+                // A position carries the same mission clock a bearing does, so the
+                // retained set ages on it too (2026-09-09): a busy radar beside a quiet
+                // acoustic feed is the ordinary case, and before this the last unmatched
+                // bearing stayed in every snapshot until the next bearing arrived,
+                // however long past its own `until_s` that was.
+                pipeline.expire_bearings(det.timestamp_s);
                 if let Err(err) = pipeline.push(det) {
                     tracing::warn!(%err, "detection refused by the reorder buffer");
                 }
@@ -275,7 +296,9 @@ pub async fn ingest_with(
                 }
                 // A retained bearing has a stated lifetime and something has to end it.
                 // Doing it here rather than on a timer keeps it on the same clock the
-                // bearings themselves carry.
+                // bearings themselves carry; the position arm above does the same, and a
+                // pipeline that receives nothing at all cannot age its set, which is why
+                // the consumer ages the *view* by its own clock as well.
                 pipeline.expire_bearings(bearing.timestamp_s);
                 if out.send(snapshot_output(&pipeline)).is_err() {
                     tracing::warn!("track consumer is gone; stopping the pipeline");

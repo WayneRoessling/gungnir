@@ -1443,7 +1443,7 @@ calls it in its tick loop.
 | `gungnir-association` | Tracking core | NN/GNN, Hungarian/JV, gating, JPDA, MHT | Foundational | **Hungarian/JV, GNN, and chi-square gating implemented and gated 2026-09-05** against scipy; the assignment bench is real and the fuzz target now drives the solver. JPDA and MHT are trait surfaces |
 | `gungnir-track` | Tracking core | Track lifecycle | Foundational | **Implemented and gated 2026-09-05**: init/confirm/coast/delete agreeing with Stone Soup on every confirm and delete step index |
 | `gungnir-rfs` | Tracking core | PHD/CPHD, GLMB/LMB | Foundational | **PHD implemented and gated 2026-09-06, CPHD implemented and gated 2026-09-08 and signed 2026-09-09 after a review correction** (§1 above); the LMB filter is built and gated but not signed (`gungnir-rfs/src/lib.rs` module doc) and the full delta-GLMB remains a trait surface; the dense-swarm bench is still a placeholder |
-| `gungnir-fusion-async` | Tracking core | OOS/multi-rate fusion, concurrency | Foundational | Ingest task runs and drains; pipeline not implemented (`PIPELINE_IMPLEMENTED = false`) |
+| `gungnir-fusion-async` | Tracking core | OOS/multi-rate fusion, concurrency | Foundational | Pipeline implemented and gated since 2026-09-06 (GAP-011; `PIPELINE_IMPLEMENTED = true`): a reorder buffer, the Jonker-Volgenant associator and chi-square gate, a constant-velocity or CV/CT-IMM filter per baseline (DN-28), bearing retention (DN-27; GAP-096, the snapshot change signed 2026-09-09) and the dense-group PHD/CPHD mode (GAP-015). The outbound snapshot's epoch coherence is model-checked under loom (GAP-061) |
 | `gungnir-track-fusion` | Tracking core | Track-to-track CI fusion, registration/bias | Foundational | Trait surface |
 | `gungnir-allocation` | Tracking core | Bellman/DP resource assignment | Foundational | Returns `NotImplemented`; degenerate inputs tested |
 | `gungnir-scenario` | Tracking core | Five-scenario generator | Foundational | **Implemented 2026-09-05**: Scenarios 1 to 5 with truth, sensor model, and detections; both `scenario` verification rows gated. Does not reproduce the plan-07 Python generator byte for byte (GAP-016) |
@@ -1452,7 +1452,7 @@ calls it in its tick loop.
 | `gungnir-testkit` | Tracking core (verification) | Shared proptest strategies | Foundational | Implemented and tested |
 | `gungnir-fuzz` | Tracking core (verification) | Fuzz targets (ingest parser, cost matrix) | Foundational | Targets implemented; nightly workflow |
 | `gungnir-model` | Foundation | Canonical views, events, schema version | Critical | Implemented and tested; wired |
-| `gungnir-tracking-service` | Service layer | Detections in, `TrackView`s out | Core | Implemented facade over an unimplemented pipeline; wired; health honest |
+| `gungnir-tracking-service` | Service layer | Detections in, `TrackView`s out | Core | Implemented facade over the fusion-async pipeline; wired; health follows the ingest task's liveness. Projects tracks, retained bearing rays and the pipeline's counters (GAP-096), the rays aged by the host's clock since 2026-09-09 |
 | `gungnir-intercept-service` | Service layer | Tracks and resources in, `PlanView` out | Core | Implemented facade over an unimplemented allocator; wired; health honest |
 | `gungnir-eventing` | Productization / Foundational | Broadcast event bus with envelopes | High | Implemented and tested; wired |
 | `gungnir-store` | Productization / Foundational | JSON-lines session journal, retention | High | Implemented and tested; wired |
