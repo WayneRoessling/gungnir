@@ -15,8 +15,8 @@ use gungnir_app::update;
 use gungnir_config::ConfigBaseline;
 use gungnir_eventing::{Event, TrackingEvent};
 use gungnir_model::{
-    Classification, MissionTime, Provenance, Quality, Releasability, TrackId, TrackStatus,
-    TrackView,
+    Classification, ExchangeItem, MissionTime, Provenance, Quality, Releasability, TrackId,
+    TrackStatus, TrackView,
 };
 use gungnir_security::AuditLog;
 use gungnir_store::SessionId;
@@ -58,6 +58,31 @@ fn desktop_with_events(name: &str, n: usize) -> (AppState, std::path::PathBuf) {
         let event = Event::Tracking(TrackingEvent::TrackInitiated(track));
         state.events.publish(now, event).expect("publish");
     }
+    update::tick(&mut state);
+    state.save_session().expect("save the session");
+    (state, dir)
+}
+
+/// A desktop whose journal holds one track marked releasable to all peers rather than
+/// the `Internal` default, so a report folded from it carries a releasability the
+/// GAP-065 exchange producer must actually thread through rather than one that would
+/// read the same by coincidence.
+fn desktop_with_a_marked_track(name: &str) -> (AppState, std::path::PathBuf) {
+    let (mut state, dir) = desktop(name);
+    let now = state.clock.now();
+    let track = TrackView {
+        id: TrackId(1),
+        status: TrackStatus::Confirmed,
+        state: nalgebra::SVector::zeros(),
+        covariance: nalgebra::SMatrix::identity(),
+        classification: Classification::Unknown,
+        provenance: Provenance::default(),
+        quality: Quality::default(),
+        mission_time: MissionTime(0.0),
+        releasability: Releasability::AllPeers,
+    };
+    let event = Event::Tracking(TrackingEvent::TrackInitiated(track));
+    state.events.publish(now, event).expect("publish");
     update::tick(&mut state);
     state.save_session().expect("save the session");
     (state, dir)
@@ -182,6 +207,81 @@ fn a_report_folds_the_journal_and_exports_a_file() {
     assert!(
         text.contains("session"),
         "the export does not name its session, so its figures cannot be recomputed"
+    );
+}
+
+/// GAP-065, DN-18 §5 amendment 2: generating a report queues it for coalition exchange
+/// when a node is linked -- the same shape `handoffs.rs::issue_for` uses for
+/// `Handoffs`, with the one report `ReportState` holds standing in for a set that has
+/// no growing `Vec` to republish. With no link there is nothing to queue to and
+/// generating still works.
+#[test]
+fn generating_a_report_queues_it_for_exchange_when_a_node_is_linked() {
+    use gungnir_remote::link::NodeLink;
+
+    let (mut state, _dir) = desktop_with_a_marked_track("exchange-generate");
+    let mut reports = ReportState::default();
+
+    // No link yet: generating still works, and there is nothing to queue to.
+    reports.generate(&state).expect("generate");
+
+    let link = NodeLink::scripted();
+    state.link = Some(link.clone());
+    reports.generate(&state).expect("generate while linked");
+
+    let p = link.read().expect("projection");
+    assert_eq!(
+        p.exchange_outbox.len(),
+        1,
+        "one publish for the one report, generated while linked; the earlier unlinked \
+         generate queued nothing"
+    );
+    let batch = &p.exchange_outbox[0];
+    assert_eq!(batch.item, ExchangeItem::Reports);
+    assert_eq!(
+        batch.products.len(),
+        1,
+        "one report is the whole current set, not a growing one"
+    );
+    assert_eq!(
+        batch.products[0].releasability,
+        Releasability::AllPeers,
+        "the queued product must carry the report's own releasability"
+    );
+}
+
+/// Exporting is PN-13's second, independent action (an operator can export without
+/// regenerating first) and GAP-065 names it as producing a report too: exporting queues
+/// it for exchange exactly as generating does, and does so again on the same report
+/// when a node is linked only after the export runs.
+#[test]
+fn exporting_a_report_queues_it_for_exchange_when_a_node_is_linked() {
+    use gungnir_remote::link::NodeLink;
+
+    let (mut state, _dir) = desktop_with_a_marked_track("exchange-export");
+    let mut reports = ReportState::default();
+    reports.generate(&state).expect("generate");
+
+    // No link yet: exporting still writes the file, and there is nothing to queue to.
+    reports.export(&state).expect("export");
+
+    let link = NodeLink::scripted();
+    state.link = Some(link.clone());
+    reports.export(&state).expect("export while linked");
+
+    let p = link.read().expect("projection");
+    assert_eq!(
+        p.exchange_outbox.len(),
+        1,
+        "one publish for the one export while linked; the earlier unlinked export and \
+         the unlinked generate before it queued nothing"
+    );
+    let batch = &p.exchange_outbox[0];
+    assert_eq!(batch.item, ExchangeItem::Reports);
+    assert_eq!(
+        batch.products[0].releasability,
+        Releasability::AllPeers,
+        "the queued product must carry the report's own releasability"
     );
 }
 

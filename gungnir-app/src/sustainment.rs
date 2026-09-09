@@ -30,7 +30,8 @@
 
 use crate::state::AppState;
 use gungnir_config::ConfigStore;
-use gungnir_model::MissionTime;
+use gungnir_model::{ExchangeItem, MissionTime};
+use gungnir_remote::link::ExchangeProductRecord;
 use gungnir_replay::ReplaySession;
 use gungnir_reporting::{JournalReportGenerator, MissionReport, ReportGenerator};
 use gungnir_security::authz::role_permits;
@@ -357,6 +358,7 @@ impl ReportState {
                     report.marking_inputs.parties,
                     report.marking_inputs.all_peers
                 );
+                publish_to_exchange(state, &report);
                 self.report = Some(report);
                 self.nothing_recorded = false;
                 Ok(())
@@ -419,9 +421,49 @@ impl ReportState {
             metrics: None,
         };
         generator.export(report, &path)?;
+        publish_to_exchange(state, report);
         self.last_export = Some(path.display().to_string());
         Ok(())
     }
+}
+
+/// Publish this report to the coalition exchange queue (GAP-065, DN-18 §5 amendment 2),
+/// if a node is linked. A no-op otherwise: with no link there is nowhere to queue to,
+/// the same behaviour `handoffs.rs::publish_to_exchange` and
+/// `launch_warning.rs::publish_to_exchange` already have when unlinked.
+///
+/// **One report, not a republished collection.** `Handoffs` and `Warnings` each hold
+/// every issued item in a growing `Vec` on `AppState` (`state.handoffs`,
+/// `state.issued_launch_warnings`) and republish that whole current set on every new
+/// one; a `MissionReport` is generated on demand, and `ReportState.report` already holds
+/// exactly this desktop's current one -- `None` until PN-13's first Generate, replaced
+/// (never accumulated) by every Generate after. That single value already *is* this
+/// desktop's whole current set for `Reports`, so queuing it keeps
+/// `NodeLink::queue_exchange`'s "replacement, not addition" contract the same shape
+/// `Handoffs` and `Warnings` use, with no second `Vec<MissionReport>` invented to hold
+/// a history nothing else on this desktop keeps.
+///
+/// **Unfiltered by marking**, the reason `handoffs.rs::publish_to_exchange` gives for
+/// the same choice: `NodeApi::exchange_for`/`ExchangeSet::may_send` already apply DN-18
+/// §5's marking and agreement gates together at serve time, so filtering here would
+/// duplicate a decision that is supposed to live in one place.
+///
+/// **Called from both `generate` and `export`.** PN-13 exposes them as two separate
+/// operator actions -- either can be clicked without the other -- and each is a point at
+/// which this desktop has just produced the report GAP-065's own register entry named
+/// as this gap's last unproduced item: `generate` folds a fresh one from the journal,
+/// `export` writes the current one to disk. Both count.
+fn publish_to_exchange(state: &AppState, report: &MissionReport) {
+    let Some(link) = state.link.clone() else {
+        return;
+    };
+    let product = ExchangeProductRecord {
+        id: report.session.0.to_string(),
+        at: state.clock.now(),
+        releasability: report.releasability.clone(),
+        body: serde_json::to_value(report).unwrap_or(serde_json::Value::Null),
+    };
+    link.queue_exchange(ExchangeItem::Reports, vec![product]);
 }
 
 /// The counts, labelled, with a note on the two that are read as each other.
