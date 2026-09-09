@@ -119,9 +119,15 @@ core, service layer, productization layer) and `rust-ui-architecture-coding-stan
 plausible-looking filter code that is subtly wrong (for example the wrong Joseph-form
 covariance update). The gates are structural:
 
-1. **Differential testing against a trusted oracle** (`gungnir-oracle`, workflow
-   `oracle-diff.yml`): the same scenario through a hand-verified reference, numerical
-   agreement asserted within the tolerance in `verification-capability-table.md`.
+1. **Differential testing against a trusted oracle** (workflow `oracle-diff.yml`): the
+   same scenario through a hand-verified reference, numerical agreement asserted within
+   the tolerance in `verification-capability-table.md`. The tests live *beside the code
+   they verify* -- 16 `tests/*_diff.rs` targets across the tracking-core crates, reading
+   the oracle output recorded in `testdata/oracles/` -- so each deserializes a fixture
+   straight into its own crate's types rather than into a second definition of them.
+   `gungnir-oracle` was designed as a single central harness for this and never
+   populated (GAP-082); until 2026-09-08 this gate ran that empty crate instead of the
+   suite and compared nothing, which is GAP-061 and not a statement about the suite.
 2. **Property-based invariant testing** (`gungnir-testkit`, `proptest`, runs inside
    `cargo test`): posterior covariance stays PSD, track IDs are never reused while
    active, assignment solutions respect the constraint matrix. Agents write the test
