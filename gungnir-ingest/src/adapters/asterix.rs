@@ -54,6 +54,11 @@ pub struct FeedSpec {
     pub bind_addr: SocketAddr,
     pub multicast: Option<(Ipv4Addr, Ipv4Addr)>,
     pub radars: Vec<RadarBinding>,
+    /// Direction finders this feed's Category 205 blocks may be attributed to
+    /// (GAP-100), bound by [`bind_feed`] the same way `radars` already is. Empty means
+    /// no Category 205 report on this feed is attributed to anything, the same
+    /// honest-empty state an empty `radars` gives Category 048 and 034.
+    pub df_sites: Vec<DfBinding>,
 }
 
 /// What a host keeps of a bound feed: the queue of service observations it drains and
@@ -68,7 +73,11 @@ pub struct FeedSinks {
 /// The adapter's counters as of its last poll, for a host to read.
 pub type FeedStatsSink = Arc<Mutex<AsterixFeedStats>>;
 
-/// Bind one feed and build its adapter with the sinks the host keeps.
+/// Bind one feed and build its adapter with the sinks the host keeps. `spec.df_sites`
+/// (GAP-100) is applied through [`AsterixFeedAdapter::with_df_sites`] the same way
+/// `spec.radars` is applied through [`AsterixFeedAdapter::new`]; an empty list is a
+/// no-op, so a feed with no direction finder configured builds exactly the adapter it
+/// always did.
 ///
 /// # Errors
 ///
@@ -81,6 +90,7 @@ pub fn bind_feed(
     let source = UdpDatagramSource::bind(spec.bind_addr, spec.multicast)?;
     Ok(
         AsterixFeedAdapter::new(spec.name.clone(), source, frame, &spec.radars)
+            .with_df_sites(&spec.df_sites, frame)
             .with_observation_sink(sinks.observations.clone())
             .with_stats_sink(sinks.stats.clone()),
     )
@@ -100,12 +110,12 @@ pub struct RadarBinding {
 /// One direction finder a feed is allowed to speak for: its ASTERIX identity, the
 /// sensor it is in the registry, where it stands, and the angular accuracy its own
 /// Interface Control Document states (GAP-100; `gungnir_interop::asterix::cat205`'s
-/// module documentation explains why the wire format itself carries none). Not part of
-/// [`FeedSpec`] yet -- deferred here the same way GAP-001's Category 034 half deferred
-/// its own host-configuration wiring ("untouched here because another change was in
-/// those files"): a deployment reaches this through [`AsterixFeedAdapter::with_df_sites`]
-/// until a `ConfigBaseline` section names direction finders the way `radars` already
-/// names radars.
+/// module documentation explains why the wire format itself carries none). Part of
+/// [`FeedSpec`] (`df_sites`) and applied by [`bind_feed`] through
+/// [`AsterixFeedAdapter::with_df_sites`], the same host-configuration wiring GAP-001's
+/// Category 034 half also went without at first and was given later the same week; a
+/// `ConfigBaseline` section (`RadarFeedConfig::df_sites`, in `gungnir-config`) names
+/// direction finders the way `RadarFeedConfig::radars` already names radars.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DfBinding {
     pub sac: u8,
@@ -663,6 +673,48 @@ mod tests {
         assert!(detections.is_empty());
         assert_eq!(adapter.stats().blocks_cat205, 1);
         assert_eq!(adapter.stats().unknown_radar, 1);
+    }
+
+    /// GAP-100 host wiring: [`bind_feed`] -- the one function both `gungnir-app` and
+    /// `gungnir-node` call to build a live ASTERIX feed adapter -- forwards
+    /// `FeedSpec::df_sites` into [`AsterixFeedAdapter::with_df_sites`], exactly as it
+    /// already forwards `radars` into [`AsterixFeedAdapter::new`]. Binds a real
+    /// loopback socket on an OS-assigned port through the real `bind_feed` (proving the
+    /// construction path a deployment's start-up takes actually runs), then drives the
+    /// resulting adapter with `handle_datagram` directly rather than sending a UDP
+    /// packet to a port this test cannot otherwise discover -- `handle_datagram` never
+    /// touches the socket (it is "public so the fuzz target and the seed test reach the
+    /// parser without a source", per its own doc comment), so this is a real exercise
+    /// of the codec and site lookup `with_df_sites` configured, not a shortcut around
+    /// them.
+    #[test]
+    fn bind_feed_wires_a_configured_direction_finder_into_the_live_adapter() {
+        let spec = FeedSpec {
+            name: "test".into(),
+            bind_addr: "127.0.0.1:0".parse().expect("loopback, any port"),
+            multicast: None,
+            radars: Vec::new(),
+            df_sites: vec![df_binding()],
+        };
+        let mut adapter = bind_feed(&spec, &frame(), &FeedSinks::default())
+            .expect("a loopback socket always binds");
+        let detections = adapter.handle_datagram(&cat205_datagram(), MissionTime(43_205.0));
+        assert_eq!(detections.len(), 1);
+        assert_eq!(detections[0].sensor, SensorId(21));
+        match detections[0].measurement {
+            gungnir_model::Measurement::Bearing {
+                azimuth_rad,
+                azimuth_variance_rad2,
+                ..
+            } => {
+                assert!((azimuth_rad - 90.0_f64.to_radians()).abs() < 1e-6);
+                let sigma = 1.5_f64.to_radians();
+                assert!((azimuth_variance_rad2 - sigma * sigma).abs() < 1e-12);
+            }
+            ref other => panic!("expected a bearing, got {other:?}"),
+        }
+        assert_eq!(adapter.stats().blocks_cat205, 1);
+        assert_eq!(adapter.stats().unknown_radar, 0);
     }
 
     #[test]

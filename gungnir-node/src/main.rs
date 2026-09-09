@@ -369,7 +369,7 @@ fn build_gateway(
                     let feed_sinks = gungnir_ingest::adapters::asterix::FeedSinks::default();
                     match gungnir_ingest::adapters::asterix::bind_feed(&spec, &frame, &feed_sinks) {
                         Ok(adapter) => {
-                            tracing::info!(feed = %spec.name, addr = %spec.bind_addr, radars = spec.radars.len(), "radar feed bound");
+                            tracing::info!(feed = %spec.name, addr = %spec.bind_addr, radars = spec.radars.len(), df_sites = spec.df_sites.len(), "radar feed bound");
                             gateway.add_adapter(Box::new(adapter));
                             gateway.set_expected_adapters(config.sensors.len() + sinks.len() + 1);
                             // The node has no panel; its counters reach the log on the
@@ -694,9 +694,9 @@ fn local_frame(config: &ConfigBaseline) -> Option<gungnir_model::LocalFrame> {
 }
 
 /// The feeds as the ingest crate builds them: validated addresses parsed, positions
-/// taken from the sensor list.
+/// taken from the sensor list. `df_sites` (GAP-100) is built the same way `radars` is.
 fn feed_specs(config: &ConfigBaseline) -> Vec<gungnir_ingest::adapters::asterix::FeedSpec> {
-    use gungnir_ingest::adapters::asterix::{FeedSpec, RadarBinding};
+    use gungnir_ingest::adapters::asterix::{DfBinding, FeedSpec, RadarBinding};
     config
         .radar_feeds
         .iter()
@@ -723,11 +723,30 @@ fn feed_specs(config: &ConfigBaseline) -> Vec<gungnir_ingest::adapters::asterix:
                     })
                 })
                 .collect();
+            let df_sites = f
+                .df_sites
+                .iter()
+                .filter_map(|d| {
+                    let sensor = config.sensors.iter().find(|s| s.id == d.sensor_id)?;
+                    Some(DfBinding {
+                        sac: d.sac,
+                        sic: d.sic,
+                        sensor: SensorId(d.sensor_id),
+                        position: gungnir_model::Geodetic {
+                            lat_rad: sensor.position[0],
+                            lon_rad: sensor.position[1],
+                            alt_m: sensor.position[2],
+                        },
+                        azimuth_sigma_rad: d.azimuth_sigma_rad,
+                    })
+                })
+                .collect();
             Some(FeedSpec {
                 name: f.name.clone(),
                 bind_addr,
                 multicast,
                 radars,
+                df_sites,
             })
         })
         .collect()
@@ -1967,6 +1986,87 @@ impl gungnir_store::sealing::JournalSealer for EphemeralSealer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn df_sensor() -> gungnir_config::SensorConfig {
+        gungnir_config::SensorConfig {
+            id: 21,
+            modality: "df".into(),
+            position: [0.9, 0.2, 30.0],
+            max_range_m: 5_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        }
+    }
+
+    fn df_feed(bind_addr: &str) -> gungnir_config::RadarFeedConfig {
+        gungnir_config::RadarFeedConfig {
+            name: "north".into(),
+            bind_addr: bind_addr.into(),
+            multicast: None,
+            radars: Vec::new(),
+            df_sites: vec![gungnir_config::DfSiteConfig {
+                sensor_id: 21,
+                sac: 50,
+                sic: 6,
+                azimuth_sigma_rad: 1.5_f64.to_radians(),
+            }],
+        }
+    }
+
+    /// GAP-100: a direction finder named in `RadarFeedConfig::df_sites` reaches
+    /// `FeedSpec::df_sites` as the exact `DfBinding` `bind_feed` will hand to
+    /// `AsterixFeedAdapter::with_df_sites`, the same derivation this function already
+    /// makes for a radar's `RadarBinding`. A feed naming only a direction finder and no
+    /// radar still produces one spec.
+    #[test]
+    fn feed_specs_carries_a_configured_direction_finder_into_the_binding() {
+        let config = ConfigBaseline {
+            sensors: vec![df_sensor()],
+            radar_feeds: vec![df_feed("0.0.0.0:8600")],
+            ..ConfigBaseline::default()
+        };
+        let specs = feed_specs(&config);
+        assert_eq!(specs.len(), 1);
+        assert!(specs[0].radars.is_empty());
+        assert_eq!(
+            specs[0].df_sites,
+            vec![gungnir_ingest::adapters::asterix::DfBinding {
+                sac: 50,
+                sic: 6,
+                sensor: SensorId(21),
+                position: gungnir_model::Geodetic {
+                    lat_rad: 0.9,
+                    lon_rad: 0.2,
+                    alt_m: 30.0,
+                },
+                azimuth_sigma_rad: 1.5_f64.to_radians(),
+            }]
+        );
+    }
+
+    /// GAP-100, "reachable at start-up": the node's real `build_gateway` -- what `main`
+    /// calls to stand the ingest gateway up -- binds a feed that names only a direction
+    /// finder and registers it into `FeedReports::radar`, exactly as it already does
+    /// for a radar-only feed. `127.0.0.1:0` is a real loopback bind (OS-assigned
+    /// port), not a stub, so this proves the node's own construction path actually
+    /// runs; `bind_feed_wires_a_configured_direction_finder_into_the_live_adapter` in
+    /// `gungnir-ingest` proves what that path builds actually attributes a bearing.
+    #[test]
+    fn build_gateway_reaches_a_configured_direction_finder_at_start_up() {
+        let config = ConfigBaseline {
+            sensors: vec![df_sensor()],
+            origin: Some([0.9, 0.2, 0.0]),
+            radar_feeds: vec![df_feed("127.0.0.1:0")],
+            ..ConfigBaseline::default()
+        };
+        let rt = tokio::runtime::Runtime::new().expect("a throwaway runtime for the handle");
+        let (_gateway, _sinks, reports, _sapient) = build_gateway(&config, rt.handle());
+        assert_eq!(
+            reports.radar.len(),
+            1,
+            "the one feed, bound for its direction finder alone"
+        );
+    }
 
     /// GAP-060: the node's outbound peer-link identity is provider-issued, the same as
     /// its serving identity, rather than only ever coming from the environment.
