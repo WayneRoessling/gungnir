@@ -18,7 +18,7 @@ Status: first draft, 2026-09-04.
 | Data encoding | SD-02 Apache Arrow (arrow 53) | detections for analytics and bulk exchange | real |
 | Sensor and track interoperability | SD-03 ASTERIX Category 048 | radar feeds through the gateway | planned (GAP-064, first categories in I2) |
 | Sensor and track interoperability | SD-04 STANAG 4676 | coalition track exchange | planned (GAP-064) |
-| Sensor and track interoperability | SD-16 Cursor-on-Target (CoT) | exchange with a participant that holds no machine identity here: reported positions inbound, picture, warnings and handoffs outbound | planned (GAP-090, GAP-091; DN-25). **In scope for the release under D-33**; schema version 2.0 pinned |
+| Sensor and track interoperability | SD-16 Cursor-on-Target (CoT) | exchange with a participant that holds no machine identity here: reported positions inbound, picture, warnings and handoffs outbound | planned (GAP-090, GAP-091; DN-25). **In scope for the release under D-33**; schema version 2.0, the type tree and the protocol version 1 framing all pinned as of 2026-09-08 |
 | Cooperative identity | SD-09 AIS (ITU-R M.1371) | maritime cooperative identity | planned (D-09, GAP-010) |
 | Cooperative identity | SD-10 ADS-B 1090 ES (RTCA DO-260B) | air cooperative identity | planned (D-09, GAP-010) |
 | Transport | SD-06 HTTP/1.1 (RFC 9112); SD-07 WebSocket (RFC 6455) | the API and its event stream | planned (GAP-041) |

@@ -3527,6 +3527,22 @@ not by finding, for the time between whenever each item landed and this correcti
     edge drawn here that no manifest carries would be this document claiming something
     untrue. The change that adds the sink adds both in the same commit.
 
+    **Three pins after all (2026-09-08, D-33 e, f, g).** Reading the reference client's
+    own source rather than its documents showed that "nothing in the first increment needs
+    it" was false: `commoncommo` starts a mesh client at protocol version 1 and drops to
+    XML only for a contact advertising nothing higher than 0, so a stock ATAK or WinTAK on
+    the multicast group sends protobuf from its first datagram, and the I3 mesh feed and
+    mesh sink meet the unpinned framing before the I4 stream sink ever does. The framing is
+    now pinned at `TAK-Product-Center/atak-civ` tag 5.5.1.8 (the repository read on
+    2026-09-06 was archived in May 2025), the message set is transcribed into
+    `docs/design/external-standards.md` §5.4.2 and the codec is written from that table with
+    nothing copied. The corpus gained a second half: a stream connection stays XML until the
+    server advertises version 1, so the recorder now also listens on TCP as a server that
+    never speaks. The evidence and the three decisions are in
+    `docs/design/tak-interoperability-research.md`. **Still nothing in DN-25 is built**, and
+    the one step no session can take, the recording itself, is still the step before the
+    codec.
+
 96A. **Two defects in the allocator, found by building on it and fixed** (2026-09-06);
     two more found and recorded unfixed. Both fixed ones were in code item 92 closed, and
     a closed entry is where a defect is least likely to be looked for.

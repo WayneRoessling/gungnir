@@ -37,7 +37,10 @@ Status: first draft, 2026-09-04.
   feed and the multicast sink need no certificate and can be built in I3; the stream sink
   establishes a party from a certificate and therefore cannot precede SD-08. Splitting it
   the other way would put the only bearer that can carry a marked payload first and leave
-  the deployment to discover the restriction late.
+  the deployment to discover the restriction late. **Amended 2026-09-08**: the I3 piece
+  carries the protocol version 1 framing as well as XML, because a stock client sends
+  protobuf on the mesh (`../../../design/tak-interoperability-research.md` §4.1; D-33(e)).
+  The split itself is unchanged.
 
 ## Traceability
 

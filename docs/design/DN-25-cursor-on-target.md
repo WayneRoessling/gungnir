@@ -205,6 +205,18 @@ returned one requirement to this note that a summary would have lost: **`ce` and
 no stated confidence level**, so the mapping declares which multiple of sigma it writes, on
 the sink and in the conversion loss.
 
+**The protobuf framing was pinned on 2026-09-08 after all** (§5.4 there, D-33(e)), and the
+reason reaches back into this note: a stock client on the mesh sends protocol version 1 from
+its first datagram, so "XML end to end" was true of the stream bearer and never of the mesh
+bearer, and it is the mesh bearer this note puts first. Two consequences for §5. The codec
+decodes both wire forms from the first increment, gated on a corpus that now has a mesh half
+and a stream half ([`tak-interoperability-research.md`](tak-interoperability-research.md)
+§6). And rule 7 gains a fourth known loss before a line is written: the protobuf fields
+`hae`, `ce` and `le` write `999999` for unknown, and a mapping that read that as a radius
+would carry a thousand-kilometre error that no gate refuses; it is recorded as "no error
+stated", never as a number. Rules 1 to 8 are otherwise unchanged, and rule 3 in particular:
+the framing changes how affiliation arrives, not what is done with it.
+
 **The type tree was pinned on 2026-09-07** (§5.7), which this note had left open and §5.6
 had named as the gap. It returns two more requirements. The friendly test is the pinned
 `friend` predicate `^a-f-`, anchored and **case-sensitive** -- §5.7.2's finding 5 records
