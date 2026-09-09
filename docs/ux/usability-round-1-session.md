@@ -15,6 +15,19 @@ group D may now run. **US-09 is the one exception**: the SAPIENT loopback fixtur
 separately needed now exists too (§3), unrelated to GAP-097, but wiring the round-1
 baselines to it is a remaining session-setup step.
 
+**Read once more against the code before the first participant, 2026-09-08, and three
+more card-versus-build faults came out** -- the same reading that found GAP-097, applied
+to the cards GAP-097's own hold had not yet let anyone run. **US-15 asked for a submit
+control PN-16 deliberately does not draw, and for a coverage comparison that is zero by
+construction** for round-1's laydown pair; both are corrected in §3 and §5, and the
+second leaves an open scenario-design question for the owner rather than a fix. **The
+node baseline US-04 and US-08 name was never a committed file**, though two documents
+wrote about it as though it were; §3 now says the moderator writes it. Separately, the
+seed hash the report records had been left at the pre-fix seed's value since the
+2026-09-08 seed correction, and `reports/round-1-2026-09-06.md` now carries the hash of
+the seed as committed. None of this is a measurement and none of it fills a field in
+the report: no session has run.
+
 Decided 2026-09-06 by the owner (D-28, GAP-074): round 1 runs against the **rendered
 panels**, not the wireframes, one participant per role, and its results become the
 MOP-37 target proposal. This document is what a moderator needs on the day. What the
@@ -42,7 +55,7 @@ document did not have -- it will very likely change again before the eight sessi
 |---|---|---|---|
 | **A. Runs now, single desktop, no seed** | US-10 (state a requirement), US-11 (replay a recorded session and find a decision), US-12 (raid summary and the MOE-04 trace), US-13 (an invalid baseline in the editor) | The write path is wired and the panel is built; US-11 and US-12 need a recorded session, which §3's seed produces | Nothing |
 | **B. Needs the seeded session, single desktop** | US-01, US-02, US-05, US-06 (plans in the queue), US-03 (a track that goes stale), US-14 (evidence on a track) | No plan or track appears on an unseeded desktop from a laptop's own sensors, and a session needs the *same* picture in front of every participant regardless. GAP-089's `--rehearsal` driver puts the seed's tracks and plans through the real submit path | Nothing further: **GAP-097** closed 2026-09-08. The live planner (real since GAP-029, 2026-09-06) had been re-proposing an unchanged assignment every tick on top of the seed's own scripted plans, flooding the queue; it now mints a new plan only when the assignment itself changes |
-| **D. Newly unblocked (2026-09-06/08), each needs a setup beyond the single `--rehearsal` flag** | US-04 (Detached strip, continue under delegation), US-08 (KAL cell reconnects, one conflict) -- both need a real `gungnir-node` signed into and then lost; US-09 (re-task a sensor, coverage before/after, commit) -- needs a live SAPIENT acknowledgement loop the round-1 baseline does not yet configure; US-15 (compare laydowns, submit with a rehearsal) -- needs PN-16's own scenario rehearsal, single-process, no node | GAP-050 (failover and reconciliation), GAP-057 (desktop and node sign-in) and GAP-041/GAP-004 (sensor tasking transport and acknowledgement) all closed by 2026-09-07; GAP-045 landed PN-16's real rehearsal 2026-09-08 | US-04/US-08 ran the same live planner as group B and are clear now that **GAP-097** is closed. **US-09's own blocker is separate and also clear**: the SAPIENT loopback fixture it needs now exists (§3); wiring the round-1 baselines to it is what remains. US-15's rehearsal replay drives the same `update::tick` group B did, so it is clear for the same reason group B is |
+| **D. Newly unblocked (2026-09-06/08), each needs a setup beyond the single `--rehearsal` flag** | US-04 (Detached strip, continue under delegation), US-08 (KAL cell reconnects, one conflict) -- both need a real `gungnir-node` signed into and then lost; US-09 (re-task a sensor, coverage before/after, commit) -- needs a live SAPIENT acknowledgement loop the round-1 baseline does not yet configure; US-15 (compare laydowns, rehearse the alternative) -- needs PN-16's own scenario rehearsal, single-process, no node | GAP-050 (failover and reconciliation), GAP-057 (desktop and node sign-in) and GAP-041/GAP-004 (sensor tasking transport and acknowledgement) all closed by 2026-09-07; GAP-045 landed PN-16's real rehearsal 2026-09-08 | US-04/US-08 ran the same live planner as group B and are clear now that **GAP-097** is closed. **US-09's own blocker is separate and also clear**: the SAPIENT loopback fixture it needs now exists (§3); wiring the round-1 baselines to it is what remains. US-15's rehearsal replay drives the same `update::tick` group B did, so it is clear for the same reason group B is |
 | **C. Blocked by an unwired write or an undesigned control** | US-07 (set the area layer to Hold: `SET_CONTROL_STATUS` exists as an authorization constant with no caller anywhere in the UI -- no control-status write reaches the desktop), US-16 (accept a coverage gap with a warning obligation and an expiry: GAP-087's own text says the gap-acceptance control "is neither designed anywhere," not GAP-068 as an earlier draft of this table said -- GAP-068 (roles in code) closed 2026-09-05 and was never this task's blocker) | The panel draws nothing for the write, by the rule that a control which does not do the thing is worse than no control | An unfiled design decision for the gap-acceptance control (US-16) and a control-status write path (US-07); neither is scoped yet |
 
 **Round 1 is therefore fourteen tasks (groups A, B and D).** Thirteen are session-ready
@@ -61,7 +74,9 @@ measured**, never as a value.
   defended assets, one no-go geofence, the harbour boom as a hazard, and (added
   2026-09-08 for US-15) two declared laydowns -- `current` (the deployment as sited) and
   `b` (the area-layer battery moved toward the upper Vell approach, ahead of R2's
-  scheduled maintenance window). It lives at `testdata/usability/round-1.json`
+  scheduled maintenance window), and (added 2026-09-08 for US-15) one declared
+  approach, the upper Vell axis itself, without which PN-16's coverage column computes
+  nothing to compare. It lives at `testdata/usability/round-1.json`
   (GAP-089, landed), with a `SOURCE.md` beside it.
 - **Seed.** GAP-089's driver reads `testdata/usability/round-1-seed.json` and, on a
   schedule from session start, shows the tracks the tasks name (T-039 and the two inbound
@@ -85,6 +100,16 @@ measured**, never as a value.
   emptied it from the queue. Relaunch `gungnir-app` (same `GUNGNIR_CONFIG` and
   `--rehearsal` flags) fresh for each of the four operator cards rather than running
   them back to back in one process.
+- **Every group D task gets its own dry run before the first participant, and none of
+  the four is exempt.** Each of US-04, US-08, US-09 and US-15 needs a setup heavier than
+  the single `--rehearsal` flag -- a second process, a second baseline, a fixture
+  listening on a socket, or a rehearsal that takes as long as its fixture -- and none of
+  those is scripted end to end anywhere in this repository. The moderator runs each
+  setup once, alone, against the same revision the session will use, and confirms the
+  card's own trigger is actually reached (the strip shows Detached; PN-18 reports a
+  reconciliation; an acknowledgement comes back; the rehearsal section fills in). A
+  setup discovered to be wrong with a participant in the chair costs that participant's
+  session, and this round has one participant.
 - **US-04 and US-08 need a real node, not the rehearsal flag.** `rehearsal::install`
   explicitly refuses a baseline whose backend is not embedded (`RehearsalError::NotEmbedded`),
   because a rehearsal against a shared node picture is not a rehearsal. Bring up a
@@ -97,6 +122,12 @@ measured**, never as a value.
   printf '%s' 'the passphrase' | gungnir-node account add accounts.json 7 operator
   GUNGNIR_TOKEN_KEY=<a signing key> gungnir-node round-1-node.json
   ```
+
+  `round-1-node.json` is **not a committed file** and this document does not pretend it
+  is one: the moderator writes it during the dry run, from `round-1.json` with the two
+  sections above replacing its `backend` and `security.authentication.provider`, and
+  keeps it beside the session's other artefacts. Only `round-1.json`, the seed and the
+  loopback fixture live in `testdata/usability/`.
 
   Start `gungnir-app` against the matching desktop baseline, sign in through PN-20 with
   operator 7, and confirm PN-01 shows the node link established before reading the
@@ -115,9 +146,10 @@ measured**, never as a value.
   mechanism end to end on a single desktop, no node required. GAP-004 landed the node's
   own half of the same loop on 2026-09-08 (`gungnir-node/src/main.rs::bind_sapient_feeds`,
   `TcpSapientSource::sink`), so a node-backed US-04/US-08 setup could in principle carry
-  US-09 too. Either way, round-1.json (desktop) and round-1-node.json (node) have no
-  `sapient_feeds` section today, and nothing plays the sensor's side of that exchange
-  interactively -- neither path is wired to a real or simulated SAPIENT sensor.
+  US-09 too. Either way, `round-1.json` has no `sapient_feeds` section today -- and
+  neither will the node baseline a moderator writes from it -- and nothing plays the
+  sensor's side of that exchange interactively, so neither path is wired to a real or
+  simulated SAPIENT sensor.
   **The fixture now exists**: `testdata/usability/tools/sapient_loopback.py`, a
   generic "always accept" SAPIENT sensor -- a TCP listener that answers whatever
   `task_id` it receives with `Accepted`, on the same connection, for as long as the
@@ -134,7 +166,33 @@ measured**, never as a value.
   mechanism, not GAP-089's, and it drives `update::tick` internally the same number of
   times the fixture has detections for -- so its own decision counts were exposed to
   GAP-097 exactly as the seeded tasks were, and are clear for the same reason now that
-  GAP-097 is closed.
+  GAP-097 is closed. **Three faults in this card, found on 2026-09-08 by reading PN-16
+  against it rather than by running it, and named here rather than worked around. The
+  first is fixed in the baseline, the second is not fixable here, and the third is fixed
+  in §5's card:**
+  - **The options table had nothing to compute.** `sustainment::planning_rows` returns
+    `LaydownCoverage::NotComputed` for every row when the baseline declares no approach
+    to evaluate coverage along, and `round-1.json` declared none, so both laydowns would
+    have read "not computed" and the card's first success criterion could not have been
+    met at all. `round-1.json` now declares the upper Vell approach -- the axis the
+    laydown intents and the no-go fence already name -- and both rows compute:
+    two gap segments and 7 000 m uncovered, pinned in `gungnir-app/tests/rehearsal.rs`.
+  - **The comparison between these two laydowns is zero by construction.** Coverage is
+    built from a laydown's *sensor* placements alone, and `current` and `b` place both
+    radars identically; `b` moves the area-layer battery and nothing else. So `b`'s
+    difference column reads exactly `0.0`, measured, not estimated. The card now asks
+    the planner to read both rows and account for the zero, which is a real question
+    about whether PN-16 makes clear what its coverage number is a function of. It is
+    **not** the question the card was written to ask, and making it that one means
+    giving round 1 a laydown pair that differs in sensor siting -- a scenario-design
+    decision for the owner, not one this document takes.
+  - **There is no submit, by design.** `PlanningAction` offers `SelectLaydown`,
+    `PickScenario` and `RunRehearsal` and nothing else, and PN-16 draws a line saying
+    "Adopting a laydown is not done from here: moving a sensor is a physical act with
+    its own authority chain" -- DN-26 §6 rule 4, which GAP-045's closing action still
+    lists as deliberately unbuilt. A card that says "submit B" asks the participant to
+    hunt for a control this system refuses to draw, which measures the moderator's
+    error, not the panel's.
 
 ## 4. Moderator script
 
@@ -176,7 +234,7 @@ One card per task; the moderator reads only the **task** line. The rest is the s
 | US-04 | Operator | "At 02:03 the strip shows Detached." (the moderator kills the node at this cue) | The node link drops and PN-01 shows Detached | States which backend is now live (embedded fallback) and what is queued in the outbox from PN-18; says they can continue deciding under delegation while disconnected | PN-01, PN-18 | D |
 | US-08 | Supervisor | "The KAL cell reconnects with one conflict." (the moderator restarts the node with a contradicting decision on its record) | PN-18 shows a reconciliation due | Resolves the one conflict through PN-18 (keep this desktop's decision or the node's) with the role-rank arbitration explained; presses switch-back once the node answers | PN-18 | D |
 | US-09 | Sensor manager | "R1 is lost at 01:50. Re-task R2 to search, with coverage shown before and after." | Sensor 1 stops reporting | Commands R2 to Search through PN-10; states the coverage difference from PN-11; commits once acknowledged; reports the remaining gap | PN-10, PN-11 | D |
-| US-15 | Planner | "Compare laydowns A and B and submit B with its rehearsal." | Card read | Both laydowns' coverage read from PN-16's table; laydown B selected and previewed in the viewport; the maintenance-window gap named; a scenario run and its rehearsal record read before submitting | PN-16, PN-11 | D |
+| US-15 | Planner | "Compare the two laydown options and rehearse the alternative. Tell me what you would do next." | Card read | Both rows' coverage read from PN-16's table (`current` and `b`, two gap segments and 7 000 m each); `b`'s difference column read as zero and accounted for -- coverage answers for sensors, and `b` moves a battery; `b` selected and previewed in the viewport; its maintenance-window intent named; a scenario run and its tracks-formed and decisions-raised counts read; the participant states that there is no adopt or submit control and why | PN-16, PN-11 | D |
 
 Group C's cards (US-07, US-16) are held for round 2 and are not read in round 1.
 
