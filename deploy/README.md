@@ -17,6 +17,28 @@ docker build -f deploy/node/Dockerfile -t gungnir-node:dev .
 docker run --rm -p 7410:7410 -v gungnir-data:/var/lib/gungnir gungnir-node:dev
 ```
 
+That compiles the node inside the image, with `--locked`, and is the build that ships.
+A binary built elsewhere can be put into the same runtime stage instead -- `ci.yml`
+does this on every pull request with a binary it compiles in the same `rust` image on
+the runner with its cargo cache mounted in, so the image check takes seconds rather
+than a cold six-minute compile:
+
+```bash
+docker buildx build -f deploy/node/Dockerfile -t gungnir-node:dev --build-context build=<dir> .
+```
+
+where `<dir>/out/gungnir-node` is the binary. The named context replaces the
+Dockerfile's `build` stage, so nothing is compiled; the runtime stage is the same
+either way, and the binary has to be linked against `debian:bookworm-slim`'s glibc
+(2.36): one built natively on Ubuntu 24.04 needs GLIBC 2.38 and 2.39 and does not
+load. `ci.yml` still compiles from source on main and on any pull request that
+changes a manifest, the lockfile, the toolchain file, or this directory.
+
+The same applies to the `gungnir-node` binary `release.yml` publishes as a bare
+artifact: it is built natively on `ubuntu-latest`, so it runs on hosts with that
+runner's glibc or newer, not on Debian bookworm; the container image is the build
+for older hosts.
+
 The image runs as an unprivileged user, keeps the journal on the
 `/var/lib/gungnir` volume, and reads `/etc/gungnir/config.json`
 (`deploy/node/config.example.json` is baked in as a starting point; mount your own

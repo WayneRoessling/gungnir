@@ -30,10 +30,21 @@
 # and the comparison come from the same hardware. Until then, a real regression is found
 # by a person reading these ratios, and this comment exists so that nobody reads the
 # green tick as evidence that performance was checked.
+#
+# **Not on pull requests since 2026-09-09.** While the comparison is advisory and
+# cross-machine, a per-PR run is four to five minutes of benchmarks whose ratios the
+# job itself says cannot be attributed to the code, and 21 of the last 21 went green
+# unread. The baseline still needs writing, so the job runs on every push to main,
+# and `workflow_dispatch` from a branch runs the lenient comparison against main's
+# baseline on demand -- which is how a person who suspects a regression gets the
+# ratios without every pull request paying for them. The `pull_request` trigger
+# comes back with BENCH_REGRESSION_ENFORCE, on the same-machine runner, when the
+# number means something. ci.yml's `benches compile` step is what proves, per pull
+# request, that the benchmarks still build.
 name: bench-regression
 
 on:
-  pull_request:
+  workflow_dispatch:
   # **Without this the baseline is never written and the gate can never fail** (GAP-093).
   # Both halves of the branch below, and the cache-save step at the end, are guarded on
   # `refs/heads/main`; in a `pull_request` event `github.ref` is `refs/pull/<n>/merge`,
@@ -42,6 +53,16 @@ on:
   # measuring nothing, which is the failure the recursive-glob fix above it was for.
   push:
     branches: [main]
+
+# Nothing here writes to the repository, and the repository is public.
+permissions:
+  contents: read
+
+# One run per ref at a time, and never cancelled: a run on main writes the baseline
+# and the cargo cache, and a cancelled save leaves the next comparison with nothing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -55,12 +76,18 @@ env:
 jobs:
   bench:
     runs-on: ubuntu-latest
+    # Four to five minutes warm; a run past twenty is a hung benchmark, not a slow one.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.98"
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Written from main only; see ci.yml for the quota arithmetic.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
       # Per-commit key with a prefix fallback: a cache key is immutable, so saving every
       # main push under one fixed key would keep the first for ever and freeze the
       # baseline at the day it landed. `restore-keys` takes the most recent match.
@@ -70,7 +97,8 @@ jobs:
           path: target/criterion
           key: criterion-baseline-main-${{ github.sha }}
           restore-keys: criterion-baseline-main-
-      # Two different jobs, and they were run with the same flag, which could not work.
+      # Two different invocations, and they were run with the same flag, which could not
+      # work. The lenient branch is now reached by `workflow_dispatch` from a branch.
       #
       # On main the baseline has to be *written*: `--baseline` only ever compares, so the
       # `main/` directory the cache save step is meant to preserve was never created and

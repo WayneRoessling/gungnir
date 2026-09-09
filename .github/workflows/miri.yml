@@ -5,12 +5,23 @@ name: miri
 on:
   pull_request:
 
+# Nothing here writes to the repository, and the repository is public.
+permissions:
+  contents: read
+
+# A push to the pull-request branch supersedes the run in flight for the previous
+# push; this workflow never runs on main, so there is nothing that must not be cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   detect-unsafe:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       has_unsafe: ${{ steps.scan.outputs.has_unsafe }}
     steps:
@@ -29,6 +40,9 @@ jobs:
     needs: detect-unsafe
     if: needs.detect-unsafe.outputs.has_unsafe == 'true'
     runs-on: ubuntu-latest
+    # miri is an interpreter and twelve crates is a lot of it; the bound is generous,
+    # and it is still a bound rather than six hours.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

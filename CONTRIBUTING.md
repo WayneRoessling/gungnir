@@ -103,7 +103,13 @@ cargo bench --workspace --no-run
 
 The CI workflows under `.github/workflows/` run the same commands plus the gated
 checks (`oracle-diff`, `miri`, `loom`, `fuzz-nightly`, `bench-regression`,
-`gpu-fusion`, `release`). Until those workflows are enabled on a hosted runner, say
+`gpu-fusion`, `release`). One difference from the list above is deliberate:
+`ci.yml` runs the tests through `cargo nextest run --workspace` (same tests and
+profile, but every test binary is scheduled at once instead of one after another)
+followed by `cargo test --workspace --doc` for the doctests nextest does not run.
+`cargo test --workspace` locally remains exactly right; nextest is optional there
+(`cargo install cargo-nextest --locked`). `bench-regression.yml` runs on main and
+by dispatch, not per pull request, since 2026-09-09; its header says why. Until those workflows are enabled on a hosted runner, say
 in the PR description which of them you ran by hand.
 
 ## Pull request description

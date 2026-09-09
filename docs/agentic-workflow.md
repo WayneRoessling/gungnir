@@ -150,7 +150,12 @@ covariance update). The gates are structural:
 5. **Fuzzing** (`gungnir-fuzz`, workflow `fuzz-nightly.yml`) on the sensor-ingestion
    parser and association cost-matrix construction.
 6. **Benchmark regression gate** (workflow `bench-regression.yml`): `criterion` versus
-   the baseline stored from `main`, hard-fail beyond a p99 threshold.
+   the baseline stored from `main`, hard-fail beyond a p99 threshold. Advisory since
+   2026-09-07 and run on pushes to `main` and by dispatch since 2026-09-09, because
+   the comparison is cross-machine on hosted runners and cannot attribute a
+   difference to the code; the workflow header records both decisions and the
+   condition (a same-machine runner, `BENCH_REGRESSION_ENFORCE=1`) under which it
+   becomes a hard gate on pull requests again.
 
 Two checks apply beyond the tracking core and are not numbered gates:
 
