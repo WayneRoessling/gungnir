@@ -70,6 +70,11 @@ pub struct FeedSpec {
     /// no Category 205 report on this feed is attributed to anything, the same
     /// honest-empty state an empty `radars` gives Category 048 and 034.
     pub df_sites: Vec<DfBinding>,
+    /// UAS Identification and Target Report gateways this feed's Category 129 blocks may
+    /// be attributed to (GAP-101), bound by [`bind_feed`] the same way `df_sites`
+    /// already is. Empty means no Category 129 report on this feed is attributed to
+    /// anything, the same honest-empty state an empty `df_sites` gives Category 205.
+    pub uas_sites: Vec<UasBinding>,
 }
 
 /// What a host keeps of a bound feed: the queue of service observations it drains and
@@ -85,10 +90,11 @@ pub struct FeedSinks {
 pub type FeedStatsSink = Arc<Mutex<AsterixFeedStats>>;
 
 /// Bind one feed and build its adapter with the sinks the host keeps. `spec.df_sites`
-/// (GAP-100) is applied through [`AsterixFeedAdapter::with_df_sites`] the same way
-/// `spec.radars` is applied through [`AsterixFeedAdapter::new`]; an empty list is a
-/// no-op, so a feed with no direction finder configured builds exactly the adapter it
-/// always did.
+/// (GAP-100) is applied through [`AsterixFeedAdapter::with_df_sites`] and
+/// `spec.uas_sites` (GAP-101) through [`AsterixFeedAdapter::with_uas_sites`], the same
+/// way `spec.radars` is applied through [`AsterixFeedAdapter::new`]; an empty list is a
+/// no-op in both cases, so a feed with no direction finder and no UAS gateway
+/// configured builds exactly the adapter it always did.
 ///
 /// # Errors
 ///
@@ -102,6 +108,7 @@ pub fn bind_feed(
     Ok(
         AsterixFeedAdapter::new(spec.name.clone(), source, frame, &spec.radars)
             .with_df_sites(&spec.df_sites, frame)
+            .with_uas_sites(&spec.uas_sites)
             .with_observation_sink(sinks.observations.clone())
             .with_stats_sink(sinks.stats.clone()),
     )
@@ -148,10 +155,12 @@ pub struct DfBinding {
 /// ASTERIX identity and the sensor it is in the registry (GAP-101). Unlike
 /// [`RadarBinding`] and [`DfBinding`], no position: `cat129::UasSite` carries none, for
 /// the reason its own documentation gives (this category reports the UAS's own absolute
-/// position, not a range or bearing that would need a receiver origin to resolve). Not
-/// part of [`FeedSpec`] yet, deferred here the same way [`DfBinding`] was for GAP-100: a
-/// deployment reaches this through [`AsterixFeedAdapter::with_uas_sites`] until a
-/// `ConfigBaseline` section names UAS gateways the way `radars` already names radars.
+/// position, not a range or bearing that would need a receiver origin to resolve). Part
+/// of [`FeedSpec`] (`uas_sites`) and applied by [`bind_feed`] through
+/// [`AsterixFeedAdapter::with_uas_sites`], the same host-configuration wiring GAP-100's
+/// Category 205 half also went without at first and was given later the same day; a
+/// `ConfigBaseline` section (`RadarFeedConfig::uas_sites`, in `gungnir-config`) names
+/// UAS gateways the way `RadarFeedConfig::radars` already names radars.
 ///
 /// I129/010's own recommendation is `sac = 0, sic = 0` for an airborne-to-ground
 /// broadcast (`cat129`'s module documentation), so the common case is one binding at
@@ -838,6 +847,7 @@ mod tests {
             multicast: None,
             radars: Vec::new(),
             df_sites: vec![df_binding()],
+            uas_sites: Vec::new(),
         };
         let mut adapter = bind_feed(&spec, &frame(), &FeedSinks::default())
             .expect("a loopback socket always binds");
@@ -900,6 +910,45 @@ mod tests {
         assert_eq!(s.uas_reports, 1);
         assert_eq!(s.detections, 1);
         assert_eq!(s.unknown_radar, 0);
+    }
+
+    /// GAP-101 host wiring: [`bind_feed`] -- the one function both `gungnir-app` and
+    /// `gungnir-node` call to build a live ASTERIX feed adapter -- forwards
+    /// `FeedSpec::uas_sites` into [`AsterixFeedAdapter::with_uas_sites`], exactly as it
+    /// already forwards `df_sites` into [`AsterixFeedAdapter::with_df_sites`]. The same
+    /// construction this test's Category 205 twin
+    /// (`bind_feed_wires_a_configured_direction_finder_into_the_live_adapter`) makes,
+    /// and for the same reasons: a real loopback socket on an OS-assigned port through
+    /// the real `bind_feed`, then `handle_datagram` directly rather than a UDP packet to
+    /// a port this test cannot otherwise discover -- `handle_datagram` never touches the
+    /// socket, so the codec and the gateway lookup `with_uas_sites` configured are both
+    /// really exercised.
+    #[test]
+    fn bind_feed_wires_a_configured_uas_gateway_into_the_live_adapter() {
+        let spec = FeedSpec {
+            name: "test".into(),
+            bind_addr: "127.0.0.1:0".parse().expect("loopback, any port"),
+            multicast: None,
+            radars: Vec::new(),
+            df_sites: Vec::new(),
+            uas_sites: vec![uas_binding()],
+        };
+        let mut adapter = bind_feed(&spec, &frame(), &FeedSinks::default())
+            .expect("a loopback socket always binds");
+        let detections = adapter.handle_datagram(&cat129_datagram(), MissionTime(43_205.0));
+        assert_eq!(detections.len(), 1);
+        assert_eq!(detections[0].sensor, SensorId(61));
+        assert!(matches!(
+            detections[0].measurement,
+            gungnir_model::Measurement::Position { .. }
+        ));
+        let reports = adapter.drain_uas_reports();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].sensor, SensorId(61));
+        assert_eq!(reports[0].registration_country, "DE");
+        assert_eq!(adapter.stats().blocks_cat129, 1);
+        assert_eq!(adapter.stats().uas_reports, 1);
+        assert_eq!(adapter.stats().unknown_radar, 0);
     }
 
     #[test]

@@ -369,7 +369,7 @@ fn build_gateway(
                     let feed_sinks = gungnir_ingest::adapters::asterix::FeedSinks::default();
                     match gungnir_ingest::adapters::asterix::bind_feed(&spec, &frame, &feed_sinks) {
                         Ok(adapter) => {
-                            tracing::info!(feed = %spec.name, addr = %spec.bind_addr, radars = spec.radars.len(), df_sites = spec.df_sites.len(), "radar feed bound");
+                            tracing::info!(feed = %spec.name, addr = %spec.bind_addr, radars = spec.radars.len(), df_sites = spec.df_sites.len(), uas_sites = spec.uas_sites.len(), "radar feed bound");
                             gateway.add_adapter(Box::new(adapter));
                             gateway.set_expected_adapters(config.sensors.len() + sinks.len() + 1);
                             // The node has no panel; its counters reach the log on the
@@ -759,8 +759,11 @@ fn local_frame(config: &ConfigBaseline) -> Option<gungnir_model::LocalFrame> {
 
 /// The feeds as the ingest crate builds them: validated addresses parsed, positions
 /// taken from the sensor list. `df_sites` (GAP-100) is built the same way `radars` is.
+/// `uas_sites` (GAP-101) needs no position at all -- see `gungnir_ingest`'s own
+/// documentation on `UasBinding` -- so the sensor list is consulted only to confirm the
+/// named sensor exists, which is what the gateway's allow list admits a detection under.
 fn feed_specs(config: &ConfigBaseline) -> Vec<gungnir_ingest::adapters::asterix::FeedSpec> {
-    use gungnir_ingest::adapters::asterix::{DfBinding, FeedSpec, RadarBinding};
+    use gungnir_ingest::adapters::asterix::{DfBinding, FeedSpec, RadarBinding, UasBinding};
     config
         .radar_feeds
         .iter()
@@ -805,12 +808,23 @@ fn feed_specs(config: &ConfigBaseline) -> Vec<gungnir_ingest::adapters::asterix:
                     })
                 })
                 .collect();
+            let uas_sites = f
+                .uas_sites
+                .iter()
+                .filter(|u| config.sensors.iter().any(|s| s.id == u.sensor_id))
+                .map(|u| UasBinding {
+                    sac: u.sac,
+                    sic: u.sic,
+                    sensor: SensorId(u.sensor_id),
+                })
+                .collect();
             Some(FeedSpec {
                 name: f.name.clone(),
                 bind_addr,
                 multicast,
                 radars,
                 df_sites,
+                uas_sites,
             })
         })
         .collect()
@@ -2074,6 +2088,35 @@ mod tests {
                 sic: 6,
                 azimuth_sigma_rad: 1.5_f64.to_radians(),
             }],
+            uas_sites: Vec::new(),
+        }
+    }
+
+    fn uas_sensor() -> gungnir_config::SensorConfig {
+        gungnir_config::SensorConfig {
+            id: 61,
+            modality: "uas-gateway".into(),
+            position: [0.9, 0.2, 12.0],
+            max_range_m: 20_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        }
+    }
+
+    /// SAC/SIC `00/00` is what edition 1.2 §5.2.1 recommends for an airborne-to-ground
+    /// broadcast, so this is the common single-gateway deployment.
+    fn uas_feed(bind_addr: &str) -> gungnir_config::RadarFeedConfig {
+        gungnir_config::RadarFeedConfig {
+            name: "utm".into(),
+            bind_addr: bind_addr.into(),
+            multicast: None,
+            radars: Vec::new(),
+            df_sites: Vec::new(),
+            uas_sites: vec![gungnir_config::UasSiteConfig {
+                sensor_id: 61,
+                sac: 0,
+                sic: 0,
+            }],
         }
     }
 
@@ -2129,6 +2172,56 @@ mod tests {
             reports.radar.len(),
             1,
             "the one feed, bound for its direction finder alone"
+        );
+    }
+
+    /// GAP-101: a UAS gateway named in `RadarFeedConfig::uas_sites` reaches
+    /// `FeedSpec::uas_sites` as the exact `UasBinding` `bind_feed` will hand to
+    /// `AsterixFeedAdapter::with_uas_sites`, the same derivation this function already
+    /// makes for a radar's `RadarBinding` -- minus the position, which this category
+    /// takes from the report itself rather than from the receiving antenna. A feed
+    /// naming only a UAS gateway still produces one spec.
+    #[test]
+    fn feed_specs_carries_a_configured_uas_gateway_into_the_binding() {
+        let config = ConfigBaseline {
+            sensors: vec![uas_sensor()],
+            radar_feeds: vec![uas_feed("0.0.0.0:8601")],
+            ..ConfigBaseline::default()
+        };
+        let specs = feed_specs(&config);
+        assert_eq!(specs.len(), 1);
+        assert!(specs[0].radars.is_empty());
+        assert!(specs[0].df_sites.is_empty());
+        assert_eq!(
+            specs[0].uas_sites,
+            vec![gungnir_ingest::adapters::asterix::UasBinding {
+                sac: 0,
+                sic: 0,
+                sensor: SensorId(61),
+            }]
+        );
+    }
+
+    /// GAP-101, "reachable at start-up": the node's real `build_gateway` binds a feed
+    /// that names only a UAS gateway and registers it into `FeedReports::radar`, exactly
+    /// as it already does for a radar-only and a direction-finder-only feed.
+    /// `127.0.0.1:0` is a real loopback bind (OS-assigned port), not a stub;
+    /// `bind_feed_wires_a_configured_uas_gateway_into_the_live_adapter` in
+    /// `gungnir-ingest` proves what that path builds actually attributes a report.
+    #[test]
+    fn build_gateway_reaches_a_configured_uas_gateway_at_start_up() {
+        let config = ConfigBaseline {
+            sensors: vec![uas_sensor()],
+            origin: Some([0.9, 0.2, 0.0]),
+            radar_feeds: vec![uas_feed("127.0.0.1:0")],
+            ..ConfigBaseline::default()
+        };
+        let rt = tokio::runtime::Runtime::new().expect("a throwaway runtime for the handle");
+        let (_gateway, _sinks, reports, _sapient) = build_gateway(&config, rt.handle());
+        assert_eq!(
+            reports.radar.len(),
+            1,
+            "the one feed, bound for its UAS gateway alone"
         );
     }
 

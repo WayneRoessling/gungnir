@@ -346,8 +346,9 @@ pub enum MachineRole {
     },
 }
 
-/// One ASTERIX radar feed: a socket, the radars it may speak for, and (GAP-100) the
-/// direction finders it may attribute Category 205 bearings to. Not `Eq` now that
+/// One ASTERIX radar feed: a socket, the radars it may speak for, (GAP-100) the
+/// direction finders it may attribute Category 205 bearings to, and (GAP-101) the UAS
+/// gateways it may attribute Category 129 identification reports to. Not `Eq` now that
 /// `df_sites` carries a stated accuracy in radians (`DfSiteConfig`); every other field
 /// still would be.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -363,10 +364,18 @@ pub struct RadarFeedConfig {
     /// default for a feed that only carries radars) means every Category 205 report on
     /// this feed is counted `unknown_radar`, the same honest-empty state an
     /// unconfigured `radars` already gives Category 048 and 034. A feed must bind at
-    /// least one radar or one direction finder (`validate_radar_feeds`); nothing that
-    /// binds neither is worth a socket.
+    /// least one radar, one direction finder or one UAS gateway
+    /// (`validate_radar_feeds`); nothing that binds none of the three is worth a socket.
     #[serde(default)]
     pub df_sites: Vec<DfSiteConfig>,
+    /// UAS Identification and Target Report gateways this feed's Category 129 blocks may
+    /// be attributed to (GAP-101). Empty (the default before this was configurable, and
+    /// still the default for a feed that carries no UAS gateway) means every Category
+    /// 129 report on this feed is counted `unknown_radar` and attributed to nothing,
+    /// the same honest-empty state an unconfigured `df_sites` already gives Category
+    /// 205.
+    #[serde(default)]
+    pub uas_sites: Vec<UasSiteConfig>,
 }
 
 /// One AIS receiver feed (GAP-010, D-32): the receiver's sensor identity and where its
@@ -522,6 +531,30 @@ pub struct DfSiteConfig {
     pub sic: u8,
     /// Radians. Never defaulted: see the struct documentation.
     pub azimuth_sigma_rad: f64,
+}
+
+/// One UAS Identification and Target Report gateway a feed's Category 129 blocks may be
+/// attributed to (GAP-101): which sensor its SAC/SIC pair is -- the identical lookup
+/// [`RadarBindingConfig`] and [`DfSiteConfig`] already make.
+///
+/// Leaner than both of those on purpose, and the reason is the category's own shape
+/// rather than an omission: `gungnir_interop::asterix::cat129::UasSite` carries no
+/// position because this category reports the *UAS's* own absolute position, not a range
+/// or a bearing that would need a receiving antenna's origin to resolve. So the sensor
+/// named here supplies only the identity a report is attributed under -- which is also
+/// why it must be in the baseline's own sensor list: the gateway admits a detection
+/// under that `SensorId` or not at all.
+///
+/// No check that `sac`/`sic` is non-zero, and that absence is deliberate: edition 1.2
+/// §5.2.1 *recommends* `00/00` for an airborne-to-ground broadcast
+/// (`gungnir_interop::asterix::cat129`'s own module documentation), so the common
+/// deployment is one entry at `(0, 0)` naming the single receiving gateway, and refusing
+/// that pair would refuse the specification's own recommended configuration.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct UasSiteConfig {
+    pub sensor_id: u32,
+    pub sac: u8,
+    pub sic: u8,
 }
 
 /// The terrain a deployment masks line of sight against (GAP-023).
@@ -2127,12 +2160,23 @@ fn validate_sapient_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> 
 /// plus the one check no other feed config needs: a stated accuracy no wire item
 /// supplies, so it cannot be range-checked against anything the format itself states,
 /// only against being a real number at all.
+///
+/// GAP-101: UAS gateways are validated the same shape again, and for the same reason
+/// get their own `BTreeSet`s -- `gungnir_interop::asterix::cat129::AsterixCat129Codec`
+/// holds its own site list, so a Category 129 SAC/SIC is never looked up against a
+/// radar's or a direction finder's. Nothing category-specific is added on top: unlike
+/// `azimuth_sigma_rad`, every field of `UasSiteConfig` is either a `u8` whose whole
+/// range the wire allows or the sensor id already checked here, and `00/00` is the
+/// specification's own recommended pair rather than a value to refuse (see
+/// [`UasSiteConfig`]).
 fn validate_radar_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     let mut names = std::collections::BTreeSet::new();
     let mut pairs = std::collections::BTreeSet::new();
     let mut bound = std::collections::BTreeSet::new();
     let mut df_pairs = std::collections::BTreeSet::new();
     let mut df_bound = std::collections::BTreeSet::new();
+    let mut uas_pairs = std::collections::BTreeSet::new();
+    let mut uas_bound = std::collections::BTreeSet::new();
     for feed in &baseline.radar_feeds {
         if !names.insert(feed.name.as_str()) {
             return Err(ConfigError::Invalid(format!(
@@ -2156,9 +2200,9 @@ fn validate_radar_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 }
             }
         }
-        if feed.radars.is_empty() && feed.df_sites.is_empty() {
+        if feed.radars.is_empty() && feed.df_sites.is_empty() && feed.uas_sites.is_empty() {
             return Err(ConfigError::Invalid(format!(
-                "radar feed {:?} binds no radar and no direction finder",
+                "radar feed {:?} binds no radar, no direction finder and no UAS gateway",
                 feed.name
             )));
         }
@@ -2210,6 +2254,43 @@ fn validate_radar_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                     feed.name, d.sac, d.sic
                 )));
             }
+        }
+        validate_uas_sites(baseline, feed, &mut uas_pairs, &mut uas_bound)?;
+    }
+    Ok(())
+}
+
+/// GAP-101, split out of [`validate_radar_feeds`] rather than written inline beside the
+/// radar and direction-finder loops: adding a third list there took that function past
+/// `clippy::too_many_lines`, and a helper is the honest fix where an `allow` would only
+/// have hidden it. `pairs` and `bound` are the caller's own sets, threaded through so
+/// uniqueness still holds across every feed in the baseline and not merely within one,
+/// exactly as it does for the two lists above.
+fn validate_uas_sites(
+    baseline: &ConfigBaseline,
+    feed: &RadarFeedConfig,
+    pairs: &mut std::collections::BTreeSet<(u8, u8)>,
+    bound: &mut std::collections::BTreeSet<u32>,
+) -> Result<(), ConfigError> {
+    for u in &feed.uas_sites {
+        if !baseline.sensors.iter().any(|s| s.id == u.sensor_id) {
+            return Err(ConfigError::Invalid(format!(
+                "radar feed {:?} names UAS gateway sensor {}, which is not in the \
+                 sensor list",
+                feed.name, u.sensor_id
+            )));
+        }
+        if !pairs.insert((u.sac, u.sic)) {
+            return Err(ConfigError::Invalid(format!(
+                "radar feed {:?}: UAS gateway SAC/SIC {}/{} is bound twice",
+                feed.name, u.sac, u.sic
+            )));
+        }
+        if !bound.insert(u.sensor_id) {
+            return Err(ConfigError::Invalid(format!(
+                "radar feed {:?}: UAS gateway sensor {} is bound to two SAC/SIC pairs",
+                feed.name, u.sensor_id
+            )));
         }
     }
     Ok(())
@@ -4099,6 +4180,7 @@ mod tests {
                 multicast: None,
                 radars,
                 df_sites: Vec::new(),
+                uas_sites: Vec::new(),
             }],
             ..ConfigBaseline::default()
         };
@@ -4204,6 +4286,7 @@ mod tests {
                 multicast: None,
                 radars: Vec::new(),
                 df_sites,
+                uas_sites: Vec::new(),
             }],
             ..ConfigBaseline::default()
         };
@@ -4240,6 +4323,72 @@ mod tests {
             );
         }
         // A feed with neither a radar nor a direction finder is still refused.
+        assert!(matches!(
+            validate(&feed(Vec::new())),
+            Err(ConfigError::Invalid(_))
+        ));
+    }
+
+    /// GAP-101: a UAS Identification and Target Report gateway is validated the same
+    /// shape a radar and a direction finder already are (known sensor, unique SAC/SIC,
+    /// no sensor bound to two pairs). Nothing is checked on top of that, and the one
+    /// pair that might look suspect is checked here to be *accepted*: `00/00` is what
+    /// edition 1.2 §5.2.1 recommends for an airborne-to-ground broadcast, so refusing it
+    /// would refuse the specification's own recommended configuration
+    /// (`UasSiteConfig`'s own documentation).
+    #[test]
+    fn a_uas_gateway_needs_a_known_sensor_and_unique_pairs() {
+        let sensor = |id| SensorConfig {
+            id,
+            modality: "uas-gateway".into(),
+            position: [0.9, 0.2, 30.0],
+            max_range_m: 20_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        };
+        let one = |sensor_id, sac, sic| UasSiteConfig {
+            sensor_id,
+            sac,
+            sic,
+        };
+        let feed = |uas_sites: Vec<UasSiteConfig>| ConfigBaseline {
+            sensors: vec![sensor(61)],
+            radar_feeds: vec![RadarFeedConfig {
+                name: "utm".into(),
+                bind_addr: "0.0.0.0:8601".into(),
+                multicast: None,
+                radars: Vec::new(),
+                df_sites: Vec::new(),
+                uas_sites,
+            }],
+            ..ConfigBaseline::default()
+        };
+
+        // A feed naming only a UAS gateway, no radar and no direction finder, is valid:
+        // GAP-101 widens GAP-100's "or" to three, it does not add a second "both".
+        validate(&feed(vec![one(61, 10, 20)])).expect("a UAS-gateway-only feed");
+        // The specification's own recommended placeholder pair is configuration, not an
+        // error: this is the common single-gateway deployment.
+        validate(&feed(vec![one(61, 0, 0)])).expect("SAC/SIC 0/0 is the recommended pair");
+
+        // An unknown sensor is refused, the same as a radar's or a direction finder's
+        // would be -- and it matters more here than anywhere: the gateway admits a
+        // detection under this `SensorId` or not at all.
+        assert!(matches!(
+            validate(&feed(vec![one(99, 10, 20)])),
+            Err(ConfigError::Invalid(_))
+        ));
+        // The same SAC/SIC bound twice is refused.
+        assert!(matches!(
+            validate(&feed(vec![one(61, 10, 20), one(61, 10, 20)])),
+            Err(ConfigError::Invalid(_))
+        ));
+        // The same sensor bound to two SAC/SIC pairs is refused.
+        assert!(matches!(
+            validate(&feed(vec![one(61, 10, 20), one(61, 10, 21)])),
+            Err(ConfigError::Invalid(_))
+        ));
+        // A feed binding none of the three is still refused.
         assert!(matches!(
             validate(&feed(Vec::new())),
             Err(ConfigError::Invalid(_))
