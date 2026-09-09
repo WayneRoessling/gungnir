@@ -3885,7 +3885,11 @@ not by finding, for the time between whenever each item landed and this correcti
     RustCrypto and duplicates `zbus` itself against the copy `gungnir-app`'s accessibility
     stack already carries (5.19.0 beside 4.4.0) -- neither this workspace's pin to change,
     both recorded rather than hidden. Windows and macOS carry neither duplicate. Human-owned
-    code; written and gated, not signed. GAP-057's node account store and GAP-060's
+    code, **signed by the owner 2026-09-08** (with items 104 and 111, the same review: the
+    first-run race `ensure_secret` had -- a second process's `set_password` landing between
+    this one's write and its return -- found and closed the same day by re-reading the store
+    rather than trusting what was generated, see `os_keystore.rs::read_back`). GAP-057's
+    node account store and GAP-060's
     transport-identity persistence both named this same decision as their remaining item;
     the decision is taken and neither is built by this entry, which is D-39's alone.
 
@@ -3944,8 +3948,8 @@ not by finding, for the time between whenever each item landed and this correcti
     `gungnir-app`'s identical dev-dependency already does, and carries the same comment.
 
     **Human-owned crate touched: `gungnir-security`, the account-store type and the
-    `os_keystore` signature change, per `docs/agentic-workflow.md`. Written and gated,
-    not signed.** `gungnir-config`'s new variant and its validation, and the wiring in
+    `os_keystore` signature change, per `docs/agentic-workflow.md`. Signed by the owner
+    2026-09-08, with items 103 and 111.** `gungnir-config`'s new variant and its validation, and the wiring in
     `gungnir-node` and `gungnir-app`, are ordinary configuration and plumbing work
     outside the identity path that crate scopes as human-owned; neither needed a
     signature on its own account.
@@ -4382,8 +4386,9 @@ not by finding, for the time between whenever each item landed and this correcti
 
     **Human-owned crates touched: `gungnir-security` (the generalised constructor
     and constant) and `gungnir-remote/src/identity.rs` (the low-trust-listed
-    transport-identity path, `docs/agentic-workflow.md`). Written and gated, not
-    signed.** `gungnir-node/src/main.rs` and `gungnir-app/src/session.rs` are
+    transport-identity path, `docs/agentic-workflow.md`). Signed by the owner 2026-09-08,
+    with items 103 and 104 -- one review over the whole OS-keystore mechanism and its
+    four services.** `gungnir-node/src/main.rs` and `gungnir-app/src/session.rs` are
     ordinary wiring at the two call sites, outside what either policy scopes as
     human-owned on its own account.
 
