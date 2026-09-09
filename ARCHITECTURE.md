@@ -5074,6 +5074,15 @@ not by finding, for the time between whenever each item landed and this correcti
     addition not being associative, and that making it order-free would need exact or
     scaled summation. GAP-103 is Closed.
 
+    **Proved on the gate that found it, rather than on the next scheduled night.**
+    `fuzz-nightly` was dispatched manually on the branch: `cost_matrix_construction`
+    did **244,022,222 runs in 1201 s without a crash**, growing a 115-entry corpus from
+    nothing at 203k executions a second. The comparison is what makes it evidence --
+    the same target over the same input space crashed in **0.07 s, on its 25,000th
+    input**, before this change. `sensor_ingestion_parser` (104,330,559 runs) and
+    `asterix_feed` (25,923,346) ran clean in the same dispatch, so gate 5's matrix is
+    green on all three targets for the first time since the defect was found.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and
