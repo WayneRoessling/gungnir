@@ -858,6 +858,45 @@ has its own subsection above.
 Each is added under §6 rule 4 and recorded in this table when it lands. Agents must not
 add any crate not listed here.
 
+#### Model checker (written 2026-09-08 under GAP-061, **not signed**)
+
+Gate 4 has required `loom` since the workflow was written (`agentic-workflow.md`, and §5
+below). What it did not have until 2026-09-08 was a dependency, which is why twenty-two
+green runs model-checked nothing: `RUSTFLAGS=--cfg loom` set a cfg no line of source
+read. This entry records the dependency; it is not a new decision about the tool.
+
+| Crate | Used for | Used by | Landed |
+|---|---|---|---|
+| `loom` (feature `futures`) | Gate 4's model checks -- `gungnir-fusion-async/src/loom_model.rs`, over the channel shim in `src/sync.rs`. The `futures` feature supplies `loom::future::block_on`, which is what drives the real `async fn ingest_with` inside a loom execution rather than a transcription of it | `gungnir-fusion-async`, from `[target.'cfg(loom)'.dev-dependencies]` and nowhere else | 2026-09-08 |
+
+Three things are deliberate:
+
+1. **`[target.'cfg(loom)'.dev-dependencies]`, not a plain `[dev-dependencies]` entry.**
+   Cargo evaluates that table's cfg against the rustflags in force, so an ordinary
+   `cargo build`, `cargo test`, `cargo deny` or `cargo about` run never resolves,
+   downloads or compiles `loom` at all: it reaches no SBOM and no release-target graph,
+   and this row therefore adds nothing to what ships. Verified rather than assumed --
+   `cargo tree -p gungnir-fusion-async -e dev` shows no `loom` line, and the same command
+   under `RUSTFLAGS=--cfg loom` shows `loom v0.7.2`. It is the pattern `tokio` uses for
+   its own loom support.
+2. **The code is gated on `all(test, loom)`, not on `loom`.** A dev-dependency is linked
+   only into test targets, so a plain `cargo build --lib` under the flag would meet
+   `use loom::..` with no `loom` crate to resolve. `tokio` gates its shim the same way
+   for the same reason. `cfg(loom)` is declared in `[workspace.lints.rust]`'s
+   `check-cfg`, because it is a real cfg this workspace sets and not a typo.
+3. **A channel of our own under the flag, rather than `loom::sync::mpsc`.** loom's mpsc
+   never reports disconnection -- its `try_recv` returns a message or `Empty` and
+   delegates otherwise to a blocking `recv` -- and `ingest_with` terminates on
+   `Disconnected`. The shim therefore builds crossbeam's contract out of `loom::sync`
+   primitives, and `sync.rs` states in full what that does and does not buy: the loop,
+   the pipeline and the consumer protocol are real, the channel beneath them is a model,
+   and nothing here is evidence about `crossbeam-channel`'s own implementation.
+
+**Not signed.** `gungnir-fusion-async` is a human-owned, low-trust crate
+(`agentic-workflow.md`), so this row and the model checks it serves are written and
+gated and await the owner's review. §5's sign-off requirement is not satisfied by this
+entry existing.
+
 ---
 
 ## 3. General Rust standards
@@ -940,6 +979,13 @@ Same posture as `unsafe`: agents may write `fusion-async` code, including code u
   introduce or affect — this is for the human reviewer's benefit and should not be skipped
   even when the change looks small.
 - Human sign-off is mandatory before merge regardless of green CI, per the existing gate.
+- **New cross-task state goes through `gungnir_fusion_async::sync` or Gate 4 cannot see
+  it.** That module is the shim the gate model-checks through: `crossbeam-channel` in
+  every ordinary build, a loom-instrumented channel under `--cfg loom`. A channel
+  constructed straight from `crossbeam_channel` in that crate is invisible to loom, and
+  invisible is exactly how this gate spent 22 runs certifying nothing (GAP-061). The
+  model checks themselves are `gungnir-fusion-async/src/loom_model.rs`, and its module
+  documentation states what they reach and what they do not.
 
 ---
 

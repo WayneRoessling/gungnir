@@ -6,22 +6,34 @@
 # (GAP-061). The trigger was never the problem: the path filter matches, and the runs are
 # there from 2026-09-07 onwards on every branch that touched either crate. What the runs
 # actually did is the problem. `grep -rn loom` over every .rs and .toml in the workspace
-# matches nothing: there is no `loom` dependency and no `cfg(loom)` code anywhere, so
-# `RUSTFLAGS: --cfg loom` sets a cfg that no line of source reads. The step below then ran
+# matched nothing: there was no `loom` dependency and no `cfg(loom)` code anywhere, so
+# `RUSTFLAGS: --cfg loom` set a cfg that no line of source read. The step below then ran
 # the crate's four ordinary unit tests -- "running 4 tests ... finished in 0.00s", which is
 # not what a model check with LOOM_MAX_PREEMPTIONS=3 looks like -- and reported success.
 #
-# The two steps at the end are the same assertion gpu-fusion.yml already makes in this
-# repository: a gate that ran nothing has not passed. They do not weaken the criterion,
-# they state it. Until the model checks are written this gate is red, and red is the
-# honest colour for it; a green tick here has never meant the pipeline's interleavings
-# were checked, and the whole of GAP-061 is that nobody had read the logs to notice.
+# **Closed 2026-09-08.** `gungnir-fusion-async` declares `loom 0.7.2` in
+# `[target.'cfg(loom)'.dev-dependencies]`, so the flag this workflow has always set is now
+# the thing that pulls the model checker in; `src/sync.rs` puts the crate's cross-task
+# channels behind a shim that is `crossbeam-channel` in every ordinary build and a
+# loom-instrumented channel under the flag; and `src/loom_model.rs` drives the **real**
+# `ingest_with` against the **real** drain-to-latest consumer protocol over it. Three
+# properties are checked and one negative check proves the assertions have teeth. See
+# that module's documentation for what is covered and, as importantly, what is not.
 #
-# What closes it: a `loom` dev-dependency behind `cfg(loom)`, the pipeline's cross-task
-# state expressed in `loom::sync` shims under that cfg, and model checks in a module whose
-# path contains `loom_`. `gungnir-fusion-async` is a human-owned crate (CLAUDE.md, and
-# docs/agentic-workflow.md's low-trust tier), so that work needs the owner's sign-off and
-# a PR that says in plain language which interleaving it covers.
+# The three assertions below are the same one gpu-fusion.yml already makes in this
+# repository -- a gate that ran nothing has not passed -- and they are kept now that the
+# gate is green, because they are what stops it going quiet again. They are stated in
+# increasing strength, and the third is GAP-061's own lesson applied to this gate:
+#
+#   1. the crate declares a `loom` dependency at all (structural; names the cause rather
+#      than the symptom, because --cfg loom compiles happily against a crate that has
+#      never heard of loom, and for 22 runs it did);
+#   2. at least one test in a module whose path contains `loom_` ran, so the crate's
+#      ordinary unit tests cannot satisfy this gate by being counted; and
+#   3. **the model checks explored more than zero interleavings**. A test that runs a
+#      single execution is not a model check, and counting tests would not tell them
+#      apart. Each model prints the number it explored and the job sums them, so the log
+#      carries the figure rather than leaving a reader to infer it from a green tick.
 name: loom
 
 on:
@@ -56,6 +68,19 @@ jobs:
             echo "::error::gungnir-fusion-async declares no loom dependency, so RUSTFLAGS=--cfg loom sets a cfg no code reads and this gate model-checks nothing (GAP-061)"
             exit 1
           fi
+      # The model-check code is the only code in the workspace that `ci.yml`'s clippy job
+      # cannot see: it is behind `cfg(all(test, loom))`, so an ordinary
+      # `cargo clippy --workspace --all-targets` compiles straight past it. Unlinted code
+      # inside a verification gate is the same family of hole as an unread gate log, so
+      # the flag's own job lints it. `[workspace.lints]` already denies `clippy::all`,
+      # which is what makes this fail rather than warn; no extra `-D warnings` is needed,
+      # and adding one would fail the job on `clippy::pedantic`, which this workspace
+      # warns on by policy.
+      - name: clippy sees the model checks
+        env:
+          RUSTFLAGS: --cfg loom
+        shell: bash
+        run: cargo clippy -p gungnir-fusion-async --release --lib --tests
       - name: loom model checks (Scenario 3 pipeline)
         env:
           RUSTFLAGS: --cfg loom
@@ -66,7 +91,8 @@ jobs:
           cargo test -p gungnir-fusion-async --release --lib -- --nocapture loom_ 2>&1 | tee loom.log
       # Execution half. The filter above is the criterion: the model checks live in a
       # module whose path contains loom_, so the crate's ordinary unit tests cannot
-      # satisfy this gate by being counted.
+      # satisfy this gate by being counted. And a model check that explored one
+      # interleaving is a unit test with extra steps, so the count is checked too.
       - name: A gate that model-checked nothing has not passed
         shell: bash
         run: |
@@ -74,5 +100,12 @@ jobs:
           echo "loom model checks executed: $ran"
           if [ "$ran" -eq 0 ]; then
             echo "::error::no loom model check ran; this gate cannot pass vacuously (GAP-061)"
+            exit 1
+          fi
+          explored=$(sed -n 's/^loom: .* explored \([0-9][0-9]*\) interleavings.*$/\1/p' loom.log \
+            | awk '{ s += $1 } END { print s + 0 }')
+          echo "interleavings explored: $explored"
+          if [ "$explored" -eq 0 ]; then
+            echo "::error::the loom tests ran but reported no explored interleavings; a model check that runs one execution is not a model check (GAP-061)"
             exit 1
           fi

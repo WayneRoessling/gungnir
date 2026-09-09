@@ -134,8 +134,19 @@ covariance update). The gates are structural:
    given an invariant; a human authors the invariant.
 3. **`cargo miri`** (workflow `miri.yml`) on any PR touching `unsafe`.
 4. **`loom`** (workflow `loom.yml`) on `gungnir-fusion-async`: exhaustive interleaving,
-   run against the real Scenario 3 async pipeline rather than a synthetic stress
-   harness.
+   run against the real async pipeline rather than a synthetic stress harness. That
+   crate's cross-task state is two channels and nothing else -- no `Arc<Mutex>` and no
+   atomics anywhere in it or in `gungnir-tracking-service` -- so `src/sync.rs` puts those
+   channels behind a shim that is `crossbeam-channel` in every ordinary build and
+   loom-instrumented under the flag, and `src/loom_model.rs` drives the **real**
+   `ingest_with` and the **real** drain-to-latest consumer protocol over it. Three
+   properties are checked, and a fourth, negative, check runs the coherence assertion
+   against the two-channel publication shape this crate used before GAP-096 and requires
+   loom to catch it -- so the assertion cannot be quietly weakened. Until 2026-09-08
+   there was no `loom` dependency in the workspace at all, so `--cfg loom` set a cfg no
+   line of code read and 22 green runs model-checked nothing (GAP-061); the workflow now
+   fails a run that declares no dependency, runs no test in a `loom_` module, or reports
+   no explored interleavings.
 5. **Fuzzing** (`gungnir-fuzz`, workflow `fuzz-nightly.yml`) on the sensor-ingestion
    parser and association cost-matrix construction.
 6. **Benchmark regression gate** (workflow `bench-regression.yml`): `criterion` versus
