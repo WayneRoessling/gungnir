@@ -84,8 +84,41 @@ fn generate_secret() -> String {
     })
 }
 
+/// Whatever the entry holds right now, as the wrapping secret -- the read every caller's
+/// correctness rests on, named rather than inlined so the race note below has something
+/// to point at and so a test can stage the losing interleaving against it directly.
+fn read_back(entry: &keyring_core::Entry) -> Result<String, SecurityError> {
+    entry.get_password().map_err(|err| {
+        SecurityError::KeyProviderUnavailable(format!(
+            "the operating-system keystore did not return the stored secret: {err}"
+        ))
+    })
+}
+
 /// The entry's stored secret, or a freshly generated one written back when this account
-/// has none yet.
+/// has none yet -- and then **re-read, so what is returned is what the store actually
+/// holds** rather than what this process generated.
+///
+/// **Why the re-read (2026-09-08).** Two processes starting against the same account
+/// both see `NoEntry`, both generate, and the second `set_password` wins. Returning the
+/// generated secret unchecked would have the loser seal its `keystore.sealed` under a
+/// secret the store no longer holds -- and `PersistentKeyProvider::open_or_create`
+/// correctly refuses a file that will not open rather than overwriting it, so that file
+/// would be unopenable from then on. The keys in it may be the only way to read a year
+/// of journals (`keystore.rs`'s own words on exactly that refusal), so the loser adopts
+/// the winner's secret rather than diverging from it.
+///
+/// **What this does not claim.** It narrows the window; it does not close it. A writer
+/// landing between this `set_password` and this read-back is adopted; one landing after
+/// the read-back but before the caller seals its own file is not, and that caller's file
+/// is then orphaned exactly as it would have been before. Closing it completely needs a
+/// compare-and-swap or a lock across the store, and none of the three backends this
+/// reaches offers one -- so the residual is stated here rather than implied away.
+///
+/// **A failed read-back is a fault, not a reason to fall back on the generated value.**
+/// If the store cannot confirm what it holds, sealing under an unconfirmed secret is the
+/// same risk with the evidence removed; the error surfaces and the caller takes DN-22
+/// §5's honest fallback -- journal in the clear, or an ephemeral identity -- instead.
 fn ensure_secret(entry: &keyring_core::Entry) -> Result<String, SecurityError> {
     match entry.get_password() {
         Ok(secret) => Ok(secret),
@@ -96,7 +129,7 @@ fn ensure_secret(entry: &keyring_core::Entry) -> Result<String, SecurityError> {
                     "the operating-system keystore refused to store a new secret: {err}"
                 ))
             })?;
-            Ok(secret)
+            read_back(entry)
         }
         Err(err) => Err(SecurityError::KeyProviderUnavailable(format!(
             "the operating-system keystore did not return the stored secret: {err}"
@@ -183,6 +216,56 @@ mod tests {
     #[test]
     fn two_generated_secrets_are_not_the_same_bytes() {
         assert_ne!(generate_secret(), generate_secret());
+    }
+
+    /// The first-run race [`ensure_secret`]'s own doc names, staged in the order that
+    /// loses it: this process generates and stores, another process's `set_password`
+    /// lands next, and only then does the read-back run. What comes out must be the
+    /// store's value, not this process's -- because sealing `keystore.sealed` under a
+    /// secret the store no longer holds leaves that file permanently unopenable, which
+    /// `open_or_create` is right to refuse and cannot repair.
+    ///
+    /// Staged against [`read_back`] rather than through `ensure_secret` end to end
+    /// because the interleaving is *inside* that function: two real processes would
+    /// interleave there, and a single-threaded test cannot suspend itself mid-call. The
+    /// step being proved is the one the fix added.
+    #[test]
+    fn a_writer_that_wins_the_first_run_race_is_adopted_rather_than_diverged_from() {
+        let ours = mock_entry(DESKTOP_KEYSTORE_SERVICE, "first-run-race");
+        let generated = generate_secret();
+        ours.set_password(&generated)
+            .expect("our own write lands first");
+
+        let theirs = mock_entry(DESKTOP_KEYSTORE_SERVICE, "first-run-race");
+        let winner = generate_secret();
+        theirs
+            .set_password(&winner)
+            .expect("the other process wins");
+
+        let adopted = read_back(&ours).expect("the store answers");
+        assert_eq!(
+            adopted, winner,
+            "the loser must seal its file under what the store actually holds"
+        );
+        assert_ne!(
+            adopted, generated,
+            "returning the locally generated secret is the orphaning bug this closes"
+        );
+    }
+
+    /// The other half of the same fix: a read-back that cannot answer is a fault, and
+    /// must not quietly degrade to the generated value -- that would seal a file under a
+    /// secret nothing has confirmed. The caller's own honest fallback (DN-22 §5) covers
+    /// it from there.
+    #[test]
+    fn a_read_back_that_cannot_answer_is_an_error_and_not_the_generated_value() {
+        let entry = mock_entry(DESKTOP_KEYSTORE_SERVICE, "read-back-fault");
+        entry.set_password(&generate_secret()).expect("stored");
+        let mock: &keyring_core::mock::Cred =
+            entry.as_any().downcast_ref().expect("mock credential");
+        mock.set_error(keyring_core::Error::NoStorageAccess("locked".into()));
+        let err = read_back(&entry).expect_err("an unconfirmable secret is a fault");
+        assert!(err.to_string().contains("did not return"), "{err}");
     }
 
     /// The property the `service` parameter exists for (2026-09-08, GAP-060's

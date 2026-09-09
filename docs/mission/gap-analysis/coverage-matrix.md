@@ -17,14 +17,14 @@ every part of the capability; implementation is what remains.
 
 | Capability | Design | Implementation | Evidence | Gaps |
 |---|---|---|---|---|
-| CAP-1.1 Ingest observations | full | partial | `gungnir-ingest` gateway and adapter trait; `gungnir-interop` codec boundary; `DetectionView` carries provenance | GAP-001, GAP-064, GAP-099, GAP-100, GAP-101 |
+| CAP-1.1 Ingest observations | full | partial | `gungnir-ingest` gateway and adapter trait; `gungnir-interop` codec boundary; `DetectionView` carries provenance | GAP-001, GAP-064, GAP-099, GAP-100, GAP-103 |
 | CAP-1.2 Validate and quarantine | full | partial | `IngestGateway` validation and quarantine; `gungnir-security` authentication trait | GAP-002 |
 | CAP-1.3 Sensor modes and tasking | full | partial | Registry, modes, coverage regions, and the outbound control path are built as of 2026-09-05 (GAP-003, GAP-004): a command is recorded, published, and swept for acknowledgement, and a requested mode is kept apart from the confirmed one. No adapter carries a command to a real sensor (GAP-001) and collection requirements are built and tasked from PN-15 but the list is not rebuilt at startup (GAP-005); DN-11 (`../../design/`) names a component for every remaining part | GAP-003, GAP-004, GAP-005 |
 | CAP-1.4 Coverage and gaps | full | partial | Coverage volumes in `gungnir-analytics`; gap detection as a function and map rendering of coverage are not designed; a component is now named for every part of it by DN-12 (`../../design/`, first draft 2026-09-05) | GAP-006, GAP-007 |
 | CAP-1.5 Time discipline | full | partial | `gungnir-time` clocks and late-data policy; `DetectionView` source and receipt time | GAP-008 |
 | CAP-1.6 Peer early warning | full | none | API snapshot and event stream exist for peers; no designed path that merges peer tracks as a source with visible staleness; a component is now named for every part of it by DN-16 (`../../design/`, first draft 2026-09-05) | GAP-009, GAP-091 |
-| CAP-1.7 Cooperative identity | full | none | Codec boundary in `gungnir-interop`; evidence model in `gungnir-identification` | GAP-010 |
-| CAP-2.1 Multi-sensor picture | full | partial | Tracking core trait surfaces, `gungnir-fusion-async`, `gungnir-tracking-service` facade | GAP-011, GAP-016, GAP-048, GAP-066, GAP-096, GAP-101 |
+| CAP-1.7 Cooperative identity | full | none | Codec boundary in `gungnir-interop`; evidence model in `gungnir-identification` | GAP-010, GAP-101 |
+| CAP-2.1 Multi-sensor picture | full | partial | Tracking core trait surfaces, `gungnir-fusion-async`, `gungnir-tracking-service` facade | GAP-011, GAP-016, GAP-048, GAP-066, GAP-096, GAP-103 |
 | CAP-2.2 Tracks through gaps | full | partial | `Quality` on `TrackView`; stale drawn muted; stale never allocated | GAP-011, GAP-012 |
 | CAP-2.3 Sensor registration | full | none | `gungnir-track-fusion` registration traits; integration with `gungnir-data-fusion` flagged as a risk in `../../gungnir-capabilities.md` §9 | GAP-013, GAP-014 |
 | CAP-2.4 Dense groups | full | none | `gungnir-rfs` PHD/CPHD and LMB traits | GAP-015 |
@@ -33,7 +33,7 @@ every part of the capability; implementation is what remains.
 | CAP-2.7 Global identity | full | partial | `gungnir-identity` resolver with lineage; cross-session correlation is an `../../../ARCHITECTURE.md` §10 item | GAP-019, GAP-069 |
 | CAP-2.8 Predict trajectory and approach | full | partial | `gungnir-assessment` scores closing speed to one point; trajectory prediction and closest point of approach are not designed; a component is now named for every part of it by DN-02 (`../../design/`, first draft 2026-09-05) | GAP-020 |
 | CAP-2.9 Anomalies | full | none | Alerts and correlation exist in `gungnir-observability`; no designated home for anomaly rules; plan 09 ML-04 for learned detection; a component is now named for every part of it by DN-15 (`../../design/`, first draft 2026-09-05) | GAP-021, GAP-080 |
-| CAP-2.10 Terrain and map context | full | partial | `gungnir-data` loaders, `gungnir-data-fusion`, `gungnir-geo` layers, `gungnir-viewport3d` scene | GAP-014, GAP-022, GAP-023, GAP-024, GAP-098 |
+| CAP-2.10 Terrain and map context | full | partial | `gungnir-data` loaders, `gungnir-data-fusion`, `gungnir-geo` layers, `gungnir-viewport3d` scene | GAP-014, GAP-022, GAP-023, GAP-024, GAP-098, GAP-102 |
 | CAP-2.11 Geometric questions | full | full | `gungnir-analytics` implemented and tested | none |
 | CAP-2.12 Pattern of life and order of battle | full | partial | Entities with lineage and reports over journals; collection requirements and the tasking concurrence are built as of 2026-09-05 (GAP-005), with the lifecycle on the event bus; no designed pattern-of-life or order-of-battle product (GAP-019); a component is now named for every part of it by DN-11 and DN-19 (`../../design/`) | GAP-005, GAP-025 |
 | CAP-3.1 Defended-asset list | full | none | Not in the `gungnir-config` schema; `gungnir-assessment` takes one protected point; a component is now named for every part of it by DN-01 (`../../design/`, first draft 2026-09-05) | GAP-026, GAP-073 |

@@ -55,3 +55,13 @@ keyring.workspace = true
 # it wraps instead. A normal dependency for that reason, not a test-only one; its tests
 # reach the same crate's always-on `mock` module. See the workspace manifest's comment.
 keyring-core.workspace = true
+# D-42, GAP-084: the cloud node's `ManagedService` custody profile (DN-22 amendment 5,
+# §14). The SDK clients are async and `KeyProvider` is not, so `managed_service.rs` owns a
+# thread with its own runtime and both backends sit behind the `CloudKeyService` seam a
+# test fake also implements. See the workspace manifest for the feature choices.
+aws-config.workspace = true
+aws-sdk-kms.workspace = true
+azure_core.workspace = true
+azure_identity.workspace = true
+azure_security_keyvault_keys.workspace = true
+tokio.workspace = true

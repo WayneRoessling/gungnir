@@ -302,9 +302,13 @@ signing key, which is `GUNGNIR_TOKEN_KEY` and DN-22's business. It does not crea
 first account automatically at start-up: a node that provisions itself is a node with a
 default credential.
 
-## 11. Amendment 2 (2026-09-08): the operating system's keystore for a node's own accounts
+## 11. Amendment 2 (2026-09-08, **signed by the owner the same day**): the operating system's keystore for a node's own accounts
 
-**Written and gated, not signed.**
+**Human-owned; signed by the owner 2026-09-08, together with DN-22 §13's OS-keystore
+mechanism and item 111's TLS-identity generalisation -- one review over the whole
+mechanism and its four services.** The owner's review found and closed a first-run race
+in `os_keystore::ensure_secret` before signing (DN-22 §13 records the fix); this
+amendment shares that helper and the fix applies here too.
 
 Amendment 1 gave the node a way to write its account file; that file is still plaintext
 JSON with argon2-hashed passphrases, protected only by whatever the platform's file

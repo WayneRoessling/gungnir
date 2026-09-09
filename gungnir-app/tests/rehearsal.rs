@@ -265,3 +265,248 @@ fn a_node_backed_baseline_refuses_a_rehearsal_and_a_bad_seed_is_named() {
     ));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn t_039_is_not_stale_before_65_s_and_is_stale_after() {
+    // US-03's card reads "the seed makes T-039 stale 20 s in", the 20 s being measured
+    // from P-1183 appearing at 45 s -- so 65 s, corrected 2026-09-08 from an earlier
+    // 80 s that missed the card by 35 s. The walk above checks staleness at 85 s only,
+    // which any `stale_after_s` at or below 85 satisfies: it would not have failed on
+    // the 80 s the card never wanted, and so does not pin the fix it was written for.
+    // Bracketing the transition does. Its own state, so the ticks it adds cannot
+    // perturb the queue counts the main walk asserts.
+    let (mut state, dir) = desktop("stale");
+    let (seed, hash) = rehearsal::load_seed(&testdata("round-1-seed.json")).expect("seed loads");
+    rehearsal::install(&mut state, seed, hash).expect("installed");
+    let t39_is_stale = |state: &AppState| {
+        state
+            .tracking
+            .tracks()
+            .iter()
+            .find(|t| t.id.0 == 39)
+            .expect("T-039 is present throughout")
+            .quality
+            .is_stale
+    };
+
+    // The seed's schedule runs from the *first frame*, not from `install`
+    // (`RehearsalPicture::elapsed` captures its origin on the first `poll`), so the
+    // session has to be started at 0 before any later time means what the card says.
+    at(&mut state, 0.0);
+    at(&mut state, 64.0);
+    assert!(
+        !t39_is_stale(&state),
+        "T-039 must still be fresh at 64 s: the stale label is the trigger US-03's \
+         clock starts on, and one that fires before P-1183 has been on screen for 20 s \
+         measures a different task than the card describes"
+    );
+    at(&mut state, 66.0);
+    assert!(
+        t39_is_stale(&state),
+        "T-039 must be stale by 66 s (65 s after it appears at at_s 0, which is 20 s \
+         after P-1183 appears at 45 s)"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_round_1_baseline_gives_pn_16_a_laydown_pair_us_15_can_compare() {
+    // US-15's card has the planner read the laydowns' coverage off PN-16's table and say
+    // which option changes it. Two things had to be true before it could, and both are
+    // scenario content rather than code, so both are pinned here.
+    //
+    // 1. `planning_rows` returns `NotComputed` for every row when the baseline declares
+    //    no approach to evaluate along, and round-1.json declared none until 2026-09-08
+    //    -- the whole table read "not computed". The `approaches` section added that day
+    //    is what makes these rows `Computed`.
+    // 2. PN-16's coverage is a function of a laydown's *sensor* placements alone
+    //    (`laydown_coverage_volumes`), and until 2026-09-08 the only alternative `b`
+    //    moved a battery, so its difference column read exactly `0.0` and the card asked
+    //    for a difference that could not exist. `c` is the laydown that makes the pair
+    //    a comparable one: the same two radars, one of them re-sited.
+    //
+    // The three rows are asserted individually and by their relationship. A pair whose
+    // coverage cannot differ is the exact failure this scenario was changed to remove,
+    // so `c`'s delta being non-zero is asserted in its own right and not merely implied
+    // by the metre figures.
+    use gungnir_ui::panels::planning::LaydownCoverage;
+
+    let (state, dir) = desktop("coverage");
+    let gungnir_app::sustainment::PlanningRows::Rows(rows) =
+        gungnir_app::sustainment::planning_rows(&state)
+    else {
+        panic!("round-1.json declares three laydowns, so PN-16 has rows to draw");
+    };
+    let read = |id: &str| -> (usize, f64, Option<f64>) {
+        let row = rows
+            .iter()
+            .find(|r| r.id.0 == id)
+            .unwrap_or_else(|| panic!("round-1.json declares laydown {id:?}"));
+        let LaydownCoverage::Computed {
+            gap_segments,
+            uncovered_m,
+            delta_uncovered_m,
+        } = &row.coverage
+        else {
+            panic!(
+                "laydown {id:?} has no computed coverage, so US-15's card cannot be run \
+                 against this baseline: {:?}",
+                row.coverage
+            );
+        };
+        (*gap_segments, *uncovered_m, *delta_uncovered_m)
+    };
+    assert_eq!(rows.len(), 3, "`current`, `b` and `c`");
+
+    // Measured against the declared upper Vell approach, not chosen. The axis runs
+    // ~24 km out from the estuary; with both radars sited as the deployment stands, its
+    // outer 7 000 m is seen by nothing and a further stretch by one radar only.
+    let (segments, uncovered, delta) = read("current");
+    assert_eq!(segments, 2);
+    assert!((uncovered - 7000.0).abs() < 1.0, "current {uncovered} m");
+    assert_eq!(
+        delta, None,
+        "the current laydown is what the others differ from"
+    );
+
+    // **`b`'s zero is kept, and kept deliberately.** It moves the area-layer battery and
+    // nothing else, so it reads "same as today" -- which is a true answer about what the
+    // column measures, and the contrast that makes `c`'s number mean something. If
+    // someone gives `b` a sensor of its own, this fails and the card's own text about
+    // accounting for the zero has to change with it.
+    let (segments, uncovered, delta) = read("b");
+    assert_eq!(segments, 2);
+    assert!((uncovered - 7000.0).abs() < 1.0, "b {uncovered} m");
+    assert_eq!(
+        delta,
+        Some(0.0),
+        "`b` differs from `current` only in where a battery stands, which coverage does \
+         not read"
+    );
+
+    // **`c` is the pair US-15 compares, and this is the assertion that keeps it one.**
+    // It re-sites S2 10 km up the declared axis: the dark stretch falls from 7 000 m to
+    // 1 750 m, so the difference column reads "5250 m less gap than today". A regression
+    // that put S2 back where `current` has it, or anywhere its coverage of this axis
+    // matched, would make `delta` zero again and fail here.
+    let (segments, uncovered, delta) = read("c");
+    assert_eq!(segments, 2);
+    assert!((uncovered - 1750.0).abs() < 1.0, "c {uncovered} m");
+    let delta = delta.expect("`c` is not the current laydown, so it has a difference");
+    assert!(
+        (delta + 5250.0).abs() < 1.0,
+        "`c` should read 5250 m less uncovered approach than `current`, not {delta}"
+    );
+    assert!(
+        delta != 0.0,
+        "a laydown pair whose coverage cannot differ is what US-15's card could not be \
+         run against; `c` exists to differ"
+    );
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn moving_round_1s_forward_radar_trades_redundancy_and_does_not_create_coverage() {
+    // **`c`'s gain is not free, and the panel's own columns do not show what it costs.**
+    // PN-16 reports uncovered metres and a segment count; it does not report how much of
+    // the approach one radar sees alone. The uncovered metres `c` buys come out of the
+    // stretch both radars see together rather than out of thin air: forward-siting
+    // converts dark approach into single-sensor approach.
+    //
+    // Its own test rather than a tail on the row assertions above, because it is a
+    // different claim -- that one about what US-15 reads, this one about what US-15 is
+    // not shown. Asserted at all because `SOURCE.md`, the session document and the gap
+    // register all quote these figures, and a scenario edit that turned `c` into a free
+    // win would otherwise leave three documents describing a trade that no longer
+    // exists.
+    //
+    // Volumes are built exactly as `sustainment::laydown_coverage_volumes` builds them
+    // -- sensors that search or track, placed by the laydown, ranged by the baseline --
+    // which is itself the finding this scenario rests on: coverage reads placements and
+    // nothing else about a laydown.
+    let (state, dir) = desktop("trade");
+    let frame = gungnir_app::sustainment::local_frame(&state).expect("round-1 declares an origin");
+    let routes: Vec<Vec<[f64; 3]>> = state
+        .config
+        .approaches
+        .iter()
+        .map(|a| {
+            a.points
+                .iter()
+                .map(|[lat_rad, lon_rad, alt_m]| {
+                    frame.to_enu(gungnir_model::Geodetic {
+                        lat_rad: *lat_rad,
+                        lon_rad: *lon_rad,
+                        alt_m: *alt_m,
+                    })
+                })
+                .collect()
+        })
+        .collect();
+    let approaches: Vec<&[[f64; 3]]> = routes.iter().map(Vec::as_slice).collect();
+    let single_sensor_m = |id: &str| -> f64 {
+        let laydown = state
+            .config
+            .laydowns
+            .iter()
+            .find(|l| l.id.0 == id)
+            .unwrap_or_else(|| panic!("laydown {id:?}"));
+        let volumes: Vec<(gungnir_model::SensorId, gungnir_analytics::CoverageVolume)> = laydown
+            .sensors
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s.mode,
+                    gungnir_model::SensorMode::Search | gungnir_model::SensorMode::Track
+                )
+            })
+            .map(|s| {
+                let max_range_m = state
+                    .config
+                    .sensors
+                    .iter()
+                    .find(|d| d.id == s.sensor.0)
+                    .expect("a laydown may only place a declared sensor")
+                    .max_range_m;
+                (
+                    s.sensor,
+                    gungnir_analytics::CoverageVolume {
+                        sensor_enu: s.position_enu,
+                        max_range_m,
+                        min_elevation_rad: state.config.analytics.coverage_min_elevation_rad,
+                    },
+                )
+            })
+            .collect();
+        gungnir_analytics::combined_coverage(
+            &volumes,
+            &gungnir_analytics::FlatTerrainLineOfSight,
+            &approaches,
+            gungnir_analytics::CoverageParameters {
+                sample_spacing_m: state.config.analytics.coverage_sample_spacing_m,
+                terrain_masking_applied: false,
+            },
+        )
+        .gap_length_m(gungnir_analytics::GapSeverity::SingleSensor)
+    };
+    let (current_single, c_single) = (single_sensor_m("current"), single_sensor_m("c"));
+    assert!(
+        (current_single - 2500.0).abs() < 1.0,
+        "current single-sensor {current_single} m"
+    );
+    assert!(
+        (c_single - 7750.0).abs() < 1.0,
+        "c single-sensor {c_single} m"
+    );
+    // 7 000 + 2 500 and 1 750 + 7 750: the length of the axis the two radars do *not*
+    // see together is the same either way, because the harbour radar's own reach lies
+    // inside the forward radar's in both sitings. That equality is the trade stated as a
+    // number, and it is why `c` is an option rather than an improvement.
+    assert!(
+        ((7000.0 + current_single) - (1750.0 + c_single)).abs() < 1.0,
+        "moving a radar should redistribute the approach neither radar pair covers \
+         twice, not create coverage: {current_single} vs {c_single}"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}

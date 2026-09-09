@@ -183,7 +183,7 @@ impl SensorPositions {
     /// becomes one metre east, so every sensor lands within a couple of metres of the ENU
     /// origin, every bearing is drawn from there instead of from the sensor, and every
     /// range-azimuth-elevation report is placed beside the origin rather than beside the
-    /// thing that saw it. Both binaries did exactly that from 2026-09-07 until GAP-101
+    /// thing that saw it. Both binaries did exactly that from 2026-09-07 until GAP-103
     /// closed it, which is why this takes a [`gungnir_model::Geodetic`] and not a bare
     /// `[f64; 3]`: the mistake is now a type error rather than a silent one.
     ///

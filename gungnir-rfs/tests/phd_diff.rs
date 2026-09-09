@@ -21,9 +21,34 @@
 //! definition. The clamp makes the library under-report cardinality exactly when merging
 //! combines past one target, which is why the gap grows with the number of targets.
 //!
-//! A second difference, on the first scan and before any weight approaches one, is **not
-//! yet explained**, and this file says so rather than implying the investigation
-//! finished.
+//! **The first-scan difference is explained as of 2026-09-08, and the dominant half of it
+//! was the generator's own fault.** It used to be recorded here as untraced. Two
+//! conventions:
+//!
+//! 1. The generator stamped Stone Soup's birth components one scan in the past, and
+//!    `DistanceHypothesiser` predicts every component to the detection's timestamp -- so
+//!    each birth was predicted forward by a second before the update saw it, entering with
+//!    `diag(P) = [500.333, 401, ...]` instead of the stated `[100, 400, ...]`. Vo--Ma adds
+//!    the birth intensity to the already-predicted intensity and does not predict it. This
+//!    was a transcription error against the library's interface, of the same species as
+//!    the `mapping=(0, 1, 2)` one the generator already records, and it is **fixed**:
+//!    births are stamped at the scan's own timestamp, a zero predict interval.
+//! 2. Stone Soup applies `prob_survival` inside the update rather than in the predict, and
+//!    exempts only components carrying its `TaggedWeightedGaussianState.BIRTH` sentinel --
+//!    which these tags are not. That is a real convention difference and is **not** fixed:
+//!    setting the sentinel makes Stone Soup drop the birth's missed-detection component
+//!    entirely, which is a third convention and not Vo--Ma's either.
+//!
+//! Adopting both conventions in the reference collapses the first-scan cardinality gap
+//! from 0.281 / 0.842 / 1.684 to 1.11e-16 / 4.44e-16 / 8.88e-16 across the three cases,
+//! with the worst component-wise mean difference exactly zero. Scans 1 and 2 then agree to
+//! machine epsilon and the divergence from scan 3 is the merge clamp above, so the two
+//! documented causes account for the whole disagreement and none is outstanding.
+//!
+//! **Explained is not agreed.** The clamp is still wrong for a PHD intensity and
+//! convention 2 is still there, so the row stays gated against the textbook recursion; the
+//! fixture's recorded disagreement fell from 0.842 to 0.139 on the worst case because a
+//! transcription error left the comparison, not because the library became an oracle.
 //!
 //! So the row is gated against the Vo--Ma Gaussian-mixture PHD recursion written out in
 //! numpy in the generator. §2's Oracle column already reads "hand-derived" for two other
@@ -80,6 +105,7 @@ struct Case {
     probes: Vec<Vec<f64>>,
     per_scan: Vec<Scan>,
     stonesoup_cardinality_disagreement: Option<f64>,
+    stonesoup_first_scan_disagreement: Option<f64>,
 }
 
 #[derive(serde::Deserialize)]
@@ -87,7 +113,7 @@ struct Fixture {
     oracle: String,
     stonesoup_status: String,
     stonesoup_confirmed_defect: String,
-    stonesoup_unexplained: String,
+    stonesoup_first_scan_explained: String,
     settings: Settings,
     cases: Vec<Case>,
 }
@@ -250,9 +276,29 @@ fn the_stone_soup_disagreement_is_recorded_rather_than_forgotten() {
         "the confirmed cause must be named: {}",
         fixture.stonesoup_confirmed_defect
     );
+    // Stricter than the assertion this replaced, which only required that *something*
+    // was recorded as unexplained. Now that the cause is known, the record has to name
+    // both halves of it -- the birth-timestamp transcription error and the prob_survival
+    // convention -- or a regeneration could quietly reduce it to "explained" with nothing
+    // behind the word.
+    for required in [
+        "timestamp",
+        "prob_survival",
+        "DistanceHypothesiser",
+        "Vo-Ma",
+    ] {
+        assert!(
+            fixture.stonesoup_first_scan_explained.contains(required),
+            "the first-scan explanation must still name {required}: {}",
+            fixture.stonesoup_first_scan_explained
+        );
+    }
     assert!(
-        !fixture.stonesoup_unexplained.is_empty(),
-        "the part that is not understood must be stated, not omitted"
+        fixture
+            .cases
+            .iter()
+            .all(|c| c.stonesoup_first_scan_disagreement.is_some()),
+        "every case must record what the first-scan gap actually is now"
     );
     assert!(
         fixture.cases.iter().any(|c| c

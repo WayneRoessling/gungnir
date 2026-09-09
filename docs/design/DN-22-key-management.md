@@ -1,6 +1,6 @@
 # DN-22 Key custody, rotation, and escrow
 
-Closes GAP-084, filed by plan 11 finding F-3. Status: **signed off by the owner 2026-09-05**, with **amendment 1 (§9) signed the same day** after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11), signed by the owner 2026-09-06**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12), signed by the owner 2026-09-06**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08, written and gated, not signed**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in.
+Closes GAP-084, filed by plan 11 finding F-3. Status: **signed off by the owner 2026-09-05**, with **amendment 1 (§9) signed the same day** after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11), signed by the owner 2026-09-06**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12), signed by the owner 2026-09-06**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08, signed by the owner the same day**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. The owner's review found a first-run race in the secret-generation helper before signing; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08, written and gated, not signed**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over.
 **Human-owned and signed**: `gungnir-security` is a low-trust crate and this note decides
 who can read what. The owner signed it on 2026-09-05.
 
@@ -352,7 +352,7 @@ does what it says and a signature on a design says the design is the right one; 
 the first as though it were the second is how a note nobody agreed to becomes the thing
 later work cites.
 
-## 13. Amendment 4 -- the operating system's keystore, the row §5 actually named (2026-09-08, **written and gated, not signed**)
+## 13. Amendment 4 -- the operating system's keystore, the row §5 actually named (2026-09-08, **signed by the owner the same day**)
 
 **Raised by D-39.** §5's disconnected row never named a passphrase-sealed file; it named
 "the operating system's keystore, unlocked at operator login." Amendment 3 built the
@@ -390,21 +390,285 @@ same machine, exactly as `dir` already distinguishes their keystore files.
 `keyring-core`'s always-on mock store: a first run generates and stores a secret, a
 second returns the one already stored, two generated secrets differ, and a fault
 distinct from "nothing stored yet" is reported rather than read as first-run and
-overwritten. `gungnir-security/tests/os_keystore.rs` and
+overwritten. **Found in review and closed the same day (2026-09-08), before signing:**
+a first-run race where a second writer's `set_password` lands between this process's
+own write and its return -- `ensure_secret` now re-reads the store rather than trusting
+what it generated, so the loser adopts the winner's secret instead of sealing its file
+under one the store no longer holds; staged directly against that interleaving, and
+against a read-back that itself cannot answer (a fault, not a silent fall-through to
+the generated value). `gungnir-security/tests/os_keystore.rs` and
 `gungnir-app/tests/encryption_status.rs` each carry one test against whatever backend
 the machine running them actually has, honest either way: where one is reachable the
 secret round-trips for real and the entry is cleaned up; where none is reachable (a
 headless Linux CI runner with no Secret Service session) the function's own error path
 is what fires, which is §5's fallback and not a gap in coverage.
 
-**Human-owned; written and gated, not signed.** The mechanism this amendment describes
+**Human-owned; signed by the owner 2026-09-08, together with item 104's node account
+store and item 111's TLS-identity generalisation -- one review over the whole
+OS-keystore mechanism and its four services.** The mechanism this amendment describes
 and the code behind it (`gungnir-security/src/os_keystore.rs`,
 `PersistentKeyProvider::open_or_create_via_os_keystore`, and the wiring in
-`gungnir-app/src/state.rs`) are put to the owner together rather than kept apart the way
+`gungnir-app/src/state.rs`) were put to the owner together rather than kept apart the way
 amendment 3's design and code were: amendment 3 was a real design decision the owner
 could have taken differently, where this one is D-39 with no room left for a different
 shape once the crate was chosen -- the string source changes, the reviewed and signed
 custody model does not.
+
+## 14. Amendment 5 -- `ManagedService`, the cloud node's row, designed (2026-09-08, **written and gated, not signed**)
+
+**Raised by D-42.** §5's table has three rows and until now only two of them had a
+design. The cloud row says "a managed key service, **off-host**. The node process may
+`seal` and `unseal` and never holds material", and that sentence is the whole of it:
+nothing says what a `seal` costs when the key is in another company's hardware, what
+happens when the network to it is down, or what `may_destroy` means when the destroy
+button is in somebody else's console. D-42 admitted the crates (`aws-sdk-kms`;
+`azure_security_keyvault_keys` with `azure_identity`) and said in its own text that a
+design note was owed before code. This is that note.
+
+**What is categorically different about this profile.** In every other row a key is
+held *inside* this process -- minted in memory, or unwrapped from a file or the
+operating system's keystore into memory. Here the master key is in a hardware security
+module this deployment does not own and cannot read, and reaching it is a network round
+trip. That single fact decides everything below.
+
+### a. Envelope encryption, because a round trip per envelope cannot meet the budget
+
+The choice is between calling the key service for **every** `seal` and `unseal`, or
+having it wrap a data key that then does the bulk work locally. `../performance-budgets.md`
+settles it, and the numbers are not close:
+
+- **Journal append**: under 1 ms for 50 envelopes -- **20 microseconds per envelope**.
+- **Journal durability**: an accepted envelope is on disk within 100 ms, and the node
+  profile fsyncs **every** envelope (D-04).
+
+A call to a regional key service is a TLS round trip measured in tens of milliseconds.
+Per envelope that is roughly a thousand times the append budget and it consumes the
+entire durability budget in one network hop, before the fsync that budget is actually
+about. It would also make the journal -- the system of record -- unwritable whenever the
+link is slow, which is precisely the condition a deployment most wants a record of.
+
+**So: the key service wraps, and this process encrypts.** The provider holds an
+AES-256-GCM data key, `seal` and `unseal` are local and use amendment 1 (b)'s sealed form
+unchanged, and the key service is called **once at start and once per rotation** and at
+no other time. A journal written under this profile is byte-identical in shape to one
+written under any other, which is what lets the replay and recovery tooling stay one
+implementation.
+
+**What is conceded by saying so.** The data key **is** in this process's memory; only
+the master key is not. That is weaker than the literal reading of §5's "never holds
+material", and this amendment corrects §5 rather than pretending to satisfy it: what
+the cloud row buys is that key material is **never persisted here and never recoverable
+from this host's disk**, because the only thing written down is a blob that the key
+service alone can open. A process-memory disclosure on a running node reads the data
+key either way, in this profile as in every other; that is a different threat and no
+custody model in this note defends against it.
+
+### b. Signing is the exception, and stays in the service
+
+`sign` is not on any per-frame path. `TransportIdentity` signs once per TLS handshake,
+and this is a node with few long-lived peers; `BaselineSigning` signs when an operator
+applies a baseline. Amendment 1 (a) already priced exactly this -- "a signature per
+handshake means a round trip to a managed service per connection in the cloud profile...
+acceptable for a node with few long-lived peers" -- and that pricing holds.
+
+So the split is by frequency, and stating the rule that way rather than by key type is
+deliberate:
+
+| Purpose | Where the operation happens | Cost |
+|---|---|---|
+| `JournalAtRest` | Locally, under a data key the service wrapped | One round trip at start, one per rotation |
+| `TransportIdentity` | In the key service; the private half never leaves it | One round trip per handshake |
+| `BaselineSigning` | In the key service; the private half never leaves it | One round trip per baseline signed |
+
+**The two signing purposes therefore keep the property §5 wanted and the journal
+purpose does not**, and the note says which is which rather than claiming both.
+
+### c. The mechanism reuses amendment 3's file, the way amendment 4 did
+
+Amendment 4's shape applies again, and this is the second time it has: `PersistentKeyProvider`
+already seals a key snapshot into one file under a 32-byte wrapping key that argon2
+derives from a string, and amendment 4 changed only where that string comes from. This
+amendment changes it once more. The string is **32 random bytes, hex-encoded, that the
+key service wraps**; the wrapped blob is written beside the keystore as
+`keystore.kms-wrapped`, and at every later start it is handed back to the service to
+unwrap. One file format, one derivation, one set of tests, for a third source.
+
+As in amendment 4, argon2's cost against a high-entropy generated secret buys nothing
+beyond what it already buys against a human passphrase; it is fed through unchanged so
+there is no second code path.
+
+**Why a wrapped 32-byte secret rather than wrapping the snapshot directly.** AWS KMS
+`Encrypt` caps its plaintext at 4096 bytes, and a snapshot grows with every rotation --
+a deployment would have hit that ceiling silently, years in, with no way to open its own
+keystore. Wrapping one fixed-size secret has no ceiling.
+
+### d. When the service is unreachable
+
+§7's rule governs and needs no exception: an unavailable keystore yields a **stated
+unencrypted state reported in health, never a claimed-but-absent encryption**. This
+profile reports through the same `EncryptionStatus` three-state machinery the desktop
+already uses, with no new state:
+
+- **At start, unreachable** -- no credential, no route, or the service's own policy
+  denies -- is `UnavailableWritingPlaintext { reason }`, carrying what the service
+  actually said. The node starts and journals in the clear, exactly as a desktop does
+  when its keystore will not open.
+- **Open** is `Active { provider: "managed-service" }`.
+- **Never configured** is `NotConfigured`, unchanged.
+
+**Unreachable *after* start is deliberately not a fourth state, and the reason is worth
+recording**: because the data key is already in this process, the journal keeps sealing
+through an outage. That is a real availability property of (a)'s choice and not an
+oversight -- a design that called the service per envelope would have stopped
+journalling the moment the link went, which for a system of record is the worst possible
+moment. What does fail during an outage is `sign`: an established connection continues,
+a **new** handshake cannot be made, and the node refuses it by name rather than serving
+without one.
+
+### e. Rotation, retirement, destruction: what carries over and what does not
+
+**Rotation carries over unchanged.** A rotation mints a new data key, retires the
+previous one, wraps the new secret, and rewrites nothing -- §5's rule and AP-08's. Old
+material still names the version that protected it in amendment 1 (b)'s header.
+
+**Rotation of the *master* key is the service's, not this system's**, and the two must
+not be confused. AWS KMS rotates the backing key under a stable ARN and a blob wrapped
+before a rotation still opens after it, so this system never sees the event. Azure Key
+Vault mints a new key *version* instead, so the wrapped blob records the version it was
+wrapped under and is opened with that version. Neither is something this system
+initiates or audits; the cloud account's own trail holds it.
+
+**Retirement carries over.** A retired data key still reads and does not write.
+
+**Destruction does not carry over, and this is the one place DN-22's machinery genuinely
+fails to reach.** §5 says the system "refuses to destroy a key that protects retained
+data without an explicit, recorded override naming what will become unreadable", and
+calls an accidental destruction that orphans a year of journals "the worst outcome in
+this note". `may_destroy` enforces that, and for this profile **it cannot**: deleting
+the master key is an action in the cloud provider's console or API, taken by whoever
+holds that account, and this system can neither prevent it, require an override for it,
+nor observe that it happened until an unwrap fails. Saying so plainly is the answer;
+pretending `may_destroy` covers it would be worse than the gap.
+
+What is left in its place is not nothing, but it is not this system's either: both
+services impose a mandatory waiting period before a key is actually gone (AWS KMS
+schedules deletion 7 to 30 days out; Azure Key Vault offers soft-delete with purge
+protection), and configuring those is a deployment act outside this baseline. **The
+deployment guidance is therefore part of this design and not an afterthought**: a
+`ManagedService` deployment that has not enabled its provider's deletion protection has
+no equivalent of `may_destroy` at all.
+
+### f. Escrow: required for this profile, and only for the journal
+
+§11's escrow wraps a journal data key to the security officer's **public** key by ECDH
+over P-256. For this profile it works **unchanged**, and that is a direct consequence of
+(a): the data key is in process, so there is something to wrap. Had the note chosen a
+call per envelope there would have been nothing to escrow at all.
+
+**Escrow of the two signing keys does not apply and there is nothing to build.** Their
+private halves never enter this process, so this system cannot wrap them to anybody.
+Recovering a signing key is the cloud account's own affair. That is a real reduction in
+what §11 covers for this profile and it is stated rather than left to be discovered.
+
+**This amendment adds one rule the other profiles do not carry: a `ManagedService`
+baseline with no `security.escrow` section is refused at validation.** §11 deliberately
+allows a deployment to escrow nothing and have PN-09 say so, and for every other profile
+that stays true. This profile is the exception because (e) is: it is the only one where
+the safeguard against the note's own worst outcome is **absent rather than merely
+unused**, and the escrow record -- wrapped to a key the cloud account does not hold and
+stored beside the journal -- is the only thing that survives the master key being
+deleted. Requiring it turns "the worst outcome in this note" from unguarded back into
+guarded. **This is the amendment's own new rule, not a reading of an existing one**, and
+it is the part of this note most worth an owner disagreeing with.
+
+### g. Configuration: a region, an endpoint, a key, and never a credential
+
+§6's rule is unchanged and this profile is the hardest test of it, because a cloud
+client is exactly the place an access key would otherwise be pasted. The baseline names:
+
+```
+security.key_provider:
+  kind: managed-service
+  cloud: aws | azure     # which service; never inferred from the endpoint's shape
+  endpoint: <AWS region, or the Azure vault URL>
+  key_id: <AWS key ARN or alias, or the Azure key name>
+```
+
+**`cloud` is named and not inferred.** A region string and a vault URL are
+distinguishable by eye, and guessing between two key services from the shape of a string
+is the kind of confidently-wrong inference this system forbids everywhere else.
+
+**`key_id` replaces the earlier field name `key_ring`**, which was a term from Google
+Cloud's key hierarchy -- a service D-42 explicitly put out of scope. AWS has a key ARN
+and Azure a key name; neither has a ring. The variant has never been constructible, so
+nothing is migrated.
+
+**How the process authenticates instead.** Neither cloud takes a credential from this
+baseline:
+
+- **AWS**: the SDK's default credential chain -- environment, web identity token (an
+  EKS service account), container credentials, and the EC2 instance metadata service.
+  In a cloud deployment that resolves to the instance's or pod's own IAM role.
+- **Azure**: `azure_identity`'s **`ManagedIdentityCredential`**, which resolves to the
+  managed identity assigned to the host -- system-assigned by default, and a
+  user-assigned one where the deployment says so. **Not `DefaultAzureCredential`, which
+  no longer exists**: at 1.0 the Azure SDK split that chain into a developer-tools
+  credential and this one, and a deployment wants only this one. Reaching for the old
+  name would have compiled against nothing; keeping the chain that falls back to a
+  developer's own signed-in Azure CLI session would have been worse than that, because
+  it would work on an engineer's machine and fail on the node.
+
+Both are the same idea and it is the idea §6 was reaching for: the deployment's identity
+is a property of where the process is running, granted by the cloud account, and never a
+string in a file this system reads. A baseline therefore still holds no secret, and
+validation's existing key-material check still refuses one pasted into `endpoint` or
+`key_id`.
+
+### h. `gungnir-node` only
+
+The mirror of amendment 4's last rule. §5 assigns this row to the **cloud node**;
+`gungnir-node` gains the arm and `gungnir-app` keeps refusing it by name -- with the
+reason corrected from "designed and not built", which it no longer is, to what it
+actually is now: the cloud node's custody row, not the desktop's. A connected desktop
+wanting a cloud key service is a change to §5's table and therefore a later question,
+not this amendment's to take.
+
+### i. Verification, and what it honestly does not cover
+
+The key service sits behind a `CloudKeyService` seam -- wrap, unwrap, sign, describe --
+so what can be tested without a cloud account is tested against a fake that implements
+it, and what cannot is named:
+
+**Genuinely verified, against a fake:** that `seal` and `unseal` make **no** call to the
+service at all, counted rather than asserted in prose, which is (a)'s whole claim; that
+the wrapped secret round-trips so a restart opens the same keystore; that a service
+unreachable at start yields `UnavailableWritingPlaintext` carrying the service's own
+reason and never a claimed encryption; that sealing **continues** through an outage that
+begins after start, and `sign` **fails** through the same outage, per (d); that a
+rotation leaves earlier material readable; that escrow wrapping still works for the
+journal key; that a wrapped secret which does not open, and a keystore whose wrapped
+secret has gone missing, are each refused and **named** rather than quietly re-created as
+a first run; and that a baseline naming this profile without an escrow section is
+refused, per (f).
+
+**Not verified, and it must not be claimed otherwise:** no call has been made to a real
+AWS KMS or Azure Key Vault. The two SDK-backed implementations are compile-verified and
+carry `#[ignore]`d integration tests that would run against real credentials if a
+deployment had any. Whether a real service's error text, latency, wrapped-blob size and
+credential-chain behaviour match what the fake models is **unverified and needs a cloud
+account**. This follows the precedent amendment 4 set for the OS keystore -- honest
+either way -- with the difference stated rather than glossed: there, the real backend
+was reachable on the machine running the suite and half the tests actually used it; here
+no real backend is reachable at all, so the real path has exactly the coverage a
+compiler gives it and no more.
+
+**Human-owned; written and gated, not signed.** The design here and the code behind it
+(`gungnir-security/src/managed_service.rs`, `PersistentKeyProvider::open_or_create_via_managed_service`,
+and the arm in `gungnir-node/src/main.rs`) are put to the owner together, as amendment 4
+was. Unlike amendment 4, this one had real room for a different shape -- (a)'s choice
+between a call per envelope and envelope encryption, and (f)'s new mandatory-escrow rule
+are both decisions the owner could take differently -- so a signature here is a
+signature on a design, not only on a conformance.
 
 ## Traceability
 

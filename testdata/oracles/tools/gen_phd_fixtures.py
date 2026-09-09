@@ -36,10 +36,77 @@ weight 2 by definition. The clamp makes the library under-report cardinality exa
 merging combines past one target, which is why the disagreement grows with the number of
 targets in the scene.
 
-A SECOND DIFFERENCE IS NOT YET EXPLAINED. The two also disagree on the first scan, before
-any weight approaches one. That is stated here because it is not understood, and a
-fixture that recorded only the cause that was found would imply the rest had been ruled
-out.
+THE FIRST-SCAN DIFFERENCE IS EXPLAINED AS OF 2026-09-08, AND IT WAS THIS GENERATOR'S
+FAULT. It used to say here that the two also disagreed on the first scan, before any
+weight approaches one, and that the reason was not understood. It is now understood and
+it is two conventions, one of them a transcription error on this side of the comparison.
+
+  (1) THE BIRTHS WERE BEING PREDICTED, WHICH IS NOT THE VO-MA BIRTH MODEL. Vo and Ma's
+      birth intensity is defined at time k and is added to the ALREADY-PREDICTED
+      intensity; it does not itself go through F P F' + Q. `reference_gm_phd` does that
+      correctly. `stonesoup_gm_phd` used to stamp each birth at `timestamp - DT`, and
+      Stone Soup's `DistanceHypothesiser.hypothesise` predicts every component to the
+      detection's timestamp unconditionally (distance.py: `prediction =
+      self.predictor.predict(track, timestamp=timestamp, **kwargs)`), with
+      `KalmanPredictor._predict_over_interval` taking the interval as `timestamp -
+      prior.timestamp`. So the library was handed a birth one scan in the past and duly
+      predicted it forward by a second: it entered the update with diag(P) =
+      [500.333, 401, ...] instead of the stated [100, 400, ...].
+
+      That inflation only reached the WEIGHTS because CLUTTER = 1e-6 is not negligible
+      next to the likelihood here. The birth's likelihood at its own detection fell from
+      4.5432347548e-05 to 5.2732426963e-06, a factor of 8.6, so the detection-associated
+      weight went from 1.726e-05/(1.726e-05 + 1e-06) = 0.9452 to 1.984e-06/(1.984e-06 +
+      1e-06) = 0.6649. With a clutter density of the usual 1e-26 the same error would
+      have been invisible in the weights and would still have been there.
+
+      FIXED BELOW: births are now stamped at the scan's own timestamp, so Stone Soup
+      predicts them over a zero interval and they enter the update with the covariance
+      they were given. Survivors still carry their own (previous) timestamp and are still
+      predicted by DT, which is what Vo-Ma asks for. This is the same species of error as
+      the mapping=(0, 1, 2) one recorded further down, found the same way, and it is
+      recorded rather than silently corrected for the same reason.
+
+  (2) STONE SOUP APPLIES p_S INSIDE THE UPDATE; VO-MA APPLIES IT IN THE PREDICT, BEFORE
+      BIRTHS ARE ADDED. `updater/pointprocess.py` multiplies each detection-associated
+      weight by `self.prob_survival` unless the component's tag is the sentinel
+      `TaggedWeightedGaussianState.BIRTH == 'birth'`, and does the same to the
+      missed-detection weight. This generator tags births "birth-0-0", "birth-0-1" and so
+      on, which are not that sentinel, so the library thins them by p_S where the
+      reference -- applying p_S during predict, before appending births -- does not.
+
+      NOT FIXED, AND DELIBERATELY SO. Setting the tag to the sentinel does not reproduce
+      Vo-Ma either: `pointprocess.py` then drops the birth's missed-detection component
+      entirely, where Vo-Ma keeps it at (1 - p_D) w. That is a third convention, not the
+      reference's. So this one is a genuine and defensible modelling difference between
+      the library and the textbook, and it is documented here rather than tuned away.
+
+  THE EVIDENCE. Re-running the reference recursion with each convention switchable, the
+  scan-1 cardinality gap against Stone Soup goes:
+
+                                   one_target  three_separated  six_reborn
+    shipped reference               0.2805921       0.8417764    1.6835529
+    + births predicted              0.0024357       0.0073072    0.0146143
+    + p_S inside the update         0.2798697       0.8396090    1.6792180
+    + both                          1.11e-16        4.44e-16     8.88e-16
+
+  Matching pre-reduce components optimally (Hungarian) with both conventions adopted, the
+  worst weight difference is 1.11e-16, the worst mean difference is exactly 0.0, and the
+  worst covariance difference is 8.53e-14 on entries of order 500. Verified in the other
+  direction too: stamping the births at the current timestamp makes Stone Soup produce
+  0.9645258792250884 for one_target, bit-identical to the reference carrying convention
+  (2) alone, leaving exactly the 7.2248e-04 that convention accounts for.
+
+  WHAT IS LEFT. With both conventions adopted the two agree to machine epsilon on scans 1
+  AND 2 and diverge from scan 3, where Stone Soup's weight pins at exactly 1.0 while the
+  reference continues 1.024751, 1.038508, 1.042783. That is the merge clamp above. The
+  two documented causes therefore account for the whole disagreement; no third one is
+  outstanding.
+
+  WHY THE ROW IS STILL NOT GATED AGAINST STONE SOUP. Convention (2) and the weight clamp
+  are both still there, and the clamp is still wrong for a PHD intensity. Fixing this
+  generator's half removed a transcription error from the comparison; it did not turn the
+  library into an oracle for this recursion.
 
 WHAT IS AND IS NOT COMPARED. Section 2's method is "same birth/clutter/detection model,
 compare intensity function + cardinality". The intensity function is a mixture, and two
@@ -283,7 +350,16 @@ def stonesoup_gm_phd(scans, births_per_scan):
                         to_stonesoup_cov(np.asarray(p)),
                         weight=w,
                         tag=f"birth-{index}-{tag}",
-                        timestamp=timestamp - datetime.timedelta(seconds=DT),
+                        # THE SCAN'S OWN TIMESTAMP, NOT THE PREVIOUS ONE. The
+                        # hypothesiser predicts every component to `timestamp`, so a
+                        # birth stamped one DT in the past is predicted forward by a
+                        # second before the update ever sees it -- which is not the
+                        # Vo-Ma birth model, where the birth intensity is added to the
+                        # already-predicted intensity and is not itself predicted. A
+                        # zero interval leaves it with the covariance it was given.
+                        # Survivors keep their own (previous) timestamp and are still
+                        # predicted by DT. See the module docstring, cause (1).
+                        timestamp=timestamp,
                     )
                 )
             detection_set = {
@@ -342,10 +418,14 @@ def build_case(name, truth, scan_count, birth_scans):
         )
 
     agreement = None
+    first_scan = None
     if library.get("available"):
         worst = 0.0
-        for mine, theirs in zip(reference, library["per_scan"]):
-            worst = max(worst, abs(sum(c[0] for c in mine) - sum(c[0] for c in theirs)))
+        for scan, (mine, theirs) in enumerate(zip(reference, library["per_scan"])):
+            gap = abs(sum(c[0] for c in mine) - sum(c[0] for c in theirs))
+            if scan == 0:
+                first_scan = float(gap)
+            worst = max(worst, gap)
         agreement = float(worst)
 
     return {
@@ -356,6 +436,7 @@ def build_case(name, truth, scan_count, birth_scans):
         "probes": probes,
         "per_scan": per_scan,
         "stonesoup_cardinality_disagreement": agreement,
+        "stonesoup_first_scan_disagreement": first_scan,
         "stonesoup_reason": library.get("reason"),
     }
 
@@ -372,16 +453,41 @@ def main():
     payload = {
         "oracle": "the textbook Vo-Ma Gaussian-mixture PHD recursion, written out in numpy",
         "stonesoup": "1.9.1",
-        "stonesoup_status": "disagrees; NOT a cross-check. See the module docstring.",
+        "stonesoup_status": (
+            "disagrees; NOT a cross-check. See the module docstring. The disagreement is "
+            "now fully explained -- the merge-weight clamp below, plus a prob_survival "
+            "convention -- but explained is not agreed, and the clamp is still wrong for "
+            "a PHD intensity, so the row stays gated against the textbook recursion."
+        ),
         "stonesoup_confirmed_defect": (
             "GaussianMixtureReducer.merge_components clamps a merged weight to 1.0 "
             "(checked directly: 0.7 + 0.6 merges to 1.0). A PHD weight is an expected "
             "target count, not a probability, so the clamp under-reports cardinality "
             "whenever merging combines past one target."
         ),
-        "stonesoup_unexplained": (
-            "The two also disagree on the first scan, before any weight approaches one. "
-            "That difference has not been traced."
+        "stonesoup_first_scan_explained": (
+            "Explained 2026-09-08; it used to be recorded here as untraced. Two "
+            "conventions, and the dominant one was this generator's own transcription "
+            "error. (1) Births were stamped one DT in the past, and Stone Soup's "
+            "DistanceHypothesiser predicts every component to the detection timestamp, so "
+            "the library predicted each birth forward by a second before updating it -- "
+            "diag(P) = [500.333, 401, ...] instead of the stated [100, 400, ...], the "
+            "likelihood at the detection down by a factor of 8.6, and because CLUTTER=1e-6 "
+            "is not negligible next to that likelihood the weight fell from 0.9452 to "
+            "0.6649. Vo-Ma adds the birth intensity to the already-predicted intensity and "
+            "does not predict it. FIXED: births are now stamped at the scan's own "
+            "timestamp, a zero predict interval. (2) Stone Soup applies prob_survival "
+            "inside the update (updater/pointprocess.py) unless a component carries the "
+            "TaggedWeightedGaussianState.BIRTH sentinel, which these tags are not, so it "
+            "thins births by p_S where the reference applies p_S during predict before "
+            "births are appended. NOT fixed: setting the sentinel makes Stone Soup drop "
+            "the birth's missed-detection component entirely, which is a third convention "
+            "and not Vo-Ma's either. Adopting both conventions in the reference collapses "
+            "the first-scan cardinality gap to 1.11e-16 / 4.44e-16 / 8.88e-16 across the "
+            "three cases, with worst component-wise mean difference exactly 0.0. Scans 1 "
+            "and 2 then agree to machine epsilon and the divergence from scan 3 is the "
+            "merge clamp above, so the two documented causes account for the whole "
+            "disagreement and none is outstanding."
         ),
         "settings": {
             "probability_of_survival": PROB_SURVIVAL,

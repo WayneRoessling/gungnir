@@ -215,7 +215,7 @@ fn a_polar_report_that_would_place_a_detection_nowhere_is_refused() {
     );
 }
 
-/// GAP-101: a sensor's declared geodetic position reaches the map as **metres in the
+/// GAP-103: a sensor's declared geodetic position reaches the map as **metres in the
 /// local ENU frame**, not as the radians it was written in.
 ///
 /// `SensorConfig::position` is `[lat_rad, lon_rad, alt_m]` and this map is ENU metres.

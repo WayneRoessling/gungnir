@@ -20,7 +20,35 @@ bench = false
 [lints]
 workspace = true
 
+[features]
+# Real-world CRS conversion for point-cloud files (GAP-102, D-41). **Off by default,
+# and the reason is a build dependency rather than a preference.** `proj` links
+# `libproj` through `proj-sys`, which needs either a system libproj at >= 9.6.2 found
+# by pkg-config, or cmake plus SQLite3 (headers, library, and the `sqlite3` command
+# line binary, which PROJ's own build runs to generate `proj.db`) to build one from
+# source. A Linux runner gets all of that from `libproj-dev` or from
+# `cmake libsqlite3-dev sqlite3`; a stock Windows developer machine has none of it, and
+# `proj-sys` 0.27's from-source path does not work there in any case (it passes
+# `SQLITE3_INCLUDE_DIR`/`SQLITE3_LIBRARY`, which PROJ 9.6.2's CMake rejects by name in
+# favour of `SQLite3_INCLUDE_DIR`/`SQLite3_LIBRARY`, and names the library
+# `libsqlite3.a`, which is not what MSVC produces). Making this a default dependency
+# would therefore break `cargo check` and `cargo test` for anyone on Windows, which is
+# the platform `release.yml` ships `gungnir-app` for.
+#
+# So the default build reads a file's declared CRS and *refuses by name* to place a
+# file that is not already in the local frame, exactly as the DEM path does; the
+# conversion itself needs this feature. `ci.yml`'s `proj-crs` job installs the native
+# dependencies and runs this feature's tests, so the conversion is gated somewhere real
+# rather than merely compiled.
+#
+# GAP-023 folded the DEM loader's conversion into this same feature rather than keeping
+# the separate `crs-projection` it first shipped under: one `proj` link, one feature,
+# one CI job for both file kinds.
+crs = ["dep:proj"]
+
 [dependencies]
+# Optional: see the `crs` feature above for why this is not a plain dependency.
+proj = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing.workspace = true
 crossbeam-channel.workspace = true

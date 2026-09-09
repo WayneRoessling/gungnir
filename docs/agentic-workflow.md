@@ -119,17 +119,34 @@ core, service layer, productization layer) and `rust-ui-architecture-coding-stan
 plausible-looking filter code that is subtly wrong (for example the wrong Joseph-form
 covariance update). The gates are structural:
 
-1. **Differential testing against a trusted oracle** (`gungnir-oracle`, workflow
-   `oracle-diff.yml`): the same scenario through a hand-verified reference, numerical
-   agreement asserted within the tolerance in `verification-capability-table.md`.
+1. **Differential testing against a trusted oracle** (workflow `oracle-diff.yml`): the
+   same scenario through a hand-verified reference, numerical agreement asserted within
+   the tolerance in `verification-capability-table.md`. The tests live *beside the code
+   they verify* -- 16 `tests/*_diff.rs` targets across the tracking-core crates, reading
+   the oracle output recorded in `testdata/oracles/` -- so each deserializes a fixture
+   straight into its own crate's types rather than into a second definition of them.
+   `gungnir-oracle` was designed as a single central harness for this and never
+   populated (GAP-082); until 2026-09-08 this gate ran that empty crate instead of the
+   suite and compared nothing, which is GAP-061 and not a statement about the suite.
 2. **Property-based invariant testing** (`gungnir-testkit`, `proptest`, runs inside
    `cargo test`): posterior covariance stays PSD, track IDs are never reused while
    active, assignment solutions respect the constraint matrix. Agents write the test
    given an invariant; a human authors the invariant.
 3. **`cargo miri`** (workflow `miri.yml`) on any PR touching `unsafe`.
 4. **`loom`** (workflow `loom.yml`) on `gungnir-fusion-async`: exhaustive interleaving,
-   run against the real Scenario 3 async pipeline rather than a synthetic stress
-   harness.
+   run against the real async pipeline rather than a synthetic stress harness. That
+   crate's cross-task state is two channels and nothing else -- no `Arc<Mutex>` and no
+   atomics anywhere in it or in `gungnir-tracking-service` -- so `src/sync.rs` puts those
+   channels behind a shim that is `crossbeam-channel` in every ordinary build and
+   loom-instrumented under the flag, and `src/loom_model.rs` drives the **real**
+   `ingest_with` and the **real** drain-to-latest consumer protocol over it. Three
+   properties are checked, and a fourth, negative, check runs the coherence assertion
+   against the two-channel publication shape this crate used before GAP-096 and requires
+   loom to catch it -- so the assertion cannot be quietly weakened. Until 2026-09-08
+   there was no `loom` dependency in the workspace at all, so `--cfg loom` set a cfg no
+   line of code read and 22 green runs model-checked nothing (GAP-061); the workflow now
+   fails a run that declares no dependency, runs no test in a `loom_` module, or reports
+   no explored interleavings.
 5. **Fuzzing** (`gungnir-fuzz`, workflow `fuzz-nightly.yml`) on the sensor-ingestion
    parser and association cost-matrix construction.
 6. **Benchmark regression gate** (workflow `bench-regression.yml`): `criterion` versus

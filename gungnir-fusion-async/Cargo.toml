@@ -40,3 +40,17 @@ gungnir-association = { path = "../gungnir-association", version = "0.1.0" }
 [dev-dependencies]
 proptest.workspace = true
 gungnir-testkit = { path = "../gungnir-testkit", version = "0.1.0" }
+
+# Gate 4 (`.github/workflows/loom.yml`, docs/agentic-workflow.md, §5 of the coding
+# standards). **Behind `cfg(loom)` rather than a plain dev-dependency**, which is what
+# `RUSTFLAGS=--cfg loom` -- the flag the gate has always set -- now actually buys: cargo
+# evaluates this table's cfg against the rustflags in force, so an ordinary
+# `cargo build`, `cargo test` or `cargo deny` run never resolves, downloads or compiles
+# `loom` at all, and it appears in no SBOM and no release-target graph. The model checks
+# it serves are `src/loom_model.rs`, which is `#[cfg(loom)]` for the same reason.
+#
+# This is also the structural half of the gate: `loom.yml` greps this manifest for a
+# `loom` dependency, because `--cfg loom` compiles perfectly happily against a crate that
+# has never heard of loom, and for 22 runs it did (GAP-061).
+[target.'cfg(loom)'.dev-dependencies]
+loom.workspace = true

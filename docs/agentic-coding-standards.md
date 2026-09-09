@@ -629,30 +629,67 @@ and `docs/ml/architecture.md`'s own condition for a native ML dependency -- a se
 reviewer appointed for it -- had not been met. The owner un-deferred it on 2026-09-08 on
 their own authority as the reviewer the deferral named, ahead of a model actually
 existing, because Plan 09's own schedule needs the runtime question settled before
-GAP-080 can plan around it.
+GAP-080 can plan around it. Built the same day: `onnx::OnnxModel`, a real `Model`
+implementor over `ort::session::Session`, landed behind a Cargo feature that is off by
+default for a reason found while building it (point 2 below), not a placeholder for one
+found later.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
-| `ort` (default features disabled; `download-binaries` specifically refused) | The `Model` trait's real backend: loading and running an ONNX graph | `gungnir-ml` | Not yet: no gap builds it |
+| `ort` `2.0.0-rc.13` (MIT OR Apache-2.0; default features disabled, `["load-dynamic", "api-27"]` enabled) | The `Model` trait's real backend: loading and running an ONNX graph, through `OnnxModel` | `gungnir-ml`, behind its own `onnx-runtime` feature (off by default) | 2026-09-08 |
 
-Two things about this one:
+Three things about this one:
 
 1. **`ort` over `tract`, for op coverage, not for safety.** `tract` is a pure-Rust
    ONNX-subset interpreter and would have sidestepped a native dependency entirely, but
    nobody has checked whether Plan 09's intended models fit inside that subset, and `ort`
    wraps the real ONNX Runtime with the full operator set. If a future gap finds `tract`
    covers what is actually needed, revisiting this pin costs nothing that has been built
-   yet -- nothing has.
-2. **`download-binaries` is refused, not merely left off by default.** That feature
-   fetches a prebuilt ONNX Runtime from a third-party CDN, and those binaries may carry
-   telemetry -- not acceptable in this system regardless of convenience. Whoever builds
-   GAP-077's runtime must build ONNX Runtime from source instead, the same shape of
-   native-dependency handling this stack already gives `rcgen` (§2.9 point 2) and
-   `vtkio` (GAP-023): a build-time cost accepted in exchange for not trusting a binary
-   this project did not build. **Not yet checked**: `ort`'s exact resolved version, its
-   duplicate-linkage footprint against the rest of the workspace, and whether a C++
-   toolchain needs adding to `ci.yml` for the from-source build -- all owed by GAP-077's
-   own implementation, not decided here.
+   yet beyond `OnnxModel` itself.
+2. **`download-binaries` is refused; `load-dynamic` was chosen over a from-source static
+   link, and the reason is sharper than build time.** `download-binaries` fetches a
+   prebuilt ONNX Runtime from pyke's own CDN, refused for the same third-party-binary-
+   telemetry reason this stack refuses one anywhere else. The straightforward
+   alternative -- disable it and statically link an ONNX Runtime built from source --
+   was rejected for a checked reason, not a theoretical one: it would require a C++
+   toolchain and `cmake` on every contributor's machine and every `fmt-clippy-test` CI
+   run just to run `cargo check`, and `ci.yml`'s `ubuntu-latest` job installs neither
+   today. `load-dynamic` instead disables linking entirely (`ort-sys/disable-linking`)
+   and `dlopen`s `libonnxruntime`/`onnxruntime.dll` the first time a `Session` is built,
+   from `ORT_DYLIB_PATH` at runtime -- **confirmed 2026-09-08 by `cargo check -p
+   gungnir-ml --features onnx-runtime` succeeding on a machine with no cmake, clang or
+   gcc installed at all**, so building this workspace needs neither toolchain regardless
+   of whether the feature is on. Building ONNX Runtime from source is still exactly what
+   D-40 asked for; `load-dynamic` only moves *when* that has to happen, from every
+   contributor's `cargo check` to whichever deployment step actually supplies a working
+   `libonnxruntime` -- unbuilt, and belonging to GAP-080 or a packaging gap after it, not
+   this one.
+3. **The `onnx-runtime` feature is off by default because of a defect found while
+   integrating it, not out of excess caution.** `ort` 2.0.0-rc.13's global `ort::api()`
+   accessor is documented ("May panic if ... Loading the ONNX Runtime dynamic library
+   fails") and confirmed by reproduction to **panic** -- not return a `Result` -- when
+   `load-dynamic` cannot load a compatible ONNX Runtime, which is every environment this
+   change has run in (this workspace's own CI included: `ubuntu-latest` has no
+   `libonnxruntime.so` anywhere on its default search path, and neither does any
+   contributor machine by default). Reproduced twice on this change's own development
+   machine, against a wrong-version system `onnxruntime.dll` (1.17.1) it found on the
+   default search path with `ORT_DYLIB_PATH` unset: the panic poisons an internal global
+   mutex that `ort`'s own atexit handler locks again on process exit, which panics a
+   second time in a context that cannot unwind and hard-aborts the process
+   (`STATUS_STACK_BUFFER_OVERRUN`) -- reproduced identically with `OnnxModel::load`'s own
+   `catch_unwind` wrapper in place, which stops the panic from escaping that one call but
+   cannot undo the poisoning. A test that calls into real `ort` at all, pass or fail,
+   risks taking the whole test binary down with it at exit; `gungnir-ml`'s `onnx-runtime`
+   feature (`Cargo.toml`) keeps that call out of every default `cargo test --workspace`
+   run, and `onnx.rs`'s own test module explains in a comment why it deliberately adds no
+   round-trip test even behind the feature. **No CI job enables this feature today**:
+   real inference is real, compiling, reviewed code, and it is not exercised anywhere
+   until a gap supplies both a working `libonnxruntime` and a reason to risk the process
+   on it -- which is also why `cargo tree -p gungnir-ml --features onnx-runtime -d`
+   (checked 2026-09-08) is the honest form of the duplicate-linkage check here: `ort`,
+   `ort-sys` and `libloading` add no duplicate package to the graph at all; the `syn`
+   (D-18, D-39) and `hashbrown` (already beneath `arrow`/`indexmap`, independent of this
+   change) duplicates it reports both pre-exist this dependency.
 
 #### Coordinate reference system projection (signed off 2026-09-08, D-41)
 
@@ -666,50 +703,173 @@ it on 2026-09-08.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
-| `proj` | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data` | Not yet: no gap builds it |
-| `proj-sys` (`proj`'s own dependency, binding `libproj` v9.6.x) | Finds a system `libproj` install or builds one from source when none is found -- the same two-path shape `vtkio`'s and `rcgen`'s own native dependencies already follow | `gungnir-data` (a normal dependency, not test-only) | Not yet: no gap builds it |
+| `proj` 0.31 (`default-features = false`) | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data` | GAP-102 (point clouds) and GAP-023 (DEMs), 2026-09-08, **optional, behind that crate's default-off `crs` feature** |
+| `proj-sys` 0.27 (`proj`'s own dependency, binding `libproj` v9.6.x) | Finds a system `libproj` install or builds one from source when none is found -- the same two-path shape `vtkio`'s and `rcgen`'s own native dependencies already follow | `gungnir-data`, transitively | GAP-102 and GAP-023, with the same feature gate |
 
-`proj` and `libproj` are both permissively licensed (`proj`: MIT OR Apache-2.0;
-`libproj`: X/MIT, an OSGeo project), so this is a build-and-review cost, not a licensing
-one. **Full projection support was chosen over a WGS84-geographic-only first step**: a
-narrower cut would have left the common case of a projected DEM (UTM and similar) still
-refused, and `gungnir-coord`'s existing `Wgs84` tangent-plane conversion does not extend
-to a projected CRS regardless -- it solves a different problem (geographic lat/lon to a
-local tangent plane), not general reprojection. **Not yet checked**: `proj-sys`'s build
-behaviour on a CI runner with no system `libproj` present, what `validate_terrain` and
-`validate_point_cloud` need to change to accept a declared CRS beyond `"local-enu"`, and
-what a wrong or unsupported EPSG code should do (refuse by name, matching every other
-malformed-input rule this stack already follows, is the expected answer but is GAP-023's
-and GAP-098's own decision to confirm, not this one's).
+`proj` and `libproj` are both permissively licensed (`proj` and `proj-sys`:
+MIT OR Apache-2.0, confirmed on crates.io 2026-09-08; `libproj`: X/MIT, an OSGeo
+project), so this is a build-and-review cost, not a licensing one. **Full projection
+support was chosen over a WGS84-geographic-only first step**: a narrower cut would have
+left the common case of a projected DEM (UTM and similar) still refused, and
+`gungnir-coord`'s existing `Wgs84` tangent-plane conversion does not extend to a
+projected CRS regardless -- it solves a different problem (geographic lat/lon to a local
+tangent plane), not general reprojection.
+
+**Three things this row left open were checked by GAP-102 (2026-09-08), by running the
+build rather than reading about it, and two of the answers constrain how the crate may be
+taken.**
+
+1. **The build. `proj-sys` 0.27 cannot build `libproj` on `x86_64-pc-windows-msvc`,
+   which is the target `release.yml` ships `gungnir-app` for.** Its from-source path
+   passes `SQLITE3_INCLUDE_DIR` and `SQLITE3_LIBRARY`, which PROJ 9.6.2's own CMake
+   rejects by name in favour of `SQLite3_INCLUDE_DIR`/`SQLite3_LIBRARY`; it names the
+   library `libsqlite3.a`, a Unix filename MSVC does not produce; and PROJ's build
+   additionally requires the `sqlite3` command line binary, which nothing in the Rust
+   dependency chain supplies. On a Linux runner none of this bites, because
+   `apt-get install cmake pkg-config libsqlite3-dev sqlite3` satisfies all three by the
+   standard names. `proj-sys` does **not** need `libclang`: it ships pre-generated
+   bindings and runs `bindgen` only under its optional `buildtime_bindgen` feature.
+   **Consequence: every member takes `proj` as an optional dependency behind a
+   default-off feature**, so a default `cargo check`/`cargo test` stays green on every
+   developer machine, and `ci.yml`'s `proj-crs` job installs the native dependencies and
+   is the one place the conversion is actually exercised.
+2. **The high-level API is two-dimensional.** `proj` 0.31's `Proj::convert` sets the `z`
+   of every coordinate it hands `proj_trans` to `0.0`, so a height cannot be routed
+   through PROJ from this crate's public API at all. A caller therefore converts the
+   horizontal pair through PROJ and scales the vertical by the factor the file itself
+   declares, applying no vertical datum shift -- which is the same answer PROJ gives when
+   its optional vertical-datum grids are absent, and which
+   `gungnir-data/src/pointcloud/crs.rs` states in full rather than leaving to be
+   discovered.
+3. **A wrong or unsupported EPSG code is refused by name, and the refusal is split
+   across two places on purpose.** `validate_point_cloud` checks only the *shape* of the
+   declaration (`"local-enu"`, or `"epsg:<code>"` with a non-zero code), because a
+   baseline is validated on machines with no PROJ database -- the same reason it does not
+   check that a path exists -- and the loader, which has PROJ, is what reports a code no
+   register knows. `network` and `tiff` are also refused, not merely left off: they let
+   `libproj` fetch grid files over the internet at run time, which no deployment profile
+   in `ARCHITECTURE.md` §8 permits.
+
+**One governance note, since it is not obvious.** `deny.toml` sets
+`[graph] all-features = false`, so `cargo deny check licenses` does not evaluate an
+optional dependency's subtree: the `proj` tree is in `Cargo.lock` but is not covered by
+that gate while the feature is off. The licences above were therefore confirmed by hand
+against crates.io rather than by the gate, and a change that makes this feature default
+must re-run `cargo deny` expecting new crates to appear.
+
+**GAP-023's DEM half merged into this entry on 2026-09-09, and settled four more things.**
+
+1. **One feature, not two.** GAP-023 landed independently and first, taking `proj` as
+   `features = ["bundled_proj"]` behind a `gungnir-data` feature called `crs-projection`,
+   with its own `.github/workflows/crs-projection.yml`. That workflow's first run did
+   answer the question it was built for: PROJ 9.6.2 compiled from the source `proj-sys`
+   vendors, on `ubuntu-latest`, with nothing installed but `cmake` -- no `libclang`, no
+   system `libproj`, no `pkg-config` -- in about four and a half minutes, and the tests
+   ran against it. **The bundled path works, and was dropped anyway.** One library taken
+   two ways, behind two features, compiled by two CI jobs, is worse than the single spec
+   above, and `default-features = false`'s refusal of `network` and `tiff` (point 3) is
+   the property worth keeping. `ci.yml`'s `proj-crs` job absorbed the workflow, its DEM
+   test steps and its anti-vacuous-pass check together.
+2. **`validate_terrain` accepts `frame: "epsg:<code>"` alongside `"local-enu"`**, parsed
+   through `gungnir_config::Frame` (`LocalEnu` or `Epsg(u32)`) so validation and the DEM
+   loader's conversion read the same value the same way. The field stays a plain `String`
+   on the wire -- schema-compatible with a baseline written before D-41 -- and the refusal
+   of a code no register knows happens in the loader, which has PROJ, not in
+   `gungnir-config`, which must validate on machines that do not.
+3. **The DEM conversion is split across two crates, following D-41's placement of `proj`
+   in `gungnir-data` alone.** That crate depends on no other workspace crate
+   (`ARCHITECTURE.md`'s dependency table), so it converts only as far as WGS84 geographic
+   (`geospatial::crs::to_wgs84`); `gungnir-app` carries the result the rest of the way to
+   local ENU through `gungnir_coord::Wgs84`, the same oracle-verified tangent-plane
+   transform every other geodetic quantity already goes through, anchored on the
+   deployment's own `ConfigBaseline::origin`. A file already in plain geographic WGS84
+   therefore converts with the feature off, because that half links nothing native.
+4. **The first CI run failed on the test's arithmetic rather than on the conversion, and
+   the arithmetic is worth stating.** The fixture test asserted that two cells 30 m apart
+   in a UTM grid stay 30 m apart in local ENU. They do not, and must not: UTM's grid is
+   deliberately shrunk by k0 = 0.9996 on the central meridian, which is exactly where the
+   fixture sits, so 30 m of grid is 30 / 0.9996 = 30.0120 m of ground. The old assertion
+   was satisfied by precisely the bug it claimed to be a tripwire for. GAP-023's register
+   entry carries the full decomposition of the observed number; the transform itself was
+   not implicated.
+
 
 #### Cloud KMS for the ManagedService custody profile (signed off 2026-09-08, D-42)
 
 GAP-084 built the disconnected desktop's OS-keystore custody (D-39) but the cloud
-deployment profile's equivalent, `ManagedService`, has never been designed: DN-22 §5
-names the row and stops. The owner named AWS and Azure as the two targets to support on
+deployment profile's equivalent, `ManagedService`, had never been designed: DN-22 §5
+named the row and stopped. The owner named AWS and Azure as the two targets to support on
 2026-09-08; neither GCP KMS nor HashiCorp Vault is in scope, and a deployment needing
-either is a future decision, not a gap in this one.
+either is a future decision, not a gap in this one. **The design that was owed before any
+code is DN-22 amendment 5 (§14)**, written the same day, and the crates below landed
+against it rather than ahead of it.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
-| `aws-sdk-kms` | `ManagedService`'s AWS KMS backend | `gungnir-security` | Not yet: no gap builds it |
-| `azure_security_keyvault_keys` (pre-1.0, `0.9.0`) | `ManagedService`'s Azure Key Vault backend | `gungnir-security` | Not yet: no gap builds it |
-| `azure_identity` | Authentication for `azure_security_keyvault_keys` | `gungnir-security` | Not yet: no gap builds it |
+| `aws-sdk-kms` 1.118.0 (Apache-2.0; no default features, `default-https-client` + `rt-tokio` + `behavior-version-latest`) | `ManagedService`'s AWS KMS backend: wrapping a data key, and signing with a private half that never leaves the service | `gungnir-security` | 2026-09-08 |
+| `aws-config` 1.12.0 (Apache-2.0; same three features) | The default credential chain -- environment, web identity token, container credentials, EC2 IMDS -- so no credential appears in a baseline | `gungnir-security` | 2026-09-08 |
+| `azure_security_keyvault_keys` 1.0.1 (MIT; no default features) | `ManagedService`'s Azure Key Vault backend, the same two operations | `gungnir-security` | 2026-09-08 |
+| `azure_identity` 1.0.0 (MIT; no default features) | `ManagedIdentityCredential`, which resolves to the managed identity assigned to the host -- **not** `DefaultAzureCredential`, which 1.0 removed (see point 5) | `gungnir-security` | 2026-09-08 |
+| `azure_core` 1.1.0 (MIT; `reqwest` + `reqwest_rustls` + `tokio`) | Both Azure crates' shared error and credential types, named directly because they appear in the signatures this code calls | `gungnir-security` | 2026-09-08 |
 
-Two things about this one:
+Six things about this one, four of which were found by checking rather than assumed:
 
 1. **`azure_security_keyvault_keys`, never the older `azure_security_keyvault`.**
    The two names are easy to confuse: `azure_security_keyvault` is an earlier, unofficial
    crate of a similar name that Microsoft has said will not be updated further now that
    the official per-service crates (`_keys`, `_secrets`, `_certificates`) exist.
    `_keys` specifically is the one this workspace wants -- key custody, not secret or
-   certificate storage.
-2. **`0.9.0` is pre-1.0, and that is recorded rather than smoothed over.** A pre-1.0
-   crate's API may still move under a later dependency bump; `aws-sdk-kms` (Apache-2.0,
-   maintained by AWS directly) carries no equivalent caveat. **Not yet designed at all**:
-   `ManagedService` itself has no DN-22 amendment describing its shape, so building
-   against these two crates needs that design note first, the same discipline every other
-   custody profile in DN-22 already had before its own code.
+   certificate storage. Confirmed on checking: the older crate's last release is 0.21.0
+   from October 2024 and it has not moved since.
+2. **The "pre-1.0" caveat this decision recorded is retired, because it is no longer
+   true.** D-42 and the first draft of this row both said `azure_security_keyvault_keys`
+   was "pre-1.0 at 0.9.0" and warned that its API might still move. Checked against
+   crates.io on 2026-09-08 when the crate was actually added: it reached 1.0.0 on
+   2026-05-13 and is now **1.0.1**, so the warning no longer applies and carrying it
+   forward would have been recording a stale fact as a current one. `azure_identity` is
+   pinned at **1.0.0**, its latest stable; a 1.1.0-beta.1 exists and this workspace does
+   not pin prereleases.
+3. **`aws-config` is an addition to D-42, not something it named**, and is called out
+   rather than folded in. The decision named `aws-sdk-kms`, which is the service client
+   and carries no credential resolution at all; the default chain that lets DN-22 §6's
+   "no secret in a baseline" rule actually hold lives in `aws-config`. It is the same
+   crate AWS's own documentation pairs with every service SDK, so this is the decision's
+   evident intent rather than a widening of it -- but the owner's signature should know
+   it is there. Its `sso` and `credentials-process` default features are **off**: both
+   are developer-workstation credential sources (an interactive SSO login, an external
+   helper process), not deployment ones, and `sso` alone pulls two further service SDKs.
+4. **Duplicate linkage checked 2026-09-08, and it is not clean.** Comparing the lockfile
+   before and after: 40 packages added (789 to 829), and exactly **two crates that had
+   one version now have two** -- `http` (0.2.12 beside the workspace's 1.5.0) and
+   `http-body` (0.4.6 beside 1.1.0). Both come from `aws-smithy-runtime-api`, which
+   exposes the `http` 0.2 request and response types in its own public API alongside the
+   1.x ones; it is the AWS SDK's pin and not reachable from any feature this workspace
+   can set. **Unlike the ADS-B oracles' duplicates (§2.9, "ADS-B oracles"), these are
+   normal dependencies and are linked into the shipped binaries**, which is the honest
+   way to state it. Everything else shares: one `hyper` 1.11.1, one `rustls` 0.23.43, one
+   `tokio` 1.53.1, one `tower` 0.5.3, one `reqwest` 0.13.4, and no second `aws-lc-rs` --
+   the workspace already carried that whole stack for `axum` and `reqwest`, so the AWS
+   and Azure clients cost no new TLS implementation and no new native build. `deny.toml`
+   sets `multiple-versions = "warn"`, so this is a warning and not a gate; it is recorded
+   here so the next person reads it as accepted rather than unnoticed.
+   `cargo deny check licenses bans sources advisories` passes all four.
+5. **A cost worth stating: every crate that depends on `gungnir-security` now links
+   these.** That is `gungnir-api`, `gungnir-app`, `gungnir-collab`, `gungnir-node`,
+   `gungnir-remote` and `gungnir-workflow` -- including the desktop, whose own custody
+   row is the operating system's keystore and which refuses `ManagedService` by name.
+   Putting the backends behind a Cargo feature that only `gungnir-node` enables would
+   fix that, and was **not** done: `KeyProviderConfig::is_implemented` is consulted by
+   `gungnir-config`'s validation, and a feature would make it answer differently
+   depending on which binary was built, so a baseline valid on the node would be refused
+   on the desktop. A build-configuration policy that makes validation build-dependent is
+   a worse trade than a larger desktop binary, but it is the owner's call to revisit.
+6. **`DefaultAzureCredential` does not exist in `azure_identity` 1.0**, which is worth
+   recording because every piece of Azure documentation and every pre-1.0 example still
+   names it. The 1.0 release split that chain into `DeveloperToolsCredential` and
+   `ManagedIdentityCredential`, and a deployment wants the second. Reaching for the old
+   name would simply not have compiled; reaching for the developer half would have been
+   worse than that, because it authenticates from an engineer's own signed-in Azure CLI
+   session and so works on a workstation and fails on a node.
 
 #### gRPC as the second transport (signed off 2026-09-05, D-21)
 
@@ -858,6 +1018,45 @@ has its own subsection above.
 Each is added under §6 rule 4 and recorded in this table when it lands. Agents must not
 add any crate not listed here.
 
+#### Model checker (written 2026-09-08 under GAP-061, **not signed**)
+
+Gate 4 has required `loom` since the workflow was written (`agentic-workflow.md`, and §5
+below). What it did not have until 2026-09-08 was a dependency, which is why twenty-two
+green runs model-checked nothing: `RUSTFLAGS=--cfg loom` set a cfg no line of source
+read. This entry records the dependency; it is not a new decision about the tool.
+
+| Crate | Used for | Used by | Landed |
+|---|---|---|---|
+| `loom` (feature `futures`) | Gate 4's model checks -- `gungnir-fusion-async/src/loom_model.rs`, over the channel shim in `src/sync.rs`. The `futures` feature supplies `loom::future::block_on`, which is what drives the real `async fn ingest_with` inside a loom execution rather than a transcription of it | `gungnir-fusion-async`, from `[target.'cfg(loom)'.dev-dependencies]` and nowhere else | 2026-09-08 |
+
+Three things are deliberate:
+
+1. **`[target.'cfg(loom)'.dev-dependencies]`, not a plain `[dev-dependencies]` entry.**
+   Cargo evaluates that table's cfg against the rustflags in force, so an ordinary
+   `cargo build`, `cargo test`, `cargo deny` or `cargo about` run never resolves,
+   downloads or compiles `loom` at all: it reaches no SBOM and no release-target graph,
+   and this row therefore adds nothing to what ships. Verified rather than assumed --
+   `cargo tree -p gungnir-fusion-async -e dev` shows no `loom` line, and the same command
+   under `RUSTFLAGS=--cfg loom` shows `loom v0.7.2`. It is the pattern `tokio` uses for
+   its own loom support.
+2. **The code is gated on `all(test, loom)`, not on `loom`.** A dev-dependency is linked
+   only into test targets, so a plain `cargo build --lib` under the flag would meet
+   `use loom::..` with no `loom` crate to resolve. `tokio` gates its shim the same way
+   for the same reason. `cfg(loom)` is declared in `[workspace.lints.rust]`'s
+   `check-cfg`, because it is a real cfg this workspace sets and not a typo.
+3. **A channel of our own under the flag, rather than `loom::sync::mpsc`.** loom's mpsc
+   never reports disconnection -- its `try_recv` returns a message or `Empty` and
+   delegates otherwise to a blocking `recv` -- and `ingest_with` terminates on
+   `Disconnected`. The shim therefore builds crossbeam's contract out of `loom::sync`
+   primitives, and `sync.rs` states in full what that does and does not buy: the loop,
+   the pipeline and the consumer protocol are real, the channel beneath them is a model,
+   and nothing here is evidence about `crossbeam-channel`'s own implementation.
+
+**Not signed.** `gungnir-fusion-async` is a human-owned, low-trust crate
+(`agentic-workflow.md`), so this row and the model checks it serves are written and
+gated and await the owner's review. §5's sign-off requirement is not satisfied by this
+entry existing.
+
 ---
 
 ## 3. General Rust standards
@@ -940,6 +1139,13 @@ Same posture as `unsafe`: agents may write `fusion-async` code, including code u
   introduce or affect — this is for the human reviewer's benefit and should not be skipped
   even when the change looks small.
 - Human sign-off is mandatory before merge regardless of green CI, per the existing gate.
+- **New cross-task state goes through `gungnir_fusion_async::sync` or Gate 4 cannot see
+  it.** That module is the shim the gate model-checks through: `crossbeam-channel` in
+  every ordinary build, a loom-instrumented channel under `--cfg loom`. A channel
+  constructed straight from `crossbeam_channel` in that crate is invisible to loom, and
+  invisible is exactly how this gate spent 22 runs certifying nothing (GAP-061). The
+  model checks themselves are `gungnir-fusion-async/src/loom_model.rs`, and its module
+  documentation states what they reach and what they do not.
 
 ---
 

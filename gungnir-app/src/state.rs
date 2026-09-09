@@ -1154,13 +1154,18 @@ fn build_encryption(
             )
         }
 
-        // Validation refuses this, so reaching here means a baseline bypassed it. Say
-        // so and write in the clear rather than pretending either way.
-        other @ KeyProviderConfig::ManagedService { .. } => {
-            let reason = format!(
-                "the configured key provider is designed and not built ({})",
-                other.owning_gap().unwrap_or("GAP-084")
-            );
+        // **Built since 2026-09-08, and still refused here** (DN-22 amendment 5, §14h).
+        // The refusal is no longer "designed and not built" -- it is: §5's table assigns
+        // a managed key service to the **cloud node**, the way it assigns the operating
+        // system's keystore to this desktop, and `gungnir-node`'s `seal_journal` is where
+        // the arm for it lives. The exact mirror of that binary keeping no arm for
+        // `OperatingSystemKeystore`.
+        //
+        // A connected desktop wanting a cloud key service would be a change to §5's
+        // table, so it is a later question and not one to settle by quietly adding an arm.
+        KeyProviderConfig::ManagedService { .. } => {
+            let reason = "a managed key service is the cloud node's custody row (DN-22                           §5), not the desktop's; this desktop's row is the operating                           system's keystore"
+                .to_string();
             alerts.push(format!("Journal encryption is off: {reason}"));
             (
                 EncryptionStatus::UnavailableWritingPlaintext { reason },
@@ -1339,7 +1344,7 @@ fn recover_launch_warnings_or_alert(
 /// each sensor is. Without it every bearing and every range-azimuth-elevation report is
 /// refused, which is what happened until 2026-09-07.
 ///
-/// **Geodetic in, ENU out (GAP-101).** `SensorConfig::position` is
+/// **Geodetic in, ENU out (GAP-103).** `SensorConfig::position` is
 /// `[lat_rad, lon_rad, alt_m]`; `SensorPositions` is metres in the local ENU frame. From
 /// 2026-09-07 this handed the one straight to the other, which type-checks and placed
 /// every sensor a metre or two from the ENU origin. So the conversion goes through the
@@ -1521,7 +1526,7 @@ fn tracking_service(
     pipeline: gungnir_tracking_service::PipelineSettings,
     alerts: &mut Vec<String>,
 ) -> LiveTrackingService {
-    // GAP-101: without an origin there is no local frame, so no sensor has an ENU
+    // GAP-103: without an origin there is no local frame, so no sensor has an ENU
     // position and every bearing and polar report is refused. Said out loud, because on
     // screen that is indistinguishable from no angular feed reporting at all.
     if config.origin.is_none() && !config.sensors.is_empty() {
@@ -1615,7 +1620,7 @@ mod tests {
         }
     }
 
-    /// GAP-101: the desktop's own construction path puts a sensor where the deployment
+    /// GAP-103: the desktop's own construction path puts a sensor where the deployment
     /// declared it, in ENU metres.
     ///
     /// This is the call `build_backends` makes, not a re-implementation of it. The defect

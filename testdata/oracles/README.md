@@ -22,6 +22,8 @@ these files only record what the oracle answered.
 | `track/fusion.json` | Hand-derived covariance intersection (scipy 1.18.1 bounded Brent), cross-checked against Stone Soup `ChernoffUpdater` at a fixed ω | Track-to-track fusion | `tools/gen_track_fusion_fixtures.py` |
 | `track/registration.json` | Hand-derived weighted least squares; the bias is injected by construction | Sensor registration | `tools/gen_track_fusion_fixtures.py` |
 | `track/phd.json` | The textbook Vo--Ma GM-PHD recursion. **Stone Soup 1.9.1 was driven and disagrees**; the fixture carries the confirmed cause and the part that is not explained | Gaussian-mixture PHD | `tools/gen_phd_fixtures.py` |
+| `track/cphd.json` | The closed-form Gaussian-mixture CPHD update (Vo/Vo/Cantoni 2007), re-derived. **Stone Soup 1.9.1 has no CPHD updater at all**; the fixture carries the brute-force cross-check that stands in for a library comparison | Gaussian-mixture CPHD | `tools/gen_cphd_fixtures.py` |
+| `track/lmb.json` | The LMB filter (Reuter/Vo/Vo/Dietmayer 2014), re-derived, with the association marginals from literal enumeration. **Stone Soup 1.9.1 has no GLMB and no LMB at all** -- not partial, absent, established three ways; the fixture carries five independent checks including an untruncated delta-GLMB run alongside, which measures what the LMB approximates | Labelled multi-Bernoulli | `tools/gen_lmb_fixtures.py` |
 
 ## MATLAB
 

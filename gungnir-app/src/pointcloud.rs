@@ -19,8 +19,10 @@
 //! build against; [`register`] is what calls it, from `update::tick` right after
 //! [`poll`], and [`registration_line`] is what PN-09 reads to say which backend did.
 
-use gungnir_config::PointCloudFileConfig;
-use gungnir_data::{LoadRequest, LoadResult};
+use gungnir_config::{PointCloudConfig, PointCloudFileConfig};
+use gungnir_data::pointcloud::crs::PointCloudCrs;
+use gungnir_data::pointcloud::PointBuffer;
+use gungnir_data::{DataError, LoadRequest, LoadResult};
 
 use crate::fusion::FusionBackend;
 use crate::state::AppState;
@@ -84,6 +86,205 @@ fn request_for(file: &PointCloudFileConfig) -> LoadRequest {
         Some(bounds) => LoadRequest::CopcBounded(std::path::PathBuf::from(&file.path), bounds),
         None => LoadRequest::PointCloud(std::path::PathBuf::from(&file.path)),
     }
+}
+
+/// What a loaded cloud needs before it can be drawn (GAP-102, D-41): the reconciliation
+/// of what the baseline's `frame` claims with what the file's own CRS VLRs declare.
+///
+/// A pure function of the three things that decide it, so every branch is checkable
+/// without a loader, a file, or a `libproj` build -- which matters here more than usual,
+/// because the conversion arm is the only one a default build cannot execute.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Placement {
+    /// The cloud is already in the deployment's local ENU metres and is drawn as it
+    /// stands. This is what every point cloud did before GAP-102, and it is still the
+    /// default; what changed is that the claim is now checked against the file.
+    AsLoaded,
+    /// The cloud is in a real-world system and must be converted. `source` is the
+    /// definition to hand PROJ -- the file's own WKT where it has one, since a compound
+    /// WKT states the vertical system that a bare horizontal code does not.
+    Convert {
+        source: String,
+        vertical_metres: f64,
+    },
+    /// Refused, with the reason an operator reads. Mirrors `terrain::placement_refusal`:
+    /// a cloud that cannot be placed is named rather than drawn in the wrong place.
+    Refused(String),
+}
+
+/// Reconcile the baseline's declared frame with the file's own.
+///
+/// `declared_epsg` is `PointCloudConfig::declared_epsg` -- `None` for `"local-enu"`.
+/// `file` is what the loader read out of the file's CRS VLRs. `has_origin` is whether
+/// the baseline declared `origin`, which is the anchor any conversion lands on.
+///
+/// **The file wins where the two disagree, and the disagreement is refused rather than
+/// resolved.** A baseline claiming `"local-enu"` for a file whose own tags name a
+/// projected system is the case this exists for: before GAP-102 nothing could contradict
+/// that claim, and the cloud was drawn at whatever coordinates the file happened to
+/// hold. It is the same rule `terrain.rs`'s `placement_refusal` has always applied to a
+/// DEM, arriving here now that a point cloud finally carries a CRS to check.
+#[must_use]
+pub fn placement(
+    declared_epsg: Option<u32>,
+    file: Option<&PointCloudCrs>,
+    has_origin: bool,
+) -> Placement {
+    let Some(code) = declared_epsg else {
+        // The baseline says the file is already in local metres.
+        return match file.and_then(PointCloudCrs::proj_definition) {
+            Some(_) => Placement::Refused(format!(
+                "the file declares its own coordinate reference system ({}), not the \
+                 local frame point_cloud.frame claims; set point_cloud.frame to \
+                 \"epsg:<code>\" to have it converted, or reproject the file to the \
+                 deployment's local metres",
+                describe(file)
+            )),
+            // Nothing declared contradicts nothing: the baseline's word stands, exactly
+            // as it did before this gap.
+            None => Placement::AsLoaded,
+        };
+    };
+    if !has_origin {
+        return Placement::Refused(format!(
+            "point_cloud.frame is \"epsg:{code}\", which needs converting into the \
+             deployment's local frame, and the baseline declares no origin to convert \
+             onto; declare origin, or prepare the files in local metres and set \
+             point_cloud.frame to \"local-enu\""
+        ));
+    }
+    if let Some(declared) = file {
+        if !declared.agrees_with_epsg(code) {
+            return Placement::Refused(format!(
+                "point_cloud.frame claims EPSG:{code} and the file declares {}; the \
+                 file's own tags are what its coordinates actually are, so this is a \
+                 baseline to correct rather than a file to override",
+                describe(file)
+            ));
+        }
+    }
+    // The file's own definition where it has one: it is richer than the baseline's bare
+    // code, because a compound WKT states the vertical system too.
+    let source = file
+        .and_then(PointCloudCrs::proj_definition)
+        .unwrap_or_else(|| format!("EPSG:{code}"));
+    let vertical_metres = match file {
+        // A file that declares a system but no readable unit for its heights is refused,
+        // not assumed: there the file had something to say and it could not be read, and
+        // a wrong vertical unit is a silent factor-of-three error in every height.
+        Some(declared) => match declared.vertical_unit_metres() {
+            Some(metres) => metres,
+            None => {
+                return Placement::Refused(format!(
+                    "the file declares {} but no unit this build can read for its \
+                     heights, so they cannot be scaled to metres",
+                    describe(file)
+                ))
+            }
+        },
+        // A file that declares nothing at all is taken to store metres. This is the one
+        // assumption in the path and it is named rather than buried: a LAS file with no
+        // CRS VLR carries no unit either, the baseline's code names only the horizontal
+        // system, and metres is what such a file almost always holds. A deployment for
+        // which that is wrong should reproject the file, which gives it a declaration
+        // and removes the guess.
+        None => 1.0,
+    };
+    Placement::Convert {
+        source,
+        vertical_metres,
+    }
+}
+
+/// A file's declaration in the words an operator reads in a refusal.
+fn describe(file: Option<&PointCloudCrs>) -> String {
+    match file {
+        Some(PointCloudCrs::Wkt(wkt)) => {
+            // The name is the first quoted string of a WKT node, which is what a reader
+            // recognises; the whole WKT runs to hundreds of characters and would bury
+            // the rest of the message.
+            let name = wkt
+                .split_once('"')
+                .and_then(|(_, rest)| rest.split_once('"'))
+                .map_or("an unnamed system", |(name, _)| name);
+            format!("{name:?}")
+        }
+        Some(PointCloudCrs::Geokeys(crs)) => format!("{crs:?}"),
+        None => "nothing".to_string(),
+    }
+}
+
+/// Apply this deployment's [`placement`] to one freshly loaded cloud.
+///
+/// `Err` carries the reason for `PointCloudStatus::Failed` and the operator alert, the
+/// same shape a load error already takes.
+fn place(state: &AppState, buffer: PointBuffer) -> Result<PointBuffer, String> {
+    let declared_epsg = state
+        .config
+        .point_cloud
+        .as_ref()
+        .and_then(PointCloudConfig::declared_epsg);
+    match placement(
+        declared_epsg,
+        buffer.crs.as_ref(),
+        state.config.origin.is_some(),
+    ) {
+        Placement::AsLoaded => Ok(buffer),
+        Placement::Refused(reason) => Err(reason),
+        Placement::Convert {
+            source,
+            vertical_metres,
+        } => {
+            // `placement` already refused the no-origin case, so this is defensive
+            // rather than a state a running deployment reaches; a `let-else` keeps the
+            // no-`expect` rule without pretending the combination cannot occur.
+            let Some(frame) = crate::sustainment::local_frame(state) else {
+                return Err("the baseline declares no origin to convert onto".to_string());
+            };
+            convert(&buffer, &source, vertical_metres, &frame).map_err(|e| e.to_string())
+        }
+    }
+}
+
+/// The conversion, when this binary was built with the `crs` feature.
+#[cfg(feature = "crs")]
+fn convert(
+    buffer: &PointBuffer,
+    source: &str,
+    vertical_metres: f64,
+    frame: &gungnir_model::LocalFrame,
+) -> Result<PointBuffer, DataError> {
+    gungnir_data::pointcloud::crs::to_local_enu(
+        buffer,
+        source,
+        vertical_metres,
+        &|[lat_rad, lon_rad, alt_m]| {
+            frame.to_enu(gungnir_model::Geodetic {
+                lat_rad,
+                lon_rad,
+                alt_m,
+            })
+        },
+    )
+}
+
+/// The same call in a binary built without the `crs` feature: refused by name, with the
+/// reason being this build rather than anything about the file.
+///
+/// **Not a silent pass-through, deliberately.** Returning the cloud unconverted would
+/// draw a projected coordinate as though it were metres east of the origin, which is the
+/// confidently-wrong answer this workspace's health flags exist to refuse.
+#[cfg(not(feature = "crs"))]
+fn convert(
+    _buffer: &PointBuffer,
+    _source: &str,
+    _vertical_metres: f64,
+    _frame: &gungnir_model::LocalFrame,
+) -> Result<PointBuffer, DataError> {
+    Err(DataError::NotImplemented {
+        what: "converting a point cloud out of its own coordinate reference system",
+        waiting_on: "a build with gungnir-data's `crs` feature, which links libproj",
+    })
 }
 
 /// Start loading the configured point-cloud pair off the render thread. Idempotent: the
@@ -156,6 +357,12 @@ fn apply_result(state: &mut AppState, result: LoadResult) {
     // result is for: empty means it is the source's, one entry means it is the target's.
     let awaiting_source = state.data.point_clouds.is_empty();
     let path = if awaiting_source { &source } else { &target };
+    // GAP-102: a cloud is reconciled against the frame the baseline claims before it is
+    // kept, so a file in a real-world system is converted or refused rather than drawn
+    // at whatever coordinates it happens to hold.
+    let loaded = loaded
+        .map_err(|e| e.to_string())
+        .and_then(|b| place(state, b));
     match loaded {
         Ok(buffer) => {
             state.data.point_clouds.push(buffer);
@@ -172,8 +379,7 @@ fn apply_result(state: &mut AppState, result: LoadResult) {
             }
             // Otherwise still waiting on the other half; status stays `Loading`.
         }
-        Err(err) => {
-            let reason = err.to_string();
+        Err(reason) => {
             // All-or-nothing: a cloud that arrived before its partner failed is not a
             // pair anything downstream can use.
             state.data.point_clouds.clear();
