@@ -4042,12 +4042,36 @@ not by finding, for the time between whenever each item landed and this correcti
     real socket independently in `gungnir-ingest/src/adapters/sapient.rs`; three
     `gungnir-config` tests cover the new fields' validation rules.
 
+    **Found in review before signing: `TcpTaskSink::send`'s `write_all` treated a
+    transient `WouldBlock` like a dead connection.** The connection is nonblocking
+    (`TcpSapientSource::connect` sets it, and `try_clone` shares that as live, shared
+    kernel state with `TcpTaskSink`'s own handle -- confirmed empirically, not assumed).
+    A single write far larger than any real buffer was accepted whole by this
+    platform's loopback path with no blocking at all, but a *run* of ordinary-sized
+    writes -- the shape a burst of individually-issued tasks actually takes -- exhausted
+    the same connection's real buffer within a handful of calls, measured directly
+    rather than assumed. Once that happened, `write_all` logged the error and returned,
+    and if an earlier write inside that same call had already placed bytes on the wire,
+    the rest of that task's JSON never followed -- no trailing newline -- so the next
+    task sent would land right after it, and the middleware would read one garbled
+    merged line. `send` now retries the remainder on `WouldBlock`, holding its lock for
+    the whole call so a concurrent `send` cannot interleave into an unfinished message,
+    bounded by a 3-second deadline shared with `TcpSapientSource::connect`'s own
+    timeout; a peer wedged for the whole deadline while mid-message can still leave a
+    fragment on the wire, and that residual is named in `send`'s own doc comment rather
+    than papered over -- flipping the connection to blocking instead is not a safer fix,
+    since the same shared nonblocking flag would then block `take_messages` on the same
+    connection out from under whatever thread is polling it. Two new tests reproduce the
+    exhaustion for real (many discrete writes, not one large one, per the measurement
+    above) and prove both the recovery and the bounded give-up.
+
     **Human-owned crate touched: `gungnir-ingest`, `TcpSapientSource::sink` and
     `TcpTaskSink`, the same trust boundary this gap's own earlier `TaskAck` reader
-    sits on, per `docs/agentic-workflow.md`. Written and gated, not signed.** The
-    config fields and the `gungnir-node` wiring are ordinary configuration and
-    plumbing work outside the identity path that crate scopes as human-owned; neither
-    needed a signature on its own account. No dependency edge changed:
+    sits on, per `docs/agentic-workflow.md`. Signed by the owner 2026-09-08, over the
+    corrected code.** The config fields and the `gungnir-node` wiring are ordinary
+    configuration and plumbing work outside the identity path that crate scopes as
+    human-owned; neither needed a signature on its own account. No dependency edge
+    changed:
     `gungnir_sensor_management::sapient_task` was already reachable from
     `gungnir-node`.
 
