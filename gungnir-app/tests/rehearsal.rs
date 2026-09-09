@@ -523,7 +523,8 @@ fn the_report_records_the_hash_of_the_seed_as_committed() {
     // written to catch. This pins it: the report's recorded hash is compared against
     // the seed on disk, so changing the seed without correcting the report fails here.
     let (_, hash) = rehearsal::load_seed(&testdata("round-1-seed.json")).expect("seed loads");
-    let report = Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/ux/reports/round-1-2026-09-06.md");
+    let report =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/ux/reports/round-1-2026-09-06.md");
     let text = std::fs::read_to_string(&report).expect("the round-1 report is committed");
     assert!(
         text.contains(&hash),
