@@ -1,9 +1,9 @@
 {
  "oracle": "the textbook Vo-Ma Gaussian-mixture PHD recursion, written out in numpy",
  "stonesoup": "1.9.1",
- "stonesoup_status": "disagrees; NOT a cross-check. See the module docstring.",
+ "stonesoup_status": "disagrees; NOT a cross-check. See the module docstring. The disagreement is now fully explained -- the merge-weight clamp below, plus a prob_survival convention -- but explained is not agreed, and the clamp is still wrong for a PHD intensity, so the row stays gated against the textbook recursion.",
  "stonesoup_confirmed_defect": "GaussianMixtureReducer.merge_components clamps a merged weight to 1.0 (checked directly: 0.7 + 0.6 merges to 1.0). A PHD weight is an expected target count, not a probability, so the clamp under-reports cardinality whenever merging combines past one target.",
- "stonesoup_unexplained": "The two also disagree on the first scan, before any weight approaches one. That difference has not been traced.",
+ "stonesoup_first_scan_explained": "Explained 2026-09-08; it used to be recorded here as untraced. Two conventions, and the dominant one was this generator's own transcription error. (1) Births were stamped one DT in the past, and Stone Soup's DistanceHypothesiser predicts every component to the detection timestamp, so the library predicted each birth forward by a second before updating it -- diag(P) = [500.333, 401, ...] instead of the stated [100, 400, ...], the likelihood at the detection down by a factor of 8.6, and because CLUTTER=1e-6 is not negligible next to that likelihood the weight fell from 0.9452 to 0.6649. Vo-Ma adds the birth intensity to the already-predicted intensity and does not predict it. FIXED: births are now stamped at the scan's own timestamp, a zero predict interval. (2) Stone Soup applies prob_survival inside the update (updater/pointprocess.py) unless a component carries the TaggedWeightedGaussianState.BIRTH sentinel, which these tags are not, so it thins births by p_S where the reference applies p_S during predict before births are appended. NOT fixed: setting the sentinel makes Stone Soup drop the birth's missed-detection component entirely, which is a third convention and not Vo-Ma's either. Adopting both conventions in the reference collapses the first-scan cardinality gap to 1.11e-16 / 4.44e-16 / 8.88e-16 across the three cases, with worst component-wise mean difference exactly 0.0. Scans 1 and 2 then agree to machine epsilon and the divergence from scan 3 is the merge clamp above, so the two documented causes account for the whole disagreement and none is outstanding.",
  "settings": {
   "probability_of_survival": 0.99,
   "probability_of_detection": 0.95,
@@ -277,7 +277,8 @@
      "component_count": 3
     }
    ],
-   "stonesoup_cardinality_disagreement": 0.8417764438292656,
+   "stonesoup_cardinality_disagreement": 0.13925879482032855,
+   "stonesoup_first_scan_disagreement": 0.0021674331553191983,
    "stonesoup_reason": null
   },
   {
@@ -427,7 +428,8 @@
      "component_count": 1
     }
    ],
-   "stonesoup_cardinality_disagreement": 0.2805921479430885,
+   "stonesoup_cardinality_disagreement": 0.04641443876894513,
+   "stonesoup_first_scan_disagreement": 0.0007224777184398068,
    "stonesoup_reason": null
   },
   {
@@ -820,7 +822,8 @@
      "component_count": 6
     }
    ],
-   "stonesoup_cardinality_disagreement": 1.6835528865428149,
+   "stonesoup_cardinality_disagreement": 0.40120527581094034,
+   "stonesoup_first_scan_disagreement": 0.004334866310635732,
    "stonesoup_reason": null
   }
  ]
