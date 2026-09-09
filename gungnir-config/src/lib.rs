@@ -401,6 +401,32 @@ pub enum AdsbSource {
     File { path: String },
 }
 
+/// One MISB ST 0601 UAS metadata feed (GAP-099): the receiving feed's sensor identity
+/// and where its KLV byte stream comes from. Same shape as [`AisFeedConfig`] and
+/// [`AdsbFeedConfig`]: `gungnir_ingest::adapters::misb::UasMetadataAdapter` places a
+/// decoded platform position in the same shared [`ConfigBaseline::origin`] local frame
+/// every other cooperative feed places into, rather than a placement field of its own.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MisbFeedConfig {
+    pub name: String,
+    /// The receiving feed's identity in the sensor list; its detections and platform
+    /// reports carry this identity.
+    pub sensor_id: u32,
+    pub source: MisbSource,
+}
+
+/// Where a MISB feed's KLV bytes come from. Same shape as [`AisSource`]/[`AdsbSource`]:
+/// `gungnir_ingest::adapters::misb::TcpKlvSource`/`RecordedKlvSource` are the two
+/// [`gungnir_ingest::adapters::misb::KlvSource`] implementations this maps onto.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum MisbSource {
+    /// A receiver re-streaming the metadata elementary stream over TCP, `host:port`.
+    Tcp { addr: String },
+    /// A recording of KLV bytes.
+    File { path: String },
+}
+
 /// One SAPIENT edge-node feed (GAP-001): a spotter, an acoustic array, or a passive-RF
 /// direction finder, all the same adapter and the same message shape
 /// (`gungnir_ingest::adapters::sapient`) and told apart only by which node type this
@@ -930,6 +956,10 @@ pub struct ConfigBaseline {
     /// ADS-B receiver feeds bound at start (GAP-010). Empty means no cooperative source.
     #[serde(default)]
     pub adsb_feeds: Vec<AdsbFeedConfig>,
+    /// MISB ST 0601 UAS metadata feeds bound at start (GAP-099). Empty means no ISR
+    /// platform telemetry source.
+    #[serde(default)]
+    pub misb_feeds: Vec<MisbFeedConfig>,
     /// SAPIENT edge-node feeds bound at start (GAP-001). Empty means no spotter,
     /// acoustic, or passive-RF source.
     #[serde(default)]
@@ -1102,6 +1132,7 @@ impl Default for ConfigBaseline {
             radar_feeds: Vec::new(),
             ais_feeds: Vec::new(),
             adsb_feeds: Vec::new(),
+            misb_feeds: Vec::new(),
             sapient_feeds: Vec::new(),
             sapient_node_id: None,
             peers: Vec::new(),
@@ -1923,6 +1954,52 @@ fn validate_adsb_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 if path.trim().is_empty() {
                     return Err(ConfigError::Invalid(format!(
                         "ADS-B feed {:?}: the recording path is empty",
+                        feed.name
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// GAP-099: a MISB feed names a receiver in the sensor list, once, and a source that
+/// parses. Same shape as [`validate_ais_feeds`], for the sibling feed type.
+fn validate_misb_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    let mut names = std::collections::BTreeSet::new();
+    let mut receivers = std::collections::BTreeSet::new();
+    for feed in &baseline.misb_feeds {
+        if !names.insert(feed.name.as_str()) {
+            return Err(ConfigError::Invalid(format!(
+                "MISB feed {:?} is declared twice",
+                feed.name
+            )));
+        }
+        if !baseline.sensors.iter().any(|s| s.id == feed.sensor_id) {
+            return Err(ConfigError::Invalid(format!(
+                "MISB feed {:?} names sensor {}, which is not in the sensor list",
+                feed.name, feed.sensor_id
+            )));
+        }
+        if !receivers.insert(feed.sensor_id) {
+            return Err(ConfigError::Invalid(format!(
+                "MISB feed {:?} names sensor {}, which another feed already speaks for",
+                feed.name, feed.sensor_id
+            )));
+        }
+        match &feed.source {
+            MisbSource::Tcp { addr } => {
+                if addr.parse::<std::net::SocketAddr>().is_err() {
+                    return Err(ConfigError::Invalid(format!(
+                        "MISB feed {:?}: {addr:?} is not an ip:port",
+                        feed.name
+                    )));
+                }
+            }
+            MisbSource::File { path } => {
+                if path.trim().is_empty() {
+                    return Err(ConfigError::Invalid(format!(
+                        "MISB feed {:?}: the recording path is empty",
                         feed.name
                     )));
                 }
@@ -3102,6 +3179,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     validate_radar_feeds(baseline)?;
     validate_ais_feeds(baseline)?;
     validate_adsb_feeds(baseline)?;
+    validate_misb_feeds(baseline)?;
     validate_sapient_feeds(baseline)?;
     validate_exchange(baseline)?;
     validate_machine_identities(baseline)?;
@@ -4089,6 +4167,77 @@ mod tests {
             sensor_id: 20,
             source: AdsbSource::Tcp {
                 addr: "127.0.0.1:30004".into(),
+            },
+        });
+        assert!(matches!(validate(&two), Err(ConfigError::Invalid(_))));
+    }
+
+    #[test]
+    fn a_misb_feed_needs_a_known_sensor_a_unique_name_and_a_parsing_source() {
+        let sensor = || SensorConfig {
+            id: 40,
+            modality: "misb".into(),
+            position: [0.9, 0.2, 500.0],
+            max_range_m: 50_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        };
+        let misb = |sensor_id, source| ConfigBaseline {
+            sensors: vec![sensor()],
+            misb_feeds: vec![MisbFeedConfig {
+                name: "uas-1".into(),
+                sensor_id,
+                source,
+            }],
+            ..ConfigBaseline::default()
+        };
+        validate(&misb(
+            40,
+            MisbSource::Tcp {
+                addr: "127.0.0.1:9001".into(),
+            },
+        ))
+        .expect("a tcp feed");
+        validate(&misb(
+            40,
+            MisbSource::File {
+                path: "testdata/misb/DynamicConstantMISMMSPacketData.bin".into(),
+            },
+        ))
+        .expect("a recorded feed");
+        assert!(matches!(
+            validate(&misb(
+                41,
+                MisbSource::Tcp {
+                    addr: "127.0.0.1:9001".into()
+                }
+            )),
+            Err(ConfigError::Invalid(_))
+        ));
+        assert!(matches!(
+            validate(&misb(
+                40,
+                MisbSource::Tcp {
+                    addr: "nowhere".into()
+                }
+            )),
+            Err(ConfigError::Invalid(_))
+        ));
+        assert!(matches!(
+            validate(&misb(40, MisbSource::File { path: "  ".into() })),
+            Err(ConfigError::Invalid(_))
+        ));
+        let mut two = misb(
+            40,
+            MisbSource::Tcp {
+                addr: "127.0.0.1:9001".into(),
+            },
+        );
+        two.misb_feeds.push(MisbFeedConfig {
+            name: "uas-1".into(),
+            sensor_id: 40,
+            source: MisbSource::Tcp {
+                addr: "127.0.0.1:9002".into(),
             },
         });
         assert!(matches!(validate(&two), Err(ConfigError::Invalid(_))));

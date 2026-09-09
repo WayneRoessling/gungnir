@@ -90,6 +90,11 @@ pub struct AppState {
     /// The association memory between ADS-B reports and tracks, for the platform class
     /// they declare (GAP-027); same purpose as `cooperative.by_track`, narrower.
     pub adsb_cooperative: std::collections::HashMap<TrackId, crate::adsb::LastAdsbCooperative>,
+    /// Each bound MISB feed's counters, by name, for a future PN-09 row (GAP-099). No
+    /// report sink is attached (see `crate::misb`'s module doc comment): nothing yet
+    /// drains a `UasPlatformReport`, and evidence fusion over one is not part of
+    /// GAP-099's own closing action.
+    pub misb_stats: Vec<(String, gungnir_ingest::adapters::misb::MisbStatsSink)>,
     /// Each bound SAPIENT feed's counters, by name, for PN-09 (GAP-001).
     pub sapient_stats: Vec<(
         String,
@@ -549,7 +554,7 @@ impl AppState {
         }
         tracing::info!(session = mission.session.0, journal = %journal.root().display(), "opened live session");
 
-        let (ingest, feeds, ais, adsb, sapient, endpoint_client, peers) =
+        let (ingest, feeds, ais, adsb, misb, sapient, endpoint_client, peers) =
             build_ingest(&config, runtime.handle(), &mut alerts);
         let identification_settings = config.policy.identification.clone();
 
@@ -588,6 +593,7 @@ impl AppState {
             adsb_stats: adsb.stats,
             adsb_submitted: std::collections::HashSet::new(),
             adsb_cooperative: std::collections::HashMap::new(),
+            misb_stats: misb.stats,
             sapient_stats: sapient.stats,
             sapient_task_acks: sapient.task_acks,
             last_bearing_rays: Vec::new(),
@@ -1332,6 +1338,7 @@ fn build_ingest(
     crate::radar::BoundFeeds,
     crate::cooperative::BoundAisFeeds,
     crate::adsb::BoundAdsbFeeds,
+    crate::misb::BoundMisbFeeds,
     crate::sapient::BoundSapientFeeds,
     Option<gungnir_remote::endpoint::EndpointClient>,
     Vec<crate::peers::BoundPeer>,
@@ -1359,6 +1366,10 @@ fn build_ingest(
     let ais = crate::cooperative::bind_feeds(config, &mut ingest, alerts);
     // GAP-010: an ADS-B adapter per configured feed, on the same shape as AIS above.
     let adsb = crate::adsb::bind_feeds(config, &mut ingest, alerts);
+    // GAP-099: a MISB adapter per configured feed; its platform position enters the
+    // gateway like AIS's and ADS-B's do, but see `crate::misb`'s module doc comment
+    // for why nothing here drains a platform-report sink the way AIS and ADS-B do.
+    let misb = crate::misb::bind_feeds(config, &mut ingest, alerts);
     // GAP-001: a SAPIENT adapter per configured feed (spotter, acoustic, or
     // passive-RF); its detections enter the gateway like a radar's, not like AIS's or
     // ADS-B's cooperative reports.
@@ -1378,7 +1389,16 @@ fn build_ingest(
             None
         }
     };
-    (ingest, feeds, ais, adsb, sapient, endpoint_client, peers)
+    (
+        ingest,
+        feeds,
+        ais,
+        adsb,
+        misb,
+        sapient,
+        endpoint_client,
+        peers,
+    )
 }
 
 /// The embedded tracker, filtering as the promoted algorithm baseline says (GAP-053,

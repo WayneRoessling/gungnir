@@ -442,6 +442,7 @@ fn build_gateway(
         }
     }
     bind_adsb_feeds(config, &mut gateway, &sinks);
+    bind_misb_feeds(config, &mut gateway, &sinks);
     let sapient = bind_sapient_feeds(config, &mut gateway, &sinks);
     (gateway, sinks, reports, sapient)
 }
@@ -503,6 +504,69 @@ fn bind_adsb_feeds(
             }
             Err(err) => {
                 tracing::error!(feed = %feed.name, %err, "ADS-B feed not bound");
+            }
+        }
+    }
+}
+
+/// GAP-099: MISB ST 0601 UAS metadata receivers. Same reasoning and the same shape as
+/// AIS/ADS-B above: the codec and adapter are decoded and gated
+/// (`gungnir-interop/src/misb0601/mod.rs`, `gungnir-ingest/src/adapters/misb.rs`), the
+/// platform's own position is tracked, and the orientation/sensor-pointing report goes
+/// nowhere on this binary -- no sink of either kind is attached, exactly as AIS/ADS-B
+/// attach none here -- because this binary has no edge to `gungnir-identification`.
+/// Split out of [`build_gateway`] for the same reason as [`bind_adsb_feeds`].
+fn bind_misb_feeds(
+    config: &ConfigBaseline,
+    gateway: &mut IngestGateway,
+    sinks: &[gungnir_ingest::adapters::asterix::ServiceObservationSink],
+) {
+    if config.misb_feeds.is_empty() {
+        return;
+    }
+    let Some(frame) = local_frame(config) else {
+        tracing::warn!(
+            feeds = config.misb_feeds.len(),
+            "MISB feeds are configured and no local frame origin is declared: no \
+             receiver is bound"
+        );
+        return;
+    };
+    for feed in &config.misb_feeds {
+        let source: Result<Box<dyn gungnir_ingest::adapters::misb::KlvSource>, String> = match &feed
+            .source
+        {
+            gungnir_config::MisbSource::Tcp { addr } => addr
+                .parse()
+                .map_err(|e| format!("{addr}: {e}"))
+                .and_then(|addr| {
+                    gungnir_ingest::adapters::misb::TcpKlvSource::connect(
+                        addr,
+                        std::time::Duration::from_secs(3),
+                    )
+                    .map(|s| Box::new(s) as _)
+                    .map_err(|e| e.to_string())
+                }),
+            gungnir_config::MisbSource::File { path } => {
+                gungnir_ingest::adapters::misb::RecordedKlvSource::open(std::path::Path::new(path))
+                    .map(|s| Box::new(s) as _)
+                    .map_err(|e| e.to_string())
+            }
+        };
+        match source {
+            Ok(source) => {
+                let adapter = gungnir_ingest::adapters::misb::UasMetadataAdapter::new(
+                    feed.name.clone(),
+                    SensorId(feed.sensor_id),
+                    frame,
+                    source,
+                );
+                tracing::info!(feed = %feed.name, sensor = feed.sensor_id, "MISB feed bound; the platform's own position is tracked, and the orientation/sensor-pointing report is not fused here because this binary has no edge to the crate that fuses evidence (GAP-099, matching GAP-010's AIS/ADS-B reasoning)");
+                gateway.add_adapter(Box::new(adapter));
+                gateway.set_expected_adapters(config.sensors.len() + sinks.len() + 1);
+            }
+            Err(err) => {
+                tracing::error!(feed = %feed.name, %err, "MISB feed not bound");
             }
         }
     }
@@ -2295,5 +2359,157 @@ mod tests {
             }
             other => panic!("expected an Acknowledged event: {other:?}"),
         }
+    }
+
+    /// MISB ST 0601's UAS Datalink LS key (`gungnir_interop::misb0601::UDS_KEY`),
+    /// copied here because this binary has no dependency edge on `gungnir-interop`
+    /// (`ARCHITECTURE.md` draws none) and the key is not re-exported through
+    /// `gungnir_ingest::adapters::misb`.
+    const MISB_UDS_KEY: [u8; 16] = [
+        0x06, 0x0E, 0x2B, 0x34, 0x02, 0x0B, 0x01, 0x01, 0x0E, 0x01, 0x03, 0x01, 0x01, 0x00, 0x00,
+        0x00,
+    ];
+
+    /// MISB ST 0601.8-08's checksum algorithm
+    /// (`gungnir_interop::misb0601::packet_checksum`), duplicated for the same reason
+    /// as [`MISB_UDS_KEY`] above: the lower 16 bits of the sum of 16-bit big-endian
+    /// words over `packet`, excluding `packet`'s own trailing two bytes.
+    fn misb_packet_checksum(packet: &[u8]) -> u16 {
+        let summed = &packet[..packet.len() - 2];
+        let mut total: u32 = 0;
+        let mut pos = 0usize;
+        while pos + 2 <= summed.len() {
+            total = total.wrapping_add(u32::from(u16::from_be_bytes([
+                summed[pos],
+                summed[pos + 1],
+            ])));
+            pos += 2;
+        }
+        if pos < summed.len() {
+            total = total.wrapping_add(u32::from(summed[pos]) << 8);
+        }
+        u16::try_from(total & 0xFFFF).unwrap_or(0)
+    }
+
+    /// A well-formed KLV frame carrying a real platform position: the same Sensor
+    /// Latitude/Longitude raw bytes `gungnir-ingest/tests/misb_feed.rs` uses, copied
+    /// verbatim from the vendored fixture (`testdata/misb/SOURCE.md`) and already
+    /// pinned by `misb0601_fixtures.rs` as decoding to 60.176822966978335 /
+    /// 128.42675904204452 -- reused rather than re-derived so this test needs no
+    /// second, untested implementation of MISB's "mapped" encoding. Proves the
+    /// config-to-gateway wiring; the codec and the adapter are gated elsewhere.
+    fn misb_well_formed_frame() -> Vec<u8> {
+        let items: [(u8, &[u8]); 2] = [
+            (13, &[0x55, 0x95, 0xB6, 0x6D]),
+            (14, &[0x5B, 0x53, 0x60, 0xC4]),
+        ];
+        let mut value = Vec::new();
+        for (tag, bytes) in items {
+            value.push(tag);
+            value.push(u8::try_from(bytes.len()).expect("short-form"));
+            value.extend_from_slice(bytes);
+        }
+        value.push(1);
+        value.push(2);
+        let checksum_at = MISB_UDS_KEY.len() + 1 + value.len();
+        value.push(0);
+        value.push(0);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&MISB_UDS_KEY);
+        bytes.push(u8::try_from(value.len()).expect("short-form"));
+        bytes.extend_from_slice(&value);
+        let cs = misb_packet_checksum(&bytes).to_be_bytes();
+        bytes[checksum_at] = cs[0];
+        bytes[checksum_at + 1] = cs[1];
+        bytes
+    }
+
+    /// GAP-099: a configured `misb_feeds` entry is bound into the real gateway at
+    /// start and its platform position reaches the gateway as an accepted detection,
+    /// the same standard `gungnir-ingest/tests/misb_feed.rs` already holds the
+    /// adapter to on its own -- this proves the config-to-`bind_misb_feeds` half.
+    #[test]
+    fn a_configured_misb_feed_is_bound_and_its_position_reaches_the_gateway() {
+        let origin = [60.0_f64.to_radians(), 128.0_f64.to_radians(), 0.0];
+        let dir = std::env::temp_dir().join(format!("gungnir-node-misb-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let recording = dir.join("frame.klv");
+        std::fs::write(&recording, misb_well_formed_frame()).expect("recording");
+
+        let config = ConfigBaseline {
+            sensors: vec![gungnir_config::SensorConfig {
+                id: 40,
+                modality: "misb".into(),
+                position: origin,
+                max_range_m: 50_000.0,
+                control_endpoint: None,
+                maintenance: Vec::new(),
+            }],
+            origin: Some(origin),
+            misb_feeds: vec![gungnir_config::MisbFeedConfig {
+                name: "uas-1".into(),
+                sensor_id: 40,
+                source: gungnir_config::MisbSource::File {
+                    path: recording.to_string_lossy().into_owned(),
+                },
+            }],
+            ..ConfigBaseline::default()
+        };
+        gungnir_config::validate(&config).expect("valid");
+
+        let mut gateway = IngestGateway::new(Box::new(AllowListAuthenticator {
+            allowed: vec![SensorId(40)],
+        }));
+        bind_misb_feeds(&config, &mut gateway, &[]);
+        gateway.set_expected_adapters(1);
+
+        let events = gateway.tick(gungnir_model::MissionTime(1_000.0), &mut NoTrackingService);
+        assert_eq!(events.len(), 1, "{events:#?}");
+        assert!(
+            matches!(
+                &events[0],
+                gungnir_model::events::IngestEvent::Accepted(d) if d.sensor == SensorId(40)
+            ),
+            "{events:#?}"
+        );
+        assert_eq!(gateway.stats().accepted, 1);
+        assert_eq!(gateway.stats().quarantined, 0);
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The mirror image of the acceptance test above: no `origin` means no local
+    /// frame to place a platform position in, so the feed is refused with a warning
+    /// rather than bound and silently producing nothing -- matching AIS's and
+    /// ADS-B's own no-origin behaviour above.
+    #[test]
+    fn a_misb_feed_with_no_local_frame_origin_binds_nothing() {
+        let config = ConfigBaseline {
+            sensors: vec![gungnir_config::SensorConfig {
+                id: 41,
+                modality: "misb".into(),
+                position: [0.9, 0.2, 0.0],
+                max_range_m: 50_000.0,
+                control_endpoint: None,
+                maintenance: Vec::new(),
+            }],
+            origin: None,
+            misb_feeds: vec![gungnir_config::MisbFeedConfig {
+                name: "uas-2".into(),
+                sensor_id: 41,
+                source: gungnir_config::MisbSource::File {
+                    path: "does-not-matter.bin".into(),
+                },
+            }],
+            ..ConfigBaseline::default()
+        };
+
+        let mut gateway = IngestGateway::new(Box::new(AllowListAuthenticator {
+            allowed: vec![SensorId(41)],
+        }));
+        bind_misb_feeds(&config, &mut gateway, &[]);
+        let events = gateway.tick(gungnir_model::MissionTime(1_000.0), &mut NoTrackingService);
+        assert!(events.is_empty(), "{events:#?}");
     }
 }
