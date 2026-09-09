@@ -887,8 +887,43 @@ EFFORT_RANK = {"S": 1, "M": 2, "L": 3, "XL": 4}
 for g in G:
     g["reach"] = max(reach[c] for c in g["caps"])
     g["priority"] = g["sev"] * g["reach"]
+# Identifiers must be unique. `README.md` under "Identifiers": "`GAP-nnn`: a gap.
+# Stable; never reused. New gaps are appended." -- and `D-nn` is stable likewise. Two
+# branches that each append a gap pick the same next number, and git merges them with no
+# conflict, because the two `gap(...)` calls sit at different offsets. Nothing below
+# catches that: the dependency, cycle, ordering and coverage checks all read `ids` and
+# `dids` as sets, which collapse a duplicate, so the register renders two summary rows
+# and two entry blocks under the one identifier -- and CI's regenerate-and-diff still
+# passes, because the generator stays deterministic. It is not reliably loud either: two
+# duplicates in the same target increment do starve `closure-roadmap.md`'s wave below
+# into a bare `IndexError`, but only after three of the five documents are written, while
+# two in different increments write all five and exit 0. So count the ids here, before
+# they are collected. Four collisions so far: GAP-090 (and again on the GAP-094 it was
+# renumbered to), GAP-097, and GAP-102 on 2026-09-09.
+def dupes(seq):
+    seen, dup = set(), []
+    for x in seq:
+        if x in seen and x not in dup:
+            dup.append(x)
+        seen.add(x)
+    return dup
+_dup = dupes([g["id"] for g in G])
+if _dup:
+    raise SystemExit(f"duplicate gap id: {', '.join(_dup)}; ids are never reused (README.md)")
+_dup = dupes([d[0] for d in decisions])
+if _dup:
+    raise SystemExit(f"duplicate decision id: {', '.join(_dup)}; ids are never reused (README.md)")
+
 ids = {g["id"] for g in G}
 dids = {d[0] for d in decisions}
+# Every decision has an outcome and every outcome has a decision. `decisions-needed.md`
+# reads `outcomes[d[0]]` twice, so a decision with no outcome is a loud `KeyError` there,
+# but an outcome left behind by a deleted decision renders nothing and would pass.
+_no_outcome = sorted(dids - set(outcomes))
+_no_decision = sorted(set(outcomes) - dids)
+if _no_outcome or _no_decision:
+    raise SystemExit(f"decision ids with no outcome: {_no_outcome}; "
+                     f"outcome ids with no decision: {_no_decision}")
 for g in G:
     for d in g["deps"]:
         assert d in ids or d in dids, (g["id"], d)
