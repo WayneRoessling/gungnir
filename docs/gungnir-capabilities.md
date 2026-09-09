@@ -388,7 +388,11 @@ mixture-reduction step), and it has no CPHD updater at all. Both rows are gated
 against this crate's own hand-derived recursions instead -- the PHD one checked
 against the textbook Vo-Ma paper, the CPHD one independently checked against a
 brute-force enumeration of every possible detection-to-target association before
-being trusted.
+being trusted. The owner's review before signing the CPHD (2026-09-09) found the
+leave-one-out elementary symmetric functions numerically unstable for a
+well-matched target among clutter, in the crate and its oracle alike; both were
+corrected the same day and the fixture gained a clutter case so the regime stays
+gated.
 
 *Definition of done:* Weights within 1e-3; exact cardinality where unambiguous.
 
@@ -1438,7 +1442,7 @@ calls it in its tick loop.
 | `gungnir-filters` | Tracking core | KF/EKF/UKF/PF/IMM/sqrt-UDU/RTS | Foundational | **Linear KF implemented and gated 2026-09-05** (Joseph form, agreeing with filterpy to 9.1e-13); the other six are trait surfaces, and the EKF bench is still a placeholder |
 | `gungnir-association` | Tracking core | NN/GNN, Hungarian/JV, gating, JPDA, MHT | Foundational | **Hungarian/JV, GNN, and chi-square gating implemented and gated 2026-09-05** against scipy; the assignment bench is real and the fuzz target now drives the solver. JPDA and MHT are trait surfaces |
 | `gungnir-track` | Tracking core | Track lifecycle | Foundational | **Implemented and gated 2026-09-05**: init/confirm/coast/delete agreeing with Stone Soup on every confirm and delete step index |
-| `gungnir-rfs` | Tracking core | PHD/CPHD, GLMB/LMB | Foundational | **PHD implemented and gated 2026-09-06, CPHD implemented and gated 2026-09-08** (§1 above); GLMB/LMB are trait surfaces, and the dense-swarm bench is still a placeholder |
+| `gungnir-rfs` | Tracking core | PHD/CPHD, GLMB/LMB | Foundational | **PHD implemented and gated 2026-09-06, CPHD implemented and gated 2026-09-08 and signed 2026-09-09 after a review correction** (§1 above); the LMB filter is built and gated but not signed (`gungnir-rfs/src/lib.rs` module doc) and the full delta-GLMB remains a trait surface; the dense-swarm bench is still a placeholder |
 | `gungnir-fusion-async` | Tracking core | OOS/multi-rate fusion, concurrency | Foundational | Ingest task runs and drains; pipeline not implemented (`PIPELINE_IMPLEMENTED = false`) |
 | `gungnir-track-fusion` | Tracking core | Track-to-track CI fusion, registration/bias | Foundational | Trait surface |
 | `gungnir-allocation` | Tracking core | Bellman/DP resource assignment | Foundational | Returns `NotImplemented`; degenerate inputs tested |

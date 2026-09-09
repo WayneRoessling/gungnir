@@ -64,6 +64,19 @@ struct Scan {
     intensity_at_probes: Vec<f64>,
 }
 
+/// `count` clutter returns per scan, uniform in an annulus around each truth position
+/// (2026-09-09): the regime the leave-one-out elementary symmetric functions were
+/// unstable in -- one dominant predictive likelihood among many small ones -- kept
+/// genuinely random so no return recurs where a previous scan's clutter-born component
+/// sits. Drawn from [`SplitMix64`] seeded per scan and truth index, exactly as the
+/// generator's `annulus_clutter` draws them, so both sides see identical detections.
+#[derive(serde::Deserialize)]
+struct ClutterAnnulus {
+    radius_min: f64,
+    radius_max: f64,
+    count: usize,
+}
+
 #[derive(serde::Deserialize)]
 struct Case {
     name: String,
@@ -72,6 +85,46 @@ struct Case {
     birth_scans: Vec<usize>,
     probes: Vec<Vec<f64>>,
     per_scan: Vec<Scan>,
+    /// Absent from the three original, clutter-free cases.
+    #[serde(default)]
+    clutter_annulus: Option<ClutterAnnulus>,
+    /// `([x, y, z], weight)` broad births added on every scan; absent from the three
+    /// original cases. What keeps the cardinality prior's tail fat.
+    #[serde(default)]
+    per_scan_births: Vec<(Vec<f64>, f64)>,
+    /// This case's own clutter density, overriding the shared setting: a case that
+    /// carries real clutter has to declare a rate its scans are consistent with, or
+    /// the model is right to read the clutter as targets. Absent from the three
+    /// original cases.
+    #[serde(default)]
+    clutter_density: Option<f64>,
+}
+
+/// `SplitMix64`, the standard constants, matching the generator's own bit for bit; its
+/// `next_unit` is `(z >> 11) / 2^53`, exact in both languages.
+struct SplitMix64(u64);
+
+impl SplitMix64 {
+    fn next_u64(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn next_unit(&mut self) -> f64 {
+        // 53 bits after the shift: exactly representable, so the cast is lossless.
+        #[allow(clippy::cast_precision_loss)]
+        let mantissa = (self.next_u64() >> 11) as f64;
+        // 2^53 as an exact literal, so no second cast is needed to name it.
+        mantissa / 9_007_199_254_740_992.0
+    }
+}
+
+/// The generator's seed for scan `scan`'s clutter around truth position `t`.
+fn clutter_seed(scan: usize, t: usize) -> u64 {
+    0x5EED + 1000 * scan as u64 + t as u64
 }
 
 #[derive(serde::Deserialize)]
@@ -131,6 +184,10 @@ fn intensity_at(components: &[GaussianComponent], point: &[f64]) -> f64 {
     total
 }
 
+// One scene's replay end to end -- build the filter, regenerate the scans exactly as
+// the generator did (truth, annulus clutter, births per scan), assert per scan; cutting
+// it at an arbitrary line count would put one case's replay in two places.
+#[allow(clippy::too_many_lines)]
 #[test]
 fn the_cphd_filter_matches_the_closed_form_derivation() {
     let fixture = fixture();
@@ -147,7 +204,7 @@ fn the_cphd_filter_matches_the_closed_form_derivation() {
             PhdSettings {
                 probability_of_survival: s.probability_of_survival,
                 probability_of_detection: s.probability_of_detection,
-                clutter_density: s.clutter_density,
+                clutter_density: case.clutter_density.unwrap_or(s.clutter_density),
                 prune_threshold: s.prune_threshold,
                 merge_distance: s.merge_distance,
                 max_components: s.max_components,
@@ -162,31 +219,53 @@ fn the_cphd_filter_matches_the_closed_form_derivation() {
         let motion = ConstantVelocity {
             sigma_a_sq: s.sigma_a_sq,
         };
-        let detections: Vec<SVector<f64, 3>> = case
-            .truth
-            .iter()
-            .map(|p| SVector::<f64, 3>::from_column_slice(p))
-            .collect();
+        let birth_at = |p: &[f64], weight: f64| {
+            let mut mean = SVector::<f64, 6>::zeros();
+            for axis in 0..3 {
+                mean[axis] = p[axis];
+            }
+            GaussianComponent {
+                weight,
+                mean,
+                cov: diagonal::<6>(&s.birth_cov_diag),
+            }
+        };
 
         for scan in 0..case.scan_count {
-            let births: Vec<GaussianComponent> = if case.birth_scans.contains(&scan) {
+            let mut detections: Vec<SVector<f64, 3>> = case
+                .truth
+                .iter()
+                .map(|p| SVector::<f64, 3>::from_column_slice(p))
+                .collect();
+            if let Some(annulus) = &case.clutter_annulus {
+                for (t, p) in case.truth.iter().enumerate() {
+                    let mut rng = SplitMix64(clutter_seed(scan, t));
+                    for _ in 0..annulus.count {
+                        let radius = annulus.radius_min
+                            + (annulus.radius_max - annulus.radius_min) * rng.next_unit();
+                        let angle = 2.0 * std::f64::consts::PI * rng.next_unit();
+                        detections.push(SVector::<f64, 3>::new(
+                            p[0] + radius * angle.cos(),
+                            p[1] + radius * angle.sin(),
+                            p[2],
+                        ));
+                    }
+                }
+            }
+
+            let mut births: Vec<GaussianComponent> = if case.birth_scans.contains(&scan) {
                 case.truth
                     .iter()
-                    .map(|p| {
-                        let mut mean = SVector::<f64, 6>::zeros();
-                        for axis in 0..3 {
-                            mean[axis] = p[axis];
-                        }
-                        GaussianComponent {
-                            weight: s.birth_weight,
-                            mean,
-                            cov: diagonal::<6>(&s.birth_cov_diag),
-                        }
-                    })
+                    .map(|p| birth_at(p, s.birth_weight))
                     .collect()
             } else {
                 Vec::new()
             };
+            births.extend(
+                case.per_scan_births
+                    .iter()
+                    .map(|(p, weight)| birth_at(p, *weight)),
+            );
             filter
                 .predict(&motion, s.dt, &births)
                 .unwrap_or_else(|e| panic!("{} scan {scan}: {e}", case.name));
@@ -253,5 +332,23 @@ fn the_fixture_covers_a_multi_target_scene() {
         fixture.cases.iter().any(|c| c.truth.len() >= 3),
         "every fixture scene has fewer than three targets, so merging is never \
          meaningfully exercised"
+    );
+}
+
+/// And at least one scene must put the filter in the regime the leave-one-out
+/// elementary symmetric functions were unstable in (2026-09-09): one dominant
+/// predictive likelihood among many small ones, under a fat cardinality prior. The
+/// three original scenes have neither clutter nor per-scan births and never reach it;
+/// a regeneration that dropped the fourth would leave this row gating only the clean
+/// case again.
+#[test]
+fn the_fixture_covers_clutter_under_a_fat_prior() {
+    let fixture = fixture();
+    assert!(
+        fixture.cases.iter().any(|c| {
+            c.clutter_annulus.as_ref().is_some_and(|a| a.count >= 12)
+                && !c.per_scan_births.is_empty()
+        }),
+        "no fixture scene carries annulus clutter and per-scan births, so the          leave-one-out ESF regime is not gated against the oracle"
     );
 }

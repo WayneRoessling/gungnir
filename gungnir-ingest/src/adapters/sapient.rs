@@ -36,8 +36,9 @@
 //! wire is one TCP session per middleware, not read-only by anything in the ICD, so
 //! `TcpStream::try_clone` gives an independent handle to the *same* connection for
 //! writing, one JSON object per line outbound exactly as `take_messages` reads them
-//! inbound. **Human-owned (the `gungnir-ingest` gateway); written and gated, not
-//! signed.**
+//! inbound. [`TcpTaskSink::send`]'s own doc comment records a `WouldBlock` handling bug
+//! found in review and closed the same day, before signing. **Human-owned (the
+//! `gungnir-ingest` gateway); signed by the owner 2026-09-08.**
 //!
 //! So a spotter, an acoustic array, or a passive-RF direction finder each need no design
 //! of our own: they need this adapter, accepting their node type, and the measurement
@@ -255,6 +256,17 @@ pub struct TcpTaskSink {
 }
 
 impl TcpTaskSink {
+    /// How long `send` retries a write that keeps returning `WouldBlock` before giving
+    /// up. `TcpSapientSource::connect`'s own connection timeout (3s) is the closest
+    /// existing precedent for how long this workspace is willing to wait on this
+    /// connection, reused here rather than inventing a second number.
+    const SEND_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
+
+    /// How long `send` sleeps between retries. Short enough that the deadline above
+    /// still gets hundreds of attempts, long enough not to busy-spin a thread against a
+    /// socket that will not accept more for a while.
+    const SEND_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_millis(5);
+
     /// Write one task message and a trailing newline, the same framing
     /// [`TcpSapientSource::take_messages`] reads inbound.
     ///
@@ -266,9 +278,47 @@ impl TcpTaskSink {
     /// `Issued` once the sink is called, which is accurate: the bytes left this
     /// process; what the middleware or the sensor did with them is what a `TaskAck`
     /// (or its absence) reports, not this call.
+    ///
+    /// **Retries on `WouldBlock` instead of treating it like any other error
+    /// (2026-09-08, found in review before signing).** This connection is nonblocking
+    /// (`TcpSapientSource::connect` sets it, and `try_clone` shares that as live, shared
+    /// kernel state with this handle -- confirmed empirically rather than assumed, since
+    /// std does not document it either way), so a full send buffer is not a rare event:
+    /// a peer merely a few milliseconds slow to drain is enough to see `WouldBlock` on
+    /// an otherwise healthy connection. Before this fix, a single `write_all` call
+    /// treated that exactly like a dead connection -- logged, and the rest of the
+    /// message never sent. That was worse than a dropped message whenever the *first*
+    /// part of that call had already placed bytes on the wire before a later write in
+    /// the same call returned `WouldBlock`: those bytes cannot be recalled, so a
+    /// partial, newline-less fragment of a task stayed stuck ahead of whatever `send`
+    /// was called next, corrupting the one-JSON-object-per-line framing the
+    /// middleware's own reader depends on for both messages, not just this one.
+    ///
+    /// This loop tracks how many bytes of *this* message have gone out and retries only
+    /// the remainder, holding the same lock for the whole call so a concurrent `send`
+    /// for a different task cannot interleave into a message this one has not finished
+    /// -- a transient blip now waits instead of dropping or corrupting anything.
+    ///
+    /// **What this does not claim.** A peer unresponsive for the whole of
+    /// `SEND_DEADLINE` while this call is mid-message can still leave that fragment on
+    /// the wire when this gives up: there is no way to recall bytes already handed to
+    /// the kernel. Flipping this connection to blocking for the duration of the write is
+    /// not a safer fix -- the nonblocking flag is shared, live kernel state, not a
+    /// per-handle copy (confirmed the same way), so blocking this handle would block
+    /// `TcpSapientSource::take_messages` on the same connection out from under whatever
+    /// thread is polling it. A connection unresponsive for multiple seconds mid-write is
+    /// one the read side is already likely diagnosing as dead on its own account; this
+    /// residual is stated rather than papered over, the same way
+    /// `gungnir_security::os_keystore::ensure_secret`'s own residual is.
     pub fn send(&self, mut json: String) {
-        use std::io::Write;
         json.push('\n');
+        self.send_within(json.as_bytes(), Self::SEND_DEADLINE);
+    }
+
+    /// As [`send`][Self::send], with the deadline as a parameter so a test can prove
+    /// the give-up path without waiting out the real one.
+    fn send_within(&self, bytes: &[u8], deadline: std::time::Duration) {
+        use std::io::Write;
         let Ok(mut stream) = self.stream.lock() else {
             tracing::error!(
                 sink = %self.description,
@@ -276,12 +326,45 @@ impl TcpTaskSink {
             );
             return;
         };
-        if let Err(e) = stream.write_all(json.as_bytes()) {
-            tracing::error!(
-                sink = %self.description,
-                %e,
-                "a SAPIENT task could not be written to the connection"
-            );
+        let mut sent = 0;
+        let give_up_at = std::time::Instant::now() + deadline;
+        loop {
+            match stream.write(&bytes[sent..]) {
+                Ok(0) => {
+                    tracing::error!(
+                        sink = %self.description,
+                        "a SAPIENT task's connection accepted no more bytes"
+                    );
+                    return;
+                }
+                Ok(n) => {
+                    sent += n;
+                    if sent == bytes.len() {
+                        return;
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    if std::time::Instant::now() >= give_up_at {
+                        tracing::error!(
+                            sink = %self.description,
+                            sent,
+                            total = bytes.len(),
+                            "a SAPIENT task could not be fully written before its send \
+                             deadline; the connection is not draining"
+                        );
+                        return;
+                    }
+                    std::thread::sleep(Self::SEND_RETRY_INTERVAL);
+                }
+                Err(e) => {
+                    tracing::error!(
+                        sink = %self.description,
+                        %e,
+                        "a SAPIENT task could not be written to the connection"
+                    );
+                    return;
+                }
+            }
         }
     }
 }
@@ -1538,6 +1621,126 @@ mod tests {
             received,
             b"{\"nodeId\":\"gungnir-node-1\",\"task\":{}}\n".to_vec(),
             "one JSON object and a trailing newline, the framing take_messages reads"
+        );
+    }
+
+    /// The bug `send_within` closes (2026-09-08, found in review before signing):
+    /// `write_all` treated a transient `WouldBlock` like a dead connection and gave up
+    /// mid-message. This forces a real `WouldBlock` -- not a mocked one -- with many
+    /// separate small sends rather than one large one: measured directly against this
+    /// platform's own loopback path, a *single* write large enough to fill the whole
+    /// buffer several times over was still accepted in one call with no blocking at
+    /// all, while a *run* of ordinary-sized writes exhausted the same connection's real
+    /// buffer within a handful of calls -- so many discrete sends is the shape that
+    /// actually reproduces backpressure here, and is also the shape a burst of
+    /// individually-issued SAPIENT tasks actually takes. The old code would have
+    /// returned early on whichever send first hit `WouldBlock`, having already placed
+    /// a truncated, newline-less fragment of that task's JSON on the wire ahead of
+    /// every send after it; this proves every message still arrives, in order, intact.
+    #[test]
+    fn send_retries_through_a_transient_would_block_rather_than_dropping_or_truncating() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let accepted = std::thread::spawn(move || {
+            use std::io::Read;
+            let (mut stream, _) = listener.accept().expect("accept");
+            // Give the sender time to actually exhaust the buffer and hit WouldBlock
+            // before this starts draining -- proving the retry loop recovers, not
+            // just that an already-empty buffer never blocked in the first place.
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            let mut buf = Vec::new();
+            stream.read_to_end(&mut buf).expect("read");
+            buf
+        });
+
+        let source =
+            TcpSapientSource::connect(addr, std::time::Duration::from_secs(3)).expect("connect");
+        let sink = source.sink().expect("sink");
+
+        // ~430 bytes per line, 3000 lines: well past the roughly 450KB this
+        // connection's own buffer was measured to hold before a run of discrete
+        // writes hits WouldBlock, so several of these sends must retry.
+        let filler = "x".repeat(400);
+        let expected: Vec<String> = (0..3000u32)
+            .map(|i| format!("{{\"seq\":{i},\"pad\":\"{filler}\"}}"))
+            .collect();
+        for line in &expected {
+            sink.send(line.clone());
+        }
+        drop(source);
+        drop(sink);
+
+        let received = accepted.join().expect("thread");
+        let received_text = String::from_utf8(received).expect("valid utf8, nothing corrupted");
+        let received_lines: Vec<&str> = received_text.lines().collect();
+        assert_eq!(
+            received_lines.len(),
+            expected.len(),
+            "every message must arrive, none dropped, none merged into another"
+        );
+        assert_eq!(
+            received_lines,
+            expected.iter().map(String::as_str).collect::<Vec<_>>(),
+            "in order and byte-for-byte -- a merged or truncated line here is exactly \
+             the corruption this fix closes"
+        );
+    }
+
+    /// The residual `send_within`'s own doc comment names: a peer that never drains at
+    /// all must still return control to the caller, bounded by the deadline, rather
+    /// than retrying forever. Uses the same many-discrete-writes shape as the test
+    /// above, for the same measured reason -- one oversized write does not reproduce
+    /// backpressure on this platform's loopback path at all.
+    #[test]
+    fn send_within_gives_up_after_its_deadline_rather_than_hanging_forever() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let accepted = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept");
+            // Never read at all: the connection that will not drain is exactly the
+            // case the deadline exists for. Held well past this test's own
+            // assertions so the socket stays open and genuinely refuses more, rather
+            // than closing and turning this into the differently-handled
+            // "connection closed" path.
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            drop(stream);
+        });
+
+        let source =
+            TcpSapientSource::connect(addr, std::time::Duration::from_secs(3)).expect("connect");
+        let sink = source.sink().expect("sink");
+
+        // Stop at the first call that genuinely had to wait out a meaningful slice of
+        // its own deadline, rather than looping indefinitely once that is proven --
+        // measured at attempt 7 (458KB) on this platform, so 200 attempts (12.8MB) is
+        // a generous margin without letting the test run long.
+        let deadline = std::time::Duration::from_millis(30);
+        let chunk = vec![b'x'; 64 * 1024];
+        let mut blocked = None;
+        for attempt in 0..200u32 {
+            let start = std::time::Instant::now();
+            sink.send_within(&chunk, deadline);
+            let elapsed = start.elapsed();
+            if elapsed >= deadline / 2 {
+                blocked = Some((attempt, elapsed));
+                break;
+            }
+        }
+
+        drop(source);
+        drop(sink);
+        drop(accepted);
+
+        let (attempt, elapsed) = blocked.expect(
+            "no call needed to retry within 200 attempts (12.8MB) -- this platform's \
+             real send buffer is bigger than measured, or the retry loop is not \
+             really exercising WouldBlock; either way this test proved nothing and \
+             must be revisited rather than trusted",
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(1),
+            "attempt {attempt} took {elapsed:?} against a {deadline:?} deadline -- \
+             must be bounded, not hanging"
         );
     }
 }
