@@ -60,6 +60,19 @@
         { "resource": 2, "position_enu": [2000.0, 1400.0, -1.0] }
       ],
       "current": false
+    },
+    {
+      "id": "c",
+      "intent": "move S2 forward to the south-shore site 10 km up the upper Vell approach, for early detection over the outer estuary",
+      "sensors": [
+        { "sensor": 1, "position_enu": [0.0, 0.0, 25.0], "mode": "Search" },
+        { "sensor": 2, "position_enu": [10762.0, 2540.0, 35.0], "mode": "Search" }
+      ],
+      "resources": [
+        { "resource": 1, "position_enu": [0.0, 0.0, 0.0] },
+        { "resource": 2, "position_enu": [5718.507, 1081.599, -2.649] }
+      ],
+      "current": false
     }
   ]
 }
