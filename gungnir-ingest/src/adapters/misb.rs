@@ -33,12 +33,20 @@
 //! counted on [`MisbFeedStats::checksum_mismatches`] rather than silently accepted or
 //! silently dropped.
 //!
-//! **A known limitation, stated rather than hidden**: like `AisReceiverAdapter`'s
-//! `partial` line buffer, this adapter's byte buffer has no upper bound. A source
-//! that never delivers a valid frame (the wrong protocol connected to the wrong
-//! port) grows it without limit. Real MISB streams are periodic (typically several
-//! frames per second), so a healthy feed drains the buffer continuously; nothing in
-//! this gap's scope adds a cap that the AIS and ADS-B adapters do not also have.
+//! **What bounds the buffer, and what does not.** A header promising more than
+//! `MAX_FRAME_BYTES` is treated as corrupt and resynchronized past rather than waited
+//! for (that constant's own doc comment records the stall this closed), so one corrupt
+//! length byte can no longer hold the feed or grow the buffer without limit. A header
+//! within that bound whose frame never completes -- a source that stops mid-frame --
+//! holds at most that many bytes until more arrive or the connection fails, which is
+//! the right behaviour for a stream that has merely paused; and a stream carrying no
+//! UAS Datalink LS key at all is trimmed to the fifteen bytes a key could be
+//! straddling, as before.
+//!
+//! **Human-owned (the `gungnir-ingest` gateway); signed by the owner 2026-09-09**,
+//! after the review before signing found and closed the corrupt-length stall above,
+//! recorded the missing-altitude axis a placed fix silently carried, and made the
+//! codec's fixed tag widths strict (`gungnir_interop::misb0601`).
 
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Read};
@@ -63,6 +71,20 @@ use gungnir_model::{
 /// is actually known should set this from that, which is a change to this adapter's
 /// configuration and not to its mapping.
 const BASELINE_POSITION_VARIANCE_M2: [f64; 3] = [400.0, 400.0, 900.0];
+
+/// The largest frame this adapter will wait for, in bytes -- this adapter's own bound,
+/// not MISB's. ST 0601 puts no limit on a local set's BER length, but a UAS Datalink LS
+/// is a few hundred bytes to a few kilobytes in practice (the vendored worked example is
+/// 228), so a header promising more than this is far more likely one corrupt length
+/// byte than a frame worth waiting for. Waiting is not free: every byte that arrives
+/// behind such a header is swallowed until the promised count is met, so before this
+/// bound existed (2026-09-09, found in review before signing) a single corrupt length
+/// stalled the feed for good -- twenty valid frames queued behind a header claiming
+/// four gigabytes produced nothing across two hundred polls, with no error, no
+/// resynchronization, and a buffer that only grew. A header past this bound is now
+/// treated exactly like a malformed one: counted on
+/// [`MisbFeedStats::frames_undecodable`] and resynchronized past.
+const MAX_FRAME_BYTES: usize = 65_535;
 
 /// Where the KLV bytes come from: a receiver's TCP port, a recording, or a test.
 pub trait KlvSource: Send {
@@ -300,6 +322,7 @@ impl<S: KlvSource> UasMetadataAdapter<S> {
         enu: [f64; 3],
         source_time: MissionTime,
         now: MissionTime,
+        conversion_loss: Option<&'static str>,
     ) -> DetectionView {
         DetectionView {
             sensor: self.sensor,
@@ -316,6 +339,7 @@ impl<S: KlvSource> UasMetadataAdapter<S> {
                     "misb0601 ({})",
                     gungnir_interop::misb0601::CROSS_CHECK_SOURCE
                 ),
+                conversion_loss: conversion_loss.map(str::to_owned),
                 ..Provenance::default()
             },
         }
@@ -349,7 +373,16 @@ impl<S: KlvSource> UasMetadataAdapter<S> {
         match platform_position {
             Some(point) => {
                 self.stats.positions_placed += 1;
-                out.push(self.detection(point.enu, source_time, now));
+                // The fix is still placed, but an absent Sensor True Altitude puts it
+                // at 0 m in the local frame, and that axis is then not a measurement:
+                // named in the provenance, the same way `cat048::map` records "no
+                // height in report" rather than passing the radar site's height off
+                // as measured (2026-09-09, found in review before signing).
+                let loss = (!point.elevation_reported).then_some(
+                    "no Sensor True Altitude (Tag 15) in frame; up set to 0 m in the \
+                     local frame",
+                );
+                out.push(self.detection(point.enu, source_time, now, loss));
             }
             None => self.stats.positions_not_placed += 1,
         }
@@ -390,6 +423,19 @@ impl<S: KlvSource> ProtocolAdapter for UasMetadataAdapter<S> {
                     self.stats.frames_decoded += 1;
                     self.handle(&frame, now, &mut out);
                     self.buffer.drain(..consumed);
+                    continue;
+                }
+                // A header promising more than any real frame carries is one corrupt
+                // length byte, not a frame in transit: waiting for it would swallow
+                // every frame behind it (`MAX_FRAME_BYTES`). Fall through to the
+                // resynchronization below exactly as a malformed frame does.
+                Err(Misb0601Error::Truncated { needed, .. }) if needed > MAX_FRAME_BYTES => {
+                    tracing::warn!(
+                        adapter = %self.name,
+                        needed,
+                        bound = MAX_FRAME_BYTES,
+                        "a KLV header promises an implausibly large frame; treated as corrupt"
+                    );
                 }
                 // Not corrupt: the frame the header promises has not fully arrived.
                 // Wait for the next poll rather than treating this as a fault.
@@ -399,21 +445,23 @@ impl<S: KlvSource> ProtocolAdapter for UasMetadataAdapter<S> {
                     | Misb0601Error::BerLengthMalformed
                     | Misb0601Error::LocalSetTruncated { .. },
                 ) => {
-                    self.stats.frames_undecodable += 1;
                     tracing::debug!(adapter = %self.name, "a KLV frame did not decode; resynchronizing");
-                    if let Some(offset) = find_next_key(&self.buffer, 1) {
-                        self.stats.resynchronized += 1;
-                        self.buffer.drain(..offset);
-                    } else {
-                        // No key anywhere in what is buffered. Keep the last
-                        // `UDS_KEY.len() - 1` bytes in case a key is straddling the
-                        // end of this read, and wait for more.
-                        let keep = self.buffer.len().min(UDS_KEY.len() - 1);
-                        let drop_to = self.buffer.len() - keep;
-                        self.buffer.drain(..drop_to);
-                        break;
-                    }
                 }
+            }
+            // Whatever is at the front is not a frame this adapter will decode: count
+            // it and move to the next key.
+            self.stats.frames_undecodable += 1;
+            if let Some(offset) = find_next_key(&self.buffer, 1) {
+                self.stats.resynchronized += 1;
+                self.buffer.drain(..offset);
+            } else {
+                // No key anywhere in what is buffered. Keep the last
+                // `UDS_KEY.len() - 1` bytes in case a key is straddling the end of
+                // this read, and wait for more.
+                let keep = self.buffer.len().min(UDS_KEY.len() - 1);
+                let drop_to = self.buffer.len() - keep;
+                self.buffer.drain(..drop_to);
+                break;
             }
         }
         if let Some(sink) = &self.stats_sink {
@@ -560,5 +608,129 @@ mod tests {
         assert_eq!(stats.frames_decoded, 1);
         assert_eq!(stats.frames_undecodable, 1);
         assert_eq!(stats.resynchronized, 1);
+    }
+
+    /// The stall `MAX_FRAME_BYTES` closes (2026-09-09, found in review before signing):
+    /// one header claiming four gigabytes, then twenty valid frames. Before the bound,
+    /// every one of those frames was swallowed behind the header -- nothing decoded,
+    /// nothing counted, nothing resynchronized, across two hundred polls -- because a
+    /// `Truncated` frame was always one to wait for. Now the header is treated as the
+    /// corrupt length it is, and the frames behind it decode.
+    #[test]
+    fn one_corrupt_length_no_longer_stalls_the_frames_behind_it() {
+        let good = build_frame(&[
+            (13, &60_200_000_i32.to_be_bytes()),
+            (14, &128_100_000_i32.to_be_bytes()),
+            (15, &30_000_u16.to_be_bytes()),
+        ]);
+        let mut stream = Vec::new();
+        stream.extend_from_slice(&UDS_KEY);
+        stream.extend_from_slice(&[0x84, 0xFF, 0xFF, 0xFF, 0xFF]); // BER long form: 4 GiB
+        for _ in 0..20 {
+            stream.extend_from_slice(&good);
+        }
+        let source = RecordedKlvSource::from_bytes(stream, "test".into()).with_bytes_per_poll(64);
+        let mut adapter = UasMetadataAdapter::new("uas1", SensorId(24), frame(), source);
+        let mut detections = 0;
+        for poll in 0..200 {
+            detections += adapter
+                .poll(MissionTime(f64::from(poll)))
+                .expect("polls")
+                .len();
+        }
+        let stats = adapter.stats();
+        assert_eq!(
+            detections, 20,
+            "every frame behind the corrupt header must decode"
+        );
+        assert_eq!(
+            (
+                stats.frames_decoded,
+                stats.frames_undecodable,
+                stats.resynchronized
+            ),
+            (20, 1, 1),
+            "the corrupt header is counted once and resynchronized past once"
+        );
+    }
+
+    /// A length that is wrong but plausible -- ten bytes more than the frame really
+    /// has -- cannot be told from a real header, so the next frame's first bytes are
+    /// read as the tail of this one. What saves the stream is that the mangled local
+    /// set does not parse (a key byte read as a tag whose length runs past the end),
+    /// which resynchronizes to the next key: the mangled frame is lost, the one behind
+    /// it is not.
+    #[test]
+    fn a_plausible_but_wrong_length_loses_one_frame_and_recovers_at_the_next_key() {
+        let good = build_frame(&[
+            (13, &60_200_000_i32.to_be_bytes()),
+            (14, &128_100_000_i32.to_be_bytes()),
+            (15, &30_000_u16.to_be_bytes()),
+        ]);
+        let mut mangled = good.clone();
+        mangled[UDS_KEY.len()] += 10; // the short-form length byte
+        let mut stream = mangled;
+        for _ in 0..4 {
+            stream.extend_from_slice(&good);
+        }
+        let source = RecordedKlvSource::from_bytes(stream, "test".into());
+        let mut adapter = UasMetadataAdapter::new("uas1", SensorId(25), frame(), source);
+        let detections = adapter.poll(MissionTime(0.0)).expect("polls").len();
+        let stats = adapter.stats();
+        assert_eq!(
+            detections, 4,
+            "the four frames behind the mangled one decode"
+        );
+        assert_eq!(
+            (
+                stats.frames_decoded,
+                stats.frames_undecodable,
+                stats.resynchronized
+            ),
+            (4, 1, 1)
+        );
+    }
+
+    /// A fix with no Sensor True Altitude is still placed -- at 0 m in the local
+    /// frame -- and says so in its provenance rather than carrying a 30 m vertical
+    /// sigma for an axis nobody measured, the same record `cat048::map` keeps for a
+    /// plot with no height (2026-09-09, found in review before signing).
+    #[test]
+    fn a_frame_without_an_altitude_is_placed_and_the_missing_axis_is_recorded() {
+        let sink = PlatformReportSink::default();
+        let bytes = build_frame(&[
+            (13, &60_200_000_i32.to_be_bytes()),
+            (14, &128_100_000_i32.to_be_bytes()),
+        ]);
+        let source = RecordedKlvSource::from_bytes(bytes, "test".into());
+        let mut adapter = UasMetadataAdapter::new("uas1", SensorId(26), frame(), source)
+            .with_report_sink(sink.clone());
+        let detections = adapter.poll(MissionTime(1_000.0)).expect("polls");
+        assert_eq!(detections.len(), 1);
+        let loss = detections[0]
+            .provenance
+            .conversion_loss
+            .as_deref()
+            .expect("the missing altitude is recorded");
+        assert!(loss.contains("Tag 15"), "{loss}");
+        assert_eq!(adapter.stats().positions_placed, 1);
+        let reports: Vec<UasPlatformReport> = sink.lock().expect("sink").drain(..).collect();
+        assert!(
+            !reports[0]
+                .platform_position
+                .expect("placed")
+                .elevation_reported
+        );
+
+        // And a frame that does carry the altitude records no loss at all.
+        let bytes = build_frame(&[
+            (13, &60_200_000_i32.to_be_bytes()),
+            (14, &128_100_000_i32.to_be_bytes()),
+            (15, &30_000_u16.to_be_bytes()),
+        ]);
+        let source = RecordedKlvSource::from_bytes(bytes, "test".into());
+        let mut adapter = UasMetadataAdapter::new("uas1", SensorId(27), frame(), source);
+        let detections = adapter.poll(MissionTime(1_000.0)).expect("polls");
+        assert!(detections[0].provenance.conversion_loss.is_none());
     }
 }

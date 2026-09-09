@@ -25,6 +25,13 @@
 //! The parser behind this adapter is gated on the `asterix_feed` fuzz target
 //! (`docs/agentic-workflow.md`, "Parsers in `gungnir-ingest` adapters"); its corpus is
 //! the public capture, and `tests/asterix_seeds.rs` checks the corpus still decodes.
+//!
+//! **The Category 205 arm and its [`DfBinding`] (GAP-100): human-owned (the
+//! `gungnir-ingest` gateway), signed by the owner 2026-09-09**, after the review before
+//! signing confirmed the codec's bearing scale and angular reference against the
+//! primary text's own item definitions (`gungnir_interop::asterix::cat205`'s module
+//! documentation records the one discrepancy inside that text) and added the angular
+//! range refusals those definitions state.
 
 use crate::{DetectionView, IngestError, ProtocolAdapter};
 use gungnir_interop::asterix::{cat034, cat048, cat129, cat205, data_blocks, RadarSite};
