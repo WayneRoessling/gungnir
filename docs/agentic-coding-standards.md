@@ -666,21 +666,59 @@ it on 2026-09-08.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
-| `proj` | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data` | Not yet: no gap builds it |
-| `proj-sys` (`proj`'s own dependency, binding `libproj` v9.6.x) | Finds a system `libproj` install or builds one from source when none is found -- the same two-path shape `vtkio`'s and `rcgen`'s own native dependencies already follow | `gungnir-data` (a normal dependency, not test-only) | Not yet: no gap builds it |
+| `proj` 0.31 (`default-features = false`) | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data` | GAP-102 (point clouds), 2026-09-08, **optional, behind that crate's default-off `crs` feature** |
+| `proj-sys` 0.27 (`proj`'s own dependency, binding `libproj` v9.6.x) | Finds a system `libproj` install or builds one from source when none is found -- the same two-path shape `vtkio`'s and `rcgen`'s own native dependencies already follow | `gungnir-data`, transitively | GAP-102, with the same feature gate |
 
-`proj` and `libproj` are both permissively licensed (`proj`: MIT OR Apache-2.0;
-`libproj`: X/MIT, an OSGeo project), so this is a build-and-review cost, not a licensing
-one. **Full projection support was chosen over a WGS84-geographic-only first step**: a
-narrower cut would have left the common case of a projected DEM (UTM and similar) still
-refused, and `gungnir-coord`'s existing `Wgs84` tangent-plane conversion does not extend
-to a projected CRS regardless -- it solves a different problem (geographic lat/lon to a
-local tangent plane), not general reprojection. **Not yet checked**: `proj-sys`'s build
-behaviour on a CI runner with no system `libproj` present, what `validate_terrain` and
-`validate_point_cloud` need to change to accept a declared CRS beyond `"local-enu"`, and
-what a wrong or unsupported EPSG code should do (refuse by name, matching every other
-malformed-input rule this stack already follows, is the expected answer but is GAP-023's
-and GAP-098's own decision to confirm, not this one's).
+`proj` and `libproj` are both permissively licensed (`proj` and `proj-sys`:
+MIT OR Apache-2.0, confirmed on crates.io 2026-09-08; `libproj`: X/MIT, an OSGeo
+project), so this is a build-and-review cost, not a licensing one. **Full projection
+support was chosen over a WGS84-geographic-only first step**: a narrower cut would have
+left the common case of a projected DEM (UTM and similar) still refused, and
+`gungnir-coord`'s existing `Wgs84` tangent-plane conversion does not extend to a
+projected CRS regardless -- it solves a different problem (geographic lat/lon to a local
+tangent plane), not general reprojection.
+
+**Three things this row left open were checked by GAP-102 (2026-09-08), by running the
+build rather than reading about it, and two of the answers constrain how the crate may be
+taken.**
+
+1. **The build. `proj-sys` 0.27 cannot build `libproj` on `x86_64-pc-windows-msvc`,
+   which is the target `release.yml` ships `gungnir-app` for.** Its from-source path
+   passes `SQLITE3_INCLUDE_DIR` and `SQLITE3_LIBRARY`, which PROJ 9.6.2's own CMake
+   rejects by name in favour of `SQLite3_INCLUDE_DIR`/`SQLite3_LIBRARY`; it names the
+   library `libsqlite3.a`, a Unix filename MSVC does not produce; and PROJ's build
+   additionally requires the `sqlite3` command line binary, which nothing in the Rust
+   dependency chain supplies. On a Linux runner none of this bites, because
+   `apt-get install cmake pkg-config libsqlite3-dev sqlite3` satisfies all three by the
+   standard names. `proj-sys` does **not** need `libclang`: it ships pre-generated
+   bindings and runs `bindgen` only under its optional `buildtime_bindgen` feature.
+   **Consequence: every member takes `proj` as an optional dependency behind a
+   default-off feature**, so a default `cargo check`/`cargo test` stays green on every
+   developer machine, and `ci.yml`'s `proj-crs` job installs the native dependencies and
+   is the one place the conversion is actually exercised.
+2. **The high-level API is two-dimensional.** `proj` 0.31's `Proj::convert` sets the `z`
+   of every coordinate it hands `proj_trans` to `0.0`, so a height cannot be routed
+   through PROJ from this crate's public API at all. A caller therefore converts the
+   horizontal pair through PROJ and scales the vertical by the factor the file itself
+   declares, applying no vertical datum shift -- which is the same answer PROJ gives when
+   its optional vertical-datum grids are absent, and which
+   `gungnir-data/src/pointcloud/crs.rs` states in full rather than leaving to be
+   discovered.
+3. **A wrong or unsupported EPSG code is refused by name, and the refusal is split
+   across two places on purpose.** `validate_point_cloud` checks only the *shape* of the
+   declaration (`"local-enu"`, or `"epsg:<code>"` with a non-zero code), because a
+   baseline is validated on machines with no PROJ database -- the same reason it does not
+   check that a path exists -- and the loader, which has PROJ, is what reports a code no
+   register knows. `network` and `tiff` are also refused, not merely left off: they let
+   `libproj` fetch grid files over the internet at run time, which no deployment profile
+   in `ARCHITECTURE.md` §8 permits.
+
+**One governance note, since it is not obvious.** `deny.toml` sets
+`[graph] all-features = false`, so `cargo deny check licenses` does not evaluate an
+optional dependency's subtree: the `proj` tree is in `Cargo.lock` but is not covered by
+that gate while the feature is off. The licences above were therefore confirmed by hand
+against crates.io rather than by the gate, and a change that makes this feature default
+must re-run `cargo deny` expecting new crates to appear.
 
 #### Cloud KMS for the ManagedService custody profile (signed off 2026-09-08, D-42)
 

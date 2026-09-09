@@ -162,6 +162,17 @@ las = { version = "0.11", features = ["laz-parallel"] }
 # GeoTIFF DEMs (GAP-023, decided 2026-09-06): the image-rs TIFF codec, pure Rust;
 # gungnir-data owns the three GeoTIFF tags itself (§2.9, "Terrain").
 tiff = "0.11"
+# Real-world coordinate reference systems for DEM and point-cloud files (D-41,
+# 2026-09-08; docs/agentic-coding-standards.md §2.9). `proj` 0.31 binds libproj 9.6.x
+# through `proj-sys` 0.27, which links a system libproj when pkg-config finds one at
+# >= 9.6.2 and builds it from source with cmake otherwise. Taken WITHOUT default
+# features: the default `geo-types` feature only adds trait impls for a geometry type
+# this workspace does not use, and `network`/`tiff` would let libproj fetch grid files
+# over the internet at runtime, which no deployment profile in ARCHITECTURE.md §8
+# permits. Every member that takes it does so as an OPTIONAL dependency behind a
+# default-off feature, because the native build is not available on every developer
+# machine -- see gungnir-data's `crs` feature for the whole of that reasoning.
+proj = { version = "0.31", default-features = false }
 
 # Docking for the role workspaces (signed off 2026-09-05, D-19;
 # docs/agentic-coding-standards.md §2.9). Pinned to 0.10 because that is the line that

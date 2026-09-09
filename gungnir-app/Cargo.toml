@@ -12,6 +12,15 @@ description = "eframe desktop binary: bootstrap + AppState + update loop. The on
 [lints]
 workspace = true
 
+[features]
+# Real-world CRS support for the configured point-cloud pair (GAP-102, D-41): forwards
+# `gungnir-data`'s own `crs` feature, which is what links `libproj`. Off by default for
+# the reasons that feature's own comment gives -- chiefly that `proj-sys` 0.27 cannot
+# build libproj on Windows MSVC at all, which is the target `release.yml` ships this
+# binary for. Without it a baseline naming an `epsg:<code>` frame is refused by name at
+# load, never drawn in the wrong place.
+crs = ["gungnir-data/crs"]
+
 [dev-dependencies]
 criterion.workspace = true
 rand.workspace = true

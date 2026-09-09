@@ -121,6 +121,56 @@ jobs:
       - name: rendered documents and sample sets are committed
         run: git diff --exit-code -- docs/test-tracks testdata/tracks/samples
 
+  # GAP-102 (D-41): the point-cloud CRS conversion, which is the one thing in this
+  # workspace that a default `cargo test` cannot run.
+  #
+  # **Why it is a job of its own rather than a flag on `fmt-clippy-test`.** `proj` links
+  # `libproj` through `proj-sys` 0.27, which wants a system libproj at >= 9.6.2 from
+  # pkg-config and otherwise builds PROJ 9.6.2 from source with cmake. Ubuntu's own
+  # `libproj-dev` is older than that minimum, so the source build is the path this job
+  # actually takes, and it needs SQLite3 three separate ways: the headers and the library
+  # to link against, and the `sqlite3` command line binary, which PROJ's own build runs
+  # to generate `proj.db`. That is a few minutes on a cold cache and nothing on a warm
+  # one, and keeping it apart means a failure here reads as "the projection build broke"
+  # rather than muddying the workspace's main gate.
+  #
+  # **This is where the conversion is verified at all.** `gungnir-data`'s `crs` feature is
+  # off by default because `proj-sys` 0.27 cannot build libproj on Windows MSVC -- it
+  # passes `SQLITE3_INCLUDE_DIR`/`SQLITE3_LIBRARY`, which PROJ 9.6.2's CMake rejects by
+  # name in favour of `SQLite3_INCLUDE_DIR`/`SQLite3_LIBRARY`, and names the library
+  # `libsqlite3.a`, which is not what MSVC produces -- and Windows is the target
+  # release.yml ships gungnir-app for. So the feature-gated tests in
+  # `gungnir-data/tests/pointcloud_crs.rs` and `gungnir-app/tests/pointcloud_crs.rs` run
+  # here and nowhere else. If this job is ever removed, that code becomes untested.
+  proj-crs:
+    name: point-cloud CRS conversion (libproj)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Native build dependencies for proj-sys
+        # cmake and a C++ toolchain to build PROJ; libsqlite3-dev for the headers and
+        # library `libsqlite3-sys` and PROJ both link; sqlite3 for the binary PROJ's
+        # build script runs. pkg-config so proj-sys can look for a system libproj first
+        # and report cleanly when it does not find an acceptable one.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake pkg-config libsqlite3-dev sqlite3
+      - name: rustc warnings are errors, with the feature on
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo check -p gungnir-data -p gungnir-app --features crs --all-targets
+      - name: clippy, with the feature on
+        run: cargo clippy -p gungnir-data -p gungnir-app --features crs --all-targets
+      # The conversion itself: `gungnir-data`'s check against an independent pyproj run,
+      # and `gungnir-app`'s end-to-end tick through a real `LocalFrame`.
+      - name: test the conversion against the real fixture
+        run: cargo test -p gungnir-data -p gungnir-app --features crs --test pointcloud_crs
+
   node-linux-container:
     name: gungnir-node builds for Linux x86_64
     runs-on: ubuntu-latest

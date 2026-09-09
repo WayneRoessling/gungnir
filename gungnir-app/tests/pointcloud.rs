@@ -71,8 +71,26 @@ fn settle(state: &mut AppState) {
     panic!("the loader never answered: {:?}", state.point_cloud);
 }
 
+/// **Rewritten by GAP-102 (D-41), and the rewrite is the point rather than a
+/// concession.** This test used to assert that this pair *loaded*: a five-point LAS as
+/// source and the bounded Autzen COPC hierarchy as target, both kept, with
+/// `frame: "local-enu"` unopposed. GAP-102 taught the loader to read a LAS file's own
+/// CRS VLRs, and the Autzen capture declares one -- NAD83 / Oregon GIC Lambert (ft) with
+/// NAVD88 heights -- so the baseline's claim that this file was already in the
+/// deployment's local metres is now contradicted by the file itself and the pair is
+/// refused by name.
+///
+/// That is the behaviour change GAP-102 exists to make. The old expectation was not
+/// wrong about the mechanics, which `a_pair_of_undeclared_files_still_loads_in_order`
+/// below still covers; it was wrong about the geography, and silently so. The two
+/// fixtures were never in one frame -- the five-point file's coordinates are a synthetic
+/// UTM-shaped pair and Autzen's are Oregon Lambert feet -- and nothing in the desktop
+/// could say so until a point cloud carried a CRS to check.
+///
+/// The bounded COPC read is still exercised end to end here: `load_copc_bounded` runs,
+/// returns its 4767 points, and the refusal happens after it, in `pointcloud::place`.
 #[test]
-fn a_las_source_and_a_bounded_copc_target_both_load_in_order() {
+fn a_copc_target_that_declares_a_real_crs_is_refused_against_a_local_enu_baseline() {
     let (mut state, dir) = desktop(
         "pair",
         PointCloudConfig {
@@ -100,24 +118,66 @@ fn a_las_source_and_a_bounded_copc_target_both_load_in_order() {
     );
     settle(&mut state);
     match &state.point_cloud {
+        PointCloudStatus::Failed { path, reason } => {
+            assert!(path.contains("autzen"), "the target is what refused: {path}");
+            assert!(
+                reason.contains("NAD83 / Oregon GIC Lambert (ft)"),
+                "the refusal names what the file actually declares: {reason}"
+            );
+            assert!(
+                reason.contains("epsg:<code>"),
+                "and says what to set instead: {reason}"
+            );
+        }
+        other => panic!("{other:?}"),
+    }
+    // All-or-nothing is unchanged: the source had already loaded and is discarded, so
+    // nothing half-placed reaches the viewport.
+    assert!(state.data.point_clouds.is_empty());
+    assert!(gungnir_app::pointcloud::layers(&state.point_cloud, &state.data).is_empty());
+    assert!(
+        state.alerts.iter().any(|a| a.contains("not loaded")),
+        "the operator is told: {:?}",
+        state.alerts
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The pair mechanics GAP-098 built, kept under test with two files that declare no CRS
+/// at all -- which is what leaves a baseline's `frame: "local-enu"` unopposed, and so is
+/// the case where a pair still loads and is drawn.
+#[test]
+fn a_pair_of_undeclared_files_still_loads_in_order() {
+    let (mut state, dir) = desktop(
+        "undeclared-pair",
+        PointCloudConfig {
+            source: plain(fixture("five-points.las")),
+            target: plain(fixture("five-points.las")),
+            frame: "local-enu".into(),
+        },
+    );
+    update::tick(&mut state);
+    settle(&mut state);
+    match &state.point_cloud {
         PointCloudStatus::Loaded {
             source_points,
             target_points,
             ..
         } => {
             assert_eq!(*source_points, 5);
-            assert_eq!(*target_points, 4767);
+            assert_eq!(*target_points, 5);
         }
         other => panic!("{other:?}"),
     }
     assert_eq!(state.data.point_clouds.len(), 2, "source, then target");
-    assert_eq!(state.data.point_clouds[0].positions.len(), 5);
-    assert_eq!(state.data.point_clouds[1].positions.len(), 4767);
+    // Positions are unchanged by the placement step: an undeclared file is drawn exactly
+    // as it was before GAP-102, relative to its own minimum bound.
+    assert_eq!(state.data.point_clouds[0].origin, [500_010.0, 6_000_019.0, 12.0]);
+    assert_eq!(state.data.point_clouds[0].crs, None);
     // The viewport layer only ever reflects a complete pair (GAP-098's display piece).
     let layers = gungnir_app::pointcloud::layers(&state.point_cloud, &state.data);
     assert_eq!(layers.len(), 2);
     assert_eq!(layers[0].positions.len(), 5);
-    assert_eq!(layers[1].positions.len(), 4767);
     let _ = std::fs::remove_dir_all(dir);
 }
 
