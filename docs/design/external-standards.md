@@ -1169,7 +1169,7 @@ acceptances and every refusal path, two `gungnir-node` tests, and two
 a hand-built, well-formed frame reaches the real gateway as an accepted detection, and
 one with no local frame origin binds nothing.
 
-## 9. Radio direction finding: ASTERIX Category 205 -- surveyed 2026-09-06, **pinned and built 2026-09-08 (GAP-100)**
+## 9. Radio direction finding and UAS identification: ASTERIX Categories 205 and 129 -- surveyed 2026-09-06, both pinned and built 2026-09-08 (GAP-100, GAP-101)
 
 **Surveyed as the cheaper option passed over on purpose, then taken.** The 2026-09-06
 survey found Category 205 nearly free to add given the existing ASTERIX decoder, but left
@@ -1198,7 +1198,8 @@ Identification Reports**, Edition 1.2, 2019-06-12 -- surveyed the same day as 20
 **not pinned and not built under GAP-100**: it is a different report shape
 (identification, not a bearing) that would not share Category 205's one hard design
 question (9.2 below), and forcing it into the same change would not have simplified
-verifying that question's answer. It remains open for a future gap.
+verifying that question's answer. It remained open for a future gap to pick up --
+**picked up 2026-09-08 by GAP-101, pinned and built the same day; §9.3 below.**
 
 **One nuance this pin has that Category 048 and 034's did not.** Edition 1.0 itself cites
 Part I edition **2.4** (24 October 2016) in its own bibliography, not the edition 3.1
@@ -1262,6 +1263,110 @@ four fixture tests in `gungnir-interop/tests/asterix_fixtures.rs` against the ha
 capture, the catalogue's own conformance and wire-coverage declarations in
 `gungnir-interop/tests/conformance.rs`, and two adapter-routing tests in
 `gungnir-ingest/src/adapters/asterix.rs`.
+
+### 9.3 Category 129, UAS Identification and Target Reports -- pinned and built 2026-09-08 (GAP-101)
+
+**Picked up from this section's own 9.1, which named it "adjacent and also free" and
+left it open.** GAP-101 confirmed rather than assumed the reason it was left open still
+held (a different report shape, not this section's bearing question) before building it.
+
+**What is pinned.** **EUROCONTROL-SPEC-0149-29, ASTERIX Part 29, Category 129, UAS
+Identification and Target Reports**, Edition **1.2**, 12 June 2019, ISBN
+978-2-87497-028-3 -- the same ISBN 9.1 already recorded for Category 205; checked against
+both PDFs' own cover pages rather than assumed to be a repeated typo, and recorded as
+what appears to be one ISBN registered per ASTERIX Part-N series rather than one per
+part. Free PDF at
+`https://www.eurocontrol.int/sites/default/files/2019-06/cat129p29ed12_0.pdf`, fetched
+and read in full (twice, by two independent extraction methods, precisely because one of
+them turned out to render the UAP table ambiguously -- next paragraph) rather than
+assumed from this survey's own summary. Edition 1.2's own bibliography (§2.2) cites Part
+I edition **2.4**, the identical nuance 9.1 already recorded for Category 205: the shared
+framing this crate builds on implements edition 3.1, and the two agree on the
+block/record/FSPEC structure this decoder depends on (checked against edition 1.2's own
+§4.4 diagram) without every other difference between 2.4 and 3.1 being separately ruled
+out.
+
+**No machine-readable cross-check exists for this category, unlike Category 205's.**
+`asterix-specs` (§1.4) does not carry Category 129 in its own specification index at
+all -- checked 2026-09-08, the index lists 001, 002, 004, 007 through 011, 015 through
+021, 023, 025, 032, 034, 048, 062, 063, 065, 150, 205, 240 and 247, and stops there.
+`CroatiaControlLtd/asterix`, which supplied a field-definition XML for Category 205 with
+no sample data, carries no file of any kind for Category 129. So this decoder is built
+and cross-checked against the primary PDF alone, read by two independent
+text-extraction methods that agreed on every prose passage; where the two renderings of
+the UAP table (§5.3.1) disagreed with each other, the one that agreed with the
+specification's own per-item detailed sections (§5.2.x) is what the decoder follows.
+
+**A genuine discrepancy in the primary source, found and not silently resolved.**
+Edition 1.2's own UAP table states data item I129/120 (Operational Risk Levels) is one
+octet long; its own detailed description states "Three-octet fixed length Data Item"
+and diagrams only the first octet's bits. `gungnir-interop/src/asterix/cat129.rs`
+follows the three-octet description (the section that fixes every other item's bit
+layout too) and carries the two undocumented octets raw rather than asserting they are
+spare. The same section's Annex A defines Air Risk Category values but its Airspace
+Encounter Category subsection is a heading with no defined values anywhere in this
+edition -- checked against the primary PDF, not assumed incomplete -- so that subfield
+is carried as a raw code rather than a named one.
+
+**What is built.** `gungnir-interop/src/asterix/cat129.rs` decodes every standard-UAP
+item Table 2 defines (FRN 1 to 15) except the generic SP field, which it carries raw by
+the same convention Category 048 and 205 already use; FRN 16 to 21 are "Reserved for
+Future Use" and a set FSPEC bit for one of them is an error, the same treatment a
+reserved FRN gets in every other category this crate speaks. Unlike Category 048 or
+205, this category has no message-type discriminator and no "no detection this scan"
+flag, so `AsterixCat129Codec::map` returns a mapped report directly rather than a
+`Mapped` enum with a not-an-observation arm.
+
+**The one substantive design decision, and it answers a question 9.1 and 9.2 did not
+have to ask.** A UAS Identification and Target Report is a cooperative source in AIS's
+and ADS-B's sense -- it broadcasts its own claimed identity and position rather than
+reporting an observation of something else -- so it does not become a
+`Measurement::Bearing` (this section's own hard question for Category 205) or a
+`Measurement::Position` `DetectionView` on its own terms either. It maps to
+`gungnir_model::UasIdentificationReport`, a new type, through a new
+`UasIdentificationCodec` boundary in `gungnir-interop`, the same kind of dedicated
+boundary `ServiceMessageCodec` already is for Category 034's non-detection output.
+**Where that type lives, and why its position is a plain `Geodetic` rather than an ENU
+one**, mirrors `gungnir_model::UasPlatformReport` (GAP-099)'s own stated reasoning for
+living in `gungnir-model` rather than beside an ingest adapter, and diverges from its
+`EnuPoint` choice for the reason `gungnir_model::uas_identification`'s own module
+documentation gives: this category's SAC/SIC attribution needs no `gungnir-geo`
+dependency to resolve, so `gungnir-interop` can construct the whole report in one place,
+the same as it already constructs Category 034's `RadarServiceReport`. A deployment that
+also wants this report's position on the tracking picture gets a `DetectionView`
+(`Measurement::Position`, the same fixed baseline variance AIS, ADS-B and MISB ST 0601
+already use) from `gungnir_ingest::adapters::asterix`, which holds the `LocalFrame` this
+crate may not depend on and converts the same geodetic value as a second, independent
+step -- unlike a radar or a direction finder's fixed antenna, converted once at
+configuration, this category's position is the *target's* own and differs on every
+message, so the frame is now held on the adapter rather than only borrowed at
+construction.
+
+**SAC/SIC is often a placeholder in this category.** Edition 1.2 §5.2.1 itself
+recommends `00/00` for an airborne-to-ground broadcast; a deployment that only ever
+sees that recommendation followed configures one `UasSite`/`UasBinding` at `(0, 0)` for
+its one receiving gateway, the same shape one AIS or ADS-B receiver already gets one
+`SensorId` regardless of how many distinct platforms it hears.
+
+`gungnir_ingest::adapters::asterix::AsterixFeedAdapter` gained a fourth category arm and
+an opt-in `with_uas_sites` builder (`UasBinding`, leaner than `RadarBinding`/`DfBinding`
+because nothing this category maps needs a receiver position), so no existing call site
+changed; `ConfigBaseline`/`gungnir-app`/`gungnir-node` host configuration wiring is
+deliberately deferred, the identical shape 9.2 deferred for Category 205's own host
+wiring. No real Category 129 capture exists anywhere to vendor (checked the same three
+places 9.2 checked for Category 205, this section's own paragraph above has what was
+found), so `testdata/asterix/cat129.raw` is hand-built directly from edition 1.2's own
+byte tables and documented as exactly that in `testdata/asterix/SOURCE.md`'s Category
+129 section.
+
+Tests: eight unit tests in the codec (the hand-built record at the specification's own
+least significant bits, the mapping and its recorded losses, the ARC label offset, the
+no-blocking rule, a reserved FRN, truncation at every length), four fixture tests in
+`gungnir-interop/tests/asterix_fixtures.rs` against the hand-built fixture, the
+catalogue's own conformance and wire-coverage declarations in
+`gungnir-interop/tests/conformance.rs`, and two adapter-routing tests in
+`gungnir-ingest/src/adapters/asterix.rs`. **`gungnir-ingest` is human-owned; written and
+gated, not signed.**
 
 ## 6. Consequences for GAP-064, GAP-010 and GAP-091
 

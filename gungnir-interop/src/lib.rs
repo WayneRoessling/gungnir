@@ -24,6 +24,7 @@ pub use adsb::AdsbCodec;
 pub use ais::AisCodec;
 pub use asterix::cat034::{AsterixCat034Codec, RadarServiceReport, ServiceEvent};
 pub use asterix::cat048::AsterixCat048Codec;
+pub use asterix::cat129::{AsterixCat129Codec, UasSite};
 pub use asterix::cat205::{AsterixCat205Codec, DfSite};
 pub use asterix::RadarSite;
 
@@ -184,6 +185,16 @@ impl SchemaCatalog {
                     version: 1,
                     kind: SchemaKind::AsterixCategory(205),
                 },
+                // Pinned and decoded 2026-09-08 (GAP-101, picking up the "open for a
+                // future gap" note docs/design/external-standards.md §9.1 left):
+                // Category 129, UAS Identification and Target Reports, edition 1.2.
+                // Decodes (`asterix::cat129`) to `gungnir_model::UasIdentificationReport`
+                // through `UasIdentificationCodec`, not `DetectionCodec`; does not encode.
+                SchemaEntry {
+                    name: "asterix.cat129".into(),
+                    version: 1,
+                    kind: SchemaKind::AsterixCategory(129),
+                },
                 SchemaEntry {
                     name: "stanag.4676".into(),
                     version: 1,
@@ -257,6 +268,22 @@ pub trait ServiceMessageCodec: Send + Sync {
         bytes: &[u8],
         receipt_time: MissionTime,
     ) -> Result<Vec<RadarServiceReport>, InteropError>;
+}
+
+/// The boundary for formats that carry a cooperative source's own claimed identity and
+/// telemetry rather than a sensor's observation of another target -- ASTERIX Category
+/// 129 today. A UAS identification report is neither a detection ([`DetectionCodec`])
+/// nor a sensor's own service message ([`ServiceMessageCodec`]); it is the same shape as
+/// AIS's and ADS-B's cooperative reports, which have no boundary of their own in this
+/// crate because neither of those formats needs an interop-level site registry the way
+/// ASTERIX SAC/SIC attribution does (`docs/design/external-standards.md` §9.3).
+pub trait UasIdentificationCodec: Send + Sync {
+    fn name(&self) -> &'static str;
+    fn decode(
+        &self,
+        bytes: &[u8],
+        receipt_time: MissionTime,
+    ) -> Result<Vec<gungnir_model::UasIdentificationReport>, InteropError>;
 }
 
 /// The boundary industry-format adapters implement.
@@ -579,6 +606,16 @@ mod tests {
         assert_eq!(
             c.lookup("asterix.cat205").map(|e| &e.kind),
             Some(&SchemaKind::AsterixCategory(205))
+        );
+    }
+
+    /// GAP-101: the build declares Category 129 too, once it decodes.
+    #[test]
+    fn catalog_lists_category_129() {
+        let c = SchemaCatalog::builtin();
+        assert_eq!(
+            c.lookup("asterix.cat129").map(|e| &e.kind),
+            Some(&SchemaKind::AsterixCategory(129))
         );
     }
 

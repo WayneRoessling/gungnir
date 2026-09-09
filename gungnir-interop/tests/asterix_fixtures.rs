@@ -12,18 +12,20 @@
 //! built to editions 1.32 and 1.29; the edition the capture was produced under is not
 //! recorded by its source, so those tests check that every block reads and that what
 //! it says is physically plausible, not that any field equals a value known from
-//! elsewhere. `cat205.raw` is different in kind: it is synthesized from the
-//! specification's own byte tables (GAP-100), so its test below checks field values
-//! against the exact counts that built the file, which is the "known-correct" this
-//! fixture can honestly offer.
+//! elsewhere. `cat205.raw` and `cat129.raw` are different in kind: each is synthesized
+//! from its own specification's byte tables (GAP-100, GAP-101), so their tests below
+//! check field values against the exact counts that built the files, which is the
+//! "known-correct" those fixtures can honestly offer.
 
 use gungnir_interop::asterix::cat034;
 use gungnir_interop::asterix::cat048::{decode_block, decode_records, Mapped, Record, ReportType};
+use gungnir_interop::asterix::cat129;
 use gungnir_interop::asterix::cat205;
 use gungnir_interop::asterix::data_blocks;
 use gungnir_interop::{
-    AsterixCat034Codec, AsterixCat048Codec, AsterixCat205Codec, DetectionCodec, DfSite,
-    InteropError, RadarSite, ServiceEvent, ServiceMessageCodec,
+    AsterixCat034Codec, AsterixCat048Codec, AsterixCat129Codec, AsterixCat205Codec, DetectionCodec,
+    DfSite, InteropError, RadarSite, ServiceEvent, ServiceMessageCodec, UasIdentificationCodec,
+    UasSite,
 };
 use gungnir_model::{MissionTime, SensorId};
 use std::collections::BTreeSet;
@@ -31,6 +33,7 @@ use std::collections::BTreeSet;
 const CAT048_RAW: &[u8] = include_bytes!("../../testdata/asterix/cat048.raw");
 const CAT034_RAW: &[u8] = include_bytes!("../../testdata/asterix/cat034.raw");
 const CAT205_RAW: &[u8] = include_bytes!("../../testdata/asterix/cat205.raw");
+const CAT129_RAW: &[u8] = include_bytes!("../../testdata/asterix/cat129.raw");
 const PCAP: &[u8] = include_bytes!("../../testdata/asterix/cat_034_048.pcap");
 
 /// The UDP payloads of a little-endian libpcap capture over Ethernet and IPv4, with
@@ -448,6 +451,97 @@ fn category_205_truncated_and_corrupted_fixture_never_panics() {
             let mut m = CAT205_RAW.to_vec();
             m[i] ^= flip;
             let _ = cat205::decode_records(&m);
+        }
+    }
+}
+
+/// The Category 129 fixture (`testdata/asterix/SOURCE.md`'s Category 129 section):
+/// field-for-field against the exact counts the fixture was built from, since it is a
+/// hand-built record and not a real capture -- the same "known-correct" discipline
+/// `category_205_fixture_decodes_to_the_documented_values` applies.
+#[test]
+fn category_129_fixture_decodes_to_the_documented_values() {
+    let recs = cat129::decode_records(CAT129_RAW).expect("cat129.raw decodes");
+    assert_eq!(
+        recs.len(),
+        1,
+        "one data block, one record (edition 1.2 §4.4)"
+    );
+    let r = &recs[0];
+    assert_eq!(
+        r.data_source,
+        Some(gungnir_interop::asterix::cat048::DataSource { sac: 0, sic: 0 }),
+        "the airborne-to-ground placeholder edition 1.2 §5.2.1 recommends"
+    );
+    assert_eq!(r.registration_country.as_deref(), Some("US"));
+    assert!((r.time_of_day_s.expect("I129/070") - 43_200.0).abs() < 1e-9);
+    let pos = r.position.expect("I129/080");
+    assert!((pos.latitude_deg - 10.0).abs() < 0.001);
+    assert!((pos.longitude_deg + 20.0).abs() < 0.001);
+    assert!((r.altitude_amsl_m.expect("I129/090") - 500.0).abs() < 1e-9);
+    assert!(
+        r.altitude_agl_m.is_none(),
+        "the fixture carries no I129/100"
+    );
+    assert!((r.gnss_signal_accuracy_m.expect("I129/110") - 12.0).abs() < 1e-9);
+    assert!(
+        r.manufacturer_id.is_none() && r.model_id.is_none() && r.serial_number.is_none(),
+        "the fixture carries none of the optional identification items"
+    );
+    assert!(r.operational_risk.is_none());
+    assert!(
+        r.carried_raw.is_empty(),
+        "the fixture carries no implementation-undocumented item"
+    );
+}
+
+#[test]
+fn category_129_fixture_maps_to_a_uas_identification_report() {
+    let site = UasSite {
+        sac: 0,
+        sic: 0,
+        sensor: SensorId(51),
+    };
+    let codec = AsterixCat129Codec::new(vec![site]);
+    let receipt = MissionTime(20_500.0 * 86_400.0 + 43_205.0);
+    let reports = codec.decode(CAT129_RAW, receipt).expect("maps");
+    assert_eq!(reports.len(), 1);
+    let rep = &reports[0];
+    assert_eq!(rep.sensor, SensorId(51));
+    assert!((rep.source_time.0 - (20_500.0 * 86_400.0 + 43_200.0)).abs() < 1e-6);
+    assert_eq!(rep.registration_country, "US");
+    assert!((rep.position.lat_rad.to_degrees() - 10.0).abs() < 0.001);
+    assert!((rep.position.lon_rad.to_degrees() + 20.0).abs() < 0.001);
+    assert!((rep.position.alt_m - 500.0).abs() < 1e-9);
+    assert!(
+        rep.conversion_loss
+            .as_deref()
+            .is_some_and(|s| s.contains("geoid")),
+        "the AMSL-as-ellipsoidal approximation is recorded, not silently assumed exact"
+    );
+}
+
+#[test]
+fn category_129_unconfigured_site_is_refused_not_guessed() {
+    let codec = AsterixCat129Codec::default();
+    assert!(matches!(
+        codec.decode(CAT129_RAW, MissionTime(0.0)),
+        Err(InteropError::UnknownRadar { sac: 0, sic: 0, .. })
+    ));
+}
+
+/// The fuzz row's promise in miniature for the new category, the same property
+/// `category_205_truncated_and_corrupted_fixture_never_panics` establishes for 205.
+#[test]
+fn category_129_truncated_and_corrupted_fixture_never_panics() {
+    for n in 0..CAT129_RAW.len() {
+        let _ = cat129::decode_records(&CAT129_RAW[..n]);
+    }
+    for i in 0..CAT129_RAW.len() {
+        for flip in [0x01u8, 0x80, 0xFF] {
+            let mut m = CAT129_RAW.to_vec();
+            m[i] ^= flip;
+            let _ = cat129::decode_records(&m);
         }
     }
 }

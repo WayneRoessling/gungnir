@@ -556,6 +556,34 @@ enum MaintenanceState <<InformationElement>> {
 class MissionTime <<InformationElement>> {
   pub f64
 }
+class UasIdentificationReport <<InformationElement>> {
+  sensor: SensorId
+  source_time: MissionTime
+  receipt_time: MissionTime
+  position: Geodetic
+  altitude_amsl_m: Option<f64>
+  altitude_agl_m: Option<f64>
+  gnss_signal_accuracy_m: Option<f64>
+  manufacturer_id: Option<String>
+  model_id: Option<String>
+  serial_number: Option<[u8; 12]>
+  registration_country: String
+  operational_risk: Option<OperationalRisk>
+  horizontal_velocity_enu_m_s: Option<[f64; 2]>
+  vertical_velocity_m_s: Option<f64>
+  conversion_loss: Option<String>
+}
+class OperationalRisk <<InformationElement>> {
+  certification_category: UasCertificationCategory
+  air_risk_category_code: u8
+  airspace_encounter_category_code: u8
+}
+enum UasCertificationCategory <<InformationElement>> {
+  Unknown
+  Open
+  Specific
+  Certified
+}
 class EnuPoint <<InformationElement>> {
   enu: [f64; 3]
   elevation_reported: bool
@@ -843,6 +871,11 @@ MaintenanceWindow --> SensorId
 MaintenanceWindow --> MissionTime
 MaintenanceWindow --> MissionTime
 MaintenanceWindow --> MaintenanceState
+UasIdentificationReport --> SensorId
+UasIdentificationReport --> MissionTime
+UasIdentificationReport --> MissionTime
+UasIdentificationReport --> OperationalRisk
+OperationalRisk --> UasCertificationCategory
 UasPlatformReport --> SensorId
 UasPlatformReport --> EnuPoint
 UasPlatformReport --> EnuPoint
