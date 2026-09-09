@@ -362,14 +362,21 @@ pub mod crs {
 /// `gungnir-data-fusion/src/point_to_plane.rs` and `normals.rs` document for their own
 /// independent verification, just checkable from the projection's definition instead of
 /// re-running it in another language.
-// `#[cfg(test)]` on the outside and the feature gate within, rather than one combined
-// `cfg(all(test, ...))`: `gungnir-app/tests/architecture_compliance.rs`'s unwrap-policy
-// scanner strips `#[cfg(test)]`-gated modules by matching that literal attribute, so a
-// combined form would leave these tests' `expect(...)` looking like production code.
+// Two stacked outer attributes, not one combined `cfg(all(test, feature = "crs"))` and
+// not an inner `#![cfg(feature = "crs")]` either.
+//
+// Not combined, because `gungnir-app/tests/architecture_compliance.rs`'s unwrap-policy
+// scanner strips `#[cfg(test)]`-gated modules by matching that literal attribute and
+// brace-matching from the next `{`; a combined form would leave these tests'
+// `expect(...)` looking like production code. Stacking keeps the literal attribute, and
+// `#[cfg(feature = ...)]` carries no brace of its own for the scanner to trip over.
+//
+// Not inner, because mixing an inner attribute with the outer ones above it is
+// `clippy::mixed_attributes_style`, which is denied. That only ever fires with the
+// feature on, so it went unseen until `ci.yml`'s `proj-crs` job first ran clippy here.
 #[cfg(test)]
+#[cfg(feature = "crs")]
 mod crs_tests {
-    #![cfg(feature = "crs")]
-
     use super::crs::to_wgs84;
 
     /// UTM zone 33N's central meridian is 15°E. On the central meridian, at every
