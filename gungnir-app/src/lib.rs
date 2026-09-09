@@ -36,6 +36,7 @@ pub mod identity;
 pub mod keystore;
 pub mod launch_warning;
 pub mod laydown_rehearsal;
+pub mod misb;
 pub mod node_tasks;
 pub mod peers;
 pub mod pointcloud;
