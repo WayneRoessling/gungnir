@@ -26,6 +26,35 @@
 //! the arithmetic stays in the input's scale and the exact-cost criterion is
 //! achievable: the returned total is a sum of the selected input entries, read back
 //! from the matrix, not an accumulation from the solver's internals.
+//!
+//! # What the total promises (D-43, resolved 2026-09-09)
+//!
+//! [`Assignment::total_cost`] is `Option<f64>`, and `None` means the optimum's value is
+//! not a representable `f64`. Entry finiteness does not imply total finiteness: a
+//! matrix whose entries all pass [`check_finite`] can still have an optimum whose sum
+//! overflows, which `gungnir-fuzz`'s `cost_matrix_construction` target found on an
+//! all-finite 5x2 matrix with two entries near `f64::MAX` (GAP-103).
+//!
+//! The `Option` rather than an error, because **the assignment itself is still
+//! correct** in that case. Measured over 200,000 all-finite matrices drawn from the
+//! top exponent band: every total that overflowed belonged to a problem whose
+//! brute-force optimum was itself not representable, and no case produced a wrong
+//! assignment count or a suboptimal pairing. Refusing such a matrix would discard a
+//! sound answer, and returning `-inf` in a bare `f64` would let a value the input
+//! guard exists to prevent leave through the output -- the silent propagation
+//! `agentic-workflow.md`'s low-trust tier names. `None` says the one thing that is
+//! true: there is an optimal assignment, and its cost is not a number.
+//!
+//! **One limit of that, stated rather than hidden.** The total is the accumulation of
+//! the selected entries in the solver's own order, and floating-point addition is not
+//! associative, so at the very edge of the range the order can decide the answer:
+//! `MAX + MAX - MAX` overflows where `MAX - MAX + MAX` does not. `Some`-versus-`None`
+//! is therefore an exact statement about *this* accumulation, not about the ideal
+//! real-number sum, for the same reason the verification table already records that
+//! "exact" on the cost means to the rounding of a sum taken in a different order than
+//! the oracle takes it. Making it order-free would need exact or scaled summation, a
+//! real cost in a crate whose one production cost matrix is bounded near 1.1e4 by
+//! construction; it was judged not worth the added subtlety in a human-owned file.
 
 use nalgebra::DMatrix;
 
@@ -63,8 +92,13 @@ pub enum AssociationError {
 /// The result of an optimal assignment.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
-    /// Sum of the selected entries, read back from the input matrix.
-    pub total_cost: f64,
+    /// Sum of the selected entries, read back from the input matrix, or `None` when
+    /// that sum is not a representable `f64`.
+    ///
+    /// `None` does not mean the assignment failed: [`Assignment::row_to_col`] is the
+    /// optimum either way. It means this problem's optimal *value* overflows, which
+    /// an all-finite matrix can still do (see the module documentation, D-43).
+    pub total_cost: Option<f64>,
     /// `row_to_col[i]` is the column assigned to row `i`, or `None` when there are
     /// fewer columns than rows and row `i` went unassigned.
     pub row_to_col: Vec<Option<usize>>,
@@ -107,14 +141,22 @@ fn check_finite(cost: &DMatrix<f64>) -> Result<(), AssociationError> {
 /// tied. An empty matrix (no rows or no columns) is a valid problem whose answer is
 /// "nothing assigned, cost zero", not an error.
 ///
+/// The returned [`Assignment::total_cost`] is `Some` whenever the optimum's value is a
+/// representable `f64`, and `None` when it is not. Every entry being finite does not
+/// make their sum finite, and `None` is not a failure: the pairing is the optimum
+/// either way (D-43; see the module documentation for the measurements behind that
+/// choice).
+///
 /// # Errors
-/// [`AssociationError::NonFiniteCost`] if any entry is NaN or infinite.
+/// [`AssociationError::NonFiniteCost`] if any *entry* is NaN or infinite. An entry
+/// guard cannot speak for the total, which is why the total is an `Option` and not a
+/// second error variant.
 pub fn solve_assignment(cost: &DMatrix<f64>) -> Result<Assignment, AssociationError> {
     check_finite(cost)?;
     let (rows, cols) = (cost.nrows(), cost.ncols());
     if rows == 0 || cols == 0 {
         return Ok(Assignment {
-            total_cost: 0.0,
+            total_cost: Some(0.0),
             row_to_col: vec![None; rows],
         });
     }
@@ -213,8 +255,12 @@ pub fn solve_assignment(cost: &DMatrix<f64>) -> Result<Assignment, AssociationEr
         total_cost += cost[(r, c)];
     }
 
+    // The entries are finite, but their sum need not be: D-43 chose to report that as
+    // `None` rather than to refuse the matrix or to hand back the infinity. The check is
+    // on the accumulated total rather than on the entries, because that is exactly the
+    // quantity that can fail to be representable.
     Ok(Assignment {
-        total_cost,
+        total_cost: total_cost.is_finite().then_some(total_cost),
         row_to_col,
     })
 }
@@ -239,7 +285,7 @@ mod tests {
             cost[(i, i)] = 0.0;
         }
         let a = solve_assignment(&cost).expect("solvable");
-        assert_eq!(a.total_cost, 0.0);
+        assert_eq!(a.total_cost, Some(0.0));
         assert_eq!(a.row_to_col, vec![Some(0), Some(1), Some(2), Some(3)]);
     }
 
@@ -249,11 +295,10 @@ mod tests {
     fn beats_greedy_on_a_known_case() {
         let cost = matrix(3, 3, &[4.0, 1.0, 3.0, 2.0, 0.0, 5.0, 3.0, 2.0, 2.0]);
         let a = solve_assignment(&cost).expect("solvable");
-        assert!(
-            (a.total_cost - 5.0).abs() < 1e-12,
-            "optimum was {}",
-            a.total_cost
-        );
+        let total = a
+            .total_cost
+            .expect("a small exact matrix has a representable optimum");
+        assert!((total - 5.0).abs() < 1e-12, "optimum was {total}");
         assert_eq!(a.assigned_count(), 3);
     }
 
@@ -277,11 +322,76 @@ mod tests {
     #[test]
     fn empty_matrix_is_not_an_error() {
         let a = solve_assignment(&DMatrix::from_row_slice(0, 0, &[])).expect("solvable");
-        assert_eq!(a.total_cost, 0.0);
+        assert_eq!(a.total_cost, Some(0.0));
         assert!(a.row_to_col.is_empty());
 
         let b = solve_assignment(&DMatrix::from_element(3, 0, 0.0)).expect("solvable");
         assert_eq!(b.row_to_col, vec![None, None, None]);
+    }
+
+    /// D-43, and the exact input `gungnir-fuzz` found (GAP-103). Every entry is finite,
+    /// so `check_finite` passes and must: the *sum of the selected two* is what
+    /// overflows. The contract is that this is not an error and not an infinity -- the
+    /// pairing is the optimum, and the total says it is not a number.
+    #[test]
+    fn an_optimum_that_is_not_representable_is_reported_as_no_total() {
+        // -f64::MAX and a second entry large enough that their sum is not representable.
+        let (a, b) = (-f64::MAX, -6.171_889_577_392_9e303);
+        let mut cost = DMatrix::from_element(5, 2, 0.0);
+        cost[(3, 0)] = a;
+        cost[(0, 1)] = b;
+        assert!(
+            cost.iter().all(|v| v.is_finite()),
+            "the input is all-finite"
+        );
+        assert!(!(a + b).is_finite(), "the two selected entries do overflow");
+
+        let got = solve_assignment(&cost).expect("an all-finite matrix is solvable");
+        assert_eq!(
+            got.total_cost, None,
+            "the optimum's value is not representable"
+        );
+        assert_eq!(
+            got.row_to_col,
+            vec![Some(1), None, None, Some(0), None],
+            "the pairing is still the optimum: the two most negative entries"
+        );
+        assert_eq!(got.assigned_count(), 2, "both columns are used");
+    }
+
+    /// The other half of the same contract, and the one that stops `None` becoming a
+    /// lazy answer: a matrix may carry entries at the representable limit and still
+    /// have an optimum that is perfectly fine, because the optimum does not select
+    /// them. That case must report a total.
+    #[test]
+    fn a_huge_entry_the_optimum_avoids_still_yields_a_total() {
+        // The optimum takes the two zeros; the two enormous entries are never selected.
+        let cost = matrix(2, 2, &[0.0, f64::MAX, f64::MAX, 0.0]);
+        let got = solve_assignment(&cost).expect("solvable");
+        assert_eq!(
+            got.total_cost,
+            Some(0.0),
+            "the selected entries sum to zero"
+        );
+        assert_eq!(got.row_to_col, vec![Some(0), Some(1)]);
+    }
+
+    /// `None` is reserved for a total that is genuinely not representable, in either
+    /// direction, and is never a stand-in for "large".
+    #[test]
+    fn a_large_but_representable_total_is_some() {
+        let cost = matrix(2, 2, &[1e307, 0.0, 0.0, 1e307]);
+        let got = solve_assignment(&cost).expect("solvable");
+        assert_eq!(
+            got.total_cost,
+            Some(0.0),
+            "the optimum avoids both large entries"
+        );
+
+        // Forced to take both: 2e307 is large and entirely representable.
+        let cost = matrix(2, 2, &[1e307, f64::MAX, f64::MAX, 1e307]);
+        let got = solve_assignment(&cost).expect("solvable");
+        assert_eq!(got.total_cost, Some(2e307));
     }
 
     #[test]
@@ -303,7 +413,10 @@ mod tests {
     fn total_tie_returns_a_valid_permutation() {
         let cost = DMatrix::from_element(4, 4, 7.0);
         let a = solve_assignment(&cost).expect("solvable");
-        assert!((a.total_cost - 28.0).abs() < 1e-12);
+        let total = a
+            .total_cost
+            .expect("a small exact matrix has a representable optimum");
+        assert!((total - 28.0).abs() < 1e-12);
         let mut columns: Vec<usize> = a.row_to_col.iter().filter_map(|c| *c).collect();
         columns.sort_unstable();
         assert_eq!(columns, vec![0, 1, 2, 3], "not a permutation");
@@ -320,11 +433,10 @@ mod tests {
         );
         let a = solve_assignment(&cost).expect("solvable");
         // -5 + -8 + -1 = -14 via the diagonal; -3 + -8 + -6 = -17 is better.
-        assert!(
-            a.total_cost <= -14.0,
-            "cost {} is not optimal",
-            a.total_cost
-        );
+        let total = a
+            .total_cost
+            .expect("a small exact matrix has a representable optimum");
+        assert!(total <= -14.0, "cost {total} is not optimal");
         assert_eq!(a.assigned_count(), 3);
     }
 }

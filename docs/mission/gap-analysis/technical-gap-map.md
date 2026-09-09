@@ -34,7 +34,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-029 Allocator | CAP-3.3 | 5 | XL | I3 | `../../../ARCHITECTURE.md` §10, the tracking math itself |
 | GAP-031 Intercept geometry solver | CAP-3.4 | 5 | L | I3 | `gungnir-intercept-service/src/geometry.rs`; `../../design/DN-04-effector-model.md` §9 |
 | GAP-048 Tracking metrics | CAP-5.3, CAP-2.1 | 3 | M | I2 | `../../verification-capability-table.md` §1, metrics rows |
-| GAP-103 `solve_assignment` returns an infinite total on an all-finite cost matrix | CAP-2.1 | 2 | S | I2 | `../../verification-capability-table.md` §1 (Hungarian / Jonker-Volgenant); `../../../ARCHITECTURE.md` §10 Open; GAP-061 (the fuzz-nightly gate whose first successful run found this); GAP-076 (the fuzz corpus that feeds it) |
+| GAP-103 `solve_assignment` returns an infinite total on an all-finite cost matrix | CAP-2.1 | 2 | S | I2 | `../../verification-capability-table.md` §1 (Hungarian / Jonker-Volgenant); `../../../ARCHITECTURE.md` §10 item 122; GAP-061 (the fuzz-nightly gate whose first successful run found this); GAP-076 (the fuzz corpus that feeds it) |
 
 ### Service facades and wiring
 

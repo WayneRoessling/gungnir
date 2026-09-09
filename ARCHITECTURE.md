@@ -2731,28 +2731,6 @@ re-reading the register alone.
   closed and still has no resolver, because §7.1 draws no edge from `gungnir-node` to
   `gungnir-identity`: a graph decision now, not a missing capability. (GAP-019 is
   closed for the desktop half; the node half is this bullet)
-- **`solve_assignment`'s output contract is unstated, and a fuzz target found the
-  gap.** `gungnir_association::solve_assignment` checks that every *entry* of a cost
-  matrix is finite and promises nothing about the *total* it returns; on an all-finite
-  matrix with two entries near the representable limit the sum of the selected entries
-  overflows and the function returns `Ok` with `total_cost = -inf`.
-  `gungnir-fuzz`'s `cost_matrix_construction` target found this on its first successful
-  run (2026-09-08), against its own postcondition that a finite cost matrix yields a
-  finite total, and it was deliberately not fixed by the change that made that run
-  possible: numerical stability guarantees are low-trust in
-  `docs/agentic-workflow.md`, and the three available answers -- refuse such an input,
-  error on a non-finite total, or state that no finite total was ever promised -- are
-  mutually exclusive contract statements rather than one bug with one fix. The
-  behaviour is reproduced and measured in the register: the overflow is broad (31,679
-  of 200,000 all-finite extreme-magnitude matrices) but the *pairing* is sound in every
-  case tried, and in every overflowing case the brute-force optimum was itself not a
-  representable `f64` -- so the solver is reporting an unrepresentable optimum, not
-  mis-solving. No production caller can reach it: `gungnir-fusion-async`'s cost matrix
-  is bounded by its own gate threshold by construction. **fuzz-nightly fails on this
-  target every night until the contract is settled, which is the gate working**; the
-  postcondition is not to be weakened to silence it. (D-43 is the decision; GAP-103 is
-  the gap; `docs/verification-capability-table.md` §1 holds the row that must end up
-  saying so)
 - **Plan 05 gap register, most recently updated 2026-09-08.**
   `docs/mission/gap-analysis/gap-register.md` carries 104 gaps against the mission
   capabilities, each with a closing action, a target increment, and an owner;
@@ -2801,7 +2779,8 @@ re-reading the register alone.
   whoever noticed it next. **It had fallen behind again and reads 103 as of
   2026-09-09**: GAP-099 (MISB ST 0601), GAP-100 (ASTERIX Category 205), GAP-101
   (ASTERIX Category 129) and GAP-102 (the point-cloud CRS half of D-41) each landed
-  without moving it, and GAP-103 is the bullet above. The same correction, made the
+  without moving it, and GAP-103 is item 122 below, having been an open bullet here
+  until D-43 settled it on 2026-09-09. The same correction, made the
   same way, by the change that noticed it. **GAP-103 is also the fourth number
   collision this list has had to record**, and it was resolved by the same rule: it
   was filed as GAP-102 on 2026-09-08 while the point-cloud CRS gap was claiming that
@@ -5041,6 +5020,68 @@ not by finding, for the time between whenever each item landed and this correcti
     against the reverted defect to confirm it fails there. No human-owned crate is
     touched: the conversion itself is `gungnir-coord`'s and is called rather than
     changed.
+### Resolved on 2026-09-09
+
+122. **D-43: `solve_assignment` states what its total promises, and the answer is a
+    fourth one** (2026-09-09, GAP-103). `gungnir_association::solve_assignment` checked
+    that every *entry* of a cost matrix was finite and promised nothing about the
+    *total* it returned; on an all-finite matrix with two entries near `f64::MAX` the
+    sum of the selected entries overflows, and it returned `Ok` with
+    `total_cost = -inf`. `gungnir-fuzz`'s `cost_matrix_construction` target found that
+    on its first successful run (GAP-061's gate, 2026-09-08) against its own
+    postcondition, and it was deliberately left unfixed then: numerical stability
+    guarantees are low-trust in `docs/agentic-workflow.md`, and the available answers
+    were mutually exclusive contract statements rather than one bug with one fix.
+
+    **The register framed three and the owner chose a fourth while walking it.**
+    `Assignment::total_cost` is now `Option<f64>`, `None` meaning this problem's
+    optimum is not a representable `f64`. Refusing such an input was rejected because
+    no precondition can be both safe and tight -- which entries the optimum selects is
+    unknown until it has been solved -- so any bound would refuse matrices whose
+    optimum is perfectly representable, the same magic-number objection `assignment.rs`
+    already raises against padding a rectangular matrix. Returning an error was
+    rejected because the pairing is provably correct in that case and **all three
+    production callers consume only the pairing**: `GlobalNearestNeighbor::associate`,
+    `gungnir-fusion-async`'s associate step and `gungnir-metrics`'s CLEAR stage 2 each
+    take `row_to_col` and discard the total, so an error would have dropped a whole
+    scan of tracking over a number none of them reads. Promising nothing was rejected
+    as true but weak: `-inf` is the correct IEEE-754 value of that sum, yet it leaves a
+    non-finite value reachable through a `pub f64` field on a function whose input
+    guard exists precisely to stop non-finite values, guarded only by a doc comment.
+    The `Option` says the one thing that is true -- there is an optimal assignment, and
+    its cost is not a number -- and the type rather than the documentation enforces it.
+
+    **What decided it was measured, not argued.** Over 200,000 all-finite matrices
+    drawn from the top exponent band, 31,679 had an optimum whose value overflowed, and
+    in every one of those the brute-force optimum over all injective row-to-column maps
+    was itself not representable, with no wrong assignment count, no suboptimal pairing
+    and no case where a finite optimum was answered with an overflowing pick. The
+    solver was never mis-solving. Operationally nothing could reach it in any case:
+    `gungnir-fusion-async` fills its cost matrix with a gated squared Mahalanobis
+    distance or `gate_threshold * 1000.0 + 1.0`, bounded near 1.1e4 by construction.
+
+    **The fuzz postcondition was reconciled last and strengthened, not relaxed.**
+    `cost_matrix_construction` now recomputes the sum of the selected entries, requires
+    a reported total to be finite, and requires `None` to be matched by a sum that
+    genuinely is not representable -- so a solver returning `None` to make the target
+    pass would fail it. `docs/verification-capability-table.md` §1's Hungarian /
+    Jonker-Volgenant row and its §2 counterpart now state the domain and the promise;
+    the pass criterion itself was not touched. Human-owned change (numerical stability
+    guarantee): written, gated and **signed by the owner 2026-09-09**, the same day
+    he took the decision. The signature was given with the one judgement call inside
+    it stated rather than buried -- that `Some` versus `None` is exact about the
+    solver's own accumulation and not about the ideal real-number sum, floating-point
+    addition not being associative, and that making it order-free would need exact or
+    scaled summation. GAP-103 is Closed.
+
+    **Proved on the gate that found it, rather than on the next scheduled night.**
+    `fuzz-nightly` was dispatched manually on the branch: `cost_matrix_construction`
+    did **244,022,222 runs in 1201 s without a crash**, growing a 115-entry corpus from
+    nothing at 203k executions a second. The comparison is what makes it evidence --
+    the same target over the same input space crashed in **0.07 s, on its 25,000th
+    input**, before this change. `sensor_ingestion_parser` (104,330,559 runs) and
+    `asterix_feed` (25,923,346) ran clean in the same dispatch, so gate 5's matrix is
+    green on all three targets for the first time since the defect was found.
 
 ## Directory layout
 
