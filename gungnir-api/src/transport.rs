@@ -773,6 +773,23 @@ impl NodeApi {
         Ok(())
     }
 
+    /// How many event streams are currently subscribed.
+    ///
+    /// **Subscribed, not connected**, and the difference is the point. [`stream_events`]
+    /// takes its receiver as its very first act, before it reads the client's subscribe
+    /// frame, so a non-zero count means an envelope published from here on will reach
+    /// that client -- whereas a link reporting `connected` has only had its *snapshot*
+    /// answered over HTTP and may not have opened its socket yet.
+    ///
+    /// A test that publishes into that window loses the envelope silently and for good:
+    /// a `from_seq` 0 subscription means "everything from now" by the v2 contract, so
+    /// [`NodeApi::backlog_since`] will not replay it either. `gungnir-app`'s failover
+    /// end-to-end test waits on this before publishing for exactly that reason.
+    #[must_use]
+    pub fn subscriber_count(&self) -> usize {
+        self.events.receiver_count()
+    }
+
     #[must_use]
     pub fn snapshot(&self) -> Option<v2::SnapshotResponse> {
         self.snapshot.read().ok().map(|s| s.clone())
