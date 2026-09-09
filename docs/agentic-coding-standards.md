@@ -703,8 +703,8 @@ it on 2026-09-08.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
-| `proj` 0.31 (`default-features = false`) | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data` | GAP-102 (point clouds), 2026-09-08, **optional, behind that crate's default-off `crs` feature** |
-| `proj-sys` 0.27 (`proj`'s own dependency, binding `libproj` v9.6.x) | Finds a system `libproj` install or builds one from source when none is found -- the same two-path shape `vtkio`'s and `rcgen`'s own native dependencies already follow | `gungnir-data`, transitively | GAP-102, with the same feature gate |
+| `proj` 0.31 (`default-features = false`) | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data` | GAP-102 (point clouds) and GAP-023 (DEMs), 2026-09-08, **optional, behind that crate's default-off `crs` feature** |
+| `proj-sys` 0.27 (`proj`'s own dependency, binding `libproj` v9.6.x) | Finds a system `libproj` install or builds one from source when none is found -- the same two-path shape `vtkio`'s and `rcgen`'s own native dependencies already follow | `gungnir-data`, transitively | GAP-102 and GAP-023, with the same feature gate |
 
 `proj` and `libproj` are both permissively licensed (`proj` and `proj-sys`:
 MIT OR Apache-2.0, confirmed on crates.io 2026-09-08; `libproj`: X/MIT, an OSGeo
@@ -756,6 +756,43 @@ optional dependency's subtree: the `proj` tree is in `Cargo.lock` but is not cov
 that gate while the feature is off. The licences above were therefore confirmed by hand
 against crates.io rather than by the gate, and a change that makes this feature default
 must re-run `cargo deny` expecting new crates to appear.
+
+**GAP-023's DEM half merged into this entry on 2026-09-09, and settled four more things.**
+
+1. **One feature, not two.** GAP-023 landed independently and first, taking `proj` as
+   `features = ["bundled_proj"]` behind a `gungnir-data` feature called `crs-projection`,
+   with its own `.github/workflows/crs-projection.yml`. That workflow's first run did
+   answer the question it was built for: PROJ 9.6.2 compiled from the source `proj-sys`
+   vendors, on `ubuntu-latest`, with nothing installed but `cmake` -- no `libclang`, no
+   system `libproj`, no `pkg-config` -- in about four and a half minutes, and the tests
+   ran against it. **The bundled path works, and was dropped anyway.** One library taken
+   two ways, behind two features, compiled by two CI jobs, is worse than the single spec
+   above, and `default-features = false`'s refusal of `network` and `tiff` (point 3) is
+   the property worth keeping. `ci.yml`'s `proj-crs` job absorbed the workflow, its DEM
+   test steps and its anti-vacuous-pass check together.
+2. **`validate_terrain` accepts `frame: "epsg:<code>"` alongside `"local-enu"`**, parsed
+   through `gungnir_config::Frame` (`LocalEnu` or `Epsg(u32)`) so validation and the DEM
+   loader's conversion read the same value the same way. The field stays a plain `String`
+   on the wire -- schema-compatible with a baseline written before D-41 -- and the refusal
+   of a code no register knows happens in the loader, which has PROJ, not in
+   `gungnir-config`, which must validate on machines that do not.
+3. **The DEM conversion is split across two crates, following D-41's placement of `proj`
+   in `gungnir-data` alone.** That crate depends on no other workspace crate
+   (`ARCHITECTURE.md`'s dependency table), so it converts only as far as WGS84 geographic
+   (`geospatial::crs::to_wgs84`); `gungnir-app` carries the result the rest of the way to
+   local ENU through `gungnir_coord::Wgs84`, the same oracle-verified tangent-plane
+   transform every other geodetic quantity already goes through, anchored on the
+   deployment's own `ConfigBaseline::origin`. A file already in plain geographic WGS84
+   therefore converts with the feature off, because that half links nothing native.
+4. **The first CI run failed on the test's arithmetic rather than on the conversion, and
+   the arithmetic is worth stating.** The fixture test asserted that two cells 30 m apart
+   in a UTM grid stay 30 m apart in local ENU. They do not, and must not: UTM's grid is
+   deliberately shrunk by k0 = 0.9996 on the central meridian, which is exactly where the
+   fixture sits, so 30 m of grid is 30 / 0.9996 = 30.0120 m of ground. The old assertion
+   was satisfied by precisely the bug it claimed to be a tripwire for. GAP-023's register
+   entry carries the full decomposition of the observed number; the transform itself was
+   not implicated.
+
 
 #### Cloud KMS for the ManagedService custody profile (signed off 2026-09-08, D-42)
 

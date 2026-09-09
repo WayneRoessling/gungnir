@@ -140,10 +140,16 @@ jobs:
   # name in favour of `SQLite3_INCLUDE_DIR`/`SQLite3_LIBRARY`, and names the library
   # `libsqlite3.a`, which is not what MSVC produces -- and Windows is the target
   # release.yml ships gungnir-app for. So the feature-gated tests in
-  # `gungnir-data/tests/pointcloud_crs.rs` and `gungnir-app/tests/pointcloud_crs.rs` run
-  # here and nowhere else. If this job is ever removed, that code becomes untested.
+  # `gungnir-data/tests/pointcloud_crs.rs`, `gungnir-app/tests/pointcloud_crs.rs`,
+  # `gungnir-data/src/geospatial/mod.rs`'s `crs_tests` and `gungnir-app/tests/terrain.rs`
+  # run here and nowhere else. If this job is ever removed, that code becomes untested.
+  #
+  # GAP-023's DEM half arrived behind its own `crs-projection` feature and its own
+  # `crs-projection.yml` workflow, which was the first place that code ever built. Both
+  # merged into this job when the two halves met: one `proj` link, one feature, one place
+  # PROJ is compiled from source per pull request rather than two.
   proj-crs:
-    name: point-cloud CRS conversion (libproj)
+    name: DEM and point-cloud CRS conversion (libproj)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -160,6 +166,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake pkg-config libsqlite3-dev sqlite3
+      # gungnir-app's test binaries link eframe/glow, the same libraries the
+      # `fmt, clippy, test` job installs for exactly that reason. This job builds
+      # gungnir-app too, so it needs them for the same reason and not a new one.
+      - name: System libraries for eframe/glow
+        run: sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libgl1-mesa-dev
       - name: rustc warnings are errors, with the feature on
         env:
           RUSTFLAGS: -D warnings
@@ -168,8 +179,34 @@ jobs:
         run: cargo clippy -p gungnir-data -p gungnir-app --features crs --all-targets
       # The conversion itself: `gungnir-data`'s check against an independent pyproj run,
       # and `gungnir-app`'s end-to-end tick through a real `LocalFrame`.
-      - name: test the conversion against the real fixture
-        run: cargo test -p gungnir-data -p gungnir-app --features crs --test pointcloud_crs
+      - name: point clouds -- the conversion against the real fixture
+        run: |
+          set -o pipefail
+          cargo test -p gungnir-data -p gungnir-app --features crs --test pointcloud_crs \
+            2>&1 | tee pointcloud.log
+      # `crs::to_wgs84` itself, hand-verified against UTM's own central-meridian
+      # symmetry (gungnir-data/src/geospatial/mod.rs's `crs_tests`), and the DEM end to
+      # end: testdata/dem/small.tif declares EPSG:32633 and has to convert, place and
+      # mask line of sight, with its cell spacing landing on 30 / 0.9996 m (GAP-023).
+      - name: DEM -- crs::to_wgs84 and the small.tif fixture end to end
+        run: |
+          set -o pipefail
+          cargo test -p gungnir-data --features crs --lib 2>&1 | tee dem-unit.log
+          cargo test -p gungnir-app --features crs --test terrain 2>&1 | tee dem-app.log
+      # The same anti-vacuous-pass check gpu-fusion.yml uses, carried over from the
+      # crs-projection.yml this job absorbed: a feature-gated suite that silently
+      # compiled zero tests in (a typo in the cfg, the wrong crate, a renamed feature)
+      # would otherwise report success for running nothing.
+      - name: a gate that ran nothing has not passed
+        shell: bash
+        run: |
+          ran=$(cat pointcloud.log dem-unit.log dem-app.log \
+            | awk '/^test result:/ { s += $4 } END { print s + 0 }')
+          echo "crs tests executed: $ran"
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::the crs test run executed zero tests; the gate cannot pass vacuously (GAP-023, GAP-102)"
+            exit 1
+          fi
 
   node-linux-container:
     name: gungnir-node builds for Linux x86_64

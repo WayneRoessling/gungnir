@@ -40,6 +40,10 @@ workspace = true
 # conversion itself needs this feature. `ci.yml`'s `proj-crs` job installs the native
 # dependencies and runs this feature's tests, so the conversion is gated somewhere real
 # rather than merely compiled.
+#
+# GAP-023 folded the DEM loader's conversion into this same feature rather than keeping
+# the separate `crs-projection` it first shipped under: one `proj` link, one feature,
+# one CI job for both file kinds.
 crs = ["dep:proj"]
 
 [dependencies]

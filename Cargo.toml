@@ -188,6 +188,12 @@ tiff = "0.11"
 # permits. Every member that takes it does so as an OPTIONAL dependency behind a
 # default-off feature, because the native build is not available on every developer
 # machine -- see gungnir-data's `crs` feature for the whole of that reasoning.
+#
+# GAP-023 (the DEM half) first took this with `features = ["bundled_proj"]` behind a
+# separate `crs-projection` feature, and proved that path builds on `ubuntu-latest` with
+# nothing but `cmake`. Both halves converged on the single spec above when they merged:
+# one library, one feature, one CI job, and `default-features = false`'s refusal of
+# `network`/`tiff` kept rather than reintroduced.
 proj = { version = "0.31", default-features = false }
 
 # Docking for the role workspaces (signed off 2026-09-05, D-19;
