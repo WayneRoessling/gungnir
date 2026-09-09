@@ -17,7 +17,7 @@ pub mod authority;
 pub mod fires;
 
 pub use authority::{is_pre_delegated, roles_permitting, AuthorityPolicy, ControlStatusPolicy};
-pub use fires::{FiresContext, FiresDeconflictionPolicy};
+pub use fires::{FiresContext, FiresDeconflictionPolicy, ReportedPositionSource};
 
 use gungnir_geo::GeoService;
 use gungnir_model::events::VerdictSummary;

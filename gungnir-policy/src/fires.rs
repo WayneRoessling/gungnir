@@ -4,7 +4,9 @@
 
 //! Fires deconfliction.
 //!
-//! Design: docs/design/DN-05-fires.md. Capability CAP-3.8; decision D-07 put fires
+//! Design: docs/design/DN-05-fires.md, extended by
+//! docs/design/DN-25-cursor-on-target.md §5 rule 5 for the friendly-position
+//! check's three states (GAP-090). Capability CAP-3.8; decision D-07 put fires
 //! in the first release, so this is release content and not a domain extension.
 //! Mission thread MT-06 steps 5 to 7.
 //!
@@ -25,19 +27,55 @@
 use crate::{DenialReason, PolicyEngine, PolicyVerdict};
 use gungnir_geo::{great_circle_distance_m, Geofence};
 use gungnir_model::{
-    DeconflictionCheck, DeconflictionKind, DeconflictionResult, FiresPlan, FiresSettings, Geodetic,
-    PlanView, ResourceView,
+    Classification, DeconflictionCheck, DeconflictionKind, DeconflictionResult, FiresPlan,
+    FiresSettings, Geodetic, PlanView, ReportedPosition, ResourceView,
 };
+
+/// Where rule 1 gets a self-reported friendly position from, and whether the
+/// concept even exists in this deployment (DN-25 §5 rule 5; GAP-090).
+///
+/// **Three states, not one.** Before this type, an empty detected-friendly set
+/// could mean "the ellipse is clear" or "nothing was watching it", and those are
+/// not the same fact. Distinguishing them is the entire content of GAP-090.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum ReportedPositionSource<'a> {
+    /// No reported-position source is configured in this deployment.
+    ///
+    /// **The honest state of every real deployment today.** GAP-091's wire
+    /// adapter cannot be built yet -- it needs an actual TAK client to record a
+    /// corpus from, which is the one thing this workspace cannot supply itself
+    /// (`docs/design/external-standards.md` §5.6, §5.8) -- so nothing has ever
+    /// constructed the other two variants outside a test. Never a pass: the
+    /// concept of a self-reporting friendly not existing here is not evidence
+    /// that none is present.
+    #[default]
+    NotConfigured,
+    /// A source is configured but has not reported recently enough to trust:
+    /// rule 2's existing "cannot be evaluated" failure, applied to this source
+    /// rather than to the detected picture.
+    Silent,
+    /// A source is configured and live. An empty slice is a legitimate reading
+    /// -- the source checked and found nobody -- and is reported as a pass, not
+    /// folded into `NotConfigured`.
+    Live(&'a [ReportedPosition]),
+}
 
 /// What the picture knows that the deconfliction rules need.
 ///
 /// Supplied by the caller rather than fetched, so this stays a pure function of its
-/// inputs and every case is testable. `None` on a field means the data is
+/// inputs and every case is testable. `None` on an `Option` field means the data is
 /// unavailable, and the corresponding check fails rather than passing.
 #[derive(Debug, Clone, Default)]
 pub struct FiresContext<'a> {
-    /// Known friendly positions. `None` when the picture cannot supply them.
+    /// Known **detected** friendly positions: the tracks carried as friendly
+    /// (GAP-036). `None` when the picture cannot supply them at all, which is a
+    /// different failure from an empty list -- an empty list is a real reading,
+    /// `None` is the absence of one.
     pub friendly_positions: Option<&'a [Geodetic]>,
+    /// Known **self-reported** friendly positions, and whether that concept
+    /// exists here yet (DN-25 §5 rule 5; GAP-090). Defaults to `NotConfigured`,
+    /// which is the truth until GAP-091 delivers a feed.
+    pub reported_positions: ReportedPositionSource<'a>,
     /// Areas artillery may not strike. `None` when the layer is unavailable.
     pub no_fire_areas: Option<&'a [Geofence]>,
     /// Declared airspace measures the trajectory must not violate.
@@ -92,34 +130,9 @@ impl FiresDeconflictionPolicy<'_> {
             },
         ));
 
-        // 2. Friendly positions.
-        checks.push(match self.context.friendly_positions {
-            None => check(
-                DeconflictionKind::FriendlyPosition,
-                false,
-                "friendly positions unavailable, so this check could not be evaluated",
-            ),
-            Some(positions) => {
-                let breach = positions
-                    .iter()
-                    .find(|p| great_circle_distance_m(target, **p) <= radius);
-                match breach {
-                    Some(p) => check(
-                        DeconflictionKind::FriendlyPosition,
-                        false,
-                        format!(
-                            "a friendly position lies {:.0} m from the target, inside the {radius:.0} m keep-out",
-                            great_circle_distance_m(target, *p)
-                        ),
-                    ),
-                    None => check(
-                        DeconflictionKind::FriendlyPosition,
-                        true,
-                        format!("no friendly position within {radius:.0} m"),
-                    ),
-                }
-            }
-        });
+        // 2. Friendly positions: detected tracks and, once one exists, a
+        // reported-position source (DN-25 §5 rule 5; GAP-090).
+        checks.push(self.friendly_position_check(target, radius));
 
         // 3. No-fire areas.
         checks.push(Self::area_check(
@@ -190,6 +203,92 @@ impl FiresDeconflictionPolicy<'_> {
             }
         }
     }
+
+    /// Rule 1, in full (DN-05 §5 rule 1; DN-25 §5 rule 5; GAP-090).
+    ///
+    /// A breach -- detected or reported -- is checked for and denies before
+    /// anything about source availability is decided, so a known danger is never
+    /// masked by an unrelated data gap. A reported position is scanned
+    /// regardless of its affiliation filter result and regardless of staleness:
+    /// only `Friendly` reports are ever compared against the keep-out (DN-25 §5
+    /// rule 3, "may lower risk and never raise it"), and a stale one is not
+    /// excluded from that comparison (DN-25 §5 rule 4, "a stale friendly is not
+    /// a cleared fire mission") -- staleness is never a reason to stop treating a
+    /// last-known friendly position as present.
+    ///
+    /// Only once no breach is found does availability decide the result, and
+    /// that is where the three states DN-25 §5 rule 5 asks for are told apart:
+    /// a live source reporting nobody passes and says so; a configured-but-silent
+    /// source and an unconfigured one both fail, each with its own reason, and
+    /// neither is ever a pass.
+    fn friendly_position_check(&self, target: Geodetic, radius: f64) -> DeconflictionCheck {
+        let kind = DeconflictionKind::FriendlyPosition;
+
+        if let Some(positions) = self.context.friendly_positions {
+            if let Some(p) = positions
+                .iter()
+                .find(|p| great_circle_distance_m(target, **p) <= radius)
+            {
+                return check(
+                    kind,
+                    false,
+                    format!(
+                        "a detected friendly position lies {:.0} m from the target, inside the {radius:.0} m keep-out",
+                        great_circle_distance_m(target, *p)
+                    ),
+                );
+            }
+        }
+
+        if let ReportedPositionSource::Live(reports) = self.context.reported_positions {
+            if let Some(r) = reports
+                .iter()
+                .filter(|r| r.affiliation == Classification::Friendly)
+                .find(|r| great_circle_distance_m(target, r.position) <= radius)
+            {
+                return check(
+                    kind,
+                    false,
+                    format!(
+                        "a reported friendly ({}) lies {:.0} m from the target, inside the {radius:.0} m keep-out",
+                        r.reporter,
+                        great_circle_distance_m(target, r.position)
+                    ),
+                );
+            }
+        }
+
+        // No breach in whatever we had to look at. Whether that is a pass
+        // depends on what we had, not on the absence of a breach alone.
+        if self.context.friendly_positions.is_none() {
+            return check(
+                kind,
+                false,
+                "detected friendly positions unavailable, so this check could not be evaluated",
+            );
+        }
+        match self.context.reported_positions {
+            ReportedPositionSource::NotConfigured => check(
+                kind,
+                false,
+                format!(
+                    "no source configured for reported friendly positions, so a friendly beyond the detected picture cannot be ruled out of the {radius:.0} m keep-out; this check could not be evaluated"
+                ),
+            ),
+            ReportedPositionSource::Silent => check(
+                kind,
+                false,
+                "the reported-position source is configured and silent, so this check could not be evaluated",
+            ),
+            ReportedPositionSource::Live(_) => check(
+                kind,
+                true,
+                format!(
+                    "no detected friendly within {radius:.0} m, and the reported-position source is live and reports nobody within {radius:.0} m"
+                ),
+            ),
+        }
+    }
 }
 
 impl PolicyEngine for FiresDeconflictionPolicy<'_> {
@@ -214,7 +313,7 @@ impl PolicyEngine for FiresDeconflictionPolicy<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gungnir_model::{MissionTime, PlanId, PlanKind, ResourceId, TrackId};
+    use gungnir_model::{MissionTime, PeerOrigin, PlanId, PlanKind, ResourceId, TrackId};
 
     fn g(lat_deg: f64, lon_deg: f64) -> Geodetic {
         Geodetic {
@@ -242,6 +341,36 @@ mod tests {
         }
     }
 
+    /// A reported position, timed so `age_s()` is `receipt_time - peer_time`
+    /// seconds, at `(lat_deg, lon_deg)`, claiming `affiliation`.
+    fn reported(
+        peer_time: f64,
+        receipt_time: f64,
+        lat_deg: f64,
+        lon_deg: f64,
+        affiliation: Classification,
+    ) -> ReportedPosition {
+        ReportedPosition {
+            origin: PeerOrigin {
+                peer: "mesh".into(),
+                remote_track: String::new(),
+                peer_time: MissionTime(peer_time),
+                receipt_time: MissionTime(receipt_time),
+                assigned_quality: 0.5,
+            },
+            reporter: "fire-group-2".into(),
+            position: g(lat_deg, lon_deg),
+            claimed_accuracy_m: Some(10.0),
+            affiliation,
+        }
+    }
+
+    /// Every check fully supplied and clear: detected friendlies (possibly
+    /// empty), no no-fire areas, no airspace measures, no interceptors, and a
+    /// **live** reported-position source with nobody in it. This is "everything
+    /// the picture can supply, and it says clear" -- not today's real state,
+    /// which is `FiresContext::default()` (see the tests below that use it
+    /// directly).
     fn full_context<'a>(
         friendly: &'a [Geodetic],
         no_fire: &'a [Geofence],
@@ -250,6 +379,7 @@ mod tests {
     ) -> FiresContext<'a> {
         FiresContext {
             friendly_positions: Some(friendly),
+            reported_positions: ReportedPositionSource::Live(&[]),
             no_fire_areas: Some(no_fire),
             airspace_measures: Some(airspace),
             interceptor_points: Some(interceptors),
@@ -424,5 +554,187 @@ mod tests {
             PolicyVerdict::RequiresHumanApproval,
             "this engine has nothing to say about an intercept"
         );
+    }
+
+    // GAP-090 / DN-25 §5 rule 5: rule 1's three states. Each row of CAP-3.8's
+    // agreed pass criterion (verification-capability-table.md, "Rows added by
+    // DN-25") gets its own test below, named after the clause it checks.
+
+    fn friendly_position_result(context: FiresContext<'_>) -> DeconflictionCheck {
+        let s = settings();
+        let policy = FiresDeconflictionPolicy {
+            settings: &s,
+            context,
+        };
+        policy
+            .deconflict(&fires_plan(40.0))
+            .checks
+            .into_iter()
+            .find(|c| c.kind == DeconflictionKind::FriendlyPosition)
+            .expect("the friendly-position check always runs")
+    }
+
+    #[test]
+    fn a_reported_friendly_inside_the_ellipse_is_denied() {
+        // "A reported friendly inside the target's error ellipse denies."
+        let inside = [reported(100.0, 101.0, 0.002, 0.0, Classification::Friendly)];
+        let fp = friendly_position_result(FiresContext {
+            reported_positions: ReportedPositionSource::Live(&inside),
+            ..full_context(&[], &[], &[], &[])
+        });
+        assert!(!fp.passed, "{}", fp.detail);
+        assert!(fp.detail.contains("reported"), "{}", fp.detail);
+
+        // The verdict carries the denial through to the policy chain, same as a
+        // detected breach does today.
+        let s = settings();
+        let policy = FiresDeconflictionPolicy {
+            settings: &s,
+            context: FiresContext {
+                reported_positions: ReportedPositionSource::Live(&inside),
+                ..full_context(&[], &[], &[], &[])
+            },
+        };
+        assert!(matches!(
+            policy.evaluate(&plan_of(fires_plan(40.0)), &[]),
+            PolicyVerdict::Denied {
+                reason_code: DenialReason::FiresDeconfliction
+            }
+        ));
+    }
+
+    #[test]
+    fn a_configured_source_reporting_nobody_passes_and_names_the_source() {
+        // "a configured source reporting nobody in the ellipse passes and the
+        // result names the source it read." An empty slice is a real reading
+        // from a live source, not an absent one (DN-25 §5 rule 5).
+        let fp = friendly_position_result(FiresContext {
+            reported_positions: ReportedPositionSource::Live(&[]),
+            ..full_context(&[], &[], &[], &[])
+        });
+        assert!(fp.passed, "{}", fp.detail);
+        assert!(
+            fp.detail.contains("reported-position source is live"),
+            "the result must name what it read: {}",
+            fp.detail
+        );
+        assert!(
+            fp.detail.contains("detected"),
+            "and where the detected half came from too: {}",
+            fp.detail
+        );
+    }
+
+    #[test]
+    fn a_configured_and_silent_source_is_a_failed_check_never_a_pass() {
+        // DN-25 §5 rule 5's middle state: configured, but not trusted right now
+        // -- rule 2's existing "cannot be evaluated" failure, not a pass.
+        let fp = friendly_position_result(FiresContext {
+            reported_positions: ReportedPositionSource::Silent,
+            ..full_context(&[], &[], &[], &[])
+        });
+        assert!(!fp.passed, "a silent source must never pass: {}", fp.detail);
+        assert!(fp.detail.contains("silent"), "{}", fp.detail);
+        assert!(
+            fp.detail.contains("could not be evaluated"),
+            "{}",
+            fp.detail
+        );
+    }
+
+    #[test]
+    fn no_configured_source_is_a_failed_check_carrying_that_reason_never_a_pass() {
+        // "no configured source is a failed check carrying that reason, and
+        // never a pass -- an empty friendly set may not read as an absent one."
+        // This is GAP-090's whole point: an empty *detected* set (a real
+        // reading -- the tracker ran and found nobody friendly) must not be
+        // read as "clear" when the concept of a self-reporting friendly does
+        // not exist here.
+        let empty_detected = friendly_position_result(FiresContext {
+            friendly_positions: Some(&[]),
+            reported_positions: ReportedPositionSource::NotConfigured,
+            ..full_context(&[], &[], &[], &[])
+        });
+        assert!(!empty_detected.passed, "{}", empty_detected.detail);
+        assert!(
+            empty_detected.detail.contains("no source configured"),
+            "{}",
+            empty_detected.detail
+        );
+
+        // And never a pass even when the detected picture is non-empty and
+        // clear: a source that does not exist cannot corroborate it.
+        let some_detected = [g(45.0, 45.0)];
+        let clear_detected = friendly_position_result(FiresContext {
+            friendly_positions: Some(&some_detected),
+            reported_positions: ReportedPositionSource::NotConfigured,
+            ..full_context(&[], &[], &[], &[])
+        });
+        assert!(!clear_detected.passed, "{}", clear_detected.detail);
+    }
+
+    #[test]
+    fn a_stale_reported_friendly_does_not_clear_a_fire_mission() {
+        // "a reported friendly older than the configured maximum age does not
+        // clear a fire mission." Staleness is visible (DN-16; DN-25 §5 rule 4)
+        // but it is never a reason to stop treating a last-known friendly
+        // position as present, so the check must still deny.
+        let stale_and_inside = [reported(0.0, 600.0, 0.002, 0.0, Classification::Friendly)];
+        assert!(
+            stale_and_inside[0].origin.is_stale_beyond(30.0),
+            "the fixture must actually be stale for this test to mean anything"
+        );
+        let fp = friendly_position_result(FiresContext {
+            reported_positions: ReportedPositionSource::Live(&stale_and_inside),
+            ..full_context(&[], &[], &[], &[])
+        });
+        assert!(
+            !fp.passed,
+            "a stale reported friendly inside the keep-out must still deny: {}",
+            fp.detail
+        );
+    }
+
+    #[test]
+    fn a_reported_affiliation_other_than_friendly_changes_no_checks_result() {
+        // "a report claiming any affiliation other than Friendly changes no
+        // check's result." DN-25 §5 rule 3: a self-report may lower risk and
+        // never raise it, so a claimed-hostile report inside the keep-out must
+        // not deny -- only a claimed-friendly one may (the previous test).
+        for affiliation in [
+            Classification::Hostile,
+            Classification::Neutral,
+            Classification::Unknown,
+        ] {
+            let inside = [reported(100.0, 101.0, 0.002, 0.0, affiliation)];
+            let fp = friendly_position_result(FiresContext {
+                reported_positions: ReportedPositionSource::Live(&inside),
+                ..full_context(&[], &[], &[], &[])
+            });
+            assert!(
+                fp.passed,
+                "a claimed {affiliation:?} report inside the ellipse must not deny: {}",
+                fp.detail
+            );
+        }
+    }
+
+    #[test]
+    fn todays_real_default_state_is_no_configured_source_never_a_silent_pass() {
+        // GAP-090's honesty target. `FiresContext::default()` is what every
+        // real construction site builds today (`gungnir-app/src/decisions.rs`),
+        // because GAP-091's feed does not exist: `reported_positions` defaults
+        // to `NotConfigured`. Before this change an empty detected set here
+        // read as a silent pass; now it must fail and say why.
+        assert!(matches!(
+            FiresContext::default().reported_positions,
+            ReportedPositionSource::NotConfigured
+        ));
+        let fp = friendly_position_result(FiresContext {
+            friendly_positions: Some(&[]),
+            ..FiresContext::default()
+        });
+        assert!(!fp.passed, "{}", fp.detail);
+        assert!(fp.detail.contains("no source configured"), "{}", fp.detail);
     }
 }

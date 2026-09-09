@@ -89,7 +89,7 @@ pub use assets::{
 pub use effectors::{EffectorLayer, Magazine, RelativeCost};
 pub use exchange::{
     ExchangeAgreement, ExchangeFormat, ExchangeItem, ExchangeSet, LaunchWarningReport,
-    PeerLaunchWarning, PeerOrigin,
+    PeerLaunchWarning, PeerOrigin, ReportedPosition,
 };
 pub use frame::LocalFrame;
 pub use gungnir_coord::Geodetic;

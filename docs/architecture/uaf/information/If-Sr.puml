@@ -194,6 +194,13 @@ class PeerOrigin <<InformationElement>> {
   receipt_time: MissionTime
   assigned_quality: f32
 }
+class ReportedPosition <<InformationElement>> {
+  origin: PeerOrigin
+  reporter: String
+  position: Geodetic
+  claimed_accuracy_m: Option<f64>
+  affiliation: Classification
+}
 class LaunchWarningReport <<InformationElement>> {
   id: String
   what: String
@@ -735,6 +742,8 @@ ReplayEvent --> SessionId
 ReplayEvent --> MissionTime
 PeerOrigin --> MissionTime
 PeerOrigin --> MissionTime
+ReportedPosition --> PeerOrigin
+ReportedPosition --> Classification
 LaunchWarningReport --> MissionTime
 LaunchWarningReport --> Releasability
 PeerLaunchWarning --> LaunchWarningReport

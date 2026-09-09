@@ -47,6 +47,7 @@ Diagram: [`If-Sr.puml`](If-Sr.puml).
 | `RehearsalEvent` | enum | `Started { seed: String, seed_sha256: String, at: MissionTime, }` | `gungnir-model/src/events.rs` |
 | `ReplayEvent` | enum | `Opened { session: crate::SessionId, at: MissionTime, }`<br>`Closed { session: crate::SessionId, stepped: usize, at: MissionTime, }` | `gungnir-model/src/events.rs` |
 | `PeerOrigin` | struct | `peer: String`<br>`remote_track: String`<br>`peer_time: MissionTime`<br>`receipt_time: MissionTime`<br>`assigned_quality: f32` | `gungnir-model/src/exchange.rs` |
+| `ReportedPosition` | struct | `origin: PeerOrigin`<br>`reporter: String`<br>`position: Geodetic`<br>`claimed_accuracy_m: Option<f64>`<br>`affiliation: Classification` | `gungnir-model/src/exchange.rs` |
 | `LaunchWarningReport` | struct | `id: String`<br>`what: String`<br>`at: MissionTime`<br>`releasability: Releasability` | `gungnir-model/src/exchange.rs` |
 | `PeerLaunchWarning` | struct | `peer: String`<br>`report: LaunchWarningReport`<br>`receipt_time: MissionTime` | `gungnir-model/src/exchange.rs` |
 | `ExchangeItem` | enum | `Tracks`<br>`Warnings`<br>`Reports`<br>`Handoffs`<br>`Health` | `gungnir-model/src/exchange.rs` |
