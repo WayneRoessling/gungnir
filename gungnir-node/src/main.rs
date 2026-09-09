@@ -44,7 +44,9 @@ use gungnir_policy::{ControlStatusPolicy, GeofencePolicy, PolicyChain, PolicyEng
 use gungnir_sensor_management::{InMemorySensorRegistry, SensorRegistry};
 use gungnir_store::{EventJournal, FileEventJournal};
 use gungnir_time::{TimeAuthority, WallClockAuthority};
-use gungnir_tracking_service::{LiveTrackingService, TrackingService};
+use gungnir_tracking_service::{
+    project_pipeline_stats, LiveTrackingService, PipelineStats, TrackingService,
+};
 use std::time::{Duration, Instant};
 
 /// Service tick period.
@@ -1137,18 +1139,29 @@ fn coverage_answer(config: &ConfigBaseline, sensors: &InMemorySensorRegistry) ->
 /// after, so it is cheap and always current. Collection requirements are empty because
 /// a node states none of its own -- PN-15 is a desktop panel, and publishing an empty
 /// list is different from the field being absent (GAP-005).
+///
+/// **`bearing_rays`/`pipeline_stats` are the same values `tracking.bearing_rays()`/
+/// `tracking.pipeline_stats()` already give an embedded desktop** (GAP-096's wire
+/// contract): attached here so a connected one reads the same picture rather than the
+/// `TrackingService` trait's defaulted empty answer `gungnir-remote` gave before this
+/// entry. Refreshed every tick like `tracks`, so a snapshot taken right after this call
+/// is as current as the pipeline's last poll -- there is no separate live update for
+/// either between snapshots (see `gungnir_remote::RemoteTrackingService`'s own doc
+/// comment for what that means for a connected desktop).
 fn publish_picture(
     api: &Arc<NodeApi>,
     tracks: &[gungnir_model::TrackView],
+    bearing_rays: &[gungnir_model::BearingRayView],
+    pipeline_stats: PipelineStats,
     plan: &PlanView,
     health: SystemHealth,
 ) {
-    if let Err(err) = api.publish_snapshot(SnapshotResponse::new(
-        tracks.to_vec(),
-        Some(plan.clone()),
-        health,
-        Vec::new(),
-    )) {
+    let snapshot = SnapshotResponse::new(tracks.to_vec(), Some(plan.clone()), health, Vec::new())
+        .with_bearing_data(
+            bearing_rays.to_vec(),
+            project_pipeline_stats(pipeline_stats),
+        );
+    if let Err(err) = api.publish_snapshot(snapshot) {
         tracing::error!(%err, "could not publish the snapshot");
     }
 }
@@ -1803,7 +1816,14 @@ async fn run(
             last_health_log = Instant::now();
         }
         api.set_now(now.0);
-        publish_picture(&api, tracking.tracks(), &last_plan, health);
+        publish_picture(
+            &api,
+            tracking.tracks(),
+            tracking.bearing_rays(),
+            tracking.pipeline_stats(),
+            &last_plan,
+            health,
+        );
         // Computed here rather than in the request handler, so a caller's polling rate
         // cannot decide this node's load.
         if let Err(err) = api.publish_coverage(coverage_answer(&config, &sensors)) {

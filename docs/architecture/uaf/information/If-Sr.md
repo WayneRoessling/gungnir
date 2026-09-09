@@ -75,6 +75,7 @@ Diagram: [`If-Sr.puml`](If-Sr.puml).
 | `DetectionView` | struct | `sensor: SensorId`<br>`source_time: MissionTime`<br>`receipt_time: MissionTime`<br>`measurement: Measurement`<br>`provenance: Provenance` | `gungnir-model/src/lib.rs` |
 | `TrackView` | struct | `id: TrackId`<br>`status: TrackStatus`<br>`state: SVector<f64, 6>`<br>`covariance: SMatrix<f64, 6, 6>`<br>`classification: Classification`<br>`provenance: Provenance`<br>`quality: Quality`<br>`mission_time: MissionTime`<br>`releasability: Releasability` | `gungnir-model/src/lib.rs` |
 | `BearingRayView` | struct | `sensor: SensorId`<br>`origin_enu: [f64; 3]`<br>`azimuth_rad: f64`<br>`elevation_rad: Option<f64>`<br>`azimuth_one_sigma_rad: f64`<br>`valid_until: MissionTime` | `gungnir-model/src/lib.rs` |
+| `PipelineStatsView` | struct | `accepted: u64`<br>`too_late: u64`<br>`epochs: u64`<br>`associated: u64`<br>`initiated: u64`<br>`bearings_offered: u64`<br>`bearings_updated: u64`<br>`bearings_retained: u64`<br>`bearings_expired: u64`<br>`bearings_refused: u64` | `gungnir-model/src/lib.rs` |
 | `ResourceView` | struct | `id: ResourceId`<br>`position: Geodetic`<br>`capacity: u32`<br>`ready: bool`<br>`layer: EffectorLayer`<br>`cost: RelativeCost`<br>`magazine: Option<Magazine>`<br>`intercept_speed_mps: Option<f64>` | `gungnir-model/src/lib.rs` |
 | `PlanId` | tuple struct | `pub u64` | `gungnir-model/src/lib.rs` |
 | `InterceptSolutionView` | struct | `resource: ResourceId`<br>`track: TrackId`<br>`intercept_point: Option<Geodetic>`<br>`time_to_intercept_s: Option<f64>` | `gungnir-model/src/lib.rs` |

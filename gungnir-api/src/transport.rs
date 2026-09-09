@@ -612,6 +612,13 @@ impl NodeApi {
         // item covers it, and the requirements are internal by the same reasoning.
         withheld += usize::from(full.plan.is_some());
         withheld += full.requirements.len();
+        // GAP-096's wire contract: a retained bearing and the pipeline's own counters
+        // are this deployment's internal sensor picture, exactly like the plan and the
+        // requirements above -- DN-18 names no exchange item for either, so a machine
+        // party gets none of it, counted rather than silently dropped. An operator's own
+        // desktop is the only caller `snapshot` hands the unfiltered `full` to.
+        withheld += full.bearing_rays.len();
+        withheld += usize::from(full.pipeline_stats != gungnir_model::PipelineStatsView::default());
         let health = if self.exchange.may_send(
             party,
             ExchangeItem::Health,
@@ -628,6 +635,8 @@ impl NodeApi {
             plan: None,
             health,
             requirements: Vec::new(),
+            bearing_rays: Vec::new(),
+            pipeline_stats: gungnir_model::PipelineStatsView::default(),
             withheld,
         })
     }

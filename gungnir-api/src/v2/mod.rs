@@ -16,8 +16,8 @@
 //! "Version 2, decided 2026-09-05").
 
 use gungnir_model::{
-    CollectionRequirement, DetectionView, ExchangeItem, MissionTime, PlanId, PlanView,
-    Releasability, SystemHealth, TrackView, SCHEMA_VERSION,
+    BearingRayView, CollectionRequirement, DetectionView, ExchangeItem, MissionTime,
+    PipelineStatsView, PlanId, PlanView, Releasability, SystemHealth, TrackView, SCHEMA_VERSION,
 };
 use gungnir_security::OperatorId;
 
@@ -36,6 +36,25 @@ pub struct SnapshotResponse {
     /// track them -- and every node does, since GAP-005.
     #[serde(default)]
     pub requirements: Vec<CollectionRequirement>,
+    /// Bearings the node's pipeline has retained but matched to no track (GAP-096's wire
+    /// contract; DN-27 §5 rule 3), alongside `tracks`.
+    ///
+    /// **Additive and defaulted**, the same rule `requirements` above already follows
+    /// (`docs/gungnir-api-v1.md`, "Adding a field with a default is compatible"): a
+    /// client built before this field existed still decodes the payload, reading none,
+    /// which is the same honest empty answer `TrackingService::bearing_rays`'s own
+    /// default gives a backend with no pipeline behind it. No `SCHEMA_VERSION` bump,
+    /// because nothing that already read this payload is misled by the addition.
+    #[serde(default)]
+    pub bearing_rays: Vec<BearingRayView>,
+    /// The node pipeline's own bearing counters (GAP-096's wire contract), mirroring
+    /// `TrackingService::pipeline_stats` locally.
+    ///
+    /// **Additive and defaulted**, exactly as `bearing_rays` above. A
+    /// [`gungnir_model::PipelineStatsView`], not `gungnir_fusion_async::PipelineStats`
+    /// itself -- see that type's own doc comment for why.
+    #[serde(default)]
+    pub pipeline_stats: PipelineStatsView,
     /// Items removed from this response for the caller's party (DN-17 §5 rule 3,
     /// GAP-062). Zero for an operator inside the deployment. Never silent: a peer that
     /// is told its picture is partial can act on that; one that is not believes it has
@@ -57,8 +76,25 @@ impl SnapshotResponse {
             plan,
             health,
             requirements,
+            bearing_rays: Vec::new(),
+            pipeline_stats: PipelineStatsView::default(),
             withheld: 0,
         }
+    }
+
+    /// Attach the node pipeline's retained bearings and counters (GAP-096's wire
+    /// contract), the same builder idiom `LiveTrackingService::with_staleness` and
+    /// `NodeApi::with_exchange` already use elsewhere in this workspace rather than
+    /// growing `new`'s own positional list a fifth and sixth time.
+    #[must_use]
+    pub fn with_bearing_data(
+        mut self,
+        bearing_rays: Vec<BearingRayView>,
+        pipeline_stats: PipelineStatsView,
+    ) -> Self {
+        self.bearing_rays = bearing_rays;
+        self.pipeline_stats = pipeline_stats;
+        self
     }
 }
 
@@ -313,5 +349,63 @@ mod tests {
         let json = serde_json::to_string(&s).expect("encode");
         let back: SnapshotResponse = serde_json::from_str(&json).expect("decode");
         assert_eq!(s, back);
+    }
+
+    /// GAP-096's wire contract: `bearing_rays`/`pipeline_stats` round-trip like every
+    /// other field.
+    #[test]
+    fn bearing_data_survives_the_wire_round_trip() {
+        let ray = BearingRayView {
+            sensor: gungnir_model::SensorId(4),
+            origin_enu: [10.0, 20.0, 3.0],
+            azimuth_rad: 0.4,
+            elevation_rad: None,
+            azimuth_one_sigma_rad: 0.01,
+            valid_until: MissionTime(90.0),
+        };
+        let stats = PipelineStatsView {
+            bearings_offered: 3,
+            bearings_retained: 1,
+            ..PipelineStatsView::default()
+        };
+        let s = SnapshotResponse::new(Vec::new(), None, SystemHealth::default(), Vec::new())
+            .with_bearing_data(vec![ray], stats);
+        let json = serde_json::to_string(&s).expect("encode");
+        let back: SnapshotResponse = serde_json::from_str(&json).expect("decode");
+        assert_eq!(s, back);
+        assert_eq!(back.bearing_rays, vec![ray]);
+        assert_eq!(back.pipeline_stats, stats);
+    }
+
+    /// Backward compatibility (GAP-096's wire contract): a snapshot encoded before
+    /// `bearing_rays`/`pipeline_stats` existed -- the same shape `requirements`' own
+    /// comment describes for a client built before that field existed -- still decodes,
+    /// degrading to the same honest empty answer `TrackingService::bearing_rays`/
+    /// `pipeline_stats` default to locally, rather than failing to parse
+    /// (`docs/gungnir-api-v1.md`, "Adding a field with a default is compatible").
+    #[test]
+    fn an_older_snapshot_with_no_bearing_fields_still_decodes() {
+        let current = SnapshotResponse::new(Vec::new(), None, SystemHealth::default(), Vec::new());
+        let mut value = serde_json::to_value(&current).expect("encodes");
+        let obj = value.as_object_mut().expect("an object");
+        assert!(
+            obj.remove("bearing_rays").is_some(),
+            "the field must exist on the current shape for this test to mean anything"
+        );
+        assert!(
+            obj.remove("pipeline_stats").is_some(),
+            "the field must exist on the current shape for this test to mean anything"
+        );
+        let decoded: SnapshotResponse = serde_json::from_value(value)
+            .expect("a payload missing the new fields must still decode");
+        assert!(
+            decoded.bearing_rays.is_empty(),
+            "a missing field must default to empty, not fail"
+        );
+        assert_eq!(
+            decoded.pipeline_stats,
+            PipelineStatsView::default(),
+            "a missing field must default to the honest empty counters, not fail"
+        );
     }
 }

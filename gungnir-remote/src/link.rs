@@ -41,7 +41,7 @@ use gungnir_api::v2::{
 use gungnir_eventing::{Envelope, Event};
 use gungnir_intercept_service::PlanView;
 use gungnir_model::events::{InterceptEvent, TrackingEvent};
-use gungnir_model::DetectionView;
+use gungnir_model::{BearingRayView, DetectionView, PipelineStatsView};
 use gungnir_tracking_service::TrackView;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, watch};
@@ -68,6 +68,20 @@ pub use gungnir_api::transport::{HEARTBEAT_INTERVAL, HEARTBEAT_TIMEOUT};
 pub struct Projection {
     pub tracks: Vec<TrackView>,
     pub plan: PlanView,
+    /// Bearings the node's pipeline retained but matched to no track, as of the last
+    /// snapshot (GAP-096's wire contract).
+    ///
+    /// **Refreshed at snapshot time only** -- the initial connection and each
+    /// reconnect. Unlike `tracks` and `plan`, which the event stream also keeps live
+    /// between snapshots (`Event::Tracking`'s two variants and `Event::Intercept`'s),
+    /// no envelope variant carries a bearing or a counter update today, so a connected
+    /// desktop's bearing picture ages until the next reconnect: a real answer, current
+    /// as of the last time this link actually asked, not a live one.
+    pub bearing_rays: Vec<BearingRayView>,
+    /// The node pipeline's own bearing counters, as of the last snapshot (GAP-096's
+    /// wire contract). Refreshed on the same cadence as `bearing_rays`, for the same
+    /// reason.
+    pub pipeline_stats: PipelineStatsView,
     /// True only once a node has answered. Cleared as soon as it stops.
     pub connected: bool,
     /// The most recent transport failure, for the status strip.
@@ -696,6 +710,12 @@ async fn run_link(
         if let Some(plan) = snapshot.plan {
             p.plan = plan;
         }
+        // GAP-096's wire contract: the same snapshot that carries tracks now carries the
+        // node's retained bearings and pipeline counters too. See `Projection::
+        // bearing_rays`'s own doc comment for why this is a per-(re)connect refresh and
+        // not a live one.
+        p.bearing_rays = snapshot.bearing_rays;
+        p.pipeline_stats = snapshot.pipeline_stats;
         p.token = Some(token.clone());
         p.connected = true;
         p.last_error = None;

@@ -307,6 +307,52 @@ pub fn project_bearing_ray(
     }
 }
 
+/// Project the pipeline's own counters into the wire-facing view (GAP-096's wire
+/// contract).
+///
+/// Field for field, like [`project_bearing_ray`] beside it: see
+/// [`gungnir_model::PipelineStatsView`]'s own doc comment for why this is a mirror of
+/// `gungnir_fusion_async::PipelineStats` rather than that type made to carry `serde`
+/// itself. [`pipeline_stats_from_view`] is the inverse, for a remote backend that
+/// received one over the wire and must still answer [`TrackingService::pipeline_stats`]'s
+/// `PipelineStats` return type.
+#[must_use]
+pub fn project_pipeline_stats(stats: PipelineStats) -> gungnir_model::PipelineStatsView {
+    gungnir_model::PipelineStatsView {
+        accepted: stats.accepted,
+        too_late: stats.too_late,
+        epochs: stats.epochs,
+        associated: stats.associated,
+        initiated: stats.initiated,
+        bearings_offered: stats.bearings_offered,
+        bearings_updated: stats.bearings_updated,
+        bearings_retained: stats.bearings_retained,
+        bearings_expired: stats.bearings_expired,
+        bearings_refused: stats.bearings_refused,
+    }
+}
+
+/// The inverse of [`project_pipeline_stats`] (GAP-096's wire contract): a remote backend
+/// -- `gungnir-remote`'s `RemoteTrackingService` is the one today -- reads this back into
+/// the same `PipelineStats` [`TrackingService::pipeline_stats`] declares, so a caller
+/// cannot tell from the return type alone whether a local pipeline or a wire read
+/// answered it.
+#[must_use]
+pub fn pipeline_stats_from_view(view: gungnir_model::PipelineStatsView) -> PipelineStats {
+    PipelineStats {
+        accepted: view.accepted,
+        too_late: view.too_late,
+        epochs: view.epochs,
+        associated: view.associated,
+        initiated: view.initiated,
+        bearings_offered: view.bearings_offered,
+        bearings_updated: view.bearings_updated,
+        bearings_retained: view.bearings_retained,
+        bearings_expired: view.bearings_expired,
+        bearings_refused: view.bearings_refused,
+    }
+}
+
 /// What `Provenance::algorithm_version` says while nothing governs this service.
 ///
 /// **This used to be the crate version**, which answers a different question than the one
@@ -1085,5 +1131,32 @@ mod tests {
 
         drop(svc);
         runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+    }
+
+    /// GAP-096's wire contract: the mirror round-trips. A remote backend that projects a
+    /// node's counters and converts them back must see exactly what a local pipeline
+    /// would have reported, field for field.
+    #[test]
+    fn pipeline_stats_survive_the_view_round_trip() {
+        let stats = PipelineStats {
+            accepted: 11,
+            too_late: 2,
+            epochs: 5,
+            associated: 4,
+            initiated: 1,
+            bearings_offered: 7,
+            bearings_updated: 3,
+            bearings_retained: 2,
+            bearings_expired: 1,
+            bearings_refused: 1,
+        };
+        let view = project_pipeline_stats(stats);
+        assert_eq!(view.accepted, stats.accepted);
+        assert_eq!(view.bearings_retained, stats.bearings_retained);
+        assert_eq!(
+            pipeline_stats_from_view(view),
+            stats,
+            "the round trip must not lose or invent a counter"
+        );
     }
 }

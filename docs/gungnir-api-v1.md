@@ -102,7 +102,7 @@ section above had already superseded.
 |---|---|---|---|---|
 | `POST /v2/session` | `SessionRequest { operator, passphrase }` | `SessionResponse { token, expires_s }` | none: this is what establishes identity | Yes (GAP-057) |
 | `GET /v2/session` | none | `SessionStatus { operator, role, expires_s }` | a valid token | Yes (GAP-057) |
-| `GET /v2/snapshot` | none | `SnapshotResponse { schema_version, tracks, plan, health, requirements }` | `picture.view` | Yes (GAP-041) |
+| `GET /v2/snapshot` | none | `SnapshotResponse { schema_version, tracks, plan, health, requirements, bearing_rays, pipeline_stats }` | `picture.view` | Yes (GAP-041); `bearing_rays`/`pipeline_stats` GAP-096 |
 | `GET /v2/events` (WebSocket) | `SubscribeRequest { from_seq }` as the first frame | A stream of `EventFrame` (`gungnir_eventing::Envelope`) with `seq >= from_seq`, in order | `picture.view` | Yes (GAP-041) |
 | `GET /v2/health` | none | `SystemHealth` | `picture.view` | Yes (GAP-041) |
 | `GET /v2/coverage` | none | `CoverageResponse`: the whole `CoverageReport` when one was computed, or `NotComputed` with a reason. **Not a bare `Vec<CoverageGap>`**, which would discard the sample spacing and terrain-masking flag DN-12 §5 puts on the result | `picture.view` | Yes (GAP-006) |

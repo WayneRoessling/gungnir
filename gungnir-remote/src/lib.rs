@@ -29,7 +29,10 @@ pub mod link;
 pub mod peer;
 
 use gungnir_intercept_service::{InterceptService, PlanOutcome, PlanView, ResourceView};
-use gungnir_tracking_service::{DetectionView, MissionTime, TrackView, TrackingService};
+use gungnir_model::{BearingRayView, PipelineStatsView};
+use gungnir_tracking_service::{
+    DetectionView, MissionTime, PipelineStats, TrackView, TrackingService,
+};
 use link::NodeLink;
 use rustls::pki_types::pem::{self, PemObject};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
@@ -255,6 +258,11 @@ pub fn connect_with_link(
 pub struct RemoteTrackingService {
     endpoint: RemoteEndpoint,
     cache: Vec<TrackView>,
+    /// Mirrors `link::Projection::bearing_rays` (GAP-096's wire contract); see that
+    /// field's own doc comment for the per-(re)connect refresh cadence.
+    bearing_rays: Vec<BearingRayView>,
+    /// Mirrors `link::Projection::pipeline_stats` (GAP-096's wire contract).
+    pipeline_stats: PipelineStatsView,
     outbox: Vec<DetectionView>,
     dropped: u64,
     connected: bool,
@@ -269,6 +277,8 @@ impl RemoteTrackingService {
         Self {
             endpoint,
             cache: Vec::new(),
+            bearing_rays: Vec::new(),
+            pipeline_stats: PipelineStatsView::default(),
             outbox: Vec::new(),
             dropped: 0,
             connected: false,
@@ -377,11 +387,31 @@ impl TrackingService for RemoteTrackingService {
         self.connected = projection.connected;
         if projection.connected {
             self.cache.clone_from(&projection.tracks);
+            // GAP-096's wire contract: the same projection tracks came from also
+            // carries the node's retained bearings and pipeline counters, refreshed on
+            // the cadence `link::Projection::bearing_rays`'s doc comment describes.
+            self.bearing_rays.clone_from(&projection.bearing_rays);
+            self.pipeline_stats = projection.pipeline_stats;
         }
     }
 
     fn tracks(&self) -> &[TrackView] {
         &self.cache
+    }
+
+    /// The node's retained bearings as of the last snapshot (GAP-096's wire contract):
+    /// real data read over the link, in place of the [`TrackingService`] trait's
+    /// defaulted empty answer.
+    fn bearing_rays(&self) -> &[BearingRayView] {
+        &self.bearing_rays
+    }
+
+    /// The node pipeline's own counters as of the last snapshot (GAP-096's wire
+    /// contract), converted back from the wire view into the same `PipelineStats`
+    /// [`LiveTrackingService`](gungnir_tracking_service::LiveTrackingService) returns to
+    /// an embedded caller -- see `gungnir_tracking_service::pipeline_stats_from_view`.
+    fn pipeline_stats(&self) -> PipelineStats {
+        gungnir_tracking_service::pipeline_stats_from_view(self.pipeline_stats)
     }
 
     fn is_healthy(&self) -> bool {

@@ -18,13 +18,13 @@ use gungnir_eventing::{Envelope, Event};
 use gungnir_intercept_service::InterceptService;
 use gungnir_model::events::{InterceptEvent, TrackingEvent};
 use gungnir_model::{
-    Classification, ExchangeItem, MissionTime, PlanView, Provenance, Quality, Releasability,
-    SystemHealth, TrackId, TrackStatus, TrackView,
+    BearingRayView, Classification, ExchangeItem, MissionTime, PipelineStatsView, PlanView,
+    Provenance, Quality, Releasability, SensorId, SystemHealth, TrackId, TrackStatus, TrackView,
 };
 use gungnir_remote::link::{Credential, ExchangeProductRecord};
 use gungnir_remote::{connect, connect_with_link, RemoteEndpoint, RemoteError};
 use gungnir_security::{hash_passphrase, Account, InMemoryAccountStore, OperatorId, TokenIssuer};
-use gungnir_tracking_service::TrackingService;
+use gungnir_tracking_service::{pipeline_stats_from_view, TrackingService};
 use std::sync::Arc;
 use tokio::sync::watch;
 
@@ -252,6 +252,77 @@ async fn a_desktop_receives_the_nodes_picture() {
         tracking.tracks().len(),
         2,
         "the snapshot's tracks did not reach the desktop"
+    );
+}
+
+/// A bearing ray, per [`BearingRayView`]'s own fields.
+fn bearing_ray() -> BearingRayView {
+    BearingRayView {
+        sensor: SensorId(7),
+        origin_enu: [100.0, 200.0, 5.0],
+        azimuth_rad: 0.6,
+        elevation_rad: Some(0.1),
+        azimuth_one_sigma_rad: 0.02,
+        valid_until: MissionTime(15.0),
+    }
+}
+
+/// The pipeline counters a node holding one retained bearing and nothing else would
+/// report.
+fn pipeline_stats() -> PipelineStatsView {
+    PipelineStatsView {
+        accepted: 1,
+        bearings_offered: 1,
+        bearings_retained: 1,
+        ..PipelineStatsView::default()
+    }
+}
+
+/// GAP-096's wire contract: a node holding a retained bearing publishes it, and a
+/// desktop connected over the real v2 transport reads it back through
+/// `TrackingService::bearing_rays`/`pipeline_stats` -- the same two methods every other
+/// backend in this workspace still answers with the trait's defaulted empty set --
+/// rather than the node-only `LiveTrackingService` GAP-096 built these on.
+///
+/// Mirrors `a_desktop_receives_the_nodes_picture` above exactly, for tracks: a real
+/// `axum` server, a real client, `connect`, poll until healthy, then read the answer
+/// back.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_desktop_receives_the_nodes_bearing_rays_and_pipeline_stats() {
+    let ray = bearing_ray();
+    let stats = pipeline_stats();
+    let snap = snapshot(vec![track(1)]).with_bearing_data(vec![ray], stats);
+    let api = authenticating(snap);
+    let url = serve(Arc::clone(&api)).await;
+
+    let handle = tokio::runtime::Handle::current();
+    let (mut tracking, _intercept) =
+        connect(&RemoteEndpoint::plain(url), credential(), &handle).expect("the link starts");
+
+    until(
+        || {
+            tracking.poll(MissionTime(0.0));
+            tracking.is_healthy()
+        },
+        "the link to report connected",
+    )
+    .await;
+    tracking.poll(MissionTime(0.0));
+
+    assert_eq!(
+        tracking.tracks().len(),
+        1,
+        "the same snapshot's track must still cross alongside the bearing data"
+    );
+    assert_eq!(
+        tracking.bearing_rays(),
+        &[ray],
+        "the node's retained bearing did not reach the desktop over the wire"
+    );
+    assert_eq!(
+        tracking.pipeline_stats(),
+        pipeline_stats_from_view(stats),
+        "the node's pipeline counters did not reach the desktop over the wire"
     );
 }
 
