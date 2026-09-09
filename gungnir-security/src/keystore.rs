@@ -31,7 +31,8 @@
 //! wrapping key, the same escrow wiring -- and differs only in where the string fed to
 //! argon2 comes from: a high-entropy secret `os_keystore` generates once and the
 //! platform's own credential manager holds from then on, rather than a passphrase typed
-//! at every sign-in. **Human-owned; written and gated, not signed.**
+//! at every sign-in. **Human-owned; signed by the owner 2026-09-08 (`ARCHITECTURE.md`
+//! §10 item 103).**
 //!
 //! **Generalised 2026-09-08 (GAP-060's remaining slice): `service` is now a parameter
 //! of [`PersistentKeyProvider::open_or_create_via_os_keystore`], not a name it bakes in
@@ -42,7 +43,8 @@
 //! under its own service name, so a single fixed name stopped being correct -- the
 //! same reason `crate::os_keystore::wrapping_secret` itself took `service` as a
 //! parameter when GAP-057's node account store needed a second name under the
-//! identical mechanism. **Human-owned; written and gated, not signed.**
+//! identical mechanism. **Human-owned; signed by the owner 2026-09-08 (`ARCHITECTURE.md`
+//! §10 item 111).**
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;

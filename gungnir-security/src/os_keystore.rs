@@ -6,7 +6,9 @@
 //! secret (DN-22 §5; D-39; GAP-084).
 //!
 //! **Human-owned** (docs/agentic-workflow.md: `gungnir-security` decides who can read
-//! what); written and gated, not signed.
+//! what); signed by the owner 2026-09-08 (`ARCHITECTURE.md` §10 item 103, reviewed with
+//! items 104 and 111: the review found and closed `ensure_secret`'s first-run race, see
+//! `read_back`).
 //!
 //! `keystore.rs`'s `PersistentKeyProvider` already does everything DN-22 amendment 3
 //! asks for: one sealed file holding an AES-256-GCM-wrapped `P256KeyProvider` snapshot,
