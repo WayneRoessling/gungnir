@@ -143,13 +143,21 @@ fn assignment_matches_scipy() {
         let got = solve_assignment(&cost)
             .unwrap_or_else(|e| panic!("{}: solver rejected a well-formed matrix: {e}", case.name));
 
-        let d = relative_difference(got.total_cost, case.total_cost);
+        // Every oracle case is a small exact decimal, so its optimum is representable
+        // and the solver must say so: a `None` here would be the D-43 contract firing
+        // on a matrix that has a perfectly good total, which is itself a failure.
+        let total = got.total_cost.unwrap_or_else(|| {
+            panic!(
+                "{}: solver reported no representable total for an ordinary matrix",
+                case.name
+            )
+        });
+        let d = relative_difference(total, case.total_cost);
         assert!(
             d < COST_TOL,
-            "{}: total cost {} differs from scipy's {} by {d:e} relative, \
+            "{}: total cost {total} differs from scipy's {} by {d:e} relative, \
              tolerance {COST_TOL:e}",
             case.name,
-            got.total_cost,
             case.total_cost
         );
         if d > worst_cost {
