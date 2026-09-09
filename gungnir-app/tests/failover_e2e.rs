@@ -163,6 +163,40 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
             .is_some_and(gungnir_remote::link::NodeLink::connected)
     });
 
+    // **Connected is not subscribed, and this test used to assume it was.** The wait
+    // above is satisfied as soon as the link's *snapshot* has been answered over HTTP,
+    // which `NodeLink` does before it opens its WebSocket and sends the subscribe frame
+    // (`gungnir-remote/src/link.rs`: `p.connected = true` precedes `open_stream`). An
+    // envelope published into that window reaches no live receiver, and it is not
+    // recovered afterwards either: the subscription carries `from_seq` 0, which means
+    // "everything from now" by the v2 contract, so `backlog_since` returns an empty
+    // backlog rather than replaying it. The envelope is simply gone, and the test then
+    // waits out its whole deadline with the link showing connected.
+    //
+    // That is what actually failed here -- four times now: three on 2026-09-08 (once on
+    // `main` itself, Actions run 34232995914) and again on 2026-09-09 in run
+    // 34348951731. Every one of them printed the link already connected. It was read as
+    // slowness at the time and the deadline was raised from 5 s to 10 s, which could not
+    // have helped: no deadline recovers an envelope that was never delivered, and the
+    // 10 s duly failed the same way. The deadline is back to 5 s because the wait is
+    // once again a liveness bound on an immediate operation -- a broadcast fan-out to an
+    // already-subscribed socket -- and a failure at 5 s would now be real evidence of
+    // something new rather than this race again.
+    //
+    // Neither number was ever a performance criterion, and the tightening does not make
+    // one: nothing in `docs/verification-capability-table.md` names a delivery deadline,
+    // and the budget that does bound this path -- detection to event-stream publish, p99
+    // under 150 ms on-prem (`docs/performance-budgets.md`) -- is thirty times tighter
+    // than even 5 s. A regression to seconds is that budget's row to catch.
+    //
+    // `gungnir-remote/tests/common/mod.rs::until_following` documents the same hazard
+    // and works around it with sentinel envelopes. This waits on the node's own
+    // subscriber count instead, which is the condition itself rather than a probe for
+    // it, and leaves the record clean -- the reconciliation below reads that record.
+    until(&mut state, "the event stream to subscribe", 10.0, |_| {
+        api.subscriber_count() >= 1
+    });
+
     // The node's record has one envelope before the outage, which the stream carries.
     api.publish_event(Envelope {
         seq: 1,
@@ -170,25 +204,7 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
         event: decided(5, true),
     })
     .expect("published");
-    // 10 s, not the 5 s this carried until 2026-09-08, and the change is to the
-    // harness's liveness bound rather than to anything the test asserts: the check
-    // below is still that the envelope arrives and the link's sequence advances past
-    // it, unchanged. **5 s was the tightest deadline in this file for the operation
-    // with the most behind it** -- a sign-in, an established link and a subscribed
-    // event stream -- while the wait immediately above allows 10 s for the same class
-    // of loopback round trip and the reconciliation below allows 15 s. It duly failed
-    // three times on 2026-09-08, once on `main` itself (Actions run 34232995914) and
-    // once on each of two branches, and every failure printed the link already
-    // connected, so the path worked and only the clock ran out.
-    //
-    // **This is not a performance criterion being widened.** Nothing in
-    // `docs/verification-capability-table.md` names a delivery deadline, and the
-    // budget that does bound this -- detection to event-stream publish, p99 under
-    // 150 ms on-prem (`docs/performance-budgets.md`) -- is sixty times tighter than
-    // even the old value, so this number never measured latency and does not now. A
-    // regression to seconds is that budget's row to catch, and it should not be this
-    // test's job to fail slowly and blame the wrong thing.
-    until(&mut state, "the node's envelope to arrive", 10.0, |s| {
+    until(&mut state, "the node's envelope to arrive", 5.0, |s| {
         s.link.as_ref().is_some_and(|l| l.last_seq() >= 1)
     });
 
