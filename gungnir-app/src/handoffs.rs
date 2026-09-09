@@ -270,13 +270,16 @@ pub fn issue_for(state: &mut AppState, record: &DecisionRecord) {
 /// exists to catch: the criterion is that the marking gate is independent of the
 /// agreement gate, and it stops meaning that the moment a caller checks only one of them.
 ///
-/// **Handoffs only, for now.** `gungnir_workflow::warning::Warning` carries no
+/// **Handoffs only, for `Warning`.** `gungnir_workflow::warning::Warning` carries no
 /// releasability field -- DN-17 §3's marked-types list does not name it, unlike
-/// `Handoff` -- and `gungnir_reporting::MissionReport` has no running collection on the
-/// desktop the way `state.handoffs` already is one. Wiring either is its own change, not
-/// a silent gap folded into this one: republishing a set that does not exist yet would be
-/// the "producer... faked to make the path look busier than it is"
-/// `gungnir-model/src/exchange.rs` already refuses to be.
+/// `Handoff` -- so wiring it is its own change, not a silent gap folded into this one:
+/// republishing a set that does not exist yet would be the "producer... faked to make
+/// the path look busier than it is" `gungnir-model/src/exchange.rs` already refuses to
+/// be. **`gungnir_reporting::MissionReport` is no longer in that position**: it gained
+/// its own producer 2026-09-08 (`sustainment.rs::publish_to_exchange`, GAP-065) with no
+/// `state.handoffs`-shaped `Vec` added to republish -- `ReportState` already holds at
+/// most the one report PN-13 last generated, and that single value already is this
+/// desktop's whole current set for `ExchangeItem::Reports`.
 fn publish_to_exchange(state: &AppState) {
     let Some(link) = state.link.clone() else {
         return;
