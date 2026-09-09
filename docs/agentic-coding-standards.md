@@ -621,6 +621,96 @@ Four things are deliberate:
    `KeyProviderConfig::OperatingSystemKeystore`, exactly as it already keeps none for
    `PassphraseSealedFile`.
 
+#### ONNX inference runtime (signed off 2026-09-08, D-40)
+
+GAP-077 built `gungnir-ml`'s `Model`/`FeatureExtractor` traits and `ModelSet` on
+2026-09-06 but deliberately deferred the runtime itself: no model existed yet to run,
+and `docs/ml/architecture.md`'s own condition for a native ML dependency -- a security
+reviewer appointed for it -- had not been met. The owner un-deferred it on 2026-09-08 on
+their own authority as the reviewer the deferral named, ahead of a model actually
+existing, because Plan 09's own schedule needs the runtime question settled before
+GAP-080 can plan around it.
+
+| Crate | Used for | Used by | Landed |
+|---|---|---|---|
+| `ort` (default features disabled; `download-binaries` specifically refused) | The `Model` trait's real backend: loading and running an ONNX graph | `gungnir-ml` | Not yet: no gap builds it |
+
+Two things about this one:
+
+1. **`ort` over `tract`, for op coverage, not for safety.** `tract` is a pure-Rust
+   ONNX-subset interpreter and would have sidestepped a native dependency entirely, but
+   nobody has checked whether Plan 09's intended models fit inside that subset, and `ort`
+   wraps the real ONNX Runtime with the full operator set. If a future gap finds `tract`
+   covers what is actually needed, revisiting this pin costs nothing that has been built
+   yet -- nothing has.
+2. **`download-binaries` is refused, not merely left off by default.** That feature
+   fetches a prebuilt ONNX Runtime from a third-party CDN, and those binaries may carry
+   telemetry -- not acceptable in this system regardless of convenience. Whoever builds
+   GAP-077's runtime must build ONNX Runtime from source instead, the same shape of
+   native-dependency handling this stack already gives `rcgen` (§2.9 point 2) and
+   `vtkio` (GAP-023): a build-time cost accepted in exchange for not trusting a binary
+   this project did not build. **Not yet checked**: `ort`'s exact resolved version, its
+   duplicate-linkage footprint against the rest of the workspace, and whether a C++
+   toolchain needs adding to `ci.yml` for the from-source build -- all owed by GAP-077's
+   own implementation, not decided here.
+
+#### Coordinate reference system projection (signed off 2026-09-08, D-41)
+
+Neither the DEM loader (GAP-023) nor the point-cloud loader (GAP-098) converts a file's
+coordinates -- each requires the file already be in the deployment's local-ENU frame,
+because the approved stack had never admitted a projection library, and refuses
+anything else by name rather than placing it wrong. Most real DEM and LIDAR data ships
+in a real-world CRS (geographic WGS84 or a projected system such as UTM), so this was a
+live usability limit on both capabilities, not a hypothetical one, and the owner closed
+it on 2026-09-08.
+
+| Crate | Used for | Used by | Landed |
+|---|---|---|---|
+| `proj` | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data` | Not yet: no gap builds it |
+| `proj-sys` (`proj`'s own dependency, binding `libproj` v9.6.x) | Finds a system `libproj` install or builds one from source when none is found -- the same two-path shape `vtkio`'s and `rcgen`'s own native dependencies already follow | `gungnir-data` (a normal dependency, not test-only) | Not yet: no gap builds it |
+
+`proj` and `libproj` are both permissively licensed (`proj`: MIT OR Apache-2.0;
+`libproj`: X/MIT, an OSGeo project), so this is a build-and-review cost, not a licensing
+one. **Full projection support was chosen over a WGS84-geographic-only first step**: a
+narrower cut would have left the common case of a projected DEM (UTM and similar) still
+refused, and `gungnir-coord`'s existing `Wgs84` tangent-plane conversion does not extend
+to a projected CRS regardless -- it solves a different problem (geographic lat/lon to a
+local tangent plane), not general reprojection. **Not yet checked**: `proj-sys`'s build
+behaviour on a CI runner with no system `libproj` present, what `validate_terrain` and
+`validate_point_cloud` need to change to accept a declared CRS beyond `"local-enu"`, and
+what a wrong or unsupported EPSG code should do (refuse by name, matching every other
+malformed-input rule this stack already follows, is the expected answer but is GAP-023's
+and GAP-098's own decision to confirm, not this one's).
+
+#### Cloud KMS for the ManagedService custody profile (signed off 2026-09-08, D-42)
+
+GAP-084 built the disconnected desktop's OS-keystore custody (D-39) but the cloud
+deployment profile's equivalent, `ManagedService`, has never been designed: DN-22 §5
+names the row and stops. The owner named AWS and Azure as the two targets to support on
+2026-09-08; neither GCP KMS nor HashiCorp Vault is in scope, and a deployment needing
+either is a future decision, not a gap in this one.
+
+| Crate | Used for | Used by | Landed |
+|---|---|---|---|
+| `aws-sdk-kms` | `ManagedService`'s AWS KMS backend | `gungnir-security` | Not yet: no gap builds it |
+| `azure_security_keyvault_keys` (pre-1.0, `0.9.0`) | `ManagedService`'s Azure Key Vault backend | `gungnir-security` | Not yet: no gap builds it |
+| `azure_identity` | Authentication for `azure_security_keyvault_keys` | `gungnir-security` | Not yet: no gap builds it |
+
+Two things about this one:
+
+1. **`azure_security_keyvault_keys`, never the older `azure_security_keyvault`.**
+   The two names are easy to confuse: `azure_security_keyvault` is an earlier, unofficial
+   crate of a similar name that Microsoft has said will not be updated further now that
+   the official per-service crates (`_keys`, `_secrets`, `_certificates`) exist.
+   `_keys` specifically is the one this workspace wants -- key custody, not secret or
+   certificate storage.
+2. **`0.9.0` is pre-1.0, and that is recorded rather than smoothed over.** A pre-1.0
+   crate's API may still move under a later dependency bump; `aws-sdk-kms` (Apache-2.0,
+   maintained by AWS directly) carries no equivalent caveat. **Not yet designed at all**:
+   `ManagedService` itself has no DN-22 amendment describing its shape, so building
+   against these two crates needs that design note first, the same discipline every other
+   custody profile in DN-22 already had before its own code.
+
 #### gRPC as the second transport (signed off 2026-09-05, D-21)
 
 Rule 5 below and D-18 both left `tonic` a later question. The owner took it on 2026-09-05.

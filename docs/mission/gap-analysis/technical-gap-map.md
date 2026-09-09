@@ -156,7 +156,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 |---|---|---|---|---|---|
 | GAP-074 Usability test rounds and MOP-37 targets | CAP-5.9 | 3 | M | I3 | `../../ux/usability-test-plan.md` §7; `../../ux/usability-round-1-session.md` |
 | GAP-076 Test-track integration: fuzz corpus, benchmark inputs, end-to-end replay | CAP-5.2, CAP-5.10, CAP-6.7 | 3 | S | I2 | `../../plans/07-test-track-suite.md` |
-| GAP-077 `gungnir-ml` crate, inference runtime sign-off, and the dependency edge | CAP-2.6, CAP-5.7 | 2 | L | I4 | `../../plans/09-ml-model-integration.md` |
+| GAP-077 `gungnir-ml` crate, inference runtime sign-off, and the dependency edge | CAP-2.6, CAP-5.7 | 2 | L | I4 | `../../plans/09-ml-model-integration.md`; D-40 |
 | GAP-078 Model manifests as `gungnir-modelops` baselines | CAP-5.7 | 3 | M | I4 | `docs/ml/mlops.md` |
 | GAP-079 Dataset pipeline from test tracks and journals | CAP-5.3, CAP-5.7 | 2 | M | I3 | `docs/ml/data-pipeline.md` |
 | GAP-081 Architecture compliance checks not automated | CAP-5.7, CAP-6.5 | 3 | M | I2 | `docs/architecture/togaf/phase-g-implementation-governance/architecture-contracts.md` |
