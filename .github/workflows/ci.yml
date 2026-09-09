@@ -269,21 +269,29 @@ jobs:
   # mostly the runner's own `target/`. This job was the second-longest in the workflow
   # for a compile that had already happened.
   #
-  # Now the runner's build is the binary the image gets, through the `--build-context
-  # build=` override deploy/node/Dockerfile documents, and the image is started once to
-  # prove the binary runs on the runtime stage's glibc (the runner is Ubuntu, the image
-  # is Debian bookworm, and a binary can link on one and not load on the other). The
-  # from-source path still runs where it can still find something: on main (off
+  # Now one compile, inside the Dockerfile's own build image (`rust:1.98-slim-bookworm`)
+  # with the runner's cargo registry and a dedicated target directory mounted in, so it
+  # is warm from the cache the way a native build is *and* linked against the glibc the
+  # runtime stage has. That second half is not optional: the first version of this job
+  # built natively on the runner (Ubuntu 24.04, glibc 2.39), and the smoke step below
+  # failed it on the spot with `GLIBC_2.38' not found` from bookworm's 2.36 -- the
+  # binary aws-lc-sys and std produce on the host does not load on the image. Then the
+  # binary goes into the image through the `--build-context build=` override
+  # deploy/node/Dockerfile documents, and the image is started once to prove it runs.
+  #
+  # The from-source path still runs where it can still find something: on main (off
   # everyone's critical path, and the build release.yml's container job will repeat),
   # and on a pull request that touches what the in-image compile depends on -- the
-  # manifests, the lockfile, the toolchain file, the Dockerfile and its context
-  # filter. A dependency that needs a native library the slim image lacks is caught by
-  # exactly that condition; a change to gungnir-node's own code cannot break the image
-  # build in a way the runner build would not already have caught.
+  # manifests, the lockfile, the toolchain file, the Dockerfile and its context filter.
+  # The compile above already happens in the same image, so what that path adds is the
+  # Dockerfile's own build stage: its `COPY . .` under `.dockerignore`, its `--locked`.
   node-linux-container:
     name: gungnir-node builds for Linux x86_64
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # The Dockerfile's build stage. Keep the two in step.
+      BUILD_IMAGE: rust:1.98-slim-bookworm
     steps:
       - uses: actions/checkout@v4
         with:
@@ -293,24 +301,49 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.98"
+      # Restores and (from main) saves `~/.cargo/registry` and `target/`, which is where
+      # the container build below keeps its artifacts (`target/bookworm`). The container
+      # sees the checkout at a fixed `/src`, so cargo's path-keyed fingerprints line up
+      # run to run and the restored directory is actually reused.
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
-      - name: build the headless node only (no UI crates)
-        run: cargo build -p gungnir-node --release --target x86_64-unknown-linux-gnu --locked
+      - name: build the headless node only (no UI crates), against the runtime's glibc
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The image's own toolchain, named exactly, so rustup does not read
+          # rust-toolchain.toml's "1.98" as a channel it has to download.
+          ver=$(docker run --rm "$BUILD_IMAGE" sh -c 'echo "$RUST_VERSION"')
+          echo "building in $BUILD_IMAGE with rust $ver, glibc $(docker run --rm "$BUILD_IMAGE" sh -c 'ldd --version | head -n 1')"
+          # Runs as the runner's own uid so everything it writes -- the registry, the
+          # target directory -- stays owned by the user rust-cache saves it as. The
+          # whole of ~/.cargo is CARGO_HOME (not just the registry) because cargo
+          # takes a lock file at CARGO_HOME's root, which the image's is not writable for.
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$PWD:/src" -w /src \
+            -v "$HOME/.cargo:/cargo" \
+            -e CARGO_HOME=/cargo \
+            -e HOME=/tmp \
+            -e RUSTUP_TOOLCHAIN="$ver" \
+            -e CARGO_TARGET_DIR=/src/target/bookworm \
+            -e CARGO_TERM_COLOR=always \
+            "$BUILD_IMAGE" cargo build --release -p gungnir-node --locked
       - name: container image, from the binary built above
         run: |
           mkdir -p prebuilt/out
-          cp target/x86_64-unknown-linux-gnu/release/gungnir-node prebuilt/out/
+          cp target/bookworm/release/gungnir-node prebuilt/out/
           docker buildx build -f deploy/node/Dockerfile -t gungnir-node:ci \
             --build-context build=prebuilt .
       # `docker build` proves the file was copied, not that it runs. `gungnir-node
       # account` with no command is the cheapest thing the binary does: it opens no
       # journal, binds no port, prints its usage and exits 2 from its own argument
-      # handling. Any other status is the binary failing to load -- 127 from the loader
-      # for a glibc the runtime stage does not have, 126 for a file that is not
-      # executable, 139 for a crash -- and is what this step is for.
+      # handling. Any other status is the binary failing to load -- the loader's
+      # `version GLIBC_2.38 not found` (exit 1) is the one this step has already
+      # caught, 126 is a file that is not executable, 139 a crash -- and is what this
+      # step is for.
       - name: the image runs
         shell: bash
         run: |

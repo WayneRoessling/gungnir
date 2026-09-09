@@ -9,16 +9,24 @@
 #     fallback: a manifest that no longer matches `Cargo.lock` is a stale lockfile in
 #     the repository, and an image built from a silently regenerated one would carry
 #     dependency versions no pull request reviewed.
-#   * from a binary already built -- `ci.yml` builds the node on the runner with a warm
-#     cargo cache and passes `--build-context build=<dir containing gungnir-node>`,
-#     which BuildKit substitutes for the `build` stage below (a named context overrides
-#     a stage of the same name). The compile stage is then never run, the runtime stage
-#     is unchanged, and a pull request checks the image in about ten seconds rather
-#     than recompiling every dependency cold for six minutes. `ci.yml` still compiles
-#     from source when the change touches something that could break the in-image
-#     compile: the manifests, the lockfile, the toolchain file, or this directory.
+#   * from a binary already built -- `ci.yml` builds the node inside this same build
+#     image on the runner, with a warm cargo cache mounted in, and passes
+#     `--build-context build=<dir>` with the binary at `<dir>/out/gungnir-node`, which
+#     BuildKit substitutes for the `build` stage below (a named context overrides a
+#     stage of the same name). The compile stage is then never run, the runtime stage
+#     is unchanged, and a pull request checks the image in seconds rather than
+#     recompiling every dependency cold. The binary must be linked against this
+#     image's glibc: one built on an Ubuntu 24.04 runner needs GLIBC_2.38 and 2.39 and
+#     does not load on bookworm's 2.36, which is why ci.yml compiles in this image and
+#     not natively. `ci.yml` still compiles from source when the change touches
+#     something that could break this stage: the manifests, the lockfile, the
+#     toolchain file, or this directory.
 
 FROM rust:1.98-slim-bookworm AS build
+# rust-toolchain.toml names the channel "1.98"; the image ships "1.98.1" and rustup
+# treats those as different toolchains, so without this it downloads a second copy of
+# the compiler (five components, a minute or more) before building anything.
+ENV RUSTUP_TOOLCHAIN=$RUST_VERSION
 WORKDIR /src
 COPY . .
 RUN cargo build --release -p gungnir-node --locked \
