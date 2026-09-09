@@ -4789,6 +4789,42 @@ not by finding, for the time between whenever each item landed and this correcti
     stays on `workflow_dispatch` permanently (D-10 as amended 2026-09-08); nothing
     here reopens that question.
 
+118. **GAP-101: sensor positions reached the tracker as geodetic radians**
+    (2026-09-08). GAP-001's closing action built
+    `gungnir_tracking_service::SensorPositions` on 2026-09-07 -- the map that says
+    where each sensor measures from, in the local ENU frame -- and both binaries
+    then filled it straight from the baseline:
+    `config.sensors.iter().map(|s| (s.id, s.position))`, in `gungnir-app`'s
+    `state::sensor_positions` and, character for character, in `gungnir-node`'s.
+    `SensorConfig::position` is geodetic `[lat_rad, lon_rad, alt_m]` and
+    `SensorPositions` is ENU metres; both are three `f64`, so the join compiled,
+    and a sensor at 55 N 12 E was stored at (0.960, 0.210, 0.000) -- 0.98 m from
+    the ENU origin, where the baseline had declared it 1.7 km away. Every bearing
+    was therefore anchored beside the origin rather than at the sensor, and every
+    range-azimuth-elevation report was *placed* there by `place_polar`. Nothing
+    downstream could catch it: the result is finite, in-frame and plausible, so
+    `validate_detection` passes it and the tracker initiates on it. That is the
+    outcome `docs/design/DN-27-bearing-only-detections.md` §2 exists to forbid,
+    arriving through a door §2 did not guard -- §2 prohibits inventing a *range*
+    for a bearing, and the resolver honours that scrupulously while being filled
+    with values that put every sensor at the origin anyway.
+
+    The fix is a type change rather than two added lines:
+    `SensorPositions::from_geodetic(&LocalFrame, impl IntoIterator<Item = (u32,
+    Geodetic)>)` takes a `gungnir_model::Geodetic` and not a bare `[f64; 3]`, so
+    the confusion is now a compile error; `from_sensors` stays for callers that
+    genuinely hold ENU and says ENU in its first line. Both binaries convert
+    through the frame they already had, the desktop's three copies of that frame
+    construction folded onto one `sustainment::local_frame_of`. A baseline with no
+    declared origin has no frame and there is no sound default for one, so it
+    yields an empty map -- which is already a named refusal of every angular report
+    (`SubmitError::NotAPosition`) rather than a ray drawn from a guess -- and the
+    desktop alerts while the node warns, since refusing every bearing silently is
+    indistinguishable from no angular feed reporting. Eight tests, each first run
+    against the reverted defect to confirm it fails there. No human-owned crate is
+    touched: the conversion itself is `gungnir-coord`'s and is called rather than
+    changed.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

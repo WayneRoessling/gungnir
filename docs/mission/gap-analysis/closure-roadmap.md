@@ -14,29 +14,30 @@ capability roadmap in `../capabilities/capability-roadmap.md`.
 |---|---|---|---|---|---|---|
 | 1 | GAP-064 ASTERIX and STANAG 4676 codecs | Technical | 36 | L | Services engineer | D-09 |
 | 2 | GAP-001 Live sensor adapters | Technical | 45 | XL | Services engineer | GAP-064, D-08 |
-| 3 | GAP-016 Scenario generator | Technical | 32 | L | Tracking engineer (human-owned crate) |  |
-| 4 | GAP-056 Performance harnesses | Technical | 32 | M | Services engineer | GAP-016, D-04 |
-| 5 | GAP-046 Test-track suite | Mission | 32 | L | Plan 07 lead | GAP-016 |
-| 6 | GAP-085 Journal append misses its budget: no buffering | Technical | 30 | S | Services engineer | D-04, GAP-056 |
-| 7 | GAP-041 API transport | Technical | 30 | L | Services engineer | D-02, D-18 |
-| 8 | GAP-076 Test-track integration: fuzz corpus, benchmark inputs, end-to-end replay | Technical | 27 | S | Services engineer | GAP-046 |
-| 9 | GAP-002 Source authentication for live feeds | Technical | 27 | M | Services engineer | D-02 |
-| 10 | GAP-003 Sensor management not wired | Technical | 27 | M | Services engineer |  |
-| 11 | GAP-048 Tracking metrics | Technical | 24 | M | Tracking engineer (human-owned crate) |  |
-| 12 | GAP-011 Tracking pipeline | Technical | 40 | XL | Tracking engineer (human-owned crate) | GAP-016, GAP-048 |
-| 13 | GAP-066 Service contracts too thin | Technical | 24 | M | Services engineer |  |
-| 14 | GAP-082 `todo!()` reachability unproven | Technical | 24 | M | Services engineer |  |
-| 15 | GAP-010 Cooperative identity decoders | Technical | 24 | L | Services engineer | D-09 |
-| 16 | GAP-023 Data loaders per format | Technical | 24 | L | UI engineer |  |
-| 17 | GAP-008 Clock-skew detection across sources | Technical | 21 | M | Services engineer |  |
-| 18 | GAP-092 The journal budget's debug cost was attributed to runner I/O; it is the encode | Technical | 16 | S | Services engineer |  |
-| 19 | GAP-069 `uuid` v7 for `GlobalEntityId` | Technical | 10 | S | Services engineer | D-11 |
-| 20 | GAP-013 Track-to-track fusion and sensor registration | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
-| 21 | GAP-051 Session lifecycle in `gungnir-mission` | Technical | 6 | M | Services engineer |  |
-| 22 | GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | Technical | 4 | M | Owner | D-10 |
-| 23 | GAP-061 Release workflow unexercised | Technical | 3 | M | Owner | D-10 |
-| 24 | GAP-093 Gate 6 never saves a baseline, so it compares nothing and cannot fail | Technical | 24 | S | Services engineer | GAP-061 |
-| 25 | GAP-081 Architecture compliance checks not automated | Technical | 3 | M | Owner |  |
+| 3 | GAP-101 Sensor positions reached the tracker as geodetic radians | Technical | 36 | S | Services engineer | GAP-001 |
+| 4 | GAP-016 Scenario generator | Technical | 32 | L | Tracking engineer (human-owned crate) |  |
+| 5 | GAP-056 Performance harnesses | Technical | 32 | M | Services engineer | GAP-016, D-04 |
+| 6 | GAP-046 Test-track suite | Mission | 32 | L | Plan 07 lead | GAP-016 |
+| 7 | GAP-085 Journal append misses its budget: no buffering | Technical | 30 | S | Services engineer | D-04, GAP-056 |
+| 8 | GAP-041 API transport | Technical | 30 | L | Services engineer | D-02, D-18 |
+| 9 | GAP-076 Test-track integration: fuzz corpus, benchmark inputs, end-to-end replay | Technical | 27 | S | Services engineer | GAP-046 |
+| 10 | GAP-002 Source authentication for live feeds | Technical | 27 | M | Services engineer | D-02 |
+| 11 | GAP-003 Sensor management not wired | Technical | 27 | M | Services engineer |  |
+| 12 | GAP-048 Tracking metrics | Technical | 24 | M | Tracking engineer (human-owned crate) |  |
+| 13 | GAP-011 Tracking pipeline | Technical | 40 | XL | Tracking engineer (human-owned crate) | GAP-016, GAP-048 |
+| 14 | GAP-066 Service contracts too thin | Technical | 24 | M | Services engineer |  |
+| 15 | GAP-082 `todo!()` reachability unproven | Technical | 24 | M | Services engineer |  |
+| 16 | GAP-010 Cooperative identity decoders | Technical | 24 | L | Services engineer | D-09 |
+| 17 | GAP-023 Data loaders per format | Technical | 24 | L | UI engineer |  |
+| 18 | GAP-008 Clock-skew detection across sources | Technical | 21 | M | Services engineer |  |
+| 19 | GAP-092 The journal budget's debug cost was attributed to runner I/O; it is the encode | Technical | 16 | S | Services engineer |  |
+| 20 | GAP-069 `uuid` v7 for `GlobalEntityId` | Technical | 10 | S | Services engineer | D-11 |
+| 21 | GAP-013 Track-to-track fusion and sensor registration | Technical | 8 | L | Tracking engineer (human-owned crate) | GAP-011 |
+| 22 | GAP-051 Session lifecycle in `gungnir-mission` | Technical | 6 | M | Services engineer |  |
+| 23 | GAP-094 The advisories gate fails, and one finding is a memory-disclosure vulnerability | Technical | 4 | M | Owner | D-10 |
+| 24 | GAP-061 Release workflow unexercised | Technical | 3 | M | Owner | D-10 |
+| 25 | GAP-093 Gate 6 never saves a baseline, so it compares nothing and cannot fail | Technical | 24 | S | Services engineer | GAP-061 |
+| 26 | GAP-081 Architecture compliance checks not automated | Technical | 3 | M | Owner |  |
 
 ## I3: Close the decision loop. Closes the allocator, geometry, asset list, policy model, queue, and the panels that let a human decide in the product.
 
@@ -156,6 +157,6 @@ replaces.
 
 | Increment | Gaps | Effort S / M / L / XL |
 |---|---|---|
-| I2 | 25 | 5 / 11 / 7 / 2 |
+| I2 | 26 | 6 / 11 / 7 / 2 |
 | I3 | 58 | 8 / 37 / 12 / 1 |
 | I4 | 17 | 0 / 9 / 7 / 1 |
