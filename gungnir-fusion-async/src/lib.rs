@@ -9,6 +9,14 @@
 //! Arc<Mutex<..>>, are the default for cross-task state per the same section.
 
 pub mod pipeline;
+pub mod sync;
+
+// Gate 4's model checks (`.github/workflows/loom.yml`, GAP-061). Compiled only by
+// `cargo test --lib` under `--cfg loom`, which is the only configuration in which the
+// `loom` dependency exists at all: it is a dev-dependency, so it is linked into test
+// targets and nothing else. See `sync.rs` for why the cfg is `all(test, loom)`.
+#[cfg(all(test, loom))]
+mod loom_model;
 
 pub use pipeline::{
     run_batch, BearingOutcome, BearingRefusal, FilterSelection, FusionPipeline, ImmBaselineFields,
@@ -16,8 +24,11 @@ pub use pipeline::{
     IMPLEMENTED_FILTERS,
 };
 
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
-use std::time::Duration;
+// The channel types come from `crate::sync` rather than straight from
+// `crossbeam-channel`: under `not(loom)` that module re-exports exactly these types, so
+// the signatures below are unchanged for every ordinary build and for every caller, and
+// under `--cfg loom` the same loop runs over a loom-instrumented channel (GAP-061).
+use crate::sync::{Receiver, Sender, TryRecvError};
 
 /// A raw detection as the tracking core consumes it. The canonical, provenance-bearing
 /// form is `gungnir_model::DetectionView`; `gungnir-tracking-service` converts.
@@ -108,9 +119,6 @@ impl From<BearingDetection> for Submission {
         Submission::Bearing(b)
     }
 }
-
-/// How often the ingest loop re-polls its inbound channel while idle.
-const IDLE_POLL: Duration = Duration::from_millis(10);
 
 /// Everything one pass through [`ingest_with`]'s loop produced, bundled into one
 /// channel message rather than sent as three (GAP-096).
@@ -244,7 +252,7 @@ pub async fn ingest_with(
                     return;
                 }
             }
-            Err(TryRecvError::Empty) => tokio::time::sleep(IDLE_POLL).await,
+            Err(TryRecvError::Empty) => crate::sync::idle_backoff().await,
             Err(TryRecvError::Disconnected) => break,
         }
     }

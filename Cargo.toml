@@ -90,6 +90,11 @@ license = "AGPL-3.0-or-later"
 # with `[lints] workspace = true`.
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+# `loom` is a real cfg this workspace sets: Gate 4 builds `gungnir-fusion-async` with
+# `RUSTFLAGS=--cfg loom` (`.github/workflows/loom.yml`). Declaring it here is what stops
+# `unexpected_cfgs` from warning on every `cfg(all(test, loom))` in that crate, and it is
+# declared workspace-wide because the flag reaches every crate in the build graph.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
@@ -120,6 +125,17 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1"
 crossbeam-channel = "0.5"
+# Gate 4's model checker (docs/agentic-workflow.md; docs/agentic-coding-standards.md §5,
+# §2.9). Consumed by exactly one crate, `gungnir-fusion-async`, and there only from
+# `[target.'cfg(loom)'.dev-dependencies]`, so it enters no ordinary build graph: an
+# ordinary `cargo build`/`cargo test` never resolves it, and it reaches neither the SBOM
+# nor `cargo deny`'s release-target graph. Only `RUSTFLAGS=--cfg loom` pulls it in.
+#
+# The `futures` feature supplies `loom::future::block_on`, which is how the real
+# `ingest_with` -- an `async fn` -- is driven inside a loom execution: it parks through
+# loom's own runtime rather than spinning, so a pending future is a scheduling decision
+# loom makes rather than one it cannot see.
+loom = { version = "0.7", features = ["futures"] }
 # YAML for the plan-07 test-track library (GAP-016, decided 2026-09-06, D-31): the yaml
 # organisation's continuation of serde_yaml, same API, MIT OR Apache-2.0. Test/bench
 # crates only; no production crate reads YAML (docs/agentic-coding-standards.md §2.9).
