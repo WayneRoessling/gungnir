@@ -1,26 +1,56 @@
-# Gate 1: differential testing against the Python/MATLAB oracles
-# (docs/agentic-workflow.md). Runs when the oracle-comparable crates change.
+# Gate 1: differential testing against the trusted oracles
+# (docs/agentic-workflow.md §1). Runs when the oracle-comparable crates, or the
+# fixtures they read, change.
 #
-# **This gate fired 12 times, went green 12 times, and compared nothing** (GAP-061). As
-# with loom.yml the trigger was never at fault -- the runs are there from 2026-09-07, and
-# the 2026-09-08 run on claude/gap-015-cphd-filter is a CPHD filter change correctly
-# matching gungnir-rfs/**. The job installs five scientific Python packages, compiles the
-# crate, and then reports, verbatim:
+# **This gate fired 12 times, went green 12 times, and compared nothing** (GAP-061). The
+# trigger was never at fault -- the runs are there from 2026-09-07, and the 2026-09-08 run
+# on claude/gap-015-cphd-filter is a CPHD filter change correctly matching gungnir-rfs/**.
+# What the job did is the fault. It ran `cargo test -p gungnir-oracle` and reported:
 #
 #     running 0 tests
 #     test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 #
-# `gungnir-oracle` is one src/lib.rs and no tests directory. `diff_test_filter` is a
-# documented `NotImplemented` stub whose own doc comment says the oracle trajectories are
-# not checked in (GAP-082). So there was never a differential test to run, and the pip
-# install was the only work the job did. Gate 1 is the gate that exists because an agent
-# can write plausible filter code that is subtly wrong; it has been certifying every
-# filter change in this repository by running zero comparisons.
+# **The differential testing is real; this gate was pointed at the wrong crate.** That
+# distinction is the whole of the finding and it must not be flattened. `gungnir-oracle`
+# is one src/lib.rs whose `diff_test_filter` is a documented `NotImplemented` stub with no
+# tests directory (GAP-082) -- it was designed as a *central* harness and never populated.
+# Meanwhile the differential suite this project actually built lives **distributed across
+# the crates it verifies**: 16 `tests/*_diff.rs` targets in 9 crates, driving 50 tests
+# against 21 checked-in fixtures under `testdata/oracles/`, generated offline by the 13
+# pinned Python oracles in `testdata/oracles/tools/` (filterpy, pymap3d, Stone Soup, scipy,
+# motmetrics; provenance in `testdata/oracles/SOURCE.md`). They pass, and they have been
+# passing all along inside the ordinary `fmt, clippy, test` job.
 #
-# The step at the end is the same assertion gpu-fusion.yml already makes here: a gate that
-# ran nothing has not passed. It widens no tolerance and skips no case -- there are no
-# cases. This gate is red until GAP-082 lands the recorded oracle trajectories and the
-# differential tests that read them, and red is the honest colour for it.
+# So the true statement is not "nothing is verified". It is: **this gate contributed none
+# of the evidence `docs/release-governance.md` says the evidence package is made of**,
+# because it ran a stub instead of the suite, under its own name, on its own log.
+# `docs/agentic-workflow.md` §1 still names `gungnir-oracle` as the vehicle; the
+# implementation went the other way, deliberately -- a per-crate test deserializes the
+# fixture straight into that crate's own types, so there is no second definition of a
+# coordinate or a state vector to drift from the first (see the doc comment on
+# `gungnir-coord/tests/pymap3d_diff.rs`). Reality is better than the design; the gate is
+# moved to reality.
+#
+# The gate now discovers and runs that real suite. Three assertions keep it from going
+# hollow again, and none of them widens a tolerance or skips a case:
+#
+#   1. discovery found at least one `*_diff` target;
+#   2. every target discovered actually reported a result -- this caught a genuine bug
+#      while the gate was being written, where `cargo test` consumed the driving loop's
+#      stdin and 15 of 16 targets silently never ran while the step still exited 0;
+#   3. at least one test executed.
+#
+# A fourth assertion closes the drift that caused GAP-061 in the first place: every crate
+# holding a differential test must appear in this file's own `paths:` filter, so a suite
+# that grows into a new crate cannot quietly stop being gated. That check found
+# `gungnir-metrics` (motmetrics_diff.rs) missing from the filter, and `testdata/oracles/**`
+# missing entirely -- editing a fixture did not re-run the tests that read it.
+#
+# Not done here, and named rather than left implied: the gate does not regenerate the
+# fixtures and diff them against the checked-in copies, so fixture drift is not detected.
+# That needs the oracle versions pinned and installed, is slow and network-bound, and is
+# its own piece of work. Each fixture stamps its `oracle` and `oracle_version`, and the
+# suite already asserts those stamps, which is the cheap half of the claim.
 name: oracle-diff
 
 on:
@@ -34,8 +64,14 @@ on:
       - "gungnir-rfs/**"
       - "gungnir-track-fusion/**"
       - "gungnir-allocation/**"
+      # Holds motmetrics_diff.rs and was absent from this list until GAP-061; a change
+      # to the CLEAR-MOT metrics did not run the test that checks them.
+      - "gungnir-metrics/**"
       - "gungnir-oracle/**"
       - "gungnir-scenario/**"
+      # The fixtures are half of a differential test. Editing one changes what the
+      # comparison asserts, so it has to re-run the comparison.
+      - "testdata/oracles/**"
       # A change to the gate's own definition re-runs the gate; see loom.yml.
       - ".github/workflows/oracle-diff.yml"
 
@@ -51,25 +87,95 @@ jobs:
         with:
           toolchain: "1.98"
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Reference implementations used to generate oracle fixtures
-        run: pip install filterpy stonesoup motmetrics pymap3d scipy numpy
+
+      # No Python here on purpose. The previous version of this job installed filterpy,
+      # stonesoup, motmetrics, pymap3d, scipy and numpy on every run and no step used
+      # them: the oracles run *offline*, in testdata/oracles/tools/, and what is checked
+      # in is their recorded numerical output. Nothing in the test path imports Python.
+
+      - name: Find the differential tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          meta=$(cargo metadata --no-deps --format-version 1)
+          printf '%s' "$meta" | jq -r '
+            [.packages[]
+             | select([.targets[] | select(.kind[]=="test") | select(.name|endswith("_diff"))] | length > 0)
+             | .name] | unique | .[]' | tr -d '\r' > diff-packages.txt
+          printf '%s' "$meta" | jq -r '
+            [.packages[].targets[]
+             | select(.kind[]=="test") | select(.name|endswith("_diff")) | .name] | unique | .[]' | tr -d '\r' > diff-targets.txt
+          echo "packages holding differential tests:"; sed 's/^/  /' diff-packages.txt
+          echo "differential test targets:";           sed 's/^/  /' diff-targets.txt
+          n=$(grep -c . diff-targets.txt || true)
+          echo "discovered targets: $n"
+          if [ "$n" -eq 0 ]; then
+            echo "::error::no *_diff test target found anywhere in the workspace. This gate runs the differential suite in testdata/oracles/ (16 targets across 9 crates as of GAP-061); discovering none means the suite was removed or renamed, not that it passed (GAP-061)"
+            exit 1
+          fi
+
+      # The drift check. GAP-061 happened because the gate's idea of where the tests
+      # lived stopped matching where they were; this makes that specific failure loud.
+      - name: Every crate with a differential test is in this gate's paths filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=""
+          while read -r pkg; do
+            [ -z "$pkg" ] && continue
+            grep -qF "\"$pkg/**\"" .github/workflows/oracle-diff.yml || missing="$missing $pkg"
+          done < diff-packages.txt
+          if [ -n "$missing" ]; then
+            echo "::error::these crates hold differential tests but are not in oracle-diff.yml's paths filter, so changing them would not run this gate:$missing (GAP-061)"
+            exit 1
+          fi
+          echo "all crates holding differential tests are covered by the paths filter"
+
       - name: Differential tests
         shell: bash
         run: |
+          set -euo pipefail
+          args=""
+          while read -r p; do [ -n "$p" ] && args="$args -p $p"; done < diff-packages.txt
+          while read -r t; do [ -n "$t" ] && args="$args --test $t"; done < diff-targets.txt
+          echo "cargo test$args"
           set -o pipefail
-          cargo test -p gungnir-oracle -- --nocapture 2>&1 | tee oracle-diff.log
+          # </dev/null matters: cargo test reads stdin, and a version of this step that
+          # piped the target list into a loop had it eaten after the first target.
+          cargo test $args -- --nocapture </dev/null 2>&1 | tee oracle-diff.log
+
       - name: A gate that compared nothing has not passed
         shell: bash
         run: |
+          set -euo pipefail
+          discovered=$(grep -c . diff-targets.txt || true)
+          reported=$(grep -c '^test result:' oracle-diff.log || true)
           ran=$(awk '/^test result:/ { s += $4 } END { print s + 0 }' oracle-diff.log)
-          echo "differential tests executed: $ran"
-          if [ "$ran" -eq 0 ]; then
-            echo "::error::no differential test ran; gungnir-oracle has no tests and its harness is a NotImplemented stub, so this gate cannot pass vacuously (GAP-061, GAP-082)"
+          failed=$(awk '/^test result:/ { s += $6 } END { print s + 0 }' oracle-diff.log)
+          echo "targets discovered: $discovered"
+          echo "targets reporting:  $reported"
+          echo "tests executed:     $ran"
+          echo "tests failed:       $failed"
+          if [ "$reported" -ne "$discovered" ]; then
+            echo "::error::$discovered differential test targets were discovered but only $reported reported a result; a target that never ran is not a target that passed (GAP-061)"
             exit 1
           fi
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::every differential test target reported, but zero tests executed between them; this gate cannot pass vacuously (GAP-061)"
+            exit 1
+          fi
+
+      - name: Upload the differential-test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-diff-log
+          path: |
+            oracle-diff.log
+            diff-packages.txt
+            diff-targets.txt
+          if-no-files-found: warn
+
       - name: Upload trace output on failure
         if: failure()
         uses: actions/upload-artifact@v4
