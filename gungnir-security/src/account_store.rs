@@ -6,7 +6,8 @@
 //! (GAP-057's node half; D-39; `docs/design/DN-23-operator-authentication.md` amendment
 //! 2).
 //!
-//! **Human-owned** (docs/agentic-workflow.md); written and gated, not signed.
+//! **Human-owned** (docs/agentic-workflow.md); signed by the owner 2026-09-08
+//! (`ARCHITECTURE.md` §10 item 104, reviewed with items 103 and 111).
 //!
 //! `keystore.rs`'s `PersistentKeyProvider` seals a `P256KeyProvider` snapshot in one
 //! file under a key argon2 derives from a string that `os_keystore` supplies. This

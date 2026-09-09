@@ -5140,6 +5140,58 @@ not by finding, for the time between whenever each item landed and this correcti
     `asterix_feed` (25,923,346) ran clean in the same dispatch, so gate 5's matrix is
     green on all three targets for the first time since the defect was found.
 
+123. **GAP-101: ASTERIX Category 129 UAS identification reports -- built 2026-09-08,
+    reviewed and signed 2026-09-09.** The build was recorded in the gap register and in
+    `docs/design/external-standards.md` §9.3 rather than here, and its register entry
+    cited item 114 (Category 205's) as its `ARCHITECTURE.md` reference; this is the
+    entry it should have had, written at the review, and the register now points here.
+    `gungnir-interop/src/asterix/cat129.rs` decodes every standard-UAP item of
+    EUROCONTROL-SPEC-0149-29 edition 1.2 into `gungnir_model::UasIdentificationReport`
+    -- a cooperative source in AIS's and ADS-B's sense, carrying the UAS's own claimed
+    identity and position -- and `gungnir_ingest::adapters::asterix`'s fourth category
+    arm places that position in the local frame as a `DetectionView` under the same fixed
+    baseline variance the other cooperative sources use, queueing the full report beside
+    it for a consumer that does not yet exist (the register's open item (2)). Host
+    wiring followed the same day (PR #65).
+
+    **Reviewed before signing against the primary text itself, the way Category 205
+    was.** Every item's scale, width and sign was checked against the PDF's own item
+    pages: the position at 180/2^30 degrees (the document's own "1.6764 * 10-07"), both
+    altitudes two's-complement at 0.1 m, the five-octet packed velocity pair at
+    0.01 m/s with X east and Y north, the twenty-bit vertical velocity, time of day at
+    1/128 s, the ASCII identity items at their stated widths, the FSPEC order of
+    Table 2. All agree with the codec. The altitude handling is honest on its own terms
+    -- an AMSL height on a nominally ellipsoidal field is recorded as a loss, and an
+    AGL-only record is never promoted to an absolute altitude -- and the GNSS-accuracy
+    sentinel (`0x0000`, "unknown or more than 255 m") is carried as a literal `0.0`
+    with its meaning on the field's doc comment, which a future consumer must read
+    before using the value as an accuracy.
+
+    **One reading reversed.** Edition 1.2 contradicts itself over I129/120 (Operational
+    Risk Levels): the item's Format line says "Three-octet fixed length Data Item", and
+    the codec had followed it, carrying two undocumented octets raw. Everything else the
+    document says about the item says one octet -- Table 2's length column; the item's
+    structure diagram, headed "Octet no. 1" and numbering bits 8 to 1 and nothing above,
+    where every genuine three-octet item in the same document (I129/020, /030, /070, /090,
+    /100, /220) diagrams bits 24 to 17 under "Octet no. 1" and continues to 1; and its
+    three subfields, which fill exactly eight bits -- and the Format line is verbatim the
+    neighbouring three-octet items', which is what a copy-paste artefact looks like. No
+    later edition or erratum resolves it: EUROCONTROL's own list of ASTERIX categories and
+    their statuses (issue of 22 October 2025, checked 2026-09-09) gives edition 1.2 of 12
+    June 2019 as Category 129's latest available edition. No capture exists anywhere, and
+    an encoder's author reads the table and the diagram. The owner chose one octet; the
+    codec now reads it so, with the evidence laid out in its module documentation and in
+    §9.3 so the next reader does not reverse it back on the Format line alone. The cost of
+    being wrong either way is stated rather than hidden: a record carrying the item under
+    the other reading fails `decode_block`'s exact-length rule and is rejected whole and
+    loudly, never silently misaligned -- a test now pins that for a three-octet sender.
+
+    **Human-owned crate touched (`gungnir-ingest`, the low-trust gateway), the original
+    arm and the wiring both: signed by the owner 2026-09-09, over the corrected codec.**
+    No dependency edge changed. The same review found the register's sibling entry
+    GAP-100 still describing item 114's changes as unsigned after their 2026-09-09
+    signature; corrected in the same change.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and
