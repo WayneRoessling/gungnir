@@ -114,11 +114,17 @@ fn friendly_at_enu(e: f64, n: f64) -> TrackView {
     t
 }
 
-/// **A check with missing data fails and never passes** (DN-05 §5 rule 2): three checks
+/// **A check with missing data fails and never passes** (DN-05 §5 rule 2): four checks
 /// have no source today, so a fires task is denied, never queued, and every check is on
 /// PN-05 with its reason.
+///
+/// The friendly-position check is one of the four as of GAP-090, not the exception it
+/// used to be. An empty *detected* set (this test's `Picture(vec![])`, a real reading --
+/// the tracker ran and found nobody friendly) used to read as "clear"; now, with no
+/// reported-position source configured (GAP-091's feed does not exist), rule 1 cannot
+/// certify the keep-out clear of an undetected friendly, so it fails and says why.
 #[test]
-fn a_fires_task_is_denied_while_three_checks_have_no_source() {
+fn a_fires_task_is_denied_while_four_checks_have_no_source() {
     let (mut state, dir) = desktop("no-sources");
     state.tracking = Box::new(Picture(vec![]));
     let outcome = decisions::submit(&mut state, fires_task(40.0));
@@ -137,11 +143,8 @@ fn a_fires_task_is_denied_while_three_checks_have_no_source() {
     assert_eq!(checks.len(), 5, "{checks:?}");
     let by = |k: DeconflictionKind| checks.iter().find(|c| c.kind == k).expect("check");
     assert!(by(DeconflictionKind::LocationAccuracy).passed);
-    assert!(
-        by(DeconflictionKind::FriendlyPosition).passed,
-        "no friendly track is near"
-    );
     for k in [
+        DeconflictionKind::FriendlyPosition,
         DeconflictionKind::NoFireArea,
         DeconflictionKind::AirspaceMeasure,
         DeconflictionKind::InterceptorTrajectory,
@@ -150,6 +153,15 @@ fn a_fires_task_is_denied_while_three_checks_have_no_source() {
         assert!(!c.passed, "{k:?} passed with no data");
         assert!(c.detail.contains("could not be evaluated"), "{}", c.detail);
     }
+    // GAP-090: the friendly-position failure names its own reason -- no
+    // reported-position source configured -- distinct from the other three,
+    // which are simply unavailable layers.
+    let friendly = by(DeconflictionKind::FriendlyPosition);
+    assert!(
+        friendly.detail.contains("no source configured"),
+        "{}",
+        friendly.detail
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 

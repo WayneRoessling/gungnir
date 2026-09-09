@@ -43,6 +43,7 @@ use gungnir_model::{Classification, PlanView, TrackId};
 use gungnir_policy::{
     is_pre_delegated, AuthorityPolicy, ControlStatusPolicy, DenialReason, FiresContext,
     FiresDeconflictionPolicy, GeofencePolicy, PolicyChain, PolicyEngine, PolicyVerdict,
+    ReportedPositionSource,
 };
 use gungnir_security::authz::role_permits;
 use gungnir_security::{actions, Role};
@@ -87,6 +88,10 @@ pub const DECISION_ACTION: &str = actions::DECIDE_PLAN;
 /// told only about the missing fences would reasonably conclude that configuring some
 /// fences makes the check real.
 #[derive(Debug, Clone, PartialEq, Eq)]
+// Four independent, orthogonal caveats about separately missing data sources, not a
+// state machine: each names a different reason a different check cannot pass, and
+// they combine freely (GAP-088, GAP-031, GAP-090 each own one).
+#[allow(clippy::struct_excessive_bools)]
 pub struct PolicyChainReport {
     /// Engine names in the order they were consulted.
     pub engines: Vec<&'static str>,
@@ -100,6 +105,12 @@ pub struct PolicyChainReport {
     /// measures, interceptor points (GAP-031) -- and a check without data fails (DN-05
     /// §5), so a fires task is denied until the sources exist.
     pub fires_sources_missing: bool,
+    /// The friendly-position check's reported half has no source configured
+    /// (DN-25 §5 rule 5; GAP-090): GAP-091's feed does not exist, so this build
+    /// always passes `ReportedPositionSource::NotConfigured`, and the check
+    /// fails with that reason rather than passing on an empty detected set
+    /// alone.
+    pub no_reported_position_source_configured: bool,
 }
 
 impl PolicyChainReport {
@@ -112,6 +123,14 @@ impl PolicyChainReport {
                 "the fires no-fire-area, airspace-measure and interceptor-trajectory checks, \
                  which have no data source (GAP-088, GAP-031) and therefore fail: a fires \
                  task is denied until the sources exist, and PN-05 lists each check",
+            );
+        }
+        if self.no_reported_position_source_configured {
+            out.push(
+                "the fires friendly-position check's reported half, because no \
+                 reported-position source is configured (GAP-090, GAP-091): the check \
+                 fails with that reason rather than passing on an empty detected set, \
+                 and PN-05 names it",
             );
         }
         if self.no_intercept_geometry {
@@ -326,6 +345,12 @@ pub const DESKTOP_ENGINES: [&str; 4] = [
 /// without an origin they cannot be placed and the check is told so. No-fire areas
 /// (GAP-088), airspace measures (no source) and interceptor points (GAP-031) are `None`,
 /// which DN-05 §5 rule 2 turns into a failed check with the reason -- never a pass.
+///
+/// The reported-position half of rule 1 (DN-25 §5 rule 5; GAP-090) has no function
+/// here to call: there is nothing to build. `reported_positions` is constructed
+/// inline at both call sites below as `ReportedPositionSource::NotConfigured`,
+/// because that is the honest state of this build -- GAP-091's feed does not exist
+/// -- rather than a value a helper computes and could be mistaken for one.
 fn friendly_positions(state: &AppState) -> Option<Vec<gungnir_model::Geodetic>> {
     let frame = crate::sustainment::local_frame(state)?;
     Some(
@@ -351,6 +376,9 @@ pub fn fires_checks(state: &AppState, plan: &PlanView) -> Vec<gungnir_model::Dec
         settings: &state.config.policy.fires,
         context: FiresContext {
             friendly_positions: friendly.as_deref(),
+            // GAP-090/GAP-091: no reported-position feed exists in this build, so
+            // this is the honest state rather than a silent stand-in for one.
+            reported_positions: ReportedPositionSource::NotConfigured,
             no_fire_areas: None,
             airspace_measures: None,
             interceptor_points: None,
@@ -396,6 +424,9 @@ fn with_chain<T>(state: &AppState, f: impl FnOnce(&PolicyChain<'_>) -> T) -> T {
             settings: &state.config.policy.fires,
             context: FiresContext {
                 friendly_positions: friendly.as_deref(),
+                // GAP-090/GAP-091: see the comment on the identical field in
+                // `fires_checks` above -- no feed exists, so this is the truth.
+                reported_positions: ReportedPositionSource::NotConfigured,
                 no_fire_areas: None,
                 airspace_measures: None,
                 interceptor_points: None,
@@ -621,6 +652,10 @@ pub fn chain_report_for(config: &gungnir_config::ConfigBaseline) -> PolicyChainR
         no_geofences_configured: config.geofences.is_empty(),
         no_intercept_geometry: true,
         fires_sources_missing: true,
+        // GAP-090/GAP-091: unconditional like `no_intercept_geometry` above --
+        // there is no configuration surface for a reported-position source at
+        // all yet, so there is nothing on `config` to read this from.
+        no_reported_position_source_configured: true,
     }
 }
 
@@ -870,17 +905,19 @@ mod tests {
         assert!(report.no_geofences_configured);
         assert!(report.no_intercept_geometry);
         assert!(report.fires_sources_missing);
+        assert!(report.no_reported_position_source_configured);
 
         let caveats = report.caveats();
         assert_eq!(
             caveats.len(),
-            3,
+            4,
             "every independent reason must be named, or fixing one would look like \
              fixing the check"
         );
         assert!(caveats.iter().any(|c| c.contains("GAP-031")));
         assert!(caveats.iter().any(|c| c.contains("geofence section")));
         assert!(caveats.iter().any(|c| c.contains("fires")));
+        assert!(caveats.iter().any(|c| c.contains("GAP-090")));
     }
 
     /// Fixing either reason alone leaves the check vacuous, which is the whole point of
@@ -892,6 +929,7 @@ mod tests {
             no_geofences_configured: false,
             no_intercept_geometry: true,
             fires_sources_missing: false,
+            no_reported_position_source_configured: false,
         };
         assert_eq!(fences_configured.caveats().len(), 1);
 
@@ -900,11 +938,30 @@ mod tests {
             no_geofences_configured: false,
             no_intercept_geometry: false,
             fires_sources_missing: false,
+            no_reported_position_source_configured: false,
         };
         assert!(
             sound.caveats().is_empty(),
             "with both causes fixed the check is real and must claim nothing"
         );
+    }
+
+    /// GAP-090's caveat is independent of the other three: it names the
+    /// friendly-position check's reported half specifically, and stands alone
+    /// when the other three causes are fixed.
+    #[test]
+    fn the_reported_position_caveat_stands_alone() {
+        let only_this = PolicyChainReport {
+            engines: chain_report().engines,
+            no_geofences_configured: false,
+            no_intercept_geometry: false,
+            fires_sources_missing: false,
+            no_reported_position_source_configured: true,
+        };
+        let caveats = only_this.caveats();
+        assert_eq!(caveats.len(), 1);
+        assert!(caveats[0].contains("GAP-090"));
+        assert!(caveats[0].contains("GAP-091"));
     }
 
     /// Accepting and overriding are different authorities. An operator holds the first

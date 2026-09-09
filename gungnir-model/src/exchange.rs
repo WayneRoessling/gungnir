@@ -19,8 +19,14 @@
 //! Coalition exchange needs almost no new mechanism: it is the peer source inbound,
 //! the existing stream and reports outbound, the handoff, and the marking. What it
 //! needs beyond those is an agreement, which is what [`ExchangeAgreement`] is.
+//!
+//! [`ReportedPosition`] is DN-25's addition, capability CAP-3.8, GAP-090; see
+//! docs/design/DN-25-cursor-on-target.md §3: a position an entity reports about
+//! itself, from something that is not a sensor. It reuses [`PeerOrigin`] rather
+//! than paralleling it, for the reason §3 gives: the timing and quality rules
+//! are the same three, and a second struct beside it would drift.
 
-use crate::{MissionTime, Releasability};
+use crate::{Classification, Geodetic, MissionTime, Releasability};
 
 /// Where a peer-sourced track came from and how far behind it is.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -52,6 +58,41 @@ impl PeerOrigin {
     pub fn is_stale_beyond(&self, max_age_s: f64) -> bool {
         self.age_s() > max_age_s
     }
+}
+
+/// A position an entity reports about itself, from something that is not a sensor.
+///
+/// **Never a track.** DN-16 refused to make a track out of a peer's launch warning,
+/// because a track we have not observed is a track we cannot maintain. A self-report
+/// is the same case and takes the same answer.
+///
+/// Nothing in this workspace constructs one yet. GAP-091's wire adapter -- the
+/// codec, the inbound feed, and the multicast sink DN-25 §2 assigns to
+/// `gungnir-interop`, `gungnir-ingest`, and `gungnir-remote` -- is blocked on an
+/// actual TAK client (ATAK, `WinTAK`, or iTAK) to record a corpus from
+/// (`docs/design/external-standards.md` §5.6, §5.8): "recorded, never authored" is
+/// the rule that keeps a decoder from being tested only against its own author's
+/// fixtures, and that client is the one thing this workspace cannot supply itself.
+/// The type exists so `gungnir-policy`'s DN-05 rule 1 (GAP-090) can be written and
+/// gated against it now, with directly constructed values standing in for the feed,
+/// so that a future feed plugs in without a further change to the policy.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ReportedPosition {
+    /// Timing and assigned quality, exactly as a peer-sourced track carries them.
+    pub origin: PeerOrigin,
+    /// Callsign or unit as the reporter states it. Shown as theirs, and never
+    /// resolved against the order of battle unless a person does it.
+    pub reporter: String,
+    /// WGS-84 as it arrived. **The caller anchors it to the local frame**, because
+    /// the conversion lives in a crate this type's consumers may not depend on --
+    /// the correction DN-01 §3a had to make, not repeated here.
+    pub position: Geodetic,
+    /// The accuracy the reporter claims, in metres. Recorded on the provenance and
+    /// weighted by nothing.
+    pub claimed_accuracy_m: Option<f64>,
+    /// What the reporter says it is, from the type's `friend` predicate and
+    /// nothing else. Only `Friendly` is acted on; see DN-25 §5 rule 3.
+    pub affiliation: Classification,
 }
 
 /// A launch warning as the deployment that raised it publishes it (DN-16 §5, GAP-009).
@@ -270,6 +311,60 @@ mod tests {
         // strongest form of this rule.
         let o = origin(100.0, 101.0, 0.4);
         assert!((o.assigned_quality - 0.4).abs() < f32::EPSILON);
+    }
+
+    fn reported(
+        peer_time: f64,
+        receipt_time: f64,
+        affiliation: Classification,
+    ) -> ReportedPosition {
+        ReportedPosition {
+            origin: origin(peer_time, receipt_time, 0.6),
+            reporter: "fire-group-2".into(),
+            position: crate::Geodetic {
+                lat_rad: 0.0,
+                lon_rad: 0.0,
+                alt_m: 0.0,
+            },
+            claimed_accuracy_m: Some(5.0),
+            affiliation,
+        }
+    }
+
+    #[test]
+    fn a_reported_position_reuses_peer_origin_for_age_and_staleness() {
+        // DN-25 §3: "PeerOrigin is reused rather than paralleled". The strongest
+        // check of that claim is that the same two methods, called through the
+        // embedded field, give the same answer they give PeerOrigin directly.
+        let r = reported(100.0, 140.0, Classification::Friendly);
+        assert!((r.origin.age_s() - 40.0).abs() < f64::EPSILON);
+        assert!(r.origin.is_stale_beyond(30.0));
+        assert!(!r.origin.is_stale_beyond(50.0));
+    }
+
+    #[test]
+    fn a_reported_position_round_trips_and_carries_no_kinematic_state() {
+        // The same criterion as a launch warning (DN-16 §5's rule DN-25 §3 reuses):
+        // a self-report is never a track, so nothing serialised can be mistaken for
+        // one.
+        let r = reported(100.0, 101.0, Classification::Friendly);
+        let text = serde_json::to_string(&r).expect("serialises");
+        assert!(!text.contains("velocity"), "{text}");
+        assert!(!text.contains("covariance"), "{text}");
+        let back: ReportedPosition = serde_json::from_str(&text).expect("parses");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn a_reported_position_carries_the_reporters_claimed_affiliation_unfiltered() {
+        // The type itself records whatever the reporter claims (DN-25 §3: "from the
+        // type's `friend` predicate and nothing else"); only `Friendly` is acted on
+        // is a rule for the reader (DN-05 rule 1, GAP-090), not a constraint the
+        // type enforces on construction.
+        let hostile = reported(100.0, 101.0, Classification::Hostile);
+        assert_eq!(hostile.affiliation, Classification::Hostile);
+        let friendly = reported(100.0, 101.0, Classification::Friendly);
+        assert_eq!(friendly.affiliation, Classification::Friendly);
     }
 
     #[test]
