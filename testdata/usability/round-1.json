@@ -25,6 +25,9 @@
   "endpoints": [
     { "name": "port-authority", "kind": "voice", "address": "vhf-16" }
   ],
+  "approaches": [
+    { "name": "upper Vell approach", "points": [[0.96102475, 0.2159873, 300.0], [0.96047787, 0.21271366, 300.0], [0.9599779, 0.2097128, 300.0]] }
+  ],
   "geofences": [
     { "name": "upper Vell no-go", "center": [0.96020, 0.20900, 0.0], "radius_m": 1500.0, "no_go": true }
   ],

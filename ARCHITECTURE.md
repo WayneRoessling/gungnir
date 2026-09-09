@@ -4789,6 +4789,103 @@ not by finding, for the time between whenever each item landed and this correcti
     stays on `workflow_dispatch` permanently (D-10 as amended 2026-09-08); nothing
     here reopens that question.
 
+118. **GAP-099's `misb_feeds`: the ISR video-metadata feed reaches a running
+    deployment** (2026-09-08). Item 113 built the MISB ST 0601 KLV decoder and its
+    adapter and then named, under its own "deliberately not built", exactly what was
+    missing: "a `misb_feeds` entry in `gungnir-config::ConfigBaseline` and a bound
+    socket in either binary, so this feed is built and gated but not yet wired into a
+    running deployment". That is closed. `MisbFeedConfig` and `MisbSource` take the
+    same two-variant `Tcp { addr }` / `File { path }` shape `AisSource` and
+    `AdsbSource` already have rather than inventing a third convention;
+    `ConfigBaseline` carries `misb_feeds: Vec<MisbFeedConfig>`; and
+    `validate_misb_feeds` -- unique names, a known sensor, one feed per sensor, a
+    source that parses -- joins the main `validate()` chain. Both binaries bind every
+    configured entry at start: `gungnir-node`'s `bind_misb_feeds` from
+    `build_gateway`, immediately after `bind_adsb_feeds` and mirroring it, and
+    `gungnir-app`'s own `misb::bind_feeds` through `state.rs`'s `build_ingest`.
+    Nothing in `gungnir-ingest` itself was touched.
+
+    **One sink is attached and one deliberately is not, and the reason is a defect
+    rather than a preference.** The desktop attaches a `MisbStatsSink` -- a `Copy`
+    struct overwritten in place, safe to leave unread until a PN-09 row wants it --
+    and attaches no `PlatformReportSink` for `UasPlatformReport`. GAP-099's closing
+    action names two remaining pieces, this wiring and primary-source confirmation,
+    and evidence fusion over platform reports is neither; more to the point, a report
+    sink with nothing draining it is an unbounded queue that grows for as long as a
+    live feed runs. The reasoning sits in `gungnir_app::misb`'s own module doc comment
+    rather than only here. What remains on the gap is independent confirmation against
+    MISB's own primary text, still blocked on the NSG registry's bot gateway that
+    `docs/design/external-standards.md` §8 already records; that document's "what it
+    does not do" row went stale the moment this landed and was corrected with it.
+
+119. **GAP-024's registration engine is called by a real tick, and PN-09 says which
+    backend ran** (2026-09-08). Item 117 built the WGSL kernels and `gungnir-app`'s
+    `FusionBackend`, and stated plainly why the last step was not taken then:
+    "nothing in `update::tick` calls it: GAP-098 already found that no point cloud
+    reaches `DataStore.point_clouds`, so there is nothing to register against yet,
+    and building an engine against fabricated data to look more finished would be
+    exactly the fake wiring this document's own culture refuses". Item 112 then made
+    a configured pair reach `DataStore.point_clouds` for real, which is what changed.
+    `gungnir_app::pointcloud::register`, called from `update::tick` immediately after
+    `pointcloud::poll`, builds the engine through `FusionBackend::engine_for` on the
+    first tick a `Loaded` pair is present and steps that same engine once per tick
+    from then on -- one iteration per tick, which is `PointCloudFusion::step`'s own
+    documented contract, rather than running to convergence inside a frame. An
+    incomplete pair opens no engine and is a no-op, holding GAP-098's all-or-nothing
+    rule rather than restating it. `AppState` carries the result as `registration:
+    RegistrationOutcome` (`NoPair`, `Registered { transform, converged,
+    inlier_ratio }`, `Failed { reason }`) beside the engine itself.
+
+    **A fallback that is never silent.** `PointCloudRegistrationLine`
+    (`NotConfigured`, `Pending`, `Gpu`, `CpuFallback { reason }`) is derived by the
+    pure `pointcloud::registration_line` and drawn on PN-09, so a deployment whose
+    GPU path failed to resolve reads as CPU-with-a-reason rather than as the GPU path
+    working. The lazy-resolution rule item 117 established is intact: the only two
+    tests that reach a loaded pair force `FusionBackend::Cpu` before ticking, so plain
+    `cargo test` still requests no `wgpu` device, and `fires_deconfliction.rs` -- the
+    canary for the eager-probe regression that had cost over 300 CPU-seconds on three
+    tests that normally take 0.01 s -- stayed at its baseline.
+
+120. **Three dependency decisions taken ahead of their engineering** (2026-09-08,
+    D-40, D-41, D-42). Each settles a §2.9 question a gap could not proceed without,
+    and none is yet recorded in `docs/agentic-coding-standards.md` §2.9 or built: the
+    decision and the engineering are separate acts, the same distinction D-39's own
+    history draws for GAP-057 and GAP-060 in item 103.
+
+    **D-40, the inference runtime GAP-077 deferred: `ort`** (MIT OR Apache-2.0). The
+    2026-09-05 deferral rested on two grounds -- no model existed to need a runtime,
+    and `docs/ml/architecture.md`'s own condition of a security reviewer appointed for
+    it was unmet -- and neither has changed on its own; the owner un-defers it on his
+    own authority as the reviewer that deferral named, because Plan 09's schedule
+    needs the runtime question settled ahead of the first trained model rather than
+    behind it. `ort` over `tract` for full ONNX operator coverage, since Plan 09's
+    intended models are not yet known well enough to confirm they fit `tract`'s
+    smaller pure-Rust subset. **`ort`'s default `download-binaries` feature is
+    refused**: it fetches prebuilt ONNX Runtime from a third-party CDN and those
+    binaries may carry telemetry, so the runtime is built from Microsoft's source
+    instead -- the same shape of native-dependency review `rcgen` and `vtkio` already
+    get here.
+
+    **D-41, real-world CRS for DEM and point-cloud files: `proj`, full support.**
+    Neither loader converts anything today: each requires the file already be in the
+    deployment's local-ENU frame and refuses it by name otherwise, because the
+    approved stack has never held a projection library. Most real DEM and LIDAR data
+    ships in a geographic or a projected CRS, so this is a live usability limit on
+    both capabilities rather than a hypothetical one. Full projection support was
+    chosen over a narrower WGS84-only first step deliberately, and it reaches GAP-023
+    and GAP-098 alike.
+
+    **D-42, cloud KMS for the `ManagedService` custody profile: AWS via
+    `aws-sdk-kms`, Azure via `azure_security_keyvault_keys` with `azure_identity`.**
+    DN-22 §5 names `ManagedService` and stops; item 103 built the disconnected
+    desktop's OS-keystore custody under D-39 and left the cloud profile's equivalent
+    with neither a design nor an admitted crate. The Azure crate is named precisely,
+    because `azure_security_keyvault` is a different and deprecated package and
+    choosing it from memory is exactly the error this row exists to prevent. **The
+    order is stated with the decision**: `ManagedService` needs its own DN-22
+    amendment before either backend is written, since no custody profile in this
+    system has been built from a bare name ahead of its own design note.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and
