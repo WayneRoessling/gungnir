@@ -265,3 +265,107 @@ fn a_node_backed_baseline_refuses_a_rehearsal_and_a_bad_seed_is_named() {
     ));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn t_039_is_not_stale_before_65_s_and_is_stale_after() {
+    // US-03's card reads "the seed makes T-039 stale 20 s in", the 20 s being measured
+    // from P-1183 appearing at 45 s -- so 65 s, corrected 2026-09-08 from an earlier
+    // 80 s that missed the card by 35 s. The walk above checks staleness at 85 s only,
+    // which any `stale_after_s` at or below 85 satisfies: it would not have failed on
+    // the 80 s the card never wanted, and so does not pin the fix it was written for.
+    // Bracketing the transition does. Its own state, so the ticks it adds cannot
+    // perturb the queue counts the main walk asserts.
+    let (mut state, dir) = desktop("stale");
+    let (seed, hash) = rehearsal::load_seed(&testdata("round-1-seed.json")).expect("seed loads");
+    rehearsal::install(&mut state, seed, hash).expect("installed");
+    let t39_is_stale = |state: &AppState| {
+        state
+            .tracking
+            .tracks()
+            .iter()
+            .find(|t| t.id.0 == 39)
+            .expect("T-039 is present throughout")
+            .quality
+            .is_stale
+    };
+
+    // The seed's schedule runs from the *first frame*, not from `install`
+    // (`RehearsalPicture::elapsed` captures its origin on the first `poll`), so the
+    // session has to be started at 0 before any later time means what the card says.
+    at(&mut state, 0.0);
+    at(&mut state, 64.0);
+    assert!(
+        !t39_is_stale(&state),
+        "T-039 must still be fresh at 64 s: the stale label is the trigger US-03's \
+         clock starts on, and one that fires before P-1183 has been on screen for 20 s \
+         measures a different task than the card describes"
+    );
+    at(&mut state, 66.0);
+    assert!(
+        t39_is_stale(&state),
+        "T-039 must be stale by 66 s (65 s after it appears at at_s 0, which is 20 s \
+         after P-1183 appears at 45 s)"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_round_1_baseline_lets_pn_16_compute_coverage_for_both_laydowns() {
+    // US-15's card has the planner read both laydowns' coverage off PN-16's table.
+    // `planning_rows` returns `NotComputed` for every row when the baseline declares no
+    // approach to evaluate along, and round-1.json declared none until 2026-09-08 -- so
+    // the card asked for a number the session could not produce. The `approaches`
+    // section added that day is what makes these rows `Computed`; this test is what
+    // keeps them so.
+    use gungnir_ui::panels::planning::LaydownCoverage;
+
+    let (state, dir) = desktop("coverage");
+    let gungnir_app::sustainment::PlanningRows::Rows(rows) =
+        gungnir_app::sustainment::planning_rows(&state)
+    else {
+        panic!("round-1.json declares two laydowns, so PN-16 has rows to draw");
+    };
+    assert_eq!(rows.len(), 2, "`current` and `b`");
+
+    for row in &rows {
+        let LaydownCoverage::Computed {
+            gap_segments,
+            uncovered_m,
+            delta_uncovered_m,
+        } = &row.coverage
+        else {
+            panic!(
+                "laydown {:?} has no computed coverage, so US-15's card cannot be run \
+                 against this baseline: {:?}",
+                row.id, row.coverage
+            );
+        };
+        // Measured against the declared upper Vell approach, not chosen: the axis runs
+        // ~25 km out from the estuary and both radars together leave two stretches of
+        // it uncovered.
+        assert_eq!(*gap_segments, 2, "laydown {:?}", row.id);
+        assert!(
+            (*uncovered_m - 7000.0).abs() < 1.0,
+            "laydown {:?} uncovered {uncovered_m} m",
+            row.id
+        );
+        // **The finding US-15's card rests on, pinned so it cannot go quiet.** PN-16's
+        // coverage is built from a laydown's *sensor* placements alone
+        // (`laydown_coverage_volumes`), and round-1's two laydowns place both radars
+        // identically -- `b` moves the area-layer battery and nothing else. So the
+        // comparison column reads exactly zero by construction, and a participant asked
+        // to "compare" these two on coverage is being asked to read a difference that
+        // cannot exist. The day someone gives `b` a sensor of its own this assertion
+        // fails, which is the point: the card's premise changes with it.
+        if !row.current {
+            assert_eq!(
+                *delta_uncovered_m,
+                Some(0.0),
+                "laydown {:?} differs from `current` only in where a battery stands, \
+                 which coverage does not read",
+                row.id
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
