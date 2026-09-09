@@ -524,13 +524,67 @@ pub struct DfSiteConfig {
     pub azimuth_sigma_rad: f64,
 }
 
+/// What a [`TerrainConfig::frame`] or [`PointCloudConfig::frame`] string means, parsed
+/// in one place so `validate_terrain` and the DEM loader's real-world-CRS conversion
+/// (GAP-023, D-41) read the same value the same way rather than each parsing the string
+/// afresh.
+///
+/// `TerrainConfig::frame` stays a plain `String` on the wire (schema-compatible with
+/// every baseline written before D-41, and consistent with how the rest of this file
+/// validates a string field rather than giving it a serde-level enum), but every reader
+/// of it should go through this type rather than compare against `"local-enu"` by hand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Frame {
+    /// The file was prepared in the deployment's local frame (metres east and north of
+    /// `ConfigBaseline::origin`); nothing to convert.
+    LocalEnu,
+    /// A real-world coordinate reference system, by its EPSG code -- geographic
+    /// (`4326` is WGS84) or projected (a UTM zone, for instance). D-41 chose full
+    /// projection support over a WGS84-only first step, so this is not restricted to
+    /// geographic codes.
+    Epsg(u32),
+}
+
+impl std::fmt::Display for Frame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Frame::LocalEnu => f.write_str("local-enu"),
+            Frame::Epsg(code) => write!(f, "EPSG:{code}"),
+        }
+    }
+}
+
+impl std::str::FromStr for Frame {
+    type Err = String;
+
+    /// `"local-enu"`, or `"epsg:<code>"` matched case-insensitively on the prefix (so
+    /// both `"EPSG:32633"` -- the casing this file's own error messages and
+    /// `gungnir-app`'s already use -- and `"epsg:32633"` parse) with an unsigned decimal
+    /// code after the colon. Anything else, including a negative or non-numeric code,
+    /// is refused by name rather than guessed at.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "local-enu" {
+            return Ok(Frame::LocalEnu);
+        }
+        let lower = s.to_ascii_lowercase();
+        let Some(code) = lower.strip_prefix("epsg:") else {
+            return Err(format!("{s:?} is not \"local-enu\" or \"epsg:<code>\""));
+        };
+        code.parse::<u32>()
+            .map(Frame::Epsg)
+            .map_err(|_| format!("{s:?}'s EPSG code is not an unsigned whole number"))
+    }
+}
+
 /// The terrain a deployment masks line of sight against (GAP-023).
 ///
-/// `frame` says what the file's coordinates are, and today the only value is
-/// `"local-enu"`: the DEM was prepared in the deployment's local frame (metres east and
-/// north of `origin`), because converting a projected or geographic DEM needs a
-/// projection library the approved stack does not hold. A file whose own tags contradict
-/// that is refused at load, by name.
+/// `frame` says what the file's coordinates are: `"local-enu"` (the DEM was prepared in
+/// the deployment's local frame, metres east and north of `origin`), or `"epsg:<code>"`
+/// naming the real-world coordinate reference system the file is actually in --
+/// geographic or projected -- which the loader converts to local ENU via `proj`
+/// (GAP-023, D-41). See [`Frame`]. A `GeoTIFF`'s own tags are read regardless of what
+/// `frame` declares; a mismatch between the two, or a file whose tags contradict a
+/// `"local-enu"` declaration, is refused at load, by name.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TerrainConfig {
     /// An ESRI ASCII grid (`.asc`) or a `GeoTIFF` (`.tif`, `.tiff`).
@@ -2217,7 +2271,10 @@ fn validate_radar_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
 
 /// GAP-023: a terrain entry names a file of a format the loader reads, in a frame the
 /// desktop can place. Existence is not checked here: a baseline is validated on machines
-/// that do not hold the file, and the loader reports a missing one at start.
+/// that do not hold the file, and the loader reports a missing one at start. Nor is the
+/// EPSG code itself checked against PROJ's own database here -- `gungnir-config` has no
+/// dependency on `proj` (D-41 places that in `gungnir-data`), so an unrecognised code is
+/// caught the same place a missing file is: when the loader actually runs.
 fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     let Some(t) = &baseline.terrain else {
         return Ok(());
@@ -2232,12 +2289,8 @@ fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             t.path
         )));
     }
-    if t.frame != "local-enu" {
-        return Err(ConfigError::Invalid(format!(
-            "terrain.frame {:?} is not supported; only \"local-enu\" is, because no projection \
-             library is in the approved stack",
-            t.frame
-        )));
+    if let Err(reason) = t.frame.parse::<Frame>() {
+        return Err(ConfigError::Invalid(format!("terrain.frame {reason}")));
     }
     Ok(())
 }
@@ -4625,7 +4678,7 @@ mod tests {
     }
 
     #[test]
-    fn a_terrain_entry_needs_a_known_format_and_the_local_frame() {
+    fn a_terrain_entry_needs_a_known_format_and_a_parseable_frame() {
         let mut b = ConfigBaseline {
             terrain: Some(TerrainConfig {
                 path: "dem/site.asc".into(),
@@ -4639,11 +4692,42 @@ mod tests {
             frame: "local-enu".into(),
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
+        // GAP-023, D-41: a real-world CRS by EPSG code is now accepted syntactically --
+        // both the codebase's own uppercase-EPSG casing and lowercase both parse -- and
+        // does not need a projection library to validate, only to load and convert.
         b.terrain = Some(TerrainConfig {
             path: "dem/site.tif".into(),
             frame: "EPSG:32633".into(),
         });
+        validate(&b).expect("a declared real-world CRS by EPSG code is valid");
+        b.terrain = Some(TerrainConfig {
+            path: "dem/site.tif".into(),
+            frame: "epsg:4326".into(),
+        });
+        validate(&b).expect("lowercase epsg: is accepted the same way");
+        // Neither "local-enu" nor "epsg:<code>" is still refused, whatever the reason.
+        b.terrain = Some(TerrainConfig {
+            path: "dem/site.tif".into(),
+            frame: "wgs84".into(),
+        });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
+        b.terrain = Some(TerrainConfig {
+            path: "dem/site.tif".into(),
+            frame: "epsg:not-a-number".into(),
+        });
+        assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
+    }
+
+    #[test]
+    fn frame_parses_and_displays_round_trip() {
+        assert_eq!("local-enu".parse(), Ok(Frame::LocalEnu));
+        assert_eq!("epsg:32633".parse(), Ok(Frame::Epsg(32633)));
+        assert_eq!("EPSG:32633".parse(), Ok(Frame::Epsg(32633)));
+        assert_eq!(Frame::LocalEnu.to_string(), "local-enu");
+        assert_eq!(Frame::Epsg(4326).to_string(), "EPSG:4326");
+        assert!("epsg:-1".parse::<Frame>().is_err(), "no negative EPSG code");
+        assert!("epsg:".parse::<Frame>().is_err(), "no code at all");
+        assert!("".parse::<Frame>().is_err());
     }
 
     #[test]

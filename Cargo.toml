@@ -162,6 +162,24 @@ las = { version = "0.11", features = ["laz-parallel"] }
 # GeoTIFF DEMs (GAP-023, decided 2026-09-06): the image-rs TIFF codec, pure Rust;
 # gungnir-data owns the three GeoTIFF tags itself (§2.9, "Terrain").
 tiff = "0.11"
+# Real-world CRS conversion for a DEM (GAP-023, signed off 2026-09-08, D-41): converts a
+# file's declared coordinate reference system -- geographic or projected -- into the
+# deployment's local-ENU frame. Behind `gungnir-data`'s `crs-projection` feature, off by
+# default (§2.9's D-41 entry).
+#
+# `bundled_proj` builds `libproj` from the source `proj-sys` vendors in its own crate
+# (`PROJSRC/`, no network fetch at build time) via `cmake` and a C/C++ toolchain, rather
+# than the crate's other path of linking a system install found through `pkg-config`.
+# Deliberately the from-source path even though a system `libproj` would build faster
+# when present: this workspace already makes that choice for `ort` (D-40) and for
+# `rcgen`'s `aws_lc_rs` backend (§2.9 point 2) -- a build-time cost accepted over
+# depending on a package this project did not build, of a version and provenance the
+# build cannot otherwise pin. `bundled_proj` also sidesteps needing `buildtime_bindgen`
+# (which needs `libclang`, absent from every host this change could confirm): the
+# vendored source's own pre-generated bindings (`proj-sys/src/bundled_bindings.rs`,
+# checked into the crate) cover it, since they were generated against the exact PROJ
+# version `PROJSRC/` bundles.
+proj = { version = "0.31", features = ["bundled_proj"] }
 
 # Docking for the role workspaces (signed off 2026-09-05, D-19;
 # docs/agentic-coding-standards.md §2.9). Pinned to 0.10 because that is the line that

@@ -20,6 +20,17 @@ bench = false
 [lints]
 workspace = true
 
+[features]
+# Real-world CRS conversion for a DEM (GAP-023, D-41): off by default because `proj`
+# links `libproj` via `proj-sys`, which this feature builds from its own vendored
+# source (`bundled_proj`) with `cmake` and a C/C++ toolchain -- a heavier, more
+# environment-dependent build than the rest of this crate's pure-Rust or
+# already-workspace-approved native deps. `docs/agentic-coding-standards.md` §2.9's
+# D-41 entry records the tradeoff and what CI actually verifies; a default build's
+# `cargo check`/`cargo test` never needs `cmake` at all as a result. The same shape
+# `gpu-tests` (`gungnir-data-fusion`) already uses for an environment-gated capability.
+crs-projection = ["dep:proj"]
+
 [dependencies]
 thiserror.workspace = true
 tracing.workspace = true
@@ -32,3 +43,6 @@ tiff.workspace = true
 # Pin exact tested minor versions in the PR that introduces them (agentic coding
 # standard: dependency discipline) rather than here. oxigdal-3d was the DEM route
 # the source doc named; the owner chose `tiff` instead on 2026-09-06 (GAP-023).
+# GAP-023, D-41: real-world CRS conversion for a DEM, behind the `crs-projection`
+# feature above. Optional so a default build never resolves `proj-sys`'s build script.
+proj = { workspace = true, optional = true }

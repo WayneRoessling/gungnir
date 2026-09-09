@@ -12,6 +12,13 @@ description = "eframe desktop binary: bootstrap + AppState + update loop. The on
 [lints]
 workspace = true
 
+[features]
+# Real-world CRS conversion for a DEM (GAP-023, D-41): forwards to `gungnir-data`'s own
+# `crs-projection` feature, off by default for the same reason (§2.9's D-41 entry) --
+# `proj-sys` links `libproj`, built from source with `cmake` and a C/C++ toolchain, and
+# no host this change could confirm build against had either.
+crs-projection = ["gungnir-data/crs-projection"]
+
 [dev-dependencies]
 criterion.workspace = true
 rand.workspace = true

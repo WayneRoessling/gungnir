@@ -1,0 +1,66 @@
+# Real-world CRS conversion for a DEM (GAP-023, D-41): `gungnir-data`'s `crs-projection`
+# feature, off by default (docs/agentic-coding-standards.md §2.9's D-41 entry) because
+# `proj-sys` links `libproj`, built from its own vendored source (`bundled_proj`) with
+# `cmake` and a C/C++ toolchain -- neither of which the change that added this feature
+# could confirm on the host that wrote it (no `cmake`, no `libclang`, and no system
+# `libproj`, though MSVC's own C++ compiler was present). `ci.yml`'s own jobs never pass
+# `--features`, so they never touch this; this workflow is the first and only place it
+# actually builds and runs.
+#
+# Unlike gpu-fusion.yml this does not need a self-hosted runner or manual dispatch:
+# `cmake` is a plain `apt-get install` away on `ubuntu-latest`, so this runs on every
+# pull request that could plausibly affect it.
+name: crs-projection
+
+on:
+  pull_request:
+    paths:
+      - "gungnir-data/**"
+      - "gungnir-app/Cargo.toml"
+      - "gungnir-app/src/terrain.rs"
+      - "gungnir-app/tests/terrain.rs"
+      - "gungnir-config/src/lib.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/crs-projection.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  crs-projection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+      - uses: Swatinem/rust-cache@v2
+      # `bundled_proj` builds libproj from the source proj-sys vendors in its own crate
+      # (no network fetch at build time) via cmake; a C/C++ toolchain is already on the
+      # ubuntu-latest image. No libclang/clang needed: proj-sys's pre-generated
+      # `bundled_bindings.rs` covers the bundled build, so `buildtime_bindgen` (which
+      # would need it) is deliberately not enabled anywhere in this workspace.
+      - name: cmake for PROJ's bundled build
+        run: sudo apt-get update && sudo apt-get install -y cmake
+      - name: gungnir-data unit tests (crs::to_wgs84, hand-verified against UTM's own
+          central-meridian symmetry -- see gungnir-data/src/geospatial/mod.rs)
+        run: |
+          set -o pipefail
+          cargo test -p gungnir-data --features crs-projection --lib 2>&1 | tee data-tests.log
+      - name: gungnir-app integration test (the small.tif UTM fixture, end to end)
+        run: |
+          set -o pipefail
+          cargo test -p gungnir-app --features crs-projection --test terrain 2>&1 | tee app-tests.log
+      # The same anti-vacuous-pass check gpu-fusion.yml uses: a feature-gated suite that
+      # silently compiled zero tests in (a typo in the cfg, the wrong crate) would
+      # otherwise report success for running nothing.
+      - name: a gate that ran nothing has not passed
+        shell: bash
+        run: |
+          ran=$(cat data-tests.log app-tests.log | awk '/^test result:/ { s += $4 } END { print s + 0 }')
+          echo "crs-projection tests executed: $ran"
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::the crs-projection test run executed zero tests; the gate cannot pass vacuously (GAP-023)"
+            exit 1
+          fi

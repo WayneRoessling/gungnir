@@ -666,21 +666,75 @@ it on 2026-09-08.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
-| `proj` | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data` | Not yet: no gap builds it |
-| `proj-sys` (`proj`'s own dependency, binding `libproj` v9.6.x) | Finds a system `libproj` install or builds one from source when none is found -- the same two-path shape `vtkio`'s and `rcgen`'s own native dependencies already follow | `gungnir-data` (a normal dependency, not test-only) | Not yet: no gap builds it |
+| `proj` 0.31.0 | Converting a DEM's or a point cloud's declared coordinate reference system -- geographic or projected -- to the deployment's local-ENU frame | `gungnir-data`, behind its `crs-projection` feature (off by default) | 2026-09-08, GAP-023 (the DEM half only; GAP-098's point-cloud half is a separate change) |
+| `proj-sys` 0.27.0 (`proj`'s own dependency, binding `libproj` v9.6.2) | Builds `libproj` from the source it vendors in its own crate (`bundled_proj` feature; no network fetch at build time) | `gungnir-data`, same feature | 2026-09-08, GAP-023 |
 
 `proj` and `libproj` are both permissively licensed (`proj`: MIT OR Apache-2.0;
 `libproj`: X/MIT, an OSGeo project), so this is a build-and-review cost, not a licensing
-one. **Full projection support was chosen over a WGS84-geographic-only first step**: a
-narrower cut would have left the common case of a projected DEM (UTM and similar) still
-refused, and `gungnir-coord`'s existing `Wgs84` tangent-plane conversion does not extend
-to a projected CRS regardless -- it solves a different problem (geographic lat/lon to a
-local tangent plane), not general reprojection. **Not yet checked**: `proj-sys`'s build
-behaviour on a CI runner with no system `libproj` present, what `validate_terrain` and
-`validate_point_cloud` need to change to accept a declared CRS beyond `"local-enu"`, and
-what a wrong or unsupported EPSG code should do (refuse by name, matching every other
-malformed-input rule this stack already follows, is the expected answer but is GAP-023's
-and GAP-098's own decision to confirm, not this one's).
+one -- re-checked against crates.io and the crate's own repository on 2026-09-08 rather
+than assumed from the sentence above, which was already correct. **Full projection
+support was chosen over a WGS84-geographic-only first step**: a narrower cut would have
+left the common case of a projected DEM (UTM and similar) still refused, and
+`gungnir-coord`'s existing `Wgs84` tangent-plane conversion does not extend to a
+projected CRS regardless -- it solves a different problem (geographic lat/lon to a
+local tangent plane), not general reprojection.
+
+**GAP-023's half landed 2026-09-08, and answered what this entry left open.**
+
+1. **`bundled_proj`, not `pkg_config` (now a deprecated no-op on `proj-sys` itself) or
+   the crate's default behaviour.** `proj-sys` unconditionally tries `pkg-config` first
+   regardless of that feature; `bundled_proj` instead builds PROJ 9.6.2 from the source
+   `proj-sys` vendors in its own crate (`PROJSRC/`, confirmed by reading the crate's own
+   `build.rs` and `Cargo.toml` from its repository rather than assumed) via `cmake` and
+   a C/C++ toolchain -- the same from-source-over-ambient-system-package choice this
+   stack already made for `ort` (D-40) and `rcgen`'s `aws_lc_rs` backend (point 2
+   above), and, unlike relying on whatever `libproj-dev` a Linux distribution happens to
+   package, guaranteed to be at least the 9.6.2 `proj` 0.31.0 requires. It also avoids
+   `buildtime_bindgen` (which needs `libclang`, found nowhere this change could check):
+   `proj-sys/src/bundled_bindings.rs`, checked into the crate and generated against the
+   exact PROJ version `PROJSRC/` bundles, covers the bundled build without it.
+2. **`proj-sys`'s build behaviour on a host with no system `libproj`, checked directly
+   rather than guessed at.** The change that added this feature ran
+   `cargo check -p gungnir-data --features crs-projection` on its own machine (Windows,
+   Visual Studio 2022 Community installed) and got a real, specific failure: `cmake` is
+   not installed, so `proj-sys`'s build script cannot drive the CMake build it correctly
+   selected (`-G "Visual Studio 17 2022"`, finding the same MSVC install `rustc` already
+   links against) -- confirmed by the build log itself, not inferred from a missing-tool
+   check alone. No `libclang`/`clang` was present either, but the build never reached
+   that step: `bundled_bindings.rs` (point 1) meant it did not need to. **This is
+   therefore a narrower gap than "cannot build on Windows"**: a host with `cmake`
+   installed alongside the toolchain this workspace already requires would likely get
+   substantially further, though this change did not have `cmake` available to confirm
+   that. `ci.yml`'s jobs all run on `ubuntu-latest` and never pass `--features`, so none
+   of them build this; `.github/workflows/crs-projection.yml` (new) installs `cmake` via
+   `apt-get` and is the first and only place this feature actually compiles and its
+   tests run, on every pull request that could plausibly touch it.
+3. **`validate_terrain` accepts `frame: "epsg:<code>"` alongside `"local-enu"`**,
+   parsed through a new `gungnir_config::Frame` (`LocalEnu` or `Epsg(u32)`) so
+   validation and the DEM loader's conversion read the same value the same way. The
+   field itself stays a plain `String` on the wire -- schema-compatible with a baseline
+   written before D-41, and consistent with how the rest of this file validates a
+   string field rather than giving it a serde-level enum.
+4. **A wrong or unsupported EPSG code is refused by name**, as expected, but not by
+   `validate_terrain`: `gungnir-config` gained no dependency on `proj` (D-41 places that
+   in `gungnir-data` alone), so a baseline validates the same way it always has, on a
+   machine that may hold neither the DEM file nor PROJ's own data resources. The refusal
+   happens where the file is actually read: `gungnir-app`'s placement step reconciles
+   `frame`'s declared EPSG (or the absence of one) against the file's own tags, and
+   `gungnir_data::geospatial::crs::to_wgs84` reports a code PROJ does not recognise as a
+   named error rather than a panic.
+5. **Deliberately split across two crates, following D-41's own placement of `proj` in
+   `gungnir-data` alone.** `gungnir-data` depends on no other workspace crate
+   (`ARCHITECTURE.md`'s dependency table), so it converts a real-world CRS only as far
+   as WGS84 geographic (`geospatial::crs::to_wgs84`); `gungnir-app` (which already
+   depends on both `gungnir-data` and `gungnir-coord`, the latter since GAP-045) carries
+   the result the rest of the way to local ENU via `gungnir_coord::Wgs84` -- the same
+   oracle-verified tangent-plane transform every other geodetic quantity in the system
+   already goes through, using the deployment's own declared `ConfigBaseline::origin`,
+   rather than a second implementation of the same math or a second origin.
+6. **GAP-098 (point-cloud CRS) is untouched by this entry's landing.** `PointCloudConfig`
+   and `validate_point_cloud` still accept only `"local-enu"`; D-41 named both gaps as
+   unblocked, but GAP-023 and GAP-098 are separate changes, and this one is GAP-023's.
 
 #### Cloud KMS for the ManagedService custody profile (signed off 2026-09-08, D-42)
 
