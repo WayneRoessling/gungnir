@@ -305,8 +305,16 @@ jobs:
       # the container build below keeps its artifacts (`target/bookworm`). The container
       # sees the checkout at a fixed `/src`, so cargo's path-keyed fingerprints line up
       # run to run and the restored directory is actually reused.
+      #
+      # `key` folds a name into the cache key. rust-cache saves only on a key miss, and
+      # the key is otherwise the job id plus the lockfile: when this job switched from a
+      # native build to the container build, the first main run hit the cache the native
+      # build had saved -- which held no `target/bookworm` -- and therefore saved nothing,
+      # so every run stayed cold with a green "cache hit" in the log. Change the name
+      # whenever what this job puts in `target/` changes shape.
       - uses: Swatinem/rust-cache@v2
         with:
+          key: bookworm-container
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       - name: build the headless node only (no UI crates), against the runtime's glibc
