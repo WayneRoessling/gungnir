@@ -1,6 +1,27 @@
 # Gate 4: loom exhaustive interleaving on gungnir-fusion-async only
 # (docs/agentic-workflow.md, docs/agentic-coding-standards.md §5). Always required
 # for changes to that crate, and human sign-off is required in addition.
+#
+# **This gate fired 22 times, went green 22 times, and model-checked zero interleavings**
+# (GAP-061). The trigger was never the problem: the path filter matches, and the runs are
+# there from 2026-09-07 onwards on every branch that touched either crate. What the runs
+# actually did is the problem. `grep -rn loom` over every .rs and .toml in the workspace
+# matches nothing: there is no `loom` dependency and no `cfg(loom)` code anywhere, so
+# `RUSTFLAGS: --cfg loom` sets a cfg that no line of source reads. The step below then ran
+# the crate's four ordinary unit tests -- "running 4 tests ... finished in 0.00s", which is
+# not what a model check with LOOM_MAX_PREEMPTIONS=3 looks like -- and reported success.
+#
+# The two steps at the end are the same assertion gpu-fusion.yml already makes in this
+# repository: a gate that ran nothing has not passed. They do not weaken the criterion,
+# they state it. Until the model checks are written this gate is red, and red is the
+# honest colour for it; a green tick here has never meant the pipeline's interleavings
+# were checked, and the whole of GAP-061 is that nobody had read the logs to notice.
+#
+# What closes it: a `loom` dev-dependency behind `cfg(loom)`, the pipeline's cross-task
+# state expressed in `loom::sync` shims under that cfg, and model checks in a module whose
+# path contains `loom_`. `gungnir-fusion-async` is a human-owned crate (CLAUDE.md, and
+# docs/agentic-workflow.md's low-trust tier), so that work needs the owner's sign-off and
+# a PR that says in plain language which interleaving it covers.
 name: loom
 
 on:
@@ -8,6 +29,10 @@ on:
     paths:
       - "gungnir-fusion-async/**"
       - "gungnir-tracking-service/**"
+      # A change to the gate's own definition re-runs the gate. Without this the only
+      # workflow whose behaviour a PR is editing is the one workflow that does not run
+      # on it, which is how a gate gets edited blind.
+      - ".github/workflows/loom.yml"
 
 env:
   CARGO_TERM_COLOR: always
@@ -21,8 +46,33 @@ jobs:
         with:
           toolchain: "1.98"
       - uses: Swatinem/rust-cache@v2
+      # Structural half of the check, and the one that names the cause rather than the
+      # symptom. --cfg loom compiles happily against a crate that has never heard of
+      # loom, which is exactly why this was invisible for 22 runs.
+      - name: loom is wired into the crate at all
+        shell: bash
+        run: |
+          if ! grep -qE '^[[:space:]]*loom[[:space:]]*(=|\.)' gungnir-fusion-async/Cargo.toml; then
+            echo "::error::gungnir-fusion-async declares no loom dependency, so RUSTFLAGS=--cfg loom sets a cfg no code reads and this gate model-checks nothing (GAP-061)"
+            exit 1
+          fi
       - name: loom model checks (Scenario 3 pipeline)
         env:
           RUSTFLAGS: --cfg loom
           LOOM_MAX_PREEMPTIONS: "3"
-        run: cargo test -p gungnir-fusion-async --release --lib -- --nocapture
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test -p gungnir-fusion-async --release --lib -- --nocapture loom_ 2>&1 | tee loom.log
+      # Execution half. The filter above is the criterion: the model checks live in a
+      # module whose path contains loom_, so the crate's ordinary unit tests cannot
+      # satisfy this gate by being counted.
+      - name: A gate that model-checked nothing has not passed
+        shell: bash
+        run: |
+          ran=$(awk '/^test result:/ { s += $4 } END { print s + 0 }' loom.log)
+          echo "loom model checks executed: $ran"
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::no loom model check ran; this gate cannot pass vacuously (GAP-061)"
+            exit 1
+          fi

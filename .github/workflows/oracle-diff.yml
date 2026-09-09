@@ -1,5 +1,26 @@
 # Gate 1: differential testing against the Python/MATLAB oracles
 # (docs/agentic-workflow.md). Runs when the oracle-comparable crates change.
+#
+# **This gate fired 12 times, went green 12 times, and compared nothing** (GAP-061). As
+# with loom.yml the trigger was never at fault -- the runs are there from 2026-09-07, and
+# the 2026-09-08 run on claude/gap-015-cphd-filter is a CPHD filter change correctly
+# matching gungnir-rfs/**. The job installs five scientific Python packages, compiles the
+# crate, and then reports, verbatim:
+#
+#     running 0 tests
+#     test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+#
+# `gungnir-oracle` is one src/lib.rs and no tests directory. `diff_test_filter` is a
+# documented `NotImplemented` stub whose own doc comment says the oracle trajectories are
+# not checked in (GAP-082). So there was never a differential test to run, and the pip
+# install was the only work the job did. Gate 1 is the gate that exists because an agent
+# can write plausible filter code that is subtly wrong; it has been certifying every
+# filter change in this repository by running zero comparisons.
+#
+# The step at the end is the same assertion gpu-fusion.yml already makes here: a gate that
+# ran nothing has not passed. It widens no tolerance and skips no case -- there are no
+# cases. This gate is red until GAP-082 lands the recorded oracle trajectories and the
+# differential tests that read them, and red is the honest colour for it.
 name: oracle-diff
 
 on:
@@ -15,6 +36,8 @@ on:
       - "gungnir-allocation/**"
       - "gungnir-oracle/**"
       - "gungnir-scenario/**"
+      # A change to the gate's own definition re-runs the gate; see loom.yml.
+      - ".github/workflows/oracle-diff.yml"
 
 env:
   CARGO_TERM_COLOR: always
@@ -34,7 +57,19 @@ jobs:
       - name: Reference implementations used to generate oracle fixtures
         run: pip install filterpy stonesoup motmetrics pymap3d scipy numpy
       - name: Differential tests
-        run: cargo test -p gungnir-oracle -- --nocapture
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test -p gungnir-oracle -- --nocapture 2>&1 | tee oracle-diff.log
+      - name: A gate that compared nothing has not passed
+        shell: bash
+        run: |
+          ran=$(awk '/^test result:/ { s += $4 } END { print s + 0 }' oracle-diff.log)
+          echo "differential tests executed: $ran"
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::no differential test ran; gungnir-oracle has no tests and its harness is a NotImplemented stub, so this gate cannot pass vacuously (GAP-061, GAP-082)"
+            exit 1
+          fi
       - name: Upload trace output on failure
         if: failure()
         uses: actions/upload-artifact@v4
