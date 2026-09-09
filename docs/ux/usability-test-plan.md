@@ -137,7 +137,12 @@ planner to "submit B with its rehearsal" and to have it "submitted with the reco
 PN-16 draws no adoption control at all -- deliberately, per DN-26 §6 rule 4, because
 moving a sensor is a physical act with an authority chain this system does not model.
 The session card was corrected on 2026-09-08 to ask the planner to say the control is
-absent and why. Read §4 for intent; run from the session document.
+absent and why. §4's "laydowns A and B" moved the same day for a different reason:
+PN-16 reads coverage from sensor placements alone, so the two round-1 laydowns then
+declared -- which differ only in where a battery stands -- could not be told apart on
+the table §4 has them compared on. The owner's answer was to give the round a pair that
+differs in *siting*, and `round-1.json` now declares a third laydown `c`; the session
+card compares `current` with it. Read §4 for intent; run from the session document.
 
 1. **Ten of the sixteen tasks can run in round 1**, and four of those ten only once the
    live desktop can be seeded with tracks and plans. The tracker and the allocator both
