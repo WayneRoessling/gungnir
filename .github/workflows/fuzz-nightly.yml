@@ -38,9 +38,16 @@ on:
     - cron: "17 3 * * *"
   workflow_dispatch:
 
+# Nothing here writes to the repository, and the repository is public.
+permissions:
+  contents: read
+
 jobs:
   fuzz:
     runs-on: ubuntu-latest
+    # Twenty minutes of fuzzing plus the install and the sanitizer build; a run past
+    # forty-five is a stuck target, and libFuzzer's -max_total_time cannot end it.
+    timeout-minutes: 45
     strategy:
       # A crash in one target is a finding about that target, and the other two have
       # earned their twenty minutes regardless. On 2026-09-08 the manifest error above
@@ -53,6 +60,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
+      # Still compiled from source: cargo-fuzz publishes no prebuilt binary, so it is
+      # not in taiki-e/install-action's list the way the release tooling is. Two to
+      # three minutes per matrix leg, once a night.
       - run: cargo install cargo-fuzz --locked
       - name: fuzz ${{ matrix.target }} for 20 minutes
         env:

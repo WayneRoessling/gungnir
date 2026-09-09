@@ -1,0 +1,17 @@
+# What `deploy/node/Dockerfile` does not need from the build context.
+#
+# Without this file `COPY . .` shipped the whole checkout, and on a CI runner that
+# had just run `cargo build` the context was 1.68 GB of `target/` -- artifacts the
+# image could not reuse anyway, because cargo's fingerprints are keyed on absolute
+# paths and `/src` is not `/home/runner/work/...`. The from-source build needs the
+# manifests, the lockfile, the toolchain file, every crate directory (the workspace
+# manifest names them all, `gungnir-fuzz` included through `exclude`), and the
+# license files the runtime stage copies. Nothing else.
+target/
+**/target/
+.git/
+.github/
+.claude/
+docs/
+testdata/
+benches/

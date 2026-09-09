@@ -55,7 +55,7 @@ gungnir-workspace/
 ├── benches/README.md               # index of the criterion groups (they live per crate)
 │
 ├── .github/workflows/
-│   ├── ci.yml                      # fmt, clippy, test, benches compile, node container build
+│   ├── ci.yml                      # fmt, clippy, test (nextest), release budget gates, benches compile, node container build
 │   ├── oracle-diff.yml             # gate 1
 │   ├── miri.yml                    # gate 3
 │   ├── loom.yml                    # gate 4

@@ -29,6 +29,11 @@ name: gpu-fusion
 on:
   workflow_dispatch:
 
+# The runner is the owner's workstation and the token needs nothing from GitHub but
+# the checkout.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 

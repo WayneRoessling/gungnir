@@ -46,12 +46,25 @@ on:
       # on it, which is how a gate gets edited blind.
       - ".github/workflows/loom.yml"
 
+# Nothing here writes to the repository, and the repository is public.
+permissions:
+  contents: read
+
+# A push to the pull-request branch supersedes the run in flight for the previous
+# push; this workflow never runs on main, so there is nothing that must not be cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   loom:
     runs-on: ubuntu-latest
+    # About a minute and a half; LOOM_MAX_PREEMPTIONS=3 bounds the exploration, so a
+    # run past thirty minutes is a model that stopped terminating.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
