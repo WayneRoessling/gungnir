@@ -15,7 +15,8 @@ codec was built and gated against two MIT decoders, and **no normative source is
 at all (sections 4.3 and 4.5). Later still under **D-33**, which put SD-16
 in scope for the release: **the CoT event schema version 2.0 is pinned** and the TAK Protocol
 Version 1 protobuf framing is deliberately left unpinned until a bearer needs it
-(section 5).
+(section 5) -- **then pinned on 2026-09-08 under D-33(e)**, when the client's own source
+showed that the mesh bearer needs it first (section 5.4).
 
 **What this is.** GAP-064 records that neither the ASTERIX nor the STANAG 4676 specification
 is in this repository, and that `AsterixCat048Codec` and `Stanag4676Codec` in
@@ -459,9 +460,10 @@ changes the oracle column and nothing else: the tests are reused unchanged.
 
 **Public, and the only format in this note whose releasability is not in doubt.** Pinned
 2026-09-06 under D-33, which put SD-16 in scope for the release, and extended 2026-09-07
-when the owner asked for the type tree as well: **three artifacts, two of them pinned.** The
-event schema is §5.1, the type tree is §5.7, and §5.4 says why the protobuf framing is
-deliberately left unpinned. The design that consumes it
+when the owner asked for the type tree as well, and again 2026-09-08 under D-33(e): **three
+artifacts, all three pinned.** The event schema is §5.1, the type tree is §5.7, and the
+protobuf framing is §5.4, pinned last and for a reason found in the client's source rather
+than in a document. The design that consumes it
 is [`DN-25-cursor-on-target.md`](DN-25-cursor-on-target.md); the gaps are GAP-090 and
 GAP-091.
 
@@ -532,7 +534,10 @@ the way EUROCONTROL's can. The copies in public repositories are transcriptions 
 Where a transcription and MITRE's released file disagree, **the released file governs** --
 the rule §1.4 already sets for `asterix-specs`. Nothing has been copied into this repository.
 
-### 5.4 TAK Protocol Version 1, the protobuf framing -- deliberately not pinned
+### 5.4 TAK Protocol Version 1, the protobuf framing -- pinned 2026-09-08
+
+The history is kept, because the reason the pin was refused on 2026-09-06 is the reason it
+had to be taken two days later.
 
 A different thing from the schema, and it must not be conflated with it. What was verified on
 2026-09-06: a payload is one `atakmap::commoncommo::v1::TakMessage` serialized with protocol
@@ -544,7 +549,8 @@ advertising the versions it supports and the client selecting one before either 
 `.proto` files inside the reference client's source repository, so the only identifier that
 could be pinned is a repository and a commit.
 
-It is not pinned, and not needing it is a design property rather than an omission.
+**As written on 2026-09-06, superseded by §5.4.1 below.** It is not pinned, and not
+needing it is a design property rather than an omission.
 Negotiation begins in XML and version 0 (XML) stays accepted, so DN-25's first increment --
 codec, inbound feed, multicast sink -- is XML end to end, which is exactly why
 [`Sd-Rm.md`](../architecture/uaf/standards/Sd-Rm.md) splits SD-16 across two increments.
@@ -553,12 +559,150 @@ licence question attached** (§5.5), and it is not owed yet. When the stream sin
 the pin is a commit, the question goes to the owner, and this section gains the answer rather
 than acquiring one by default.
 
+**Finding 2026-09-08, which undercuts the paragraph above and is recorded rather than
+patched over:** the reference client's own source starts a mesh client at protocol version
+1 and drops to XML only when a known contact advertises nothing higher than 0, so a stock
+ATAK or WinTAK on the multicast group sends protobuf from its first datagram, with no
+contacts at all. The first increment's mesh feed and mesh sink therefore meet the framing
+this section leaves unpinned, and the recorded corpus will be `takproto-v1` on the group.
+The stream connection, by contrast, stays XML until the server advertises version 1. The
+evidence, the successor repository the pin would name (`TAK-Product-Center/atak-civ`, tag
+5.5.1.8; the repository §5.5 read is archived), and the decision asked of the owner are in
+[`tak-interoperability-research.md`](tak-interoperability-research.md) §4 and §7. **Taken
+later the same day**, below.
+
+#### 5.4.1 The pin
+
+**Pinned: `TAK-Product-Center/atak-civ`, release tag `5.5.1.8` (2025-10-28), directory
+`commoncommo/core/impl/protobuf/`**, under D-33(e). The artifacts are `protocol.txt` (the
+framing and the negotiation) and the ten `.proto` files `takmessage`, `takcontrol`,
+`cotevent`, `detail`, `contact`, `group`, `precisionlocation`, `status`, `takv` and
+`track`, package `atakmap.commoncommo.protobuf.v1`. That is the successor of the archived
+repository §5.5 read on 2026-09-06 (archived 2025-05-02, last release 4.6.0.5); the files
+are the same in both and neither carries a version, a date or a header of its own, which is
+why the pin is a tag and not a document number. The codec's doc comment names the tag beside
+the schema version and the guide's case number, and the conformance tests name it too.
+
+What the framing is, from `protocol.txt`, transcribed 2026-09-08:
+
+| Where | Framing | Then |
+|---|---|---|
+| Mesh datagram | `0xbf` `<varint version>` `0xbf` | one `TakMessage` |
+| Stream | `0xbf` `<varint length>` | one `TakMessage` of that length |
+| Version 0 | no header; an XML `<event>`, on a stream delimited by `</event>` and prefaced by an XML declaration | -- |
+
+Negotiation on a stream is three XML events: the server advertises
+`t-x-takp-v` with `<TakProtocolSupport version="1"/>` at most once per connection, the
+client asks with `t-x-takp-q` and `<TakRequest version="1"/>`, the server answers
+`t-x-takp-r` with `<TakResponse status="true|false"/>`, and the client waits at least a
+minute before giving up. On a mesh every device supporting more than version 0 sends a
+`TakControl` at least once a minute, and each broadcasts the highest version every known
+contact supports, falling back to 0 when there is no overlap. Version 1's payload is one
+`TakMessage` in protocol buffers version 3, and version 1 defines no negotiation
+attributes beyond the version number.
+
+#### 5.4.2 The message set, transcribed 2026-09-08 -- what the codec is written from
+
+Under D-33(f) **the codec learns its field numbers from this table and from nothing
+copied**: the structs are hand-written against `prost` with these tags, no `.proto` file
+enters the repository, and no code is generated from the reference tree. Where this table
+and the pinned tag disagree, the tag governs and this table is corrected.
+
+| Message | Field | Tag | Type | Note from the source |
+|---|---|---|---|---|
+| `TakMessage` | `takControl` | 1 | `TakControl` | optional; "if omitted, continue using last reported control information" |
+| | `cotEvent` | 2 | `CotEvent` | optional; "if omitted, no event data in this message" |
+| `TakControl` | `minProtoVersion` | 1 | uint32 | 0 reads as 1 |
+| | `maxProtoVersion` | 2 | uint32 | 0 reads as 1 |
+| | `contactUid` | 3 | string | may be omitted when paired with a `CotEvent` that carries it |
+| | `extensionIds` | 4 | repeated uint32 | extensions the sender can *decode*; "must be centrally registered with TPC"; absent means none |
+| `CotEvent` | `type` | 1 | string | |
+| | `access` | 2 | string | carried as optional; omitted means the CoT value "Undefined"; the comment says MIL-STD-6090 now requires it |
+| | `qos` | 3 | string | optional |
+| | `opex` | 4 | string | optional |
+| | `uid` | 5 | string | |
+| | `sendTime` | 6 | uint64 | `time=`, **milliseconds since 1970-01-01T00:00:00Z** |
+| | `startTime` | 7 | uint64 | `start=`, same unit |
+| | `staleTime` | 8 | uint64 | `stale=`, same unit |
+| | `how` | 9 | string | |
+| | `lat` | 10 | double | |
+| | `lon` | 11 | double | |
+| | `hae` | 12 | double | **"use 999999 for unknown"** |
+| | `ce` | 13 | double | **"use 999999 for unknown"** |
+| | `le` | 14 | double | **"use 999999 for unknown"** |
+| | `detail` | 15 | `Detail` | optional; "if omitted, then the cot message had no data under `<detail>`" |
+| | `caveat` | 16 | string | optional |
+| | `releasableTo` | 17 | string | optional |
+| `Detail` | `xmlDetail` | 1 | string | the `<detail>` children not absorbed by the typed fields, serialised in UTF-8 **without** the `<detail>` wrapper and without an XML header; the receiver re-wraps it and parses it as a document |
+| | `contact` | 2 | `Contact` | `<contact>` |
+| | `group` | 3 | `Group` | `<__group>` |
+| | `precisionLocation` | 4 | `PrecisionLocation` | `<precisionlocation>` |
+| | `status` | 5 | `Status` | `<status>` |
+| | `takv` | 6 | `Takv` | `<takv>` |
+| | `track` | 7 | `Track` | `<track>` |
+| | `extensionDetails` | 8 | repeated `ExtensionEncodedDetail` | `extensionId` (1, uint32) and `data` (2, bytes); registered extensions only |
+| `Contact` | `endpoint` | 1 | string | optional |
+| | `callsign` | 2 | string | |
+| | `altendpoints` | 3 | string | optional |
+| `Group` | `name` | 1 | string | |
+| | `role` | 2 | string | |
+| `PrecisionLocation` | `geopointsrc` | 1 | string | |
+| | `altsrc` | 2 | string | |
+| `Status` | `battery` | 1 | uint32 | |
+| `Takv` | `device` | 1 | string | |
+| | `platform` | 2 | string | |
+| | `os` | 3 | string | |
+| | `version` | 4 | string | |
+| `Track` | `speed` | 1 | double | |
+| | `course` | 2 | double | |
+
+Three rules from the source that the codec must keep, because a test written from the
+table alone would not catch breaking them:
+
+1. **Whole elements only.** A typed field is populated from a whole `<detail>` child and
+   that child is then omitted from `xmlDetail`; a child that appears more times than the
+   field allows, or that fails to map, stays in `xmlDetail` whole and the typed field is
+   left empty. A receiver that finds the same element in both **keeps the `xmlDetail`
+   copy and ignores the typed one**.
+2. **The sentinel is not a value.** `999999` in `hae`, `ce` or `le` means unknown. Read
+   as a radius it is a thousand-kilometre error, which is a number no gate would refuse
+   and no operator would believe; it goes on `Provenance::conversion_loss` as "no error
+   stated", exactly as an XML event with no usable `ce` would (DN-25 §5 rule 7).
+3. **`staleTime` is the sender's claim, in its unit.** §5.2's consequence 3 is unchanged
+   by the unit: DN-16's age rule decides, not the field.
+
+#### 5.4.3 What is verified and what is not
+
+**Verified 2026-09-08** by reading the artifacts: `protocol.txt` and the ten `.proto`
+files at tag `5.5.1.8` (an annotated tag, object `deb39afce04c1e0adc1a4aebc411411613654acf`,
+pointing at commit `7d583c8834f7f432da8dfc4a1e7c61d7df65e846`, "Release 5.5.1.8
+(2025-10-28)"); the
+absence of a header on every `.proto` file; the licence file of the repository; and, in
+`commoncommo/core/impl/contactmanager.cpp` and `datagramsocketmanagement.cpp` at the same
+tag, the initialisation to `SELF_MAX` and the fall-back to 0 that the finding above rests on.
+
+**Not verified:** that the `.proto` files at `5.5.1.8` differ in no way from those at
+`4.6.0.5` beyond what a diff would show (they were read at the newer tag only); that
+WinTAK, which builds on the same library, behaves as ATAK does on the mesh (inferred);
+and iTAK's mesh wire form, which the corpus will show.
+
 ### 5.5 Licence
 
 The reference client and the reference server are both **GPLv3**, verified 2026-09-06 by
 reading `LICENSE.md` at each upstream repository. The client repository's README adds that
 work by US Federal employees may be ineligible for copyright in the United States and that
 the licence file governs where it is not.
+
+**Re-verified 2026-09-08 at the successor repository.** The client repository read on
+2026-09-06 (`deptofdefense/AndroidTacticalAssaultKit-CIV`) was archived on 2025-05-02 at
+release 4.6.0.5; the live one is `TAK-Product-Center/atak-civ`, the same GPLv3 text, the
+same README statement, latest release tag 5.5.1.8 with an SDK zip as its asset. The server
+(`TAK-Product-Center/Server`) is at 5.7-RELEASE-14. The `.proto` files carry no notice of
+their own. **D-33(f), taken the same day, answers the question the second rule below left
+open:** the message set is transcribed into §5.4.2 and the codec is written from that
+table; no `.proto` file is copied and no code is generated from the tree. This is the
+route §5.2 took for the XSD, and it is recorded as the owner's decision, not as a reading
+of what the licence permits.
 
 Two rules follow, and they are the two §1.5 already sets for the GPL-licensed captures:
 
@@ -567,8 +711,8 @@ Two rules follow, and they are the two §1.5 already sets for the GPL-licensed c
   every commercial sensor vendor emits this format without licensing anything.
 - **No file, generated type or fixture is taken from a copyleft repository** except under
   §1.5's recording conditions. That includes `.proto` files: generating Rust types from them
-  is touching that tree, which is why §5.4 leaves the question open instead of answering it
-  by habit.
+  is touching that tree, which is why §5.4 left the question open until D-33(f) answered it
+  on 2026-09-08 by transcription (§5.4.2) rather than by habit.
 
 ### 5.6 The corpus: what it must hold, and why it has to be recorded
 
@@ -630,6 +774,21 @@ host.
 3. **Ten minutes of wall clock**, walking the six items in order and noting the time of
    each, so `SOURCE.md` can say which datagrams are which.
 
+**Expect protobuf on the group (finding 2026-09-08).** §5.4's finding applies here: a
+stock client on the mesh sends `takproto-v1`, so the manifest's `wire` column will say so
+for every datagram unless an XML-only client is on the group. The XML half of the corpus
+comes from the same client over a TCP "server" connection to a recorder that sends nothing:
+`record --tcp` (default port 8087, the plain streaming port a client offers when a server
+is added with SSL off), which writes `stream.cotlog` and `stream.manifest.json`, splits
+the byte stream on `</event>` exactly as the reference client's `takproto/README.txt` says
+clients delimit it, and would frame a `0xbf`-prefixed message by its varint length if one
+ever arrived, which it should not, since the recorder never advertises.
+[`tak-interoperability-research.md`](tak-interoperability-research.md) §6 says why the
+corpus has two halves. An Android emulator cannot reach the group at all and needs that
+mode or `record --unicast`, which binds the UDP port without joining, for a client sending
+to `10.0.2.2` (§3 there). The walk of the six items is done once per half, with the
+client's server connection switched on for the stream half.
+
 The recorder was exercised against loopback multicast on 2026-09-07 with synthetic
 datagrams that were then deleted: it joined the group, framed four datagrams, distinguished
 the two wire forms, read the log back, and reported the single sender. **That test proves
@@ -666,7 +825,7 @@ it and the codec waits.
 | Candidate | What it is | Terms | Reading |
 |---|---|---|---|
 | `snstac/pytak` test data, <https://github.com/snstac/pytak> | Python TAK integration library | **Apache-2.0** | Copyable under §1.5's recording conditions, and useful: a second reading of the format to disagree with. Author-written rather than client-emitted, so it is a cross-check and never evidence about what a client sends |
-| `snstac/takproto` test data, <https://github.com/snstac/takproto> | Encoder and decoder for the protobuf payloads | **MIT** | The same reading, and relevant only once §5.4 is pinned |
+| `snstac/takproto` test data, <https://github.com/snstac/takproto> | Encoder and decoder for the protobuf payloads | **MIT** | The same reading; relevant now that §5.4 is pinned, as a cross-check on the wire bytes of the mesh half. Its vendored `.proto` files are the reference tree's under another name, so they change nothing about origin |
 | The reference client and server repositories | The implementations themselves | **GPLv3** (§5.5) | Not a fixture source. §5.5's second rule covers their test data as well as their code |
 
 **Nothing has been copied and nothing has been recorded.** GAP-091's closing action puts
@@ -806,14 +965,17 @@ it.
 
 ### 5.8 What is built
 
-**No codec, and no corpus; two of the three artifacts pinned.** `gungnir-interop` has no CoT codec, the schema catalogue has
+**No codec, and no corpus; all three artifacts pinned as of 2026-09-08.** `gungnir-interop` has no CoT codec, the schema catalogue has
 no entry for it, and no binary opens a socket for it. GAP-090 and GAP-091 are open. This
 section exists so that the codec, when it is written, can name what it decodes -- GAP-064's
 rule, which is the rule this whole note was written to serve.
 
 **One thing is built, and it is not a decoder.** `testdata/cot/tools/record_cot.py` is the
 recorder §5.6 specifies, standard-library only, exercised against loopback multicast on
-2026-09-07 and holding no data. `testdata/cot/SOURCE.md` says in its first line that the
+2026-09-07 and holding no data. **On 2026-09-08 it gained the `--tcp` and `--unicast`
+modes** that give the corpus its stream half and its emulator route, exercised against
+loopback the same way, with the synthetic bytes deleted afterwards, and still holding
+nothing. `testdata/cot/SOURCE.md` says in its first line that the
 directory is empty and why, because an empty fixture directory with no note beside it reads
 as an oversight rather than as a state. Recording the corpus needs a TAK client, which is
 the one thing this workspace cannot supply itself -- the same shape of blocker as §4's ADS-B
@@ -1106,7 +1268,7 @@ capture, the catalogue's own conformance and wire-coverage declarations in
 | ADS-B (GAP-010) | **Codec built and gated 2026-09-06** on the open-source-consensus route, with **two permissively licensed captures vendored** and **no normative source pinned** (§4.3, §4.5). Doc 9871 2nd edition with Amendment 2 remains the specification of record and is not held | A receiver adapter in `gungnir-ingest` and the evidence path into `gungnir-identification`, the same two the AIS half waits on. Buying Doc 9871 is a later upgrade that changes the oracle column and no test |
 | CoT, the schema (GAP-091) | **Version 2.0 pinned 2026-09-06 under D-33**, transcribed in §5.2, publicly released and with the release statement read; no codec, no fixture | A self-recorded corpus (§5.6), then the codec in `gungnir-interop`, the feed in `gungnir-ingest` and the multicast sink in `gungnir-remote` |
 | CoT, the type tree (GAP-091) | **Pinned 2026-09-07** (§5.7): the August 2005 MITRE Developer's Guide, case #06-0249, for the grammar and semantics, and the `friend` predicate `^a-f-` for the one question DN-25 asks of a type. The predicate file itself is unobtainable and the mapping file (Apache-2.0, revision 1.80) is named rather than copied | The corpus (§5.6 item 2), which is what turns the 2005 citation into a check against a client |
-| CoT, the protobuf framing (GAP-091) | **Deliberately not pinned** (§5.4): no version and no date exist, and the only identifier is a commit of a GPLv3 repository | Needed only by the stream sink in I4. The owner answers the licence question in §5.5 when it is; XML negotiation means nothing else waits on it |
+| CoT, the protobuf framing (GAP-091) | **Pinned 2026-09-08** (§5.4, D-33(e)): `TAK-Product-Center/atak-civ` tag 5.5.1.8, the framing and the ten-message set transcribed in §5.4.1 and §5.4.2; the codec learns its field numbers from that transcription and from nothing copied (D-33(f)) | The corpus's mesh half (§5.6), which a stock client sends as protobuf, then the codec's protobuf half gated on it |
 
 When either codec is built, replace the corresponding `NotImplemented` and cite this note
 and the pinned edition from the codec's doc comment, so the citation check in
