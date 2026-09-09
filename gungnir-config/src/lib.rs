@@ -346,9 +346,11 @@ pub enum MachineRole {
     },
 }
 
-/// One ASTERIX radar feed: a socket and the radars it may speak for (GAP-001,
-/// `docs/design/handoff-2026-09-06-radar-feed.md` §4 step 1).
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// One ASTERIX radar feed: a socket, the radars it may speak for, and (GAP-100) the
+/// direction finders it may attribute Category 205 bearings to. Not `Eq` now that
+/// `df_sites` carries a stated accuracy in radians (`DfSiteConfig`); every other field
+/// still would be.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct RadarFeedConfig {
     pub name: String,
     /// `ip:port` to bind, e.g. `0.0.0.0:8600`.
@@ -356,6 +358,15 @@ pub struct RadarFeedConfig {
     #[serde(default)]
     pub multicast: Option<MulticastConfig>,
     pub radars: Vec<RadarBindingConfig>,
+    /// Direction finders this feed's Category 205 blocks may be attributed to
+    /// (GAP-100). Empty (the default before this was configurable, and still the
+    /// default for a feed that only carries radars) means every Category 205 report on
+    /// this feed is counted `unknown_radar`, the same honest-empty state an
+    /// unconfigured `radars` already gives Category 048 and 034. A feed must bind at
+    /// least one radar or one direction finder (`validate_radar_feeds`); nothing that
+    /// binds neither is worth a socket.
+    #[serde(default)]
+    pub df_sites: Vec<DfSiteConfig>,
 }
 
 /// One AIS receiver feed (GAP-010, D-32): the receiver's sensor identity and where its
@@ -462,6 +473,29 @@ pub struct RadarBindingConfig {
     pub sensor_id: u32,
     pub sac: u8,
     pub sic: u8,
+}
+
+/// One radio direction finder a feed's Category 205 blocks may be attributed to
+/// (GAP-100): which sensor its SAC/SIC pair is -- the same lookup [`RadarBindingConfig`]
+/// makes, so its position comes from that sensor too -- and the stated one-sigma
+/// bearing accuracy from its own Interface Control Document.
+///
+/// `azimuth_sigma_rad` lives here and nowhere else in this schema because
+/// `gungnir_interop::asterix::cat205`'s own module documentation is explicit that
+/// edition 1.0 never carries a usable angular error for a bearing on the wire: I205/110
+/// is marked "never present" for the one message type that pairs a bearing with a
+/// position, and I205/100's bits are "application dependent" with no fixed unit at
+/// all. A deployment's own Interface Control Document is the only honest source, so a
+/// baseline states it here, validated the same way `validate_measurement_noise_var`
+/// validates a variance no wire format supplies either: finite and positive, never
+/// defaulted (`validate_radar_feeds`).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DfSiteConfig {
+    pub sensor_id: u32,
+    pub sac: u8,
+    pub sic: u8,
+    /// Radians. Never defaulted: see the struct documentation.
+    pub azimuth_sigma_rad: f64,
 }
 
 /// The terrain a deployment masks line of sight against (GAP-023).
@@ -2008,10 +2042,20 @@ fn validate_sapient_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> 
     Ok(())
 }
 
+/// GAP-100: direction finders are validated the same shape as radars in the same
+/// feed -- own `BTreeSet`s because a Category 205 SAC/SIC is looked up in its own
+/// codec's own site list (`gungnir_interop::asterix::cat205::AsterixCat205Codec`),
+/// entirely apart from the Category 048/034 lookup a radar's SAC/SIC goes through, so
+/// reusing a SAC/SIC across the two is not the ambiguity it would be within one list --
+/// plus the one check no other feed config needs: a stated accuracy no wire item
+/// supplies, so it cannot be range-checked against anything the format itself states,
+/// only against being a real number at all.
 fn validate_radar_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     let mut names = std::collections::BTreeSet::new();
     let mut pairs = std::collections::BTreeSet::new();
     let mut bound = std::collections::BTreeSet::new();
+    let mut df_pairs = std::collections::BTreeSet::new();
+    let mut df_bound = std::collections::BTreeSet::new();
     for feed in &baseline.radar_feeds {
         if !names.insert(feed.name.as_str()) {
             return Err(ConfigError::Invalid(format!(
@@ -2035,9 +2079,9 @@ fn validate_radar_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 }
             }
         }
-        if feed.radars.is_empty() {
+        if feed.radars.is_empty() && feed.df_sites.is_empty() {
             return Err(ConfigError::Invalid(format!(
-                "radar feed {:?} binds no radar",
+                "radar feed {:?} binds no radar and no direction finder",
                 feed.name
             )));
         }
@@ -2058,6 +2102,35 @@ fn validate_radar_feeds(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 return Err(ConfigError::Invalid(format!(
                     "radar feed {:?}: sensor {} is bound to two SAC/SIC pairs",
                     feed.name, r.sensor_id
+                )));
+            }
+        }
+        for d in &feed.df_sites {
+            if !baseline.sensors.iter().any(|s| s.id == d.sensor_id) {
+                return Err(ConfigError::Invalid(format!(
+                    "radar feed {:?} names direction finder sensor {}, which is not in \
+                     the sensor list",
+                    feed.name, d.sensor_id
+                )));
+            }
+            if !df_pairs.insert((d.sac, d.sic)) {
+                return Err(ConfigError::Invalid(format!(
+                    "radar feed {:?}: direction finder SAC/SIC {}/{} is bound twice",
+                    feed.name, d.sac, d.sic
+                )));
+            }
+            if !df_bound.insert(d.sensor_id) {
+                return Err(ConfigError::Invalid(format!(
+                    "radar feed {:?}: direction finder sensor {} is bound to two SAC/SIC \
+                     pairs",
+                    feed.name, d.sensor_id
+                )));
+            }
+            if !(d.azimuth_sigma_rad.is_finite() && d.azimuth_sigma_rad > 0.0) {
+                return Err(ConfigError::Invalid(format!(
+                    "radar feed {:?}: direction finder {}/{}'s azimuth_sigma_rad must be \
+                     finite and positive",
+                    feed.name, d.sac, d.sic
                 )));
             }
         }
@@ -3947,6 +4020,7 @@ mod tests {
                 bind_addr: addr.into(),
                 multicast: None,
                 radars,
+                df_sites: Vec::new(),
             }],
             ..ConfigBaseline::default()
         };
@@ -4019,6 +4093,77 @@ mod tests {
         ));
         assert!(matches!(
             validate(&feed(vec![one(1, 7, 3), one(1, 7, 4)], "0.0.0.0:8600")),
+            Err(ConfigError::Invalid(_))
+        ));
+    }
+
+    /// GAP-100: a direction finder is validated the same shape a radar already is
+    /// (known sensor, unique SAC/SIC, no sensor bound twice), plus the one check
+    /// nothing else needs -- a finite, positive `azimuth_sigma_rad`, because no wire
+    /// item states one and the codec refuses to invent it
+    /// (`gungnir_interop::asterix::cat205::DfSite`'s own documentation).
+    #[test]
+    fn a_direction_finder_needs_a_known_sensor_unique_pairs_and_a_positive_accuracy() {
+        let sensor = |id| SensorConfig {
+            id,
+            modality: "df".into(),
+            position: [0.9, 0.2, 30.0],
+            max_range_m: 5_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        };
+        let one = |sensor_id, sac, sic, azimuth_sigma_rad| DfSiteConfig {
+            sensor_id,
+            sac,
+            sic,
+            azimuth_sigma_rad,
+        };
+        let feed = |df_sites: Vec<DfSiteConfig>| ConfigBaseline {
+            sensors: vec![sensor(21)],
+            radar_feeds: vec![RadarFeedConfig {
+                name: "north".into(),
+                bind_addr: "0.0.0.0:8600".into(),
+                multicast: None,
+                radars: Vec::new(),
+                df_sites,
+            }],
+            ..ConfigBaseline::default()
+        };
+        let sigma = 1.5_f64.to_radians();
+
+        // A feed naming only a direction finder, no radar, is valid: GAP-100 makes
+        // `radars` and `df_sites` an "or", not a "both".
+        validate(&feed(vec![one(21, 50, 6, sigma)])).expect("a direction-finder-only feed");
+
+        // An unknown sensor is refused, the same as a radar's would be.
+        assert!(matches!(
+            validate(&feed(vec![one(99, 50, 6, sigma)])),
+            Err(ConfigError::Invalid(_))
+        ));
+        // The same SAC/SIC bound twice is refused.
+        assert!(matches!(
+            validate(&feed(vec![one(21, 50, 6, sigma), one(21, 50, 6, sigma)])),
+            Err(ConfigError::Invalid(_))
+        ));
+        // The same sensor bound to two SAC/SIC pairs is refused.
+        assert!(matches!(
+            validate(&feed(vec![one(21, 50, 6, sigma), one(21, 50, 7, sigma)])),
+            Err(ConfigError::Invalid(_))
+        ));
+        // A non-positive or non-finite stated accuracy is refused; nothing on the wire
+        // could ever justify defaulting one.
+        for bad in [0.0, -sigma, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(
+                matches!(
+                    validate(&feed(vec![one(21, 50, 6, bad)])),
+                    Err(ConfigError::Invalid(_))
+                ),
+                "{bad} should have been refused"
+            );
+        }
+        // A feed with neither a radar nor a direction finder is still refused.
+        assert!(matches!(
+            validate(&feed(Vec::new())),
             Err(ConfigError::Invalid(_))
         ));
     }

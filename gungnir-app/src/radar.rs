@@ -11,7 +11,7 @@
 
 use gungnir_config::ConfigBaseline;
 use gungnir_ingest::adapters::asterix::{
-    bind_feed, FeedSinks, FeedSpec, FeedStatsSink, RadarBinding, ServiceObservationKind,
+    bind_feed, DfBinding, FeedSinks, FeedSpec, FeedStatsSink, RadarBinding, ServiceObservationKind,
     ServiceObservationSink,
 };
 use gungnir_ingest::IngestGateway;
@@ -20,7 +20,11 @@ use gungnir_sensor_management::ServiceObservation;
 
 use crate::state::AppState;
 
-/// The feeds as the ingest crate builds them, from a validated baseline.
+/// The feeds as the ingest crate builds them, from a validated baseline. `df_sites`
+/// (GAP-100) is built the same way `radars` is: a sensor named by id in the baseline's
+/// own sensor list supplies the position, so a direction finder no sensor names is
+/// silently absent here the same way a radar with the same problem already is --
+/// `gungnir_config::validate` refuses that baseline before it would ever reach this.
 #[must_use]
 pub fn feed_specs(config: &ConfigBaseline) -> Vec<FeedSpec> {
     config
@@ -49,11 +53,30 @@ pub fn feed_specs(config: &ConfigBaseline) -> Vec<FeedSpec> {
                     })
                 })
                 .collect();
+            let df_sites = f
+                .df_sites
+                .iter()
+                .filter_map(|d| {
+                    let sensor = config.sensors.iter().find(|s| s.id == d.sensor_id)?;
+                    Some(DfBinding {
+                        sac: d.sac,
+                        sic: d.sic,
+                        sensor: SensorId(d.sensor_id),
+                        position: Geodetic {
+                            lat_rad: sensor.position[0],
+                            lon_rad: sensor.position[1],
+                            alt_m: sensor.position[2],
+                        },
+                        azimuth_sigma_rad: d.azimuth_sigma_rad,
+                    })
+                })
+                .collect();
             Some(FeedSpec {
                 name: f.name.clone(),
                 bind_addr,
                 multicast,
                 radars,
+                df_sites,
             })
         })
         .collect()
@@ -184,5 +207,103 @@ pub fn observe_services(state: &mut AppState) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gungnir_config::{DfSiteConfig, RadarFeedConfig, SensorConfig};
+    use gungnir_ingest::AllowListAuthenticator;
+
+    fn df_sensor(id: u32) -> SensorConfig {
+        SensorConfig {
+            id,
+            modality: "df".into(),
+            position: [0.9, 0.2, 30.0],
+            max_range_m: 5_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        }
+    }
+
+    fn df_site(sensor_id: u32) -> DfSiteConfig {
+        DfSiteConfig {
+            sensor_id,
+            sac: 50,
+            sic: 6,
+            azimuth_sigma_rad: 1.5_f64.to_radians(),
+        }
+    }
+
+    /// GAP-100: a direction finder named in `RadarFeedConfig::df_sites` reaches
+    /// `FeedSpec::df_sites` as the exact `DfBinding` `bind_feed` will hand to
+    /// `AsterixFeedAdapter::with_df_sites` -- SAC/SIC and accuracy carried straight
+    /// through, position resolved from the sensor list the same way a radar's already
+    /// is. A feed naming only a direction finder and no radar still produces one spec.
+    #[test]
+    fn feed_specs_carries_a_configured_direction_finder_into_the_binding() {
+        let config = ConfigBaseline {
+            sensors: vec![df_sensor(21)],
+            radar_feeds: vec![RadarFeedConfig {
+                name: "north".into(),
+                bind_addr: "0.0.0.0:8600".into(),
+                multicast: None,
+                radars: Vec::new(),
+                df_sites: vec![df_site(21)],
+            }],
+            ..ConfigBaseline::default()
+        };
+        let specs = feed_specs(&config);
+        assert_eq!(specs.len(), 1);
+        assert!(specs[0].radars.is_empty());
+        assert_eq!(
+            specs[0].df_sites,
+            vec![DfBinding {
+                sac: 50,
+                sic: 6,
+                sensor: SensorId(21),
+                position: Geodetic {
+                    lat_rad: 0.9,
+                    lon_rad: 0.2,
+                    alt_m: 30.0,
+                },
+                azimuth_sigma_rad: 1.5_f64.to_radians(),
+            }]
+        );
+    }
+
+    /// GAP-100, "reachable at start-up": the desktop's real `bind_feeds` -- the
+    /// function `AppState` calls when it stands the ingest gateway up -- binds a feed
+    /// that names only a direction finder without an alert and registers it, exactly
+    /// as it already does for a radar-only feed. `127.0.0.1:0` is a real loopback bind
+    /// (OS-assigned port), not a stub, so this proves the construction path itself
+    /// runs; `bind_feed_wires_a_configured_direction_finder_into_the_live_adapter` in
+    /// `gungnir-ingest` proves what that path builds actually attributes a bearing.
+    #[test]
+    fn bind_feeds_reaches_a_configured_direction_finder_at_start_up() {
+        let config = ConfigBaseline {
+            sensors: vec![df_sensor(21)],
+            origin: Some([0.9, 0.2, 0.0]),
+            radar_feeds: vec![RadarFeedConfig {
+                name: "north".into(),
+                bind_addr: "127.0.0.1:0".into(),
+                multicast: None,
+                radars: Vec::new(),
+                df_sites: vec![df_site(21)],
+            }],
+            ..ConfigBaseline::default()
+        };
+        let mut gateway = IngestGateway::new(Box::new(AllowListAuthenticator {
+            allowed: vec![SensorId(21)],
+        }));
+        let mut alerts = Vec::new();
+        let bound = bind_feeds(&config, &mut gateway, &mut alerts);
+        assert!(alerts.is_empty(), "unexpected alerts: {alerts:?}");
+        assert_eq!(
+            bound.stats.len(),
+            1,
+            "the one feed, bound for its direction finder alone"
+        );
     }
 }
