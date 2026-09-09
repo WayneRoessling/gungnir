@@ -5192,6 +5192,49 @@ not by finding, for the time between whenever each item landed and this correcti
     GAP-100 still describing item 114's changes as unsigned after their 2026-09-09
     signature; corrected in the same change.
 
+124. **DN-30 (measurement noise from the baseline): signed by the owner 2026-09-07,
+    re-reviewed 2026-09-09, and `from_baseline` now refuses what it cannot honour.**
+    DN-30's code (2026-09-07, PR #14) let a promoted baseline set
+    `PipelineSettings::measurement_noise_var` -- the field DN-28 §7 found understating
+    scenario 1's real sensor noise by up to 25x -- through `gungnir-config`'s two
+    baseline shapes and one new argument to `PipelineSettings::from_baseline` in
+    `gungnir-fusion-async`. The owner signed that diff the same day, but the record was
+    written on a branch that was never merged and the note was renumbered from DN-29
+    since; the review the owner asked for before recording it on main is this item.
+
+    **What the review found sound.** The configured noise reaches every filter selection
+    and the dense-group mode through the pipeline's single `measurement_model()`, and a
+    freshly initiated track's prior through its single `single_detection_covariance()`,
+    so the two cannot state the sensor differently. Both baseline shapes are validated
+    finite-and-positive per axis in `gungnir-config` before promotion; nothing in
+    production builds a `TrackingConfig` around that validation (`gungnir-modelops`'s
+    zeroed fields are in its tests). DN-30 §6's figures re-measure exactly on main today
+    -- 169.2 m and two tracks for scenario 1, 83.2 m and ten for scenario 2 -- so the
+    verification table's Measured column is current.
+
+    **What the review changed.** `from_baseline` kept a value it could not honour
+    silently: a noise axis that was not finite and positive fell back to the default
+    figure, and the gate threshold had carried the same fallback since GAP-053, while
+    both binaries went on stamping the baseline's identifier on every track. That is the
+    substitution DN-24 §7 forbids and the reason `UnsupportedFilter` was made an error
+    rather than a default in the first place; DN-30 §4 had described the fallback as
+    defensive because `gungnir-config` makes it unreachable, which is true and is not the
+    point -- a low-trust crate does not decide silently what it does with a value it was
+    not supposed to receive. `from_baseline` now returns `BaselineError` (the
+    unsupported filter, an invalid gate threshold, or an invalid noise axis named the way
+    `gungnir-config` names it) and both binaries' existing not-applied path -- an alert
+    on the desktop, an error log on the node, the tracker left ungoverned -- reports it.
+    Two tests in `gungnir-tracking-service` pin the refusals. No interleaving is
+    affected: `from_baseline` runs before the pipeline exists, touches no shared state
+    and awaits nothing; the loom gate ran unchanged.
+
+    **Human-owned crate touched (`gungnir-fusion-async`): signed by the owner
+    2026-09-07 as built, and 2026-09-09 over the corrected code.** No dependency edge
+    changed. The register's GAP-015 entry, which still described item 109's CPHD
+    derivation as unsigned after its 2026-09-09 signature, is corrected in the same
+    change; the LMB derivation and the dense-group wiring it also names remain unsigned
+    and were never in the queue this sweep walked.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

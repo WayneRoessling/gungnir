@@ -3,10 +3,10 @@
 Closes the follow-up DN-28 §7 named and did not fix: "the `measurement_noise_var`
 mismatch between `PipelineSettings::default()` and each scenario's actual sensor model,
 which predates this note and likely affects the fragmentation counts recorded for
-scenarios 2 through 4 as well as scenario 1." Status: **proposed 2026-09-07, built and
-gated 2026-09-07. Not yet signed by the owner** -- it touches `gungnir-fusion-async`
-(low-trust: `from_baseline`'s signature) and should get the same review DN-28's code
-diff got before merge, per `docs/agentic-workflow.md`.
+scenarios 2 through 4 as well as scenario 1." Status: **proposed, built, gated and
+signed by the owner 2026-09-07; re-reviewed 2026-09-09** (§7), the review finding one
+thing to change in the low-trust crate: `from_baseline` no longer keeps a value it cannot
+honour by silently substituting the default (§4).
 
 Motivated by the same diagnosed defect DN-28 was, one layer down: DN-28 §7 found that
 `PipelineSettings::default().measurement_noise_var` (`[400, 400, 900]`) understated
@@ -85,14 +85,26 @@ pub fn from_baseline(
     filter_selection: &str,
     imm: &ImmBaselineFields,
     measurement_noise_var: [f64; 3],
-) -> Result<Self, UnsupportedFilter>
+) -> Result<Self, BaselineError>
 ```
 
-Applied unconditionally (every selection uses it), and only when every axis is finite and
-positive -- `gungnir-config` already refuses anything else before a candidate is
-promoted, and this does not assume that and silently falls back to
-`Self::default()`'s figure otherwise, the same defensive shape `gate_threshold`'s own
-check already has.
+Applied unconditionally (every selection uses it). **As built on 2026-09-07** it was
+applied only when every axis was finite and positive, and otherwise fell back silently to
+`Self::default()`'s figure -- the same defensive shape `gate_threshold`'s own check had
+carried since GAP-053 -- on the reasoning that `gungnir-config` refuses anything else
+before a candidate is promoted. **The 2026-09-09 review reversed that.** A fallback the
+caller is not told about leaves both binaries stamping the baseline's identifier on
+tracks the pipeline produced under settings the baseline does not name, which is exactly
+the claim DN-24 §7 forbids and the reason `UnsupportedFilter` is an error rather than a
+substitution. So `from_baseline` now returns `BaselineError` -- `UnsupportedFilter`, an
+`InvalidGateThreshold`, or an `InvalidMeasurementNoise` naming the axis -- for any value
+it cannot honour, the gate threshold included, and both binaries' existing not-applied
+path (an alert on the desktop, an error log on the node, the tracker left ungoverned
+either way) is what reports it. No validated baseline reaches the new arms; they are
+there for the caller that skipped validation, which is the case a low-trust crate must
+not decide silently. `gungnir-tracking-service`'s
+`a_non_positive_measurement_noise_axis_is_refused_not_substituted` and
+`a_non_positive_gate_threshold_is_refused_not_substituted` pin both.
 
 `gungnir-app/src/state.rs` and `gungnir-node/src/main.rs` both pass
 `baseline.config.measurement_noise_var` through at their existing `from_baseline` call
@@ -145,9 +157,24 @@ already covered.
 
 Small: no new estimator, no new type, one field threaded through a schema and a function
 signature already carrying two other fields the same way (DN-28 §5). Built and gated
-2026-09-07. **Not signed.** `docs/agentic-workflow.md`'s low-trust tier names
-`gungnir-fusion-async` for concurrency correctness and numerical stability; this change
-touches neither (`from_baseline` gains an argument it validates and stores, with no new
-await point, no new shared state, and no change to how a filter is predicted or
-updated), but the crate is named by the tier itself rather than by what any one change
-inside it does, so it is drafted rather than merged unsupervised, per `CLAUDE.md`.
+2026-09-07, and **signed by the owner the same day** over the `gungnir-fusion-async`
+diff. `docs/agentic-workflow.md`'s low-trust tier names `gungnir-fusion-async` for
+concurrency correctness and numerical stability; this change touches neither
+(`from_baseline` gains an argument it validates and stores, with no new await point, no
+new shared state, and no change to how a filter is predicted or updated), but the crate
+is named by the tier itself rather than by what any one change inside it does, so the
+signature was sought rather than assumed unnecessary. The record of that signature was
+written on a branch that was never merged (`claude/dn-29-measurement-noise-baseline`,
+under the note's number at the time) and is carried here instead.
+
+**Re-reviewed 2026-09-09, on the owner's request, before the record was made** (the
+review `ARCHITECTURE.md` §10 item 124 carries). What the review checked: that the
+configured noise reaches every filter selection and the dense-group mode through the
+pipeline's one `measurement_model()`, and the freshly initiated prior through its one
+`single_detection_covariance()`; that both baseline shapes are validated in
+`gungnir-config` and that nothing in production constructs a `TrackingConfig` around
+that validation (the zeroed fields in `gungnir-modelops` are its tests' own); and that
+§6's measured figures re-measure exactly on main as it stands (169.2 m and two tracks,
+83.2 m and ten). The one change is §4's: the silent fallback became a refusal, for both
+fields. No interleaving is affected -- `from_baseline` runs before the pipeline exists,
+touches no shared state and awaits nothing -- and the loom gate was run unchanged.

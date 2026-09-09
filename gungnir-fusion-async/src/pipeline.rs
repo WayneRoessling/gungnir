@@ -313,6 +313,41 @@ pub struct UnsupportedFilter {
     pub implemented: &'static [&'static str],
 }
 
+/// Why a promoted baseline is not applied as written (DN-24 §7, GAP-053; DN-30 §4).
+///
+/// **Refused, never substituted.** Until the 2026-09-09 review of DN-30,
+/// [`PipelineSettings::from_baseline`] kept a gate threshold or a measurement-noise axis
+/// it could not honour by silently running `PipelineSettings::default()`'s figure in its
+/// place, while both binaries went on stamping the baseline's identifier on every track
+/// -- the exact claim DN-24 §7 forbids, since the picture was then produced by settings
+/// the governance record does not name. `gungnir-config` refuses both values before a
+/// candidate can be promoted, so no validated baseline reaches these arms; they exist so
+/// that a caller which bypasses that validation is told, and the binaries' existing
+/// not-applied path (an alert, the tracker left ungoverned) is what handles every
+/// variant here, the same as it handles [`UnsupportedFilter`].
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum BaselineError {
+    /// The baseline names a filter this build does not run.
+    #[error(transparent)]
+    UnsupportedFilter(#[from] UnsupportedFilter),
+    /// The baseline's gate threshold is not a finite, positive number.
+    #[error(
+        "the baseline's gate_threshold is {gate_threshold}, not a finite positive number; a \
+         promoted baseline is not applied by substituting the default gate"
+    )]
+    InvalidGateThreshold { gate_threshold: f64 },
+    /// One axis of the baseline's measurement-noise variance is not finite and positive.
+    #[error(
+        "the baseline's measurement_noise_var.{axis} is {value}, not a finite positive \
+         number; a promoted baseline is not applied by substituting the default noise"
+    )]
+    InvalidMeasurementNoise { axis: &'static str, value: f64 },
+}
+
+/// The axes of [`PipelineSettings::measurement_noise_var`], in its order, named the way
+/// `gungnir-config`'s own validation names them so one message reads like the other.
+const MEASUREMENT_NOISE_AXES: [&str; 3] = ["east", "north", "height"];
+
 /// The filter selections `PipelineSettings::from_baseline` accepts.
 ///
 /// Two, as of DN-28. The names are `TrackingConfig::filter_selection`'s vocabulary and
@@ -375,31 +410,41 @@ impl PipelineSettings {
     ///
     /// # Errors
     ///
-    /// [`UnsupportedFilter`] when the baseline names a filter this build does not have,
-    /// and a non-positive or non-finite gate threshold or measurement-noise axis, both
-    /// of which `gungnir-config` already refuses but which this does not assume.
+    /// [`BaselineError`]: a filter this build does not have, a gate threshold that is not
+    /// finite and positive, or a measurement-noise axis that is not. `gungnir-config`
+    /// refuses the last two before a candidate is promoted, and this does not assume it:
+    /// until the 2026-09-09 review a value that failed here was silently replaced by
+    /// `Self::default()`'s while the baseline's name was still stamped on every track
+    /// (DN-30 §4), which is the substitution DN-24 §7 forbids. Now it is an error the
+    /// binaries' existing not-applied path reports.
     pub fn from_baseline(
         gate_threshold: f64,
         filter_selection: &str,
         imm: &ImmBaselineFields,
         measurement_noise_var: [f64; 3],
-    ) -> Result<Self, UnsupportedFilter> {
+    ) -> Result<Self, BaselineError> {
         if !IMPLEMENTED_FILTERS.contains(&filter_selection) {
             return Err(UnsupportedFilter {
                 selection: filter_selection.to_owned(),
                 implemented: IMPLEMENTED_FILTERS,
-            });
+            }
+            .into());
         }
-        let mut settings = Self::default();
-        if gate_threshold.is_finite() && gate_threshold > 0.0 {
-            settings.gate = ChiSquareGate { gate_threshold };
+        if !(gate_threshold.is_finite() && gate_threshold > 0.0) {
+            return Err(BaselineError::InvalidGateThreshold { gate_threshold });
         }
-        if measurement_noise_var
-            .iter()
-            .all(|v| v.is_finite() && *v > 0.0)
+        if let Some((axis, value)) = MEASUREMENT_NOISE_AXES
+            .into_iter()
+            .zip(measurement_noise_var)
+            .find(|(_, value)| !(value.is_finite() && *value > 0.0))
         {
-            settings.measurement_noise_var = measurement_noise_var;
+            return Err(BaselineError::InvalidMeasurementNoise { axis, value });
         }
+        let mut settings = Self {
+            gate: ChiSquareGate { gate_threshold },
+            measurement_noise_var,
+            ..Self::default()
+        };
         if filter_selection == "imm-cv-ct" {
             settings.filter_selection = FilterSelection::ImmCvCt;
             settings.imm_turn_rate_rad_s = imm.turn_rate_rad_s;
