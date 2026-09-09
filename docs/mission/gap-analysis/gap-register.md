@@ -66,7 +66,7 @@ drafting agent's proposals for the owner and the engineering reviewer to confirm
 | GAP-045 | Scenario replay through the live pipeline | Technical | CAP-5.2 | 3 | 1 | M | 3 | I3 | Services engineer | In progress |
 | GAP-046 | Test-track suite | Mission | CAP-5.2, CAP-5.10 | 4 | 8 | L | 32 | I2 | Plan 07 lead | Closed |
 | GAP-076 | Test-track integration: fuzz corpus, benchmark inputs, end-to-end replay | Technical | CAP-5.2, CAP-5.10, CAP-6.7 | 3 | 9 | S | 27 | I2 | Services engineer | Closed |
-| GAP-077 | `gungnir-ml` crate, inference runtime sign-off, and the dependency edge | Technical | CAP-2.6, CAP-5.7 | 2 | 7 | L | 14 | I4 | Services engineer | Open |
+| GAP-077 | `gungnir-ml` crate, inference runtime sign-off, and the dependency edge | Technical | CAP-2.6, CAP-5.7 | 2 | 7 | L | 14 | I4 | Services engineer | In progress |
 | GAP-078 | Model manifests as `gungnir-modelops` baselines | Technical | CAP-5.7 | 3 | 1 | M | 3 | I4 | Services engineer | Open |
 | GAP-079 | Dataset pipeline from test tracks and journals | Technical | CAP-5.3, CAP-5.7 | 2 | 1 | M | 2 | I3 | Services engineer | In progress |
 | GAP-080 | First two models trained, evaluated, and promoted | Mission | CAP-2.6, CAP-2.9 | 2 | 7 | L | 14 | I4 | Services engineer | Open |
@@ -400,7 +400,7 @@ Counts: 100 gaps, 3 mission, 97 technical; 1 already covered by a plan in `../..
 - Evidence: `gungnir-data/src/lib.rs` (`spawn_loader`, `DataError::NotImplemented`); `../../verification-capability-table.md` §2, `gungnir-data` rows.
 - Severity: 3. Reach: 8 threads. Effort: L. Priority: 24.
 - Impact: No format loads; the viewport shows no terrain and analytics has no surface to mask against.
-- Closing action: Done 2026-09-07: the COPC fixture, sourced and recorded with the same SOURCE.md provenance testdata/asterix, testdata/sapient and the rest of testdata/pointcloud already carry; the bounded-read happy path is tested against it. What remains is the DEM half: a projection library is an owner decision if a deployment cannot prepare its DEM in the local frame.
+- Closing action: Done 2026-09-07: the COPC fixture, sourced and recorded with the same SOURCE.md provenance testdata/asterix, testdata/sapient and the rest of testdata/pointcloud already carry; the bounded-read happy path is tested against it. **The projection-library decision is taken (D-41, 2026-09-08): `proj`, full support, not WGS84-only.** Not yet recorded in `agentic-coding-standards.md` §2.9 and not yet built. What remains: recording the crate, teaching `validate_terrain` to accept a declared CRS beyond `"local-enu"`, the actual coordinate conversion in the loader, and a fixture whose file tags a real-world CRS rather than already being local-ENU.
 - Target: I2. Owner: UI engineer. Status: In progress.
 - Reference: `../../verification-capability-table.md` §2, `gungnir-data` rows; `testdata/dem/SOURCE.md`.
 
@@ -826,13 +826,13 @@ Counts: 100 gaps, 3 mission, 97 technical; 1 already covered by a plan in `../..
 
 - Type: Technical.
 - Capability: CAP-2.6 Classify and identify; CAP-5.7 Model governance.
-- Description: **The crate exists 2026-09-06; the runtime does not, by decision.** `gungnir-ml` holds the `Model` and `FeatureExtractor` traits, `FakeModel`, `ModelSet` with honest health, and `ModelSet::load` that refuses with the reason nothing can run a model (the owner deferred the runtime on 2026-09-05). Edge (q) to `gungnir-model` and `gungnir-interop` is drawn; nothing depends on the crate. The runtime sign-off is the remaining act. Plan 09 specifies a `Model` trait, a `FeatureExtractor` trait, and a `ModelSet` over an ONNX runtime; no crate exists, the runtime is not a signed-off dependency, and the edges from `gungnir-identification` and `gungnir-analytics` are not drawn in `../../../ARCHITECTURE.md`. The runtime was **deliberately deferred by the owner on 2026-09-05** rather than signed: this gap targets increment 4, no model has been trained so nothing needs a runtime, and the security reviewer that `docs/ml/architecture.md` names for a native dependency has not been appointed. `tract` remains the pure-Rust alternative to weigh when the decision is taken.
-- Evidence: `docs/ml/architecture.md`; `agentic-coding-standards.md` §2.9 (not in the approved stack); `../../../ARCHITECTURE.md` §7.1.
+- Description: **The crate exists 2026-09-06; the runtime does not, by decision -- and the decision was taken 2026-09-08 (D-40).** `gungnir-ml` holds the `Model` and `FeatureExtractor` traits, `FakeModel`, `ModelSet` with honest health, and `ModelSet::load` that refuses with the reason nothing can run a model (the owner deferred the runtime on 2026-09-05). Edge (q) to `gungnir-model` and `gungnir-interop` is drawn; nothing depends on the crate. **`ort` is the pick (D-40)**, un-deferred on the owner's own authority as the reviewer the original deferral named, ahead of a trained model existing, because Plan 09's schedule needed the runtime question settled first. `ort`'s default `download-binaries` feature is refused for the third-party-CDN telemetry risk it carries; the runtime must build ONNX Runtime from source. Not yet recorded in `agentic-coding-standards.md` §2.9 and not yet built -- the decision and the engineering are separate acts, the same distinction D-39's own history draws for GAP-057 and GAP-060. Plan 09 specifies a `Model` trait, a `FeatureExtractor` trait, and a `ModelSet` over an ONNX runtime; the edges from `gungnir-identification` and `gungnir-analytics` are still not drawn in `../../../ARCHITECTURE.md`, since nothing yet depends on the crate.
+- Evidence: `docs/ml/architecture.md`; `agentic-coding-standards.md` §2.9 (not yet recorded); `../../../ARCHITECTURE.md` §7.1; D-40.
 - Severity: 2. Reach: 7 threads. Effort: L. Priority: 14.
 - Impact: Neither machine-learning use case can be built, and the first attempt would add an unrecorded native dependency and an undrawn edge.
-- Closing action: Sign off the inference runtime under §2.9 when a model exists to run (`ort` or `tract`, §3), and load through it.
-- Target: I4. Owner: Services engineer. Status: Open.
-- Reference: `../../plans/09-ml-model-integration.md`.
+- Closing action: Record `ort` (default features off, `download-binaries` refused) in `agentic-coding-standards.md` §2.9 per D-40's own reasoning, build ONNX Runtime from source in CI, load `ModelSet` through it once a model exists to run, and draw the edges from `gungnir-identification`/`gungnir-analytics` when they actually depend on the crate.
+- Target: I4. Owner: Services engineer. Status: In progress.
+- Reference: `../../plans/09-ml-model-integration.md`; D-40.
 
 **GAP-078 Model manifests as `gungnir-modelops` baselines**
 
@@ -1145,7 +1145,7 @@ Counts: 100 gaps, 3 mission, 97 technical; 1 already covered by a plan in `../..
 - Evidence: `../gap-analysis/coverage-matrix.md` CAP-6.4 (no component or key management designed); `../../../ARCHITECTURE.md` §8.5.
 - Severity: 4. Reach: 2 threads. Effort: M. Priority: 8.
 - Impact: GAP-060 cannot be implemented without inventing a custody model at coding time, and an accreditor asks about custody before ciphers.
-- Closing action: Done 2026-09-08 for the disconnected desktop: `keyring` 4.2.0 (D-39) and `PersistentKeyProvider::open_or_create_via_os_keystore`, wired into `gungnir-app` alongside the passphrase-sealed file. Remaining: `ManagedService`, the cloud profile's equivalent, which waits on its own §2.9 decision; GAP-057's node account store on the now-admitted crate is that gap's own item.
+- Closing action: Done 2026-09-08 for the disconnected desktop: `keyring` 4.2.0 (D-39) and `PersistentKeyProvider::open_or_create_via_os_keystore`, wired into `gungnir-app` alongside the passphrase-sealed file. **`ManagedService`'s own §2.9 decision is taken (D-42, 2026-09-08): AWS via `aws-sdk-kms` and Azure via `azure_security_keyvault_keys`/`azure_identity`.** Not yet recorded in `agentic-coding-standards.md` §2.9 and not yet built. What remains, in order: a DN-22 amendment designing `ManagedService`'s own shape (DN-22 §5 names the row and stops -- no custody profile in this system has been built from a bare name before its own design note, and this one should not be the first), then the two backends against it. GAP-057's node account store on the now-admitted OS-keystore crate is that gap's own separate item.
 - Target: I4. Owner: Security engineer (human-owned crate). Status: In progress.
 - Reference: `../../plans/11-design-gap-closure.md` finding F-3.
 - Depends on: D-02.
