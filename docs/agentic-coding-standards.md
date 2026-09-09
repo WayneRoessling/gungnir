@@ -709,6 +709,13 @@ local tangent plane), not general reprojection.
    of them build this; `.github/workflows/crs-projection.yml` (new) installs `cmake` via
    `apt-get` and is the first and only place this feature actually compiles and its
    tests run, on every pull request that could plausibly touch it.
+
+   **That workflow's first run settles the open question: the bundled build works.**
+   `proj` 0.31.0 and PROJ 9.6.2 compiled from the vendored source on `ubuntu-latest`
+   with nothing installed beyond `cmake` -- no `libclang`, no system `libproj`, no
+   `pkg-config` -- in about four and a half minutes, and the tests ran against it. So
+   the only thing standing between this feature and the Windows desktop it is ultimately
+   for is `cmake` on that host, which is a package rather than a design problem.
 3. **`validate_terrain` accepts `frame: "epsg:<code>"` alongside `"local-enu"`**,
    parsed through a new `gungnir_config::Frame` (`LocalEnu` or `Epsg(u32)`) so
    validation and the DEM loader's conversion read the same value the same way. The

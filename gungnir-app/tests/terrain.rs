@@ -34,11 +34,17 @@ fn desktop(name: &str, path: String) -> (AppState, PathBuf) {
 /// As `desktop`, but naming the terrain's declared frame (GAP-023, D-41) instead of
 /// always `"local-enu"`.
 fn desktop_with_frame(name: &str, path: String, frame: &str) -> (AppState, PathBuf) {
+    desktop_at(name, path, frame, [0.959_931, 0.209_44, 0.0])
+}
+
+/// As `desktop_with_frame`, but placing the deployment's local ENU origin
+/// (`[lat_rad, lon_rad, alt_m]`) rather than taking the default one.
+fn desktop_at(name: &str, path: String, frame: &str, origin: [f64; 3]) -> (AppState, PathBuf) {
     let dir = std::env::temp_dir().join(format!("gungnir-terrain-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let config = ConfigBaseline {
         data_dir: dir.to_string_lossy().into_owned(),
-        origin: Some([0.959_931, 0.209_44, 0.0]),
+        origin: Some(origin),
         terrain: Some(TerrainConfig {
             path,
             frame: frame.into(),
@@ -135,7 +141,27 @@ fn a_geotiff_that_declares_utm_is_refused_by_name_and_line_of_sight_stays_flat()
 #[cfg(feature = "crs-projection")]
 #[test]
 fn a_geotiff_that_declares_utm_converts_and_masks_line_of_sight_when_the_frame_matches() {
-    let (mut state, dir) = desktop_with_frame("utm-converted", fixture("small.tif"), "epsg:32633");
+    // The origin is put next to the fixture rather than at the default one, for two
+    // reasons that the first CI run of this test demonstrated rather than assumed.
+    //
+    // `small.tif` spans easting 500000..500150 -- so it sits on zone 33N's central
+    // meridian, 15 deg E -- and northing 6000000..6000120, which the meridian-arc
+    // series puts at about 54.149 deg N. The default origin (55 deg N, 12 deg E) is
+    // 216 km from that, and at 216 km a `TerrainMesh` position's `f32` step is 0.026 m,
+    // which swamps the millimetre-scale agreement the spacing assertion below is
+    // trying to check. A DEM tile 216 km from its own deployment's origin is also not
+    // what this feature is for: `TerrainMesh` keeps an `f64` origin and small `f32`
+    // offsets precisely so a DEM near the origin stays exact.
+    //
+    // Being a kilometre or two off in that latitude estimate costs nothing: the
+    // curvature term it feeds is quadratic in the distance from the origin, so even
+    // 2 km leaves it near 1e-8 relative.
+    let (mut state, dir) = desktop_at(
+        "utm-converted",
+        fixture("small.tif"),
+        "epsg:32633",
+        [0.945_078, 0.261_799, 0.0],
+    );
     settle(&mut state);
     match &state.terrain {
         TerrainStatus::Loaded {
@@ -171,23 +197,31 @@ fn a_geotiff_that_declares_utm_converts_and_masks_line_of_sight_when_the_frame_m
         "{:?}",
         mesh.positions
     );
-    // Two adjacent cell centres in the fixture's own frame are exactly 30 m apart
-    // (SOURCE.md). Over this fixture's 150 m by 120 m extent, UTM zone 33N's distortion
-    // from true scale is many orders of magnitude below a centimetre (its 0.9996
-    // central-meridian scale factor barely moves across 150 m), so the same two
-    // points' Euclidean distance after conversion to local ENU should still read as
-    // 30 m to well within a centimetre. A reprojection that silently swapped an axis,
-    // mixed up degrees and radians, or dropped a scale factor would miss this by
-    // orders of magnitude, not by noise -- this is a coarse but effective tripwire for
-    // exactly those bugs, independent of knowing this fixture's absolute position.
+    // Two adjacent cell centres are exactly 30 m apart *in the file's own UTM grid*
+    // (SOURCE.md's `ModelPixelScale`). On the ground they are further apart than that,
+    // and by a known amount: UTM's grid is deliberately shrunk, scale factor
+    // k0 = 0.9996 on the central meridian, so 30 m of grid is 30 / 0.9996 = 30.0120 m
+    // of ground. This fixture sits on that central meridian (easting 500000 is the
+    // false easting exactly), and the point scale factor changes by about 7e-11 across
+    // its 150 m width, so k0 is the whole of the correction here.
+    //
+    // Asserting that number to a few millimetres is a much stronger check than "about
+    // 30 m" would be: it is only satisfied if the conversion actually undoes UTM's
+    // scale factor. A pipeline that returned the grid distance unchanged would land on
+    // 30.000 and miss by 12 mm; one that swapped an axis, or confused degrees with
+    // radians, would miss by orders of magnitude. The first CI run of this test is what
+    // established that the 12 mm is real rather than noise (see this function's own
+    // origin note above).
     let adjacent_spacing_m = {
         let a = mesh.positions[0];
         let b = mesh.positions[1];
         (f64::from(a[0] - b[0]).powi(2) + f64::from(a[1] - b[1]).powi(2)).sqrt()
     };
+    let expected_m = 30.0 / 0.9996;
     assert!(
-        (adjacent_spacing_m - 30.0).abs() < 0.01,
-        "adjacent cell spacing: {adjacent_spacing_m} m"
+        (adjacent_spacing_m - expected_m).abs() < 0.005,
+        "adjacent cell spacing: {adjacent_spacing_m} m, expected {expected_m} m \
+         (30 m of UTM grid undone by k0 = 0.9996)"
     );
     let _ = std::fs::remove_dir_all(dir);
 }
