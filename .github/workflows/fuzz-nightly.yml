@@ -2,7 +2,11 @@
 # cost-matrix construction (docs/agentic-workflow.md). Scheduled, not per-PR.
 #
 # **The schedule did fire, and the job failed before it fuzzed a single byte** (GAP-061).
-# The first nightly ran 2026-09-08T08:06Z and ended 0.05 s into the fuzz step with
+# Two independent defects, either of which alone stops the gate; the first hid the second,
+# so the second could not be seen until the first was fixed.
+#
+# **One: the fuzz project directory.** The first nightly ran 2026-09-08T08:06Z and ended
+# 0.05 s into the fuzz step with
 #
 #     Error: could not read the manifest file: /home/runner/work/gungnir/gungnir/fuzz/Cargo.toml
 #
@@ -12,8 +16,21 @@
 # `fuzz/` directory that has never existed here. `working-directory: gungnir-fuzz` did not
 # help, because that path is resolved from the crate root and not from the working
 # directory -- which is why the setting looked right and never was. `--fuzz-dir` names the
-# directory explicitly (cargo-fuzz 0.10.2 and later; 0.13.2 is what installs here) and is
-# the one thing that does fix it.
+# directory explicitly (cargo-fuzz 0.10.2 and later; 0.13.2 is what installs here).
+#
+# **Two: the toolchain, which is not the one this job asks for.** With the manifest found,
+# the run got as far as the build and stopped on
+#
+#     error: the option `Z` is only accepted on the nightly compiler
+#
+# from `/home/runner/.rustup/toolchains/1.98-x86_64-unknown-linux-gnu/bin/rustc`. cargo-fuzz
+# needs `-Zsanitizer=address`, and `dtolnay/rust-toolchain@nightly` had duly installed
+# nightly and made it the rustup default -- but `rust-toolchain.toml` at the repository
+# root pins `channel = "1.98"`, and a toolchain file outranks the rustup default. Every
+# `cargo` invocation in this job was therefore 1.98 no matter what the setup step did.
+# `RUSTUP_TOOLCHAIN` outranks the file in turn, and propagates into the `cargo build`
+# cargo-fuzz spawns, which is why it is set on the step rather than passed as `+nightly`
+# to the outer command only.
 name: fuzz-nightly
 
 on:
@@ -38,6 +55,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-fuzz --locked
       - name: fuzz ${{ matrix.target }} for 20 minutes
+        env:
+          # See the header: without this, rust-toolchain.toml pins the build to 1.98 and
+          # the sanitizer flags cargo-fuzz requires are rejected as nightly-only.
+          RUSTUP_TOOLCHAIN: nightly
         run: cargo fuzz run --fuzz-dir gungnir-fuzz ${{ matrix.target }} -- -max_total_time=1200
       - name: Upload crash artifacts
         if: failure()
