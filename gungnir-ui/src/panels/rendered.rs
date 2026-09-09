@@ -1560,6 +1560,8 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
                         masking: false,
                         detail: "no terrain configured",
                     },
+                    point_cloud_registration:
+                        crate::panels::sensor_health::PointCloudRegistrationLine::NotConfigured,
                     feeds,
                     cooperative_feeds: &[],
                     peers: &[],
@@ -1688,6 +1690,8 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                     masking: false,
                     detail: "no terrain configured",
                 },
+                point_cloud_registration:
+                    crate::panels::sensor_health::PointCloudRegistrationLine::NotConfigured,
                 feeds: &[],
                 cooperative_feeds: &[],
                 peers: &[],
@@ -1722,6 +1726,8 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                     masking: false,
                     detail: "no terrain configured",
                 },
+                point_cloud_registration:
+                    crate::panels::sensor_health::PointCloudRegistrationLine::NotConfigured,
                 feeds: &[],
                 cooperative_feeds: &[],
                 peers: &[],
@@ -1754,6 +1760,92 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                         12 expired, 2 refused"
         ),
         "the pipeline's five bearing counters did not reach the screen: {text}"
+    );
+}
+
+/// **GAP-024: the line that used to not exist.** `FusionBackend::engine_for` could
+/// silently fall back from the GPU path to the CPU reference, and nothing told an
+/// operator which one actually ran -- exactly the kind of quiet fallback this
+/// workspace's health flags exist to refuse. Proves all four states reach the screen
+/// from synthetic `PointCloudRegistrationLine` values alone -- no `FusionBackend`, no
+/// `wgpu`, no device, per the workspace rule against ever constructing a real GPU
+/// device in a test.
+#[test]
+fn the_point_cloud_registration_line_names_the_backend_and_why() {
+    use crate::panels::sensor_health::{
+        render_sensor_health, BearingPipelineLine, ClockSyncLine, PointCloudRegistrationLine,
+        SensorHealthView,
+    };
+    use crate::panels::status_strip::EncryptionState;
+
+    let health = gungnir_model::SystemHealth::default();
+    let probe = RenderProbe::new();
+    let draw = |line: PointCloudRegistrationLine<'_>| {
+        let (_, frame) = probe.draw(|ui| {
+            render_sensor_health(
+                ui,
+                &theme::Palette::day(),
+                &SensorHealthView {
+                    health: &health,
+                    encryption: EncryptionState::Active,
+                    sensors: &[],
+                    clocks: ClockSyncLine {
+                        sources_observed: 0,
+                        sources_out_of_sync: 0,
+                        max_skew_s: 0.0,
+                    },
+                    detectors: &[],
+                    terrain: crate::panels::sensor_health::TerrainLine {
+                        masking: false,
+                        detail: "no terrain configured",
+                    },
+                    point_cloud_registration: line,
+                    feeds: &[],
+                    cooperative_feeds: &[],
+                    peers: &[],
+                    bearing_feeds: &[],
+                    bearing_pipeline: BearingPipelineLine::default(),
+                },
+            );
+        });
+        frame.joined()
+    };
+
+    // No pair configured at all: said plainly, never drawn empty or left to imply a
+    // backend that never ran (GAP-024's own rule, mirroring GAP-098's for the pair).
+    let text = draw(PointCloudRegistrationLine::NotConfigured);
+    assert!(
+        text.contains("Point-cloud registration: no source/target pair configured"),
+        "{text}"
+    );
+
+    // The GPU path, unremarkable and said so plainly.
+    let text = draw(PointCloudRegistrationLine::Gpu);
+    assert!(
+        text.contains("Point-cloud registration: GPU path"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("CPU fallback"),
+        "the GPU path must not also read as a fallback: {text}"
+    );
+
+    // The CPU fallback, named as a fallback and with the reason it fell back -- never
+    // left to look like the GPU path quietly worked.
+    let text = draw(PointCloudRegistrationLine::CpuFallback {
+        reason: "no suitable GPU adapter",
+    });
+    assert!(
+        text.contains("Point-cloud registration: CPU fallback (no suitable GPU adapter)"),
+        "{text}"
+    );
+
+    // The one tick between a pair loading and a backend resolving: still honest, never
+    // claiming either backend has actually run yet.
+    let text = draw(PointCloudRegistrationLine::Pending);
+    assert!(
+        text.contains("Point-cloud registration: pair loaded, backend not yet resolved"),
+        "{text}"
     );
 }
 

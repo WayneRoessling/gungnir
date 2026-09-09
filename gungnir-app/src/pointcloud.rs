@@ -13,10 +13,16 @@
 //! the pair as one unit that is loading, loaded, or failed together -- a cloud loaded
 //! alone while its partner failed is not a pair anything downstream can use, so it is
 //! not kept.
+//!
+//! **[`register`] is GAP-024's missing caller.** Once a pair is [`PointCloudStatus::
+//! Loaded`], `crate::fusion::FusionBackend::engine_for` finally has a real target to
+//! build against; [`register`] is what calls it, from `update::tick` right after
+//! [`poll`], and [`registration_line`] is what PN-09 reads to say which backend did.
 
 use gungnir_config::PointCloudFileConfig;
 use gungnir_data::{LoadRequest, LoadResult};
 
+use crate::fusion::FusionBackend;
 use crate::state::AppState;
 
 /// Where the configured point-cloud pair stands, for PN-09-style reporting.
@@ -183,6 +189,127 @@ fn apply_result(state: &mut AppState, result: LoadResult) {
     }
 }
 
+/// The largest number of ICP iterations one registration attempt is allowed before
+/// `PointCloudFusion::step` refuses further progress as `FusionError::Divergence`
+/// (`rust-3d-data-ecosystem-build-vs-adopt.md` §3.4: bounded so a poorly converging
+/// registration never stalls the render loop). [`register`] spends one `step` call
+/// per tick, so this is also, in effect, how many frames a pair is given to converge
+/// before this module reports it gave up rather than retrying forever.
+const MAX_ICP_ITERATIONS: u32 = 50;
+
+/// What this tick's registration attempt did with the loaded pair (GAP-024): distinct
+/// from [`PointCloudStatus`], which only says the *pair* finished loading.
+/// `NoPair` covers "not configured", "still loading" and "failed" alike -- the same
+/// all-or-nothing reasoning [`PointCloudStatus`] itself uses, since none of those three
+/// is a pair complete enough to register.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RegistrationOutcome {
+    /// `state.point_cloud` is not [`PointCloudStatus::Loaded`]: nothing complete to
+    /// register against.
+    NoPair,
+    /// The registration engine (GPU or CPU, per `AppState::fusion`) stepped this tick.
+    Registered {
+        transform: nalgebra::Isometry3<f32>,
+        converged: bool,
+        inlier_ratio: f32,
+    },
+    /// The engine could not be built, or could not step, and why -- never silently
+    /// dropped (CLAUDE.md's rule against a health flag or a test claiming more than
+    /// what actually ran).
+    Failed { reason: String },
+}
+
+/// Build or continue this tick's registration of the loaded pair (GAP-024): the
+/// caller `crate::fusion::FusionBackend::engine_for` was missing, now that GAP-098
+/// gives it a real pair to build against. Called from `update::tick`, right after
+/// [`poll`], so a pair that completes loading this tick is registered the same tick
+/// rather than one frame late.
+///
+/// **All-or-nothing, matching GAP-098.** A no-op -- `state.registration_engine` is
+/// dropped and [`RegistrationOutcome::NoPair`] recorded -- unless `state.point_cloud`
+/// is [`PointCloudStatus::Loaded`]; an incomplete pair (only a source loaded, or
+/// neither) has nothing to register against, the same discipline [`apply_result`]
+/// already applies to what it keeps in `DataStore.point_clouds`.
+///
+/// **Built once per pair, stepped every tick after.** `FusionBackend::engine_for`
+/// builds a fresh engine on every call it gets (uploading the target and its spatial
+/// hash on the GPU path), so this calls it only on the first tick a pair is complete
+/// (`state.registration_engine` still `None`) and keeps that same engine for every
+/// tick after. `PointCloudFusion::step`'s own doc comment is explicit that one call is
+/// one ICP iteration, meant to be spread over many frames rather than run to
+/// convergence inside one -- the same non-blocking shape [`crate::terrain::poll`] and
+/// [`poll`] already give a slow load.
+pub fn register(state: &mut AppState) {
+    if !state.point_cloud.is_loaded() {
+        // Not a pair (not yet, or not any more): nothing to hold an engine open for.
+        // Cleared rather than left stale, so a pair that somehow un-loads never leaves
+        // behind a result implying registration is still running.
+        state.registration_engine = None;
+        state.registration = RegistrationOutcome::NoPair;
+        return;
+    }
+
+    if state.registration_engine.is_none() {
+        let handle = state.runtime.handle().clone();
+        // `state.point_cloud.is_loaded()` above and GAP-098's own invariant (source
+        // first, target second, and never one without the other) are what make these
+        // two indices safe without a length check here.
+        let target = &state.data.point_clouds[1];
+        match state.fusion.engine_for(&handle, target, MAX_ICP_ITERATIONS) {
+            Ok(engine) => state.registration_engine = Some(engine),
+            Err(err) => {
+                state.registration = RegistrationOutcome::Failed {
+                    reason: err.to_string(),
+                };
+                return;
+            }
+        }
+    }
+
+    // The branch above either found an engine already in place or just built one on
+    // success; a build failure already returned. Never `unwrap`/`expect`: a `let-else`
+    // that leaves this tick's registration unchanged is the honest way to handle a
+    // combination this module's own control flow does not actually produce.
+    let Some(engine) = state.registration_engine.as_mut() else {
+        return;
+    };
+    let source = &state.data.point_clouds[0];
+    state.registration = match engine.step(source) {
+        Ok(step) => RegistrationOutcome::Registered {
+            transform: step.transform,
+            converged: step.converged,
+            inlier_ratio: step.inlier_ratio,
+        },
+        Err(err) => RegistrationOutcome::Failed {
+            reason: err.to_string(),
+        },
+    };
+}
+
+/// The PN-09 line for which backend is registering the configured pair, and why
+/// (GAP-024). A pure function of the two pieces of state that decide it, so it is
+/// checkable against synthetic [`PointCloudStatus`]/[`FusionBackend`] values rather
+/// than a real load or a real `wgpu` device.
+#[must_use]
+pub fn registration_line<'a>(
+    point_cloud: &PointCloudStatus,
+    fusion: &'a FusionBackend,
+) -> gungnir_ui::panels::sensor_health::PointCloudRegistrationLine<'a> {
+    use gungnir_ui::panels::sensor_health::PointCloudRegistrationLine;
+    if !point_cloud.is_loaded() {
+        return PointCloudRegistrationLine::NotConfigured;
+    }
+    match fusion {
+        // Reachable only for the one tick, at most, between a pair finishing loading
+        // and `register` resolving a backend for it -- both happen inside the same
+        // `update::tick` call in a running deployment, so this is defensive rather
+        // than a state an operator should ever actually see.
+        FusionBackend::Uninitialized => PointCloudRegistrationLine::Pending,
+        FusionBackend::Gpu { .. } => PointCloudRegistrationLine::Gpu,
+        FusionBackend::Cpu { reason } => PointCloudRegistrationLine::CpuFallback { reason },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,5 +390,152 @@ mod tests {
     fn a_load_error_is_never_swallowed() {
         let err = DataError::Io("no such file".into());
         assert!(err.to_string().contains("no such file"));
+    }
+
+    // -- GAP-024: `register`/`registration_line`, the caller `FusionBackend` was
+    //    missing (`crate::fusion`'s own doc comment) -------------------------------
+
+    /// Four non-coplanar points, mirroring `crate::fusion`'s own `tiny_cloud` fixture:
+    /// enough for Kabsch to recover a rotation, and identical to itself converges in
+    /// one CPU `step` (`crate::fusion::tests::cpu_backend_builds_a_working_engine`
+    /// checks the same fact one layer down).
+    fn tiny_cloud() -> PointBuffer {
+        PointBuffer {
+            positions: vec![
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ],
+            ..PointBuffer::default()
+        }
+    }
+
+    /// A throwaway desktop, the same shape `gungnir-app/tests/pointcloud.rs::desktop`
+    /// builds: a unique scratch `data_dir` so parallel tests never share a journal,
+    /// and no point-cloud file configured, since these tests inject the pair directly
+    /// rather than exercise the loader (GAP-098's own path, already covered there).
+    fn desktop_state(name: &str) -> (AppState, std::path::PathBuf) {
+        use gungnir_config::ConfigBaseline;
+        let dir = std::env::temp_dir().join(format!(
+            "gungnir-pointcloud-registration-{name}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let config = ConfigBaseline {
+            data_dir: dir.to_string_lossy().into_owned(),
+            ..ConfigBaseline::default()
+        };
+        (AppState::with_config(config).expect("starts"), dir)
+    }
+
+    /// Neither cloud, then only the source: a real tick must not open a registration
+    /// engine or claim a result for either, matching GAP-098's own all-or-nothing
+    /// rule for what it keeps in `DataStore.point_clouds`.
+    #[test]
+    fn an_incomplete_pair_is_never_registered_by_a_real_tick() {
+        let (mut state, dir) = desktop_state("incomplete");
+
+        assert!(matches!(state.point_cloud, PointCloudStatus::NotConfigured));
+        crate::update::tick(&mut state);
+        assert_eq!(state.registration, RegistrationOutcome::NoPair);
+        assert!(state.registration_engine.is_none());
+
+        // The transient shape `apply_result` itself produces mid-load: the source has
+        // arrived and the target has not, so `DataStore.point_clouds` holds exactly
+        // one buffer while `PointCloudStatus` still says `Loading`.
+        state.point_cloud = PointCloudStatus::Loading {
+            source: "a.las".into(),
+            target: "b.las".into(),
+        };
+        state.data.point_clouds.push(buffer(5));
+        crate::update::tick(&mut state);
+        assert_eq!(state.registration, RegistrationOutcome::NoPair);
+        assert!(
+            state.registration_engine.is_none(),
+            "a lone cloud must not open a registration engine"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A loaded pair reaches `engine_for` through a real `update::tick`, on a backend
+    /// forced to the CPU path so this test -- which runs under plain `cargo test` --
+    /// never asks a real `wgpu::Instance` for an adapter (this workspace's hard rule
+    /// against constructing a real GPU device anywhere plain `cargo test` reaches;
+    /// `crate::fusion`'s own tests use the identical bypass).
+    #[test]
+    fn a_loaded_pair_registers_through_a_real_tick_on_a_forced_cpu_backend() {
+        let (mut state, dir) = desktop_state("loaded-cpu");
+        state.data.point_clouds.push(tiny_cloud());
+        state.data.point_clouds.push(tiny_cloud());
+        state.point_cloud = PointCloudStatus::Loaded {
+            source: "source.las".into(),
+            target: "target.las".into(),
+            source_points: 4,
+            target_points: 4,
+        };
+        state.fusion = FusionBackend::Cpu {
+            reason: "test: forced CPU path".into(),
+        };
+
+        crate::update::tick(&mut state);
+
+        match &state.registration {
+            RegistrationOutcome::Registered { converged, .. } => {
+                assert!(
+                    *converged,
+                    "an identical source and target converge at once"
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            state.registration_engine.is_some(),
+            "a successful build must be kept for the next tick to step"
+        );
+        assert!(
+            !state.fusion.is_gpu(),
+            "the forced CPU backend must not have been overwritten"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The PN-09 mapping itself, against synthetic `PointCloudStatus`/`FusionBackend`
+    /// values -- no `AppState`, no loader, no device, for the same reason
+    /// `crate::fusion`'s own tests construct `FusionBackend::Cpu` directly rather than
+    /// resolve it.
+    #[test]
+    fn registration_line_reports_not_configured_pending_and_cpu_fallback() {
+        use gungnir_ui::panels::sensor_health::PointCloudRegistrationLine;
+
+        assert_eq!(
+            registration_line(&PointCloudStatus::NotConfigured, &FusionBackend::new()),
+            PointCloudRegistrationLine::NotConfigured
+        );
+
+        let loaded = PointCloudStatus::Loaded {
+            source: "s".into(),
+            target: "t".into(),
+            source_points: 1,
+            target_points: 1,
+        };
+        assert_eq!(
+            registration_line(&loaded, &FusionBackend::new()),
+            PointCloudRegistrationLine::Pending,
+            "a pair loaded before any backend resolved must not be claimed as either one"
+        );
+        assert_eq!(
+            registration_line(
+                &loaded,
+                &FusionBackend::Cpu {
+                    reason: "no suitable GPU adapter".into(),
+                },
+            ),
+            PointCloudRegistrationLine::CpuFallback {
+                reason: "no suitable GPU adapter"
+            }
+        );
     }
 }

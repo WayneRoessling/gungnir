@@ -70,6 +70,15 @@ pub struct AppState {
     pub terrain: crate::terrain::TerrainStatus,
     /// Where the configured point-cloud pair stands (GAP-098).
     pub point_cloud: crate::pointcloud::PointCloudStatus,
+    /// What this tick's registration of the loaded pair did (GAP-024), read by PN-09
+    /// (`crate::pointcloud::registration_line`) and, once GAP-024's own remaining item
+    /// finds an owner, the viewport.
+    pub registration: crate::pointcloud::RegistrationOutcome,
+    /// The registration engine while a loaded pair holds one open (GAP-024): built once
+    /// by `crate::pointcloud::register` the tick a pair completes loading, then stepped
+    /// once per tick after, never rebuilt for the same pair. Internal wiring, the same
+    /// role [`Self::pointcloud_loader`] plays for the load itself.
+    pub registration_engine: Option<Box<dyn gungnir_data_fusion::PointCloudFusion>>,
     /// The radar feeds' service observations, drained each frame (GAP-064).
     pub service_sinks: Vec<gungnir_ingest::adapters::asterix::ServiceObservationSink>,
     /// Each bound feed's counters, by name, for PN-09 (GAP-001).
@@ -422,9 +431,11 @@ pub struct AppState {
     /// at construction -- `crate::fusion`'s own doc comment explains why eagerly
     /// requesting a `wgpu` device here, in the constructor every one of this
     /// crate's integration tests calls, is exactly the mistake that module's design
-    /// avoids. Not yet called from the tick: no point cloud reaches
-    /// `DataStore.point_clouds` (GAP-098), so there is nothing for it to register
-    /// against yet, and in today's build no `wgpu` call happens at all.
+    /// avoids. Called from the tick now, through `crate::pointcloud::register`, but
+    /// only once `DataStore.point_clouds` holds a loaded pair (GAP-098); a test that
+    /// configures no point cloud still never resolves this field at all, and the two
+    /// tests that do (`gungnir-app/tests/pointcloud.rs`, `pointcloud::tests`) force
+    /// this field to `Cpu` first rather than let resolution touch a real device.
     pub fusion: crate::fusion::FusionBackend,
 }
 
@@ -466,11 +477,13 @@ impl AppState {
         // GAP-024: deliberately not constructed here. `crate::fusion::FusionBackend`
         // resolves lazily, on `engine_for`'s first call, precisely so that building
         // an `AppState` -- which every integration test in this crate does -- never
-        // requests a real `wgpu` device on its own. Nothing calls `engine_for` yet
-        // (GAP-098: no point cloud reaches `DataStore.point_clouds`), so today this
-        // is inert either way; the point is that it stays inert for every test that
-        // does not ask for it, rather than every test paying for a GPU probe it
-        // never uses.
+        // requests a real `wgpu` device on its own. `crate::pointcloud::register`
+        // (called from `update::tick`) is the only caller, and only once
+        // `DataStore.point_clouds` holds a loaded pair (GAP-098); a test that never
+        // configures one -- every test in this crate except two -- still never
+        // resolves this field, and those two (`gungnir-app/tests/pointcloud.rs`'s
+        // real-fixture pair, `pointcloud::tests`'s own synthetic one) force the CPU
+        // path explicitly rather than let resolution touch a real device.
         let fusion = crate::fusion::FusionBackend::new();
         let hazards = crate::hazards::layer_from_config(&config)?;
         // GAP-057: the session authority and the account listing the baseline names,
@@ -579,6 +592,8 @@ impl AppState {
             rehearsal: None,
             terrain: crate::terrain::TerrainStatus::NotConfigured,
             point_cloud: crate::pointcloud::PointCloudStatus::NotConfigured,
+            registration: crate::pointcloud::RegistrationOutcome::NoPair,
+            registration_engine: None,
             service_sinks: feeds.observations,
             feed_stats: feeds.stats,
             ais_sinks: ais.reports,
