@@ -52,6 +52,21 @@ core, service layer, productization layer) and `rust-ui-architecture-coding-stan
   backpressure, out-of-order measurement handling.
 - Numerical stability guarantees: covariance must stay positive semi-definite; no silent
   NaN propagation.
+  - Signed off so far: `gungnir_association::solve_assignment`'s output contract
+    (2026-09-09, D-43 and GAP-103). The first signature under this clause, and worth
+    recording as the precedent for where its edge is. A fuzz target found the function
+    returning `Ok` with `total_cost = -inf` on an all-finite cost matrix -- an infinity
+    rather than a NaN, and reached by arithmetic on valid input rather than by a missing
+    guard, so whether the clause covered it at all was itself the borderline question.
+    It was brought to the owner rather than decided, on the rule the recommend-versus-act
+    bullet below already states for its own edge: bring the borderline ones, do not
+    decide the edge unilaterally. **What the owner decided
+    was the contract, not the fix**: the three answers the register framed were
+    mutually exclusive statements about what the function promises, and he chose a
+    fourth (`total_cost` became `Option<f64>`). The pattern worth carrying: when a
+    defect's repair is a choice between contracts rather than a correction to one,
+    the drafting agent's job is to measure what distinguishes them and frame the
+    choice, not to pick.
 - The recommend-versus-act boundary: `gungnir-policy` verdict logic, geofence and
   authority enforcement, and the `gungnir-command` approval workflow. The system must
   never execute an intercept without a recorded human decision, and no agent-written

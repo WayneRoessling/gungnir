@@ -5067,7 +5067,12 @@ not by finding, for the time between whenever each item landed and this correcti
     pass would fail it. `docs/verification-capability-table.md` §1's Hungarian /
     Jonker-Volgenant row and its §2 counterpart now state the domain and the promise;
     the pass criterion itself was not touched. Human-owned change (numerical stability
-    guarantee): written and gated, the owner's signature outstanding.
+    guarantee): written, gated and **signed by the owner 2026-09-09**, the same day
+    he took the decision. The signature was given with the one judgement call inside
+    it stated rather than buried -- that `Some` versus `None` is exact about the
+    solver's own accumulation and not about the ideal real-number sum, floating-point
+    addition not being associative, and that making it order-free would need exact or
+    scaled summation. GAP-103 is Closed.
 
 ## Directory layout
 
