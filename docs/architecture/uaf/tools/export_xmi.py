@@ -83,6 +83,38 @@ Traceability packages included: the deduplicated union of every relationship
 endpoint it holds, accumulated during the same pass that builds `links_by_id`
 (see `build()`).
 
+Seventh version. Round 6 still produced no package diagrams and no
+relationships -- but with one new, sharply diagnostic detail: each
+OperationalActivity had acquired its own Activity diagram. Those are EA
+auto-creating a behavior diagram per `uml:Activity` element, a side effect of
+the metaclass rather than anything this script emits, which means EA was
+importing the model tree happily while ignoring the `<diagrams>` and
+`<connectors>` extension blocks entirely. Two structural differences from the
+sample explain that, and both are now fixed:
+
+  - ID convention. Every id in a real EA export is `EAPK_`+GUID for a package
+    and `EAID_`+GUID for everything else (433 EAID_ / 18 EAPK_ in the sample,
+    no exceptions), the GUID being EA's own `{...}` with hyphens turned into
+    underscores. Rounds 1-6 used the registry id directly (`CAP-1.1`, `REL-1`,
+    `PKG-Op-Tr`, `DGM-Op-Sr`). A standard XMI parser resolves any unique
+    string as an idref -- which is exactly why elements and their `<UAF:...>`
+    stereotype applications worked all along -- but EA's own extension parser
+    reads the `<connectors>`/`<diagrams>` blocks, and ids it cannot map back
+    to a GUID are the most plausible reason that half never landed. Ids are
+    now deterministic MD5-derived GUIDs (`ea_guid()`), so output stays
+    byte-identical run to run; the registry id survives as the element's
+    `alias` and its `uafId` tagged value.
+  - Root nesting. The sample is `<uml:Model>` (carrying no xmi:id at all) >
+    one `EAPK_` root package > the view packages. Rounds 1-6 hung the view
+    packages directly off `uml:Model` with no root package -- and "Import
+    Package from XMI" imports *a package*.
+
+Note for anyone reading the output: inside an EA `<links>` block the child
+elements carry `xmi:id`, not `xmi:idref`, even though they are references to
+a relationship declared elsewhere (verified against the sample, which does
+the same). So a relationship id legitimately appears three times -- once as
+its `packagedElement` declaration and once in each endpoint's `<links>`.
+
 What is confirmed against the real sample vs. still a best-effort mapping:
 see VIEW_PACKAGES, ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO below -- each
 confirmed entry says so in a trailing comment. Briefly: Capability,
@@ -110,6 +142,7 @@ or the CI drift check -- this is a manually-run, one-way export, same footing as
 """
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 from xml.sax.saxutils import quoteattr
@@ -184,6 +217,40 @@ RELATIONSHIP_KIND_INFO = {
     "carried_by": ("CarriedBy", "Abstraction", "Rq-Tr"),
 }
 
+def ea_guid(key: str) -> str:
+    """A GUID-shaped id body (8_4_4_4_12 hex, underscore-separated) derived
+    deterministically from a registry id, so re-running produces byte-identical
+    output and re-importing diffs cleanly against what is already in EA.
+
+    Why not just use the registry id (`CAP-1.1`, `REL-1`) as the xmi:id, which
+    is what rounds 1-6 did: every id in a real EA export is `EAPK_`+GUID for a
+    package and `EAID_`+GUID for everything else (433 EAID_ / 18 EAPK_ ids in
+    the sample, no exceptions), where the GUID body is EA's own `{...}` GUID
+    with hyphens turned into underscores. A plain XMI parser resolves any
+    unique string as an idref, which is why elements and their `<UAF:...>`
+    stereotype applications imported fine all along -- but EA's own extension
+    parser, which is what reads the `<connectors>` and `<diagrams>` blocks,
+    is the half that never worked, and non-GUID ids it cannot map back to a
+    GUID are the most plausible reason. The registry id stays recoverable: it
+    is the element's `alias` and its `uafId` tagged value."""
+    h = hashlib.md5(key.encode("utf-8")).hexdigest().upper()
+    return f"{h[0:8]}_{h[8:12]}_{h[12:16]}_{h[16:20]}_{h[20:32]}"
+
+
+def eaid(key: str) -> str:
+    """Element/connector/diagram id, EA's `EAID_` convention."""
+    return f"EAID_{ea_guid(key)}"
+
+
+def eapk(key: str) -> str:
+    """Package id, EA's `EAPK_` convention -- a package additionally has an
+    `EAID_` form of the same GUID (the sample's package extension entries
+    carry both: `package2="EAID_<guid>" package="EAPK_<parent guid>"`)."""
+    return f"EAPK_{ea_guid(key)}"
+
+
+ROOT_PKG_KEY = "gungnir-uaf-root"
+
 # Fields already surfaced structurally (id is the xmi:id, name is the element
 # name, description becomes ownedComment) -- everything else on an entry becomes
 # a generic tagged value, so a future registry field needs no change here.
@@ -238,27 +305,31 @@ def element_xml(entry: dict, stereotype: str, metaclass: str) -> tuple[str, str]
     element-extension XML is built separately, later, by element_ext_xml --
     it needs to know which relationships touch this element first (its
     `<links>` list), which isn't known until every relationship is processed."""
-    eid = entry["id"]
-    name = entry.get("name", eid)
+    reg_id = entry["id"]
+    eid = eaid(reg_id)
+    name = entry.get("name", reg_id)
     desc = entry.get("description", "")
     extra_attrs = ' isReadOnly="false" isSingleExecution="false"' if metaclass == "Activity" else ""
+    # The registry id rides along as the UML alias (EA shows it in the Alias
+    # column) as well as the uafId tagged value, since the xmi:id is now a
+    # GUID rather than the id itself.
     body = [f'        <packagedElement xmi:type={attr("uml:" + metaclass)} xmi:id={attr(eid)} '
             f'name={attr(name)} visibility="public"{extra_attrs}>\n']
     if desc:
-        body.append(f'          <ownedComment xmi:id={attr(eid + "-desc")} body={attr(desc)}/>\n')
+        body.append(f'          <ownedComment xmi:id={attr(eaid(reg_id + "-desc"))} body={attr(desc)}/>\n')
     body.append('        </packagedElement>\n')
     uaf_stereo = f'    <UAF:{stereotype} base_{metaclass}={attr(eid)}/>\n'
     return "".join(body), uaf_stereo
 
 
-def element_ext_xml(eid: str, stereotype: str, metaclass: str, desc: str, entry: dict,
-                     links: list[tuple[str, str, str, str]]) -> str:
-    """The EA element-extension XML for a real (non-package) element, now
-    including a `<links>` entry per relationship that touches it (metaclass,
-    rel_id, start_id, end_id) -- confirmed present on both endpoints of a real
-    relationship in the sample; omitting it is a likely reason relationships
-    weren't showing up as attached to their elements."""
-    tags = [f'          <tag name="uafKind" value={attr(stereotype)}/>\n']
+def element_ext_xml(reg_id: str, stereotype: str, metaclass: str, desc: str, entry: dict,
+                     pkg_key: str, links: list[tuple[str, str, str, str]]) -> str:
+    """The EA element-extension XML for a real (non-package) element, with a
+    `<links>` entry per relationship that touches it (metaclass, rel_id,
+    start_id, end_id) -- confirmed present on both endpoints of a real
+    relationship in the sample."""
+    tags = [f'          <tag name="uafKind" value={attr(stereotype)}/>\n',
+            f'          <tag name="uafId" value={attr(reg_id)}/>\n']
     for k, v in entry.items():
         if k in STRUCTURAL_FIELDS or v in (None, "", []):
             continue
@@ -268,27 +339,32 @@ def element_ext_xml(eid: str, stereotype: str, metaclass: str, desc: str, entry:
         for lm, lid, start, end in links
     )
     return (
-        f'      <element xmi:idref={attr(eid)} xmi:type={attr("uml:" + metaclass)}>\n'
-        f'        <properties stereotype={attr(stereotype)} documentation={attr(desc)}/>\n'
+        f'      <element xmi:idref={attr(eaid(reg_id))} xmi:type={attr("uml:" + metaclass)} '
+        f'name={attr(entry.get("name", reg_id))} scope="public">\n'
+        f'        <model package={attr(eapk(pkg_key))} ea_eleType="element"/>\n'
+        f'        <properties isSpecification="false" sType={attr(metaclass)} nType="0" scope="public" '
+        f'stereotype={attr(stereotype)} documentation={attr(desc)}/>\n'
+        f'        <alias alias={attr(reg_id)}/>\n'
         f'        <tags>\n{"".join(tags)}        </tags>\n'
         f'        <links>\n{links_xml}        </links>\n'
         f'      </element>\n'
     )
 
 
-def package_ext_xml(pkg_id: str, title: str) -> str:
-    """Every package gets its own EA extension element entry too, confirmed
-    in the real sample -- a different shape from a real element's
+def package_ext_xml(pkg_key: str, title: str, parent_key: str) -> str:
+    """Every package gets its own EA extension element entry too, confirmed in
+    the real sample -- a different shape from a real element's
     (`<packageproperties>`/`<paths>`/`<times>`/`<flags>` instead of
-    `<properties>`/`<tags>`), omitted entirely from every prior round."""
+    `<properties>`/`<tags>`). Note `package2`: a package carries BOTH the
+    `EAID_` and `EAPK_` form of its own GUID, exactly as the sample does."""
     return (
-        f'      <element xmi:idref={attr(pkg_id)} xmi:type="uml:Package" name={attr(title)} scope="public">\n'
-        f'        <model package="MODEL-gungnir-uaf" ea_eleType="package"/>\n'
+        f'      <element xmi:idref={attr(eapk(pkg_key))} xmi:type="uml:Package" name={attr(title)} scope="public">\n'
+        f'        <model package2={attr(eaid(pkg_key))} package={attr(eapk(parent_key))} ea_eleType="package"/>\n'
         f'        <properties isSpecification="false" sType="Package" nType="0" scope="public"/>\n'
         f'        <packageproperties version="1.0"/>\n'
         f'        <paths/>\n'
-        f'        <times created="2026-09-04" modified="2026-09-04"/>\n'
-        f'        <flags iscontrolled="0" isprotected="0" usedtd="0" logxml="0"/>\n'
+        f'        <times created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00"/>\n'
+        f'        <flags iscontrolled="0" isprotected="0" batchsave="0" batchload="0" usedtd="0" logxml="0"/>\n'
         f'      </element>\n'
     )
 
@@ -298,9 +374,10 @@ def relationship_xml(rel_id: str, from_id: str, to_id: str, kind: str,
     """Returns (packagedElement XML, EA element-extension XML, EA connector-
     extension XML, UAF stereotype-application XML or "")."""
     name = f"{kind}: {from_id} -> {to_id}"
+    rid, from_eid, to_eid = eaid(rel_id), eaid(from_id), eaid(to_id)
     rel = (
-        f'        <packagedElement xmi:type={attr("uml:" + metaclass)} xmi:id={attr(rel_id)} '
-        f'name={attr(name)} visibility="public" supplier={attr(to_id)} client={attr(from_id)}/>\n'
+        f'        <packagedElement xmi:type={attr("uml:" + metaclass)} xmi:id={attr(rid)} '
+        f'name={attr(name)} visibility="public" supplier={attr(to_eid)} client={attr(from_eid)}/>\n'
     )
     tags = [f'          <tag name="uafRelationship" value={attr(kind)}/>\n']
     for k, v in extra.items():
@@ -311,54 +388,64 @@ def relationship_xml(rel_id: str, from_id: str, to_id: str, kind: str,
 
     stereo_attr = f' stereotype={attr(stereotype)}' if stereotype else ""
     elem_ext = (
-        f'      <element xmi:idref={attr(rel_id)} xmi:type={attr("uml:" + metaclass)}>\n'
+        f'      <element xmi:idref={attr(rid)} xmi:type={attr("uml:" + metaclass)}>\n'
         f'        <properties{stereo_attr}/>\n'
         f'        <tags>\n{tags_xml}        </tags>\n'
         f'      </element>\n'
     )
     connector_ext = (
-        f'      <connector xmi:idref={attr(rel_id)}>\n'
-        f'        <source xmi:idref={attr(from_id)}/>\n'
-        f'        <target xmi:idref={attr(to_id)}/>\n'
+        f'      <connector xmi:idref={attr(rid)}>\n'
+        f'        <source xmi:idref={attr(from_eid)}>\n'
+        f'          <role visibility="Public" targetScope="instance"/>\n'
+        f'          <type aggregation="none" containment="Unspecified"/>\n'
+        f'          <modifiers isOrdered="false" changeable="none" isNavigable="false"/>\n'
+        f'        </source>\n'
+        f'        <target xmi:idref={attr(to_eid)}>\n'
+        f'          <role visibility="Public" targetScope="instance"/>\n'
+        f'          <type aggregation="none" containment="Unspecified"/>\n'
+        f'          <modifiers isOrdered="false" changeable="none" isNavigable="true"/>\n'
+        f'        </target>\n'
         f'        <properties ea_type={attr(metaclass)} direction="Source -&gt; Destination"'
         f'{stereo_attr} name={attr(name)}/>\n'
+        f'        <modifiers isRoot="false" isLeaf="false"/>\n'
         f'        <tags>\n{tags_xml}        </tags>\n'
         f'      </connector>\n'
     )
-    uaf_stereo = f'    <UAF:{stereotype} base_{metaclass}={attr(rel_id)}/>\n' if stereotype else ""
+    uaf_stereo = f'    <UAF:{stereotype} base_{metaclass}={attr(rid)}/>\n' if stereotype else ""
     return rel, elem_ext, connector_ext, uaf_stereo
 
 
-def diagram_xml(pkg_code: str, pkg_id: str, title: str, domain: str | None,
-                 viewpoint: str | None, member_ids: list[str], seq: int) -> str:
-    """One diagram per element-holding view package: every locally-owned
-    element on a simple grid, plus the package itself as a boundary frame --
-    the shape confirmed in the real sample's own diagrams. Geometry is a
-    mechanical grid, not a considered layout."""
+def diagram_xml(pkg_key: str, title: str, domain: str | None,
+                 viewpoint: str | None, member_reg_ids: list[str], seq: int) -> str:
+    """One diagram per view package: every member on a simple grid, plus the
+    package itself as a boundary frame -- the shape confirmed in the real
+    sample's own diagrams. Members are referenced by their EAID_ id, whichever
+    package owns them (the sample places a foreign-owned element on a diagram
+    the same way). Geometry is a mechanical grid, not a considered layout."""
     cols, box_w, box_h, gap, margin = 5, 140, 76, 20, 20
+    pkg_id = eapk(pkg_key)
     els = []
-    for i, eid in enumerate(member_ids):
+    for i, reg_id in enumerate(member_reg_ids):
         row, col = divmod(i, cols)
         left = margin + col * (box_w + gap)
         top = margin + row * (box_h + gap)
-        duid = f"{(seq * 1000 + i) & 0xFFFFFFFF:08X}"
+        duid = ea_guid(f"{pkg_key}:{reg_id}")[:8]
         els.append(f'          <element geometry={attr(f"Left={left};Top={top};Right={left + box_w};Bottom={top + box_h};")} '
-                    f'subject={attr(eid)} seqno={attr(i + 1)} style={attr(f"HideIcon=0;DUID={duid};")}/>\n')
-    n_rows = -(-len(member_ids) // cols) if member_ids else 1  # ceil div
-    frame_right = margin + min(len(member_ids), cols) * (box_w + gap) + margin
+                    f'subject={attr(eaid(reg_id))} seqno={attr(i + 1)} style={attr(f"HideIcon=0;DUID={duid};")}/>\n')
+    n_rows = -(-len(member_reg_ids) // cols) if member_reg_ids else 1  # ceil div
+    frame_right = margin + min(len(member_reg_ids), cols) * (box_w + gap) + margin
     frame_bottom = margin + n_rows * (box_h + gap) + margin
-    frame_duid = f"{(seq * 1000 + 999) & 0xFFFFFFFF:08X}"
+    frame_duid = ea_guid(f"{pkg_key}:frame")[:8]
     els.append(f'          <element geometry={attr(f"Left=10;Top=10;Right={frame_right};Bottom={frame_bottom};")} '
-                f'subject={attr(pkg_id)} seqno={attr(len(member_ids) + 1)} style={attr(f"DUID={frame_duid};")}/>\n')
+                f'subject={attr(pkg_id)} seqno={attr(len(member_reg_ids) + 1)} style={attr(f"DUID={frame_duid};")}/>\n')
 
-    diag_id = f"DGM-{pkg_code}"
-    save_tag = f"{seq & 0xFFFFFFFF:08X}"
     return (
-        f'      <diagram xmi:id={attr(diag_id)}>\n'
+        f'      <diagram xmi:id={attr(eaid(f"diagram:{pkg_key}"))}>\n'
         f'        <model package={attr(pkg_id)} localID={attr(seq)} owner={attr(pkg_id)}/>\n'
         f'        <properties name={attr(title)} type="Logical"/>\n'
+        f'        <project author="gungnir" version="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00"/>\n'
         f'        <style1 value={attr(STYLE1)}/>\n'
-        f'        <style2 value={attr(style2_xml(domain, viewpoint, save_tag))}/>\n'
+        f'        <style2 value={attr(style2_xml(domain, viewpoint, ea_guid("savetag:" + pkg_key)[:8]))}/>\n'
         f'        <swimlanes value={attr(SWIMLANES)}/>\n'
         f'        <matrixitems value={attr(MATRIXITEMS)}/>\n'
         f'        <extendedProperties/>\n'
@@ -379,7 +466,7 @@ def build(elements: dict, rels: dict) -> str:
     # endpoints) -- not known until this whole pass is done. Relationships
     # themselves have no such dependency, so their own extension entries are
     # built immediately, into rel_ea_elements.
-    element_records: dict[str, tuple[str, str, str, dict]] = {}
+    element_records: dict[str, tuple[str, str, str, dict, str]] = {}
     links_by_id: dict[str, list[tuple[str, str, str, str]]] = {}
 
     for section, entries in elements.items():
@@ -393,7 +480,7 @@ def build(elements: dict, rels: dict) -> str:
             pkg_members[view_code].append(eid)
             pkg_element_xml[view_code].append(cls_xml)
             uaf_stereotypes.append(uaf_xml)
-            element_records[eid] = (stereotype, metaclass, entry.get("description", ""), entry)
+            element_records[eid] = (stereotype, metaclass, entry.get("description", ""), entry, view_code)
             links_by_id[eid] = []
 
     n = 0
@@ -417,7 +504,7 @@ def build(elements: dict, rels: dict) -> str:
                 connectors.append(conn_ext)
                 if uaf_xml:
                     uaf_stereotypes.append(uaf_xml)
-                link = (metaclass, rel_id, from_id, to_id)
+                link = (metaclass, eaid(rel_id), eaid(from_id), eaid(to_id))
                 links_by_id[from_id].append(link)
                 links_by_id[to_id].append(link)
                 # Confirmed in the real sample's own "Operational Traceability"
@@ -433,8 +520,8 @@ def build(elements: dict, rels: dict) -> str:
                     pkg_members[view_code].append(to_id)
 
     ea_elements = [
-        element_ext_xml(eid, stereotype, metaclass, desc, entry, links_by_id[eid])
-        for eid, (stereotype, metaclass, desc, entry) in element_records.items()
+        element_ext_xml(eid, stereotype, metaclass, desc, entry, view_code, links_by_id[eid])
+        for eid, (stereotype, metaclass, desc, entry, view_code) in element_records.items()
     ]
     ea_elements.extend(rel_ea_elements)
 
@@ -443,16 +530,29 @@ def build(elements: dict, rels: dict) -> str:
         members = pkg_element_xml[code]
         if not members:
             continue
-        pkg_id = f"PKG-{code}"
         full_title = f"{title} {code}" if code not in ("Rq", "Rq-Tr") else title
         packages.append(
-            f'    <packagedElement xmi:type="uml:Package" xmi:id={attr(pkg_id)} name={attr(full_title)}>\n'
+            f'      <packagedElement xmi:type="uml:Package" xmi:id={attr(eapk(code))} '
+            f'name={attr(full_title)} visibility="public">\n'
             + "".join(members)
-            + '    </packagedElement>\n'
+            + '      </packagedElement>\n'
         )
-        ea_elements.append(package_ext_xml(pkg_id, full_title))
+        ea_elements.append(package_ext_xml(code, full_title, ROOT_PKG_KEY))
         if pkg_members[code]:
-            diagrams.append(diagram_xml(code, pkg_id, full_title, domain, viewpoint, pkg_members[code], i + 1))
+            diagrams.append(diagram_xml(code, full_title, domain, viewpoint, pkg_members[code], i + 1))
+
+    # Root package inside uml:Model, matching the sample's nesting exactly:
+    # <uml:Model> (no xmi:id of its own) > one EAPK_ root package ("Model" in
+    # the sample) > the view packages. Rounds 1-6 put the view packages
+    # directly under uml:Model, one level shallower and with no root package at
+    # all -- and "Import Package from XMI" imports *a package*.
+    root_pkg = (
+        f'    <packagedElement xmi:type="uml:Package" xmi:id={attr(eapk(ROOT_PKG_KEY))} '
+        f'name="Gungnir UAF Model" visibility="public">\n'
+        + "".join(packages)
+        + '    </packagedElement>\n'
+    )
+    ea_elements.append(package_ext_xml(ROOT_PKG_KEY, "Gungnir UAF Model", ROOT_PKG_KEY))
 
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -461,8 +561,9 @@ def build(elements: dict, rels: dict) -> str:
         'xmlns:uml="http://schema.omg.org/spec/UML/2.1" '
         'xmlns:EAUML="http://www.sparxsystems.com/profiles/EAUML/1.0" '
         'xmlns:UAF="http://www.omg.org/spec/UAF/20160505/UAF">\n'
-        '  <uml:Model xmi:type="uml:Model" xmi:id="MODEL-gungnir-uaf" name="Gungnir UAF Model">\n'
-        + "".join(packages)
+        '  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="6.5" exporterID="1628"/>\n'
+        '  <uml:Model xmi:type="uml:Model" name="EA_Model" visibility="public">\n'
+        + root_pkg
         + '  </uml:Model>\n'
         + "".join(uaf_stereotypes)
         + '  <xmi:Extension extender="Enterprise Architect" extenderID="6.5">\n'
