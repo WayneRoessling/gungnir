@@ -1,6 +1,7 @@
 # DN-25 Cursor-on-Target exchange
 
-Closes GAP-090 and GAP-091. Status: first draft, 2026-09-06. **Design only; no code exists.**
+Closes GAP-090 and GAP-091. Status: first draft, 2026-09-06; **the design (§1 to §9) signed
+by the owner as the one to build, 2026-09-10. No code exists.**
 
 ## 1. The gaps and the thread steps they block
 
@@ -45,6 +46,16 @@ things that exist:
 | The inbound adapter | `gungnir-ingest` | DN-16 §2's argument, only stronger. A self-reported position is the least trustworthy input the system has, and the gateway that validates and quarantines a radar must validate this |
 | The outbound sink | `gungnir-remote` | `endpoint.rs` and `peer.rs` are where outbound connections, retries and refusals already live |
 | Which data may go where | `gungnir-model` and the existing gates | `ExchangeSet::may_send` and `Releasability::permits`, unchanged. This note adds no second answer to a question already answered |
+
+**Signed by the owner 2026-09-10: this table's four-way split, and the "no new crate"
+finding it rests on, is the right shape.** Checked before that signature against what each
+named type and function actually does today (`PeerOrigin`'s `assigned_quality`/`age_s`/
+`is_stale_beyond`, `ExchangeFormat::is_lossy`, `ExchangeSet::may_send`,
+`Releasability::permits`), against `external-standards.md` §5's pinned schema, §5.7's
+`friend` predicate and §1.5's copyleft rule, and against `dependency-edges.md` (see §4's
+note on what that check turned up). No code exists; this signature is on the design alone,
+the same two-step DN-28 and DN-29 went through -- a future `gungnir-model`/`gungnir-interop`/
+`gungnir-ingest`/`gungnir-remote` diff is signed on its own account, against this design.
 
 ## 3. Types
 
