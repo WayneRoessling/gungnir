@@ -79,7 +79,26 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_uaf import UAF, load_registry  # noqa: E402
-from export_xmi import ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO, SECTION_TITLE, STRUCTURAL_FIELDS  # noqa: E402
+from export_xmi import ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO, STRUCTURAL_FIELDS  # noqa: E402
+
+# export_xmi.py groups elements into named UAF view packages (VIEW_PACKAGES,
+# matching a real EA project's own package/diagram structure); this script
+# builds EA's live object model directly instead of emitting XMI to import, so
+# it has no equivalent need for that grouping -- it keeps its own simpler
+# one-package-per-registry-section layout, unaffected by that reorganization.
+SECTION_TITLE = {
+    "capabilities": "Capabilities",
+    "operational_performers": "Operational Performers",
+    "operational_activities": "Operational Activities",
+    "services": "Services",
+    "resources": "Resources",
+    "personnel_types": "Personnel Types",
+    "standards": "Standards",
+    "projects": "Projects",
+    "information_elements": "Information Elements",
+    "actual_resources": "Actual Resources",
+    "requirements": "Requirements",
+}
 
 
 def ascii_escape(s: object) -> str:
@@ -112,7 +131,7 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
     for section, entries in elements.items():
         if not isinstance(entries, list) or section not in ELEMENT_KIND_INFO:
             continue
-        stereotype, _metaclass = ELEMENT_KIND_INFO[section]
+        stereotype, _metaclass, _view_code = ELEMENT_KIND_INFO[section]
         title = SECTION_TITLE[section]
         for entry in entries:
             eid = entry["id"]
@@ -131,7 +150,7 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
     for kind, entries in rels.items():
         if kind not in RELATIONSHIP_KIND_INFO:
             continue
-        stereotype, _metaclass = RELATIONSHIP_KIND_INFO[kind]
+        stereotype, _metaclass, _view_code = RELATIONSHIP_KIND_INFO[kind]
         for entry in entries:
             from_id = entry.get("from")
             to = entry.get("to")
