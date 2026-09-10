@@ -6,17 +6,19 @@ Option Explicit
 ' whether Connectors.AddNew really persists a visible connector, whether a
 ' stereotype name binds to UAF iconography, or anything else about EA's actual
 ' behaviour. What it does confirm, cheaply and repeatably, is that the generated
-' script is syntactically valid VBScript and that its control flow (loops, the
-' element-id Dictionary, every AddNew/Update/Refresh call) runs to completion
-' without a VBScript compilation or runtime error -- exactly the class of bug
-' that would otherwise only surface after a slow paste-into-EA-and-run cycle.
+' script -- including its CSV parsing -- is syntactically valid VBScript and
+' that its control flow runs to completion without a VBScript compilation or
+' runtime error, exactly the class of bug that would otherwise only surface
+' after a slow paste-into-EA-and-run cycle.
 '
 ' Usage:
-'   cscript.exe //Nologo test_ea_script_mock.vbs [path-to-generated-vbs]
-' Defaults to ..\exports\gungnir-uaf-import.vbs relative to this file.
+'   cscript.exe //Nologo test_ea_script_mock.vbs [path-to-generated-vbs] [data-dir]
+' Both default to ..\exports relative to this file (where export_ea_script.py
+' writes the driver and its four CSV files together).
 
-Dim nextId
+Dim nextId, allObjectsByID
 nextId = 1
+Set allObjectsByID = CreateObject("Scripting.Dictionary")
 
 Class MockObj
   Public Name
@@ -24,10 +26,13 @@ Class MockObj
   Public Notes
   Public SupplierID
   Public ElementID
+  Public ConnectorID
   Private childrenByKind
 
   Public Sub Class_Initialize()
     ElementID = nextId
+    ConnectorID = nextId
+    allObjectsByID.Add nextId, Me
     nextId = nextId + 1
     Set childrenByKind = CreateObject("Scripting.Dictionary")
   End Sub
@@ -103,10 +108,14 @@ Class MockRepository
   End Property
 
   Public Function GetElementByID(id)
-    Dim o
-    Set o = New MockObj
-    o.ElementID = id
-    Set GetElementByID = o
+    ' Real lookup, not a fabricated stand-in: proves a value set on an element
+    ' (e.g. Notes) earlier in the script is still there when read back later,
+    ' the way the driver's element-tags and relationships passes both do.
+    Set GetElementByID = allObjectsByID.Item(id)
+  End Function
+
+  Public Function GetConnectorByID(id)
+    Set GetConnectorByID = allObjectsByID.Item(id)
   End Function
 End Class
 
@@ -120,26 +129,39 @@ Dim Repository, Session
 Set Repository = New MockRepository
 Set Session = New MockSession
 
-Dim targetPath, fso
+Dim scriptDir, targetPath, dataDir, fso
 Set fso = CreateObject("Scripting.FileSystemObject")
+scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 If WScript.Arguments.Count >= 1 Then
   targetPath = WScript.Arguments(0)
 Else
-  targetPath = fso.GetParentFolderName(WScript.ScriptFullName) & "\..\exports\gungnir-uaf-import.vbs"
+  targetPath = scriptDir & "\..\exports\gungnir-uaf-import.vbs"
+End If
+If WScript.Arguments.Count >= 2 Then
+  dataDir = WScript.Arguments(1)
+Else
+  dataDir = scriptDir & "\..\exports"
 End If
 
-Dim f, rawLines, filteredLines, i, keep, scriptText
+Dim f, rawLines, filteredLines, i, keep, line, scriptText
 Set f = fso.OpenTextFile(targetPath, 1, False, 0)  ' 0 = ASCII; the generator writes strict ASCII
 rawLines = Split(f.ReadAll(), vbLf)
 f.Close
 
-' Strip the trailing MsgBox line -- it would pop a blocking GUI dialog under
-' cscript.exe. Everything before it still executes.
+' Strip the trailing MsgBox line (would pop a blocking GUI dialog under
+' cscript.exe) and point DATA_DIR at the real exports folder instead of the
+' generator's edit-this-yourself placeholder.
 ReDim filteredLines(UBound(rawLines))
 keep = 0
 For i = 0 To UBound(rawLines)
-  If Left(Trim(rawLines(i)), 6) <> "MsgBox" Then
-    filteredLines(keep) = rawLines(i)
+  line = rawLines(i)
+  If Left(Trim(line), 6) = "MsgBox" Then
+    ' drop it
+  ElseIf Left(Trim(line), 16) = "Const DATA_DIR =" Then
+    filteredLines(keep) = "Const DATA_DIR = """ & dataDir & """"
+    keep = keep + 1
+  Else
+    filteredLines(keep) = line
     keep = keep + 1
   End If
 Next
@@ -148,4 +170,30 @@ scriptText = Join(filteredLines, vbLf)
 
 ExecuteGlobal scriptText
 
-WScript.Echo "test_ea_script_mock: " & targetPath & " executed to completion without error"
+WScript.Echo "test_ea_script_mock: " & targetPath & " (data: " & dataDir & ") executed to completion without error"
+
+' End-to-end check of the one thing that already broke once: a real non-ASCII
+' character surviving CSV write -> CSV parse -> \uXXXX decode -> el.Notes,
+' checked by length delta and AscW on the actual string (not by eyeballing
+' console output, which silently drops characters cscript's codepage can't
+' render -- that is exactly what produced a false "it's broken" reading during
+' development here).
+Dim checkId, checkEl, notesLen, foundNonAscii, k
+checkId = "RS-analytics"  ' known to carry the section sign in its description
+If elementIds.Exists(checkId) Then
+  Set checkEl = Repository.GetElementByID(elementIds.Item(checkId))
+  foundNonAscii = False
+  For k = 1 To Len(checkEl.Notes)
+    If AscW(Mid(checkEl.Notes, k, 1)) = 167 Then
+      foundNonAscii = True
+      Exit For
+    End If
+  Next
+  If foundNonAscii Then
+    WScript.Echo "UNICODE CHECK: PASS -- " & checkId & "'s Notes contains a real section-sign character (U+00A7), not a § escape or a stray backslash"
+  Else
+    WScript.Echo "UNICODE CHECK: FAIL -- " & checkId & "'s Notes does not contain U+00A7. Notes length=" & Len(checkEl.Notes)
+  End If
+Else
+  WScript.Echo "UNICODE CHECK: SKIPPED -- " & checkId & " not found (registry data may have changed)"
+End If

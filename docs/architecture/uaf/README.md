@@ -96,16 +96,23 @@ path that actually carries relationships across.
 python docs/architecture/uaf/tools/export_ea_script.py
 ```
 
-writes `exports/gungnir-uaf-import.vbs`: the same registry built directly in EA
-through its own Scripting/Automation interface (`Repository`,
-`Package.Elements.AddNew`, `Element.Connectors.AddNew`) rather than through
-XMI import, since that carries relationships (as EA Connectors) where the XMI
-path did not. Open your EA project, `Tools > Scripting`, create a new VBScript,
-paste the file in, run it (Ctrl+F9); Script Output logs progress. Not
-idempotent -- delete the "Gungnir UAF Model" package before re-running after a
-registry change. `test_ea_script_mock.vbs` executes a freshly generated script
-against a hand-written mock of the EA object model via `cscript.exe`, outside
-of EA (`cscript.exe //Nologo docs/architecture/uaf/tools/test_ea_script_mock.vbs`);
+writes five files to `exports/`: `gungnir-uaf-import.vbs`, a short (~200 line)
+driver, plus `gungnir-uaf-elements.csv`, `-element-tags.csv`, `-relationships.csv`
+and `-relationship-tags.csv`, the bulk data it reads at runtime. The driver
+builds the registry directly in EA through its own Scripting/Automation
+interface (`Repository`, `Package.Elements.AddNew`, `Element.Connectors.AddNew`)
+rather than through XMI import, since that carries relationships (as EA
+Connectors) where the XMI path did not; the data lives in CSV rather than being
+inlined as ~11,000 lines of script statements because pasting that much text
+into EA's script editor choked (reported: paste advancing one line at a time).
+All five files must sit in the same folder. Open your EA project,
+`Tools > Scripting`, create a new VBScript, paste `gungnir-uaf-import.vbs` in,
+edit the `DATA_DIR` constant near the top to that folder, run it (Ctrl+F9);
+Script Output logs progress. Not idempotent -- delete the "Gungnir UAF Model"
+package before re-running after a registry change. `test_ea_script_mock.vbs`
+executes a freshly generated driver against a hand-written mock of the EA
+object model via `cscript.exe`, outside of EA
+(`cscript.exe //Nologo docs/architecture/uaf/tools/test_ea_script_mock.vbs`);
 that confirms the generated VBScript is well-formed and its control flow
 completes, not that EA's real object model does what the mock assumes -- see
 both scripts' docstrings for exactly what is and is not verified.
