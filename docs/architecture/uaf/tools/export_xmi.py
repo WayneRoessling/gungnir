@@ -33,18 +33,13 @@ were coming through. This version:
     classes together). `uses` (the plain Cargo.toml dependency, no UAF
     stereotype) is instead co-located directly in the Resources package
     alongside its own source elements.
-  - Adds one diagram per ELEMENT-holding view package (not the Traceability
-    packages -- see below), built from the real sample's own diagram XML:
-    `<diagram>` with the confirmed `style1`/`style2`/`swimlanes`/
-    `matrixitems` boilerplate (reused verbatim; these read as generic EA UI
-    preferences, not content-specific data) and an `<elements>` list placing
-    every locally-owned element plus the package-boundary frame on a simple
-    auto-generated grid -- not a considered layout, and NOT extended to the
-    Traceability packages, since showing elements from other packages plus
-    connector lines needs cross-package `<elements>` entries and the
-    connector-line geometry mini-language (`SX=...;EDGE=...`), both far less
-    certain even with the sample in hand than everything above. Flagged
-    explicitly, not silently skipped.
+  - Adds one diagram per view package, including the Traceability packages
+    (round 5 extended this -- see below), built from the real sample's own
+    diagram XML: `<diagram>` with the confirmed `style1`/`style2`/
+    `swimlanes`/`matrixitems` boilerplate (reused verbatim; these read as
+    generic EA UI preferences, not content-specific data) and an `<elements>`
+    list placing every member plus the package-boundary frame on a simple
+    auto-generated grid -- not a considered layout.
 
 Fifth version. Round 4 (the view-package reorganization above) still left
 Traceability packages empty, no diagrams, and no relationships showing on
@@ -65,13 +60,28 @@ package directly against this script's output and found two concrete gaps:
     sample for every package and omitted entirely from every round so far.
     Added via `package_ext_xml()`.
 
-Neither is independently confirmed to be *the* fix for diagrams not
+Neither was independently confirmed to be *the* fix for diagrams not
 appearing -- that structure (the `<diagram>` block itself) already matched
-the sample closely in round 4, and there's no equivalent "diagram is missing
-some backlink" evidence the way there was for relationships. If diagrams
-still don't appear after this round, the next diagnostic step is the actual
-EA import log (the "Write Log" checkbox in the import dialog) rather than a
-sixth guess.
+the sample closely in round 4.
+
+Sixth version. Wayne pointed at the sample's "Operational Processes" diagram
+specifically and its `<elements>` list: it places `OperationalPerformer1` on
+that diagram even though the element itself is owned by a different package
+(`Operational Structure Op-Sr`), purely so the IsCapableToPerform connector to
+it renders -- and that connector has NO entry of its own in the list. The
+sample's own "Operational Traceability" diagram confirms the pattern the
+other direction: it lists the *endpoint* elements of both relationships it
+concerns (`OperationalPerformer1`, `Capability1`, `OperationalActivity1`), not
+the relationships themselves. Together these settle something round 4 had
+flagged as its biggest uncertainty: a connector line renders once both its
+endpoints are present on a diagram -- referenced purely by `subject=<xmi:id>`,
+regardless of which package owns them -- with no separate diagram-element
+entry for the connector, and the `SX=...;EDGE=...` geometry mini-language
+some connector diagram-entries do carry is for custom manual line routing,
+optional rather than required. So every view package now gets a diagram,
+Traceability packages included: the deduplicated union of every relationship
+endpoint it holds, accumulated during the same pass that builds `links_by_id`
+(see `build()`).
 
 What is confirmed against the real sample vs. still a best-effort mapping:
 see VIEW_PACKAGES, ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO below -- each
@@ -137,9 +147,6 @@ VIEW_PACKAGES = {
     "Rs-Tr": ("Resource Traceability", "Resources", "Traceability"),       # domain/viewpoint confirmed (DMM spec); not in the EA sample
     "Rq-Tr": ("Requirements Traceability", None, None),                    # see Rq above
 }
-# View packages that hold relationships rather than elements -- no diagram is
-# attempted for these (see module docstring for why).
-TRACEABILITY_PACKAGES = {"Op-Tr", "Sv-Tr", "Rs-Tr", "Rq-Tr"}
 
 # Registry section -> (UAF stereotype, UML base metaclass, view package code).
 ELEMENT_KIND_INFO = {
@@ -413,6 +420,17 @@ def build(elements: dict, rels: dict) -> str:
                 link = (metaclass, rel_id, from_id, to_id)
                 links_by_id[from_id].append(link)
                 links_by_id[to_id].append(link)
+                # Confirmed in the real sample's own "Operational Traceability"
+                # diagram: a connector line renders once both its endpoints are
+                # placed on a diagram -- the connector itself needs no entry of
+                # its own there (the EDGE/SX/SY geometry mini-language some
+                # diagram entries carry is for custom manual routing, optional).
+                # So a Traceability package's diagram is just the deduplicated
+                # union of every relationship's two endpoints it holds.
+                if from_id not in pkg_members[view_code]:
+                    pkg_members[view_code].append(from_id)
+                if to_id not in pkg_members[view_code]:
+                    pkg_members[view_code].append(to_id)
 
     ea_elements = [
         element_ext_xml(eid, stereotype, metaclass, desc, entry, links_by_id[eid])
@@ -433,7 +451,7 @@ def build(elements: dict, rels: dict) -> str:
             + '    </packagedElement>\n'
         )
         ea_elements.append(package_ext_xml(pkg_id, full_title))
-        if code not in TRACEABILITY_PACKAGES and pkg_members[code]:
+        if pkg_members[code]:
             diagrams.append(diagram_xml(code, pkg_id, full_title, domain, viewpoint, pkg_members[code], i + 1))
 
     return (
