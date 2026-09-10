@@ -75,9 +75,84 @@ bash docs/architecture/uaf/render.sh
 
 or `render.ps1` renders every `.puml` and `.mmd` to SVG under `rendered/`
 (PlantUML via `plantuml` or the Docker image; Mermaid via `mmdc` or `npx`).
-Rendering was not exercised on 2026-09-04 (no renderer installed on the drafting
-host); the sources are valid PlantUML and Mermaid syntax by inspection. Mermaid
-sources also render inline on GitLab and GitHub when pasted into a Markdown fence.
+Exercised end-to-end on 2026-09-10 via the `plantuml/plantuml` Docker image (no
+local Java/Graphviz install needed) and `npx @mermaid-js/mermaid-cli`; all 53
+sources render cleanly. Mermaid sources also render inline on GitLab and GitHub
+when pasted into a Markdown fence.
+
+```bash
+python docs/architecture/uaf/tools/export_xmi.py
+```
+
+writes `exports/gungnir-uaf.xmi`: the same registry as XMI 2.1/UML 2.1, for
+import into Sparx Enterprise Architect's UAF MDG Technology. One-way (registry
+to EA, never the reverse) and not part of the CI drift check -- run it after
+`build_uaf.py` whenever you want EA caught up with the registry.
+
+Four rounds so far. The first two guessed at EA's XMI dialect and only got
+elements across, not relationships. The third was built against four files
+Wayne exported from a real EA project (its own default UAF model template, in
+XMI 1.1, XMI 2.1, EA native XML, and .xea): UAF stereotypes bound correctly
+for the first time, via a dedicated `<UAF:StereotypeName base_X="id"/>`
+element in EA's own `UAF` XMI namespace that both prior rounds were missing
+entirely, and different UAF stereotypes turned out to extend different UML
+metaclasses (`OperationalActivity` is a `uml:Activity`, not a `uml:Class`; the
+`ActualResource`-family is `uml:InstanceSpecification`) -- but relationships
+and view diagrams were still missing. The fourth round is a structural fix
+Wayne's own read of the same sample files supplied: EA organizes a UAF model
+as named VIEW packages (`VIEW_PACKAGES` in the script -- "Operational
+Structure Op-Sr", "Strategic Taxonomy St-Tx", ...), each with its own diagram,
+not by our registry's own flat element-kind taxonomy, and it places each
+relationship's `Abstraction` in a dedicated Traceability view package
+alongside its own endpoints (following the sample's own `Op-Tr` package,
+confirmed) rather than one disconnected `Relationships` package -- which is
+very likely why relationships weren't coming through at all. Diagrams are a
+mechanical grid layout per element-holding package, reusing the sample's own
+`style1`/`style2` boilerplate verbatim; the Traceability packages don't get
+one (showing elements from other packages plus connector lines needs more of
+EA's diagram format than is confirmed -- see the script's docstring).
+
+A second pass at the OMG UAF 1.1 specification PDFs (the UAFP profile and the
+Domain Metamodel) firmed up several of the "not in the sample" guesses: every
+domain/viewpoint pairing this script asserts (`Resources`, `Services`,
+`Personnel::Structure`, `Projects::Roadmap`, `Standards::Taxonomy`, ...) is
+checked against the DMM's own package index and is a real, valid UAF
+domain/viewpoint -- including catching one that isn't: "Actual Resources" only
+has `Taxonomy` and `Constraints` viewpoints in the spec, no `Connectivity`, so
+`Ar-Cn` (kept as the view code for consistency with this repo's existing
+`actual-resources/Ar-Cn.puml`) gets a plain diagram with no `MDGView` tag
+rather than asserting a pairing the spec doesn't support. The UAFP profile PDF
+was less tractable for confirming stereotype-to-metaclass mappings -- its
+stereotype definitions are UML profile diagrams, and PDF text extraction loses
+their visual structure, so a bare-text search kept conflating unrelated
+mentions. See the script's docstring and `VIEW_PACKAGES`/`ELEMENT_KIND_INFO`/
+`RELATIONSHIP_KIND_INFO` for exactly which of our 11 element kinds and 9
+relationship kinds are confirmed versus still a best-effort mapping.
+
+```bash
+python docs/architecture/uaf/tools/export_ea_script.py
+```
+
+writes five files to `exports/`: `gungnir-uaf-import.vbs`, a short (~200 line)
+driver, plus `gungnir-uaf-elements.csv`, `-element-tags.csv`, `-relationships.csv`
+and `-relationship-tags.csv`, the bulk data it reads at runtime. A fallback
+path via EA's own Scripting/Automation interface (`Repository`,
+`Package.Elements.AddNew`, `Element.Connectors.AddNew`) rather than XMI
+import, from when the first two XMI rounds weren't getting relationships
+across; the data lives in CSV rather than being inlined as ~11,000 lines of
+script statements because pasting that much text into EA's script editor
+choked (reported: paste advancing one line at a time). All five files must
+sit in the same folder. Open your EA project,
+`Tools > Scripting`, create a new VBScript, paste `gungnir-uaf-import.vbs` in,
+edit the `DATA_DIR` constant near the top to that folder, run it (Ctrl+F9);
+Script Output logs progress. Not idempotent -- delete the "Gungnir UAF Model"
+package before re-running after a registry change. `test_ea_script_mock.vbs`
+executes a freshly generated driver against a hand-written mock of the EA
+object model via `cscript.exe`, outside of EA
+(`cscript.exe //Nologo docs/architecture/uaf/tools/test_ea_script_mock.vbs`);
+that confirms the generated VBScript is well-formed and its control flow
+completes, not that EA's real object model does what the mock assumes -- see
+both scripts' docstrings for exactly what is and is not verified.
 
 ## Conventions
 

@@ -1,0 +1,599 @@
+#!/usr/bin/env python3
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
+"""Export the UAF registry (model/elements.yaml, model/relationships.yaml) as an
+XMI 2.1 / UML 2.1 file for import into Sparx Enterprise Architect's UAF MDG
+Technology (plan 03 follow-up: a one-way, EA-facing bridge off the same registry
+`build_uaf.py` already validates -- NOT a second source of truth).
+
+Fourth version. Round 3 (built against four files Wayne exported from a real EA
+project, see below) got UAFP stereotypes binding correctly for the first time,
+but relationships and view diagrams were still missing. Wayne's own read of the
+same sample files supplied the fix: EA organizes a UAF model as VIEW packages
+(e.g. "Operational Processes Op-Pr" holding its own diagram plus its
+OperationalPerformer/OperationalActivity elements) -- round 3 grouped elements
+by registry section instead ("Operational Performers", "Operational
+Activities", ...), which is a reasonable taxonomy but not the shape EA expects,
+and it put every relationship in one flat "Relationships" package disconnected
+from either endpoint's real package, which is very likely why none of them
+were coming through. This version:
+
+  - Groups elements into named UAF view packages (VIEW_PACKAGES below) instead
+    of raw registry sections -- "Operational Structure Op-Sr",
+    "Strategic Taxonomy St-Tx", etc., matching the real sample's naming and
+    package/diagram/MDGView structure exactly where the sample covers it.
+  - Places each relationship's Abstraction packagedElement in a dedicated
+    Traceability view package (Op-Tr, confirmed by the sample; others
+    extrapolated -- see RELATIONSHIP_KIND_INFO) rather than a flat
+    disconnected package, following the same "one relationship kind, one
+    source domain, one traceability package" rule the sample's own Op-Tr
+    package demonstrates (it held both the Abstraction and its two endpoint
+    classes together). `uses` (the plain Cargo.toml dependency, no UAF
+    stereotype) is instead co-located directly in the Resources package
+    alongside its own source elements.
+  - Adds one diagram per view package, including the Traceability packages
+    (round 5 extended this -- see below), built from the real sample's own
+    diagram XML: `<diagram>` with the confirmed `style1`/`style2`/
+    `swimlanes`/`matrixitems` boilerplate (reused verbatim; these read as
+    generic EA UI preferences, not content-specific data) and an `<elements>`
+    list placing every member plus the package-boundary frame on a simple
+    auto-generated grid -- not a considered layout.
+
+Fifth version. Round 4 (the view-package reorganization above) still left
+Traceability packages empty, no diagrams, and no relationships showing on
+elements. Wayne compared the sample's own "Operational Processes Op-Pr"
+package directly against this script's output and found two concrete gaps:
+
+  - Every element that participates in a relationship has a `<links>` entry
+    in its own EA extension `<element>` block, one per relationship touching
+    it (confirmed on both endpoints of a real Association in the sample) --
+    this script built each element's extension entry independently of
+    relationships and never added one. Fixed: `element_ext_xml()` now takes
+    the accumulated links for that element, which means an element's own EA
+    extension entry has to be built AFTER every relationship is processed,
+    not alongside the element itself -- see `build()`'s two-pass structure.
+  - A package is ALSO its own EA extension `<element>` entry (a different
+    shape from a real element's: `<packageproperties>`/`<paths>`/`<times>`/
+    `<flags>` instead of `<properties>`/`<tags>`), confirmed present in the
+    sample for every package and omitted entirely from every round so far.
+    Added via `package_ext_xml()`.
+
+Neither was independently confirmed to be *the* fix for diagrams not
+appearing -- that structure (the `<diagram>` block itself) already matched
+the sample closely in round 4.
+
+Sixth version. Wayne pointed at the sample's "Operational Processes" diagram
+specifically and its `<elements>` list: it places `OperationalPerformer1` on
+that diagram even though the element itself is owned by a different package
+(`Operational Structure Op-Sr`), purely so the IsCapableToPerform connector to
+it renders -- and that connector has NO entry of its own in the list. The
+sample's own "Operational Traceability" diagram confirms the pattern the
+other direction: it lists the *endpoint* elements of both relationships it
+concerns (`OperationalPerformer1`, `Capability1`, `OperationalActivity1`), not
+the relationships themselves. Together these settle something round 4 had
+flagged as its biggest uncertainty: a connector line renders once both its
+endpoints are present on a diagram -- referenced purely by `subject=<xmi:id>`,
+regardless of which package owns them -- with no separate diagram-element
+entry for the connector, and the `SX=...;EDGE=...` geometry mini-language
+some connector diagram-entries do carry is for custom manual line routing,
+optional rather than required. So every view package now gets a diagram,
+Traceability packages included: the deduplicated union of every relationship
+endpoint it holds, accumulated during the same pass that builds `links_by_id`
+(see `build()`).
+
+Seventh version. Round 6 still produced no package diagrams and no
+relationships -- but with one new, sharply diagnostic detail: each
+OperationalActivity had acquired its own Activity diagram. Those are EA
+auto-creating a behavior diagram per `uml:Activity` element, a side effect of
+the metaclass rather than anything this script emits, which means EA was
+importing the model tree happily while ignoring the `<diagrams>` and
+`<connectors>` extension blocks entirely. Two structural differences from the
+sample explain that, and both are now fixed:
+
+  - ID convention. Every id in a real EA export is `EAPK_`+GUID for a package
+    and `EAID_`+GUID for everything else (433 EAID_ / 18 EAPK_ in the sample,
+    no exceptions), the GUID being EA's own `{...}` with hyphens turned into
+    underscores. Rounds 1-6 used the registry id directly (`CAP-1.1`, `REL-1`,
+    `PKG-Op-Tr`, `DGM-Op-Sr`). A standard XMI parser resolves any unique
+    string as an idref -- which is exactly why elements and their `<UAF:...>`
+    stereotype applications worked all along -- but EA's own extension parser
+    reads the `<connectors>`/`<diagrams>` blocks, and ids it cannot map back
+    to a GUID are the most plausible reason that half never landed. Ids are
+    now deterministic MD5-derived GUIDs (`ea_guid()`), so output stays
+    byte-identical run to run; the registry id survives as the element's
+    `alias` and its `uafId` tagged value.
+  - Root nesting. The sample is `<uml:Model>` (carrying no xmi:id at all) >
+    one `EAPK_` root package > the view packages. Rounds 1-6 hung the view
+    packages directly off `uml:Model` with no root package -- and "Import
+    Package from XMI" imports *a package*.
+
+Note for anyone reading the output: inside an EA `<links>` block the child
+elements carry `xmi:id`, not `xmi:idref`, even though they are references to
+a relationship declared elsewhere (verified against the sample, which does
+the same). So a relationship id legitimately appears three times -- once as
+its `packagedElement` declaration and once in each endpoint's `<links>`.
+
+What is confirmed against the real sample vs. still a best-effort mapping:
+see VIEW_PACKAGES, ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO below -- each
+confirmed entry says so in a trailing comment. Briefly: Capability,
+OperationalPerformer, OperationalActivity, InformationElement, and Exhibits
+(plus the package/diagram/MDGView shape for St-Tx/Op-Sr/Op-Pr/Op-Tr/If) are
+confirmed; Services, Resources, Personnel, Standards, Projects, Actual
+Resources, Requirements, and 8 of 9 relationship kinds are still the
+OMG-profile-literature-informed guesses the first version made (a pass at the
+OMG UAFP 1.1 specification PDF to firm these up did not yield clean answers --
+its stereotype-definition pages are UML profile diagrams, and PDF text
+extraction loses their visual structure, so a bare-text search kept
+conflating unrelated mentions rather than resolving them).
+
+Why XMI here and not SysML v2: EA's UAF support is built on the OMG UAF Profile
+(UAFP), a UML profile exchanged via XMI; SysML v2 uses an unrelated
+textual/API representation with no UAF binding.
+
+Usage (from the workspace root):
+
+    python docs/architecture/uaf/tools/export_xmi.py
+
+Writes `docs/architecture/uaf/exports/gungnir-uaf.xmi`. Not part of `build_uaf.py`
+or the CI drift check -- this is a manually-run, one-way export, same footing as
+`render.sh`/`render.ps1`.
+"""
+from __future__ import annotations
+
+import hashlib
+import sys
+from pathlib import Path
+from xml.sax.saxutils import quoteattr
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_uaf import UAF, load_registry  # noqa: E402
+
+# View package code -> (display title, MDG domain, MDG viewpoint). Domain/
+# viewpoint feed the diagram's `MDGView=UAF {domain}::{viewpoint}` tag; a
+# package still gets a plain (Logical-type, no MDGView) diagram when either is
+# None -- there's just no UAF-specific view type to assert because none is
+# confirmed or confidently guessable. The domain/viewpoint pair itself is checked
+# against the OMG UAF 1.1 Domain Metamodel spec's own package index (every
+# "Domain MetaModel::<Domain>::<Viewpoint>" heading in the document) for every
+# row below -- all real, valid pairings, including the ones "not in sample"
+# (the real EA export). What that index cannot confirm is the two-letter VIEW
+# CODE (Rs-Cn, Sv-Cn, ...) or exact package title wording, which stay this
+# repo's own convention (matching its existing Rs-Cn/Sv-Cn/etc. hand-authored
+# views elsewhere under docs/architecture/uaf/), not something drawn from the
+# spec.
+VIEW_PACKAGES = {
+    "St-Tx": ("Strategic Taxonomy", "Strategic", "Taxonomy"),              # confirmed (real EA sample)
+    "Op-Sr": ("Operational Structure", "Operational", "Structure"),        # confirmed (real EA sample)
+    "Op-Pr": ("Operational Processes", "Operational", "Processes"),        # confirmed (real EA sample)
+    "If-Sr": ("Information Structure", "Information", "Information Model"),  # confirmed (real EA sample)
+    "Op-Tr": ("Operational Traceability", "Operational", "Traceability"),  # confirmed (real EA sample)
+    "Rs-Cn": ("Resource Connectivity", "Resources", "Connectivity"),       # domain/viewpoint confirmed (DMM spec); not in the EA sample
+    "Sv-Cn": ("Service Connectivity", "Services", "Connectivity"),         # domain/viewpoint confirmed (DMM spec); not in the EA sample
+    "Pr-Sr": ("Personnel Structure", "Personnel", "Structure"),            # domain/viewpoint confirmed (DMM spec); not in the EA sample
+    "Sd-Tx": ("Standards Taxonomy", "Standards", "Taxonomy"),              # domain/viewpoint confirmed (DMM spec); not in the EA sample
+    "Pj-Rm": ("Project Roadmap", "Projects", "Roadmap"),                   # domain/viewpoint confirmed (DMM spec); not in the EA sample
+    "Ar-Cn": ("Actual Resources Connectivity", None, None),                # code kept for consistency with this repo's existing actual-resources/Ar-Cn.puml; the DMM spec's own domain index lists ONLY Taxonomy and Constraints under "Actual Resources" -- no Connectivity viewpoint exists there at all, so no MDGView is asserted rather than guessing one the spec doesn't support
+    "Rq": ("Requirements", None, None),                                    # confirmed ABSENT: the DMM spec's own domain index has no "Requirements" domain at all, so no MDGView is guessable and none is attempted
+    "Sv-Tr": ("Service Traceability", "Services", "Traceability"),         # domain/viewpoint confirmed (DMM spec); not in the EA sample
+    "Rs-Tr": ("Resource Traceability", "Resources", "Traceability"),       # domain/viewpoint confirmed (DMM spec); not in the EA sample
+    "Rq-Tr": ("Requirements Traceability", None, None),                    # see Rq above
+}
+
+# Registry section -> (UAF stereotype, UML base metaclass, view package code).
+ELEMENT_KIND_INFO = {
+    "capabilities": ("Capability", "Class", "St-Tx"),                    # confirmed
+    "operational_performers": ("OperationalPerformer", "Class", "Op-Sr"),  # confirmed
+    "operational_activities": ("OperationalActivity", "Activity", "Op-Pr"),  # confirmed
+    "services": ("ServiceInterface", "Class", "Sv-Cn"),
+    "resources": ("ResourceArtifact", "Class", "Rs-Cn"),
+    "personnel_types": ("PersonType", "Class", "Pr-Sr"),
+    "standards": ("Standard", "Class", "Sd-Tx"),
+    "projects": ("Project", "Class", "Pj-Rm"),
+    "information_elements": ("InformationElement", "Class", "If-Sr"),    # confirmed (stereotype name; was "Information" -- wrong -- in round 1)
+    "actual_resources": ("ActualResource", "InstanceSpecification", "Ar-Cn"),  # metaclass confirmed by the "Actual X" family pattern
+    "requirements": ("Requirement", "Class", "Rq"),
+}
+
+# Registry relationship kind -> (UAF stereotype or None, UML base metaclass,
+# view package code it's placed in). Abstraction is confirmed for `exhibits`
+# and is the same base two other confirmed UAF relationship stereotypes
+# (IsCapableToPerform, MapsToCapability) use; the traceability package per
+# kind follows the sample's own "one traceability package per source domain"
+# pattern (Op-Tr held both the Abstraction and its two endpoint classes).
+# `uses` is deliberately not a UAF relationship: Cargo.toml's literal crate
+# dependency graph, so it stays a plain uml:Dependency with no UAF stereotype,
+# placed directly in Resources alongside its own source elements.
+RELATIONSHIP_KIND_INFO = {
+    "exhibits": ("Exhibits", "Abstraction", "Op-Tr"),        # confirmed
+    "achieves": ("Achieves", "Abstraction", "Op-Tr"),
+    "performs": ("Performs", "Abstraction", "Op-Tr"),
+    "realizes": ("Realizes", "Abstraction", "Sv-Tr"),
+    "implements": ("Implements", "Abstraction", "Rs-Tr"),
+    "conforms_to": ("ConformsTo", "Abstraction", "Rs-Tr"),
+    "uses": (None, "Dependency", "Rs-Cn"),
+    "satisfies": ("Satisfies", "Abstraction", "Rq-Tr"),
+    "carried_by": ("CarriedBy", "Abstraction", "Rq-Tr"),
+}
+
+def ea_guid(key: str) -> str:
+    """A GUID-shaped id body (8_4_4_4_12 hex, underscore-separated) derived
+    deterministically from a registry id, so re-running produces byte-identical
+    output and re-importing diffs cleanly against what is already in EA.
+
+    Why not just use the registry id (`CAP-1.1`, `REL-1`) as the xmi:id, which
+    is what rounds 1-6 did: every id in a real EA export is `EAPK_`+GUID for a
+    package and `EAID_`+GUID for everything else (433 EAID_ / 18 EAPK_ ids in
+    the sample, no exceptions), where the GUID body is EA's own `{...}` GUID
+    with hyphens turned into underscores. A plain XMI parser resolves any
+    unique string as an idref, which is why elements and their `<UAF:...>`
+    stereotype applications imported fine all along -- but EA's own extension
+    parser, which is what reads the `<connectors>` and `<diagrams>` blocks,
+    is the half that never worked, and non-GUID ids it cannot map back to a
+    GUID are the most plausible reason. The registry id stays recoverable: it
+    is the element's `alias` and its `uafId` tagged value."""
+    h = hashlib.md5(key.encode("utf-8")).hexdigest().upper()
+    return f"{h[0:8]}_{h[8:12]}_{h[12:16]}_{h[16:20]}_{h[20:32]}"
+
+
+def eaid(key: str) -> str:
+    """Element/connector/diagram id, EA's `EAID_` convention."""
+    return f"EAID_{ea_guid(key)}"
+
+
+def eapk(key: str) -> str:
+    """Package id, EA's `EAPK_` convention -- a package additionally has an
+    `EAID_` form of the same GUID (the sample's package extension entries
+    carry both: `package2="EAID_<guid>" package="EAPK_<parent guid>"`)."""
+    return f"EAPK_{ea_guid(key)}"
+
+
+ROOT_PKG_KEY = "gungnir-uaf-root"
+
+# Fields already surfaced structurally (id is the xmi:id, name is the element
+# name, description becomes ownedComment) -- everything else on an entry becomes
+# a generic tagged value, so a future registry field needs no change here.
+STRUCTURAL_FIELDS = {"id", "name", "description"}
+
+# Verbatim from the real EA export (see module docstring); these read as
+# generic EA UI preferences, not content specific to any one diagram.
+STYLE1 = (
+    "ShowPrivate=1;ShowProtected=1;ShowPublic=1;HideRelationships=0;Locked=0;Border=1;HighlightForeign=1;"
+    "PackageContents=1;SequenceNotes=0;ScalePrintImage=0;PPgs.cx=1;PPgs.cy=1;DocSize.cx=826;DocSize.cy=1169;"
+    "ShowDetails=0;Orientation=P;Zoom=100;ShowTags=0;OpParams=1;VisibleAttributeDetail=0;ShowOpRetType=1;"
+    "ShowIcons=1;CollabNums=0;HideProps=0;ShowReqs=0;ShowCons=0;PaperSize=9;HideParents=0;UseAlias=0;"
+    "HideAtts=0;HideOps=0;HideStereo=0;HideElemStereo=0;ShowTests=0;ShowMaint=0;ConnectorNotation=UML 2.1;"
+    "ExplicitNavigability=0;ShowShape=1;AllDockable=0;AdvancedElementProps=1;AdvancedFeatureProps=1;"
+    "AdvancedConnectorProps=1;m_bElementClassifier=1;SPT=1;ShowNotes=0;SuppressBrackets=0;"
+    "SuppConnectorLabels=0;PrintPageHeadFoot=0;ShowAsList=0;"
+)
+SWIMLANES = (
+    "locked=false;orientation=0;width=0;inbar=false;names=false;color=-1;bold=false;fcol=0;tcol=-1;"
+    "ofCol=-1;ufCol=-1;hl=0;ufh=0;hh=0;cls=0;bw=0;hli=0;bro=0;SwimlaneFont=lfh:-16,lfw:0,lfi:0,lfu:0,"
+    "lfs:0,lfface:Calibri,lfe:0,lfo:0,lfchar:1,lfop:0,lfcp:0,lfq:0,lfpf=0,lfWidth=0;"
+)
+MATRIXITEMS = "locked=false;matrixactive=false;swimlanesactive=true;kanbanactive=false;width=1;clrLine=0;"
+
+
+def attr(s: object) -> str:
+    return quoteattr(str(s))
+
+
+def tag_xml(name: str, value: object) -> str:
+    v = value
+    if isinstance(v, list):
+        v = ", ".join(str(x) for x in v)
+    return f'          <tag name={attr(name)} value={attr(v)}/>\n'
+
+
+def style2_xml(domain: str | None, viewpoint: str | None, save_tag: str) -> str:
+    mdg_view = f"MDGView=UAF {domain}::{viewpoint};" if domain and viewpoint else ""
+    return (
+        f"SaveTag={save_tag};ExcludeRTF=0;DocAll=0;HideQuals=1;AttPkg=1;ShowTests=0;ShowMaint=0;"
+        "SuppressFOC=1;MatrixActive=0;SwimlanesActive=1;KanbanActive=0;MatrixLineWidth=1;MatrixLineClr=0;"
+        "MatrixLocked=0;TConnectorNotation=UML 2.1;TExplicitNavigability=0;AdvancedElementProps=1;"
+        "AdvancedFeatureProps=1;AdvancedConnectorProps=1;m_bElementClassifier=1;SPT=1;"
+        f"MDGDgm=SysML1.4::BlockDefinition;{mdg_view}"
+        "STBLDgm=;ShowNotes=0;VisibleAttributeDetail=0;ShowOpRetType=1;SuppressBrackets=0;"
+        "SuppConnectorLabels=0;PrintPageHeadFoot=0;ShowAsList=0;SuppressedCompartments=;SF=1;Theme=:119;"
+    )
+
+
+def element_xml(entry: dict, stereotype: str, metaclass: str) -> tuple[str, str]:
+    """Returns (packagedElement XML, UAF stereotype-application XML). The EA
+    element-extension XML is built separately, later, by element_ext_xml --
+    it needs to know which relationships touch this element first (its
+    `<links>` list), which isn't known until every relationship is processed."""
+    reg_id = entry["id"]
+    eid = eaid(reg_id)
+    name = entry.get("name", reg_id)
+    desc = entry.get("description", "")
+    extra_attrs = ' isReadOnly="false" isSingleExecution="false"' if metaclass == "Activity" else ""
+    # The registry id rides along as the UML alias (EA shows it in the Alias
+    # column) as well as the uafId tagged value, since the xmi:id is now a
+    # GUID rather than the id itself.
+    body = [f'        <packagedElement xmi:type={attr("uml:" + metaclass)} xmi:id={attr(eid)} '
+            f'name={attr(name)} visibility="public"{extra_attrs}>\n']
+    if desc:
+        body.append(f'          <ownedComment xmi:id={attr(eaid(reg_id + "-desc"))} body={attr(desc)}/>\n')
+    body.append('        </packagedElement>\n')
+    uaf_stereo = f'    <UAF:{stereotype} base_{metaclass}={attr(eid)}/>\n'
+    return "".join(body), uaf_stereo
+
+
+def element_ext_xml(reg_id: str, stereotype: str, metaclass: str, desc: str, entry: dict,
+                     pkg_key: str, links: list[tuple[str, str, str, str]]) -> str:
+    """The EA element-extension XML for a real (non-package) element, with a
+    `<links>` entry per relationship that touches it (metaclass, rel_id,
+    start_id, end_id) -- confirmed present on both endpoints of a real
+    relationship in the sample."""
+    tags = [f'          <tag name="uafKind" value={attr(stereotype)}/>\n',
+            f'          <tag name="uafId" value={attr(reg_id)}/>\n']
+    for k, v in entry.items():
+        if k in STRUCTURAL_FIELDS or v in (None, "", []):
+            continue
+        tags.append(tag_xml(k, v))
+    links_xml = "".join(
+        f'          <{lm} xmi:id={attr(lid)} start={attr(start)} end={attr(end)}/>\n'
+        for lm, lid, start, end in links
+    )
+    return (
+        f'      <element xmi:idref={attr(eaid(reg_id))} xmi:type={attr("uml:" + metaclass)} '
+        f'name={attr(entry.get("name", reg_id))} scope="public">\n'
+        f'        <model package={attr(eapk(pkg_key))} ea_eleType="element"/>\n'
+        f'        <properties isSpecification="false" sType={attr(metaclass)} nType="0" scope="public" '
+        f'stereotype={attr(stereotype)} documentation={attr(desc)}/>\n'
+        f'        <alias alias={attr(reg_id)}/>\n'
+        f'        <tags>\n{"".join(tags)}        </tags>\n'
+        f'        <links>\n{links_xml}        </links>\n'
+        f'      </element>\n'
+    )
+
+
+def package_ext_xml(pkg_key: str, title: str, parent_key: str) -> str:
+    """Every package gets its own EA extension element entry too, confirmed in
+    the real sample -- a different shape from a real element's
+    (`<packageproperties>`/`<paths>`/`<times>`/`<flags>` instead of
+    `<properties>`/`<tags>`). Note `package2`: a package carries BOTH the
+    `EAID_` and `EAPK_` form of its own GUID, exactly as the sample does."""
+    return (
+        f'      <element xmi:idref={attr(eapk(pkg_key))} xmi:type="uml:Package" name={attr(title)} scope="public">\n'
+        f'        <model package2={attr(eaid(pkg_key))} package={attr(eapk(parent_key))} ea_eleType="package"/>\n'
+        f'        <properties isSpecification="false" sType="Package" nType="0" scope="public"/>\n'
+        f'        <packageproperties version="1.0"/>\n'
+        f'        <paths/>\n'
+        f'        <times created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00"/>\n'
+        f'        <flags iscontrolled="0" isprotected="0" batchsave="0" batchload="0" usedtd="0" logxml="0"/>\n'
+        f'      </element>\n'
+    )
+
+
+def relationship_xml(rel_id: str, from_id: str, to_id: str, kind: str,
+                      stereotype: str | None, metaclass: str, extra: dict) -> tuple[str, str, str, str]:
+    """Returns (packagedElement XML, EA element-extension XML, EA connector-
+    extension XML, UAF stereotype-application XML or "")."""
+    name = f"{kind}: {from_id} -> {to_id}"
+    rid, from_eid, to_eid = eaid(rel_id), eaid(from_id), eaid(to_id)
+    rel = (
+        f'        <packagedElement xmi:type={attr("uml:" + metaclass)} xmi:id={attr(rid)} '
+        f'name={attr(name)} visibility="public" supplier={attr(to_eid)} client={attr(from_eid)}/>\n'
+    )
+    tags = [f'          <tag name="uafRelationship" value={attr(kind)}/>\n']
+    for k, v in extra.items():
+        if k in ("from", "to") or v in (None, "", []):
+            continue
+        tags.append(tag_xml(k, v))
+    tags_xml = "".join(tags)
+
+    stereo_attr = f' stereotype={attr(stereotype)}' if stereotype else ""
+    elem_ext = (
+        f'      <element xmi:idref={attr(rid)} xmi:type={attr("uml:" + metaclass)}>\n'
+        f'        <properties{stereo_attr}/>\n'
+        f'        <tags>\n{tags_xml}        </tags>\n'
+        f'      </element>\n'
+    )
+    connector_ext = (
+        f'      <connector xmi:idref={attr(rid)}>\n'
+        f'        <source xmi:idref={attr(from_eid)}>\n'
+        f'          <role visibility="Public" targetScope="instance"/>\n'
+        f'          <type aggregation="none" containment="Unspecified"/>\n'
+        f'          <modifiers isOrdered="false" changeable="none" isNavigable="false"/>\n'
+        f'        </source>\n'
+        f'        <target xmi:idref={attr(to_eid)}>\n'
+        f'          <role visibility="Public" targetScope="instance"/>\n'
+        f'          <type aggregation="none" containment="Unspecified"/>\n'
+        f'          <modifiers isOrdered="false" changeable="none" isNavigable="true"/>\n'
+        f'        </target>\n'
+        f'        <properties ea_type={attr(metaclass)} direction="Source -&gt; Destination"'
+        f'{stereo_attr} name={attr(name)}/>\n'
+        f'        <modifiers isRoot="false" isLeaf="false"/>\n'
+        f'        <tags>\n{tags_xml}        </tags>\n'
+        f'      </connector>\n'
+    )
+    uaf_stereo = f'    <UAF:{stereotype} base_{metaclass}={attr(rid)}/>\n' if stereotype else ""
+    return rel, elem_ext, connector_ext, uaf_stereo
+
+
+def diagram_xml(pkg_key: str, title: str, domain: str | None,
+                 viewpoint: str | None, member_reg_ids: list[str], seq: int) -> str:
+    """One diagram per view package: every member on a simple grid, plus the
+    package itself as a boundary frame -- the shape confirmed in the real
+    sample's own diagrams. Members are referenced by their EAID_ id, whichever
+    package owns them (the sample places a foreign-owned element on a diagram
+    the same way). Geometry is a mechanical grid, not a considered layout."""
+    cols, box_w, box_h, gap, margin = 5, 140, 76, 20, 20
+    pkg_id = eapk(pkg_key)
+    els = []
+    for i, reg_id in enumerate(member_reg_ids):
+        row, col = divmod(i, cols)
+        left = margin + col * (box_w + gap)
+        top = margin + row * (box_h + gap)
+        duid = ea_guid(f"{pkg_key}:{reg_id}")[:8]
+        els.append(f'          <element geometry={attr(f"Left={left};Top={top};Right={left + box_w};Bottom={top + box_h};")} '
+                    f'subject={attr(eaid(reg_id))} seqno={attr(i + 1)} style={attr(f"HideIcon=0;DUID={duid};")}/>\n')
+    n_rows = -(-len(member_reg_ids) // cols) if member_reg_ids else 1  # ceil div
+    frame_right = margin + min(len(member_reg_ids), cols) * (box_w + gap) + margin
+    frame_bottom = margin + n_rows * (box_h + gap) + margin
+    frame_duid = ea_guid(f"{pkg_key}:frame")[:8]
+    els.append(f'          <element geometry={attr(f"Left=10;Top=10;Right={frame_right};Bottom={frame_bottom};")} '
+                f'subject={attr(pkg_id)} seqno={attr(len(member_reg_ids) + 1)} style={attr(f"DUID={frame_duid};")}/>\n')
+
+    return (
+        f'      <diagram xmi:id={attr(eaid(f"diagram:{pkg_key}"))}>\n'
+        f'        <model package={attr(pkg_id)} localID={attr(seq)} owner={attr(pkg_id)}/>\n'
+        f'        <properties name={attr(title)} type="Logical"/>\n'
+        f'        <project author="gungnir" version="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00"/>\n'
+        f'        <style1 value={attr(STYLE1)}/>\n'
+        f'        <style2 value={attr(style2_xml(domain, viewpoint, ea_guid("savetag:" + pkg_key)[:8]))}/>\n'
+        f'        <swimlanes value={attr(SWIMLANES)}/>\n'
+        f'        <matrixitems value={attr(MATRIXITEMS)}/>\n'
+        f'        <extendedProperties/>\n'
+        f'        <xrefs/>\n'
+        f'        <elements>\n{"".join(els)}        </elements>\n'
+        f'      </diagram>\n'
+    )
+
+
+def build(elements: dict, rels: dict) -> str:
+    pkg_members: dict[str, list[str]] = {code: [] for code in VIEW_PACKAGES}
+    pkg_element_xml: dict[str, list[str]] = {code: [] for code in VIEW_PACKAGES}
+    uaf_stereotypes, connectors, rel_ea_elements = [], [], []
+    known_ids: set[str] = set()
+    # Building a real element's own EA extension entry is deferred until every
+    # relationship is processed, since it needs a <links> entry per
+    # relationship touching it (confirmed in the real sample, present on both
+    # endpoints) -- not known until this whole pass is done. Relationships
+    # themselves have no such dependency, so their own extension entries are
+    # built immediately, into rel_ea_elements.
+    element_records: dict[str, tuple[str, str, str, dict, str]] = {}
+    links_by_id: dict[str, list[tuple[str, str, str, str]]] = {}
+
+    for section, entries in elements.items():
+        if not isinstance(entries, list) or section not in ELEMENT_KIND_INFO:
+            continue
+        stereotype, metaclass, view_code = ELEMENT_KIND_INFO[section]
+        for entry in entries:
+            eid = entry["id"]
+            known_ids.add(eid)
+            cls_xml, uaf_xml = element_xml(entry, stereotype, metaclass)
+            pkg_members[view_code].append(eid)
+            pkg_element_xml[view_code].append(cls_xml)
+            uaf_stereotypes.append(uaf_xml)
+            element_records[eid] = (stereotype, metaclass, entry.get("description", ""), entry, view_code)
+            links_by_id[eid] = []
+
+    n = 0
+    for kind, entries in rels.items():
+        if kind not in RELATIONSHIP_KIND_INFO:
+            continue
+        stereotype, metaclass, view_code = RELATIONSHIP_KIND_INFO[kind]
+        for entry in entries:
+            from_id = entry.get("from")
+            to = entry.get("to")
+            to_list = to if isinstance(to, list) else [to]
+            for to_id in to_list:
+                if from_id not in known_ids or to_id not in known_ids:
+                    continue  # id resolution is build_uaf.py's job (check()); skip quietly here
+                n += 1
+                rel_id = f"REL-{n}"
+                rel_xml, elem_ext, conn_ext, uaf_xml = relationship_xml(
+                    rel_id, from_id, to_id, kind, stereotype, metaclass, entry)
+                pkg_element_xml[view_code].append(rel_xml)
+                rel_ea_elements.append(elem_ext)
+                connectors.append(conn_ext)
+                if uaf_xml:
+                    uaf_stereotypes.append(uaf_xml)
+                link = (metaclass, eaid(rel_id), eaid(from_id), eaid(to_id))
+                links_by_id[from_id].append(link)
+                links_by_id[to_id].append(link)
+                # Confirmed in the real sample's own "Operational Traceability"
+                # diagram: a connector line renders once both its endpoints are
+                # placed on a diagram -- the connector itself needs no entry of
+                # its own there (the EDGE/SX/SY geometry mini-language some
+                # diagram entries carry is for custom manual routing, optional).
+                # So a Traceability package's diagram is just the deduplicated
+                # union of every relationship's two endpoints it holds.
+                if from_id not in pkg_members[view_code]:
+                    pkg_members[view_code].append(from_id)
+                if to_id not in pkg_members[view_code]:
+                    pkg_members[view_code].append(to_id)
+
+    ea_elements = [
+        element_ext_xml(eid, stereotype, metaclass, desc, entry, view_code, links_by_id[eid])
+        for eid, (stereotype, metaclass, desc, entry, view_code) in element_records.items()
+    ]
+    ea_elements.extend(rel_ea_elements)
+
+    packages, diagrams = [], []
+    for i, (code, (title, domain, viewpoint)) in enumerate(VIEW_PACKAGES.items()):
+        members = pkg_element_xml[code]
+        if not members:
+            continue
+        full_title = f"{title} {code}" if code not in ("Rq", "Rq-Tr") else title
+        packages.append(
+            f'      <packagedElement xmi:type="uml:Package" xmi:id={attr(eapk(code))} '
+            f'name={attr(full_title)} visibility="public">\n'
+            + "".join(members)
+            + '      </packagedElement>\n'
+        )
+        ea_elements.append(package_ext_xml(code, full_title, ROOT_PKG_KEY))
+        if pkg_members[code]:
+            diagrams.append(diagram_xml(code, full_title, domain, viewpoint, pkg_members[code], i + 1))
+
+    # Root package inside uml:Model, matching the sample's nesting exactly:
+    # <uml:Model> (no xmi:id of its own) > one EAPK_ root package ("Model" in
+    # the sample) > the view packages. Rounds 1-6 put the view packages
+    # directly under uml:Model, one level shallower and with no root package at
+    # all -- and "Import Package from XMI" imports *a package*.
+    root_pkg = (
+        f'    <packagedElement xmi:type="uml:Package" xmi:id={attr(eapk(ROOT_PKG_KEY))} '
+        f'name="Gungnir UAF Model" visibility="public">\n'
+        + "".join(packages)
+        + '    </packagedElement>\n'
+    )
+    ea_elements.append(package_ext_xml(ROOT_PKG_KEY, "Gungnir UAF Model", ROOT_PKG_KEY))
+
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<xmi:XMI xmi:version="2.1" '
+        'xmlns:xmi="http://schema.omg.org/spec/XMI/2.1" '
+        'xmlns:uml="http://schema.omg.org/spec/UML/2.1" '
+        'xmlns:EAUML="http://www.sparxsystems.com/profiles/EAUML/1.0" '
+        'xmlns:UAF="http://www.omg.org/spec/UAF/20160505/UAF">\n'
+        '  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="6.5" exporterID="1628"/>\n'
+        '  <uml:Model xmi:type="uml:Model" name="EA_Model" visibility="public">\n'
+        + root_pkg
+        + '  </uml:Model>\n'
+        + "".join(uaf_stereotypes)
+        + '  <xmi:Extension extender="Enterprise Architect" extenderID="6.5">\n'
+        '    <elements>\n'
+        + "".join(ea_elements)
+        + '    </elements>\n'
+        '    <connectors>\n'
+        + "".join(connectors)
+        + '    </connectors>\n'
+        '    <diagrams>\n'
+        + "".join(diagrams)
+        + '    </diagrams>\n'
+        '  </xmi:Extension>\n'
+        '</xmi:XMI>\n'
+    )
+
+
+def main() -> int:
+    elements, rels = load_registry()
+    xmi = build(elements, rels)
+    out_dir = UAF / "exports"
+    out_dir.mkdir(exist_ok=True)
+    out_path = out_dir / "gungnir-uaf.xmi"
+    out_path.write_text(xmi, encoding="utf-8")
+    n_elements = sum(len(v) for k, v in elements.items() if isinstance(v, list) and k in ELEMENT_KIND_INFO)
+    n_rels = xmi.count('<connector xmi:idref=')
+    n_diagrams = xmi.count('<diagram xmi:id=')
+    print(f"wrote {out_path}: {n_elements} elements, {n_rels} relationships, {n_diagrams} diagrams")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

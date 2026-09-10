@@ -1,0 +1,351 @@
+id,section,stereotype,name,description
+CAP-1,Capabilities,Capability,Sense,"Bring every observation the sector can obtain into one governed, time-disciplined stream."
+CAP-1.1,Capabilities,Capability,Ingest observations from every sensor class,
+CAP-1.2,Capabilities,Capability,"Validate, authenticate, and quarantine input",
+CAP-1.3,Capabilities,Capability,"Manage sensor readiness, modes, tasking, and calibration",
+CAP-1.4,Capabilities,Capability,Know sensor coverage and gaps over terrain,
+CAP-1.5,Capabilities,Capability,Keep time discipline,
+CAP-1.6,Capabilities,Capability,"Receive early warning, tracks, and reports from peers",
+CAP-1.7,Capabilities,Capability,Receive cooperative identity,
+CAP-2,Capabilities,Capability,Understand,"Turn observations into one honest picture with identities, uncertainty, and context."
+CAP-2.1,Capabilities,Capability,Maintain one multi-sensor track picture with uncertainty,
+CAP-2.2,Capabilities,Capability,Keep tracks through gaps with visible quality,
+CAP-2.3,Capabilities,Capability,Register sensors against each other,
+CAP-2.4,Capabilities,Capability,Track dense groups and count targets,
+CAP-2.5,Capabilities,Capability,Maintain a clutter-tolerant surface picture,
+CAP-2.6,Capabilities,Capability,Classify and identify with evidence and confidence,
+CAP-2.7,Capabilities,Capability,"Keep one identity across gaps, sorties, sessions, and peers",
+CAP-2.8,Capabilities,Capability,"Predict trajectory, time to impact, closest approach",
+CAP-2.9,Capabilities,Capability,Detect anomalies in tracks and feeds,
+CAP-2.10,Capabilities,Capability,"Fuse terrain, imagery, point clouds, and map layers",
+CAP-2.11,Capabilities,Capability,Answer geometric questions,
+CAP-2.12,Capabilities,Capability,Maintain pattern of life and order of battle,
+CAP-3,Capabilities,Capability,Decide,Turn the picture into a policy-checked recommendation for a human.
+CAP-3.1,Capabilities,Capability,Maintain the defended-asset list,
+CAP-3.2,Capabilities,Capability,Score threat and priority per track,
+CAP-3.3,Capabilities,Capability,Recommend the cheapest adequate assignment,
+CAP-3.4,Capabilities,Capability,Compute intercept geometry,
+CAP-3.5,Capabilities,Capability,"Offer alternatives, what-if, and rationale",
+CAP-3.6,Capabilities,Capability,Enforce rules of engagement,
+CAP-3.7,Capabilities,Capability,Manage the queue under saturation,
+CAP-3.8,Capabilities,Capability,Recommend fires tasks with deconfliction,
+CAP-3.9,Capabilities,Capability,Recommend sensor re-tasking under degradation,
+CAP-4,Capabilities,Capability,Act (recommend and authorize),"Put the recommendation in front of the person who holds authority, record what they decide, and hand off; never act without that record."
+CAP-4.1,Capabilities,Capability,Present recommendations for decision,
+CAP-4.2,Capabilities,Capability,Record every decision,
+CAP-4.3,Capabilities,Capability,Never execute without a recorded human decision,
+CAP-4.4,Capabilities,Capability,Hand off to effector systems with provenance,
+CAP-4.5,Capabilities,Capability,Warn assets and authorities,
+CAP-4.6,Capabilities,Capability,Track engagements and assess effects,
+CAP-4.7,Capabilities,Capability,Assist roles without authority,
+CAP-5,Capabilities,Capability,Sustain,"Keep the sector operating, learning, and honest over time and through outages."
+CAP-5.1,Capabilities,Capability,Journal every event durably,
+CAP-5.2,Capabilities,Capability,Replay and rehearse,
+CAP-5.3,Capabilities,Capability,Produce reports and measures from the journal,
+CAP-5.4,Capabilities,Capability,Operate disconnected and reconcile,
+CAP-5.5,Capabilities,Capability,Report health honestly and run the alert lifecycle,
+CAP-5.6,Capabilities,Capability,Manage configuration baselines and mission plans,
+CAP-5.7,Capabilities,Capability,Govern algorithm and model baselines,
+CAP-5.8,Capabilities,Capability,Support the battle rhythm,
+CAP-5.9,Capabilities,Capability,Provide role-based workspaces and workflow,
+CAP-5.10,Capabilities,Capability,Meet performance budgets per profile,
+CAP-6,Capabilities,Capability,Secure,"Control who can see and do what, and prove it afterwards."
+CAP-6.1,Capabilities,Capability,Authenticate operators and callers,
+CAP-6.2,Capabilities,Capability,"Authorize by role, class, and layer",
+CAP-6.3,Capabilities,Capability,Audit everything that matters,
+CAP-6.4,Capabilities,Capability,Protect data in transit and at rest,
+CAP-6.5,Capabilities,Capability,Assure the supply chain,
+CAP-6.6,Capabilities,Capability,Mark and enforce releasability,
+CAP-6.7,Capabilities,Capability,Treat external input as untrusted,
+CAP-7,Capabilities,Capability,Integrate,Be one node in a system of systems.
+CAP-7.1,Capabilities,Capability,Expose a versioned interface,
+CAP-7.2,Capabilities,Capability,Speak the domain's interoperability standards,
+CAP-7.3,Capabilities,Capability,"Run as desktop, on-prem node, or cloud node",
+CAP-7.4,Capabilities,Capability,Exchange with peers and coalition,
+OP-01,Operational Performers,OperationalPerformer,Operator,Runs the live picture for a domain at a site or the sector; decides engagements within delegated authority.
+OP-02,Operational Performers,OperationalPerformer,Supervisor,"Runs the sector; manages the recommendation queue, weapons control status, holds, degraded-state acknowledgement, reconciliation conflicts, plan apply."
+OP-03,Operational Performers,OperationalPerformer,Analyst,"Works the recorded record; replay, after-action review, reports, measures, model promotion evidence."
+OP-04,Operational Performers,OperationalPerformer,Sensor manager,"Owns sensor readiness, modes, coverage, tasking, and calibration."
+OP-05,Operational Performers,OperationalPerformer,Administrator,"Owns configuration baselines, accounts and roles, the node, and the audit record."
+OP-06,Operational Performers,OperationalPerformer,Intelligence analyst,"Owns requirements and tasking, identification evidence and declarations, order of battle, pattern of life, dissemination."
+OP-07,Operational Performers,OperationalPerformer,Planner,"Owns defended-asset list drafts, laydown and coverage planning, mission plans, rehearsal."
+OP-08,Operational Performers,OperationalPerformer,Commander,Holds the authorities the others act under; may decide directly.
+OP-10,Operational Performers,OperationalPerformer,Sector command post,"The sector's command post; hosts the service node, the supervisor, operators, sensor manager, planner, intelligence analyst (vignettes, SCP)."
+OP-11,Operational Performers,OperationalPerformer,Site defense cell,"A defended site's cell with a desktop and local sensors and effectors (vignettes, OPS and HAF)."
+OP-12,Operational Performers,OperationalPerformer,Port defense cell,"The port's cell with a desktop, coastal sensors, patrol craft (vignettes, KAL)."
+OP-20,Operational Performers,OperationalPerformer,Higher command,"Sets rules of engagement; receives status, warnings, reports, order of battle."
+OP-21,Operational Performers,OperationalPerformer,Neighbouring sector,Exchanges tracks and warnings; hands over raids.
+OP-22,Operational Performers,OperationalPerformer,Fire units and effector systems,Receive decided assignments; report readiness and outcomes.
+OP-23,Operational Performers,OperationalPerformer,Sensor operators and maintainers,"Operate and maintain sensors; modes, faults, calibration."
+OP-24,Operational Performers,OperationalPerformer,Civil aviation authority and airport,"Corridors, flight plans, ADS-B; receive warnings of engagements."
+OP-25,Operational Performers,OperationalPerformer,Port and maritime authorities,"AIS, harbour operations, barriers; receive warnings."
+OP-26,Operational Performers,OperationalPerformer,Coalition partners,Picture and product exchange with releasability.
+OP-27,Operational Performers,OperationalPerformer,Accreditors and auditors,Need evidence that the system enforces policy and records decisions.
+OP-30,Operational Performers,OperationalPerformer,Command-and-control system (Gungnir),The logical performer that exhibits every system capability; realized by the desktop and the service node.
+OP-31,Operational Performers,OperationalPerformer,Operator workstation,The desktop (gungnir-app) with embedded or remote services.
+OP-32,Operational Performers,OperationalPerformer,Sector service node,The headless node (gungnir-node) that is the system of record in connected profiles.
+OP-33,Operational Performers,OperationalPerformer,Sensor network,"The sensors feeding the sector, logically part of the C2 system's inputs; physical sensors are actual resources."
+OP-34,Operational Performers,OperationalPerformer,Effector interface,The handoff boundary to fire units and effector systems (CAP-4.4).
+OA-01,Operational Activities,OperationalActivity,Ingest and validate observations,"Bring sensor, cooperative, peer, and human reports in; validate; quarantine; carry provenance."
+OA-02,Operational Activities,OperationalActivity,Maintain the track picture,"Initiate, update, coast, and delete tracks from all sources with uncertainty and quality."
+OA-03,Operational Activities,OperationalActivity,Identify tracks,"Classify and identify from kinematic, signature, cooperative, and human evidence with stated confidence."
+OA-04,Operational Activities,OperationalActivity,Assess threat and priority,"Predict path, asset threatened, time to impact, closest approach; score against the defended-asset list."
+OA-05,Operational Activities,OperationalActivity,Recommend assignments,"Propose the cheapest adequate resource-to-track assignment within readiness, geometry, and policy."
+OA-06,Operational Activities,OperationalActivity,Check policy,"Evaluate identification criteria, weapons control status, authority, geofences, and restrictions; produce a verdict."
+OA-07,Operational Activities,OperationalActivity,Decide,"A human accepts, overrides, rejects, holds, or lets expire; the decision is recorded."
+OA-08,Operational Activities,OperationalActivity,Hand off to effectors,Pass decided assignments to fire units and effector systems with provenance.
+OA-09,Operational Activities,OperationalActivity,Warn assets and authorities,"Warn defended assets, units, and civil authorities with lead time; record the warning."
+OA-10,Operational Activities,OperationalActivity,Assess engagement effects,"Track the engaged threat, record the outcome, supersede plans, re-plan the remainder."
+OA-11,Operational Activities,OperationalActivity,Journal and report,"Journal every event; produce summaries, reports, and measures after action."
+OA-12,Operational Activities,OperationalActivity,Manage sensors and coverage,"Set modes, task sensors, keep calibration, compute coverage and gaps over terrain."
+OA-13,Operational Activities,OperationalActivity,Detect and correlate degradation,"Detect sensor loss, ingest gaps, clock skew, quality collapse; correlate into incidents."
+OA-14,Operational Activities,OperationalActivity,Re-task sensors,Change modes and tasking to restore the most valuable coverage; show before and after.
+OA-15,Operational Activities,OperationalActivity,Exchange the picture with peers,"Send and receive tracks, warnings, and products with peers, higher command, and partners."
+OA-16,Operational Activities,OperationalActivity,Flag anomalies,"Detect AIS-off, spoofing, loitering, and implausible feeds as alerts through the lifecycle."
+OA-17,Operational Activities,OperationalActivity,State collection requirements,"Express an information requirement with area, question, priority, and window; task or decline it."
+OA-18,Operational Activities,OperationalActivity,Fuse identification evidence,Combine evidence into identities with confidence; retain the evidence with the track.
+OA-19,Operational Activities,OperationalActivity,Maintain entities and order of battle,Keep global identities across sessions; merge and split; accumulate pattern of life.
+OA-20,Operational Activities,OperationalActivity,Disseminate products,"Release identities, warnings, and products to roles and peers with marking."
+OA-21,Operational Activities,OperationalActivity,Set the defended-asset list and priorities,"Define protected assets, priorities, and warning obligations."
+OA-22,Operational Activities,OperationalActivity,Plan the laydown,Place sensors and effectors; compute coverage and gaps over terrain.
+OA-23,Operational Activities,OperationalActivity,Configure policy,"Set identification criteria, weapons control status, authorities, restrictions as geofences, delegations."
+OA-24,Operational Activities,OperationalActivity,Validate and apply the plan,Validate a configuration baseline; apply it with audit.
+OA-25,Operational Activities,OperationalActivity,Rehearse,Replay a scenario through the pipeline under a plan; review recommendations and gaps.
+OA-26,Operational Activities,OperationalActivity,Review after action,"Review the journal, measure, record lessons."
+OA-27,Operational Activities,OperationalActivity,Operate disconnected,Fall back to embedded services; keep journaling; queue for forwarding; act under pre-delegated authority.
+OA-28,Operational Activities,OperationalActivity,Reconcile journals,Forward the queue; merge local and node journals; report conflicts.
+OA-29,Operational Activities,OperationalActivity,Resolve conflicts,Resolve reported decision conflicts under the arbitration rule; update the record.
+OA-30,Operational Activities,OperationalActivity,Recommend a fires task,"Propose a fires task with target location and uncertainty, time window, and deconfliction."
+OA-31,Operational Activities,OperationalActivity,Manage the decision queue,Order pending decisions by priority and time remaining; apply delegation; escalate; time out.
+OA-32,Operational Activities,OperationalActivity,Assist with questions and drafts,Answer questions about the picture and draft products with provenance and no authority.
+OA-33,Operational Activities,OperationalActivity,Govern algorithm and model baselines,"Validate, promote, and roll back the algorithm and model configuration in force."
+OA-34,Operational Activities,OperationalActivity,Authenticate and authorize,Establish who a caller is and what their role permits before any action.
+OA-35,Operational Activities,OperationalActivity,Audit,"Record every decision, configuration change, promotion, tasking, and assistant exchange append-only."
+OA-36,Operational Activities,OperationalActivity,Exchange cooperative identity,"Receive IFF, ADS-B, AIS, and blue-force identity and attach it as evidence."
+SV-01,Services,ServiceInterface,Tracking,"Detections in, tracks with quality out; health honest (pipeline not implemented)."
+SV-02,Services,ServiceInterface,Intercept planning,"Tracks and resources in, a PlanView out; last-good-plan on over-budget solves (allocator not implemented)."
+SV-03,Services,ServiceInterface,Event bus,Broadcast publish and subscribe with sequence-stamped envelopes.
+SV-04,Services,ServiceInterface,Event journal,Append-only JSON-lines session journal; read back for replay; retention.
+SV-05,Services,ServiceInterface,Time authority,Wall and replay clocks; source versus receipt time; late-data policy.
+SV-06,Services,ServiceInterface,Configuration store,"Load, validate, and save versioned configuration baselines."
+SV-07,Services,ServiceInterface,Mission lifecycle,"Create, live, save, load, replay, close a session."
+SV-08,Services,ServiceInterface,Ingest gateway,"Adapters behind a validating, authenticating, quarantining gateway (SourceAuthenticator, IngestGateway)."
+SV-09,Services,ServiceInterface,Sensor registry,"Sensor records, modes with a transition table, coverage regions."
+SV-10,Services,ServiceInterface,Interop catalogue and codecs,Schema catalogue with version negotiation; Arrow form; ASTERIX and STANAG codecs (NotImplemented).
+SV-11,Services,ServiceInterface,Identity resolution,Global entity identity across session tracks with merge and split lineage.
+SV-12,Services,ServiceInterface,Identification,"Evidence fusion to friend, hostile, neutral, unknown with a margin rule."
+SV-13,Services,ServiceInterface,Geospatial,"Geofence containment, map layers, coordinate reference governance."
+SV-14,Services,ServiceInterface,Analytics,"Line of sight, viewshed, coverage volumes, route deconfliction over terrain."
+SV-15,Services,ServiceInterface,Policy,Geofence and readiness verdicts through a chain that never self-approves.
+SV-16,Services,ServiceInterface,Approval workflow,Pending approvals and decision records; nothing actionable without one.
+SV-17,Services,ServiceInterface,Threat assessment,Risk scores and the reward matrix for the allocator.
+SV-18,Services,ServiceInterface,Decision support,Rationale (real); alternatives and what-if (trait surface).
+SV-19,Services,ServiceInterface,Model registry,"Validate, promote, roll back algorithm baselines."
+SV-20,Services,ServiceInterface,Authentication,Credential to OperatorId (trait only; mechanism D-02).
+SV-21,Services,ServiceInterface,Authorization,Role-to-action matrix; unknown operators permitted nothing.
+SV-22,Services,ServiceInterface,Audit log,Append-only audit entries per gated action.
+SV-23,Services,ServiceInterface,API v1,"Snapshot, event stream, detection submission, plan decision, health; transport pending."
+SV-24,Services,ServiceInterface,Health monitor,Health snapshot from service flags; alert correlation; watchdog.
+SV-25,Services,ServiceInterface,Store-and-forward and reconciliation,Bounded queue while disconnected; journal merge with conflict reporting.
+SV-26,Services,ServiceInterface,Shared picture and arbitration,Apply node envelopes to a projection; role-rank arbitration of conflicts.
+SV-27,Services,ServiceInterface,Operator workflow,Role workspace layouts; alert lifecycle; cases and annotations.
+SV-28,Services,ServiceInterface,Replay,Deterministic playback of a journal under the replay clock.
+SV-29,Services,ServiceInterface,Reporting,Reports and exports with every figure traceable to the journal.
+SV-30,Services,ServiceInterface,Remote backends,RemoteTrackingService and RemoteInterceptService over the API with an outbox; transport pending.
+SV-31,Services,ServiceInterface,Data loading,"Point cloud, VTK, terrain, glTF loaders off the UI thread (surface only)."
+SV-32,Services,ServiceInterface,Point-cloud fusion,CPU reference and GPU ICP registration (trait surface).
+SV-33,Services,ServiceInterface,Tracking metrics,"MOTA, MOTP, purity, fragmentation against truth."
+SV-34,Services,ServiceInterface,Scenario generation,The five engineering scenarios with truth.
+RS-allocation,Resources,ResourceArtifact,gungnir-allocation,Bellman/DP resource-to-track assignment.
+RS-analytics,Resources,ResourceArtifact,gungnir-analytics,"Advanced 3D analytical functions -- line-of-sight, viewshed, sensor-coverage volumes, terrain masking, route deconfliction -- as standalone CPU services rendered by gungnir-viewport3d rather than embedded in it. docs/gungnir-capabilities.md \u00a75.3 -- Medium."
+RS-api,Resources,ResourceArtifact,gungnir-api,"Versioned, security-gated external contract (v1: snapshot, event stream, detection submit, plan decision) so remote desktops, peer C2 systems, analytics tools, or enterprise data services can integrate with a service node. Transport-neutral types here; the HTTP/JSON + WebSocket transport is the next stack addition. docs/gungnir-capabilities.md \u00a75.5 -- High."
+RS-app,Resources,ResourceArtifact,gungnir-app,"eframe desktop binary: bootstrap + AppState + update loop. The one crate allowed to depend on everything. Intentionally thin -- wiring, not logic, per rust-ui-architecture-coding-standards.md \u00a71. Selects the embedded or remote services backend from gungnir-config (ARCHITECTURE.md \u00a78) and runs eframe with Renderer::Glow so three-d has a GL context."
+RS-assessment,Resources,ResourceArtifact,gungnir-assessment,"Threat/risk scoring, predicted time-to-impact, asset exposure, confidence-aware prioritization feeding the allocation decision's reward matrix. docs/gungnir-capabilities.md \u00a75.4 -- Medium."
+RS-association,Resources,ResourceArtifact,gungnir-association,"NN/GNN, Hungarian/JV, gating, JPDA, MHT."
+RS-collab,Resources,ResourceArtifact,gungnir-collab,"Collaboration & multi-user concurrency: shared operational picture across desktops connected to one node, concurrent annotations, and authority conflict resolution between operators' decisions. docs/gungnir-capabilities.md \u00a75.6 -- Medium. Server-authoritative mission state lives on the node (ARCHITECTURE.md \u00a78)."
+RS-command,Resources,ResourceArtifact,gungnir-command,"Human-approval workflow sitting on top of gungnir-policy's verdicts -- the operator-facing accept/override/reject boundary for an intercept plan, with every decision recorded. docs/gungnir-capabilities.md \u00a75.4 -- Critical. Human-owned changes. Pairs with gungnir-policy."
+RS-config,Resources,ResourceArtifact,gungnir-config,"Managed, versioned, validated configuration for sensor definitions, filter/association selection, thresholds, allocation weights, backend selection (embedded or remote), and service-node settings. docs/gungnir-capabilities.md \u00a75.1 -- High. Pairs with gungnir-mission."
+RS-coord,Resources,ResourceArtifact,gungnir-coord,ECEF/ENU/NED/geodetic coordinate frame transforms.
+RS-core,Resources,ResourceArtifact,gungnir-core,"CV/CA/CT motion models -- F/Q generation (exact-match closed-form oracle only) -- plus the identifier, lifecycle-status, and PSD-assertion primitives every higher crate shares (docs/agentic-coding-standards.md \u00a71.2, \u00a72.1)."
+RS-data-fusion,Resources,ResourceArtifact,gungnir-data-fusion,"GPU-accelerated point cloud registration/fusion (point-to-plane ICP) on wgpu compute, per rust-3d-data-ecosystem-build-vs-adopt.md \u00a73. The one genuine ecosystem gap identified -- kept as its own crate, separate from gungnir-data, because it's the only data-layer crate that needs a wgpu::Device (borrowed from gungnir-render)."
+RS-data,Resources,ResourceArtifact,gungnir-data,"File I/O for point cloud / VTK scientific mesh / terrain / glTF, per rust-3d-data-ecosystem-build-vs-adopt.md \u00a71. No egui/three-d/wgpu dependency -- unit-testable with plain cargo test."
+RS-decision,Resources,ResourceArtifact,gungnir-decision,"Course-of-action generation and comparison, constraint handling, what-if simulation against a live snapshot, and recommendation explanations -- beyond single-solution DP allocation. docs/gungnir-capabilities.md \u00a75.4 -- Medium."
+RS-eventing,Resources,ResourceArtifact,gungnir-eventing,Transport-neutral broadcast event bus (in-process today; a durable/replayable log or network stream behind the same trait later). docs/gungnir-capabilities.md \u00a75.1 -- High. Replaces the UI polling a mutable slice every frame.
+RS-filters,Resources,ResourceArtifact,gungnir-filters,KF/EKF/UKF/PF/IMM/sqrt-UDU/RTS state estimation.
+RS-fusion-async,Resources,ResourceArtifact,gungnir-fusion-async,OOS handling / multi-rate async fusion pipeline. The only crate that uses the tokio runtime; the runtime is owned by the host binary.
+RS-fuzz,Resources,ResourceArtifact,gungnir-fuzz,
+RS-geo,Resources,ResourceArtifact,gungnir-geo,"Coordinate-reference-system governance, map/imagery layers, geocoding, vector features, spatial indexing, and geofencing. docs/gungnir-capabilities.md \u00a75.3 -- Medium."
+RS-identification,Resources,ResourceArtifact,gungnir-identification,Friend/foe/unknown track classification from an evidence-fusion process. gungnir-capabilities.md \u00a75.3 -- Medium.
+RS-identity,Resources,ResourceArtifact,gungnir-identity,"Persistent global track/entity identity across feeds -- aliases, merge/split history, supersession -- beyond the tracking core's internal track IDs. docs/gungnir-capabilities.md \u00a75.3 -- High."
+RS-ingest,Resources,ResourceArtifact,gungnir-ingest,"Protocol-specific adapters plus a validation/authentication/quarantine gateway that normalizes live, recorded, and simulated sources into the canonical DetectionView before anything reaches the Tracking Service. docs/gungnir-capabilities.md \u00a75.2 -- Critical. Gateway changes are human-owned."
+RS-intercept-service,Resources,ResourceArtifact,gungnir-intercept-service,App-facing facade over gungnir-allocation + gungnir-coord: turns current tracks + available resources into an intercept/tasking plan (gungnir-model PlanView). Kept separate from gungnir-tracking-service because it answers 'what should we do' rather than 'where are they' -- see ARCHITECTURE.md \u00a72.
+RS-interop,Resources,ResourceArtifact,gungnir-interop,"Data standards & interoperability: the schema catalog with version negotiation, the Arrow representation of detections, and the ASTERIX/STANAG codec boundary that gungnir-ingest adapters and gungnir-reporting exports use. docs/gungnir-capabilities.md \u00a75.6 and \u00a71 (interop schema row) -- Medium."
+RS-metrics,Resources,ResourceArtifact,gungnir-metrics,"MOTA/MOTP, purity/fragmentation, track-to-truth assignment."
+RS-mission,Resources,ResourceArtifact,gungnir-mission,"Mission/session lifecycle: create/load/save/replay/close, plus scenario binding. gungnir-capabilities.md \u00a75.1 -- High. Pairs with gungnir-config."
+RS-ml,Resources,ResourceArtifact,gungnir-ml,"The model and feature-extractor traits learned models are held to, a fake model for the consumers' tests, and the dataset extraction from test-track sets into the Arrow form docs/ml/data-pipeline.md documents (GAP-077, GAP-079). OnnxModel, the ort-backed real Model, is real compiling code behind the onnx-runtime feature (off by default: agentic-coding-standards.md \u00a72.9, D-40) -- ort 2.0.0-rc.13's load-dynamic path panics rather than erroring when no compatible ONNX Runtime library is reachable, so it must not run inside default `cargo test`. ModelSet::load reports which named models are unavailable rather than pretending."
+RS-model,Resources,ResourceArtifact,gungnir-model,"Canonical, versioned operational data model -- TrackView/DetectionView/ResourceView/PlanView and friends, with provenance, quality, identity, timestamps, and classification as first-class fields. Foundational/Critical per docs/gungnir-capabilities.md \u00a75.1 -- the service facades and every productization crate build on this one."
+RS-modelops,Resources,ResourceArtifact,gungnir-modelops,"Registry for selecting, tuning, comparing, validating, promoting, and rolling back filter/association configurations by mission profile, and (GAP-078) the model artefact -- name, version, hash, evaluation record -- a baseline optionally carries alongside its tracking configuration through the same promotion state machine. gungnir-capabilities.md \u00a75.4 -- Medium."
+RS-node,Resources,ResourceArtifact,gungnir-node,"Headless service-node binary for the on-prem and cloud profiles (ARCHITECTURE.md \u00a78.1): hosts the services layer and the authoritative gungnir-store journal behind gungnir-api. Targets Linux x86_64 containers; depends on no UI, three-d, or wgpu crate."
+RS-observability,Resources,ResourceArtifact,gungnir-observability,"Production-facing metrics, structured logs, distributed traces, health checks, watchdogs, and alert correlation -- extends the developer-facing tracing instrumentation into an operator-facing system-status capability. gungnir-capabilities.md \u00a75.5 -- High."
+RS-oracle,Resources,ResourceArtifact,gungnir-oracle,Differential-test harness against Python/MATLAB oracles. Depends on everything; nothing depends on it.
+RS-policy,Resources,ResourceArtifact,gungnir-policy,"Authority model, geofence/no-go enforcement, and policy evaluation sitting in front of the Intercept Planning Service's output. docs/gungnir-capabilities.md \u00a75.4 -- Critical. Human-owned changes (agentic-workflow.md). Pairs with gungnir-command."
+RS-remote,Resources,ResourceArtifact,gungnir-remote,"Remote implementations of the TrackingService and InterceptService traits that talk to a gungnir-node over gungnir-api, so the desktop switches between the embedded and connected profiles without any UI change (ARCHITECTURE.md \u00a78.2). Store-and-forward while disconnected."
+RS-render,Resources,ResourceArtifact,gungnir-render,"Shared wgpu device/queue/surface management + egui<->wgpu render pass wiring, per rust-ui-architecture-coding-standards.md \u00a71. No tracking-domain knowledge."
+RS-replay,Resources,ResourceArtifact,gungnir-replay,"Deterministic session playback, timeline scrubbing, and recorded-data replay -- reads gungnir-store's event journal through a gungnir-time ReplayClockAuthority. docs/gungnir-capabilities.md \u00a75.6 -- Lower."
+RS-reporting,Resources,ResourceArtifact,gungnir-reporting,Mission reports and export packages with provenance preserved: every figure traces back to the recorded event journal it was computed from. docs/gungnir-capabilities.md \u00a75.6 -- Lower.
+RS-resilience,Resources,ResourceArtifact,gungnir-resilience,"Resilience & disconnected operations: store-and-forward of envelopes while a node is unreachable, checkpoints, and journal reconciliation after the link returns (ARCHITECTURE.md \u00a78.4). docs/gungnir-capabilities.md \u00a75.6 -- Medium."
+RS-rfs,Resources,ResourceArtifact,gungnir-rfs,"PHD/CPHD, GLMB/LMB random finite set filters."
+RS-scenario,Resources,ResourceArtifact,gungnir-scenario,"Ground-truth + sensor simulation, five-scenario generator. Test/bench dependency only -- never a normal dependency of a production crate."
+RS-security,Resources,ResourceArtifact,gungnir-security,"Authentication, role/attribute-based authorization, encryption in transit and at rest, secrets/key management, signed binaries and configuration, audit logging. gungnir-capabilities.md \u00a75.5 -- Critical."
+RS-sensor-management,Resources,ResourceArtifact,gungnir-sensor-management,"Sensor registry (identity, modality, location, calibration version, operating state) plus tasking, mode management, and coverage planning. docs/gungnir-capabilities.md \u00a75.2 -- High."
+RS-store,Resources,ResourceArtifact,gungnir-store,"Durable storage for mission sessions (an append-only JSON-lines event journal), replay artifacts, configuration baselines, and audit logs, with an explicit retention/deletion policy. docs/gungnir-capabilities.md \u00a75.1 -- High."
+RS-testkit,Resources,ResourceArtifact,gungnir-testkit,Shared proptest strategies for the tracking core. Depends on no workspace crate (so it can be a dev-dependency of every one of them without a dev-dependency cycle); nothing depends on it at runtime.
+RS-time,Resources,ResourceArtifact,gungnir-time,"Clock discipline across sensors: source-time vs. receipt-time semantics, late-data policy, deterministic replay-time control, synchronization health. docs/gungnir-capabilities.md \u00a75.2 -- Critical."
+RS-track-fusion,Resources,ResourceArtifact,gungnir-track-fusion,"Track-to-track fusion (CI/info-matrix), sensor registration/bias."
+RS-track,Resources,ResourceArtifact,gungnir-track,Track lifecycle: init/confirm/coast/delete.
+RS-tracking-service,Resources,ResourceArtifact,gungnir-tracking-service,"App-facing facade over the tracking/estimation core. Owns the IMM bank, associator, track manager, and async multi-rate/OOS fusion pipeline behind one trait, and projects the core's kinematic Track into the canonical gungnir-model TrackView. See ARCHITECTURE.md \u00a72."
+RS-ui,Resources,ResourceArtifact,gungnir-ui,"2D egui dashboard panels + centralized theme, per rust-ui-architecture-coding-standards.md \u00a71/\u00a76. One file per panel; no magic layout numbers. Reads gungnir-model views only; holds no state of its own."
+RS-viewport3d,Resources,ResourceArtifact,gungnir-viewport3d,"three-d scene setup, camera, streaming/scientific data bridges, and live track/intercept rendering, drawn into eframe's OpenGL (glow) context. Combines rust-3d-data-ecosystem-build-vs-adopt.md \u00a72 with gungnir-model views -- see ARCHITECTURE.md \u00a74-5 for why track rendering lives here rather than in a translation crate."
+RS-workflow,Resources,ResourceArtifact,gungnir-workflow,"Human factors & operator workflow: role-based workspace layouts, the alert acknowledgement/escalation lifecycle, annotations and cases -- turning a set of panels into a designed operator workflow. docs/gungnir-capabilities.md \u00a75.6 -- Medium."
+PT-01,Personnel Types,PersonType,Operator,
+PT-02,Personnel Types,PersonType,Supervisor,
+PT-03,Personnel Types,PersonType,Analyst,
+PT-04,Personnel Types,PersonType,Sensor manager,
+PT-05,Personnel Types,PersonType,Administrator,
+PT-06,Personnel Types,PersonType,Intelligence analyst,
+PT-07,Personnel Types,PersonType,Planner,
+PT-08,Personnel Types,PersonType,Commander,
+SD-01,Standards,Standard,Gungnir canonical schema v1,The versioned JSON form of every view and event; the journal and the API carry it.
+SD-02,Standards,Standard,Apache Arrow (arrow 53),Columnar form of detections for analytics and bulk exchange.
+SD-03,Standards,Standard,ASTERIX Category 048 (Eurocontrol),Radar target reports; codec returns NotImplemented (GAP-064).
+SD-04,Standards,Standard,STANAG 4676 (NATO ISR tracking standard),Track exchange with coalition; codec returns NotImplemented (GAP-064).
+SD-05,Standards,Standard,JSON (RFC 8259),"Serialization of configuration, journal lines, and API payloads."
+SD-06,Standards,Standard,HTTP/1.1 (RFC 9112),Request and response transport for the API (GAP-041).
+SD-07,Standards,Standard,WebSocket (RFC 6455),The API event stream (GAP-041).
+SD-08,Standards,Standard,TLS 1.3 (RFC 8446),Encryption in transit and mutual authentication of machines (GAP-060).
+SD-09,Standards,Standard,AIS (ITU-R M.1371),Cooperative maritime identity (GAP-010).
+SD-10,Standards,Standard,ADS-B 1090 ES (RTCA DO-260B),Cooperative air identity (GAP-010).
+SD-11,Standards,Standard,UUID version 7 (RFC 9562),Textual and time-ordered form of GlobalEntityId (GAP-069).
+SD-12,Standards,Standard,OCI container image,Packaging of the service node for Linux x86_64.
+SD-13,Standards,Standard,Software bill of materials (CycloneDX JSON) and signed releases,Release evidence per docs/release-governance.md; exercised under GAP-061.
+SD-14,Standards,Standard,UAF 1.2 (OMG),The framework these views follow.
+SD-15,Standards,Standard,TOGAF 10 ADM,The method plan 10 follows; references these views.
+SD-16,Standards,Standard,Cursor-on-Target (CoT),"Exchange with a participant that holds no machine identity here; no codec and no sink exist (GAP-090, GAP-091)."
+PJ-I1,Projects,Project,Increment 1,Productize the core
+PJ-I2,Projects,Project,Increment 2,Integrate real data
+PJ-I3,Projects,Project,Increment 3,Close the decision-support loop
+PJ-I4,Projects,Project,Increment 4,Operationalize and scale
+PJ-P01,Projects,Project,Plan 01 product business plan,
+PJ-P02,Projects,Project,Plan 02 mission analysis,
+PJ-P03,Projects,Project,Plan 03 UAF views,
+PJ-P04,Projects,Project,Plan 04 mission capabilities,
+PJ-P05,Projects,Project,Plan 05 capability design gaps,
+PJ-P06,Projects,Project,Plan 06 UX designs by role,
+PJ-P07,Projects,Project,Plan 07 test-track suite,
+PJ-P08,Projects,Project,Plan 08 AI agent integration,
+PJ-P09,Projects,Project,Plan 09 ML model integration,
+PJ-P10,Projects,Project,Plan 10 TOGAF ADM documentation,
+IE-01,Information Elements,InformationElement,DetectionView,"The canonical observation after validation; sensor, source time, receipt time, ENU measurement, provenance."
+IE-02,Information Elements,InformationElement,TrackView,"The canonical track; state, covariance, classification, provenance, quality, mission time."
+IE-03,Information Elements,InformationElement,ResourceView,"A taskable resource; position, capacity, readiness."
+IE-04,Information Elements,InformationElement,PlanView,The intercept service's recommendation; solutions and policy value.
+IE-05,Information Elements,InformationElement,InterceptSolutionView,One resource-to-track pairing with intercept point and time (None until the solver exists).
+IE-06,Information Elements,InformationElement,SystemHealth,"Tracking, intercept, and ingest health flags as reported, never inferred."
+IE-07,Information Elements,InformationElement,Provenance,"Source sensors, calibration baseline, algorithm version."
+IE-08,Information Elements,InformationElement,Quality,"Association confidence, latency, staleness."
+IE-09,Information Elements,InformationElement,Classification,"Unknown, Neutral, Friendly, Hostile."
+IE-10,Information Elements,InformationElement,MissionTime,Seconds on the mission clock.
+IE-11,Information Elements,InformationElement,GlobalEntityId,Persistent identity across sessions (u128; uuid v7 under GAP-069).
+IE-12,Information Elements,InformationElement,Envelope,"Sequence number, mission time, and one Event; the unit the bus carries and the journal stores."
+IE-13,Information Elements,InformationElement,TrackingEvent,"TrackInitiated, TrackUpdated, TrackCoasting, TrackDeleted."
+IE-14,Information Elements,InformationElement,InterceptEvent,"PlanProposed, PlanApproved, PlanSuperseded."
+IE-15,Information Elements,InformationElement,IngestEvent,Accepted or Quarantined with reason.
+IE-16,Information Elements,InformationElement,CommandEvent,"ApprovalRequested; Decided with plan, accepted, operator."
+IE-17,Information Elements,InformationElement,ConfigBaseline,"Versioned, validated configuration; sensors, resources, tracking, backend, node, horizon, data directory."
+IE-18,Information Elements,InformationElement,DecisionRecord,"Who decided what on which plan, with verdict and time."
+IE-19,Information Elements,InformationElement,PolicyVerdict,"Approved (never by built-in engines), Denied with reason, RequiresHumanApproval."
+IE-20,Information Elements,InformationElement,AuditEntry,"Actor, action, time, outcome; append-only."
+IE-21,Information Elements,InformationElement,Alert and AlertLifecycle,"Alert with severity; New, Acknowledged, Escalated, Closed with history."
+IE-22,Information Elements,InformationElement,SnapshotResponse,"Schema version, tracks, plan, health."
+IE-23,Information Elements,InformationElement,ApprovalRequest,"Plan id, accepted, operator."
+IE-24,Information Elements,InformationElement,SubmitDetectionRequest,One DetectionView for the gateway.
+IE-25,Information Elements,InformationElement,SubscribeRequest,The first frame of the event stream; from_seq.
+IE-26,Information Elements,InformationElement,SchemaEntry,"Name, version, kind of a schema the build speaks."
+IE-27,Information Elements,InformationElement,SensorRecord and CoverageRegion,"Identity, modality, location, calibration version, mode; coverage geometry."
+IE-28,Information Elements,InformationElement,Report,A mission report or export with figures traceable to the journal.
+IE-29,Information Elements,InformationElement,IdentificationEvidence,One piece of evidence with source and weight toward a classification.
+IE-30,Information Elements,InformationElement,RiskScore,Threat score per track with contributing factors.
+IE-31,Information Elements,InformationElement,ReconciliationReport,Merged journal statistics and the conflicting decisions found.
+IE-32,Information Elements,InformationElement,WorkspaceLayout,"The panels a role sees, in order."
+IE-33,Information Elements,InformationElement,Mission and SessionId,A session with its state and configuration.
+AR-01,Actual Resources,ActualResource,Operator workstation host,Windows 11 with a discrete NVIDIA GPU running gungnir-app; OpenGL context for egui and three-d; wgpu compute device for point-cloud fusion.
+AR-02,Actual Resources,ActualResource,On-prem service node host,Linux x86_64 container running gungnir-node on the site or sector LAN; authoritative journal on local storage.
+AR-03,Actual Resources,ActualResource,Cloud service node host,The same container hosted in the cloud; WAN clients; encryption at rest with keys off-host (GAP-060).
+AR-04,Actual Resources,ActualResource,Sensor feeds,"Radar, EO/IR, acoustic, RF, ISR video, cooperative receivers, spotter applications feeding the node or a desktop through adapters."
+AR-05,Actual Resources,ActualResource,Peer command-and-control nodes,"Neighbouring sectors, higher command, and coalition systems reached through the API and interop formats."
+AR-06,Actual Resources,ActualResource,Effector systems,Fire units and effector controllers that receive handoff messages and report outcomes.
+AR-07,Actual Resources,ActualResource,Build and release infrastructure,Self-hosted GitLab with runners (including a GPU runner) and the container registry (D-10).
+REQ-F-01,Requirements,Requirement,Observations from heterogeneous sensors are ingested through one governed gateway that validates and quarantines,
+REQ-F-02,Requirements,Requirement,Every source is authenticated before its data enters the picture,
+REQ-F-03,Requirements,Requirement,"Sensor modes, tasking, and calibration are held in a registry and changeable by the sensor manager",
+REQ-F-04,Requirements,Requirement,Coverage is computed and coverage gaps are detected and displayed,
+REQ-F-05,Requirements,Requirement,Data from sources with different clocks is time-disciplined and skew is detected,
+REQ-F-06,Requirements,Requirement,Cooperative identity from open protocols is decoded and fused as evidence,
+REQ-F-07,Requirements,Requirement,"A multi-sensor, multi-rate, out-of-sequence tracking pipeline maintains the picture",
+REQ-F-08,Requirements,Requirement,Tracks carry a quality and a staleness that the interface renders differently from fresh data,
+REQ-F-09,Requirements,Requirement,Classification and identification produce evidence with a margin rule and per-class thresholds set by policy,
+REQ-F-10,Requirements,Requirement,Entities keep a global identity with lineage across sources and sessions,
+REQ-F-11,Requirements,Requirement,Threats are scored against a defended-asset list with per-class lethality and asset weighting,
+REQ-F-12,Requirements,Requirement,"The system recommends a cheapest-adequate assignment of resources to tracks within readiness, geometry, and policy",
+REQ-F-13,Requirements,Requirement,Every recommendation carries a rationale and its alternatives,
+REQ-F-14,Requirements,Requirement,"The queue orders pending decisions by priority and time remaining, and supports pre-delegation where policy allows",
+REQ-F-15,Requirements,Requirement,"A session is journaled, replayable, and reproduces the same picture",
+REQ-F-16,Requirements,Requirement,Measures are computed from the journal without manual collation,
+REQ-D-01,Requirements,Requirement,Shared types have exactly one owning crate; everything above re-exports,
+REQ-D-02,Requirements,Requirement,Every detection carries its source and its receipt time,
+REQ-D-03,Requirements,Requirement,"Identification evidence names its producer, including model name and version for a machine-learning source",
+REQ-D-04,Requirements,Requirement,Envelopes carry a bus sequence number and a mission time,
+REQ-D-05,Requirements,Requirement,The node journal fsyncs every envelope; desktop journals fsync on session save and every five seconds,
+REQ-D-06,Requirements,Requirement,"Journals merge in mission-time order, duplicates are dropped, and conflicting decisions are reported rather than resolved",
+REQ-D-07,Requirements,Requirement,"Views, reports, and the interface contract carry a releasability marking",
+REQ-D-08,Requirements,Requirement,Training data and model artefacts live outside this repository; only the manifest enters it,
+REQ-I-01,Requirements,Requirement,"The node exposes a versioned contract for snapshot, event stream, detection submission, and plan decisions",
+REQ-I-02,Requirements,Requirement,"Schema versions are negotiated explicitly and an incompatible peer is refused, not silently accepted",
+REQ-I-03,Requirements,Requirement,Radar feeds decode from ASTERIX category 048,
+REQ-I-04,Requirements,Requirement,Coalition track exchange uses STANAG 4676,
+REQ-I-05,Requirements,Requirement,Each external party is a configurable endpoint with a message type rather than a bespoke integration,
+REQ-I-06,Requirements,Requirement,Detections are exportable in a columnar format for analytics and bulk exchange,
+REQ-S-01,Requirements,Requirement,"No engagement, effector command, or reserved identity declaration executes without a recorded human decision",
+REQ-S-02,Requirements,Requirement,"Authority is enforced per role, per class, and per engagement layer, per the authority matrix",
+REQ-S-03,Requirements,Requirement,Weapons control status is set by the authorized roles and constrains every recommendation,
+REQ-S-04,Requirements,Requirement,Pending decisions escalate and time out rather than waiting indefinitely,
+REQ-S-05,Requirements,Requirement,"Every consequential act is attributable to a person, a role, and a mission time in an audit log",
+REQ-S-06,Requirements,Requirement,Machine identities authenticate with mutual transport-layer security; operator sessions use short-lived signed tokens,
+REQ-S-07,Requirements,Requirement,Data is encrypted in transit on every network crossing and at rest where the deployment requires it,
+REQ-S-08,Requirements,Requirement,The assistant has no tool that changes state and no dependency path to a crate that does,
+REQ-S-09,Requirements,Requirement,"Untrusted text from sensors, peers, annotations, and reports is treated as data by the assistant, never as instruction",
+REQ-S-10,Requirements,Requirement,"Every release carries a bill of materials, a signature, and its assurance reports",
+REQ-P-01,Requirements,Requirement,The desktop sustains its frame-rate budget with the 3D viewport open under a dense-swarm scenario,
+REQ-P-02,Requirements,Requirement,"The per-frame tick stays inside its budget with ingest, poll, plan, and journal all running",
+REQ-P-03,Requirements,Requirement,Snapshot calls do not touch the pipeline and stay inside their budget,
+REQ-P-04,Requirements,Requirement,Detection to on-screen update stays inside its end-to-end budget in the embedded profile,
+REQ-P-05,Requirements,Requirement,The node sustains its detection ingest throughput through validation and quarantine,
+REQ-P-06,Requirements,Requirement,Detection to event-stream publish stays inside its budget on-prem and in cloud,
+REQ-P-07,Requirements,Requirement,"An accepted envelope is durable within its budget, and the node recovers to serving within its budget after restart",
+REQ-P-08,Requirements,Requirement,"A desktop falls back to embedded operation within its budget after link loss, stores and forwards to capacity, and reconciles within its budget",
+REQ-P-09,Requirements,Requirement,Covariances stay positive semi-definite and no value becomes non-finite over long runs,
+REQ-U-01,Requirements,Requirement,Each role has a workspace containing what that role's threads need and not more,
+REQ-U-02,Requirements,Requirement,Every layout carries a status strip stating what the system knows and does not know,
+REQ-U-03,Requirements,Requirement,"Absence, staleness, and degradation are visible rather than inferred from silence",
+REQ-U-04,Requirements,Requirement,"Machine assistance is labelled, sourced, and carries no authority in the interface",
+REQ-U-05,Requirements,Requirement,"Default display vocabulary is the agreed standard terms, with a per-deployment override table",
+REQ-C-01,Requirements,Requirement,No dependency edge exists that `ARCHITECTURE.md` does not draw,
+REQ-C-02,Requirements,Requirement,Every dependency is recorded in the standards document \u00a72.9 and pinned once,
+REQ-C-03,Requirements,Requirement,"No `unwrap()` or `expect()` outside tests, entry points, and debug-only invariant checks",
+REQ-C-04,Requirements,Requirement,Unimplemented capability returns a named error on every reachable path,
+REQ-C-05,Requirements,Requirement,The graphics and compute contexts stay separate and separately pinned,
+REQ-C-06,Requirements,Requirement,"Deployment profiles differ by configuration and wiring, never by conditional logic in a domain crate",
+REQ-C-07,Requirements,Requirement,"The two binaries contain wiring, not domain logic",
+REQ-C-08,Requirements,Requirement,No pass criterion or measure target is widened to make a test pass,
+REQ-C-09,Requirements,Requirement,Every artefact is unclassified and derived from public sources,
+REQ-C-10,Requirements,Requirement,No verification gate is waived by an agent,
