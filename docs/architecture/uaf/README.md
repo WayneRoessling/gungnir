@@ -87,10 +87,28 @@ python docs/architecture/uaf/tools/export_xmi.py
 writes `exports/gungnir-uaf.xmi`: the same registry as XMI 2.1/UML 2.1, for
 import into Sparx Enterprise Architect's UAF MDG Technology. One-way (registry
 to EA, never the reverse) and not part of the CI drift check -- run it after
-`build_uaf.py` whenever you want EA caught up with the registry. See the
-script's own docstring for exactly what is guaranteed (valid, importable XMI)
-versus best-effort (the UAF stereotype binding, which depends on the UAF MDG
-Technology being enabled in your EA install before import).
+`build_uaf.py` whenever you want EA caught up with the registry. In practice,
+XMI import got the elements into EA but not the relationships (twice, on two
+different relationship encodings) -- see `export_ea_script.py` below for the
+path that actually carries relationships across.
+
+```bash
+python docs/architecture/uaf/tools/export_ea_script.py
+```
+
+writes `exports/gungnir-uaf-import.vbs`: the same registry built directly in EA
+through its own Scripting/Automation interface (`Repository`,
+`Package.Elements.AddNew`, `Element.Connectors.AddNew`) rather than through
+XMI import, since that carries relationships (as EA Connectors) where the XMI
+path did not. Open your EA project, `Tools > Scripting`, create a new VBScript,
+paste the file in, run it (Ctrl+F9); Script Output logs progress. Not
+idempotent -- delete the "Gungnir UAF Model" package before re-running after a
+registry change. `test_ea_script_mock.vbs` executes a freshly generated script
+against a hand-written mock of the EA object model via `cscript.exe`, outside
+of EA (`cscript.exe //Nologo docs/architecture/uaf/tools/test_ea_script_mock.vbs`);
+that confirms the generated VBScript is well-formed and its control flow
+completes, not that EA's real object model does what the mock assumes -- see
+both scripts' docstrings for exactly what is and is not verified.
 
 ## Conventions
 
