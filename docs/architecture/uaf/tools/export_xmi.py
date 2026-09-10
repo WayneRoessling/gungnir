@@ -18,25 +18,43 @@ What this produces and what it does not guarantee:
   - Valid, well-formed XMI 2.1 / UML 2.1: one `uml:Package` per registry section,
     one `uml:Class` per element (`xmi:id` is the registry id itself, e.g. `RS-model`,
     so re-importing after a registry change diffs cleanly against what is already
-    in the EA project), one `uml:Dependency` per relationship edge. This much is
-    guaranteed to import into EA as a browsable plain UML model even if nothing
-    below this line binds correctly on your installation.
+    in the EA project). This much is guaranteed to import into EA as a browsable
+    plain UML model even if nothing below this line binds on your installation --
+    confirmed by a first-round import: the classes came through.
+  - Relationships did NOT come through on that first round: a plain
+    `uml:Dependency` packagedElement is, it turns out, the wrong shape for EA's
+    importer -- EA's own model treats a relationship as a Connector attached to
+    its two endpoint elements, not a free-floating package member the way a Class
+    is, and its "Import Package from XMI" appears to only create Connectors from
+    its own native `xmi:Extension` connector block, not from plain UML
+    Dependency/Association packagedElements. So every relationship is now carried
+    BOTH ways: still a `uml:Dependency` in the model proper (harmless, standards-
+    correct, kept in case a different tool round-trips this file), and as a
+    `<connectors><connector>` entry in the same `xmi:Extension
+    extender="Enterprise Architect"` block that successfully carried the class
+    stereotypes -- the exact tag names there (`source`/`target`, `ea_type`) are a
+    second-best-effort, not verified against a live EA import yet, since round 1
+    only told us classes-without-stereotypes-checked worked and connectors did
+    not exist at all.
+  - No diagrams: this export has never emitted any diagram XML (`uml:Diagram` or
+    EA's `<diagrams>` extension). Nothing to verify here yet -- it is simply not
+    built. Ask for it explicitly if you want a first pass; it is a distinct,
+    larger piece of work (element layout coordinates, EA's diagram extension
+    schema) rather than a one-line addition to what is here.
   - A best-effort UAF stereotype per element/relationship (`ResourceArtifact`,
     `Capability`, `OperationalPerformer`, ... -- names cross-checked against the
     OMG UAF 1.2 profile and a UAF-certified tool's stereotype list, not guessed),
-    applied via the `xmi:Extension extender="Enterprise Architect"` block EA's own
-    XMI carries stereotypes in. This is the part to verify on first import: if a
-    stereotype does not bind (EA shows the element as a plain Class rather than
-    with UAF iconography), the fix is enabling the UAF MDG Technology
-    (Extensions > MDG Technologies > UAF) before importing, or renaming the
-    stereotype tag here to match what your EA's UAF profile actually calls it.
-    Every element also carries a `uafKind`/`uafRelationship` tagged value with our
-    own registry vocabulary verbatim, so the mapping is recoverable even if the
-    stereotype name itself does not bind.
+    applied via the `xmi:Extension extender="Enterprise Architect"` block. Not yet
+    confirmed whether the stereotype *name* itself binds to UAF MDG iconography
+    or just imports as a plain Class/Connector with a stereotype label -- report
+    back what you see. Every element and relationship also carries a
+    `uafKind`/`uafRelationship` tagged value with our own registry vocabulary
+    verbatim, so the mapping is recoverable regardless of whether the stereotype
+    name binds.
   - Every other registry field (owner, status, code, source, layer, category,
     priority, ...) becomes an EA tagged value, and `description` becomes both an
-    `ownedComment` and a `notes` tag, so nothing in the registry is dropped on
-    export even if EA's importer only picks up a subset of it.
+    `ownedComment` and a `documentation`/`notes` tag, so nothing in the registry
+    is dropped on export even if EA's importer only picks up a subset of it.
 
 Usage (from the workspace root):
 
@@ -150,24 +168,41 @@ def class_xml(entry: dict, stereotype: str) -> tuple[str, str]:
 
 
 def dependency_xml(rel_id: str, from_id: str, to_id: str, kind: str,
-                    stereotype: str, extra: dict) -> tuple[str, str]:
+                    stereotype: str, extra: dict) -> tuple[str, str, str]:
+    """Returns (uml:Dependency packagedElement XML, EA element-extension XML,
+    EA connector-extension XML). The connector block is the one EA's importer
+    is actually expected to read; the other two are kept for round-tripping to
+    tools that do honour plain UML Dependency/stereotype-on-element XMI."""
     name = f"{kind}: {from_id} -> {to_id}"
     dep = (
-        f'      <packagedElement xmi:type="uml:Dependency" xmi:id={attr(rel_id)} '
-        f'name={attr(name)} client={attr(from_id)} supplier={attr(to_id)}/>\n'
+        f'      <packagedElement xmi:type="uml:Dependency" xmi:id={attr(rel_id)} name={attr(name)}>\n'
+        f'        <client xmi:idref={attr(from_id)}/>\n'
+        f'        <supplier xmi:idref={attr(to_id)}/>\n'
+        f'      </packagedElement>\n'
     )
     tags = [f'          <tag name="uafRelationship" value={attr(kind)}/>\n']
     for k, v in extra.items():
         if k in ("from", "to") or v in (None, "", []):
             continue
         tags.append(tag_xml(k, v))
-    ext = (
+    tags_xml = "".join(tags)
+
+    elem_ext = (
         f'      <element xmi:idref={attr(rel_id)} xmi:type="uml:Dependency">\n'
         f'        <properties stereotype={attr(stereotype)}/>\n'
-        f'        <tags>\n{"".join(tags)}        </tags>\n'
+        f'        <tags>\n{tags_xml}        </tags>\n'
         f'      </element>\n'
     )
-    return dep, ext
+    connector_ext = (
+        f'      <connector xmi:idref={attr(rel_id)}>\n'
+        f'        <source xmi:idref={attr(from_id)}/>\n'
+        f'        <target xmi:idref={attr(to_id)}/>\n'
+        f'        <properties ea_type="Dependency" direction="Source -&gt; Destination" '
+        f'stereotype={attr(stereotype)} name={attr(name)}/>\n'
+        f'        <tags>\n{tags_xml}        </tags>\n'
+        f'      </connector>\n'
+    )
+    return dep, elem_ext, connector_ext
 
 
 def build(elements: dict, rels: dict) -> str:
@@ -192,7 +227,7 @@ def build(elements: dict, rels: dict) -> str:
             + '    </packagedElement>\n'
         )
 
-    dependencies, n = [], 0
+    dependencies, connectors, n = [], [], 0
     for kind, entries in rels.items():
         if kind not in RELATIONSHIP_STEREOTYPE:
             continue
@@ -206,9 +241,10 @@ def build(elements: dict, rels: dict) -> str:
                     continue  # id resolution is build_uaf.py's job (check()); skip quietly here
                 n += 1
                 rel_id = f"REL-{n}"
-                dep_xml, ext_xml = dependency_xml(rel_id, from_id, to_id, kind, stereotype, entry)
+                dep_xml, elem_ext, conn_ext = dependency_xml(rel_id, from_id, to_id, kind, stereotype, entry)
                 dependencies.append(dep_xml)
-                ea_elements.append(ext_xml)
+                ea_elements.append(elem_ext)
+                connectors.append(conn_ext)
     rel_pkg = (
         '    <packagedElement xmi:type="uml:Package" xmi:id="PKG-relationships" name="Relationships">\n'
         + "".join(dependencies)
@@ -228,6 +264,9 @@ def build(elements: dict, rels: dict) -> str:
         '    <elements>\n'
         + "".join(ea_elements)
         + '    </elements>\n'
+        '    <connectors>\n'
+        + "".join(connectors)
+        + '    </connectors>\n'
         '  </xmi:Extension>\n'
         '</xmi:XMI>\n'
     )
