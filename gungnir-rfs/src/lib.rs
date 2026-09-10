@@ -22,14 +22,17 @@
 //! naming a type for a filter it does not implement is how a reader ends up believing
 //! the build has something it does not.
 //!
-//! **The LMB build is written and gated, not signed. The CPHD build was signed by the
-//! owner on 2026-09-09**, after the review before signing found and closed a numerical
-//! instability in its leave-one-out elementary symmetric functions (see
-//! `elementary_symmetric_leave_one_out`'s own doc comment). Both are reached by
-//! `docs/agentic-workflow.md`'s numerical-stability clause the same way the PHD filter
-//! is (`ARCHITECTURE.md` §10), and neither has a library oracle -- Stone Soup 1.9.1 has
-//! no CPHD updater and no labelled filter at all, established by evidence in each
-//! generator rather than assumed. Each is gated against this crate's own hand
+//! **The CPHD build was signed by the owner on 2026-09-09**, after the review before
+//! signing found and closed a numerical instability in its leave-one-out elementary
+//! symmetric functions (see `elementary_symmetric_leave_one_out`'s own doc comment).
+//! **The LMB build is signed by the owner on 2026-09-10**, after the same review found
+//! and closed a different instability: [`association_marginals`]'s doc comment on the
+//! log-domain rewrite has the finding, a genuine underflow at the settings' own stated
+//! label ceiling. Both are reached by `docs/agentic-workflow.md`'s numerical-stability
+//! clause the same way the PHD filter is (`ARCHITECTURE.md` §10), and neither has a
+//! library oracle -- Stone Soup 1.9.1 has no CPHD updater and no labelled filter at all,
+//! established by evidence in each generator rather than assumed. Each is gated against
+//! this crate's own hand
 //! derivation, independently checked before any Rust was written. That is real
 //! verification, not a substitute for the owner's review this class of code needs
 //! before it is signed -- which, for the CPHD, is exactly where the instability was
@@ -1432,13 +1435,51 @@ impl LmbFilter {
 /// three agree to `2.5e-15` relative, which is the evidence that this program's
 /// bookkeeping is right; a shared derivation could not have provided it.
 ///
-/// # Scaling
+/// `ln(exp(a) + exp(b))`, without computing either exponential unless doing so cannot
+/// overflow: factoring out the larger of `a`/`b` first is what makes this safe to fold
+/// pairwise, streamed, over an arbitrary number of terms (as [`association_marginals`]
+/// does) rather than needing every term collected into one slice first. `f64::NEG_INFINITY`
+/// combined with anything returns the other operand unchanged, which is exactly `ln(0)`
+/// behaving as the additive identity ought to.
+fn lse2(a: f64, b: f64) -> f64 {
+    if !a.is_finite() && !b.is_finite() {
+        // Both `-inf` (or one `-inf`, one `NaN`, which never occurs here since every
+        // caller only ever passes a finite value or exactly `NEG_INFINITY`): the sum of
+        // two impossibilities is impossible, not `NaN` from `0.0_f64.ln()` twice over.
+        return f64::NEG_INFINITY;
+    }
+    let m = a.max(b);
+    m + ((a - m).exp() + (b - m).exp()).ln()
+}
+
+/// # Log domain, and why: a real underflow found reviewing this before signing
 ///
-/// Each label's weight vector is divided by its own largest entry first. Scaling one
-/// label scales every joint assignment weight by the same factor, so the marginals are
-/// unchanged -- but the products taken across labels are not, and with `κ` at `1e-6` a
-/// per-label weight of order `1e4` raised to the number of labels overflows a `f64`
-/// long before the scene is interesting.
+/// An earlier version scaled each label's weight vector by its own largest entry
+/// (bounding every per-label factor at 1, to stop the products taken across labels
+/// overflowing when `κ` is small) and accumulated `forward`/`backward` in linear space.
+/// That stopped overflow but not the opposite failure: with many labels each
+/// confidently associated to a detection -- which is the regime a dense, well-tracked
+/// scene actually produces, not a pathological one -- the *scaled* weight of "this label
+/// consumes nothing" becomes small for every label, and its product over `n` labels
+/// underflows to exactly zero long before `n` reaches [`LmbSettings::max_bernoullis`]'s
+/// own documented ceiling of 100. `backward[0][full]` -- the normalising total -- then
+/// underflows to zero, this function returns `None`, and [`LmbFilter::update`] fails the
+/// *entire* scan with [`RfsError::MalformedScene`] over a scene that is not malformed at
+/// all. No fixture exercised anywhere near 100 labels (the largest is three), so nothing
+/// caught it before this review: a probe scene of 100 labels genuinely competing for two
+/// detections, at the same likelihood-to-clutter ratios a real association produces,
+/// reproduced the failure directly, and an independent log-domain re-implementation of
+/// the identical recursion (compared against the scaled linear one below 100 labels,
+/// where both agree to the tests' own tolerance) stayed correct at 100 and well past it.
+///
+/// **The fix is to work in log-space throughout rather than to scale harder.** Every
+/// weight becomes its natural log (`f64::NEG_INFINITY` for a zero weight, which is the
+/// correct representation of "impossible" rather than a value to guard against), every
+/// product becomes a sum, and every sum becomes a log-sum-exp -- which cannot overflow
+/// (it factors out the largest term before exponentiating the rest) and cannot underflow
+/// the way a product of many sub-1 linear factors does, because no partial product is
+/// ever computed in linear space until the one division that turns a final log-ratio
+/// back into a probability.
 fn association_marginals(u: &[Vec<f64>], detection_count: usize) -> Option<Vec<Vec<f64>>> {
     let n = u.len();
     let width = ASSOCIATION_FIRST_DETECTION + detection_count;
@@ -1448,24 +1489,23 @@ fn association_marginals(u: &[Vec<f64>], detection_count: usize) -> Option<Vec<V
     let size = 1_usize.checked_shl(u32::try_from(detection_count).ok()?)?;
     let full = size - 1;
 
-    let scaled: Vec<Vec<f64>> = u
+    // `ln(0)` is `-inf`, the correct log-domain value for a weight that is exactly
+    // impossible, not a case to special-case away.
+    let log_weight = |v: f64| if v > 0.0 { v.ln() } else { f64::NEG_INFINITY };
+    let logs: Vec<Vec<f64>> = u
         .iter()
-        .map(|row| {
-            let peak = row.iter().copied().fold(0.0_f64, f64::max);
-            if peak > 0.0 && peak.is_finite() {
-                row.iter().map(|v| v / peak).collect()
-            } else {
-                row.clone()
-            }
-        })
+        .map(|row| row.iter().copied().map(log_weight).collect())
         .collect();
-    let c: Vec<f64> = scaled
+    // `log_c[l]` is `ln(u_l(absent) + u_l(missed))`, via log-sum-exp of the two rather
+    // than `ln` of a linear-domain sum, so a label whose "consumes nothing" weight is
+    // itself tiny never passes through a linear intermediate at all.
+    let log_c: Vec<f64> = logs
         .iter()
-        .map(|row| row[ASSOCIATION_ABSENT] + row[ASSOCIATION_MISSED])
+        .map(|row| lse2(row[ASSOCIATION_ABSENT], row[ASSOCIATION_MISSED]))
         .collect();
 
-    let mut forward = vec![vec![0.0_f64; size]; n + 1];
-    forward[0][0] = 1.0;
+    let mut forward = vec![vec![f64::NEG_INFINITY; size]; n + 1];
+    forward[0][0] = 0.0;
     for l in 0..n {
         // Split the borrow rather than index the same `Vec` twice: the recursion reads
         // row `l` and writes row `l + 1`, which is a disjoint pair and not an aliasing
@@ -1473,29 +1513,35 @@ fn association_marginals(u: &[Vec<f64>], detection_count: usize) -> Option<Vec<V
         let (head, tail) = forward.split_at_mut(l + 1);
         let (previous, next) = (&head[l], &mut tail[0]);
         for (s, &here) in previous.iter().enumerate() {
-            if here == 0.0 {
+            if !here.is_finite() {
                 continue;
             }
-            next[s] += here * c[l];
+            next[s] = lse2(next[s], here + log_c[l]);
             for j in 0..detection_count {
                 if s & (1 << j) != 0 {
                     continue;
                 }
-                next[s | (1 << j)] += here * scaled[l][ASSOCIATION_FIRST_DETECTION + j];
+                next[s | (1 << j)] = lse2(
+                    next[s | (1 << j)],
+                    here + logs[l][ASSOCIATION_FIRST_DETECTION + j],
+                );
             }
         }
     }
 
-    let mut backward = vec![vec![0.0_f64; size]; n + 1];
-    backward[n].fill(1.0);
+    let mut backward = vec![vec![f64::NEG_INFINITY; size]; n + 1];
+    backward[n].fill(0.0);
     for l in (0..n).rev() {
         let (head, tail) = backward.split_at_mut(l + 1);
         let (current, next) = (&mut head[l], &tail[0]);
         for (s, slot) in current.iter_mut().enumerate() {
-            let mut acc = next[s] * c[l];
+            let mut acc = next[s] + log_c[l];
             for j in 0..detection_count {
                 if s & (1 << j) != 0 {
-                    acc += next[s & !(1 << j)] * scaled[l][ASSOCIATION_FIRST_DETECTION + j];
+                    acc = lse2(
+                        acc,
+                        next[s & !(1 << j)] + logs[l][ASSOCIATION_FIRST_DETECTION + j],
+                    );
                 }
             }
             *slot = acc;
@@ -1503,37 +1549,54 @@ fn association_marginals(u: &[Vec<f64>], detection_count: usize) -> Option<Vec<V
     }
 
     let total = backward[0][full];
-    if total <= 0.0 || !total.is_finite() {
+    if !total.is_finite() {
         return None;
     }
 
     let mut out = vec![vec![0.0_f64; width]; n];
     for (l, row) in out.iter_mut().enumerate() {
-        let mut no_detection = 0.0;
+        // Accumulated in log-space across every `s`, exactly like `no_detection`: the
+        // number of terms scales with `size` (up to 2^16), and folding them in linear
+        // space here would reintroduce the same underflow this rewrite exists to
+        // remove, just moved one loop over.
+        let mut no_detection = f64::NEG_INFINITY;
+        let mut detection = vec![f64::NEG_INFINITY; detection_count];
         for (s, &here) in forward[l].iter().enumerate() {
-            if here == 0.0 {
+            if !here.is_finite() {
                 continue;
             }
             let rest = full & !s;
             // Labels after `l` may use anything left over; `backward` is indexed by the
             // set they are ALLOWED, not the set they consume, which is why `rest` and
             // not an exact-set lookup appears here.
-            no_detection += here * c[l] * backward[l + 1][rest];
+            no_detection = lse2(no_detection, here + log_c[l] + backward[l + 1][rest]);
             for j in 0..detection_count {
                 if s & (1 << j) != 0 {
                     continue;
                 }
-                row[ASSOCIATION_FIRST_DETECTION + j] += here
-                    * scaled[l][ASSOCIATION_FIRST_DETECTION + j]
-                    * backward[l + 1][rest & !(1 << j)];
+                let term = here
+                    + logs[l][ASSOCIATION_FIRST_DETECTION + j]
+                    + backward[l + 1][rest & !(1 << j)];
+                detection[j] = lse2(detection[j], term);
             }
         }
-        if c[l] > 0.0 {
-            row[ASSOCIATION_ABSENT] = no_detection * scaled[l][ASSOCIATION_ABSENT] / c[l];
-            row[ASSOCIATION_MISSED] = no_detection * scaled[l][ASSOCIATION_MISSED] / c[l];
+        for (j, log_p) in detection.into_iter().enumerate() {
+            row[ASSOCIATION_FIRST_DETECTION + j] = if log_p.is_finite() {
+                (log_p - total).exp()
+            } else {
+                0.0
+            };
         }
-        for value in row.iter_mut() {
-            *value /= total;
+        // `no_detection - log_c[l]` is the log of "this label consumed nothing", split
+        // between absent and missed in the same proportion the weights themselves carry
+        // -- `absent/c_l` and `missed/c_l` -- computed as a log-difference so neither
+        // side ever visits a linear intermediate. `log_c[l] == -inf` means the label
+        // always produces a detection, so absent and missed both stay at their default
+        // zero rather than dividing `-inf` by `-inf` into a `NaN`.
+        if log_c[l].is_finite() {
+            let ratio = no_detection - log_c[l];
+            row[ASSOCIATION_ABSENT] = (ratio + logs[l][ASSOCIATION_ABSENT] - total).exp();
+            row[ASSOCIATION_MISSED] = (ratio + logs[l][ASSOCIATION_MISSED] - total).exp();
         }
     }
     Some(out)
@@ -2972,6 +3035,187 @@ mod tests {
                 "{clutter} clutter, broad births {broad_birth_weight}: the extracted track is \
                  {distance:.1} m from the only target"
             );
+        }
+    }
+
+    /// **Found and fixed reviewing this file for the owner's signature.** No fixture
+    /// exercised anywhere near the settings' own stated ceiling (100 Bernoullis, 12
+    /// detections) -- the largest oracle scenario has 3 labels and 4 detections. The
+    /// filter's earlier row-peak scaling bounded every per-label factor at 1 but still
+    /// took the *product* of up to `n` of them in linear space; at 100 labels genuinely
+    /// competing for two detections, at ordinary likelihood-to-clutter ratios, that
+    /// product underflowed to exactly zero and `association_marginals` returned `None`
+    /// -- failing [`LmbFilter::update`]'s entire scan with [`RfsError::MalformedScene`]
+    /// over a scene that was not malformed at all. Cross-checks the now-log-domain
+    /// production recursion against an independently written log-domain
+    /// re-implementation of the identical recursion, at `n` from 8 through 200 labels
+    /// genuinely competing for 2 detections (not isolated fillers -- real multi-way
+    /// competition, the regime the underflow was in), well past the settings' own
+    /// documented ceiling.
+    // One independent log-domain reference implementation plus the sweep over `n`; the
+    // reference has to be self-contained to be worth anything as a cross-check, and
+    // splitting it out would not shorten this so much as rename the split.
+    #[allow(clippy::too_many_lines)]
+    #[test]
+    fn association_marginals_stays_correct_at_the_settings_own_label_ceiling() {
+        fn log_domain_marginals(u: &[Vec<f64>], detection_count: usize) -> Vec<Vec<f64>> {
+            // The identical recursion in log-space via log-sum-exp, as an independent
+            // check on precision rather than a second derivation of the algorithm.
+            // Every accumulation collects its terms into a `Vec` and calls `lse` exactly
+            // once, rather than folding pairwise, so nothing here silently drops back
+            // into linear-domain summation the way a running `lse(&[acc, next])` chain
+            // reduces to for large term counts.
+            fn lse(values: &[f64]) -> f64 {
+                let m = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                if !m.is_finite() {
+                    return f64::NEG_INFINITY;
+                }
+                m + values.iter().map(|v| (v - m).exp()).sum::<f64>().ln()
+            }
+            let n = u.len();
+            let size = 1_usize << detection_count;
+            let full = size - 1;
+            let log_row = |row: &[f64]| -> Vec<f64> {
+                row.iter()
+                    .map(|v| if *v > 0.0 { v.ln() } else { f64::NEG_INFINITY })
+                    .collect()
+            };
+            let logs: Vec<Vec<f64>> = u.iter().map(|r| log_row(r)).collect();
+            let c: Vec<f64> = logs
+                .iter()
+                .map(|row| lse(&[row[ASSOCIATION_ABSENT], row[ASSOCIATION_MISSED]]))
+                .collect();
+
+            // `incoming[s]` collects every log-weighted contribution to `forward[l+1][s]`
+            // before a single `lse` folds them, mirroring the linear version's
+            // `next[s] +=` accumulation but in log-space.
+            let mut forward = vec![vec![f64::NEG_INFINITY; size]; n + 1];
+            forward[0][0] = 0.0;
+            for l in 0..n {
+                let mut incoming = vec![Vec::new(); size];
+                for s in 0..size {
+                    let here = forward[l][s];
+                    if !here.is_finite() {
+                        continue;
+                    }
+                    incoming[s].push(here + c[l]);
+                    for j in 0..detection_count {
+                        if s & (1 << j) == 0 {
+                            incoming[s | (1 << j)]
+                                .push(here + logs[l][ASSOCIATION_FIRST_DETECTION + j]);
+                        }
+                    }
+                }
+                for (s, terms) in incoming.into_iter().enumerate() {
+                    forward[l + 1][s] = lse(&terms);
+                }
+            }
+            let mut backward = vec![vec![f64::NEG_INFINITY; size]; n + 1];
+            backward[n].fill(0.0);
+            for l in (0..n).rev() {
+                for s in 0..size {
+                    let mut terms = vec![backward[l + 1][s] + c[l]];
+                    for j in 0..detection_count {
+                        if s & (1 << j) != 0 {
+                            terms.push(
+                                backward[l + 1][s & !(1 << j)]
+                                    + logs[l][ASSOCIATION_FIRST_DETECTION + j],
+                            );
+                        }
+                    }
+                    backward[l][s] = lse(&terms);
+                }
+            }
+            let total = backward[0][full];
+            let mut out = vec![vec![0.0; ASSOCIATION_FIRST_DETECTION + detection_count]; n];
+            for (l, row) in out.iter_mut().enumerate() {
+                let mut no_detection_terms = Vec::new();
+                let mut detection_terms = vec![Vec::new(); detection_count];
+                for (s, &here) in forward[l].iter().enumerate() {
+                    if !here.is_finite() {
+                        continue;
+                    }
+                    let rest = full & !s;
+                    no_detection_terms.push(here + c[l] + backward[l + 1][rest]);
+                    for j in 0..detection_count {
+                        if s & (1 << j) != 0 {
+                            continue;
+                        }
+                        detection_terms[j].push(
+                            here + logs[l][ASSOCIATION_FIRST_DETECTION + j]
+                                + backward[l + 1][rest & !(1 << j)],
+                        );
+                    }
+                }
+                for j in 0..detection_count {
+                    row[ASSOCIATION_FIRST_DETECTION + j] = (lse(&detection_terms[j]) - total).exp();
+                }
+                let no_detection = lse(&no_detection_terms);
+                let split_absent = no_detection + logs[l][ASSOCIATION_ABSENT] - c[l];
+                let split_missed = no_detection + logs[l][ASSOCIATION_MISSED] - c[l];
+                row[ASSOCIATION_ABSENT] = (split_absent - total).exp();
+                row[ASSOCIATION_MISSED] = (split_missed - total).exp();
+            }
+            out
+        }
+
+        // n labels genuinely competing for 2 detections: each has high existence and a
+        // real, non-negligible likelihood split across both detections -- the regime
+        // where the marginal actually depends on every other label's weight, not an
+        // isolated filler that would sidestep the scaling question entirely.
+        fn scene(n: usize) -> Vec<Vec<f64>> {
+            (0..n)
+                .map(|i| {
+                    let existence = 0.9;
+                    let p_d = 0.9;
+                    let kappa = 1e-6;
+                    // Every label's own likelihood for detection 0 vs 1 varies, so the
+                    // competition is genuine rather than a tie replicated n times.
+                    // `i` never exceeds 200 in this test, well inside `f64`'s exact
+                    // integer range; the cast is for the trig argument, not a count.
+                    #[allow(clippy::cast_precision_loss)]
+                    let i_f = i as f64;
+                    let q0 = 1e-3 * (1.0 + (i_f * 0.37).sin().abs());
+                    let q1 = 1e-3 * (1.0 + (i_f * 0.61).cos().abs());
+                    vec![
+                        1.0 - existence,
+                        existence * (1.0 - p_d),
+                        existence * p_d * q0 / kappa,
+                        existence * p_d * q1 / kappa,
+                    ]
+                })
+                .collect()
+        }
+
+        for n in [8usize, 16, 32, 64, 100, 200] {
+            let u = scene(n);
+            let linear = association_marginals(&u, 2).unwrap_or_else(|| {
+                panic!(
+                    "n={n}: association_marginals returned None -- the exact underflow \
+                     this test exists to catch, over a scene that is not malformed"
+                )
+            });
+            let log_domain = log_domain_marginals(&u, 2);
+            assert_eq!(linear.len(), n);
+            for (label, (lin_row, log_row)) in linear.iter().zip(log_domain.iter()).enumerate() {
+                let lin_sum: f64 = lin_row.iter().sum();
+                assert!(
+                    (lin_sum - 1.0).abs() < 1e-9,
+                    "n={n} label={label}: linear row does not sum to 1: {lin_row:?} (sum {lin_sum})"
+                );
+                for (k, (&lv, &logv)) in lin_row.iter().zip(log_row.iter()).enumerate() {
+                    assert!(
+                        lv.is_finite() && !lv.is_nan(),
+                        "n={n} label={label} entry={k}: linear-domain result is not finite: {lv}"
+                    );
+                    let diff = (lv - logv).abs();
+                    assert!(
+                        diff < 1e-6,
+                        "n={n} label={label} entry={k}: linear {lv} vs log-domain {logv}, \
+                         differ by {diff} -- the scaling has drifted from the reference"
+                    );
+                }
+            }
         }
     }
 }

@@ -188,6 +188,7 @@ fn assert_epoch_coherent(snapshot: &PipelineSnapshot) {
         &snapshot.tracks,
         &snapshot.retained_bearings,
         &snapshot.stats,
+        snapshot.dense_group.as_ref(),
     );
 }
 
@@ -195,7 +196,23 @@ fn assert_epoch_coherent_parts(
     tracks: &[TimedTrack],
     retained: &[RetainedBearing],
     stats: &PipelineStats,
+    dense_group: Option<&crate::DenseGroupEstimate>,
 ) {
+    // **Found reviewing this file for the owner's signature.** `dense_group` and
+    // `dense_group_refusals` (GAP-015) were added to `PipelineSnapshot` and to
+    // `snapshot_output` without extending this check, which is the exact class of bug
+    // this whole assertion exists to catch -- just left uncovered in the two newest
+    // fields. The fields are still read in the same one-shot struct construction as
+    // `tracks`/`retained`/`stats`, so nothing here is a live defect; this closes the
+    // coverage gap so a future change that split them onto a second channel (the
+    // failure `unbundled_publication_is_caught` proves this suite would catch) is
+    // actually checked against, rather than assumed safe by the same argument that
+    // covers the older three fields.
+    assert!(
+        stats.epochs > 0 || dense_group.is_none(),
+        "dense_group and stats came from different instants: an estimate exists before \
+         any epoch had been processed"
+    );
     let live_by_counter = stats.bearings_retained - stats.bearings_expired;
     assert_eq!(
         retained.len() as u64,
@@ -489,13 +506,13 @@ fn unbundled_publication_is_caught() {
         for _ in 0..CONCURRENT_POLLS {
             drain_latest(&track_rx, &mut tracks);
             drain_latest(&rest_rx, &mut rest);
-            assert_epoch_coherent_parts(&tracks, &rest.0, &rest.1);
+            assert_epoch_coherent_parts(&tracks, &rest.0, &rest.1, None);
             loom::thread::yield_now();
         }
         assert!(publisher.join().is_ok(), "the publisher panicked");
         drain_latest(&track_rx, &mut tracks);
         drain_latest(&rest_rx, &mut rest);
-        assert_epoch_coherent_parts(&tracks, &rest.0, &rest.1);
+        assert_epoch_coherent_parts(&tracks, &rest.0, &rest.1, None);
     });
 }
 

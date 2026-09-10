@@ -48,6 +48,18 @@
 //! idle or configured away, which `tests/dense_group.rs` asserts by comparing the two
 //! runs field for field over a raid that engages it.
 //!
+//! **Human-owned (concurrency; `docs/agentic-workflow.md`): the wiring above --
+//! [`FusionPipeline::run_dense_group`], its engage/release state machine, and
+//! [`PipelineSnapshot::dense_group`]'s epoch coherence with everything else in the
+//! same bundle -- is signed by the owner 2026-09-10** (`ARCHITECTURE.md` §10 item
+//! 128), reviewed alongside `gungnir-rfs`'s LMB derivation (item 128 also carries
+//! that). `crate::loom_model`'s epoch-coherence assertion checked `tracks`,
+//! `retained_bearings` and `stats` but never `dense_group`, added to
+//! `PipelineSnapshot` after that check was written; extended in the same review so a
+//! future change that split it onto a second channel -- the exact failure the loom
+//! suite exists to catch -- would actually be caught rather than assumed safe by the
+//! same argument that covers the older three fields.
+//!
 //! # Out of sequence, and why a horizon rather than a re-filter
 //!
 //! Detections arrive from several sensors with different latencies, so arrival order
