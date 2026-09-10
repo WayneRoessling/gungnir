@@ -9,7 +9,24 @@
 //! Decision D-42 admitted the crates. Register entry GAP-084.
 //!
 //! **Human-owned** (docs/agentic-workflow.md: `gungnir-security` decides who can read
-//! what); written and gated, not signed.
+//! what); signed by the owner 2026-09-10, over both halves together -- the design
+//! (DN-22 amendment 5, §14) and this code -- per the register's own rule that this
+//! profile needed both signed at once.
+//!
+//! **One real defect found and fixed before signing.** Key Vault's `sign` returns an
+//! ES256 signature as the raw 64-byte `r || s` concatenation (RFC 7518 §3.4), never the
+//! ASN.1 DER encoding this crate's `KeyProvider::sign` contract uses everywhere else --
+//! `P256KeyProvider::sign` converts to DER before returning, AWS KMS's own algorithm
+//! returns DER natively, and every real caller (`gungnir_remote::identity`'s TLS bridge
+//! foremost) parses a signature with `Signature::from_der`. Handed straight through, a
+//! signature from an `AzureKeyVaultKeyService`-backed identity would have failed every
+//! TLS handshake it signed -- invisible to every test here, since the in-crate fake
+//! never modelled either service's real wire format and the two tests that could reach
+//! a real vault are `#[ignore]`d for want of credentials. `azure_call`'s `Job::Sign` arm
+//! now converts through `azure_signature_to_provider_format`, and a new test constructs
+//! a real P-256 signature, takes its raw form exactly as Key Vault's own documentation
+//! describes it, and checks the conversion parses with `Signature::from_der` and still
+//! verifies.
 //!
 //! # The one decision this module exists to implement
 //!
@@ -659,7 +676,7 @@ async fn azure_call(
                 // operation takes a digest, not a message.
                 value: Some(sha256(&message)),
             };
-            client
+            let raw = client
                 .sign(
                     key_name,
                     parameters
@@ -672,8 +689,41 @@ async fn azure_call(
                 .into_model()
                 .map_err(|e| format!("reading the sign response: {e}"))?
                 .result
-                .ok_or_else(|| "the vault returned no signature".to_string())
+                .ok_or_else(|| "the vault returned no signature".to_string())?;
+            azure_signature_to_provider_format(scheme, raw)
         }
+    }
+}
+
+/// Key Vault's `sign` operation returns ES256 as the raw 64-byte `r || s` concatenation
+/// (RFC 7518 §3.4), never the ASN.1 DER encoding this crate's `KeyProvider::sign`
+/// contract uses everywhere else: `P256KeyProvider::sign` (`asymmetric.rs`) calls
+/// `Signature::to_der()` before returning, AWS KMS's own `EcdsaSha256` algorithm returns
+/// DER natively, and every consumer -- `gungnir_remote::identity`'s `rustls`/`rcgen`
+/// bridge chief among them -- parses the result with `Signature::from_der`. Handed
+/// straight through, a raw signature from this path would fail to parse or, worse,
+/// parse as a different (wrong) signature under a decoder lenient enough to try, and
+/// every TLS handshake signed by an `AzureKeyVaultKeyService`-backed identity would be
+/// unusable -- invisible to every test here, since none of them reaches a real vault.
+/// **Found and fixed 2026-09-10, reviewing this file for the owner's signature.**
+/// PS256 (RSA) has no such split -- an RSA signature is one raw integer under either
+/// convention -- so this only converts the one scheme that needs it.
+fn azure_signature_to_provider_format(
+    scheme: SignatureScheme,
+    raw: Vec<u8>,
+) -> Result<Vec<u8>, String> {
+    match scheme {
+        SignatureScheme::EcdsaP256Sha256 => {
+            let signature = p256::ecdsa::Signature::from_slice(&raw).map_err(|e| {
+                format!(
+                    "Key Vault's ES256 signature ({} bytes) did not parse as the \
+                     documented raw r||s format: {e}",
+                    raw.len()
+                )
+            })?;
+            Ok(signature.to_der().as_bytes().to_vec())
+        }
+        SignatureScheme::RsaPssSha256 | SignatureScheme::Ed25519 => Ok(raw),
     }
 }
 
@@ -1107,5 +1157,46 @@ mod tests {
         assert!(azure.contains("Ed25519"), "{azure}");
         assert!(aws_signing_algorithm(SignatureScheme::EcdsaP256Sha256).is_ok());
         assert!(azure_signing_algorithm(SignatureScheme::EcdsaP256Sha256).is_ok());
+    }
+
+    /// **Found and fixed reviewing this file for the owner's 2026-09-10 signature.** Key
+    /// Vault's `sign` returns ES256 as the raw 64-byte `r || s` concatenation (RFC 7518
+    /// §3.4); every consumer of this crate's `KeyProvider::sign` -- `P256KeyProvider`
+    /// itself, and `gungnir_remote::identity`'s TLS bridge -- expects the ASN.1 DER
+    /// encoding `AwsKmsKeyService`'s path already gets natively from KMS. Nothing here
+    /// could reach a real vault to catch the mismatch, so this constructs a real P-256
+    /// signature exactly the length and shape Key Vault's own documentation describes
+    /// and checks the conversion round-trips to something `Signature::from_der` (the
+    /// form every real caller uses) accepts and that verifies under the signing key.
+    #[test]
+    fn azure_s_raw_ecdsa_signature_is_converted_to_the_der_every_caller_expects() {
+        use p256::ecdsa::signature::{Signer, Verifier};
+        use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
+
+        let signing_key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
+        let verifying_key = VerifyingKey::from(&signing_key);
+        let signature: Signature = signing_key.sign(b"a TLS transcript");
+        // Key Vault's own wire format: the fixed-size raw `r || s` bytes, not DER.
+        let raw = signature.to_bytes().to_vec();
+        assert_eq!(
+            raw.len(),
+            64,
+            "P-256's raw ECDSA signature is exactly 64 bytes"
+        );
+
+        let der = azure_signature_to_provider_format(SignatureScheme::EcdsaP256Sha256, raw)
+            .expect("a well-formed raw signature converts");
+        assert_ne!(
+            der,
+            signature.to_bytes().to_vec(),
+            "the output must not still be the raw form"
+        );
+        let parsed = Signature::from_der(&der).expect(
+            "every real caller (P256KeyProvider, gungnir_remote::identity) parses with \
+             from_der; a raw passthrough would fail exactly here",
+        );
+        verifying_key
+            .verify(b"a TLS transcript", &parsed)
+            .expect("the converted signature must still verify under the signing key");
     }
 }

@@ -3117,8 +3117,9 @@ not by finding, for the time between whenever each item landed and this correcti
 
 88. **A sixth batch, fifteen items: the four decisions landed and eleven gaps advanced**
     (2026-09-06). D-29: the node issues its TLS identity from its key provider through
-    rcgen's `SigningKey` (`gungnir-node/src/identity.rs`; rcgen a runtime dependency of
-    the node alone). D-30: `Role::SecurityOfficer`. D-31: `yaml_serde`, and the four
+    rcgen's `SigningKey` (`gungnir-node/src/identity.rs` at the time this item was
+    written; moved to `gungnir-remote/src/identity.rs` later the same day, item 99).
+    D-30: `Role::SecurityOfficer`. D-31: `yaml_serde`, and the four
     plan-07 YAML files load and cross-check (`gungnir_scenario::TrackLibrary`). D-32:
     M.1371-6 pinned after both editions were compared table by table, the gpsd captures
     copied with provenance and the AIS decoder gated on gpsd's decodes; Doc 9871 pinned
@@ -5239,6 +5240,148 @@ not by finding, for the time between whenever each item landed and this correcti
     derivation as unsigned after its 2026-09-09 signature, is corrected in the same
     change; the LMB derivation and the dense-group wiring it also names remain unsigned
     and were never in the queue this sweep walked.
+
+125. **GAP-057: the account nobody could create for one of this system's own roles --
+    found reviewing the CLI that was itself flagged as unsigned, signed by the owner
+    2026-09-10.** `gungnir-node/src/account.rs` (`account add`/`add-os-keystore`) was
+    built 2026-09-07 to close the gap its own module documentation names: `FileAccountStore`
+    and `hash_passphrase` existed and were signed 2026-09-06, but nothing shipped could
+    call the hasher, so a deployment following DN-23 had a documented file format and no
+    way to write one. It was flagged in the gap register as human-owned and unsigned from
+    the day it landed.
+
+    **Reviewed before signing.** Every role name `role_from_str` accepts was checked
+    against `gungnir_security::Role`'s actual variants, the passphrase path was checked
+    for the disclosure `docs/agentic-coding-standards.md` names (arguments are visible
+    through the process table; this reads standard input only, and does not echo it,
+    naming that limitation rather than hiding it), and the corrupt-file and duplicate-
+    operator refusals were checked against their own tests.
+
+    **One role unreachable, found and closed.** `Role` has nine variants;
+    `role_from_str` had eight. `Role::IntelligenceAnalyst` was added to the enum after
+    this file was written (2026-09-07) and reached every other role-aware surface in the
+    workspace -- `gungnir-app`'s own sign-in role parser, `gungnir-security::authz`'s
+    permission table (it is the one role besides `Commander` and `Supervisor` this system
+    grants coalition-exchange release authority to), `gungnir-workflow`'s workspace
+    layout -- but never this CLI, because nothing re-checked the enum against it. A
+    deployment could authenticate an intelligence analyst on the desktop and could not
+    provision that same role for a node at all: `gungnir-node account add ... 7
+    intelligence-analyst` failed with "no such role", the account was never written, and
+    nothing in the existing test suite tried the case that would have caught it. Fixed
+    with an exhaustive reverse mapping (`role_to_cli_str`, test-only, no wildcard arm) so
+    a tenth role added to the enum without a matching line here fails to compile rather
+    than silently repeating the defect, a round-trip test over every current role, and an
+    end-to-end test provisioning an `IntelligenceAnalyst` account through the binary and
+    signing in with it, the same shape the file already used for every other role.
+
+    **Human-owned (this CLI writes the credential material the account store and every
+    caller-authority path trust): signed by the owner 2026-09-10, over the corrected
+    code.** No dependency edge changed. The gap register's GAP-057 entry, which called
+    this same code "human-owned; unsigned" and ended its action field with a dangling
+    "Remaining: the owner's review and signature" left over from before its OS-keystore
+    half was signed under item 104, is corrected in the same change; a separate, older
+    inconsistency in that entry's own "Still open" paragraph -- naming GAP-084's OS
+    keystore provider as unbuilt after the same entry's own text says it was built and
+    wired 2026-09-08 -- is out of scope here and flagged separately.
+
+126. **GAP-060: the certificate and key-custody path, found unsigned behind a
+    self-contradicting register entry, signed by the owner 2026-09-10.**
+    `gungnir-remote/src/identity.rs` -- `ProviderKey`'s `rcgen`/`rustls` `SigningKey`
+    implementations, `issue`, `issue_for_client` -- landed 2026-09-06 in `gungnir-node`
+    and moved to `gungnir-remote` the same day (item 99), which is also the day the
+    owner decided the path counts as low-trust though the crate itself does not. That
+    decision was recorded as a signature in the gap register's GAP-060 entry, and the
+    same entry separately called the same code "unsigned" a few sentences later. Both
+    were true in different senses -- the owner had decided the path's trust tier, not
+    reviewed the code against what it claims -- and the entry is corrected here rather
+    than left to keep contradicting itself.
+
+    **What the review checked.** The invariant the module's own heading states -- the
+    private half never leaves the provider -- against the actual call graph:
+    `ProviderKey::sign` and `ProviderSigner::sign` both go through `KeyProvider::sign`
+    alone, with no path that reads or returns the private scalar, the same property
+    `gungnir-app/tests/architecture_compliance.rs` pins mechanically. `der_bytes()`'s
+    claimed slice of the SPKI DER ("the last 65 bytes") against `to_public_key_der()`'s
+    actual, fixed-length P-256 encoding: correct, because that encoder's algorithm
+    identifier has no variable-length field ahead of the key material.
+
+    **A gap in the existing test, not in the code.** The one test exercising this path
+    proved a fresh signature verifies against a public key obtained independently of the
+    certificate; it never checked that the certificate `rcgen` actually built embeds that
+    same key. A wrong slice in `der_bytes()` would have passed that test while shipping a
+    certificate no real TLS peer could ever validate. A new test parses the actual
+    certificate bytes for the true point instead, and passes as the code stands -- kept
+    as a regression guard, not because this signature needed it to.
+
+    **Human-owned (this path was added to the low-trust list by name on 2026-09-06,
+    scoped to it rather than to the crate): signed by the owner 2026-09-10, over the
+    reviewed code.** No dependency edge changed. Every citation of this file's old
+    location -- `docs/mission/gap-analysis/decisions-needed.md`'s D-29 row,
+    `docs/agentic-coding-standards.md` §2.9's `rcgen` row, and this document's own item
+    88 -- is corrected to `gungnir-remote/src/identity.rs` in the same change; item 88's
+    text is left as the history it was written as, with a note rather than a rewrite,
+    since it was accurate for the hours before the move item 99 records.
+
+127. **DN-22 amendment 5: `ManagedService`, the cloud custody profile, signed by the
+    owner 2026-09-10, design and code together.** `gungnir-security/src/managed_service.rs`
+    was designed and built 2026-09-08 (DN-22 §14; D-42; GAP-084), giving §5's third and
+    last custody row -- an off-host key service -- the shape its first draft never gave
+    it: envelope encryption because a network round trip per `seal` misses the journal
+    budget by three orders of magnitude, signing left in the service because it is not on
+    a per-frame path, and a managed-service baseline required to name an escrow officer
+    because §14's own safeguard against the design's worst outcome is absent for this
+    profile alone. Its own entry named the outstanding signature as covering both halves
+    at once -- the design decisions and the human-owned code -- because amendment 5, unlike
+    amendment 4, had real room for a different shape.
+
+    **What the review checked.** Every claim the module's own documentation makes against
+    the code: that `seal`/`unseal`/`rotate` never call the service (amendment 5a, pinned by
+    its own test counting calls across a thousand seals); that the wrapped-secret file is
+    never regenerated on an open failure, which would orphan a keystore the file alone can
+    still unlock; that the worker-thread bridge between a synchronous `KeyProvider` and two
+    asynchronous SDKs cannot deadlock or leave a caller blocked when the thread fails to
+    start, the runtime fails to build, or the cloud client fails to construct -- each path
+    answers every queued call with why rather than dropping it; that no `Debug`
+    implementation on either service or the provider above them prints a key, checked by a
+    fake specifically written out rather than derived so its own key would leak if the
+    property broke; and that AWS KMS's 4096-byte `Encrypt` ceiling is respected by
+    construction, since only a fixed 32-byte secret is ever wrapped.
+
+    **One real defect found, invisible to every test that could run here.** Azure Key
+    Vault's `sign` operation returns an ES256 (ECDSA P-256) signature as the raw 64-byte
+    `r || s` concatenation, per RFC 7518 §3.4 -- not the ASN.1 DER encoding this crate's
+    `KeyProvider::sign` contract uses everywhere else: `P256KeyProvider::sign`
+    (`asymmetric.rs`) explicitly converts to DER before returning, AWS KMS's own
+    `EcdsaSha256` algorithm returns DER natively, and every real caller --
+    `gungnir_remote::identity`'s `rustls`/`rcgen` bridge (item 126) foremost -- parses a
+    signature with `Signature::from_der`. Handed straight through, a signature from an
+    `AzureKeyVaultKeyService`-backed transport identity would have failed to parse, or
+    parsed as the wrong thing, on every TLS handshake it signed. The in-crate fake this
+    module's own tests run against never modelled either cloud's real wire format for a
+    signature -- it returns a bare hash -- and the two tests that could have caught this
+    against a genuine vault are `#[ignore]`d for want of credentials this workspace does
+    not have and must not fabricate. Fixed: `azure_call`'s `Job::Sign` arm now converts
+    through a new `azure_signature_to_provider_format`, which parses the raw fixed-size
+    signature and re-encodes it as DER for the one scheme that needs it (RSA-PSS has no
+    such split; a raw RSA signature is the same integer either way). A new test builds a
+    real P-256 signature, takes its raw form exactly as Key Vault's own documentation
+    describes it, and checks the conversion parses with `Signature::from_der` and still
+    verifies under the signing key -- the property a passthrough would have broken.
+
+    **Human-owned (`gungnir-security` decides who can read what): signed by the owner
+    2026-09-10, over both halves together, per the entry's own rule that this profile
+    needed both signed at once.** No dependency edge changed. What the entry's own action
+    field already named as remaining and outside this review's reach stays open: a real
+    cloud round trip, which needs credentials this workspace does not have; the Azure
+    unwrap path selecting the latest master-key version rather than one recorded per
+    wrapped secret, which matters only to a deployment that rotates its master key; and
+    `gungnir-node`'s `seal_journal` ending its match in a wildcard arm rather than
+    exhaustively, named as the reason `ManagedService` could sit unwired there unnoticed
+    before this build. `docs/design/DN-22-key-management.md` §14, `docs/design/README.md`'s
+    DN-22 row, and the gap register's GAP-084 entry are corrected in the same change; the
+    same sweep also found and corrected a stale claim in that row that D-29's code (item
+    126) had been signed 2026-09-06, when the record it pointed to was a 2026-09-06
+    trust-tier classification, not a code review.
 
 ## Directory layout
 
