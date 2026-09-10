@@ -5422,6 +5422,65 @@ not by finding, for the time between whenever each item landed and this correcti
     126) had been signed 2026-09-06, when the record it pointed to was a 2026-09-06
     trust-tier classification, not a code review.
 
+128. **GAP-015: the LMB derivation and the dense-group pipeline wiring, signed by the
+    owner 2026-09-10.** Two of the three items GAP-015 left after the Gaussian-mixture
+    CPHD's own review (item 109) closed: `gungnir-rfs`'s labelled multi-Bernoulli
+    filter (`LmbFilter`, the exact δ-GLMB update of an LMB prior, moment-matched back
+    to one), and `gungnir-fusion-async`'s wiring of the dense-group mode into the
+    pipeline -- `FusionPipeline::run_dense_group`'s engage/release state machine and
+    `PipelineSnapshot::dense_group`'s place in the same one-shot snapshot bundle GAP-096
+    already gated. Neither had been asked for by anyone before this session found them
+    while sweeping for every remaining "written and gated, not signed" claim; both were
+    the same numerical-stability and concurrency trust tiers as items already signed
+    this sweep, reviewed the same way.
+
+    **A real underflow found in `association_marginals`, the exact analogue of item
+    109's ESF instability.** No fixture exercises anywhere near
+    `LmbSettings::max_bernoullis`'s own documented ceiling of 100 -- the largest oracle
+    scenario has three labels. The function's row-peak scaling bounded every per-label
+    factor at 1 to stop overflow, but still took the *product* of up to `n` such factors
+    in linear space; at 100 labels genuinely competing for two detections, at ordinary
+    likelihood-to-clutter ratios (not a contrived input), that product underflowed to
+    exactly zero, the normalising total came back zero, and `LmbFilter::update` failed
+    the entire scan with `RfsError::MalformedScene` over a scene that was not malformed
+    at all. A probe of 100 labels reproduced it directly; an independent log-domain
+    (log-sum-exp) re-implementation of the identical recursion stayed correct past 200.
+    **Fixed by rewriting `association_marginals` in log-space throughout**, which cannot
+    overflow (the largest term is factored out before any exponential is taken) and
+    cannot underflow a product the way linear accumulation of many sub-1 factors does.
+    Every existing test -- the oracle diff, the brute-force cross-check, label
+    continuity -- still passes; a new regression test pins the fix from 8 through 200
+    labels against the same independent log-domain reference.
+
+    **A verification gap closed in `gungnir-fusion-async`'s own loom model.**
+    `PipelineSnapshot::dense_group` and `dense_group_refusals` were added after
+    `loom_model::assert_epoch_coherent` was written (GAP-096, item 115) and never added
+    to what it checks -- the exact class of publish-skew bug that assertion exists to
+    catch, left uncovered in the two newest fields it never saw. Not a live defect: both
+    fields are still read in the same one-shot `snapshot_output` construction as
+    `tracks`/`retained_bearings`/`stats`, so nothing split them onto a second channel.
+    Extended the check anyway, so a future change that did would actually be caught
+    rather than assumed safe by the argument that covers the older three fields; the
+    loom gate (4 models, 99 interleavings each at `LOOM_MAX_PREEMPTIONS=3`, the negative
+    check still firing) ran unchanged and passed.
+
+    **One stale doc comment corrected, one live question surfaced rather than
+    decided.** `DenseGroupFilter::Phd`'s doc comment gave the CPHD's then-unsigned
+    derivation as the sole reason PHD is the pipeline's default; that reason expired
+    when item 109 signed CPHD, and the comment still gave it. Corrected to state
+    plainly that both derivations are now signed and whether to flip the default is an
+    open question for the owner -- named, not decided here, since flipping a pipeline's
+    default filter is a behaviour change nobody asked for in this review.
+
+    **Human-owned (`gungnir-rfs`: numerical stability; `gungnir-fusion-async`:
+    concurrency and numerical stability), both signed by the owner 2026-09-10, over the
+    corrected code.** No dependency edge changed. The gap register's GAP-015 entry,
+    whose own action field named both as "written and gated, neither self-signed," is
+    corrected in the same change; the δ-GLMB itself remains genuinely unbuilt and named
+    as a refusal, and the `spawn_blocking` plumbing, `TrackingConfig` vocabulary and
+    consumer GAP-015's action field names as remaining are unaffected by this signature
+    and stay open.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

@@ -50,6 +50,10 @@
 //! variant whose output *does* carry labels, and that variant -- not this one -- is what
 //! may be presented as tracks.
 //!
+//! **Human-owned (concurrency), signed by the owner 2026-09-10**: see
+//! `crate::pipeline`'s module documentation, "The dense-group mode", for what the
+//! review covered and what it found (`ARCHITECTURE.md` §10 item 128).
+//!
 //! # Nothing draws one yet
 //!
 //! `gungnir-tracking-service` does not read [`crate::PipelineSnapshot::dense_group`], so
@@ -133,12 +137,11 @@ pub enum DenseGroupFilter {
     /// The Gaussian-mixture PHD (`gungnir_rfs::PhdFilter`). Propagates the intensity
     /// alone, so the count it reports is that distribution's *mean* and nothing more.
     ///
-    /// **The default, because it is the half of GAP-015 the owner has signed**
-    /// (2026-09-06). A deployment that takes the default gets math that has been through
-    /// human review; one that selects [`Self::Cphd`] gets math that is written and gated
-    /// but not yet signed. That is the only reason the cheaper and less informative
-    /// filter is the default, and when the CPHD derivation is signed this default is a
-    /// one-line change with a stated reason.
+    /// **The default.** Both derivations are now signed by the owner (PHD 2026-09-06,
+    /// CPHD 2026-09-09, item 109; this mode's own wiring, item 128) -- the reason this
+    /// used to be the default (the cheaper filter being the only one reviewed) no
+    /// longer holds, and whether to flip it is left to the owner rather than changed in
+    /// passing here. See [`Self::Cphd`] for the case for the flip.
     #[default]
     Phd,
     /// The Gaussian-mixture CPHD (`gungnir_rfs::CphdFilter`). Propagates the whole
@@ -151,8 +154,11 @@ pub enum DenseGroupFilter {
     /// also fills [`DenseGroupEstimate::most_probable_count`] and
     /// [`DenseGroupEstimate::count_distribution`], which the PHD cannot: a commander told
     /// "about 2.4 targets" is owed the difference between "almost always 2, sometimes 3"
-    /// and "often 0, occasionally 5". It is not the default only because the derivation
-    /// is pending the owner's review (GAP-015, landed 2026-09-08).
+    /// and "often 0, occasionally 5". **No longer not-the-default for the reason this
+    /// comment used to give**: the derivation is signed (2026-09-09, item 109), and
+    /// this mode's own wiring around it is now signed too (item 128). Whether to make
+    /// this the default is a live open question left to the owner, named rather than
+    /// decided here.
     Cphd,
 }
 
