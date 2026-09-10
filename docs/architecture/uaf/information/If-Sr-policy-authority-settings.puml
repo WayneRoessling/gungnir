@@ -1,0 +1,118 @@
+@startuml If-Sr-policy-authority-settings
+title If-Sr information structure: Policy, authority & settings
+left to right direction
+!pragma layout smetana
+hide empty members
+skinparam classAttributeIconSize 0
+class "AnomalySettings" as AnomalySettings <<InformationElement>> {
+  loitering: Option<LoiteringSettings>
+  kinematics: Option<KinematicEnvelope>
+  feed: Option<FeedSettings>
+  cooperative: Option<CooperativeSettings>
+}
+class "LoiteringSettings" as LoiteringSettings <<InformationElement>> {
+  max_speed_mps: f64
+  min_duration_s: f64
+}
+class "KinematicEnvelope" as KinematicEnvelope <<InformationElement>> {
+  max_speed_mps: f64
+  max_climb_rate_mps: f64
+}
+class "FeedSettings" as FeedSettings <<InformationElement>> {
+  silence_factor: f64
+  rate_tolerance: f64
+  max_rejected: u32
+}
+class "CooperativeSettings" as CooperativeSettings <<InformationElement>> {
+  lost_after_s: f64
+  max_separation_m: f64
+}
+enum "WeaponsControlStatus" as WeaponsControlStatus <<InformationElement>> {
+  Free
+  Tight
+  Hold
+}
+class "IdentificationSettings" as IdentificationSettings <<InformationElement>> {
+  thresholds: BTreeMap<String, f64>
+  minimum_margin: f64
+  operator_confirms: Vec<String>
+}
+class "StalenessSettings" as StalenessSettings <<InformationElement>> {
+  default_s: f64
+  by_class_s: BTreeMap<String, f64>
+}
+class "ControlStatusSettings" as ControlStatusSettings <<InformationElement>> {
+  by_layer: BTreeMap<EffectorLayer, WeaponsControlStatus>
+}
+class "AuthorityRule" as AuthorityRule <<InformationElement>> {
+  action: String
+  role: String
+  layer: Option<EffectorLayer>
+  class: Option<String>
+  pre_delegated: bool
+}
+class "AuthoritySettings" as AuthoritySettings <<InformationElement>> {
+  rules: Vec<AuthorityRule>
+}
+class "DecisionSettings" as DecisionSettings <<InformationElement>> {
+  expiry_s: BTreeMap<EffectorLayer, f64>
+  escalate_after_s: BTreeMap<EffectorLayer, f64>
+}
+class "FiresSettings" as FiresSettings <<InformationElement>> {
+  max_location_error_m: f64
+  minimum_separation_m: f64
+}
+class "ValidityWindow" as ValidityWindow <<InformationElement>> {
+  valid_from: MissionTime
+  valid_until: Option<MissionTime>
+}
+class "PolicySettings" as PolicySettings <<InformationElement>> {
+  identification: IdentificationSettings
+  staleness: StalenessSettings
+  control_status: ControlStatusSettings
+  authority: AuthoritySettings
+  decisions: DecisionSettings
+  fires: FiresSettings
+}
+enum "LayoutNode" as LayoutNode <<InformationElement>> {
+  Panel { pn: String }
+  Tabs { children: Vec<LayoutNode> }
+  Horizontal { children: Vec<LayoutNode>, shares: Vec<f32>, }
+  Vertical { children: Vec<LayoutNode>, shares: Vec<f32>, }
+}
+class "RoleLayout" as RoleLayout <<InformationElement>> {
+  main: LayoutNode
+  detached: Vec<String>
+}
+class "UiSettings" as UiSettings <<InformationElement>> {
+  layouts: BTreeMap<String, RoleLayout>
+  scene_3d: bool
+  theme: String
+}
+enum "ThemeVariant" as ThemeVariant <<InformationElement>> {
+  Day
+  Night
+}
+enum "EffectorLayer\n(see If-Sr-plans-effectors-handoff)" as EffectorLayer <<External>> #line.dashed {
+}
+class "MissionTime\n(see If-Sr-core-identifiers-frames-quality)" as MissionTime <<External>> #line.dashed {
+}
+AnomalySettings --> CooperativeSettings : cooperative
+AnomalySettings --> FeedSettings : feed
+AnomalySettings --> KinematicEnvelope : kinematics
+AnomalySettings --> LoiteringSettings : loitering
+ControlStatusSettings --> EffectorLayer : by_layer
+ControlStatusSettings --> WeaponsControlStatus : by_layer
+AuthorityRule --> EffectorLayer : layer
+AuthoritySettings --> AuthorityRule : rules
+DecisionSettings --> EffectorLayer : expiry_s, escalate_after_s
+ValidityWindow --> MissionTime : valid_from, valid_until
+PolicySettings --> AuthoritySettings : authority
+PolicySettings --> ControlStatusSettings : control_status
+PolicySettings --> DecisionSettings : decisions
+PolicySettings --> FiresSettings : fires
+PolicySettings --> IdentificationSettings : identification
+PolicySettings --> StalenessSettings : staleness
+RoleLayout --> LayoutNode : main
+UiSettings --> RoleLayout : layouts
+@enduml

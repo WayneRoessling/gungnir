@@ -1,0 +1,125 @@
+@startuml If-Sr-battle-rhythm-mission-records
+title If-Sr information structure: Battle rhythm & mission records
+left to right direction
+!pragma layout smetana
+hide empty members
+skinparam classAttributeIconSize 0
+class "LaydownId" as LaydownId <<InformationElement>> {
+  pub String
+}
+class "SensorPlacement" as SensorPlacement <<InformationElement>> {
+  sensor: SensorId
+  position_enu: [f64; 3]
+  mode: SensorMode
+}
+class "ResourcePlacement" as ResourcePlacement <<InformationElement>> {
+  resource: ResourceId
+  position_enu: [f64; 3]
+}
+class "Laydown" as Laydown <<InformationElement>> {
+  id: LaydownId
+  intent: String
+  sensors: Vec<SensorPlacement>
+  resources: Vec<ResourcePlacement>
+  current: bool
+}
+class "TestTrackNumber" as TestTrackNumber <<InformationElement>> {
+  pub u8
+}
+class "RequirementId" as RequirementId <<InformationElement>> {
+  pub u64
+}
+enum "Concurrence" as Concurrence <<InformationElement>> {
+  Operator { id: String, role: String }
+  UnattributedRole { role: String }
+}
+class "CollectionRequirement" as CollectionRequirement <<InformationElement>> {
+  id: RequirementId
+  title: String
+  priority: AssetPriority
+  area: AssetExtent
+  needed_by: Option<MissionTime>
+  state: RequirementState
+}
+enum "RequirementState" as RequirementState <<InformationElement>> {
+  Stated
+  Tasked { by: Concurrence }
+  Satisfied { evidence: String }
+  Declined { by: Concurrence, reason: String }
+  Lapsed
+}
+class "ScheduledProduct" as ScheduledProduct <<InformationElement>> {
+  name: String
+  kind: ProductKind
+  schedule: Schedule
+  deliver_to: Option<String>
+}
+enum "ProductKind" as ProductKind <<InformationElement>> {
+  HandoverSummary
+  SituationReport
+  MeasuresSummary
+}
+class "Schedule" as Schedule <<InformationElement>> {
+  period_s: f64
+  offset_s: f64
+}
+class "MaintenanceWindow" as MaintenanceWindow <<InformationElement>> {
+  sensor: SensorId
+  from: MissionTime
+  to: MissionTime
+  reason: String
+  state: MaintenanceState
+}
+enum "MaintenanceState" as MaintenanceState <<InformationElement>> {
+  Planned
+  Active
+  Completed
+  Overrun
+}
+enum "Term" as Term <<InformationElement>> {
+  Classification(Classification)
+  TrackStatus(TrackStatus)
+  Layer(EffectorLayer)
+  ControlStatus(WeaponsControlStatus)
+  SensorMode(SensorMode)
+}
+class "Vocabulary" as Vocabulary <<InformationElement>> {
+  overrides: BTreeMap<String, String>
+}
+enum "AssetExtent\n(see If-Sr-assets-exchange-releasability)" as AssetExtent <<External>> #line.dashed {
+}
+enum "AssetPriority\n(see If-Sr-assets-exchange-releasability)" as AssetPriority <<External>> #line.dashed {
+}
+enum "Classification\n(see If-Sr-picture-tracking-vocabulary)" as Classification <<External>> #line.dashed {
+}
+enum "EffectorLayer\n(see If-Sr-plans-effectors-handoff)" as EffectorLayer <<External>> #line.dashed {
+}
+class "MissionTime\n(see If-Sr-core-identifiers-frames-quality)" as MissionTime <<External>> #line.dashed {
+}
+class "SensorId\n(see If-Sr-picture-tracking-vocabulary)" as SensorId <<External>> #line.dashed {
+}
+enum "SensorMode\n(see If-Sr-picture-tracking-vocabulary)" as SensorMode <<External>> #line.dashed {
+}
+enum "WeaponsControlStatus\n(see If-Sr-policy-authority-settings)" as WeaponsControlStatus <<External>> #line.dashed {
+}
+SensorPlacement --> SensorId : sensor
+SensorPlacement --> SensorMode : mode
+Laydown --> LaydownId : id
+Laydown --> ResourcePlacement : resources
+Laydown --> SensorPlacement : sensors
+CollectionRequirement --> AssetExtent : area
+CollectionRequirement --> AssetPriority : priority
+CollectionRequirement --> MissionTime : needed_by
+CollectionRequirement --> RequirementId : id
+CollectionRequirement --> RequirementState : state
+RequirementState --> Concurrence : Tasked, Declined
+ScheduledProduct --> ProductKind : kind
+ScheduledProduct --> Schedule : schedule
+MaintenanceWindow --> MaintenanceState : state
+MaintenanceWindow --> MissionTime : from, to
+MaintenanceWindow --> SensorId : sensor
+Term --> Classification : Classification
+Term --> EffectorLayer : Layer
+Term --> SensorMode : SensorMode
+Term --> WeaponsControlStatus : ControlStatus
+@enduml

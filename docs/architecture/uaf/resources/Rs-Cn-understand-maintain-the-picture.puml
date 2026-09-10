@@ -1,0 +1,26 @@
+@startuml Rs-Cn-understand-maintain-the-picture
+title Rs-Cn resource connectivity: Understand & Maintain the Picture (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "Understand & Maintain the Picture" {
+  component "gungnir-analytics" as RS_analytics <<Resource>>
+  component "gungnir-geo" as RS_geo <<Resource>>
+  component "gungnir-identification" as RS_identification <<Resource>>
+  component "gungnir-identity" as RS_identity <<Resource>>
+}
+component "coord\n(see Rs-Cn-tracking-core)" as RS_coord <<External>> #line.dashed
+component "data\n(see Rs-Cn-data-ecosystem)" as RS_data <<External>> #line.dashed
+component "model\n(see Rs-Cn-foundation-model)" as RS_model <<External>> #line.dashed
+component "sensor_management\n(see Rs-Cn-sense-ingest-normalize)" as RS_sensor_management <<External>> #line.dashed
+RS_analytics --> RS_coord
+RS_analytics --> RS_data
+RS_analytics --> RS_geo
+RS_analytics --> RS_model
+RS_analytics --> RS_sensor_management
+RS_geo --> RS_coord
+RS_geo --> RS_data
+RS_identification --> RS_model
+RS_identity --> RS_model
+@enduml

@@ -1,0 +1,69 @@
+@startuml If-Sr-uas-identification-platform-reports
+title If-Sr information structure: UAS identification & platform reports
+left to right direction
+!pragma layout smetana
+hide empty members
+skinparam classAttributeIconSize 0
+class "UasIdentificationReport" as UasIdentificationReport <<InformationElement>> {
+  sensor: SensorId
+  source_time: MissionTime
+  receipt_time: MissionTime
+  position: Geodetic
+  altitude_amsl_m: Option<f64>
+  altitude_agl_m: Option<f64>
+  gnss_signal_accuracy_m: Option<f64>
+  manufacturer_id: Option<String>
+  model_id: Option<String>
+  serial_number: Option<[u8; 12]>
+  registration_country: String
+  operational_risk: Option<OperationalRisk>
+  horizontal_velocity_enu_m_s: Option<[f64; 2]>
+  vertical_velocity_m_s: Option<f64>
+  conversion_loss: Option<String>
+}
+class "OperationalRisk" as OperationalRisk <<InformationElement>> {
+  certification_category: UasCertificationCategory
+  air_risk_category_code: u8
+  airspace_encounter_category_code: u8
+}
+enum "UasCertificationCategory" as UasCertificationCategory <<InformationElement>> {
+  Unknown
+  Open
+  Specific
+  Certified
+}
+class "EnuPoint" as EnuPoint <<InformationElement>> {
+  enu: [f64; 3]
+  elevation_reported: bool
+}
+class "UasPlatformReport" as UasPlatformReport <<InformationElement>> {
+  sensor: SensorId
+  platform_position: Option<EnuPoint>
+  platform_heading_rad: Option<f64>
+  platform_pitch_rad: Option<f64>
+  platform_roll_rad: Option<f64>
+  sensor_relative_azimuth_rad: Option<f64>
+  sensor_relative_elevation_rad: Option<f64>
+  sensor_relative_roll_rad: Option<f64>
+  slant_range_m: Option<f64>
+  frame_center: Option<EnuPoint>
+  platform_designation: Option<String>
+  platform_tail_number: Option<String>
+  mission_id: Option<String>
+  image_source_sensor: Option<String>
+  uas_lds_version: Option<u8>
+  source_time: MissionTime
+  receipt_time: MissionTime
+}
+class "MissionTime\n(see If-Sr-core-identifiers-frames-quality)" as MissionTime <<External>> #line.dashed {
+}
+class "SensorId\n(see If-Sr-picture-tracking-vocabulary)" as SensorId <<External>> #line.dashed {
+}
+UasIdentificationReport --> MissionTime : source_time, receipt_time
+UasIdentificationReport --> OperationalRisk : operational_risk
+UasIdentificationReport --> SensorId : sensor
+OperationalRisk --> UasCertificationCategory : certification_category
+UasPlatformReport --> EnuPoint : platform_position, frame_center
+UasPlatformReport --> MissionTime : source_time, receipt_time
+UasPlatformReport --> SensorId : sensor
+@enduml

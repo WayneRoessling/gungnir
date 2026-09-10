@@ -1,0 +1,110 @@
+@startuml If-Sr-plans-effectors-handoff
+title If-Sr information structure: Plans, effectors & handoff
+left to right direction
+!pragma layout smetana
+hide empty members
+skinparam classAttributeIconSize 0
+enum "EffectorLayer" as EffectorLayer <<InformationElement>> {
+  Area
+  Point
+  SelfDefence
+  NonKinetic
+}
+class "RelativeCost" as RelativeCost <<InformationElement>> {
+  pub f64
+}
+class "Magazine" as Magazine <<InformationElement>> {
+  rounds_available: u32
+  reserve: u32
+}
+class "DecisionAttribution" as DecisionAttribution <<InformationElement>> {
+  operator: String
+  role: String
+  at: MissionTime
+  authority_rule: Option<String>
+}
+class "Handoff" as Handoff <<InformationElement>> {
+  decision: DecisionId
+  plan: PlanId
+  kind: PlanKind
+  decided_by: DecisionAttribution
+  track_provenance: Vec<(TrackId, Provenance, Quality)>
+  releasability: Releasability
+  issued: MissionTime
+}
+enum "DeliveryState" as DeliveryState <<InformationElement>> {
+  Manual
+  Delivered { at: MissionTime }
+  Refused { reason: String, at: MissionTime }
+  Undelivered { since: MissionTime }
+}
+enum "EffectorReport" as EffectorReport <<InformationElement>> {
+  Acknowledged { at: MissionTime, }
+  Executing { at: MissionTime, }
+  Completed { at: MissionTime, effective: bool, detail: String, }
+  Refused { at: MissionTime, reason: String, }
+}
+enum "HandoffError" as HandoffError <<InformationElement>> {
+  UnknownDecision(DecisionId)
+}
+class "DecisionId" as DecisionId <<InformationElement>> {
+  pub u64
+}
+enum "PlanKind" as PlanKind <<InformationElement>> {
+  Intercept { solutions: Vec<InterceptSolutionView>, }
+  Fires(Box<FiresPlan>)
+}
+class "FiresPlan" as FiresPlan <<InformationElement>> {
+  target: TrackId
+  target_position: Geodetic
+  location_error_m: f64
+  firing_unit: ResourceId
+  time_on_target: Option<MissionTime>
+  deconfliction: DeconflictionResult
+}
+class "DeconflictionResult" as DeconflictionResult <<InformationElement>> {
+  checks: Vec<DeconflictionCheck>
+}
+class "DeconflictionCheck" as DeconflictionCheck <<InformationElement>> {
+  kind: DeconflictionKind
+  passed: bool
+  detail: String
+}
+enum "DeconflictionKind" as DeconflictionKind <<InformationElement>> {
+  FriendlyPosition
+  NoFireArea
+  AirspaceMeasure
+  InterceptorTrajectory
+  LocationAccuracy
+}
+class "InterceptSolutionView\n(see If-Sr-picture-tracking-vocabulary)" as InterceptSolutionView <<External>> #line.dashed {
+}
+class "MissionTime\n(see If-Sr-core-identifiers-frames-quality)" as MissionTime <<External>> #line.dashed {
+}
+class "PlanId\n(see If-Sr-picture-tracking-vocabulary)" as PlanId <<External>> #line.dashed {
+}
+class "Provenance\n(see If-Sr-core-identifiers-frames-quality)" as Provenance <<External>> #line.dashed {
+}
+class "Quality\n(see If-Sr-core-identifiers-frames-quality)" as Quality <<External>> #line.dashed {
+}
+enum "Releasability\n(see If-Sr-assets-exchange-releasability)" as Releasability <<External>> #line.dashed {
+}
+DecisionAttribution --> MissionTime : at
+Handoff --> DecisionAttribution : decided_by
+Handoff --> DecisionId : decision
+Handoff --> MissionTime : issued
+Handoff --> PlanId : plan
+Handoff --> PlanKind : kind
+Handoff --> Provenance : track_provenance
+Handoff --> Quality : track_provenance
+Handoff --> Releasability : releasability
+DeliveryState --> MissionTime : Delivered, Refused, Undelivered
+EffectorReport --> MissionTime : Acknowledged, Executing, Completed, Refused
+HandoffError --> DecisionId : UnknownDecision
+PlanKind --> FiresPlan : Fires
+PlanKind --> InterceptSolutionView : Intercept
+FiresPlan --> DeconflictionResult : deconfliction
+FiresPlan --> MissionTime : time_on_target
+DeconflictionResult --> DeconflictionCheck : checks
+DeconflictionCheck --> DeconflictionKind : kind
+@enduml

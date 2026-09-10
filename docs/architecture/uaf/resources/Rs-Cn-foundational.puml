@@ -1,0 +1,22 @@
+@startuml Rs-Cn-foundational
+title Rs-Cn resource connectivity: Foundational (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "Foundational" {
+  component "gungnir-config" as RS_config <<Resource>>
+  component "gungnir-eventing" as RS_eventing <<Resource>>
+  component "gungnir-mission" as RS_mission <<Resource>>
+  component "gungnir-store" as RS_store <<Resource>>
+}
+component "model\n(see Rs-Cn-foundation-model)" as RS_model <<External>> #line.dashed
+RS_config --> RS_model
+RS_eventing --> RS_model
+RS_mission --> RS_model
+RS_mission --> RS_config
+RS_mission --> RS_store
+RS_mission --> RS_eventing
+RS_store --> RS_model
+RS_store --> RS_eventing
+@enduml

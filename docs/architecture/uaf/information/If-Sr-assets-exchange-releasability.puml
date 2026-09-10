@@ -1,0 +1,107 @@
+@startuml If-Sr-assets-exchange-releasability
+title If-Sr information structure: Assets, exchange & releasability
+left to right direction
+!pragma layout smetana
+hide empty members
+skinparam classAttributeIconSize 0
+class "AssetId" as AssetId <<InformationElement>> {
+  pub u32
+}
+enum "AssetPriority" as AssetPriority <<InformationElement>> {
+  Low
+  Medium
+  High
+  Critical
+}
+enum "AssetExtent" as AssetExtent <<InformationElement>> {
+  Point { position: Geodetic }
+  Circle { center: Geodetic, radius_m: f64 }
+}
+class "WarningObligation" as WarningObligation <<InformationElement>> {
+  lead_time_s: f64
+  channel: String
+  within_m: Option<f64>
+}
+class "DefendedAsset" as DefendedAsset <<InformationElement>> {
+  id: AssetId
+  name: String
+  extent: AssetExtent
+  priority: AssetPriority
+  warning: Option<WarningObligation>
+  note: Option<String>
+}
+class "AssetListView" as AssetListView <<InformationElement>> {
+  baseline_version: u32
+  assets: Vec<DefendedAsset>
+}
+class "PeerOrigin" as PeerOrigin <<InformationElement>> {
+  peer: String
+  remote_track: String
+  peer_time: MissionTime
+  receipt_time: MissionTime
+  assigned_quality: f32
+}
+class "ReportedPosition" as ReportedPosition <<InformationElement>> {
+  origin: PeerOrigin
+  reporter: String
+  position: Geodetic
+  claimed_accuracy_m: Option<f64>
+  affiliation: Classification
+}
+class "LaunchWarningReport" as LaunchWarningReport <<InformationElement>> {
+  id: String
+  what: String
+  at: MissionTime
+  releasability: Releasability
+}
+class "PeerLaunchWarning" as PeerLaunchWarning <<InformationElement>> {
+  peer: String
+  report: LaunchWarningReport
+  receipt_time: MissionTime
+}
+enum "ExchangeItem" as ExchangeItem <<InformationElement>> {
+  Tracks
+  Warnings
+  Reports
+  Handoffs
+  Health
+}
+enum "ExchangeFormat" as ExchangeFormat <<InformationElement>> {
+  Canonical
+  Stanag4676
+  Asterix048
+}
+class "ExchangeAgreement" as ExchangeAgreement <<InformationElement>> {
+  party: String
+  inbound: Vec<ExchangeItem>
+  outbound: Vec<ExchangeItem>
+  format: ExchangeFormat
+}
+class "ExchangeSet" as ExchangeSet <<InformationElement>> {
+  agreements: Vec<ExchangeAgreement>
+}
+enum "Releasability" as Releasability <<InformationElement>> {
+  Internal
+  Parties { parties: BTreeSet<String> }
+  AllPeers
+}
+enum "Classification\n(see If-Sr-picture-tracking-vocabulary)" as Classification <<External>> #line.dashed {
+}
+class "MissionTime\n(see If-Sr-core-identifiers-frames-quality)" as MissionTime <<External>> #line.dashed {
+}
+DefendedAsset --> AssetExtent : extent
+DefendedAsset --> AssetId : id
+DefendedAsset --> AssetPriority : priority
+DefendedAsset --> WarningObligation : warning
+AssetListView --> DefendedAsset : assets
+PeerOrigin --> MissionTime : peer_time, receipt_time
+ReportedPosition --> Classification : affiliation
+ReportedPosition --> PeerOrigin : origin
+LaunchWarningReport --> MissionTime : at
+LaunchWarningReport --> Releasability : releasability
+PeerLaunchWarning --> LaunchWarningReport : report
+PeerLaunchWarning --> MissionTime : receipt_time
+ExchangeAgreement --> ExchangeFormat : format
+ExchangeAgreement --> ExchangeItem : inbound, outbound
+ExchangeSet --> ExchangeAgreement : agreements
+@enduml
