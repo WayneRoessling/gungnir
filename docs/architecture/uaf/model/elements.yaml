@@ -29,11 +29,11 @@ capabilities:
     description: Bring every observation the sector can obtain into one governed, time-disciplined stream.
     owner: plan-04
   - {id: CAP-1.1, parent: CAP-1, name: Ingest observations from every sensor class}
-  - {id: CAP-1.2, parent: CAP-1, name: Validate, authenticate, and quarantine input}
-  - {id: CAP-1.3, parent: CAP-1, name: Manage sensor readiness, modes, tasking, and calibration}
+  - {id: CAP-1.2, parent: CAP-1, name: "Validate, authenticate, and quarantine input"}
+  - {id: CAP-1.3, parent: CAP-1, name: "Manage sensor readiness, modes, tasking, and calibration"}
   - {id: CAP-1.4, parent: CAP-1, name: Know sensor coverage and gaps over terrain}
   - {id: CAP-1.5, parent: CAP-1, name: Keep time discipline}
-  - {id: CAP-1.6, parent: CAP-1, name: Receive early warning, tracks, and reports from peers}
+  - {id: CAP-1.6, parent: CAP-1, name: "Receive early warning, tracks, and reports from peers"}
   - {id: CAP-1.7, parent: CAP-1, name: Receive cooperative identity}
   - id: CAP-2
     name: Understand
@@ -46,10 +46,10 @@ capabilities:
   - {id: CAP-2.4, parent: CAP-2, name: Track dense groups and count targets}
   - {id: CAP-2.5, parent: CAP-2, name: Maintain a clutter-tolerant surface picture}
   - {id: CAP-2.6, parent: CAP-2, name: Classify and identify with evidence and confidence}
-  - {id: CAP-2.7, parent: CAP-2, name: Keep one identity across gaps, sorties, sessions, and peers}
-  - {id: CAP-2.8, parent: CAP-2, name: Predict trajectory, time to impact, closest approach}
+  - {id: CAP-2.7, parent: CAP-2, name: "Keep one identity across gaps, sorties, sessions, and peers"}
+  - {id: CAP-2.8, parent: CAP-2, name: "Predict trajectory, time to impact, closest approach"}
   - {id: CAP-2.9, parent: CAP-2, name: Detect anomalies in tracks and feeds}
-  - {id: CAP-2.10, parent: CAP-2, name: Fuse terrain, imagery, point clouds, and map layers}
+  - {id: CAP-2.10, parent: CAP-2, name: "Fuse terrain, imagery, point clouds, and map layers"}
   - {id: CAP-2.11, parent: CAP-2, name: Answer geometric questions}
   - {id: CAP-2.12, parent: CAP-2, name: Maintain pattern of life and order of battle}
   - id: CAP-3
@@ -61,7 +61,7 @@ capabilities:
   - {id: CAP-3.2, parent: CAP-3, name: Score threat and priority per track}
   - {id: CAP-3.3, parent: CAP-3, name: Recommend the cheapest adequate assignment}
   - {id: CAP-3.4, parent: CAP-3, name: Compute intercept geometry}
-  - {id: CAP-3.5, parent: CAP-3, name: Offer alternatives, what-if, and rationale}
+  - {id: CAP-3.5, parent: CAP-3, name: "Offer alternatives, what-if, and rationale"}
   - {id: CAP-3.6, parent: CAP-3, name: Enforce rules of engagement}
   - {id: CAP-3.7, parent: CAP-3, name: Manage the queue under saturation}
   - {id: CAP-3.8, parent: CAP-3, name: Recommend fires tasks with deconfliction}
@@ -99,7 +99,7 @@ capabilities:
     description: Control who can see and do what, and prove it afterwards.
     owner: plan-04
   - {id: CAP-6.1, parent: CAP-6, name: Authenticate operators and callers}
-  - {id: CAP-6.2, parent: CAP-6, name: Authorize by role, class, and layer}
+  - {id: CAP-6.2, parent: CAP-6, name: "Authorize by role, class, and layer"}
   - {id: CAP-6.3, parent: CAP-6, name: Audit everything that matters}
   - {id: CAP-6.4, parent: CAP-6, name: Protect data in transit and at rest}
   - {id: CAP-6.5, parent: CAP-6, name: Assure the supply chain}
@@ -112,7 +112,7 @@ capabilities:
     owner: plan-04
   - {id: CAP-7.1, parent: CAP-7, name: Expose a versioned interface}
   - {id: CAP-7.2, parent: CAP-7, name: Speak the domain's interoperability standards}
-  - {id: CAP-7.3, parent: CAP-7, name: Run as desktop, on-prem node, or cloud node}
+  - {id: CAP-7.3, parent: CAP-7, name: "Run as desktop, on-prem node, or cloud node"}
   - {id: CAP-7.4, parent: CAP-7, name: Exchange with peers and coalition}
 
 # Operational performers: the roles (as logical performers), the organizational
@@ -121,96 +121,96 @@ capabilities:
 # same eight as personnel.
 operational_performers:
   - {id: OP-01, name: Operator, kind: role, owner: plan-02, description: Runs the live picture for a domain at a site or the sector; decides engagements within delegated authority.}
-  - {id: OP-02, name: Supervisor, kind: role, owner: plan-02, description: Runs the sector; manages the recommendation queue, weapons control status, holds, degraded-state acknowledgement, reconciliation conflicts, plan apply.}
-  - {id: OP-03, name: Analyst, kind: role, owner: plan-02, description: Works the recorded record; replay, after-action review, reports, measures, model promotion evidence.}
-  - {id: OP-04, name: Sensor manager, kind: role, owner: plan-02, description: Owns sensor readiness, modes, coverage, tasking, and calibration.}
-  - {id: OP-05, name: Administrator, kind: role, owner: plan-02, description: Owns configuration baselines, accounts and roles, the node, and the audit record.}
-  - {id: OP-06, name: Intelligence analyst, kind: role, owner: plan-02, status: adopted 2026-09-04 (D-05), description: Owns requirements and tasking, identification evidence and declarations, order of battle, pattern of life, dissemination.}
-  - {id: OP-07, name: Planner, kind: role, owner: plan-02, status: adopted 2026-09-04 (D-05), description: Owns defended-asset list drafts, laydown and coverage planning, mission plans, rehearsal.}
+  - {id: OP-02, name: Supervisor, kind: role, owner: plan-02, description: "Runs the sector; manages the recommendation queue, weapons control status, holds, degraded-state acknowledgement, reconciliation conflicts, plan apply."}
+  - {id: OP-03, name: Analyst, kind: role, owner: plan-02, description: "Works the recorded record; replay, after-action review, reports, measures, model promotion evidence."}
+  - {id: OP-04, name: Sensor manager, kind: role, owner: plan-02, description: "Owns sensor readiness, modes, coverage, tasking, and calibration."}
+  - {id: OP-05, name: Administrator, kind: role, owner: plan-02, description: "Owns configuration baselines, accounts and roles, the node, and the audit record."}
+  - {id: OP-06, name: Intelligence analyst, kind: role, owner: plan-02, status: adopted 2026-09-04 (D-05), description: "Owns requirements and tasking, identification evidence and declarations, order of battle, pattern of life, dissemination."}
+  - {id: OP-07, name: Planner, kind: role, owner: plan-02, status: adopted 2026-09-04 (D-05), description: "Owns defended-asset list drafts, laydown and coverage planning, mission plans, rehearsal."}
   - {id: OP-08, name: Commander, kind: role, owner: plan-02, status: adopted 2026-09-04 (D-05), description: Holds the authorities the others act under; may decide directly.}
-  - {id: OP-10, name: Sector command post, kind: organization, owner: plan-02, description: The sector's command post; hosts the service node, the supervisor, operators, sensor manager, planner, intelligence analyst (vignettes, SCP).}
-  - {id: OP-11, name: Site defense cell, kind: organization, owner: plan-02, description: A defended site's cell with a desktop and local sensors and effectors (vignettes, OPS and HAF).}
-  - {id: OP-12, name: Port defense cell, kind: organization, owner: plan-02, description: The port's cell with a desktop, coastal sensors, patrol craft (vignettes, KAL).}
-  - {id: OP-20, name: Higher command, kind: external, owner: plan-02, description: Sets rules of engagement; receives status, warnings, reports, order of battle.}
+  - {id: OP-10, name: Sector command post, kind: organization, owner: plan-02, description: "The sector's command post; hosts the service node, the supervisor, operators, sensor manager, planner, intelligence analyst (vignettes, SCP)."}
+  - {id: OP-11, name: Site defense cell, kind: organization, owner: plan-02, description: "A defended site's cell with a desktop and local sensors and effectors (vignettes, OPS and HAF)."}
+  - {id: OP-12, name: Port defense cell, kind: organization, owner: plan-02, description: "The port's cell with a desktop, coastal sensors, patrol craft (vignettes, KAL)."}
+  - {id: OP-20, name: Higher command, kind: external, owner: plan-02, description: "Sets rules of engagement; receives status, warnings, reports, order of battle."}
   - {id: OP-21, name: Neighbouring sector, kind: external, owner: plan-02, description: Exchanges tracks and warnings; hands over raids.}
   - {id: OP-22, name: Fire units and effector systems, kind: external, owner: plan-02, description: Receive decided assignments; report readiness and outcomes.}
-  - {id: OP-23, name: Sensor operators and maintainers, kind: external, owner: plan-02, description: Operate and maintain sensors; modes, faults, calibration.}
-  - {id: OP-24, name: Civil aviation authority and airport, kind: external, owner: plan-02, description: Corridors, flight plans, ADS-B; receive warnings of engagements.}
-  - {id: OP-25, name: Port and maritime authorities, kind: external, owner: plan-02, description: AIS, harbour operations, barriers; receive warnings.}
+  - {id: OP-23, name: Sensor operators and maintainers, kind: external, owner: plan-02, description: "Operate and maintain sensors; modes, faults, calibration."}
+  - {id: OP-24, name: Civil aviation authority and airport, kind: external, owner: plan-02, description: "Corridors, flight plans, ADS-B; receive warnings of engagements."}
+  - {id: OP-25, name: Port and maritime authorities, kind: external, owner: plan-02, description: "AIS, harbour operations, barriers; receive warnings."}
   - {id: OP-26, name: Coalition partners, kind: external, owner: plan-02, description: Picture and product exchange with releasability.}
   - {id: OP-27, name: Accreditors and auditors, kind: external, owner: plan-02, description: Need evidence that the system enforces policy and records decisions.}
   - {id: OP-30, name: Command-and-control system (Gungnir), kind: system, owner: plan-03, description: The logical performer that exhibits every system capability; realized by the desktop and the service node.}
   - {id: OP-31, name: Operator workstation, kind: system-part, parent: OP-30, owner: plan-03, description: The desktop (gungnir-app) with embedded or remote services.}
   - {id: OP-32, name: Sector service node, kind: system-part, parent: OP-30, owner: plan-03, description: The headless node (gungnir-node) that is the system of record in connected profiles.}
-  - {id: OP-33, name: Sensor network, kind: system-part, parent: OP-30, owner: plan-03, description: The sensors feeding the sector, logically part of the C2 system's inputs; physical sensors are actual resources.}
+  - {id: OP-33, name: Sensor network, kind: system-part, parent: OP-30, owner: plan-03, description: "The sensors feeding the sector, logically part of the C2 system's inputs; physical sensors are actual resources."}
   - {id: OP-34, name: Effector interface, kind: system-part, parent: OP-30, owner: plan-03, description: The handoff boundary to fire units and effector systems (CAP-4.4).}
 
 # Operational activities: the functions the thread steps perform, independent of
 # who performs them. The step-to-activity mapping is in tools/build_uaf.py.
 operational_activities:
-  - {id: OA-01, name: Ingest and validate observations, description: Bring sensor, cooperative, peer, and human reports in; validate; quarantine; carry provenance.}
-  - {id: OA-02, name: Maintain the track picture, description: Initiate, update, coast, and delete tracks from all sources with uncertainty and quality.}
-  - {id: OA-03, name: Identify tracks, description: Classify and identify from kinematic, signature, cooperative, and human evidence with stated confidence.}
-  - {id: OA-04, name: Assess threat and priority, description: Predict path, asset threatened, time to impact, closest approach; score against the defended-asset list.}
-  - {id: OA-05, name: Recommend assignments, description: Propose the cheapest adequate resource-to-track assignment within readiness, geometry, and policy.}
-  - {id: OA-06, name: Check policy, description: Evaluate identification criteria, weapons control status, authority, geofences, and restrictions; produce a verdict.}
-  - {id: OA-07, name: Decide, description: A human accepts, overrides, rejects, holds, or lets expire; the decision is recorded.}
+  - {id: OA-01, name: Ingest and validate observations, description: "Bring sensor, cooperative, peer, and human reports in; validate; quarantine; carry provenance."}
+  - {id: OA-02, name: Maintain the track picture, description: "Initiate, update, coast, and delete tracks from all sources with uncertainty and quality."}
+  - {id: OA-03, name: Identify tracks, description: "Classify and identify from kinematic, signature, cooperative, and human evidence with stated confidence."}
+  - {id: OA-04, name: Assess threat and priority, description: "Predict path, asset threatened, time to impact, closest approach; score against the defended-asset list."}
+  - {id: OA-05, name: Recommend assignments, description: "Propose the cheapest adequate resource-to-track assignment within readiness, geometry, and policy."}
+  - {id: OA-06, name: Check policy, description: "Evaluate identification criteria, weapons control status, authority, geofences, and restrictions; produce a verdict."}
+  - {id: OA-07, name: Decide, description: "A human accepts, overrides, rejects, holds, or lets expire; the decision is recorded."}
   - {id: OA-08, name: Hand off to effectors, description: Pass decided assignments to fire units and effector systems with provenance.}
-  - {id: OA-09, name: Warn assets and authorities, description: Warn defended assets, units, and civil authorities with lead time; record the warning.}
-  - {id: OA-10, name: Assess engagement effects, description: Track the engaged threat, record the outcome, supersede plans, re-plan the remainder.}
-  - {id: OA-11, name: Journal and report, description: Journal every event; produce summaries, reports, and measures after action.}
-  - {id: OA-12, name: Manage sensors and coverage, description: Set modes, task sensors, keep calibration, compute coverage and gaps over terrain.}
-  - {id: OA-13, name: Detect and correlate degradation, description: Detect sensor loss, ingest gaps, clock skew, quality collapse; correlate into incidents.}
+  - {id: OA-09, name: Warn assets and authorities, description: "Warn defended assets, units, and civil authorities with lead time; record the warning."}
+  - {id: OA-10, name: Assess engagement effects, description: "Track the engaged threat, record the outcome, supersede plans, re-plan the remainder."}
+  - {id: OA-11, name: Journal and report, description: "Journal every event; produce summaries, reports, and measures after action."}
+  - {id: OA-12, name: Manage sensors and coverage, description: "Set modes, task sensors, keep calibration, compute coverage and gaps over terrain."}
+  - {id: OA-13, name: Detect and correlate degradation, description: "Detect sensor loss, ingest gaps, clock skew, quality collapse; correlate into incidents."}
   - {id: OA-14, name: Re-task sensors, description: Change modes and tasking to restore the most valuable coverage; show before and after.}
-  - {id: OA-15, name: Exchange the picture with peers, description: Send and receive tracks, warnings, and products with peers, higher command, and partners.}
-  - {id: OA-16, name: Flag anomalies, description: Detect AIS-off, spoofing, loitering, and implausible feeds as alerts through the lifecycle.}
-  - {id: OA-17, name: State collection requirements, description: Express an information requirement with area, question, priority, and window; task or decline it.}
+  - {id: OA-15, name: Exchange the picture with peers, description: "Send and receive tracks, warnings, and products with peers, higher command, and partners."}
+  - {id: OA-16, name: Flag anomalies, description: "Detect AIS-off, spoofing, loitering, and implausible feeds as alerts through the lifecycle."}
+  - {id: OA-17, name: State collection requirements, description: "Express an information requirement with area, question, priority, and window; task or decline it."}
   - {id: OA-18, name: Fuse identification evidence, description: Combine evidence into identities with confidence; retain the evidence with the track.}
   - {id: OA-19, name: Maintain entities and order of battle, description: Keep global identities across sessions; merge and split; accumulate pattern of life.}
-  - {id: OA-20, name: Disseminate products, description: Release identities, warnings, and products to roles and peers with marking.}
-  - {id: OA-21, name: Set the defended-asset list and priorities, description: Define protected assets, priorities, and warning obligations.}
+  - {id: OA-20, name: Disseminate products, description: "Release identities, warnings, and products to roles and peers with marking."}
+  - {id: OA-21, name: Set the defended-asset list and priorities, description: "Define protected assets, priorities, and warning obligations."}
   - {id: OA-22, name: Plan the laydown, description: Place sensors and effectors; compute coverage and gaps over terrain.}
-  - {id: OA-23, name: Configure policy, description: Set identification criteria, weapons control status, authorities, restrictions as geofences, delegations.}
+  - {id: OA-23, name: Configure policy, description: "Set identification criteria, weapons control status, authorities, restrictions as geofences, delegations."}
   - {id: OA-24, name: Validate and apply the plan, description: Validate a configuration baseline; apply it with audit.}
   - {id: OA-25, name: Rehearse, description: Replay a scenario through the pipeline under a plan; review recommendations and gaps.}
-  - {id: OA-26, name: Review after action, description: Review the journal, measure, record lessons.}
+  - {id: OA-26, name: Review after action, description: "Review the journal, measure, record lessons."}
   - {id: OA-27, name: Operate disconnected, description: Fall back to embedded services; keep journaling; queue for forwarding; act under pre-delegated authority.}
   - {id: OA-28, name: Reconcile journals, description: Forward the queue; merge local and node journals; report conflicts.}
   - {id: OA-29, name: Resolve conflicts, description: Resolve reported decision conflicts under the arbitration rule; update the record.}
-  - {id: OA-30, name: Recommend a fires task, description: Propose a fires task with target location and uncertainty, time window, and deconfliction.}
+  - {id: OA-30, name: Recommend a fires task, description: "Propose a fires task with target location and uncertainty, time window, and deconfliction."}
   - {id: OA-31, name: Manage the decision queue, description: Order pending decisions by priority and time remaining; apply delegation; escalate; time out.}
   - {id: OA-32, name: Assist with questions and drafts, description: Answer questions about the picture and draft products with provenance and no authority.}
-  - {id: OA-33, name: Govern algorithm and model baselines, description: Validate, promote, and roll back the algorithm and model configuration in force.}
+  - {id: OA-33, name: Govern algorithm and model baselines, description: "Validate, promote, and roll back the algorithm and model configuration in force."}
   - {id: OA-34, name: Authenticate and authorize, description: Establish who a caller is and what their role permits before any action.}
-  - {id: OA-35, name: Audit, description: Record every decision, configuration change, promotion, tasking, and assistant exchange append-only.}
-  - {id: OA-36, name: Exchange cooperative identity, description: Receive IFF, ADS-B, AIS, and blue-force identity and attach it as evidence.}
+  - {id: OA-35, name: Audit, description: "Record every decision, configuration change, promotion, tasking, and assistant exchange append-only."}
+  - {id: OA-36, name: Exchange cooperative identity, description: "Receive IFF, ADS-B, AIS, and blue-force identity and attach it as evidence."}
 
 # Services: the service traits the crates expose. `code` is the Rust path;
 # tools/build_uaf.py checks that each trait still exists.
 services:
-  - {id: SV-01, name: Tracking, code: gungnir_tracking_service::TrackingService, status: scaffold, description: Detections in, tracks with quality out; health honest (pipeline not implemented).}
-  - {id: SV-02, name: Intercept planning, code: gungnir_intercept_service::InterceptService, status: scaffold, description: Tracks and resources in, a PlanView out; last-good-plan on over-budget solves (allocator not implemented).}
+  - {id: SV-01, name: Tracking, code: gungnir_tracking_service::TrackingService, status: scaffold, description: "Detections in, tracks with quality out; health honest (pipeline not implemented)."}
+  - {id: SV-02, name: Intercept planning, code: gungnir_intercept_service::InterceptService, status: scaffold, description: "Tracks and resources in, a PlanView out; last-good-plan on over-budget solves (allocator not implemented)."}
   - {id: SV-03, name: Event bus, code: gungnir_eventing::EventBus, status: real, description: Broadcast publish and subscribe with sequence-stamped envelopes.}
   - {id: SV-04, name: Event journal, code: gungnir_store::EventJournal, status: real, description: Append-only JSON-lines session journal; read back for replay; retention.}
   - {id: SV-05, name: Time authority, code: gungnir_time::TimeAuthority, status: real, description: Wall and replay clocks; source versus receipt time; late-data policy.}
-  - {id: SV-06, name: Configuration store, code: gungnir_config::ConfigStore, status: real, description: Load, validate, and save versioned configuration baselines.}
-  - {id: SV-07, name: Mission lifecycle, code: gungnir_mission::MissionManager, status: scaffold, description: Create, live, save, load, replay, close a session.}
-  - {id: SV-08, name: Ingest gateway, code: gungnir_ingest::ProtocolAdapter, status: real, description: Adapters behind a validating, authenticating, quarantining gateway (SourceAuthenticator, IngestGateway).}
-  - {id: SV-09, name: Sensor registry, code: gungnir_sensor_management::SensorRegistry, status: real, description: Sensor records, modes with a transition table, coverage regions.}
+  - {id: SV-06, name: Configuration store, code: gungnir_config::ConfigStore, status: real, description: "Load, validate, and save versioned configuration baselines."}
+  - {id: SV-07, name: Mission lifecycle, code: gungnir_mission::MissionManager, status: scaffold, description: "Create, live, save, load, replay, close a session."}
+  - {id: SV-08, name: Ingest gateway, code: gungnir_ingest::ProtocolAdapter, status: real, description: "Adapters behind a validating, authenticating, quarantining gateway (SourceAuthenticator, IngestGateway)."}
+  - {id: SV-09, name: Sensor registry, code: gungnir_sensor_management::SensorRegistry, status: real, description: "Sensor records, modes with a transition table, coverage regions."}
   - {id: SV-10, name: Interop catalogue and codecs, code: gungnir_interop::DetectionCodec, status: scaffold, description: Schema catalogue with version negotiation; Arrow form; ASTERIX and STANAG codecs (NotImplemented).}
   - {id: SV-11, name: Identity resolution, code: gungnir_identity::IdentityResolver, status: real, description: Global entity identity across session tracks with merge and split lineage.}
-  - {id: SV-12, name: Identification, code: gungnir_identification::IdentificationEngine, status: real, description: Evidence fusion to friend, hostile, neutral, unknown with a margin rule.}
-  - {id: SV-13, name: Geospatial, code: gungnir_geo::GeoService, status: real, description: Geofence containment, map layers, coordinate reference governance.}
-  - {id: SV-14, name: Analytics, code: gungnir_analytics::LineOfSight, status: real, description: Line of sight, viewshed, coverage volumes, route deconfliction over terrain.}
+  - {id: SV-12, name: Identification, code: gungnir_identification::IdentificationEngine, status: real, description: "Evidence fusion to friend, hostile, neutral, unknown with a margin rule."}
+  - {id: SV-13, name: Geospatial, code: gungnir_geo::GeoService, status: real, description: "Geofence containment, map layers, coordinate reference governance."}
+  - {id: SV-14, name: Analytics, code: gungnir_analytics::LineOfSight, status: real, description: "Line of sight, viewshed, coverage volumes, route deconfliction over terrain."}
   - {id: SV-15, name: Policy, code: gungnir_policy::PolicyEngine, status: real, description: Geofence and readiness verdicts through a chain that never self-approves.}
   - {id: SV-16, name: Approval workflow, code: gungnir_command::ApprovalWorkflow, status: real, description: Pending approvals and decision records; nothing actionable without one.}
   - {id: SV-17, name: Threat assessment, code: gungnir_assessment::ThreatAssessor, status: real, description: Risk scores and the reward matrix for the allocator.}
   - {id: SV-18, name: Decision support, code: gungnir_decision::DecisionSupport, status: scaffold, description: Rationale (real); alternatives and what-if (trait surface).}
-  - {id: SV-19, name: Model registry, code: gungnir_modelops::ModelRegistry, status: real, description: Validate, promote, roll back algorithm baselines.}
+  - {id: SV-19, name: Model registry, code: gungnir_modelops::ModelRegistry, status: real, description: "Validate, promote, roll back algorithm baselines."}
   - {id: SV-20, name: Authentication, code: gungnir_security::Authenticator, status: scaffold, description: Credential to OperatorId (trait only; mechanism D-02).}
   - {id: SV-21, name: Authorization, code: gungnir_security::Authorizer, status: real, description: Role-to-action matrix; unknown operators permitted nothing.}
   - {id: SV-22, name: Audit log, code: gungnir_security::AuditLog, status: real, description: Append-only audit entries per gated action.}
-  - {id: SV-23, name: API v1, code: gungnir_api::ApiHandler, status: scaffold, description: Snapshot, event stream, detection submission, plan decision, health; transport pending.}
+  - {id: SV-23, name: API v1, code: gungnir_api::ApiHandler, status: scaffold, description: "Snapshot, event stream, detection submission, plan decision, health; transport pending."}
   - {id: SV-24, name: Health monitor, code: gungnir_observability::HealthMonitor, status: real, description: Health snapshot from service flags; alert correlation; watchdog.}
   - {id: SV-25, name: Store-and-forward and reconciliation, code: gungnir_resilience::StoreAndForwardQueue, status: real, description: Bounded queue while disconnected; journal merge with conflict reporting.}
   - {id: SV-26, name: Shared picture and arbitration, code: gungnir_collab::SharedPictureSync, status: real, description: Apply node envelopes to a projection; role-rank arbitration of conflicts.}
@@ -218,9 +218,9 @@ services:
   - {id: SV-28, name: Replay, code: gungnir_replay, status: real, description: Deterministic playback of a journal under the replay clock.}
   - {id: SV-29, name: Reporting, code: gungnir_reporting::ReportGenerator, status: real, description: Reports and exports with every figure traceable to the journal.}
   - {id: SV-30, name: Remote backends, code: gungnir_remote, status: scaffold, description: RemoteTrackingService and RemoteInterceptService over the API with an outbox; transport pending.}
-  - {id: SV-31, name: Data loading, code: gungnir_data, status: scaffold, description: Point cloud, VTK, terrain, glTF loaders off the UI thread (surface only).}
+  - {id: SV-31, name: Data loading, code: gungnir_data, status: scaffold, description: "Point cloud, VTK, terrain, glTF loaders off the UI thread (surface only)."}
   - {id: SV-32, name: Point-cloud fusion, code: gungnir_data_fusion, status: scaffold, description: CPU reference and GPU ICP registration (trait surface).}
-  - {id: SV-33, name: Tracking metrics, code: gungnir_metrics, status: scaffold, description: MOTA, MOTP, purity, fragmentation against truth.}
+  - {id: SV-33, name: Tracking metrics, code: gungnir_metrics, status: scaffold, description: "MOTA, MOTP, purity, fragmentation against truth."}
   - {id: SV-34, name: Scenario generation, code: gungnir_scenario, status: scaffold, description: The five engineering scenarios with truth.}
 
 # Resources are generated from the crate manifests; do not edit between the markers.
@@ -294,7 +294,7 @@ standards:
   - {id: SD-02, name: Apache Arrow (arrow 53), source: gungnir_interop::detection_arrow_schema, status: real, description: Columnar form of detections for analytics and bulk exchange.}
   - {id: SD-03, name: ASTERIX Category 048 (Eurocontrol), source: gungnir_interop::AsterixCat048Codec, status: planned, description: Radar target reports; codec returns NotImplemented (GAP-064).}
   - {id: SD-04, name: STANAG 4676 (NATO ISR tracking standard), source: gungnir_interop::Stanag4676Codec, status: planned, description: Track exchange with coalition; codec returns NotImplemented (GAP-064).}
-  - {id: SD-05, name: JSON (RFC 8259), source: serde_json, status: real, description: Serialization of configuration, journal lines, and API payloads.}
+  - {id: SD-05, name: JSON (RFC 8259), source: serde_json, status: real, description: "Serialization of configuration, journal lines, and API payloads."}
   - {id: SD-06, name: HTTP/1.1 (RFC 9112), source: docs/gungnir-api-v1.md, status: planned, description: Request and response transport for the API (GAP-041).}
   - {id: SD-07, name: WebSocket (RFC 6455), source: docs/gungnir-api-v1.md, status: planned, description: The API event stream (GAP-041).}
   - {id: SD-08, name: TLS 1.3 (RFC 8446), source: ARCHITECTURE.md §8.5; D-02, status: planned, description: Encryption in transit and mutual authentication of machines (GAP-060).}
@@ -305,7 +305,7 @@ standards:
   - {id: SD-13, name: Software bill of materials (CycloneDX JSON) and signed releases, source: docs/release-governance.md, status: planned, description: Release evidence per docs/release-governance.md; exercised under GAP-061.}
   - {id: SD-14, name: UAF 1.2 (OMG), source: docs/architecture/uaf/, status: real, description: The framework these views follow.}
   - {id: SD-15, name: TOGAF 10 ADM, source: docs/plans/10-togaf-adm-documentation.md, status: planned, description: The method plan 10 follows; references these views.}
-  - {id: SD-16, name: Cursor-on-Target (CoT), source: docs/design/DN-25-cursor-on-target.md, status: planned, description: Exchange with a participant that holds no machine identity here; no codec and no sink exist (GAP-090, GAP-091).}
+  - {id: SD-16, name: Cursor-on-Target (CoT), source: docs/design/DN-25-cursor-on-target.md, status: planned, description: "Exchange with a participant that holds no machine identity here; no codec and no sink exist (GAP-090, GAP-091)."}
 
 projects:
   - {id: PJ-I1, name: Increment 1, description: Productize the core, source: docs/gungnir-capabilities.md §7, status: in progress}
@@ -324,46 +324,46 @@ projects:
   - {id: PJ-P10, name: Plan 10 TOGAF ADM documentation, source: docs/plans/10-togaf-adm-documentation.md, status: not started}
 
 information_elements:
-  - {id: IE-01, name: DetectionView, code: gungnir_model::DetectionView, description: The canonical observation after validation; sensor, source time, receipt time, ENU measurement, provenance.}
-  - {id: IE-02, name: TrackView, code: gungnir_model::TrackView, description: The canonical track; state, covariance, classification, provenance, quality, mission time.}
-  - {id: IE-03, name: ResourceView, code: gungnir_model::ResourceView, description: A taskable resource; position, capacity, readiness.}
+  - {id: IE-01, name: DetectionView, code: gungnir_model::DetectionView, description: "The canonical observation after validation; sensor, source time, receipt time, ENU measurement, provenance."}
+  - {id: IE-02, name: TrackView, code: gungnir_model::TrackView, description: "The canonical track; state, covariance, classification, provenance, quality, mission time."}
+  - {id: IE-03, name: ResourceView, code: gungnir_model::ResourceView, description: "A taskable resource; position, capacity, readiness."}
   - {id: IE-04, name: PlanView, code: gungnir_model::PlanView, description: The intercept service's recommendation; solutions and policy value.}
   - {id: IE-05, name: InterceptSolutionView, code: gungnir_model::InterceptSolutionView, description: One resource-to-track pairing with intercept point and time (None until the solver exists).}
-  - {id: IE-06, name: SystemHealth, code: gungnir_model::SystemHealth, description: Tracking, intercept, and ingest health flags as reported, never inferred.}
-  - {id: IE-07, name: Provenance, code: gungnir_model::Provenance, description: Source sensors, calibration baseline, algorithm version.}
-  - {id: IE-08, name: Quality, code: gungnir_model::Quality, description: Association confidence, latency, staleness.}
-  - {id: IE-09, name: Classification, code: gungnir_model::Classification, description: Unknown, Neutral, Friendly, Hostile.}
+  - {id: IE-06, name: SystemHealth, code: gungnir_model::SystemHealth, description: "Tracking, intercept, and ingest health flags as reported, never inferred."}
+  - {id: IE-07, name: Provenance, code: gungnir_model::Provenance, description: "Source sensors, calibration baseline, algorithm version."}
+  - {id: IE-08, name: Quality, code: gungnir_model::Quality, description: "Association confidence, latency, staleness."}
+  - {id: IE-09, name: Classification, code: gungnir_model::Classification, description: "Unknown, Neutral, Friendly, Hostile."}
   - {id: IE-10, name: MissionTime, code: gungnir_model::MissionTime, description: Seconds on the mission clock.}
   - {id: IE-11, name: GlobalEntityId, code: gungnir_model::GlobalEntityId, description: Persistent identity across sessions (u128; uuid v7 under GAP-069).}
-  - {id: IE-12, name: Envelope, code: gungnir_eventing::Envelope, description: Sequence number, mission time, and one Event; the unit the bus carries and the journal stores.}
-  - {id: IE-13, name: TrackingEvent, code: gungnir_model::events::TrackingEvent, description: TrackInitiated, TrackUpdated, TrackCoasting, TrackDeleted.}
-  - {id: IE-14, name: InterceptEvent, code: gungnir_model::events::InterceptEvent, description: PlanProposed, PlanApproved, PlanSuperseded.}
+  - {id: IE-12, name: Envelope, code: gungnir_eventing::Envelope, description: "Sequence number, mission time, and one Event; the unit the bus carries and the journal stores."}
+  - {id: IE-13, name: TrackingEvent, code: gungnir_model::events::TrackingEvent, description: "TrackInitiated, TrackUpdated, TrackCoasting, TrackDeleted."}
+  - {id: IE-14, name: InterceptEvent, code: gungnir_model::events::InterceptEvent, description: "PlanProposed, PlanApproved, PlanSuperseded."}
   - {id: IE-15, name: IngestEvent, code: gungnir_model::events::IngestEvent, description: Accepted or Quarantined with reason.}
-  - {id: IE-16, name: CommandEvent, code: gungnir_model::events::CommandEvent, description: ApprovalRequested; Decided with plan, accepted, operator.}
-  - {id: IE-17, name: ConfigBaseline, code: gungnir_config::ConfigBaseline, description: Versioned, validated configuration; sensors, resources, tracking, backend, node, horizon, data directory.}
-  - {id: IE-18, name: DecisionRecord, code: gungnir_command::DecisionRecord, description: Who decided what on which plan, with verdict and time.}
-  - {id: IE-19, name: PolicyVerdict, code: gungnir_policy::PolicyVerdict, description: Approved (never by built-in engines), Denied with reason, RequiresHumanApproval.}
-  - {id: IE-20, name: AuditEntry, code: gungnir_security::AuditEntry, description: Actor, action, time, outcome; append-only.}
-  - {id: IE-21, name: Alert and AlertLifecycle, code: gungnir_workflow::AlertLifecycle, description: Alert with severity; New, Acknowledged, Escalated, Closed with history.}
-  - {id: IE-22, name: SnapshotResponse, code: gungnir_api::v1::SnapshotResponse, description: Schema version, tracks, plan, health.}
-  - {id: IE-23, name: ApprovalRequest, code: gungnir_api::v1::ApprovalRequest, description: Plan id, accepted, operator.}
+  - {id: IE-16, name: CommandEvent, code: gungnir_model::events::CommandEvent, description: "ApprovalRequested; Decided with plan, accepted, operator."}
+  - {id: IE-17, name: ConfigBaseline, code: gungnir_config::ConfigBaseline, description: "Versioned, validated configuration; sensors, resources, tracking, backend, node, horizon, data directory."}
+  - {id: IE-18, name: DecisionRecord, code: gungnir_command::DecisionRecord, description: "Who decided what on which plan, with verdict and time."}
+  - {id: IE-19, name: PolicyVerdict, code: gungnir_policy::PolicyVerdict, description: "Approved (never by built-in engines), Denied with reason, RequiresHumanApproval."}
+  - {id: IE-20, name: AuditEntry, code: gungnir_security::AuditEntry, description: "Actor, action, time, outcome; append-only."}
+  - {id: IE-21, name: Alert and AlertLifecycle, code: gungnir_workflow::AlertLifecycle, description: "Alert with severity; New, Acknowledged, Escalated, Closed with history."}
+  - {id: IE-22, name: SnapshotResponse, code: gungnir_api::v1::SnapshotResponse, description: "Schema version, tracks, plan, health."}
+  - {id: IE-23, name: ApprovalRequest, code: gungnir_api::v1::ApprovalRequest, description: "Plan id, accepted, operator."}
   - {id: IE-24, name: SubmitDetectionRequest, code: gungnir_api::v1::SubmitDetectionRequest, description: One DetectionView for the gateway.}
   - {id: IE-25, name: SubscribeRequest, code: gungnir_api::v1::SubscribeRequest, description: The first frame of the event stream; from_seq.}
-  - {id: IE-26, name: SchemaEntry, code: gungnir_interop::SchemaEntry, description: Name, version, kind of a schema the build speaks.}
-  - {id: IE-27, name: SensorRecord and CoverageRegion, code: gungnir_sensor_management::SensorRecord, description: Identity, modality, location, calibration version, mode; coverage geometry.}
+  - {id: IE-26, name: SchemaEntry, code: gungnir_interop::SchemaEntry, description: "Name, version, kind of a schema the build speaks."}
+  - {id: IE-27, name: SensorRecord and CoverageRegion, code: gungnir_sensor_management::SensorRecord, description: "Identity, modality, location, calibration version, mode; coverage geometry."}
   - {id: IE-28, name: Report, code: gungnir_reporting, description: A mission report or export with figures traceable to the journal.}
   - {id: IE-29, name: IdentificationEvidence, code: gungnir_identification, description: One piece of evidence with source and weight toward a classification.}
   - {id: IE-30, name: RiskScore, code: gungnir_assessment, description: Threat score per track with contributing factors.}
   - {id: IE-31, name: ReconciliationReport, code: gungnir_resilience, description: Merged journal statistics and the conflicting decisions found.}
-  - {id: IE-32, name: WorkspaceLayout, code: gungnir_workflow::WorkspaceLayout, description: The panels a role sees, in order.}
+  - {id: IE-32, name: WorkspaceLayout, code: gungnir_workflow::WorkspaceLayout, description: "The panels a role sees, in order."}
   - {id: IE-33, name: Mission and SessionId, code: gungnir_mission::Mission, description: A session with its state and configuration.}
 
 actual_resources:
   - {id: AR-01, name: Operator workstation host, description: Windows 11 with a discrete NVIDIA GPU running gungnir-app; OpenGL context for egui and three-d; wgpu compute device for point-cloud fusion., source: ARCHITECTURE.md §8.7 and §9}
   - {id: AR-02, name: On-prem service node host, description: Linux x86_64 container running gungnir-node on the site or sector LAN; authoritative journal on local storage., source: ARCHITECTURE.md §8.1 and §8.2}
   - {id: AR-03, name: Cloud service node host, description: The same container hosted in the cloud; WAN clients; encryption at rest with keys off-host (GAP-060)., source: ARCHITECTURE.md §8.2 and §8.5}
-  - {id: AR-04, name: Sensor feeds, description: Radar, EO/IR, acoustic, RF, ISR video, cooperative receivers, spotter applications feeding the node or a desktop through adapters., source: docs/mission/operational-environment.md}
-  - {id: AR-05, name: Peer command-and-control nodes, description: Neighbouring sectors, higher command, and coalition systems reached through the API and interop formats., source: ARCHITECTURE.md §8.6}
+  - {id: AR-04, name: Sensor feeds, description: "Radar, EO/IR, acoustic, RF, ISR video, cooperative receivers, spotter applications feeding the node or a desktop through adapters.", source: docs/mission/operational-environment.md}
+  - {id: AR-05, name: Peer command-and-control nodes, description: "Neighbouring sectors, higher command, and coalition systems reached through the API and interop formats.", source: ARCHITECTURE.md §8.6}
   - {id: AR-06, name: Effector systems, description: Fire units and effector controllers that receive handoff messages and report outcomes., source: docs/mission/roles-and-stakeholders.md §3}
   - {id: AR-07, name: Build and release infrastructure, description: Self-hosted GitLab with runners (including a GPU runner) and the container registry (D-10)., source: docs/release-governance.md}
 

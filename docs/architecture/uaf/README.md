@@ -75,9 +75,22 @@ bash docs/architecture/uaf/render.sh
 
 or `render.ps1` renders every `.puml` and `.mmd` to SVG under `rendered/`
 (PlantUML via `plantuml` or the Docker image; Mermaid via `mmdc` or `npx`).
-Rendering was not exercised on 2026-09-04 (no renderer installed on the drafting
-host); the sources are valid PlantUML and Mermaid syntax by inspection. Mermaid
-sources also render inline on GitLab and GitHub when pasted into a Markdown fence.
+Exercised end-to-end on 2026-09-10 via the `plantuml/plantuml` Docker image (no
+local Java/Graphviz install needed) and `npx @mermaid-js/mermaid-cli`; all 53
+sources render cleanly. Mermaid sources also render inline on GitLab and GitHub
+when pasted into a Markdown fence.
+
+```bash
+python docs/architecture/uaf/tools/export_xmi.py
+```
+
+writes `exports/gungnir-uaf.xmi`: the same registry as XMI 2.1/UML 2.1, for
+import into Sparx Enterprise Architect's UAF MDG Technology. One-way (registry
+to EA, never the reverse) and not part of the CI drift check -- run it after
+`build_uaf.py` whenever you want EA caught up with the registry. See the
+script's own docstring for exactly what is guaranteed (valid, importable XMI)
+versus best-effort (the UAF stereotype binding, which depends on the UAF MDG
+Technology being enabled in your EA install before import).
 
 ## Conventions
 
