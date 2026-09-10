@@ -1,0 +1,79 @@
+@startuml Rs-Cn-user-interface
+title Rs-Cn resource connectivity: User interface (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "User interface" {
+  component "gungnir-app" as RS_app <<Binary>>
+  component "gungnir-ui" as RS_ui <<Resource>>
+  component "gungnir-viewport3d" as RS_viewport3d <<Resource>>
+}
+component "analytics\n(see Rs-Cn-understand-maintain-the-picture)" as RS_analytics <<External>> #line.dashed
+component "assessment\n(see Rs-Cn-assess-decide-govern-action)" as RS_assessment <<External>> #line.dashed
+component "command\n(see Rs-Cn-assess-decide-govern-action)" as RS_command <<External>> #line.dashed
+component "config\n(see Rs-Cn-foundational)" as RS_config <<External>> #line.dashed
+component "coord\n(see Rs-Cn-tracking-core)" as RS_coord <<External>> #line.dashed
+component "data\n(see Rs-Cn-data-ecosystem)" as RS_data <<External>> #line.dashed
+component "data_fusion\n(see Rs-Cn-data-ecosystem)" as RS_data_fusion <<External>> #line.dashed
+component "decision\n(see Rs-Cn-assess-decide-govern-action)" as RS_decision <<External>> #line.dashed
+component "eventing\n(see Rs-Cn-foundational)" as RS_eventing <<External>> #line.dashed
+component "geo\n(see Rs-Cn-understand-maintain-the-picture)" as RS_geo <<External>> #line.dashed
+component "identification\n(see Rs-Cn-understand-maintain-the-picture)" as RS_identification <<External>> #line.dashed
+component "identity\n(see Rs-Cn-understand-maintain-the-picture)" as RS_identity <<External>> #line.dashed
+component "ingest\n(see Rs-Cn-sense-ingest-normalize)" as RS_ingest <<External>> #line.dashed
+component "intercept_service\n(see Rs-Cn-service-facades)" as RS_intercept_service <<External>> #line.dashed
+component "mission\n(see Rs-Cn-foundational)" as RS_mission <<External>> #line.dashed
+component "model\n(see Rs-Cn-foundation-model)" as RS_model <<External>> #line.dashed
+component "modelops\n(see Rs-Cn-assess-decide-govern-action)" as RS_modelops <<External>> #line.dashed
+component "observability\n(see Rs-Cn-secure-operate-sustain)" as RS_observability <<External>> #line.dashed
+component "policy\n(see Rs-Cn-assess-decide-govern-action)" as RS_policy <<External>> #line.dashed
+component "remote\n(see Rs-Cn-deployment)" as RS_remote <<External>> #line.dashed
+component "render\n(see Rs-Cn-data-ecosystem)" as RS_render <<External>> #line.dashed
+component "replay\n(see Rs-Cn-secure-operate-sustain)" as RS_replay <<External>> #line.dashed
+component "reporting\n(see Rs-Cn-secure-operate-sustain)" as RS_reporting <<External>> #line.dashed
+component "resilience\n(see Rs-Cn-secure-operate-sustain)" as RS_resilience <<External>> #line.dashed
+component "security\n(see Rs-Cn-secure-operate-sustain)" as RS_security <<External>> #line.dashed
+component "sensor_management\n(see Rs-Cn-sense-ingest-normalize)" as RS_sensor_management <<External>> #line.dashed
+component "store\n(see Rs-Cn-foundational)" as RS_store <<External>> #line.dashed
+component "time\n(see Rs-Cn-sense-ingest-normalize)" as RS_time <<External>> #line.dashed
+component "tracking_service\n(see Rs-Cn-service-facades)" as RS_tracking_service <<External>> #line.dashed
+component "workflow\n(see Rs-Cn-secure-operate-sustain)" as RS_workflow <<External>> #line.dashed
+RS_app --> RS_coord
+RS_app --> RS_tracking_service
+RS_app --> RS_intercept_service
+RS_app --> RS_remote
+RS_app --> RS_resilience
+RS_app --> RS_identification
+RS_app --> RS_identity
+RS_app --> RS_data
+RS_app --> RS_data_fusion
+RS_app --> RS_render
+RS_app --> RS_viewport3d
+RS_app --> RS_ui
+RS_app --> RS_model
+RS_app --> RS_config
+RS_app --> RS_mission
+RS_app --> RS_eventing
+RS_app --> RS_store
+RS_app --> RS_time
+RS_app --> RS_ingest
+RS_app --> RS_observability
+RS_app --> RS_workflow
+RS_app --> RS_security
+RS_app --> RS_policy
+RS_app --> RS_command
+RS_app --> RS_geo
+RS_app --> RS_sensor_management
+RS_app --> RS_analytics
+RS_app --> RS_assessment
+RS_app --> RS_modelops
+RS_app --> RS_decision
+RS_app --> RS_replay
+RS_app --> RS_reporting
+RS_ui --> RS_model
+RS_viewport3d --> RS_data
+RS_viewport3d --> RS_data_fusion
+RS_viewport3d --> RS_model
+RS_viewport3d --> RS_ui
+@enduml

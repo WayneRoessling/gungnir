@@ -3,7 +3,6 @@ title Sv-Cn service connectivity: information flow on one tick and across the AP
 skinparam rectangle {
   BackgroundColor #F7F7F7
 }
-left to right direction
 rectangle "SV-08 Ingest gateway" as SV_08 <<Service>>
 rectangle "SV-01 Tracking" as SV_01 <<Service>>
 rectangle "SV-17 Threat assessment" as SV_17 <<Service>>

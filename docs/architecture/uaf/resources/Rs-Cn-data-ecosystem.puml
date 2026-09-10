@@ -1,0 +1,13 @@
+@startuml Rs-Cn-data-ecosystem
+title Rs-Cn resource connectivity: Data ecosystem (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "Data ecosystem" {
+  component "gungnir-data-fusion" as RS_data_fusion <<Resource>>
+  component "gungnir-data" as RS_data <<Resource>>
+  component "gungnir-render" as RS_render <<Resource>>
+}
+RS_data_fusion --> RS_data
+@enduml

@@ -1,0 +1,14 @@
+@startuml Rs-Cn-foundation-model
+title Rs-Cn resource connectivity: Foundation model (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "Foundation model" {
+  component "gungnir-model" as RS_model <<Resource>>
+}
+component "coord\n(see Rs-Cn-tracking-core)" as RS_coord <<External>> #line.dashed
+component "core\n(see Rs-Cn-tracking-core)" as RS_core <<External>> #line.dashed
+RS_model --> RS_core
+RS_model --> RS_coord
+@enduml

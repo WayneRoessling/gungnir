@@ -1,0 +1,26 @@
+@startuml Rs-Cn-sense-ingest-normalize
+title Rs-Cn resource connectivity: Sense, Ingest & Normalize (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "Sense, Ingest & Normalize" {
+  component "gungnir-ingest" as RS_ingest <<Resource>>
+  component "gungnir-interop" as RS_interop <<Resource>>
+  component "gungnir-sensor-management" as RS_sensor_management <<Resource>>
+  component "gungnir-time" as RS_time <<Resource>>
+}
+component "config\n(see Rs-Cn-foundational)" as RS_config <<External>> #line.dashed
+component "coord\n(see Rs-Cn-tracking-core)" as RS_coord <<External>> #line.dashed
+component "model\n(see Rs-Cn-foundation-model)" as RS_model <<External>> #line.dashed
+component "tracking_service\n(see Rs-Cn-service-facades)" as RS_tracking_service <<External>> #line.dashed
+RS_ingest --> RS_model
+RS_ingest --> RS_time
+RS_ingest --> RS_tracking_service
+RS_ingest --> RS_interop
+RS_interop --> RS_model
+RS_sensor_management --> RS_coord
+RS_sensor_management --> RS_model
+RS_sensor_management --> RS_config
+RS_time --> RS_model
+@enduml

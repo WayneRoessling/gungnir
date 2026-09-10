@@ -4836,7 +4836,8 @@ not by finding, for the time between whenever each item landed and this correcti
     already held) and `bearing_pipeline` (the five counters, read live).
 
     **One change inside `gungnir-fusion-async` beyond this gap's own doc-comment
-    correction (2026-09-08, signed the same day): written and gated, not signed.**
+    correction (2026-09-08, signed the same day): written and gated, and signed by the
+    owner 2026-09-09 after the review below.**
     `FusionPipeline` runs inside `ingest_with`'s spawned task, reachable only through
     the channel it sends snapshots on, so exposing `retained_bearings()` and `stats()`
     to `LiveTrackingService` needed the channel to carry more than `Vec<TimedTrack>`.
@@ -4848,6 +4849,44 @@ not by finding, for the time between whenever each item landed and this correcti
     No pipeline rule changed; only what already crossed an existing channel boundary
     does. `gungnir-fusion-async/tests/oos_convergence.rs` updated its channel type to
     match and is otherwise unchanged.
+
+    **Reviewed before signing (2026-09-09).** The bundling claim above turned out to be
+    the best-verified thing in the queue: the 2026-09-08 loom work (GAP-061,
+    `loom_model.rs`) had since model-checked it --
+    `loom_model::snapshot_fields_come_from_one_epoch` holds the
+    three fields' epoch coherence over every interleaving of the outbound channel, and
+    the permanent negative check `unbundled_publication_is_caught` proves the
+    two-channel shape this replaced *does* skew once the publisher is preempted between
+    its sends. Re-run locally at preemption bounds 2 and 3, before and after the loop
+    change below: 36 and 99 interleavings per model, the negative check firing as
+    designed; the gate runs on every pull request touching
+    either crate. What the review found was the lifetime, not the bundling. DN-27 §5
+    rule 3 retains an unmatched bearing "for a stated lifetime", PN-08 tells the
+    operator so ("retained 60 s unless it refines one or expires"), and nothing honoured
+    it on screen: `FusionPipeline::expire_bearings` ran only when *another bearing*
+    arrived -- its own doc comment offered it as "public so a host whose acoustic feed
+    has gone quiet still ages what it is drawing", but the pipeline is owned by the
+    ingest task and no host can reach it -- and `LiveTrackingService::poll` replaced the
+    rays wholesale on a snapshot and otherwise kept them, never consulting
+    `valid_until`; the viewport has no clock. So the last unmatched bearing from a feed
+    that then went quiet, or that was merely rarer than the radar beside it, stayed on
+    PN-02 for the rest of the session. This gap's own verification test aged a bearing
+    out by offering a second one, and its comment says why: "that is what actually ages
+    a retained bearing out." Closed in two places, each on its own clock: `ingest_with`
+    now expires the retained set on every submission's clock, a position's as well as a
+    bearing's (inside the signed crate, two lines, coherent with the loom assertion by
+    construction since `expire_bearings` moves the counter it checks), and `poll(now)`
+    drops any ray whose `valid_until` the host's clock has passed, with or without a
+    new snapshot -- the same clock that marks a track stale, and the only place the
+    quiet-feed case can be handled. Both falsified doc comments are corrected, the
+    snapshot's own doc now states what the unbounded outbound channel does not bound
+    (one full copy of the picture per processed submission, accumulated by a consumer
+    that stops polling -- unchanged in kind since it carried tracks alone, larger since
+    GAP-096, and a producer-side coalescing would be a §2.2 design change rather than
+    this entry's), and two tests pin the fix: a position at 30 s ages out a bearing
+    retained until 15 s with no second bearing, and a view polled at 15.1 s with
+    nothing arriving no longer shows a ray that expired at 15.0 s while one polled at
+    14.9 s still does.
 
     **Verification.** `gungnir-tracking-service::tests::
     a_retained_bearing_appears_in_the_view_and_leaves_it_once_expired`: a bearing

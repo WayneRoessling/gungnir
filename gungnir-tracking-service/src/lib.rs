@@ -412,7 +412,8 @@ pub const UNGOVERNED_ALGORITHM_VERSION: &str = concat!(
 pub struct LiveTrackingService {
     tracks: Vec<TrackView>,
     /// Bearings that matched no track, projected for [`TrackingService::bearing_rays`]
-    /// (GAP-096). Replaced wholesale on every snapshot, exactly as `tracks` is: the
+    /// (GAP-096). Replaced wholesale on every snapshot, exactly as `tracks` is, and aged
+    /// by the host's clock on every poll (a ray past its `valid_until` is dropped): the
     /// pipeline's own `retained` set is already the current one, so there is nothing to
     /// merge.
     bearing_rays: Vec<gungnir_model::BearingRayView>,
@@ -721,6 +722,13 @@ impl TrackingService for LiveTrackingService {
                 }
             }
         }
+        // A retained bearing's lifetime is honoured here, on this clock, whether or not
+        // a snapshot arrived (2026-09-09, found in review before item 115 was signed).
+        // The pipeline can only age its own set on a submission's clock, and a feed
+        // that has gone quiet sends none -- so without this, the last unmatched bearing
+        // stayed on PN-02 for the rest of the session while PN-08 had said "retained
+        // 60 s". `now` is the same clock `is_stale` ages a track against above.
+        self.bearing_rays.retain(|ray| ray.valid_until.0 > now.0);
     }
 
     fn tracks(&self) -> &[TrackView] {
@@ -1168,6 +1176,65 @@ mod tests {
         assert!(
             !svc.is_healthy(),
             "the pipeline is gone; health must not claim otherwise"
+        );
+    }
+
+    /// The other half of the lifetime (2026-09-09, found in review before item 115 was
+    /// signed): a retained bearing leaves the view when the host's clock passes its
+    /// `valid_until` with nothing else arriving. The pipeline can only age its set on a
+    /// submission's clock, and a quiet feed sends none, so this is the case only the
+    /// view can honour -- and before this it did not: the ray stayed for the session.
+    #[test]
+    fn a_retained_bearing_leaves_the_view_when_now_passes_its_lifetime_with_nothing_else_arriving()
+    {
+        let settings = PipelineSettings {
+            bearing_retention_s: 5.0,
+            ..PipelineSettings::default()
+        };
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let mut svc = LiveTrackingService::with_pipeline_settings(runtime.handle(), settings)
+            .with_sensor_positions(SensorPositions::from_sensors([(7, [100.0, 200.0, 5.0])]));
+        svc.submit_detection(DetectionView {
+            sensor: SensorId(7),
+            source_time: MissionTime(10.0),
+            receipt_time: MissionTime(10.0),
+            measurement: gungnir_model::Measurement::Bearing {
+                azimuth_rad: 0.6,
+                elevation_rad: None,
+                azimuth_variance_rad2: 4e-4,
+                elevation_variance_rad2: None,
+            },
+            provenance: Provenance::default(),
+        })
+        .expect("a bearing with a known sensor position is accepted");
+        for _ in 0..2_000 {
+            svc.poll(MissionTime(10.0));
+            if !svc.bearing_rays().is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(svc.bearing_rays().len(), 1, "the bearing did not surface");
+        assert!((svc.bearing_rays()[0].valid_until.0 - 15.0).abs() < 1e-9);
+
+        // Still inside its lifetime: stays. Nothing has been submitted since.
+        svc.poll(MissionTime(14.9));
+        assert_eq!(
+            svc.bearing_rays().len(),
+            1,
+            "aged out before its valid_until"
+        );
+
+        // Past it, with nothing else arriving at the pipeline: gone.
+        svc.poll(MissionTime(15.1));
+        assert!(
+            svc.bearing_rays().is_empty(),
+            "a retained bearing outlived its valid_until on the view: {:?}",
+            svc.bearing_rays()
         );
     }
 

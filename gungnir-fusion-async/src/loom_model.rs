@@ -227,6 +227,9 @@ fn assert_epoch_coherent_parts(
 /// Deliberately the same shape as the real one, down to `Disconnected` breaking the
 /// loop *after* whatever it already drained is kept: taking only the newest snapshot,
 /// applying its three fields together, and ageing nothing when there is no new one.
+/// The real one additionally drops rays whose `valid_until` its own clock has passed
+/// (2026-09-09); that is presentation against a clock this model does not have, and
+/// it is outside what the channel protocol here checks.
 fn poll(rx: &Receiver<PipelineSnapshot>, applied: &mut Applied) {
     let mut latest: Option<PipelineSnapshot> = None;
     loop {

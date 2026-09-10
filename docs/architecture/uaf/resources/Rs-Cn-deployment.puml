@@ -1,0 +1,54 @@
+@startuml Rs-Cn-deployment
+title Rs-Cn resource connectivity: Deployment (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "Deployment" {
+  component "gungnir-node" as RS_node <<Binary>>
+  component "gungnir-remote" as RS_remote <<Resource>>
+}
+component "analytics\n(see Rs-Cn-understand-maintain-the-picture)" as RS_analytics <<External>> #line.dashed
+component "api\n(see Rs-Cn-secure-operate-sustain)" as RS_api <<External>> #line.dashed
+component "config\n(see Rs-Cn-foundational)" as RS_config <<External>> #line.dashed
+component "eventing\n(see Rs-Cn-foundational)" as RS_eventing <<External>> #line.dashed
+component "geo\n(see Rs-Cn-understand-maintain-the-picture)" as RS_geo <<External>> #line.dashed
+component "identity\n(see Rs-Cn-understand-maintain-the-picture)" as RS_identity <<External>> #line.dashed
+component "ingest\n(see Rs-Cn-sense-ingest-normalize)" as RS_ingest <<External>> #line.dashed
+component "intercept_service\n(see Rs-Cn-service-facades)" as RS_intercept_service <<External>> #line.dashed
+component "mission\n(see Rs-Cn-foundational)" as RS_mission <<External>> #line.dashed
+component "model\n(see Rs-Cn-foundation-model)" as RS_model <<External>> #line.dashed
+component "modelops\n(see Rs-Cn-assess-decide-govern-action)" as RS_modelops <<External>> #line.dashed
+component "observability\n(see Rs-Cn-secure-operate-sustain)" as RS_observability <<External>> #line.dashed
+component "policy\n(see Rs-Cn-assess-decide-govern-action)" as RS_policy <<External>> #line.dashed
+component "security\n(see Rs-Cn-secure-operate-sustain)" as RS_security <<External>> #line.dashed
+component "sensor_management\n(see Rs-Cn-sense-ingest-normalize)" as RS_sensor_management <<External>> #line.dashed
+component "store\n(see Rs-Cn-foundational)" as RS_store <<External>> #line.dashed
+component "time\n(see Rs-Cn-sense-ingest-normalize)" as RS_time <<External>> #line.dashed
+component "tracking_service\n(see Rs-Cn-service-facades)" as RS_tracking_service <<External>> #line.dashed
+RS_node --> RS_model
+RS_node --> RS_config
+RS_node --> RS_mission
+RS_node --> RS_eventing
+RS_node --> RS_store
+RS_node --> RS_time
+RS_node --> RS_ingest
+RS_node --> RS_sensor_management
+RS_node --> RS_tracking_service
+RS_node --> RS_intercept_service
+RS_node --> RS_api
+RS_node --> RS_remote
+RS_node --> RS_security
+RS_node --> RS_modelops
+RS_node --> RS_identity
+RS_node --> RS_policy
+RS_node --> RS_geo
+RS_node --> RS_analytics
+RS_node --> RS_observability
+RS_remote --> RS_security
+RS_remote --> RS_model
+RS_remote --> RS_eventing
+RS_remote --> RS_api
+RS_remote --> RS_tracking_service
+RS_remote --> RS_intercept_service
+@enduml

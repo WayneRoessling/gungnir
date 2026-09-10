@@ -829,10 +829,17 @@ impl FusionPipeline {
         BearingOutcome::Retained { until_s }
     }
 
-    /// The bearings that matched no track and are still inside their lifetime
-    /// (DN-27 §5 rule 3). **To be drawn as rays, never as symbols** (§7) -- by a caller
-    /// that does not exist yet: nothing outside this crate's own tests calls this, which
-    /// is the whole of GAP-096.
+    /// The bearings that matched no track and were still inside their lifetime as of
+    /// the last submission's clock (DN-27 §5 rule 3). **To be drawn as rays, never as
+    /// symbols** (§7): [`crate::ingest_with`] reads this into every `PipelineSnapshot`,
+    /// which is how a caller outside this crate reaches it (GAP-096).
+    ///
+    /// "As of the last submission's clock" is exact, not loose. [`Self::expire_bearings`]
+    /// runs on every submission the ingest loop takes -- a bearing's or a position's --
+    /// and on nothing else, because the pipeline has no clock of its own; a pipeline
+    /// that has received nothing since a bearing was retained still lists it here past
+    /// its `until_s`. The consumer ages what it *shows* by its own clock
+    /// (`LiveTrackingService::poll`), which is the half that reaches an operator.
     #[must_use]
     pub fn retained_bearings(&self) -> &[RetainedBearing] {
         &self.retained
@@ -883,8 +890,18 @@ impl FusionPipeline {
 
     /// Drop retained bearings whose lifetime has run out at `now_s`.
     ///
-    /// Called by [`FusionPipeline::offer_bearing`] on every offer; public so a host
-    /// whose acoustic feed has gone quiet still ages what it is drawing.
+    /// Called by [`FusionPipeline::offer_bearing`] on every offer, and by
+    /// [`crate::ingest_with`] on every position it takes as well (2026-09-09), so the
+    /// retained set ages on the sensor clock whenever anything at all arrives.
+    ///
+    /// **A host cannot call this on the live pipeline**, whatever an earlier version of
+    /// this comment offered: the pipeline is owned by the ingest task and reachable only
+    /// through the snapshot channel. So a feed that has gone quiet is aged where the
+    /// picture is -- `LiveTrackingService::poll` drops a ray whose `valid_until` its own
+    /// clock has passed -- rather than here. Found in review before signing (item 115):
+    /// until then, with no further bearing arriving, the last unmatched bearing was
+    /// drawn for as long as the session lasted, while PN-08 had told the operator it was
+    /// retained for `bearing_retention_s`.
     pub fn expire_bearings(&mut self, now_s: f64) {
         let before = self.retained.len();
         self.retained.retain(|r| r.until_s > now_s);
