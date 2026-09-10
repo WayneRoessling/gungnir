@@ -79,7 +79,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_uaf import UAF, load_registry  # noqa: E402
-from export_xmi import ELEMENT_STEREOTYPE, RELATIONSHIP_STEREOTYPE, SECTION_TITLE, STRUCTURAL_FIELDS  # noqa: E402
+from export_xmi import ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO, SECTION_TITLE, STRUCTURAL_FIELDS  # noqa: E402
 
 
 def ascii_escape(s: object) -> str:
@@ -110,9 +110,9 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
     known_ids: set[str] = set()
 
     for section, entries in elements.items():
-        if not isinstance(entries, list) or section not in ELEMENT_STEREOTYPE:
+        if not isinstance(entries, list) or section not in ELEMENT_KIND_INFO:
             continue
-        stereotype = ELEMENT_STEREOTYPE[section]
+        stereotype, _metaclass = ELEMENT_KIND_INFO[section]
         title = SECTION_TITLE[section]
         for entry in entries:
             eid = entry["id"]
@@ -129,9 +129,9 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
 
     rel_rows, rel_tag_rows, n = [], [], 0
     for kind, entries in rels.items():
-        if kind not in RELATIONSHIP_STEREOTYPE:
+        if kind not in RELATIONSHIP_KIND_INFO:
             continue
-        stereotype = RELATIONSHIP_STEREOTYPE[kind]
+        stereotype, _metaclass = RELATIONSHIP_KIND_INFO[kind]
         for entry in entries:
             from_id = entry.get("from")
             to = entry.get("to")
@@ -142,7 +142,7 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
                 n += 1
                 rel_id = f"REL-{n}"
                 name = ascii_escape(f"{kind}: {from_id} -> {to_id}")
-                rel_rows.append([rel_id, kind, stereotype, from_id, to_id, name])
+                rel_rows.append([rel_id, kind, stereotype or "", from_id, to_id, name])
                 rel_tag_rows.append([rel_id, "uafRelationship", kind])
                 for k, v in entry.items():
                     if k in ("from", "to") or v in (None, "", []):

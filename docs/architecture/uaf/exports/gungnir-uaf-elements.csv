@@ -122,40 +122,40 @@ OA-33,Operational Activities,OperationalActivity,Govern algorithm and model base
 OA-34,Operational Activities,OperationalActivity,Authenticate and authorize,Establish who a caller is and what their role permits before any action.
 OA-35,Operational Activities,OperationalActivity,Audit,"Record every decision, configuration change, promotion, tasking, and assistant exchange append-only."
 OA-36,Operational Activities,OperationalActivity,Exchange cooperative identity,"Receive IFF, ADS-B, AIS, and blue-force identity and attach it as evidence."
-SV-01,Services,Service,Tracking,"Detections in, tracks with quality out; health honest (pipeline not implemented)."
-SV-02,Services,Service,Intercept planning,"Tracks and resources in, a PlanView out; last-good-plan on over-budget solves (allocator not implemented)."
-SV-03,Services,Service,Event bus,Broadcast publish and subscribe with sequence-stamped envelopes.
-SV-04,Services,Service,Event journal,Append-only JSON-lines session journal; read back for replay; retention.
-SV-05,Services,Service,Time authority,Wall and replay clocks; source versus receipt time; late-data policy.
-SV-06,Services,Service,Configuration store,"Load, validate, and save versioned configuration baselines."
-SV-07,Services,Service,Mission lifecycle,"Create, live, save, load, replay, close a session."
-SV-08,Services,Service,Ingest gateway,"Adapters behind a validating, authenticating, quarantining gateway (SourceAuthenticator, IngestGateway)."
-SV-09,Services,Service,Sensor registry,"Sensor records, modes with a transition table, coverage regions."
-SV-10,Services,Service,Interop catalogue and codecs,Schema catalogue with version negotiation; Arrow form; ASTERIX and STANAG codecs (NotImplemented).
-SV-11,Services,Service,Identity resolution,Global entity identity across session tracks with merge and split lineage.
-SV-12,Services,Service,Identification,"Evidence fusion to friend, hostile, neutral, unknown with a margin rule."
-SV-13,Services,Service,Geospatial,"Geofence containment, map layers, coordinate reference governance."
-SV-14,Services,Service,Analytics,"Line of sight, viewshed, coverage volumes, route deconfliction over terrain."
-SV-15,Services,Service,Policy,Geofence and readiness verdicts through a chain that never self-approves.
-SV-16,Services,Service,Approval workflow,Pending approvals and decision records; nothing actionable without one.
-SV-17,Services,Service,Threat assessment,Risk scores and the reward matrix for the allocator.
-SV-18,Services,Service,Decision support,Rationale (real); alternatives and what-if (trait surface).
-SV-19,Services,Service,Model registry,"Validate, promote, roll back algorithm baselines."
-SV-20,Services,Service,Authentication,Credential to OperatorId (trait only; mechanism D-02).
-SV-21,Services,Service,Authorization,Role-to-action matrix; unknown operators permitted nothing.
-SV-22,Services,Service,Audit log,Append-only audit entries per gated action.
-SV-23,Services,Service,API v1,"Snapshot, event stream, detection submission, plan decision, health; transport pending."
-SV-24,Services,Service,Health monitor,Health snapshot from service flags; alert correlation; watchdog.
-SV-25,Services,Service,Store-and-forward and reconciliation,Bounded queue while disconnected; journal merge with conflict reporting.
-SV-26,Services,Service,Shared picture and arbitration,Apply node envelopes to a projection; role-rank arbitration of conflicts.
-SV-27,Services,Service,Operator workflow,Role workspace layouts; alert lifecycle; cases and annotations.
-SV-28,Services,Service,Replay,Deterministic playback of a journal under the replay clock.
-SV-29,Services,Service,Reporting,Reports and exports with every figure traceable to the journal.
-SV-30,Services,Service,Remote backends,RemoteTrackingService and RemoteInterceptService over the API with an outbox; transport pending.
-SV-31,Services,Service,Data loading,"Point cloud, VTK, terrain, glTF loaders off the UI thread (surface only)."
-SV-32,Services,Service,Point-cloud fusion,CPU reference and GPU ICP registration (trait surface).
-SV-33,Services,Service,Tracking metrics,"MOTA, MOTP, purity, fragmentation against truth."
-SV-34,Services,Service,Scenario generation,The five engineering scenarios with truth.
+SV-01,Services,ServiceInterface,Tracking,"Detections in, tracks with quality out; health honest (pipeline not implemented)."
+SV-02,Services,ServiceInterface,Intercept planning,"Tracks and resources in, a PlanView out; last-good-plan on over-budget solves (allocator not implemented)."
+SV-03,Services,ServiceInterface,Event bus,Broadcast publish and subscribe with sequence-stamped envelopes.
+SV-04,Services,ServiceInterface,Event journal,Append-only JSON-lines session journal; read back for replay; retention.
+SV-05,Services,ServiceInterface,Time authority,Wall and replay clocks; source versus receipt time; late-data policy.
+SV-06,Services,ServiceInterface,Configuration store,"Load, validate, and save versioned configuration baselines."
+SV-07,Services,ServiceInterface,Mission lifecycle,"Create, live, save, load, replay, close a session."
+SV-08,Services,ServiceInterface,Ingest gateway,"Adapters behind a validating, authenticating, quarantining gateway (SourceAuthenticator, IngestGateway)."
+SV-09,Services,ServiceInterface,Sensor registry,"Sensor records, modes with a transition table, coverage regions."
+SV-10,Services,ServiceInterface,Interop catalogue and codecs,Schema catalogue with version negotiation; Arrow form; ASTERIX and STANAG codecs (NotImplemented).
+SV-11,Services,ServiceInterface,Identity resolution,Global entity identity across session tracks with merge and split lineage.
+SV-12,Services,ServiceInterface,Identification,"Evidence fusion to friend, hostile, neutral, unknown with a margin rule."
+SV-13,Services,ServiceInterface,Geospatial,"Geofence containment, map layers, coordinate reference governance."
+SV-14,Services,ServiceInterface,Analytics,"Line of sight, viewshed, coverage volumes, route deconfliction over terrain."
+SV-15,Services,ServiceInterface,Policy,Geofence and readiness verdicts through a chain that never self-approves.
+SV-16,Services,ServiceInterface,Approval workflow,Pending approvals and decision records; nothing actionable without one.
+SV-17,Services,ServiceInterface,Threat assessment,Risk scores and the reward matrix for the allocator.
+SV-18,Services,ServiceInterface,Decision support,Rationale (real); alternatives and what-if (trait surface).
+SV-19,Services,ServiceInterface,Model registry,"Validate, promote, roll back algorithm baselines."
+SV-20,Services,ServiceInterface,Authentication,Credential to OperatorId (trait only; mechanism D-02).
+SV-21,Services,ServiceInterface,Authorization,Role-to-action matrix; unknown operators permitted nothing.
+SV-22,Services,ServiceInterface,Audit log,Append-only audit entries per gated action.
+SV-23,Services,ServiceInterface,API v1,"Snapshot, event stream, detection submission, plan decision, health; transport pending."
+SV-24,Services,ServiceInterface,Health monitor,Health snapshot from service flags; alert correlation; watchdog.
+SV-25,Services,ServiceInterface,Store-and-forward and reconciliation,Bounded queue while disconnected; journal merge with conflict reporting.
+SV-26,Services,ServiceInterface,Shared picture and arbitration,Apply node envelopes to a projection; role-rank arbitration of conflicts.
+SV-27,Services,ServiceInterface,Operator workflow,Role workspace layouts; alert lifecycle; cases and annotations.
+SV-28,Services,ServiceInterface,Replay,Deterministic playback of a journal under the replay clock.
+SV-29,Services,ServiceInterface,Reporting,Reports and exports with every figure traceable to the journal.
+SV-30,Services,ServiceInterface,Remote backends,RemoteTrackingService and RemoteInterceptService over the API with an outbox; transport pending.
+SV-31,Services,ServiceInterface,Data loading,"Point cloud, VTK, terrain, glTF loaders off the UI thread (surface only)."
+SV-32,Services,ServiceInterface,Point-cloud fusion,CPU reference and GPU ICP registration (trait surface).
+SV-33,Services,ServiceInterface,Tracking metrics,"MOTA, MOTP, purity, fragmentation against truth."
+SV-34,Services,ServiceInterface,Scenario generation,The five engineering scenarios with truth.
 RS-allocation,Resources,ResourceArtifact,gungnir-allocation,Bellman/DP resource-to-track assignment.
 RS-analytics,Resources,ResourceArtifact,gungnir-analytics,"Advanced 3D analytical functions -- line-of-sight, viewshed, sensor-coverage volumes, terrain masking, route deconfliction -- as standalone CPU services rendered by gungnir-viewport3d rather than embedded in it. docs/gungnir-capabilities.md \u00a75.3 -- Medium."
 RS-api,Resources,ResourceArtifact,gungnir-api,"Versioned, security-gated external contract (v1: snapshot, event stream, detection submit, plan decision) so remote desktops, peer C2 systems, analytics tools, or enterprise data services can integrate with a service node. Transport-neutral types here; the HTTP/JSON + WebSocket transport is the next stack addition. docs/gungnir-capabilities.md \u00a75.5 -- High."
@@ -245,39 +245,39 @@ PJ-P07,Projects,Project,Plan 07 test-track suite,
 PJ-P08,Projects,Project,Plan 08 AI agent integration,
 PJ-P09,Projects,Project,Plan 09 ML model integration,
 PJ-P10,Projects,Project,Plan 10 TOGAF ADM documentation,
-IE-01,Information Elements,Information,DetectionView,"The canonical observation after validation; sensor, source time, receipt time, ENU measurement, provenance."
-IE-02,Information Elements,Information,TrackView,"The canonical track; state, covariance, classification, provenance, quality, mission time."
-IE-03,Information Elements,Information,ResourceView,"A taskable resource; position, capacity, readiness."
-IE-04,Information Elements,Information,PlanView,The intercept service's recommendation; solutions and policy value.
-IE-05,Information Elements,Information,InterceptSolutionView,One resource-to-track pairing with intercept point and time (None until the solver exists).
-IE-06,Information Elements,Information,SystemHealth,"Tracking, intercept, and ingest health flags as reported, never inferred."
-IE-07,Information Elements,Information,Provenance,"Source sensors, calibration baseline, algorithm version."
-IE-08,Information Elements,Information,Quality,"Association confidence, latency, staleness."
-IE-09,Information Elements,Information,Classification,"Unknown, Neutral, Friendly, Hostile."
-IE-10,Information Elements,Information,MissionTime,Seconds on the mission clock.
-IE-11,Information Elements,Information,GlobalEntityId,Persistent identity across sessions (u128; uuid v7 under GAP-069).
-IE-12,Information Elements,Information,Envelope,"Sequence number, mission time, and one Event; the unit the bus carries and the journal stores."
-IE-13,Information Elements,Information,TrackingEvent,"TrackInitiated, TrackUpdated, TrackCoasting, TrackDeleted."
-IE-14,Information Elements,Information,InterceptEvent,"PlanProposed, PlanApproved, PlanSuperseded."
-IE-15,Information Elements,Information,IngestEvent,Accepted or Quarantined with reason.
-IE-16,Information Elements,Information,CommandEvent,"ApprovalRequested; Decided with plan, accepted, operator."
-IE-17,Information Elements,Information,ConfigBaseline,"Versioned, validated configuration; sensors, resources, tracking, backend, node, horizon, data directory."
-IE-18,Information Elements,Information,DecisionRecord,"Who decided what on which plan, with verdict and time."
-IE-19,Information Elements,Information,PolicyVerdict,"Approved (never by built-in engines), Denied with reason, RequiresHumanApproval."
-IE-20,Information Elements,Information,AuditEntry,"Actor, action, time, outcome; append-only."
-IE-21,Information Elements,Information,Alert and AlertLifecycle,"Alert with severity; New, Acknowledged, Escalated, Closed with history."
-IE-22,Information Elements,Information,SnapshotResponse,"Schema version, tracks, plan, health."
-IE-23,Information Elements,Information,ApprovalRequest,"Plan id, accepted, operator."
-IE-24,Information Elements,Information,SubmitDetectionRequest,One DetectionView for the gateway.
-IE-25,Information Elements,Information,SubscribeRequest,The first frame of the event stream; from_seq.
-IE-26,Information Elements,Information,SchemaEntry,"Name, version, kind of a schema the build speaks."
-IE-27,Information Elements,Information,SensorRecord and CoverageRegion,"Identity, modality, location, calibration version, mode; coverage geometry."
-IE-28,Information Elements,Information,Report,A mission report or export with figures traceable to the journal.
-IE-29,Information Elements,Information,IdentificationEvidence,One piece of evidence with source and weight toward a classification.
-IE-30,Information Elements,Information,RiskScore,Threat score per track with contributing factors.
-IE-31,Information Elements,Information,ReconciliationReport,Merged journal statistics and the conflicting decisions found.
-IE-32,Information Elements,Information,WorkspaceLayout,"The panels a role sees, in order."
-IE-33,Information Elements,Information,Mission and SessionId,A session with its state and configuration.
+IE-01,Information Elements,InformationElement,DetectionView,"The canonical observation after validation; sensor, source time, receipt time, ENU measurement, provenance."
+IE-02,Information Elements,InformationElement,TrackView,"The canonical track; state, covariance, classification, provenance, quality, mission time."
+IE-03,Information Elements,InformationElement,ResourceView,"A taskable resource; position, capacity, readiness."
+IE-04,Information Elements,InformationElement,PlanView,The intercept service's recommendation; solutions and policy value.
+IE-05,Information Elements,InformationElement,InterceptSolutionView,One resource-to-track pairing with intercept point and time (None until the solver exists).
+IE-06,Information Elements,InformationElement,SystemHealth,"Tracking, intercept, and ingest health flags as reported, never inferred."
+IE-07,Information Elements,InformationElement,Provenance,"Source sensors, calibration baseline, algorithm version."
+IE-08,Information Elements,InformationElement,Quality,"Association confidence, latency, staleness."
+IE-09,Information Elements,InformationElement,Classification,"Unknown, Neutral, Friendly, Hostile."
+IE-10,Information Elements,InformationElement,MissionTime,Seconds on the mission clock.
+IE-11,Information Elements,InformationElement,GlobalEntityId,Persistent identity across sessions (u128; uuid v7 under GAP-069).
+IE-12,Information Elements,InformationElement,Envelope,"Sequence number, mission time, and one Event; the unit the bus carries and the journal stores."
+IE-13,Information Elements,InformationElement,TrackingEvent,"TrackInitiated, TrackUpdated, TrackCoasting, TrackDeleted."
+IE-14,Information Elements,InformationElement,InterceptEvent,"PlanProposed, PlanApproved, PlanSuperseded."
+IE-15,Information Elements,InformationElement,IngestEvent,Accepted or Quarantined with reason.
+IE-16,Information Elements,InformationElement,CommandEvent,"ApprovalRequested; Decided with plan, accepted, operator."
+IE-17,Information Elements,InformationElement,ConfigBaseline,"Versioned, validated configuration; sensors, resources, tracking, backend, node, horizon, data directory."
+IE-18,Information Elements,InformationElement,DecisionRecord,"Who decided what on which plan, with verdict and time."
+IE-19,Information Elements,InformationElement,PolicyVerdict,"Approved (never by built-in engines), Denied with reason, RequiresHumanApproval."
+IE-20,Information Elements,InformationElement,AuditEntry,"Actor, action, time, outcome; append-only."
+IE-21,Information Elements,InformationElement,Alert and AlertLifecycle,"Alert with severity; New, Acknowledged, Escalated, Closed with history."
+IE-22,Information Elements,InformationElement,SnapshotResponse,"Schema version, tracks, plan, health."
+IE-23,Information Elements,InformationElement,ApprovalRequest,"Plan id, accepted, operator."
+IE-24,Information Elements,InformationElement,SubmitDetectionRequest,One DetectionView for the gateway.
+IE-25,Information Elements,InformationElement,SubscribeRequest,The first frame of the event stream; from_seq.
+IE-26,Information Elements,InformationElement,SchemaEntry,"Name, version, kind of a schema the build speaks."
+IE-27,Information Elements,InformationElement,SensorRecord and CoverageRegion,"Identity, modality, location, calibration version, mode; coverage geometry."
+IE-28,Information Elements,InformationElement,Report,A mission report or export with figures traceable to the journal.
+IE-29,Information Elements,InformationElement,IdentificationEvidence,One piece of evidence with source and weight toward a classification.
+IE-30,Information Elements,InformationElement,RiskScore,Threat score per track with contributing factors.
+IE-31,Information Elements,InformationElement,ReconciliationReport,Merged journal statistics and the conflicting decisions found.
+IE-32,Information Elements,InformationElement,WorkspaceLayout,"The panels a role sees, in order."
+IE-33,Information Elements,InformationElement,Mission and SessionId,A session with its state and configuration.
 AR-01,Actual Resources,ActualResource,Operator workstation host,Windows 11 with a discrete NVIDIA GPU running gungnir-app; OpenGL context for egui and three-d; wgpu compute device for point-cloud fusion.
 AR-02,Actual Resources,ActualResource,On-prem service node host,Linux x86_64 container running gungnir-node on the site or sector LAN; authoritative journal on local storage.
 AR-03,Actual Resources,ActualResource,Cloud service node host,The same container hosted in the cloud; WAN clients; encryption at rest with keys off-host (GAP-060).

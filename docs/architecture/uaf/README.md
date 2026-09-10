@@ -87,10 +87,22 @@ python docs/architecture/uaf/tools/export_xmi.py
 writes `exports/gungnir-uaf.xmi`: the same registry as XMI 2.1/UML 2.1, for
 import into Sparx Enterprise Architect's UAF MDG Technology. One-way (registry
 to EA, never the reverse) and not part of the CI drift check -- run it after
-`build_uaf.py` whenever you want EA caught up with the registry. In practice,
-XMI import got the elements into EA but not the relationships (twice, on two
-different relationship encodings) -- see `export_ea_script.py` below for the
-path that actually carries relationships across.
+`build_uaf.py` whenever you want EA caught up with the registry. The first two
+rounds guessed at EA's XMI dialect and only got elements across, not
+relationships; the third round is built against four files exported from a
+real EA project (its own default UAF model template, in XMI 1.1, XMI 2.1, EA
+native XML, and .xea), which settled the open questions directly: UAF
+stereotypes are applied via a dedicated `<UAF:StereotypeName base_X="id"/>`
+element in EA's own `UAF` XMI namespace (missing entirely from both prior
+rounds), different UAF stereotypes extend different UML metaclasses
+(`OperationalActivity` is a `uml:Activity`, not a `uml:Class`; the
+`ActualResource`-family stereotypes are `uml:InstanceSpecification`), and UAF
+relationships (`Exhibits`, confirmed; the other 8 kinds inferred from the same
+family) extend `uml:Abstraction`, not `uml:Dependency`. See the script's
+docstring for exactly which of our 11 element kinds and 9 relationship kinds
+were directly confirmed by the sample versus still a best-effort mapping (the
+sample has no Resources or Services packages at all, so those -- and 8 of 9
+relationship kinds -- remain unconfirmed guesses, just better-informed ones).
 
 ```bash
 python docs/architecture/uaf/tools/export_ea_script.py
@@ -98,14 +110,14 @@ python docs/architecture/uaf/tools/export_ea_script.py
 
 writes five files to `exports/`: `gungnir-uaf-import.vbs`, a short (~200 line)
 driver, plus `gungnir-uaf-elements.csv`, `-element-tags.csv`, `-relationships.csv`
-and `-relationship-tags.csv`, the bulk data it reads at runtime. The driver
-builds the registry directly in EA through its own Scripting/Automation
-interface (`Repository`, `Package.Elements.AddNew`, `Element.Connectors.AddNew`)
-rather than through XMI import, since that carries relationships (as EA
-Connectors) where the XMI path did not; the data lives in CSV rather than being
-inlined as ~11,000 lines of script statements because pasting that much text
-into EA's script editor choked (reported: paste advancing one line at a time).
-All five files must sit in the same folder. Open your EA project,
+and `-relationship-tags.csv`, the bulk data it reads at runtime. A fallback
+path via EA's own Scripting/Automation interface (`Repository`,
+`Package.Elements.AddNew`, `Element.Connectors.AddNew`) rather than XMI
+import, from when the first two XMI rounds weren't getting relationships
+across; the data lives in CSV rather than being inlined as ~11,000 lines of
+script statements because pasting that much text into EA's script editor
+choked (reported: paste advancing one line at a time). All five files must
+sit in the same folder. Open your EA project,
 `Tools > Scripting`, create a new VBScript, paste `gungnir-uaf-import.vbs` in,
 edit the `DATA_DIR` constant near the top to that folder, run it (Ctrl+F9);
 Script Output logs progress. Not idempotent -- delete the "Gungnir UAF Model"
