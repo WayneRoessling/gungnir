@@ -46,6 +46,33 @@ were coming through. This version:
     certain even with the sample in hand than everything above. Flagged
     explicitly, not silently skipped.
 
+Fifth version. Round 4 (the view-package reorganization above) still left
+Traceability packages empty, no diagrams, and no relationships showing on
+elements. Wayne compared the sample's own "Operational Processes Op-Pr"
+package directly against this script's output and found two concrete gaps:
+
+  - Every element that participates in a relationship has a `<links>` entry
+    in its own EA extension `<element>` block, one per relationship touching
+    it (confirmed on both endpoints of a real Association in the sample) --
+    this script built each element's extension entry independently of
+    relationships and never added one. Fixed: `element_ext_xml()` now takes
+    the accumulated links for that element, which means an element's own EA
+    extension entry has to be built AFTER every relationship is processed,
+    not alongside the element itself -- see `build()`'s two-pass structure.
+  - A package is ALSO its own EA extension `<element>` entry (a different
+    shape from a real element's: `<packageproperties>`/`<paths>`/`<times>`/
+    `<flags>` instead of `<properties>`/`<tags>`), confirmed present in the
+    sample for every package and omitted entirely from every round so far.
+    Added via `package_ext_xml()`.
+
+Neither is independently confirmed to be *the* fix for diagrams not
+appearing -- that structure (the `<diagram>` block itself) already matched
+the sample closely in round 4, and there's no equivalent "diagram is missing
+some backlink" evidence the way there was for relationships. If diagrams
+still don't appear after this round, the next diagnostic step is the actual
+EA import log (the "Write Log" checkbox in the import dialog) rather than a
+sixth guess.
+
 What is confirmed against the real sample vs. still a best-effort mapping:
 see VIEW_PACKAGES, ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO below -- each
 confirmed entry says so in a trailing comment. Briefly: Capability,
@@ -199,9 +226,11 @@ def style2_xml(domain: str | None, viewpoint: str | None, save_tag: str) -> str:
     )
 
 
-def element_xml(entry: dict, stereotype: str, metaclass: str) -> tuple[str, str, str]:
-    """Returns (packagedElement XML, EA element-extension XML, UAF stereotype-
-    application XML)."""
+def element_xml(entry: dict, stereotype: str, metaclass: str) -> tuple[str, str]:
+    """Returns (packagedElement XML, UAF stereotype-application XML). The EA
+    element-extension XML is built separately, later, by element_ext_xml --
+    it needs to know which relationships touch this element first (its
+    `<links>` list), which isn't known until every relationship is processed."""
     eid = entry["id"]
     name = entry.get("name", eid)
     desc = entry.get("description", "")
@@ -211,20 +240,50 @@ def element_xml(entry: dict, stereotype: str, metaclass: str) -> tuple[str, str,
     if desc:
         body.append(f'          <ownedComment xmi:id={attr(eid + "-desc")} body={attr(desc)}/>\n')
     body.append('        </packagedElement>\n')
+    uaf_stereo = f'    <UAF:{stereotype} base_{metaclass}={attr(eid)}/>\n'
+    return "".join(body), uaf_stereo
 
+
+def element_ext_xml(eid: str, stereotype: str, metaclass: str, desc: str, entry: dict,
+                     links: list[tuple[str, str, str, str]]) -> str:
+    """The EA element-extension XML for a real (non-package) element, now
+    including a `<links>` entry per relationship that touches it (metaclass,
+    rel_id, start_id, end_id) -- confirmed present on both endpoints of a real
+    relationship in the sample; omitting it is a likely reason relationships
+    weren't showing up as attached to their elements."""
     tags = [f'          <tag name="uafKind" value={attr(stereotype)}/>\n']
     for k, v in entry.items():
         if k in STRUCTURAL_FIELDS or v in (None, "", []):
             continue
         tags.append(tag_xml(k, v))
-    ext = (
+    links_xml = "".join(
+        f'          <{lm} xmi:id={attr(lid)} start={attr(start)} end={attr(end)}/>\n'
+        for lm, lid, start, end in links
+    )
+    return (
         f'      <element xmi:idref={attr(eid)} xmi:type={attr("uml:" + metaclass)}>\n'
         f'        <properties stereotype={attr(stereotype)} documentation={attr(desc)}/>\n'
         f'        <tags>\n{"".join(tags)}        </tags>\n'
+        f'        <links>\n{links_xml}        </links>\n'
         f'      </element>\n'
     )
-    uaf_stereo = f'    <UAF:{stereotype} base_{metaclass}={attr(eid)}/>\n'
-    return "".join(body), ext, uaf_stereo
+
+
+def package_ext_xml(pkg_id: str, title: str) -> str:
+    """Every package gets its own EA extension element entry too, confirmed
+    in the real sample -- a different shape from a real element's
+    (`<packageproperties>`/`<paths>`/`<times>`/`<flags>` instead of
+    `<properties>`/`<tags>`), omitted entirely from every prior round."""
+    return (
+        f'      <element xmi:idref={attr(pkg_id)} xmi:type="uml:Package" name={attr(title)} scope="public">\n'
+        f'        <model package="MODEL-gungnir-uaf" ea_eleType="package"/>\n'
+        f'        <properties isSpecification="false" sType="Package" nType="0" scope="public"/>\n'
+        f'        <packageproperties version="1.0"/>\n'
+        f'        <paths/>\n'
+        f'        <times created="2026-09-04" modified="2026-09-04"/>\n'
+        f'        <flags iscontrolled="0" isprotected="0" usedtd="0" logxml="0"/>\n'
+        f'      </element>\n'
+    )
 
 
 def relationship_xml(rel_id: str, from_id: str, to_id: str, kind: str,
@@ -305,20 +364,30 @@ def diagram_xml(pkg_code: str, pkg_id: str, title: str, domain: str | None,
 def build(elements: dict, rels: dict) -> str:
     pkg_members: dict[str, list[str]] = {code: [] for code in VIEW_PACKAGES}
     pkg_element_xml: dict[str, list[str]] = {code: [] for code in VIEW_PACKAGES}
-    ea_elements, uaf_stereotypes, connectors = [], [], []
+    uaf_stereotypes, connectors, rel_ea_elements = [], [], []
     known_ids: set[str] = set()
+    # Building a real element's own EA extension entry is deferred until every
+    # relationship is processed, since it needs a <links> entry per
+    # relationship touching it (confirmed in the real sample, present on both
+    # endpoints) -- not known until this whole pass is done. Relationships
+    # themselves have no such dependency, so their own extension entries are
+    # built immediately, into rel_ea_elements.
+    element_records: dict[str, tuple[str, str, str, dict]] = {}
+    links_by_id: dict[str, list[tuple[str, str, str, str]]] = {}
 
     for section, entries in elements.items():
         if not isinstance(entries, list) or section not in ELEMENT_KIND_INFO:
             continue
         stereotype, metaclass, view_code = ELEMENT_KIND_INFO[section]
         for entry in entries:
-            known_ids.add(entry["id"])
-            cls_xml, ext_xml, uaf_xml = element_xml(entry, stereotype, metaclass)
-            pkg_members[view_code].append(entry["id"])
+            eid = entry["id"]
+            known_ids.add(eid)
+            cls_xml, uaf_xml = element_xml(entry, stereotype, metaclass)
+            pkg_members[view_code].append(eid)
             pkg_element_xml[view_code].append(cls_xml)
-            ea_elements.append(ext_xml)
             uaf_stereotypes.append(uaf_xml)
+            element_records[eid] = (stereotype, metaclass, entry.get("description", ""), entry)
+            links_by_id[eid] = []
 
     n = 0
     for kind, entries in rels.items():
@@ -337,10 +406,19 @@ def build(elements: dict, rels: dict) -> str:
                 rel_xml, elem_ext, conn_ext, uaf_xml = relationship_xml(
                     rel_id, from_id, to_id, kind, stereotype, metaclass, entry)
                 pkg_element_xml[view_code].append(rel_xml)
-                ea_elements.append(elem_ext)
+                rel_ea_elements.append(elem_ext)
                 connectors.append(conn_ext)
                 if uaf_xml:
                     uaf_stereotypes.append(uaf_xml)
+                link = (metaclass, rel_id, from_id, to_id)
+                links_by_id[from_id].append(link)
+                links_by_id[to_id].append(link)
+
+    ea_elements = [
+        element_ext_xml(eid, stereotype, metaclass, desc, entry, links_by_id[eid])
+        for eid, (stereotype, metaclass, desc, entry) in element_records.items()
+    ]
+    ea_elements.extend(rel_ea_elements)
 
     packages, diagrams = [], []
     for i, (code, (title, domain, viewpoint)) in enumerate(VIEW_PACKAGES.items()):
@@ -354,6 +432,7 @@ def build(elements: dict, rels: dict) -> str:
             + "".join(members)
             + '    </packagedElement>\n'
         )
+        ea_elements.append(package_ext_xml(pkg_id, full_title))
         if code not in TRACEABILITY_PACKAGES and pkg_members[code]:
             diagrams.append(diagram_xml(code, pkg_id, full_title, domain, viewpoint, pkg_members[code], i + 1))
 
