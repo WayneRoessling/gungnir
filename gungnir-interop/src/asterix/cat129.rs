@@ -42,17 +42,31 @@
 //! renderings of the UAP *table* disagreed with each other, the table-aware one matched
 //! the detailed per-item sections and is what this module follows (next paragraph).
 //!
-//! **A genuine discrepancy in the primary source, recorded rather than silently
-//! resolved.** Edition 1.2's own UAP summary (§5.3.1, Table 2) states data item
-//! I129/120 (Operational Risk Levels) is one octet long; its own detailed description
-//! (§5.2.12) states "Three-octet fixed length Data Item" and diagrams only the first
-//! octet's bits. A wire decoder must pick one to keep every following item aligned; this
-//! module follows §5.2.12 (three octets), because it is the section that fixes the bit
-//! layout every other item's own decode already trusts its analogous section for, and
-//! because a one-octet item would leave two of the "fixed length" item's own declared
-//! octets undocumented by construction rather than by omission. [`Record::carried_raw`]
-//! carries those two undocumented octets raw, named `I129/120 octets 2-3`, rather than
-//! asserting they are spare.
+//! **A genuine discrepancy in the primary source, recorded rather than silently resolved
+//! -- and the reading reversed at the owner's review, 2026-09-09.** Edition 1.2's own UAP
+//! summary (§5.3.1, Table 2) states data item I129/120 (Operational Risk Levels) is one
+//! octet long; its detailed description (§5.2.12) opens "Three-octet fixed length Data
+//! Item". A wire decoder must pick one to keep every following item aligned. This module
+//! first followed the Format line (three octets, two of them carried raw as
+//! undocumented). The review before the adapter was signed weighed everything the
+//! document itself says about the item, and all of it but that one line says one octet:
+//! Table 2's length column says 1; the item's structure diagram is headed "Octet no. 1"
+//! and numbers bits 8 to 1 and nothing above them, where every genuinely three-octet item
+//! in the same document (I129/020, /030, /070, /090, /100, /220) diagrams "Octet no. 1"
+//! as bits 24 to 17 and continues through bits 16 to 1; the three subfields it defines --
+//! UCC (bits 8/7), ARC (6/5), AEC (4/1) -- fill exactly eight bits with nothing left for
+//! two more octets; and "Three-octet fixed length Data Item" is, word for word, the
+//! Format line of the three-octet items around it, which is what a copy-paste artefact
+//! looks like. An encoder's author reads Table 2 for lengths and the diagram for bits, so
+//! one octet is also the reading real senders are likeliest to have implemented. This
+//! module now reads one octet and carries nothing raw for the item. No later edition or
+//! erratum resolves it: EUROCONTROL's own list of ASTERIX categories and their statuses
+//! (issue of 22 October 2025, checked 2026-09-09) gives edition 1.2 of 12 June 2019 as
+//! Category 129's latest available edition. No capture exists anywhere to arbitrate.
+//! Whichever length a sender chose, a record carrying this item under the other reading
+//! fails [`decode_block`]'s exact-length rule and is rejected whole and loudly -- never
+//! silently misaligned -- so the cost of being wrong is a dropped record with a
+//! `malformed_blocks` count against it, not a wrong field.
 //!
 //! **Annex A is incomplete in this edition, checked rather than assumed.** I129/120's
 //! Air Risk Category (ARC) subfield is defined by Annex A's "Air Risk Categories" list
@@ -89,8 +103,8 @@
 //!
 //! **What this module does and does not decode.** [`decode_records`] types every
 //! standard-UAP item edition 1.2's Table 2 defines (FRN 1 to 15) except the generic SP
-//! field (FRN 13, no catalogue number, carried raw by convention) and I129/120's own
-//! undocumented trailing octets (above); FRN 16 to 21 are "Reserved for Future Use" and
+//! field (FRN 13, no catalogue number, carried raw by convention); FRN 16 to 21 are
+//! "Reserved for Future Use" and
 //! a set FSPEC bit for one of them is an [`crate::InteropError::Malformed`], the same
 //! treatment `cat048`/`cat205` give a reserved FRN flagged present. I129/015 (Data
 //! Destination Identification) decodes but is not promoted to
@@ -155,7 +169,8 @@ pub struct DataDestination {
 }
 
 /// A data item this build carries without interpreting: the SP field (FRN 13, no
-/// catalogue number) and I129/120's own two undocumented trailing octets.
+/// catalogue number). Nothing else in the standard UAP is carried raw (I129/120 was,
+/// under its earlier three-octet reading; module documentation).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawItem {
     /// The item's name, for example `I129/SP`. Not always a catalogue number: the SP
@@ -200,9 +215,8 @@ pub struct Record {
     /// collapsed to `None`, the same restraint `Self::registration_country` and every
     /// other item here applies to a sentinel this build does not invent meaning for.
     pub gnss_signal_accuracy_m: Option<f64>,
-    /// I129/120: the one octet edition 1.2 actually describes. The item's own
-    /// undocumented remaining octets are in [`Self::carried_raw`] as `I129/120 octets
-    /// 2-3` (module documentation).
+    /// I129/120: the one octet edition 1.2 describes and its UAP table sizes (module
+    /// documentation on the document's own contradiction and the 2026-09-09 reading).
     pub operational_risk: Option<OperationalRisk>,
     /// I129/185: `[east_m_s, north_m_s]`, target-centric Cartesian (module
     /// documentation on why this needs no ENU conversion).
@@ -310,7 +324,7 @@ fn parse_record(cur: &mut Cursor<'_>) -> Result<Record, InteropError> {
                 r.altitude_agl_m = Some(f64::from(sign_extend(raw, 24)) * 0.1);
             }
             11 => r.gnss_signal_accuracy_m = Some(f64::from(cur.u16("I129/110")?)),
-            12 => r.operational_risk = Some(parse_operational_risk(cur, &mut r.carried_raw)?),
+            12 => r.operational_risk = Some(parse_operational_risk(cur)?),
             13 => raw(&mut r, "I129/SP", cur.explicit("I129/SP")?),
             14 => r.horizontal_velocity_enu_m_s = Some(parse_horizontal_velocity(cur)?),
             15 => {
@@ -348,20 +362,11 @@ fn parse_wgs84(cur: &mut Cursor<'_>) -> Result<WgsPosition, InteropError> {
     })
 }
 
-/// I129/120 (§5.2.12): the specification's own three-octet length (module
-/// documentation on the Table 2 discrepancy), with only the first octet's bits
-/// described. UCC (bits 8/7), ARC (bits 6/5) and AEC (bits 4/1) come from that octet;
-/// the other two are carried raw.
-fn parse_operational_risk(
-    cur: &mut Cursor<'_>,
-    carried_raw: &mut Vec<RawItem>,
-) -> Result<OperationalRisk, InteropError> {
-    let b = cur.take(3, "I129/120")?;
-    let first = b[0];
-    carried_raw.push(RawItem {
-        item: "I129/120 octets 2-3",
-        octets: b[1..].to_vec(),
-    });
+/// I129/120 (§5.2.12): one octet -- Table 2's length and the item's own eight-bit
+/// diagram, over its Format line's "Three-octet" (module documentation on the
+/// discrepancy and its 2026-09-09 re-reading). UCC in bits 8/7, ARC in 6/5, AEC in 4/1.
+fn parse_operational_risk(cur: &mut Cursor<'_>) -> Result<OperationalRisk, InteropError> {
+    let first = cur.u8("I129/120")?;
     let certification_category = match (first >> 6) & 0b11 {
         0 => UasCertificationCategory::Unknown,
         1 => UasCertificationCategory::Open,
@@ -675,8 +680,8 @@ mod tests {
         b.extend_from_slice(&[0, 0, 0, 0]); // I129/080 latitude = 0
         b.extend_from_slice(&[0, 0, 0, 0]); // I129/080 longitude = 0
         let first = (2u8 << 6) | (1u8 << 4) | 5u8; // UCC=2 ARC=1 AEC=5
-        b.extend_from_slice(&[first, 0xAA, 0xBB]); // I129/120, 3 octets
-                                                   // I129/185: HVX = 300 (12 bits set within top 20), HVY = -150, packed 40 bits.
+        b.push(first); // I129/120, one octet (module documentation)
+                       // I129/185: HVX = 300 (12 bits set within top 20), HVY = -150, packed 40 bits.
         let hvx: i64 = 300;
         let hvy: i64 = -150;
         let packed: u64 =
@@ -695,16 +700,36 @@ mod tests {
         assert_eq!(risk.air_risk_category_code, 1);
         assert_eq!(risk.air_risk_category_label(), 2);
         assert_eq!(risk.airspace_encounter_category_code, 5);
-        assert_eq!(
+        assert!(
+            r.carried_raw.is_empty(),
+            "a one-octet I129/120 leaves nothing to carry raw: {:?}",
             r.carried_raw
-                .iter()
-                .find(|i| i.item == "I129/120 octets 2-3")
-                .map(|i| i.octets.clone()),
-            Some(vec![0xAA, 0xBB])
         );
+        // I129/185 follows I129/120 directly in the UAP, so its correct decode is also
+        // the proof that the one-octet read left the cursor aligned.
         let v = r.horizontal_velocity_enu_m_s.expect("I129/185");
         assert!((v[0] - 3.00).abs() < 1e-9);
         assert!((v[1] - (-1.50)).abs() < 1e-9);
+    }
+
+    /// The other reading, rejected loudly rather than misaligned silently: a sender that
+    /// encoded I129/120 as its Format line's three octets leaves two octets the record
+    /// cannot account for, and `decode_block`'s exact-length rule refuses the block.
+    #[test]
+    fn a_three_octet_operational_risk_item_is_refused_by_the_block_length_rule() {
+        let mut b = vec![0x81, 0x00, 0x00];
+        b.push(0x87); // FRN 1, 6, 7 + FX
+        b.push(0x88); // FRN 8, 12, no FX
+        b.extend_from_slice(&[7, 9]); // I129/010
+        b.extend_from_slice(b"DE"); // I129/050
+        b.extend_from_slice(&[0x54, 0x60, 0x00]); // I129/070
+        b.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]); // I129/080
+        b.extend_from_slice(&[0x95, 0xAA, 0xBB]); // I129/120 as three octets
+        let len = u16::try_from(b.len()).expect("small");
+        b[1..3].copy_from_slice(&len.to_be_bytes());
+        let err = decode_records(&b).expect_err("two unaccounted octets must refuse the block");
+        assert!(matches!(err, InteropError::Malformed { .. }), "{err}");
+        assert!(err.to_string().contains("2 octets remain"), "{err}");
     }
 
     #[test]

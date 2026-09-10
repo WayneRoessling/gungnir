@@ -112,9 +112,9 @@ pub struct UasIdentificationReport {
 }
 
 /// I129/120 Operational Risk Levels (edition 1.2 §5.2.12), decoded from the one octet
-/// the specification actually describes -- see `gungnir_interop::asterix::cat129`'s
-/// module documentation for why the item's own declared length has two more octets
-/// this build carries raw rather than interprets.
+/// the specification describes -- see `gungnir_interop::asterix::cat129`'s module
+/// documentation for the document's own contradiction over the item's length and why
+/// one octet is the reading this build follows (the owner's review, 2026-09-09).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OperationalRisk {
     pub certification_category: UasCertificationCategory,

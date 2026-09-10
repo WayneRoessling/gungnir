@@ -30,7 +30,8 @@
 //! production edge.
 //!
 //! # Persistent identities (2026-09-08, GAP-060's remaining slice; human-owned per
-//! `docs/agentic-workflow.md` -- written and gated, not signed)
+//! `docs/agentic-workflow.md` -- signed by the owner 2026-09-08, `ARCHITECTURE.md` §10
+//! item 111)
 //!
 //! [`issue_for_client`] and [`issue`] build a fresh ephemeral `P256KeyProvider` (the
 //! node's serving identity in `gungnir-node/src/main.rs::spawn_tls_from_provider`) or

@@ -1324,13 +1324,23 @@ text-extraction methods that agreed on every prose passage; where the two render
 the UAP table (§5.3.1) disagreed with each other, the one that agreed with the
 specification's own per-item detailed sections (§5.2.x) is what the decoder follows.
 
-**A genuine discrepancy in the primary source, found and not silently resolved.**
-Edition 1.2's own UAP table states data item I129/120 (Operational Risk Levels) is one
-octet long; its own detailed description states "Three-octet fixed length Data Item"
-and diagrams only the first octet's bits. `gungnir-interop/src/asterix/cat129.rs`
-follows the three-octet description (the section that fixes every other item's bit
-layout too) and carries the two undocumented octets raw rather than asserting they are
-spare. The same section's Annex A defines Air Risk Category values but its Airspace
+**A genuine discrepancy in the primary source, found and not silently resolved -- and
+re-read at the owner's review, 2026-09-09.** Edition 1.2's own UAP table states data
+item I129/120 (Operational Risk Levels) is one octet long; its detailed description
+opens "Three-octet fixed length Data Item". `gungnir-interop/src/asterix/cat129.rs`
+first followed the Format line, carrying two undocumented octets raw; the review weighed
+everything the document says about the item and all of it but that line says one octet
+-- Table 2's length column; the item's structure diagram, headed "Octet no. 1" and
+numbering bits 8 to 1 and nothing above, where every genuine three-octet item in the
+document (I129/020, /030, /070, /090, /100, /220) diagrams bits 24 to 17 under "Octet
+no. 1" and continues to 1; and its three subfields, which fill exactly eight bits --
+while the Format line is verbatim the neighbouring three-octet items', a copy-paste
+artefact. No later edition or erratum resolves it: EUROCONTROL's own list of ASTERIX
+categories and their statuses (issue of 22 October 2025, checked 2026-09-09) gives
+edition 1.2 of 12 June 2019 as Category 129's latest available edition. The codec now
+reads one octet (`ARCHITECTURE.md` §10 item 123); a record carrying the item under the
+other reading fails the block's exact-length rule and is rejected loudly rather than
+misaligned. The same section's Annex A defines Air Risk Category values but its Airspace
 Encounter Category subsection is a heading with no defined values anywhere in this
 edition -- checked against the primary PDF, not assumed incomplete -- so that subfield
 is carried as a raw code rather than a named one.
@@ -1389,14 +1399,23 @@ paragraph above has what was found), so `testdata/asterix/cat129.raw` is hand-bu
 directly from edition 1.2's own byte tables and documented as exactly that in
 `testdata/asterix/SOURCE.md`'s Category 129 section.
 
-Tests: eight unit tests in the codec (the hand-built record at the specification's own
-least significant bits, the mapping and its recorded losses, the ARC label offset, the
-no-blocking rule, a reserved FRN, truncation at every length), four fixture tests in
-`gungnir-interop/tests/asterix_fixtures.rs` against the hand-built fixture, the
-catalogue's own conformance and wire-coverage declarations in
-`gungnir-interop/tests/conformance.rs`, and two adapter-routing tests in
-`gungnir-ingest/src/adapters/asterix.rs`. **`gungnir-ingest` is human-owned; written and
-gated, not signed.**
+Tests: nine unit tests in the codec (the hand-built record at the specification's own
+least significant bits, the mapping and its recorded losses, the ARC label offset with
+I129/185 decoded correctly behind a one-octet I129/120, the three-octet reading of that
+item refused by the block-length rule, the no-blocking rule, a reserved FRN, truncation
+at every length), four fixture tests in `gungnir-interop/tests/asterix_fixtures.rs`
+against the hand-built fixture, the catalogue's own conformance and wire-coverage
+declarations in `gungnir-interop/tests/conformance.rs`, and two adapter-routing tests in
+`gungnir-ingest/src/adapters/asterix.rs`. **`gungnir-ingest` is human-owned; signed by
+the owner 2026-09-09 (next paragraph).**
+
+**Reviewed before signing, 2026-09-09 (GAP-101).** Every item's scale, width and sign in
+`cat129.rs` was checked against this PDF's own item pages -- the position at 180/2^30
+degrees, the two's-complement 0.1 m altitudes, the packed five-octet velocity pair, the
+twenty-bit vertical velocity, the 1/128 s time of day, the ASCII identity widths,
+Table 2's FSPEC order -- and all agree. The one reading reversed is I129/120's length,
+above. The adapter's Category 129 arm and its wiring were signed by the owner the same
+day (`ARCHITECTURE.md` §10 item 123).
 
 ## 6. Consequences for GAP-064, GAP-010 and GAP-091
 

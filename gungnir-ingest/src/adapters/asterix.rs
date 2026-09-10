@@ -32,6 +32,13 @@
 //! primary text's own item definitions (`gungnir_interop::asterix::cat205`'s module
 //! documentation records the one discrepancy inside that text) and added the angular
 //! range refusals those definitions state.
+//!
+//! **The Category 129 arm, its [`UasBinding`] and `uas_detection` (GAP-101): human-owned
+//! (the `gungnir-ingest` gateway), signed by the owner 2026-09-09**, after the review
+//! before signing checked every item's scale, width and sign against the primary
+//! text's own item pages and reversed the codec's reading of the one item that text
+//! contradicts itself on (`gungnir_interop::asterix::cat129`'s module documentation:
+//! I129/120, one octet).
 
 use crate::{DetectionView, IngestError, ProtocolAdapter};
 use gungnir_interop::asterix::{cat034, cat048, cat129, cat205, data_blocks, RadarSite};
