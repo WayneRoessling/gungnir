@@ -21,9 +21,9 @@ mod loom_model;
 
 pub use dense_group::{DenseGroupEstimate, DenseGroupFilter, DenseGroupSettings, GroupComponent};
 pub use pipeline::{
-    run_batch, BearingOutcome, BearingRefusal, FilterSelection, FusionPipeline, ImmBaselineFields,
-    PipelineSettings, PipelineStats, PushError, RetainedBearing, TimedTrack, UnsupportedFilter,
-    IMPLEMENTED_FILTERS,
+    run_batch, BaselineError, BearingOutcome, BearingRefusal, FilterSelection, FusionPipeline,
+    ImmBaselineFields, PipelineSettings, PipelineStats, PushError, RetainedBearing, TimedTrack,
+    UnsupportedFilter, IMPLEMENTED_FILTERS,
 };
 
 // The channel types come from `crate::sync` rather than straight from

@@ -27,6 +27,17 @@
 //! PHC strings, which is what DN-22 §6 and DN-23 §5 rule 6 permit, and the node's token
 //! signing key stays in the environment where [`crate::auth`] reads it.
 //!
+//! **Human-owned: this CLI writes credential material** (`hash_passphrase`'s output)
+//! **into the account store both `gungnir-security` and `gungnir-app`/`gungnir-node`
+//! trust; signed by the owner 2026-09-10** (`ARCHITECTURE.md` §10 item 125), after the
+//! review found and closed a real gap: `role_from_str` had every role this workspace had
+//! when this file was written (2026-09-07) but not `Role::IntelligenceAnalyst`, added to
+//! the enum afterward and never re-checked against this CLI -- the one role this system
+//! grants coalition-exchange release authority to
+//! (`gungnir_security::authz::role_permits`) could not be provisioned on a node at all.
+//! `role_to_cli_str` (test-only) now maps every variant with no wildcard arm, so a tenth
+//! role added without a line here fails to compile rather than repeating the defect.
+//!
 //! **`add-os-keystore` and `list-os-keystore` (GAP-057's node half, D-39).** The same
 //! provisioning need, against `gungnir_security::EncryptedAccountStore` instead of a
 //! plaintext file: accounts sealed under a key the operating system's own keystore
@@ -75,7 +86,8 @@ impl std::fmt::Display for AccountError {
             AccountError::UnknownRole(role) => write!(
                 f,
                 "no such role: {role}. One of: operator, supervisor, analyst, \
-                 sensor-manager, administrator, commander, planner, security-officer"
+                 sensor-manager, administrator, commander, planner, security-officer, \
+                 intelligence-analyst"
             ),
             AccountError::BadOperatorId(id) => {
                 write!(f, "the operator id must be a whole number, not {id}")
@@ -121,7 +133,7 @@ file; where this machine has no reachable keystore they refuse, the same as a da
 directory that cannot be written.
 
 Roles: operator, supervisor, analyst, sensor-manager, administrator, commander,
-       planner, security-officer";
+       planner, security-officer, intelligence-analyst";
 
 /// Parse a role as it is written on a command line.
 fn role_from_str(s: &str) -> Result<Role, AccountError> {
@@ -134,6 +146,7 @@ fn role_from_str(s: &str) -> Result<Role, AccountError> {
         "commander" => Ok(Role::Commander),
         "planner" => Ok(Role::Planner),
         "security-officer" => Ok(Role::SecurityOfficer),
+        "intelligence-analyst" => Ok(Role::IntelligenceAnalyst),
         _ => Err(AccountError::UnknownRole(s.to_string())),
     }
 }
@@ -404,5 +417,59 @@ pub fn run(args: &[String]) -> Result<String, AccountError> {
             "no such account command: {other}"
         ))),
         None => Err(AccountError::Usage("account needs a command".into())),
+    }
+}
+
+/// The inverse of [`role_from_str`], over every [`Role`] variant with no wildcard arm:
+/// a tenth role added to the enum without a line here fails to compile rather than
+/// silently leaving this CLI unable to provision it, which is exactly the defect found
+/// and fixed 2026-09-10 -- `IntelligenceAnalyst` reached every other role-aware surface
+/// in the workspace (`gungnir-app`, `gungnir-security::authz`, `gungnir-workflow`) but
+/// not this one, because it was added to [`Role`] after this file was written and
+/// nothing here re-checked the enum against it.
+#[cfg(test)]
+fn role_to_cli_str(role: Role) -> &'static str {
+    match role {
+        Role::Operator => "operator",
+        Role::Supervisor => "supervisor",
+        Role::Analyst => "analyst",
+        Role::SensorManager => "sensor-manager",
+        Role::Administrator => "administrator",
+        Role::Commander => "commander",
+        Role::Planner => "planner",
+        Role::SecurityOfficer => "security-officer",
+        Role::IntelligenceAnalyst => "intelligence-analyst",
+    }
+}
+
+#[cfg(test)]
+mod role_coverage {
+    use super::{role_from_str, role_to_cli_str, Role};
+
+    /// Every role this workspace has must be provisionable through this CLI. Walking
+    /// `role_to_cli_str`'s exhaustive match rather than a hand-maintained list here is
+    /// what makes a future role addition fail this test (or fail to compile) instead of
+    /// silently leaving the CLI unable to create that account, the way
+    /// `IntelligenceAnalyst` was until 2026-09-10.
+    #[test]
+    fn every_role_round_trips_through_the_cli_parser() {
+        for role in [
+            Role::Operator,
+            Role::Supervisor,
+            Role::Analyst,
+            Role::SensorManager,
+            Role::Administrator,
+            Role::Commander,
+            Role::Planner,
+            Role::SecurityOfficer,
+            Role::IntelligenceAnalyst,
+        ] {
+            let s = role_to_cli_str(role);
+            assert_eq!(
+                role_from_str(s).expect("every name role_to_cli_str emits must parse back"),
+                role,
+                "role {role:?} does not round-trip through {s:?}"
+            );
+        }
     }
 }

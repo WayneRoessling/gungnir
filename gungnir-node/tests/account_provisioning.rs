@@ -198,6 +198,50 @@ fn an_unknown_role_is_refused_and_names_the_ones_that_exist() {
     );
 }
 
+/// **The defect found and fixed 2026-09-10**: `IntelligenceAnalyst` reached every other
+/// role-aware surface in the workspace (`gungnir-app`'s own role parser, the authority
+/// matrix, `gungnir-workflow`'s layout) but not this CLI's `role_from_str`, added after
+/// this file was and never re-checked against the growing enum -- a node deployment
+/// could not provision an account for the one role this system grants coalition
+/// exchange release authority to (`gungnir-security::authz`). Provisioning it now round
+/// trips to authentication the same as every other role the earlier tests cover.
+#[test]
+fn an_intelligence_analyst_account_can_be_created_and_authenticates() {
+    let dir = scratch("intelligence-analyst");
+    let path = dir.join("accounts.json");
+    let file = path.to_string_lossy().into_owned();
+
+    let (code, said, err) = run_account(
+        &["add", file.as_str(), "11", "intelligence-analyst"],
+        Some("a passphrase"),
+    );
+    assert_eq!(code, 0, "provisioning must succeed: {err}");
+    assert!(
+        said.contains("added operator 11"),
+        "it must say what it did: {said}"
+    );
+
+    let store = gungnir_security::FileAccountStore::open(&path).expect("the store opens it");
+    let listing = store.listing();
+    assert_eq!(listing.len(), 1);
+    assert_eq!(
+        listing[0].1,
+        gungnir_security::Role::IntelligenceAnalyst,
+        "the role must be the one asked for, not silently mapped to another"
+    );
+
+    let issuer = gungnir_security::TokenIssuer::new(
+        b"a-signing-key-of-adequate-length-0123456789".to_vec(),
+        60.0,
+    )
+    .expect("issuer");
+    let authority = gungnir_api::transport::AccountTokenAuthority::new(Box::new(store), issuer);
+    assert!(
+        authority.sign_in(11, "a passphrase", 0.0).is_ok(),
+        "the provisioned passphrase must sign in"
+    );
+}
+
 #[test]
 fn listing_shows_operators_and_roles_and_never_the_hash() {
     let dir = scratch("list");

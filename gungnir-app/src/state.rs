@@ -1459,10 +1459,11 @@ fn build_ingest(
 /// The settings this desktop's pipeline runs, from the promoted algorithm baseline
 /// where there is one this build can apply (GAP-053, DN-24 §7).
 ///
-/// A baseline naming a filter this build does not implement is **not** silently run as
-/// the default: the alert says so, and [`tracking_service`] leaves the tracker
-/// ungoverned, so the picture and the governance record disagree visibly rather than
-/// quietly.
+/// A baseline naming a filter this build does not implement -- or, since DN-30's
+/// 2026-09-09 review, a gate threshold or measurement-noise axis the pipeline cannot
+/// honour -- is **not** silently run as the default: the alert says so, and
+/// [`tracking_service`] leaves the tracker ungoverned, so the picture and the
+/// governance record disagree visibly rather than quietly.
 /// The `imm-cv-ct` fields `PipelineSettings::from_baseline` needs, from the baseline's
 /// own `TrackingConfig` (DN-28 §5). Built here rather than in `gungnir-tracking-service`,
 /// which sits below `gungnir-config` and may not depend on it (the same reason

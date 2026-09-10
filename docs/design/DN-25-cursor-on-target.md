@@ -1,6 +1,7 @@
 # DN-25 Cursor-on-Target exchange
 
-Closes GAP-090 and GAP-091. Status: first draft, 2026-09-06. **Design only; no code exists.**
+Closes GAP-090 and GAP-091. Status: first draft, 2026-09-06; **the design (§1 to §9) signed
+by the owner as the one to build, 2026-09-10. No code exists.**
 
 ## 1. The gaps and the thread steps they block
 
@@ -45,6 +46,16 @@ things that exist:
 | The inbound adapter | `gungnir-ingest` | DN-16 §2's argument, only stronger. A self-reported position is the least trustworthy input the system has, and the gateway that validates and quarantines a radar must validate this |
 | The outbound sink | `gungnir-remote` | `endpoint.rs` and `peer.rs` are where outbound connections, retries and refusals already live |
 | Which data may go where | `gungnir-model` and the existing gates | `ExchangeSet::may_send` and `Releasability::permits`, unchanged. This note adds no second answer to a question already answered |
+
+**Signed by the owner 2026-09-10: this table's four-way split, and the "no new crate"
+finding it rests on, is the right shape.** Checked before that signature against what each
+named type and function actually does today (`PeerOrigin`'s `assigned_quality`/`age_s`/
+`is_stale_beyond`, `ExchangeFormat::is_lossy`, `ExchangeSet::may_send`,
+`Releasability::permits`), against `external-standards.md` §5's pinned schema, §5.7's
+`friend` predicate and §1.5's copyleft rule, and against `dependency-edges.md` (see §4's
+note on what that check turned up). No code exists; this signature is on the design alone,
+the same two-step DN-28 and DN-29 went through -- a future `gungnir-model`/`gungnir-interop`/
+`gungnir-ingest`/`gungnir-remote` diff is signed on its own account, against this design.
 
 ## 3. Types
 
@@ -100,7 +111,8 @@ struct beside it would drift.
 ## 4. Edges
 
 **One, proposed:** `gungnir-remote` to `gungnir-interop`, for the outbound sink to encode.
-It would be edge (s) in `dependency-edges.md`. Direction is the same as edge (i)
+It would be edge (v) in `dependency-edges.md` (recorded there as such; relabelled from
+(s) in review, §16's own note has why). Direction is the same as edge (i)
 (`gungnir-ingest` to `gungnir-interop`, in the manifest since 2026-09-06) and adds no cycle:
 `gungnir-interop` depends on `gungnir-model` alone.
 
@@ -110,11 +122,13 @@ desktop and the node would each grow a socket, a retry loop and a refusal count 
 `endpoint.rs` already has, and DN-07's handoff already proved that path belongs in
 `gungnir-remote`.
 
-**Accepted by the owner as engineering reviewer, 2026-09-06**, and recorded as edge (s) in
-[`dependency-edges.md`](dependency-edges.md) §13. Per the rule it enters a manifest, and is
-drawn in `ARCHITECTURE.md` §7.1, in the change that adds the sink and not before: an edge in
-the graph that no manifest carries is the graph claiming something that is not true. Inbound
-needs no new edge.
+**Accepted by the owner as engineering reviewer, 2026-09-06**, and recorded as edge (v) in
+[`dependency-edges.md`](dependency-edges.md) §16 -- relabelled 2026-09-09 from (s)/§13, which
+collided with the real, already-drawn `gungnir-node` to `gungnir-identity` edge of the same
+letter (`dependency-edges.md` §16's own note has the finding). Per the rule it enters a
+manifest, and is drawn in `ARCHITECTURE.md` §7.1, in the change that adds the sink and not
+before: an edge in the graph that no manifest carries is the graph claiming something that
+is not true. Inbound needs no new edge.
 
 ## 5. Behaviour
 
@@ -293,8 +307,9 @@ DN-05 for the deconfliction rule GAP-090 feeds; on DN-03 for the warning ledger 
 [`external-standards.md`](external-standards.md) §5 for the pinned schema, the transcribed
 attributes and the licence finding, and §5.7 for the type tree, the `friend` predicate and
 the case-sensitivity finding; **D-33** for the scope decision and the pins, extended
-2026-09-07 to cover the type tree; edge (s) accepted 2026-09-06 and recorded in
-[`dependency-edges.md`](dependency-edges.md) §13.
+2026-09-07 to cover the type tree; edge (v) accepted 2026-09-06 and recorded in
+[`dependency-edges.md`](dependency-edges.md) §16 (relabelled 2026-09-09 from (s)/§13, which
+collided with a different, real edge of the same letter -- §16's own note has the finding).
 Principles AP-02 (honest status: §5 rules 5, 6 and 8), AP-06 (one owning crate per type: §2),
 AP-07 (provenance travels with the data: §5 rule 7), and above all **AP-09** (releasability is
 a property of the data, which is what §5 rule 1 refuses to trade away for a convenient

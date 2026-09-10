@@ -28,7 +28,8 @@ pub use gungnir_fusion_async::Detection;
 /// making every host depend on `gungnir-fusion-async`: the hosts speak to the pipeline
 /// through this facade, which is the whole point of `ARCHITECTURE.md` §2.
 pub use gungnir_fusion_async::{
-    FilterSelection, ImmBaselineFields, PipelineSettings, PipelineStats, UnsupportedFilter,
+    BaselineError, FilterSelection, ImmBaselineFields, PipelineSettings, PipelineStats,
+    UnsupportedFilter,
 };
 pub use gungnir_model::{
     BearingRayView, DetectionView, MissionTime, SensorId, TrackId, TrackStatus, TrackView,
@@ -992,7 +993,10 @@ mod tests {
         let err =
             PipelineSettings::from_baseline(11.34, "ekf", &imm_fields(), [625.0, 3600.0, 22500.0])
                 .expect_err("not built");
-        assert_eq!(err.selection, "ekf");
+        assert!(
+            matches!(&err, BaselineError::UnsupportedFilter(u) if u.selection == "ekf"),
+            "{err:?}"
+        );
         assert!(err.to_string().contains("does not implement"), "{err}");
 
         runtime.shutdown_timeout(std::time::Duration::from_secs(1));
@@ -1043,6 +1047,52 @@ mod tests {
         )
         .expect("implemented");
         assert_eq!(settings.measurement_noise_var, [625.0, 3600.0, 22500.0]);
+    }
+
+    /// **DN-30 §4, as re-reviewed 2026-09-09.** A measurement-noise axis the pipeline
+    /// cannot build an `R` from is refused by name, not replaced by the default figure
+    /// under the baseline's own identifier -- `gungnir-config` refuses it first, and
+    /// this is what a caller that skipped that validation is told.
+    #[test]
+    fn a_non_positive_measurement_noise_axis_is_refused_not_substituted() {
+        for (bad, axis) in [
+            ([625.0, 0.0, 22500.0], "north"),
+            ([625.0, 3600.0, -1.0], "height"),
+            ([f64::NAN, 3600.0, 22500.0], "east"),
+            ([625.0, f64::INFINITY, 22500.0], "north"),
+        ] {
+            let err = PipelineSettings::from_baseline(11.34, "kf-cv", &imm_fields(), bad)
+                .expect_err("refused");
+            assert!(
+                matches!(&err, BaselineError::InvalidMeasurementNoise { axis: a, .. } if *a == axis),
+                "{bad:?}: {err:?}"
+            );
+            assert!(
+                err.to_string()
+                    .contains(&format!("measurement_noise_var.{axis}")),
+                "{err}"
+            );
+        }
+    }
+
+    /// The same rule for the gate threshold, which had carried the silent fallback since
+    /// GAP-053: refused by name, never the default gate under the baseline's name.
+    #[test]
+    fn a_non_positive_gate_threshold_is_refused_not_substituted() {
+        for bad in [0.0, -9.21, f64::NAN, f64::INFINITY] {
+            let err = PipelineSettings::from_baseline(
+                bad,
+                "kf-cv",
+                &imm_fields(),
+                [625.0, 3600.0, 22500.0],
+            )
+            .expect_err("refused");
+            assert!(
+                matches!(err, BaselineError::InvalidGateThreshold { .. }),
+                "{bad}: {err:?}"
+            );
+            assert!(err.to_string().contains("gate_threshold"), "{err}");
+        }
     }
 
     /// Block until the spawned ingest task has actually been dropped, or fail the test.

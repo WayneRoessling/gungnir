@@ -5,6 +5,29 @@
 //! A host's TLS identity, issued from its own key provider (GAP-060, D-29; DN-22
 //! amendment 1).
 //!
+//! **Human-owned (the certificate and key-custody path, added to
+//! `docs/agentic-workflow.md`'s low-trust list by name on 2026-09-06): the issuance code
+//! below -- `ProviderKey`, `issue`, `issue_for_client`, and the invariant they exist
+//! for -- is signed by the owner 2026-09-10.** The gap register's own account of this
+//! path's history said both "signed by the owner 2026-09-06" and, a few sentences later,
+//! "unsigned" for the same code; that contradiction, not a code defect, is what made this
+//! review overdue, and it is corrected in the same change as this signature. The
+//! "Persistent identities" section below was already reviewed and signed on 2026-09-08
+//! (`ARCHITECTURE.md` §10 item 111); this signature is the one the code above it never
+//! had a documented instance of.
+//!
+//! **What the review checked.** The invariant this module's own heading states --
+//! `der_bytes()`'s slice of `spki_der` is what actually ends up embedded in the issued
+//! certificate, not merely a value that signs correctly against a separately-obtained
+//! key -- was not what the existing unit test proved, so a new one
+//! (`the_certificates_own_embedded_key_is_the_true_one`) checks it directly. Every other
+//! claim in this file's documentation was checked against the code it describes:
+//! `ProviderKey::sign` and `ProviderSigner::sign` both go through `KeyProvider::sign`
+//! alone, with no path that reads or returns the private scalar, which is what
+//! `gungnir-app/tests/architecture_compliance.rs` also pins at the crate-surface level;
+//! the ephemeral-vs-persistent fallback in the later section falls back honestly rather
+//! than silently, per its own already-signed review.
+//!
 //! # The invariant, which is the point of the whole module
 //!
 //! **The private half never leaves custody.** `rcgen` builds and signs the certificate
@@ -438,6 +461,42 @@ mod tests {
     use super::*;
     use gungnir_security::P256KeyProvider;
     use p256::ecdsa::signature::Verifier;
+
+    /// **Found reviewing this file for the owner's 2026-09-10 signature.** The existing
+    /// round-trip test above proves the provider's true key produces a valid signature,
+    /// but never inspects `identity.certificate_der` itself -- so a bug in
+    /// `ProviderKey::der_bytes()`'s slice of `spki_der` (the module's own doc comment
+    /// names it: "the last 65 bytes of the DER") could embed the wrong public key in the
+    /// certificate while every other assertion here still passed, since the signature is
+    /// produced independently of `der_bytes()`. This checks the one thing that would
+    /// actually catch that: the true EC point, obtained the same way `der_bytes()` is
+    /// documented to obtain it, must appear in the certificate `rcgen` actually built.
+    /// It passes as the code stands -- no defect found here -- and is kept as a
+    /// regression test against `der_bytes()`'s slicing changing silently.
+    #[test]
+    fn the_certificates_own_embedded_key_is_the_true_one() {
+        let mut provider = P256KeyProvider::new();
+        let key = provider.generate(KeyPurpose::TransportIdentity);
+        let spki = provider.public_key_der(&key).expect("spki");
+        let point = spki[spki.len() - 65..].to_vec();
+        let provider = Arc::new(provider);
+        let identity = issue(
+            Arc::clone(&provider),
+            key,
+            spki.clone(),
+            vec!["localhost".into()],
+            "gungnir-node",
+        )
+        .expect("issued");
+        let found = identity
+            .certificate_der
+            .windows(65)
+            .any(|w| w == point.as_slice());
+        assert!(
+            found,
+            "the true EC point does not appear in the certificate DER at all"
+        );
+    }
 
     #[test]
     fn the_identity_is_signed_by_the_provider_and_verifies_under_its_public_half() {

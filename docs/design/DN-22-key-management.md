@@ -1,6 +1,6 @@
 # DN-22 Key custody, rotation, and escrow
 
-Closes GAP-084, filed by plan 11 finding F-3. Status: **signed off by the owner 2026-09-05**, with **amendment 1 (§9) signed the same day** after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11), signed by the owner 2026-09-06**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12), signed by the owner 2026-09-06**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08, signed by the owner the same day**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. The owner's review found a first-run race in the secret-generation helper before signing; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08, written and gated, not signed**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over.
+Closes GAP-084, filed by plan 11 finding F-3. Status: **signed off by the owner 2026-09-05**, with **amendment 1 (§9) signed the same day** after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11), signed by the owner 2026-09-06**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12), signed by the owner 2026-09-06**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08, signed by the owner the same day**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. The owner's review found a first-run race in the secret-generation helper before signing; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08, signed by the owner 2026-09-10**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over. The review before signing found and closed a real defect in the code behind it: Azure Key Vault's raw ECDSA signature format, handed through unconverted, would have broken every TLS handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127).
 **Human-owned and signed**: `gungnir-security` is a low-trust crate and this note decides
 who can read what. The owner signed it on 2026-09-05.
 
@@ -414,7 +414,7 @@ could have taken differently, where this one is D-39 with no room left for a dif
 shape once the crate was chosen -- the string source changes, the reviewed and signed
 custody model does not.
 
-## 14. Amendment 5 -- `ManagedService`, the cloud node's row, designed (2026-09-08, **written and gated, not signed**)
+## 14. Amendment 5 -- `ManagedService`, the cloud node's row, designed (2026-09-08, **signed by the owner 2026-09-10**)
 
 **Raised by D-42.** §5's table has three rows and until now only two of them had a
 design. The cloud row says "a managed key service, **off-host**. The node process may
@@ -662,13 +662,16 @@ was reachable on the machine running the suite and half the tests actually used 
 no real backend is reachable at all, so the real path has exactly the coverage a
 compiler gives it and no more.
 
-**Human-owned; written and gated, not signed.** The design here and the code behind it
+**Human-owned; signed by the owner 2026-09-10.** The design here and the code behind it
 (`gungnir-security/src/managed_service.rs`, `PersistentKeyProvider::open_or_create_via_managed_service`,
-and the arm in `gungnir-node/src/main.rs`) are put to the owner together, as amendment 4
+and the arm in `gungnir-node/src/main.rs`) were put to the owner together, as amendment 4
 was. Unlike amendment 4, this one had real room for a different shape -- (a)'s choice
 between a call per envelope and envelope encryption, and (f)'s new mandatory-escrow rule
-are both decisions the owner could take differently -- so a signature here is a
-signature on a design, not only on a conformance.
+are both decisions the owner could take differently -- so the signature is on a design,
+not only on a conformance. The review before it found and fixed a real defect: Azure Key
+Vault's `sign` returns a raw ECDSA signature this crate's `KeyProvider::sign` contract
+never expected, which would have broken every TLS handshake a Key-Vault-backed identity
+signed (`ARCHITECTURE.md` §10 item 127).
 
 ## Traceability
 
