@@ -1,0 +1,218 @@
+@startuml If-Sr-events-the-record
+title If-Sr information structure: Events & the record
+left to right direction
+!pragma layout smetana
+hide empty members
+skinparam classAttributeIconSize 0
+enum "TrackingEvent" as TrackingEvent <<InformationElement>> {
+  TrackInitiated(TrackView)
+  TrackUpdated(TrackView)
+  TrackCoasting(TrackId)
+  TrackDeleted(TrackId)
+}
+enum "InterceptEvent" as InterceptEvent <<InformationElement>> {
+  PlanProposed(PlanView)
+  PlanApproved(PlanView)
+  PlanSuperseded(PlanView)
+  PlanEvaluated { plan: PlanId, verdict: VerdictSummary, engines: Vec<String>, }
+}
+enum "IngestEvent" as IngestEvent <<InformationElement>> {
+  Accepted(DetectionView)
+  Quarantined { sensor: SensorId, reason: String, }
+  NotAccepted { sensor: SensorId, reason: String, }
+}
+enum "SensorEvent" as SensorEvent <<InformationElement>> {
+  ModeChanged { sensor: crate::SensorId, from: crate::SensorMode, to: crate::SensorMode, at: MissionTime, }
+}
+enum "IdentityEvent" as IdentityEvent <<InformationElement>> {
+  Correlated { track: TrackId, entity: crate::identity::GlobalEntityId, confidence: f64, basis: String, at: MissionTime, }
+  Minted { track: TrackId, entity: crate::identity::GlobalEntityId, at: MissionTime, }
+}
+enum "CalibrationEvent" as CalibrationEvent <<InformationElement>> {
+  ReferenceObserved { sensor: SensorId, reference: String, truth_enu: [f64; 3], observed_enu: [f64; 3], observation_variance_m2: [f64; 3], at: MissionTime, }
+  RegistrationApplied { sensor: SensorId, offset_enu: [f64; 3], residual_spread_m: f64, references: u32, at: MissionTime, }
+  RegistrationRefused { sensor: SensorId, reason: String, at: MissionTime, }
+}
+enum "SensorTaskEvent" as SensorTaskEvent <<InformationElement>> {
+  Issued { task: SensorTaskId, sensor: SensorId, at: MissionTime, }
+  Acknowledged { task: SensorTaskId, sensor: SensorId, at: MissionTime, }
+  Failed { task: SensorTaskId, sensor: SensorId, reason: String, at: MissionTime, }
+  Unacknowledged { task: SensorTaskId, sensor: SensorId, at: MissionTime, }
+}
+enum "GovernanceEvent" as GovernanceEvent <<InformationElement>> {
+  InForceAtStart { baseline: crate::AlgorithmBaselineId, at: MissionTime, }
+  NoneInForce { profile: Option<crate::MissionProfile>, at: MissionTime, }
+  Promoted { baseline: crate::AlgorithmBaselineId, by: String, at: MissionTime, }
+  RolledBack { profile: crate::MissionProfile, restored: Option<crate::AlgorithmBaselineId>, by: String, at: MissionTime, }
+  PromotionRefused { baseline: crate::AlgorithmBaselineId, reason: String, at: MissionTime, }
+}
+enum "RhythmEvent" as RhythmEvent <<InformationElement>> {
+  ProductDue { name: String, kind: crate::ProductKind, due: MissionTime, }
+  ProductHeld { name: String, at: MissionTime }
+  ProductUndelivered { name: String, endpoint: String, reason: String, at: MissionTime, }
+  HandoverAcknowledged { by: String, period: (MissionTime, MissionTime), outstanding: bool, at: MissionTime, }
+  MaintenanceOpened { sensor: SensorId, until: MissionTime, reason: String, at: MissionTime, }
+  MaintenanceCompleted { sensor: SensorId, at: MissionTime }
+  MaintenanceOverrun { sensor: SensorId, window_closed: MissionTime, reason: String, at: MissionTime, }
+}
+enum "RequirementEvent" as RequirementEvent <<InformationElement>> {
+  Stated { requirement: CollectionRequirement, at: MissionTime, }
+  Tasked { requirement: RequirementId, task: SensorTaskId, by: Concurrence, at: MissionTime, }
+  Declined { requirement: RequirementId, by: Concurrence, reason: String, at: MissionTime, }
+  Satisfied { requirement: RequirementId, evidence: String, at: MissionTime, }
+  Lapsed { requirement: RequirementId, at: MissionTime, }
+}
+enum "CommandEvent" as CommandEvent <<InformationElement>> {
+  ApprovalRequested(PlanId)
+  Decided { plan: PlanId, decision: DecisionId, accepted: bool, operator: Option<String>, verdict: VerdictSummary, rationale: Option<String>, }
+  Expired { plan: PlanId, at: MissionTime, }
+  Escalated { plan: PlanId, to_role: String, at: MissionTime, }
+}
+enum "EngagementEvent" as EngagementEvent <<InformationElement>> {
+  Opened { decision: DecisionId, plan: PlanId, track: TrackId, }
+  Executing { decision: DecisionId, at: MissionTime, }
+  Closed { decision: DecisionId, outcome: String, at: MissionTime, }
+}
+enum "HandoffEvent" as HandoffEvent <<InformationElement>> {
+  Issued { decision: DecisionId, endpoint: Option<String>, at: MissionTime, }
+  Manual { decision: DecisionId, at: MissionTime, }
+  Undelivered { decision: DecisionId, endpoint: String, reason: String, at: MissionTime, }
+  Delivered { decision: DecisionId, endpoint: String, attempts: u32, at: MissionTime, }
+  Refused { decision: DecisionId, endpoint: String, reason: String, at: MissionTime, }
+  Reported { decision: DecisionId, endpoint: String, report: crate::handoff::EffectorReport, at: MissionTime, }
+}
+enum "ReviewEvent" as ReviewEvent <<InformationElement>> {
+  Opened { session: crate::SessionId, operator: Option<String>, at: MissionTime, }
+  FindingRecorded { session: crate::SessionId, finding: u64, kind: String, refers_to: Option<MissionTime>, operator: Option<String>, at: MissionTime, }
+  FindingPromoted { session: crate::SessionId, finding: u64, gap: String, operator: Option<String>, at: MissionTime, }
+  Concluded { session: crate::SessionId, findings: usize, operator: Option<String>, at: MissionTime, }
+  Closed { session: crate::SessionId, operator: Option<String>, at: MissionTime, }
+}
+enum "VerdictSummary" as VerdictSummary <<InformationElement>> {
+  Approved
+  Denied { reason: String }
+  RequiresHumanApproval
+}
+enum "HealthEvent" as HealthEvent <<InformationElement>> {
+  Changed { tracking_healthy: bool, intercept_healthy: bool, ingest_healthy: bool, at: MissionTime, }
+}
+enum "WarningEvent" as WarningEvent <<InformationElement>> {
+  Raised { asset: crate::AssetId, track: crate::TrackId, due_by: MissionTime, at: MissionTime, }
+  Sent { asset: crate::AssetId, track: crate::TrackId, at: MissionTime, }
+  Acknowledged { asset: crate::AssetId, track: crate::TrackId, party: String, at: MissionTime, }
+  Failed { asset: crate::AssetId, track: crate::TrackId, reason: String, at: MissionTime, }
+  Late { asset: crate::AssetId, track: crate::TrackId, at: MissionTime, }
+  Waived { asset: crate::AssetId, track: crate::TrackId, operator: String, reason: String, at: MissionTime, }
+  Closed { asset: crate::AssetId, track: crate::TrackId, final_state: String, at: MissionTime, }
+}
+enum "LaunchWarningEvent" as LaunchWarningEvent <<InformationElement>> {
+  Issued(crate::LaunchWarningReport)
+  Received(crate::PeerLaunchWarning)
+  Refused { peer: String, reason: String, at: MissionTime, }
+}
+enum "LinkEvent" as LinkEvent <<InformationElement>> {
+  FellBack { endpoint: String, silent_s: f64, at: MissionTime, }
+  Restored { endpoint: String, fallback_since: MissionTime, at: MissionTime, }
+  SwitchedBack { endpoint: String, at: MissionTime, merged: usize, conflicts: usize, node_history: bool, }
+  ConflictResolved { plan: crate::PlanId, kept_local: bool, operator: Option<String>, at: MissionTime, }
+}
+enum "RehearsalEvent" as RehearsalEvent <<InformationElement>> {
+  Started { seed: String, seed_sha256: String, at: MissionTime, }
+}
+enum "ReplayEvent" as ReplayEvent <<InformationElement>> {
+  Opened { session: crate::SessionId, at: MissionTime, }
+  Closed { session: crate::SessionId, stepped: usize, at: MissionTime, }
+}
+class "AlgorithmBaselineId\n(see If-Sr-core-identifiers-frames-quality)" as AlgorithmBaselineId <<External>> #line.dashed {
+}
+class "AssetId\n(see If-Sr-assets-exchange-releasability)" as AssetId <<External>> #line.dashed {
+}
+class "CollectionRequirement\n(see If-Sr-battle-rhythm-mission-records)" as CollectionRequirement <<External>> #line.dashed {
+}
+enum "Concurrence\n(see If-Sr-battle-rhythm-mission-records)" as Concurrence <<External>> #line.dashed {
+}
+class "DecisionId\n(see If-Sr-plans-effectors-handoff)" as DecisionId <<External>> #line.dashed {
+}
+class "DetectionView\n(see If-Sr-picture-tracking-vocabulary)" as DetectionView <<External>> #line.dashed {
+}
+enum "EffectorReport\n(see If-Sr-plans-effectors-handoff)" as EffectorReport <<External>> #line.dashed {
+}
+class "GlobalEntityId\n(see If-Sr-core-identifiers-frames-quality)" as GlobalEntityId <<External>> #line.dashed {
+}
+class "LaunchWarningReport\n(see If-Sr-assets-exchange-releasability)" as LaunchWarningReport <<External>> #line.dashed {
+}
+class "MissionProfile\n(see If-Sr-core-identifiers-frames-quality)" as MissionProfile <<External>> #line.dashed {
+}
+class "MissionTime\n(see If-Sr-core-identifiers-frames-quality)" as MissionTime <<External>> #line.dashed {
+}
+class "PeerLaunchWarning\n(see If-Sr-assets-exchange-releasability)" as PeerLaunchWarning <<External>> #line.dashed {
+}
+class "PlanId\n(see If-Sr-picture-tracking-vocabulary)" as PlanId <<External>> #line.dashed {
+}
+class "PlanView\n(see If-Sr-picture-tracking-vocabulary)" as PlanView <<External>> #line.dashed {
+}
+enum "ProductKind\n(see If-Sr-battle-rhythm-mission-records)" as ProductKind <<External>> #line.dashed {
+}
+class "RequirementId\n(see If-Sr-battle-rhythm-mission-records)" as RequirementId <<External>> #line.dashed {
+}
+class "SensorId\n(see If-Sr-picture-tracking-vocabulary)" as SensorId <<External>> #line.dashed {
+}
+enum "SensorMode\n(see If-Sr-picture-tracking-vocabulary)" as SensorMode <<External>> #line.dashed {
+}
+class "SensorTaskId\n(see If-Sr-picture-tracking-vocabulary)" as SensorTaskId <<External>> #line.dashed {
+}
+class "SessionId\n(see If-Sr-picture-tracking-vocabulary)" as SessionId <<External>> #line.dashed {
+}
+class "TrackView\n(see If-Sr-picture-tracking-vocabulary)" as TrackView <<External>> #line.dashed {
+}
+TrackingEvent --> TrackView : TrackInitiated, TrackUpdated
+InterceptEvent --> PlanId : PlanEvaluated
+InterceptEvent --> PlanView : PlanProposed, PlanApproved, PlanSuperseded
+InterceptEvent --> VerdictSummary : PlanEvaluated
+IngestEvent --> DetectionView : Accepted
+IngestEvent --> SensorId : Quarantined, NotAccepted
+SensorEvent --> MissionTime : ModeChanged
+SensorEvent --> SensorId : ModeChanged
+SensorEvent --> SensorMode : ModeChanged
+IdentityEvent --> GlobalEntityId : Correlated, Minted
+IdentityEvent --> MissionTime : Correlated, Minted
+CalibrationEvent --> MissionTime : ReferenceObserved, RegistrationApplied, RegistrationRefused
+CalibrationEvent --> SensorId : ReferenceObserved, RegistrationApplied, RegistrationRefused
+SensorTaskEvent --> MissionTime : Issued, Acknowledged, Failed, Unacknowledged
+SensorTaskEvent --> SensorId : Issued, Acknowledged, Failed, Unacknowledged
+SensorTaskEvent --> SensorTaskId : Issued, Acknowledged, Failed, Unacknowledged
+GovernanceEvent --> AlgorithmBaselineId : InForceAtStart, Promoted, RolledBack, PromotionRefused
+GovernanceEvent --> MissionProfile : NoneInForce, RolledBack
+GovernanceEvent --> MissionTime : InForceAtStart, NoneInForce, Promoted, RolledBack, PromotionRefused
+RhythmEvent --> MissionTime : ProductDue, ProductHeld, ProductUndelivered, HandoverAcknowledged, MaintenanceOpened, MaintenanceCompleted, MaintenanceOverrun
+RhythmEvent --> ProductKind : ProductDue
+RhythmEvent --> SensorId : MaintenanceOpened, MaintenanceCompleted, MaintenanceOverrun
+RequirementEvent --> CollectionRequirement : Stated
+RequirementEvent --> Concurrence : Tasked, Declined
+RequirementEvent --> MissionTime : Stated, Tasked, Declined, Satisfied, Lapsed
+RequirementEvent --> RequirementId : Tasked, Declined, Satisfied, Lapsed
+RequirementEvent --> SensorTaskId : Tasked
+CommandEvent --> DecisionId : Decided
+CommandEvent --> MissionTime : Expired, Escalated
+CommandEvent --> PlanId : ApprovalRequested, Decided, Expired, Escalated
+CommandEvent --> VerdictSummary : Decided
+EngagementEvent --> DecisionId : Opened, Executing, Closed
+EngagementEvent --> MissionTime : Executing, Closed
+EngagementEvent --> PlanId : Opened
+HandoffEvent --> DecisionId : Issued, Manual, Undelivered, Delivered, Refused, Reported
+HandoffEvent --> EffectorReport : Reported
+HandoffEvent --> MissionTime : Issued, Manual, Undelivered, Delivered, Refused, Reported
+ReviewEvent --> MissionTime : Opened, FindingRecorded, FindingPromoted, Concluded, Closed
+ReviewEvent --> SessionId : Opened, FindingRecorded, FindingPromoted, Concluded, Closed
+HealthEvent --> MissionTime : Changed
+WarningEvent --> AssetId : Raised, Sent, Acknowledged, Failed, Late, Waived, Closed
+WarningEvent --> MissionTime : Raised, Sent, Acknowledged, Failed, Late, Waived, Closed
+LaunchWarningEvent --> LaunchWarningReport : Issued
+LaunchWarningEvent --> MissionTime : Refused
+LaunchWarningEvent --> PeerLaunchWarning : Received
+LinkEvent --> MissionTime : FellBack, Restored, SwitchedBack, ConflictResolved
+LinkEvent --> PlanId : ConflictResolved
+RehearsalEvent --> MissionTime : Started
+ReplayEvent --> MissionTime : Opened, Closed
+ReplayEvent --> SessionId : Opened, Closed
+@enduml

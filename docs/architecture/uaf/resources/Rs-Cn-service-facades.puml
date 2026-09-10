@@ -1,0 +1,34 @@
+@startuml Rs-Cn-service-facades
+title Rs-Cn resource connectivity: Service facades (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "Service facades" {
+  component "gungnir-intercept-service" as RS_intercept_service <<Resource>>
+  component "gungnir-tracking-service" as RS_tracking_service <<Resource>>
+}
+component "allocation\n(see Rs-Cn-tracking-core)" as RS_allocation <<External>> #line.dashed
+component "association\n(see Rs-Cn-tracking-core)" as RS_association <<External>> #line.dashed
+component "coord\n(see Rs-Cn-tracking-core)" as RS_coord <<External>> #line.dashed
+component "core\n(see Rs-Cn-tracking-core)" as RS_core <<External>> #line.dashed
+component "filters\n(see Rs-Cn-tracking-core)" as RS_filters <<External>> #line.dashed
+component "fusion_async\n(see Rs-Cn-tracking-core)" as RS_fusion_async <<External>> #line.dashed
+component "model\n(see Rs-Cn-foundation-model)" as RS_model <<External>> #line.dashed
+component "rfs\n(see Rs-Cn-tracking-core)" as RS_rfs <<External>> #line.dashed
+component "track\n(see Rs-Cn-tracking-core)" as RS_track <<External>> #line.dashed
+component "track_fusion\n(see Rs-Cn-tracking-core)" as RS_track_fusion <<External>> #line.dashed
+RS_intercept_service --> RS_core
+RS_intercept_service --> RS_coord
+RS_intercept_service --> RS_allocation
+RS_intercept_service --> RS_model
+RS_tracking_service --> RS_core
+RS_tracking_service --> RS_coord
+RS_tracking_service --> RS_filters
+RS_tracking_service --> RS_association
+RS_tracking_service --> RS_track
+RS_tracking_service --> RS_rfs
+RS_tracking_service --> RS_track_fusion
+RS_tracking_service --> RS_fusion_async
+RS_tracking_service --> RS_model
+@enduml

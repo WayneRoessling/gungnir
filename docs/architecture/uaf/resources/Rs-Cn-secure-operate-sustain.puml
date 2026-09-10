@@ -1,0 +1,57 @@
+@startuml Rs-Cn-secure-operate-sustain
+title Rs-Cn resource connectivity: Secure, Operate & Sustain (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "Secure, Operate & Sustain" {
+  component "gungnir-api" as RS_api <<Resource>>
+  component "gungnir-collab" as RS_collab <<Resource>>
+  component "gungnir-observability" as RS_observability <<Resource>>
+  component "gungnir-replay" as RS_replay <<Resource>>
+  component "gungnir-reporting" as RS_reporting <<Resource>>
+  component "gungnir-resilience" as RS_resilience <<Resource>>
+  component "gungnir-security" as RS_security <<Resource>>
+  component "gungnir-workflow" as RS_workflow <<Resource>>
+}
+component "analytics\n(see Rs-Cn-understand-maintain-the-picture)" as RS_analytics <<External>> #line.dashed
+component "assessment\n(see Rs-Cn-assess-decide-govern-action)" as RS_assessment <<External>> #line.dashed
+component "command\n(see Rs-Cn-assess-decide-govern-action)" as RS_command <<External>> #line.dashed
+component "eventing\n(see Rs-Cn-foundational)" as RS_eventing <<External>> #line.dashed
+component "identity\n(see Rs-Cn-understand-maintain-the-picture)" as RS_identity <<External>> #line.dashed
+component "intercept_service\n(see Rs-Cn-service-facades)" as RS_intercept_service <<External>> #line.dashed
+component "metrics\n(see Rs-Cn-tracking-core)" as RS_metrics <<External>> #line.dashed
+component "model\n(see Rs-Cn-foundation-model)" as RS_model <<External>> #line.dashed
+component "sensor_management\n(see Rs-Cn-sense-ingest-normalize)" as RS_sensor_management <<External>> #line.dashed
+component "store\n(see Rs-Cn-foundational)" as RS_store <<External>> #line.dashed
+component "time\n(see Rs-Cn-sense-ingest-normalize)" as RS_time <<External>> #line.dashed
+component "tracking_service\n(see Rs-Cn-service-facades)" as RS_tracking_service <<External>> #line.dashed
+RS_api --> RS_model
+RS_api --> RS_eventing
+RS_api --> RS_security
+RS_api --> RS_tracking_service
+RS_api --> RS_intercept_service
+RS_api --> RS_analytics
+RS_collab --> RS_model
+RS_collab --> RS_eventing
+RS_collab --> RS_command
+RS_collab --> RS_security
+RS_observability --> RS_model
+RS_replay --> RS_model
+RS_replay --> RS_eventing
+RS_replay --> RS_store
+RS_replay --> RS_time
+RS_reporting --> RS_model
+RS_reporting --> RS_eventing
+RS_reporting --> RS_store
+RS_reporting --> RS_metrics
+RS_reporting --> RS_identity
+RS_resilience --> RS_model
+RS_resilience --> RS_eventing
+RS_resilience --> RS_store
+RS_workflow --> RS_model
+RS_workflow --> RS_security
+RS_workflow --> RS_observability
+RS_workflow --> RS_sensor_management
+RS_workflow --> RS_assessment
+@enduml

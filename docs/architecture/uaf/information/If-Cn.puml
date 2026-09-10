@@ -1,6 +1,5 @@
 @startuml If-Cn
 title If-Cn information exchange: an observation and a decision, hop by hop
-left to right direction
 skinparam rectangle {
   BackgroundColor #F7F7F7
 }

@@ -1,0 +1,37 @@
+@startuml If-Sr-overview
+title If-Sr information structure: overview
+!pragma layout smetana
+skinparam componentStyle rectangle
+left to right direction
+component "Core identifiers, frames & quality" as core_identifiers_frames_quality <<Group>> [[If-Sr-core-identifiers-frames-quality.svg]]
+component "Picture & tracking vocabulary" as picture_tracking_vocabulary <<Group>> [[If-Sr-picture-tracking-vocabulary.svg]]
+component "Events & the record" as events_the_record <<Group>> [[If-Sr-events-the-record.svg]]
+component "Plans, effectors & handoff" as plans_effectors_handoff <<Group>> [[If-Sr-plans-effectors-handoff.svg]]
+component "Policy, authority & settings" as policy_authority_settings <<Group>> [[If-Sr-policy-authority-settings.svg]]
+component "Assets, exchange & releasability" as assets_exchange_releasability <<Group>> [[If-Sr-assets-exchange-releasability.svg]]
+component "Battle rhythm & mission records" as battle_rhythm_mission_records <<Group>> [[If-Sr-battle-rhythm-mission-records.svg]]
+component "UAS identification & platform reports" as uas_identification_platform_reports <<Group>> [[If-Sr-uas-identification-platform-reports.svg]]
+events_the_record --> picture_tracking_vocabulary
+events_the_record --> core_identifiers_frames_quality
+events_the_record --> battle_rhythm_mission_records
+events_the_record --> plans_effectors_handoff
+events_the_record --> assets_exchange_releasability
+assets_exchange_releasability --> core_identifiers_frames_quality
+assets_exchange_releasability --> picture_tracking_vocabulary
+plans_effectors_handoff --> core_identifiers_frames_quality
+plans_effectors_handoff --> picture_tracking_vocabulary
+plans_effectors_handoff --> assets_exchange_releasability
+battle_rhythm_mission_records --> picture_tracking_vocabulary
+picture_tracking_vocabulary --> assets_exchange_releasability
+picture_tracking_vocabulary --> core_identifiers_frames_quality
+picture_tracking_vocabulary --> plans_effectors_handoff
+policy_authority_settings --> plans_effectors_handoff
+policy_authority_settings --> core_identifiers_frames_quality
+core_identifiers_frames_quality --> assets_exchange_releasability
+battle_rhythm_mission_records --> assets_exchange_releasability
+battle_rhythm_mission_records --> core_identifiers_frames_quality
+uas_identification_platform_reports --> picture_tracking_vocabulary
+uas_identification_platform_reports --> core_identifiers_frames_quality
+battle_rhythm_mission_records --> plans_effectors_handoff
+battle_rhythm_mission_records --> policy_authority_settings
+@enduml

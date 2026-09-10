@@ -56,13 +56,96 @@ LAYERS = [
     ("Service facades", ["tracking-service", "intercept-service"]),
     ("Productization", ["eventing", "store", "config", "mission", "time", "ingest", "sensor-management",
                         "interop", "identity", "identification", "geo", "analytics", "policy", "command",
-                        "assessment", "decision", "modelops", "security", "api", "observability",
+                        "assessment", "decision", "modelops", "ml", "security", "api", "observability",
                         "resilience", "collab", "workflow", "replay", "reporting"]),
     ("Data ecosystem", ["data", "data-fusion", "render"]),
     ("Deployment", ["remote", "node"]),
     ("User interface", ["viewport3d", "ui", "app"]),
 ]
 LAYER_OF = {c: layer for layer, crates in LAYERS for c in crates}
+
+# Productization is the one LAYERS entry too big for a single Rs-Cn detail diagram
+# (25 crates against 1-14 for every other layer). Sub-grouped here for Rs-Cn only;
+# LAYERS and LAYER_OF are untouched, so every other generated view is unaffected.
+#
+# Curated by what each crate's own Cargo.toml description says it does, not by
+# parsing docs/gungnir-capabilities.md section 5's prose: that section's five
+# subsections *mention* crates for many reasons (cross-reference, a shared
+# concern like testing in section 5.6, which names nearly every crate in the
+# workspace), so grepping it for crate names would pull in a different, wrong
+# set per subsection rather than one owning group per crate. Five groups, not
+# section 5's six, because "5.6 Validate Against Reality" is a cross-cutting
+# practice covering the whole workspace, not a set of crates it owns.
+PRODUCTIZATION_GROUPS = [
+    ("Foundational", ["eventing", "store", "config", "mission"]),
+    ("Sense, Ingest & Normalize", ["time", "ingest", "sensor-management", "interop"]),
+    ("Understand & Maintain the Picture", ["geo", "analytics", "identity", "identification"]),
+    ("Assess, Decide & Govern Action", ["policy", "command", "assessment", "decision", "modelops", "ml"]),
+    ("Secure, Operate & Sustain", ["security", "api", "observability", "resilience",
+                                   "collab", "workflow", "replay", "reporting"]),
+]
+PRODUCTIZATION_GROUP_OF = {c: g for g, crates in PRODUCTIZATION_GROUPS for c in crates}
+
+
+def rs_cn_group(short: str, layer: str) -> str:
+    """Which Rs-Cn detail diagram a crate is drawn in: its layer, or its
+    Productization sub-group. Raises if a Productization crate was added to
+    LAYERS without being added here, the same guard dependency_graph.rs applies
+    at the layer level."""
+    if layer != "Productization":
+        return layer
+    if short not in PRODUCTIZATION_GROUP_OF:
+        raise SystemExit(
+            f"gungnir-{short} is in the Productization layer but not in any "
+            "PRODUCTIZATION_GROUPS entry in build_uaf.py -- add it before "
+            "regenerating Rs-Cn"
+        )
+    return PRODUCTIZATION_GROUP_OF[short]
+
+
+def rs_cn_group_names() -> list[str]:
+    non_prod = [layer for layer, _ in LAYERS if layer != "Productization"]
+    return non_prod + [g for g, _ in PRODUCTIZATION_GROUPS]
+
+
+def slugify(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+# gungnir-model source file -> information domain, for If-Sr (116 types across 23
+# files as of 2026-09; one file, one diagram, was unreadable). Curated by what is
+# actually declared in each file (checked by hand against the source), not derived
+# from the filename. A file not listed here fails the build (see
+# `if_sr_domain`), so a new gungnir-model source file cannot silently land in no
+# diagram or the wrong one.
+INFORMATION_DOMAINS = [
+    ("Core identifiers, frames & quality", ["identity.rs", "frame.rs", "time.rs", "quality.rs",
+                                             "profiles.rs", "provenance.rs"]),
+    ("Picture & tracking vocabulary", ["lib.rs"]),
+    ("Events & the record", ["events.rs"]),
+    ("Plans, effectors & handoff", ["plans.rs", "effectors.rs", "handoff.rs"]),
+    ("Policy, authority & settings", ["policy_settings.rs", "anomaly_settings.rs", "ui_settings.rs"]),
+    ("Assets, exchange & releasability", ["assets.rs", "exchange.rs", "releasability.rs"]),
+    ("Battle rhythm & mission records", ["rhythm.rs", "requirements.rs", "laydown.rs", "vocabulary.rs"]),
+    ("UAS identification & platform reports", ["uas_identification.rs", "uas_platform.rs"]),
+]
+INFORMATION_DOMAIN_OF = {f: d for d, files in INFORMATION_DOMAINS for f in files}
+
+
+def if_sr_domain(rel_file: str) -> str:
+    fname = rel_file.rsplit("/", 1)[-1]
+    if fname not in INFORMATION_DOMAIN_OF:
+        raise SystemExit(
+            f"gungnir-model/src/{fname} declares a type but is not in any "
+            "INFORMATION_DOMAINS entry in build_uaf.py -- add it before "
+            "regenerating If-Sr"
+        )
+    return INFORMATION_DOMAIN_OF[fname]
+
+
+def if_sr_domain_names() -> list[str]:
+    return [d for d, _ in INFORMATION_DOMAINS]
+
 
 # Thread step -> operational activities (registry OA ids). Keyed by (thread, step).
 STEP_ACTIVITIES = {
@@ -425,6 +508,17 @@ def puml_escape(s: str) -> str:
     return s.replace("\n", " ").replace('"', "'")
 
 
+def member_label(kind: str, m: str) -> str:
+    """The name to hang on a reference edge for one member: the variant name for an
+    enum (`Decided { plan: PlanId, ... }` -> `Decided`), the field name for a struct
+    (`plan: PlanId` -> `plan`), or the member itself for a single-field tuple struct."""
+    if kind == "enum":
+        return re.match(r"\w+", m).group(0)
+    if ":" in m:
+        return m.split(":", 1)[0].strip()
+    return m
+
+
 # ----------------------------------------------------------------------------- resource views
 def gen_resource_views(facts: list[dict], status: dict[str, str]) -> None:
     # Rs-Sr
@@ -444,30 +538,90 @@ def gen_resource_views(facts: list[dict], status: dict[str, str]) -> None:
                     "Layer membership follows `../../../../ARCHITECTURE.md` §1 to §8. Status text is copied, not interpreted."))
     write(UAF / "resources" / "Rs-Sr.md", NL.join(L))
 
-    # Rs-Cn (component diagram + edge table)
-    P = ["@startuml Rs-Cn", "title Rs-Cn resource connectivity: crate dependency graph (from Cargo.toml)",
-         "skinparam componentStyle rectangle", "skinparam linetype ortho", "left to right direction"]
-    for layer, _ in LAYERS:
-        members = [f for f in facts if f["layer"] == layer and f["member"]]
-        if not members:
-            continue
-        P.append(f'package "{layer}" {{')
+    # Rs-Cn: one context diagram (the LAYERS boxes, inter-layer edges only) plus
+    # one detail diagram per Rs-Cn group -- the six non-Productization layers
+    # unchanged, and Productization split five ways (PRODUCTIZATION_GROUPS) because
+    # 25 crates in one diagram was the reason this view needed splitting at all.
+    # A dependency that crosses a group boundary is drawn twice: fully in its own
+    # group's diagram, and as a dashed <<External>> stub carrying a pointer back to
+    # that diagram everywhere else it is depended on. No new ids are minted -- a
+    # stub reuses the real RS-<crate> alias -- so `check()`'s registry-reference
+    # scan (every RS-* token in every .puml must be a real id) needs no changes.
+    group_of = {f["short"]: rs_cn_group(f["short"], f["layer"]) for f in facts if f["member"]}
+    group_file = {g: f"Rs-Cn-{slugify(g)}" for g in rs_cn_group_names()}
+
+    def write_rs_cn_group(group: str, members: list[dict]) -> None:
+        P = [f"@startuml Rs-Cn-{slugify(group)}",
+             f"title Rs-Cn resource connectivity: {group} (from Cargo.toml)",
+             # smetana lays out a hub-and-stub group (one binary, dozens of external
+             # deps) measurably more compactly than Graphviz dot -- confirmed by
+             # rendering both and comparing SVG dimensions, not a stylistic choice.
+             "!pragma layout smetana",
+             "skinparam componentStyle rectangle", "skinparam linetype ortho", "left to right direction"]
+        local_ids = {f["id"].replace("-", "_") for f in members}
+        P.append(f'package "{group}" {{')
         for f in members:
             stereo = "<<Binary>>" if f["kind"] == "binary" else "<<Resource>>"
             P.append(f'  component "{f["crate"]}" as {f["id"].replace("-", "_")} {stereo}')
         P.append("}")
+        stubs: dict[str, str] = {}  # dep crate id -> home group, for external deps only
+        for f in members:
+            for d in f["deps"]:
+                d_short = d.removeprefix("gungnir-")
+                d_id = f"RS_{d_short.replace('-', '_')}"
+                if d_id not in local_ids and d_short in group_of:
+                    stubs[d_id] = group_of[d_short]
+        for d_id, home in sorted(stubs.items()):
+            P.append(f'component "{d_id[3:]}\\n(see {group_file[home]})" as {d_id} <<External>> #line.dashed')
+        for f in members:
+            for d in f["deps"]:
+                P.append(f'{f["id"].replace("-", "_")} --> RS_{d.removeprefix("gungnir-").replace("-", "_")}')
+        P.append("@enduml")
+        write(UAF / "resources" / f"{group_file[group]}.puml", NL.join(P))
+
+    for group in rs_cn_group_names():
+        members = [f for f in facts if f["member"] and group_of.get(f["short"]) == group]
+        if members:
+            write_rs_cn_group(group, members)
+
+    # Context diagram: groups as boxes, one edge per (group, group) pair that has
+    # at least one real crate-to-crate dependency, so the reader sees the shape of
+    # the graph before choosing which detail diagram to open.
+    P = ["@startuml Rs-Cn-overview", "title Rs-Cn resource connectivity: overview (from Cargo.toml)",
+         "!pragma layout smetana",
+         "skinparam componentStyle rectangle", "left to right direction"]
+    for group in rs_cn_group_names():
+        P.append(f'component "{group}" as {slugify(group).replace("-", "_")} <<Group>> [[{group_file[group]}.svg]]')
+    seen_edges = set()
     for f in facts:
         if not f["member"]:
             continue
+        src_group = group_of.get(f["short"])
         for d in f["deps"]:
-            P.append(f'{f["id"].replace("-", "_")} --> RS_{d.removeprefix("gungnir-").replace("-", "_")}')
+            dst_group = group_of.get(d.removeprefix("gungnir-"))
+            if src_group and dst_group and src_group != dst_group and (src_group, dst_group) not in seen_edges:
+                seen_edges.add((src_group, dst_group))
+                P.append(f'{slugify(src_group).replace("-", "_")} --> {slugify(dst_group).replace("-", "_")}')
     P.append("@enduml")
-    write(UAF / "resources" / "Rs-Cn.puml", NL.join(P))
+    write(UAF / "resources" / "Rs-Cn-overview.puml", NL.join(P))
 
     L = [header("Rs-Cn", "Resource connectivity",
                 "Resource connectivity shows the interfaces and connections between resources.",
                 "The one-way dependency graph of the workspace: which crate may call which. It is the truth that `ARCHITECTURE.md` describes in prose; if they disagree, the manifests win.")]
-    L.append("Diagram: [`Rs-Cn.puml`](Rs-Cn.puml) (rendered under `rendered/resources/` by the render scripts in the UAF root).\n")
+    L.append("One monolithic diagram of all 50 members was unreadable, so this view is "
+             "an overview plus one detail diagram per group: `Rs-Cn-overview.puml` shows "
+             "the groups and which groups depend on which; each detail diagram shows one "
+             "group's crates in full and draws anything it depends on outside the group as "
+             "a dashed `<<External>>` stub carrying a pointer to that dependency's own "
+             "diagram, rather than repeating its own dependencies. The six non-Productization "
+             "layers each get one diagram; Productization -- 25 crates, too many for one "
+             "diagram -- is split five ways (see `PRODUCTIZATION_GROUPS` in `tools/build_uaf.py`, "
+             "curated from each crate's own manifest description, not parsed from prose).\n")
+    L.append("Diagrams (rendered under `rendered/resources/` by the render scripts in the UAF root):\n")
+    L.append("- [`Rs-Cn-overview.puml`](Rs-Cn-overview.puml)")
+    for group in rs_cn_group_names():
+        L.append(f"- [`{group_file[group]}.puml`]({group_file[group]}.puml) -- {group}")
+    L.append("")
     L.append("| Resource | Depends on (normal) | Dev-only |")
     L.append("|---|---|---|")
     for f in facts:
@@ -518,42 +672,115 @@ def gen_information_structure() -> None:
     L = [header("If-Sr", "Information structure",
                 "Information structure shows the information elements and their relationships.",
                 "The canonical operational data model: every view, event, and value type in `gungnir-model`, parsed from the source, plus the class diagram of how they compose. Every other crate and the API reuse these types, so this is the one vocabulary for tracks, plans, and events.")]
-    L.append("Diagram: [`If-Sr.puml`](If-Sr.puml).\n")
-    L.append("| Type | Kind | Members | Source |")
-    L.append("|---|---|---|---|")
+    L.append(f"One monolithic diagram of all {len(types)} types was unreadable, so this view "
+             "is an overview plus one detail diagram per information domain: `If-Sr-overview.puml` "
+             "shows the domains and which domains reference which; each detail diagram draws one "
+             "domain's types in full, with members, and draws any type it references outside the "
+             "domain as an empty `<<External>>` stub carrying a pointer to that type's own diagram. "
+             "Domains are curated in `INFORMATION_DOMAINS` in `tools/build_uaf.py`, grounded in what "
+             "each `gungnir-model/src/*.rs` file actually declares.\n")
+    L.append("Diagrams (rendered under `rendered/information/` by the render scripts in the UAF root):\n")
+    L.append("- [`If-Sr-overview.puml`](If-Sr-overview.puml)")
+    for domain in if_sr_domain_names():
+        L.append(f"- [`If-Sr-{slugify(domain)}.puml`](If-Sr-{slugify(domain)}.puml) -- {domain}")
+    L.append("")
+    L.append("| Type | Kind | Domain | Members | Source |")
+    L.append("|---|---|---|---|---|")
     for name, kind, members in types:
         mem = "<br>".join("`" + m.replace("|", "\\|") + "`" for m in members) or ""
-        L.append(f"| `{name}` | {kind} | {mem} | `{files[name]}` |")
+        L.append(f"| `{name}` | {kind} | {if_sr_domain(files[name])} | {mem} | `{files[name]}` |")
     L.append("")
     L.append(footer("`gungnir-model/src/*.rs`", "If-Cn, Sv-If, Op-If, the TOGAF data architecture",
                     "`TrackId`, `TrackStatus`, `ResourceId` are re-exported from `gungnir-core`; `Geodetic` from `gungnir-coord`. `Envelope` and `Event` live in `gungnir-eventing` and wrap the four event enums here."))
     write(UAF / "information" / "If-Sr.md", NL.join(L))
 
-    P = ["@startuml If-Sr", "title If-Sr information structure: gungnir-model", "hide empty members", "skinparam classAttributeIconSize 0"]
-    # Deterministic order, and the same order the classes above are emitted in. A set
+    # Deterministic order, and the same order the classes are emitted in. A set
     # comprehension here made the emitted relationship lines follow Python's string hash
     # order, which is randomised per process (PYTHONHASHSEED), so two runs of this
     # generator produced the same relationships in different sequences and the CI diff
     # check failed at random. `dict.fromkeys` dedupes while keeping first-seen order.
     names = list(dict.fromkeys(n for n, _, _ in types))
-    for name, kind, members in types:
-        if kind == "enum":
-            P.append(f"enum {name} <<InformationElement>> {{")
+    domain_of_type = {name: if_sr_domain(files[name]) for name, _, _ in types}
+    type_file = {d: f"If-Sr-{slugify(d)}" for d in if_sr_domain_names()}
+    # (name -> kind, members) for the per-domain detail-diagram emitter below.
+    by_name = {name: (kind, members) for name, kind, members in types}
+
+    def emit_class(P: list[str], name: str, hollow: bool = False) -> None:
+        kind, members = by_name[name]
+        label = f"{name}\\n(see {type_file[domain_of_type[name]]})" if hollow else name
+        opener = "enum" if kind == "enum" else "class"
+        stereo = "<<External>>" if hollow else "<<InformationElement>>"
+        style = " #line.dashed" if hollow else ""
+        P.append(f"{opener} \"{label}\" as {name} {stereo}{style} {{")
+        if not hollow:
             for m in members:
                 P.append(f"  {puml_escape(m)}")
-            P.append("}")
-        else:
-            P.append(f"class {name} <<InformationElement>> {{")
+        P.append("}")
+
+    def write_if_sr_domain(domain: str, domain_names: list[str]) -> None:
+        P = [f"@startuml If-Sr-{slugify(domain)}", f"title If-Sr information structure: {domain}",
+             # Class diagrams default to top-to-bottom, which stacks these mostly
+             # sibling, mostly edge-sparse types into one enormous row (measured:
+             # some domains rendered 30-40x wider than tall). left-to-right plus
+             # smetana wraps them into a far more square layout instead.
+             "left to right direction", "!pragma layout smetana",
+             "hide empty members", "skinparam classAttributeIconSize 0"]
+        for name in domain_names:
+            emit_class(P, name, hollow=False)
+        stubs: set[str] = set()
+        for name in domain_names:
+            _, members = by_name[name]
             for m in members:
-                P.append(f"  {puml_escape(m)}")
-            P.append("}")
+                for other in names:
+                    if other != name and other not in domain_names and re.search(r"\b" + other + r"\b", m):
+                        stubs.add(other)
+        for other in sorted(stubs):
+            emit_class(P, other, hollow=True)
+        for name in domain_names:
+            kind, members = by_name[name]
+            # One edge per (name, other) pair, not one per member that mentions
+            # `other` -- a domain-heavy enum like an event type can reference the
+            # same external id from half its variants, which used to draw that
+            # many overlapping arrows. The edge carries the variant/field names
+            # that referenced `other`, so the collapse loses no information.
+            refs: dict[str, list[str]] = {}
+            for m in members:
+                label = member_label(kind, m)
+                for other in names:
+                    if other != name and re.search(r"\b" + other + r"\b", m):
+                        labels = refs.setdefault(other, [])
+                        if label not in labels:
+                            labels.append(label)
+            for other in sorted(refs):
+                P.append(f'{name} --> {other} : {", ".join(refs[other])}')
+        P.append("@enduml")
+        write(UAF / "information" / f"{type_file[domain]}.puml", NL.join(P))
+
+    for domain in if_sr_domain_names():
+        domain_names = [n for n in names if domain_of_type[n] == domain]
+        if domain_names:
+            write_if_sr_domain(domain, domain_names)
+
+    # Context diagram: domains as boxes, one edge per (domain, domain) pair with at
+    # least one real cross-domain member reference.
+    P = ["@startuml If-Sr-overview", "title If-Sr information structure: overview",
+         "!pragma layout smetana",
+         "skinparam componentStyle rectangle", "left to right direction"]
+    for domain in if_sr_domain_names():
+        P.append(f'component "{domain}" as {slugify(domain).replace("-", "_")} <<Group>> [[{type_file[domain]}.svg]]')
+    seen_edges = set()
     for name, kind, members in types:
+        src = domain_of_type[name]
         for m in members:
             for other in names:
-                if other != name and re.search(r"\b" + other + r"\b", m):
-                    P.append(f"{name} --> {other}")
+                if other == name or not re.search(r"\b" + other + r"\b", m):
+                    continue
+                dst = domain_of_type[other]
+                if src != dst and (src, dst) not in seen_edges:
+                    seen_edges.add((src, dst))
+                    P.append(f'{slugify(src).replace("-", "_")} --> {slugify(dst).replace("-", "_")}')
     P.append("@enduml")
-    write(UAF / "information" / "If-Sr.puml", NL.join(P))
+    write(UAF / "information" / "If-Sr-overview.puml", NL.join(P))
 
 
 # ----------------------------------------------------------------------------- operational views

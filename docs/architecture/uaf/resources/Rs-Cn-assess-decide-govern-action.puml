@@ -1,0 +1,33 @@
+@startuml Rs-Cn-assess-decide-govern-action
+title Rs-Cn resource connectivity: Assess, Decide & Govern Action (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+package "Assess, Decide & Govern Action" {
+  component "gungnir-assessment" as RS_assessment <<Resource>>
+  component "gungnir-command" as RS_command <<Resource>>
+  component "gungnir-decision" as RS_decision <<Resource>>
+  component "gungnir-ml" as RS_ml <<Resource>>
+  component "gungnir-modelops" as RS_modelops <<Resource>>
+  component "gungnir-policy" as RS_policy <<Resource>>
+}
+component "analytics\n(see Rs-Cn-understand-maintain-the-picture)" as RS_analytics <<External>> #line.dashed
+component "config\n(see Rs-Cn-foundational)" as RS_config <<External>> #line.dashed
+component "geo\n(see Rs-Cn-understand-maintain-the-picture)" as RS_geo <<External>> #line.dashed
+component "interop\n(see Rs-Cn-sense-ingest-normalize)" as RS_interop <<External>> #line.dashed
+component "model\n(see Rs-Cn-foundation-model)" as RS_model <<External>> #line.dashed
+RS_assessment --> RS_model
+RS_command --> RS_model
+RS_command --> RS_policy
+RS_decision --> RS_model
+RS_decision --> RS_assessment
+RS_decision --> RS_policy
+RS_decision --> RS_analytics
+RS_ml --> RS_model
+RS_ml --> RS_interop
+RS_modelops --> RS_config
+RS_modelops --> RS_model
+RS_policy --> RS_model
+RS_policy --> RS_geo
+@enduml

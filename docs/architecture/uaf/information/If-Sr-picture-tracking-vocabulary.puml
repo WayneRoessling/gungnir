@@ -1,0 +1,150 @@
+@startuml If-Sr-picture-tracking-vocabulary
+title If-Sr information structure: Picture & tracking vocabulary
+left to right direction
+!pragma layout smetana
+hide empty members
+skinparam classAttributeIconSize 0
+enum "SensorMode" as SensorMode <<InformationElement>> {
+  Standby
+  Search
+  Track
+  Calibrating
+  Offline
+}
+class "SessionId" as SessionId <<InformationElement>> {
+  pub u64
+}
+class "SensorId" as SensorId <<InformationElement>> {
+  pub u32
+}
+class "SensorTaskId" as SensorTaskId <<InformationElement>> {
+  pub u64
+}
+enum "SensorCommand" as SensorCommand <<InformationElement>> {
+  SetMode { mode: SensorMode, }
+  Cue { target: Geodetic, dwell_s: Option<f64>, }
+  Search { area: AssetExtent, }
+  Calibrate { procedure: String, }
+}
+enum "Classification" as Classification <<InformationElement>> {
+  Unknown
+  Neutral
+  Friendly
+  Hostile
+}
+enum "Measurement" as Measurement <<InformationElement>> {
+  Position { enu: nalgebra::Vector3<f64>, variance_m2: [f64; 3], }
+  RangeAzimuthElevation { range_m: f64, azimuth_rad: f64, elevation_rad: f64, variance: [f64; 3], }
+  Bearing { azimuth_rad: f64, elevation_rad: Option<f64>, azimuth_variance_rad2: f64, elevation_variance_rad2: Option<f64>, }
+}
+class "DetectionView" as DetectionView <<InformationElement>> {
+  sensor: SensorId
+  source_time: MissionTime
+  receipt_time: MissionTime
+  measurement: Measurement
+  provenance: Provenance
+}
+class "TrackView" as TrackView <<InformationElement>> {
+  id: TrackId
+  status: TrackStatus
+  state: SVector<f64, 6>
+  covariance: SMatrix<f64, 6, 6>
+  classification: Classification
+  provenance: Provenance
+  quality: Quality
+  mission_time: MissionTime
+  releasability: Releasability
+}
+class "BearingRayView" as BearingRayView <<InformationElement>> {
+  sensor: SensorId
+  origin_enu: [f64; 3]
+  azimuth_rad: f64
+  elevation_rad: Option<f64>
+  azimuth_one_sigma_rad: f64
+  valid_until: MissionTime
+}
+class "PipelineStatsView" as PipelineStatsView <<InformationElement>> {
+  accepted: u64
+  too_late: u64
+  epochs: u64
+  associated: u64
+  initiated: u64
+  bearings_offered: u64
+  bearings_updated: u64
+  bearings_retained: u64
+  bearings_expired: u64
+  bearings_refused: u64
+}
+class "ResourceView" as ResourceView <<InformationElement>> {
+  id: ResourceId
+  position: Geodetic
+  capacity: u32
+  ready: bool
+  layer: EffectorLayer
+  cost: RelativeCost
+  magazine: Option<Magazine>
+  intercept_speed_mps: Option<f64>
+}
+class "PlanId" as PlanId <<InformationElement>> {
+  pub u64
+}
+class "InterceptSolutionView" as InterceptSolutionView <<InformationElement>> {
+  resource: ResourceId
+  track: TrackId
+  intercept_point: Option<Geodetic>
+  time_to_intercept_s: Option<f64>
+}
+class "PlanView" as PlanView <<InformationElement>> {
+  id: PlanId
+  mission_time: MissionTime
+  kind: PlanKind
+  policy_value: f64
+  releasability: Releasability
+}
+class "SystemHealth" as SystemHealth <<InformationElement>> {
+  tracking_healthy: bool
+  intercept_healthy: bool
+  ingest_healthy: bool
+}
+enum "ModelError" as ModelError <<InformationElement>> {
+  SchemaVersion { expected: u32, found: u32 }
+}
+enum "AssetExtent\n(see If-Sr-assets-exchange-releasability)" as AssetExtent <<External>> #line.dashed {
+}
+enum "EffectorLayer\n(see If-Sr-plans-effectors-handoff)" as EffectorLayer <<External>> #line.dashed {
+}
+class "Magazine\n(see If-Sr-plans-effectors-handoff)" as Magazine <<External>> #line.dashed {
+}
+class "MissionTime\n(see If-Sr-core-identifiers-frames-quality)" as MissionTime <<External>> #line.dashed {
+}
+enum "PlanKind\n(see If-Sr-plans-effectors-handoff)" as PlanKind <<External>> #line.dashed {
+}
+class "Provenance\n(see If-Sr-core-identifiers-frames-quality)" as Provenance <<External>> #line.dashed {
+}
+class "Quality\n(see If-Sr-core-identifiers-frames-quality)" as Quality <<External>> #line.dashed {
+}
+class "RelativeCost\n(see If-Sr-plans-effectors-handoff)" as RelativeCost <<External>> #line.dashed {
+}
+enum "Releasability\n(see If-Sr-assets-exchange-releasability)" as Releasability <<External>> #line.dashed {
+}
+SensorCommand --> AssetExtent : Search
+SensorCommand --> SensorMode : SetMode
+DetectionView --> Measurement : measurement
+DetectionView --> MissionTime : source_time, receipt_time
+DetectionView --> Provenance : provenance
+DetectionView --> SensorId : sensor
+TrackView --> Classification : classification
+TrackView --> MissionTime : mission_time
+TrackView --> Provenance : provenance
+TrackView --> Quality : quality
+TrackView --> Releasability : releasability
+BearingRayView --> MissionTime : valid_until
+BearingRayView --> SensorId : sensor
+ResourceView --> EffectorLayer : layer
+ResourceView --> Magazine : magazine
+ResourceView --> RelativeCost : cost
+PlanView --> MissionTime : mission_time
+PlanView --> PlanId : id
+PlanView --> PlanKind : kind
+PlanView --> Releasability : releasability
+@enduml

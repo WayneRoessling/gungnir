@@ -1,0 +1,46 @@
+@startuml If-Sr-core-identifiers-frames-quality
+title If-Sr information structure: Core identifiers, frames & quality
+left to right direction
+!pragma layout smetana
+hide empty members
+skinparam classAttributeIconSize 0
+class "LocalFrame" as LocalFrame <<InformationElement>> {
+  origin: Geodetic
+}
+class "GlobalEntityId" as GlobalEntityId <<InformationElement>> {
+  pub u128
+}
+class "MissionProfile" as MissionProfile <<InformationElement>> {
+  pub String
+}
+class "AlgorithmBaselineId" as AlgorithmBaselineId <<InformationElement>> {
+  profile: MissionProfile
+  name: String
+}
+class "Provenance" as Provenance <<InformationElement>> {
+  source_sensor_ids: Vec<u32>
+  calibration_baseline_version: Option<String>
+  algorithm_version: String
+  peer: Option<crate::PeerOrigin>
+  conversion_loss: Option<String>
+  authentication: SourceAuthentication
+}
+enum "SourceAuthentication" as SourceAuthentication <<InformationElement>> {
+  Unauthenticated
+  AllowList
+  MachineIdentity
+}
+class "Quality" as Quality <<InformationElement>> {
+  association_confidence: f32
+  latency_s: f32
+  is_stale: bool
+}
+class "MissionTime" as MissionTime <<InformationElement>> {
+  pub f64
+}
+class "PeerOrigin\n(see If-Sr-assets-exchange-releasability)" as PeerOrigin <<External>> #line.dashed {
+}
+AlgorithmBaselineId --> MissionProfile : profile
+Provenance --> PeerOrigin : peer
+Provenance --> SourceAuthentication : authentication
+@enduml

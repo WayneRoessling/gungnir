@@ -1,0 +1,59 @@
+@startuml Rs-Cn-overview
+title Rs-Cn resource connectivity: overview (from Cargo.toml)
+!pragma layout smetana
+skinparam componentStyle rectangle
+left to right direction
+component "Tracking core" as tracking_core <<Group>> [[Rs-Cn-tracking-core.svg]]
+component "Foundation model" as foundation_model <<Group>> [[Rs-Cn-foundation-model.svg]]
+component "Service facades" as service_facades <<Group>> [[Rs-Cn-service-facades.svg]]
+component "Data ecosystem" as data_ecosystem <<Group>> [[Rs-Cn-data-ecosystem.svg]]
+component "Deployment" as deployment <<Group>> [[Rs-Cn-deployment.svg]]
+component "User interface" as user_interface <<Group>> [[Rs-Cn-user-interface.svg]]
+component "Foundational" as foundational <<Group>> [[Rs-Cn-foundational.svg]]
+component "Sense, Ingest & Normalize" as sense_ingest_normalize <<Group>> [[Rs-Cn-sense-ingest-normalize.svg]]
+component "Understand & Maintain the Picture" as understand_maintain_the_picture <<Group>> [[Rs-Cn-understand-maintain-the-picture.svg]]
+component "Assess, Decide & Govern Action" as assess_decide_govern_action <<Group>> [[Rs-Cn-assess-decide-govern-action.svg]]
+component "Secure, Operate & Sustain" as secure_operate_sustain <<Group>> [[Rs-Cn-secure-operate-sustain.svg]]
+understand_maintain_the_picture --> tracking_core
+understand_maintain_the_picture --> data_ecosystem
+understand_maintain_the_picture --> foundation_model
+understand_maintain_the_picture --> sense_ingest_normalize
+secure_operate_sustain --> foundation_model
+secure_operate_sustain --> foundational
+secure_operate_sustain --> service_facades
+secure_operate_sustain --> understand_maintain_the_picture
+user_interface --> tracking_core
+user_interface --> service_facades
+user_interface --> deployment
+user_interface --> secure_operate_sustain
+user_interface --> understand_maintain_the_picture
+user_interface --> data_ecosystem
+user_interface --> foundation_model
+user_interface --> foundational
+user_interface --> sense_ingest_normalize
+user_interface --> assess_decide_govern_action
+assess_decide_govern_action --> foundation_model
+secure_operate_sustain --> assess_decide_govern_action
+foundational --> foundation_model
+assess_decide_govern_action --> understand_maintain_the_picture
+tracking_core --> sense_ingest_normalize
+tracking_core --> foundation_model
+sense_ingest_normalize --> foundation_model
+sense_ingest_normalize --> service_facades
+service_facades --> tracking_core
+service_facades --> foundation_model
+assess_decide_govern_action --> sense_ingest_normalize
+foundation_model --> tracking_core
+assess_decide_govern_action --> foundational
+deployment --> foundation_model
+deployment --> foundational
+deployment --> sense_ingest_normalize
+deployment --> service_facades
+deployment --> secure_operate_sustain
+deployment --> assess_decide_govern_action
+deployment --> understand_maintain_the_picture
+secure_operate_sustain --> sense_ingest_normalize
+secure_operate_sustain --> tracking_core
+sense_ingest_normalize --> tracking_core
+sense_ingest_normalize --> foundational
+@enduml
