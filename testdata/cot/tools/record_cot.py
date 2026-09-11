@@ -1,3 +1,7 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
 """Record a Cursor-on-Target corpus from a TAK client, and summarise one that was recorded.
 
 `docs/design/external-standards.md` §5.6 specifies the corpus this produces: what a
