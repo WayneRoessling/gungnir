@@ -4,7 +4,7 @@ Architecture, decisions and their reasoning, Rust design, and the algorithms —
 
 Wayne Roessling · github.com/WayneRoessling/gungnir · main at 0cb9f0a, 2026-09-10 · every figure sourced to a file, a CI run, or a table row.
 
-This is the Markdown source rendered to `GungnirOverview.pdf` by a ReportLab-based build script (not checked into this repository). The document body was audited against `main` at ee12f7e (2026-09-09); see Chapter 1's "one honest status sentence" for what has and has not been re-verified since.
+This is the Markdown source rendered to `GungnirOverview.pdf` by a ReportLab-based build script (not checked into this repository). The document body was audited against `main` at ee12f7e (2026-09-09); see Chapter 1's "one honest status sentence" for what has and has not been re-verified since. Image lines (`![caption](path)`) reference SVGs under `docs/architecture/uaf/rendered/` by path relative to the repository root and are rendered as vector graphics, not rasterized.
 
 ---
 
@@ -603,7 +603,28 @@ The Op-Pr views are parsed from `docs/mission/mission-threads.md`, each step map
 
 The seven matrices under `docs/architecture/uaf/traceability/` (capability-to-activity, activity-to-service, service-to-resource, resource-to-standard, role-to-activity, requirement-to-capability, requirement-to-resource) are all generated from `relationships.yaml`; the last two were added under GAP-083 when requirements became the eleventh element kind. Design intent is tagged `(planned)` rather than drawn as implemented. The registry check (`check`, `build_uaf.py` lines 817-885) is the no-orphan rule: every relationship endpoint exists; every leaf capability is exhibited by a performer; every activity is realized by a service or performed by a human role; every service is implemented by a resource and its `code` path resolves to a real `pub` item in that crate's source; every requirement naming a capability has a `satisfies` row; every element token in any diagram source exists. Run with `--check` at ee12f7e it reports 0 problems and 64 notes. The CI job `uaf-registry` (`.github/workflows/ci.yml` lines 107-123) runs the full regenerate-and-check and then `git diff --exit-code -- docs/architecture/uaf`, so a manifest or mission-text change without a regeneration fails the check on the pull request. Status: built and gated. Its first run after hosting found an edge (`gungnir-remote` to `gungnir-security`) in a manifest but missing from the top-level dependency-graph table, and commit `b8002d8` removed a nondeterministic ordering that had failed the diff check at random.
 
-Known defects in this set: `uaf/README.md` still says "Ten kinds" while the registry has eleven; every generated file carries a hard-coded `DATE = "2026-09-04"` whatever day it was regenerated; the generator's member regex matches the `exclude` line, so `Rs-Sr.md` counts 51 workspace members where the manifest has 50; and rendering of the 34 diagram sources was not exercised on 2026-09-04 for want of a renderer on the drafting host, per the UAF README, with no rendered output in the tree at ee12f7e.
+Known defects in this set: `uaf/README.md` still says "Ten kinds" while the registry has eleven; every generated file carries a hard-coded `DATE = "2026-09-04"` whatever day it was regenerated; the generator's member regex matches the `exclude` line, so `Rs-Sr.md` counts 51 workspace members where the manifest has 50. Rendering was not exercised on 2026-09-04 for want of a renderer on the drafting host; it was exercised 2026-09-10 (PR #94) through the Docker `plantuml/plantuml` image and `mmdc`, and all 53 SVGs (51 PlantUML, 2 Mermaid) are committed under `docs/architecture/uaf/rendered/`, mirroring the source tree by domain. Nine are reproduced below, one per top-level domain, as vector graphics -- zoom in on the PDF page for a wide one; the full set, including the ten Op-Pr process diagrams, ten Op-Is scenario diagrams, and the domain-detail breakdowns of Rs-Cn and If-Sr, is in the repository rather than reproduced here.
+
+### A sample from each domain
+
+![St-Tx: strategic capability taxonomy, registry ids with names in model/elements.yaml](docs/architecture/uaf/rendered/strategic/St-Tx.svg)
+
+![Op-Sr: operational structure -- performers and their roles](docs/architecture/uaf/rendered/operational/Op-Sr.svg)
+
+![Sv-Cn: service connectivity -- information flow on one tick and across the API](docs/architecture/uaf/rendered/services/Sv-Cn.svg)
+
+![Rs-Cn overview: the crate dependency graph by productization group](docs/architecture/uaf/rendered/resources/Rs-Cn-overview.svg)
+
+![If-Sr overview: every public type in gungnir-model, grouped by domain](docs/architecture/uaf/rendered/information/If-Sr-overview.svg)
+
+![Pr-Sr: personnel structure -- the eight roles and the SecurityOfficer variant](docs/architecture/uaf/rendered/personnel/Pr-Sr.svg)
+
+![Pj-Rm: project roadmap -- the four engineering increments](docs/architecture/uaf/rendered/projects/Pj-Rm.svg)
+
+![Sc-Cn: security connectivity -- callers, custody, and the audit trail](docs/architecture/uaf/rendered/security/Sc-Cn.svg)
+
+![Ar-Cn: actual-resources connectivity -- the fielded instances behind the resource catalogue](docs/architecture/uaf/rendered/actual-resources/Ar-Cn.svg)
+
 
 ## 8.4 Principles AP-01 to AP-17 and contracts C-01 to C-17
 
