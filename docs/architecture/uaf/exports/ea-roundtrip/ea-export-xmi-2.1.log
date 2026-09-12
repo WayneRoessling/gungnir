@@ -1,0 +1,34 @@
+Exporting package to 'D:\d\test_XML_native_xea2_1_probe.xml'
+Retrieving data for export: diagram elements
+Retrieving data for export: links
+Retrieving data for export: constraints
+Retrieving data for export: attribute tagged values
+Retrieving data for export: operation tagged values
+Retrieving data for export: operation parameter tagged values
+Retrieving data for export: connector tagged values
+Retrieving data for export: Discussions
+Completed data retrieval
+Pre-processing export tree...
+Completed pre-processing
+Processing package: Gungnir UAF Probe
+Processing package: Operational Processes Op-Pr
+Diagram: Operational Processes Op-Pr
+Element:0: Maintain the track picture
+Processing package: Operational Structure Op-Sr
+Diagram: Operational Structure Op-Sr
+Element:1: Fusion node
+Element:2: 
+Element:3: Sector sensing node
+Element:4: 
+Processing package: Operational Traceability Op-Tr
+Diagram: Operational Traceability Op-Tr
+Processing package: Strategic Taxonomy St-Tx
+Diagram: Strategic Taxonomy St-Tx
+Element:5: Sense
+Element:6: 
+Element:7: Understand
+Element:8: 
+Adding Document Item XML
+Sequencing Interaction Diagrams
+Formatting output XML...please wait
+XMI Document Export Complete!

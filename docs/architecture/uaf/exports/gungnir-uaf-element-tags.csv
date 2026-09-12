@@ -1,1530 +1,1530 @@
-id,key,value
-CAP-1,uafId,CAP-1
-CAP-1,uafKind,Capability
-CAP-1,kind,area
-CAP-1,owner,plan-04
-CAP-1.1,uafId,CAP-1.1
-CAP-1.1,uafKind,Capability
-CAP-1.1,parent,CAP-1
-CAP-1.2,uafId,CAP-1.2
-CAP-1.2,uafKind,Capability
-CAP-1.2,parent,CAP-1
-CAP-1.3,uafId,CAP-1.3
-CAP-1.3,uafKind,Capability
-CAP-1.3,parent,CAP-1
-CAP-1.4,uafId,CAP-1.4
-CAP-1.4,uafKind,Capability
-CAP-1.4,parent,CAP-1
-CAP-1.5,uafId,CAP-1.5
-CAP-1.5,uafKind,Capability
-CAP-1.5,parent,CAP-1
-CAP-1.6,uafId,CAP-1.6
-CAP-1.6,uafKind,Capability
-CAP-1.6,parent,CAP-1
-CAP-1.7,uafId,CAP-1.7
-CAP-1.7,uafKind,Capability
-CAP-1.7,parent,CAP-1
-CAP-2,uafId,CAP-2
-CAP-2,uafKind,Capability
-CAP-2,kind,area
-CAP-2,owner,plan-04
-CAP-2.1,uafId,CAP-2.1
-CAP-2.1,uafKind,Capability
-CAP-2.1,parent,CAP-2
-CAP-2.2,uafId,CAP-2.2
-CAP-2.2,uafKind,Capability
-CAP-2.2,parent,CAP-2
-CAP-2.3,uafId,CAP-2.3
-CAP-2.3,uafKind,Capability
-CAP-2.3,parent,CAP-2
-CAP-2.4,uafId,CAP-2.4
-CAP-2.4,uafKind,Capability
-CAP-2.4,parent,CAP-2
-CAP-2.5,uafId,CAP-2.5
-CAP-2.5,uafKind,Capability
-CAP-2.5,parent,CAP-2
-CAP-2.6,uafId,CAP-2.6
-CAP-2.6,uafKind,Capability
-CAP-2.6,parent,CAP-2
-CAP-2.7,uafId,CAP-2.7
-CAP-2.7,uafKind,Capability
-CAP-2.7,parent,CAP-2
-CAP-2.8,uafId,CAP-2.8
-CAP-2.8,uafKind,Capability
-CAP-2.8,parent,CAP-2
-CAP-2.9,uafId,CAP-2.9
-CAP-2.9,uafKind,Capability
-CAP-2.9,parent,CAP-2
-CAP-2.10,uafId,CAP-2.10
-CAP-2.10,uafKind,Capability
-CAP-2.10,parent,CAP-2
-CAP-2.11,uafId,CAP-2.11
-CAP-2.11,uafKind,Capability
-CAP-2.11,parent,CAP-2
-CAP-2.12,uafId,CAP-2.12
-CAP-2.12,uafKind,Capability
-CAP-2.12,parent,CAP-2
-CAP-3,uafId,CAP-3
-CAP-3,uafKind,Capability
-CAP-3,kind,area
-CAP-3,owner,plan-04
-CAP-3.1,uafId,CAP-3.1
-CAP-3.1,uafKind,Capability
-CAP-3.1,parent,CAP-3
-CAP-3.2,uafId,CAP-3.2
-CAP-3.2,uafKind,Capability
-CAP-3.2,parent,CAP-3
-CAP-3.3,uafId,CAP-3.3
-CAP-3.3,uafKind,Capability
-CAP-3.3,parent,CAP-3
-CAP-3.4,uafId,CAP-3.4
-CAP-3.4,uafKind,Capability
-CAP-3.4,parent,CAP-3
-CAP-3.5,uafId,CAP-3.5
-CAP-3.5,uafKind,Capability
-CAP-3.5,parent,CAP-3
-CAP-3.6,uafId,CAP-3.6
-CAP-3.6,uafKind,Capability
-CAP-3.6,parent,CAP-3
-CAP-3.7,uafId,CAP-3.7
-CAP-3.7,uafKind,Capability
-CAP-3.7,parent,CAP-3
-CAP-3.8,uafId,CAP-3.8
-CAP-3.8,uafKind,Capability
-CAP-3.8,parent,CAP-3
-CAP-3.9,uafId,CAP-3.9
-CAP-3.9,uafKind,Capability
-CAP-3.9,parent,CAP-3
-CAP-4,uafId,CAP-4
-CAP-4,uafKind,Capability
-CAP-4,kind,area
-CAP-4,owner,plan-04
-CAP-4.1,uafId,CAP-4.1
-CAP-4.1,uafKind,Capability
-CAP-4.1,parent,CAP-4
-CAP-4.2,uafId,CAP-4.2
-CAP-4.2,uafKind,Capability
-CAP-4.2,parent,CAP-4
-CAP-4.3,uafId,CAP-4.3
-CAP-4.3,uafKind,Capability
-CAP-4.3,parent,CAP-4
-CAP-4.4,uafId,CAP-4.4
-CAP-4.4,uafKind,Capability
-CAP-4.4,parent,CAP-4
-CAP-4.5,uafId,CAP-4.5
-CAP-4.5,uafKind,Capability
-CAP-4.5,parent,CAP-4
-CAP-4.6,uafId,CAP-4.6
-CAP-4.6,uafKind,Capability
-CAP-4.6,parent,CAP-4
-CAP-4.7,uafId,CAP-4.7
-CAP-4.7,uafKind,Capability
-CAP-4.7,parent,CAP-4
-CAP-5,uafId,CAP-5
-CAP-5,uafKind,Capability
-CAP-5,kind,area
-CAP-5,owner,plan-04
-CAP-5.1,uafId,CAP-5.1
-CAP-5.1,uafKind,Capability
-CAP-5.1,parent,CAP-5
-CAP-5.2,uafId,CAP-5.2
-CAP-5.2,uafKind,Capability
-CAP-5.2,parent,CAP-5
-CAP-5.3,uafId,CAP-5.3
-CAP-5.3,uafKind,Capability
-CAP-5.3,parent,CAP-5
-CAP-5.4,uafId,CAP-5.4
-CAP-5.4,uafKind,Capability
-CAP-5.4,parent,CAP-5
-CAP-5.5,uafId,CAP-5.5
-CAP-5.5,uafKind,Capability
-CAP-5.5,parent,CAP-5
-CAP-5.6,uafId,CAP-5.6
-CAP-5.6,uafKind,Capability
-CAP-5.6,parent,CAP-5
-CAP-5.7,uafId,CAP-5.7
-CAP-5.7,uafKind,Capability
-CAP-5.7,parent,CAP-5
-CAP-5.8,uafId,CAP-5.8
-CAP-5.8,uafKind,Capability
-CAP-5.8,parent,CAP-5
-CAP-5.9,uafId,CAP-5.9
-CAP-5.9,uafKind,Capability
-CAP-5.9,parent,CAP-5
-CAP-5.10,uafId,CAP-5.10
-CAP-5.10,uafKind,Capability
-CAP-5.10,parent,CAP-5
-CAP-6,uafId,CAP-6
-CAP-6,uafKind,Capability
-CAP-6,kind,area
-CAP-6,owner,plan-04
-CAP-6.1,uafId,CAP-6.1
-CAP-6.1,uafKind,Capability
-CAP-6.1,parent,CAP-6
-CAP-6.2,uafId,CAP-6.2
-CAP-6.2,uafKind,Capability
-CAP-6.2,parent,CAP-6
-CAP-6.3,uafId,CAP-6.3
-CAP-6.3,uafKind,Capability
-CAP-6.3,parent,CAP-6
-CAP-6.4,uafId,CAP-6.4
-CAP-6.4,uafKind,Capability
-CAP-6.4,parent,CAP-6
-CAP-6.5,uafId,CAP-6.5
-CAP-6.5,uafKind,Capability
-CAP-6.5,parent,CAP-6
-CAP-6.6,uafId,CAP-6.6
-CAP-6.6,uafKind,Capability
-CAP-6.6,parent,CAP-6
-CAP-6.7,uafId,CAP-6.7
-CAP-6.7,uafKind,Capability
-CAP-6.7,parent,CAP-6
-CAP-7,uafId,CAP-7
-CAP-7,uafKind,Capability
-CAP-7,kind,area
-CAP-7,owner,plan-04
-CAP-7.1,uafId,CAP-7.1
-CAP-7.1,uafKind,Capability
-CAP-7.1,parent,CAP-7
-CAP-7.2,uafId,CAP-7.2
-CAP-7.2,uafKind,Capability
-CAP-7.2,parent,CAP-7
-CAP-7.3,uafId,CAP-7.3
-CAP-7.3,uafKind,Capability
-CAP-7.3,parent,CAP-7
-CAP-7.4,uafId,CAP-7.4
-CAP-7.4,uafKind,Capability
-CAP-7.4,parent,CAP-7
-OP-01,uafId,OP-01
-OP-01,uafKind,OperationalPerformer
-OP-01,kind,role
-OP-01,owner,plan-02
-OP-02,uafId,OP-02
-OP-02,uafKind,OperationalPerformer
-OP-02,kind,role
-OP-02,owner,plan-02
-OP-03,uafId,OP-03
-OP-03,uafKind,OperationalPerformer
-OP-03,kind,role
-OP-03,owner,plan-02
-OP-04,uafId,OP-04
-OP-04,uafKind,OperationalPerformer
-OP-04,kind,role
-OP-04,owner,plan-02
-OP-05,uafId,OP-05
-OP-05,uafKind,OperationalPerformer
-OP-05,kind,role
-OP-05,owner,plan-02
-OP-06,uafId,OP-06
-OP-06,uafKind,OperationalPerformer
-OP-06,kind,role
-OP-06,owner,plan-02
-OP-06,status,adopted 2026-09-04 (D-05)
-OP-07,uafId,OP-07
-OP-07,uafKind,OperationalPerformer
-OP-07,kind,role
-OP-07,owner,plan-02
-OP-07,status,adopted 2026-09-04 (D-05)
-OP-08,uafId,OP-08
-OP-08,uafKind,OperationalPerformer
-OP-08,kind,role
-OP-08,owner,plan-02
-OP-08,status,adopted 2026-09-04 (D-05)
-OP-10,uafId,OP-10
-OP-10,uafKind,OperationalPerformer
-OP-10,kind,organization
-OP-10,owner,plan-02
-OP-11,uafId,OP-11
-OP-11,uafKind,OperationalPerformer
-OP-11,kind,organization
-OP-11,owner,plan-02
-OP-12,uafId,OP-12
-OP-12,uafKind,OperationalPerformer
-OP-12,kind,organization
-OP-12,owner,plan-02
-OP-20,uafId,OP-20
-OP-20,uafKind,OperationalPerformer
-OP-20,kind,external
-OP-20,owner,plan-02
-OP-21,uafId,OP-21
-OP-21,uafKind,OperationalPerformer
-OP-21,kind,external
-OP-21,owner,plan-02
-OP-22,uafId,OP-22
-OP-22,uafKind,OperationalPerformer
-OP-22,kind,external
-OP-22,owner,plan-02
-OP-23,uafId,OP-23
-OP-23,uafKind,OperationalPerformer
-OP-23,kind,external
-OP-23,owner,plan-02
-OP-24,uafId,OP-24
-OP-24,uafKind,OperationalPerformer
-OP-24,kind,external
-OP-24,owner,plan-02
-OP-25,uafId,OP-25
-OP-25,uafKind,OperationalPerformer
-OP-25,kind,external
-OP-25,owner,plan-02
-OP-26,uafId,OP-26
-OP-26,uafKind,OperationalPerformer
-OP-26,kind,external
-OP-26,owner,plan-02
-OP-27,uafId,OP-27
-OP-27,uafKind,OperationalPerformer
-OP-27,kind,external
-OP-27,owner,plan-02
-OP-30,uafId,OP-30
-OP-30,uafKind,OperationalPerformer
-OP-30,kind,system
-OP-30,owner,plan-03
-OP-31,uafId,OP-31
-OP-31,uafKind,OperationalPerformer
-OP-31,kind,system-part
-OP-31,parent,OP-30
-OP-31,owner,plan-03
-OP-32,uafId,OP-32
-OP-32,uafKind,OperationalPerformer
-OP-32,kind,system-part
-OP-32,parent,OP-30
-OP-32,owner,plan-03
-OP-33,uafId,OP-33
-OP-33,uafKind,OperationalPerformer
-OP-33,kind,system-part
-OP-33,parent,OP-30
-OP-33,owner,plan-03
-OP-34,uafId,OP-34
-OP-34,uafKind,OperationalPerformer
-OP-34,kind,system-part
-OP-34,parent,OP-30
-OP-34,owner,plan-03
-OA-01,uafId,OA-01
-OA-01,uafKind,OperationalActivity
-OA-02,uafId,OA-02
-OA-02,uafKind,OperationalActivity
-OA-03,uafId,OA-03
-OA-03,uafKind,OperationalActivity
-OA-04,uafId,OA-04
-OA-04,uafKind,OperationalActivity
-OA-05,uafId,OA-05
-OA-05,uafKind,OperationalActivity
-OA-06,uafId,OA-06
-OA-06,uafKind,OperationalActivity
-OA-07,uafId,OA-07
-OA-07,uafKind,OperationalActivity
-OA-08,uafId,OA-08
-OA-08,uafKind,OperationalActivity
-OA-09,uafId,OA-09
-OA-09,uafKind,OperationalActivity
-OA-10,uafId,OA-10
-OA-10,uafKind,OperationalActivity
-OA-11,uafId,OA-11
-OA-11,uafKind,OperationalActivity
-OA-12,uafId,OA-12
-OA-12,uafKind,OperationalActivity
-OA-13,uafId,OA-13
-OA-13,uafKind,OperationalActivity
-OA-14,uafId,OA-14
-OA-14,uafKind,OperationalActivity
-OA-15,uafId,OA-15
-OA-15,uafKind,OperationalActivity
-OA-16,uafId,OA-16
-OA-16,uafKind,OperationalActivity
-OA-17,uafId,OA-17
-OA-17,uafKind,OperationalActivity
-OA-18,uafId,OA-18
-OA-18,uafKind,OperationalActivity
-OA-19,uafId,OA-19
-OA-19,uafKind,OperationalActivity
-OA-20,uafId,OA-20
-OA-20,uafKind,OperationalActivity
-OA-21,uafId,OA-21
-OA-21,uafKind,OperationalActivity
-OA-22,uafId,OA-22
-OA-22,uafKind,OperationalActivity
-OA-23,uafId,OA-23
-OA-23,uafKind,OperationalActivity
-OA-24,uafId,OA-24
-OA-24,uafKind,OperationalActivity
-OA-25,uafId,OA-25
-OA-25,uafKind,OperationalActivity
-OA-26,uafId,OA-26
-OA-26,uafKind,OperationalActivity
-OA-27,uafId,OA-27
-OA-27,uafKind,OperationalActivity
-OA-28,uafId,OA-28
-OA-28,uafKind,OperationalActivity
-OA-29,uafId,OA-29
-OA-29,uafKind,OperationalActivity
-OA-30,uafId,OA-30
-OA-30,uafKind,OperationalActivity
-OA-31,uafId,OA-31
-OA-31,uafKind,OperationalActivity
-OA-32,uafId,OA-32
-OA-32,uafKind,OperationalActivity
-OA-33,uafId,OA-33
-OA-33,uafKind,OperationalActivity
-OA-34,uafId,OA-34
-OA-34,uafKind,OperationalActivity
-OA-35,uafId,OA-35
-OA-35,uafKind,OperationalActivity
-OA-36,uafId,OA-36
-OA-36,uafKind,OperationalActivity
-SV-01,uafId,SV-01
-SV-01,uafKind,ServiceInterface
-SV-01,code,gungnir_tracking_service::TrackingService
-SV-01,status,scaffold
-SV-02,uafId,SV-02
-SV-02,uafKind,ServiceInterface
-SV-02,code,gungnir_intercept_service::InterceptService
-SV-02,status,scaffold
-SV-03,uafId,SV-03
-SV-03,uafKind,ServiceInterface
-SV-03,code,gungnir_eventing::EventBus
-SV-03,status,real
-SV-04,uafId,SV-04
-SV-04,uafKind,ServiceInterface
-SV-04,code,gungnir_store::EventJournal
-SV-04,status,real
-SV-05,uafId,SV-05
-SV-05,uafKind,ServiceInterface
-SV-05,code,gungnir_time::TimeAuthority
-SV-05,status,real
-SV-06,uafId,SV-06
-SV-06,uafKind,ServiceInterface
-SV-06,code,gungnir_config::ConfigStore
-SV-06,status,real
-SV-07,uafId,SV-07
-SV-07,uafKind,ServiceInterface
-SV-07,code,gungnir_mission::MissionManager
-SV-07,status,scaffold
-SV-08,uafId,SV-08
-SV-08,uafKind,ServiceInterface
-SV-08,code,gungnir_ingest::ProtocolAdapter
-SV-08,status,real
-SV-09,uafId,SV-09
-SV-09,uafKind,ServiceInterface
-SV-09,code,gungnir_sensor_management::SensorRegistry
-SV-09,status,real
-SV-10,uafId,SV-10
-SV-10,uafKind,ServiceInterface
-SV-10,code,gungnir_interop::DetectionCodec
-SV-10,status,scaffold
-SV-11,uafId,SV-11
-SV-11,uafKind,ServiceInterface
-SV-11,code,gungnir_identity::IdentityResolver
-SV-11,status,real
-SV-12,uafId,SV-12
-SV-12,uafKind,ServiceInterface
-SV-12,code,gungnir_identification::IdentificationEngine
-SV-12,status,real
-SV-13,uafId,SV-13
-SV-13,uafKind,ServiceInterface
-SV-13,code,gungnir_geo::GeoService
-SV-13,status,real
-SV-14,uafId,SV-14
-SV-14,uafKind,ServiceInterface
-SV-14,code,gungnir_analytics::LineOfSight
-SV-14,status,real
-SV-15,uafId,SV-15
-SV-15,uafKind,ServiceInterface
-SV-15,code,gungnir_policy::PolicyEngine
-SV-15,status,real
-SV-16,uafId,SV-16
-SV-16,uafKind,ServiceInterface
-SV-16,code,gungnir_command::ApprovalWorkflow
-SV-16,status,real
-SV-17,uafId,SV-17
-SV-17,uafKind,ServiceInterface
-SV-17,code,gungnir_assessment::ThreatAssessor
-SV-17,status,real
-SV-18,uafId,SV-18
-SV-18,uafKind,ServiceInterface
-SV-18,code,gungnir_decision::DecisionSupport
-SV-18,status,scaffold
-SV-19,uafId,SV-19
-SV-19,uafKind,ServiceInterface
-SV-19,code,gungnir_modelops::ModelRegistry
-SV-19,status,real
-SV-20,uafId,SV-20
-SV-20,uafKind,ServiceInterface
-SV-20,code,gungnir_security::Authenticator
-SV-20,status,scaffold
-SV-21,uafId,SV-21
-SV-21,uafKind,ServiceInterface
-SV-21,code,gungnir_security::Authorizer
-SV-21,status,real
-SV-22,uafId,SV-22
-SV-22,uafKind,ServiceInterface
-SV-22,code,gungnir_security::AuditLog
-SV-22,status,real
-SV-23,uafId,SV-23
-SV-23,uafKind,ServiceInterface
-SV-23,code,gungnir_api::ApiHandler
-SV-23,status,scaffold
-SV-24,uafId,SV-24
-SV-24,uafKind,ServiceInterface
-SV-24,code,gungnir_observability::HealthMonitor
-SV-24,status,real
-SV-25,uafId,SV-25
-SV-25,uafKind,ServiceInterface
-SV-25,code,gungnir_resilience::StoreAndForwardQueue
-SV-25,status,real
-SV-26,uafId,SV-26
-SV-26,uafKind,ServiceInterface
-SV-26,code,gungnir_collab::SharedPictureSync
-SV-26,status,real
-SV-27,uafId,SV-27
-SV-27,uafKind,ServiceInterface
-SV-27,code,gungnir_workflow::AlertLifecycle
-SV-27,status,real
-SV-28,uafId,SV-28
-SV-28,uafKind,ServiceInterface
-SV-28,code,gungnir_replay
-SV-28,status,real
-SV-29,uafId,SV-29
-SV-29,uafKind,ServiceInterface
-SV-29,code,gungnir_reporting::ReportGenerator
-SV-29,status,real
-SV-30,uafId,SV-30
-SV-30,uafKind,ServiceInterface
-SV-30,code,gungnir_remote
-SV-30,status,scaffold
-SV-31,uafId,SV-31
-SV-31,uafKind,ServiceInterface
-SV-31,code,gungnir_data
-SV-31,status,scaffold
-SV-32,uafId,SV-32
-SV-32,uafKind,ServiceInterface
-SV-32,code,gungnir_data_fusion
-SV-32,status,scaffold
-SV-33,uafId,SV-33
-SV-33,uafKind,ServiceInterface
-SV-33,code,gungnir_metrics
-SV-33,status,scaffold
-SV-34,uafId,SV-34
-SV-34,uafKind,ServiceInterface
-SV-34,code,gungnir_scenario
-SV-34,status,scaffold
-RS-allocation,uafId,RS-allocation
-RS-allocation,uafKind,ResourceArtifact
-RS-allocation,kind,library
-RS-allocation,layer,Tracking core
-RS-allocation,code,gungnir-allocation/Cargo.toml
-RS-analytics,uafId,RS-analytics
-RS-analytics,uafKind,ResourceArtifact
-RS-analytics,kind,library
-RS-analytics,layer,Productization
-RS-analytics,code,gungnir-analytics/Cargo.toml
-RS-api,uafId,RS-api
-RS-api,uafKind,ResourceArtifact
-RS-api,kind,library
-RS-api,layer,Productization
-RS-api,code,gungnir-api/Cargo.toml
-RS-app,uafId,RS-app
-RS-app,uafKind,ResourceArtifact
-RS-app,kind,binary
-RS-app,layer,User interface
-RS-app,code,gungnir-app/Cargo.toml
-RS-assessment,uafId,RS-assessment
-RS-assessment,uafKind,ResourceArtifact
-RS-assessment,kind,library
-RS-assessment,layer,Productization
-RS-assessment,code,gungnir-assessment/Cargo.toml
-RS-association,uafId,RS-association
-RS-association,uafKind,ResourceArtifact
-RS-association,kind,library
-RS-association,layer,Tracking core
-RS-association,code,gungnir-association/Cargo.toml
-RS-collab,uafId,RS-collab
-RS-collab,uafKind,ResourceArtifact
-RS-collab,kind,library
-RS-collab,layer,Productization
-RS-collab,code,gungnir-collab/Cargo.toml
-RS-command,uafId,RS-command
-RS-command,uafKind,ResourceArtifact
-RS-command,kind,library
-RS-command,layer,Productization
-RS-command,code,gungnir-command/Cargo.toml
-RS-config,uafId,RS-config
-RS-config,uafKind,ResourceArtifact
-RS-config,kind,library
-RS-config,layer,Productization
-RS-config,code,gungnir-config/Cargo.toml
-RS-coord,uafId,RS-coord
-RS-coord,uafKind,ResourceArtifact
-RS-coord,kind,library
-RS-coord,layer,Tracking core
-RS-coord,code,gungnir-coord/Cargo.toml
-RS-core,uafId,RS-core
-RS-core,uafKind,ResourceArtifact
-RS-core,kind,library
-RS-core,layer,Tracking core
-RS-core,code,gungnir-core/Cargo.toml
-RS-data-fusion,uafId,RS-data-fusion
-RS-data-fusion,uafKind,ResourceArtifact
-RS-data-fusion,kind,library
-RS-data-fusion,layer,Data ecosystem
-RS-data-fusion,code,gungnir-data-fusion/Cargo.toml
-RS-data,uafId,RS-data
-RS-data,uafKind,ResourceArtifact
-RS-data,kind,library
-RS-data,layer,Data ecosystem
-RS-data,code,gungnir-data/Cargo.toml
-RS-decision,uafId,RS-decision
-RS-decision,uafKind,ResourceArtifact
-RS-decision,kind,library
-RS-decision,layer,Productization
-RS-decision,code,gungnir-decision/Cargo.toml
-RS-eventing,uafId,RS-eventing
-RS-eventing,uafKind,ResourceArtifact
-RS-eventing,kind,library
-RS-eventing,layer,Productization
-RS-eventing,code,gungnir-eventing/Cargo.toml
-RS-filters,uafId,RS-filters
-RS-filters,uafKind,ResourceArtifact
-RS-filters,kind,library
-RS-filters,layer,Tracking core
-RS-filters,code,gungnir-filters/Cargo.toml
-RS-fusion-async,uafId,RS-fusion-async
-RS-fusion-async,uafKind,ResourceArtifact
-RS-fusion-async,kind,library
-RS-fusion-async,layer,Tracking core
-RS-fusion-async,code,gungnir-fusion-async/Cargo.toml
-RS-fuzz,uafId,RS-fuzz
-RS-fuzz,uafKind,ResourceArtifact
-RS-fuzz,kind,library
-RS-fuzz,layer,Tracking core
-RS-fuzz,code,gungnir-fuzz/Cargo.toml
-RS-geo,uafId,RS-geo
-RS-geo,uafKind,ResourceArtifact
-RS-geo,kind,library
-RS-geo,layer,Productization
-RS-geo,code,gungnir-geo/Cargo.toml
-RS-identification,uafId,RS-identification
-RS-identification,uafKind,ResourceArtifact
-RS-identification,kind,library
-RS-identification,layer,Productization
-RS-identification,code,gungnir-identification/Cargo.toml
-RS-identity,uafId,RS-identity
-RS-identity,uafKind,ResourceArtifact
-RS-identity,kind,library
-RS-identity,layer,Productization
-RS-identity,code,gungnir-identity/Cargo.toml
-RS-ingest,uafId,RS-ingest
-RS-ingest,uafKind,ResourceArtifact
-RS-ingest,kind,library
-RS-ingest,layer,Productization
-RS-ingest,code,gungnir-ingest/Cargo.toml
-RS-intercept-service,uafId,RS-intercept-service
-RS-intercept-service,uafKind,ResourceArtifact
-RS-intercept-service,kind,library
-RS-intercept-service,layer,Service facades
-RS-intercept-service,code,gungnir-intercept-service/Cargo.toml
-RS-interop,uafId,RS-interop
-RS-interop,uafKind,ResourceArtifact
-RS-interop,kind,library
-RS-interop,layer,Productization
-RS-interop,code,gungnir-interop/Cargo.toml
-RS-metrics,uafId,RS-metrics
-RS-metrics,uafKind,ResourceArtifact
-RS-metrics,kind,library
-RS-metrics,layer,Tracking core
-RS-metrics,code,gungnir-metrics/Cargo.toml
-RS-mission,uafId,RS-mission
-RS-mission,uafKind,ResourceArtifact
-RS-mission,kind,library
-RS-mission,layer,Productization
-RS-mission,code,gungnir-mission/Cargo.toml
-RS-ml,uafId,RS-ml
-RS-ml,uafKind,ResourceArtifact
-RS-ml,kind,library
-RS-ml,layer,Productization
-RS-ml,code,gungnir-ml/Cargo.toml
-RS-model,uafId,RS-model
-RS-model,uafKind,ResourceArtifact
-RS-model,kind,library
-RS-model,layer,Foundation model
-RS-model,code,gungnir-model/Cargo.toml
-RS-modelops,uafId,RS-modelops
-RS-modelops,uafKind,ResourceArtifact
-RS-modelops,kind,library
-RS-modelops,layer,Productization
-RS-modelops,code,gungnir-modelops/Cargo.toml
-RS-node,uafId,RS-node
-RS-node,uafKind,ResourceArtifact
-RS-node,kind,binary
-RS-node,layer,Deployment
-RS-node,code,gungnir-node/Cargo.toml
-RS-observability,uafId,RS-observability
-RS-observability,uafKind,ResourceArtifact
-RS-observability,kind,library
-RS-observability,layer,Productization
-RS-observability,code,gungnir-observability/Cargo.toml
-RS-oracle,uafId,RS-oracle
-RS-oracle,uafKind,ResourceArtifact
-RS-oracle,kind,library
-RS-oracle,layer,Tracking core
-RS-oracle,code,gungnir-oracle/Cargo.toml
-RS-policy,uafId,RS-policy
-RS-policy,uafKind,ResourceArtifact
-RS-policy,kind,library
-RS-policy,layer,Productization
-RS-policy,code,gungnir-policy/Cargo.toml
-RS-remote,uafId,RS-remote
-RS-remote,uafKind,ResourceArtifact
-RS-remote,kind,library
-RS-remote,layer,Deployment
-RS-remote,code,gungnir-remote/Cargo.toml
-RS-render,uafId,RS-render
-RS-render,uafKind,ResourceArtifact
-RS-render,kind,library
-RS-render,layer,Data ecosystem
-RS-render,code,gungnir-render/Cargo.toml
-RS-replay,uafId,RS-replay
-RS-replay,uafKind,ResourceArtifact
-RS-replay,kind,library
-RS-replay,layer,Productization
-RS-replay,code,gungnir-replay/Cargo.toml
-RS-reporting,uafId,RS-reporting
-RS-reporting,uafKind,ResourceArtifact
-RS-reporting,kind,library
-RS-reporting,layer,Productization
-RS-reporting,code,gungnir-reporting/Cargo.toml
-RS-resilience,uafId,RS-resilience
-RS-resilience,uafKind,ResourceArtifact
-RS-resilience,kind,library
-RS-resilience,layer,Productization
-RS-resilience,code,gungnir-resilience/Cargo.toml
-RS-rfs,uafId,RS-rfs
-RS-rfs,uafKind,ResourceArtifact
-RS-rfs,kind,library
-RS-rfs,layer,Tracking core
-RS-rfs,code,gungnir-rfs/Cargo.toml
-RS-scenario,uafId,RS-scenario
-RS-scenario,uafKind,ResourceArtifact
-RS-scenario,kind,library
-RS-scenario,layer,Tracking core
-RS-scenario,code,gungnir-scenario/Cargo.toml
-RS-security,uafId,RS-security
-RS-security,uafKind,ResourceArtifact
-RS-security,kind,library
-RS-security,layer,Productization
-RS-security,code,gungnir-security/Cargo.toml
-RS-sensor-management,uafId,RS-sensor-management
-RS-sensor-management,uafKind,ResourceArtifact
-RS-sensor-management,kind,library
-RS-sensor-management,layer,Productization
-RS-sensor-management,code,gungnir-sensor-management/Cargo.toml
-RS-store,uafId,RS-store
-RS-store,uafKind,ResourceArtifact
-RS-store,kind,library
-RS-store,layer,Productization
-RS-store,code,gungnir-store/Cargo.toml
-RS-testkit,uafId,RS-testkit
-RS-testkit,uafKind,ResourceArtifact
-RS-testkit,kind,library
-RS-testkit,layer,Tracking core
-RS-testkit,code,gungnir-testkit/Cargo.toml
-RS-time,uafId,RS-time
-RS-time,uafKind,ResourceArtifact
-RS-time,kind,library
-RS-time,layer,Productization
-RS-time,code,gungnir-time/Cargo.toml
-RS-track-fusion,uafId,RS-track-fusion
-RS-track-fusion,uafKind,ResourceArtifact
-RS-track-fusion,kind,library
-RS-track-fusion,layer,Tracking core
-RS-track-fusion,code,gungnir-track-fusion/Cargo.toml
-RS-track,uafId,RS-track
-RS-track,uafKind,ResourceArtifact
-RS-track,kind,library
-RS-track,layer,Tracking core
-RS-track,code,gungnir-track/Cargo.toml
-RS-tracking-service,uafId,RS-tracking-service
-RS-tracking-service,uafKind,ResourceArtifact
-RS-tracking-service,kind,library
-RS-tracking-service,layer,Service facades
-RS-tracking-service,code,gungnir-tracking-service/Cargo.toml
-RS-ui,uafId,RS-ui
-RS-ui,uafKind,ResourceArtifact
-RS-ui,kind,library
-RS-ui,layer,User interface
-RS-ui,code,gungnir-ui/Cargo.toml
-RS-viewport3d,uafId,RS-viewport3d
-RS-viewport3d,uafKind,ResourceArtifact
-RS-viewport3d,kind,library
-RS-viewport3d,layer,User interface
-RS-viewport3d,code,gungnir-viewport3d/Cargo.toml
-RS-workflow,uafId,RS-workflow
-RS-workflow,uafKind,ResourceArtifact
-RS-workflow,kind,library
-RS-workflow,layer,Productization
-RS-workflow,code,gungnir-workflow/Cargo.toml
-PT-01,uafId,PT-01
-PT-01,uafKind,PersonType
-PT-01,code,gungnir_security::Role::Operator
-PT-01,performer,OP-01
-PT-01,in_code,True
-PT-02,uafId,PT-02
-PT-02,uafKind,PersonType
-PT-02,code,gungnir_security::Role::Supervisor
-PT-02,performer,OP-02
-PT-02,in_code,True
-PT-03,uafId,PT-03
-PT-03,uafKind,PersonType
-PT-03,code,gungnir_security::Role::Analyst
-PT-03,performer,OP-03
-PT-03,in_code,True
-PT-04,uafId,PT-04
-PT-04,uafKind,PersonType
-PT-04,code,gungnir_security::Role::SensorManager
-PT-04,performer,OP-04
-PT-04,in_code,True
-PT-05,uafId,PT-05
-PT-05,uafKind,PersonType
-PT-05,code,gungnir_security::Role::Administrator
-PT-05,performer,OP-05
-PT-05,in_code,True
-PT-06,uafId,PT-06
-PT-06,uafKind,PersonType
-PT-06,performer,OP-06
-PT-06,in_code,False
-PT-06,status,adopted 2026-09-04; enters the code under GAP-068
-PT-07,uafId,PT-07
-PT-07,uafKind,PersonType
-PT-07,performer,OP-07
-PT-07,in_code,False
-PT-07,status,adopted 2026-09-04; enters the code under GAP-068
-PT-08,uafId,PT-08
-PT-08,uafKind,PersonType
-PT-08,performer,OP-08
-PT-08,in_code,False
-PT-08,status,adopted 2026-09-04; enters the code under GAP-068
-SD-01,uafId,SD-01
-SD-01,uafKind,Standard
-SD-01,source,gungnir_model::SCHEMA_VERSION
-SD-01,status,real
-SD-02,uafId,SD-02
-SD-02,uafKind,Standard
-SD-02,source,gungnir_interop::detection_arrow_schema
-SD-02,status,real
-SD-03,uafId,SD-03
-SD-03,uafKind,Standard
-SD-03,source,gungnir_interop::AsterixCat048Codec
-SD-03,status,planned
-SD-04,uafId,SD-04
-SD-04,uafKind,Standard
-SD-04,source,gungnir_interop::Stanag4676Codec
-SD-04,status,planned
-SD-05,uafId,SD-05
-SD-05,uafKind,Standard
-SD-05,source,serde_json
-SD-05,status,real
-SD-06,uafId,SD-06
-SD-06,uafKind,Standard
-SD-06,source,docs/gungnir-api-v1.md
-SD-06,status,planned
-SD-07,uafId,SD-07
-SD-07,uafKind,Standard
-SD-07,source,docs/gungnir-api-v1.md
-SD-07,status,planned
-SD-08,uafId,SD-08
-SD-08,uafKind,Standard
-SD-08,source,ARCHITECTURE.md \u00a78.5; D-02
-SD-08,status,planned
-SD-09,uafId,SD-09
-SD-09,uafKind,Standard
-SD-09,source,D-09
-SD-09,status,planned
-SD-10,uafId,SD-10
-SD-10,uafKind,Standard
-SD-10,source,D-09
-SD-10,status,planned
-SD-11,uafId,SD-11
-SD-11,uafKind,Standard
-SD-11,source,D-11
-SD-11,status,planned
-SD-12,uafId,SD-12
-SD-12,uafKind,Standard
-SD-12,source,deploy/node/Dockerfile
-SD-12,status,real
-SD-13,uafId,SD-13
-SD-13,uafKind,Standard
-SD-13,source,docs/release-governance.md
-SD-13,status,planned
-SD-14,uafId,SD-14
-SD-14,uafKind,Standard
-SD-14,source,docs/architecture/uaf/
-SD-14,status,real
-SD-15,uafId,SD-15
-SD-15,uafKind,Standard
-SD-15,source,docs/plans/10-togaf-adm-documentation.md
-SD-15,status,planned
-SD-16,uafId,SD-16
-SD-16,uafKind,Standard
-SD-16,source,docs/design/DN-25-cursor-on-target.md
-SD-16,status,planned
-PJ-I1,uafId,PJ-I1
-PJ-I1,uafKind,Project
-PJ-I1,source,docs/gungnir-capabilities.md \u00a77
-PJ-I1,status,in progress
-PJ-I2,uafId,PJ-I2
-PJ-I2,uafKind,Project
-PJ-I2,source,docs/gungnir-capabilities.md \u00a77
-PJ-I2,status,planned
-PJ-I3,uafId,PJ-I3
-PJ-I3,uafKind,Project
-PJ-I3,source,docs/gungnir-capabilities.md \u00a77
-PJ-I3,status,planned
-PJ-I4,uafId,PJ-I4
-PJ-I4,uafKind,Project
-PJ-I4,source,docs/gungnir-capabilities.md \u00a77
-PJ-I4,status,planned
-PJ-P01,uafId,PJ-P01
-PJ-P01,uafKind,Project
-PJ-P01,source,docs/plans/01-product-business-plan.md
-PJ-P01,status,not started
-PJ-P02,uafId,PJ-P02
-PJ-P02,uafKind,Project
-PJ-P02,source,docs/plans/02-mission-analysis.md
-PJ-P02,status,first draft 2026-09-04
-PJ-P03,uafId,PJ-P03
-PJ-P03,uafKind,Project
-PJ-P03,source,docs/plans/03-uaf-views.md
-PJ-P03,status,first draft 2026-09-04
-PJ-P04,uafId,PJ-P04
-PJ-P04,uafKind,Project
-PJ-P04,source,docs/plans/04-mission-capabilities.md
-PJ-P04,status,first draft 2026-09-04
-PJ-P05,uafId,PJ-P05
-PJ-P05,uafKind,Project
-PJ-P05,source,docs/plans/05-capability-design-gaps.md
-PJ-P05,status,first draft 2026-09-04
-PJ-P06,uafId,PJ-P06
-PJ-P06,uafKind,Project
-PJ-P06,source,docs/plans/06-ux-design-by-role.md
-PJ-P06,status,not started
-PJ-P07,uafId,PJ-P07
-PJ-P07,uafKind,Project
-PJ-P07,source,docs/plans/07-test-track-suite.md
-PJ-P07,status,not started
-PJ-P08,uafId,PJ-P08
-PJ-P08,uafKind,Project
-PJ-P08,source,docs/plans/08-ai-agent-integration.md
-PJ-P08,status,not started
-PJ-P09,uafId,PJ-P09
-PJ-P09,uafKind,Project
-PJ-P09,source,docs/plans/09-ml-model-integration.md
-PJ-P09,status,not started
-PJ-P10,uafId,PJ-P10
-PJ-P10,uafKind,Project
-PJ-P10,source,docs/plans/10-togaf-adm-documentation.md
-PJ-P10,status,not started
-IE-01,uafId,IE-01
-IE-01,uafKind,InformationElement
-IE-01,code,gungnir_model::DetectionView
-IE-02,uafId,IE-02
-IE-02,uafKind,InformationElement
-IE-02,code,gungnir_model::TrackView
-IE-03,uafId,IE-03
-IE-03,uafKind,InformationElement
-IE-03,code,gungnir_model::ResourceView
-IE-04,uafId,IE-04
-IE-04,uafKind,InformationElement
-IE-04,code,gungnir_model::PlanView
-IE-05,uafId,IE-05
-IE-05,uafKind,InformationElement
-IE-05,code,gungnir_model::InterceptSolutionView
-IE-06,uafId,IE-06
-IE-06,uafKind,InformationElement
-IE-06,code,gungnir_model::SystemHealth
-IE-07,uafId,IE-07
-IE-07,uafKind,InformationElement
-IE-07,code,gungnir_model::Provenance
-IE-08,uafId,IE-08
-IE-08,uafKind,InformationElement
-IE-08,code,gungnir_model::Quality
-IE-09,uafId,IE-09
-IE-09,uafKind,InformationElement
-IE-09,code,gungnir_model::Classification
-IE-10,uafId,IE-10
-IE-10,uafKind,InformationElement
-IE-10,code,gungnir_model::MissionTime
-IE-11,uafId,IE-11
-IE-11,uafKind,InformationElement
-IE-11,code,gungnir_model::GlobalEntityId
-IE-12,uafId,IE-12
-IE-12,uafKind,InformationElement
-IE-12,code,gungnir_eventing::Envelope
-IE-13,uafId,IE-13
-IE-13,uafKind,InformationElement
-IE-13,code,gungnir_model::events::TrackingEvent
-IE-14,uafId,IE-14
-IE-14,uafKind,InformationElement
-IE-14,code,gungnir_model::events::InterceptEvent
-IE-15,uafId,IE-15
-IE-15,uafKind,InformationElement
-IE-15,code,gungnir_model::events::IngestEvent
-IE-16,uafId,IE-16
-IE-16,uafKind,InformationElement
-IE-16,code,gungnir_model::events::CommandEvent
-IE-17,uafId,IE-17
-IE-17,uafKind,InformationElement
-IE-17,code,gungnir_config::ConfigBaseline
-IE-18,uafId,IE-18
-IE-18,uafKind,InformationElement
-IE-18,code,gungnir_command::DecisionRecord
-IE-19,uafId,IE-19
-IE-19,uafKind,InformationElement
-IE-19,code,gungnir_policy::PolicyVerdict
-IE-20,uafId,IE-20
-IE-20,uafKind,InformationElement
-IE-20,code,gungnir_security::AuditEntry
-IE-21,uafId,IE-21
-IE-21,uafKind,InformationElement
-IE-21,code,gungnir_workflow::AlertLifecycle
-IE-22,uafId,IE-22
-IE-22,uafKind,InformationElement
-IE-22,code,gungnir_api::v1::SnapshotResponse
-IE-23,uafId,IE-23
-IE-23,uafKind,InformationElement
-IE-23,code,gungnir_api::v1::ApprovalRequest
-IE-24,uafId,IE-24
-IE-24,uafKind,InformationElement
-IE-24,code,gungnir_api::v1::SubmitDetectionRequest
-IE-25,uafId,IE-25
-IE-25,uafKind,InformationElement
-IE-25,code,gungnir_api::v1::SubscribeRequest
-IE-26,uafId,IE-26
-IE-26,uafKind,InformationElement
-IE-26,code,gungnir_interop::SchemaEntry
-IE-27,uafId,IE-27
-IE-27,uafKind,InformationElement
-IE-27,code,gungnir_sensor_management::SensorRecord
-IE-28,uafId,IE-28
-IE-28,uafKind,InformationElement
-IE-28,code,gungnir_reporting
-IE-29,uafId,IE-29
-IE-29,uafKind,InformationElement
-IE-29,code,gungnir_identification
-IE-30,uafId,IE-30
-IE-30,uafKind,InformationElement
-IE-30,code,gungnir_assessment
-IE-31,uafId,IE-31
-IE-31,uafKind,InformationElement
-IE-31,code,gungnir_resilience
-IE-32,uafId,IE-32
-IE-32,uafKind,InformationElement
-IE-32,code,gungnir_workflow::WorkspaceLayout
-IE-33,uafId,IE-33
-IE-33,uafKind,InformationElement
-IE-33,code,gungnir_mission::Mission
-AR-01,uafId,AR-01
-AR-01,uafKind,ActualResource
-AR-01,source,ARCHITECTURE.md \u00a78.7 and \u00a79
-AR-02,uafId,AR-02
-AR-02,uafKind,ActualResource
-AR-02,source,ARCHITECTURE.md \u00a78.1 and \u00a78.2
-AR-03,uafId,AR-03
-AR-03,uafKind,ActualResource
-AR-03,source,ARCHITECTURE.md \u00a78.2 and \u00a78.5
-AR-04,uafId,AR-04
-AR-04,uafKind,ActualResource
-AR-04,source,docs/mission/operational-environment.md
-AR-05,uafId,AR-05
-AR-05,uafKind,ActualResource
-AR-05,source,ARCHITECTURE.md \u00a78.6
-AR-06,uafId,AR-06
-AR-06,uafKind,ActualResource
-AR-06,source,docs/mission/roles-and-stakeholders.md \u00a73
-AR-07,uafId,AR-07
-AR-07,uafKind,ActualResource
-AR-07,source,docs/release-governance.md
-REQ-F-01,uafId,REQ-F-01
-REQ-F-01,uafKind,Requirement
-REQ-F-01,category,F
-REQ-F-01,source,"CAP-1.1, CAP-1.2"
-REQ-F-01,priority,I2
-REQ-F-01,verification,"Verification table, ingest row"
-REQ-F-01,gaps,"GAP-001, GAP-064"
-REQ-F-01,owner,architecture-requirements-specification.md
-REQ-F-02,uafId,REQ-F-02
-REQ-F-02,uafKind,Requirement
-REQ-F-02,category,F
-REQ-F-02,source,"CAP-1.2, D-02"
-REQ-F-02,priority,I2
-REQ-F-02,verification,Security gate
-REQ-F-02,gaps,GAP-002
-REQ-F-02,owner,architecture-requirements-specification.md
-REQ-F-03,uafId,REQ-F-03
-REQ-F-03,uafKind,Requirement
-REQ-F-03,category,F
-REQ-F-03,source,CAP-1.3
-REQ-F-03,priority,"I2 for the registry, I3 for outbound control"
-REQ-F-03,verification,"Verification table, sensor-management row"
-REQ-F-03,gaps,"GAP-003, GAP-004"
-REQ-F-03,owner,architecture-requirements-specification.md
-REQ-F-04,uafId,REQ-F-04
-REQ-F-04,uafKind,Requirement
-REQ-F-04,category,F
-REQ-F-04,source,CAP-1.4
-REQ-F-04,priority,I3
-REQ-F-04,verification,MOP for coverage; usability round 2
-REQ-F-04,gaps,"GAP-006, GAP-007"
-REQ-F-04,owner,architecture-requirements-specification.md
-REQ-F-05,uafId,REQ-F-05
-REQ-F-05,uafKind,Requirement
-REQ-F-05,category,F
-REQ-F-05,source,CAP-1.5
-REQ-F-05,priority,I2
-REQ-F-05,verification,MOP-09; the test-track skew case
-REQ-F-05,gaps,GAP-008
-REQ-F-05,owner,architecture-requirements-specification.md
-REQ-F-06,uafId,REQ-F-06
-REQ-F-06,uafKind,Requirement
-REQ-F-06,category,F
-REQ-F-06,source,"CAP-1.7, D-09"
-REQ-F-06,priority,I2
-REQ-F-06,verification,Codec conformance
-REQ-F-06,gaps,GAP-010
-REQ-F-06,owner,architecture-requirements-specification.md
-REQ-F-07,uafId,REQ-F-07
-REQ-F-07,uafKind,Requirement
-REQ-F-07,category,F
-REQ-F-07,source,CAP-2.1 to CAP-2.5
-REQ-F-07,priority,"I2, random finite sets I3"
-REQ-F-07,verification,"Verification table \u00a71, oracle agreement"
-REQ-F-07,gaps,"GAP-011, GAP-013, GAP-015, GAP-016"
-REQ-F-07,owner,architecture-requirements-specification.md
-REQ-F-08,uafId,REQ-F-08
-REQ-F-08,uafKind,Requirement
-REQ-F-08,category,F
-REQ-F-08,source,CAP-2.2
-REQ-F-08,priority,I3
-REQ-F-08,verification,Usability round 2; C-02
-REQ-F-08,gaps,GAP-012
-REQ-F-08,owner,architecture-requirements-specification.md
-REQ-F-09,uafId,REQ-F-09
-REQ-F-09,uafKind,Requirement
-REQ-F-09,category,F
-REQ-F-09,source,CAP-2.6
-REQ-F-09,priority,I3
-REQ-F-09,verification,MOE for identification; ML-01 gates
-REQ-F-09,gaps,GAP-018
-REQ-F-09,owner,architecture-requirements-specification.md
-REQ-F-10,uafId,REQ-F-10
-REQ-F-10,uafKind,Requirement
-REQ-F-10,category,F
-REQ-F-10,source,CAP-2.7
-REQ-F-10,priority,I3
-REQ-F-10,verification,Property test on lineage
-REQ-F-10,gaps,"GAP-019, GAP-069"
-REQ-F-10,owner,architecture-requirements-specification.md
-REQ-F-11,uafId,REQ-F-11
-REQ-F-11,uafKind,Requirement
-REQ-F-11,category,F
-REQ-F-11,source,"CAP-3.1, CAP-3.2"
-REQ-F-11,priority,I3
-REQ-F-11,verification,MOE-01; scenario replay
-REQ-F-11,gaps,"GAP-026, GAP-027"
-REQ-F-11,owner,architecture-requirements-specification.md
-REQ-F-12,uafId,REQ-F-12
-REQ-F-12,uafKind,Requirement
-REQ-F-12,category,F
-REQ-F-12,source,"CAP-3.3, CAP-3.4"
-REQ-F-12,priority,I3
-REQ-F-12,verification,"Verification table, allocation row"
-REQ-F-12,gaps,"GAP-029, GAP-030, GAP-031"
-REQ-F-12,owner,architecture-requirements-specification.md
-REQ-F-13,uafId,REQ-F-13
-REQ-F-13,uafKind,Requirement
-REQ-F-13,category,F
-REQ-F-13,source,CAP-3.5
-REQ-F-13,priority,I3
-REQ-F-13,verification,Usability round 2; assistant evaluation
-REQ-F-13,gaps,GAP-032
-REQ-F-13,owner,architecture-requirements-specification.md
-REQ-F-14,uafId,REQ-F-14
-REQ-F-14,uafKind,Requirement
-REQ-F-14,category,F
-REQ-F-14,source,"CAP-3.7, D-15"
-REQ-F-14,priority,I3
-REQ-F-14,verification,MOP for time to decision
-REQ-F-14,gaps,"GAP-034, GAP-035"
-REQ-F-14,owner,architecture-requirements-specification.md
-REQ-F-15,uafId,REQ-F-15
-REQ-F-15,uafKind,Requirement
-REQ-F-15,category,F
-REQ-F-15,source,CAP-5.2
-REQ-F-15,priority,I2
-REQ-F-15,verification,Journal round-trip; replay determinism
-REQ-F-15,gaps,GAP-045
-REQ-F-15,owner,architecture-requirements-specification.md
-REQ-F-16,uafId,REQ-F-16
-REQ-F-16,uafKind,Requirement
-REQ-F-16,category,F
-REQ-F-16,source,CAP-5.3
-REQ-F-16,priority,I3
-REQ-F-16,verification,The measures themselves
-REQ-F-16,gaps,GAP-047
-REQ-F-16,owner,architecture-requirements-specification.md
-REQ-D-01,uafId,REQ-D-01
-REQ-D-01,uafKind,Requirement
-REQ-D-01,category,D
-REQ-D-01,source,AP-06
-REQ-D-01,priority,Now
-REQ-D-01,verification,"Contract C-07, checked"
-REQ-D-01,owner,architecture-requirements-specification.md
-REQ-D-02,uafId,REQ-D-02
-REQ-D-02,uafKind,Requirement
-REQ-D-02,category,D
-REQ-D-02,source,"AP-07, CAP-1.2"
-REQ-D-02,priority,Now
-REQ-D-02,verification,Schema review; C-08
-REQ-D-02,owner,architecture-requirements-specification.md
-REQ-D-03,uafId,REQ-D-03
-REQ-D-03,uafKind,Requirement
-REQ-D-03,category,D
-REQ-D-03,source,"AP-07, ML-01"
-REQ-D-03,priority,I4
-REQ-D-03,verification,ML promotion gate
-REQ-D-03,gaps,GAP-080
-REQ-D-03,owner,architecture-requirements-specification.md
-REQ-D-04,uafId,REQ-D-04
-REQ-D-04,uafKind,Requirement
-REQ-D-04,category,D
-REQ-D-04,source,AP-08
-REQ-D-04,priority,Now
-REQ-D-04,verification,Ordering and fan-out tests
-REQ-D-04,owner,architecture-requirements-specification.md
-REQ-D-05,uafId,REQ-D-05
-REQ-D-05,uafKind,Requirement
-REQ-D-05,category,D
-REQ-D-05,source,D-04
-REQ-D-05,priority,I2
-REQ-D-05,verification,Journal durability budget
-REQ-D-05,owner,architecture-requirements-specification.md
-REQ-D-06,uafId,REQ-D-06
-REQ-D-06,uafKind,Requirement
-REQ-D-06,category,D
-REQ-D-06,source,D-03
-REQ-D-06,priority,I4
-REQ-D-06,verification,Reconciliation invariant tests
-REQ-D-06,owner,architecture-requirements-specification.md
-REQ-D-07,uafId,REQ-D-07
-REQ-D-07,uafKind,Requirement
-REQ-D-07,category,D
-REQ-D-07,source,"D-06, CAP-6.6"
-REQ-D-07,priority,"I3 marking, I4 enforcement"
-REQ-D-07,verification,Schema review; per-caller test
-REQ-D-07,gaps,GAP-062
-REQ-D-07,owner,architecture-requirements-specification.md
-REQ-D-08,uafId,REQ-D-08
-REQ-D-08,uafKind,Requirement
-REQ-D-08,category,D
-REQ-D-08,source,ML plan
-REQ-D-08,priority,I4
-REQ-D-08,verification,Manifest schema; repository policy
-REQ-D-08,gaps,GAP-078
-REQ-D-08,owner,architecture-requirements-specification.md
-REQ-I-01,uafId,REQ-I-01
-REQ-I-01,uafKind,Requirement
-REQ-I-01,category,I
-REQ-I-01,source,CAP-7.1
-REQ-I-01,priority,I4
-REQ-I-01,verification,"Conformance suite, GAP-063"
-REQ-I-01,gaps,GAP-041
-REQ-I-01,owner,architecture-requirements-specification.md
-REQ-I-02,uafId,REQ-I-02
-REQ-I-02,uafKind,Requirement
-REQ-I-02,category,I
-REQ-I-02,source,CAP-7.2
-REQ-I-02,priority,Now
-REQ-I-02,verification,Catalogue tests
-REQ-I-02,owner,architecture-requirements-specification.md
-REQ-I-03,uafId,REQ-I-03
-REQ-I-03,uafKind,Requirement
-REQ-I-03,category,I
-REQ-I-03,source,"SD-03, D-09"
-REQ-I-03,priority,I2
-REQ-I-03,verification,"Codec conformance, fuzz"
-REQ-I-03,gaps,GAP-064
-REQ-I-03,owner,architecture-requirements-specification.md
-REQ-I-04,uafId,REQ-I-04
-REQ-I-04,uafKind,Requirement
-REQ-I-04,category,I
-REQ-I-04,source,"SD-04, D-06"
-REQ-I-04,priority,I4
-REQ-I-04,verification,Codec conformance
-REQ-I-04,gaps,"GAP-064, GAP-065"
-REQ-I-04,owner,architecture-requirements-specification.md
-REQ-I-05,uafId,REQ-I-05
-REQ-I-05,uafKind,Requirement
-REQ-I-05,category,I
-REQ-I-05,source,D-08
-REQ-I-05,priority,I4
-REQ-I-05,verification,Synthetic peer tests
-REQ-I-05,gaps,"GAP-009, GAP-040, GAP-042"
-REQ-I-05,owner,architecture-requirements-specification.md
-REQ-I-06,uafId,REQ-I-06
-REQ-I-06,uafKind,Requirement
-REQ-I-06,category,I
-REQ-I-06,source,SD-02
-REQ-I-06,priority,Now
-REQ-I-06,verification,Round-trip test
-REQ-I-06,owner,architecture-requirements-specification.md
-REQ-S-01,uafId,REQ-S-01
-REQ-S-01,uafKind,Requirement
-REQ-S-01,category,S
-REQ-S-01,source,"AP-01, CAP-4.3"
-REQ-S-01,priority,I3
-REQ-S-01,verification,Contract C-01; a dedicated test
-REQ-S-01,gaps,GAP-039
-REQ-S-01,owner,architecture-requirements-specification.md
-REQ-S-02,uafId,REQ-S-02
-REQ-S-02,uafKind,Requirement
-REQ-S-02,category,S
-REQ-S-02,source,"CAP-6.2, D-05"
-REQ-S-02,priority,I3
-REQ-S-02,verification,Authorization tests
-REQ-S-02,gaps,"GAP-058, GAP-068"
-REQ-S-02,owner,architecture-requirements-specification.md
-REQ-S-03,uafId,REQ-S-03
-REQ-S-03,uafKind,Requirement
-REQ-S-03,category,S
-REQ-S-03,source,CAP-3.6
-REQ-S-03,priority,I3
-REQ-S-03,verification,Policy tests
-REQ-S-03,gaps,GAP-033
-REQ-S-03,owner,architecture-requirements-specification.md
-REQ-S-04,uafId,REQ-S-04
-REQ-S-04,uafKind,Requirement
-REQ-S-04,category,S
-REQ-S-04,source,"CAP-3.6, CAP-3.7"
-REQ-S-04,priority,I3
-REQ-S-04,verification,Queue tests
-REQ-S-04,gaps,GAP-034
-REQ-S-04,owner,architecture-requirements-specification.md
-REQ-S-05,uafId,REQ-S-05
-REQ-S-05,uafKind,Requirement
-REQ-S-05,category,S
-REQ-S-05,source,"AP-03, CAP-6.3"
-REQ-S-05,priority,I3
-REQ-S-05,verification,Audit completeness test
-REQ-S-05,gaps,GAP-059
-REQ-S-05,owner,architecture-requirements-specification.md
-REQ-S-06,uafId,REQ-S-06
-REQ-S-06,uafKind,Requirement
-REQ-S-06,category,S
-REQ-S-06,source,D-02
-REQ-S-06,priority,I4
-REQ-S-06,verification,Security gate
-REQ-S-06,gaps,GAP-057
-REQ-S-06,owner,architecture-requirements-specification.md
-REQ-S-07,uafId,REQ-S-07
-REQ-S-07,uafKind,Requirement
-REQ-S-07,category,S
-REQ-S-07,source,CAP-6.4
-REQ-S-07,priority,I4
-REQ-S-07,verification,Security gate
-REQ-S-07,gaps,GAP-060
-REQ-S-07,owner,architecture-requirements-specification.md
-REQ-S-08,uafId,REQ-S-08
-REQ-S-08,uafKind,Requirement
-REQ-S-08,category,S
-REQ-S-08,source,AI plan
-REQ-S-08,priority,I4
-REQ-S-08,verification,Dependency-list test; injection cases
-REQ-S-08,gaps,GAP-044
-REQ-S-08,planned_carriers,gungnir-agent
-REQ-S-08,owner,architecture-requirements-specification.md
-REQ-S-09,uafId,REQ-S-09
-REQ-S-09,uafKind,Requirement
-REQ-S-09,category,S
-REQ-S-09,source,AI plan
-REQ-S-09,priority,I4
-REQ-S-09,verification,"Seven injection cases, every case every run"
-REQ-S-09,gaps,GAP-044
-REQ-S-09,owner,architecture-requirements-specification.md
-REQ-S-10,uafId,REQ-S-10
-REQ-S-10,uafKind,Requirement
-REQ-S-10,category,S
-REQ-S-10,source,CAP-6.5
-REQ-S-10,priority,I2
-REQ-S-10,verification,The workflow itself
-REQ-S-10,gaps,GAP-061
-REQ-S-10,owner,architecture-requirements-specification.md
-REQ-P-01,uafId,REQ-P-01
-REQ-P-01,uafKind,Requirement
-REQ-P-01,category,P
-REQ-P-01,source,"Budgets, desktop"
-REQ-P-01,priority,I3
-REQ-P-01,verification,Tick harness plus viewport spans
-REQ-P-01,owner,architecture-requirements-specification.md
-REQ-P-02,uafId,REQ-P-02
-REQ-P-02,uafKind,Requirement
-REQ-P-02,category,P
-REQ-P-02,source,"Budgets, desktop"
-REQ-P-02,priority,I2
-REQ-P-02,verification,Tick harness
-REQ-P-02,owner,architecture-requirements-specification.md
-REQ-P-03,uafId,REQ-P-03
-REQ-P-03,uafKind,Requirement
-REQ-P-03,category,P
-REQ-P-03,source,"Budgets, desktop"
-REQ-P-03,priority,I2
-REQ-P-03,verification,Tick harness
-REQ-P-03,owner,architecture-requirements-specification.md
-REQ-P-04,uafId,REQ-P-04
-REQ-P-04,uafKind,Requirement
-REQ-P-04,category,P
-REQ-P-04,source,"Budgets, desktop"
-REQ-P-04,priority,I2
-REQ-P-04,verification,Scenario 3 replay
-REQ-P-04,owner,architecture-requirements-specification.md
-REQ-P-05,uafId,REQ-P-05
-REQ-P-05,uafKind,Requirement
-REQ-P-05,category,P
-REQ-P-05,source,"Budgets, node"
-REQ-P-05,priority,I4
-REQ-P-05,verification,Load generation through the recorded adapter
-REQ-P-05,owner,architecture-requirements-specification.md
-REQ-P-06,uafId,REQ-P-06
-REQ-P-06,uafKind,Requirement
-REQ-P-06,category,P
-REQ-P-06,source,"Budgets, node"
-REQ-P-06,priority,I4
-REQ-P-06,verification,Node tick harness
-REQ-P-06,owner,architecture-requirements-specification.md
-REQ-P-07,uafId,REQ-P-07
-REQ-P-07,uafKind,Requirement
-REQ-P-07,category,P
-REQ-P-07,source,"Budgets, node"
-REQ-P-07,priority,I4
-REQ-P-07,verification,Checkpoint replay test
-REQ-P-07,owner,architecture-requirements-specification.md
-REQ-P-08,uafId,REQ-P-08
-REQ-P-08,uafKind,Requirement
-REQ-P-08,category,P
-REQ-P-08,source,"Budgets, connectivity"
-REQ-P-08,priority,I4
-REQ-P-08,verification,Integration test that cuts the transport
-REQ-P-08,owner,architecture-requirements-specification.md
-REQ-P-09,uafId,REQ-P-09
-REQ-P-09,uafKind,Requirement
-REQ-P-09,category,P
-REQ-P-09,source,Verification table \u00a71
-REQ-P-09,priority,Now
-REQ-P-09,verification,"Property tests, already a gate"
-REQ-P-09,owner,architecture-requirements-specification.md
-REQ-U-01,uafId,REQ-U-01
-REQ-U-01,uafKind,Requirement
-REQ-U-01,category,U
-REQ-U-01,source,"CAP-5.9, D-05"
-REQ-U-01,priority,I3
-REQ-U-01,verification,Usability round 2
-REQ-U-01,gaps,GAP-055
-REQ-U-01,owner,architecture-requirements-specification.md
-REQ-U-02,uafId,REQ-U-02
-REQ-U-02,uafKind,Requirement
-REQ-U-02,category,U
-REQ-U-02,source,UX plan
-REQ-U-02,priority,I3
-REQ-U-02,verification,Heuristic walkthrough; MOP-37
-REQ-U-02,gaps,GAP-072
-REQ-U-02,owner,architecture-requirements-specification.md
-REQ-U-03,uafId,REQ-U-03
-REQ-U-03,uafKind,Requirement
-REQ-U-03,category,U
-REQ-U-03,source,AP-02
-REQ-U-03,priority,I3
-REQ-U-03,verification,Usability round 2; contract C-02
-REQ-U-03,gaps,"GAP-072, GAP-073"
-REQ-U-03,owner,architecture-requirements-specification.md
-REQ-U-04,uafId,REQ-U-04
-REQ-U-04,uafKind,Requirement
-REQ-U-04,category,U
-REQ-U-04,source,"AI plan, UX principle 7"
-REQ-U-04,priority,I4
-REQ-U-04,verification,Assistant evaluation; usability round 2
-REQ-U-04,gaps,GAP-044
-REQ-U-04,owner,architecture-requirements-specification.md
-REQ-U-05,uafId,REQ-U-05
-REQ-U-05,uafKind,Requirement
-REQ-U-05,category,U
-REQ-U-05,source,D-12
-REQ-U-05,priority,I3
-REQ-U-05,verification,Baseline schema test
-REQ-U-05,gaps,GAP-070
-REQ-U-05,owner,architecture-requirements-specification.md
-REQ-C-01,uafId,REQ-C-01
-REQ-C-01,uafKind,Requirement
-REQ-C-01,category,C
-REQ-C-01,source,AP-10
-REQ-C-01,priority,constraint
-REQ-C-01,verification,"Contract C-11, checked"
-REQ-C-01,owner,architecture-requirements-specification.md
-REQ-C-02,uafId,REQ-C-02
-REQ-C-02,uafKind,Requirement
-REQ-C-02,category,C
-REQ-C-02,source,AP-14
-REQ-C-02,priority,constraint
-REQ-C-02,verification,"Contract C-14, checked"
-REQ-C-02,owner,architecture-requirements-specification.md
-REQ-C-03,uafId,REQ-C-03
-REQ-C-03,uafKind,Requirement
-REQ-C-03,category,C
-REQ-C-03,source,AP-12
-REQ-C-03,priority,constraint
-REQ-C-03,verification,"Checked, zero today"
-REQ-C-03,owner,architecture-requirements-specification.md
-REQ-C-04,uafId,REQ-C-04
-REQ-C-04,uafKind,Requirement
-REQ-C-04,category,C
-REQ-C-04,source,AP-12
-REQ-C-04,priority,constraint
-REQ-C-04,verification,Contract C-03; GAP-082
-REQ-C-04,owner,architecture-requirements-specification.md
-REQ-C-05,uafId,REQ-C-05
-REQ-C-05,uafKind,Requirement
-REQ-C-05,category,C
-REQ-C-05,source,AP-15
-REQ-C-05,priority,constraint
-REQ-C-05,verification,Contract C-15
-REQ-C-05,owner,architecture-requirements-specification.md
-REQ-C-06,uafId,REQ-C-06
-REQ-C-06,uafKind,Requirement
-REQ-C-06,category,C
-REQ-C-06,source,AP-05
-REQ-C-06,priority,constraint
-REQ-C-06,verification,Contract C-06
-REQ-C-06,owner,architecture-requirements-specification.md
-REQ-C-07,uafId,REQ-C-07
-REQ-C-07,uafKind,Requirement
-REQ-C-07,category,C
-REQ-C-07,source,AP-13
-REQ-C-07,priority,constraint
-REQ-C-07,verification,Contract C-13
-REQ-C-07,owner,architecture-requirements-specification.md
-REQ-C-08,uafId,REQ-C-08
-REQ-C-08,uafKind,Requirement
-REQ-C-08,category,C
-REQ-C-08,source,AP-17
-REQ-C-08,priority,constraint
-REQ-C-08,verification,Contract C-17; diff review
-REQ-C-08,owner,architecture-requirements-specification.md
-REQ-C-09,uafId,REQ-C-09
-REQ-C-09,uafKind,Requirement
-REQ-C-09,category,C
-REQ-C-09,source,AP-04
-REQ-C-09,priority,constraint
-REQ-C-09,verification,Contract C-05
-REQ-C-09,owner,architecture-requirements-specification.md
-REQ-C-10,uafId,REQ-C-10
-REQ-C-10,uafKind,Requirement
-REQ-C-10,category,C
-REQ-C-10,source,AP-16
-REQ-C-10,priority,constraint
-REQ-C-10,verification,Contract C-16
-REQ-C-10,owner,architecture-requirements-specification.md
+id,key,value
+CAP-1,uafId,CAP-1
+CAP-1,uafKind,Capability
+CAP-1,kind,area
+CAP-1,owner,plan-04
+CAP-1.1,uafId,CAP-1.1
+CAP-1.1,uafKind,Capability
+CAP-1.1,parent,CAP-1
+CAP-1.2,uafId,CAP-1.2
+CAP-1.2,uafKind,Capability
+CAP-1.2,parent,CAP-1
+CAP-1.3,uafId,CAP-1.3
+CAP-1.3,uafKind,Capability
+CAP-1.3,parent,CAP-1
+CAP-1.4,uafId,CAP-1.4
+CAP-1.4,uafKind,Capability
+CAP-1.4,parent,CAP-1
+CAP-1.5,uafId,CAP-1.5
+CAP-1.5,uafKind,Capability
+CAP-1.5,parent,CAP-1
+CAP-1.6,uafId,CAP-1.6
+CAP-1.6,uafKind,Capability
+CAP-1.6,parent,CAP-1
+CAP-1.7,uafId,CAP-1.7
+CAP-1.7,uafKind,Capability
+CAP-1.7,parent,CAP-1
+CAP-2,uafId,CAP-2
+CAP-2,uafKind,Capability
+CAP-2,kind,area
+CAP-2,owner,plan-04
+CAP-2.1,uafId,CAP-2.1
+CAP-2.1,uafKind,Capability
+CAP-2.1,parent,CAP-2
+CAP-2.2,uafId,CAP-2.2
+CAP-2.2,uafKind,Capability
+CAP-2.2,parent,CAP-2
+CAP-2.3,uafId,CAP-2.3
+CAP-2.3,uafKind,Capability
+CAP-2.3,parent,CAP-2
+CAP-2.4,uafId,CAP-2.4
+CAP-2.4,uafKind,Capability
+CAP-2.4,parent,CAP-2
+CAP-2.5,uafId,CAP-2.5
+CAP-2.5,uafKind,Capability
+CAP-2.5,parent,CAP-2
+CAP-2.6,uafId,CAP-2.6
+CAP-2.6,uafKind,Capability
+CAP-2.6,parent,CAP-2
+CAP-2.7,uafId,CAP-2.7
+CAP-2.7,uafKind,Capability
+CAP-2.7,parent,CAP-2
+CAP-2.8,uafId,CAP-2.8
+CAP-2.8,uafKind,Capability
+CAP-2.8,parent,CAP-2
+CAP-2.9,uafId,CAP-2.9
+CAP-2.9,uafKind,Capability
+CAP-2.9,parent,CAP-2
+CAP-2.10,uafId,CAP-2.10
+CAP-2.10,uafKind,Capability
+CAP-2.10,parent,CAP-2
+CAP-2.11,uafId,CAP-2.11
+CAP-2.11,uafKind,Capability
+CAP-2.11,parent,CAP-2
+CAP-2.12,uafId,CAP-2.12
+CAP-2.12,uafKind,Capability
+CAP-2.12,parent,CAP-2
+CAP-3,uafId,CAP-3
+CAP-3,uafKind,Capability
+CAP-3,kind,area
+CAP-3,owner,plan-04
+CAP-3.1,uafId,CAP-3.1
+CAP-3.1,uafKind,Capability
+CAP-3.1,parent,CAP-3
+CAP-3.2,uafId,CAP-3.2
+CAP-3.2,uafKind,Capability
+CAP-3.2,parent,CAP-3
+CAP-3.3,uafId,CAP-3.3
+CAP-3.3,uafKind,Capability
+CAP-3.3,parent,CAP-3
+CAP-3.4,uafId,CAP-3.4
+CAP-3.4,uafKind,Capability
+CAP-3.4,parent,CAP-3
+CAP-3.5,uafId,CAP-3.5
+CAP-3.5,uafKind,Capability
+CAP-3.5,parent,CAP-3
+CAP-3.6,uafId,CAP-3.6
+CAP-3.6,uafKind,Capability
+CAP-3.6,parent,CAP-3
+CAP-3.7,uafId,CAP-3.7
+CAP-3.7,uafKind,Capability
+CAP-3.7,parent,CAP-3
+CAP-3.8,uafId,CAP-3.8
+CAP-3.8,uafKind,Capability
+CAP-3.8,parent,CAP-3
+CAP-3.9,uafId,CAP-3.9
+CAP-3.9,uafKind,Capability
+CAP-3.9,parent,CAP-3
+CAP-4,uafId,CAP-4
+CAP-4,uafKind,Capability
+CAP-4,kind,area
+CAP-4,owner,plan-04
+CAP-4.1,uafId,CAP-4.1
+CAP-4.1,uafKind,Capability
+CAP-4.1,parent,CAP-4
+CAP-4.2,uafId,CAP-4.2
+CAP-4.2,uafKind,Capability
+CAP-4.2,parent,CAP-4
+CAP-4.3,uafId,CAP-4.3
+CAP-4.3,uafKind,Capability
+CAP-4.3,parent,CAP-4
+CAP-4.4,uafId,CAP-4.4
+CAP-4.4,uafKind,Capability
+CAP-4.4,parent,CAP-4
+CAP-4.5,uafId,CAP-4.5
+CAP-4.5,uafKind,Capability
+CAP-4.5,parent,CAP-4
+CAP-4.6,uafId,CAP-4.6
+CAP-4.6,uafKind,Capability
+CAP-4.6,parent,CAP-4
+CAP-4.7,uafId,CAP-4.7
+CAP-4.7,uafKind,Capability
+CAP-4.7,parent,CAP-4
+CAP-5,uafId,CAP-5
+CAP-5,uafKind,Capability
+CAP-5,kind,area
+CAP-5,owner,plan-04
+CAP-5.1,uafId,CAP-5.1
+CAP-5.1,uafKind,Capability
+CAP-5.1,parent,CAP-5
+CAP-5.2,uafId,CAP-5.2
+CAP-5.2,uafKind,Capability
+CAP-5.2,parent,CAP-5
+CAP-5.3,uafId,CAP-5.3
+CAP-5.3,uafKind,Capability
+CAP-5.3,parent,CAP-5
+CAP-5.4,uafId,CAP-5.4
+CAP-5.4,uafKind,Capability
+CAP-5.4,parent,CAP-5
+CAP-5.5,uafId,CAP-5.5
+CAP-5.5,uafKind,Capability
+CAP-5.5,parent,CAP-5
+CAP-5.6,uafId,CAP-5.6
+CAP-5.6,uafKind,Capability
+CAP-5.6,parent,CAP-5
+CAP-5.7,uafId,CAP-5.7
+CAP-5.7,uafKind,Capability
+CAP-5.7,parent,CAP-5
+CAP-5.8,uafId,CAP-5.8
+CAP-5.8,uafKind,Capability
+CAP-5.8,parent,CAP-5
+CAP-5.9,uafId,CAP-5.9
+CAP-5.9,uafKind,Capability
+CAP-5.9,parent,CAP-5
+CAP-5.10,uafId,CAP-5.10
+CAP-5.10,uafKind,Capability
+CAP-5.10,parent,CAP-5
+CAP-6,uafId,CAP-6
+CAP-6,uafKind,Capability
+CAP-6,kind,area
+CAP-6,owner,plan-04
+CAP-6.1,uafId,CAP-6.1
+CAP-6.1,uafKind,Capability
+CAP-6.1,parent,CAP-6
+CAP-6.2,uafId,CAP-6.2
+CAP-6.2,uafKind,Capability
+CAP-6.2,parent,CAP-6
+CAP-6.3,uafId,CAP-6.3
+CAP-6.3,uafKind,Capability
+CAP-6.3,parent,CAP-6
+CAP-6.4,uafId,CAP-6.4
+CAP-6.4,uafKind,Capability
+CAP-6.4,parent,CAP-6
+CAP-6.5,uafId,CAP-6.5
+CAP-6.5,uafKind,Capability
+CAP-6.5,parent,CAP-6
+CAP-6.6,uafId,CAP-6.6
+CAP-6.6,uafKind,Capability
+CAP-6.6,parent,CAP-6
+CAP-6.7,uafId,CAP-6.7
+CAP-6.7,uafKind,Capability
+CAP-6.7,parent,CAP-6
+CAP-7,uafId,CAP-7
+CAP-7,uafKind,Capability
+CAP-7,kind,area
+CAP-7,owner,plan-04
+CAP-7.1,uafId,CAP-7.1
+CAP-7.1,uafKind,Capability
+CAP-7.1,parent,CAP-7
+CAP-7.2,uafId,CAP-7.2
+CAP-7.2,uafKind,Capability
+CAP-7.2,parent,CAP-7
+CAP-7.3,uafId,CAP-7.3
+CAP-7.3,uafKind,Capability
+CAP-7.3,parent,CAP-7
+CAP-7.4,uafId,CAP-7.4
+CAP-7.4,uafKind,Capability
+CAP-7.4,parent,CAP-7
+OP-01,uafId,OP-01
+OP-01,uafKind,OperationalPerformer
+OP-01,kind,role
+OP-01,owner,plan-02
+OP-02,uafId,OP-02
+OP-02,uafKind,OperationalPerformer
+OP-02,kind,role
+OP-02,owner,plan-02
+OP-03,uafId,OP-03
+OP-03,uafKind,OperationalPerformer
+OP-03,kind,role
+OP-03,owner,plan-02
+OP-04,uafId,OP-04
+OP-04,uafKind,OperationalPerformer
+OP-04,kind,role
+OP-04,owner,plan-02
+OP-05,uafId,OP-05
+OP-05,uafKind,OperationalPerformer
+OP-05,kind,role
+OP-05,owner,plan-02
+OP-06,uafId,OP-06
+OP-06,uafKind,OperationalPerformer
+OP-06,kind,role
+OP-06,owner,plan-02
+OP-06,status,adopted 2026-09-04 (D-05)
+OP-07,uafId,OP-07
+OP-07,uafKind,OperationalPerformer
+OP-07,kind,role
+OP-07,owner,plan-02
+OP-07,status,adopted 2026-09-04 (D-05)
+OP-08,uafId,OP-08
+OP-08,uafKind,OperationalPerformer
+OP-08,kind,role
+OP-08,owner,plan-02
+OP-08,status,adopted 2026-09-04 (D-05)
+OP-10,uafId,OP-10
+OP-10,uafKind,OperationalPerformer
+OP-10,kind,organization
+OP-10,owner,plan-02
+OP-11,uafId,OP-11
+OP-11,uafKind,OperationalPerformer
+OP-11,kind,organization
+OP-11,owner,plan-02
+OP-12,uafId,OP-12
+OP-12,uafKind,OperationalPerformer
+OP-12,kind,organization
+OP-12,owner,plan-02
+OP-20,uafId,OP-20
+OP-20,uafKind,OperationalPerformer
+OP-20,kind,external
+OP-20,owner,plan-02
+OP-21,uafId,OP-21
+OP-21,uafKind,OperationalPerformer
+OP-21,kind,external
+OP-21,owner,plan-02
+OP-22,uafId,OP-22
+OP-22,uafKind,OperationalPerformer
+OP-22,kind,external
+OP-22,owner,plan-02
+OP-23,uafId,OP-23
+OP-23,uafKind,OperationalPerformer
+OP-23,kind,external
+OP-23,owner,plan-02
+OP-24,uafId,OP-24
+OP-24,uafKind,OperationalPerformer
+OP-24,kind,external
+OP-24,owner,plan-02
+OP-25,uafId,OP-25
+OP-25,uafKind,OperationalPerformer
+OP-25,kind,external
+OP-25,owner,plan-02
+OP-26,uafId,OP-26
+OP-26,uafKind,OperationalPerformer
+OP-26,kind,external
+OP-26,owner,plan-02
+OP-27,uafId,OP-27
+OP-27,uafKind,OperationalPerformer
+OP-27,kind,external
+OP-27,owner,plan-02
+OP-30,uafId,OP-30
+OP-30,uafKind,OperationalPerformer
+OP-30,kind,system
+OP-30,owner,plan-03
+OP-31,uafId,OP-31
+OP-31,uafKind,OperationalPerformer
+OP-31,kind,system-part
+OP-31,parent,OP-30
+OP-31,owner,plan-03
+OP-32,uafId,OP-32
+OP-32,uafKind,OperationalPerformer
+OP-32,kind,system-part
+OP-32,parent,OP-30
+OP-32,owner,plan-03
+OP-33,uafId,OP-33
+OP-33,uafKind,OperationalPerformer
+OP-33,kind,system-part
+OP-33,parent,OP-30
+OP-33,owner,plan-03
+OP-34,uafId,OP-34
+OP-34,uafKind,OperationalPerformer
+OP-34,kind,system-part
+OP-34,parent,OP-30
+OP-34,owner,plan-03
+OA-01,uafId,OA-01
+OA-01,uafKind,OperationalActivity
+OA-02,uafId,OA-02
+OA-02,uafKind,OperationalActivity
+OA-03,uafId,OA-03
+OA-03,uafKind,OperationalActivity
+OA-04,uafId,OA-04
+OA-04,uafKind,OperationalActivity
+OA-05,uafId,OA-05
+OA-05,uafKind,OperationalActivity
+OA-06,uafId,OA-06
+OA-06,uafKind,OperationalActivity
+OA-07,uafId,OA-07
+OA-07,uafKind,OperationalActivity
+OA-08,uafId,OA-08
+OA-08,uafKind,OperationalActivity
+OA-09,uafId,OA-09
+OA-09,uafKind,OperationalActivity
+OA-10,uafId,OA-10
+OA-10,uafKind,OperationalActivity
+OA-11,uafId,OA-11
+OA-11,uafKind,OperationalActivity
+OA-12,uafId,OA-12
+OA-12,uafKind,OperationalActivity
+OA-13,uafId,OA-13
+OA-13,uafKind,OperationalActivity
+OA-14,uafId,OA-14
+OA-14,uafKind,OperationalActivity
+OA-15,uafId,OA-15
+OA-15,uafKind,OperationalActivity
+OA-16,uafId,OA-16
+OA-16,uafKind,OperationalActivity
+OA-17,uafId,OA-17
+OA-17,uafKind,OperationalActivity
+OA-18,uafId,OA-18
+OA-18,uafKind,OperationalActivity
+OA-19,uafId,OA-19
+OA-19,uafKind,OperationalActivity
+OA-20,uafId,OA-20
+OA-20,uafKind,OperationalActivity
+OA-21,uafId,OA-21
+OA-21,uafKind,OperationalActivity
+OA-22,uafId,OA-22
+OA-22,uafKind,OperationalActivity
+OA-23,uafId,OA-23
+OA-23,uafKind,OperationalActivity
+OA-24,uafId,OA-24
+OA-24,uafKind,OperationalActivity
+OA-25,uafId,OA-25
+OA-25,uafKind,OperationalActivity
+OA-26,uafId,OA-26
+OA-26,uafKind,OperationalActivity
+OA-27,uafId,OA-27
+OA-27,uafKind,OperationalActivity
+OA-28,uafId,OA-28
+OA-28,uafKind,OperationalActivity
+OA-29,uafId,OA-29
+OA-29,uafKind,OperationalActivity
+OA-30,uafId,OA-30
+OA-30,uafKind,OperationalActivity
+OA-31,uafId,OA-31
+OA-31,uafKind,OperationalActivity
+OA-32,uafId,OA-32
+OA-32,uafKind,OperationalActivity
+OA-33,uafId,OA-33
+OA-33,uafKind,OperationalActivity
+OA-34,uafId,OA-34
+OA-34,uafKind,OperationalActivity
+OA-35,uafId,OA-35
+OA-35,uafKind,OperationalActivity
+OA-36,uafId,OA-36
+OA-36,uafKind,OperationalActivity
+SV-01,uafId,SV-01
+SV-01,uafKind,ServiceInterface
+SV-01,code,gungnir_tracking_service::TrackingService
+SV-01,status,scaffold
+SV-02,uafId,SV-02
+SV-02,uafKind,ServiceInterface
+SV-02,code,gungnir_intercept_service::InterceptService
+SV-02,status,scaffold
+SV-03,uafId,SV-03
+SV-03,uafKind,ServiceInterface
+SV-03,code,gungnir_eventing::EventBus
+SV-03,status,real
+SV-04,uafId,SV-04
+SV-04,uafKind,ServiceInterface
+SV-04,code,gungnir_store::EventJournal
+SV-04,status,real
+SV-05,uafId,SV-05
+SV-05,uafKind,ServiceInterface
+SV-05,code,gungnir_time::TimeAuthority
+SV-05,status,real
+SV-06,uafId,SV-06
+SV-06,uafKind,ServiceInterface
+SV-06,code,gungnir_config::ConfigStore
+SV-06,status,real
+SV-07,uafId,SV-07
+SV-07,uafKind,ServiceInterface
+SV-07,code,gungnir_mission::MissionManager
+SV-07,status,scaffold
+SV-08,uafId,SV-08
+SV-08,uafKind,ServiceInterface
+SV-08,code,gungnir_ingest::ProtocolAdapter
+SV-08,status,real
+SV-09,uafId,SV-09
+SV-09,uafKind,ServiceInterface
+SV-09,code,gungnir_sensor_management::SensorRegistry
+SV-09,status,real
+SV-10,uafId,SV-10
+SV-10,uafKind,ServiceInterface
+SV-10,code,gungnir_interop::DetectionCodec
+SV-10,status,scaffold
+SV-11,uafId,SV-11
+SV-11,uafKind,ServiceInterface
+SV-11,code,gungnir_identity::IdentityResolver
+SV-11,status,real
+SV-12,uafId,SV-12
+SV-12,uafKind,ServiceInterface
+SV-12,code,gungnir_identification::IdentificationEngine
+SV-12,status,real
+SV-13,uafId,SV-13
+SV-13,uafKind,ServiceInterface
+SV-13,code,gungnir_geo::GeoService
+SV-13,status,real
+SV-14,uafId,SV-14
+SV-14,uafKind,ServiceInterface
+SV-14,code,gungnir_analytics::LineOfSight
+SV-14,status,real
+SV-15,uafId,SV-15
+SV-15,uafKind,ServiceInterface
+SV-15,code,gungnir_policy::PolicyEngine
+SV-15,status,real
+SV-16,uafId,SV-16
+SV-16,uafKind,ServiceInterface
+SV-16,code,gungnir_command::ApprovalWorkflow
+SV-16,status,real
+SV-17,uafId,SV-17
+SV-17,uafKind,ServiceInterface
+SV-17,code,gungnir_assessment::ThreatAssessor
+SV-17,status,real
+SV-18,uafId,SV-18
+SV-18,uafKind,ServiceInterface
+SV-18,code,gungnir_decision::DecisionSupport
+SV-18,status,scaffold
+SV-19,uafId,SV-19
+SV-19,uafKind,ServiceInterface
+SV-19,code,gungnir_modelops::ModelRegistry
+SV-19,status,real
+SV-20,uafId,SV-20
+SV-20,uafKind,ServiceInterface
+SV-20,code,gungnir_security::Authenticator
+SV-20,status,scaffold
+SV-21,uafId,SV-21
+SV-21,uafKind,ServiceInterface
+SV-21,code,gungnir_security::Authorizer
+SV-21,status,real
+SV-22,uafId,SV-22
+SV-22,uafKind,ServiceInterface
+SV-22,code,gungnir_security::AuditLog
+SV-22,status,real
+SV-23,uafId,SV-23
+SV-23,uafKind,ServiceInterface
+SV-23,code,gungnir_api::ApiHandler
+SV-23,status,scaffold
+SV-24,uafId,SV-24
+SV-24,uafKind,ServiceInterface
+SV-24,code,gungnir_observability::HealthMonitor
+SV-24,status,real
+SV-25,uafId,SV-25
+SV-25,uafKind,ServiceInterface
+SV-25,code,gungnir_resilience::StoreAndForwardQueue
+SV-25,status,real
+SV-26,uafId,SV-26
+SV-26,uafKind,ServiceInterface
+SV-26,code,gungnir_collab::SharedPictureSync
+SV-26,status,real
+SV-27,uafId,SV-27
+SV-27,uafKind,ServiceInterface
+SV-27,code,gungnir_workflow::AlertLifecycle
+SV-27,status,real
+SV-28,uafId,SV-28
+SV-28,uafKind,ServiceInterface
+SV-28,code,gungnir_replay
+SV-28,status,real
+SV-29,uafId,SV-29
+SV-29,uafKind,ServiceInterface
+SV-29,code,gungnir_reporting::ReportGenerator
+SV-29,status,real
+SV-30,uafId,SV-30
+SV-30,uafKind,ServiceInterface
+SV-30,code,gungnir_remote
+SV-30,status,scaffold
+SV-31,uafId,SV-31
+SV-31,uafKind,ServiceInterface
+SV-31,code,gungnir_data
+SV-31,status,scaffold
+SV-32,uafId,SV-32
+SV-32,uafKind,ServiceInterface
+SV-32,code,gungnir_data_fusion
+SV-32,status,scaffold
+SV-33,uafId,SV-33
+SV-33,uafKind,ServiceInterface
+SV-33,code,gungnir_metrics
+SV-33,status,scaffold
+SV-34,uafId,SV-34
+SV-34,uafKind,ServiceInterface
+SV-34,code,gungnir_scenario
+SV-34,status,scaffold
+RS-allocation,uafId,RS-allocation
+RS-allocation,uafKind,ResourceArtifact
+RS-allocation,kind,library
+RS-allocation,layer,Tracking core
+RS-allocation,code,gungnir-allocation/Cargo.toml
+RS-analytics,uafId,RS-analytics
+RS-analytics,uafKind,ResourceArtifact
+RS-analytics,kind,library
+RS-analytics,layer,Productization
+RS-analytics,code,gungnir-analytics/Cargo.toml
+RS-api,uafId,RS-api
+RS-api,uafKind,ResourceArtifact
+RS-api,kind,library
+RS-api,layer,Productization
+RS-api,code,gungnir-api/Cargo.toml
+RS-app,uafId,RS-app
+RS-app,uafKind,ResourceArtifact
+RS-app,kind,binary
+RS-app,layer,User interface
+RS-app,code,gungnir-app/Cargo.toml
+RS-assessment,uafId,RS-assessment
+RS-assessment,uafKind,ResourceArtifact
+RS-assessment,kind,library
+RS-assessment,layer,Productization
+RS-assessment,code,gungnir-assessment/Cargo.toml
+RS-association,uafId,RS-association
+RS-association,uafKind,ResourceArtifact
+RS-association,kind,library
+RS-association,layer,Tracking core
+RS-association,code,gungnir-association/Cargo.toml
+RS-collab,uafId,RS-collab
+RS-collab,uafKind,ResourceArtifact
+RS-collab,kind,library
+RS-collab,layer,Productization
+RS-collab,code,gungnir-collab/Cargo.toml
+RS-command,uafId,RS-command
+RS-command,uafKind,ResourceArtifact
+RS-command,kind,library
+RS-command,layer,Productization
+RS-command,code,gungnir-command/Cargo.toml
+RS-config,uafId,RS-config
+RS-config,uafKind,ResourceArtifact
+RS-config,kind,library
+RS-config,layer,Productization
+RS-config,code,gungnir-config/Cargo.toml
+RS-coord,uafId,RS-coord
+RS-coord,uafKind,ResourceArtifact
+RS-coord,kind,library
+RS-coord,layer,Tracking core
+RS-coord,code,gungnir-coord/Cargo.toml
+RS-core,uafId,RS-core
+RS-core,uafKind,ResourceArtifact
+RS-core,kind,library
+RS-core,layer,Tracking core
+RS-core,code,gungnir-core/Cargo.toml
+RS-data-fusion,uafId,RS-data-fusion
+RS-data-fusion,uafKind,ResourceArtifact
+RS-data-fusion,kind,library
+RS-data-fusion,layer,Data ecosystem
+RS-data-fusion,code,gungnir-data-fusion/Cargo.toml
+RS-data,uafId,RS-data
+RS-data,uafKind,ResourceArtifact
+RS-data,kind,library
+RS-data,layer,Data ecosystem
+RS-data,code,gungnir-data/Cargo.toml
+RS-decision,uafId,RS-decision
+RS-decision,uafKind,ResourceArtifact
+RS-decision,kind,library
+RS-decision,layer,Productization
+RS-decision,code,gungnir-decision/Cargo.toml
+RS-eventing,uafId,RS-eventing
+RS-eventing,uafKind,ResourceArtifact
+RS-eventing,kind,library
+RS-eventing,layer,Productization
+RS-eventing,code,gungnir-eventing/Cargo.toml
+RS-filters,uafId,RS-filters
+RS-filters,uafKind,ResourceArtifact
+RS-filters,kind,library
+RS-filters,layer,Tracking core
+RS-filters,code,gungnir-filters/Cargo.toml
+RS-fusion-async,uafId,RS-fusion-async
+RS-fusion-async,uafKind,ResourceArtifact
+RS-fusion-async,kind,library
+RS-fusion-async,layer,Tracking core
+RS-fusion-async,code,gungnir-fusion-async/Cargo.toml
+RS-fuzz,uafId,RS-fuzz
+RS-fuzz,uafKind,ResourceArtifact
+RS-fuzz,kind,library
+RS-fuzz,layer,Tracking core
+RS-fuzz,code,gungnir-fuzz/Cargo.toml
+RS-geo,uafId,RS-geo
+RS-geo,uafKind,ResourceArtifact
+RS-geo,kind,library
+RS-geo,layer,Productization
+RS-geo,code,gungnir-geo/Cargo.toml
+RS-identification,uafId,RS-identification
+RS-identification,uafKind,ResourceArtifact
+RS-identification,kind,library
+RS-identification,layer,Productization
+RS-identification,code,gungnir-identification/Cargo.toml
+RS-identity,uafId,RS-identity
+RS-identity,uafKind,ResourceArtifact
+RS-identity,kind,library
+RS-identity,layer,Productization
+RS-identity,code,gungnir-identity/Cargo.toml
+RS-ingest,uafId,RS-ingest
+RS-ingest,uafKind,ResourceArtifact
+RS-ingest,kind,library
+RS-ingest,layer,Productization
+RS-ingest,code,gungnir-ingest/Cargo.toml
+RS-intercept-service,uafId,RS-intercept-service
+RS-intercept-service,uafKind,ResourceArtifact
+RS-intercept-service,kind,library
+RS-intercept-service,layer,Service facades
+RS-intercept-service,code,gungnir-intercept-service/Cargo.toml
+RS-interop,uafId,RS-interop
+RS-interop,uafKind,ResourceArtifact
+RS-interop,kind,library
+RS-interop,layer,Productization
+RS-interop,code,gungnir-interop/Cargo.toml
+RS-metrics,uafId,RS-metrics
+RS-metrics,uafKind,ResourceArtifact
+RS-metrics,kind,library
+RS-metrics,layer,Tracking core
+RS-metrics,code,gungnir-metrics/Cargo.toml
+RS-mission,uafId,RS-mission
+RS-mission,uafKind,ResourceArtifact
+RS-mission,kind,library
+RS-mission,layer,Productization
+RS-mission,code,gungnir-mission/Cargo.toml
+RS-ml,uafId,RS-ml
+RS-ml,uafKind,ResourceArtifact
+RS-ml,kind,library
+RS-ml,layer,Productization
+RS-ml,code,gungnir-ml/Cargo.toml
+RS-model,uafId,RS-model
+RS-model,uafKind,ResourceArtifact
+RS-model,kind,library
+RS-model,layer,Foundation model
+RS-model,code,gungnir-model/Cargo.toml
+RS-modelops,uafId,RS-modelops
+RS-modelops,uafKind,ResourceArtifact
+RS-modelops,kind,library
+RS-modelops,layer,Productization
+RS-modelops,code,gungnir-modelops/Cargo.toml
+RS-node,uafId,RS-node
+RS-node,uafKind,ResourceArtifact
+RS-node,kind,binary
+RS-node,layer,Deployment
+RS-node,code,gungnir-node/Cargo.toml
+RS-observability,uafId,RS-observability
+RS-observability,uafKind,ResourceArtifact
+RS-observability,kind,library
+RS-observability,layer,Productization
+RS-observability,code,gungnir-observability/Cargo.toml
+RS-oracle,uafId,RS-oracle
+RS-oracle,uafKind,ResourceArtifact
+RS-oracle,kind,library
+RS-oracle,layer,Tracking core
+RS-oracle,code,gungnir-oracle/Cargo.toml
+RS-policy,uafId,RS-policy
+RS-policy,uafKind,ResourceArtifact
+RS-policy,kind,library
+RS-policy,layer,Productization
+RS-policy,code,gungnir-policy/Cargo.toml
+RS-remote,uafId,RS-remote
+RS-remote,uafKind,ResourceArtifact
+RS-remote,kind,library
+RS-remote,layer,Deployment
+RS-remote,code,gungnir-remote/Cargo.toml
+RS-render,uafId,RS-render
+RS-render,uafKind,ResourceArtifact
+RS-render,kind,library
+RS-render,layer,Data ecosystem
+RS-render,code,gungnir-render/Cargo.toml
+RS-replay,uafId,RS-replay
+RS-replay,uafKind,ResourceArtifact
+RS-replay,kind,library
+RS-replay,layer,Productization
+RS-replay,code,gungnir-replay/Cargo.toml
+RS-reporting,uafId,RS-reporting
+RS-reporting,uafKind,ResourceArtifact
+RS-reporting,kind,library
+RS-reporting,layer,Productization
+RS-reporting,code,gungnir-reporting/Cargo.toml
+RS-resilience,uafId,RS-resilience
+RS-resilience,uafKind,ResourceArtifact
+RS-resilience,kind,library
+RS-resilience,layer,Productization
+RS-resilience,code,gungnir-resilience/Cargo.toml
+RS-rfs,uafId,RS-rfs
+RS-rfs,uafKind,ResourceArtifact
+RS-rfs,kind,library
+RS-rfs,layer,Tracking core
+RS-rfs,code,gungnir-rfs/Cargo.toml
+RS-scenario,uafId,RS-scenario
+RS-scenario,uafKind,ResourceArtifact
+RS-scenario,kind,library
+RS-scenario,layer,Tracking core
+RS-scenario,code,gungnir-scenario/Cargo.toml
+RS-security,uafId,RS-security
+RS-security,uafKind,ResourceArtifact
+RS-security,kind,library
+RS-security,layer,Productization
+RS-security,code,gungnir-security/Cargo.toml
+RS-sensor-management,uafId,RS-sensor-management
+RS-sensor-management,uafKind,ResourceArtifact
+RS-sensor-management,kind,library
+RS-sensor-management,layer,Productization
+RS-sensor-management,code,gungnir-sensor-management/Cargo.toml
+RS-store,uafId,RS-store
+RS-store,uafKind,ResourceArtifact
+RS-store,kind,library
+RS-store,layer,Productization
+RS-store,code,gungnir-store/Cargo.toml
+RS-testkit,uafId,RS-testkit
+RS-testkit,uafKind,ResourceArtifact
+RS-testkit,kind,library
+RS-testkit,layer,Tracking core
+RS-testkit,code,gungnir-testkit/Cargo.toml
+RS-time,uafId,RS-time
+RS-time,uafKind,ResourceArtifact
+RS-time,kind,library
+RS-time,layer,Productization
+RS-time,code,gungnir-time/Cargo.toml
+RS-track-fusion,uafId,RS-track-fusion
+RS-track-fusion,uafKind,ResourceArtifact
+RS-track-fusion,kind,library
+RS-track-fusion,layer,Tracking core
+RS-track-fusion,code,gungnir-track-fusion/Cargo.toml
+RS-track,uafId,RS-track
+RS-track,uafKind,ResourceArtifact
+RS-track,kind,library
+RS-track,layer,Tracking core
+RS-track,code,gungnir-track/Cargo.toml
+RS-tracking-service,uafId,RS-tracking-service
+RS-tracking-service,uafKind,ResourceArtifact
+RS-tracking-service,kind,library
+RS-tracking-service,layer,Service facades
+RS-tracking-service,code,gungnir-tracking-service/Cargo.toml
+RS-ui,uafId,RS-ui
+RS-ui,uafKind,ResourceArtifact
+RS-ui,kind,library
+RS-ui,layer,User interface
+RS-ui,code,gungnir-ui/Cargo.toml
+RS-viewport3d,uafId,RS-viewport3d
+RS-viewport3d,uafKind,ResourceArtifact
+RS-viewport3d,kind,library
+RS-viewport3d,layer,User interface
+RS-viewport3d,code,gungnir-viewport3d/Cargo.toml
+RS-workflow,uafId,RS-workflow
+RS-workflow,uafKind,ResourceArtifact
+RS-workflow,kind,library
+RS-workflow,layer,Productization
+RS-workflow,code,gungnir-workflow/Cargo.toml
+PT-01,uafId,PT-01
+PT-01,uafKind,PersonType
+PT-01,code,gungnir_security::Role::Operator
+PT-01,performer,OP-01
+PT-01,in_code,True
+PT-02,uafId,PT-02
+PT-02,uafKind,PersonType
+PT-02,code,gungnir_security::Role::Supervisor
+PT-02,performer,OP-02
+PT-02,in_code,True
+PT-03,uafId,PT-03
+PT-03,uafKind,PersonType
+PT-03,code,gungnir_security::Role::Analyst
+PT-03,performer,OP-03
+PT-03,in_code,True
+PT-04,uafId,PT-04
+PT-04,uafKind,PersonType
+PT-04,code,gungnir_security::Role::SensorManager
+PT-04,performer,OP-04
+PT-04,in_code,True
+PT-05,uafId,PT-05
+PT-05,uafKind,PersonType
+PT-05,code,gungnir_security::Role::Administrator
+PT-05,performer,OP-05
+PT-05,in_code,True
+PT-06,uafId,PT-06
+PT-06,uafKind,PersonType
+PT-06,performer,OP-06
+PT-06,in_code,False
+PT-06,status,adopted 2026-09-04; enters the code under GAP-068
+PT-07,uafId,PT-07
+PT-07,uafKind,PersonType
+PT-07,performer,OP-07
+PT-07,in_code,False
+PT-07,status,adopted 2026-09-04; enters the code under GAP-068
+PT-08,uafId,PT-08
+PT-08,uafKind,PersonType
+PT-08,performer,OP-08
+PT-08,in_code,False
+PT-08,status,adopted 2026-09-04; enters the code under GAP-068
+SD-01,uafId,SD-01
+SD-01,uafKind,Standard
+SD-01,source,gungnir_model::SCHEMA_VERSION
+SD-01,status,real
+SD-02,uafId,SD-02
+SD-02,uafKind,Standard
+SD-02,source,gungnir_interop::detection_arrow_schema
+SD-02,status,real
+SD-03,uafId,SD-03
+SD-03,uafKind,Standard
+SD-03,source,gungnir_interop::AsterixCat048Codec
+SD-03,status,planned
+SD-04,uafId,SD-04
+SD-04,uafKind,Standard
+SD-04,source,gungnir_interop::Stanag4676Codec
+SD-04,status,planned
+SD-05,uafId,SD-05
+SD-05,uafKind,Standard
+SD-05,source,serde_json
+SD-05,status,real
+SD-06,uafId,SD-06
+SD-06,uafKind,Standard
+SD-06,source,docs/gungnir-api-v1.md
+SD-06,status,planned
+SD-07,uafId,SD-07
+SD-07,uafKind,Standard
+SD-07,source,docs/gungnir-api-v1.md
+SD-07,status,planned
+SD-08,uafId,SD-08
+SD-08,uafKind,Standard
+SD-08,source,ARCHITECTURE.md \u00a78.5; D-02
+SD-08,status,planned
+SD-09,uafId,SD-09
+SD-09,uafKind,Standard
+SD-09,source,D-09
+SD-09,status,planned
+SD-10,uafId,SD-10
+SD-10,uafKind,Standard
+SD-10,source,D-09
+SD-10,status,planned
+SD-11,uafId,SD-11
+SD-11,uafKind,Standard
+SD-11,source,D-11
+SD-11,status,planned
+SD-12,uafId,SD-12
+SD-12,uafKind,Standard
+SD-12,source,deploy/node/Dockerfile
+SD-12,status,real
+SD-13,uafId,SD-13
+SD-13,uafKind,Standard
+SD-13,source,docs/release-governance.md
+SD-13,status,planned
+SD-14,uafId,SD-14
+SD-14,uafKind,Standard
+SD-14,source,docs/architecture/uaf/
+SD-14,status,real
+SD-15,uafId,SD-15
+SD-15,uafKind,Standard
+SD-15,source,docs/plans/10-togaf-adm-documentation.md
+SD-15,status,planned
+SD-16,uafId,SD-16
+SD-16,uafKind,Standard
+SD-16,source,docs/design/DN-25-cursor-on-target.md
+SD-16,status,planned
+PJ-I1,uafId,PJ-I1
+PJ-I1,uafKind,Project
+PJ-I1,source,docs/gungnir-capabilities.md \u00a77
+PJ-I1,status,in progress
+PJ-I2,uafId,PJ-I2
+PJ-I2,uafKind,Project
+PJ-I2,source,docs/gungnir-capabilities.md \u00a77
+PJ-I2,status,planned
+PJ-I3,uafId,PJ-I3
+PJ-I3,uafKind,Project
+PJ-I3,source,docs/gungnir-capabilities.md \u00a77
+PJ-I3,status,planned
+PJ-I4,uafId,PJ-I4
+PJ-I4,uafKind,Project
+PJ-I4,source,docs/gungnir-capabilities.md \u00a77
+PJ-I4,status,planned
+PJ-P01,uafId,PJ-P01
+PJ-P01,uafKind,Project
+PJ-P01,source,docs/plans/01-product-business-plan.md
+PJ-P01,status,not started
+PJ-P02,uafId,PJ-P02
+PJ-P02,uafKind,Project
+PJ-P02,source,docs/plans/02-mission-analysis.md
+PJ-P02,status,first draft 2026-09-04
+PJ-P03,uafId,PJ-P03
+PJ-P03,uafKind,Project
+PJ-P03,source,docs/plans/03-uaf-views.md
+PJ-P03,status,first draft 2026-09-04
+PJ-P04,uafId,PJ-P04
+PJ-P04,uafKind,Project
+PJ-P04,source,docs/plans/04-mission-capabilities.md
+PJ-P04,status,first draft 2026-09-04
+PJ-P05,uafId,PJ-P05
+PJ-P05,uafKind,Project
+PJ-P05,source,docs/plans/05-capability-design-gaps.md
+PJ-P05,status,first draft 2026-09-04
+PJ-P06,uafId,PJ-P06
+PJ-P06,uafKind,Project
+PJ-P06,source,docs/plans/06-ux-design-by-role.md
+PJ-P06,status,not started
+PJ-P07,uafId,PJ-P07
+PJ-P07,uafKind,Project
+PJ-P07,source,docs/plans/07-test-track-suite.md
+PJ-P07,status,not started
+PJ-P08,uafId,PJ-P08
+PJ-P08,uafKind,Project
+PJ-P08,source,docs/plans/08-ai-agent-integration.md
+PJ-P08,status,not started
+PJ-P09,uafId,PJ-P09
+PJ-P09,uafKind,Project
+PJ-P09,source,docs/plans/09-ml-model-integration.md
+PJ-P09,status,not started
+PJ-P10,uafId,PJ-P10
+PJ-P10,uafKind,Project
+PJ-P10,source,docs/plans/10-togaf-adm-documentation.md
+PJ-P10,status,not started
+IE-01,uafId,IE-01
+IE-01,uafKind,InformationElement
+IE-01,code,gungnir_model::DetectionView
+IE-02,uafId,IE-02
+IE-02,uafKind,InformationElement
+IE-02,code,gungnir_model::TrackView
+IE-03,uafId,IE-03
+IE-03,uafKind,InformationElement
+IE-03,code,gungnir_model::ResourceView
+IE-04,uafId,IE-04
+IE-04,uafKind,InformationElement
+IE-04,code,gungnir_model::PlanView
+IE-05,uafId,IE-05
+IE-05,uafKind,InformationElement
+IE-05,code,gungnir_model::InterceptSolutionView
+IE-06,uafId,IE-06
+IE-06,uafKind,InformationElement
+IE-06,code,gungnir_model::SystemHealth
+IE-07,uafId,IE-07
+IE-07,uafKind,InformationElement
+IE-07,code,gungnir_model::Provenance
+IE-08,uafId,IE-08
+IE-08,uafKind,InformationElement
+IE-08,code,gungnir_model::Quality
+IE-09,uafId,IE-09
+IE-09,uafKind,InformationElement
+IE-09,code,gungnir_model::Classification
+IE-10,uafId,IE-10
+IE-10,uafKind,InformationElement
+IE-10,code,gungnir_model::MissionTime
+IE-11,uafId,IE-11
+IE-11,uafKind,InformationElement
+IE-11,code,gungnir_model::GlobalEntityId
+IE-12,uafId,IE-12
+IE-12,uafKind,InformationElement
+IE-12,code,gungnir_eventing::Envelope
+IE-13,uafId,IE-13
+IE-13,uafKind,InformationElement
+IE-13,code,gungnir_model::events::TrackingEvent
+IE-14,uafId,IE-14
+IE-14,uafKind,InformationElement
+IE-14,code,gungnir_model::events::InterceptEvent
+IE-15,uafId,IE-15
+IE-15,uafKind,InformationElement
+IE-15,code,gungnir_model::events::IngestEvent
+IE-16,uafId,IE-16
+IE-16,uafKind,InformationElement
+IE-16,code,gungnir_model::events::CommandEvent
+IE-17,uafId,IE-17
+IE-17,uafKind,InformationElement
+IE-17,code,gungnir_config::ConfigBaseline
+IE-18,uafId,IE-18
+IE-18,uafKind,InformationElement
+IE-18,code,gungnir_command::DecisionRecord
+IE-19,uafId,IE-19
+IE-19,uafKind,InformationElement
+IE-19,code,gungnir_policy::PolicyVerdict
+IE-20,uafId,IE-20
+IE-20,uafKind,InformationElement
+IE-20,code,gungnir_security::AuditEntry
+IE-21,uafId,IE-21
+IE-21,uafKind,InformationElement
+IE-21,code,gungnir_workflow::AlertLifecycle
+IE-22,uafId,IE-22
+IE-22,uafKind,InformationElement
+IE-22,code,gungnir_api::v1::SnapshotResponse
+IE-23,uafId,IE-23
+IE-23,uafKind,InformationElement
+IE-23,code,gungnir_api::v1::ApprovalRequest
+IE-24,uafId,IE-24
+IE-24,uafKind,InformationElement
+IE-24,code,gungnir_api::v1::SubmitDetectionRequest
+IE-25,uafId,IE-25
+IE-25,uafKind,InformationElement
+IE-25,code,gungnir_api::v1::SubscribeRequest
+IE-26,uafId,IE-26
+IE-26,uafKind,InformationElement
+IE-26,code,gungnir_interop::SchemaEntry
+IE-27,uafId,IE-27
+IE-27,uafKind,InformationElement
+IE-27,code,gungnir_sensor_management::SensorRecord
+IE-28,uafId,IE-28
+IE-28,uafKind,InformationElement
+IE-28,code,gungnir_reporting
+IE-29,uafId,IE-29
+IE-29,uafKind,InformationElement
+IE-29,code,gungnir_identification
+IE-30,uafId,IE-30
+IE-30,uafKind,InformationElement
+IE-30,code,gungnir_assessment
+IE-31,uafId,IE-31
+IE-31,uafKind,InformationElement
+IE-31,code,gungnir_resilience
+IE-32,uafId,IE-32
+IE-32,uafKind,InformationElement
+IE-32,code,gungnir_workflow::WorkspaceLayout
+IE-33,uafId,IE-33
+IE-33,uafKind,InformationElement
+IE-33,code,gungnir_mission::Mission
+AR-01,uafId,AR-01
+AR-01,uafKind,ActualResource
+AR-01,source,ARCHITECTURE.md \u00a78.7 and \u00a79
+AR-02,uafId,AR-02
+AR-02,uafKind,ActualResource
+AR-02,source,ARCHITECTURE.md \u00a78.1 and \u00a78.2
+AR-03,uafId,AR-03
+AR-03,uafKind,ActualResource
+AR-03,source,ARCHITECTURE.md \u00a78.2 and \u00a78.5
+AR-04,uafId,AR-04
+AR-04,uafKind,ActualResource
+AR-04,source,docs/mission/operational-environment.md
+AR-05,uafId,AR-05
+AR-05,uafKind,ActualResource
+AR-05,source,ARCHITECTURE.md \u00a78.6
+AR-06,uafId,AR-06
+AR-06,uafKind,ActualResource
+AR-06,source,docs/mission/roles-and-stakeholders.md \u00a73
+AR-07,uafId,AR-07
+AR-07,uafKind,ActualResource
+AR-07,source,docs/release-governance.md
+REQ-F-01,uafId,REQ-F-01
+REQ-F-01,uafKind,Requirement
+REQ-F-01,category,F
+REQ-F-01,source,"CAP-1.1, CAP-1.2"
+REQ-F-01,priority,I2
+REQ-F-01,verification,"Verification table, ingest row"
+REQ-F-01,gaps,"GAP-001, GAP-064"
+REQ-F-01,owner,architecture-requirements-specification.md
+REQ-F-02,uafId,REQ-F-02
+REQ-F-02,uafKind,Requirement
+REQ-F-02,category,F
+REQ-F-02,source,"CAP-1.2, D-02"
+REQ-F-02,priority,I2
+REQ-F-02,verification,Security gate
+REQ-F-02,gaps,GAP-002
+REQ-F-02,owner,architecture-requirements-specification.md
+REQ-F-03,uafId,REQ-F-03
+REQ-F-03,uafKind,Requirement
+REQ-F-03,category,F
+REQ-F-03,source,CAP-1.3
+REQ-F-03,priority,"I2 for the registry, I3 for outbound control"
+REQ-F-03,verification,"Verification table, sensor-management row"
+REQ-F-03,gaps,"GAP-003, GAP-004"
+REQ-F-03,owner,architecture-requirements-specification.md
+REQ-F-04,uafId,REQ-F-04
+REQ-F-04,uafKind,Requirement
+REQ-F-04,category,F
+REQ-F-04,source,CAP-1.4
+REQ-F-04,priority,I3
+REQ-F-04,verification,MOP for coverage; usability round 2
+REQ-F-04,gaps,"GAP-006, GAP-007"
+REQ-F-04,owner,architecture-requirements-specification.md
+REQ-F-05,uafId,REQ-F-05
+REQ-F-05,uafKind,Requirement
+REQ-F-05,category,F
+REQ-F-05,source,CAP-1.5
+REQ-F-05,priority,I2
+REQ-F-05,verification,MOP-09; the test-track skew case
+REQ-F-05,gaps,GAP-008
+REQ-F-05,owner,architecture-requirements-specification.md
+REQ-F-06,uafId,REQ-F-06
+REQ-F-06,uafKind,Requirement
+REQ-F-06,category,F
+REQ-F-06,source,"CAP-1.7, D-09"
+REQ-F-06,priority,I2
+REQ-F-06,verification,Codec conformance
+REQ-F-06,gaps,GAP-010
+REQ-F-06,owner,architecture-requirements-specification.md
+REQ-F-07,uafId,REQ-F-07
+REQ-F-07,uafKind,Requirement
+REQ-F-07,category,F
+REQ-F-07,source,CAP-2.1 to CAP-2.5
+REQ-F-07,priority,"I2, random finite sets I3"
+REQ-F-07,verification,"Verification table \u00a71, oracle agreement"
+REQ-F-07,gaps,"GAP-011, GAP-013, GAP-015, GAP-016"
+REQ-F-07,owner,architecture-requirements-specification.md
+REQ-F-08,uafId,REQ-F-08
+REQ-F-08,uafKind,Requirement
+REQ-F-08,category,F
+REQ-F-08,source,CAP-2.2
+REQ-F-08,priority,I3
+REQ-F-08,verification,Usability round 2; C-02
+REQ-F-08,gaps,GAP-012
+REQ-F-08,owner,architecture-requirements-specification.md
+REQ-F-09,uafId,REQ-F-09
+REQ-F-09,uafKind,Requirement
+REQ-F-09,category,F
+REQ-F-09,source,CAP-2.6
+REQ-F-09,priority,I3
+REQ-F-09,verification,MOE for identification; ML-01 gates
+REQ-F-09,gaps,GAP-018
+REQ-F-09,owner,architecture-requirements-specification.md
+REQ-F-10,uafId,REQ-F-10
+REQ-F-10,uafKind,Requirement
+REQ-F-10,category,F
+REQ-F-10,source,CAP-2.7
+REQ-F-10,priority,I3
+REQ-F-10,verification,Property test on lineage
+REQ-F-10,gaps,"GAP-019, GAP-069"
+REQ-F-10,owner,architecture-requirements-specification.md
+REQ-F-11,uafId,REQ-F-11
+REQ-F-11,uafKind,Requirement
+REQ-F-11,category,F
+REQ-F-11,source,"CAP-3.1, CAP-3.2"
+REQ-F-11,priority,I3
+REQ-F-11,verification,MOE-01; scenario replay
+REQ-F-11,gaps,"GAP-026, GAP-027"
+REQ-F-11,owner,architecture-requirements-specification.md
+REQ-F-12,uafId,REQ-F-12
+REQ-F-12,uafKind,Requirement
+REQ-F-12,category,F
+REQ-F-12,source,"CAP-3.3, CAP-3.4"
+REQ-F-12,priority,I3
+REQ-F-12,verification,"Verification table, allocation row"
+REQ-F-12,gaps,"GAP-029, GAP-030, GAP-031"
+REQ-F-12,owner,architecture-requirements-specification.md
+REQ-F-13,uafId,REQ-F-13
+REQ-F-13,uafKind,Requirement
+REQ-F-13,category,F
+REQ-F-13,source,CAP-3.5
+REQ-F-13,priority,I3
+REQ-F-13,verification,Usability round 2; assistant evaluation
+REQ-F-13,gaps,GAP-032
+REQ-F-13,owner,architecture-requirements-specification.md
+REQ-F-14,uafId,REQ-F-14
+REQ-F-14,uafKind,Requirement
+REQ-F-14,category,F
+REQ-F-14,source,"CAP-3.7, D-15"
+REQ-F-14,priority,I3
+REQ-F-14,verification,MOP for time to decision
+REQ-F-14,gaps,"GAP-034, GAP-035"
+REQ-F-14,owner,architecture-requirements-specification.md
+REQ-F-15,uafId,REQ-F-15
+REQ-F-15,uafKind,Requirement
+REQ-F-15,category,F
+REQ-F-15,source,CAP-5.2
+REQ-F-15,priority,I2
+REQ-F-15,verification,Journal round-trip; replay determinism
+REQ-F-15,gaps,GAP-045
+REQ-F-15,owner,architecture-requirements-specification.md
+REQ-F-16,uafId,REQ-F-16
+REQ-F-16,uafKind,Requirement
+REQ-F-16,category,F
+REQ-F-16,source,CAP-5.3
+REQ-F-16,priority,I3
+REQ-F-16,verification,The measures themselves
+REQ-F-16,gaps,GAP-047
+REQ-F-16,owner,architecture-requirements-specification.md
+REQ-D-01,uafId,REQ-D-01
+REQ-D-01,uafKind,Requirement
+REQ-D-01,category,D
+REQ-D-01,source,AP-06
+REQ-D-01,priority,Now
+REQ-D-01,verification,"Contract C-07, checked"
+REQ-D-01,owner,architecture-requirements-specification.md
+REQ-D-02,uafId,REQ-D-02
+REQ-D-02,uafKind,Requirement
+REQ-D-02,category,D
+REQ-D-02,source,"AP-07, CAP-1.2"
+REQ-D-02,priority,Now
+REQ-D-02,verification,Schema review; C-08
+REQ-D-02,owner,architecture-requirements-specification.md
+REQ-D-03,uafId,REQ-D-03
+REQ-D-03,uafKind,Requirement
+REQ-D-03,category,D
+REQ-D-03,source,"AP-07, ML-01"
+REQ-D-03,priority,I4
+REQ-D-03,verification,ML promotion gate
+REQ-D-03,gaps,GAP-080
+REQ-D-03,owner,architecture-requirements-specification.md
+REQ-D-04,uafId,REQ-D-04
+REQ-D-04,uafKind,Requirement
+REQ-D-04,category,D
+REQ-D-04,source,AP-08
+REQ-D-04,priority,Now
+REQ-D-04,verification,Ordering and fan-out tests
+REQ-D-04,owner,architecture-requirements-specification.md
+REQ-D-05,uafId,REQ-D-05
+REQ-D-05,uafKind,Requirement
+REQ-D-05,category,D
+REQ-D-05,source,D-04
+REQ-D-05,priority,I2
+REQ-D-05,verification,Journal durability budget
+REQ-D-05,owner,architecture-requirements-specification.md
+REQ-D-06,uafId,REQ-D-06
+REQ-D-06,uafKind,Requirement
+REQ-D-06,category,D
+REQ-D-06,source,D-03
+REQ-D-06,priority,I4
+REQ-D-06,verification,Reconciliation invariant tests
+REQ-D-06,owner,architecture-requirements-specification.md
+REQ-D-07,uafId,REQ-D-07
+REQ-D-07,uafKind,Requirement
+REQ-D-07,category,D
+REQ-D-07,source,"D-06, CAP-6.6"
+REQ-D-07,priority,"I3 marking, I4 enforcement"
+REQ-D-07,verification,Schema review; per-caller test
+REQ-D-07,gaps,GAP-062
+REQ-D-07,owner,architecture-requirements-specification.md
+REQ-D-08,uafId,REQ-D-08
+REQ-D-08,uafKind,Requirement
+REQ-D-08,category,D
+REQ-D-08,source,ML plan
+REQ-D-08,priority,I4
+REQ-D-08,verification,Manifest schema; repository policy
+REQ-D-08,gaps,GAP-078
+REQ-D-08,owner,architecture-requirements-specification.md
+REQ-I-01,uafId,REQ-I-01
+REQ-I-01,uafKind,Requirement
+REQ-I-01,category,I
+REQ-I-01,source,CAP-7.1
+REQ-I-01,priority,I4
+REQ-I-01,verification,"Conformance suite, GAP-063"
+REQ-I-01,gaps,GAP-041
+REQ-I-01,owner,architecture-requirements-specification.md
+REQ-I-02,uafId,REQ-I-02
+REQ-I-02,uafKind,Requirement
+REQ-I-02,category,I
+REQ-I-02,source,CAP-7.2
+REQ-I-02,priority,Now
+REQ-I-02,verification,Catalogue tests
+REQ-I-02,owner,architecture-requirements-specification.md
+REQ-I-03,uafId,REQ-I-03
+REQ-I-03,uafKind,Requirement
+REQ-I-03,category,I
+REQ-I-03,source,"SD-03, D-09"
+REQ-I-03,priority,I2
+REQ-I-03,verification,"Codec conformance, fuzz"
+REQ-I-03,gaps,GAP-064
+REQ-I-03,owner,architecture-requirements-specification.md
+REQ-I-04,uafId,REQ-I-04
+REQ-I-04,uafKind,Requirement
+REQ-I-04,category,I
+REQ-I-04,source,"SD-04, D-06"
+REQ-I-04,priority,I4
+REQ-I-04,verification,Codec conformance
+REQ-I-04,gaps,"GAP-064, GAP-065"
+REQ-I-04,owner,architecture-requirements-specification.md
+REQ-I-05,uafId,REQ-I-05
+REQ-I-05,uafKind,Requirement
+REQ-I-05,category,I
+REQ-I-05,source,D-08
+REQ-I-05,priority,I4
+REQ-I-05,verification,Synthetic peer tests
+REQ-I-05,gaps,"GAP-009, GAP-040, GAP-042"
+REQ-I-05,owner,architecture-requirements-specification.md
+REQ-I-06,uafId,REQ-I-06
+REQ-I-06,uafKind,Requirement
+REQ-I-06,category,I
+REQ-I-06,source,SD-02
+REQ-I-06,priority,Now
+REQ-I-06,verification,Round-trip test
+REQ-I-06,owner,architecture-requirements-specification.md
+REQ-S-01,uafId,REQ-S-01
+REQ-S-01,uafKind,Requirement
+REQ-S-01,category,S
+REQ-S-01,source,"AP-01, CAP-4.3"
+REQ-S-01,priority,I3
+REQ-S-01,verification,Contract C-01; a dedicated test
+REQ-S-01,gaps,GAP-039
+REQ-S-01,owner,architecture-requirements-specification.md
+REQ-S-02,uafId,REQ-S-02
+REQ-S-02,uafKind,Requirement
+REQ-S-02,category,S
+REQ-S-02,source,"CAP-6.2, D-05"
+REQ-S-02,priority,I3
+REQ-S-02,verification,Authorization tests
+REQ-S-02,gaps,"GAP-058, GAP-068"
+REQ-S-02,owner,architecture-requirements-specification.md
+REQ-S-03,uafId,REQ-S-03
+REQ-S-03,uafKind,Requirement
+REQ-S-03,category,S
+REQ-S-03,source,CAP-3.6
+REQ-S-03,priority,I3
+REQ-S-03,verification,Policy tests
+REQ-S-03,gaps,GAP-033
+REQ-S-03,owner,architecture-requirements-specification.md
+REQ-S-04,uafId,REQ-S-04
+REQ-S-04,uafKind,Requirement
+REQ-S-04,category,S
+REQ-S-04,source,"CAP-3.6, CAP-3.7"
+REQ-S-04,priority,I3
+REQ-S-04,verification,Queue tests
+REQ-S-04,gaps,GAP-034
+REQ-S-04,owner,architecture-requirements-specification.md
+REQ-S-05,uafId,REQ-S-05
+REQ-S-05,uafKind,Requirement
+REQ-S-05,category,S
+REQ-S-05,source,"AP-03, CAP-6.3"
+REQ-S-05,priority,I3
+REQ-S-05,verification,Audit completeness test
+REQ-S-05,gaps,GAP-059
+REQ-S-05,owner,architecture-requirements-specification.md
+REQ-S-06,uafId,REQ-S-06
+REQ-S-06,uafKind,Requirement
+REQ-S-06,category,S
+REQ-S-06,source,D-02
+REQ-S-06,priority,I4
+REQ-S-06,verification,Security gate
+REQ-S-06,gaps,GAP-057
+REQ-S-06,owner,architecture-requirements-specification.md
+REQ-S-07,uafId,REQ-S-07
+REQ-S-07,uafKind,Requirement
+REQ-S-07,category,S
+REQ-S-07,source,CAP-6.4
+REQ-S-07,priority,I4
+REQ-S-07,verification,Security gate
+REQ-S-07,gaps,GAP-060
+REQ-S-07,owner,architecture-requirements-specification.md
+REQ-S-08,uafId,REQ-S-08
+REQ-S-08,uafKind,Requirement
+REQ-S-08,category,S
+REQ-S-08,source,AI plan
+REQ-S-08,priority,I4
+REQ-S-08,verification,Dependency-list test; injection cases
+REQ-S-08,gaps,GAP-044
+REQ-S-08,planned_carriers,gungnir-agent
+REQ-S-08,owner,architecture-requirements-specification.md
+REQ-S-09,uafId,REQ-S-09
+REQ-S-09,uafKind,Requirement
+REQ-S-09,category,S
+REQ-S-09,source,AI plan
+REQ-S-09,priority,I4
+REQ-S-09,verification,"Seven injection cases, every case every run"
+REQ-S-09,gaps,GAP-044
+REQ-S-09,owner,architecture-requirements-specification.md
+REQ-S-10,uafId,REQ-S-10
+REQ-S-10,uafKind,Requirement
+REQ-S-10,category,S
+REQ-S-10,source,CAP-6.5
+REQ-S-10,priority,I2
+REQ-S-10,verification,The workflow itself
+REQ-S-10,gaps,GAP-061
+REQ-S-10,owner,architecture-requirements-specification.md
+REQ-P-01,uafId,REQ-P-01
+REQ-P-01,uafKind,Requirement
+REQ-P-01,category,P
+REQ-P-01,source,"Budgets, desktop"
+REQ-P-01,priority,I3
+REQ-P-01,verification,Tick harness plus viewport spans
+REQ-P-01,owner,architecture-requirements-specification.md
+REQ-P-02,uafId,REQ-P-02
+REQ-P-02,uafKind,Requirement
+REQ-P-02,category,P
+REQ-P-02,source,"Budgets, desktop"
+REQ-P-02,priority,I2
+REQ-P-02,verification,Tick harness
+REQ-P-02,owner,architecture-requirements-specification.md
+REQ-P-03,uafId,REQ-P-03
+REQ-P-03,uafKind,Requirement
+REQ-P-03,category,P
+REQ-P-03,source,"Budgets, desktop"
+REQ-P-03,priority,I2
+REQ-P-03,verification,Tick harness
+REQ-P-03,owner,architecture-requirements-specification.md
+REQ-P-04,uafId,REQ-P-04
+REQ-P-04,uafKind,Requirement
+REQ-P-04,category,P
+REQ-P-04,source,"Budgets, desktop"
+REQ-P-04,priority,I2
+REQ-P-04,verification,Scenario 3 replay
+REQ-P-04,owner,architecture-requirements-specification.md
+REQ-P-05,uafId,REQ-P-05
+REQ-P-05,uafKind,Requirement
+REQ-P-05,category,P
+REQ-P-05,source,"Budgets, node"
+REQ-P-05,priority,I4
+REQ-P-05,verification,Load generation through the recorded adapter
+REQ-P-05,owner,architecture-requirements-specification.md
+REQ-P-06,uafId,REQ-P-06
+REQ-P-06,uafKind,Requirement
+REQ-P-06,category,P
+REQ-P-06,source,"Budgets, node"
+REQ-P-06,priority,I4
+REQ-P-06,verification,Node tick harness
+REQ-P-06,owner,architecture-requirements-specification.md
+REQ-P-07,uafId,REQ-P-07
+REQ-P-07,uafKind,Requirement
+REQ-P-07,category,P
+REQ-P-07,source,"Budgets, node"
+REQ-P-07,priority,I4
+REQ-P-07,verification,Checkpoint replay test
+REQ-P-07,owner,architecture-requirements-specification.md
+REQ-P-08,uafId,REQ-P-08
+REQ-P-08,uafKind,Requirement
+REQ-P-08,category,P
+REQ-P-08,source,"Budgets, connectivity"
+REQ-P-08,priority,I4
+REQ-P-08,verification,Integration test that cuts the transport
+REQ-P-08,owner,architecture-requirements-specification.md
+REQ-P-09,uafId,REQ-P-09
+REQ-P-09,uafKind,Requirement
+REQ-P-09,category,P
+REQ-P-09,source,Verification table \u00a71
+REQ-P-09,priority,Now
+REQ-P-09,verification,"Property tests, already a gate"
+REQ-P-09,owner,architecture-requirements-specification.md
+REQ-U-01,uafId,REQ-U-01
+REQ-U-01,uafKind,Requirement
+REQ-U-01,category,U
+REQ-U-01,source,"CAP-5.9, D-05"
+REQ-U-01,priority,I3
+REQ-U-01,verification,Usability round 2
+REQ-U-01,gaps,GAP-055
+REQ-U-01,owner,architecture-requirements-specification.md
+REQ-U-02,uafId,REQ-U-02
+REQ-U-02,uafKind,Requirement
+REQ-U-02,category,U
+REQ-U-02,source,UX plan
+REQ-U-02,priority,I3
+REQ-U-02,verification,Heuristic walkthrough; MOP-37
+REQ-U-02,gaps,GAP-072
+REQ-U-02,owner,architecture-requirements-specification.md
+REQ-U-03,uafId,REQ-U-03
+REQ-U-03,uafKind,Requirement
+REQ-U-03,category,U
+REQ-U-03,source,AP-02
+REQ-U-03,priority,I3
+REQ-U-03,verification,Usability round 2; contract C-02
+REQ-U-03,gaps,"GAP-072, GAP-073"
+REQ-U-03,owner,architecture-requirements-specification.md
+REQ-U-04,uafId,REQ-U-04
+REQ-U-04,uafKind,Requirement
+REQ-U-04,category,U
+REQ-U-04,source,"AI plan, UX principle 7"
+REQ-U-04,priority,I4
+REQ-U-04,verification,Assistant evaluation; usability round 2
+REQ-U-04,gaps,GAP-044
+REQ-U-04,owner,architecture-requirements-specification.md
+REQ-U-05,uafId,REQ-U-05
+REQ-U-05,uafKind,Requirement
+REQ-U-05,category,U
+REQ-U-05,source,D-12
+REQ-U-05,priority,I3
+REQ-U-05,verification,Baseline schema test
+REQ-U-05,gaps,GAP-070
+REQ-U-05,owner,architecture-requirements-specification.md
+REQ-C-01,uafId,REQ-C-01
+REQ-C-01,uafKind,Requirement
+REQ-C-01,category,C
+REQ-C-01,source,AP-10
+REQ-C-01,priority,constraint
+REQ-C-01,verification,"Contract C-11, checked"
+REQ-C-01,owner,architecture-requirements-specification.md
+REQ-C-02,uafId,REQ-C-02
+REQ-C-02,uafKind,Requirement
+REQ-C-02,category,C
+REQ-C-02,source,AP-14
+REQ-C-02,priority,constraint
+REQ-C-02,verification,"Contract C-14, checked"
+REQ-C-02,owner,architecture-requirements-specification.md
+REQ-C-03,uafId,REQ-C-03
+REQ-C-03,uafKind,Requirement
+REQ-C-03,category,C
+REQ-C-03,source,AP-12
+REQ-C-03,priority,constraint
+REQ-C-03,verification,"Checked, zero today"
+REQ-C-03,owner,architecture-requirements-specification.md
+REQ-C-04,uafId,REQ-C-04
+REQ-C-04,uafKind,Requirement
+REQ-C-04,category,C
+REQ-C-04,source,AP-12
+REQ-C-04,priority,constraint
+REQ-C-04,verification,Contract C-03; GAP-082
+REQ-C-04,owner,architecture-requirements-specification.md
+REQ-C-05,uafId,REQ-C-05
+REQ-C-05,uafKind,Requirement
+REQ-C-05,category,C
+REQ-C-05,source,AP-15
+REQ-C-05,priority,constraint
+REQ-C-05,verification,Contract C-15
+REQ-C-05,owner,architecture-requirements-specification.md
+REQ-C-06,uafId,REQ-C-06
+REQ-C-06,uafKind,Requirement
+REQ-C-06,category,C
+REQ-C-06,source,AP-05
+REQ-C-06,priority,constraint
+REQ-C-06,verification,Contract C-06
+REQ-C-06,owner,architecture-requirements-specification.md
+REQ-C-07,uafId,REQ-C-07
+REQ-C-07,uafKind,Requirement
+REQ-C-07,category,C
+REQ-C-07,source,AP-13
+REQ-C-07,priority,constraint
+REQ-C-07,verification,Contract C-13
+REQ-C-07,owner,architecture-requirements-specification.md
+REQ-C-08,uafId,REQ-C-08
+REQ-C-08,uafKind,Requirement
+REQ-C-08,category,C
+REQ-C-08,source,AP-17
+REQ-C-08,priority,constraint
+REQ-C-08,verification,Contract C-17; diff review
+REQ-C-08,owner,architecture-requirements-specification.md
+REQ-C-09,uafId,REQ-C-09
+REQ-C-09,uafKind,Requirement
+REQ-C-09,category,C
+REQ-C-09,source,AP-04
+REQ-C-09,priority,constraint
+REQ-C-09,verification,Contract C-05
+REQ-C-09,owner,architecture-requirements-specification.md
+REQ-C-10,uafId,REQ-C-10
+REQ-C-10,uafKind,Requirement
+REQ-C-10,category,C
+REQ-C-10,source,AP-16
+REQ-C-10,priority,constraint
+REQ-C-10,verification,Contract C-16
+REQ-C-10,owner,architecture-requirements-specification.md

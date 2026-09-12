@@ -11,6 +11,13 @@
 testdata/** -text
 *.jsonl -text
 
+# Sparx EA wrote these, not us: they are the evidence for what EA's XMI dialect
+# actually is (`docs/architecture/uaf/exports/ea-roundtrip/README.md`), so they are
+# kept byte for byte, CRLF included. Normalising them would mean citing a file EA
+# did not produce. Everything the exporters generate is LF and stays under the
+# rule above.
+docs/architecture/uaf/exports/ea-roundtrip/** -text
+
 *.png binary
 *.jpg binary
 *.svg text eol=lf

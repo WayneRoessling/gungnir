@@ -178,6 +178,9 @@ WScript.Echo "test_ea_script_mock: " & targetPath & " (data: " & dataDir & ") ex
 ' console output, which silently drops characters cscript's codepage can't
 ' render -- that is exactly what produced a false "it's broken" reading during
 ' development here).
+Dim failures
+failures = 0
+
 Dim checkId, checkEl, notesLen, foundNonAscii, k
 checkId = "RS-analytics"  ' known to carry the section sign in its description
 If elementIds.Exists(checkId) Then
@@ -190,10 +193,97 @@ If elementIds.Exists(checkId) Then
     End If
   Next
   If foundNonAscii Then
-    WScript.Echo "UNICODE CHECK: PASS -- " & checkId & "'s Notes contains a real section-sign character (U+00A7), not a § escape or a stray backslash"
+    WScript.Echo "UNICODE CHECK: PASS -- " & checkId & "'s Notes contains a real section-sign character (U+00A7), not an escape or a stray backslash"
   Else
     WScript.Echo "UNICODE CHECK: FAIL -- " & checkId & "'s Notes does not contain U+00A7. Notes length=" & Len(checkEl.Notes)
+    failures = failures + 1
   End If
 Else
   WScript.Echo "UNICODE CHECK: SKIPPED -- " & checkId & " not found (registry data may have changed)"
 End If
+
+' ---------------------------------------------------------------------------
+' Fidelity checks. The UNICODE CHECK above only asks whether one character is
+' PRESENT, and a containment test stays true no matter what else is appended --
+' which is why it reported PASS for months while every last field of every CSV
+' row carried two trailing carriage returns, Notes included. These two assert
+' equality and cleanliness instead, which is what that bug needed.
+Function HasControlChar(s)
+  Dim i
+  HasControlChar = False
+  For i = 1 To Len(s)
+    If AscW(Mid(s, i, 1)) < 32 Then
+      HasControlChar = True
+      Exit Function
+    End If
+  Next
+End Function
+
+Function Describe(s)
+  Dim i, c, out
+  out = ""
+  For i = 1 To Len(s)
+    c = AscW(Mid(s, i, 1))
+    If c < 32 Then
+      out = out & "<" & c & ">"
+    Else
+      out = out & Mid(s, i, 1)
+    End If
+  Next
+  Describe = out
+End Function
+
+' 1. Every element's Notes is EXACTLY the description field the CSV carried --
+'    no truncation, no transport characters tacked on either end.
+Dim fidRows, fidRow, fidEl, nMismatch
+fidRows = ReadCSVRows(dataDir & "\gungnir-uaf-elements.csv")
+nMismatch = 0
+For Each fidRow In fidRows
+  If elementIds.Exists(fidRow(0)) Then
+    Set fidEl = Repository.GetElementByID(elementIds.Item(fidRow(0)))
+    If CStr(fidEl.Notes) <> CStr(fidRow(4)) Then
+      nMismatch = nMismatch + 1
+      If nMismatch <= 3 Then
+        WScript.Echo "  MISMATCH " & fidRow(0) & ": Notes=[" & Describe(fidEl.Notes) & "] CSV=[" & Describe(fidRow(4)) & "]"
+      End If
+    End If
+  End If
+Next
+If nMismatch = 0 Then
+  WScript.Echo "NOTES FIDELITY: PASS -- all " & (UBound(fidRows) + 1) & " element Notes match their CSV field exactly"
+Else
+  WScript.Echo "NOTES FIDELITY: FAIL -- " & nMismatch & " element Notes differ from the CSV field"
+  failures = failures + 1
+End If
+
+' 2. No parsed field anywhere holds a control character. Registry text has none,
+'    so one here is always a line-ending or escaping artefact of this bridge.
+Dim files, fname, ctlRows, ctlRow, ctlIdx, nCtl
+files = Array("gungnir-uaf-elements.csv", "gungnir-uaf-element-tags.csv", _
+              "gungnir-uaf-relationships.csv", "gungnir-uaf-relationship-tags.csv")
+nCtl = 0
+For Each fname In files
+  ctlRows = ReadCSVRows(dataDir & "\" & fname)
+  For Each ctlRow In ctlRows
+    For ctlIdx = 0 To UBound(ctlRow)
+      If HasControlChar(ctlRow(ctlIdx)) Then
+        nCtl = nCtl + 1
+        If nCtl <= 3 Then
+          WScript.Echo "  CONTROL CHAR in " & fname & " field " & ctlIdx & ": [" & Describe(ctlRow(ctlIdx)) & "]"
+        End If
+      End If
+    Next
+  Next
+Next
+If nCtl = 0 Then
+  WScript.Echo "FIELD CLEANLINESS: PASS -- no control character in any parsed field of the four CSVs"
+Else
+  WScript.Echo "FIELD CLEANLINESS: FAIL -- " & nCtl & " parsed fields hold a control character"
+  failures = failures + 1
+End If
+
+If failures > 0 Then
+  WScript.Echo "test_ea_script_mock: " & failures & " check(s) FAILED"
+  WScript.Quit 1
+End If
+WScript.Echo "test_ea_script_mock: all checks passed"

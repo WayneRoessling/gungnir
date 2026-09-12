@@ -73,7 +73,13 @@ Function DecodeUnicodeEscapes(s)
   result = ""
   pos = 1
   Do While pos <= Len(s)
-    If Mid(s, pos, 1) = bs And Mid(s, pos + 1, 1) = "u" And IsHex4(Mid(s, pos + 2, 4)) Then
+    If Mid(s, pos, 1) = bs And Mid(s, pos + 1, 1) = bs Then
+      ' A doubled backslash is one literal backslash, consumed here so that a
+      ' registry value which itself spells out a backslash-u escape cannot be
+      ' decoded into the character it names. The generator doubles it.
+      result = result & bs
+      pos = pos + 2
+    ElseIf Mid(s, pos, 1) = bs And Mid(s, pos + 1, 1) = "u" And IsHex4(Mid(s, pos + 2, 4)) Then
       hex4 = Mid(s, pos + 2, 4)
       result = result & ChrW(CLng("&H" & hex4))
       pos = pos + 6
@@ -86,7 +92,7 @@ Function DecodeUnicodeEscapes(s)
 End Function
 
 Function ReadCSVRows(path)
-  Dim f, allLines, rows, i, fields
+  Dim f, allLines, rows, i, fields, line
   Set f = fso.OpenTextFile(path, 1, False, 0)
   allLines = Split(f.ReadAll(), vbLf)
   f.Close
@@ -94,8 +100,19 @@ Function ReadCSVRows(path)
   Dim rowCount
   rowCount = 0
   For i = 1 To UBound(allLines)  ' skip header row (index 0)
-    If Len(Trim(allLines(i))) > 0 Then
-      fields = ParseCSVLine(allLines(i))
+    ' The generator writes LF, but strip any carriage returns this line still
+    ' ends with rather than trusting that. Splitting a CRLF file on vbLf leaves
+    ' one on every line, and the CSVs were briefly written with CRLF twice over
+    ' (\r\r\n), which silently appended two of them to the LAST field of every
+    ' row -- descriptions, connector names, every tagged value -- and turned an
+    ' empty description into a 2-character field that passed the Len() > 0 guard
+    ' below. Trim() does not remove them: it only removes spaces.
+    line = allLines(i)
+    Do While Len(line) > 0 And Right(line, 1) = vbCr
+      line = Left(line, Len(line) - 1)
+    Loop
+    If Len(Trim(line)) > 0 Then
+      fields = ParseCSVLine(line)
       Dim j
       For j = 0 To UBound(fields)
         fields(j) = DecodeUnicodeEscapes(fields(j))
@@ -104,8 +121,14 @@ Function ReadCSVRows(path)
       rowCount = rowCount + 1
     End If
   Next
-  ReDim Preserve rows(rowCount - 1)
-  ReadCSVRows = rows
+  If rowCount = 0 Then
+    ' ReDim Preserve rows(-1) is a runtime error, so a CSV with only a header
+    ' has to return an explicitly empty array instead.
+    ReadCSVRows = Array()
+  Else
+    ReDim Preserve rows(rowCount - 1)
+    ReadCSVRows = rows
+  End If
 End Function
 
 Function GetOrCreatePackage(parentPackages, pkgName)
@@ -142,9 +165,14 @@ Dim elRows, elRow, sectionPkg, el
 elRows = ReadCSVRows(DATA_DIR & "\gungnir-uaf-elements.csv")
 n = 0
 For Each elRow In elRows
-  ' elRow: id, section, stereotype, name, description
+  ' elRow: id, section, stereotype, name, description, ea_type
+  ' ea_type, not a hardcoded "Class": a UAF stereotype extends a specific UML
+  ' metaclass, and EA will not bind one to an element of the wrong kind --
+  ' OperationalActivity extends uml:Activity and the Actual* family extends
+  ' uml:InstanceSpecification, both confirmed by EA's own UAF model. Creating
+  ' every element as a Class silently lost those stereotypes on this path.
   Set sectionPkg = GetOrCreatePackage(rootPkg.Packages, elRow(1))
-  Set el = sectionPkg.Elements.AddNew(elRow(3), "Class")
+  Set el = sectionPkg.Elements.AddNew(elRow(3), elRow(5))
   el.Stereotype = elRow(2)
   If Len(elRow(4)) > 0 Then el.Notes = elRow(4)
   el.Update
@@ -170,10 +198,15 @@ Dim relRows, relRow, fromEl, conn
 relRows = ReadCSVRows(DATA_DIR & "\gungnir-uaf-relationships.csv")
 n = 0
 For Each relRow In relRows
-  ' relRow: rel_id, kind, stereotype, from_id, to_id, name
+  ' relRow: rel_id, kind, stereotype, from_id, to_id, name, ea_type
+  ' Same reason as the element types above: every UAF relationship stereotype
+  ' this registry uses extends uml:Abstraction, not uml:Dependency (confirmed on
+  ' Exhibits, IsCapableToPerform and MapsToCapability in EA's own UAF model), so
+  ' creating them all as Dependency connectors meant none of the stereotypes
+  ' could bind. `uses`, the plain Cargo dependency, stays a Dependency.
   If elementIds.Exists(relRow(3)) And elementIds.Exists(relRow(4)) Then
     Set fromEl = repo.GetElementByID(elementIds.Item(relRow(3)))
-    Set conn = fromEl.Connectors.AddNew(relRow(5), "Dependency")
+    Set conn = fromEl.Connectors.AddNew(relRow(5), relRow(6))
     conn.SupplierID = elementIds.Item(relRow(4))
     conn.Stereotype = relRow(2)
     conn.Update

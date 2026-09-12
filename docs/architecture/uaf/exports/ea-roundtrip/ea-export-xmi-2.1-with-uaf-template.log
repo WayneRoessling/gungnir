@@ -1,0 +1,116 @@
+Exporting package to 'D:\d\test_XML_native_xea2_1_probe_extra.xml'
+Retrieving data for export: diagram elements
+Retrieving data for export: links
+Retrieving data for export: constraints
+Retrieving data for export: attribute tagged values
+Retrieving data for export: operation tagged values
+Retrieving data for export: operation parameter tagged values
+Retrieving data for export: connector tagged values
+Retrieving data for export: Discussions
+Completed data retrieval
+Pre-processing export tree...
+Completed pre-processing
+Processing package: Model
+Processing package: Gungnir UAF Probe
+Processing package: Operational Processes Op-Pr
+Diagram: Operational Processes Op-Pr
+Element:0: Maintain the track picture
+Processing package: Operational Structure Op-Sr
+Diagram: Operational Structure Op-Sr
+Element:1: Fusion node
+Element:2: 
+Element:3: Sector sensing node
+Element:4: 
+Processing package: Operational Traceability Op-Tr
+Diagram: Operational Traceability Op-Tr
+Processing package: Strategic Taxonomy St-Tx
+Diagram: Strategic Taxonomy St-Tx
+Element:5: Sense
+Element:6: 
+Element:7: Understand
+Element:8: 
+Processing package: Information Model If
+Diagram: Information Model
+Element:9: InformationElement1
+Element:10: InformationElement2
+Processing package: Operational Taxonomy Op-Tx
+Diagram: Operational Taxonomy
+Element:11: OperationalInterface1
+Element:12: Signal1
+Processing package: Strategic Taxonomy St-Tx
+Diagram: Strategic Taxonomy
+Element:13: Enterprise Phase A
+Element:14: Enterprise Phase B
+Element:15: Enterprise Phase C
+Element:16: Whole Life Enterprise A
+Processing package: Operational Structure Op-Sr
+Diagram: Operational Structure
+Element:17: Operational Performer 1
+Element:18: Operational Performer 2
+Element:19: Operational Performer 3
+Processing package: Strategic Structure St-Sr
+Diagram: Strategic Structure
+Element:20: Enterprise Phase A
+Element:21: Enterprise Phase B
+Element:22: Enterprise Phase C
+Element:23: Whole Life Enterprise A
+Processing package: Operational Connectivity Op-Cn
+Diagram: Operational Connectivity
+Element:24: OperationalArchitecture1
+Element:25: OperationalRole1
+Element:26: OperationalRole2
+Processing package: Strategic Connectivity St-Cn
+Diagram: Strategic Connectivity
+Element:27: Capability A
+Element:28: Capability A.1
+Element:29: Capability B
+Processing package: Operational Processes Op-Pr
+Diagram: Operational Processes
+Element:30: OperationalPerformer1
+Element:31: OperationalActivity1
+Element:32: StandardOperationalActivity1
+Processing package: Strategic States St-St
+Diagram: Strategic States St-St
+Element:33: Capability
+Element:34: Actual Resource
+Element:35: Actual State
+Processing package: Operational States Op-St
+Diagram: Operational States
+Element:36: State A
+Element:37: State B
+Element:38: Final
+Element:39: Initial
+Processing package: Strategic Constraints St-Ct
+Diagram: Strategic Constraints
+Element:40: Capability
+Element:41: Performance Requirement
+Processing package: Strategic Deployment St-Rm
+Diagram: Strategic Deployment
+Element:42: ActualProjectMilestone1
+Element:43: ActualProjectMilestone2
+Processing package: Operational Interaction Scenarios Op-Is
+Diagram: Operational Interaction Scenarios
+Element:44: OperationalRole1
+Element:45: OperationalRole2
+Processing package: Strategic Phasing St-Rm
+Diagram: Strategic Phasing
+Element:46: ActualProjectMilestone1
+Element:47: ActualProjectMilestone2
+Processing package: Operational Constraints Op-Ct
+Diagram: Operational Constraints
+Element:48: List of Operational Constraints
+Element:49: Operational Activity 1
+Element:50: Constraint 1
+Processing package: Strategic Traceability St-Tr
+Diagram: Strategic Traceability
+Element:51: Capability A
+Element:52: Activity A
+Processing package: Operational Traceability Op-Tr
+Diagram: Operational Traceability
+Element:53: Capability1
+Element:54: OperationalPerformer1
+Element:55: OperationalActivity1
+Adding Document Item XML
+Sequencing Interaction Diagrams
+Formatting output XML...please wait
+XMI Document Export Complete!
