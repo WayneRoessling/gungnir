@@ -119,6 +119,15 @@ jobs:
       # regeneration) or if the registry check reports a problem.
       - name: regenerate and check
         run: python docs/architecture/uaf/tools/build_uaf.py
+      # The EA exports live under docs/architecture/uaf/exports and so were inside
+      # the diff path below while never being regenerated, which meant a registry
+      # change left them stale with no signal -- the opposite of the "cannot drift
+      # silently" the exporters claimed. Both are deterministic and write LF on
+      # every platform, so they belong in the same gate.
+      - name: regenerate the Sparx EA exports
+        run: |
+          python docs/architecture/uaf/tools/export_xmi.py
+          python docs/architecture/uaf/tools/export_ea_script.py
       - name: generated files are committed
         run: git diff --exit-code -- docs/architecture/uaf
 

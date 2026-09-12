@@ -11,7 +11,6 @@ package "Tracking core" {
   component "gungnir-core" as RS_core <<Resource>>
   component "gungnir-filters" as RS_filters <<Resource>>
   component "gungnir-fusion-async" as RS_fusion_async <<Resource>>
-  component "gungnir-fuzz" as RS_fuzz <<Resource>>
   component "gungnir-metrics" as RS_metrics <<Resource>>
   component "gungnir-oracle" as RS_oracle <<Resource>>
   component "gungnir-rfs" as RS_rfs <<Resource>>
@@ -20,8 +19,6 @@ package "Tracking core" {
   component "gungnir-track-fusion" as RS_track_fusion <<Resource>>
   component "gungnir-track" as RS_track <<Resource>>
 }
-component "ingest\n(see Rs-Cn-sense-ingest-normalize)" as RS_ingest <<External>> #line.dashed
-component "model\n(see Rs-Cn-foundation-model)" as RS_model <<External>> #line.dashed
 RS_allocation --> RS_core
 RS_association --> RS_filters
 RS_filters --> RS_core
@@ -32,9 +29,6 @@ RS_fusion_async --> RS_track_fusion
 RS_fusion_async --> RS_core
 RS_fusion_async --> RS_filters
 RS_fusion_async --> RS_association
-RS_fuzz --> RS_association
-RS_fuzz --> RS_ingest
-RS_fuzz --> RS_model
 RS_metrics --> RS_track
 RS_metrics --> RS_association
 RS_oracle --> RS_filters

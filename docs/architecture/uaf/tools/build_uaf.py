@@ -216,9 +216,31 @@ def replace_block(text: str, begin: str, end: str, body: str) -> str:
 
 
 # ----------------------------------------------------------------------------- code facts
+def workspace_members() -> set[str]:
+    """The crates in the root manifest's `members` array, and only those.
+
+    Reading the array rather than grepping the whole file for quoted
+    `gungnir-*` tokens: that harvest also picked up `exclude = ["gungnir-fuzz"]`,
+    so the fuzz crate counted as a workspace member. It lost its "not a workspace
+    member" note in the registry, its Kind cell in Rs-Sr, and it was drawn as a
+    real resource in Rs-Cn-tracking-core, while the member count printed one too
+    many.
+    """
+    s = read(ROOT / "Cargo.toml")
+    m = re.search(r"^members\s*=\s*\[(.*?)^\]", s, re.S | re.M)
+    if not m:
+        m = re.search(r"^members\s*=\s*\[(.*?)\]", s, re.S | re.M)
+    if not m:
+        raise SystemExit("build_uaf: no `members` array in the root Cargo.toml")
+    # Strip trailing comments before looking for quoted names, so a crate named
+    # in a comment inside the array cannot be mistaken for an entry.
+    body = "\n".join(line.split("#", 1)[0] for line in m.group(1).splitlines())
+    return set(re.findall(r'"(gungnir-[a-z0-9-]+)"', body))
+
+
 def crate_facts() -> list[dict]:
     """Every gungnir-* crate: kind, description, workspace dependencies, dev-deps."""
-    members = set(re.findall(r'"(gungnir-[a-z0-9-]+)"', read(ROOT / "Cargo.toml")))
+    members = workspace_members()
     facts = []
     for manifest in sorted(glob.glob(str(ROOT / "gungnir-*" / "Cargo.toml"))):
         crate_dir = Path(manifest).parent
@@ -226,10 +248,51 @@ def crate_facts() -> list[dict]:
         s = read(Path(manifest))
 
         def deps(section: str) -> list[str]:
-            m = re.search(r"^\[" + re.escape(section) + r"\]\n(.*?)(?=^\[|\Z)", s, re.S | re.M)
-            return re.findall(r"^(gungnir-[a-z0-9-]+)", m.group(1), re.M) if m else []
+            """Every gungnir-* crate this manifest depends on under `section`.
+
+            Covers the four shapes a Cargo dependency can take, not just the
+            plain `[dependencies]` table: a target-specific table
+            (`[target.'cfg(loom)'.dev-dependencies]`, already used by
+            gungnir-fusion-async), a per-dependency sub-table
+            (`[dependencies.gungnir-x]`), and a renamed dependency
+            (`alias = { package = "gungnir-x" }`). Any of those was previously
+            invisible, so the edge was missing from the `uses` section, the
+            Rs-Cn table and every Rs-Cn diagram -- while the view's own footer
+            asserts the manifests are the truth.
+            """
+            found: list[str] = []
+            # Plain and target-specific tables: [dependencies],
+            # [dev-dependencies], [target.'...'.dependencies], ...
+            for m in re.finditer(
+                    r"^\[(?:target\.[^\]]+\.)?" + re.escape(section) + r"\]\n(.*?)(?=^\[|\Z)",
+                    s, re.S | re.M):
+                body = m.group(1)
+                found += re.findall(r"^(gungnir-[a-z0-9-]+)\s*=", body, re.M)
+                # A renamed dependency names the real crate in `package = "..."`.
+                found += re.findall(r'^[A-Za-z0-9_-]+\s*=\s*\{[^}\n]*\bpackage\s*=\s*"(gungnir-[a-z0-9-]+)"',
+                                    body, re.M)
+            # Per-dependency sub-tables: [dependencies.gungnir-x] and the
+            # target-specific form of the same.
+            found += re.findall(
+                r"^\[(?:target\.[^\]]+\.)?" + re.escape(section) + r"\.(gungnir-[a-z0-9-]+)\]",
+                s, re.M)
+            for m in re.finditer(
+                    r"^\[(?:target\.[^\]]+\.)?" + re.escape(section) + r"\.[A-Za-z0-9_-]+\]\n(.*?)(?=^\[|\Z)",
+                    s, re.S | re.M):
+                found += re.findall(r'^package\s*=\s*"(gungnir-[a-z0-9-]+)"', m.group(1), re.M)
+            # dict.fromkeys: de-duplicated, first-seen order preserved, so the
+            # output stays deterministic. A crate listed under both
+            # [dependencies] and a cfg-specific table is one edge, not two.
+            return list(dict.fromkeys(found))
 
         desc = re.search(r'^description\s*=\s*"(.*)"', s, re.M)
+        normal = deps("dependencies")
+        # A crate that is already a real dependency is not also reported as a dev
+        # dependency: the normal edge subsumes it, and carrying both put the same
+        # from/to pair into the generated `uses` section twice (RS-app -> RS-ui
+        # was stated twice for exactly this reason), which is one relationship
+        # asserted as two.
+        dev_only = [d for d in deps("dev-dependencies") if d not in normal]
         facts.append({
             "crate": crate,
             "short": crate.removeprefix("gungnir-"),
@@ -237,10 +300,23 @@ def crate_facts() -> list[dict]:
             "kind": "binary" if (crate_dir / "src" / "main.rs").exists() else "library",
             "member": crate in members,
             "description": desc.group(1) if desc else "",
-            "deps": deps("dependencies"),
-            "dev_deps": deps("dev-dependencies"),
+            "deps": normal,
+            "dev_deps": dev_only,
             "layer": LAYER_OF.get(crate.removeprefix("gungnir-"), "Unassigned"),
         })
+    # A crate with no LAYERS entry used to default quietly to "Unassigned", and
+    # Rs-Sr's table iterates LAYERS, so it got no row at all -- while the Counts
+    # line below still counted it, making the table under-report the number it
+    # prints. Rs-Cn-overview would also draw edges to a component it never
+    # declared, and rs_cn_group would raise KeyError on 'Unassigned' the moment
+    # anything depended on it. if_sr_domain and rs_cn_group both refuse their
+    # analogous case deliberately; this one now does too.
+    unassigned = sorted(f["crate"] for f in facts if f["layer"] == "Unassigned")
+    if unassigned:
+        raise SystemExit(
+            "build_uaf: these crates have no architecture layer, so they would be "
+            "dropped from Rs-Sr and drawn as phantom nodes in Rs-Cn. Add each to "
+            f"LAYERS in this script: {', '.join(unassigned)}")
     return facts
 
 
@@ -314,9 +390,28 @@ def parse_model_types() -> tuple[list[tuple[str, str, list[str]]], dict[str, str
 
 
 def api_endpoints() -> list[str]:
+    """The endpoint table's rows from docs/gungnir-api-v1.md's Endpoints section.
+
+    Scans the whole section for table rows rather than the first paragraph-sized
+    chunk of it. The previous pattern -- `^## Endpoints\\n\\n(.*?)\\n\\n` -- stopped
+    at the first blank line, which stopped being the end of the table as soon as
+    a sentence of prose was added between the heading and it: the capture then
+    held two lines of prose, no `|` rows at all, and this returned an empty list
+    while ten table lines sat just below. Nothing noticed, so Sv-If published an
+    endpoint heading with no endpoints under it.
+
+    Raises rather than returning empty: an API document with an Endpoints section
+    and no endpoint rows in it is a broken input, not an empty one.
+    """
     s = read(DOCS / "gungnir-api-v1.md")
-    m = re.search(r"^## Endpoints\n\n(.*?)\n\n", s, re.S | re.M)
-    return [line for line in m.group(1).splitlines() if line.startswith("|")]
+    m = re.search(r"^## Endpoints$(.*?)(?=^## |\Z)", s, re.S | re.M)
+    if not m:
+        raise SystemExit("build_uaf: docs/gungnir-api-v1.md has no '## Endpoints' section")
+    rows = [line for line in m.group(1).splitlines() if line.startswith("|")]
+    if not rows:
+        raise SystemExit("build_uaf: the '## Endpoints' section of docs/gungnir-api-v1.md "
+                         "contains no table rows")
+    return rows
 
 
 # ----------------------------------------------------------------------------- mission facts
@@ -403,7 +498,12 @@ def parse_requirements() -> list[dict]:
             rid, statement, source, verification = cells
             carried, priority = "", "constraint"
         else:
-            raise SystemExit(f"{rid if cells else line[:40]}: a requirements table with {len(cells)} columns is not one this tool reads")
+            # Reports the offending LINE, not `rid`: rid is only bound inside the
+            # branches above, so naming it here raised UnboundLocalError on the
+            # first malformed row and named the previous requirement on any later
+            # one -- in both cases hiding the message this branch exists to print.
+            raise SystemExit(f"build_uaf: {line.strip()[:80]!r}: a requirements table with "
+                             f"{len(cells)} columns is not one this tool reads")
         if rid in seen:
             continue
         seen.add(rid)
@@ -424,18 +524,36 @@ def parse_requirements() -> list[dict]:
     return reqs
 
 
+def yq(s: object) -> str:
+    r"""One YAML scalar, SINGLE-quoted, safe for any text the registry carries.
+
+    Single quotes, not double: inside a YAML double-quoted scalar a backslash
+    introduces an escape, and the generated sections were emitted double-quoted
+    with only `"` replaced. So a description containing a Windows path broke the
+    registry outright (`C:\terrain\dem.tif` -> ScannerError, and nothing
+    downstream loads), while `\t` and `\n` in prose turned silently into a real
+    tab and a real newline inside the value. Commit 0cb9f0a closed the comma and
+    colon holes the same way but left this one.
+
+    In a single-quoted YAML scalar the only escape is `''` for a literal quote,
+    so doubling those is the whole job. Newlines are collapsed to a space because
+    these are one-line flow-mapping values, not because YAML cannot hold them.
+    """
+    t = str(s).replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    return "'" + t.replace("'", "''") + "'"
+
+
 def regenerate_requirements(reqs: list[dict], facts: list[dict]) -> None:
     resources = {f["id"] for f in facts}
     lines = ["requirements:"]
     for r in reqs:
-        name = r["statement"].replace('"', "'")
         # A crate the specification names that the workspace does not have is a planned
         # carrier: recorded on the element, never a relationship to a missing target.
         r["planned_crates"] = [c for c in r["crates"] if "RS-" + c.removeprefix("gungnir-") not in resources]
         r["crates"] = [c for c in r["crates"] if c not in r["planned_crates"]]
-        lines.append(f'  - {{id: {r["id"]}, name: "{name}", category: {r["category"]}, '
-                     f'source: "{r["source"].replace(chr(34), chr(39))}", '
-                     f'priority: "{r["priority"]}", verification: "{r["verification"].replace(chr(34), chr(39))}", '
+        lines.append(f'  - {{id: {r["id"]}, name: {yq(r["statement"])}, category: {r["category"]}, '
+                     f'source: {yq(r["source"])}, '
+                     f'priority: {yq(r["priority"])}, verification: {yq(r["verification"])}, '
                      f'gaps: [{", ".join(r["gaps"])}], planned_carriers: [{", ".join(r["planned_crates"])}], '
                      f'owner: architecture-requirements-specification.md}}')
     text = read(MODEL / "elements.yaml")
@@ -459,10 +577,17 @@ def regenerate_requirements(reqs: list[dict], facts: list[dict]) -> None:
 def regenerate_registry(facts: list[dict]) -> None:
     lines = ["resources:"]
     for f in facts:
-        note = "" if f["member"] else "; not a workspace member (fuzz targets, built separately)"
-        desc = f["description"].replace('"', "'")
-        lines.append(f'  - {{id: {f["id"]}, name: {f["crate"]}, kind: {f["kind"]}, layer: "{f["layer"]}", '
-                     f'code: {f["crate"]}/Cargo.toml, description: "{desc}{note}"}}')
+        # The separator only appears when there is something to separate: the
+        # manifest may carry no description at all, and the note then has nothing
+        # in front of it. (Live for gungnir-fuzz, whose note was suppressed
+        # entirely until workspace_members stopped counting it as a member.)
+        if f["member"]:
+            desc = f["description"]
+        else:
+            note = "not a workspace member (built separately)"
+            desc = f"{f['description']}; {note}" if f["description"] else note
+        lines.append(f'  - {{id: {f["id"]}, name: {f["crate"]}, kind: {f["kind"]}, layer: {yq(f["layer"])}, '
+                     f'code: {f["crate"]}/Cargo.toml, description: {yq(desc)}}}')
     text = read(MODEL / "elements.yaml")
     text = replace_block(text, "# BEGIN generated resources", "# END generated resources", NL.join(lines))
     write(MODEL / "elements.yaml", text)
@@ -529,10 +654,21 @@ def gen_resource_views(facts: list[dict], status: dict[str, str]) -> None:
     L.append("|---|---|---|---|---|")
     for layer, _ in LAYERS:
         for f in [x for x in facts if x["layer"] == layer]:
-            st = status.get(f["crate"], "not in the crate map" if not f["member"] else "")
+            # The fallback has to apply to members too. It was
+            # `"not in the crate map" if not f["member"] else ""`, so the only
+            # crates that got the explanation were the ones a missing row is
+            # expected for, and a member with no §8 row got a blank cell under a
+            # column headed "Status" -- live today for gungnir-ml.
+            st = status.get(f["crate"]) or "not in the crate map"
             L.append(f"| {f['id']} | `{f['crate']}` | {f['kind']}{'' if f['member'] else ' (not a workspace member)'} | {layer} | {st} |")
     L.append("")
-    L.append(f"Counts: {sum(1 for f in facts if f['member'])} workspace members ({sum(1 for f in facts if f['member'] and f['kind']=='binary')} binaries) plus `gungnir-fuzz`.\n")
+    # The non-members are named from the facts rather than asserted as a literal
+    # "plus `gungnir-fuzz`": with gungnir-fuzz wrongly counted as a member, that
+    # sentence both over-counted the members and double-counted fuzz.
+    non_members = [f"`{f['crate']}`" for f in facts if not f["member"]]
+    tail = f" plus {', '.join(non_members)}" if non_members else ""
+    L.append(f"Counts: {sum(1 for f in facts if f['member'])} workspace members "
+             f"({sum(1 for f in facts if f['member'] and f['kind'] == 'binary')} binaries){tail}.\n")
     L.append(footer("`Cargo.toml` of every crate; `../../../gungnir-capabilities.md` §8",
                     "Rs-Cn, Rs-If, Ar-Sr, the service-to-resource traceability",
                     "Layer membership follows `../../../../ARCHITECTURE.md` §1 to §8. Status text is copied, not interpreted."))
@@ -658,7 +794,10 @@ def gen_service_interfaces(facts: list[dict]) -> None:
         for s in traits.get(name, []):
             L.append(f"- `{s}`")
         L.append("")
-    L.append("## SV-23 API v1 endpoints (`../../../gungnir-api-v1.md`)\n")
+    # The heading said "API v1" while every path in the table it introduces is
+    # /v2 -- the document kept its filename when the paths moved, and this
+    # heading followed the filename rather than the contract.
+    L.append("## SV-23 API endpoints (`../../../gungnir-api-v1.md`)\n")
     L.extend(api_endpoints())
     L.append("")
     L.append(footer("the trait declarations in `gungnir-tracking-service`, `gungnir-intercept-service`, `gungnir-api`; the endpoint table in `../../../gungnir-api-v1.md`",
@@ -938,11 +1077,27 @@ def gen_op_is(vignettes: list[dict], threads: list[dict]) -> None:
 
 
 # ----------------------------------------------------------------------------- traceability
+def rel_targets(r: dict) -> list[str]:
+    """The `to` of one relationship entry, as a list, whether it was written as a
+    sequence or as a single id.
+
+    Both forms are legal in the registry and the two EA exporters both accept
+    either, but this module iterated `r["to"]` directly -- so a scalar iterated
+    its CHARACTERS, and one `{from: OP-09, to: CAP-1.1}` turned into seven
+    targets named `C`, `A`, `P`, `-`, `1`, `.`, `1`: a matrix cell reading
+    `C, A, P, -, 1, ., 1` and eight check() problems naming single characters.
+    """
+    to = r.get("to")
+    if to is None:
+        return []
+    return list(to) if isinstance(to, list) else [to]
+
+
 def index_rels(rels, kind):
     fwd, back = defaultdict(list), defaultdict(list)
     for r in rels.get(kind, []) or []:
         tag = " (planned)" if r.get("status") == "planned" else ""
-        for to in r["to"]:
+        for to in rel_targets(r):
             fwd[r["from"]].append(to + tag)
             back[to].append(r["from"] + tag)
     return fwd, back
@@ -1041,31 +1196,69 @@ def gen_traceability(elements, rels) -> None:
 
 
 # ----------------------------------------------------------------------------- checks
+# Relationship kind -> (section its source must be in, section its target must be
+# in). Checked by check(); a kind absent here is not kind-checked.
+RELATIONSHIP_ENDPOINTS = {
+    "exhibits": ("operational_performers", "capabilities"),
+    "achieves": ("operational_activities", "capabilities"),
+    "performs": ("operational_performers", "operational_activities"),
+    "realizes": ("services", "operational_activities"),
+    "implements": ("resources", "services"),
+    "conforms_to": ("resources", "standards"),
+    "uses": ("resources", "resources"),
+    "satisfies": ("requirements", "capabilities"),
+    "carried_by": ("requirements", "resources"),
+}
+
+
 def check(elements, rels) -> list[str]:
     problems, notes = [], []
     ids = names(elements)
     for e in elements["capabilities"]:
         if "parent" in e and e["parent"] not in ids:
             problems.append(f"{e['id']} has unknown parent {e['parent']}")
+    # Which registry section each id belongs to, so a relationship can be checked
+    # for pointing at the right KIND of thing and not merely at something that
+    # exists. Without this, `{from: OP-30, to: [CAP-1.1]}` filed under `achieves`
+    # passed silently and the capability-to-activity matrix then presented an
+    # operational performer as an operational activity.
+    section_of = {e["id"]: sec for sec, items in elements.items()
+                  if isinstance(items, list) for e in items
+                  if isinstance(e, dict) and "id" in e}
     for kind, entries in rels.items():
+        expected = RELATIONSHIP_ENDPOINTS.get(kind)
         for r in entries or []:
             if r["from"] not in ids:
                 problems.append(f"{kind}: unknown source {r['from']}")
-            for to in r["to"]:
+            elif expected and section_of.get(r["from"]) != expected[0]:
+                problems.append(f"{kind}: source {r['from']} is a {section_of.get(r['from'])} entry, "
+                                f"but {kind} goes from {expected[0]}")
+            if r.get("status") == "planned":
+                # relationships.yaml's own header says the check treats planned as
+                # satisfied BUT REPORTS IT. Only planned requirement carriers were
+                # ever reported; planned relationships were silent, so two
+                # activities passed "realized by a service" on relationships the
+                # code does not carry.
+                notes.append(f"{kind}: {r['from']} -> {', '.join(rel_targets(r)) or '(nothing)'} "
+                             f"is planned, not in the code")
+            for to in rel_targets(r):
                 if to not in ids:
                     problems.append(f"{kind}: unknown target {to} (from {r['from']})")
-    exhibited = {to for r in rels["exhibits"] for to in r["to"]}
-    achieved = {to for r in rels["achieves"] for to in r["to"]}
+                elif expected and section_of.get(to) != expected[1]:
+                    problems.append(f"{kind}: target {to} is a {section_of.get(to)} entry, "
+                                    f"but {kind} goes to {expected[1]}")
+    exhibited = {to for r in rels["exhibits"] for to in rel_targets(r)}
+    achieved = {to for r in rels["achieves"] for to in rel_targets(r)}
     for e in elements["capabilities"]:
         if "parent" in e:
             if e["id"] not in exhibited:
                 problems.append(f"{e['id']} is exhibited by no performer")
             if e["id"] not in achieved:
                 notes.append(f"{e['id']} is achieved by no activity (cross-cutting)")
-    realized = {to for r in rels["realizes"] for to in r["to"]}
+    realized = {to for r in rels["realizes"] for to in rel_targets(r)}
     human_roles = {e["id"] for e in elements["operational_performers"] if e.get("kind") == "role"}
-    performed_by_human = {to for r in rels["performs"] if r["from"] in human_roles for to in r["to"]}
-    performed = {to for r in rels["performs"] for to in r["to"]}
+    performed_by_human = {to for r in rels["performs"] if r["from"] in human_roles for to in rel_targets(r)}
+    performed = {to for r in rels["performs"] for to in rel_targets(r)}
     for e in elements["operational_activities"]:
         if e["id"] not in realized and e["id"] not in performed_by_human:
             problems.append(f"{e['id']} is realized by no service and performed by no human")
@@ -1074,7 +1267,7 @@ def check(elements, rels) -> list[str]:
     # Requirements (GAP-083): every one names at least one capability that exists, and a
     # leaf capability nobody requires is noted, because the specification's coverage
     # section is where that is decided, not here.
-    satisfied = {to for r in rels.get("satisfies", []) or [] for to in r["to"]}
+    satisfied = {to for r in rels.get("satisfies", []) or [] for to in rel_targets(r)}
     for e in elements.get("requirements", []):
         if not any(r["from"] == e["id"] for r in rels.get("satisfies", []) or []):
             if "CAP-" in e.get("source", ""):
@@ -1086,11 +1279,17 @@ def check(elements, rels) -> list[str]:
     for e in elements["capabilities"]:
         if "parent" in e and e["id"] not in satisfied:
             notes.append(f"{e['id']} is required by no requirement (see the specification's coverage section)")
-    implemented = {to for r in rels["implements"] for to in r["to"]}
+    implemented = {to for r in rels["implements"] for to in rel_targets(r)}
     for e in elements["services"]:
         if e["id"] not in implemented:
             problems.append(f"{e['id']} is implemented by no resource")
         code = e.get("code", "")
+        if not code:
+            # An empty `code` used to pass: crate became "", ROOT / "" is ROOT,
+            # ROOT exists, and `item` was empty so the source lookup was skipped
+            # -- so "its code path exists" held for a service naming no code.
+            problems.append(f"{e['id']} has no code path")
+            continue
         crate, _, item = code.partition("::")
         crate_dir = ROOT / crate.replace("_", "-")
         if not crate_dir.exists():
@@ -1101,14 +1300,30 @@ def check(elements, rels) -> list[str]:
                         for p in glob.glob(str(crate_dir / "src" / "**" / "*.rs"), recursive=True))
             if not found:
                 problems.append(f"{e['id']}: {code} not found in source")
-    # diagram references
-    pattern = re.compile(r"\b(CAP-\d\.\d+|OA-\d\d|OP-\d\d|SV-\d\d|RS-[a-z0-9-]+|SD-\d\d|IE-\d\d|PT-\d\d|PJ-[A-Z0-9]+|AR-\d\d)\b")
-    for src in glob.glob(str(UAF / "**" / "*.puml"), recursive=True) + glob.glob(str(UAF / "**" / "*.mmd"), recursive=True):
+    # diagram references. RS_<crate> with an underscore is in the pattern because
+    # that is the alias form the generated Rs-Cn detail diagrams actually emit --
+    # 483 such tokens across them, and the pattern only matched `RS-` with a
+    # hyphen, so not one reference in any of those twelve diagrams was checked.
+    # The `replace("_", "-")` below was dead code for the same reason: nothing the
+    # pattern matched could contain an underscore.
+    pattern = re.compile(r"\b(CAP-\d\.\d+|OA-\d\d|OP-\d\d|SV-\d\d|RS[-_][a-z0-9_-]+"
+                         r"|SD-\d\d|IE-\d\d|PT-\d\d|PJ-[A-Z0-9]+|AR-\d\d)\b")
+    for src in sorted(glob.glob(str(UAF / "**" / "*.puml"), recursive=True)
+                      + glob.glob(str(UAF / "**" / "*.mmd"), recursive=True)):
         text = read(Path(src))
         for tok in sorted(set(pattern.findall(text))):
-            tok_norm = tok
-            if tok_norm not in ids and tok_norm.replace("_", "-") not in ids:
+            if tok not in ids and tok.replace("_", "-") not in ids:
                 problems.append(f"{os.path.relpath(src, UAF)}: {tok} is not in the registry")
+    # The rendered SVGs are an INPUT to the XMI export now, not just a picture:
+    # export_xmi.py reads each view's element positions back out of its own render
+    # so the EA diagram keeps the layout a human arranged. A render left stale by a
+    # forgotten render.sh silently turns part of an authored layout into a grid, so
+    # it is a problem here rather than something to notice in EA. Imported inside
+    # the function because view_layout imports this module.
+    from view_layout import layout_gaps, parse_all  # noqa: PLC0415
+    problems.extend(layout_gaps(elements))
+    _views, view_warnings = parse_all(elements)
+    notes.extend(view_warnings)
     return problems, notes
 
 

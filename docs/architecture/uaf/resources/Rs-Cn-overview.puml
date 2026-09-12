@@ -36,8 +36,6 @@ assess_decide_govern_action --> foundation_model
 secure_operate_sustain --> assess_decide_govern_action
 foundational --> foundation_model
 assess_decide_govern_action --> understand_maintain_the_picture
-tracking_core --> sense_ingest_normalize
-tracking_core --> foundation_model
 sense_ingest_normalize --> foundation_model
 sense_ingest_normalize --> service_facades
 service_facades --> tracking_core

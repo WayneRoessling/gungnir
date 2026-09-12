@@ -32,8 +32,10 @@ or from the mission set; "not produced" views name the reason.
 | Parameters (Pm) | | | | | | | | | [Pm-Me](parameters/Pm-Me.md) |
 | Traceability | | | | | | | | | *[capability to activity](traceability/capability-to-activity.md)*, *[activity to service](traceability/activity-to-service.md)*, *[service to resource](traceability/service-to-resource.md)*, *[resource to standard](traceability/resource-to-standard.md)*, *[role to activity](traceability/role-to-activity.md)*, *[requirement to capability](traceability/requirement-to-capability.md)*, *[requirement to resource](traceability/requirement-to-resource.md)* (both generated from the requirements specification, GAP-083) |
 
-Not produced anywhere: simulation views, XMI or tool exchange, and the dictionary
-view (the registry is the dictionary).
+Not produced anywhere: simulation views and the dictionary view (the registry is
+the dictionary). Tool exchange is produced, but only as the registry itself: see
+the Sparx EA exports below, which carry every element and relationship and one
+generated diagram per view package, not the 51 views in this directory.
 
 A reader who works in DoDAF terms should start from
 [`../togaf/framework-cross-reference.md`](../togaf/framework-cross-reference.md), which
@@ -86,48 +88,119 @@ python docs/architecture/uaf/tools/export_xmi.py
 
 writes `exports/gungnir-uaf.xmi`: the same registry as XMI 2.1/UML 2.1, for
 import into Sparx Enterprise Architect's UAF MDG Technology. One-way (registry
-to EA, never the reverse) and not part of the CI drift check -- run it after
-`build_uaf.py` whenever you want EA caught up with the registry.
+to EA, never the reverse). CI regenerates it and fails if the committed copy is
+stale, so it cannot drift from the registry unnoticed -- run it after
+`build_uaf.py` whenever the registry changes.
 
-Four rounds so far. The first two guessed at EA's XMI dialect and only got
-elements across, not relationships. The third was built against four files
-Wayne exported from a real EA project (its own default UAF model template, in
-XMI 1.1, XMI 2.1, EA native XML, and .xea): UAF stereotypes bound correctly
-for the first time, via a dedicated `<UAF:StereotypeName base_X="id"/>`
-element in EA's own `UAF` XMI namespace that both prior rounds were missing
-entirely, and different UAF stereotypes turned out to extend different UML
-metaclasses (`OperationalActivity` is a `uml:Activity`, not a `uml:Class`; the
-`ActualResource`-family is `uml:InstanceSpecification`) -- but relationships
-and view diagrams were still missing. The fourth round is a structural fix
-Wayne's own read of the same sample files supplied: EA organizes a UAF model
-as named VIEW packages (`VIEW_PACKAGES` in the script -- "Operational
-Structure Op-Sr", "Strategic Taxonomy St-Tx", ...), each with its own diagram,
-not by our registry's own flat element-kind taxonomy, and it places each
-relationship's `Abstraction` in a dedicated Traceability view package
-alongside its own endpoints (following the sample's own `Op-Tr` package,
-confirmed) rather than one disconnected `Relationships` package -- which is
-very likely why relationships weren't coming through at all. Diagrams are a
-mechanical grid layout per element-holding package, reusing the sample's own
-`style1`/`style2` boilerplate verbatim; the Traceability packages don't get
-one (showing elements from other packages plus connector lines needs more of
-EA's diagram format than is confirmed -- see the script's docstring).
+Eight rounds so far, the last one validated by an actual EA round trip rather
+than by reading exports. Rounds 1-2 guessed at EA's XMI dialect and got only
+elements across. Round 3, built against files Wayne exported from a real EA
+project, bound UAF stereotypes for the first time, via a dedicated
+`<UAF:StereotypeName base_X="id"/>` element in EA's own `UAF` namespace that
+both prior rounds were missing, and found that different UAF stereotypes extend
+different UML metaclasses (`OperationalActivity` is a `uml:Activity`; the
+`Actual*` family is a `uml:InstanceSpecification`). Rounds 4-7 reorganized the
+model into named UAF view packages (`VIEW_PACKAGES` in the script), gave each
+one a diagram, put each relationship's `Abstraction` in a Traceability view
+package alongside its endpoints, and switched every id to a GUID. Diagrams and
+relationships still did not appear.
 
-A second pass at the OMG UAF 1.1 specification PDFs (the UAFP profile and the
-Domain Metamodel) firmed up several of the "not in the sample" guesses: every
-domain/viewpoint pairing this script asserts (`Resources`, `Services`,
-`Personnel::Structure`, `Projects::Roadmap`, `Standards::Taxonomy`, ...) is
-checked against the DMM's own package index and is a real, valid UAF
-domain/viewpoint -- including catching one that isn't: "Actual Resources" only
-has `Taxonomy` and `Constraints` viewpoints in the spec, no `Connectivity`, so
-`Ar-Cn` (kept as the view code for consistency with this repo's existing
-`actual-resources/Ar-Cn.puml`) gets a plain diagram with no `MDGView` tag
-rather than asserting a pairing the spec doesn't support. The UAFP profile PDF
-was less tractable for confirming stereotype-to-metaclass mappings -- its
-stereotype definitions are UML profile diagrams, and PDF text extraction loses
-their visual structure, so a bare-text search kept conflating unrelated
-mentions. See the script's docstring and `VIEW_PACKAGES`/`ELEMENT_KIND_INFO`/
-`RELATIONSHIP_KIND_INFO` for exactly which of our 11 element kinds and 9
-relationship kinds are confirmed versus still a best-effort mapping.
+Round 8 settled why, by importing a 5-element probe into EA and exporting what
+EA had loaded back out (kept under `exports/ea-roundtrip/`, with EA's own export
+logs and a second export covering EA's default UAF model template). Five things
+rounds 1-7 had settled the wrong way:
+
+- A connector needs its own entry in each diagram's `<elements>` list, carrying
+  `Mode=3;EOID=<target's DUID>;SOID=<source's DUID>`. Round 6 had concluded the
+  opposite -- that a line renders once both endpoints are placed -- so no
+  relationship appeared on any diagram. Confirmed both ways: the probe's
+  connectors rendered only where such entries existed, and EA wrote them back
+  with routing of its own applied.
+- A relationship must NOT also get an `<element>` entry in the extension's
+  `<elements>` block. EA carries a connector in `<connectors>` only. Rounds 4-7
+  put 686 of them in the block EA's extension parser reads first.
+- A tagged value needs `xmi:id` and `modelElement`, not just `name` and `value`.
+  EA dropped every one of the probe's tags. So rounds 1-7 lost `uafKind`,
+  `uafId`, `uafRelationship` and every extra registry field on import, despite
+  the script claiming they survived.
+- `<ownedComment>` is an EA *Note element*, not documentation: each one arrived
+  as a separate nameless Note in the owning package, alongside the
+  `documentation=` attribute that already carried the same text.
+- `Performs` is not a UAF stereotype name -- it came back under
+  `thecustomprofile`, EA's catch-all for one it cannot resolve. EA's own UAF
+  model uses `IsCapableToPerform` for that relation. That fall-through is now
+  the oracle for the stereotype names still guessed: import, export, and
+  anything landing in `thecustomprofile` is wrong.
+
+The same round trip confirmed the `MDGView=UAF <Domain>::<Viewpoint>` tag binds,
+that EA preserves the generated GUIDs verbatim, that a package IS placed on its
+own diagram as a boundary frame (by its `EAID_` id, never its `EAPK_` one), and
+supplied EA's own diagram type per viewpoint -- Logical for almost all of them,
+Statechart for States and Sequence for Interaction Scenarios
+(`DIAGRAM_KIND_BY_VIEWPOINT`).
+
+Of the eleven element kinds and nine relationship kinds, six are now confirmed
+against a real EA model: `Capability`, `OperationalPerformer`,
+`OperationalActivity`, `InformationElement`, `Exhibits` and
+`IsCapableToPerform`. The rest are still the OMG-profile-literature mapping the
+first version made. Every domain/viewpoint pairing the script asserts was
+checked against the UAF Domain Metamodel's own package index, which also caught
+one that does not exist: "Actual Resources" has only `Taxonomy` and
+`Constraints` viewpoints, no `Connectivity`, so `Ar-Cn` gets a plain diagram
+with no `MDGView` rather than a pairing the spec does not support. `Pj-Rm`
+asserting `Projects::Roadmap` is the one remaining MDGView with positive reason
+to doubt it: EA's template names its roadmap viewpoints `Deployment Roadmap` and
+`Phasing Roadmap`. See `VIEW_PACKAGES`, `ELEMENT_KIND_INFO` and
+`RELATIONSHIP_KIND_INFO` for which is which.
+
+### The authored views in EA
+
+The export carries the views in this directory as well as the registry: 59
+diagrams, being one per view package plus one for each of 44 of the 51 authored
+PlantUML views. `tools/view_layout.py` does the reading, and the six view codes
+that previously had no package at all (`If-Cn`, `Op-Cn`, `Op-Is`, `Op-St`,
+`Sc-Cn`, `St-Cn`) now have one.
+
+Element positions come from each view's own render under `rendered/`. PlantUML's
+SVG records where it put every box, so 23 of the diagrams arrive in EA with the
+layout a human arranged rather than a generated grid. That makes the renders an
+*input* to the export and not just a picture, so `build_uaf.py`'s check reports a
+view whose render no longer positions something its source declares. Run
+`render.sh` (or `render.ps1`) after editing a `.puml`, or the check fails.
+
+Three PlantUML kinds carry no element positions in their SVG at all, which was
+measured rather than assumed: the ten `Op-Is` sequence views, the ten `Op-Pr-MT`
+activity views and the `St-Tx` taxonomy have exactly one identifiable group in
+their render, the title. For those the content is recovered from the PlantUML
+source -- participants, the `<<OA-nn>>` markers on each step, the WBS bullets --
+and laid out here, preserving the authored ORDER, which is what those views are
+about. Each diagram's documentation field in EA says which of the two it is.
+
+Edges come from the PlantUML source, never from the render, because the `Rs-Cn`
+and `If-Sr` views go through `!pragma layout smetana` and it emits no edge ids.
+An edge whose endpoints are a relationship the registry already carries reuses
+that relationship's connector, so one connector shows up on every diagram that
+draws it. The 326 edges that are not registry relationships -- a post reporting
+to a post, a capability enabling a capability, the step order of a mission thread
+-- become view-local connectors: plain `uml:Dependency`, no UAF stereotype, and
+tagged `uafViewEdge` with the view that drew them. Dropping them would put
+diagrams in EA that disagree with the PlantUML they came from; promoting them into
+`relationships.yaml` would make the views a second source of typed relationships.
+They are neither.
+
+Seven views get no EA diagram, and the check says so as a note each time. Six are
+`If-Sr` class diagrams drawn almost entirely with Rust helper types that the
+registry's `information_elements` section does not carry, and the seventh,
+`Rs-Cn-overview`, is a navigation index of links to the other `Rs-Cn` diagrams
+rather than a view of elements.
+
+Two things are deliberately not asserted. `Op-Is` and `Op-St` carry no `MDGView`:
+EA's own template pairs Interaction Scenarios with a Sequence diagram and States
+with a Statechart, and what can be built here is neither -- a faithful Sequence
+view needs lifelines and Part-typed participants this model does not carry, and
+`Op-St`'s boxes are InformationElements rather than State elements. Claiming the
+viewpoint while emitting a Logical diagram would assert a pairing nothing
+supports.
 
 ```bash
 python docs/architecture/uaf/tools/export_ea_script.py
