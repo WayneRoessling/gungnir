@@ -1314,6 +1314,16 @@ def check(elements, rels) -> list[str]:
         for tok in sorted(set(pattern.findall(text))):
             if tok not in ids and tok.replace("_", "-") not in ids:
                 problems.append(f"{os.path.relpath(src, UAF)}: {tok} is not in the registry")
+    # The rendered SVGs are an INPUT to the XMI export now, not just a picture:
+    # export_xmi.py reads each view's element positions back out of its own render
+    # so the EA diagram keeps the layout a human arranged. A render left stale by a
+    # forgotten render.sh silently turns part of an authored layout into a grid, so
+    # it is a problem here rather than something to notice in EA. Imported inside
+    # the function because view_layout imports this module.
+    from view_layout import layout_gaps, parse_all  # noqa: PLC0415
+    problems.extend(layout_gaps(elements))
+    _views, view_warnings = parse_all(elements)
+    notes.extend(view_warnings)
     return problems, notes
 
 

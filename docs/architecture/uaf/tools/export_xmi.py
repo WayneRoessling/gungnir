@@ -188,6 +188,19 @@ search kept conflating unrelated mentions rather than resolving them). The
 round-trip oracle above is how to settle the rest, and it needs EA, not
 another reading of the spec.
 
+The authored views. Through round 8 this export carried the registry and one
+mechanically gridded diagram per view package -- 15 diagrams, while this
+directory authors 51 PlantUML views, six of whose view codes had no package here
+at all. It now carries both: `view_layout.py` turns each `.puml` into an element
+set, an edge list and a box layout, and `view_diagram_xml()` emits one EA diagram
+per view, 44 of them (7 views name no registry element -- see that module).
+Element positions come from each view's own render under `rendered/`, which is why
+those renders are an INPUT to this export and why `build_uaf.py`'s check reports
+one that has gone stale. An edge a view draws that the registry already carries
+reuses that relationship's connector; one it does not becomes a view-local
+connector, tagged `uafViewEdge` (see `view_edge_xml`), which is how the diagrams
+can match their PlantUML without `relationships.yaml` gaining anything.
+
 Why XMI here and not SysML v2: EA's UAF support is built on the OMG UAF Profile
 (UAFP), a UML profile exchanged via XMI; SysML v2 uses an unrelated
 textual/API representation with no UAF binding.
@@ -208,6 +221,7 @@ from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import view_layout  # noqa: E402
 from build_uaf import UAF, load_registry  # noqa: E402
 
 # View package code -> (display title, MDG domain, MDG viewpoint). Domain/
@@ -239,6 +253,25 @@ VIEW_PACKAGES = {
     "Sv-Tr": ("Service Traceability", "Services", "Traceability"),         # domain/viewpoint confirmed (DMM spec); not in the EA sample
     "Rs-Tr": ("Resource Traceability", "Resources", "Traceability"),       # domain/viewpoint confirmed (DMM spec); not in the EA sample
     "Rq-Tr": ("Requirements Traceability", None, None),                    # see Rq above
+    # The six view codes below hold no registry section of their own. They exist
+    # because this directory AUTHORS views under them (operational/Op-Cn.puml,
+    # security/Sc-Cn.puml, ...) and those views now become EA diagrams -- see
+    # view_layout.py. Before this, six of the fourteen authored view codes had no
+    # package in the export at all.
+    "Op-Cn": ("Operational Connectivity", "Operational", "Connectivity"),  # confirmed: EA's own template pairs this viewpoint with a Logical diagram, which is what these views are
+    "St-Cn": ("Strategic Connectivity", "Strategic", "Connectivity"),      # confirmed, same way
+    "If-Cn": ("Information Connectivity", None, None),                     # EA's template has no Information::Connectivity viewpoint, so none is asserted
+    "Sc-Cn": ("Security Connectivity", None, None),                        # EA's template carries no Security domain at all
+    # Op-Is and Op-St deliberately assert no MDGView. EA's template pairs
+    # Operational::Interaction Scenarios with a Sequence diagram and
+    # Operational::States with a Statechart, and what this export can build for
+    # them is neither: a faithful Sequence view needs lifelines and Part-typed
+    # participants this model does not carry, and the Op-St view's boxes are
+    # InformationElements rather than State elements. Claiming the viewpoint while
+    # emitting a Logical diagram would assert a pairing nothing supports, so the
+    # diagrams say what they are in their own documentation instead.
+    "Op-Is": ("Operational Interaction Scenarios", None, None),
+    "Op-St": ("Operational States", None, None),
 }
 
 # Viewpoint -> (EA diagram type, MDGDgm value). EA's own UAF template uses a
@@ -610,6 +643,111 @@ def diagram_xml(pkg_key: str, title: str, domain: str | None, viewpoint: str | N
     )
 
 
+def view_edge_xml(edge_key: str, from_id: str, to_id: str, label: str,
+                   view: "view_layout.ViewDiagram") -> tuple[str, str]:
+    """A connector an authored view draws that the registry does not carry, as
+    (packagedElement XML, EA connector-extension XML).
+
+    The views draw plenty of edges that are not registry relationships: a post
+    reporting to another post in Pr-Sr, one capability enabling another in St-Cn,
+    the step order of a mission thread. Dropping them would put a diagram in EA
+    that disagrees with the PlantUML it came from; promoting them into
+    relationships.yaml would make the views a second source of typed
+    relationships. So they are carried here, as a plain uml:Dependency with NO UAF
+    stereotype, tagged with the view that drew them -- always distinguishable from
+    a registry relationship, and never mistakable for one.
+    """
+    name = label or f"{from_id} -> {to_id}"
+    rid, from_eid, to_eid = eaid(edge_key), eaid(from_id), eaid(to_id)
+    rel = (
+        f'        <packagedElement xmi:type="uml:Dependency" xmi:id={attr(rid)} '
+        f'name={attr(name)} visibility="public" supplier={attr(to_eid)} client={attr(from_eid)}/>\n'
+    )
+    tags = [tag_xml(rid, edge_key, "uafViewEdge", view.stem),
+            tag_xml(rid, edge_key, "uafViewSource", view.source)]
+    connector_ext = (
+        f'      <connector xmi:idref={attr(rid)} name={attr(name)}>\n'
+        f'        <source xmi:idref={attr(from_eid)}>\n'
+        f'          <role visibility="Public" targetScope="instance"/>\n'
+        f'          <type aggregation="none" containment="Unspecified"/>\n'
+        f'          <modifiers isOrdered="false" changeable="none" isNavigable="false"/>\n'
+        f'        </source>\n'
+        f'        <target xmi:idref={attr(to_eid)}>\n'
+        f'          <role visibility="Public" targetScope="instance"/>\n'
+        f'          <type aggregation="none" containment="Unspecified"/>\n'
+        f'          <modifiers isOrdered="false" changeable="none" isNavigable="true"/>\n'
+        f'        </target>\n'
+        f'        <properties ea_type="Dependency" direction="Source -&gt; Destination"/>\n'
+        f'        <modifiers isRoot="false" isLeaf="false"/>\n'
+        '        <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>\n'
+        f'        <labels mt={attr(name)}/>\n'
+        f'        <tags>\n{"".join(tags)}        </tags>\n'
+        '        <xrefs/>\n'
+        f'      </connector>\n'
+    )
+    return rel, connector_ext
+
+
+def view_diagram_xml(view: "view_layout.ViewDiagram", pkg_key: str, domain: str | None,
+                      viewpoint: str | None, edge_keys: list[tuple[str, str, str]],
+                      seq: int) -> str:
+    """One EA diagram for one authored PlantUML view.
+
+    Same shape as a registry view package's own diagram, with two differences: the
+    element geometry is the authored one that view_layout recovered from the
+    PlantUML render rather than a grid, and the `documentation` attribute records
+    which .puml it came from and whether the layout is authored or generated --
+    because for the sequence, activity and taxonomy kinds it is this export's, and
+    a reader of the EA model is entitled to know which.
+    """
+    duid = {}
+    els = []
+    containers = [e for e in view.elements if e.container]
+    plain = [e for e in view.elements if not e.container]
+    # Containers first and so underneath: a PlantUML package encloses its members,
+    # and EA draws in list order, so a container listed after its contents would
+    # cover them.
+    for i, e in enumerate(containers + plain):
+        left, top, right, bottom = e.box
+        d = ea_guid(f"{view.stem}:{e.reg_id}")[:8]
+        duid[e.reg_id] = d
+        els.append(f'          <element geometry={attr(f"Left={left};Top={top};Right={right};Bottom={bottom};")} '
+                    f'subject={attr(eaid(e.reg_id))} seqno={attr(i + 1)} '
+                    f'style={attr(f"HideIcon=0;DUID={d};")}/>\n')
+    for edge_key, from_id, to_id in edge_keys:
+        if from_id not in duid or to_id not in duid:
+            continue
+        style = (f"Mode=3;EOID={duid[to_id]};SOID={duid[from_id]};Color=-1;LWidth=0;Hidden=0;")
+        els.append(
+            '          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" '
+            f'subject={attr(eaid(edge_key))} style={attr(style)}/>\n')
+
+    note = (f"Generated from {view.source} by export_xmi.py. "
+            + ("Element positions are the authored layout, read back from that view's "
+               "own PlantUML render."
+               if view.layout == "authored" else
+               f"The PlantUML render of a {view.puml_kind.lower()} diagram carries no "
+               "element positions, so the layout here is generated; the authored order "
+               "is preserved and the rendered SVG under rendered/ is the picture."))
+    dgm_key = f"viewdiagram:{view.stem}"
+    return (
+        f'      <diagram xmi:id={attr(eaid(dgm_key))}>\n'
+        f'        <model package={attr(eapk(pkg_key))} localID={attr(seq)} owner={attr(eapk(pkg_key))}/>\n'
+        f'        <properties documentation={attr(note)} name={attr(view.title)} '
+        f'type={attr(diagram_kind(viewpoint)[0])}/>\n'
+        f'        <project author="gungnir" version="1.0" created={attr(STAMP)} modified={attr(STAMP)}/>\n'
+        f'        <style1 value={attr(STYLE1)}/>\n'
+        f'        <style2 value={attr(style2_xml(domain, viewpoint, ea_guid("savetag:" + dgm_key)[:8]))}/>\n'
+        f'        <swimlanes value={attr(SWIMLANES)}/>\n'
+        f'        <matrixitems value={attr(MATRIXITEMS)}/>\n'
+        f'        <extendedProperties/>\n'
+        f'        <persistentstyle value={attr(PERSISTENTSTYLE)}/>\n'
+        f'        <xrefs/>\n'
+        f'        <elements>\n{"".join(els)}        </elements>\n'
+        f'      </diagram>\n'
+    )
+
+
 def build(elements: dict, rels: dict) -> str:
     pkg_members: dict[str, list[str]] = {code: [] for code in VIEW_PACKAGES}
     pkg_element_xml: dict[str, list[str]] = {code: [] for code in VIEW_PACKAGES}
@@ -623,6 +761,10 @@ def build(elements: dict, rels: dict) -> str:
     links_by_id: dict[str, list[tuple[str, str, str, str]]] = {}
     # (rel_key, from_id, to_id) per view package, for that package's diagram.
     pkg_rels: dict[str, list[tuple[str, str, str]]] = {code: [] for code in VIEW_PACKAGES}
+    # View packages that hold at least one authored-view diagram. Such a package
+    # has to be emitted even when no registry section maps to it: Sc-Cn and If-Cn
+    # exist only to hold their authored view.
+    pkg_has_view: set[str] = set()
 
     for section, entries in elements.items():
         if not isinstance(entries, list) or section not in ELEMENT_KIND_INFO:
@@ -682,15 +824,55 @@ def build(elements: dict, rels: dict) -> str:
                     pkg_members[view_code].append(to_id)
                 pkg_rels[view_code].append((rel_key, from_id, to_id))
 
+    # ---- the authored views -------------------------------------------------
+    # Every .puml under docs/architecture/uaf becomes one EA diagram in its view
+    # package, with the element positions its own PlantUML render carries. An edge
+    # a view draws that the registry already has reuses that relationship's
+    # connector, so one connector appears on as many diagrams as draw it; one it
+    # does not becomes a view-local connector (see view_edge_xml).
+    rel_by_pair: dict[tuple[str, str], str] = {}
+    for rel_key in seen_rel_keys:
+        _, _kind, ends = rel_key.split(":", 2)
+        a, b = ends.split("->", 1)
+        rel_by_pair.setdefault((a, b), rel_key)
+        rel_by_pair.setdefault((b, a), rel_key)
+
+    views, view_warnings = view_layout.parse_all(elements)
+    view_specs: list[tuple[object, list[tuple[str, str, str]]]] = []
+    for view in views:
+        code = view.code
+        if code not in VIEW_PACKAGES:
+            view_warnings.append(f"{view.source}: view code {code} has no package in "
+                                 f"VIEW_PACKAGES, so the view is not exported")
+            continue
+        edge_keys: list[tuple[str, str, str]] = []
+        for e in view.edges:
+            key = rel_by_pair.get((e.from_id, e.to_id))
+            if key is None:
+                key = f"VIEW:{view.stem}:{e.from_id}->{e.to_id}"
+                if key not in seen_rel_keys:
+                    seen_rel_keys.add(key)
+                    rel_xml, conn_ext = view_edge_xml(key, e.from_id, e.to_id, e.label, view)
+                    pkg_element_xml[code].append(rel_xml)
+                    connectors.append(conn_ext)
+                    link = ("Dependency", eaid(key), eaid(e.from_id), eaid(e.to_id))
+                    for end in (e.from_id, e.to_id):
+                        if end in links_by_id:
+                            links_by_id[end].append(link)
+            edge_keys.append((key, e.from_id, e.to_id))
+        view_specs.append((view, edge_keys))
+        pkg_has_view.add(code)
+
     ea_elements = [
         element_ext_xml(eid, stereotype, metaclass, desc, entry, view_code, links_by_id[eid])
         for eid, (stereotype, metaclass, desc, entry, view_code) in element_records.items()
     ]
 
     packages, diagrams = [], []
+    localid = 0
     for i, (code, (title, domain, viewpoint)) in enumerate(VIEW_PACKAGES.items()):
         members = pkg_element_xml[code]
-        if not members:
+        if not members and code not in pkg_has_view:
             continue
         full_title = f"{title} {code}" if code not in ("Rq", "Rq-Tr") else title
         packages.append(
@@ -701,8 +883,15 @@ def build(elements: dict, rels: dict) -> str:
         )
         ea_elements.append(package_ext_xml(code, full_title, ROOT_PKG_KEY))
         if pkg_members[code]:
+            localid += 1
             diagrams.append(diagram_xml(code, full_title, domain, viewpoint,
-                                        pkg_members[code], pkg_rels[code], i + 1))
+                                        pkg_members[code], pkg_rels[code], localid))
+        for view, edge_keys in view_specs:
+            if view.code != code:
+                continue
+            localid += 1
+            diagrams.append(view_diagram_xml(view, code, domain, viewpoint,
+                                             edge_keys, localid))
 
     # Root package inside uml:Model, matching the sample's nesting exactly:
     # <uml:Model> (no xmi:id of its own) > one EAPK_ root package ("Model" in

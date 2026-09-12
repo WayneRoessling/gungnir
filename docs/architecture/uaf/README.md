@@ -153,12 +153,54 @@ to doubt it: EA's template names its roadmap viewpoints `Deployment Roadmap` and
 `Phasing Roadmap`. See `VIEW_PACKAGES`, `ELEMENT_KIND_INFO` and
 `RELATIONSHIP_KIND_INFO` for which is which.
 
-What this export still does not carry is the views themselves. It emits one
-mechanically gridded diagram per view package, 15 of them; this directory
-authors 51 PlantUML views, and six of their view codes (`If-Cn`, `Op-Cn`,
-`Op-Is`, `Op-St`, `Sc-Cn`, `St-Cn`) have no package in the export at all.
-Carrying the authored views across, with their layouts, is a separate piece of
-work that has not been started.
+### The authored views in EA
+
+The export carries the views in this directory as well as the registry: 59
+diagrams, being one per view package plus one for each of 44 of the 51 authored
+PlantUML views. `tools/view_layout.py` does the reading, and the six view codes
+that previously had no package at all (`If-Cn`, `Op-Cn`, `Op-Is`, `Op-St`,
+`Sc-Cn`, `St-Cn`) now have one.
+
+Element positions come from each view's own render under `rendered/`. PlantUML's
+SVG records where it put every box, so 23 of the diagrams arrive in EA with the
+layout a human arranged rather than a generated grid. That makes the renders an
+*input* to the export and not just a picture, so `build_uaf.py`'s check reports a
+view whose render no longer positions something its source declares. Run
+`render.sh` (or `render.ps1`) after editing a `.puml`, or the check fails.
+
+Three PlantUML kinds carry no element positions in their SVG at all, which was
+measured rather than assumed: the ten `Op-Is` sequence views, the ten `Op-Pr-MT`
+activity views and the `St-Tx` taxonomy have exactly one identifiable group in
+their render, the title. For those the content is recovered from the PlantUML
+source -- participants, the `<<OA-nn>>` markers on each step, the WBS bullets --
+and laid out here, preserving the authored ORDER, which is what those views are
+about. Each diagram's documentation field in EA says which of the two it is.
+
+Edges come from the PlantUML source, never from the render, because the `Rs-Cn`
+and `If-Sr` views go through `!pragma layout smetana` and it emits no edge ids.
+An edge whose endpoints are a relationship the registry already carries reuses
+that relationship's connector, so one connector shows up on every diagram that
+draws it. The 326 edges that are not registry relationships -- a post reporting
+to a post, a capability enabling a capability, the step order of a mission thread
+-- become view-local connectors: plain `uml:Dependency`, no UAF stereotype, and
+tagged `uafViewEdge` with the view that drew them. Dropping them would put
+diagrams in EA that disagree with the PlantUML they came from; promoting them into
+`relationships.yaml` would make the views a second source of typed relationships.
+They are neither.
+
+Seven views get no EA diagram, and the check says so as a note each time. Six are
+`If-Sr` class diagrams drawn almost entirely with Rust helper types that the
+registry's `information_elements` section does not carry, and the seventh,
+`Rs-Cn-overview`, is a navigation index of links to the other `Rs-Cn` diagrams
+rather than a view of elements.
+
+Two things are deliberately not asserted. `Op-Is` and `Op-St` carry no `MDGView`:
+EA's own template pairs Interaction Scenarios with a Sequence diagram and States
+with a Statechart, and what can be built here is neither -- a faithful Sequence
+view needs lifelines and Part-typed participants this model does not carry, and
+`Op-St`'s boxes are InformationElements rather than State elements. Claiming the
+viewpoint while emitting a Logical diagram would assert a pairing nothing
+supports.
 
 ```bash
 python docs/architecture/uaf/tools/export_ea_script.py
