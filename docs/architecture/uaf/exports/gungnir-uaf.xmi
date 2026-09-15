@@ -5183,6 +5183,7 @@
           <tag xmi:id="EAID_E96F38A0_3E5F_9D62_F9B8_AD2DC93BC245" name="registry.kind" value="library" modelElement="EAID_B0ECAA76_C33F_26B2_B40A_5CB8386B0991"/>
           <tag xmi:id="EAID_9F647E53_A68A_0C28_6F8E_02CE9A64A1E4" name="registry.layer" value="Productization" modelElement="EAID_B0ECAA76_C33F_26B2_B40A_5CB8386B0991"/>
           <tag xmi:id="EAID_BEA78B95_DD13_2553_C7B3_97F301539FF8" name="registry.code" value="gungnir-api/Cargo.toml" modelElement="EAID_B0ECAA76_C33F_26B2_B40A_5CB8386B0991"/>
+          <tag xmi:id="EAID_CD9CBAE4_D3A9_4350_660D_486FEC6C5577" name="conformsTo" value="SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259); SD-06 HTTP/1.1 (RFC 9112) (planned); SD-07 WebSocket (RFC 6455) (planned); SD-08 TLS 1.3 (RFC 8446) (planned)" modelElement="EAID_B0ECAA76_C33F_26B2_B40A_5CB8386B0991"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -5219,6 +5220,7 @@
           <tag xmi:id="EAID_9DAD6B3A_214E_5B72_96DC_8CF847A22537" name="registry.kind" value="binary" modelElement="EAID_981BAD01_3539_D15A_0577_759B094F4517"/>
           <tag xmi:id="EAID_F0DDEC53_5A95_676F_536A_7B1BA81B5968" name="registry.layer" value="User interface" modelElement="EAID_981BAD01_3539_D15A_0577_759B094F4517"/>
           <tag xmi:id="EAID_82D9FA4C_3381_50DB_1CDC_0A037FBE8233" name="registry.code" value="gungnir-app/Cargo.toml" modelElement="EAID_981BAD01_3539_D15A_0577_759B094F4517"/>
+          <tag xmi:id="EAID_F495C51D_7D10_9F2C_BD8B_4D5DB67AED4E" name="conformsTo" value="SD-13 Software bill of materials (CycloneDX JSON) and signed releases (planned)" modelElement="EAID_981BAD01_3539_D15A_0577_759B094F4517"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -5374,6 +5376,7 @@
           <tag xmi:id="EAID_EF804222_00CB_FF1C_F1C9_829618F7877A" name="registry.kind" value="library" modelElement="EAID_A877A43E_E3CD_4ACC_8C52_99B6FC35A6A2"/>
           <tag xmi:id="EAID_44CAF166_E617_6B27_6175_DA5AC664C793" name="registry.layer" value="Productization" modelElement="EAID_A877A43E_E3CD_4ACC_8C52_99B6FC35A6A2"/>
           <tag xmi:id="EAID_5AD1E41A_55FC_5C5A_B4EE_2BF893415D6C" name="registry.code" value="gungnir-config/Cargo.toml" modelElement="EAID_A877A43E_E3CD_4ACC_8C52_99B6FC35A6A2"/>
+          <tag xmi:id="EAID_1FFD280D_DD0E_0FAF_A58A_F7FCEC2A9DAB" name="conformsTo" value="SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259)" modelElement="EAID_A877A43E_E3CD_4ACC_8C52_99B6FC35A6A2"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -5693,6 +5696,7 @@
           <tag xmi:id="EAID_91BB1A80_0B0F_76B3_97F6_E982D9C1A888" name="registry.kind" value="library" modelElement="EAID_57EA2B16_5863_BDE5_13F4_DB46A5F3652B"/>
           <tag xmi:id="EAID_FD8F914E_22C4_5F24_132B_A746D7B5A523" name="registry.layer" value="Productization" modelElement="EAID_57EA2B16_5863_BDE5_13F4_DB46A5F3652B"/>
           <tag xmi:id="EAID_CFB787A5_DD0A_E00E_114B_8CAB1B92521A" name="registry.code" value="gungnir-identity/Cargo.toml" modelElement="EAID_57EA2B16_5863_BDE5_13F4_DB46A5F3652B"/>
+          <tag xmi:id="EAID_4E8E4942_5962_73A8_8AC1_0E0D17FC1043" name="conformsTo" value="SD-11 UUID version 7 (RFC 9562) (planned)" modelElement="EAID_57EA2B16_5863_BDE5_13F4_DB46A5F3652B"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -5718,6 +5722,7 @@
           <tag xmi:id="EAID_9DF9C199_AD38_A5D2_6FF6_FE5CB9CFE7A2" name="registry.kind" value="library" modelElement="EAID_D2DCDE6F_804C_2A4D_2999_5A9935CE0597"/>
           <tag xmi:id="EAID_3F30E586_8510_87F1_8F31_8A7F4915942E" name="registry.layer" value="Productization" modelElement="EAID_D2DCDE6F_804C_2A4D_2999_5A9935CE0597"/>
           <tag xmi:id="EAID_C32CB446_D3B9_BC32_F610_DB4ECC387BD2" name="registry.code" value="gungnir-ingest/Cargo.toml" modelElement="EAID_D2DCDE6F_804C_2A4D_2999_5A9935CE0597"/>
+          <tag xmi:id="EAID_C144C712_84C3_1121_E73F_4AD913D232F1" name="conformsTo" value="SD-16 Cursor-on-Target (CoT) (planned); SD-09 AIS (ITU-R M.1371) (planned); SD-10 ADS-B 1090 ES (RTCA DO-260B) (planned)" modelElement="EAID_D2DCDE6F_804C_2A4D_2999_5A9935CE0597"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -5777,6 +5782,7 @@
           <tag xmi:id="EAID_3846A5C0_1987_578C_4E59_07BB8659C852" name="registry.kind" value="library" modelElement="EAID_6E07FC01_1A44_E74E_D435_5AF71F2D24EC"/>
           <tag xmi:id="EAID_0985F7B1_2912_79CE_194B_F899099D69A2" name="registry.layer" value="Productization" modelElement="EAID_6E07FC01_1A44_E74E_D435_5AF71F2D24EC"/>
           <tag xmi:id="EAID_4B1E9DE7_B308_7F62_3E2A_9F8D2AE796F7" name="registry.code" value="gungnir-interop/Cargo.toml" modelElement="EAID_6E07FC01_1A44_E74E_D435_5AF71F2D24EC"/>
+          <tag xmi:id="EAID_31692A3B_5AF1_ABF7_1172_CB7D835B865C" name="conformsTo" value="SD-02 Apache Arrow (arrow 53); SD-03 ASTERIX Category 048 (Eurocontrol) (planned); SD-04 STANAG 4676 (NATO ISR tracking standard) (planned); SD-16 Cursor-on-Target (CoT) (planned)" modelElement="EAID_6E07FC01_1A44_E74E_D435_5AF71F2D24EC"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -5878,6 +5884,7 @@
           <tag xmi:id="EAID_464B1C00_93EF_12D1_54B0_7195A14BD6DA" name="registry.kind" value="library" modelElement="EAID_64E4DD7A_29F0_3638_5F94_836FFD1A5412"/>
           <tag xmi:id="EAID_6F33ACA7_F601_F666_F8DF_59F1C1F6CFC4" name="registry.layer" value="Foundation model" modelElement="EAID_64E4DD7A_29F0_3638_5F94_836FFD1A5412"/>
           <tag xmi:id="EAID_FC8F82F7_5494_0CB6_EFE0_672D95912C46" name="registry.code" value="gungnir-model/Cargo.toml" modelElement="EAID_64E4DD7A_29F0_3638_5F94_836FFD1A5412"/>
+          <tag xmi:id="EAID_FD52472B_3025_EE72_4B71_0D3E8565EC91" name="conformsTo" value="SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259)" modelElement="EAID_64E4DD7A_29F0_3638_5F94_836FFD1A5412"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -5964,6 +5971,7 @@
           <tag xmi:id="EAID_46BB0E35_D599_D29A_EFC6_C28E5E9587D2" name="registry.kind" value="binary" modelElement="EAID_B54E6A0F_2EFB_4712_34F9_849E60423D11"/>
           <tag xmi:id="EAID_165726EE_DE72_6B0A_4656_7757D8D14CB2" name="registry.layer" value="Deployment" modelElement="EAID_B54E6A0F_2EFB_4712_34F9_849E60423D11"/>
           <tag xmi:id="EAID_24BDA8CF_5EF0_0987_BEC2_499E62F16DDA" name="registry.code" value="gungnir-node/Cargo.toml" modelElement="EAID_B54E6A0F_2EFB_4712_34F9_849E60423D11"/>
+          <tag xmi:id="EAID_517EC562_5CB5_A63D_800B_44C7E0B19A8C" name="conformsTo" value="SD-12 OCI container image; SD-08 TLS 1.3 (RFC 8446) (planned); SD-13 Software bill of materials (CycloneDX JSON) and signed releases (planned)" modelElement="EAID_B54E6A0F_2EFB_4712_34F9_849E60423D11"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -6082,6 +6090,7 @@
           <tag xmi:id="EAID_6B2A7C5F_37DC_14AA_72FB_9E8C7D0BBADF" name="registry.kind" value="library" modelElement="EAID_F601648C_5348_BCE0_CC7F_F90793A8073B"/>
           <tag xmi:id="EAID_6DFDBF77_AC67_A0DD_BDA0_8DFF0C765AC2" name="registry.layer" value="Deployment" modelElement="EAID_F601648C_5348_BCE0_CC7F_F90793A8073B"/>
           <tag xmi:id="EAID_E359F44D_E298_429D_175B_B9F52A080CFE" name="registry.code" value="gungnir-remote/Cargo.toml" modelElement="EAID_F601648C_5348_BCE0_CC7F_F90793A8073B"/>
+          <tag xmi:id="EAID_22043833_9ADF_22AF_80E1_278E78D54E83" name="conformsTo" value="SD-06 HTTP/1.1 (RFC 9112) (planned); SD-07 WebSocket (RFC 6455) (planned); SD-08 TLS 1.3 (RFC 8446) (planned); SD-16 Cursor-on-Target (CoT) (planned)" modelElement="EAID_F601648C_5348_BCE0_CC7F_F90793A8073B"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -6320,6 +6329,7 @@
           <tag xmi:id="EAID_279FF074_259C_E305_CC71_8E8547C936B6" name="registry.kind" value="library" modelElement="EAID_1C33C695_E991_53CA_A16D_D43DF4220FB0"/>
           <tag xmi:id="EAID_E483497E_38CF_9C4B_0531_82B139469F89" name="registry.layer" value="Productization" modelElement="EAID_1C33C695_E991_53CA_A16D_D43DF4220FB0"/>
           <tag xmi:id="EAID_4F5AD8BE_03C0_636C_F999_AC7B90DAE27F" name="registry.code" value="gungnir-store/Cargo.toml" modelElement="EAID_1C33C695_E991_53CA_A16D_D43DF4220FB0"/>
+          <tag xmi:id="EAID_ADA91F59_FBB1_F20D_1ECF_D5814384398F" name="conformsTo" value="SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259)" modelElement="EAID_1C33C695_E991_53CA_A16D_D43DF4220FB0"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -32027,13 +32037,13 @@
     <UAF:ServiceInterface base_Class="EAID_A405A114_2200_005C_DFC0_4F20F1DDD8E6"/>
     <UAF:ResourceArtifact base_Class="EAID_F3B5AE02_2587_6C3B_2F1B_8B6B317D2098"/>
     <UAF:ResourceArtifact base_Class="EAID_C71EB8D7_9575_6AC2_40D6_CC3AEE1F62C9"/>
-    <UAF:ResourceArtifact base_Class="EAID_B0ECAA76_C33F_26B2_B40A_5CB8386B0991"/>
-    <UAF:ResourceArtifact base_Class="EAID_981BAD01_3539_D15A_0577_759B094F4517"/>
+    <UAF:ResourceArtifact base_Class="EAID_B0ECAA76_C33F_26B2_B40A_5CB8386B0991" conformsTo="SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259); SD-06 HTTP/1.1 (RFC 9112) (planned); SD-07 WebSocket (RFC 6455) (planned); SD-08 TLS 1.3 (RFC 8446) (planned)"/>
+    <UAF:ResourceArtifact base_Class="EAID_981BAD01_3539_D15A_0577_759B094F4517" conformsTo="SD-13 Software bill of materials (CycloneDX JSON) and signed releases (planned)"/>
     <UAF:ResourceArtifact base_Class="EAID_579E05F4_F770_4CBB_4E7E_F7E12258EEAF"/>
     <UAF:ResourceArtifact base_Class="EAID_C7E422EF_9DB4_4AF5_4446_EE9EB339F849"/>
     <UAF:ResourceArtifact base_Class="EAID_E3BCA50A_8AAF_9FD6_E59A_97B961A09D30"/>
     <UAF:ResourceArtifact base_Class="EAID_E57273C7_29DB_341C_D57B_75199AD4007C"/>
-    <UAF:ResourceArtifact base_Class="EAID_A877A43E_E3CD_4ACC_8C52_99B6FC35A6A2"/>
+    <UAF:ResourceArtifact base_Class="EAID_A877A43E_E3CD_4ACC_8C52_99B6FC35A6A2" conformsTo="SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259)"/>
     <UAF:ResourceArtifact base_Class="EAID_950096F4_D3BA_89B3_F1C9_CFB0F38AC3C0"/>
     <UAF:ResourceArtifact base_Class="EAID_2D226BEB_B7EA_8A30_3699_DBD39A8EAD32"/>
     <UAF:ResourceArtifact base_Class="EAID_4F8C01E0_A971_0531_5A32_159B13F254E1"/>
@@ -32045,20 +32055,20 @@
     <UAF:ResourceArtifact base_Class="EAID_E2B4F078_406F_45F3_8879_376DF93ED40F"/>
     <UAF:ResourceArtifact base_Class="EAID_91180E98_051F_2A7A_7252_FCC2461ADCDE"/>
     <UAF:ResourceArtifact base_Class="EAID_BE710630_FF76_68DA_BD58_449E091D76BD"/>
-    <UAF:ResourceArtifact base_Class="EAID_57EA2B16_5863_BDE5_13F4_DB46A5F3652B"/>
-    <UAF:ResourceArtifact base_Class="EAID_D2DCDE6F_804C_2A4D_2999_5A9935CE0597"/>
+    <UAF:ResourceArtifact base_Class="EAID_57EA2B16_5863_BDE5_13F4_DB46A5F3652B" conformsTo="SD-11 UUID version 7 (RFC 9562) (planned)"/>
+    <UAF:ResourceArtifact base_Class="EAID_D2DCDE6F_804C_2A4D_2999_5A9935CE0597" conformsTo="SD-16 Cursor-on-Target (CoT) (planned); SD-09 AIS (ITU-R M.1371) (planned); SD-10 ADS-B 1090 ES (RTCA DO-260B) (planned)"/>
     <UAF:ResourceArtifact base_Class="EAID_E0CF00EC_F981_B047_F636_22FC66A1F564"/>
-    <UAF:ResourceArtifact base_Class="EAID_6E07FC01_1A44_E74E_D435_5AF71F2D24EC"/>
+    <UAF:ResourceArtifact base_Class="EAID_6E07FC01_1A44_E74E_D435_5AF71F2D24EC" conformsTo="SD-02 Apache Arrow (arrow 53); SD-03 ASTERIX Category 048 (Eurocontrol) (planned); SD-04 STANAG 4676 (NATO ISR tracking standard) (planned); SD-16 Cursor-on-Target (CoT) (planned)"/>
     <UAF:ResourceArtifact base_Class="EAID_C9E22673_BF68_0E1C_9563_7CC663DD2546"/>
     <UAF:ResourceArtifact base_Class="EAID_8F2DAF18_AAE1_F682_6DEC_07AC1AFF46E1"/>
     <UAF:ResourceArtifact base_Class="EAID_D9431BBC_CD21_9DAB_ADE5_D8447EEEBCBA"/>
-    <UAF:ResourceArtifact base_Class="EAID_64E4DD7A_29F0_3638_5F94_836FFD1A5412"/>
+    <UAF:ResourceArtifact base_Class="EAID_64E4DD7A_29F0_3638_5F94_836FFD1A5412" conformsTo="SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259)"/>
     <UAF:ResourceArtifact base_Class="EAID_EFEF1E6D_A2EB_2A0A_1575_C0C3B150A95C"/>
-    <UAF:ResourceArtifact base_Class="EAID_B54E6A0F_2EFB_4712_34F9_849E60423D11"/>
+    <UAF:ResourceArtifact base_Class="EAID_B54E6A0F_2EFB_4712_34F9_849E60423D11" conformsTo="SD-12 OCI container image; SD-08 TLS 1.3 (RFC 8446) (planned); SD-13 Software bill of materials (CycloneDX JSON) and signed releases (planned)"/>
     <UAF:ResourceArtifact base_Class="EAID_5D7CDC20_986E_A5AA_04B8_C3A25EE80A66"/>
     <UAF:ResourceArtifact base_Class="EAID_48FBCF16_5B1C_7BC0_23D5_0CB9803874A5"/>
     <UAF:ResourceArtifact base_Class="EAID_BFA9ABA7_E0B2_F6D4_DE9E_6521631700AB"/>
-    <UAF:ResourceArtifact base_Class="EAID_F601648C_5348_BCE0_CC7F_F90793A8073B"/>
+    <UAF:ResourceArtifact base_Class="EAID_F601648C_5348_BCE0_CC7F_F90793A8073B" conformsTo="SD-06 HTTP/1.1 (RFC 9112) (planned); SD-07 WebSocket (RFC 6455) (planned); SD-08 TLS 1.3 (RFC 8446) (planned); SD-16 Cursor-on-Target (CoT) (planned)"/>
     <UAF:ResourceArtifact base_Class="EAID_37E76131_E239_A3A3_B18D_F58B02CC6E6C"/>
     <UAF:ResourceArtifact base_Class="EAID_7880001A_ECAB_99D1_8294_F7603960B8BC"/>
     <UAF:ResourceArtifact base_Class="EAID_E8948346_3461_822B_798D_BEC44B8A454F"/>
@@ -32067,7 +32077,7 @@
     <UAF:ResourceArtifact base_Class="EAID_68B3A19C_3095_C295_5A93_805CA264E340"/>
     <UAF:ResourceArtifact base_Class="EAID_1F7E59D2_91DA_67F5_35EA_69B1AA548131"/>
     <UAF:ResourceArtifact base_Class="EAID_13020BC4_C8F8_529E_F926_12A9790CD3E0"/>
-    <UAF:ResourceArtifact base_Class="EAID_1C33C695_E991_53CA_A16D_D43DF4220FB0"/>
+    <UAF:ResourceArtifact base_Class="EAID_1C33C695_E991_53CA_A16D_D43DF4220FB0" conformsTo="SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259)"/>
     <UAF:ResourceArtifact base_Class="EAID_861FB812_0AA8_7F82_814D_B50A80505B57"/>
     <UAF:ResourceArtifact base_Class="EAID_53A0ED3C_E2C9_4106_FCA4_FC80233D1B99"/>
     <UAF:ResourceArtifact base_Class="EAID_460AD572_1581_B53C_5ABD_3BD83C8CD3C4"/>

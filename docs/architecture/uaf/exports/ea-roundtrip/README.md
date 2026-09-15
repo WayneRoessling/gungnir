@@ -69,6 +69,11 @@ mechanical test for each, because EA files a stereotype it cannot resolve under
 3. Export the imported package as XMI 2.1.
 4. Grep the export for `thecustomprofile:`. Every hit is a wrong name.
 
+The probe also carries a resource conforming to a standard, written the two
+ways EA writes a string property (an attribute on the stereotype application
+and an extension tag named `conformsTo`), so the same import shows which of
+the two EA reads back onto the element.
+
 A name that comes back under `UAF:` is confirmed. Record the result in
 `ELEMENT_KIND_INFO` or `RELATIONSHIP_KIND_INFO`, which says per entry whether it
 is confirmed or a guess.
