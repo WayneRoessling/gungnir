@@ -411,7 +411,16 @@ def _activity_view(text: str, ids, by_name) -> tuple[list[ViewElement], list[Vie
                                                            MARGIN + BOX_H), container=True))
     lanes = len(els)
     for step in STEP_RE.findall(text):
-        for rid in ID_RE.findall(step):
+        # The step's ACTIVITIES are the ones in its `<<OA-nn, OA-mm>>` marker, and
+        # only those go into the chain. A step's text can also name a performer
+        # -- `:6. decide: ... (OP-02 Supervisor);` -- and reading every id in the
+        # step chained that performer into the flow as if it were a step,
+        # producing OP-02 -> OA-08 edges that looked like `performs` relations the
+        # registry lacked. It is placed on the diagram as the deciding performer
+        # and left out of the order.
+        marker = re.search(r"<<([^>]*)>>", step)
+        step_ids = ID_RE.findall(marker.group(1)) if marker else []
+        for rid in step_ids:
             if rid in ids and rid not in seen:
                 seen.add(rid)
                 order.append(rid)
@@ -419,6 +428,12 @@ def _activity_view(text: str, ids, by_name) -> tuple[list[ViewElement], list[Vie
                 left = MARGIN + (i % 4) * (BOX_W + GAP_X)
                 top = MARGIN + BOX_H + GAP_Y + (i // 4) * (BOX_H + GAP_Y)
                 els.append(ViewElement(rid, "", rid, (left, top, left + BOX_W, top + BOX_H)))
+        for rid in ID_RE.findall(step):
+            if rid in ids and rid not in seen and rid not in step_ids:
+                seen.add(rid)
+                left = MARGIN + len([e for e in els if e.container]) * (BOX_W + GAP_X)
+                els.append(ViewElement(rid, "", rid, (left, MARGIN, left + BOX_W, MARGIN + BOX_H),
+                                       container=True))
     edges = [ViewEdge(order[i], order[i + 1], "then", i + 1) for i in range(len(order) - 1)]
     return els, edges, max(0, len(SWIMLANE_RE.findall(text)) - lanes)
 

@@ -167,26 +167,66 @@ id, never its `EAPK_` one, which is the bug that was actually there; and
 `MDGDgm=SysML1.4::BlockDefinition` is right for a Logical UAF view, needing
 `::StateMachine` for a States view and `::Sequence` for Interaction Scenarios.
 
+Ninth version. The second round trip, of the full 59-diagram export rather than
+a probe (exports/ea-roundtrip/run-2/). All 59 diagrams and all placements came
+back, the tagged values survived, and no Note elements appeared, so round 8's
+fixes held. It also carried something the probe run could not: EA's export
+declares every stereotype of every enabled profile in its <profiles> block --
+213 for the UAF profile, each with the metaclass it extends -- which turns the
+"import and see what lands in thecustomprofile" oracle into a list to check
+names against directly. Settled by it, and by what the import did:
+
+  - Five names were wrong and the profile gave the right ones: Achieves is
+    MapsToCapability, Realizes is Implements, PersonType is Post (the registry's
+    PT-nn entries are posts, and the authored Pr-Sr view already says so). The
+    two wrong relationship names had LOOKED bound, because EA matches a name
+    case-insensitively against every enabled profile and BIZBOK has `achieves`
+    and `realizes` -- a wrong name landing in a wrong profile, not just in
+    thecustomprofile. ConformsTo, Satisfies and CarriedBy exist in no profile:
+    UAF models conformance as a `conformsTo` property and requirements through
+    SysML, whose `satisfy` runs from the satisfier to the requirement, so those
+    two kinds now emit SysML:satisfy with the connector's endpoints swapped
+    (SATISFIER_IS_TARGET) and conforms_to is a plain Dependency like `uses`.
+  - The seven actual resources were dropped outright. Their model element was
+    right (uml:InstanceSpecification, which is what EA's own template writes)
+    but their extension entry was not: EA's own says xmi:type="uml:Object" and
+    sType="Object" for such an element, and the profile itself declares
+    ActualResource as extending Object. Fixed in element_ext_xml.
+  - A tagged value whose name matches a PROPERTY of some stereotype in an
+    enabled profile gets that stereotype applied on import: `owner` became
+    UMM2:bLibrary on 159 elements, `source` FACE:FACE_Conversion on 94,
+    `priority` MARTE:GaStep on 64, `category` UAF:Metadata on 64. Every
+    registry-field tag is now prefixed `registry.` (REGISTRY_TAG_PREFIX).
+  - EA places every connector whose two ends are on a diagram, whether or not
+    the file listed it there: the Op-Cn view diagram came back with 67 lines
+    for the 25 it was given, the rest being other views' connectors between the
+    same performers. A view-local connector is therefore one per (from, to,
+    label) across all views rather than one per view, tagged with every view
+    that draws it, so what EA adds is the same connector and not a duplicate.
+  - Two of my own defects, found while answering how the view-local connectors
+    should be treated: the St-Tx view's 56 parent edges were becoming
+    view-local connectors although the registry states the hierarchy in each
+    capability's `parent` field (now emitted as relationships, PARENT_KIND),
+    and the activity-view parser was chaining a performer named in a decision
+    step into the step order, producing 14 edges shaped like `performs` that
+    the registry rightly lacked. build_uaf.py's check now reports any view edge
+    shaped like a registry kind but absent from relationships.yaml, so that
+    class of disagreement fails the build rather than becoming a connector.
+
 Note for anyone reading the output: inside an EA `<links>` block the child
 elements carry `xmi:id`, not `xmi:idref`, even though they are references to
 a relationship declared elsewhere (verified against the sample, which does
 the same). So a relationship id legitimately appears three times -- once as
 its `packagedElement` declaration and once in each endpoint's `<links>`.
 
-What is confirmed against a real EA model vs. still a best-effort mapping:
-see VIEW_PACKAGES, ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO below -- each
-entry says which in a trailing comment. Briefly: Capability,
-OperationalPerformer, OperationalActivity, InformationElement, Exhibits and
-IsCapableToPerform (plus the package/diagram/MDGView shape for
-St-Tx/Op-Sr/Op-Pr/Op-Tr/If) are confirmed; Services, Resources, Personnel,
-Standards, Projects, Actual Resources, Requirements, and 7 of 9 relationship
-kinds are still the OMG-profile-literature-informed guesses the first version
-made (a pass at the OMG UAFP 1.1 specification PDF to firm these up did not
-yield clean answers -- its stereotype-definition pages are UML profile
-diagrams, and PDF text extraction loses their visual structure, so a bare-text
-search kept conflating unrelated mentions rather than resolving them). The
-round-trip oracle above is how to settle the rest, and it needs EA, not
-another reading of the spec.
+What is confirmed: every stereotype name in ELEMENT_KIND_INFO and
+RELATIONSHIP_KIND_INFO is now checked against the UAF profile's own declared
+list (run-2's <profiles> block), and every one that is UAF's bound as UAF's on
+the second round trip. The two that are SysML's (Requirement, satisfy) are the
+correct reuse -- UAF has no requirements domain -- with satisfy resting on
+SysML's vocabulary rather than on a list EA wrote, since SysML's block is not
+declared in the export; the next round trip shows it under SysML: or
+thecustomprofile:. Each table entry says which.
 
 The authored views. Through round 8 this export carried the registry and one
 mechanically gridded diagram per view package -- 15 diagrams, while this
@@ -288,18 +328,39 @@ DIAGRAM_KIND_BY_VIEWPOINT = {
 }
 
 # Registry section -> (UAF stereotype, UML base metaclass, view package code).
+# Every stereotype below is now checked against the UAF profile itself, not
+# against a sample or the literature: EA's second round-trip export
+# (exports/ea-roundtrip/run-2/) carries a <profiles> block declaring all 213
+# stereotypes of its UAF profile (nsPrefix UAFP) with the metaclass each
+# extends. "in the profile" below means the name is in that list.
 ELEMENT_KIND_INFO = {
-    "capabilities": ("Capability", "Class", "St-Tx"),                    # confirmed
-    "operational_performers": ("OperationalPerformer", "Class", "Op-Sr"),  # confirmed
-    "operational_activities": ("OperationalActivity", "Activity", "Op-Pr"),  # confirmed
-    "services": ("ServiceInterface", "Class", "Sv-Cn"),
-    "resources": ("ResourceArtifact", "Class", "Rs-Cn"),
-    "personnel_types": ("PersonType", "Class", "Pr-Sr"),
-    "standards": ("Standard", "Class", "Sd-Tx"),
-    "projects": ("Project", "Class", "Pj-Rm"),
-    "information_elements": ("InformationElement", "Class", "If-Sr"),    # confirmed (stereotype name; was "Information" -- wrong -- in round 1)
-    "actual_resources": ("ActualResource", "InstanceSpecification", "Ar-Cn"),  # metaclass confirmed by the "Actual X" family pattern
-    "requirements": ("Requirement", "Class", "Rq"),
+    "capabilities": ("Capability", "Class", "St-Tx"),                    # in the profile; bound on both round trips
+    "operational_performers": ("OperationalPerformer", "Class", "Op-Sr"),  # in the profile; bound on both round trips
+    "operational_activities": ("OperationalActivity", "Activity", "Op-Pr"),  # in the profile; bound on both round trips
+    "services": ("ServiceInterface", "Class", "Sv-Cn"),                  # in the profile; bound on round trip 2
+    "resources": ("ResourceArtifact", "Class", "Rs-Cn"),                 # in the profile; bound on round trip 2
+    # `Post`, not `PersonType`: PersonType is not in the UAF profile at all --
+    # round trip 2 bound it to updm:PersonType, the UPDM predecessor profile that
+    # happened to be enabled. UAF offers Person (a type of person) and Post (a
+    # type of role in an organisation); the registry's PT-nn entries are posts
+    # (Commander, Supervisor, Sensor manager ...) and the authored Pr-Sr view
+    # already stereotypes them <<Post>>.
+    "personnel_types": ("Post", "Class", "Pr-Sr"),
+    "standards": ("Standard", "Class", "Sd-Tx"),                         # in the profile; bound on round trip 2
+    "projects": ("Project", "Class", "Pj-Rm"),                           # in the profile; bound on round trip 2
+    "information_elements": ("InformationElement", "Class", "If-Sr"),    # in the profile; bound on both round trips
+    # In the profile, extending Object -- EA's name for an InstanceSpecification.
+    # Round trip 2 DROPPED all seven of these on import: the model element was
+    # right (uml:InstanceSpecification, as EA's own template writes it) but the
+    # extension entry said xmi:type="uml:InstanceSpecification"/sType=
+    # "InstanceSpecification", and EA's own entry for such an element says
+    # uml:Object / sType="Object". See element_ext_xml.
+    "actual_resources": ("ActualResource", "InstanceSpecification", "Ar-Cn"),
+    # Not in the UAF profile: UAF has no requirement of its own and reuses
+    # SysML's. Round trip 2 resolved this to SysML:requirement, which is the
+    # correct binding, so the name is kept and it is emitted in the SysML
+    # namespace (see stereo_app).
+    "requirements": ("SysML:Requirement", "Class", "Rq"),
 }
 
 # Registry relationship kind -> (UAF stereotype or None, UML base metaclass,
@@ -312,21 +373,68 @@ ELEMENT_KIND_INFO = {
 # dependency graph, so it stays a plain uml:Dependency with no UAF stereotype,
 # placed directly in Resources alongside its own source elements.
 RELATIONSHIP_KIND_INFO = {
-    "exhibits": ("Exhibits", "Abstraction", "Op-Tr"),        # confirmed (EA round trip: bound as UAF:Exhibits)
-    "achieves": ("Achieves", "Abstraction", "Op-Tr"),
-    # confirmed (EA round trip). Was "Performs" through round 7, which EA could
-    # not resolve: it came back as `thecustomprofile:Performs`, its catch-all for
-    # an unknown stereotype. EA's own UAF template carries exactly this relation
-    # (OperationalPerformer -> OperationalActivity) as UAF:IsCapableToPerform on
-    # a uml:Abstraction.
+    "exhibits": ("Exhibits", "Abstraction", "Op-Tr"),        # in the profile; bound on both round trips
+    # `MapsToCapability`, not `Achieves`: Achieves is not in the UAF profile.
+    # Round trip 2 bound it, case-insensitively, to BIZBOK:achieves -- a business
+    # architecture profile that happened to be enabled -- which is how a wrong
+    # name can look bound. MapsToCapability is the profile's relation from an
+    # activity to the capability it maps to, and EA's own UAF template uses it.
+    "achieves": ("MapsToCapability", "Abstraction", "Op-Tr"),
+    # Was "Performs" through round 7; the profile's name for a performer's
+    # relation to an activity it can perform is IsCapableToPerform.
     "performs": ("IsCapableToPerform", "Abstraction", "Op-Tr"),
-    "realizes": ("Realizes", "Abstraction", "Sv-Tr"),
-    "implements": ("Implements", "Abstraction", "Rs-Tr"),
-    "conforms_to": ("ConformsTo", "Abstraction", "Rs-Tr"),
+    # `Implements`, not `Realizes`: Realizes is not in the profile (round trip 2
+    # bound it to BIZBOK:realizes). Implements is the profile's relation from a
+    # service or resource element to the operational element it implements, so
+    # it is right for both this kind and `implements` below; the two stay
+    # distinguishable by their uafRelationship tag and their package.
+    "realizes": ("Implements", "Abstraction", "Sv-Tr"),
+    "implements": ("Implements", "Abstraction", "Rs-Tr"),   # in the profile; bound on round trip 2
+    # No stereotype: the profile has no relationship for conformance to a
+    # standard at all (nothing with "Conform" in its name among its 213). UAF
+    # models it as a `conformsTo` PROPERTY on the conforming element, which EA's
+    # own template carries as a reference-valued tag. So this is a plain
+    # Dependency like `uses`, and the registry kind survives in its tag. Emitting
+    # the property is a follow-up: its reference-value encoding is unconfirmed.
+    "conforms_to": (None, "Dependency", "Rs-Tr"),
     "uses": (None, "Dependency", "Rs-Cn"),
-    "satisfies": ("Satisfies", "Abstraction", "Rq-Tr"),
-    "carried_by": ("CarriedBy", "Abstraction", "Rq-Tr"),
+    # SysML `satisfy`, not `Satisfies`/`CarriedBy`, neither of which any profile
+    # has. UAF has no requirements domain and reuses SysML's, whose relation runs
+    # from the SATISFIER to the requirement -- the opposite direction from the
+    # registry's `REQ -> capability`, so build() swaps the connector's endpoints
+    # for these two kinds (SATISFIER_IS_TARGET). SysML's profile block is not
+    # declared in EA's export, so unlike every other name in this table this one
+    # rests on SysML's own vocabulary rather than on a list EA wrote; the round-
+    # trip oracle will show it under SysML: or thecustomprofile:.
+    "satisfies": ("SysML:satisfy", "Abstraction", "Rq-Tr"),
+    "carried_by": ("SysML:satisfy", "Abstraction", "Rq-Tr"),
 }
+
+# Registry kinds stated as `requirement -> satisfier` that SysML states the other
+# way round. The registry direction is kept in the relationship's key and tag;
+# only the connector's client/supplier are swapped, so EA's satisfy arrow points
+# from the capability or resource to the requirement, as SysML defines it.
+SATISFIER_IS_TARGET = {"satisfies", "carried_by"}
+
+# The capability hierarchy is registry data too, held as a `parent` field on each
+# capability rather than as a relationships.yaml entry. It is emitted as a
+# relationship in its own right so the St-Tx views can draw it by reference: EA's
+# own UAF template draws capability-to-capability as a plain, unstereotyped
+# Dependency, which is what this becomes.
+PARENT_KIND = "parent"
+
+
+def stereo_app(stereotype: str, base_metaclass: str, target_id: str) -> str:
+    """One stereotype-application element. A stereotype is `Name` (the UAF
+    profile) or `Profile:Name` for one from another profile -- SysML's
+    requirement and satisfy are the two in use."""
+    prefix, _, name = stereotype.rpartition(":")
+    return f'    <{prefix or "UAF"}:{name} base_{base_metaclass}={attr(target_id)}/>\n'
+
+
+def stereo_name(stereotype: str | None) -> str | None:
+    """The bare name, for the `stereotype=` attribute in an extension entry."""
+    return stereotype.rpartition(":")[2] if stereotype else None
 
 def ea_guid(key: str) -> str:
     """A GUID-shaped id body (8_4_4_4_12 hex, underscore-separated) derived
@@ -368,9 +476,19 @@ ROOT_PKG_KEY = "gungnir-uaf-root"
 STAMP = "2026-09-04 00:00:00"
 
 # Fields already surfaced structurally (id is the xmi:id, name is the element
-# name, description becomes ownedComment) -- everything else on an entry becomes
-# a generic tagged value, so a future registry field needs no change here.
+# name, description is the extension entry's documentation) -- everything else
+# on an entry becomes a generic tagged value, so a future registry field needs no
+# change here.
 STRUCTURAL_FIELDS = {"id", "name", "description"}
+
+# Every registry field's tag name is prefixed, because a bare field name is not
+# safe in EA. On import EA reconciles a tagged value against every ENABLED
+# profile, and a tag whose name matches a property of some stereotype gets that
+# stereotype applied: round trip 2 turned `owner` into UMM2:bLibrary on 159
+# elements, `source` into FACE:FACE_Conversion on 94, `priority` into MARTE:GaStep
+# on 64 and `category` into UAF:Metadata on 64, each carrying the tag's value as
+# that stereotype's property. No profile has a dotted property name.
+REGISTRY_TAG_PREFIX = "registry."
 
 # Verbatim from the real EA export (see module docstring); these read as
 # generic EA UI preferences, not content specific to any one diagram.
@@ -460,8 +578,7 @@ def element_xml(entry: dict, stereotype: str, metaclass: str) -> tuple[str, str]
     # EA actually shows in the Notes field.
     body = (f'        <packagedElement xmi:type={attr("uml:" + metaclass)} xmi:id={attr(eid)} '
             f'name={attr(name)} visibility="public"{extra_attrs}/>\n')
-    uaf_stereo = f'    <UAF:{stereotype} base_{metaclass}={attr(eid)}/>\n'
-    return body, uaf_stereo
+    return body, stereo_app(stereotype, metaclass, eid)
 
 
 def element_ext_xml(reg_id: str, stereotype: str, metaclass: str, desc: str, entry: dict,
@@ -471,22 +588,27 @@ def element_ext_xml(reg_id: str, stereotype: str, metaclass: str, desc: str, ent
     start_id, end_id) -- confirmed present on both endpoints of a real
     relationship in the sample."""
     eid = eaid(reg_id)
-    tags = [tag_xml(eid, reg_id, "uafKind", stereotype),
+    tags = [tag_xml(eid, reg_id, "uafKind", stereo_name(stereotype)),
             tag_xml(eid, reg_id, "uafId", reg_id)]
     for k, v in entry.items():
         if k in STRUCTURAL_FIELDS or v in (None, "", []):
             continue
-        tags.append(tag_xml(eid, reg_id, k, v))
+        tags.append(tag_xml(eid, reg_id, REGISTRY_TAG_PREFIX + k, v))
+    # EA's name for an InstanceSpecification is Object, in the extension entry
+    # only: its own export writes the model element as uml:InstanceSpecification
+    # and the entry as xmi:type="uml:Object" sType="Object". Round trip 2 dropped
+    # every element whose entry said InstanceSpecification.
+    ext_type = "Object" if metaclass == "InstanceSpecification" else metaclass
     links_xml = "".join(
         f'          <{lm} xmi:id={attr(lid)} start={attr(start)} end={attr(end)}/>\n'
         for lm, lid, start, end in links
     )
     return (
-        f'      <element xmi:idref={attr(eid)} xmi:type={attr("uml:" + metaclass)} '
+        f'      <element xmi:idref={attr(eid)} xmi:type={attr("uml:" + ext_type)} '
         f'name={attr(entry.get("name", reg_id))} scope="public">\n'
         f'        <model package={attr(eapk(pkg_key))} tpos="0" ea_eleType="element"/>\n'
-        f'        <properties isSpecification="false" sType={attr(metaclass)} nType="0" scope="public" '
-        f'stereotype={attr(stereotype)} documentation={attr(desc)}/>\n'
+        f'        <properties isSpecification="false" sType={attr(ext_type)} nType="0" scope="public" '
+        f'stereotype={attr(stereo_name(stereotype))} documentation={attr(desc)}/>\n'
         f'        <project author="gungnir" version="1.0" phase="1.0" created={attr(STAMP)} '
         f'modified={attr(STAMP)} complexity="1" status="Proposed"/>\n'
         '        <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;'
@@ -539,10 +661,10 @@ def relationship_xml(rel_key: str, from_id: str, to_id: str, kind: str,
     for k, v in extra.items():
         if k in ("from", "to") or v in (None, "", []):
             continue
-        tags.append(tag_xml(rid, rel_key, k, v))
+        tags.append(tag_xml(rid, rel_key, REGISTRY_TAG_PREFIX + k, v))
     tags_xml = "".join(tags)
 
-    stereo_attr = f' stereotype={attr(stereotype)}' if stereotype else ""
+    stereo_attr = f' stereotype={attr(stereo_name(stereotype))}' if stereotype else ""
     # `name` belongs on <connector> and in <labels mt=...>, which is where EA
     # puts it and what it writes back; it is not an attribute of the connector's
     # <properties> (EA's own carry only ea_type/direction/stereotype there).
@@ -567,7 +689,7 @@ def relationship_xml(rel_key: str, from_id: str, to_id: str, kind: str,
         '        <xrefs/>\n'
         f'      </connector>\n'
     )
-    uaf_stereo = f'    <UAF:{stereotype} base_{metaclass}={attr(rid)}/>\n' if stereotype else ""
+    uaf_stereo = stereo_app(stereotype, metaclass, rid) if stereotype else ""
     return rel, connector_ext, uaf_stereo
 
 
@@ -644,7 +766,7 @@ def diagram_xml(pkg_key: str, title: str, domain: str | None, viewpoint: str | N
 
 
 def view_edge_xml(edge_key: str, from_id: str, to_id: str, label: str,
-                   view: "view_layout.ViewDiagram") -> tuple[str, str]:
+                   drawn_by: list) -> tuple[str, str]:
     """A connector an authored view draws that the registry does not carry, as
     (packagedElement XML, EA connector-extension XML).
 
@@ -663,8 +785,8 @@ def view_edge_xml(edge_key: str, from_id: str, to_id: str, label: str,
         f'        <packagedElement xmi:type="uml:Dependency" xmi:id={attr(rid)} '
         f'name={attr(name)} visibility="public" supplier={attr(to_eid)} client={attr(from_eid)}/>\n'
     )
-    tags = [tag_xml(rid, edge_key, "uafViewEdge", view.stem),
-            tag_xml(rid, edge_key, "uafViewSource", view.source)]
+    tags = [tag_xml(rid, edge_key, "uafViewEdge", ", ".join(v.stem for v in drawn_by)),
+            tag_xml(rid, edge_key, "uafViewSource", ", ".join(v.source for v in drawn_by))]
     connector_ext = (
         f'      <connector xmi:idref={attr(rid)} name={attr(name)}>\n'
         f'        <source xmi:idref={attr(from_eid)}>\n'
@@ -804,13 +926,17 @@ def build(elements: dict, rels: dict) -> str:
                 if rel_key in seen_rel_keys:
                     continue  # the same edge stated twice; one connector is right
                 seen_rel_keys.add(rel_key)
+                # The connector's own direction. The key and the tag keep the
+                # registry's `from -> to`; only the two kinds SysML states the
+                # other way round get their client and supplier swapped.
+                src, dst = (to_id, from_id) if kind in SATISFIER_IS_TARGET else (from_id, to_id)
                 rel_xml, conn_ext, uaf_xml = relationship_xml(
-                    rel_key, from_id, to_id, kind, stereotype, metaclass, entry)
+                    rel_key, src, dst, kind, stereotype, metaclass, entry)
                 pkg_element_xml[view_code].append(rel_xml)
                 connectors.append(conn_ext)
                 if uaf_xml:
                     uaf_stereotypes.append(uaf_xml)
-                link = (metaclass, eaid(rel_key), eaid(from_id), eaid(to_id))
+                link = (metaclass, eaid(rel_key), eaid(src), eaid(dst))
                 links_by_id[from_id].append(link)
                 links_by_id[to_id].append(link)
                 # Both endpoints go on this package's diagram, and the
@@ -822,7 +948,29 @@ def build(elements: dict, rels: dict) -> str:
                     pkg_members[view_code].append(from_id)
                 if to_id not in pkg_members[view_code]:
                     pkg_members[view_code].append(to_id)
-                pkg_rels[view_code].append((rel_key, from_id, to_id))
+                pkg_rels[view_code].append((rel_key, src, dst))
+
+    # ---- the capability hierarchy --------------------------------------------
+    # Held in the registry as each capability's `parent` field. Emitted as
+    # relationships so the hierarchy is first-class in EA and so the St-Tx view
+    # draws it by reference: before this, that view's 56 parent edges became 56
+    # view-local connectors duplicating something the registry already stated.
+    for entry in elements.get("capabilities", []) or []:
+        parent, child = entry.get("parent"), entry.get("id")
+        if not parent or parent not in known_ids or child not in known_ids:
+            continue
+        rel_key = f"REL:{PARENT_KIND}:{parent}->{child}"
+        if rel_key in seen_rel_keys:
+            continue
+        seen_rel_keys.add(rel_key)
+        rel_xml, conn_ext, _ = relationship_xml(rel_key, parent, child, PARENT_KIND,
+                                                None, "Dependency", {})
+        pkg_element_xml["St-Tx"].append(rel_xml)
+        connectors.append(conn_ext)
+        link = ("Dependency", eaid(rel_key), eaid(parent), eaid(child))
+        links_by_id[parent].append(link)
+        links_by_id[child].append(link)
+        pkg_rels["St-Tx"].append((rel_key, parent, child))
 
     # ---- the authored views -------------------------------------------------
     # Every .puml under docs/architecture/uaf becomes one EA diagram in its view
@@ -839,6 +987,15 @@ def build(elements: dict, rels: dict) -> str:
 
     views, view_warnings = view_layout.parse_all(elements)
     view_specs: list[tuple[object, list[tuple[str, str, str]]]] = []
+    # A view-local connector is one per (from, to, label), not one per view that
+    # draws it. The same needline drawn in Op-Cn and in three vignettes is one
+    # connector, shown on all four diagrams and tagged with all four -- which is
+    # also how EA itself behaves: on import it places every connector whose two
+    # ends are on a diagram, so a connector duplicated per view came back on
+    # every diagram that held its endpoints (Op-Cn showed 67 lines for 25 edges
+    # on round trip 2). The key carries the label so two different flows between
+    # the same pair stay two connectors.
+    view_edges: dict[str, tuple[str, str, str, str, list]] = {}
     for view in views:
         code = view.code
         if code not in VIEW_PACKAGES:
@@ -849,19 +1006,22 @@ def build(elements: dict, rels: dict) -> str:
         for e in view.edges:
             key = rel_by_pair.get((e.from_id, e.to_id))
             if key is None:
-                key = f"VIEW:{view.stem}:{e.from_id}->{e.to_id}"
-                if key not in seen_rel_keys:
-                    seen_rel_keys.add(key)
-                    rel_xml, conn_ext = view_edge_xml(key, e.from_id, e.to_id, e.label, view)
-                    pkg_element_xml[code].append(rel_xml)
-                    connectors.append(conn_ext)
-                    link = ("Dependency", eaid(key), eaid(e.from_id), eaid(e.to_id))
-                    for end in (e.from_id, e.to_id):
-                        if end in links_by_id:
-                            links_by_id[end].append(link)
+                key = f"VIEW:{e.from_id}->{e.to_id}:{ea_guid(e.label)[:8]}"
+                if key not in view_edges:
+                    view_edges[key] = (e.from_id, e.to_id, e.label, code, [])
+                view_edges[key][4].append(view)
             edge_keys.append((key, e.from_id, e.to_id))
         view_specs.append((view, edge_keys))
         pkg_has_view.add(code)
+    for key, (from_id, to_id, label, code, drawn_by) in view_edges.items():
+        seen_rel_keys.add(key)
+        rel_xml, conn_ext = view_edge_xml(key, from_id, to_id, label, drawn_by)
+        pkg_element_xml[code].append(rel_xml)
+        connectors.append(conn_ext)
+        link = ("Dependency", eaid(key), eaid(from_id), eaid(to_id))
+        for end in (from_id, to_id):
+            if end in links_by_id:
+                links_by_id[end].append(link)
 
     ea_elements = [
         element_ext_xml(eid, stereotype, metaclass, desc, entry, view_code, links_by_id[eid])
@@ -912,7 +1072,8 @@ def build(elements: dict, rels: dict) -> str:
         'xmlns:xmi="http://schema.omg.org/spec/XMI/2.1" '
         'xmlns:uml="http://schema.omg.org/spec/UML/2.1" '
         'xmlns:EAUML="http://www.sparxsystems.com/profiles/EAUML/1.0" '
-        'xmlns:UAF="http://www.omg.org/spec/UAF/20160505/UAF">\n'
+        'xmlns:UAF="http://www.omg.org/spec/UAF/20160505/UAF" '
+        'xmlns:SysML="http://www.omg.org/spec/SysML/20161101/SysML">\n'
         '  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="6.5" exporterID="1628"/>\n'
         '  <uml:Model xmi:type="uml:Model" name="EA_Model" visibility="public">\n'
         + root_pkg

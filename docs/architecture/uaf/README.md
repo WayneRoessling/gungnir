@@ -92,7 +92,7 @@ to EA, never the reverse). CI regenerates it and fails if the committed copy is
 stale, so it cannot drift from the registry unnoticed -- run it after
 `build_uaf.py` whenever the registry changes.
 
-Eight rounds so far, the last one validated by an actual EA round trip rather
+Nine rounds so far, the last two validated by actual EA round trips rather
 than by reading exports. Rounds 1-2 guessed at EA's XMI dialect and got only
 elements across. Round 3, built against files Wayne exported from a real EA
 project, bound UAF stereotypes for the first time, via a dedicated
@@ -139,11 +139,17 @@ supplied EA's own diagram type per viewpoint -- Logical for almost all of them,
 Statechart for States and Sequence for Interaction Scenarios
 (`DIAGRAM_KIND_BY_VIEWPOINT`).
 
-Of the eleven element kinds and nine relationship kinds, six are now confirmed
-against a real EA model: `Capability`, `OperationalPerformer`,
-`OperationalActivity`, `InformationElement`, `Exhibits` and
-`IsCapableToPerform`. The rest are still the OMG-profile-literature mapping the
-first version made. Every domain/viewpoint pairing the script asserts was
+Round 9 was the second round trip, of the full export. EA's own export of it
+declares every stereotype of every enabled profile, 213 for UAF, each with the
+metaclass it extends, so every stereotype name the export uses is now checked
+against that list rather than guessed: `Achieves` became `MapsToCapability`,
+`Realizes` became `Implements`, `PersonType` became `Post`, and `ConformsTo`,
+`Satisfies` and `CarriedBy`, which exist in no profile, became a plain Dependency
+and SysML's `satisfy` respectively. The same round trip showed the seven actual
+resources being dropped for an extension-entry type EA does not use, and
+registry-field tags being bound to stereotypes of other enabled profiles that
+happened to own a property of the same name; both are fixed, the second by
+prefixing every such tag `registry.`. Every domain/viewpoint pairing the script asserts was
 checked against the UAF Domain Metamodel's own package index, which also caught
 one that does not exist: "Actual Resources" has only `Taxonomy` and
 `Constraints` viewpoints, no `Connectivity`, so `Ar-Cn` gets a plain diagram
@@ -180,10 +186,15 @@ Edges come from the PlantUML source, never from the render, because the `Rs-Cn`
 and `If-Sr` views go through `!pragma layout smetana` and it emits no edge ids.
 An edge whose endpoints are a relationship the registry already carries reuses
 that relationship's connector, so one connector shows up on every diagram that
-draws it. The 326 edges that are not registry relationships -- a post reporting
-to a post, a capability enabling a capability, the step order of a mission thread
--- become view-local connectors: plain `uml:Dependency`, no UAF stereotype, and
-tagged `uafViewEdge` with the view that drew them. Dropping them would put
+draws it. The 225 distinct edges that are not registry relationships -- a post
+reporting to a post, a capability enabling a capability, the step order of a
+mission thread -- become view-local connectors: plain `uml:Dependency`, no UAF
+stereotype, one per (from, to, label) across all views, and tagged `uafViewEdge`
+with every view that draws it. The capability hierarchy is not among them: it is
+registry data, each capability's `parent` field, and is emitted as relationships
+in its own right. The registry check fails on any view edge shaped like a
+registry relationship kind that `relationships.yaml` does not state, so a view
+and the registry cannot disagree silently. Dropping them would put
 diagrams in EA that disagree with the PlantUML they came from; promoting them into
 `relationships.yaml` would make the views a second source of typed relationships.
 They are neither.

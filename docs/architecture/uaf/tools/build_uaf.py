@@ -1322,8 +1322,35 @@ def check(elements, rels) -> list[str]:
     # the function because view_layout imports this module.
     from view_layout import layout_gaps, parse_all  # noqa: PLC0415
     problems.extend(layout_gaps(elements))
-    _views, view_warnings = parse_all(elements)
+    views, view_warnings = parse_all(elements)
     notes.extend(view_warnings)
+    # An edge a view draws that has the SHAPE of a registry relationship kind --
+    # a performer to an activity is what `performs` relates -- but which
+    # relationships.yaml does not state is the view and the registry
+    # disagreeing, and the XMI export would otherwise carry it as a view-local
+    # connector, which hides the disagreement instead of surfacing it. Either
+    # the registry is missing the relationship or the view draws a wrong arrow;
+    # both are problems here. The capability hierarchy counts as stated: it
+    # lives in the `parent` field rather than in relationships.yaml.
+    stated: set[tuple[str, str]] = set()
+    for kind, entries in rels.items():
+        for r in entries or []:
+            for to in rel_targets(r):
+                stated.add((r["from"], to))
+                stated.add((to, r["from"]))
+    for e in elements["capabilities"]:
+        if e.get("parent"):
+            stated.add((e["parent"], e["id"]))
+            stated.add((e["id"], e["parent"]))
+    signature = {ends: kind for kind, ends in RELATIONSHIP_ENDPOINTS.items()}
+    for v in views:
+        for edge in v.edges:
+            if (edge.from_id, edge.to_id) in stated:
+                continue
+            kind = signature.get((section_of.get(edge.from_id), section_of.get(edge.to_id)))
+            if kind:
+                problems.append(f"{v.source}: draws {edge.from_id} -> {edge.to_id}, which is shaped "
+                                f"like `{kind}` but is not in relationships.yaml")
     return problems, notes
 
 
