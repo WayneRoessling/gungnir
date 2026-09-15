@@ -19,10 +19,10 @@ the full export still rests on without a round trip of their own: a resource's
 `satisfy` between a capability and a requirement. See `../exports/ea-roundtrip/README.md` for the round
 trip this was built for and what it settled.
 
-Its main use now is the stereotype oracle. Seven of the nine relationship
-stereotypes and five of the eleven element stereotypes in
-`RELATIONSHIP_KIND_INFO`/`ELEMENT_KIND_INFO` are still guesses drawn from the OMG
-profile literature. EA resolves a stereotype it recognizes into the `UAF`
+Its main use is the stereotype oracle. Every name the export uses has now come
+back correctly (round trip 3, `../exports/ea-roundtrip/run-3/`), so this is a
+regression check rather than an open question -- but it stays the way to settle
+any name added later. EA resolves a stereotype it recognizes into the `UAF`
 namespace and files one it does not under `thecustomprofile`, so:
 
     python docs/architecture/uaf/tools/make_ea_probe.py probe.xmi
@@ -31,6 +31,11 @@ namespace and files one it does not under `thecustomprofile`, so:
 
 That is how `Performs` was caught and replaced with `IsCapableToPerform`. To test
 a different name, edit ELS/RELS below.
+
+The probe is also where a question about EA's handling of a VALUE gets settled,
+which is what round trip 3 did for `conformsTo`: it went in written both as an
+attribute of the stereotype application and as an extension tag, and only the
+tag came back intact. Send a value both plausible ways and see which survives.
 
 Usage (from the workspace root):
 
@@ -188,9 +193,13 @@ for code, (title, _d, _v) in PKGS.items():
         if pk != code:
             continue
         extra = ' isReadOnly="false" isSingleExecution="false"' if mc == "Activity" else ""
-        out.append(f'\t\t\t\t<packagedElement xmi:type={q("uml:" + mc)} xmi:id={q(EID(rid))} name={q(name)} visibility="public"{extra}>\n')
-        out.append(f'\t\t\t\t\t<ownedComment xmi:type="uml:Comment" xmi:id={q(EID(rid + "-c"))} body={q("Probe element " + rid)}/>\n')
-        out.append('\t\t\t\t</packagedElement>\n')
+        # No <ownedComment>: in EA that is a Note ELEMENT, not documentation.
+        # export_xmi.py dropped it in round 8 and this probe did not, so round
+        # trip 3 came back with seven nameless Notes cluttering the packages --
+        # the probe drifting from the exporter it exists to model. The
+        # description travels in the extension entry's documentation attribute.
+        out.append(f'\t\t\t\t<packagedElement xmi:type={q("uml:" + mc)} xmi:id={q(EID(rid))} '
+                   f'name={q(name)} visibility="public"{extra}/>\n')
     for rid, kind, st, f_, t_, pk in RELS:
         if pk != code:
             continue
@@ -302,10 +311,10 @@ for i, (code, (title, dom, vp)) in enumerate(PKGS.items()):
     )
 out.append('\t\t</diagrams>\n\t</xmi:Extension>\n')
 for rid, name, st, mc, pk, props in ELS:
-    # A stereotype's property values ride as attributes of its application --
-    # the XMI form, and the one EA wrote for `category` on round trip 2.
-    extra = "".join(f" {k}={q(v)}" for k, v in props.items())
-    out.append(f'\t<{ns(st)}:{bare(st)} base_{mc}={q(EID(rid))}{extra}/>\n')
+    # No property values as attributes here: round trip 3 showed EA corrupting
+    # one on import (see export_xmi.stereo_app). They travel as extension tags,
+    # which is what the element entries above write and what came back verbatim.
+    out.append(f'\t<{ns(st)}:{bare(st)} base_{mc}={q(EID(rid))}/>\n')
 for rid, kind, st, f_, t_, pk in RELS:
     if st:
         out.append(f'\t<{ns(st)}:{bare(st)} base_{MC[rid]}={q(EID(rid))}/>\n')

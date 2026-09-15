@@ -1,0 +1,50 @@
+Exporting package to 'D:\test_XML_native_xea2_1.xml'
+Retrieving data for export: diagram elements
+Retrieving data for export: links
+Retrieving data for export: constraints
+Retrieving data for export: attribute tagged values
+Retrieving data for export: operation tagged values
+Retrieving data for export: operation parameter tagged values
+Retrieving data for export: connector tagged values
+Retrieving data for export: Discussions
+Completed data retrieval
+Pre-processing export tree...
+Completed pre-processing
+Processing package: Gungnir UAF Probe
+Processing package: Operational Processes Op-Pr
+Diagram: Operational Processes Op-Pr
+Element:0: Maintain the track picture
+Processing package: Operational Structure Op-Sr
+Diagram: Operational Structure Op-Sr
+Element:1: Fusion node
+Element:2: 
+Element:3: Sector sensing node
+Element:4: 
+Processing package: Operational Traceability Op-Tr
+Diagram: Operational Traceability Op-Tr
+Processing package: Requirements
+Diagram: Requirements
+Element:5: Every source is authenticated before its data enters the picture
+Element:6: 
+Processing package: Requirements Traceability
+Diagram: Requirements Traceability
+Processing package: Resource Connectivity Rs-Cn
+Diagram: Resource Connectivity Rs-Cn
+Element:7: gungnir-api
+Element:8: 
+Processing package: Resource Traceability Rs-Tr
+Diagram: Resource Traceability Rs-Tr
+Processing package: Standards Taxonomy Sd-Tx
+Diagram: Standards Taxonomy Sd-Tx
+Element:9: TLS 1.3 (RFC 8446)
+Element:10: 
+Processing package: Strategic Taxonomy St-Tx
+Diagram: Strategic Taxonomy St-Tx
+Element:11: Sense
+Element:12: 
+Element:13: Understand
+Element:14: 
+Adding Document Item XML
+Sequencing Interaction Diagrams
+Formatting output XML...please wait
+XMI Document Export Complete!

@@ -1,6 +1,6 @@
 # EA round trip: what Enterprise Architect actually did with our XMI
 
-These six files are the evidence base for round 8 of
+These files are the evidence base for rounds 8 to 12 of
 [`../../tools/export_xmi.py`](../../tools/export_xmi.py). They are not generated
 by anything in this repository and nothing reads them at build time. They are
 kept because three earlier rounds of that exporter were built by reasoning about
@@ -55,6 +55,32 @@ BIZBOK and `PersonType` in UPDM; and a tagged value whose name matches a
 property of some stereotype gets that stereotype applied, so `owner` became
 `UMM2:bLibrary` on 159 elements. The exporter now prefixes every registry-field
 tag `registry.` to stay clear of every profile's property names.
+
+## Run 3: the last two open questions, and one answer that reversed a decision
+
+`run-3/` holds EA's export after importing the probe, which carried the two
+things the export still rested on without a round trip of their own. Both are
+settled.
+
+**Every stereotype name is confirmed by EA itself.** `Capability`, `Exhibits`,
+`IsCapableToPerform`, `OperationalActivity`, `OperationalPerformer`,
+`ResourceArtifact` and `Standard` came back under `UAF:`; `Requirement` and
+`satisfy` under `SysML:`. Nothing landed in `thecustomprofile` except the `uafId`
+tag name, which EA turns into a custom stereotype for any tag it does not
+recognise. That is harmless and the tag's value survives.
+
+**A profile property must travel as an extension tag, not as an attribute of the
+stereotype application.** The probe sent `conformsTo` both ways. The tag came
+back verbatim. The attribute came back corrupted: `SD-1 TLS 1.3 (RFC 8446)`
+became `EAID_D_1 TLS 1.3 (RFC 8446`, the leading registry id rewritten as though
+it were an element reference and the closing bracket dropped. So the attribute
+form is gone from the exporter, even though it is XMI's own encoding and the
+form run 2 saw EA *export* for `category`. What EA writes and what EA reads are
+not the same thing, which is the general lesson of all three runs.
+
+It also caught the probe drifting from the exporter it exists to model: the probe
+still emitted `<ownedComment>`, dropped from the exporter in round 8, and seven
+nameless Note elements came back with it.
 
 ## How to use them for a stereotype name not yet confirmed
 
