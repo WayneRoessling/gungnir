@@ -1020,6 +1020,406 @@ IE-32,registry.code,gungnir_workflow::WorkspaceLayout
 IE-33,uafId,IE-33
 IE-33,uafKind,InformationElement
 IE-33,registry.code,gungnir_mission::Mission
+IE-algorithm-baseline-id,uafId,IE-algorithm-baseline-id
+IE-algorithm-baseline-id,uafKind,InformationElement
+IE-algorithm-baseline-id,registry.code,gungnir_model::AlgorithmBaselineId
+IE-algorithm-baseline-id,registry.domain,"Core identifiers, frames & quality"
+IE-anomaly-settings,uafId,IE-anomaly-settings
+IE-anomaly-settings,uafKind,InformationElement
+IE-anomaly-settings,registry.code,gungnir_model::AnomalySettings
+IE-anomaly-settings,registry.domain,"Policy, authority & settings"
+IE-asset-extent,uafId,IE-asset-extent
+IE-asset-extent,uafKind,InformationElement
+IE-asset-extent,registry.code,gungnir_model::AssetExtent
+IE-asset-extent,registry.domain,"Assets, exchange & releasability"
+IE-asset-id,uafId,IE-asset-id
+IE-asset-id,uafKind,InformationElement
+IE-asset-id,registry.code,gungnir_model::AssetId
+IE-asset-id,registry.domain,"Assets, exchange & releasability"
+IE-asset-list-view,uafId,IE-asset-list-view
+IE-asset-list-view,uafKind,InformationElement
+IE-asset-list-view,registry.code,gungnir_model::AssetListView
+IE-asset-list-view,registry.domain,"Assets, exchange & releasability"
+IE-asset-priority,uafId,IE-asset-priority
+IE-asset-priority,uafKind,InformationElement
+IE-asset-priority,registry.code,gungnir_model::AssetPriority
+IE-asset-priority,registry.domain,"Assets, exchange & releasability"
+IE-authority-rule,uafId,IE-authority-rule
+IE-authority-rule,uafKind,InformationElement
+IE-authority-rule,registry.code,gungnir_model::AuthorityRule
+IE-authority-rule,registry.domain,"Policy, authority & settings"
+IE-authority-settings,uafId,IE-authority-settings
+IE-authority-settings,uafKind,InformationElement
+IE-authority-settings,registry.code,gungnir_model::AuthoritySettings
+IE-authority-settings,registry.domain,"Policy, authority & settings"
+IE-bearing-ray-view,uafId,IE-bearing-ray-view
+IE-bearing-ray-view,uafKind,InformationElement
+IE-bearing-ray-view,registry.code,gungnir_model::BearingRayView
+IE-bearing-ray-view,registry.domain,Picture & tracking vocabulary
+IE-calibration-event,uafId,IE-calibration-event
+IE-calibration-event,uafKind,InformationElement
+IE-calibration-event,registry.code,gungnir_model::CalibrationEvent
+IE-calibration-event,registry.domain,Events & the record
+IE-collection-requirement,uafId,IE-collection-requirement
+IE-collection-requirement,uafKind,InformationElement
+IE-collection-requirement,registry.code,gungnir_model::CollectionRequirement
+IE-collection-requirement,registry.domain,Battle rhythm & mission records
+IE-concurrence,uafId,IE-concurrence
+IE-concurrence,uafKind,InformationElement
+IE-concurrence,registry.code,gungnir_model::Concurrence
+IE-concurrence,registry.domain,Battle rhythm & mission records
+IE-control-status-settings,uafId,IE-control-status-settings
+IE-control-status-settings,uafKind,InformationElement
+IE-control-status-settings,registry.code,gungnir_model::ControlStatusSettings
+IE-control-status-settings,registry.domain,"Policy, authority & settings"
+IE-cooperative-settings,uafId,IE-cooperative-settings
+IE-cooperative-settings,uafKind,InformationElement
+IE-cooperative-settings,registry.code,gungnir_model::CooperativeSettings
+IE-cooperative-settings,registry.domain,"Policy, authority & settings"
+IE-decision-attribution,uafId,IE-decision-attribution
+IE-decision-attribution,uafKind,InformationElement
+IE-decision-attribution,registry.code,gungnir_model::DecisionAttribution
+IE-decision-attribution,registry.domain,"Plans, effectors & handoff"
+IE-decision-id,uafId,IE-decision-id
+IE-decision-id,uafKind,InformationElement
+IE-decision-id,registry.code,gungnir_model::DecisionId
+IE-decision-id,registry.domain,"Plans, effectors & handoff"
+IE-decision-settings,uafId,IE-decision-settings
+IE-decision-settings,uafKind,InformationElement
+IE-decision-settings,registry.code,gungnir_model::DecisionSettings
+IE-decision-settings,registry.domain,"Policy, authority & settings"
+IE-deconfliction-check,uafId,IE-deconfliction-check
+IE-deconfliction-check,uafKind,InformationElement
+IE-deconfliction-check,registry.code,gungnir_model::DeconflictionCheck
+IE-deconfliction-check,registry.domain,"Plans, effectors & handoff"
+IE-deconfliction-kind,uafId,IE-deconfliction-kind
+IE-deconfliction-kind,uafKind,InformationElement
+IE-deconfliction-kind,registry.code,gungnir_model::DeconflictionKind
+IE-deconfliction-kind,registry.domain,"Plans, effectors & handoff"
+IE-deconfliction-result,uafId,IE-deconfliction-result
+IE-deconfliction-result,uafKind,InformationElement
+IE-deconfliction-result,registry.code,gungnir_model::DeconflictionResult
+IE-deconfliction-result,registry.domain,"Plans, effectors & handoff"
+IE-defended-asset,uafId,IE-defended-asset
+IE-defended-asset,uafKind,InformationElement
+IE-defended-asset,registry.code,gungnir_model::DefendedAsset
+IE-defended-asset,registry.domain,"Assets, exchange & releasability"
+IE-delivery-state,uafId,IE-delivery-state
+IE-delivery-state,uafKind,InformationElement
+IE-delivery-state,registry.code,gungnir_model::DeliveryState
+IE-delivery-state,registry.domain,"Plans, effectors & handoff"
+IE-effector-layer,uafId,IE-effector-layer
+IE-effector-layer,uafKind,InformationElement
+IE-effector-layer,registry.code,gungnir_model::EffectorLayer
+IE-effector-layer,registry.domain,"Plans, effectors & handoff"
+IE-effector-report,uafId,IE-effector-report
+IE-effector-report,uafKind,InformationElement
+IE-effector-report,registry.code,gungnir_model::EffectorReport
+IE-effector-report,registry.domain,"Plans, effectors & handoff"
+IE-engagement-event,uafId,IE-engagement-event
+IE-engagement-event,uafKind,InformationElement
+IE-engagement-event,registry.code,gungnir_model::EngagementEvent
+IE-engagement-event,registry.domain,Events & the record
+IE-enu-point,uafId,IE-enu-point
+IE-enu-point,uafKind,InformationElement
+IE-enu-point,registry.code,gungnir_model::EnuPoint
+IE-enu-point,registry.domain,UAS identification & platform reports
+IE-exchange-agreement,uafId,IE-exchange-agreement
+IE-exchange-agreement,uafKind,InformationElement
+IE-exchange-agreement,registry.code,gungnir_model::ExchangeAgreement
+IE-exchange-agreement,registry.domain,"Assets, exchange & releasability"
+IE-exchange-format,uafId,IE-exchange-format
+IE-exchange-format,uafKind,InformationElement
+IE-exchange-format,registry.code,gungnir_model::ExchangeFormat
+IE-exchange-format,registry.domain,"Assets, exchange & releasability"
+IE-exchange-item,uafId,IE-exchange-item
+IE-exchange-item,uafKind,InformationElement
+IE-exchange-item,registry.code,gungnir_model::ExchangeItem
+IE-exchange-item,registry.domain,"Assets, exchange & releasability"
+IE-exchange-set,uafId,IE-exchange-set
+IE-exchange-set,uafKind,InformationElement
+IE-exchange-set,registry.code,gungnir_model::ExchangeSet
+IE-exchange-set,registry.domain,"Assets, exchange & releasability"
+IE-feed-settings,uafId,IE-feed-settings
+IE-feed-settings,uafKind,InformationElement
+IE-feed-settings,registry.code,gungnir_model::FeedSettings
+IE-feed-settings,registry.domain,"Policy, authority & settings"
+IE-fires-plan,uafId,IE-fires-plan
+IE-fires-plan,uafKind,InformationElement
+IE-fires-plan,registry.code,gungnir_model::FiresPlan
+IE-fires-plan,registry.domain,"Plans, effectors & handoff"
+IE-fires-settings,uafId,IE-fires-settings
+IE-fires-settings,uafKind,InformationElement
+IE-fires-settings,registry.code,gungnir_model::FiresSettings
+IE-fires-settings,registry.domain,"Policy, authority & settings"
+IE-governance-event,uafId,IE-governance-event
+IE-governance-event,uafKind,InformationElement
+IE-governance-event,registry.code,gungnir_model::GovernanceEvent
+IE-governance-event,registry.domain,Events & the record
+IE-handoff,uafId,IE-handoff
+IE-handoff,uafKind,InformationElement
+IE-handoff,registry.code,gungnir_model::Handoff
+IE-handoff,registry.domain,"Plans, effectors & handoff"
+IE-handoff-error,uafId,IE-handoff-error
+IE-handoff-error,uafKind,InformationElement
+IE-handoff-error,registry.code,gungnir_model::HandoffError
+IE-handoff-error,registry.domain,"Plans, effectors & handoff"
+IE-handoff-event,uafId,IE-handoff-event
+IE-handoff-event,uafKind,InformationElement
+IE-handoff-event,registry.code,gungnir_model::HandoffEvent
+IE-handoff-event,registry.domain,Events & the record
+IE-health-event,uafId,IE-health-event
+IE-health-event,uafKind,InformationElement
+IE-health-event,registry.code,gungnir_model::HealthEvent
+IE-health-event,registry.domain,Events & the record
+IE-identification-settings,uafId,IE-identification-settings
+IE-identification-settings,uafKind,InformationElement
+IE-identification-settings,registry.code,gungnir_model::IdentificationSettings
+IE-identification-settings,registry.domain,"Policy, authority & settings"
+IE-identity-event,uafId,IE-identity-event
+IE-identity-event,uafKind,InformationElement
+IE-identity-event,registry.code,gungnir_model::IdentityEvent
+IE-identity-event,registry.domain,Events & the record
+IE-kinematic-envelope,uafId,IE-kinematic-envelope
+IE-kinematic-envelope,uafKind,InformationElement
+IE-kinematic-envelope,registry.code,gungnir_model::KinematicEnvelope
+IE-kinematic-envelope,registry.domain,"Policy, authority & settings"
+IE-launch-warning-event,uafId,IE-launch-warning-event
+IE-launch-warning-event,uafKind,InformationElement
+IE-launch-warning-event,registry.code,gungnir_model::LaunchWarningEvent
+IE-launch-warning-event,registry.domain,Events & the record
+IE-launch-warning-report,uafId,IE-launch-warning-report
+IE-launch-warning-report,uafKind,InformationElement
+IE-launch-warning-report,registry.code,gungnir_model::LaunchWarningReport
+IE-launch-warning-report,registry.domain,"Assets, exchange & releasability"
+IE-laydown,uafId,IE-laydown
+IE-laydown,uafKind,InformationElement
+IE-laydown,registry.code,gungnir_model::Laydown
+IE-laydown,registry.domain,Battle rhythm & mission records
+IE-laydown-id,uafId,IE-laydown-id
+IE-laydown-id,uafKind,InformationElement
+IE-laydown-id,registry.code,gungnir_model::LaydownId
+IE-laydown-id,registry.domain,Battle rhythm & mission records
+IE-layout-node,uafId,IE-layout-node
+IE-layout-node,uafKind,InformationElement
+IE-layout-node,registry.code,gungnir_model::LayoutNode
+IE-layout-node,registry.domain,"Policy, authority & settings"
+IE-link-event,uafId,IE-link-event
+IE-link-event,uafKind,InformationElement
+IE-link-event,registry.code,gungnir_model::LinkEvent
+IE-link-event,registry.domain,Events & the record
+IE-local-frame,uafId,IE-local-frame
+IE-local-frame,uafKind,InformationElement
+IE-local-frame,registry.code,gungnir_model::LocalFrame
+IE-local-frame,registry.domain,"Core identifiers, frames & quality"
+IE-loitering-settings,uafId,IE-loitering-settings
+IE-loitering-settings,uafKind,InformationElement
+IE-loitering-settings,registry.code,gungnir_model::LoiteringSettings
+IE-loitering-settings,registry.domain,"Policy, authority & settings"
+IE-magazine,uafId,IE-magazine
+IE-magazine,uafKind,InformationElement
+IE-magazine,registry.code,gungnir_model::Magazine
+IE-magazine,registry.domain,"Plans, effectors & handoff"
+IE-maintenance-state,uafId,IE-maintenance-state
+IE-maintenance-state,uafKind,InformationElement
+IE-maintenance-state,registry.code,gungnir_model::MaintenanceState
+IE-maintenance-state,registry.domain,Battle rhythm & mission records
+IE-maintenance-window,uafId,IE-maintenance-window
+IE-maintenance-window,uafKind,InformationElement
+IE-maintenance-window,registry.code,gungnir_model::MaintenanceWindow
+IE-maintenance-window,registry.domain,Battle rhythm & mission records
+IE-measurement,uafId,IE-measurement
+IE-measurement,uafKind,InformationElement
+IE-measurement,registry.code,gungnir_model::Measurement
+IE-measurement,registry.domain,Picture & tracking vocabulary
+IE-mission-profile,uafId,IE-mission-profile
+IE-mission-profile,uafKind,InformationElement
+IE-mission-profile,registry.code,gungnir_model::MissionProfile
+IE-mission-profile,registry.domain,"Core identifiers, frames & quality"
+IE-model-error,uafId,IE-model-error
+IE-model-error,uafKind,InformationElement
+IE-model-error,registry.code,gungnir_model::ModelError
+IE-model-error,registry.domain,Picture & tracking vocabulary
+IE-operational-risk,uafId,IE-operational-risk
+IE-operational-risk,uafKind,InformationElement
+IE-operational-risk,registry.code,gungnir_model::OperationalRisk
+IE-operational-risk,registry.domain,UAS identification & platform reports
+IE-peer-launch-warning,uafId,IE-peer-launch-warning
+IE-peer-launch-warning,uafKind,InformationElement
+IE-peer-launch-warning,registry.code,gungnir_model::PeerLaunchWarning
+IE-peer-launch-warning,registry.domain,"Assets, exchange & releasability"
+IE-peer-origin,uafId,IE-peer-origin
+IE-peer-origin,uafKind,InformationElement
+IE-peer-origin,registry.code,gungnir_model::PeerOrigin
+IE-peer-origin,registry.domain,"Assets, exchange & releasability"
+IE-pipeline-stats-view,uafId,IE-pipeline-stats-view
+IE-pipeline-stats-view,uafKind,InformationElement
+IE-pipeline-stats-view,registry.code,gungnir_model::PipelineStatsView
+IE-pipeline-stats-view,registry.domain,Picture & tracking vocabulary
+IE-plan-id,uafId,IE-plan-id
+IE-plan-id,uafKind,InformationElement
+IE-plan-id,registry.code,gungnir_model::PlanId
+IE-plan-id,registry.domain,Picture & tracking vocabulary
+IE-plan-kind,uafId,IE-plan-kind
+IE-plan-kind,uafKind,InformationElement
+IE-plan-kind,registry.code,gungnir_model::PlanKind
+IE-plan-kind,registry.domain,"Plans, effectors & handoff"
+IE-policy-settings,uafId,IE-policy-settings
+IE-policy-settings,uafKind,InformationElement
+IE-policy-settings,registry.code,gungnir_model::PolicySettings
+IE-policy-settings,registry.domain,"Policy, authority & settings"
+IE-product-kind,uafId,IE-product-kind
+IE-product-kind,uafKind,InformationElement
+IE-product-kind,registry.code,gungnir_model::ProductKind
+IE-product-kind,registry.domain,Battle rhythm & mission records
+IE-rehearsal-event,uafId,IE-rehearsal-event
+IE-rehearsal-event,uafKind,InformationElement
+IE-rehearsal-event,registry.code,gungnir_model::RehearsalEvent
+IE-rehearsal-event,registry.domain,Events & the record
+IE-relative-cost,uafId,IE-relative-cost
+IE-relative-cost,uafKind,InformationElement
+IE-relative-cost,registry.code,gungnir_model::RelativeCost
+IE-relative-cost,registry.domain,"Plans, effectors & handoff"
+IE-releasability,uafId,IE-releasability
+IE-releasability,uafKind,InformationElement
+IE-releasability,registry.code,gungnir_model::Releasability
+IE-releasability,registry.domain,"Assets, exchange & releasability"
+IE-replay-event,uafId,IE-replay-event
+IE-replay-event,uafKind,InformationElement
+IE-replay-event,registry.code,gungnir_model::ReplayEvent
+IE-replay-event,registry.domain,Events & the record
+IE-reported-position,uafId,IE-reported-position
+IE-reported-position,uafKind,InformationElement
+IE-reported-position,registry.code,gungnir_model::ReportedPosition
+IE-reported-position,registry.domain,"Assets, exchange & releasability"
+IE-requirement-event,uafId,IE-requirement-event
+IE-requirement-event,uafKind,InformationElement
+IE-requirement-event,registry.code,gungnir_model::RequirementEvent
+IE-requirement-event,registry.domain,Events & the record
+IE-requirement-id,uafId,IE-requirement-id
+IE-requirement-id,uafKind,InformationElement
+IE-requirement-id,registry.code,gungnir_model::RequirementId
+IE-requirement-id,registry.domain,Battle rhythm & mission records
+IE-requirement-state,uafId,IE-requirement-state
+IE-requirement-state,uafKind,InformationElement
+IE-requirement-state,registry.code,gungnir_model::RequirementState
+IE-requirement-state,registry.domain,Battle rhythm & mission records
+IE-resource-placement,uafId,IE-resource-placement
+IE-resource-placement,uafKind,InformationElement
+IE-resource-placement,registry.code,gungnir_model::ResourcePlacement
+IE-resource-placement,registry.domain,Battle rhythm & mission records
+IE-review-event,uafId,IE-review-event
+IE-review-event,uafKind,InformationElement
+IE-review-event,registry.code,gungnir_model::ReviewEvent
+IE-review-event,registry.domain,Events & the record
+IE-rhythm-event,uafId,IE-rhythm-event
+IE-rhythm-event,uafKind,InformationElement
+IE-rhythm-event,registry.code,gungnir_model::RhythmEvent
+IE-rhythm-event,registry.domain,Events & the record
+IE-role-layout,uafId,IE-role-layout
+IE-role-layout,uafKind,InformationElement
+IE-role-layout,registry.code,gungnir_model::RoleLayout
+IE-role-layout,registry.domain,"Policy, authority & settings"
+IE-schedule,uafId,IE-schedule
+IE-schedule,uafKind,InformationElement
+IE-schedule,registry.code,gungnir_model::Schedule
+IE-schedule,registry.domain,Battle rhythm & mission records
+IE-scheduled-product,uafId,IE-scheduled-product
+IE-scheduled-product,uafKind,InformationElement
+IE-scheduled-product,registry.code,gungnir_model::ScheduledProduct
+IE-scheduled-product,registry.domain,Battle rhythm & mission records
+IE-sensor-command,uafId,IE-sensor-command
+IE-sensor-command,uafKind,InformationElement
+IE-sensor-command,registry.code,gungnir_model::SensorCommand
+IE-sensor-command,registry.domain,Picture & tracking vocabulary
+IE-sensor-event,uafId,IE-sensor-event
+IE-sensor-event,uafKind,InformationElement
+IE-sensor-event,registry.code,gungnir_model::SensorEvent
+IE-sensor-event,registry.domain,Events & the record
+IE-sensor-id,uafId,IE-sensor-id
+IE-sensor-id,uafKind,InformationElement
+IE-sensor-id,registry.code,gungnir_model::SensorId
+IE-sensor-id,registry.domain,Picture & tracking vocabulary
+IE-sensor-mode,uafId,IE-sensor-mode
+IE-sensor-mode,uafKind,InformationElement
+IE-sensor-mode,registry.code,gungnir_model::SensorMode
+IE-sensor-mode,registry.domain,Picture & tracking vocabulary
+IE-sensor-placement,uafId,IE-sensor-placement
+IE-sensor-placement,uafKind,InformationElement
+IE-sensor-placement,registry.code,gungnir_model::SensorPlacement
+IE-sensor-placement,registry.domain,Battle rhythm & mission records
+IE-sensor-task-event,uafId,IE-sensor-task-event
+IE-sensor-task-event,uafKind,InformationElement
+IE-sensor-task-event,registry.code,gungnir_model::SensorTaskEvent
+IE-sensor-task-event,registry.domain,Events & the record
+IE-sensor-task-id,uafId,IE-sensor-task-id
+IE-sensor-task-id,uafKind,InformationElement
+IE-sensor-task-id,registry.code,gungnir_model::SensorTaskId
+IE-sensor-task-id,registry.domain,Picture & tracking vocabulary
+IE-session-id,uafId,IE-session-id
+IE-session-id,uafKind,InformationElement
+IE-session-id,registry.code,gungnir_model::SessionId
+IE-session-id,registry.domain,Picture & tracking vocabulary
+IE-source-authentication,uafId,IE-source-authentication
+IE-source-authentication,uafKind,InformationElement
+IE-source-authentication,registry.code,gungnir_model::SourceAuthentication
+IE-source-authentication,registry.domain,"Core identifiers, frames & quality"
+IE-staleness-settings,uafId,IE-staleness-settings
+IE-staleness-settings,uafKind,InformationElement
+IE-staleness-settings,registry.code,gungnir_model::StalenessSettings
+IE-staleness-settings,registry.domain,"Policy, authority & settings"
+IE-term,uafId,IE-term
+IE-term,uafKind,InformationElement
+IE-term,registry.code,gungnir_model::Term
+IE-term,registry.domain,Battle rhythm & mission records
+IE-test-track-number,uafId,IE-test-track-number
+IE-test-track-number,uafKind,InformationElement
+IE-test-track-number,registry.code,gungnir_model::TestTrackNumber
+IE-test-track-number,registry.domain,Battle rhythm & mission records
+IE-theme-variant,uafId,IE-theme-variant
+IE-theme-variant,uafKind,InformationElement
+IE-theme-variant,registry.code,gungnir_model::ThemeVariant
+IE-theme-variant,registry.domain,"Policy, authority & settings"
+IE-uas-certification-category,uafId,IE-uas-certification-category
+IE-uas-certification-category,uafKind,InformationElement
+IE-uas-certification-category,registry.code,gungnir_model::UasCertificationCategory
+IE-uas-certification-category,registry.domain,UAS identification & platform reports
+IE-uas-identification-report,uafId,IE-uas-identification-report
+IE-uas-identification-report,uafKind,InformationElement
+IE-uas-identification-report,registry.code,gungnir_model::UasIdentificationReport
+IE-uas-identification-report,registry.domain,UAS identification & platform reports
+IE-uas-platform-report,uafId,IE-uas-platform-report
+IE-uas-platform-report,uafKind,InformationElement
+IE-uas-platform-report,registry.code,gungnir_model::UasPlatformReport
+IE-uas-platform-report,registry.domain,UAS identification & platform reports
+IE-ui-settings,uafId,IE-ui-settings
+IE-ui-settings,uafKind,InformationElement
+IE-ui-settings,registry.code,gungnir_model::UiSettings
+IE-ui-settings,registry.domain,"Policy, authority & settings"
+IE-validity-window,uafId,IE-validity-window
+IE-validity-window,uafKind,InformationElement
+IE-validity-window,registry.code,gungnir_model::ValidityWindow
+IE-validity-window,registry.domain,"Policy, authority & settings"
+IE-verdict-summary,uafId,IE-verdict-summary
+IE-verdict-summary,uafKind,InformationElement
+IE-verdict-summary,registry.code,gungnir_model::VerdictSummary
+IE-verdict-summary,registry.domain,Events & the record
+IE-vocabulary,uafId,IE-vocabulary
+IE-vocabulary,uafKind,InformationElement
+IE-vocabulary,registry.code,gungnir_model::Vocabulary
+IE-vocabulary,registry.domain,Battle rhythm & mission records
+IE-warning-event,uafId,IE-warning-event
+IE-warning-event,uafKind,InformationElement
+IE-warning-event,registry.code,gungnir_model::WarningEvent
+IE-warning-event,registry.domain,Events & the record
+IE-warning-obligation,uafId,IE-warning-obligation
+IE-warning-obligation,uafKind,InformationElement
+IE-warning-obligation,registry.code,gungnir_model::WarningObligation
+IE-warning-obligation,registry.domain,"Assets, exchange & releasability"
+IE-weapons-control-status,uafId,IE-weapons-control-status
+IE-weapons-control-status,uafKind,InformationElement
+IE-weapons-control-status,registry.code,gungnir_model::WeaponsControlStatus
+IE-weapons-control-status,registry.domain,"Policy, authority & settings"
 AR-01,uafId,AR-01
 AR-01,uafKind,ActualResource
 AR-01,registry.source,ARCHITECTURE.md \u00a78.7 and \u00a79

@@ -45,8 +45,15 @@ maps thirty-six DoDAF views onto the views above rather than drawing a second se
 
 - [`model/elements.yaml`](model/elements.yaml): the element registry. Ten kinds,
   stable identifiers (`CAP-x.y`, `OP-nn`, `OA-nn`, `SV-nn`, `RS-<crate>`, `PT-nn`,
-  `SD-nn`, `PJ-*`, `IE-nn`, `AR-nn`). The `resources` section is generated from
-  the crate manifests.
+  `SD-nn`, `PJ-*`, `IE-nn`, `IE-<type>`, `AR-nn`). The `resources` section is
+  generated from the crate manifests, and so is the second half of
+  `information_elements`: the 33 `IE-nn` entries are canonical and hand-authored,
+  several of them naming types in crates other than `gungnir-model` or a pair of
+  types together, while every other `gungnir-model` type is generated from the
+  crate with its own doc comment as the description. That keeps the registry in
+  step with the If-Sr views, which are generated from the same source. A type
+  with no doc comment is described by its shape and reported as a note, so the
+  gap is visible and can be closed in the code.
 - [`model/relationships.yaml`](model/relationships.yaml): typed relationships
   (exhibits, achieves, performs, realizes, implements, conforms_to, uses); `uses` is
   generated from the manifests; `status: planned` marks design not yet in code.
@@ -232,11 +239,11 @@ connector go in a compact block to one side. It is a starting layout a reader
 can follow, not a finished drawing; EA's own Layout Diagram command is one click
 for anyone who wants to go further.
 
-Seven views get no EA diagram, and the check says so as a note each time. Six are
-`If-Sr` class diagrams drawn almost entirely with Rust helper types that the
-registry's `information_elements` section does not carry, and the seventh,
-`Rs-Cn-overview`, is a navigation index of links to the other `Rs-Cn` diagrams
-rather than a view of elements.
+Two views get no EA diagram, and the check says so as a note each time, and both
+for the same reason: `If-Sr-overview` and `Rs-Cn-overview` are navigation
+indexes of links to the other diagrams in their family rather than views of
+elements, so there is nothing in them to place. The six `If-Sr` class diagrams
+that used to join them now have one: the types they draw are in the registry.
 
 Two things are deliberately not asserted. `Op-Is` and `Op-St` carry no `MDGView`:
 EA's own template pairs Interaction Scenarios with a Sequence diagram and States
