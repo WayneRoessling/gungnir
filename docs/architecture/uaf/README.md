@@ -149,9 +149,12 @@ and SysML's `satisfy` respectively. Conformance also carries UAF's own
 `conformsTo` property on the conforming element: the profile declares it as a
 String on `UAFElement`, the root every UAF stereotype inherits, so each
 conforming resource names its standards in text ("SD-05 ASTERIX Category 048
-(Eurocontrol); ...", with planned ones marked) both on its stereotype
-application and as a tag, the two ways EA writes a string property. The
-connector stays, since it is what draws. The same round trip showed the seven actual
+(Eurocontrol); ...", with planned ones marked) as a tagged value. The connector
+stays, since it is what draws. A third round trip settled that the tag is the
+only channel that works: the same value written as an attribute of the
+stereotype application, which is XMI's own encoding, came back from EA with the
+leading id rewritten and a bracket missing. That round trip also confirmed every
+stereotype name the export uses, UAF's and SysML's alike, against EA itself. The same round trip showed the seven actual
 resources being dropped for an extension-entry type EA does not use, and
 registry-field tags being bound to stereotypes of other enabled profiles that
 happened to own a property of the same name; both are fixed, the second by

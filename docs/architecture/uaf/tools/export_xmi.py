@@ -239,6 +239,31 @@ make_ea_probe.py carries a conforming resource so the next import shows which
 of the two forms EA reads, and was brought current at the same time: it still
 said `Performs` and still wrote the pre-round-8 tag shape.
 
+Twelfth version. Round trip 3 (exports/ea-roundtrip/run-3/), of the probe
+carrying the two things the export still rested on without a round trip of their
+own. Both are now settled, one of them against what round 11 shipped:
+
+  - Every stereotype name is confirmed by EA itself. Capability, Exhibits,
+    IsCapableToPerform, OperationalActivity, OperationalPerformer,
+    ResourceArtifact and Standard all came back under `UAF:`, and Requirement
+    and satisfy under `SysML:`. Nothing landed in `thecustomprofile` except the
+    `uafId` tag name, which EA turns into a custom stereotype for any tag it
+    does not recognise -- harmless, and the tag's value survives.
+  - A profile property must travel as an extension tag, NOT as an attribute of
+    the stereotype application. Round 11 emitted `conformsTo` both ways on the
+    reasoning that the attribute is XMI's own encoding and the form round trip 2
+    saw EA export. It does not survive EA's import: `SD-1 TLS 1.3 (RFC 8446)`
+    came back as `EAID_D_1 TLS 1.3 (RFC 8446`, the leading registry id rewritten
+    as though it were an element reference and the closing bracket dropped. The
+    extension tag of the same value came back verbatim. The attribute form is
+    gone; stereo_app no longer takes properties at all.
+
+Also observed, and left alone deliberately: EA wrote the satisfy application
+back as `base_Dependency` where this export sends `base_Abstraction` on a
+`uml:Abstraction` element. Abstraction is a Dependency in UML and EA normalised
+to the metaclass SysML's profile declares; the binding worked as sent, so the
+form that is known to work is kept rather than swapped for one that is not.
+
 Note for anyone reading the output: inside an EA `<links>` block the child
 elements carry `xmi:id`, not `xmi:idref`, even though they are references to
 a relationship declared elsewhere (verified against the sample, which does
@@ -461,21 +486,23 @@ SATISFIER_IS_TARGET = {"satisfies", "carried_by"}
 PARENT_KIND = "parent"
 
 
-def stereo_app(stereotype: str, base_metaclass: str, target_id: str,
-               props: dict[str, str] | None = None) -> str:
+def stereo_app(stereotype: str, base_metaclass: str, target_id: str) -> str:
     """One stereotype-application element. A stereotype is `Name` (the UAF
     profile) or `Profile:Name` for one from another profile -- SysML's
     requirement and satisfy are the two in use.
 
-    `props` are the stereotype's own property values, written as attributes of
-    the application element: `<UAF:ResourceArtifact base_Class="..."
-    conformsTo="..."/>`. That is XMI's encoding for a profile property and the
-    one EA itself writes -- round trip 2 exported a string property exactly so
-    (`<UAF:Metadata base_Class="..." category="I"/>`).
+    It carries no property values. Writing one as an attribute of the
+    application -- `<UAF:ResourceArtifact base_Class="..." conformsTo="..."/>`,
+    which is XMI's own encoding and the form round trip 2 saw EA export for
+    `category` -- does not survive EA's import: round trip 3 sent
+    `conformsTo="SD-1 TLS 1.3 (RFC 8446)"` and EA gave back
+    `conformsTo="EAID_D_1 TLS 1.3 (RFC 8446"`, the leading id rewritten as
+    though it were an element reference and the closing bracket lost. The same
+    value sent as an extension tag came back verbatim, so the tag is the only
+    channel used for a profile property -- see element_ext_xml's profile_tags.
     """
     prefix, _, name = stereotype.rpartition(":")
-    extra = "".join(f" {k}={attr(v)}" for k, v in (props or {}).items())
-    return f'    <{prefix or "UAF"}:{name} base_{base_metaclass}={attr(target_id)}{extra}/>\n'
+    return f'    <{prefix or "UAF"}:{name} base_{base_metaclass}={attr(target_id)}/>\n'
 
 
 def stereo_name(stereotype: str | None) -> str | None:
@@ -603,13 +630,11 @@ def style2_xml(domain: str | None, viewpoint: str | None, save_tag: str) -> str:
     )
 
 
-def element_xml(entry: dict, stereotype: str, metaclass: str,
-                props: dict[str, str] | None = None) -> tuple[str, str]:
+def element_xml(entry: dict, stereotype: str, metaclass: str) -> tuple[str, str]:
     """Returns (packagedElement XML, UAF stereotype-application XML). The EA
     element-extension XML is built separately, later, by element_ext_xml --
     it needs to know which relationships touch this element first (its
-    `<links>` list), which isn't known until every relationship is processed.
-    `props` are stereotype property values for the application (see stereo_app)."""
+    `<links>` list), which isn't known until every relationship is processed."""
     reg_id = entry["id"]
     eid = eaid(reg_id)
     name = entry.get("name", reg_id)
@@ -626,7 +651,7 @@ def element_xml(entry: dict, stereotype: str, metaclass: str,
     # EA actually shows in the Notes field.
     body = (f'        <packagedElement xmi:type={attr("uml:" + metaclass)} xmi:id={attr(eid)} '
             f'name={attr(name)} visibility="public"{extra_attrs}/>\n')
-    return body, stereo_app(stereotype, metaclass, eid, props)
+    return body, stereo_app(stereotype, metaclass, eid)
 
 
 def element_ext_xml(reg_id: str, stereotype: str, metaclass: str, desc: str, entry: dict,
@@ -642,6 +667,8 @@ def element_ext_xml(reg_id: str, stereotype: str, metaclass: str, desc: str, ent
     registry field from colliding with some profile's property, and these are
     the one case where the collision is the point -- `conformsTo` is meant to
     land on the element's UAF stereotype, which inherits it from UAFElement.
+    This is the ONLY channel for such a property: the attribute form on the
+    stereotype application comes back corrupted, see stereo_app.
     """
     eid = eaid(reg_id)
     tags = [tag_xml(eid, reg_id, "uafKind", stereo_name(stereotype)),
@@ -954,6 +981,10 @@ def conforms_to_text(elements: dict, rels: dict) -> dict[str, str]:
     diagram and what traceability follows, and this text is what EA's UAF
     tooling reads off the element itself. Semicolons separate entries because
     the standards' names contain commas; a planned relationship says so.
+
+    Round trip 3 confirmed the text survives an import unchanged when it travels
+    as an extension tag, and only then -- see stereo_app for what happened to the
+    attribute form.
     """
     std_name = {e["id"]: e.get("name", e["id"]) for e in elements.get("standards", []) or []}
     out: dict[str, list[str]] = {}
@@ -993,8 +1024,7 @@ def build(elements: dict, rels: dict) -> str:
         for entry in entries:
             eid = entry["id"]
             known_ids.add(eid)
-            props = {"conformsTo": conforms[eid]} if eid in conforms else None
-            cls_xml, uaf_xml = element_xml(entry, stereotype, metaclass, props)
+            cls_xml, uaf_xml = element_xml(entry, stereotype, metaclass)
             pkg_members[view_code].append(eid)
             pkg_element_xml[view_code].append(cls_xml)
             uaf_stereotypes.append(uaf_xml)
