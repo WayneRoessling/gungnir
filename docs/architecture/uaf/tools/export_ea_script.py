@@ -38,9 +38,10 @@ What it does and does not do (see docs/architecture/uaf/README.md):
   - Is NOT idempotent: re-running creates a second copy of everything. Delete
     the "Gungnir UAF Model" package in the Project Browser before re-running
     after a registry change.
-  - Stereotype names are the same best-effort OMG UAF 1.2 mapping `export_xmi.py`
-    uses -- not guaranteed to bind to UAF MDG iconography; report back what EA
-    shows.
+  - Stereotype names are `export_xmi.py`'s, which are checked against the UAF
+    profile's own declared stereotype list (see that module); a name from
+    another profile (SysML's requirement and satisfy) reaches this path as the
+    bare name, which is what EA's Automation `Stereotype` property takes.
   - CSV fields are RFC4180 (Python's `csv` module writes them; the driver's
     `ParseCSVLine` reads them the same way), and any non-ASCII character (the
     registry has exactly one distinct one: the section sign U+00A7) is written
@@ -79,7 +80,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_uaf import UAF, load_registry  # noqa: E402
-from export_xmi import ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO, STRUCTURAL_FIELDS  # noqa: E402
+from export_xmi import (ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO, STRUCTURAL_FIELDS,  # noqa: E402
+                        stereo_name)
 
 # export_xmi.py groups elements into named UAF view packages (VIEW_PACKAGES,
 # matching a real EA project's own package/diagram structure); this script
@@ -181,6 +183,10 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
         if not isinstance(entries, list) or section not in ELEMENT_KIND_INFO:
             continue
         stereotype, metaclass, _view_code = ELEMENT_KIND_INFO[section]
+        # The bare name: a stereotype from another profile is written
+        # `Profile:Name` in export_xmi's tables, and EA's Automation
+        # `Element.Stereotype` takes the name alone.
+        stereotype = stereo_name(stereotype)
         title = SECTION_TITLE[section]
         for entry in entries or []:
             eid = entry["id"]
@@ -201,6 +207,7 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
         if kind not in RELATIONSHIP_KIND_INFO:
             continue
         stereotype, metaclass, _view_code = RELATIONSHIP_KIND_INFO[kind]
+        stereotype = stereo_name(stereotype)
         for entry in entries or []:
             from_id = entry.get("from")
             to = entry.get("to")
@@ -213,6 +220,10 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
                 # and the same key export_xmi.py uses, so the two bridges agree
                 # on what a given relationship is called.
                 rel_id = f"REL:{kind}:{from_id}->{to_id}"
+                if entry.get("needline"):
+                    # Same key as export_xmi.py: OP-08 -> OP-30 carries two
+                    # needlines, and only the needline tells them apart.
+                    rel_id += f":{entry['needline']}"
                 if rel_id in seen_rel_ids:
                     continue
                 seen_rel_ids.add(rel_id)

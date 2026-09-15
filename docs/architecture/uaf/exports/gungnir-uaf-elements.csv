@@ -207,14 +207,14 @@ RS-tracking-service,Resources,ResourceArtifact,gungnir-tracking-service,"App-fac
 RS-ui,Resources,ResourceArtifact,gungnir-ui,"2D egui dashboard panels + centralized theme, per rust-ui-architecture-coding-standards.md \u00a71/\u00a76. One file per panel; no magic layout numbers. Reads gungnir-model views only; holds no state of its own.",Class
 RS-viewport3d,Resources,ResourceArtifact,gungnir-viewport3d,"three-d scene setup, camera, streaming/scientific data bridges, and live track/intercept rendering, drawn into eframe's OpenGL (glow) context. Combines rust-3d-data-ecosystem-build-vs-adopt.md \u00a72 with gungnir-model views -- see ARCHITECTURE.md \u00a74-5 for why track rendering lives here rather than in a translation crate.",Class
 RS-workflow,Resources,ResourceArtifact,gungnir-workflow,"Human factors & operator workflow: role-based workspace layouts, the alert acknowledgement/escalation lifecycle, annotations and cases -- turning a set of panels into a designed operator workflow. docs/gungnir-capabilities.md \u00a75.6 -- Medium.",Class
-PT-01,Personnel Types,PersonType,Operator,,Class
-PT-02,Personnel Types,PersonType,Supervisor,,Class
-PT-03,Personnel Types,PersonType,Analyst,,Class
-PT-04,Personnel Types,PersonType,Sensor manager,,Class
-PT-05,Personnel Types,PersonType,Administrator,,Class
-PT-06,Personnel Types,PersonType,Intelligence analyst,,Class
-PT-07,Personnel Types,PersonType,Planner,,Class
-PT-08,Personnel Types,PersonType,Commander,,Class
+PT-01,Personnel Types,Post,Operator,,Class
+PT-02,Personnel Types,Post,Supervisor,,Class
+PT-03,Personnel Types,Post,Analyst,,Class
+PT-04,Personnel Types,Post,Sensor manager,,Class
+PT-05,Personnel Types,Post,Administrator,,Class
+PT-06,Personnel Types,Post,Intelligence analyst,,Class
+PT-07,Personnel Types,Post,Planner,,Class
+PT-08,Personnel Types,Post,Commander,,Class
 SD-01,Standards,Standard,Gungnir canonical schema v1,The versioned JSON form of every view and event; the journal and the API carry it.,Class
 SD-02,Standards,Standard,Apache Arrow (arrow 53),Columnar form of detections for analytics and bulk exchange.,Class
 SD-03,Standards,Standard,ASTERIX Category 048 (Eurocontrol),Radar target reports; codec returns NotImplemented (GAP-064).,Class

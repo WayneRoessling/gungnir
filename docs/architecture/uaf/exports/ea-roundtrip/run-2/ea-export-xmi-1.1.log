@@ -1,0 +1,460 @@
+Exporting package to 'D:\test_XML_native_xea1_1.xml'
+Retrieving data for export: diagram elements
+Retrieving data for export: links
+Retrieving data for export: constraints
+Retrieving data for export: attribute tagged values
+Retrieving data for export: operation tagged values
+Retrieving data for export: operation parameter tagged values
+Retrieving data for export: connector tagged values
+Retrieving data for export: Discussions
+Completed data retrieval
+Pre-processing export tree...
+Completed pre-processing
+Processing package: Gungnir UAF Model
+Element:0: Requirements
+Element:1: Operational Processes Op-Pr
+Element:2: Standards Taxonomy Sd-Tx
+Element:3: Service Traceability Sv-Tr
+Element:4: Operational Structure Op-Sr
+Element:5: Actual Resources Connectivity Ar-Cn
+Element:6: Operational Connectivity Op-Cn
+Element:7: Personnel Structure Pr-Sr
+Element:8: Operational States Op-St
+Element:9: Strategic Taxonomy St-Tx
+Element:10: Strategic Connectivity St-Cn
+Element:11: Resource Connectivity Rs-Cn
+Element:12: Requirements Traceability
+Element:13: Resource Traceability Rs-Tr
+Element:14: Information Structure If-Sr
+Element:15: Operational Interaction Scenarios Op-Is
+Element:16: Operational Traceability Op-Tr
+Element:17: Project Roadmap Pj-Rm
+Element:18: Service Connectivity Sv-Cn
+Element:19: Security Connectivity Sc-Cn
+Element:20: Information Connectivity If-Cn
+Processing package: Actual Resources Connectivity Ar-Cn
+Diagram: Actual Resources Connectivity Ar-Cn
+Diagram: Ar-Cn actual resource connectivity: links per profile with budgets
+Processing package: Information Connectivity If-Cn
+Diagram: If-Cn information exchange: an observation and a decision, hop by hop
+Processing package: Information Structure If-Sr
+Element:21: ConfigBaseline
+Element:22: WorkspaceLayout
+Element:23: Provenance
+Element:24: AuditEntry
+Element:25: Envelope
+Element:26: MissionTime
+Element:27: SnapshotResponse
+Element:28: RiskScore
+Element:29: TrackingEvent
+Element:30: Alert and AlertLifecycle
+Element:31: Mission and SessionId
+Element:32: SubscribeRequest
+Element:33: SensorRecord and CoverageRegion
+Element:34: SystemHealth
+Element:35: IngestEvent
+Element:36: SubmitDetectionRequest
+Element:37: DetectionView
+Element:38: TrackView
+Element:39: SchemaEntry
+Element:40: DecisionRecord
+Element:41: ResourceView
+Element:42: InterceptSolutionView
+Element:43: PolicyVerdict
+Element:44: IdentificationEvidence
+Element:45: Quality
+Element:46: GlobalEntityId
+Element:47: PlanView
+Element:48: CommandEvent
+Element:49: ReconciliationReport
+Element:50: InterceptEvent
+Element:51: ApprovalRequest
+Element:52: Classification
+Element:53: Report
+Diagram: Information Structure If-Sr
+Diagram: If-Sr information structure: Core identifiers, frames & quality
+Diagram: If-Sr information structure: Events & the record
+Diagram: If-Sr information structure: Picture & tracking vocabulary
+Processing package: Operational Connectivity Op-Cn
+Diagram: Op-Cn operational connectivity: needlines between performers
+Processing package: Operational Interaction Scenarios Op-Is
+Diagram: Op-Is VG-01: Night raid on the power station (MT-01)
+Diagram: Op-Is VG-02: Salvo with the raid (MT-02)
+Diagram: Op-Is VG-03: Quadcopter over the airfield (MT-03)
+Diagram: Op-Is VG-04: USV attack on the anchorage (MT-04)
+Diagram: Op-Is VG-05: The afternoon surface picture (MT-05)
+Diagram: Op-Is VG-06: Battery on the far bank (MT-06)
+Diagram: Op-Is VG-07: Raid under GNSS denial with a radar loss (MT-07)
+Diagram: Op-Is VG-08: Who is that aircraft (MT-08)
+Diagram: Op-Is VG-09: Planning the week's laydown (MT-09)
+Diagram: Op-Is VG-10: The port cell loses the node (MT-10)
+Processing package: Operational Processes Op-Pr
+Element:54: Journal and report
+Element:55: Identify tracks
+Element:56: Configure policy
+Element:57: Recommend a fires task
+Element:58: Audit
+Element:59: Decide
+Element:60: Exchange cooperative identity
+Element:61: Exchange the picture with peers
+Element:62: Flag anomalies
+Element:63: Set the defended-asset list and priorities
+Element:64: Assess threat and priority
+Element:65: Ingest and validate observations
+Element:66: Check policy
+Element:67: Review after action
+Element:68: Maintain entities and order of battle
+Element:69: Warn assets and authorities
+Element:70: Reconcile journals
+Element:71: State collection requirements
+Element:72: Detect and correlate degradation
+Element:73: Recommend assignments
+Element:74: Resolve conflicts
+Element:75: Fuse identification evidence
+Element:76: Authenticate and authorize
+Element:77: Rehearse
+Element:78: Govern algorithm and model baselines
+Element:79: Plan the laydown
+Element:80: Maintain the track picture
+Element:81: Disseminate products
+Element:82: Hand off to effectors
+Element:83: Manage the decision queue
+Element:84: Manage sensors and coverage
+Element:85: Assist with questions and drafts
+Element:86: Re-task sensors
+Element:87: Assess engagement effects
+Element:88: Operate disconnected
+Element:89: Validate and apply the plan
+Diagram: Operational Processes Op-Pr
+Diagram: Op-Pr MT-01: One-way attack drone raid against a defended-asset list
+Diagram: Op-Pr MT-02: Mixed salvo of cruise missiles, drones, and decoys
+Diagram: Op-Pr MT-03: Small UAS over a protected site
+Diagram: Op-Pr MT-04: Uncrewed surface vessel attack on a port or anchored ship
+Diagram: Op-Pr MT-05: Surface picture compilation
+Diagram: Op-Pr MT-06: Convoy and battery tracking with cueing of fires
+Diagram: Op-Pr MT-07: Sensor management under electronic attack
+Diagram: Op-Pr MT-08: Collection management and identification evidence fusion
+Diagram: Op-Pr MT-09: Defended-asset planning, laydown, and rehearsal
+Diagram: Op-Pr MT-10: Disconnected operation and reconnection
+Processing package: Operational States Op-St
+Diagram: Op-St operational states: alert, plan, sensor mode, workstation backend
+Processing package: Operational Structure Op-Sr
+Element:90: Supervisor
+Element:91: Planner
+Element:92: Site defense cell
+Element:93: Sensor manager
+Element:94: Sector command post
+Element:95: Accreditors and auditors
+Element:96: Administrator
+Element:97: Fire units and effector systems
+Element:98: Port defense cell
+Element:99: Coalition partners
+Element:100: Higher command
+Element:101: Neighbouring sector
+Element:102: Sector service node
+Element:103: Commander
+Element:104: Sensor operators and maintainers
+Element:105: Effector interface
+Element:106: Operator
+Element:107: Civil aviation authority and airport
+Element:108: Port and maritime authorities
+Element:109: Intelligence analyst
+Element:110: Command-and-control system (Gungnir)
+Element:111: Operator workstation
+Element:112: Analyst
+Element:113: Sensor network
+Diagram: Operational Structure Op-Sr
+Diagram: Op-Sr operational structure: nodes, roles, and system parts
+Processing package: Operational Traceability Op-Tr
+Diagram: Operational Traceability Op-Tr
+Processing package: Personnel Structure Pr-Sr
+Element:114: Sensor manager
+Element:115: Planner
+Element:116: Analyst
+Element:117: Administrator
+Element:118: Supervisor
+Element:119: Operator
+Element:120: Intelligence analyst
+Element:121: Commander
+Diagram: Personnel Structure Pr-Sr
+Diagram: Pr-Sr organizational structure: posts and reporting in the vignettes' sector
+Processing package: Project Roadmap Pj-Rm
+Element:122: Plan 02 mission analysis
+Element:123: Increment 2
+Element:124: Plan 09 ML model integration
+Element:125: Plan 01 product business plan
+Element:126: Plan 10 TOGAF ADM documentation
+Element:127: Plan 04 mission capabilities
+Element:128: Increment 1
+Element:129: Plan 06 UX designs by role
+Element:130: Increment 4
+Element:131: Plan 05 capability design gaps
+Element:132: Increment 3
+Element:133: Plan 08 AI agent integration
+Element:134: Plan 07 test-track suite
+Element:135: Plan 03 UAF views
+Diagram: Project Roadmap Pj-Rm
+Processing package: Requirements
+Element:136: Covariances stay positive semi-definite and no value becomes non-finite over long runs
+Element:137: Authority is enforced per role, per class, and per engagement layer, per the authority matrix
+Element:138: Each external party is a configurable endpoint with a message type rather than a bespoke integration
+Element:139: The queue orders pending decisions by priority and time remaining, and supports pre-delegation where policy allows
+Element:140: No pass criterion or measure target is widened to make a test pass
+Element:141: The node exposes a versioned contract for snapshot, event stream, detection submission, and plan decisions
+Element:142: The desktop sustains its frame-rate budget with the 3D viewport open under a dense-swarm scenario
+Element:143: Every detection carries its source and its receipt time
+Element:144: Coverage is computed and coverage gaps are detected and displayed
+Element:145: Machine identities authenticate with mutual transport-layer security; operator sessions use short-lived signed tokens
+Element:146: Identification evidence names its producer, including model name and version for a machine-learning source
+Element:147: Every consequential act is attributable to a person, a role, and a mission time in an audit log
+Element:148: Training data and model artefacts live outside this repository; only the manifest enters it
+Element:149: Measures are computed from the journal without manual collation
+Element:150: The system recommends a cheapest-adequate assignment of resources to tracks within readiness, geometry, and policy
+Element:151: Coalition track exchange uses STANAG 4676
+Element:152: Default display vocabulary is the agreed standard terms, with a per-deployment override table
+Element:153: No verification gate is waived by an agent
+Element:154: Schema versions are negotiated explicitly and an incompatible peer is refused, not silently accepted
+Element:155: Detection to event-stream publish stays inside its budget on-prem and in cloud
+Element:156: The assistant has no tool that changes state and no dependency path to a crate that does
+Element:157: The per-frame tick stays inside its budget with ingest, poll, plan, and journal all running
+Element:158: Detection to on-screen update stays inside its end-to-end budget in the embedded profile
+Element:159: Untrusted text from sensors, peers, annotations, and reports is treated as data by the assistant, never as instruction
+Element:160: Deployment profiles differ by configuration and wiring, never by conditional logic in a domain crate
+Element:161: Observations from heterogeneous sensors are ingested through one governed gateway that validates and quarantines
+Element:162: No `unwrap()` or `expect()` outside tests, entry points, and debug-only invariant checks
+Element:163: Every artefact is unclassified and derived from public sources
+Element:164: No dependency edge exists that `ARCHITECTURE.md` does not draw
+Element:165: Every release carries a bill of materials, a signature, and its assurance reports
+Element:166: Data is encrypted in transit on every network crossing and at rest where the deployment requires it
+Element:167: Detections are exportable in a columnar format for analytics and bulk exchange
+Element:168: Sensor modes, tasking, and calibration are held in a registry and changeable by the sensor manager
+Element:169: Data from sources with different clocks is time-disciplined and skew is detected
+Element:170: Classification and identification produce evidence with a margin rule and per-class thresholds set by policy
+Element:171: Every layout carries a status strip stating what the system knows and does not know
+Element:172: The node journal fsyncs every envelope; desktop journals fsync on session save and every five seconds
+Element:173: Every dependency is recorded in the standards document §2.9 and pinned once
+Element:174: Envelopes carry a bus sequence number and a mission time
+Element:175: Every recommendation carries a rationale and its alternatives
+Element:176: A desktop falls back to embedded operation within its budget after link loss, stores and forwards to capacity, and reconciles within its budget
+Element:177: Tracks carry a quality and a staleness that the interface renders differently from fresh data
+Element:178: Cooperative identity from open protocols is decoded and fused as evidence
+Element:179: Views, reports, and the interface contract carry a releasability marking
+Element:180: Absence, staleness, and degradation are visible rather than inferred from silence
+Element:181: The graphics and compute contexts stay separate and separately pinned
+Element:182: An accepted envelope is durable within its budget, and the node recovers to serving within its budget after restart
+Element:183: The two binaries contain wiring, not domain logic
+Element:184: Radar feeds decode from ASTERIX category 048
+Element:185: A multi-sensor, multi-rate, out-of-sequence tracking pipeline maintains the picture
+Element:186: Journals merge in mission-time order, duplicates are dropped, and conflicting decisions are reported rather than resolved
+Element:187: Each role has a workspace containing what that role's threads need and not more
+Element:188: No engagement, effector command, or reserved identity declaration executes without a recorded human decision
+Element:189: A session is journaled, replayable, and reproduces the same picture
+Element:190: Snapshot calls do not touch the pipeline and stay inside their budget
+Element:191: Pending decisions escalate and time out rather than waiting indefinitely
+Element:192: Machine assistance is labelled, sourced, and carries no authority in the interface
+Element:193: The node sustains its detection ingest throughput through validation and quarantine
+Element:194: Weapons control status is set by the authorized roles and constrains every recommendation
+Element:195: Entities keep a global identity with lineage across sources and sessions
+Element:196: Threats are scored against a defended-asset list with per-class lethality and asset weighting
+Element:197: Every source is authenticated before its data enters the picture
+Element:198: Unimplemented capability returns a named error on every reachable path
+Element:199: Shared types have exactly one owning crate; everything above re-exports
+Diagram: Requirements
+Processing package: Requirements Traceability
+Diagram: Requirements Traceability
+Processing package: Resource Connectivity Rs-Cn
+Element:200: gungnir-resilience
+Element:201: gungnir-filters
+Element:202: gungnir-sensor-management
+Element:203: gungnir-store
+Element:204: gungnir-security
+Element:205: gungnir-decision
+Element:206: gungnir-core
+Element:207: gungnir-render
+Element:208: gungnir-track-fusion
+Element:209: gungnir-oracle
+Element:210: gungnir-data-fusion
+Element:211: gungnir-track
+Element:212: gungnir-time
+Element:213: gungnir-assessment
+Element:214: gungnir-identity
+Element:215: gungnir-observability
+Element:216: gungnir-rfs
+Element:217: gungnir-model
+Element:218: gungnir-tracking-service
+Element:219: gungnir-scenario
+Element:220: gungnir-interop
+Element:221: gungnir-replay
+Element:222: gungnir-fusion-async
+Element:223: gungnir-viewport3d
+Element:224: gungnir-testkit
+Element:225: gungnir-ui
+Element:226: gungnir-workflow
+Element:227: gungnir-mission
+Element:228: gungnir-geo
+Element:229: gungnir-coord
+Element:230: gungnir-app
+Element:231: gungnir-config
+Element:232: gungnir-api
+Element:233: gungnir-node
+Element:234: gungnir-identification
+Element:235: gungnir-policy
+Element:236: gungnir-analytics
+Element:237: gungnir-association
+Element:238: gungnir-metrics
+Element:239: gungnir-eventing
+Element:240: gungnir-ingest
+Element:241: gungnir-ml
+Element:242: gungnir-intercept-service
+Element:243: gungnir-fuzz
+Element:244: gungnir-collab
+Element:245: gungnir-command
+Element:246: gungnir-reporting
+Element:247: gungnir-modelops
+Element:248: gungnir-allocation
+Element:249: gungnir-remote
+Element:250: gungnir-data
+Diagram: Resource Connectivity Rs-Cn
+Diagram: Rs-Cn resource connectivity: Assess, Decide & Govern Action (from Cargo.toml)
+Diagram: Rs-Cn resource connectivity: Data ecosystem (from Cargo.toml)
+Diagram: Rs-Cn resource connectivity: Deployment (from Cargo.toml)
+Diagram: Rs-Cn resource connectivity: Foundation model (from Cargo.toml)
+Diagram: Rs-Cn resource connectivity: Foundational (from Cargo.toml)
+Diagram: Rs-Cn resource connectivity: Secure, Operate & Sustain (from Cargo.toml)
+Diagram: Rs-Cn resource connectivity: Sense, Ingest & Normalize (from Cargo.toml)
+Diagram: Rs-Cn resource connectivity: Service facades (from Cargo.toml)
+Diagram: Rs-Cn resource connectivity: Tracking core (from Cargo.toml)
+Diagram: Rs-Cn resource connectivity: Understand & Maintain the Picture (from Cargo.toml)
+Diagram: Rs-Cn resource connectivity: User interface (from Cargo.toml)
+Processing package: Resource Traceability Rs-Tr
+Diagram: Resource Traceability Rs-Tr
+Processing package: Security Connectivity Sc-Cn
+Diagram: Sc-Cn security connectivity: trust boundaries per profile
+Processing package: Service Connectivity Sv-Cn
+Element:251: Model registry
+Element:252: Replay
+Element:253: Event bus
+Element:254: Identity resolution
+Element:255: Operator workflow
+Element:256: Approval workflow
+Element:257: Tracking
+Element:258: Reporting
+Element:259: Intercept planning
+Element:260: Interop catalogue and codecs
+Element:261: Configuration store
+Element:262: Health monitor
+Element:263: Point-cloud fusion
+Element:264: Event journal
+Element:265: Mission lifecycle
+Element:266: Threat assessment
+Element:267: Geospatial
+Element:268: Store-and-forward and reconciliation
+Element:269: Analytics
+Element:270: Data loading
+Element:271: Authentication
+Element:272: Identification
+Element:273: Decision support
+Element:274: API v1
+Element:275: Scenario generation
+Element:276: Remote backends
+Element:277: Audit log
+Element:278: Shared picture and arbitration
+Element:279: Ingest gateway
+Element:280: Policy
+Element:281: Tracking metrics
+Element:282: Authorization
+Element:283: Sensor registry
+Element:284: Time authority
+Diagram: Service Connectivity Sv-Cn
+Diagram: Sv-Cn service connectivity: information flow on one tick and across the API
+Processing package: Service Traceability Sv-Tr
+Diagram: Service Traceability Sv-Tr
+Processing package: Standards Taxonomy Sd-Tx
+Element:285: TLS 1.3 (RFC 8446)
+Element:286: WebSocket (RFC 6455)
+Element:287: STANAG 4676 (NATO ISR tracking standard)
+Element:288: ADS-B 1090 ES (RTCA DO-260B)
+Element:289: Cursor-on-Target (CoT)
+Element:290: TOGAF 10 ADM
+Element:291: OCI container image
+Element:292: ASTERIX Category 048 (Eurocontrol)
+Element:293: UAF 1.2 (OMG)
+Element:294: Apache Arrow (arrow 53)
+Element:295: AIS (ITU-R M.1371)
+Element:296: Software bill of materials (CycloneDX JSON) and signed releases
+Element:297: JSON (RFC 8259)
+Element:298: UUID version 7 (RFC 9562)
+Element:299: HTTP/1.1 (RFC 9112)
+Element:300: Gungnir canonical schema v1
+Diagram: Standards Taxonomy Sd-Tx
+Processing package: Strategic Connectivity St-Cn
+Diagram: St-Cn capability connectivity: what must exist before a capability can be full
+Processing package: Strategic Taxonomy St-Tx
+Element:301: Keep tracks through gaps with visible quality
+Element:302: Authenticate operators and callers
+Element:303: Score threat and priority per track
+Element:304: Mark and enforce releasability
+Element:305: Treat external input as untrusted
+Element:306: Compute intercept geometry
+Element:307: Act (recommend and authorize)
+Element:308: Record every decision
+Element:309: Track dense groups and count targets
+Element:310: Detect anomalies in tracks and feeds
+Element:311: Secure
+Element:312: Register sensors against each other
+Element:313: Ingest observations from every sensor class
+Element:314: Enforce rules of engagement
+Element:315: Support the battle rhythm
+Element:316: Journal every event durably
+Element:317: Decide
+Element:318: Present recommendations for decision
+Element:319: Know sensor coverage and gaps over terrain
+Element:320: Manage sensor readiness, modes, tasking, and calibration
+Element:321: Fuse terrain, imagery, point clouds, and map layers
+Element:322: Keep time discipline
+Element:323: Recommend sensor re-tasking under degradation
+Element:324: Predict trajectory, time to impact, closest approach
+Element:325: Meet performance budgets per profile
+Element:326: Receive early warning, tracks, and reports from peers
+Element:327: Recommend the cheapest adequate assignment
+Element:328: Validate, authenticate, and quarantine input
+Element:329: Classify and identify with evidence and confidence
+Element:330: Recommend fires tasks with deconfliction
+Element:331: Run as desktop, on-prem node, or cloud node
+Element:332: Receive cooperative identity
+Element:333: Authorize by role, class, and layer
+Element:334: Exchange with peers and coalition
+Element:335: Audit everything that matters
+Element:336: Maintain one multi-sensor track picture with uncertainty
+Element:337: Offer alternatives, what-if, and rationale
+Element:338: Never execute without a recorded human decision
+Element:339: Manage the queue under saturation
+Element:340: Integrate
+Element:341: Assist roles without authority
+Element:342: Maintain the defended-asset list
+Element:343: Maintain a clutter-tolerant surface picture
+Element:344: Track engagements and assess effects
+Element:345: Sustain
+Element:346: Speak the domain's interoperability standards
+Element:347: Warn assets and authorities
+Element:348: Operate disconnected and reconcile
+Element:349: Keep one identity across gaps, sorties, sessions, and peers
+Element:350: Understand
+Element:351: Answer geometric questions
+Element:352: Maintain pattern of life and order of battle
+Element:353: Provide role-based workspaces and workflow
+Element:354: Hand off to effector systems with provenance
+Element:355: Assure the supply chain
+Element:356: Govern algorithm and model baselines
+Element:357: Sense
+Element:358: Replay and rehearse
+Element:359: Report health honestly and run the alert lifecycle
+Element:360: Expose a versioned interface
+Element:361: Produce reports and measures from the journal
+Element:362: Manage configuration baselines and mission plans
+Element:363: Protect data in transit and at rest
+Diagram: Strategic Taxonomy St-Tx
+Diagram: St-Tx capability taxonomy (registry ids; names in model/elements.yaml)
+Adding Document Item XML
+Formatting output XML...please wait
+XMI Document Export Complete!

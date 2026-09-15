@@ -68,6 +68,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import diagram_layout  # noqa: E402
 from build_uaf import UAF, load_registry, read  # noqa: E402
 
 # A registry id at the start of a label: "OP-20 Higher command" -> OP-20.
@@ -411,7 +412,16 @@ def _activity_view(text: str, ids, by_name) -> tuple[list[ViewElement], list[Vie
                                                            MARGIN + BOX_H), container=True))
     lanes = len(els)
     for step in STEP_RE.findall(text):
-        for rid in ID_RE.findall(step):
+        # The step's ACTIVITIES are the ones in its `<<OA-nn, OA-mm>>` marker, and
+        # only those go into the chain. A step's text can also name a performer
+        # -- `:6. decide: ... (OP-02 Supervisor);` -- and reading every id in the
+        # step chained that performer into the flow as if it were a step,
+        # producing OP-02 -> OA-08 edges that looked like `performs` relations the
+        # registry lacked. It is placed on the diagram as the deciding performer
+        # and left out of the order.
+        marker = re.search(r"<<([^>]*)>>", step)
+        step_ids = ID_RE.findall(marker.group(1)) if marker else []
+        for rid in step_ids:
             if rid in ids and rid not in seen:
                 seen.add(rid)
                 order.append(rid)
@@ -419,6 +429,12 @@ def _activity_view(text: str, ids, by_name) -> tuple[list[ViewElement], list[Vie
                 left = MARGIN + (i % 4) * (BOX_W + GAP_X)
                 top = MARGIN + BOX_H + GAP_Y + (i // 4) * (BOX_H + GAP_Y)
                 els.append(ViewElement(rid, "", rid, (left, top, left + BOX_W, top + BOX_H)))
+        for rid in ID_RE.findall(step):
+            if rid in ids and rid not in seen and rid not in step_ids:
+                seen.add(rid)
+                left = MARGIN + len([e for e in els if e.container]) * (BOX_W + GAP_X)
+                els.append(ViewElement(rid, "", rid, (left, MARGIN, left + BOX_W, MARGIN + BOX_H),
+                                       container=True))
     edges = [ViewEdge(order[i], order[i + 1], "then", i + 1) for i in range(len(order) - 1)]
     return els, edges, max(0, len(SWIMLANE_RE.findall(text)) - lanes)
 
@@ -426,11 +442,9 @@ def _activity_view(text: str, ids, by_name) -> tuple[list[ViewElement], list[Vie
 def _wbs_view(text: str, ids, by_name) -> tuple[list[ViewElement], list[ViewEdge], int]:
     """St-Tx: a work-breakdown taxonomy. Depth gives the tree, so each bullet
     becomes a box at its own level and the parent link an edge."""
-    els: list[ViewElement] = []
     edges: list[ViewEdge] = []
-    seen: set[str] = set()
+    seen: dict[str, str] = {}
     stack: dict[int, str] = {}
-    per_level: dict[int, int] = {}
     skipped = 0
     for stars, label in WBS_RE.findall(text):
         depth = len(stars)
@@ -442,14 +456,12 @@ def _wbs_view(text: str, ids, by_name) -> tuple[list[ViewElement], list[ViewEdge
         parent = stack.get(depth - 1)
         if parent and parent != rid:
             edges.append(ViewEdge(parent, rid, "", len(edges) + 1))
-        if rid in seen:
-            continue
-        seen.add(rid)
-        i = per_level.get(depth, 0)
-        per_level[depth] = i + 1
-        left = MARGIN + (depth - 1) * (BOX_W + GAP_X)
-        top = MARGIN + i * (BOX_H + 12)
-        els.append(ViewElement(rid, "", label.strip(), (left, top, left + BOX_W, top + BOX_H)))
+        seen.setdefault(rid, label.strip())
+    # The tree laid out by the same layered engine the registry diagrams use:
+    # depth becomes the column, and the barycenter ordering keeps each parent's
+    # children together beside it rather than in bullet order down the page.
+    boxes = diagram_layout.layered(list(seen), [(e.from_id, e.to_id) for e in edges])
+    els = [ViewElement(rid, "", label, boxes[rid]) for rid, label in seen.items()]
     return els, edges, skipped
 
 

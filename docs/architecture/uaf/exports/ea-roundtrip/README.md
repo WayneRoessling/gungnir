@@ -38,7 +38,25 @@ binds and survives, EA preserves our generated GUIDs verbatim, a package is
 placed on its own diagram as a boundary frame by its `EAID_` id, and
 `MDGDgm=SysML1.4::BlockDefinition` is correct for a Logical UAF view.
 
-## How to use them for the stereotype names still unconfirmed
+## Run 2: the full export, and the profile list
+
+`run-2/` holds EA's export after importing the full 59-diagram model rather than
+the probe, with its export logs. Everything round 8 fixed held at scale. It also
+settled the stereotype question outright, because EA's export declares every
+stereotype of every enabled profile in its `<profiles>` block: the UAF profile
+(`nsPrefix="UAFP"`) has 213, each with the metaclass it extends. That list is
+now what `ELEMENT_KIND_INFO` and `RELATIONSHIP_KIND_INFO` are checked against;
+the "grep for `thecustomprofile:`" oracle below still works, but the list is
+faster and complete.
+
+Run 2 also showed two ways a wrong name can look bound: EA matches
+case-insensitively against every enabled profile, so `Achieves` landed in
+BIZBOK and `PersonType` in UPDM; and a tagged value whose name matches a
+property of some stereotype gets that stereotype applied, so `owner` became
+`UMM2:bLibrary` on 159 elements. The exporter now prefixes every registry-field
+tag `registry.` to stay clear of every profile's property names.
+
+## How to use them for a stereotype name not yet confirmed
 
 Seven of our nine relationship stereotypes and five of our eleven element
 stereotypes are still literature-informed guesses. The round trip gives a

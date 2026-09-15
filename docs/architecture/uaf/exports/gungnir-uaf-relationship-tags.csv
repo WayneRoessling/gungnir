@@ -435,6 +435,83 @@ REL:conforms_to:RS-app->SD-13,uafRelationship,conforms_to
 REL:conforms_to:RS-app->SD-13,status,planned
 REL:conforms_to:RS-node->SD-13,uafRelationship,conforms_to
 REL:conforms_to:RS-node->SD-13,status,planned
+REL:exchanges:OP-33->OP-30:NL-01,uafRelationship,exchanges
+REL:exchanges:OP-33->OP-30:NL-01,needline,NL-01
+REL:exchanges:OP-33->OP-30:NL-01,name,"observations, health"
+REL:exchanges:OP-21->OP-30:NL-02,uafRelationship,exchanges
+REL:exchanges:OP-21->OP-30:NL-02,needline,NL-02
+REL:exchanges:OP-21->OP-30:NL-02,name,"early warning, peer tracks"
+REL:exchanges:OP-20->OP-30:NL-02,uafRelationship,exchanges
+REL:exchanges:OP-20->OP-30:NL-02,needline,NL-02
+REL:exchanges:OP-20->OP-30:NL-02,name,"warnings, ROE"
+REL:exchanges:OP-24->OP-30:NL-03,uafRelationship,exchanges
+REL:exchanges:OP-24->OP-30:NL-03,needline,NL-03
+REL:exchanges:OP-24->OP-30:NL-03,name,"ADS-B, flight plans"
+REL:exchanges:OP-25->OP-30:NL-03,uafRelationship,exchanges
+REL:exchanges:OP-25->OP-30:NL-03,needline,NL-03
+REL:exchanges:OP-25->OP-30:NL-03,name,"AIS, harbour state"
+REL:exchanges:OP-30->OP-01:NL-04,uafRelationship,exchanges
+REL:exchanges:OP-30->OP-01:NL-04,needline,NL-04
+REL:exchanges:OP-30->OP-01:NL-04,name,"picture, plans, verdicts, alerts"
+REL:exchanges:OP-30->OP-02:NL-04,uafRelationship,exchanges
+REL:exchanges:OP-30->OP-02:NL-04,needline,NL-04
+REL:exchanges:OP-30->OP-02:NL-04,name,"queue, incidents"
+REL:exchanges:OP-30->OP-08:NL-04,uafRelationship,exchanges
+REL:exchanges:OP-30->OP-08:NL-04,needline,NL-04
+REL:exchanges:OP-30->OP-08:NL-04,name,"summary, queue state"
+REL:exchanges:OP-01->OP-30:NL-05,uafRelationship,exchanges
+REL:exchanges:OP-01->OP-30:NL-05,needline,NL-05
+REL:exchanges:OP-01->OP-30:NL-05,name,decisions
+REL:exchanges:OP-02->OP-30:NL-05,uafRelationship,exchanges
+REL:exchanges:OP-02->OP-30:NL-05,needline,NL-05
+REL:exchanges:OP-02->OP-30:NL-05,name,"decisions, holds, status"
+REL:exchanges:OP-08->OP-30:NL-05,uafRelationship,exchanges
+REL:exchanges:OP-08->OP-30:NL-05,needline,NL-05
+REL:exchanges:OP-08->OP-30:NL-05,name,"decisions, delegations"
+REL:exchanges:OP-30->OP-34:NL-06,uafRelationship,exchanges
+REL:exchanges:OP-30->OP-34:NL-06,needline,NL-06
+REL:exchanges:OP-30->OP-34:NL-06,name,handoff
+REL:exchanges:OP-34->OP-22:NL-06,uafRelationship,exchanges
+REL:exchanges:OP-34->OP-22:NL-06,needline,NL-06
+REL:exchanges:OP-22->OP-30:NL-07,uafRelationship,exchanges
+REL:exchanges:OP-22->OP-30:NL-07,needline,NL-07
+REL:exchanges:OP-22->OP-30:NL-07,name,"readiness, outcomes"
+REL:exchanges:OP-30->OP-24:NL-08,uafRelationship,exchanges
+REL:exchanges:OP-30->OP-24:NL-08,needline,NL-08
+REL:exchanges:OP-30->OP-24:NL-08,name,warnings
+REL:exchanges:OP-30->OP-25:NL-08,uafRelationship,exchanges
+REL:exchanges:OP-30->OP-25:NL-08,needline,NL-08
+REL:exchanges:OP-30->OP-25:NL-08,name,warnings
+REL:exchanges:OP-04->OP-30:NL-09,uafRelationship,exchanges
+REL:exchanges:OP-04->OP-30:NL-09,needline,NL-09
+REL:exchanges:OP-04->OP-30:NL-09,name,"modes, tasking, calibration"
+REL:exchanges:OP-30->OP-23:NL-09,uafRelationship,exchanges
+REL:exchanges:OP-30->OP-23:NL-09,needline,NL-09
+REL:exchanges:OP-30->OP-23:NL-09,name,tasking
+REL:exchanges:OP-30->OP-04:NL-10,uafRelationship,exchanges
+REL:exchanges:OP-30->OP-04:NL-10,needline,NL-10
+REL:exchanges:OP-30->OP-04:NL-10,name,"health, coverage, incidents"
+REL:exchanges:OP-06->OP-30:NL-11,uafRelationship,exchanges
+REL:exchanges:OP-06->OP-30:NL-11,needline,NL-11
+REL:exchanges:OP-06->OP-30:NL-11,name,"requirements, declarations, releases"
+REL:exchanges:OP-30->OP-26:NL-12,uafRelationship,exchanges
+REL:exchanges:OP-30->OP-26:NL-12,needline,NL-12
+REL:exchanges:OP-30->OP-26:NL-12,name,products with releasability
+REL:exchanges:OP-30->OP-20:NL-12,uafRelationship,exchanges
+REL:exchanges:OP-30->OP-20:NL-12,needline,NL-12
+REL:exchanges:OP-30->OP-20:NL-12,name,"status, reports"
+REL:exchanges:OP-07->OP-30:NL-13,uafRelationship,exchanges
+REL:exchanges:OP-07->OP-30:NL-13,needline,NL-13
+REL:exchanges:OP-07->OP-30:NL-13,name,"laydown, plans"
+REL:exchanges:OP-08->OP-30:NL-13,uafRelationship,exchanges
+REL:exchanges:OP-08->OP-30:NL-13,needline,NL-13
+REL:exchanges:OP-08->OP-30:NL-13,name,"asset list, policy"
+REL:exchanges:OP-03->OP-30:NL-14,uafRelationship,exchanges
+REL:exchanges:OP-03->OP-30:NL-14,needline,NL-14
+REL:exchanges:OP-03->OP-30:NL-14,name,"replay, reports, promotions"
+REL:exchanges:OP-05->OP-30:NL-16,uafRelationship,exchanges
+REL:exchanges:OP-05->OP-30:NL-16,needline,NL-16
+REL:exchanges:OP-05->OP-30:NL-16,name,"accounts, roles, baselines"
 REL:uses:RS-allocation->RS-core,uafRelationship,uses
 REL:uses:RS-allocation->RS-testkit,uafRelationship,uses
 REL:uses:RS-allocation->RS-testkit,kind,dev
