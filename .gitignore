@@ -17,6 +17,13 @@ gungnir-journal/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Python bytecode. The UAF and gap-register generators under docs/**/tools are
+# run by CI, which then fails if `git diff` is dirty -- so a committed .pyc turns
+# every regeneration into a spurious diff. One did: PR #101's first run failed on
+# nothing but three .pyc files.
+__pycache__/
+*.pyc
 .idea/
 .vscode/
 
