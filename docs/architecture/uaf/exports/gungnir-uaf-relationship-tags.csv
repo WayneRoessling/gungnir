@@ -285,13 +285,13 @@ REL:realizes:SV-15->OA-23,uafRelationship,realizes
 REL:realizes:SV-16->OA-07,uafRelationship,realizes
 REL:realizes:SV-16->OA-31,uafRelationship,realizes
 REL:realizes:SV-23->OA-08,uafRelationship,realizes
-REL:realizes:SV-23->OA-08,status,planned
+REL:realizes:SV-23->OA-08,registry.status,planned
 REL:realizes:SV-23->OA-09,uafRelationship,realizes
-REL:realizes:SV-23->OA-09,status,planned
+REL:realizes:SV-23->OA-09,registry.status,planned
 REL:realizes:SV-23->OA-15,uafRelationship,realizes
-REL:realizes:SV-23->OA-15,status,planned
+REL:realizes:SV-23->OA-15,registry.status,planned
 REL:realizes:SV-23->OA-20,uafRelationship,realizes
-REL:realizes:SV-23->OA-20,status,planned
+REL:realizes:SV-23->OA-20,registry.status,planned
 REL:realizes:SV-27->OA-09,uafRelationship,realizes
 REL:realizes:SV-27->OA-13,uafRelationship,realizes
 REL:realizes:SV-27->OA-16,uafRelationship,realizes
@@ -335,9 +335,9 @@ REL:realizes:SV-22->OA-35,uafRelationship,realizes
 REL:realizes:SV-31->OA-12,uafRelationship,realizes
 REL:realizes:SV-31->OA-22,uafRelationship,realizes
 REL:realizes:SV-32->OA-02,uafRelationship,realizes
-REL:realizes:SV-32->OA-02,status,planned
+REL:realizes:SV-32->OA-02,registry.status,planned
 REL:realizes:SV-18->OA-32,uafRelationship,realizes
-REL:realizes:SV-18->OA-32,status,planned
+REL:realizes:SV-18->OA-32,registry.status,planned
 REL:implements:RS-tracking-service->SV-01,uafRelationship,implements
 REL:implements:RS-fusion-async->SV-01,uafRelationship,implements
 REL:implements:RS-filters->SV-01,uafRelationship,implements
@@ -400,128 +400,128 @@ REL:conforms_to:RS-config->SD-05,uafRelationship,conforms_to
 REL:conforms_to:RS-api->SD-01,uafRelationship,conforms_to
 REL:conforms_to:RS-api->SD-05,uafRelationship,conforms_to
 REL:conforms_to:RS-api->SD-06,uafRelationship,conforms_to
-REL:conforms_to:RS-api->SD-06,status,planned
+REL:conforms_to:RS-api->SD-06,registry.status,planned
 REL:conforms_to:RS-api->SD-07,uafRelationship,conforms_to
-REL:conforms_to:RS-api->SD-07,status,planned
+REL:conforms_to:RS-api->SD-07,registry.status,planned
 REL:conforms_to:RS-api->SD-08,uafRelationship,conforms_to
-REL:conforms_to:RS-api->SD-08,status,planned
+REL:conforms_to:RS-api->SD-08,registry.status,planned
 REL:conforms_to:RS-remote->SD-06,uafRelationship,conforms_to
-REL:conforms_to:RS-remote->SD-06,status,planned
+REL:conforms_to:RS-remote->SD-06,registry.status,planned
 REL:conforms_to:RS-remote->SD-07,uafRelationship,conforms_to
-REL:conforms_to:RS-remote->SD-07,status,planned
+REL:conforms_to:RS-remote->SD-07,registry.status,planned
 REL:conforms_to:RS-remote->SD-08,uafRelationship,conforms_to
-REL:conforms_to:RS-remote->SD-08,status,planned
+REL:conforms_to:RS-remote->SD-08,registry.status,planned
 REL:conforms_to:RS-node->SD-12,uafRelationship,conforms_to
 REL:conforms_to:RS-node->SD-08,uafRelationship,conforms_to
-REL:conforms_to:RS-node->SD-08,status,planned
+REL:conforms_to:RS-node->SD-08,registry.status,planned
 REL:conforms_to:RS-interop->SD-02,uafRelationship,conforms_to
 REL:conforms_to:RS-interop->SD-03,uafRelationship,conforms_to
-REL:conforms_to:RS-interop->SD-03,status,planned
+REL:conforms_to:RS-interop->SD-03,registry.status,planned
 REL:conforms_to:RS-interop->SD-04,uafRelationship,conforms_to
-REL:conforms_to:RS-interop->SD-04,status,planned
+REL:conforms_to:RS-interop->SD-04,registry.status,planned
 REL:conforms_to:RS-interop->SD-16,uafRelationship,conforms_to
-REL:conforms_to:RS-interop->SD-16,status,planned
+REL:conforms_to:RS-interop->SD-16,registry.status,planned
 REL:conforms_to:RS-ingest->SD-16,uafRelationship,conforms_to
-REL:conforms_to:RS-ingest->SD-16,status,planned
+REL:conforms_to:RS-ingest->SD-16,registry.status,planned
 REL:conforms_to:RS-remote->SD-16,uafRelationship,conforms_to
-REL:conforms_to:RS-remote->SD-16,status,planned
+REL:conforms_to:RS-remote->SD-16,registry.status,planned
 REL:conforms_to:RS-ingest->SD-09,uafRelationship,conforms_to
-REL:conforms_to:RS-ingest->SD-09,status,planned
+REL:conforms_to:RS-ingest->SD-09,registry.status,planned
 REL:conforms_to:RS-ingest->SD-10,uafRelationship,conforms_to
-REL:conforms_to:RS-ingest->SD-10,status,planned
+REL:conforms_to:RS-ingest->SD-10,registry.status,planned
 REL:conforms_to:RS-identity->SD-11,uafRelationship,conforms_to
-REL:conforms_to:RS-identity->SD-11,status,planned
+REL:conforms_to:RS-identity->SD-11,registry.status,planned
 REL:conforms_to:RS-app->SD-13,uafRelationship,conforms_to
-REL:conforms_to:RS-app->SD-13,status,planned
+REL:conforms_to:RS-app->SD-13,registry.status,planned
 REL:conforms_to:RS-node->SD-13,uafRelationship,conforms_to
-REL:conforms_to:RS-node->SD-13,status,planned
+REL:conforms_to:RS-node->SD-13,registry.status,planned
 REL:exchanges:OP-33->OP-30:NL-01,uafRelationship,exchanges
-REL:exchanges:OP-33->OP-30:NL-01,needline,NL-01
-REL:exchanges:OP-33->OP-30:NL-01,name,"observations, health"
+REL:exchanges:OP-33->OP-30:NL-01,registry.needline,NL-01
+REL:exchanges:OP-33->OP-30:NL-01,registry.name,"observations, health"
 REL:exchanges:OP-21->OP-30:NL-02,uafRelationship,exchanges
-REL:exchanges:OP-21->OP-30:NL-02,needline,NL-02
-REL:exchanges:OP-21->OP-30:NL-02,name,"early warning, peer tracks"
+REL:exchanges:OP-21->OP-30:NL-02,registry.needline,NL-02
+REL:exchanges:OP-21->OP-30:NL-02,registry.name,"early warning, peer tracks"
 REL:exchanges:OP-20->OP-30:NL-02,uafRelationship,exchanges
-REL:exchanges:OP-20->OP-30:NL-02,needline,NL-02
-REL:exchanges:OP-20->OP-30:NL-02,name,"warnings, ROE"
+REL:exchanges:OP-20->OP-30:NL-02,registry.needline,NL-02
+REL:exchanges:OP-20->OP-30:NL-02,registry.name,"warnings, ROE"
 REL:exchanges:OP-24->OP-30:NL-03,uafRelationship,exchanges
-REL:exchanges:OP-24->OP-30:NL-03,needline,NL-03
-REL:exchanges:OP-24->OP-30:NL-03,name,"ADS-B, flight plans"
+REL:exchanges:OP-24->OP-30:NL-03,registry.needline,NL-03
+REL:exchanges:OP-24->OP-30:NL-03,registry.name,"ADS-B, flight plans"
 REL:exchanges:OP-25->OP-30:NL-03,uafRelationship,exchanges
-REL:exchanges:OP-25->OP-30:NL-03,needline,NL-03
-REL:exchanges:OP-25->OP-30:NL-03,name,"AIS, harbour state"
+REL:exchanges:OP-25->OP-30:NL-03,registry.needline,NL-03
+REL:exchanges:OP-25->OP-30:NL-03,registry.name,"AIS, harbour state"
 REL:exchanges:OP-30->OP-01:NL-04,uafRelationship,exchanges
-REL:exchanges:OP-30->OP-01:NL-04,needline,NL-04
-REL:exchanges:OP-30->OP-01:NL-04,name,"picture, plans, verdicts, alerts"
+REL:exchanges:OP-30->OP-01:NL-04,registry.needline,NL-04
+REL:exchanges:OP-30->OP-01:NL-04,registry.name,"picture, plans, verdicts, alerts"
 REL:exchanges:OP-30->OP-02:NL-04,uafRelationship,exchanges
-REL:exchanges:OP-30->OP-02:NL-04,needline,NL-04
-REL:exchanges:OP-30->OP-02:NL-04,name,"queue, incidents"
+REL:exchanges:OP-30->OP-02:NL-04,registry.needline,NL-04
+REL:exchanges:OP-30->OP-02:NL-04,registry.name,"queue, incidents"
 REL:exchanges:OP-30->OP-08:NL-04,uafRelationship,exchanges
-REL:exchanges:OP-30->OP-08:NL-04,needline,NL-04
-REL:exchanges:OP-30->OP-08:NL-04,name,"summary, queue state"
+REL:exchanges:OP-30->OP-08:NL-04,registry.needline,NL-04
+REL:exchanges:OP-30->OP-08:NL-04,registry.name,"summary, queue state"
 REL:exchanges:OP-01->OP-30:NL-05,uafRelationship,exchanges
-REL:exchanges:OP-01->OP-30:NL-05,needline,NL-05
-REL:exchanges:OP-01->OP-30:NL-05,name,decisions
+REL:exchanges:OP-01->OP-30:NL-05,registry.needline,NL-05
+REL:exchanges:OP-01->OP-30:NL-05,registry.name,decisions
 REL:exchanges:OP-02->OP-30:NL-05,uafRelationship,exchanges
-REL:exchanges:OP-02->OP-30:NL-05,needline,NL-05
-REL:exchanges:OP-02->OP-30:NL-05,name,"decisions, holds, status"
+REL:exchanges:OP-02->OP-30:NL-05,registry.needline,NL-05
+REL:exchanges:OP-02->OP-30:NL-05,registry.name,"decisions, holds, status"
 REL:exchanges:OP-08->OP-30:NL-05,uafRelationship,exchanges
-REL:exchanges:OP-08->OP-30:NL-05,needline,NL-05
-REL:exchanges:OP-08->OP-30:NL-05,name,"decisions, delegations"
+REL:exchanges:OP-08->OP-30:NL-05,registry.needline,NL-05
+REL:exchanges:OP-08->OP-30:NL-05,registry.name,"decisions, delegations"
 REL:exchanges:OP-30->OP-34:NL-06,uafRelationship,exchanges
-REL:exchanges:OP-30->OP-34:NL-06,needline,NL-06
-REL:exchanges:OP-30->OP-34:NL-06,name,handoff
+REL:exchanges:OP-30->OP-34:NL-06,registry.needline,NL-06
+REL:exchanges:OP-30->OP-34:NL-06,registry.name,handoff
 REL:exchanges:OP-34->OP-22:NL-06,uafRelationship,exchanges
-REL:exchanges:OP-34->OP-22:NL-06,needline,NL-06
+REL:exchanges:OP-34->OP-22:NL-06,registry.needline,NL-06
 REL:exchanges:OP-22->OP-30:NL-07,uafRelationship,exchanges
-REL:exchanges:OP-22->OP-30:NL-07,needline,NL-07
-REL:exchanges:OP-22->OP-30:NL-07,name,"readiness, outcomes"
+REL:exchanges:OP-22->OP-30:NL-07,registry.needline,NL-07
+REL:exchanges:OP-22->OP-30:NL-07,registry.name,"readiness, outcomes"
 REL:exchanges:OP-30->OP-24:NL-08,uafRelationship,exchanges
-REL:exchanges:OP-30->OP-24:NL-08,needline,NL-08
-REL:exchanges:OP-30->OP-24:NL-08,name,warnings
+REL:exchanges:OP-30->OP-24:NL-08,registry.needline,NL-08
+REL:exchanges:OP-30->OP-24:NL-08,registry.name,warnings
 REL:exchanges:OP-30->OP-25:NL-08,uafRelationship,exchanges
-REL:exchanges:OP-30->OP-25:NL-08,needline,NL-08
-REL:exchanges:OP-30->OP-25:NL-08,name,warnings
+REL:exchanges:OP-30->OP-25:NL-08,registry.needline,NL-08
+REL:exchanges:OP-30->OP-25:NL-08,registry.name,warnings
 REL:exchanges:OP-04->OP-30:NL-09,uafRelationship,exchanges
-REL:exchanges:OP-04->OP-30:NL-09,needline,NL-09
-REL:exchanges:OP-04->OP-30:NL-09,name,"modes, tasking, calibration"
+REL:exchanges:OP-04->OP-30:NL-09,registry.needline,NL-09
+REL:exchanges:OP-04->OP-30:NL-09,registry.name,"modes, tasking, calibration"
 REL:exchanges:OP-30->OP-23:NL-09,uafRelationship,exchanges
-REL:exchanges:OP-30->OP-23:NL-09,needline,NL-09
-REL:exchanges:OP-30->OP-23:NL-09,name,tasking
+REL:exchanges:OP-30->OP-23:NL-09,registry.needline,NL-09
+REL:exchanges:OP-30->OP-23:NL-09,registry.name,tasking
 REL:exchanges:OP-30->OP-04:NL-10,uafRelationship,exchanges
-REL:exchanges:OP-30->OP-04:NL-10,needline,NL-10
-REL:exchanges:OP-30->OP-04:NL-10,name,"health, coverage, incidents"
+REL:exchanges:OP-30->OP-04:NL-10,registry.needline,NL-10
+REL:exchanges:OP-30->OP-04:NL-10,registry.name,"health, coverage, incidents"
 REL:exchanges:OP-06->OP-30:NL-11,uafRelationship,exchanges
-REL:exchanges:OP-06->OP-30:NL-11,needline,NL-11
-REL:exchanges:OP-06->OP-30:NL-11,name,"requirements, declarations, releases"
+REL:exchanges:OP-06->OP-30:NL-11,registry.needline,NL-11
+REL:exchanges:OP-06->OP-30:NL-11,registry.name,"requirements, declarations, releases"
 REL:exchanges:OP-30->OP-26:NL-12,uafRelationship,exchanges
-REL:exchanges:OP-30->OP-26:NL-12,needline,NL-12
-REL:exchanges:OP-30->OP-26:NL-12,name,products with releasability
+REL:exchanges:OP-30->OP-26:NL-12,registry.needline,NL-12
+REL:exchanges:OP-30->OP-26:NL-12,registry.name,products with releasability
 REL:exchanges:OP-30->OP-20:NL-12,uafRelationship,exchanges
-REL:exchanges:OP-30->OP-20:NL-12,needline,NL-12
-REL:exchanges:OP-30->OP-20:NL-12,name,"status, reports"
+REL:exchanges:OP-30->OP-20:NL-12,registry.needline,NL-12
+REL:exchanges:OP-30->OP-20:NL-12,registry.name,"status, reports"
 REL:exchanges:OP-07->OP-30:NL-13,uafRelationship,exchanges
-REL:exchanges:OP-07->OP-30:NL-13,needline,NL-13
-REL:exchanges:OP-07->OP-30:NL-13,name,"laydown, plans"
+REL:exchanges:OP-07->OP-30:NL-13,registry.needline,NL-13
+REL:exchanges:OP-07->OP-30:NL-13,registry.name,"laydown, plans"
 REL:exchanges:OP-08->OP-30:NL-13,uafRelationship,exchanges
-REL:exchanges:OP-08->OP-30:NL-13,needline,NL-13
-REL:exchanges:OP-08->OP-30:NL-13,name,"asset list, policy"
+REL:exchanges:OP-08->OP-30:NL-13,registry.needline,NL-13
+REL:exchanges:OP-08->OP-30:NL-13,registry.name,"asset list, policy"
 REL:exchanges:OP-03->OP-30:NL-14,uafRelationship,exchanges
-REL:exchanges:OP-03->OP-30:NL-14,needline,NL-14
-REL:exchanges:OP-03->OP-30:NL-14,name,"replay, reports, promotions"
+REL:exchanges:OP-03->OP-30:NL-14,registry.needline,NL-14
+REL:exchanges:OP-03->OP-30:NL-14,registry.name,"replay, reports, promotions"
 REL:exchanges:OP-05->OP-30:NL-16,uafRelationship,exchanges
-REL:exchanges:OP-05->OP-30:NL-16,needline,NL-16
-REL:exchanges:OP-05->OP-30:NL-16,name,"accounts, roles, baselines"
+REL:exchanges:OP-05->OP-30:NL-16,registry.needline,NL-16
+REL:exchanges:OP-05->OP-30:NL-16,registry.name,"accounts, roles, baselines"
 REL:uses:RS-allocation->RS-core,uafRelationship,uses
 REL:uses:RS-allocation->RS-testkit,uafRelationship,uses
-REL:uses:RS-allocation->RS-testkit,kind,dev
+REL:uses:RS-allocation->RS-testkit,registry.kind,dev
 REL:uses:RS-analytics->RS-coord,uafRelationship,uses
 REL:uses:RS-analytics->RS-data,uafRelationship,uses
 REL:uses:RS-analytics->RS-geo,uafRelationship,uses
 REL:uses:RS-analytics->RS-model,uafRelationship,uses
 REL:uses:RS-analytics->RS-sensor-management,uafRelationship,uses
 REL:uses:RS-analytics->RS-config,uafRelationship,uses
-REL:uses:RS-analytics->RS-config,kind,dev
+REL:uses:RS-analytics->RS-config,registry.kind,dev
 REL:uses:RS-api->RS-model,uafRelationship,uses
 REL:uses:RS-api->RS-eventing,uafRelationship,uses
 REL:uses:RS-api->RS-security,uafRelationship,uses
@@ -561,26 +561,26 @@ REL:uses:RS-app->RS-decision,uafRelationship,uses
 REL:uses:RS-app->RS-replay,uafRelationship,uses
 REL:uses:RS-app->RS-reporting,uafRelationship,uses
 REL:uses:RS-app->RS-scenario,uafRelationship,uses
-REL:uses:RS-app->RS-scenario,kind,dev
+REL:uses:RS-app->RS-scenario,registry.kind,dev
 REL:uses:RS-app->RS-api,uafRelationship,uses
-REL:uses:RS-app->RS-api,kind,dev
+REL:uses:RS-app->RS-api,registry.kind,dev
 REL:uses:RS-assessment->RS-model,uafRelationship,uses
 REL:uses:RS-association->RS-filters,uafRelationship,uses
 REL:uses:RS-association->RS-testkit,uafRelationship,uses
-REL:uses:RS-association->RS-testkit,kind,dev
+REL:uses:RS-association->RS-testkit,registry.kind,dev
 REL:uses:RS-collab->RS-model,uafRelationship,uses
 REL:uses:RS-collab->RS-eventing,uafRelationship,uses
 REL:uses:RS-collab->RS-command,uafRelationship,uses
 REL:uses:RS-collab->RS-security,uafRelationship,uses
 REL:uses:RS-collab->RS-policy,uafRelationship,uses
-REL:uses:RS-collab->RS-policy,kind,dev
+REL:uses:RS-collab->RS-policy,registry.kind,dev
 REL:uses:RS-command->RS-model,uafRelationship,uses
 REL:uses:RS-command->RS-policy,uafRelationship,uses
 REL:uses:RS-config->RS-model,uafRelationship,uses
 REL:uses:RS-coord->RS-testkit,uafRelationship,uses
-REL:uses:RS-coord->RS-testkit,kind,dev
+REL:uses:RS-coord->RS-testkit,registry.kind,dev
 REL:uses:RS-core->RS-testkit,uafRelationship,uses
-REL:uses:RS-core->RS-testkit,kind,dev
+REL:uses:RS-core->RS-testkit,registry.kind,dev
 REL:uses:RS-data-fusion->RS-data,uafRelationship,uses
 REL:uses:RS-decision->RS-model,uafRelationship,uses
 REL:uses:RS-decision->RS-assessment,uafRelationship,uses
@@ -590,7 +590,7 @@ REL:uses:RS-eventing->RS-model,uafRelationship,uses
 REL:uses:RS-filters->RS-core,uafRelationship,uses
 REL:uses:RS-filters->RS-coord,uafRelationship,uses
 REL:uses:RS-filters->RS-testkit,uafRelationship,uses
-REL:uses:RS-filters->RS-testkit,kind,dev
+REL:uses:RS-filters->RS-testkit,registry.kind,dev
 REL:uses:RS-fusion-async->RS-track,uafRelationship,uses
 REL:uses:RS-fusion-async->RS-rfs,uafRelationship,uses
 REL:uses:RS-fusion-async->RS-track-fusion,uafRelationship,uses
@@ -598,7 +598,7 @@ REL:uses:RS-fusion-async->RS-core,uafRelationship,uses
 REL:uses:RS-fusion-async->RS-filters,uafRelationship,uses
 REL:uses:RS-fusion-async->RS-association,uafRelationship,uses
 REL:uses:RS-fusion-async->RS-testkit,uafRelationship,uses
-REL:uses:RS-fusion-async->RS-testkit,kind,dev
+REL:uses:RS-fusion-async->RS-testkit,registry.kind,dev
 REL:uses:RS-fuzz->RS-association,uafRelationship,uses
 REL:uses:RS-fuzz->RS-ingest,uafRelationship,uses
 REL:uses:RS-fuzz->RS-model,uafRelationship,uses
@@ -611,24 +611,24 @@ REL:uses:RS-ingest->RS-time,uafRelationship,uses
 REL:uses:RS-ingest->RS-tracking-service,uafRelationship,uses
 REL:uses:RS-ingest->RS-interop,uafRelationship,uses
 REL:uses:RS-ingest->RS-scenario,uafRelationship,uses
-REL:uses:RS-ingest->RS-scenario,kind,dev
+REL:uses:RS-ingest->RS-scenario,registry.kind,dev
 REL:uses:RS-intercept-service->RS-core,uafRelationship,uses
 REL:uses:RS-intercept-service->RS-coord,uafRelationship,uses
 REL:uses:RS-intercept-service->RS-allocation,uafRelationship,uses
 REL:uses:RS-intercept-service->RS-model,uafRelationship,uses
 REL:uses:RS-interop->RS-model,uafRelationship,uses
 REL:uses:RS-interop->RS-eventing,uafRelationship,uses
-REL:uses:RS-interop->RS-eventing,kind,dev
+REL:uses:RS-interop->RS-eventing,registry.kind,dev
 REL:uses:RS-metrics->RS-track,uafRelationship,uses
 REL:uses:RS-metrics->RS-association,uafRelationship,uses
 REL:uses:RS-metrics->RS-testkit,uafRelationship,uses
-REL:uses:RS-metrics->RS-testkit,kind,dev
+REL:uses:RS-metrics->RS-testkit,registry.kind,dev
 REL:uses:RS-mission->RS-model,uafRelationship,uses
 REL:uses:RS-mission->RS-config,uafRelationship,uses
 REL:uses:RS-mission->RS-store,uafRelationship,uses
 REL:uses:RS-mission->RS-eventing,uafRelationship,uses
 REL:uses:RS-mission->RS-scenario,uafRelationship,uses
-REL:uses:RS-mission->RS-scenario,kind,dev
+REL:uses:RS-mission->RS-scenario,registry.kind,dev
 REL:uses:RS-ml->RS-model,uafRelationship,uses
 REL:uses:RS-ml->RS-interop,uafRelationship,uses
 REL:uses:RS-model->RS-core,uafRelationship,uses
@@ -655,14 +655,14 @@ REL:uses:RS-node->RS-geo,uafRelationship,uses
 REL:uses:RS-node->RS-analytics,uafRelationship,uses
 REL:uses:RS-node->RS-observability,uafRelationship,uses
 REL:uses:RS-node->RS-scenario,uafRelationship,uses
-REL:uses:RS-node->RS-scenario,kind,dev
+REL:uses:RS-node->RS-scenario,registry.kind,dev
 REL:uses:RS-observability->RS-model,uafRelationship,uses
 REL:uses:RS-oracle->RS-filters,uafRelationship,uses
 REL:uses:RS-oracle->RS-association,uafRelationship,uses
 REL:uses:RS-oracle->RS-rfs,uafRelationship,uses
 REL:uses:RS-oracle->RS-scenario,uafRelationship,uses
 REL:uses:RS-oracle->RS-testkit,uafRelationship,uses
-REL:uses:RS-oracle->RS-testkit,kind,dev
+REL:uses:RS-oracle->RS-testkit,registry.kind,dev
 REL:uses:RS-policy->RS-model,uafRelationship,uses
 REL:uses:RS-policy->RS-geo,uafRelationship,uses
 REL:uses:RS-remote->RS-security,uafRelationship,uses
@@ -672,7 +672,7 @@ REL:uses:RS-remote->RS-api,uafRelationship,uses
 REL:uses:RS-remote->RS-tracking-service,uafRelationship,uses
 REL:uses:RS-remote->RS-intercept-service,uafRelationship,uses
 REL:uses:RS-remote->RS-analytics,uafRelationship,uses
-REL:uses:RS-remote->RS-analytics,kind,dev
+REL:uses:RS-remote->RS-analytics,registry.kind,dev
 REL:uses:RS-replay->RS-model,uafRelationship,uses
 REL:uses:RS-replay->RS-eventing,uafRelationship,uses
 REL:uses:RS-replay->RS-store,uafRelationship,uses
@@ -687,12 +687,12 @@ REL:uses:RS-resilience->RS-eventing,uafRelationship,uses
 REL:uses:RS-resilience->RS-store,uafRelationship,uses
 REL:uses:RS-rfs->RS-track,uafRelationship,uses
 REL:uses:RS-rfs->RS-testkit,uafRelationship,uses
-REL:uses:RS-rfs->RS-testkit,kind,dev
+REL:uses:RS-rfs->RS-testkit,registry.kind,dev
 REL:uses:RS-scenario->RS-core,uafRelationship,uses
 REL:uses:RS-scenario->RS-coord,uafRelationship,uses
 REL:uses:RS-scenario->RS-fusion-async,uafRelationship,uses
 REL:uses:RS-scenario->RS-testkit,uafRelationship,uses
-REL:uses:RS-scenario->RS-testkit,kind,dev
+REL:uses:RS-scenario->RS-testkit,registry.kind,dev
 REL:uses:RS-sensor-management->RS-coord,uafRelationship,uses
 REL:uses:RS-sensor-management->RS-model,uafRelationship,uses
 REL:uses:RS-sensor-management->RS-config,uafRelationship,uses
@@ -702,11 +702,11 @@ REL:uses:RS-time->RS-model,uafRelationship,uses
 REL:uses:RS-track-fusion->RS-track,uafRelationship,uses
 REL:uses:RS-track-fusion->RS-coord,uafRelationship,uses
 REL:uses:RS-track-fusion->RS-testkit,uafRelationship,uses
-REL:uses:RS-track-fusion->RS-testkit,kind,dev
+REL:uses:RS-track-fusion->RS-testkit,registry.kind,dev
 REL:uses:RS-track->RS-core,uafRelationship,uses
 REL:uses:RS-track->RS-association,uafRelationship,uses
 REL:uses:RS-track->RS-testkit,uafRelationship,uses
-REL:uses:RS-track->RS-testkit,kind,dev
+REL:uses:RS-track->RS-testkit,registry.kind,dev
 REL:uses:RS-tracking-service->RS-core,uafRelationship,uses
 REL:uses:RS-tracking-service->RS-coord,uafRelationship,uses
 REL:uses:RS-tracking-service->RS-filters,uafRelationship,uses
@@ -717,9 +717,9 @@ REL:uses:RS-tracking-service->RS-track-fusion,uafRelationship,uses
 REL:uses:RS-tracking-service->RS-fusion-async,uafRelationship,uses
 REL:uses:RS-tracking-service->RS-model,uafRelationship,uses
 REL:uses:RS-tracking-service->RS-scenario,uafRelationship,uses
-REL:uses:RS-tracking-service->RS-scenario,kind,dev
+REL:uses:RS-tracking-service->RS-scenario,registry.kind,dev
 REL:uses:RS-tracking-service->RS-oracle,uafRelationship,uses
-REL:uses:RS-tracking-service->RS-oracle,kind,dev
+REL:uses:RS-tracking-service->RS-oracle,registry.kind,dev
 REL:uses:RS-ui->RS-model,uafRelationship,uses
 REL:uses:RS-viewport3d->RS-data,uafRelationship,uses
 REL:uses:RS-viewport3d->RS-data-fusion,uafRelationship,uses

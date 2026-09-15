@@ -80,8 +80,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_uaf import UAF, load_registry  # noqa: E402
-from export_xmi import (ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO, STRUCTURAL_FIELDS,  # noqa: E402
-                        stereo_name)
+from export_xmi import (ELEMENT_KIND_INFO, RELATIONSHIP_KIND_INFO, REGISTRY_TAG_PREFIX,  # noqa: E402
+                        STRUCTURAL_FIELDS, conforms_to_text, stereo_name)
 
 # export_xmi.py groups elements into named UAF view packages (VIEW_PACKAGES,
 # matching a real EA project's own package/diagram structure); this script
@@ -199,7 +199,10 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
             for k, v in entry.items():
                 if k in STRUCTURAL_FIELDS or v in (None, "", []):
                     continue
-                tag_rows.append([eid, k, ascii_escape(flatten(v))])
+                # Prefixed like export_xmi.py's, so the two bridges name a
+                # registry field's tag the same way; the prefix was added to
+                # the XMI path on round 9 and missed here.
+                tag_rows.append([eid, REGISTRY_TAG_PREFIX + k, ascii_escape(flatten(v))])
 
     rel_rows, rel_tag_rows = [], []
     seen_rel_ids: set[str] = set()
@@ -233,9 +236,14 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
                 for k, v in entry.items():
                     if k in ("from", "to") or v in (None, "", []):
                         continue
-                    rel_tag_rows.append([rel_id, k, ascii_escape(flatten(v))])
+                    rel_tag_rows.append([rel_id, REGISTRY_TAG_PREFIX + k, ascii_escape(flatten(v))])
 
     write_csv(out_dir / "gungnir-uaf-elements.csv", ["id", "section", "stereotype", "name", "description", "ea_type"], element_rows)
+    # The UAF profile's own conformsTo property, under its own name (see
+    # export_xmi.conforms_to_text): a String, so it travels as an ordinary tag.
+    for rid, text in conforms_to_text(elements, rels).items():
+        if rid in known_ids:
+            tag_rows.append([rid, "conformsTo", ascii_escape(text)])
     write_csv(out_dir / "gungnir-uaf-element-tags.csv", ["id", "key", "value"], tag_rows)
     write_csv(out_dir / "gungnir-uaf-relationships.csv", ["rel_id", "kind", "stereotype", "from_id", "to_id", "name", "ea_type"], rel_rows)
     write_csv(out_dir / "gungnir-uaf-relationship-tags.csv", ["rel_id", "key", "value"], rel_tag_rows)

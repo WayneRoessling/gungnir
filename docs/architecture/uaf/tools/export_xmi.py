@@ -225,6 +225,20 @@ and a relationship's key had no room for two needlines the same way between the
 same pair (OP-08 -> OP-30 carries NL-05 and NL-13), so the second was dropped as
 a duplicate. Both fixed; see rel_endpoints and the exchanges key.
 
+Eleventh version. The `conformsTo` follow-up. Round 9 left conformance to a
+standard as a plain Dependency because UAF has no relationship stereotype for
+it and the property's encoding was unconfirmed. The profile's own declaration
+settled the second half: `conformsTo` is a String property of UAFElement, the
+root every UAF stereotype inherits from, so there was never a reference to
+encode. Each conforming resource now carries the text of the standards it
+conforms to, both as an attribute on its stereotype application -- the XMI form
+for a profile property, and the one EA wrote for `category` on round trip 2 --
+and as an extension tag under the property's own name, the one deliberate
+exception to REGISTRY_TAG_PREFIX. The connector stays; it is what draws.
+make_ea_probe.py carries a conforming resource so the next import shows which
+of the two forms EA reads, and was brought current at the same time: it still
+said `Performs` and still wrote the pre-round-8 tag shape.
+
 Note for anyone reading the output: inside an EA `<links>` block the child
 elements carry `xmi:id`, not `xmi:idref`, even though they are references to
 a relationship declared elsewhere (verified against the sample, which does
@@ -407,8 +421,10 @@ RELATIONSHIP_KIND_INFO = {
     # standard at all (nothing with "Conform" in its name among its 213). UAF
     # models it as a `conformsTo` PROPERTY on the conforming element, which EA's
     # own template carries as a reference-valued tag. So this is a plain
-    # Dependency like `uses`, and the registry kind survives in its tag. Emitting
-    # the property is a follow-up: its reference-value encoding is unconfirmed.
+    # Dependency like `uses`, and the registry kind survives in its tag. The
+    # property is emitted as well, on the conforming element: it turned out to
+    # be a String property of UAFElement, not a reference, so there was no
+    # reference encoding to confirm -- see conforms_to_text.
     "conforms_to": (None, "Dependency", "Rs-Tr"),
     "uses": (None, "Dependency", "Rs-Cn"),
     # SysML `satisfy`, not `Satisfies`/`CarriedBy`, neither of which any profile
@@ -445,12 +461,21 @@ SATISFIER_IS_TARGET = {"satisfies", "carried_by"}
 PARENT_KIND = "parent"
 
 
-def stereo_app(stereotype: str, base_metaclass: str, target_id: str) -> str:
+def stereo_app(stereotype: str, base_metaclass: str, target_id: str,
+               props: dict[str, str] | None = None) -> str:
     """One stereotype-application element. A stereotype is `Name` (the UAF
     profile) or `Profile:Name` for one from another profile -- SysML's
-    requirement and satisfy are the two in use."""
+    requirement and satisfy are the two in use.
+
+    `props` are the stereotype's own property values, written as attributes of
+    the application element: `<UAF:ResourceArtifact base_Class="..."
+    conformsTo="..."/>`. That is XMI's encoding for a profile property and the
+    one EA itself writes -- round trip 2 exported a string property exactly so
+    (`<UAF:Metadata base_Class="..." category="I"/>`).
+    """
     prefix, _, name = stereotype.rpartition(":")
-    return f'    <{prefix or "UAF"}:{name} base_{base_metaclass}={attr(target_id)}/>\n'
+    extra = "".join(f" {k}={attr(v)}" for k, v in (props or {}).items())
+    return f'    <{prefix or "UAF"}:{name} base_{base_metaclass}={attr(target_id)}{extra}/>\n'
 
 
 def stereo_name(stereotype: str | None) -> str | None:
@@ -578,11 +603,13 @@ def style2_xml(domain: str | None, viewpoint: str | None, save_tag: str) -> str:
     )
 
 
-def element_xml(entry: dict, stereotype: str, metaclass: str) -> tuple[str, str]:
+def element_xml(entry: dict, stereotype: str, metaclass: str,
+                props: dict[str, str] | None = None) -> tuple[str, str]:
     """Returns (packagedElement XML, UAF stereotype-application XML). The EA
     element-extension XML is built separately, later, by element_ext_xml --
     it needs to know which relationships touch this element first (its
-    `<links>` list), which isn't known until every relationship is processed."""
+    `<links>` list), which isn't known until every relationship is processed.
+    `props` are stereotype property values for the application (see stereo_app)."""
     reg_id = entry["id"]
     eid = eaid(reg_id)
     name = entry.get("name", reg_id)
@@ -599,15 +626,23 @@ def element_xml(entry: dict, stereotype: str, metaclass: str) -> tuple[str, str]
     # EA actually shows in the Notes field.
     body = (f'        <packagedElement xmi:type={attr("uml:" + metaclass)} xmi:id={attr(eid)} '
             f'name={attr(name)} visibility="public"{extra_attrs}/>\n')
-    return body, stereo_app(stereotype, metaclass, eid)
+    return body, stereo_app(stereotype, metaclass, eid, props)
 
 
 def element_ext_xml(reg_id: str, stereotype: str, metaclass: str, desc: str, entry: dict,
-                     pkg_key: str, links: list[tuple[str, str, str, str]]) -> str:
+                     pkg_key: str, links: list[tuple[str, str, str, str]],
+                     profile_tags: dict[str, str] | None = None) -> str:
     """The EA element-extension XML for a real (non-package) element, with a
     `<links>` entry per relationship that touches it (metaclass, rel_id,
     start_id, end_id) -- confirmed present on both endpoints of a real
-    relationship in the sample."""
+    relationship in the sample.
+
+    `profile_tags` are the UAF profile's own properties, written under their
+    own names and NOT under REGISTRY_TAG_PREFIX: the prefix exists to keep a
+    registry field from colliding with some profile's property, and these are
+    the one case where the collision is the point -- `conformsTo` is meant to
+    land on the element's UAF stereotype, which inherits it from UAFElement.
+    """
     eid = eaid(reg_id)
     tags = [tag_xml(eid, reg_id, "uafKind", stereo_name(stereotype)),
             tag_xml(eid, reg_id, "uafId", reg_id)]
@@ -615,6 +650,8 @@ def element_ext_xml(reg_id: str, stereotype: str, metaclass: str, desc: str, ent
         if k in STRUCTURAL_FIELDS or v in (None, "", []):
             continue
         tags.append(tag_xml(eid, reg_id, REGISTRY_TAG_PREFIX + k, v))
+    for k, v in (profile_tags or {}).items():
+        tags.append(tag_xml(eid, reg_id, k, v))
     # EA's name for an InstanceSpecification is Object, in the extension entry
     # only: its own export writes the model element as uml:InstanceSpecification
     # and the entry as xmi:type="uml:Object" sType="Object". Round trip 2 dropped
@@ -904,7 +941,34 @@ def view_diagram_xml(view: "view_layout.ViewDiagram", pkg_key: str, domain: str 
     )
 
 
+def conforms_to_text(elements: dict, rels: dict) -> dict[str, str]:
+    """Each conforming resource's `conformsTo` value: the standards it conforms
+    to, as text, because that is the property's type.
+
+    In EA's UAF profile `conformsTo` is a String property of UAFElement -- the
+    root stereotype every UAF element inherits from -- not a reference to
+    Standard elements (checked in the profile's own declaration, run-2's
+    <profiles> block: `UAFElement-conformsTo`, type String). EA's own template
+    carries it as a tag on an InformationElement. So the model-level link to
+    each Standard stays the conforms_to connector, which is what draws on a
+    diagram and what traceability follows, and this text is what EA's UAF
+    tooling reads off the element itself. Semicolons separate entries because
+    the standards' names contain commas; a planned relationship says so.
+    """
+    std_name = {e["id"]: e.get("name", e["id"]) for e in elements.get("standards", []) or []}
+    out: dict[str, list[str]] = {}
+    for r in rels.get("conforms_to", []) or []:
+        to = r.get("to")
+        for sid in (to if isinstance(to, list) else [to]):
+            if sid not in std_name:
+                continue
+            text = f"{sid} {std_name[sid]}" + (" (planned)" if r.get("status") == "planned" else "")
+            out.setdefault(r["from"], []).append(text)
+    return {rid: "; ".join(items) for rid, items in out.items()}
+
+
 def build(elements: dict, rels: dict) -> str:
+    conforms = conforms_to_text(elements, rels)
     pkg_members: dict[str, list[str]] = {code: [] for code in VIEW_PACKAGES}
     pkg_element_xml: dict[str, list[str]] = {code: [] for code in VIEW_PACKAGES}
     uaf_stereotypes, connectors = [], []
@@ -929,7 +993,8 @@ def build(elements: dict, rels: dict) -> str:
         for entry in entries:
             eid = entry["id"]
             known_ids.add(eid)
-            cls_xml, uaf_xml = element_xml(entry, stereotype, metaclass)
+            props = {"conformsTo": conforms[eid]} if eid in conforms else None
+            cls_xml, uaf_xml = element_xml(entry, stereotype, metaclass, props)
             pkg_members[view_code].append(eid)
             pkg_element_xml[view_code].append(cls_xml)
             uaf_stereotypes.append(uaf_xml)
@@ -1077,7 +1142,8 @@ def build(elements: dict, rels: dict) -> str:
                 links_by_id[end].append(link)
 
     ea_elements = [
-        element_ext_xml(eid, stereotype, metaclass, desc, entry, view_code, links_by_id[eid])
+        element_ext_xml(eid, stereotype, metaclass, desc, entry, view_code, links_by_id[eid],
+                        {"conformsTo": conforms[eid]} if eid in conforms else None)
         for eid, (stereotype, metaclass, desc, entry, view_code) in element_records.items()
     ]
 
