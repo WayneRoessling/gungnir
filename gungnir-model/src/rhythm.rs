@@ -36,6 +36,7 @@ pub struct ScheduledProduct {
     pub deliver_to: Option<String>,
 }
 
+/// Which product a [`ScheduledProduct`] entry produces on its cycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProductKind {
@@ -102,6 +103,12 @@ pub struct MaintenanceWindow {
     pub state: MaintenanceState,
 }
 
+/// Where a [`MaintenanceWindow`] has got to.
+///
+/// `Overrun` is terminal, and it is the reason planned absence is tracked at all: a
+/// sensor that came back late does not retroactively become `Completed`, because the
+/// record of a window that was missed is the thing somebody has to answer for. See
+/// [`MaintenanceWindow::state_at`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MaintenanceState {

@@ -94,6 +94,12 @@ pub struct CollectionRequirement {
     pub state: RequirementState,
 }
 
+/// Where a [`CollectionRequirement`] has got to, from stated to answered.
+///
+/// Each state carries what justifies it -- the concurrence that tasked it, the evidence
+/// that satisfied it, the reason it was declined -- rather than leaving those beside it,
+/// so a requirement cannot be marked tasked or satisfied without the thing that makes
+/// saying so true.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "state", rename_all = "kebab-case")]
 pub enum RequirementState {

@@ -802,6 +802,10 @@ pub enum RehearsalEvent {
     },
 }
 
+/// A replay session being opened or closed.
+///
+/// `Closed` carries how many envelopes were stepped through, so the journal records what
+/// a replay actually covered and not merely that one happened.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ReplayEvent {
     Opened {

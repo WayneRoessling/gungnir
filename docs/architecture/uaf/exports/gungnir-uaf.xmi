@@ -7965,7 +7965,7 @@
       </element>
       <element xmi:idref="EAID_E45FA395_9527_465E_4B3D_4CC58143B112" xmi:type="uml:Class" name="AnomalySettings" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A struct of gungnir-model; no doc comment in the code. Fields: loitering, kinematics, feed, cooperative."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Which anomaly detectors a baseline turns on, and how each is tuned."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-anomaly-settings"/>
@@ -8186,7 +8186,7 @@
       </element>
       <element xmi:idref="EAID_F6D195DC_A45A_15CF_14CE_BCE307395325" xmi:type="uml:Class" name="CooperativeSettings" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A struct of gungnir-model; no doc comment in the code. Fields: lost_after_s, max_separation_m."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Tuning for the cooperative detector: when a cooperative report counts as lost, and how far it may sit from the track it claims to be before the two disagree."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-cooperative-settings"/>
@@ -8259,7 +8259,7 @@
       </element>
       <element xmi:idref="EAID_185240CF_5409_9DF0_813B_6D961D48F820" xmi:type="uml:Class" name="DeconflictionCheck" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A struct of gungnir-model; no doc comment in the code. Fields: kind, passed, detail."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="One deconfliction check and how it came out."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-deconfliction-check"/>
@@ -8278,7 +8278,7 @@
       </element>
       <element xmi:idref="EAID_FDEAFB78_A34C_4DC3_6798_F8DFE05C5BDC" xmi:type="uml:Class" name="DeconflictionKind" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A enum of gungnir-model; no doc comment in the code. Variants: FriendlyPosition, NoFireArea, AirspaceMeasure, InterceptorTrajectory, LocationAccuracy."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="What a deconfliction check examined before a fires task is offered."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-deconfliction-kind"/>
@@ -8497,7 +8497,7 @@
       </element>
       <element xmi:idref="EAID_1E6B4202_298B_893E_D144_74E8268A2154" xmi:type="uml:Class" name="FeedSettings" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A struct of gungnir-model; no doc comment in the code. Fields: silence_factor, rate_tolerance, max_rejected."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Tuning for the feed detector: when silence, a departure from the expected rate, or a run of rejections makes the feed itself the anomaly rather than what it carries."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-feed-settings"/>
@@ -8589,7 +8589,7 @@
       </element>
       <element xmi:idref="EAID_3345938B_21ED_0D02_795C_A78D6FFEC8FD" xmi:type="uml:Class" name="HandoffError" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A enum of gungnir-model; no doc comment in the code. Variants: UnknownDecision."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Why an effector report could not be applied to the handoff it names."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-handoff-error"/>
@@ -8820,7 +8820,7 @@
       </element>
       <element xmi:idref="EAID_8C0E3F43_AF02_A2D7_AAF8_525CCC395870" xmi:type="uml:Class" name="LoiteringSettings" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A struct of gungnir-model; no doc comment in the code. Fields: max_speed_mps, min_duration_s."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Tuning for the loitering detector: how slow a track must be, and for how long."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-loitering-settings"/>
@@ -8855,7 +8855,7 @@
       </element>
       <element xmi:idref="EAID_B3649E3A_EA47_89EC_2AE1_E33370DC0782" xmi:type="uml:Class" name="MaintenanceState" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A enum of gungnir-model; no doc comment in the code. Variants: Planned, Active, Completed, Overrun."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Where a MaintenanceWindow has got to."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-maintenance-state"/>
@@ -8927,7 +8927,7 @@
       </element>
       <element xmi:idref="EAID_5622ED7F_72F7_9CB8_AFF0_88365A81DC80" xmi:type="uml:Class" name="ModelError" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A enum of gungnir-model; no doc comment in the code. Variants: SchemaVersion { expected."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Why data offered to this model could not be accepted."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-model-error"/>
@@ -9076,7 +9076,7 @@
       </element>
       <element xmi:idref="EAID_1CF55418_F8C5_25B7_70F2_D7B8F764F150" xmi:type="uml:Class" name="ProductKind" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A enum of gungnir-model; no doc comment in the code. Variants: HandoverSummary, SituationReport, MeasuresSummary."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Which product a ScheduledProduct entry produces on its cycle."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-product-kind"/>
@@ -9146,7 +9146,7 @@
       </element>
       <element xmi:idref="EAID_8C50106B_36A9_EE25_2FE7_D712E133BE4F" xmi:type="uml:Class" name="ReplayEvent" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A enum of gungnir-model; no doc comment in the code. Variants: Opened { session, Closed { session."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A replay session being opened or closed."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-replay-event"/>
@@ -9216,7 +9216,7 @@
       </element>
       <element xmi:idref="EAID_92190983_0470_B417_E812_541F07363D67" xmi:type="uml:Class" name="RequirementState" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="A enum of gungnir-model; no doc comment in the code. Variants: Stated, Tasked { by, Satisfied { evidence, Declined { by, Lapsed."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Where a CollectionRequirement has got to, from stated to answered."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-requirement-state"/>

@@ -140,6 +140,7 @@ impl EffectorReport {
     }
 }
 
+/// Why an effector report could not be applied to the handoff it names.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum HandoffError {
     /// A report arrived naming a decision this deployment does not know.

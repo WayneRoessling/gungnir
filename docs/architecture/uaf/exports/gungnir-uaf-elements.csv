@@ -279,7 +279,7 @@ IE-31,Information Elements,InformationElement,ReconciliationReport,Merged journa
 IE-32,Information Elements,InformationElement,WorkspaceLayout,"The panels a role sees, in order.",Class
 IE-33,Information Elements,InformationElement,Mission and SessionId,A session with its state and configuration.,Class
 IE-algorithm-baseline-id,Information Elements,InformationElement,AlgorithmBaselineId,"Which candidate, in which profile.",Class
-IE-anomaly-settings,Information Elements,InformationElement,AnomalySettings,"A struct of gungnir-model; no doc comment in the code. Fields: loitering, kinematics, feed, cooperative.",Class
+IE-anomaly-settings,Information Elements,InformationElement,AnomalySettings,"Which anomaly detectors a baseline turns on, and how each is tuned.",Class
 IE-asset-extent,Information Elements,InformationElement,AssetExtent,The shape an asset occupies.,Class
 IE-asset-id,Information Elements,InformationElement,AssetId,"Identifier of a defended asset, stable across baseline versions.",Class
 IE-asset-list-view,Information Elements,InformationElement,AssetListView,"The asset list as the picture sees it, carrying the baseline revision it came from so a score can be traced to the list that produced it.",Class
@@ -291,12 +291,12 @@ IE-calibration-event,Information Elements,InformationElement,CalibrationEvent,A 
 IE-collection-requirement,Information Elements,InformationElement,CollectionRequirement,"A collection requirement, owned by the intelligence analyst (MT-08).",Class
 IE-concurrence,Information Elements,InformationElement,Concurrence,"Who concurred with tasking a requirement, or declined it.",Class
 IE-control-status-settings,Information Elements,InformationElement,ControlStatusSettings,Weapons control status per effector layer.,Class
-IE-cooperative-settings,Information Elements,InformationElement,CooperativeSettings,"A struct of gungnir-model; no doc comment in the code. Fields: lost_after_s, max_separation_m.",Class
+IE-cooperative-settings,Information Elements,InformationElement,CooperativeSettings,"Tuning for the cooperative detector: when a cooperative report counts as lost, and how far it may sit from the track it claims to be before the two disagree.",Class
 IE-decision-attribution,Information Elements,InformationElement,DecisionAttribution,"Who decided, when, and on what basis.",Class
 IE-decision-id,Information Elements,InformationElement,DecisionId,Identifies one recorded decision.,Class
 IE-decision-settings,Information Elements,InformationElement,DecisionSettings,Timeouts and escalation for pending decisions. DN-10 implements against this.,Class
-IE-deconfliction-check,Information Elements,InformationElement,DeconflictionCheck,"A struct of gungnir-model; no doc comment in the code. Fields: kind, passed, detail.",Class
-IE-deconfliction-kind,Information Elements,InformationElement,DeconflictionKind,"A enum of gungnir-model; no doc comment in the code. Variants: FriendlyPosition, NoFireArea, AirspaceMeasure, InterceptorTrajectory, LocationAccuracy.",Class
+IE-deconfliction-check,Information Elements,InformationElement,DeconflictionCheck,One deconfliction check and how it came out.,Class
+IE-deconfliction-kind,Information Elements,InformationElement,DeconflictionKind,What a deconfliction check examined before a fires task is offered.,Class
 IE-deconfliction-result,Information Elements,InformationElement,DeconflictionResult,"Every deconfliction check, whether it passed or failed.",Class
 IE-defended-asset,Information Elements,InformationElement,DefendedAsset,One asset the sector defends.,Class
 IE-delivery-state,Information Elements,InformationElement,DeliveryState,"How the handoff reached, or failed to reach, the effector.",Class
@@ -308,12 +308,12 @@ IE-exchange-agreement,Information Elements,InformationElement,ExchangeAgreement,
 IE-exchange-format,Information Elements,InformationElement,ExchangeFormat,Wire format for one partner.,Class
 IE-exchange-item,Information Elements,InformationElement,ExchangeItem,What flows in one direction under an agreement.,Class
 IE-exchange-set,Information Elements,InformationElement,ExchangeSet,"The agreements in force, and the two gates they form with releasability.",Class
-IE-feed-settings,Information Elements,InformationElement,FeedSettings,"A struct of gungnir-model; no doc comment in the code. Fields: silence_factor, rate_tolerance, max_rejected.",Class
+IE-feed-settings,Information Elements,InformationElement,FeedSettings,"Tuning for the feed detector: when silence, a departure from the expected rate, or a run of rejections makes the feed itself the anomaly rather than what it carries.",Class
 IE-fires-plan,Information Elements,InformationElement,FiresPlan,A fires task against a located ground target.,Class
 IE-fires-settings,Information Elements,InformationElement,FiresSettings,Limits on fires tasks (docs/design/DN-05-fires.md \u00a76).,Class
 IE-governance-event,Information Elements,InformationElement,GovernanceEvent,"Which algorithm configuration is in force, and how it got there (docs/design/DN-24-mission-profiles-and-algorithm-baselines.md \u00a78, GAP-086).",Class
 IE-handoff,Information Elements,InformationElement,Handoff,What is handed to an effector or fires system.,Class
-IE-handoff-error,Information Elements,InformationElement,HandoffError,A enum of gungnir-model; no doc comment in the code. Variants: UnknownDecision.,Class
+IE-handoff-error,Information Elements,InformationElement,HandoffError,Why an effector report could not be applied to the handoff it names.,Class
 IE-handoff-event,Information Elements,InformationElement,HandoffEvent,"A handoff's life (docs/design/DN-07-handoff.md \u00a75, GAP-040). **Never Delivered from this side until a transport carries it**: today a handoff is issued and is either manual (no endpoint configured, a radio call the operator must make) or undelivered (an endpoint is configured and nothing carries it there).",Class
 IE-health-event,Information Elements,InformationElement,HealthEvent,"System health as it changed (MOE-06, GAP-047). Published on the transition, not every frame: the record says when a backend degraded and when it came back, and a decision between the two was taken with the degraded state on the record.",Class
 IE-identification-settings,Information Elements,InformationElement,IdentificationSettings,"Per-class confidence needed before the engine may declare an identity, and the margin the leading hypothesis must hold over the runner-up. GAP-018 implements against this.",Class
@@ -326,13 +326,13 @@ IE-laydown-id,Information Elements,InformationElement,LaydownId,A named candidat
 IE-layout-node,Information Elements,InformationElement,LayoutNode,How a role's panels are arranged in a window.,Class
 IE-link-event,Information Elements,InformationElement,LinkEvent,"The node link on a connected desktop (GAP-050, D-23): fell back to embedded services after the node went silent, and answered again afterwards.",Class
 IE-local-frame,Information Elements,InformationElement,LocalFrame,The anchor of the local ENU frame every ENU coordinate in the system is relative to.,Class
-IE-loitering-settings,Information Elements,InformationElement,LoiteringSettings,"A struct of gungnir-model; no doc comment in the code. Fields: max_speed_mps, min_duration_s.",Class
+IE-loitering-settings,Information Elements,InformationElement,LoiteringSettings,"Tuning for the loitering detector: how slow a track must be, and for how long.",Class
 IE-magazine,Information Elements,InformationElement,Magazine,Rounds held and rounds withheld.,Class
-IE-maintenance-state,Information Elements,InformationElement,MaintenanceState,"A enum of gungnir-model; no doc comment in the code. Variants: Planned, Active, Completed, Overrun.",Class
+IE-maintenance-state,Information Elements,InformationElement,MaintenanceState,Where a MaintenanceWindow has got to.,Class
 IE-maintenance-window,Information Elements,InformationElement,MaintenanceWindow,A planned window in which a sensor is expected to be down.,Class
 IE-measurement,Information Elements,InformationElement,Measurement,"What a sensor actually measured. **Not always a position**, and the type says so rather than letting an adapter invent the difference (docs/design/DN-27-bearing-only-detections.md \u00a74; GAP-001's acoustic, passive-RF and spotter halves, and GAP-004's sensor half).",Class
 IE-mission-profile,Information Elements,InformationElement,MissionProfile,A named operating context. One algorithm configuration is in force per profile.,Class
-IE-model-error,Information Elements,InformationElement,ModelError,A enum of gungnir-model; no doc comment in the code. Variants: SchemaVersion { expected.,Class
+IE-model-error,Information Elements,InformationElement,ModelError,Why data offered to this model could not be accepted.,Class
 IE-operational-risk,Information Elements,InformationElement,OperationalRisk,"I129/120 Operational Risk Levels (edition 1.2 \u00a75.2.12), decoded from the one octet the specification describes -- see gungnir_interop::asterix::cat129's module documentation for the document's own contradiction over the item's length and why one octet is the reading this build follows (the owner's review, 2026-09-09).",Class
 IE-peer-launch-warning,Information Elements,InformationElement,PeerLaunchWarning,"A launch warning as this deployment received it from a peer (DN-16 \u00a75, GAP-009).",Class
 IE-peer-origin,Information Elements,InformationElement,PeerOrigin,Where a peer-sourced track came from and how far behind it is.,Class
@@ -340,15 +340,15 @@ IE-pipeline-stats-view,Information Elements,InformationElement,PipelineStatsView
 IE-plan-id,Information Elements,InformationElement,PlanId,Identifier of one plan produced by the intercept service.,Class
 IE-plan-kind,Information Elements,InformationElement,PlanKind,What a plan proposes. Intercept is the behaviour that existed before fires.,Class
 IE-policy-settings,Information Elements,InformationElement,PolicySettings,"Everything about how this deployment decides, in one versioned place.",Class
-IE-product-kind,Information Elements,InformationElement,ProductKind,"A enum of gungnir-model; no doc comment in the code. Variants: HandoverSummary, SituationReport, MeasuresSummary.",Class
+IE-product-kind,Information Elements,InformationElement,ProductKind,Which product a ScheduledProduct entry produces on its cycle.,Class
 IE-rehearsal-event,Information Elements,InformationElement,RehearsalEvent,"A seeded session for a usability round (GAP-089). **The first record of a seeded session**, so nothing that follows can be read as an operation.",Class
 IE-relative-cost,Information Elements,InformationElement,RelativeCost,What one round of this resource costs relative to the others in the same deployment. Unitless by design: it only ever breaks ties between resources of the same layer that are both adequate.,Class
 IE-releasability,Information Elements,InformationElement,Releasability,Who may receive this.,Class
-IE-replay-event,Information Elements,InformationElement,ReplayEvent,"A enum of gungnir-model; no doc comment in the code. Variants: Opened { session, Closed { session.",Class
+IE-replay-event,Information Elements,InformationElement,ReplayEvent,A replay session being opened or closed.,Class
 IE-reported-position,Information Elements,InformationElement,ReportedPosition,"A position an entity reports about itself, from something that is not a sensor.",Class
 IE-requirement-event,Information Elements,InformationElement,RequirementEvent,"The life of one collection requirement (docs/design/DN-11-sensor-control-and-tasking.md, GAP-005).",Class
 IE-requirement-id,Information Elements,InformationElement,RequirementId,Identifier of a collection requirement.,Class
-IE-requirement-state,Information Elements,InformationElement,RequirementState,"A enum of gungnir-model; no doc comment in the code. Variants: Stated, Tasked { by, Satisfied { evidence, Declined { by, Lapsed.",Class
+IE-requirement-state,Information Elements,InformationElement,RequirementState,"Where a CollectionRequirement has got to, from stated to answered.",Class
 IE-resource-placement,Information Elements,InformationElement,ResourcePlacement,Where one effector sits in a laydown.,Class
 IE-review-event,Information Elements,InformationElement,ReviewEvent,"After-action review lifecycle (docs/design/DN-20-after-action-review.md, GAP-049).",Class
 IE-rhythm-event,Information Elements,InformationElement,RhythmEvent,"The watch's rhythm: what came due, what was handed over, what went down on purpose (docs/design/DN-21-battle-rhythm.md \u00a76, GAP-054).",Class

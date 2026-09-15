@@ -9,6 +9,12 @@
 //! (GAP-021). **A detector with no settings is off**, and the health panel lists which are
 //! running, so an unconfigured detector is visibly absent rather than silently missing.
 
+/// Which anomaly detectors a baseline turns on, and how each is tuned.
+///
+/// One optional field per detector, and no separate enable flag: **a detector with no
+/// settings is off**, so there is nothing for a flag and a settings block to disagree
+/// about. [`AnomalySettings::enabled`] is what the health panel lists, which is what
+/// makes an unconfigured detector visibly absent rather than silently missing.
 #[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct AnomalySettings {
     #[serde(default)]
@@ -42,6 +48,7 @@ impl AnomalySettings {
     }
 }
 
+/// Tuning for the loitering detector: how slow a track must be, and for how long.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LoiteringSettings {
     /// Speed at or below which a track counts as loitering, m/s.
@@ -58,6 +65,8 @@ pub struct KinematicEnvelope {
     pub max_climb_rate_mps: f64,
 }
 
+/// Tuning for the feed detector: when silence, a departure from the expected rate, or
+/// a run of rejections makes the feed itself the anomaly rather than what it carries.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FeedSettings {
     /// Multiple of the expected interval after which silence is anomalous.
@@ -68,6 +77,8 @@ pub struct FeedSettings {
     pub max_rejected: u32,
 }
 
+/// Tuning for the cooperative detector: when a cooperative report counts as lost, and
+/// how far it may sit from the track it claims to be before the two disagree.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CooperativeSettings {
     /// Seconds without a cooperative report after which it counts as lost.
