@@ -213,6 +213,18 @@ names against directly. Settled by it, and by what the import did:
     shaped like a registry kind but absent from relationships.yaml, so that
     class of disagreement fails the build rather than becoming a connector.
 
+Tenth version. Two additions on top of round 9's fixes, neither driven by a
+defect: the needlines became a registry relationship kind (`exchanges`, emitted
+as UAF's OperationalExchange on a uml:InformationFlow, the shape EA's own
+template uses), and the diagrams nobody laid out by hand -- the registry
+view-package diagrams and the taxonomy -- are laid out by diagram_layout.py's
+layered engine instead of a fixed grid. Two things the exchanges exposed along
+the way, both in build(): connector matching was undirected, so once needlines
+ran each way between the same performers a view edge could match the wrong one;
+and a relationship's key had no room for two needlines the same way between the
+same pair (OP-08 -> OP-30 carries NL-05 and NL-13), so the second was dropped as
+a duplicate. Both fixed; see rel_endpoints and the exchanges key.
+
 Note for anyone reading the output: inside an EA `<links>` block the child
 elements carry `xmi:id`, not `xmi:idref`, even though they are references to
 a relationship declared elsewhere (verified against the sample, which does
@@ -261,6 +273,7 @@ from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import diagram_layout  # noqa: E402
 import view_layout  # noqa: E402
 from build_uaf import UAF, load_registry  # noqa: E402
 
@@ -408,6 +421,14 @@ RELATIONSHIP_KIND_INFO = {
     # trip oracle will show it under SysML: or thecustomprofile:.
     "satisfies": ("SysML:satisfy", "Abstraction", "Rq-Tr"),
     "carried_by": ("SysML:satisfy", "Abstraction", "Rq-Tr"),
+    # In the profile, extending InformationFlow -- the one relationship kind here
+    # that is not an Abstraction or a Dependency. EA's own UAF template carries a
+    # needline between two OperationalPerformers exactly so: a
+    # uml:InformationFlow with informationSource/informationTarget and an empty
+    # <conveyed/>, the connector's ea_type="InformationFlow", and the stereotype
+    # applied with base_InformationFlow. Its name is the needline and what it
+    # carries ("NL-04 picture, plans, verdicts, alerts"), see relationship_xml.
+    "exchanges": ("OperationalExchange", "InformationFlow", "Op-Cn"),
 }
 
 # Registry kinds stated as `requirement -> satisfier` that SysML states the other
@@ -651,12 +672,26 @@ def relationship_xml(rel_key: str, from_id: str, to_id: str, kind: str,
     real export checked. Rounds 4-7 emitted one per relationship -- 686 entries
     in `<elements>`, the first block EA's extension parser reads.
     """
-    name = f"{kind}: {from_id} -> {to_id}"
+    if extra.get("needline"):
+        # An exchange is named by its needline and what it carries, which is what
+        # the Op-Cn view labels it and what a reader of the EA diagram expects.
+        name = f'{extra["needline"]} {extra.get("name", "")}'.strip()
+    else:
+        name = f"{kind}: {from_id} -> {to_id}"
     rid, from_eid, to_eid = eaid(rel_key), eaid(from_id), eaid(to_id)
-    rel = (
-        f'        <packagedElement xmi:type={attr("uml:" + metaclass)} xmi:id={attr(rid)} '
-        f'name={attr(name)} visibility="public" supplier={attr(to_eid)} client={attr(from_eid)}/>\n'
-    )
+    if metaclass == "InformationFlow":
+        rel = (
+            f'        <packagedElement xmi:type="uml:InformationFlow" xmi:id={attr(rid)} '
+            f'name={attr(name)} visibility="public" informationSource={attr(from_eid)} '
+            f'informationTarget={attr(to_eid)}>\n'
+            '          <conveyed/>\n'
+            '        </packagedElement>\n'
+        )
+    else:
+        rel = (
+            f'        <packagedElement xmi:type={attr("uml:" + metaclass)} xmi:id={attr(rid)} '
+            f'name={attr(name)} visibility="public" supplier={attr(to_eid)} client={attr(from_eid)}/>\n'
+        )
     tags = [tag_xml(rid, rel_key, "uafRelationship", kind)]
     for k, v in extra.items():
         if k in ("from", "to") or v in (None, "", []):
@@ -721,22 +756,21 @@ def diagram_xml(pkg_key: str, title: str, domain: str | None, viewpoint: str | N
     own UAF template frames 12 of its 21 diagrams exactly this way, and no
     EAPK_ id appears as a diagram subject anywhere in its export.
     """
-    cols, box_w, box_h, gap, margin = 5, 140, 76, 20, 20
     pkg_id = eapk(pkg_key)
     els = []
+    # Positions from the layered layout (diagram_layout.py): connected elements
+    # in columns by their place in the relationship graph, the rest in a compact
+    # block. Replaces the fixed five-column grid every registry diagram had.
+    boxes = diagram_layout.layered(member_reg_ids, [(a, b) for _k, a, b in placed_rels])
     for i, reg_id in enumerate(member_reg_ids):
-        row, col = divmod(i, cols)
-        left = margin + col * (box_w + gap)
-        top = margin + row * (box_h + gap)
-        els.append(f'          <element geometry={attr(f"Left={left};Top={top};Right={left + box_w};Bottom={top + box_h};")} '
+        left, top, right, bottom = boxes[reg_id]
+        els.append(f'          <element geometry={attr(f"Left={left};Top={top};Right={right};Bottom={bottom};")} '
                     f'subject={attr(eaid(reg_id))} seqno={attr(i + 1)} '
                     f'style={attr(f"HideIcon=0;DUID={diagram_duid(pkg_key, reg_id)};")}/>\n')
     # The frame is an element entry and belongs with them, before any connector:
     # EA's own framed diagrams give it the last element seqno, then list
     # connectors after every element.
-    n_rows = -(-len(member_reg_ids) // cols) if member_reg_ids else 1  # ceil div
-    frame_right = margin + min(len(member_reg_ids), cols) * (box_w + gap) + margin
-    frame_bottom = margin + n_rows * (box_h + gap) + margin
+    frame_right, frame_bottom = diagram_layout.extent(boxes)
     frame_duid = ea_guid(f"{pkg_key}:frame")[:8]
     els.append(f'          <element geometry={attr(f"Left=10;Top=10;Right={frame_right};Bottom={frame_bottom};")} '
                 f'subject={attr(eaid(pkg_key))} seqno={attr(len(member_reg_ids) + 1)} '
@@ -903,6 +937,10 @@ def build(elements: dict, rels: dict) -> str:
             links_by_id[eid] = []
 
     seen_rel_keys: set[str] = set()
+    # rel_key -> (from, to) as the registry states it. Kept alongside the key
+    # rather than parsed back out of it, because an exchange's key carries its
+    # needline as a third segment and a split on "->" would swallow it.
+    rel_endpoints: dict[str, tuple[str, str]] = {}
     for kind, entries in rels.items():
         if kind not in RELATIONSHIP_KIND_INFO:
             continue
@@ -923,9 +961,17 @@ def build(elements: dict, rels: dict) -> str:
                 # ones, which is exactly what ea_guid()'s own docstring promises
                 # it would not do.
                 rel_key = f"REL:{kind}:{from_id}->{to_id}"
+                if entry.get("needline"):
+                    # Two needlines can run the same way between the same two
+                    # performers: OP-08 -> OP-30 carries both NL-05 (decisions,
+                    # delegations) and NL-13 (asset list, policy). The needline
+                    # is part of what the relationship IS, so it is part of the
+                    # key -- without it the second was dropped as a duplicate.
+                    rel_key += f":{entry['needline']}"
                 if rel_key in seen_rel_keys:
                     continue  # the same edge stated twice; one connector is right
                 seen_rel_keys.add(rel_key)
+                rel_endpoints[rel_key] = (from_id, to_id)
                 # The connector's own direction. The key and the tag keep the
                 # registry's `from -> to`; only the two kinds SysML states the
                 # other way round get their client and supplier swapped.
@@ -963,6 +1009,7 @@ def build(elements: dict, rels: dict) -> str:
         if rel_key in seen_rel_keys:
             continue
         seen_rel_keys.add(rel_key)
+        rel_endpoints[rel_key] = (parent, child)
         rel_xml, conn_ext, _ = relationship_xml(rel_key, parent, child, PARENT_KIND,
                                                 None, "Dependency", {})
         pkg_element_xml["St-Tx"].append(rel_xml)
@@ -978,11 +1025,17 @@ def build(elements: dict, rels: dict) -> str:
     # a view draws that the registry already has reuses that relationship's
     # connector, so one connector appears on as many diagrams as draw it; one it
     # does not becomes a view-local connector (see view_edge_xml).
+    # The stated direction wins; the reverse is only a fallback. With a single
+    # setdefault for both, whichever relationship was seen first claimed BOTH
+    # directions of its pair, so once needlines run each way between the same
+    # two performers (NL-04 OP-30 -> OP-01, NL-05 OP-01 -> OP-30) a view edge
+    # drawn OP-01 -> OP-30 was matched to NL-04.
     rel_by_pair: dict[tuple[str, str], str] = {}
-    for rel_key in seen_rel_keys:
-        _, _kind, ends = rel_key.split(":", 2)
-        a, b = ends.split("->", 1)
+    for rel_key in sorted(rel_endpoints):
+        a, b = rel_endpoints[rel_key]
         rel_by_pair.setdefault((a, b), rel_key)
+    for rel_key in sorted(rel_endpoints):
+        a, b = rel_endpoints[rel_key]
         rel_by_pair.setdefault((b, a), rel_key)
 
     views, view_warnings = view_layout.parse_all(elements)

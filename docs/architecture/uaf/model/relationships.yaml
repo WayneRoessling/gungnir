@@ -8,6 +8,7 @@
 #   implements   resource              -> service         (service to resource)
 #   conforms_to  resource              -> standard        (resource to standard)
 #   uses         resource              -> resource        GENERATED from Cargo.toml
+#   exchanges    operational performer -> performer       needline (Op-Cn)
 # `status: planned` marks a relationship the design intends but the code does not
 # yet carry; the consistency check treats planned as satisfied but reports it.
 
@@ -192,6 +193,39 @@ conforms_to:
   - {from: RS-identity, to: [SD-11], status: planned}
   - {from: RS-app, to: [SD-13], status: planned}
   - {from: RS-node, to: [SD-13], status: planned}
+
+exchanges:
+  # Needlines between operational performers, as the Op-Cn view draws them
+  # (operational/Op-Cn.puml); NL-nn is the needline and `name` what it carries.
+  # The Op-Cn.md table holds the fuller account (information elements, threads,
+  # what is carried today). Direction is source performer -> target performer;
+  # the same pair can carry a needline each way (NL-04 and NL-05).
+  - {from: OP-33, to: OP-30, needline: NL-01, name: 'observations, health'}
+  - {from: OP-21, to: OP-30, needline: NL-02, name: 'early warning, peer tracks'}
+  - {from: OP-20, to: OP-30, needline: NL-02, name: 'warnings, ROE'}
+  - {from: OP-24, to: OP-30, needline: NL-03, name: 'ADS-B, flight plans'}
+  - {from: OP-25, to: OP-30, needline: NL-03, name: 'AIS, harbour state'}
+  - {from: OP-30, to: OP-01, needline: NL-04, name: 'picture, plans, verdicts, alerts'}
+  - {from: OP-30, to: OP-02, needline: NL-04, name: 'queue, incidents'}
+  - {from: OP-30, to: OP-08, needline: NL-04, name: 'summary, queue state'}
+  - {from: OP-01, to: OP-30, needline: NL-05, name: 'decisions'}
+  - {from: OP-02, to: OP-30, needline: NL-05, name: 'decisions, holds, status'}
+  - {from: OP-08, to: OP-30, needline: NL-05, name: 'decisions, delegations'}
+  - {from: OP-30, to: OP-34, needline: NL-06, name: 'handoff'}
+  - {from: OP-34, to: OP-22, needline: NL-06}
+  - {from: OP-22, to: OP-30, needline: NL-07, name: 'readiness, outcomes'}
+  - {from: OP-30, to: OP-24, needline: NL-08, name: 'warnings'}
+  - {from: OP-30, to: OP-25, needline: NL-08, name: 'warnings'}
+  - {from: OP-04, to: OP-30, needline: NL-09, name: 'modes, tasking, calibration'}
+  - {from: OP-30, to: OP-23, needline: NL-09, name: 'tasking'}
+  - {from: OP-30, to: OP-04, needline: NL-10, name: 'health, coverage, incidents'}
+  - {from: OP-06, to: OP-30, needline: NL-11, name: 'requirements, declarations, releases'}
+  - {from: OP-30, to: OP-26, needline: NL-12, name: 'products with releasability'}
+  - {from: OP-30, to: OP-20, needline: NL-12, name: 'status, reports'}
+  - {from: OP-07, to: OP-30, needline: NL-13, name: 'laydown, plans'}
+  - {from: OP-08, to: OP-30, needline: NL-13, name: 'asset list, policy'}
+  - {from: OP-03, to: OP-30, needline: NL-14, name: 'replay, reports, promotions'}
+  - {from: OP-05, to: OP-30, needline: NL-16, name: 'accounts, roles, baselines'}
 
 # BEGIN generated uses
 uses:

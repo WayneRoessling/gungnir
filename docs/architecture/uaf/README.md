@@ -199,6 +199,30 @@ diagrams in EA that disagree with the PlantUML they came from; promoting them in
 `relationships.yaml` would make the views a second source of typed relationships.
 They are neither.
 
+The needlines are registry data now. `relationships.yaml` has an `exchanges`
+section, one entry per needline as the Op-Cn view draws it (source performer,
+target performer, `needline`, and `name` for what it carries; the Op-Cn.md table
+remains the fuller account), and the export carries each as UAF's
+`OperationalExchange`, an `InformationFlow` between the two performers, which is
+how EA's own template draws a needline. The same pair of performers can carry a
+needline each way and two the same way (OP-08 to OP-30 carries NL-05 and NL-13),
+so a needline's identity includes its id. The vignettes' messages between
+performers reuse these connectors where the pair matches; the Op-Sr structure
+view's lines between nodes and system parts are not needlines and stay
+view-local, which the disagreement check knows (`EDGE_KIND_VIEWS`).
+
+Diagrams nobody laid out by hand -- the registry view-package diagrams and the
+taxonomy -- are laid out by `tools/diagram_layout.py` rather than dropped on a
+grid: a layered layout that puts each connected element in a column by its
+longest path from a source, orders each column by the barycenter of its
+neighbours, and wraps a tall column into a few adjacent sub-columns. So the
+resource connectivity diagram layers itself by dependency depth, a traceability
+diagram by kind (performers, activities, capabilities), and the capability
+taxonomy reads as a tree with each parent's children beside it. Elements with no
+connector go in a compact block to one side. It is a starting layout a reader
+can follow, not a finished drawing; EA's own Layout Diagram command is one click
+for anyone who wants to go further.
+
 Seven views get no EA diagram, and the check says so as a note each time. Six are
 `If-Sr` class diagrams drawn almost entirely with Rust helper types that the
 registry's `information_elements` section does not carry, and the seventh,

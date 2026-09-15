@@ -220,6 +220,10 @@ def build_csvs(elements: dict, rels: dict, out_dir: Path) -> tuple[int, int]:
                 # and the same key export_xmi.py uses, so the two bridges agree
                 # on what a given relationship is called.
                 rel_id = f"REL:{kind}:{from_id}->{to_id}"
+                if entry.get("needline"):
+                    # Same key as export_xmi.py: OP-08 -> OP-30 carries two
+                    # needlines, and only the needline tells them apart.
+                    rel_id += f":{entry['needline']}"
                 if rel_id in seen_rel_ids:
                     continue
                 seen_rel_ids.add(rel_id)

@@ -1208,6 +1208,19 @@ RELATIONSHIP_ENDPOINTS = {
     "uses": ("resources", "resources"),
     "satisfies": ("requirements", "capabilities"),
     "carried_by": ("requirements", "resources"),
+    "exchanges": ("operational_performers", "operational_performers"),
+}
+
+# A relationship kind whose endpoint shape is ambiguous, and the view codes in
+# which an edge of that shape MEANS that kind. A performer-to-performer line is
+# a needline in the connectivity and interaction views, but in the structure
+# view (Op-Sr: nodes, roles, system parts) it is a structural attachment --
+# the sensor network feeding the service node -- which UAF models as structure,
+# not exchange. So the disagreement check applies `exchanges` only where the
+# line is an exchange; elsewhere the edge stays view-local. Kinds not listed
+# here are unambiguous from their endpoint types alone.
+EDGE_KIND_VIEWS = {
+    "exchanges": {"Op-Cn", "Op-Is"},
 }
 
 
@@ -1348,6 +1361,8 @@ def check(elements, rels) -> list[str]:
             if (edge.from_id, edge.to_id) in stated:
                 continue
             kind = signature.get((section_of.get(edge.from_id), section_of.get(edge.to_id)))
+            if kind and v.code not in EDGE_KIND_VIEWS.get(kind, {v.code}):
+                continue
             if kind:
                 problems.append(f"{v.source}: draws {edge.from_id} -> {edge.to_id}, which is shaped "
                                 f"like `{kind}` but is not in relationships.yaml")

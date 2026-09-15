@@ -68,6 +68,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import diagram_layout  # noqa: E402
 from build_uaf import UAF, load_registry, read  # noqa: E402
 
 # A registry id at the start of a label: "OP-20 Higher command" -> OP-20.
@@ -441,11 +442,9 @@ def _activity_view(text: str, ids, by_name) -> tuple[list[ViewElement], list[Vie
 def _wbs_view(text: str, ids, by_name) -> tuple[list[ViewElement], list[ViewEdge], int]:
     """St-Tx: a work-breakdown taxonomy. Depth gives the tree, so each bullet
     becomes a box at its own level and the parent link an edge."""
-    els: list[ViewElement] = []
     edges: list[ViewEdge] = []
-    seen: set[str] = set()
+    seen: dict[str, str] = {}
     stack: dict[int, str] = {}
-    per_level: dict[int, int] = {}
     skipped = 0
     for stars, label in WBS_RE.findall(text):
         depth = len(stars)
@@ -457,14 +456,12 @@ def _wbs_view(text: str, ids, by_name) -> tuple[list[ViewElement], list[ViewEdge
         parent = stack.get(depth - 1)
         if parent and parent != rid:
             edges.append(ViewEdge(parent, rid, "", len(edges) + 1))
-        if rid in seen:
-            continue
-        seen.add(rid)
-        i = per_level.get(depth, 0)
-        per_level[depth] = i + 1
-        left = MARGIN + (depth - 1) * (BOX_W + GAP_X)
-        top = MARGIN + i * (BOX_H + 12)
-        els.append(ViewElement(rid, "", label.strip(), (left, top, left + BOX_W, top + BOX_H)))
+        seen.setdefault(rid, label.strip())
+    # The tree laid out by the same layered engine the registry diagrams use:
+    # depth becomes the column, and the barycenter ordering keeps each parent's
+    # children together beside it rather than in bullet order down the page.
+    boxes = diagram_layout.layered(list(seen), [(e.from_id, e.to_id) for e in edges])
+    els = [ViewElement(rid, "", label, boxes[rid]) for rid, label in seen.items()]
     return els, edges, skipped
 
 
