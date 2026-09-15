@@ -389,6 +389,84 @@ def parse_model_types() -> tuple[list[tuple[str, str, list[str]]], dict[str, str
     return types, files
 
 
+def parse_model_docs() -> dict[str, list[str]]:
+    """Type name -> its `///` doc comment lines, from gungnir-model.
+
+    Walking back from the declaration over the attribute block, counting brackets
+    so a multi-line `#[derive(...)]` is stepped over whole. Stopping at the first
+    line that is not an attribute finds the doc on 99 of the 116 types; a check
+    that only skipped lines starting with `#[` found 84, because it halted on the
+    `)]` that closes a wrapped derive.
+    """
+    docs: dict[str, list[str]] = {}
+    for src in sorted(glob.glob(str(ROOT / "gungnir-model" / "src" / "*.rs"))):
+        lines = read(Path(src)).splitlines()
+        for i, line in enumerate(lines):
+            m = re.match(r"^pub (?:struct|enum) (\w+)", line)
+            if not m:
+                continue
+            j, depth = i - 1, 0
+            while j >= 0:
+                s = lines[j].strip()
+                if not s:
+                    break
+                depth += s.count(")") + s.count("]") - s.count("(") - s.count("[")
+                if depth > 0 or s.startswith("#["):
+                    j -= 1
+                    continue
+                break
+            doc: list[str] = []
+            while j >= 0 and lines[j].strip().startswith("///"):
+                doc.append(lines[j].strip()[3:].strip())
+                j -= 1
+            docs[m.group(1)] = list(reversed(doc))
+    return docs
+
+
+def model_type_description(name: str, kind: str, members: list[str],
+                           docs: dict[str, list[str]]) -> str:
+    """One line describing a gungnir-model type, for the registry.
+
+    The type's own doc comment where it has one -- its first paragraph, which is
+    the summary Rust convention puts there -- so the registry says what the code
+    says and cannot drift into a second account of it. Seventeen of the 116 types
+    carry no doc comment; those fall back to a factual statement of the type's
+    shape rather than to invented prose, and `check()` lists them so they can be
+    documented in the code instead.
+    """
+    para: list[str] = []
+    for line in docs.get(name, []):
+        if not line:
+            break
+        para.append(line)
+    if para:
+        text = " ".join(para)
+        # Rust links a type as [`Name`]; the brackets mean nothing here.
+        return re.sub(r"\[`([^`]+)`\]", r"\1", text).replace("`", "")
+    shape = "Variants" if kind == "enum" else "Fields"
+    named = [re.split(r"\s*[:(]", x)[0].strip() for x in members][:8]
+    named = [x for x in named if x]
+    tail = f" {shape}: {', '.join(named)}." if named else ""
+    return f"A {kind} of gungnir-model; no doc comment in the code.{tail}"
+
+
+def model_element_id(name: str) -> str:
+    """A generated information element's registry id: `IE-<slug of the type>`.
+
+    Name-derived, not a number continuing IE-33. A positional id would renumber
+    every later element whenever a type is added to gungnir-model, which is the
+    same trap the EA exporter's relationship keys fell into -- there it meant a
+    re-import created duplicates instead of updating. The curated IE-nn entries
+    keep their numbers; the two forms never collide because a slug is lowercase.
+
+    Split on the type name's own camel-case boundaries, so `AlgorithmBaselineId`
+    is `IE-algorithm-baseline-id` and not `IE-algorithmbaselineid`: these ids are
+    read by people in the registry and in EA's Alias column.
+    """
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", name)
+    return "IE-" + slugify(spaced)
+
+
 def api_endpoints() -> list[str]:
     """The endpoint table's rows from docs/gungnir-api-v1.md's Endpoints section.
 
@@ -541,6 +619,50 @@ def yq(s: object) -> str:
     """
     t = str(s).replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
     return "'" + t.replace("'", "''") + "'"
+
+
+def regenerate_model_information_elements() -> list[str]:
+    """Write the generated block of `information_elements`: every gungnir-model
+    type the curated entries above do not already name.
+
+    Why generated rather than hand-authored: the If-Sr views are themselves
+    generated from gungnir-model, so the registry has to know the same types or
+    the views draw elements the registry cannot resolve -- which is exactly why
+    six of the nine If-Sr views got no EA diagram at all. Generating them from
+    the same source keeps the two in step by construction, and a type added to
+    the crate turns up here on the next run instead of being missed.
+
+    The curated IE-nn entries stay hand-authored and untouched. They are the
+    canonical information elements, several of them spanning crates this parser
+    never reads (Envelope is gungnir-eventing's, AuditEntry gungnir-security's)
+    or naming a pair of types together, so they are not derivable from
+    gungnir-model and are not replaced by it.
+
+    Returns the names that had no doc comment to describe them.
+    """
+    types, files = parse_model_types()
+    docs = parse_model_docs()
+    # The curated entries are the ones whose id is not a generated slug, read
+    # from the file as it stands so a rerun does not treat its own previous
+    # output as curated.
+    curated = {e["name"] for e in yaml.safe_load(read(MODEL / "elements.yaml"))["information_elements"]
+               if not re.match(r"^IE-[a-z]", str(e["id"]))}
+    lines, undocumented = [], []
+    for name, kind, members in sorted(types, key=lambda t: t[0]):
+        if name in curated:
+            continue
+        if not [x for x in docs.get(name, []) if x]:
+            undocumented.append(name)
+        desc = model_type_description(name, kind, members, docs)
+        domain = if_sr_domain(files[name])
+        lines.append(f'  - {{id: {model_element_id(name)}, name: {name}, '
+                     f'code: gungnir_model::{name}, domain: {yq(domain)}, '
+                     f'description: {yq(desc)}}}')
+    text = read(MODEL / "elements.yaml")
+    text = replace_block(text, "# BEGIN generated model types",
+                         "# END generated model types", NL.join(lines))
+    write(MODEL / "elements.yaml", text)
+    return undocumented
 
 
 def regenerate_requirements(reqs: list[dict], facts: list[dict]) -> None:
@@ -1373,9 +1495,11 @@ def check(elements, rels) -> list[str]:
 def main(argv: list[str]) -> int:
     check_only = "--check" in argv
     facts = crate_facts()
+    undocumented: list[str] = []
     if not check_only:
         regenerate_registry(facts)
         regenerate_requirements(parse_requirements(), facts)
+        undocumented = regenerate_model_information_elements()
     elements, rels = load_registry()
     if not check_only:
         gen_resource_views(facts, crate_status())
@@ -1388,6 +1512,12 @@ def main(argv: list[str]) -> int:
         gen_traceability(elements, rels)
         print(f"generated views for {len(facts)} crates, {len(threads)} threads, {len(vignettes)} vignettes")
     problems, notes = check(elements, rels)
+    # Not a problem: a type without a doc comment still reaches the registry and
+    # EA, described by its shape. Reported so the gap is visible and can be
+    # closed in the code, which is where that sentence belongs.
+    if undocumented:
+        notes.append(f"{len(undocumented)} gungnir-model types have no doc comment, so their "
+                     f"registry description states their shape instead: {', '.join(undocumented)}")
     for n in notes:
         print("note:", n)
     for p in problems:
