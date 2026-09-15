@@ -11,9 +11,12 @@ Why this exists: `export_xmi.py` took seven rounds to produce diagrams, and roun
 showed nothing. A 27KB probe answers the same questions in one import, and the
 answer is unambiguous because there is only one of everything to look at.
 
-The probe carries 5 elements, 3 relationships, 4 view packages and 4 diagrams,
+The probe carries 8 elements, 5 relationships, 9 view packages and 9 diagrams,
 written exactly as `export_xmi.py` writes them, so whatever it does in EA is what
-the full export will do. See `../exports/ea-roundtrip/README.md` for the round
+the full export will do. Besides the settled UAF names it carries the two things
+the full export still rests on without a round trip of their own: a resource's
+`conformsTo` property, written both ways EA writes a string property, and SysML's
+`satisfy` between a capability and a requirement. See `../exports/ea-roundtrip/README.md` for the round
 trip this was built for and what it settled.
 
 Its main use now is the stereotype oracle. Seven of the nine relationship
@@ -108,6 +111,12 @@ ELS = [
     ("SD-1", "TLS 1.3 (RFC 8446)", "Standard", "Class", "Sd-Tx", {}),
     ("RS-1", "gungnir-api", "ResourceArtifact", "Class", "Rs-Cn",
      {"conformsTo": "SD-1 TLS 1.3 (RFC 8446)"}),
+    # A stereotype from another profile is written `Profile:Name`. UAF has no
+    # requirements domain and reuses SysML's; round trip 2 bound Requirement to
+    # SysML:requirement, and `satisfy` below is the one name still resting on
+    # SysML's vocabulary rather than on a list EA wrote.
+    ("REQ-1", "Every source is authenticated before its data enters the picture",
+     "SysML:Requirement", "Class", "Rq", {}),
 ]
 # (id, registry kind, stereotype or None, from, to, package). The names are the
 # ones round trip 2 settled against the profile's own list; the conforms_to
@@ -117,6 +126,10 @@ RELS = [
     ("R-2", "exhibits", "Exhibits", "OP-2", "CAP-2", "Op-Tr"),
     ("R-3", "performs", "IsCapableToPerform", "OP-2", "OA-1", "Op-Tr"),
     ("R-4", "conforms_to", None, "RS-1", "SD-1", "Rs-Tr"),
+    # SysML's satisfy runs from the SATISFIER to the requirement, so the
+    # capability is the client here, as export_xmi.py emits it after swapping
+    # the registry's `requirement -> capability` direction.
+    ("R-5", "satisfies", "SysML:satisfy", "CAP-1", "REQ-1", "Rq-Tr"),
 ]
 PKGS = {
     "St-Tx": ("Strategic Taxonomy St-Tx", "Strategic", "Taxonomy"),
@@ -126,8 +139,21 @@ PKGS = {
     "Sd-Tx": ("Standards Taxonomy Sd-Tx", "Standards", "Taxonomy"),
     "Rs-Cn": ("Resource Connectivity Rs-Cn", "Resources", "Connectivity"),
     "Rs-Tr": ("Resource Traceability Rs-Tr", "Resources", "Traceability"),
+    "Rq": ("Requirements", None, None),
+    "Rq-Tr": ("Requirements Traceability", None, None),
 }
 NAME = {e[0]: e[1] for e in ELS}
+def ns(stereotype: str) -> str:
+    """The profile prefix a stereotype is applied under: UAF unless written
+    `Profile:Name`."""
+    return stereotype.rpartition(":")[0] or "UAF"
+
+
+def bare(stereotype: str) -> str:
+    """The name alone, for a `stereotype=` attribute in an extension entry."""
+    return stereotype.rpartition(":")[2]
+
+
 # A relationship's UML metaclass: Abstraction for a UAF-stereotyped one, a plain
 # Dependency for one the profile has no stereotype for (conforms_to).
 MC = {r[0]: ("Abstraction" if r[2] else "Dependency") for r in RELS}
@@ -150,7 +176,8 @@ out = [
     '<?xml version="1.0" encoding="windows-1252"?>\n',
     '<xmi:XMI xmlns:xmi="http://schema.omg.org/spec/XMI/2.1" xmi:version="2.1" '
     'xmlns:uml="http://schema.omg.org/spec/UML/2.1" '
-    'xmlns:UAF="http://www.omg.org/spec/UAF/20160505/UAF">\n',
+    'xmlns:UAF="http://www.omg.org/spec/UAF/20160505/UAF" '
+    'xmlns:SysML="http://www.omg.org/spec/SysML/20161101/SysML">\n',
     '\t<xmi:Documentation exporter="Enterprise Architect" exporterVersion="6.5" exporterID="1628"/>\n',
     '\t<uml:Model xmi:type="uml:Model" name="EA_Model" visibility="public">\n',
     f'\t\t<packagedElement xmi:type="uml:Package" xmi:id={q(PID(ROOT))} name="Gungnir UAF Probe" visibility="public">\n',
@@ -190,7 +217,7 @@ for rid, name, st, mc, pk, props in ELS:
         f'\t\t\t<element xmi:idref={q(EID(rid))} xmi:type={q("uml:" + mc)} name={q(name)} scope="public">\n'
         f'\t\t\t\t<model package={q(PID(pk))} tpos="0" ea_eleType="element"/>\n'
         f'\t\t\t\t<properties isSpecification="false" sType={q(mc)} nType="0" scope="public" '
-        f'stereotype={q(st)} documentation={q("Probe element " + rid)}/>\n'
+        f'stereotype={q(bare(st))} documentation={q("Probe element " + rid)}/>\n'
         '\t\t\t\t<project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" '
         'modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>\n'
         '\t\t\t\t<style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;'
@@ -229,7 +256,7 @@ for rid, kind, st, f_, t_, pk in RELS:
         '\t\t\t\t\t<modifiers isOrdered="false" changeable="none" isNavigable="true"/>\n'
         '\t\t\t\t</target>\n'
         f'\t\t\t\t<properties ea_type={q(MC[rid])} direction="Source -&gt; Destination"'
-        + (f' stereotype={q(st)}' if st else '') + '/>\n'
+        + (f' stereotype={q(bare(st))}' if st else '') + '/>\n'
         '\t\t\t\t<modifiers isRoot="false" isLeaf="false"/>\n'
         '\t\t\t\t<appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>\n'
         f'\t\t\t\t<labels mt={q(nm)}/>\n'
@@ -278,10 +305,10 @@ for rid, name, st, mc, pk, props in ELS:
     # A stereotype's property values ride as attributes of its application --
     # the XMI form, and the one EA wrote for `category` on round trip 2.
     extra = "".join(f" {k}={q(v)}" for k, v in props.items())
-    out.append(f'\t<UAF:{st} base_{mc}={q(EID(rid))}{extra}/>\n')
+    out.append(f'\t<{ns(st)}:{bare(st)} base_{mc}={q(EID(rid))}{extra}/>\n')
 for rid, kind, st, f_, t_, pk in RELS:
     if st:
-        out.append(f'\t<UAF:{st} base_{MC[rid]}={q(EID(rid))}/>\n')
+        out.append(f'\t<{ns(st)}:{bare(st)} base_{MC[rid]}={q(EID(rid))}/>\n')
 out.append('</xmi:XMI>\n')
 
 p = pathlib.Path(sys.argv[1])
