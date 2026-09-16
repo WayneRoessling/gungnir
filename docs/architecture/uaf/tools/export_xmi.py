@@ -456,10 +456,14 @@ RELATIONSHIP_KIND_INFO = {
     # has. UAF has no requirements domain and reuses SysML's, whose relation runs
     # from the SATISFIER to the requirement -- the opposite direction from the
     # registry's `REQ -> capability`, so build() swaps the connector's endpoints
-    # for these two kinds (SATISFIER_IS_TARGET). SysML's profile block is not
-    # declared in EA's export, so unlike every other name in this table this one
-    # rests on SysML's own vocabulary rather than on a list EA wrote; the round-
-    # trip oracle will show it under SysML: or thecustomprofile:.
+    # for these two kinds (SATISFIER_IS_TARGET). Confirmed by round trip 3, which
+    # is how it stopped resting on SysML's own vocabulary: SysML's profile block
+    # is not declared in EA's export, so unlike every other name in this table it
+    # could not be checked against a list EA wrote, and an import was the only
+    # way. It came back as `<SysML:satisfy base_Dependency=...>` -- bound, and
+    # normalised from the base_Abstraction this sends, Abstraction being a
+    # Dependency in UML. The sent form is kept because it is the one known to
+    # work.
     "satisfies": ("SysML:satisfy", "Abstraction", "Rq-Tr"),
     "carried_by": ("SysML:satisfy", "Abstraction", "Rq-Tr"),
     # In the profile, extending InformationFlow -- the one relationship kind here
