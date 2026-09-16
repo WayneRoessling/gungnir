@@ -16,10 +16,14 @@
 # compute is on the owner's GPU -- and GitHub supplies the trigger and the log that
 # release-governance.md's evidence package is made of.
 #
-# This still cannot go green until GAP-024 writes the GPU path and its `#[ignore]`
-# tests behind the `gpu-tests` feature: today that feature is empty and
-# `--features gpu-tests -- --ignored` runs zero tests, and the last step below fails a
-# run that executed nothing. Fire it with `gh workflow run gpu-fusion.yml`.
+# **Corrected 2026-09-15: the feature is no longer empty, and this comment said it was.**
+# GAP-024 has since written the GPU path and four `#[ignore]`d `#[tokio::test]`s behind
+# `gpu-tests` (`tests/gpu_vs_cpu.rs`), and `cargo test -p gungnir-data-fusion
+# --features gpu-tests --no-run` compiles them, so a dispatch now executes four tests
+# rather than none and the "ran nothing" guard below is a guard rather than a certainty.
+# What has never happened is the dispatch itself: item (3) of GAP-024's closing action is
+# a *recorded* run on the registered runner, which a passing sandbox run is not.
+# Fire it with `gh workflow run gpu-fusion.yml`.
 #
 # The same validation runs directly on any GPU host, no forge involved:
 #   cargo test -p gungnir-data-fusion --features gpu-tests -- --ignored
