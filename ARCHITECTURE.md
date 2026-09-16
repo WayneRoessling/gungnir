@@ -5811,9 +5811,11 @@ not by finding, for the time between whenever each item landed and this correcti
     where Git sits among the user entries. An interactive check of `bash --version` in
     this workspace's own shell reports Git Bash and proves nothing about what the runner
     service resolves; that check was made and reported as evidence, and it was the wrong
-    shell. **The fix is the runner's own `.path` file**, which it applies to every job:
-    `C:\Program Files\Git\bin` prepended to machine-then-user, preserving `.cargo\bin`
-    from the user half, which a machine-PATH-only file would have dropped.
+    shell. **Corrected 2026-09-16: this item said the fix was the runner's own `.path`
+    file, and it was not** -- see item 135. The file was written (Git's bin prepended to
+    machine-then-user, preserving `.cargo\bin`) and the listener restarted after it, and
+    the next run resolved `system32` again: the runner looks `bash` up itself and the
+    file does not reach that lookup.
 
     **Two workflow changes followed, and neither is a workaround for the above.**
 
@@ -5840,6 +5842,58 @@ not by finding, for the time between whenever each item landed and this correcti
     before reaching `cargo bench`, so whether the benchmarks complete inside the
     twenty-minute timeout on this host is unmeasured, and so is the machine's own
     run-to-run spread that item 133 makes the condition for enforcement.
+
+135. **What actually fixed the self-hosted runner's shell, 2026-09-16, and the two fixes
+    before it that did not.** Item 134 recorded a runner `.path` file as the fix for `bash`
+    resolving to the WSL shim. It was not, and neither was the first attempt at a
+    replacement; the one that worked came third, and each wrong one was found by the
+    runner's own worker log rather than by reasoning about it.
+
+    **`.path` does not reach the lookup.** Written, listener restarted afterwards (start
+    10:12:32 against a file written 01:58:47, with a fresh `_diag` start log to prove it),
+    and the next dispatched run still logged `shell: C:\WINDOWS\system32\bash.EXE`. The
+    worker log shows why: `ScriptHandler] Which2: 'bash'` then
+    `Location: 'C:\WINDOWS\system32\bash.EXE'` -- the runner resolves the shell name
+    itself, and nothing in the runner log shows the file being read at all. The file is
+    still on the host and does nothing; it is safe to delete.
+
+    **A full path containing a space does not work either.** Setting the job's
+    `defaults.run.shell` to `C:\Program Files\Git\bin\bash.exe ... {0}` failed at the
+    same step with "Second path fragment must not be a drive or UNC name", and the worker
+    log again said exactly what happened: `Which2: 'C:\Program'`. **The runner splits a
+    custom shell string at its first space and does not honour quotes**, so the readable
+    path became a two-word command.
+
+    **The 8.3 short name works.** `C:\PROGRA~1\Git\bin\bash.exe`, confirmed on this
+    host with `for %I in (...) do @echo %~sI`, set as `defaults.run.shell` on both
+    self-hosted jobs with GitHub's own `--noprofile --norc -e -o pipefail {0}` template,
+    and no step in either job writes `shell: bash`. The dispatched run then passed every
+    step up to the benchmarks -- including the toolchain record that every earlier run on
+    this runner had died on -- and the worker log reads
+    `Which2: 'C:\PROGRA~1\Git\bin\bash.exe'`. It is host-specific, which both jobs
+    already are by their labels, and it fails loudly rather than silently if Git moves or
+    8.3 names are disabled.
+
+    **Both self-hosted workflows then ran to completion from this branch.** Gate 6
+    (run 35107188457) passed every step in 369 s: `rustc 1.98.1` on
+    `x86_64-pc-windows-msvc`, so `rust-toolchain.toml`'s pin held with no toolchain action;
+    `cargo bench --workspace` compiled in 2 m 58 s and ran; and the comparator reported
+    twelve benchmarks with no baseline to compare against, which is correct for a branch
+    dispatch and means no hosted-runner baseline was compared across machines. The GPU
+    workflow (run 35107957921) passed in 60 s and **executed its four GPU tests on the
+    RTX 5060 Ti for the first time** -- `gpu_matches_cpu_reference_transform_and_inlier_ratio`
+    and `gpu_matches_cpu_reference_with_normals_present` among them, which check the
+    §2 GPU row's own criterion -- with its guard logging `GPU tests executed: 4`.
+    **Neither is yet the record either gap asks for.** Both ran from an unmerged branch;
+    GAP-024 item (3) closes on a dispatch from main, and Gate 6's baseline is written only
+    by a push to main.
+
+    **The pattern, which the last three items share.** Each wrong fix was reasoned correctly
+    from a wrong premise -- that `Git Bash is on this host` meant the runner would use it,
+    that the runner's documented `.path` would reach shell resolution, that a quoted or
+    spaced path would be parsed as a path -- and each was caught only by reading what the
+    runner itself logged. On this runner the worker's `_diag` log is the evidence, and a
+    check made in any other shell is not.
 
 ## Directory layout
 

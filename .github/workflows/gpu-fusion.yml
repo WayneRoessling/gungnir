@@ -44,20 +44,41 @@ env:
 jobs:
   gpu-vs-cpu:
     runs-on: [self-hosted, gpu]
+    # **The shell is named by full path, and `shell: bash` is not used anywhere in this job**
+    # (2026-09-16). On this host the runner resolves `bash` for itself -- its own worker log
+    # records `Which2: 'bash'` then `Location: 'C:\WINDOWS\system32\bash.EXE'` -- and that
+    # is the WSL shim, a Linux bash that cannot read a Windows path and strips the
+    # backslashes out of the script path it is handed. Every run on this runner failed at
+    # its first bash step that way. A runner `.path` file putting Git's bin first was tried
+    # and **did not change the lookup**: the listener was restarted after writing it and the
+    # next run resolved `system32` again. Naming the executable is the fix that does not
+    # depend on how the runner searches, and the arguments are GitHub's own template for
+    # `shell: bash`, so behaviour is otherwise unchanged. Any step added to this job must
+    # use the default rather than writing `shell: bash`, or it reintroduces the lookup.
+    #
+    # **Why the 8.3 short name and not `C:\Program Files\Git\bin\bash.exe`**: the runner splits a
+    # custom shell string at its first space and does not honour quotes, so the
+    # readable path became the executable `C:\Program` (worker log: `Which2: 'C:\Program'`,
+    # then "Second path fragment must not be a drive or UNC name"). `PROGRA~1` is what
+    # this host maps `Program Files` to, checked with `for %I in (...) do @echo %~sI`. It is
+    # host-specific, which this job already is by its labels; if Git is reinstalled
+    # elsewhere or 8.3 names are disabled, the first step fails naming the missing file.
+    defaults:
+      run:
+        shell: 'C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -e -o pipefail {0}'
     steps:
       - uses: actions/checkout@v4
       # **No toolchain action on a self-hosted runner** (2026-09-16). `dtolnay/rust-toolchain`
       # is a composite action whose every step declares `shell: bash`, and it was the step
       # that failed the first run this workflow ever attempted here: the runner resolved
       # `bash` to the WSL shim at `C:\WINDOWS\system32\bash.exe`, which cannot see a
-      # Windows path and ate the backslashes out of the script it was handed. The runner's
-      # `.path` now puts Git's bash first and that failure is gone -- but the action was
+      # Windows path and ate the backslashes out of the script it was handed. The job's
+      # `defaults` now name Git's bash by full path and that failure is gone -- but the action was
       # installing a toolchain onto a machine that already has one, which is work and risk
       # for nothing. `rust-toolchain.toml` pins 1.98 with rustfmt and clippy, and rustup
       # honours it on every `cargo` invocation, so the pin is enforced by the repository
       # rather than by a workflow input that could drift from it.
       - name: Record the toolchain this run used
-        shell: bash
         run: |
           rustc --version --verbose
           cargo --version
@@ -66,12 +87,10 @@ jobs:
       - name: GPU path against the CPU reference
         env:
           GUNGNIR_GPU_TESTS: "1"
-        shell: bash
         run: |
           set -o pipefail
           cargo test -p gungnir-data-fusion --features gpu-tests -- --ignored 2>&1 | tee gpu-tests.log
       - name: A gate that ran nothing has not passed
-        shell: bash
         run: |
           ran=$(awk '/^test result:/ { s += $4 } END { print s + 0 }' gpu-tests.log)
           echo "GPU tests executed: $ran"
