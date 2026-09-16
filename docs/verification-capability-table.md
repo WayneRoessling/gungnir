@@ -175,7 +175,7 @@ does the row's status move in `architecture.md`. Rows with no test are listed as
 | `gungnir-data` Loader correctness per format | `gungnir-data/tests/{dem,pointcloud,vtk_gltf}.rs` (LAS, DEM, VTK, glTF; **COPC's bounded reader landed 2026-09-07** through `las::copc` -- the refusal side is tested (a non-COPC file, malformed bounds, a missing file), the happy path is not: this workspace holds no COPC fixture of its own yet, so bounded reading against real octree-indexed points is unverified here, proven only by `las::copc::CopcReader`'s own doctest) | |
 | `gungnir-data` Loading off the UI thread | `gungnir-app/tests/terrain.rs` (`spawn_loader`) | |
 | `gungnir-data-fusion` CPU ICP reference | `mod tests` in `gungnir-data-fusion/src/{cpu_reference,transform_solve}.rs` (corrected 2026-09-07: not `lib.rs`, which holds the trait and the `GpuFusionEngine` stub and carries no tests of its own) | |
-| `gungnir-data-fusion` GPU path against CPU reference | `gungnir-data-fusion/tests/gpu_vs_cpu.rs`, four `#[ignore]`d tests behind `gpu-tests` (2026-09-08, GAP-024): two check this row's exact criterion (transform within 1e-3 m/rad, inlier ratio within 0.01, against `CpuIcp`), one checks self-registration convergence, one checks voxel fusion's self-consistency (no CPU oracle for that stage). Passed against a real `wgpu` adapter the implementing agent's own sandbox unexpectedly had (an RTX 5060 Ti, the same model as `gungnir-rtx-5060ti`) -- real hardware execution, but not the recorded `gpu-fusion.yml` dispatch through GitHub Actions this row's own verification method names; see GAP-024's gap-register entry and its PR for whether that dispatch was attempted and what it returned. Separately, all four WGSL kernels parse and validate under `naga` in plain `cargo test`, no GPU needed (`gungnir-data-fusion::gpu::validation`) -- real but partial evidence, not a stand-in for the row above | |
+| `gungnir-data-fusion` GPU path against CPU reference | `gungnir-data-fusion/tests/gpu_vs_cpu.rs`, four `#[ignore]`d tests behind `gpu-tests` (2026-09-08, GAP-024): two check this row's exact criterion (transform within 1e-3 m/rad, inlier ratio within 0.01, against `CpuIcp`), one checks self-registration convergence, one checks voxel fusion's self-consistency (no CPU oracle for that stage). Passed against a real `wgpu` adapter the implementing agent's own sandbox unexpectedly had (an RTX 5060 Ti, the same model as `gungnir-rtx-5060ti`) -- real hardware execution, but not the recorded `gpu-fusion.yml` dispatch through GitHub Actions this row's own verification method names; see GAP-024's gap-register entry and its PR for whether that dispatch was attempted and what it returned. **The recorded dispatch ran 2026-09-16 and the row is a gate**: `gpu-fusion.yml` run 35113741715 on `main`, on `gungnir-rtx-5060ti`, all four tests executed and passed (`record/2026-09-16/gpu-verification-row-gated-on-the-recorded-dispatch.md`). Separately, all four WGSL kernels parse and validate under `naga` in plain `cargo test`, no GPU needed (`gungnir-data-fusion::gpu::validation`) -- real but partial evidence, not a stand-in for the row above | |
 | `gungnir-render` Single device, no per-frame resource creation | none | |
 | `gungnir-viewport3d` SSE and tileset traversal | none (corrected 2026-09-07: this row was listed as tested against `mod tests` in `lib.rs`, which does not exist; `screen_space_error` and tileset traversal live in `src/streaming/{sse,tileset}.rs` and neither file, nor any other in the crate, has a test of either) | |
 | `gungnir-viewport3d` Glyph rebuild only on change | `gungnir-viewport3d/src/tracks.rs` `mod tests` (corrected 2026-09-07: not `lib.rs`) | |
@@ -357,15 +357,17 @@ built to check it, and the walk's job is to say which of the two moves.
   is a person running the binary. `gungnir-node/tests/` holds account provisioning and
   encryption at rest, neither of which is this row's criterion.
 
-#### Group D -- one run away (1 row)
+#### Group D -- one run away (1 row), gated 2026-09-16
 
-**`gungnir-data-fusion` GPU path against CPU reference.** Four `#[ignore]`d
-`#[tokio::test]`s exist behind the `gpu-tests` feature and **compile** (checked
-2026-09-15 with `cargo test -p gungnir-data-fusion --features gpu-tests --no-run`);
-two of them assert this row's exact criterion. **None has ever executed on a GPU.**
-The row gates on the recorded dispatch that is GAP-024 item (3) -- one
-`gh workflow run gpu-fusion.yml` on the registered runner -- and not before, because a
-passing sandbox run and a recorded one are not the same claim.
+**`gungnir-data-fusion` GPU path against CPU reference.** **Gated 2026-09-16** on the
+recorded dispatch this group was waiting for: `gpu-fusion.yml` run 35113741715 on `main`,
+on `gungnir-rtx-5060ti`, with all four `#[ignore]`d GPU tests executed and passed, two of
+them asserting this row's criterion (`record/2026-09-16/gpu-verification-row-gated-on-the-recorded-dispatch.md`).
+
+**Corrected the same day**: this paragraph said the tests had never executed on a GPU.
+They had, on 2026-09-08, against a real adapter in the implementing agent's own sandbox,
+as the test column above already recorded. What the row lacked was a recorded dispatch
+through the registered runner, not an execution.
 
 #### Group E -- the plan-11 and DN-25 rows (26 rows)
 

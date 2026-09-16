@@ -1965,7 +1965,7 @@
           <tag xmi:id="EAID_386D3F2E_F2B7_2AE1_A230_E4C7CBA3E162" name="uafKind" value="Capability" modelElement="EAID_4B7D0287_D4A7_2D5D_5DA0_67F99D426660"/>
           <tag xmi:id="EAID_E51A02FE_198F_B67F_DBC5_8E5D1B307863" name="uafId" value="CAP-2.10" modelElement="EAID_4B7D0287_D4A7_2D5D_5DA0_67F99D426660"/>
           <tag xmi:id="EAID_E2682C97_9C07_8BC6_124E_31BC1BDECEBF" name="registry.parent" value="CAP-2" modelElement="EAID_4B7D0287_D4A7_2D5D_5DA0_67F99D426660"/>
-          <tag xmi:id="EAID_B862C60E_FE6C_6252_3010_9BBD11E60066" name="registry.coverage" value="GAP-023 GAP-024" modelElement="EAID_4B7D0287_D4A7_2D5D_5DA0_67F99D426660"/>
+          <tag xmi:id="EAID_B862C60E_FE6C_6252_3010_9BBD11E60066" name="registry.coverage" value="verification-table" modelElement="EAID_4B7D0287_D4A7_2D5D_5DA0_67F99D426660"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -5243,7 +5243,7 @@
       </element>
       <element xmi:idref="EAID_62CBE51C_4FC6_353B_63F9_E0C2F049275C" xmi:type="uml:Class" name="Point-cloud fusion" scope="public">
         <model package="EAPK_FA13AF13_B0CC_AEE6_6C1C_35BB98E0F735" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="ServiceInterface" documentation="CPU reference and GPU ICP registration (trait surface)."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="ServiceInterface" documentation="CPU reference ICP (point-to-point and point-to-plane) and GPU ICP (point-to-point), registered each tick once a point-cloud pair is loaded; the GPU path is gated against the CPU reference on the registered runner."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="SV-32"/>
@@ -5251,7 +5251,7 @@
           <tag xmi:id="EAID_BAEA13E3_1802_B138_6A8D_F797EABC8121" name="uafKind" value="ServiceInterface" modelElement="EAID_62CBE51C_4FC6_353B_63F9_E0C2F049275C"/>
           <tag xmi:id="EAID_858D0B88_808B_76DA_1B27_8CB863452429" name="uafId" value="SV-32" modelElement="EAID_62CBE51C_4FC6_353B_63F9_E0C2F049275C"/>
           <tag xmi:id="EAID_24A07F4B_88FA_EC8D_E14B_B08D56DD6758" name="registry.code" value="gungnir_data_fusion" modelElement="EAID_62CBE51C_4FC6_353B_63F9_E0C2F049275C"/>
-          <tag xmi:id="EAID_B96F1E19_7FF5_D727_DF36_F28FADABE6EF" name="registry.status" value="scaffold" modelElement="EAID_62CBE51C_4FC6_353B_63F9_E0C2F049275C"/>
+          <tag xmi:id="EAID_B96F1E19_7FF5_D727_DF36_F28FADABE6EF" name="registry.status" value="real" modelElement="EAID_62CBE51C_4FC6_353B_63F9_E0C2F049275C"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -18163,8 +18163,6 @@
         <labels mt="realizes: SV-32 -&gt; OA-02"/>
         <tags>
           <tag xmi:id="EAID_707C80E5_6DED_828D_3A45_D43FA1B2CE5C" name="uafRelationship" value="realizes" modelElement="EAID_17AD6B72_B05A_387F_0A64_34EB2AE0BA66"/>
-          <tag xmi:id="EAID_00E348E3_F988_DC0C_9953_B8AE04D06FAC" name="registry.status" value="planned" modelElement="EAID_17AD6B72_B05A_387F_0A64_34EB2AE0BA66"/>
-          <tag xmi:id="EAID_7269A38D_4C67_548A_1FF6_9AA55260050A" name="registry.plan" value="GAP-024" modelElement="EAID_17AD6B72_B05A_387F_0A64_34EB2AE0BA66"/>
         </tags>
         <xrefs/>
       </connector>

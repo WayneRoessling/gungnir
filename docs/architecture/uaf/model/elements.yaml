@@ -62,7 +62,7 @@ capabilities:
   - {id: CAP-2.7, parent: CAP-2, name: "Keep one identity across gaps, sorties, sessions, and peers"}
   - {id: CAP-2.8, parent: CAP-2, name: "Predict trajectory, time to impact, closest approach", coverage: "verification-table"}
   - {id: CAP-2.9, parent: CAP-2, name: Detect anomalies in tracks and feeds, coverage: "verification-table"}
-  - {id: CAP-2.10, parent: CAP-2, name: "Fuse terrain, imagery, point clouds, and map layers", coverage: "GAP-023 GAP-024"}
+  - {id: CAP-2.10, parent: CAP-2, name: "Fuse terrain, imagery, point clouds, and map layers", coverage: "verification-table"}
   - {id: CAP-2.11, parent: CAP-2, name: Answer geometric questions, coverage: "verification-table"}
   - {id: CAP-2.12, parent: CAP-2, name: Maintain pattern of life and order of battle, coverage: "verification-table"}
   - id: CAP-3
@@ -232,7 +232,7 @@ services:
   - {id: SV-29, name: Reporting, code: gungnir_reporting::ReportGenerator, status: real, description: Reports and exports with every figure traceable to the journal.}
   - {id: SV-30, name: Remote backends, code: gungnir_remote, status: scaffold, description: RemoteTrackingService and RemoteInterceptService over the API with an outbox; transport pending.}
   - {id: SV-31, name: Data loading, code: gungnir_data, status: scaffold, description: "Point cloud, VTK, terrain, glTF loaders off the UI thread (surface only)."}
-  - {id: SV-32, name: Point-cloud fusion, code: gungnir_data_fusion, status: scaffold, description: CPU reference and GPU ICP registration (trait surface).}
+  - {id: SV-32, name: Point-cloud fusion, code: gungnir_data_fusion, status: real, description: "CPU reference ICP (point-to-point and point-to-plane) and GPU ICP (point-to-point), registered each tick once a point-cloud pair is loaded; the GPU path is gated against the CPU reference on the registered runner."}
   - {id: SV-33, name: Tracking metrics, code: gungnir_metrics, status: scaffold, description: "MOTA, MOTP, purity, fragmentation against truth."}
   - {id: SV-34, name: Scenario generation, code: gungnir_scenario, status: scaffold, description: The five engineering scenarios with truth.}
 
