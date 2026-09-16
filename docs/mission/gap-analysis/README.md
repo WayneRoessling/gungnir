@@ -2,9 +2,10 @@
 
 Deliverables of [plan 05](../../plans/05-capability-design-gaps.md): one prioritized
 register of the gaps between what the missions need (`../capabilities/`, plan 04) and
-what Gungnir is designed and built to provide. Technical gaps reference
-`../../../ARCHITECTURE.md` §10 by item rather than duplicating it; §10 in turn points
-at this register for the items it does not list individually.
+what Gungnir is designed and built to provide. The register's data is YAML under
+[`data/`](data/); `tools/gen_gaps.py` renders every document in this folder from it, and
+technical gaps cite `../../record/` items (the former `ARCHITECTURE.md` §10) rather than
+duplicating them.
 
 Status: first draft 2026-09-04. Severity, effort, and target values are proposals;
 the owner scores and the engineering reviewer sizes before the register is used for
@@ -82,18 +83,26 @@ planning.
   capability), **Technical** (designed, but implementation, verification, or
   integration is incomplete). Decision-type entries live in `decisions-needed.md`.
 - Status: Open, Planned (a plan in `../../plans/` or a scheduled increment owns it),
-  In progress, Closed (date).
+  In progress, Closed. A gap has no status field: its status is the `status` of the last
+  entry in its `history`, and the entry's date says when.
 
 ## Maintenance
 
-- When a gap closes, set its status to Closed with the date in the register and, if it
-  was a §10 item, move that item to the resolved list in `../../../ARCHITECTURE.md` in the
-  same change.
-- When a decision is taken, record the outcome in `decisions-needed.md`, update the
-  gaps that depended on it, and add the outcome to `../../../ARCHITECTURE.md` §10 if it is
-  technical.
-- When a new gap is found, append it with the next identifier, cite its evidence, and
-  add it to the coverage matrix row of its capability and to the roadmap.
+Edit the YAML in `data/` and run `python tools/gen_gaps.py`; never edit the generated
+documents. CI runs the generator with `--base` against the base branch, and refuses a
+change that edits or removes a merged history entry.
+
+- When a gap's status changes, append an entry to its `history`: the date, the new
+  status, and a note of at most 120 words that names what changed and links the
+  `../../record/` item or pull request holding the explanation. The closing action and
+  evidence fields are current state and are edited in place.
+- When a decision is taken, set its `resolved` date and `outcome` in `data/decisions.yaml`
+  (an amendment appends to `amended`), append a history entry to each gap it moves, and
+  explain a technical decision in a `../../record/` item.
+- When a new gap is found, append it to `data/gaps.yaml` with the next identifier, one
+  history entry, and its evidence; the coverage matrix and roadmap follow from the data.
+  Check the identifier against `origin/main` before pushing: two branches can take the
+  same one, and the generator refuses a duplicate only once both have merged.
 - The coverage matrix must keep the property that every capability with less than
   full design or implementation coverage has at least one gap.
 - The register stays in Markdown until the repository is hosted (plan 05 open

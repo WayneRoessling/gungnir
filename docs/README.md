@@ -32,6 +32,9 @@ added. The pre-consistency snapshot of the original documents is archived in
 | 16 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Everyone | The short form of the rules for any change. |
 | 17 | [`../deploy/README.md`](../deploy/README.md) | Deployment owners | Building and running the desktop and the node container. |
 | 18 | [`plans/README.md`](plans/README.md) | Everyone | The planning set: eleven plans for the business plan, mission analysis, UAF views, capabilities, gaps, UX, test tracks, AI agent, ML, TOGAF documentation, and design gap closure, with sequencing and effort. |
+| 19 | [`unbuilt.md`](unbuilt.md) | Everyone | What the code says it does not do yet: every `NotImplemented` error, generated from the sources. |
+| 20 | [`signatures.md`](signatures.md) | Engineers, agents, reviewers | Every change the owner has signed, with the paths and the commit; the only place that says whether something is signed. |
+| 21 | [`record/README.md`](record/README.md) | Engineers, agents | Why things were done: one file per explained change, never edited once merged. Items 1 to 136 and 96A are what `ARCHITECTURE.md` §10 held. |
 
 ## Planned document sets
 
@@ -51,7 +54,7 @@ plans execute. `plans/README.md` keeps the execution status in detail.
 | `test-tracks/` | 07 | Vehicle catalogue, class profiles, sensor models, scenario library, data format (data under `../testdata/tracks/`) | First draft 2026-09-04 |
 | `ai/` | 08 | Agent concept of operations, safety boundaries, architecture, tools, provider configuration, evaluation, security | First draft 2026-09-04 |
 | `ml/` | 09 | ML use cases, architecture, data pipeline, training, evaluation, MLOps, security | First draft 2026-09-04 |
-| `design/` | 11 | A design note per open design gap: owning component, types, edges, behaviour, configuration and interface delta, panel delta, verification row | First draft 2026-09-05 (22 notes, 4 consolidations), plus DN-23 and DN-24 raised the same day out of the gaps they block, both signed and implemented; `external-standards.md` (2026-09-06) locates the ASTERIX and STANAG 4676 specifications for GAP-064 and, since D-24 the same day, the AIS and ADS-B candidates for GAP-010 -- AIS pinned to ITU-R M.1371-6 under D-32 the same day, and ADS-B **deliberately left unpinned** later that day because no specification is both free to obtain and permissively licensed, its decoder gated instead against two MIT decoders over two vendored captures (§4.3, §4.5) -- and `handoff-2026-09-06-radar-feed.md` hands the radar feed work on; `tak-interoperability-research.md` (2026-09-08) is the TAK ecosystem as verified from the clients' own source, and the three D-33 extensions the owner took the same day |
+| `design/` | 11 | A design note per open design gap: owning component, types, edges, behaviour, configuration and interface delta, panel delta, verification row | First draft 2026-09-05 (22 notes, 4 consolidations), plus DN-23 and DN-24 raised the same day out of the gaps they block, both implemented; `external-standards.md` (2026-09-06) locates the ASTERIX and STANAG 4676 specifications for GAP-064 and, since D-24 the same day, the AIS and ADS-B candidates for GAP-010 -- AIS pinned to ITU-R M.1371-6 under D-32 the same day, and ADS-B **deliberately left unpinned** later that day because no specification is both free to obtain and permissively licensed, its decoder gated instead against two MIT decoders over two vendored captures (§4.3, §4.5) -- and `handoff-2026-09-06-radar-feed.md` hands the radar feed work on; `tak-interoperability-research.md` (2026-09-08) is the TAK ecosystem as verified from the clients' own source, and the three D-33 extensions the owner took the same day |
 
 ## Which standard applies to which crate
 
@@ -70,12 +73,39 @@ workspace `Cargo.toml` (`[workspace.lints]`), which every crate opts into.
 
 ## Keeping the set consistent
 
+**One source per current fact.** A fact that has to stay true -- a status, a signature, a
+dependency edge, a pass criterion, an approved crate, what is not built -- lives in one
+source that is generated, checked or tested, and every other document cites that source
+instead of restating it. A restatement is a copy that goes stale the day the source moves,
+and before 2026-09-16 about a fifth of this repository's documentation commits were repairs
+of exactly that. Narrative -- why something was done, what was tried, what was found -- is
+written once, in a `record/` item, the commit or the pull request, and is not edited after.
+
+| Fact | Its one source |
+|---|---|
+| What is not built | [`unbuilt.md`](unbuilt.md), generated from the code's `NotImplemented` errors |
+| Gaps, and each gap's status | `mission/gap-analysis/data/gaps.yaml`; the status is the last history entry |
+| Decisions | `mission/gap-analysis/data/decisions.yaml` |
+| What the owner has signed | [`signatures.md`](signatures.md), from `signatures.yaml` |
+| The approved crates and their terms | `agentic-coding-standards.md` §2.9 |
+| Pass criteria | `verification-capability-table.md` |
+| The dependency graph | The crate manifests, reproduced in `ARCHITECTURE.md` §7.1 |
+| Why | A [`record/`](record/README.md) item, the commit, the pull request |
+
 - Some documents are **generated** and must not be edited by hand: the five plan 05
-  gap-analysis documents come from `mission/gap-analysis/tools/gen_gaps.py`, and the
-  `test-tracks/` catalogue, class-profile, sensor-model, and scenario-library pages come
+  gap-analysis documents come from `mission/gap-analysis/tools/gen_gaps.py` over the YAML
+  in `mission/gap-analysis/data/`; `unbuilt.md` from `tools/gen_unbuilt.py`;
+  `signatures.md` from `tools/signatures.py`; `record/README.md` from
+  `record/tools/record.py`; the UAF views from `architecture/uaf/tools/build_uaf.py`; and
+  the `test-tracks/` catalogue, class-profile, sensor-model, and scenario-library pages
   from `test-tracks/tools/build_catalogue.py`. Each generator is deterministic, so
   re-running it on an unmodified tree rewrites its outputs byte for byte; that is also
-  the check that no hand edit has crept in. Change the generator and re-run.
+  the check that no hand edit has crept in. Change the source and re-run;
+  `bash .github/scripts/check_documents.sh all`, from the repository root, runs all of
+  them and the cross-document checks the way CI does.
+- **History is append-only.** A merged `record/` item, a merged gap history entry, and a
+  merged signature entry are not edited; a correction is a new entry that names what it
+  corrects. CI checks all three against the base branch.
 - Oracle evidence for the `verification-capability-table.md` §1 differential tests lives
   in `../testdata/oracles/`, with the generator and the oracle version that produced each
   fixture. `../testdata/oracles/README.md` records which oracles were actually run and
@@ -88,14 +118,17 @@ workspace `Cargo.toml` (`[workspace.lints]`), which every crate opts into.
   `rust-3d-data-ecosystem-build-vs-adopt.md`, `rust-ui-architecture-coding-standards.md`,
   and `gungnir-capabilities.md` §5–§9 are cited from Rust doc comments and `Cargo.toml`
   descriptions. Add new sections at the end; do not renumber existing ones.
-- A capability's pass criterion lives in `verification-capability-table.md` and is
-  restated, not redefined, in `gungnir-capabilities.md` and in the owning crate's doc
-  comment.
+- A capability's pass criterion lives in `verification-capability-table.md`. A crate's
+  doc comment names the row (`agentic-coding-standards.md` §3.3); older comments that
+  restate a criterion inline defer to the table where they differ.
 - The crate manifests are the truth for the dependency graph; `ARCHITECTURE.md` reproduces
   them. When an edge changes, update the graph and §7.1 in the same change.
-- `ARCHITECTURE.md` §10 is the truth for what is known to be unimplemented or undecided;
-  when something lands, move it from "Open" to "Resolved" there and update the status
-  lines in `gungnir-capabilities.md`.
+- When something lands, append a history entry to its gap (closing it if it closes) and,
+  if it needs explaining, add a `record/` item. Do not restate its new status elsewhere:
+  `unbuilt.md` follows the code, and every other status is read from the gap register.
+- When the owner signs something, add an entry to `signatures.yaml` and regenerate. Never
+  write that something is signed, or that it waits for the owner, anywhere else;
+  `tools/signatures.py check` fails the second outside the history.
 
 ## Glossary
 

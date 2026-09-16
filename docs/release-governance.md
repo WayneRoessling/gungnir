@@ -61,7 +61,7 @@ by hand after the fact.
 Decided on 2026-09-04 and amended on 2026-09-07 (D-10 in
 `mission/gap-analysis/decisions-needed.md`): the repository is hosted on GitHub at
 `https://github.com/WayneRoessling/gungnir`, CI is GitHub Actions, and images go to the
-GitHub Container Registry. The eight workflows under `.github/workflows/` are both the
+GitHub Container Registry. The workflows under `.github/workflows/` are both the
 specification of the gates and the thing that runs them, so GAP-061 no longer ports
 anything; the gate names and pass criteria do not change.
 

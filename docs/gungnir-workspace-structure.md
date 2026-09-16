@@ -55,7 +55,9 @@ gungnir-workspace/
 ├── benches/README.md               # index of the criterion groups (they live per crate)
 │
 ├── .github/workflows/
-│   ├── ci.yml                      # fmt, clippy, test (nextest), release budget gates, benches compile, node container build
+│   ├── ci.yml                      # fmt, clippy, test (nextest), release budget gates, benches compile, document checks, node container build
+│   ├── pr-rules.yml                # a dependency change's Decision and Duplicate linkage lines; commit message length
+│   ├── cross-document-recheck.yml  # after each merge, every open PR's document checks against the new main
 │   ├── oracle-diff.yml             # gate 1
 │   ├── miri.yml                    # gate 3
 │   ├── loom.yml                    # gate 4
@@ -159,12 +161,16 @@ Its runner has existed since 2026-09-08.
 `gungnir-fusion-async` (concurrency) and any `unsafe` block are two of the items
 `agentic-workflow.md` marks human-owned. Both get their own always-required workflow
 rather than being folded into general CI, and both require explicit human sign-off in
-addition to a green check. Two further workflows are not numbered gates:
+addition to a green check. Four further workflows are not numbered gates:
 `gpu-fusion.yml` validates the GPU registration path against the CPU reference on the
 self-hosted `gpu` runner registered 2026-09-08 (manual dispatch only, permanently, so
 that no fork's pull request can reach that machine; it fails a run that executed zero
 tests, because the path and its tests are GAP-024's and do not exist yet), and
-`release.yml` runs the assurance track in `release-governance.md`.
+`release.yml` runs the assurance track in `release-governance.md`, `pr-rules.yml` checks
+what a pull request's description and commit messages must carry (`CONTRIBUTING.md`),
+and `cross-document-recheck.yml` re-runs the document checks of every open pull request
+against `main` after each merge, because those checks read documents other pull requests
+change.
 
 ## Naming notes
 

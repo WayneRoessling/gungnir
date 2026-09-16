@@ -365,15 +365,19 @@ crates, `oxigdal-3d`, `anyhow` or `eyre` (§3.1), `native-tls`, direct use of `h
 
 - `lib.rs` re-exports the public trait(s) and top-level types; implementation detail lives in
   submodules named after the capability, not generic names like `impl.rs` or `utils.rs`.
-- Every submodule that corresponds to a capability-table row opens with a doc comment linking
-  back to the row: `//! Verifies against verification-capability-table.md: "Extended Kalman
-  Filter (EKF)". Relative error < 1e-4 vs. filterpy/trackingEKF.`
+- Every submodule that corresponds to a capability-table row opens with a doc comment naming
+  the row: `//! Verifies against verification-capability-table.md: "Extended Kalman Filter
+  (EKF)".` The criterion itself is not restated there: it lives in the table alone, and a
+  copy in a comment is a copy that drifts when the table changes.
 
 ### 3.4 Documentation
 
 - Every public item has a doc comment. For anything appearing in the capability table, the
-  doc comment states the pass criterion inline, so the two documents never drift silently out
-  of sync.
+  doc comment names its row (§3.3); the criterion is read from the table. Comments written
+  before 2026-09-16 still restate criteria inline, and where one disagrees with the table,
+  the table is right.
+- A doc comment does not say whether its code is signed, or that it waits for the owner.
+  That is `signatures.md`'s to say, and `docs/tools/signatures.py check` refuses the second.
 
 ### 3.5 Lints
 
