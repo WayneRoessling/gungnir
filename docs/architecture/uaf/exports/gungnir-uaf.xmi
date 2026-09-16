@@ -1686,6 +1686,7 @@
           <tag xmi:id="EAID_0D33CCD7_11E3_8072_4B72_AE37EA3DDAD4" name="uafKind" value="Capability" modelElement="EAID_5977228F_8689_4320_5148_69906C010775"/>
           <tag xmi:id="EAID_AD7D2493_4E7F_4C51_3BDA_51A293E4D66B" name="uafId" value="CAP-1.6" modelElement="EAID_5977228F_8689_4320_5148_69906C010775"/>
           <tag xmi:id="EAID_ACE78C71_B844_A97E_AB24_E57D2B8B2AA7" name="registry.parent" value="CAP-1" modelElement="EAID_5977228F_8689_4320_5148_69906C010775"/>
+          <tag xmi:id="EAID_DDFDB0A0_CAB9_1B74_F77A_1DE7CCE78A4E" name="registry.coverage" value="verification-table" modelElement="EAID_5977228F_8689_4320_5148_69906C010775"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -1807,6 +1808,7 @@
           <tag xmi:id="EAID_B6062820_569B_41C9_289A_275B74F8FDB2" name="uafKind" value="Capability" modelElement="EAID_2FDB1597_9573_E58B_BDA0_1028B28EC0FA"/>
           <tag xmi:id="EAID_911EDC32_B1BD_069B_A8A1_0E76C10905C4" name="uafId" value="CAP-2.3" modelElement="EAID_2FDB1597_9573_E58B_BDA0_1028B28EC0FA"/>
           <tag xmi:id="EAID_290A9967_3295_BC80_0ABF_06D4D096A837" name="registry.parent" value="CAP-2" modelElement="EAID_2FDB1597_9573_E58B_BDA0_1028B28EC0FA"/>
+          <tag xmi:id="EAID_6D536CDE_CD39_5363_F928_035AAED9F917" name="registry.coverage" value="I2" modelElement="EAID_2FDB1597_9573_E58B_BDA0_1028B28EC0FA"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -1828,6 +1830,7 @@
           <tag xmi:id="EAID_F0F443B3_1689_4CA4_B37E_F4B5F4E2A027" name="uafKind" value="Capability" modelElement="EAID_2358DEF7_4D57_BFFD_1F68_584FDE26366C"/>
           <tag xmi:id="EAID_45CDCE2A_101E_A620_E99C_4B2DB40A45EB" name="uafId" value="CAP-2.4" modelElement="EAID_2358DEF7_4D57_BFFD_1F68_584FDE26366C"/>
           <tag xmi:id="EAID_250CC7DA_BBCB_7D61_C5C7_7CA90FDF94B3" name="registry.parent" value="CAP-2" modelElement="EAID_2358DEF7_4D57_BFFD_1F68_584FDE26366C"/>
+          <tag xmi:id="EAID_38355796_859E_6123_0C11_6DC3B0FEB930" name="registry.coverage" value="GAP-015" modelElement="EAID_2358DEF7_4D57_BFFD_1F68_584FDE26366C"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -1919,6 +1922,7 @@
           <tag xmi:id="EAID_6507FE0C_6D0F_0704_AB3E_4E476469F309" name="uafKind" value="Capability" modelElement="EAID_517FBE38_B004_5782_5149_1CDB3D5BB13B"/>
           <tag xmi:id="EAID_AB965FC6_BD4B_937F_6261_01D3FB84DE82" name="uafId" value="CAP-2.8" modelElement="EAID_517FBE38_B004_5782_5149_1CDB3D5BB13B"/>
           <tag xmi:id="EAID_C7CD136E_9293_C88F_A0EB_6F79C0945A4D" name="registry.parent" value="CAP-2" modelElement="EAID_517FBE38_B004_5782_5149_1CDB3D5BB13B"/>
+          <tag xmi:id="EAID_85CB3C7F_88E1_0655_F677_6EC995216B19" name="registry.coverage" value="verification-table" modelElement="EAID_517FBE38_B004_5782_5149_1CDB3D5BB13B"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -1940,6 +1944,7 @@
           <tag xmi:id="EAID_BD8EF5CF_BA19_09DD_AA67_F06D585DC1A2" name="uafKind" value="Capability" modelElement="EAID_285918C6_CE31_F94B_E58B_B2BD2C1A7B8E"/>
           <tag xmi:id="EAID_5D904AEC_A5EA_F770_5EEA_476E3C3CE427" name="uafId" value="CAP-2.9" modelElement="EAID_285918C6_CE31_F94B_E58B_B2BD2C1A7B8E"/>
           <tag xmi:id="EAID_1D5A1C1D_3611_F05A_8E57_244088EC50A4" name="registry.parent" value="CAP-2" modelElement="EAID_285918C6_CE31_F94B_E58B_B2BD2C1A7B8E"/>
+          <tag xmi:id="EAID_5D8E4487_ADE9_337B_4622_91E40453A8C9" name="registry.coverage" value="verification-table" modelElement="EAID_285918C6_CE31_F94B_E58B_B2BD2C1A7B8E"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -1959,6 +1964,7 @@
           <tag xmi:id="EAID_386D3F2E_F2B7_2AE1_A230_E4C7CBA3E162" name="uafKind" value="Capability" modelElement="EAID_4B7D0287_D4A7_2D5D_5DA0_67F99D426660"/>
           <tag xmi:id="EAID_E51A02FE_198F_B67F_DBC5_8E5D1B307863" name="uafId" value="CAP-2.10" modelElement="EAID_4B7D0287_D4A7_2D5D_5DA0_67F99D426660"/>
           <tag xmi:id="EAID_E2682C97_9C07_8BC6_124E_31BC1BDECEBF" name="registry.parent" value="CAP-2" modelElement="EAID_4B7D0287_D4A7_2D5D_5DA0_67F99D426660"/>
+          <tag xmi:id="EAID_B862C60E_FE6C_6252_3010_9BBD11E60066" name="registry.coverage" value="GAP-023 GAP-024" modelElement="EAID_4B7D0287_D4A7_2D5D_5DA0_67F99D426660"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -1980,6 +1986,7 @@
           <tag xmi:id="EAID_CE22832F_00E6_5031_D9FC_2B4DB44B8987" name="uafKind" value="Capability" modelElement="EAID_CAC0EFC8_4724_3BE4_1923_2A4A3A6FFB94"/>
           <tag xmi:id="EAID_F48E4E69_713A_DAB8_3A0D_76093E3E69B0" name="uafId" value="CAP-2.11" modelElement="EAID_CAC0EFC8_4724_3BE4_1923_2A4A3A6FFB94"/>
           <tag xmi:id="EAID_A370B587_EBBA_2406_0919_76F2D2A9AC3D" name="registry.parent" value="CAP-2" modelElement="EAID_CAC0EFC8_4724_3BE4_1923_2A4A3A6FFB94"/>
+          <tag xmi:id="EAID_FA87D042_9C1A_ED41_5FA9_8BEACC78810E" name="registry.coverage" value="none -- built and ungated; no requirement was derived from it and none bears on it" modelElement="EAID_CAC0EFC8_4724_3BE4_1923_2A4A3A6FFB94"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2001,6 +2008,7 @@
           <tag xmi:id="EAID_9F4B8C98_867E_98E7_83A6_A83CE40DC7BB" name="uafKind" value="Capability" modelElement="EAID_CEC036F8_F9EF_8B0D_6561_6067EF5E1D67"/>
           <tag xmi:id="EAID_A99E2D5E_6FFA_D337_7C4F_70375B3E3AA1" name="uafId" value="CAP-2.12" modelElement="EAID_CEC036F8_F9EF_8B0D_6561_6067EF5E1D67"/>
           <tag xmi:id="EAID_F428B675_358A_BB66_0069_B1F78C910B26" name="registry.parent" value="CAP-2" modelElement="EAID_CEC036F8_F9EF_8B0D_6561_6067EF5E1D67"/>
+          <tag xmi:id="EAID_C2FFD220_15F2_5865_0EF2_9B4F6C99B626" name="registry.coverage" value="verification-table" modelElement="EAID_CEC036F8_F9EF_8B0D_6561_6067EF5E1D67"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2221,6 +2229,7 @@
           <tag xmi:id="EAID_FA8B6C2A_D2AC_C04D_1A93_098ABC831154" name="uafKind" value="Capability" modelElement="EAID_6BA475D7_793F_FD62_0DE2_7D1B4A2E43B3"/>
           <tag xmi:id="EAID_7E46572B_8813_8BBB_367B_B4B23A1D56C2" name="uafId" value="CAP-3.8" modelElement="EAID_6BA475D7_793F_FD62_0DE2_7D1B4A2E43B3"/>
           <tag xmi:id="EAID_8B466ACE_310C_59F6_D2B6_BA90E48E92E7" name="registry.parent" value="CAP-3" modelElement="EAID_6BA475D7_793F_FD62_0DE2_7D1B4A2E43B3"/>
+          <tag xmi:id="EAID_F2FD57FD_5E5C_B147_0480_9FCF1416B437" name="registry.coverage" value="verification-table" modelElement="EAID_6BA475D7_793F_FD62_0DE2_7D1B4A2E43B3"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2242,6 +2251,7 @@
           <tag xmi:id="EAID_2DD9ACEE_1A18_8F0B_8EB3_874C787EE580" name="uafKind" value="Capability" modelElement="EAID_4D8A2943_0B00_5C64_2BEF_B8BD534AC2E2"/>
           <tag xmi:id="EAID_99CF97B1_C6CE_7D76_0712_138C761CE444" name="uafId" value="CAP-3.9" modelElement="EAID_4D8A2943_0B00_5C64_2BEF_B8BD534AC2E2"/>
           <tag xmi:id="EAID_6E1FAFEB_4B89_767C_8D6B_CFA8A5FFBAC0" name="registry.parent" value="CAP-3" modelElement="EAID_4D8A2943_0B00_5C64_2BEF_B8BD534AC2E2"/>
+          <tag xmi:id="EAID_F3BBEFAD_1A42_A27A_97BA_3022F6E0719B" name="registry.coverage" value="verification-table" modelElement="EAID_4D8A2943_0B00_5C64_2BEF_B8BD534AC2E2"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2288,6 +2298,7 @@
           <tag xmi:id="EAID_0F0CF035_9BA7_1CE1_4A53_3123F362A4B3" name="uafKind" value="Capability" modelElement="EAID_3FDFEB7F_6B4E_FCAC_6438_BBDC4AE7BF16"/>
           <tag xmi:id="EAID_17E66B67_0961_466D_BE54_00C041111C89" name="uafId" value="CAP-4.1" modelElement="EAID_3FDFEB7F_6B4E_FCAC_6438_BBDC4AE7BF16"/>
           <tag xmi:id="EAID_D96D9BC3_7DCA_1D79_13CC_3170291DD1E9" name="registry.parent" value="CAP-4" modelElement="EAID_3FDFEB7F_6B4E_FCAC_6438_BBDC4AE7BF16"/>
+          <tag xmi:id="EAID_BBC0E4D0_FBE8_4FAD_04B4_87CD55B40C75" name="registry.coverage" value="I3" modelElement="EAID_3FDFEB7F_6B4E_FCAC_6438_BBDC4AE7BF16"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2310,6 +2321,7 @@
           <tag xmi:id="EAID_C147168B_14B3_51B5_F9D3_83186EF5B94C" name="uafKind" value="Capability" modelElement="EAID_1A1B4DFE_9EF1_9A74_50E1_CD9514926407"/>
           <tag xmi:id="EAID_FD222808_2137_B71C_E960_D31402F88FE6" name="uafId" value="CAP-4.2" modelElement="EAID_1A1B4DFE_9EF1_9A74_50E1_CD9514926407"/>
           <tag xmi:id="EAID_56D836B7_185B_C771_EA91_5C3ED03DE6BC" name="registry.parent" value="CAP-4" modelElement="EAID_1A1B4DFE_9EF1_9A74_50E1_CD9514926407"/>
+          <tag xmi:id="EAID_D45621AE_4BA6_3410_51E1_8650F32E2B50" name="registry.coverage" value="REQ-S-01 REQ-S-05" modelElement="EAID_1A1B4DFE_9EF1_9A74_50E1_CD9514926407"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2357,6 +2369,7 @@
           <tag xmi:id="EAID_DD108C02_20EB_AEEB_621B_97D2E154D316" name="uafKind" value="Capability" modelElement="EAID_DF135D4B_10D8_A1F9_83A1_818BEA1317DA"/>
           <tag xmi:id="EAID_34834208_C414_DFB6_2B4B_F5792E652657" name="uafId" value="CAP-4.4" modelElement="EAID_DF135D4B_10D8_A1F9_83A1_818BEA1317DA"/>
           <tag xmi:id="EAID_C337B238_D997_7052_B767_6751557FCA3E" name="registry.parent" value="CAP-4" modelElement="EAID_DF135D4B_10D8_A1F9_83A1_818BEA1317DA"/>
+          <tag xmi:id="EAID_4A187C04_88E5_4E22_6E73_D62976EB030F" name="registry.coverage" value="verification-table" modelElement="EAID_DF135D4B_10D8_A1F9_83A1_818BEA1317DA"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2379,6 +2392,7 @@
           <tag xmi:id="EAID_A22B45C7_7A5D_E495_508A_A8022002B7D8" name="uafKind" value="Capability" modelElement="EAID_BBEC0DDC_A0DB_7CD7_DEA1_717558AADC43"/>
           <tag xmi:id="EAID_E07CF678_2781_AE01_054E_FEF4FEC8657F" name="uafId" value="CAP-4.5" modelElement="EAID_BBEC0DDC_A0DB_7CD7_DEA1_717558AADC43"/>
           <tag xmi:id="EAID_D4198BCB_ABF8_30D0_EEFF_AE5D496F2FF6" name="registry.parent" value="CAP-4" modelElement="EAID_BBEC0DDC_A0DB_7CD7_DEA1_717558AADC43"/>
+          <tag xmi:id="EAID_BAB3C717_A260_F80D_6695_A19384A78791" name="registry.coverage" value="verification-table" modelElement="EAID_BBEC0DDC_A0DB_7CD7_DEA1_717558AADC43"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2400,6 +2414,7 @@
           <tag xmi:id="EAID_57258326_1C3E_739A_860A_1E9479FBB99C" name="uafKind" value="Capability" modelElement="EAID_A674F2DD_2281_D496_11E4_80E47D26E760"/>
           <tag xmi:id="EAID_21243B6F_D3D6_0F13_3047_D55224F056CC" name="uafId" value="CAP-4.6" modelElement="EAID_A674F2DD_2281_D496_11E4_80E47D26E760"/>
           <tag xmi:id="EAID_7FE06815_B948_D9D5_4F2D_EF410FE10CD4" name="registry.parent" value="CAP-4" modelElement="EAID_A674F2DD_2281_D496_11E4_80E47D26E760"/>
+          <tag xmi:id="EAID_83CDB673_B805_D4E7_DF0A_5C99824CED72" name="registry.coverage" value="verification-table" modelElement="EAID_A674F2DD_2281_D496_11E4_80E47D26E760"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2420,6 +2435,7 @@
           <tag xmi:id="EAID_B40CD982_6617_1620_C9BC_129C893D4CFF" name="uafKind" value="Capability" modelElement="EAID_85BA78E4_00FB_86BE_EE57_9F78D3D12BF5"/>
           <tag xmi:id="EAID_FD76659C_A408_1A09_E8F0_3D7BEC6F5E73" name="uafId" value="CAP-4.7" modelElement="EAID_85BA78E4_00FB_86BE_EE57_9F78D3D12BF5"/>
           <tag xmi:id="EAID_19E00535_C12C_8AB6_B76C_D5AFCCA77BB0" name="registry.parent" value="CAP-4" modelElement="EAID_85BA78E4_00FB_86BE_EE57_9F78D3D12BF5"/>
+          <tag xmi:id="EAID_F2D95617_54E3_67F2_13FB_B54424C77028" name="registry.coverage" value="GAP-044" modelElement="EAID_85BA78E4_00FB_86BE_EE57_9F78D3D12BF5"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2468,6 +2484,7 @@
           <tag xmi:id="EAID_B66E9E16_1DF7_EDC4_72CD_7C5FC88E6FC2" name="uafKind" value="Capability" modelElement="EAID_38CB1DE7_7F31_16EB_7517_268CDDF4167F"/>
           <tag xmi:id="EAID_69385541_8DD9_979A_82F1_8826230C2760" name="uafId" value="CAP-5.1" modelElement="EAID_38CB1DE7_7F31_16EB_7517_268CDDF4167F"/>
           <tag xmi:id="EAID_D2171885_7E9B_B7BA_984C_501F5EB0A9F1" name="registry.parent" value="CAP-5" modelElement="EAID_38CB1DE7_7F31_16EB_7517_268CDDF4167F"/>
+          <tag xmi:id="EAID_1E7ACEEE_B814_283F_2010_10363E87DE6D" name="registry.coverage" value="REQ-D-05 REQ-D-06 REQ-P-07" modelElement="EAID_38CB1DE7_7F31_16EB_7517_268CDDF4167F"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2539,6 +2556,7 @@
           <tag xmi:id="EAID_6B64945C_D1F6_1235_4531_3D429521BEAC" name="uafKind" value="Capability" modelElement="EAID_BF0B7739_1230_6722_AA7A_71426E71F9F0"/>
           <tag xmi:id="EAID_68C9608D_2FD9_3708_3592_CDEAFA442B6A" name="uafId" value="CAP-5.4" modelElement="EAID_BF0B7739_1230_6722_AA7A_71426E71F9F0"/>
           <tag xmi:id="EAID_9BB3C1DE_A318_DDD3_7A12_460EBC7C5CD5" name="registry.parent" value="CAP-5" modelElement="EAID_BF0B7739_1230_6722_AA7A_71426E71F9F0"/>
+          <tag xmi:id="EAID_3F786BB5_1B17_28E6_196A_64C3F1189A35" name="registry.coverage" value="I4" modelElement="EAID_BF0B7739_1230_6722_AA7A_71426E71F9F0"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2566,6 +2584,7 @@
           <tag xmi:id="EAID_550B475A_7727_2E17_1447_3B53174C803D" name="uafKind" value="Capability" modelElement="EAID_E5AB8479_9B30_8547_C6B2_1F0D0439C9C0"/>
           <tag xmi:id="EAID_3AC228AD_46FD_D051_5760_290C269E2B2C" name="uafId" value="CAP-5.5" modelElement="EAID_E5AB8479_9B30_8547_C6B2_1F0D0439C9C0"/>
           <tag xmi:id="EAID_FC617904_C50F_F791_5FC5_B9EDE8C13D75" name="registry.parent" value="CAP-5" modelElement="EAID_E5AB8479_9B30_8547_C6B2_1F0D0439C9C0"/>
+          <tag xmi:id="EAID_03743FF2_05C6_DDB8_E1E0_0F4AAD024B5A" name="registry.coverage" value="REQ-U-03 REQ-C-04 -- the alert lifecycle half has no requirement" modelElement="EAID_E5AB8479_9B30_8547_C6B2_1F0D0439C9C0"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2586,6 +2605,7 @@
           <tag xmi:id="EAID_B7A5456B_411F_8461_20C8_B7987610ABAF" name="uafKind" value="Capability" modelElement="EAID_F2264A1D_BFD6_99B2_65FF_DE92DBAEB782"/>
           <tag xmi:id="EAID_5F28BA45_E9CB_7569_CD61_580D1AB69FCD" name="uafId" value="CAP-5.6" modelElement="EAID_F2264A1D_BFD6_99B2_65FF_DE92DBAEB782"/>
           <tag xmi:id="EAID_37FCEC18_9FBD_CF50_3BE8_28AAE5865CBB" name="registry.parent" value="CAP-5" modelElement="EAID_F2264A1D_BFD6_99B2_65FF_DE92DBAEB782"/>
+          <tag xmi:id="EAID_A6FAE58A_E59D_ECE6_8BB2_50D4F012C262" name="registry.coverage" value="verification-table" modelElement="EAID_F2264A1D_BFD6_99B2_65FF_DE92DBAEB782"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2611,6 +2631,7 @@
           <tag xmi:id="EAID_EB95FD6B_2A83_66F1_B155_72D168F89903" name="uafKind" value="Capability" modelElement="EAID_E1B8B8DA_D67B_4366_25EA_D49658BE36B3"/>
           <tag xmi:id="EAID_217A882B_E606_6855_D295_C68B36655DAB" name="uafId" value="CAP-5.7" modelElement="EAID_E1B8B8DA_D67B_4366_25EA_D49658BE36B3"/>
           <tag xmi:id="EAID_CD70F680_CFFC_8C87_55B5_2825F0B4ED02" name="registry.parent" value="CAP-5" modelElement="EAID_E1B8B8DA_D67B_4366_25EA_D49658BE36B3"/>
+          <tag xmi:id="EAID_41AB376E_39D5_67B9_D5D8_BF7BABB98EFE" name="registry.coverage" value="verification-table" modelElement="EAID_E1B8B8DA_D67B_4366_25EA_D49658BE36B3"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2632,6 +2653,7 @@
           <tag xmi:id="EAID_F2B5CA94_B4B6_60E9_000C_4D45506C0574" name="uafKind" value="Capability" modelElement="EAID_37CD90E7_82CA_B98F_07DC_400FC5A79B34"/>
           <tag xmi:id="EAID_CE1AA496_A2B8_1036_FD7A_FF27D157BC88" name="uafId" value="CAP-5.8" modelElement="EAID_37CD90E7_82CA_B98F_07DC_400FC5A79B34"/>
           <tag xmi:id="EAID_A52AB7EB_5E9F_161E_BC44_4A263D0A1A50" name="registry.parent" value="CAP-5" modelElement="EAID_37CD90E7_82CA_B98F_07DC_400FC5A79B34"/>
+          <tag xmi:id="EAID_07E9AFCE_4EA9_56E3_F859_2F06C0AD604C" name="registry.coverage" value="verification-table" modelElement="EAID_37CD90E7_82CA_B98F_07DC_400FC5A79B34"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2681,6 +2703,7 @@
           <tag xmi:id="EAID_A9F9DF2D_CA49_A9FB_DF84_28C6D42541DC" name="uafKind" value="Capability" modelElement="EAID_527538AC_9BA3_DD8B_A705_E9029C00E4EF"/>
           <tag xmi:id="EAID_371742E8_02EE_0EDE_3F3B_FF90FD0DD976" name="uafId" value="CAP-5.10" modelElement="EAID_527538AC_9BA3_DD8B_A705_E9029C00E4EF"/>
           <tag xmi:id="EAID_6E5C378A_BC86_40D5_6C3F_1A27CA2DB6FF" name="registry.parent" value="CAP-5" modelElement="EAID_527538AC_9BA3_DD8B_A705_E9029C00E4EF"/>
+          <tag xmi:id="EAID_CB11198F_1D99_E221_A521_CCC68586DDE0" name="registry.coverage" value="GAP-093" modelElement="EAID_527538AC_9BA3_DD8B_A705_E9029C00E4EF"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2724,6 +2747,7 @@
           <tag xmi:id="EAID_6E545434_7BD8_A194_1EC4_4C552E0D04AC" name="uafKind" value="Capability" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
           <tag xmi:id="EAID_F8E6F5DB_613C_6683_D8CB_FEED3F125FB4" name="uafId" value="CAP-6.1" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
           <tag xmi:id="EAID_530E3054_C0EE_D154_8965_D41F42ED537A" name="registry.parent" value="CAP-6" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
+          <tag xmi:id="EAID_8CB3F09F_A4F4_FDBD_A0F7_F8B49E48C6AE" name="registry.coverage" value="GAP-057" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2858,6 +2882,7 @@
           <tag xmi:id="EAID_1DD03F0F_F583_0749_6F77_02B401F31527" name="uafKind" value="Capability" modelElement="EAID_07E97FF1_3CFC_28FB_88E4_12257132D5E0"/>
           <tag xmi:id="EAID_B4236088_F38C_6E2D_02F7_4644740C9F36" name="uafId" value="CAP-6.7" modelElement="EAID_07E97FF1_3CFC_28FB_88E4_12257132D5E0"/>
           <tag xmi:id="EAID_6EE4F912_E4D9_D60A_F9A5_4EFCDACDD8D6" name="registry.parent" value="CAP-6" modelElement="EAID_07E97FF1_3CFC_28FB_88E4_12257132D5E0"/>
+          <tag xmi:id="EAID_57EBB9E0_3C74_C47F_8F69_175AAD2713F8" name="registry.coverage" value="GAP-044" modelElement="EAID_07E97FF1_3CFC_28FB_88E4_12257132D5E0"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2948,6 +2973,7 @@
           <tag xmi:id="EAID_0C785823_699A_1F4B_E737_A7EED41CB29F" name="uafKind" value="Capability" modelElement="EAID_6E7E1481_32A4_263D_3D1C_DBF7A4B259E5"/>
           <tag xmi:id="EAID_DF6C0F29_DC40_6236_B3A2_676DE9476C4A" name="uafId" value="CAP-7.3" modelElement="EAID_6E7E1481_32A4_263D_3D1C_DBF7A4B259E5"/>
           <tag xmi:id="EAID_6DE0EE7B_F1E8_64C9_301B_73974FAC9285" name="registry.parent" value="CAP-7" modelElement="EAID_6E7E1481_32A4_263D_3D1C_DBF7A4B259E5"/>
+          <tag xmi:id="EAID_8C58D382_ED98_D238_DF80_B6CBC04571F0" name="registry.coverage" value="REQ-C-06 REQ-C-07" modelElement="EAID_6E7E1481_32A4_263D_3D1C_DBF7A4B259E5"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2971,6 +2997,7 @@
           <tag xmi:id="EAID_FEC60423_E60E_ACC8_05B0_A1881801712C" name="uafKind" value="Capability" modelElement="EAID_72EB1AA9_C419_4656_C148_2D4F82956617"/>
           <tag xmi:id="EAID_F76C0A75_148B_0C7D_9BA2_CC88F3DCFE26" name="uafId" value="CAP-7.4" modelElement="EAID_72EB1AA9_C419_4656_C148_2D4F82956617"/>
           <tag xmi:id="EAID_1ECD420C_8AD8_2296_C6B1_472EDEDEED77" name="registry.parent" value="CAP-7" modelElement="EAID_72EB1AA9_C419_4656_C148_2D4F82956617"/>
+          <tag xmi:id="EAID_5DA43DAD_D4CE_4E60_AC4A_6DAD3C1F6B7C" name="registry.coverage" value="verification-table" modelElement="EAID_72EB1AA9_C419_4656_C148_2D4F82956617"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
