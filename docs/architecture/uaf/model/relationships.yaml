@@ -11,6 +11,16 @@
 #   exchanges    operational performer -> performer       needline (Op-Cn)
 # `status: planned` marks a relationship the design intends but the code does not
 # yet carry; the consistency check treats planned as satisfied but reports it.
+#
+# Because it is treated as satisfied, the marker suppresses a real gate -- a planned
+# `realizes` is the only reason OA-08 and OA-32 pass "realized by no service" -- so it
+# must carry `plan`, saying what will clear it: one or more open `GAP-nnn`, or
+# `blocked -- reason` where the obstacle is not engineering. build_uaf.py refuses a
+# planned relationship with no plan, and refuses a plan naming a gap that has closed,
+# because a marker pointing at a closed gap is how a shipped capability keeps being
+# described as unbuilt. It also checks each `conforms_to` against its standard's own
+# `status`, since the two drifted apart in both directions before anyone noticed.
+# The count is a ratchet in build_uaf.py; it only goes down.
 
 exhibits:
   # The C2 system exhibits every system capability; roles exhibit those they act in.
@@ -102,7 +112,7 @@ realizes:
   - {from: SV-18, to: [OA-05, OA-14, OA-25]}
   - {from: SV-15, to: [OA-06, OA-23]}
   - {from: SV-16, to: [OA-07, OA-31]}
-  - {from: SV-23, to: [OA-08, OA-09, OA-15, OA-20], status: planned}
+  - {from: SV-23, to: [OA-08, OA-09, OA-15, OA-20]}
   - {from: SV-27, to: [OA-09, OA-13, OA-16, OA-17]}
   - {from: SV-24, to: [OA-13]}
   - {from: SV-03, to: [OA-10, OA-11]}
@@ -124,9 +134,9 @@ realizes:
   - {from: SV-21, to: [OA-34]}
   - {from: SV-22, to: [OA-35]}
   - {from: SV-31, to: [OA-12, OA-22]}
-  - {from: SV-32, to: [OA-02], status: planned}
+  - {from: SV-32, to: [OA-02], status: planned, plan: GAP-024}
   # OA-32 (assist) is realized by plan 08's agent crate, not yet in the workspace.
-  - {from: SV-18, to: [OA-32], status: planned}
+  - {from: SV-18, to: [OA-32], status: planned, plan: GAP-044}
 
 implements:
   - {from: RS-tracking-service, to: [SV-01]}
@@ -180,19 +190,23 @@ conforms_to:
   - {from: RS-store, to: [SD-01, SD-05]}
   - {from: RS-config, to: [SD-01, SD-05]}
   - {from: RS-api, to: [SD-01, SD-05]}
-  - {from: RS-api, to: [SD-06, SD-07, SD-08], status: planned}
-  - {from: RS-remote, to: [SD-06, SD-07, SD-08], status: planned}
+  - {from: RS-api, to: [SD-06, SD-07, SD-08]}
+  - {from: RS-remote, to: [SD-06, SD-07, SD-08]}
   - {from: RS-node, to: [SD-12]}
-  - {from: RS-node, to: [SD-08], status: planned}
+  - {from: RS-node, to: [SD-08]}
   - {from: RS-interop, to: [SD-02]}
-  - {from: RS-interop, to: [SD-03, SD-04], status: planned}
-  - {from: RS-interop, to: [SD-16], status: planned}
-  - {from: RS-ingest, to: [SD-16], status: planned}
-  - {from: RS-remote, to: [SD-16], status: planned}
-  - {from: RS-ingest, to: [SD-09, SD-10], status: planned}
-  - {from: RS-identity, to: [SD-11], status: planned}
-  - {from: RS-app, to: [SD-13], status: planned}
-  - {from: RS-node, to: [SD-13], status: planned}
+  - {from: RS-interop, to: [SD-03]}
+  # AEDP-12 carries STANAG 4676's technical content and is not public in any form
+  # that could be verified (external-standards.md §2), so this is blocked on
+  # obtaining a document rather than on engineering. GAP-064 closed on that finding.
+  - {from: RS-interop, to: [SD-04], status: planned, plan: "blocked -- AEDP-12 is not public; external-standards.md §2"}
+  - {from: RS-interop, to: [SD-16], status: planned, plan: GAP-090 GAP-091}
+  - {from: RS-ingest, to: [SD-16], status: planned, plan: GAP-090 GAP-091}
+  - {from: RS-remote, to: [SD-16], status: planned, plan: GAP-090 GAP-091}
+  - {from: RS-ingest, to: [SD-09, SD-10]}
+  - {from: RS-identity, to: [SD-11]}
+  - {from: RS-app, to: [SD-13], status: planned, plan: GAP-061}
+  - {from: RS-node, to: [SD-13], status: planned, plan: GAP-061}
 
 exchanges:
   # Needlines between operational performers, as the Op-Cn view draws them
