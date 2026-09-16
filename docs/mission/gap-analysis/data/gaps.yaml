@@ -8540,3 +8540,71 @@
   - date: 2026-09-16
     status: Open
     note: "Filed by the GAP-067 walk, which held the `gungnir-observability` row."
+
+- id: GAP-126
+  name: A non-finite float in an envelope cannot be journaled faithfully
+  type: Technical
+  caps: [CAP-5.1]
+  layer: "Productization: sustainment"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    serde_json writes NaN and infinity as `null`, which reads back as an error for an
+    `f64` and as `None` for an `Option<f64>`. `read_session` then fails the whole
+    session when that line is mid-file and drops it as a torn final line when it is
+    last, so one non-finite value in an envelope either makes a session unreadable or
+    loses the envelope with only a log line to say so.
+  evidence: >-
+    `gungnir-store/src/lib.rs` (`read_session`: an undecodable final line is dropped as
+    torn, any other fails the read); found writing the round-trip test of the
+    `gungnir-store` Journal round-trip row, which is gated for finite values
+  action: >-
+    Establish whether any journaled type can carry a non-finite value. Refuse such an
+    envelope at `append` with a named error rather than write a line that cannot be read
+    back, or give the journal a lossless encoding for non-finite values. Test a NaN and
+    an infinity through `append` and `read_session`, both mid-session and as the last
+    line.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, whose `gungnir-store` round-trip test found that a
+      non-finite float does not survive the journal.
+
+- id: GAP-127
+  name: The desktop's decide and task functions check no permission
+  type: Technical
+  caps: [CAP-6.2]
+  layer: "Productization: security"
+  sev: 3
+  effort: S
+  target: I3
+  owner: Security engineer (human-owned crate)
+  deps: []
+  impact: >-
+    `decisions::decide` and `requirements::task` in `gungnir-app` name `plan.decide` and
+    `sensor.task` only on the audit record; neither checks `role_permits` before acting.
+    The panels hide the controls a role may not use, so the rule holds for a person at
+    the screen and for nothing else that calls the functions, where the node authorizes
+    every call on the caller's role.
+  evidence: >-
+    `gungnir-app/src/decisions.rs` (`decide`) and `gungnir-app/src/requirements.rs`
+    (`task`); found by the GAP-067 walk while enforcing D-54
+  action: >-
+    Check `role_permits(state.role(), ..)` inside both functions before they act,
+    refusing by name, now that the desktop's role follows the signed-in account (D-53);
+    and test that a role without `plan.decide` or `sensor.task` is refused with nothing
+    recorded.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk: enforcing the operator on a tasking concurrence found
+      that neither desktop function checks the permission its audit entry names.

@@ -388,7 +388,11 @@ impl EventJournal for FileEventJournal {
 mod tests {
     use super::*;
     use gungnir_eventing::{Event, TrackingEvent};
-    use gungnir_model::{MissionTime, TrackId};
+    use gungnir_model::{
+        Classification, MissionTime, Provenance, Quality, Releasability, TrackId, TrackStatus,
+        TrackView,
+    };
+    use std::ops::RangeInclusive;
 
     fn temp_root(tag: &str) -> PathBuf {
         let dir =
@@ -417,6 +421,271 @@ mod tests {
         assert_eq!(journal.read_session(session).expect("read"), written);
         assert_eq!(journal.sessions().expect("sessions"), vec![session]);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Familiar non-dyadic doubles, the one the defect below was found with, and the edges
+    /// of the finite range: a signed zero, the smallest subnormal, the smallest normal and
+    /// the largest finite value.
+    const NAMED: [f64; 7] = [
+        0.1 + 0.2,
+        1.0 / 3.0,
+        57_744.670_227_102_644,
+        -0.0,
+        f64::from_bits(1),
+        f64::MIN_POSITIVE,
+        f64::MAX,
+    ];
+
+    /// Carrier tracks of random floats: 44 doubles and 2 singles each, 4,224 and 192 in all.
+    const CARRIERS: usize = 96;
+
+    /// Every biased exponent of a finite double, subnormals included.
+    const WHOLE_RANGE: RangeInclusive<u64> = 0..=2046;
+
+    /// 2^-64 up to 2^65, which holds every unit the journal carries -- metres, metres per
+    /// second, their variances, seconds -- with room either side.
+    const JOURNAL_RANGE: RangeInclusive<u64> = 959..=1087;
+
+    /// Marsaglia's xorshift64 (J. Stat. Softw. 8(14), 2003; shifts 13, 7, 17), seeded fixed
+    /// so a failure names the same floats on every run. Hand-rolled because this crate has
+    /// no `rand` dependency.
+    struct XorShift64(u64);
+
+    impl XorShift64 {
+        fn next_u64(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            self.0 = x;
+            x
+        }
+
+        /// A double of random sign and random 52-bit fraction, its biased exponent drawn
+        /// from `exponents`.
+        fn next_f64(&mut self, exponents: RangeInclusive<u64>) -> f64 {
+            let draw = self.next_u64();
+            let span = exponents.end() - exponents.start() + 1;
+            let exponent = exponents.start() + self.next_u64() % span;
+            f64::from_bits((draw & (1 << 63)) | (exponent << 52) | (draw & ((1 << 52) - 1)))
+        }
+
+        /// A finite single of random sign, fraction and exponent.
+        fn next_f32(&mut self) -> f32 {
+            let draw = self.next_u64();
+            let exponent = (draw >> 32) % 255;
+            let bits = (draw & (1 << 31)) | (exponent << 23) | (draw & ((1 << 23) - 1));
+            f32::from_bits(u32::try_from(bits).expect("sign, exponent and fraction fit 32 bits"))
+        }
+    }
+
+    /// A track of the shape and scale the tracking pipeline publishes: 21 km out, moving at
+    /// about 43 m/s, with the covariance a constant-velocity filter carries 0.1 s after an
+    /// update left 5 m and 2 m/s one-sigma on each horizontal axis and 8 m and 1 m/s
+    /// vertically. Every state entry and every nonzero covariance entry is non-dyadic.
+    fn pipeline_track(mission_time: f64) -> TrackView {
+        // Step, s; white-acceleration spectral density, m^2/s^3.
+        let (dt, q) = (0.1_f64, 0.5_f64);
+        let mut covariance = [[0.0_f64; 6]; 6];
+        // Per axis, P' = F P F^T + Q, with F = [[1, dt], [0, 1]], P = diag(position,
+        // velocity) and Q = q [[dt^3/3, dt^2/2], [dt^2/2, dt]].
+        for (axis, (position, velocity)) in [(25.0, 4.0), (25.0, 4.0), (64.0, 1.0)]
+            .into_iter()
+            .enumerate()
+        {
+            covariance[axis][axis] = position + dt * dt * velocity + q * dt.powi(3) / 3.0;
+            covariance[axis][axis + 3] = dt * velocity + q * dt * dt / 2.0;
+            covariance[axis + 3][axis] = covariance[axis][axis + 3];
+            covariance[axis + 3][axis + 3] = velocity + q * dt;
+        }
+        TrackView {
+            id: TrackId(4127),
+            status: TrackStatus::Confirmed,
+            state: [
+                21_406.337_190_62,
+                -3_120.441_278_9,
+                152.3,
+                -41.17,
+                12.903_4,
+                0.1 + 0.2,
+            ]
+            .into(),
+            covariance: covariance.into(),
+            classification: Classification::Hostile,
+            provenance: Provenance {
+                source_sensor_ids: vec![3, 9],
+                algorithm_version: "cv-ekf 1.4".into(),
+                ..Provenance::default()
+            },
+            quality: Quality {
+                association_confidence: 0.87,
+                latency_s: 0.042,
+                is_stale: false,
+            },
+            mission_time: MissionTime(mission_time),
+            releasability: Releasability::default(),
+        }
+    }
+
+    /// The journal under test: each named double as a deletion's mission time, the pipeline
+    /// track, then the carriers, whose doubles alternate between the whole finite range and
+    /// the journal's own so that neither is thinly sampled.
+    fn float_journal() -> Vec<Envelope> {
+        let mut envelopes: Vec<Envelope> = NAMED
+            .iter()
+            .zip(0_u64..)
+            .map(|(&time, seq)| Envelope {
+                seq,
+                mission_time: MissionTime(time),
+                event: Event::Tracking(TrackingEvent::TrackDeleted(TrackId(seq))),
+            })
+            .collect();
+        let pipeline_time = NAMED[2] + 0.1;
+        envelopes.push(Envelope {
+            seq: envelopes.len() as u64,
+            mission_time: MissionTime(pipeline_time),
+            event: Event::Tracking(TrackingEvent::TrackInitiated(pipeline_track(pipeline_time))),
+        });
+        let mut rng = XorShift64(0x9E37_79B9_7F4A_7C15);
+        for id in (0_u64..).take(CARRIERS) {
+            let mut drawn = [0.0_f64; 44];
+            for (i, slot) in drawn.iter_mut().enumerate() {
+                *slot = rng.next_f64(if i % 2 == 0 {
+                    WHOLE_RANGE
+                } else {
+                    JOURNAL_RANGE
+                });
+            }
+            let mut state = [0.0_f64; 6];
+            state.copy_from_slice(&drawn[1..7]);
+            let mut covariance = [[0.0_f64; 6]; 6];
+            covariance.copy_from_slice(drawn[7..43].as_chunks::<6>().0);
+            let view = TrackView {
+                id: TrackId(id),
+                status: TrackStatus::Tentative,
+                state: state.into(),
+                covariance: covariance.into(),
+                classification: Classification::Unknown,
+                provenance: Provenance::default(),
+                quality: Quality {
+                    association_confidence: rng.next_f32(),
+                    latency_s: rng.next_f32(),
+                    is_stale: false,
+                },
+                mission_time: MissionTime(drawn[43]),
+                releasability: Releasability::default(),
+            };
+            envelopes.push(Envelope {
+                seq: envelopes.len() as u64,
+                mission_time: MissionTime(drawn[0]),
+                event: Event::Tracking(TrackingEvent::TrackUpdated(view)),
+            });
+        }
+        envelopes
+    }
+
+    /// Every double and every single an envelope carries, in a fixed order.
+    fn floats(envelope: &Envelope) -> (Vec<f64>, Vec<f32>) {
+        let mut doubles = vec![envelope.mission_time.0];
+        let mut singles = Vec::new();
+        match &envelope.event {
+            Event::Tracking(
+                TrackingEvent::TrackInitiated(view) | TrackingEvent::TrackUpdated(view),
+            ) => {
+                doubles.extend(view.state.iter());
+                doubles.extend(view.covariance.iter());
+                doubles.push(view.mission_time.0);
+                singles.extend([view.quality.association_confidence, view.quality.latency_s]);
+            }
+            Event::Tracking(TrackingEvent::TrackDeleted(_) | TrackingEvent::TrackCoasting(_)) => {}
+            other => panic!("the journal under test carries tracking events only, not {other:?}"),
+        }
+        (doubles, singles)
+    }
+
+    /// Every float `read` does not hold bit for bit where `written` put it, described.
+    fn changed_floats(written: &[Envelope], read: &[Envelope]) -> Vec<String> {
+        let mut changed = Vec::new();
+        for (wrote, got) in written.iter().zip(read) {
+            let ((wrote_f64, wrote_f32), (got_f64, got_f32)) = (floats(wrote), floats(got));
+            if (wrote_f64.len(), wrote_f32.len()) != (got_f64.len(), got_f32.len()) {
+                changed.push(format!("seq {}: a different payload came back", wrote.seq));
+                continue;
+            }
+            for (a, b) in wrote_f64.iter().zip(&got_f64) {
+                if a.to_bits() != b.to_bits() {
+                    changed.push(format!("seq {}: {a:?} came back as {b:?}", wrote.seq));
+                }
+            }
+            for (a, b) in wrote_f32.iter().zip(&got_f32) {
+                if a.to_bits() != b.to_bits() {
+                    changed.push(format!("seq {}: {a:?}f32 came back as {b:?}f32", wrote.seq));
+                }
+            }
+        }
+        changed
+    }
+
+    /// The `gungnir-store` Journal round-trip; retention row of
+    /// `docs/verification-capability-table.md` §2, its round-trip clause ("Exact
+    /// round-trip"): every float an envelope carries comes back from the journal **bit for
+    /// bit**, and every envelope comes back equal, under both D-04 profiles.
+    ///
+    /// **Why non-dyadic values.** `append_then_read_round_trips_exactly` journals
+    /// half-integer times, short decimals any parser reads exactly, so it cannot fail on the
+    /// float path. `serde_json` without its `float_roundtrip` feature is not correctly
+    /// rounded: it converts a number's digits to a double and then multiplies or divides by
+    /// a power of ten, two rounding steps where a correct parse takes one, and
+    /// 57744.670227102644 came back as 57744.67022710264. Every journaled track state was
+    /// exposed to that until the workspace manifest turned the feature on (2026-09-16, the
+    /// GAP-067 walk); this test is what fails if it goes off again. Measured with this
+    /// generator against `serde_json` 1.0.151 without the feature: 1,050 of the 4,224 random
+    /// doubles came back changed, and 57744.670227102644 with them. `0.1 + 0.2` and `1/3`
+    /// came back exact, so they are here as the familiar cases, not as the ones that catch it.
+    ///
+    /// **Why bits.** `==` calls `0.0` and `-0.0` equal and would pass a journal that lost a
+    /// sign. Envelope equality is asserted as well, for everything that is not a float.
+    #[test]
+    fn non_dyadic_floats_round_trip_bit_for_bit_in_both_profiles() {
+        let written = float_journal();
+        let (doubles, singles) = written
+            .iter()
+            .map(floats)
+            .fold((0, 0), |(d, s), (f64s, f32s)| {
+                (d + f64s.len(), s + f32s.len())
+            });
+        // The journal carries what it says: one double for each named envelope, and 44
+        // doubles and 2 singles for the pipeline track and for each carrier.
+        let tracks = 1 + CARRIERS;
+        assert_eq!((doubles, singles), (NAMED.len() + 44 * tracks, 2 * tracks));
+
+        for (profile, policy) in [
+            ("node", DurabilityPolicy::node()),
+            ("desktop", DurabilityPolicy::desktop()),
+        ] {
+            let root = temp_root(&format!("floats-{profile}"));
+            let mut journal = FileEventJournal::open_with_policy(&root, policy).expect("open");
+            let session = SessionId(57);
+            for env in &written {
+                journal.append(session, env).expect("append");
+            }
+            let read = journal.read_session(session).expect("read");
+            assert_eq!(
+                read.len(),
+                written.len(),
+                "{profile}: envelopes lost or gained"
+            );
+            let changed = changed_floats(&written, &read);
+            assert!(
+                changed.is_empty(),
+                "{profile}: {} of {} floats changed, the first: {:?}",
+                changed.len(),
+                doubles + singles,
+                &changed[..changed.len().min(8)]
+            );
+            assert_eq!(read, written, "{profile}");
+            let _ = fs::remove_dir_all(&root);
+        }
     }
 
     #[test]

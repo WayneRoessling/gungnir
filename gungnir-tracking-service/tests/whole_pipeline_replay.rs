@@ -5,35 +5,41 @@
 //! The `gungnir-tracking-service` row of `docs/verification-capability-table.md` §2:
 //! "Whole-pipeline scenario replay".
 //!
-//! Method, verbatim: *replay each of the five scenarios through `TrackingService` and
-//! compare the emitted track stream against the offline per-crate oracle results*.
-//! Criterion: **track states within the tolerance of the tightest §1 row exercised; no
-//! detection dropped**.
+//! Method: *replay each of the five scenarios through `TrackingService` in receipt order
+//! and compare its final track picture with `gungnir_fusion_async::run_batch` over the
+//! same detections in source order*. Criterion: **track states within the tolerance of
+//! the tightest §1 row exercised; no detection dropped**.
 //!
-//! # What the offline result is, and why it is the right comparison
+//! # What the offline result is, and why the comparison is exact
 //!
 //! The pipeline exercises four §1 rows: the linear Kalman filter (state < 1e-6), the
 //! Jonker-Volgenant assignment (exact), chi-square gating (exact membership), and the
-//! track lifecycle (exact on step index). The tightest of those is **1e-6**, and that
-//! is the tolerance asserted here rather than the looser 1e-4 the `fusion-async` row
-//! carries; each of those four is separately gated against its own external oracle, so
-//! the offline batch is a composition of already-verified parts rather than a second
-//! opinion about the mathematics.
+//! track lifecycle (exact on step index). Each of those four is separately gated against
+//! its own external oracle, so the offline batch is a composition of already-verified
+//! parts rather than a second opinion about the mathematics.
 //!
-//! What this row adds on top of them is the whole: that the service, its channels, its
-//! task and its reorder buffer deliver the same picture as the same pipeline run
+//! **Every state component of every final track is asserted equal bit for bit**, not
+//! within a tolerance. The service and the offline batch run the same pipeline under the
+//! same settings over the same detections, and once the reorder buffer has done its work
+//! the pipeline sees those detections in the same order in both, so the same arithmetic
+//! runs in the same sequence and produces the same bits. Exact equality meets any reading
+//! of "the tightest §1 row exercised": the Kalman row's 1e-6 and the exact rows alike. A
+//! non-finite component fails on its own, whatever its bits: two NaNs with the same
+//! payload compare equal bitwise and agree about nothing.
+//!
+//! What this row adds on top of the four is the whole: that the service, its channels,
+//! its task and its reorder buffer deliver the same picture as the same pipeline run
 //! offline over the same detections in source order. The generator hands out
 //! observations **in receipt order**, which for scenario 3 is genuinely out of order,
 //! so the comparison is not trivially true.
 //!
 //! # No detection dropped
 //!
-//! Every observation is submitted and every submission is asserted to be accepted. The
-//! pipeline's own refusal counter is not visible through the service, so what stands in
-//! for it is the agreement itself: a refused detection moves the estimate that would
-//! have used it, by hundreds of metres in the first case this test caught, and no
-//! tolerance of 1e-6 survives that. The counter is asserted directly one layer down, in
-//! `gungnir-fusion-async/tests/oos_convergence.rs`.
+//! Every observation is submitted and every submission is asserted to be accepted at the
+//! service's door. Past the door the pipeline's own counters are asserted directly, since
+//! `TrackingService::pipeline_stats` reports them: once the stream has drained, `accepted`
+//! must equal the number of detections submitted and `too_late`, the reorder buffer's
+//! refusal count, must be zero.
 //!
 //! The reorder horizon is set from each scenario's own latency spread rather than left
 //! at the default, because the horizon is a deployment setting and a default too small
@@ -46,9 +52,6 @@ use gungnir_scenario::{Scenario, ScenarioGenerator};
 use gungnir_tracking_service::{LiveTrackingService, TrackingService};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-
-/// The tightest §1 tolerance the pipeline exercises: the linear Kalman row's.
-const TOL: f64 = 1e-6;
 
 /// The five scenarios `docs/test-tracks/` and `gungnir-scenario` define.
 fn scenarios() -> Vec<(&'static str, Scenario)> {
@@ -176,16 +179,45 @@ fn every_scenario_replays_through_the_service_to_the_offline_result() {
                 "{name}: status of {:?}",
                 expected.id
             );
-            let worst = (found.state - expected.state).abs().max();
-            assert!(
-                worst < TOL,
-                "{name}: track {:?} differs by {worst}, over the tightest §1 tolerance \
-                 {TOL}",
-                expected.id
-            );
+            // Bit for bit, component by component; the module documentation says why
+            // nothing looser is asserted.
+            for (axis, (live_value, offline_value)) in
+                found.state.iter().zip(expected.state.iter()).enumerate()
+            {
+                assert!(
+                    offline_value.is_finite(),
+                    "{name}: track {:?} state[{axis}] is {offline_value}, which is not a \
+                     number the two runs can agree about",
+                    expected.id
+                );
+                assert_eq!(
+                    live_value.to_bits(),
+                    offline_value.to_bits(),
+                    "{name}: track {:?} state[{axis}]: the service has {live_value:e}, the \
+                     offline run {offline_value:e}",
+                    expected.id
+                );
+            }
         }
+
+        // No detection dropped, on the pipeline's own counters rather than inferred from
+        // the agreement above.
+        let stats = service.pipeline_stats();
+        assert_eq!(
+            stats.accepted,
+            detections.len() as u64,
+            "{name}: the pipeline accepted {} of {} detections: {stats:?}",
+            stats.accepted,
+            detections.len()
+        );
+        assert_eq!(
+            stats.too_late, 0,
+            "{name}: the reorder buffer refused {} detections as too late: {stats:?}",
+            stats.too_late
+        );
         println!(
-            "{name}: {} detections, {} tracks, latency spread {spread:.2} s",
+            "{name}: {} detections, all accepted, {} tracks equal to the offline run bit for \
+             bit, latency spread {spread:.2} s",
             detections.len(),
             live.len()
         );

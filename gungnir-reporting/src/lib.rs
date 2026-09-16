@@ -431,8 +431,12 @@ impl ReportGenerator for JournalReportGenerator<'_> {
 mod tests {
     use super::*;
     use gungnir_eventing::Envelope;
-    use gungnir_model::{PlanId, PlanView, TrackId};
-    use gungnir_store::FileEventJournal;
+    use gungnir_model::events::{engagement_outcome, EngagementEvent, HealthEvent, VerdictSummary};
+    use gungnir_model::{
+        Classification, DecisionId, DetectionView, Measurement, PlanId, PlanView, ProductKind,
+        Provenance, Quality, Releasability, SensorId, TrackId, TrackStatus, TrackView,
+    };
+    use gungnir_store::{DurabilityPolicy, FileEventJournal};
 
     #[test]
     fn report_counts_are_recomputed_from_the_journal() {
@@ -483,6 +487,293 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("parse");
         assert_eq!(back, report);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A marked track with the pipeline's shape of state and covariance, every nonzero float
+    /// non-dyadic.
+    fn marked_track(
+        id: u64,
+        classification: Classification,
+        releasability: Releasability,
+        at: MissionTime,
+    ) -> TrackView {
+        let mut covariance = [[0.0_f64; 6]; 6];
+        for axis in 0..3 {
+            covariance[axis][axis] = 25.1;
+            covariance[axis][axis + 3] = 0.402_5;
+            covariance[axis + 3][axis] = 0.402_5;
+            covariance[axis + 3][axis + 3] = 4.05;
+        }
+        TrackView {
+            id: TrackId(id),
+            status: TrackStatus::Confirmed,
+            state: [
+                21_406.337_190_62,
+                -3_120.441_278_9,
+                152.3,
+                -41.17,
+                12.903_4,
+                0.1 + 0.2,
+            ]
+            .into(),
+            covariance: covariance.into(),
+            classification,
+            provenance: Provenance {
+                source_sensor_ids: vec![3],
+                algorithm_version: "cv-ekf 1.4".into(),
+                ..Provenance::default()
+            },
+            quality: Quality {
+                association_confidence: 0.87,
+                latency_s: 0.042,
+                is_stale: false,
+            },
+            mission_time: at,
+            releasability,
+        }
+    }
+
+    /// A session that fills every part of a report: a detection accepted and one
+    /// quarantined, marked tracks and a marked plan, a decision with its rationale, an
+    /// engagement of a track later carried as friendly, and scheduled products one of which
+    /// went undelivered. Envelope `k` is at 57744.670227102644 + k/3 s, so the time span is
+    /// non-dyadic and starts on the double `serde_json` without `float_roundtrip` read back one
+    /// ULP off.
+    fn traceability_journal() -> Vec<Envelope> {
+        let at = |k: u32| MissionTime(57_744.670_227_102_644 + f64::from(k) / 3.0);
+        let partners = || Releasability::parties(["partner-a", "partner-b"]);
+        let plan = PlanView {
+            id: PlanId(1),
+            mission_time: at(5),
+            policy_value: 2.0 / 3.0,
+            releasability: Releasability::parties(["partner-a"]),
+            ..PlanView::default()
+        };
+        let due = |k: u32| {
+            Event::Rhythm(RhythmEvent::ProductDue {
+                name: "sitrep".into(),
+                kind: ProductKind::SituationReport,
+                due: at(k),
+            })
+        };
+        let events = vec![
+            Event::Health(HealthEvent::Changed {
+                tracking_healthy: true,
+                intercept_healthy: true,
+                ingest_healthy: true,
+                at: at(0),
+            }),
+            Event::Ingest(IngestEvent::Accepted(DetectionView {
+                sensor: SensorId(3),
+                source_time: MissionTime(at(1).0 - 0.05),
+                receipt_time: at(1),
+                measurement: Measurement::Position {
+                    enu: [21_406.337_190_62, -3_120.441_278_9, 152.3].into(),
+                    variance_m2: [25.1, 25.1, 64.3],
+                },
+                provenance: Provenance::default(),
+            })),
+            Event::Ingest(IngestEvent::Quarantined {
+                sensor: SensorId(9),
+                reason: "position not finite".into(),
+            }),
+            Event::Tracking(TrackingEvent::TrackInitiated(marked_track(
+                7,
+                Classification::Hostile,
+                partners(),
+                at(3),
+            ))),
+            Event::Tracking(TrackingEvent::TrackInitiated(marked_track(
+                8,
+                Classification::Unknown,
+                Releasability::AllPeers,
+                at(4),
+            ))),
+            Event::Intercept(InterceptEvent::PlanProposed(plan.clone())),
+            Event::Command(CommandEvent::Decided {
+                plan: PlanId(1),
+                decision: DecisionId(1),
+                accepted: true,
+                operator: Some("watch officer".into()),
+                verdict: VerdictSummary::RequiresHumanApproval,
+                rationale: Some("inbound on the northern approach".into()),
+            }),
+            Event::Intercept(InterceptEvent::PlanApproved(plan)),
+            Event::Engagement(EngagementEvent::Opened {
+                decision: DecisionId(1),
+                plan: PlanId(1),
+                track: TrackId(7),
+            }),
+            Event::Tracking(TrackingEvent::TrackUpdated(marked_track(
+                7,
+                Classification::Friendly,
+                partners(),
+                at(9),
+            ))),
+            Event::Engagement(EngagementEvent::Closed {
+                decision: DecisionId(1),
+                outcome: engagement_outcome::EFFECTIVE_TRACK_INFERRED.into(),
+                at: at(10),
+            }),
+            Event::Tracking(TrackingEvent::TrackDeleted(TrackId(8))),
+            due(12),
+            due(13),
+            due(14),
+            Event::Rhythm(RhythmEvent::ProductUndelivered {
+                name: "sitrep".into(),
+                endpoint: "higher".into(),
+                reason: "no delivery path".into(),
+                at: at(15),
+            }),
+        ];
+        events
+            .into_iter()
+            .zip(0_u32..)
+            .map(|(event, k)| Envelope {
+                seq: u64::from(k),
+                mission_time: at(k),
+                event,
+            })
+            .collect()
+    }
+
+    /// The `gungnir-reporting` Traceability row of `docs/verification-capability-table.md`
+    /// §2 ("Recompute every figure in a report from the journal"; "Exact"), over a
+    /// synthetic journal.
+    ///
+    /// `report_counts_are_recomputed_from_the_journal` reads its export back against the
+    /// report it wrote, through the store that wrote it, and checks four counts and the last
+    /// event. This exports a report the way the desktop does (a buffered journal, the file
+    /// under the journal's directory), drops that store, opens a **fresh** one over the same
+    /// directory and regenerates: the regenerated `MissionReport` must equal the exported
+    /// file **whole** -- marking, tally, first and last event, summary, and every count and
+    /// measure. The journal leaves none of those empty or at a default, and what can be
+    /// derived by hand from it is pinned in `assert_by_hand`, so two reports that were wrong
+    /// the same way cannot pass by agreeing. `metrics` is `None` on both sides: tracking metrics
+    /// come from a scenario's ground truth, not from the journal, and a live session has none.
+    #[test]
+    fn an_exported_report_is_regenerated_whole_from_the_reopened_journal() {
+        let root = std::env::temp_dir().join(format!(
+            "gungnir-reporting-traceability-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let session = SessionId(5);
+        let journaled = traceability_journal();
+        // Where the desktop writes it: `reports/session-<id>.json` under the data directory,
+        // which is also the journal's.
+        let exported_path = root.join("reports").join("session-5.json");
+
+        let exported = {
+            let mut journal =
+                FileEventJournal::open_with_policy(&root, DurabilityPolicy::desktop())
+                    .expect("open");
+            for env in &journaled {
+                journal.append(session, env).expect("append");
+            }
+            let generator = JournalReportGenerator {
+                journal: &journal,
+                metrics: None,
+            };
+            let report = generator.generate(session).expect("generate");
+            std::fs::create_dir_all(root.join("reports")).expect("report directory");
+            generator.export(&report, &exported_path).expect("export");
+            // The store drops at the end of this block and syncs what it buffered.
+            report
+        };
+
+        let reopened = FileEventJournal::open(&root).expect("a fresh store over the directory");
+        let regenerated = JournalReportGenerator {
+            journal: &reopened,
+            metrics: None,
+        }
+        .generate(session)
+        .expect("regenerate");
+        let from_file: MissionReport = serde_json::from_str(
+            &std::fs::read_to_string(&exported_path).expect("read the export"),
+        )
+        .expect("parse the export");
+
+        assert_eq!(
+            regenerated, from_file,
+            "the regenerated report is not the exported file"
+        );
+        assert_eq!(
+            regenerated, exported,
+            "the regenerated report is not the report that was exported"
+        );
+        assert_by_hand(&regenerated, &journaled);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// What `traceability_journal` gives, derived by hand rather than by the fold. Sixteen
+    /// envelopes. The marked items are track 7 twice for partners a and b, track 8 for all
+    /// peers and the plan for partner a, which DN-17's most-restrictive rule combines to
+    /// partner a alone.
+    fn assert_by_hand(regenerated: &MissionReport, journaled: &[Envelope]) {
+        assert_eq!(
+            regenerated.counts,
+            EventCounts {
+                tracks_initiated: 2,
+                tracks_deleted: 1,
+                plans_proposed: 1,
+                plans_approved: 1,
+                detections_accepted: 1,
+                detections_quarantined: 1,
+                decisions: 1,
+                products_undelivered: 1,
+                engagements_opened: 1,
+                engagements_effective_track_inferred: 1,
+                total: 16,
+                ..EventCounts::default()
+            }
+        );
+        assert_eq!(
+            regenerated.releasability,
+            Releasability::parties(["partner-a"])
+        );
+        assert_eq!(
+            regenerated.marking_inputs,
+            MarkingInputs {
+                internal: 0,
+                parties: 3,
+                all_peers: 1
+            }
+        );
+        // The span is the journaled times to the bit.
+        let bits = |t: Option<MissionTime>| t.map(|t| t.0.to_bits());
+        assert_eq!(
+            bits(regenerated.first_event),
+            bits(journaled.first().map(|e| e.mission_time))
+        );
+        assert_eq!(
+            bits(regenerated.last_event),
+            bits(journaled.last().map(|e| e.mission_time))
+        );
+        // Envelope 15 is 15/3 = 5 s after envelope 0.
+        assert_eq!(
+            regenerated.summary,
+            "Session 5: 16 events over 5.0 s; 2 tracks initiated, 1 deleted; 1 plans \
+             proposed, 1 approved; 1 detections accepted, 1 quarantined; 1 operator decisions."
+        );
+        // MOE-02: track 7 was engaged at envelope 8 and carried as friendly at envelope 9.
+        // MOE-13: three products came due and one went undelivered.
+        let value = |id: &str| {
+            regenerated
+                .measures
+                .iter()
+                .find(|m| m.id == id)
+                .map(|m| m.value.clone())
+        };
+        assert_eq!(value("MOE-02"), Some(MeasureValue::Count(1)));
+        assert_eq!(
+            value("MOE-13"),
+            Some(MeasureValue::Fraction {
+                value: 2.0 / 3.0,
+                numerator: 2,
+                denominator: 3
+            })
+        );
     }
 }
 

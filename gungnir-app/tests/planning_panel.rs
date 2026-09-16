@@ -73,7 +73,15 @@ fn no_laydowns_declared_is_an_honest_empty_state() {
     }
 }
 
+/// The PN-16 laydown options table row of `docs/verification-capability-table.md` §2:
+/// the current laydown carries no difference against itself, and an alternative's
+/// difference is computed against it.
 #[test]
+// The difference is defined as one subtraction of the two uncovered lengths the rows
+// themselves carry (`LaydownCoverage::Computed::delta_uncovered_m`), so the check is
+// equality with that subtraction; a tolerance would admit a difference taken against
+// something other than the current row.
+#[allow(clippy::float_cmp)]
 fn the_current_laydown_has_no_difference_against_itself_and_an_alternative_does() {
     let mut config = base_config();
     config.laydowns = vec![
@@ -97,15 +105,20 @@ fn the_current_laydown_has_no_difference_against_itself_and_an_alternative_does(
         .find(|r| r.id == LaydownId("current".into()))
         .expect("current row");
     assert!(current.current);
-    match &current.coverage {
+    let current_uncovered_m = match &current.coverage {
         LaydownCoverage::Computed {
-            delta_uncovered_m, ..
-        } => assert_eq!(
-            *delta_uncovered_m, None,
-            "the current laydown has no difference against itself"
-        ),
+            uncovered_m,
+            delta_uncovered_m,
+            ..
+        } => {
+            assert_eq!(
+                *delta_uncovered_m, None,
+                "the current laydown has no difference against itself"
+            );
+            *uncovered_m
+        }
         LaydownCoverage::NotComputed { reason } => panic!("expected computed: {reason}"),
-    }
+    };
 
     let moved = rows
         .iter()
@@ -114,9 +127,19 @@ fn the_current_laydown_has_no_difference_against_itself_and_an_alternative_does(
     assert!(!moved.current);
     match &moved.coverage {
         LaydownCoverage::Computed {
-            delta_uncovered_m, ..
+            uncovered_m,
+            delta_uncovered_m,
+            ..
         } => {
             let delta = delta_uncovered_m.expect("an alternative gets a delta against current");
+            // Its value, not only its sign: this row's uncovered length less the current
+            // row's, as the two rows report them.
+            assert_eq!(
+                delta,
+                uncovered_m - current_uncovered_m,
+                "the difference must be {uncovered_m} m (this row) less {current_uncovered_m} m \
+                 (the current row)"
+            );
             assert!(
                 delta > 0.0,
                 "a sensor moved off the map must cover less, not more: delta was {delta}"

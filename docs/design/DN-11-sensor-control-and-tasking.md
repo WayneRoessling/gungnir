@@ -12,8 +12,9 @@ The requirements half followed the same day (GAP-005): §3's `CollectionRequirem
 §4's edge, §5's **Requirements** paragraph, and §7's PN-15 row are built, and the model
 gained the `priority` field §3 shows and this note's implementation had omitted.
 
-Where the implementation departs from this note, §9 and §10 record it: amendment 1 and
-amendment 2 (the first `SensorControlAdapter`). What the owner has signed of this note is
+Where the implementation departs from this note, §9 to §11 record it: amendment 1,
+amendment 2 (the first `SensorControlAdapter`) and amendment 3 (a tasking concurrence names
+its operator, D-54). What the owner has signed of this note is
 in [`../signatures.md`](../signatures.md).
 
 What is **not** built: the delivery itself, which needs an adapter (GAP-001); the
@@ -298,6 +299,29 @@ timestamp plus 80-bit payload in Crockford base32; Howard Hinnant's `civil_from_
 inbound adapter's own `days_from_civil` run backwards) rather than by adding a crate for
 either. The encoder is checked against the published ULID specification's own worked
 example.
+
+## 11. Amendment 3 (2026-09-16, D-54): a tasking concurrence names its operator
+
+Amendment 1 b let `RequirementState::Tasked` carry `Concurrence::UnattributedRole`,
+because no build had an operator session, and left §8's CAP-2.12 criterion asking for a
+concurrence carrying an operator rather than widening it. Desktop sign-in has since
+shipped (GAP-057), so that reason expired, and tasking still succeeded with nobody signed
+in. At the GAP-067 walk the owner chose to enforce the criterion rather than amend it
+(D-54).
+
+`TaskingCase::concur` refuses a concurrence that names no operator
+(`TaskingError::Unattributed`), and `gungnir-app`'s `requirements::task` checks the
+operator **before** issuing the command, because a task once issued cannot be withdrawn
+and a refused concurrence must not leave one behind. The refusal says why: nobody is
+signed in, the session expired, or the desktop has no account store anyone could sign in
+to. PN-15 disables its Task controls while nobody is signed in rather than offer a control
+that would be refused. A decline, which §8's criterion does not govern, still records
+either concurrence.
+
+The replay §8 names now exists: `gungnir-app/tests/requirements_replay.rs` replays
+TT-08's sample set, whose events script MT-08's first three steps
+(`../test-tracks/data-format.md` §6), and reads the requirement events back from the
+journal.
 
 ## Traceability
 

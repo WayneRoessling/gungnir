@@ -231,8 +231,11 @@ pub struct RequirementsView<'a> {
     pub role: &'a str,
     /// Whether an operator session exists to attribute a concurrence to.
     ///
-    /// `false` today (GAP-057). A concurrence is still recorded, and says that nobody
-    /// was signed in rather than putting a role in a field that reads as a person.
+    /// Without one no sensor can be tasked against a requirement: a tasking concurrence
+    /// has to name the operator who concurred, which the desktop enforces before issuing
+    /// anything (the CAP-2.12 criterion, GAP-067 walk, 2026-09-16). A decline is still
+    /// recorded, and says that nobody was signed in rather than putting a role in a field
+    /// that reads as a person.
     pub operator_session: bool,
     /// Where the requirement list is kept between sessions.
     pub persistence: Unavailable<'a>,
@@ -308,6 +311,16 @@ pub enum RequirementAction {
     },
 }
 
+/// What PN-15 says when nobody is signed in.
+///
+/// This used to say a concurrence "records the role that acted", which stopped being
+/// true of tasking in the GAP-067 walk (2026-09-16): the desktop now refuses a tasking
+/// concurrence that names nobody, and a footer still describing the old behaviour would
+/// tell the sensor manager a control works that is refused.
+const NO_OPERATOR_SESSION: &str = "Nobody is signed in, so no sensor can be tasked against a \
+     requirement: tasking records the operator who concurred. A decline is still recorded, \
+     with the role that acted and a statement that nobody was signed in.";
+
 /// Render the requirements panel.
 pub fn render_requirements(
     ui: &mut Ui,
@@ -374,12 +387,9 @@ pub fn render_requirements(
     }
     if !view.operator_session {
         ui.label(
-            RichText::new(
-                "No operator session exists, so a concurrence records the role that \
-                 acted and states that nobody was signed in. It does not name a person.",
-            )
-            .color(palette.warning_color)
-            .size(palette.small_font_size),
+            RichText::new(NO_OPERATOR_SESSION)
+                .color(palette.warning_color)
+                .size(palette.small_font_size),
         );
     }
     draw_unavailable(ui, palette, view.persistence);
@@ -514,8 +524,10 @@ fn draw_actions(
         for sensor in view.sensors {
             // The same rule PN-10 applies: a sensor with no control endpoint cannot be
             // commanded, so tasking it would record a concurrence against a task that
-            // was never created.
-            let enabled = view.may_concur && sensor.controllable;
+            // was never created. And with nobody signed in there is no operator to name
+            // on the concurrence, which the desktop refuses before issuing anything
+            // (GAP-067 walk, 2026-09-16), so the control is not offered only to be refused.
+            let enabled = view.may_concur && sensor.controllable && view.operator_session;
             let response = ui.add_enabled(
                 enabled,
                 egui::Button::new(format!("{} #{}", sensor.modality, sensor.id)),
@@ -536,6 +548,12 @@ fn draw_actions(
                 response.on_hover_text(
                     "Concurrence is the sensor manager's, under the sensor.task \
                      authority.",
+                );
+            } else if !view.operator_session {
+                response.on_hover_text(
+                    "Nobody is signed in to name on the concurrence. Sign in to task a \
+                     sensor; a desktop with no account store cannot task one against a \
+                     requirement at all.",
                 );
             }
         }
@@ -806,6 +824,77 @@ mod tests {
                 "{priority:?} shows its variant name"
             );
         }
+    }
+
+    /// The sentence the `gungnir-workflow` Collection requirements and tasking concurrence
+    /// (CAP-2.12) row of `docs/verification-capability-table.md` §2 changed on screen. With
+    /// nobody signed in the desktop refuses a tasking concurrence (GAP-067 walk,
+    /// 2026-09-16), so the panel has to say a sensor cannot be tasked, and must no longer
+    /// say what it said before: that a concurrence "records the role that acted". With an
+    /// operator signed in there is nothing to say.
+    #[test]
+    fn with_nobody_signed_in_the_panel_says_no_sensor_can_be_tasked() {
+        use crate::harness::RenderProbe;
+        use crate::panels::unavailable::Unavailable;
+
+        let rows = [RequirementRow {
+            id: 1,
+            title: "identify the contact",
+            priority: AssetPriority::Medium,
+            standing: Standing::Stated,
+            progress: Progress::Untasked,
+            tasks: 0,
+            time_remaining_s: None,
+        }];
+        let areas = [AreaChoice {
+            name: "the harbour",
+        }];
+        let sensors = [SensorChoice {
+            id: 1,
+            modality: "radar",
+            controllable: true,
+        }];
+        let draw = |operator_session: bool| {
+            let view = RequirementsView {
+                origin: ListOrigin::NothingStated,
+                rows: &rows,
+                areas: Ok(&areas),
+                sensors: &sensors,
+                may_concur: true,
+                role: "SensorManager",
+                operator_session,
+                persistence: Unavailable {
+                    owner: "gungnir-store",
+                    gap: "GAP-005",
+                },
+                last_error: None,
+            };
+            let mut draft = Draft {
+                selected: Some(1),
+                ..Draft::default()
+            };
+            let (_, frame) = RenderProbe::new()
+                .draw(|ui| render_requirements(ui, &theme::Palette::day(), &view, &mut draft));
+            frame
+        };
+
+        let nobody = draw(false);
+        assert!(
+            nobody.says("no sensor can be tasked"),
+            "nothing said a sensor cannot be tasked with nobody signed in: {}",
+            nobody.joined()
+        );
+        assert!(
+            !nobody.says("a concurrence records the role"),
+            "the panel still describes tasking with nobody signed in: {}",
+            nobody.joined()
+        );
+        let signed_in = draw(true);
+        assert!(
+            !signed_in.says("Nobody is signed in"),
+            "the panel said nobody was signed in to a signed-in operator: {}",
+            signed_in.joined()
+        );
     }
 
     /// Changing selection drops text composed against the previous requirement: a

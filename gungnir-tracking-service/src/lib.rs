@@ -100,8 +100,9 @@ pub trait TrackingService: Send + Sync {
     /// projected views.
     fn poll(&mut self, now: MissionTime);
 
-    /// Non-blocking snapshot of current tracks (confirmed + coasting). Cheap to call
-    /// every frame from `update()` per the UI standards' immediate-mode rule.
+    /// Non-blocking snapshot of every track not deleted -- tentative, confirmed and
+    /// coasting, as `gungnir_fusion_async::FusionPipeline::snapshot` reports them. Cheap to
+    /// call every frame from `update()` per the UI standards' immediate-mode rule.
     fn tracks(&self) -> &[TrackView];
 
     /// Bearings that matched no track and are still inside their lifetime

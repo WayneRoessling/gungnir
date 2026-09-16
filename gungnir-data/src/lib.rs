@@ -6,9 +6,13 @@
 //! module converts a third-party crate's types into an internal, dependency-free
 //! type. Nothing outside this crate imports `pasture`/`vtkio`/`tiff` directly.
 //!
-//! What loads (2026-09-06): DEMs, as ESRI ASCII grid or `GeoTIFF` (`geospatial`, GAP-023).
-//! Point clouds, VTK meshes and glTF assets are each a `DataError::NotImplemented`
-//! naming what they wait on, and the loader thread returns that rather than nothing.
+//! What loads: every format a [`LoadRequest`] names (GAP-023). DEMs as ESRI ASCII grid or
+//! `GeoTIFF` (`geospatial`); LAS and LAZ point clouds through `las`, and bounded reads of
+//! COPC through `las::copc` (`pointcloud`); legacy VTK polydata through `vtkio`
+//! (`scientific`); glTF assets through `gltf` (`assets`). Each module's own documentation
+//! says what it reads and what it refuses by name. What this crate still answers with
+//! `DataError::NotImplemented` is not listed here: `docs/unbuilt.md` is generated from the
+//! code, and that is where the list is.
 
 pub mod assets;
 pub mod geospatial;

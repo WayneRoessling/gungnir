@@ -1655,9 +1655,19 @@ mod tests {
         let enu = sensor_positions(&config)
             .get(4)
             .expect("the sensor is stored");
+        // The WGS84 reference is (1279.564224, 1113.419155, -0.225243) m, derived outside
+        // the code under test: the closed-form geodetic-to-earth-centred-to-ENU conversion
+        // evaluated to 50 digits with mpmath, agreeing with PROJ's `topocentric`
+        // conversion. The derivation is written out beside the same assertion in
+        // `gungnir-tracking-service/tests/sensor_position_resolver.rs`.
         assert!(
             (enu[0] - 1279.564).abs() < 0.5 && (enu[1] - 1113.419).abs() < 0.5,
             "east and north are the declared offset in metres: {enu:?}"
+        );
+        let up_reference_m = -0.225;
+        assert!(
+            (enu[2] - up_reference_m).abs() < 0.5,
+            "up is the WGS84 reference, {up_reference_m} m, to the row's 0.5 m: {enu:?}"
         );
         assert!(
             enu[0].hypot(enu[1]) > 1_000.0,

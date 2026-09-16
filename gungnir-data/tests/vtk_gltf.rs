@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! The VTK and glTF loaders against the hand-written fixtures (GAP-023): exact counts,
-//! and a corrupt file that yields `DataError` and never a panic (verification table §2,
-//! `gungnir-data` row).
+//! The VTK and glTF loaders against the hand-written fixtures (GAP-023): exact counts and
+//! bounds, and a corrupt file that yields `DataError` and never a panic (verification
+//! table §2, `gungnir-data` row).
 
 // The fixtures hold exactly representable values, and exact is what a loader test wants.
 #![allow(clippy::float_cmp)]
@@ -26,6 +26,40 @@ fn scratch(name: &str) -> PathBuf {
     dir.join(name)
 }
 
+/// `[min, max]` per axis over a mesh's vertices. Neither mesh type carries bounds of its
+/// own, and the verification row asks for them, so they are folded here from what loaded.
+fn bounds(positions: &[[f32; 3]]) -> [[f32; 3]; 2] {
+    positions.iter().fold(
+        [[f32::INFINITY; 3], [f32::NEG_INFINITY; 3]],
+        |[min, max], p| {
+            [
+                std::array::from_fn(|axis| min[axis].min(p[axis])),
+                std::array::from_fn(|axis| max[axis].max(p[axis])),
+            ]
+        },
+    )
+}
+
+/// A glTF accessor's `min` or `max`, which the file states in its JSON as an array of
+/// numbers, read as a position.
+// JSON numbers arrive as `f64`; this fixture's are 0 and 1, which an `f32` holds exactly.
+#[allow(clippy::cast_possible_truncation)]
+fn declared(value: Option<&gltf::json::Value>, what: &str) -> [f32; 3] {
+    let components: Vec<f32> = value
+        .and_then(gltf::json::Value::as_array)
+        .unwrap_or_else(|| panic!("the POSITION accessor declares its {what}"))
+        .iter()
+        .map(|c| c.as_f64().expect("a number") as f32)
+        .collect();
+    components.try_into().expect("three components")
+}
+
+/// The `gungnir-data` Loader correctness per format row of
+/// `docs/verification-capability-table.md` §2, for VTK: exact counts and exact bounds.
+///
+/// The bounds are the fixture's own `POINTS` block (`testdata/scientific/two-triangles.vtk`):
+/// the four corners (0,0,0), (1,0,0), (1,1,0.5) and (0,1,0.5), so x and y run 0 to 1 and z
+/// runs 0 to 0.5.
 #[test]
 fn the_two_triangle_polydata_loads_with_its_scalar() {
     let mesh = scientific::load_vtk(&fixture("scientific", "two-triangles.vtk")).expect("loads");
@@ -35,6 +69,11 @@ fn the_two_triangle_polydata_loads_with_its_scalar() {
     let field = mesh.scalar_field.expect("height scalar");
     assert_eq!(field, vec![0.0, 0.0, 0.5, 0.5]);
     assert_eq!(mesh.positions[2], [1.0, 1.0, 0.5]);
+    assert_eq!(
+        bounds(&mesh.positions),
+        [[0.0, 0.0, 0.0], [1.0, 1.0, 0.5]],
+        "the POINTS block's bounds"
+    );
 }
 
 #[test]
@@ -92,14 +131,46 @@ fn an_xml_vtk_file_is_refused_by_name_while_the_reader_is_compiled_out() {
     }
 }
 
+/// The `gungnir-data` Loader correctness per format row of
+/// `docs/verification-capability-table.md` §2, for glTF: exact counts and exact bounds.
+///
+/// The bounds are the ones `testdata/assets/triangle.gltf` states for itself: its POSITION
+/// accessor's `min` [0, 0, 0] and `max` [1, 1, 0], which glTF 2.0 requires a POSITION
+/// accessor to carry. The loader never reads those two fields -- it decodes the vertices
+/// from the base64 buffer -- so the test also reads them from the file's JSON and holds the
+/// loaded vertices to them, not only to the figures written here.
 #[test]
 fn the_triangle_asset_loads_with_its_normals_and_indices() {
-    let mesh = assets::load_gltf(&fixture("assets", "triangle.gltf")).expect("loads");
+    let path = fixture("assets", "triangle.gltf");
+    let mesh = assets::load_gltf(&path).expect("loads");
     assert_eq!(mesh.positions.len(), 3);
     assert_eq!(mesh.normals.len(), 3);
     assert_eq!(mesh.indices, vec![0, 1, 2]);
     assert_eq!(mesh.normals[0], [0.0, 0.0, 1.0]);
     assert_eq!(mesh.positions[1], [1.0, 0.0, 0.0]);
+    assert_eq!(
+        bounds(&mesh.positions),
+        [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+        "the POSITION accessor's min and max"
+    );
+
+    let document = gltf::Gltf::open(&path)
+        .expect("the fixture's JSON")
+        .document;
+    let accessor = document
+        .meshes()
+        .next()
+        .and_then(|m| m.primitives().next())
+        .and_then(|p| p.get(&gltf::Semantic::Positions))
+        .expect("the triangle's POSITION accessor");
+    assert_eq!(
+        bounds(&mesh.positions),
+        [
+            declared(accessor.min().as_ref(), "min"),
+            declared(accessor.max().as_ref(), "max")
+        ],
+        "the loaded vertices against the accessor's own declared bounds"
+    );
 }
 
 #[test]

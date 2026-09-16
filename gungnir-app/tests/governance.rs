@@ -159,22 +159,33 @@ fn a_deployment_governing_nothing_says_so_in_the_record() {
 /// it is running.
 #[test]
 fn a_baseline_with_only_tracking_governs_its_one_configuration() {
+    let tracking = TrackingConfig {
+        filter_selection: "imm-cv-ct".into(),
+        gate_threshold: 9.21,
+        imm_turn_rate_rad_s: 0.05,
+        imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
+        imm_initial_mode_probabilities: [0.9, 0.1],
+        measurement_noise_var: [625.0, 3600.0, 22500.0],
+    };
     let (state, dir) = desktop(
         "implicit",
         ConfigBaseline {
-            tracking: Some(TrackingConfig {
-                filter_selection: "imm-cv-ct".into(),
-                gate_threshold: 9.21,
-                imm_turn_rate_rad_s: 0.05,
-                imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
-                imm_initial_mode_probabilities: [0.9, 0.1],
-                measurement_noise_var: [625.0, 3600.0, 22500.0],
-            }),
+            tracking: Some(tracking.clone()),
             ..ConfigBaseline::default()
         },
     );
     let in_force = state.governance.in_force().expect("something is in force");
     assert_eq!(in_force.id.profile.as_str(), "default");
+    // The `gungnir-modelops` Promotion gating and rollback row of
+    // `docs/verification-capability-table.md` §2: a `tracking`-only baseline yields one
+    // implicit `default` profile "with that configuration promoted". The identity above
+    // does not say which configuration; this does. The comparison is not vacuous: the
+    // noise figure differs from DN-30's default of [400, 400, 900], and the IMM triple
+    // from the zeros serde reads for an absent field.
+    assert_eq!(
+        in_force.config, tracking,
+        "the configuration in force is not the one the baseline carried"
+    );
     assert_eq!(
         gungnir_app::governance::in_force_label(&state.governance),
         "default/configured"

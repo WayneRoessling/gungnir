@@ -2987,21 +2987,42 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
     let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));
 
     // The current laydown is named as such, and the terrain model every row was
-    // compared under is stated once rather than left for the reader to assume.
-    assert!(frame.says("current"), "{}", frame.joined());
+    // compared under is stated once rather than left for the reader to assume. A bare
+    // "current" would be found in the column header ("Difference from current") and in
+    // this fixture's own laydown id whether or not the marker was painted, so the check
+    // is for the option label planning.rs builds for the current row: its id followed by
+    // " (current)".
+    assert!(frame.says("current (current)"), "{}", frame.joined());
     assert!(
         frame.says("flat-terrain line of sight"),
         "{}",
         frame.joined()
     );
 
-    // A computed row's numbers reach the screen, not just the view struct.
-    assert!(frame.says("900"), "{}", frame.joined());
+    // Every number the computed rows carry reaches the screen, not just the view struct
+    // (the PN-16 laydown options table row of `docs/verification-capability-table.md`
+    // §2): both rows' gap segments and uncovered lengths, in the coverage label
+    // planning.rs formats, and the alternative's difference.
+    assert!(
+        frame.says("1 gap segment(s), 900 m uncovered"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("0 gap segment(s), 400 m uncovered"),
+        "{}",
+        frame.joined()
+    );
     assert!(
         frame.says("500 m less gap than today"),
         "{}",
         frame.joined()
     );
+
+    // The current row's difference cell says it is the current laydown rather than
+    // showing a zero, which would read as an alternative that changes nothing. Nothing
+    // else on this panel paints this marker.
+    assert!(frame.says("-- (current)"), "{}", frame.joined());
 
     // A row that could not be evaluated says why, and is not drawn as a zero.
     assert!(frame.says("Not computed"), "{}", frame.joined());

@@ -12,16 +12,26 @@
 //! (GAP-005), and the v2 write paths returning `501` (GAP-041). Those are not removed by
 //! authentication existing; they are what a deployment without it still records. These
 //! tests assert both halves: a verified operator is named, and an unverified one is not.
+//!
+//! **One of them became a refusal** in the GAP-067 walk (2026-09-16). The CAP-2.12
+//! criterion moves a requirement to tasked "only with a concurrence carrying an operator",
+//! and sign-in is what made carrying one possible, so a tasking with nobody signed in is
+//! now refused -- with the reason, no command issued, and the requirement left stated --
+//! rather than recorded against the role. A decline is outside the criterion and still
+//! records the role.
 
 use gungnir_app::state::AppState;
 use gungnir_app::{decisions, requirements};
 use gungnir_command::OperatorDecision;
 use gungnir_config::{AssetConfig, ConfigBaseline, EndpointConfig, SensorConfig};
+use gungnir_eventing::Event;
+use gungnir_model::events::RequirementEvent;
 use gungnir_model::{AssetPriority, Concurrence, MissionTime, RequirementState};
 use gungnir_security::{
     hash_passphrase, Account, InMemoryAccountStore, LocalAccountAuthority, OperatorId, Role,
     SessionState,
 };
+use gungnir_sensor_management::SensorControl;
 use gungnir_time::ReplayClockAuthority;
 
 const PASSPHRASE: &str = "correct horse battery staple";
@@ -74,6 +84,18 @@ fn with_accounts(state: &mut AppState) {
     state.set_session_authority(Box::new(LocalAccountAuthority::new(Box::new(store))));
 }
 
+/// Whether anything the bus carried since `seen` was subscribed says a requirement was
+/// tasked. A refused tasking must publish nothing: a `Tasked` event with no operator on
+/// it is exactly the record the CAP-2.12 criterion forbids.
+fn any_tasked_published(seen: &gungnir_eventing::Receiver<gungnir_eventing::Envelope>) -> bool {
+    seen.try_iter().any(|envelope| {
+        matches!(
+            envelope.event,
+            Event::Requirement(RequirementEvent::Tasked { .. })
+        )
+    })
+}
+
 fn state_a_requirement(state: &mut AppState) -> gungnir_model::RequirementId {
     requirements::state_requirement(
         state,
@@ -103,26 +125,103 @@ fn a_desktop_with_no_account_store_starts_and_attributes_nothing() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// A desktop with no account store starts (the test above) and **cannot task through a
+/// requirement**: the `gungnir-workflow` Collection requirements and tasking concurrence
+/// (CAP-2.12) row of `docs/verification-capability-table.md` §2 asks for a concurrence
+/// carrying an operator, and here nobody can sign in to be one (GAP-067 walk,
+/// 2026-09-16). The refusal has to say it is the account store, because telling an
+/// operator to sign in where nobody can would send them looking for a form that does not
+/// work. A decline is outside the criterion and still records the role.
+#[test]
+fn a_desktop_with_no_account_store_cannot_task_and_says_why() {
+    let (mut state, dir) = desktop("no-store-task");
+    state.set_role(Role::SensorManager);
+    let seen = state.events.subscribe();
+    let id = state_a_requirement(&mut state);
+
+    let err = requirements::task(&mut state, id, 1, MissionTime(1.0))
+        .expect_err("a requirement was tasked with no account store");
+    let requirements::RequirementError::Unattributed { requirement, .. } = &err else {
+        panic!("refused for some other reason: {err}");
+    };
+    assert_eq!(*requirement, id);
+    let text = err.to_string();
+    assert!(
+        text.contains("account store"),
+        "the refusal did not name the account store: {text}"
+    );
+    assert!(
+        !text.contains("Sign in to task"),
+        "an operator was told to sign in where nobody can: {text}"
+    );
+    assert_eq!(state.requirements[0].state, RequirementState::Stated);
+    assert!(
+        state.sensors.tasks().is_empty(),
+        "a command was issued for a concurrence that was refused"
+    );
+    assert!(
+        !any_tasked_published(&seen),
+        "a refused tasking was published"
+    );
+
+    // The half the walk left alone: declining still records the role, and says nobody
+    // was signed in rather than naming one.
+    requirements::decline(&mut state, id, "no sensor can reach that area".into())
+        .expect("a decline with nobody signed in is still recorded");
+    match &state.requirements[0].state {
+        RequirementState::Declined { by, .. } => {
+            assert_eq!(
+                by.operator(),
+                None,
+                "an unverified decline named an operator"
+            );
+            assert!(matches!(by, Concurrence::UnattributedRole { .. }));
+        }
+        other => panic!("expected declined, got {other:?}"),
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// The payoff. A verified operator is named on a concurrence; before signing in, the
-/// same act records that nobody was signed in.
+/// same act is **refused** (GAP-067 walk, 2026-09-16) with a reason telling the operator
+/// to sign in, no command issued and nothing published, and the requirement stays stated
+/// -- so the signed-in operator can then task that same requirement. The CAP-2.12 row of
+/// `docs/verification-capability-table.md` §2: "a requirement moves from stated to
+/// tasked only with a concurrence carrying an operator".
 #[test]
 fn a_concurrence_names_the_operator_only_after_a_real_sign_in() {
     let (mut state, dir) = desktop("concurrence");
     with_accounts(&mut state);
     state.set_role(Role::SensorManager);
+    let seen = state.events.subscribe();
 
-    // Before signing in: the act still happens and still records that nobody was known.
-    let before = state_a_requirement(&mut state);
-    requirements::task(&mut state, before, 1, MissionTime(1.0)).expect("tasked");
-    match &state.requirements[0].state {
-        RequirementState::Tasked { by } => {
-            assert_eq!(by.operator(), None, "an unverified act named an operator");
-            assert!(matches!(by, Concurrence::UnattributedRole { .. }));
-        }
-        other => panic!("expected tasked, got {other:?}"),
-    }
+    // Before signing in: refused, and nothing is left behind the refusal.
+    let id = state_a_requirement(&mut state);
+    let err = requirements::task(&mut state, id, 1, MissionTime(1.0))
+        .expect_err("a requirement was tasked with nobody signed in");
+    let requirements::RequirementError::Unattributed { requirement, .. } = &err else {
+        panic!("refused for some other reason: {err}");
+    };
+    assert_eq!(*requirement, id);
+    assert!(
+        err.to_string().contains("Sign in to task it"),
+        "the refusal did not tell the operator to sign in: {err}"
+    );
+    assert_eq!(
+        state.requirements[0].state,
+        RequirementState::Stated,
+        "a refused concurrence moved the requirement"
+    );
+    assert!(
+        state.sensors.tasks().is_empty(),
+        "a command was issued for a concurrence that was refused"
+    );
+    assert!(
+        !any_tasked_published(&seen),
+        "a refused tasking was published"
+    );
 
-    // Sign in, and the next act names the operator who was actually verified.
+    // Sign in, and the act names the operator who was actually verified.
     state
         .sign_in(&LocalAccountAuthority::credential(
             OperatorId(7),
@@ -131,20 +230,58 @@ fn a_concurrence_names_the_operator_only_after_a_real_sign_in() {
         .expect("signed in");
     assert_eq!(state.attributed_operator(), Some(OperatorId(7)));
 
-    let after = state_a_requirement(&mut state);
-    requirements::task(&mut state, after, 1, MissionTime(2.0)).expect("tasked");
-    let tasked = state
-        .requirements
-        .iter()
-        .find(|r| r.id == after)
-        .expect("stated");
-    match &tasked.state {
+    requirements::task(&mut state, id, 1, MissionTime(2.0)).expect("tasked");
+    match &state.requirements[0].state {
         RequirementState::Tasked { by } => {
             assert_eq!(by.operator(), Some("7"));
             assert_eq!(by.role(), "SensorManager");
         }
         other => panic!("expected tasked, got {other:?}"),
     }
+    assert_eq!(state.sensors.tasks().len(), 1, "one task serves it");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// An expired session is the third reason nobody can be named, and it asks something
+/// different again: sign in *again*. DN-23 §5 rule 2 says an expired session refuses and
+/// is not renewed by use, and a tasking under one is refused like any other with nobody
+/// to name (GAP-067 walk, 2026-09-16).
+#[test]
+fn a_tasking_under_an_expired_session_is_refused_and_says_to_sign_in_again() {
+    let (mut state, dir) = desktop("expired");
+    let store = InMemoryAccountStore::new(vec![Account {
+        operator: OperatorId(7),
+        role: Role::SensorManager,
+        phc: hash_passphrase(PASSPHRASE).expect("hashed"),
+    }]);
+    // A 60 s session, signed in at T+0 and so valid until T+60 s.
+    state.set_session_authority(Box::new(
+        LocalAccountAuthority::new(Box::new(store)).with_lifetime(Some(60.0)),
+    ));
+    state.set_role(Role::SensorManager);
+    state
+        .sign_in(&LocalAccountAuthority::credential(
+            OperatorId(7),
+            PASSPHRASE,
+        ))
+        .expect("signed in");
+    let id = state_a_requirement(&mut state);
+
+    state.clock = Box::new(ReplayClockAuthority {
+        current: MissionTime(61.0),
+    });
+    assert!(matches!(
+        state.session_state(),
+        SessionState::Expired { .. }
+    ));
+    let err = requirements::task(&mut state, id, 1, MissionTime(61.0))
+        .expect_err("a requirement was tasked under an expired session");
+    assert!(
+        err.to_string().contains("Sign in again"),
+        "the refusal did not say the session expired: {err}"
+    );
+    assert_eq!(state.requirements[0].state, RequirementState::Stated);
+    assert!(state.sensors.tasks().is_empty());
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -169,7 +306,9 @@ fn a_rejected_sign_in_leaves_the_desktop_unattributed() {
 }
 
 /// Signing out stops attribution immediately. An act after signing out must not carry
-/// the operator who has left the console.
+/// the operator who has left the console, and since the GAP-067 walk (2026-09-16) a
+/// tasking after signing out is refused outright rather than recorded against nobody:
+/// the requirement stays stated and no command is issued.
 #[test]
 fn signing_out_stops_attribution() {
     let (mut state, dir) = desktop("sign-out");
@@ -186,16 +325,27 @@ fn signing_out_stops_attribution() {
     state.sign_out();
     assert_eq!(state.attributed_operator(), None);
 
+    let seen = state.events.subscribe();
     let id = state_a_requirement(&mut state);
-    requirements::task(&mut state, id, 1, MissionTime(3.0)).expect("tasked");
-    match &state.requirements[0].state {
-        RequirementState::Tasked { by } => assert_eq!(
-            by.operator(),
-            None,
-            "an act after signing out carried the operator who had left"
-        ),
-        other => panic!("expected tasked, got {other:?}"),
-    }
+    let err = requirements::task(&mut state, id, 1, MissionTime(3.0))
+        .expect_err("a requirement was tasked after the operator signed out");
+    assert!(
+        err.to_string().contains("nobody is signed in"),
+        "the refusal did not say nobody is signed in: {err}"
+    );
+    assert_eq!(
+        state.requirements[0].state,
+        RequirementState::Stated,
+        "a tasking after signing out moved the requirement"
+    );
+    assert!(
+        state.sensors.tasks().is_empty(),
+        "a command was issued after the operator signed out"
+    );
+    assert!(
+        !any_tasked_published(&seen),
+        "a tasking after signing out was published"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 

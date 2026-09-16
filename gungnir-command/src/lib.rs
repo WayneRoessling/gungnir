@@ -513,6 +513,93 @@ mod tests {
         ));
     }
 
+    /// The `gungnir-command` Decision recording row of
+    /// `docs/verification-capability-table.md` §2: "a `DecisionRecord` per decision; no
+    /// plan actionable without one". Each of the three choices a person can make appends
+    /// exactly one record, the newest record is the decision just taken, and a `decide`
+    /// that names nothing in the queue appends nothing.
+    ///
+    /// The expected actionability is DN-10 §3's definition, not `is_actionable`'s:
+    /// accepting acts on the plan, overriding acts on the operator's own substitute (the
+    /// plan stored in the record is the one they acted on), and rejecting declines it.
+    #[test]
+    fn every_decide_appends_exactly_one_record_carrying_that_decision() {
+        let mut wf = InMemoryApprovalWorkflow::new();
+        let queued: Vec<PendingApprovalId> = (1..=3)
+            .map(|n| {
+                wf.submit_for_approval(submission(n, PolicyVerdict::RequiresHumanApproval))
+                    .expect("submit")
+            })
+            .collect();
+        assert!(
+            wf.records().is_empty(),
+            "queueing a plan is not deciding it"
+        );
+
+        // `submission(n, ..)` queues plan n, so the k-th queued item is plan k + 1.
+        let decisions = [
+            (queued[0], PlanId(1), OperatorDecision::Accepted, 1.0, true),
+            (
+                queued[1],
+                PlanId(2),
+                OperatorDecision::Overridden,
+                2.0,
+                true,
+            ),
+            (
+                queued[2],
+                PlanId(3),
+                OperatorDecision::Rejected {
+                    reason: "track is a friendly airliner".into(),
+                },
+                3.0,
+                false,
+            ),
+        ];
+        for (id, plan, decision, at, actionable) in decisions {
+            let before = wf.records().len();
+            let returned = wf
+                .decide(id, decision.clone(), Some("op-1".into()), MissionTime(at))
+                .expect("decide");
+            assert_eq!(
+                wf.records().len(),
+                before + 1,
+                "{decision:?} did not append exactly one record"
+            );
+            let newest = wf.records().last().expect("a record");
+            assert_eq!(newest.decision, decision);
+            assert_eq!(newest.plan.id, plan, "the newest record is another plan's");
+            assert_eq!(newest.operator_id.as_deref(), Some("op-1"));
+            assert_eq!(newest.mission_time, MissionTime(at));
+            assert_eq!(newest.is_actionable(), actionable, "{decision:?}");
+            assert_eq!(
+                newest, &returned,
+                "the record kept is not the record returned"
+            );
+        }
+
+        // Nothing in the queue answers to either of these: an identifier never issued,
+        // and one already decided, which left the queue when it was. A second record for
+        // plan 1 would be two decisions where a person took one.
+        let history = wf.records().to_vec();
+        for id in [PendingApprovalId(99), queued[0]] {
+            assert!(matches!(
+                wf.decide(
+                    id,
+                    OperatorDecision::Accepted,
+                    Some("op-1".into()),
+                    MissionTime(4.0)
+                ),
+                Err(CommandError::NotFound(missing)) if missing == id
+            ));
+            assert_eq!(
+                wf.records(),
+                history.as_slice(),
+                "a refused decide on {id:?} changed the history"
+            );
+        }
+    }
+
     /// The point of GAP-034: an item nobody decides leaves the queue with a record
     /// that is not a rejection and names nobody. Before this, `queue.rs` could compute
     /// that outcome and nothing applied it, so a decision nobody took simply sat there.

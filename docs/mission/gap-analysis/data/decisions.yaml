@@ -1314,3 +1314,59 @@
     one would be a guess wearing a number. A cooperative UAS therefore weighs 1.0 in
     `lethality_by_class` -- unknown is not harmless, which is the same rule the register
     already states for a track no source has classified.
+
+- id: D-53
+  decision: How a reconciliation conflict is resolved
+  question: >-
+    D-03 locked `RoleRankArbiter` as the rule for conflicting decisions -- the higher
+    role wins, the earlier decision wins a tie -- and GAP-050 built reconciliation to
+    report every conflict and leave each to a person on PN-18, so the rule was locked
+    and never applied. A journaled decision also carried no role to rank it by, and the
+    desktop's authority role never followed the signed-in account. Build the rule into
+    reconciliation, or record that a person resolves every conflict.
+  raised_in: >-
+    `verification-capability-table.md` §2, the cross-layer Disconnected reconciliation
+    row; `gungnir-app/src/failover.rs`; the GAP-067 walk
+    (`../../record/2026-09-16/gap-067-walk.md`)
+  decider: Owner
+  unblocks: GAP-067
+  resolved: 2026-09-16
+  outcome: >-
+    **D-03's rule resolves every reconciliation conflict it can rank, and a person
+    resolves the rest.** A conflict is a decision on one side of an outage against a
+    different decision, or an expiry, on the other. A real decision beats an expiry
+    (DN-10 §9); otherwise the higher recorded role wins, and on equal rank the earlier
+    decision. A side whose role was never recorded cannot be ranked honestly, so that
+    conflict stays on PN-18 for a person permitted `plan.decide`, and the switch back
+    waits for them; the journal says whether the rule or a person resolved each. For the
+    rule to have something to rank, a decision records the role of the signed-in account
+    that made it and none when nobody is signed in (DN-23 §5 rule 1), and the desktop's
+    authority role follows the signed-in account, staying role-selected without a
+    session (rule 5). The owner chose this over the recommendation, which was to record
+    that a person resolves every conflict.
+
+- id: D-54
+  decision: Whether a tasking concurrence may name nobody
+  question: >-
+    DN-11 amendment 1 b let a concurrence carry a role with nobody signed in
+    (`Concurrence::UnattributedRole`) because no build had an operator session, and kept
+    the CAP-2.12 criterion asking for a concurrence carrying an operator. Desktop
+    sign-in has since shipped (GAP-057), and tasking still succeeded with nobody signed
+    in. Enforce the operator, or amend the criterion to accept a role, which amendment 1
+    b declined.
+  raised_in: >-
+    `verification-capability-table.md` §2, the `gungnir-workflow` collection
+    requirements and tasking concurrence row; DN-11 amendment 1 b; the GAP-067 walk
+    (`../../record/2026-09-16/gap-067-walk.md`)
+  decider: Owner
+  unblocks: GAP-067
+  resolved: 2026-09-16
+  outcome: >-
+    **A requirement moves to Tasked only with a concurrence a signed-in operator gave;
+    the criterion stands.** `TaskingCase::concur` refuses a concurrence that names no
+    operator, and the desktop checks for one before issuing the command, so a refusal
+    leaves no task behind. A deployment with no account store therefore cannot task
+    through a requirement, and the refusal says so. A decline is outside the criterion
+    and still records either concurrence. The MT-08 replay the row's method names is
+    built over TT-08, whose sample events now script MT-08's first three steps (DN-11
+    amendment 3).
