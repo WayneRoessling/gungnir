@@ -13,11 +13,15 @@ answer is unambiguous because there is only one of everything to look at.
 
 The probe carries 8 elements, 5 relationships, 9 view packages and 9 diagrams,
 written exactly as `export_xmi.py` writes them, so whatever it does in EA is what
-the full export will do. Besides the settled UAF names it carries the two things
-the full export still rests on without a round trip of their own: a resource's
-`conformsTo` property, written both ways EA writes a string property, and SysML's
-`satisfy` between a capability and a requirement. See `../exports/ea-roundtrip/README.md` for the round
-trip this was built for and what it settled.
+the full export will do. Besides the UAF names it carries a resource's
+`conformsTo` property and SysML's `satisfy` between a capability and a
+requirement -- the two things the full export rested on without a round trip of
+their own until round trip 3 settled both. See
+`../exports/ea-roundtrip/README.md` for what that settled.
+
+`conformsTo` went in written two ways, as an attribute of the stereotype
+application and as an extension tag, precisely to find out which EA reads. Only
+the tag survived, so only the tag is written now -- here and in the exporter.
 
 Its main use is the stereotype oracle. Every name the export uses has now come
 back correctly (round trip 3, `../exports/ea-roundtrip/run-3/`), so this is a
