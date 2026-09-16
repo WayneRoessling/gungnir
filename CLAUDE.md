@@ -74,6 +74,16 @@ sensors; both journal to `./gungnir-journal` under the working directory.
 a node authenticates against. It is human-owned because it writes credential material,
 and it reads the passphrase from standard input, never from an argument.
 
+`gap-register.md`, `decisions-needed.md`, `closure-roadmap.md`, `coverage-matrix.md`,
+and `technical-gap-map.md` under `docs/mission/gap-analysis/` are generated, and carry
+no in-file warning saying so. Edit the entries in
+`docs/mission/gap-analysis/tools/gen_gaps.py`, never the tables, and regenerate; CI
+regenerates them and fails on any difference.
+
+```bash
+python docs/mission/gap-analysis/tools/gen_gaps.py
+```
+
 The node stops on Ctrl-C. On Windows it ignores signals sent from Git Bash (`kill`,
 `kill -INT`), so a smoke run started from that shell has to be stopped with
 `taskkill /PID <pid> /F` or PowerShell `Stop-Process -Name gungnir-node -Force`.
