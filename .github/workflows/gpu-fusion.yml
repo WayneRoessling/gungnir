@@ -46,9 +46,21 @@ jobs:
     runs-on: [self-hosted, gpu]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.98"
+      # **No toolchain action on a self-hosted runner** (2026-09-16). `dtolnay/rust-toolchain`
+      # is a composite action whose every step declares `shell: bash`, and it was the step
+      # that failed the first run this workflow ever attempted here: the runner resolved
+      # `bash` to the WSL shim at `C:\WINDOWS\system32\bash.exe`, which cannot see a
+      # Windows path and ate the backslashes out of the script it was handed. The runner's
+      # `.path` now puts Git's bash first and that failure is gone -- but the action was
+      # installing a toolchain onto a machine that already has one, which is work and risk
+      # for nothing. `rust-toolchain.toml` pins 1.98 with rustfmt and clippy, and rustup
+      # honours it on every `cargo` invocation, so the pin is enforced by the repository
+      # rather than by a workflow input that could drift from it.
+      - name: Record the toolchain this run used
+        shell: bash
+        run: |
+          rustc --version --verbose
+          cargo --version
       - name: CPU reference (plain cargo test)
         run: cargo test -p gungnir-data-fusion
       - name: GPU path against the CPU reference
