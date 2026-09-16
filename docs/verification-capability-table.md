@@ -199,7 +199,7 @@ does the row's status move in `architecture.md`. Rows with no test are listed as
 | `gungnir-ingest` The UAS KLV metadata adapter | `gungnir-ingest/tests/misb_feed.rs`; `mod tests` in `gungnir-ingest/src/adapters/misb.rs`; `gungnir-interop/tests/misb0601_fixtures.rs`; `mod tests` in `gungnir-interop/src/misb0601/mod.rs` | |
 | `gungnir-sensor-management` Mode transitions; coverage | `mod tests` in `gungnir-sensor-management/src/lib.rs` | |
 | `gungnir-identity` Identity persistence | `gungnir-app/tests/order_of_battle.rs`; `mod tests` in `gungnir-identity` | |
-| `gungnir-identification` Evidence fusion | `mod tests` in `gungnir-identification/src/lib.rs`; `gungnir-app/tests/cooperative_identity.rs` | |
+| `gungnir-identification` Evidence fusion | `mod tests` in `gungnir-identification/src/lib.rs`; `gungnir-app/tests/cooperative_identity.rs`; `gungnir-app/tests/uas_identification.rs` and `mod tests` in `gungnir-app/src/uas.rs` (the third cooperative source, ASTERIX Category 129, added 2026-09-15 with GAP-101's consumer) | |
 | `gungnir-geo` Geofence containment | `mod tests` in `gungnir-geo/src/lib.rs`; `gungnir-geo/tests/no_hazard_in_the_policy_chain.rs` | |
 | `gungnir-policy` No-go and authority enforcement | `mod tests` in `gungnir-policy/src/{lib,authority}.rs` | |
 | `gungnir-command` Decision recording | `mod tests` in `gungnir-command/src/lib.rs`; `gungnir-app/tests/no_execution_without_decision.rs` | |

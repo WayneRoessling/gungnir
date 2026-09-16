@@ -115,6 +115,14 @@ fn a_provider_this_desktop_does_not_hold_leaves_it_running_and_honest() {
                 !reason.contains("not built"),
                 "the profile is built; the desktop simply does not hold it: {reason}"
             );
+            // The operator reads this sentence. It was written as an indented
+            // multi-line literal with no line continuations until 2026-09-15, so what
+            // reached the strip carried runs of twenty-seven spaces inside it; nothing
+            // caught that, because nothing had ever looked at the text as text.
+            assert!(
+                !reason.contains("  "),
+                "the refusal reached the operator with a run of spaces in it: {reason:?}"
+            );
         }
         other => panic!("expected an honest unencrypted state, got {other:?}"),
     }
