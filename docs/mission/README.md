@@ -16,8 +16,8 @@ cross-cutting functions. Everything here is unclassified, built from open source
 and written to functions and decisions rather than one nation's doctrine; a
 vocabulary mapping is in `glossary.md`.
 
-Status: first draft 2026-09-04; subject-matter validation pending (see the
-validation record in `mission-analysis.md`).
+Status: first draft 2026-09-04. What the owner has approved of it is in
+[`../signatures.md`](../signatures.md); the validation record is in `mission-analysis.md`.
 
 | File | Content |
 |---|---|
