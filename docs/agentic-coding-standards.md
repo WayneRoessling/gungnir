@@ -1018,12 +1018,16 @@ has its own subsection above.
 Each is added under §6 rule 4 and recorded in this table when it lands. Agents must not
 add any crate not listed here.
 
-#### Model checker (written 2026-09-08 under GAP-061, **not signed**)
+#### Model checker (written 2026-09-08 under GAP-061, **signed by the owner 2026-09-15**)
 
 Gate 4 has required `loom` since the workflow was written (`agentic-workflow.md`, and §5
 below). What it did not have until 2026-09-08 was a dependency, which is why twenty-two
 green runs model-checked nothing: `RUSTFLAGS=--cfg loom` set a cfg no line of source
-read. This entry records the dependency; it is not a new decision about the tool.
+read. This entry records the dependency; it is not a new decision about the tool. **Signed by
+the owner 2026-09-15**, on that reading of it: Gate 4 had required `loom` since the
+workflow was written, so what the signature admits is the dependency that was missing
+while twenty-two green runs model-checked nothing -- and it admits it on the three
+terms below, the first of which keeps it out of every shipping graph.
 
 | Crate | Used for | Used by | Landed |
 |---|---|---|---|
