@@ -7209,7 +7209,6 @@
           <tag xmi:id="EAID_F27F4B0A_7767_71C9_96F9_DE52936497DA" name="uafKind" value="Project" modelElement="EAID_A678B969_45A8_11CE_B1C7_F13C80404AC8"/>
           <tag xmi:id="EAID_9BFAFEB3_D7C5_588B_DF7B_3A55AB08AAF5" name="uafId" value="PJ-I1" modelElement="EAID_A678B969_45A8_11CE_B1C7_F13C80404AC8"/>
           <tag xmi:id="EAID_F2867402_0FE5_F55C_AD37_567C72F3A1C8" name="registry.source" value="docs/gungnir-capabilities.md §7" modelElement="EAID_A678B969_45A8_11CE_B1C7_F13C80404AC8"/>
-          <tag xmi:id="EAID_2C56C478_D5D4_E9C8_A804_7801F6E879CC" name="registry.status" value="in progress" modelElement="EAID_A678B969_45A8_11CE_B1C7_F13C80404AC8"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7226,7 +7225,6 @@
           <tag xmi:id="EAID_D2007B18_092D_70C1_3B00_AA286BA70E62" name="uafKind" value="Project" modelElement="EAID_65E8A9D8_734F_4A5E_3170_10F8DF602882"/>
           <tag xmi:id="EAID_763F5D76_6ACA_C715_9D1E_0A91DA049201" name="uafId" value="PJ-I2" modelElement="EAID_65E8A9D8_734F_4A5E_3170_10F8DF602882"/>
           <tag xmi:id="EAID_3702BFE1_DAF6_786E_501D_EA3C8B4E4425" name="registry.source" value="docs/gungnir-capabilities.md §7" modelElement="EAID_65E8A9D8_734F_4A5E_3170_10F8DF602882"/>
-          <tag xmi:id="EAID_00837BD4_5EDB_C6CF_A484_CA6B614AEAF7" name="registry.status" value="planned" modelElement="EAID_65E8A9D8_734F_4A5E_3170_10F8DF602882"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7243,7 +7241,6 @@
           <tag xmi:id="EAID_1B0A1AC9_0F7E_2372_E572_00048C009303" name="uafKind" value="Project" modelElement="EAID_D9AE526D_3763_93E3_98EC_5044B451B85E"/>
           <tag xmi:id="EAID_652567AE_5016_C126_7B3E_6478DF71081F" name="uafId" value="PJ-I3" modelElement="EAID_D9AE526D_3763_93E3_98EC_5044B451B85E"/>
           <tag xmi:id="EAID_0A06C2A9_27E5_05B9_D1E2_50B8B9E4F3E0" name="registry.source" value="docs/gungnir-capabilities.md §7" modelElement="EAID_D9AE526D_3763_93E3_98EC_5044B451B85E"/>
-          <tag xmi:id="EAID_42A88BD5_0601_85C2_7B1C_672DEBF6537E" name="registry.status" value="planned" modelElement="EAID_D9AE526D_3763_93E3_98EC_5044B451B85E"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7260,7 +7257,6 @@
           <tag xmi:id="EAID_F1FA394E_7A26_8C5F_A24B_B7382B3FEB68" name="uafKind" value="Project" modelElement="EAID_D65F5DAA_F75C_CFBB_81CA_EE55F01485CC"/>
           <tag xmi:id="EAID_3E3FA5DB_8A3D_005C_CDF6_9489DBE56E0F" name="uafId" value="PJ-I4" modelElement="EAID_D65F5DAA_F75C_CFBB_81CA_EE55F01485CC"/>
           <tag xmi:id="EAID_B8EB477C_B749_9B37_5A47_DAB35A829861" name="registry.source" value="docs/gungnir-capabilities.md §7" modelElement="EAID_D65F5DAA_F75C_CFBB_81CA_EE55F01485CC"/>
-          <tag xmi:id="EAID_B888C605_CF81_A1B2_1F1A_19CD84038071" name="registry.status" value="planned" modelElement="EAID_D65F5DAA_F75C_CFBB_81CA_EE55F01485CC"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>

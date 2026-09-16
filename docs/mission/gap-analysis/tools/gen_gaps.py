@@ -531,12 +531,17 @@ L.append("- **GAP-023** (data loaders) no longer gates **GAP-024** (GPU point-cl
 L.append("- **GAP-077**, **GAP-078**, and **GAP-079** (in progress) all feed **GAP-080** (the\n  first two trained models); none of the three has a gap of its own blocking it.")
 L.append("- **GAP-067** (this table's own walk) is blocked on nothing: D-16 and D-10, its two\n  named decisions, are both Resolved. It is now purely a matter of the owner's time\n  against 43 rows, not a dependency.")
 L.append("\n## Counts\n")
-L.append("| Increment | Gaps | Effort S / M / L / XL |")
-L.append("|---|---|---|")
+L.append("| Increment | Gaps | Closed / In progress / Open / Planned | Effort S / M / L / XL |")
+L.append("|---|---|---|---|")
 for inc in ["I2", "I3", "I4"]:
     rows = [g for g in G if g["target"] == inc]
     ec = Counter(g["effort"] for g in rows)
-    L.append(f"| {inc} | {len(rows)} | {ec.get('S',0)} / {ec.get('M',0)} / {ec.get('L',0)} / {ec.get('XL',0)} |")
+    # A gap's status is its last history entry, so this is how far the increment has
+    # got. Generated here so Pj-Rm and the registry can cite it rather than restate it.
+    sc = Counter(g["status"] for g in rows)
+    L.append(f"| {inc} | {len(rows)} | {sc.get('Closed',0)} / {sc.get('In progress',0)} / "
+             f"{sc.get('Open',0)} / {sc.get('Planned',0)} | "
+             f"{ec.get('S',0)} / {ec.get('M',0)} / {ec.get('L',0)} / {ec.get('XL',0)} |")
 (OUT / "closure-roadmap.md").write_text(rel("\n".join(L)) + "\n", encoding="utf-8", newline="\n")
 
 # ---------------------------------------------------------------- decisions-needed.md

@@ -895,19 +895,15 @@ SD-16,registry.status,planned
 PJ-I1,uafId,PJ-I1
 PJ-I1,uafKind,Project
 PJ-I1,registry.source,docs/gungnir-capabilities.md \u00a77
-PJ-I1,registry.status,in progress
 PJ-I2,uafId,PJ-I2
 PJ-I2,uafKind,Project
 PJ-I2,registry.source,docs/gungnir-capabilities.md \u00a77
-PJ-I2,registry.status,planned
 PJ-I3,uafId,PJ-I3
 PJ-I3,uafKind,Project
 PJ-I3,registry.source,docs/gungnir-capabilities.md \u00a77
-PJ-I3,registry.status,planned
 PJ-I4,uafId,PJ-I4
 PJ-I4,uafKind,Project
 PJ-I4,registry.source,docs/gungnir-capabilities.md \u00a77
-PJ-I4,registry.status,planned
 PJ-P01,uafId,PJ-P01
 PJ-P01,uafKind,Project
 PJ-P01,registry.source,docs/plans/01-product-business-plan.md
