@@ -203,6 +203,28 @@ mod tests {
                 );
             }
         }
+
+        // **The row's own two quantities** (`verification-capability-table.md` §2,
+        // `gungnir-data-fusion` CPU ICP reference: translation within 0.05 m, rotation
+        // within 0.5 mrad), added 2026-09-15 in the GAP-067 walk.
+        //
+        // The point-wise bound above is strictly stronger and was what this test
+        // asserted on its own until then -- every source point landing within 2e-3 m of
+        // where the known transform puts it bounds both errors implicitly. The walk's
+        // finding was that *implicitly* is the problem: a row gates on the criterion the
+        // owner agreed (D-16), and a reader had to reconstruct the implication to see
+        // that it held. These two assertions say it outright, in the criterion's own
+        // terms and against its own numbers.
+        let translation_error = (solved.translation.vector - known.translation.vector).norm();
+        assert!(
+            translation_error < 0.05,
+            "recovered translation is {translation_error} m from the known one, over the 0.05 m criterion"
+        );
+        let rotation_error = (solved.rotation.inverse() * known.rotation).angle();
+        assert!(
+            rotation_error < 5e-4,
+            "recovered rotation is {rotation_error} rad from the known one, over the 0.5 mrad criterion"
+        );
     }
 
     #[test]
