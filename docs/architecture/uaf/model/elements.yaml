@@ -18,6 +18,19 @@
 # Every entry: id, name, and where useful description, owner (which plan or code
 # path is the source of truth), status (real | scaffold | planned) and code (the
 # Rust path the element corresponds to).
+#
+# `coverage` on a leaf capability: where its acceptance criterion comes from, for
+# the ones no requirement was derived from. The requirements specification's Source
+# column records where a requirement came FROM, so a requirement drawn from a
+# principle, a decision or a budget names no capability however squarely it bears on
+# one -- which is why a capability with no requirement is not the same as one nobody
+# specified. One of: `verification-table` (a row there states it), one or more
+# `GAP-nnn` (open; the criterion arrives with the closure), one or more `REQ-x-nn`
+# (those requirements bear on it), `In` (the roadmap defers it to that increment), or
+# `none -- reason`. build_uaf.py refuses a leaf capability that has neither a
+# requirement nor a disposition, and refuses a disposition naming a closed gap, an
+# unknown requirement, or an increment the roadmap says is already full. Section 8.1
+# of the specification is generated from this field.
 
 schema_version: 2
 updated: 2026-09-04
@@ -33,7 +46,7 @@ capabilities:
   - {id: CAP-1.3, parent: CAP-1, name: "Manage sensor readiness, modes, tasking, and calibration"}
   - {id: CAP-1.4, parent: CAP-1, name: Know sensor coverage and gaps over terrain}
   - {id: CAP-1.5, parent: CAP-1, name: Keep time discipline}
-  - {id: CAP-1.6, parent: CAP-1, name: "Receive early warning, tracks, and reports from peers"}
+  - {id: CAP-1.6, parent: CAP-1, name: "Receive early warning, tracks, and reports from peers", coverage: "verification-table"}
   - {id: CAP-1.7, parent: CAP-1, name: Receive cooperative identity}
   - id: CAP-2
     name: Understand
@@ -42,16 +55,16 @@ capabilities:
     owner: plan-04
   - {id: CAP-2.1, parent: CAP-2, name: Maintain one multi-sensor track picture with uncertainty}
   - {id: CAP-2.2, parent: CAP-2, name: Keep tracks through gaps with visible quality}
-  - {id: CAP-2.3, parent: CAP-2, name: Register sensors against each other}
-  - {id: CAP-2.4, parent: CAP-2, name: Track dense groups and count targets}
+  - {id: CAP-2.3, parent: CAP-2, name: Register sensors against each other, coverage: "I2"}
+  - {id: CAP-2.4, parent: CAP-2, name: Track dense groups and count targets, coverage: "GAP-015"}
   - {id: CAP-2.5, parent: CAP-2, name: Maintain a clutter-tolerant surface picture}
   - {id: CAP-2.6, parent: CAP-2, name: Classify and identify with evidence and confidence}
   - {id: CAP-2.7, parent: CAP-2, name: "Keep one identity across gaps, sorties, sessions, and peers"}
-  - {id: CAP-2.8, parent: CAP-2, name: "Predict trajectory, time to impact, closest approach"}
-  - {id: CAP-2.9, parent: CAP-2, name: Detect anomalies in tracks and feeds}
-  - {id: CAP-2.10, parent: CAP-2, name: "Fuse terrain, imagery, point clouds, and map layers"}
-  - {id: CAP-2.11, parent: CAP-2, name: Answer geometric questions}
-  - {id: CAP-2.12, parent: CAP-2, name: Maintain pattern of life and order of battle}
+  - {id: CAP-2.8, parent: CAP-2, name: "Predict trajectory, time to impact, closest approach", coverage: "verification-table"}
+  - {id: CAP-2.9, parent: CAP-2, name: Detect anomalies in tracks and feeds, coverage: "verification-table"}
+  - {id: CAP-2.10, parent: CAP-2, name: "Fuse terrain, imagery, point clouds, and map layers", coverage: "GAP-023 GAP-024"}
+  - {id: CAP-2.11, parent: CAP-2, name: Answer geometric questions, coverage: "none -- built and ungated; no requirement was derived from it and none bears on it"}
+  - {id: CAP-2.12, parent: CAP-2, name: Maintain pattern of life and order of battle, coverage: "verification-table"}
   - id: CAP-3
     name: Decide
     kind: area
@@ -64,47 +77,47 @@ capabilities:
   - {id: CAP-3.5, parent: CAP-3, name: "Offer alternatives, what-if, and rationale"}
   - {id: CAP-3.6, parent: CAP-3, name: Enforce rules of engagement}
   - {id: CAP-3.7, parent: CAP-3, name: Manage the queue under saturation}
-  - {id: CAP-3.8, parent: CAP-3, name: Recommend fires tasks with deconfliction}
-  - {id: CAP-3.9, parent: CAP-3, name: Recommend sensor re-tasking under degradation}
+  - {id: CAP-3.8, parent: CAP-3, name: Recommend fires tasks with deconfliction, coverage: "verification-table"}
+  - {id: CAP-3.9, parent: CAP-3, name: Recommend sensor re-tasking under degradation, coverage: "verification-table"}
   - id: CAP-4
     name: Act (recommend and authorize)
     kind: area
     description: Put the recommendation in front of the person who holds authority, record what they decide, and hand off; never act without that record.
     owner: plan-04
-  - {id: CAP-4.1, parent: CAP-4, name: Present recommendations for decision}
-  - {id: CAP-4.2, parent: CAP-4, name: Record every decision}
+  - {id: CAP-4.1, parent: CAP-4, name: Present recommendations for decision, coverage: "I3"}
+  - {id: CAP-4.2, parent: CAP-4, name: Record every decision, coverage: "REQ-S-01 REQ-S-05"}
   - {id: CAP-4.3, parent: CAP-4, name: Never execute without a recorded human decision}
-  - {id: CAP-4.4, parent: CAP-4, name: Hand off to effector systems with provenance}
-  - {id: CAP-4.5, parent: CAP-4, name: Warn assets and authorities}
-  - {id: CAP-4.6, parent: CAP-4, name: Track engagements and assess effects}
-  - {id: CAP-4.7, parent: CAP-4, name: Assist roles without authority}
+  - {id: CAP-4.4, parent: CAP-4, name: Hand off to effector systems with provenance, coverage: "verification-table"}
+  - {id: CAP-4.5, parent: CAP-4, name: Warn assets and authorities, coverage: "verification-table"}
+  - {id: CAP-4.6, parent: CAP-4, name: Track engagements and assess effects, coverage: "verification-table"}
+  - {id: CAP-4.7, parent: CAP-4, name: Assist roles without authority, coverage: "GAP-044"}
   - id: CAP-5
     name: Sustain
     kind: area
     description: Keep the sector operating, learning, and honest over time and through outages.
     owner: plan-04
-  - {id: CAP-5.1, parent: CAP-5, name: Journal every event durably}
+  - {id: CAP-5.1, parent: CAP-5, name: Journal every event durably, coverage: "REQ-D-05 REQ-D-06 REQ-P-07"}
   - {id: CAP-5.2, parent: CAP-5, name: Replay and rehearse}
   - {id: CAP-5.3, parent: CAP-5, name: Produce reports and measures from the journal}
-  - {id: CAP-5.4, parent: CAP-5, name: Operate disconnected and reconcile}
-  - {id: CAP-5.5, parent: CAP-5, name: Report health honestly and run the alert lifecycle}
-  - {id: CAP-5.6, parent: CAP-5, name: Manage configuration baselines and mission plans}
-  - {id: CAP-5.7, parent: CAP-5, name: Govern algorithm and model baselines}
-  - {id: CAP-5.8, parent: CAP-5, name: Support the battle rhythm}
+  - {id: CAP-5.4, parent: CAP-5, name: Operate disconnected and reconcile, coverage: "I4"}
+  - {id: CAP-5.5, parent: CAP-5, name: Report health honestly and run the alert lifecycle, coverage: "REQ-U-03 REQ-C-04 -- the alert lifecycle half has no requirement"}
+  - {id: CAP-5.6, parent: CAP-5, name: Manage configuration baselines and mission plans, coverage: "verification-table"}
+  - {id: CAP-5.7, parent: CAP-5, name: Govern algorithm and model baselines, coverage: "verification-table"}
+  - {id: CAP-5.8, parent: CAP-5, name: Support the battle rhythm, coverage: "verification-table"}
   - {id: CAP-5.9, parent: CAP-5, name: Provide role-based workspaces and workflow}
-  - {id: CAP-5.10, parent: CAP-5, name: Meet performance budgets per profile}
+  - {id: CAP-5.10, parent: CAP-5, name: Meet performance budgets per profile, coverage: "GAP-093"}
   - id: CAP-6
     name: Secure
     kind: area
     description: Control who can see and do what, and prove it afterwards.
     owner: plan-04
-  - {id: CAP-6.1, parent: CAP-6, name: Authenticate operators and callers}
+  - {id: CAP-6.1, parent: CAP-6, name: Authenticate operators and callers, coverage: "GAP-057"}
   - {id: CAP-6.2, parent: CAP-6, name: "Authorize by role, class, and layer"}
   - {id: CAP-6.3, parent: CAP-6, name: Audit everything that matters}
   - {id: CAP-6.4, parent: CAP-6, name: Protect data in transit and at rest}
   - {id: CAP-6.5, parent: CAP-6, name: Assure the supply chain}
   - {id: CAP-6.6, parent: CAP-6, name: Mark and enforce releasability}
-  - {id: CAP-6.7, parent: CAP-6, name: Treat external input as untrusted}
+  - {id: CAP-6.7, parent: CAP-6, name: Treat external input as untrusted, coverage: "GAP-044"}
   - id: CAP-7
     name: Integrate
     kind: area
@@ -112,8 +125,8 @@ capabilities:
     owner: plan-04
   - {id: CAP-7.1, parent: CAP-7, name: Expose a versioned interface}
   - {id: CAP-7.2, parent: CAP-7, name: Speak the domain's interoperability standards}
-  - {id: CAP-7.3, parent: CAP-7, name: "Run as desktop, on-prem node, or cloud node"}
-  - {id: CAP-7.4, parent: CAP-7, name: Exchange with peers and coalition}
+  - {id: CAP-7.3, parent: CAP-7, name: "Run as desktop, on-prem node, or cloud node", coverage: "REQ-C-06 REQ-C-07"}
+  - {id: CAP-7.4, parent: CAP-7, name: Exchange with peers and coalition, coverage: "verification-table"}
 
 # Operational performers: the roles (as logical performers), the organizational
 # nodes they sit in, the external parties, and the command-and-control system as a

@@ -46,6 +46,16 @@ DOCS = UAF.parent.parent
 ROOT = DOCS.parent
 MODEL = UAF / "model"
 REQUIREMENTS_SPEC = DOCS / "architecture/togaf/requirements-management/architecture-requirements-specification.md"
+VERIFICATION_TABLE = DOCS / "verification-capability-table.md"
+GAP_REGISTER = DOCS / "mission/gap-analysis/gap-register.md"
+CAPABILITY_ROADMAP = DOCS / "mission/capabilities/capability-roadmap.md"
+
+# A leaf capability that no requirement was derived from has to say where its
+# acceptance criterion comes from instead; `coverage` on the entry is that answer,
+# and check() verifies the thing it points at exists. The number below is a
+# ratchet, not a target: it only ever goes down, and check() fails either way so
+# neither a new undermanaged capability nor a stale baseline can pass silently.
+CAPABILITIES_WITHOUT_REQUIREMENT = 27
 NL = "\n"
 DATE = "2026-09-04"
 
@@ -1286,7 +1296,7 @@ def gen_traceability(elements, rels) -> None:
     reqs = [e["id"] for e in elements.get("requirements", [])]
     two_way("requirement-to-capability", "Requirement to capability",
             "The traceability between architecture requirements and the capabilities they are stated against.",
-            "Shows which requirements bear on each leaf capability and which capabilities each requirement names; a capability with no requirement is listed in the specification's coverage section, not inferred.",
+            "Shows which requirements were derived from each leaf capability, and which capabilities each requirement names as its source. A **none** here is not a capability nobody specified: the Source column records where a requirement came from, so one drawn from a principle, a decision or a budget names no capability however squarely it bears on one. Every **none** below carries a disposition in section 8.1 of the requirements specification saying where its acceptance criterion does come from, and `build_uaf.py` refuses one that has neither.",
             "satisfies", reqs, caps, "Requirement", "Capability",
             "`../model/relationships.yaml` satisfies, generated from the requirements specification", "plan 10 requirements management; the capability assessment")
     two_way("requirement-to-resource", "Requirement to resource",
@@ -1344,6 +1354,155 @@ RELATIONSHIP_ENDPOINTS = {
 EDGE_KIND_VIEWS = {
     "exchanges": {"Op-Cn", "Op-Is"},
 }
+
+
+def coverage_evidence() -> tuple[set[str], dict[str, str], dict[str, list[str]]]:
+    """What a `coverage` disposition can point at, read from the documents.
+
+    Returns the capabilities the verification table names, each gap's status, and
+    each capability's roadmap maturity per increment.
+    """
+    in_table = set(re.findall(r"CAP-[0-9.]+[0-9]", read(VERIFICATION_TABLE)))
+    gap_status: dict[str, str] = {}
+    for line in read(GAP_REGISTER).splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        # The summary table's rows only: the per-entry prose below it repeats the
+        # identifier in a heading, where there is no status column to read.
+        if len(cells) >= 11 and re.fullmatch(r"GAP-\d+", cells[0]):
+            gap_status[cells[0]] = cells[10]
+    maturity: dict[str, list[str]] = {}
+    for line in read(CAPABILITY_ROADMAP).splitlines():
+        m = re.match(r"\| (CAP-[0-9.]+) [^|]*\|(.*)\|\s*$", line)
+        if m:
+            maturity[m.group(1)] = [c.strip() for c in m.group(2).split("|") if c.strip()]
+    return in_table, gap_status, maturity
+
+
+def coverage_problems(cap: str, disposition: str, requirement_ids: set[str],
+                      in_table: set[str], gap_status: dict[str, str],
+                      maturity: dict[str, list[str]]) -> list[str]:
+    """Whether a capability's `coverage` points at something that is actually there.
+
+    An unchecked disposition is worth nothing: "waiting on GAP-057" stops being
+    true the day that gap closes, and the capability would go back to having no
+    criterion with the registry still claiming it was covered.
+    """
+    token = disposition.split("--")[0].strip()
+    parts = token.split()
+    if not parts:
+        return [f"{cap}: coverage is empty"]
+    if parts == ["verification-table"]:
+        if cap not in in_table:
+            return [f"{cap}: coverage says verification-table, but no row there names it"]
+        return []
+    if parts[0] == "none":
+        if "--" not in disposition or not disposition.split("--", 1)[1].strip():
+            return [f"{cap}: coverage none must give a reason after --"]
+        return []
+    out = []
+    for p in parts:
+        if re.fullmatch(r"GAP-\d+", p):
+            if p not in gap_status:
+                out.append(f"{cap}: coverage names {p}, which is not in the gap register")
+            # `startswith`, not equality: GAP-103's status cell reads "Closed
+            # 2026-09-09". An exact match reads that as still open, which is the
+            # silent pass this gate exists to stop -- a capability whose gap has
+            # closed is a capability whose criterion has quietly gone missing.
+            elif gap_status[p].startswith("Closed"):
+                out.append(f"{cap}: coverage waits on {p}, which is closed -- it needs a "
+                           f"requirement, a verification row, or a new disposition")
+        elif re.fullmatch(r"REQ-[A-Z]-\d+", p):
+            if p not in requirement_ids:
+                out.append(f"{cap}: coverage names {p}, which is not a requirement")
+        elif re.fullmatch(r"I\d", p):
+            # Deferred to a later increment only counts while the roadmap agrees
+            # it is not finished now. Full at increment 1 and deferred are not
+            # both true, and that combination is how a delivered capability ends
+            # up with nobody looking for its criterion.
+            mat = maturity.get(cap)
+            if not mat:
+                out.append(f"{cap}: coverage defers to {p}, but the roadmap has no row for it")
+            elif mat[0] == "full":
+                out.append(f"{cap}: coverage defers to {p}, but the roadmap has it full at "
+                           f"increment 1")
+        else:
+            out.append(f"{cap}: coverage token {p!r} is not verification-table, a GAP id, "
+                       f"a REQ id, an increment, or none")
+    return out
+
+
+def coverage_prose(disposition: str, maturity: dict[str, list[str]], cap: str) -> tuple[str, str]:
+    """A `coverage` value rendered as the specification's two cells."""
+    token, _, reason = disposition.partition("--")
+    parts, reason = token.split(), reason.strip()
+    if parts == ["verification-table"]:
+        return ("Verification table",
+                "a row in `../../../verification-capability-table.md` states the criterion")
+    if parts[0] == "none":
+        return "None", reason
+    if re.fullmatch(r"I\d", parts[0]):
+        # State what the roadmap says rather than concluding from it. "Partial at
+        # increment 1" means part of this is already running, so "nothing is owed
+        # yet" would be false for exactly the half that is.
+        mat = maturity.get(cap, [])
+        at_one = mat[0] if mat else "?"
+        return (f"Increment {parts[0][1:]}",
+                f"the roadmap has it *{at_one}* at increment 1, full at increment {parts[0][1:]}")
+    if parts[0].startswith("GAP-"):
+        return (", ".join(parts),
+                "open in the gap register; the criterion arrives with the closure"
+                + (f" ({reason})" if reason else ""))
+    return (", ".join(parts),
+            "stated by requirements that were derived from elsewhere, so the generated "
+            "trace does not reach it" + (f"; {reason}" if reason else ""))
+
+
+def regenerate_coverage_section(elements, rels) -> None:
+    """Publish §8.1: every leaf capability no requirement was derived from.
+
+    The traceability view has always pointed here -- "a capability with no
+    requirement is listed in the specification's coverage section, not inferred" --
+    and until this existed the pointer was dangling: §8 counts requirements by
+    category and names no capability at all. So the generator reported 27 of them
+    as notes, the view printed **none** against each, and the document they both
+    deferred to was silent. Generated, because the list is the registry's to state;
+    the disposition against each is the registry's `coverage` field, which is
+    written by hand.
+    """
+    satisfied = {to for r in rels.get("satisfies", []) or [] for to in rel_targets(r)}
+    _, _, maturity = coverage_evidence()
+    rows = []
+    for e in elements["capabilities"]:
+        if "parent" not in e or e["id"] in satisfied:
+            continue
+        where, why = coverage_prose(e.get("coverage", ""), maturity, e["id"])
+        rows.append(f'| {e["id"]} {e["name"]} | {where} | {why} |')
+    body = [
+        "",
+        "### 8.1 Leaf capabilities no requirement was derived from",
+        "",
+        "Generated by `../../uaf/tools/build_uaf.py` from the registry's `coverage` field;",
+        "do not edit by hand. The Source column of §1-§7 records where a requirement came",
+        "*from*, so a requirement drawn from a principle, a decision or a budget names no",
+        "capability however squarely it bears on one. These are the leaf capabilities left",
+        "with no requirement of their own, and where each one's acceptance criterion comes",
+        "from instead. The check refuses a capability that has neither, and refuses a",
+        "disposition pointing at a gap that has closed or an increment the roadmap says is",
+        "already finished.",
+        "",
+        f"| Capability | Criterion comes from | Which means |",
+        "|---|---|---|",
+        *rows,
+        "",
+        f"{len(rows)} of {sum(1 for e in elements['capabilities'] if 'parent' in e)} leaf "
+        "capabilities. The count is a ratchet in `build_uaf.py`: writing a requirement for one",
+        "of these lowers it, and it never rises.",
+        "",
+    ]
+    text = read(REQUIREMENTS_SPEC)
+    text = replace_block(text, "<!-- BEGIN generated coverage -->",
+                         "<!-- END generated coverage -->", NL.join(body))
+    write(REQUIREMENTS_SPEC, text)
 
 
 def check(elements, rels) -> list[str]:
@@ -1411,9 +1570,40 @@ def check(elements, rels) -> list[str]:
                 notes.append(f"{e['id']} names no capability; sourced from {e.get('source') or 'nothing'}")
         for planned in e.get("planned_carriers") or []:
             notes.append(f"{e['id']} is carried by a crate that does not exist yet: {planned}")
+    # `satisfies` is generated from the specification's Source column, so it says a
+    # requirement was DERIVED FROM a capability, not that it bears on one: the
+    # requirements sourced from principles, decisions and budgets name no capability
+    # and correctly so. A leaf capability nobody derived a requirement from therefore
+    # is not necessarily unspecified -- but it has to say where its criterion does
+    # come from, which is what `coverage` carries and what §8.1 of the specification
+    # publishes. Without that the capability is only visible as a note nobody acts on.
+    in_table, gap_status, maturity = coverage_evidence()
+    requirement_ids = {e["id"] for e in elements.get("requirements", [])}
+    unrequired = []
     for e in elements["capabilities"]:
-        if "parent" in e and e["id"] not in satisfied:
-            notes.append(f"{e['id']} is required by no requirement (see the specification's coverage section)")
+        if "parent" not in e:
+            continue
+        if e["id"] in satisfied:
+            if e.get("coverage"):
+                notes.append(f"{e['id']} has a requirement and a coverage disposition; the "
+                             f"disposition is stale and should be removed")
+            continue
+        unrequired.append(e["id"])
+        if not e.get("coverage"):
+            problems.append(f"{e['id']} is required by no requirement and has no coverage "
+                            f"disposition; give it one or write the requirement")
+            continue
+        problems.extend(coverage_problems(e["id"], e["coverage"], requirement_ids,
+                                          in_table, gap_status, maturity))
+    if len(unrequired) > CAPABILITIES_WITHOUT_REQUIREMENT:
+        problems.append(f"{len(unrequired)} leaf capabilities have no requirement, above the "
+                        f"ratchet of {CAPABILITIES_WITHOUT_REQUIREMENT}: a capability was added "
+                        f"without one. Write the requirement rather than raising the number")
+    elif len(unrequired) < CAPABILITIES_WITHOUT_REQUIREMENT:
+        problems.append(f"only {len(unrequired)} leaf capabilities now have no requirement, below "
+                        f"the ratchet of {CAPABILITIES_WITHOUT_REQUIREMENT}: set "
+                        f"CAPABILITIES_WITHOUT_REQUIREMENT to {len(unrequired)} so the gate holds "
+                        f"the ground that was just taken")
     implemented = {to for r in rels["implements"] for to in rel_targets(r)}
     for e in elements["services"]:
         if e["id"] not in implemented:
@@ -1510,6 +1700,7 @@ def main(argv: list[str]) -> int:
         gen_op_pr(threads, elements)
         gen_op_is(vignettes, threads)
         gen_traceability(elements, rels)
+        regenerate_coverage_section(elements, rels)
         print(f"generated views for {len(facts)} crates, {len(threads)} threads, {len(vignettes)} vignettes")
     problems, notes = check(elements, rels)
     # Not a problem: a type without a doc comment still reaches the registry and
