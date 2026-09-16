@@ -5551,9 +5551,55 @@ not by finding, for the time between whenever each item landed and this correcti
 
     **Human-owned surface**: none of `gungnir-ingest`'s own code is touched -- the
     attachment is at each host's call site through an API that already existed -- but
-    `seal_journal` is the node end of `gungnir-security`'s custody contract, so it is
-    offered for the owner's review with GAP-084's entry. Written and gated, not signed.
-    No dependency edge changed.
+    `seal_journal` is the node end of `gungnir-security`'s custody contract, so it went
+    to the owner with GAP-084's entry and is **signed by the owner 2026-09-15** (item 130
+    below, with three other signatures taken in the same pass). No dependency edge
+    changed.
+
+130. **Four signatures cleared in one pass, 2026-09-15, and one of them was a claim
+    rather than a change.** The owner walked what the register said was waiting on him.
+    Three were real signatures and the fourth was a sentence that had been wrong since
+    the 2026-09-10 sweep missed it.
+
+    **(a) `§2.9`'s `loom` row** (`docs/agentic-coding-standards.md`, Model checker),
+    written 2026-09-08 under GAP-061 and marked "not signed" in the standards document
+    itself. Signed on the reading the row states: Gate 4 had required `loom` since the
+    workflow was written, so the signature admits the *dependency those checks had been
+    missing* -- the reason twenty-two green runs model-checked nothing -- rather than a
+    second decision about the tool. The three terms it is admitted on are unchanged, and
+    the first is what keeps it out of everything that ships:
+    `[target.'cfg(loom)'.dev-dependencies]`, so no ordinary build, `cargo deny`,
+    `cargo about` or SBOM run resolves it at all. The model checks themselves were signed
+    with `gungnir-fusion-async` in items 115 and 128; this closes the row beside them.
+
+    **(b) `gungnir-policy/src/fires.rs`** (GAP-090): the three-state
+    `ReportedPositionSource`, so PN-05's friendly-position line cannot show a pass it has
+    not earned. Human-owned, written and gated, and **never queued** -- the one item of
+    that entry the 2026-09-10 sweep never saw, because nothing had put it in front of
+    anybody. Signed with its effect on a live verdict stated plainly: none today, since
+    the other three sources are permanently missing and the chain already denied every
+    fires task; what changed is that the display stopped claiming otherwise.
+
+    **(c) `gungnir-node`'s `seal_journal`** (GAP-084 item 3, item 129 above), the node end
+    of `gungnir-security`'s custody contract.
+
+    **(d) GAP-001's own "human-owned and unsigned" sentence, ruled stale and deleted.**
+    It referred to the sensor-position resolver's `gungnir-fusion-async` touch and had
+    read that way since the resolver landed, while the crate was reviewed and signed
+    twice in the meantime (items 115 and 128) and the gateway change beside it was signed
+    2026-09-06. **This is the fourth time a settled signature has gone on reading as an
+    open one** -- items 123, 125 and 126 each recorded the same failure -- and the cause
+    is the same every time: a signature reaches the `§10` item and the code, and the
+    register's own prose keeps its old sentence. The sweep that was supposed to catch
+    exactly this on 2026-09-10 did not reach GAP-001's entry.
+
+    **What it leaves.** Nothing in the register now says a human-owned change is waiting
+    on the owner. The formal ledger is clear as well: D-01 to D-43 are all Resolved. What
+    is actually blocking the next work is a different shape of thing -- decisions nobody
+    has filed a D-number for, and a handful of steps only the owner's own hands can take
+    (a workflow dispatch on the self-hosted runner, a recorded TAK corpus, the usability
+    sessions, a self-recorded 1090ES capture). Those are being walked in the same pass and
+    will land as their own items.
 
 ## Directory layout
 
