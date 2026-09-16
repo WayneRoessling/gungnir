@@ -1966,3 +1966,97 @@
   commit: 2c3174308391676597563f7407f84e374e47b2fa
   pre_repository: false
   record: "commit 2c31743 message; PR #115"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    D-29: the node's TLS identity issued through its key provider with rcgen's SigningKey.
+    §10 items 88 and 91 recorded it as signed on 2026-09-06; items 126 and 127 called
+    that day's act a trust-tier classification. Signed on this date, settling the dispute.
+  kind: code
+  paths:
+  - gungnir-remote/src/identity.rs
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 items 88, 91, 126 and 127;
+    docs/record/2026-09-16/six-left-out-signatures-signed.md
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-060's certificate and key-custody path (identity.rs, LinkTls, client_config) and
+    the §2.9 rule it rests on. §10 item 99 recorded it as signed on 2026-09-06; item 126
+    disputed that. Signed on this date, settling the dispute.
+  kind: code
+  paths:
+  - gungnir-remote/src/identity.rs
+  - gungnir-remote/src/lib.rs
+  - docs/agentic-coding-standards.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 items 99 and 126;
+    docs/record/2026-09-16/six-left-out-signatures-signed.md
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067's §2 walk of 2026-09-07: each row's cited test checks its criterion, and rows
+    reading Tested read as Specified. docs/architecture.md and commit 61bcbfc recorded it
+    as confirmed; §10 items 131 and 132 said rows still waited. Signed on this date,
+    settling the dispute in favour of the 2026-09-07 walk.
+  kind: criterion
+  paths:
+  - docs/architecture.md
+  - docs/verification-capability-table.md
+  commit: 61bcbfce6e816682c0d0d2dccf459ca882a95340
+  pre_repository: false
+  record: >-
+    commit 61bcbfc; ARCHITECTURE.md §10 items 131 and 132;
+    docs/record/2026-09-16/six-left-out-signatures-signed.md
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    Plan 02's mission content. §10 item 37 recorded it as approved by the mission
+    subject-matter expert on 2026-09-05 while the mission documents still showed the
+    review pending. Signed on this date as that approval.
+  kind: other
+  paths:
+  - docs/mission
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 37; docs/plans/README.md;
+    docs/record/2026-09-16/six-left-out-signatures-signed.md
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    Plan 07's vehicle data. §10 item 37 recorded it as approved by the mission
+    subject-matter expert on 2026-09-05. Signed on this date as that approval; the three
+    domain tables' approval of 2026-09-07 (GAP-046) is its own entry.
+  kind: other
+  paths:
+  - docs/test-tracks
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 37; docs/plans/README.md;
+    docs/record/2026-09-16/six-left-out-signatures-signed.md
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-084: the escrow record the desktop writes beside the journal at sign-in when the
+    baseline names an officer. The design notes' index recorded it as signed on
+    2026-09-06 without naming its file. Signed on this date.
+  kind: code
+  paths:
+  - gungnir-app/src/keystore.rs
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: false
+  record: >-
+    docs/design/README.md, DN-22 row as of 2026-09-06;
+    docs/record/2026-09-16/six-left-out-signatures-signed.md

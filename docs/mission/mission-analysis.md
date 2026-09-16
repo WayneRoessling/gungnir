@@ -1,6 +1,7 @@
 # Gungnir mission analysis
 
-Status: first draft, 2026-09-04. Subject-matter validation pending; see §11.
+Status: first draft, 2026-09-04. What the owner has approved of it is in
+[`../signatures.md`](../signatures.md); the validation record is in §11.
 
 ## 1. Purpose and method
 
@@ -203,7 +204,7 @@ Validation record:
 | Date | Reviewer | Scope | Outcome |
 |---|---|---|---|
 | 2026-09-04 | Drafting agent | All files | First draft; internal consistency and link check only |
-| pending | Subject-matter reviewer (air defense) | `air-defense-and-counter-uas.md`, MT-01 to MT-03, VG-01 to VG-03 | |
-| pending | Subject-matter reviewer (maritime) | `maritime.md`, MT-04, MT-05, VG-04, VG-05 | |
-| pending | Subject-matter reviewer (land and fires) | `land.md`, MT-06, VG-06 | |
 | 2026-09-04 | Owner | Roles and scoping decisions | D-01 to D-15 resolved (`gap-analysis/decisions-needed.md`); measure targets set (D-16) |
+
+The subject-matter approval of this content is an entry in
+[`../signatures.md`](../signatures.md), not a row here.
