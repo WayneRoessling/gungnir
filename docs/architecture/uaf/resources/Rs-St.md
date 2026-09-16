@@ -27,8 +27,9 @@ latency is measured once the pipeline exists.
 
 ## Remote backend connection (`gungnir-remote`)
 
-Detached (`connect` returned `TransportNotImplemented` or the endpoint was
-unreachable) or Connected (planned, GAP-041). While Detached, `is_healthy()` is
+Detached until the node's first snapshot arrives -- `connect` returns as soon as the
+link task is spawned, so `Ok` does not mean a node answered -- and Connected once it
+has (GAP-041, GAP-050). While Detached, `is_healthy()` is
 false and the outbox accepts submissions up to `OUTBOX_CAPACITY` (100,000), dropping
 and counting the oldest beyond that. The desktop's backend state (Op-St) is derived
 from this.

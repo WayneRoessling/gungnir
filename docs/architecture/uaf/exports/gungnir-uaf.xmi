@@ -1072,12 +1072,12 @@
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_43203DB9_3D4A_24AB_6F06_226E5B15C67F" name="local sensors (adapters)" visibility="public" supplier="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_5F9F1426_B689_9EC9_7F53_460A6D028BCC" name="5,000 det/s (MOP-17)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_D0EBAA67_6D10_A6FA_F3CB_E93AC422B0A0" name="5,000 det/s (MOP-17)" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_A5998107_8D73_A34E_5AD7_3983C2678093" name="HTTP + WebSocket, p99 150 ms (MOP-02)\nplanned, GAP-041" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_42774E3B_EAB5_DE10_00E9_87831025F147" name="HTTP + WebSocket over TLS, p99 400 ms\nplanned, GAP-041" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_32C1255C_4101_B092_7F8B_C2613445C889" name="peer tracks, STANAG 4676, marking\nplanned" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A" name="as above, planned" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468" name="handoff under 500 ms (MOP-32), planned" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007" name="handoff, planned" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E" name="HTTP + WebSocket, p99 150 ms (MOP-02)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D" name="HTTP + WebSocket over TLS, p99 400 ms" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6" name="tracks, warnings, marking\nSTANAG 4676 blocked" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50" name="as above" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1" name="handoff under 500 ms (MOP-32)" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325" name="handoff" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_A21F184A_D106_0229_9C6B_1B1378FDAFFB" name="signed image (GAP-061)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_99CE5B4B_9DDC_A903_1FA5_00C84654F0DF" name="signed image (GAP-061)" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_10027B08_22C4_A782_0A4A_310E033496CA" name="signed installer (GAP-061)" visibility="public" supplier="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
@@ -1515,12 +1515,12 @@
       </packagedElement>
       <packagedElement xmi:type="uml:Package" xmi:id="EAPK_FD9D9961_5AA6_6A7B_B2E0_56F96AB50F15" name="Security Connectivity Sc-Cn" visibility="public">
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_7C9D95C5_8D2D_0005_B3D4_A72BCF8D047C" name="allow-list + validation (today)" visibility="public" supplier="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_33869F9F_F871_664E_730D_03388982B986" name="allow-list + validation (today)\nmTLS (planned, D-02)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B" name="mTLS + operator token (planned)\nno transport today" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714" name="mTLS + operator token (planned)" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_C9B67899_EDF9_924D_18E4_909916F141C2" name="mTLS + releasability (planned)" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2" name="mTLS + releasability (planned)" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA" name="mTLS handoff (planned)" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" name="allow-list + validation\nsubmissions: mTLS (D-02)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" name="mTLS + operator token" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_8ACACD61_A48D_3826_0186_4014783054E8" name="mTLS + operator token" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742" name="mTLS + releasability" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8" name="mTLS + releasability" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7" name="mTLS handoff" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_3C0AFC05_5E24_25C3_77F6_BB465FEC6BC2" name="signed image + SBOM (planned)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_ACD8FBE1_909C_B575_AA7C_AE64059FD779" name="signed image + SBOM (planned)" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_198CEBA7_D695_032C_81BE_FEEE0B82DBC1" name="signed installer (planned)" visibility="public" supplier="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
@@ -9807,12 +9807,12 @@
         <extendedProperties tagged="0"/>
         <links>
           <Dependency xmi:id="EAID_43203DB9_3D4A_24AB_6F06_226E5B15C67F" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-          <Dependency xmi:id="EAID_A5998107_8D73_A34E_5AD7_3983C2678093" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_42774E3B_EAB5_DE10_00E9_87831025F147" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+          <Dependency xmi:id="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
           <Dependency xmi:id="EAID_10027B08_22C4_A782_0A4A_310E033496CA" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
           <Dependency xmi:id="EAID_7C9D95C5_8D2D_0005_B3D4_A72BCF8D047C" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-          <Dependency xmi:id="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+          <Dependency xmi:id="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_8ACACD61_A48D_3826_0186_4014783054E8" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
           <Dependency xmi:id="EAID_198CEBA7_D695_032C_81BE_FEEE0B82DBC1" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
         </links>
       </element>
@@ -9831,14 +9831,14 @@
         <extendedProperties tagged="0"/>
         <links>
           <Dependency xmi:id="EAID_5F9F1426_B689_9EC9_7F53_460A6D028BCC" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_A5998107_8D73_A34E_5AD7_3983C2678093" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_32C1255C_4101_B092_7F8B_C2613445C889" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
           <Dependency xmi:id="EAID_A21F184A_D106_0229_9C6B_1B1378FDAFFB" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_33869F9F_F871_664E_730D_03388982B986" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_C9B67899_EDF9_924D_18E4_909916F141C2" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
           <Dependency xmi:id="EAID_3C0AFC05_5E24_25C3_77F6_BB465FEC6BC2" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
         </links>
       </element>
@@ -9857,12 +9857,12 @@
         <extendedProperties tagged="0"/>
         <links>
           <Dependency xmi:id="EAID_D0EBAA67_6D10_A6FA_F3CB_E93AC422B0A0" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-          <Dependency xmi:id="EAID_42774E3B_EAB5_DE10_00E9_87831025F147" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-          <Dependency xmi:id="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+          <Dependency xmi:id="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
           <Dependency xmi:id="EAID_99CE5B4B_9DDC_A903_1FA5_00C84654F0DF" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-          <Dependency xmi:id="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-          <Dependency xmi:id="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_8ACACD61_A48D_3826_0186_4014783054E8" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+          <Dependency xmi:id="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
           <Dependency xmi:id="EAID_ACD8FBE1_909C_B575_AA7C_AE64059FD779" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
         </links>
       </element>
@@ -9892,7 +9892,7 @@
           <Dependency xmi:id="EAID_EBB8C9FC_D5EF_0F6B_ACCA_5F6B4B5BF5FA" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_E703F889_2FA0_8300_6C29_B6D4AE6F7A68"/>
           <Dependency xmi:id="EAID_6418A685_A5C9_3FD7_E90A_6778C9F96504" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_E703F889_2FA0_8300_6C29_B6D4AE6F7A68"/>
           <Dependency xmi:id="EAID_7C9D95C5_8D2D_0005_B3D4_A72BCF8D047C" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-          <Dependency xmi:id="EAID_33869F9F_F871_664E_730D_03388982B986" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
         </links>
       </element>
       <element xmi:idref="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" xmi:type="uml:Object" name="Peer command-and-control nodes" scope="public">
@@ -9909,10 +9909,10 @@
         <xrefs/>
         <extendedProperties tagged="0"/>
         <links>
-          <Dependency xmi:id="EAID_32C1255C_4101_B092_7F8B_C2613445C889" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_C9B67899_EDF9_924D_18E4_909916F141C2" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
         </links>
       </element>
       <element xmi:idref="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" xmi:type="uml:Object" name="Effector systems" scope="public">
@@ -9929,14 +9929,14 @@
         <xrefs/>
         <extendedProperties tagged="0"/>
         <links>
-          <Dependency xmi:id="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
-          <Dependency xmi:id="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
-          <Dependency xmi:id="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
         </links>
       </element>
       <element xmi:idref="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" xmi:type="uml:Object" name="Build and release infrastructure" scope="public">
         <model package="EAPK_34896D57_5A99_007A_944A_6BA06B9C3D7F" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Object" nType="0" scope="public" stereotype="ActualResource" documentation="Self-hosted GitLab with runners (including a GPU runner) and the container registry (D-10)."/>
+        <properties isSpecification="false" sType="Object" nType="0" scope="public" stereotype="ActualResource" documentation="GitHub, with GitHub Actions, a self-hosted runner labelled gpu, and the GitHub Container Registry (D-10, amended 2026-09-07)."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="AR-07"/>
@@ -27023,7 +27023,7 @@
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_A5998107_8D73_A34E_5AD7_3983C2678093" name="HTTP + WebSocket, p99 150 ms (MOP-02)\nplanned, GAP-041">
+      <connector xmi:idref="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E" name="HTTP + WebSocket, p99 150 ms (MOP-02)">
         <source xmi:idref="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27037,14 +27037,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="HTTP + WebSocket, p99 150 ms (MOP-02)\nplanned, GAP-041"/>
+        <labels mt="HTTP + WebSocket, p99 150 ms (MOP-02)"/>
         <tags>
-          <tag xmi:id="EAID_640B0B98_4ABF_8E8B_2680_AE98D674900E" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_A5998107_8D73_A34E_5AD7_3983C2678093"/>
-          <tag xmi:id="EAID_584CFCCF_122F_D514_FFBC_15C8EF9CD483" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_A5998107_8D73_A34E_5AD7_3983C2678093"/>
+          <tag xmi:id="EAID_425C6492_9418_7F89_04B3_B64D0F85E5C8" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E"/>
+          <tag xmi:id="EAID_B08A03A8_BB98_781C_5E32_740DCA1DCF4B" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_42774E3B_EAB5_DE10_00E9_87831025F147" name="HTTP + WebSocket over TLS, p99 400 ms\nplanned, GAP-041">
+      <connector xmi:idref="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D" name="HTTP + WebSocket over TLS, p99 400 ms">
         <source xmi:idref="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27058,14 +27058,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="HTTP + WebSocket over TLS, p99 400 ms\nplanned, GAP-041"/>
+        <labels mt="HTTP + WebSocket over TLS, p99 400 ms"/>
         <tags>
-          <tag xmi:id="EAID_A63D18CA_11DD_A722_4DDF_7073875F8F89" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_42774E3B_EAB5_DE10_00E9_87831025F147"/>
-          <tag xmi:id="EAID_6AE0CF0D_D8AA_62CC_CA7F_68277D42F095" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_42774E3B_EAB5_DE10_00E9_87831025F147"/>
+          <tag xmi:id="EAID_B0C32D21_A30F_132F_7981_5C1E0012A76A" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D"/>
+          <tag xmi:id="EAID_C9D81074_A489_0B4B_EB14_58F16C8AD77E" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_32C1255C_4101_B092_7F8B_C2613445C889" name="peer tracks, STANAG 4676, marking\nplanned">
+      <connector xmi:idref="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6" name="tracks, warnings, marking\nSTANAG 4676 blocked">
         <source xmi:idref="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27079,14 +27079,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="peer tracks, STANAG 4676, marking\nplanned"/>
+        <labels mt="tracks, warnings, marking\nSTANAG 4676 blocked"/>
         <tags>
-          <tag xmi:id="EAID_3182C16A_8031_1E21_4EE1_4ED0B8BE0D41" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_32C1255C_4101_B092_7F8B_C2613445C889"/>
-          <tag xmi:id="EAID_414E7C85_2061_0C31_A6AB_5517D0BCE848" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_32C1255C_4101_B092_7F8B_C2613445C889"/>
+          <tag xmi:id="EAID_AF26902D_58C6_C8BC_9A7F_EAC880A9F3D6" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6"/>
+          <tag xmi:id="EAID_BF0ABBD4_DE61_D2BD_3269_60F62F59329B" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A" name="as above, planned">
+      <connector xmi:idref="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50" name="as above">
         <source xmi:idref="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27100,14 +27100,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="as above, planned"/>
+        <labels mt="as above"/>
         <tags>
-          <tag xmi:id="EAID_E8774A62_67FF_270F_66A8_8FE603E1B0EC" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A"/>
-          <tag xmi:id="EAID_E7DE0799_1535_FE35_DC91_5A7AC90CD7EB" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A"/>
+          <tag xmi:id="EAID_5491C7BB_C69E_A865_885B_52E32CDE6021" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50"/>
+          <tag xmi:id="EAID_89455B9E_F5EF_02D9_C545_3E7EFFE50C0E" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468" name="handoff under 500 ms (MOP-32), planned">
+      <connector xmi:idref="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1" name="handoff under 500 ms (MOP-32)">
         <source xmi:idref="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27121,14 +27121,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="handoff under 500 ms (MOP-32), planned"/>
+        <labels mt="handoff under 500 ms (MOP-32)"/>
         <tags>
-          <tag xmi:id="EAID_F7AF8C4E_EEDB_E95C_5279_5D8A4B55F1CC" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468"/>
-          <tag xmi:id="EAID_009C57A8_431D_219E_25F0_5E6C5857F958" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468"/>
+          <tag xmi:id="EAID_B2C0D5D9_32C8_7B1C_9F24_5BAA1FA39F94" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1"/>
+          <tag xmi:id="EAID_AFA6E951_3685_9A4C_483A_BB4A19EBD448" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007" name="handoff, planned">
+      <connector xmi:idref="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325" name="handoff">
         <source xmi:idref="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27142,10 +27142,10 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="handoff, planned"/>
+        <labels mt="handoff"/>
         <tags>
-          <tag xmi:id="EAID_49EAE3E1_1612_21F5_A298_05072EE3E7C3" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007"/>
-          <tag xmi:id="EAID_9F7688A0_2048_4EDC_D853_D27A2FE3D73A" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007"/>
+          <tag xmi:id="EAID_8468A436_C183_C653_211C_E571DD53A4C2" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325"/>
+          <tag xmi:id="EAID_3DDF5D83_3B3C_EC34_7D2F_2D75530080DB" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325"/>
         </tags>
         <xrefs/>
       </connector>
@@ -29963,7 +29963,7 @@
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_33869F9F_F871_664E_730D_03388982B986" name="allow-list + validation (today)\nmTLS (planned, D-02)">
+      <connector xmi:idref="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" name="allow-list + validation\nsubmissions: mTLS (D-02)">
         <source xmi:idref="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -29977,14 +29977,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="allow-list + validation (today)\nmTLS (planned, D-02)"/>
+        <labels mt="allow-list + validation\nsubmissions: mTLS (D-02)"/>
         <tags>
-          <tag xmi:id="EAID_73449FDC_A51B_135E_6201_3FBE0E234C41" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_33869F9F_F871_664E_730D_03388982B986"/>
-          <tag xmi:id="EAID_41AF4DDF_C5B5_606C_DC29_CC6522CC886B" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_33869F9F_F871_664E_730D_03388982B986"/>
+          <tag xmi:id="EAID_45F49C9E_CF73_2648_9592_D8DD33924EA9" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5"/>
+          <tag xmi:id="EAID_E3B8FB16_B5AF_16EC_7B30_4195556BD400" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B" name="mTLS + operator token (planned)\nno transport today">
+      <connector xmi:idref="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" name="mTLS + operator token">
         <source xmi:idref="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -29998,14 +29998,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="mTLS + operator token (planned)\nno transport today"/>
+        <labels mt="mTLS + operator token"/>
         <tags>
-          <tag xmi:id="EAID_AB4764C5_08FD_3E14_62BA_591F0842929A" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B"/>
-          <tag xmi:id="EAID_7E36592E_1F54_DE92_5955_3C6BD6F2BCB6" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B"/>
+          <tag xmi:id="EAID_2B43FD26_7F7E_AE83_1FEE_33CB0BD4236E" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137"/>
+          <tag xmi:id="EAID_38527719_F10F_D510_452C_B82C6142EFC6" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714" name="mTLS + operator token (planned)">
+      <connector xmi:idref="EAID_8ACACD61_A48D_3826_0186_4014783054E8" name="mTLS + operator token">
         <source xmi:idref="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -30019,14 +30019,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="mTLS + operator token (planned)"/>
+        <labels mt="mTLS + operator token"/>
         <tags>
-          <tag xmi:id="EAID_93775DE0_E4D1_A5E6_D737_E86B2C5E3D28" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714"/>
-          <tag xmi:id="EAID_B14A5207_1626_F5BE_028B_E8D32B4195B3" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714"/>
+          <tag xmi:id="EAID_60A9D4A8_6B0F_8E2C_6C2C_E7014ECA399C" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_8ACACD61_A48D_3826_0186_4014783054E8"/>
+          <tag xmi:id="EAID_345D861D_7B06_2B3A_4103_690A49AB8097" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_8ACACD61_A48D_3826_0186_4014783054E8"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_C9B67899_EDF9_924D_18E4_909916F141C2" name="mTLS + releasability (planned)">
+      <connector xmi:idref="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742" name="mTLS + releasability">
         <source xmi:idref="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -30040,14 +30040,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="mTLS + releasability (planned)"/>
+        <labels mt="mTLS + releasability"/>
         <tags>
-          <tag xmi:id="EAID_62C1DD51_4B9D_1F51_BCDB_F1B8BDD42020" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_C9B67899_EDF9_924D_18E4_909916F141C2"/>
-          <tag xmi:id="EAID_052CD315_1385_D4D7_4033_945A68095840" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_C9B67899_EDF9_924D_18E4_909916F141C2"/>
+          <tag xmi:id="EAID_A851457E_95B0_7DDD_1D65_4C991056B8FE" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742"/>
+          <tag xmi:id="EAID_D91D61DD_0DB6_0FA0_EA04_C5F625EBBF92" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2" name="mTLS + releasability (planned)">
+      <connector xmi:idref="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8" name="mTLS + releasability">
         <source xmi:idref="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -30061,14 +30061,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="mTLS + releasability (planned)"/>
+        <labels mt="mTLS + releasability"/>
         <tags>
-          <tag xmi:id="EAID_B47B0677_C36A_135D_A51A_B399F0DD6F17" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2"/>
-          <tag xmi:id="EAID_B9D43636_CEDB_FB1A_DEA4_2A8717D0C4C8" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2"/>
+          <tag xmi:id="EAID_F25AF645_EC23_D6CB_040D_E5DC02B2CF61" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8"/>
+          <tag xmi:id="EAID_87F2A91C_C519_EF0A_721A_958424AE42B1" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA" name="mTLS handoff (planned)">
+      <connector xmi:idref="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7" name="mTLS handoff">
         <source xmi:idref="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -30082,10 +30082,10 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="mTLS handoff (planned)"/>
+        <labels mt="mTLS handoff"/>
         <tags>
-          <tag xmi:id="EAID_F159768A_88A7_F875_6537_0DD0B4F3A065" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA"/>
-          <tag xmi:id="EAID_E7AB8C32_B3F2_C82E_EA38_AD811B66F635" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA"/>
+          <tag xmi:id="EAID_9067D787_053C_1ECE_73C2_540C00523EE1" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7"/>
+          <tag xmi:id="EAID_80B7DE6A_FBED_564A_60EE_37C019D2A928" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7"/>
         </tags>
         <xrefs/>
       </connector>
@@ -34174,12 +34174,12 @@
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_43203DB9_3D4A_24AB_6F06_226E5B15C67F" style="Mode=3;EOID=001BAF1D;SOID=50B9742C;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_5F9F1426_B689_9EC9_7F53_460A6D028BCC" style="Mode=3;EOID=9C43DBBE;SOID=50B9742C;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_D0EBAA67_6D10_A6FA_F3CB_E93AC422B0A0" style="Mode=3;EOID=2A9C2D41;SOID=50B9742C;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_A5998107_8D73_A34E_5AD7_3983C2678093" style="Mode=3;EOID=9C43DBBE;SOID=001BAF1D;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_42774E3B_EAB5_DE10_00E9_87831025F147" style="Mode=3;EOID=2A9C2D41;SOID=001BAF1D;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_32C1255C_4101_B092_7F8B_C2613445C889" style="Mode=3;EOID=9619E191;SOID=9C43DBBE;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A" style="Mode=3;EOID=9619E191;SOID=2A9C2D41;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468" style="Mode=3;EOID=BF51B4D3;SOID=9C43DBBE;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007" style="Mode=3;EOID=BF51B4D3;SOID=2A9C2D41;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E" style="Mode=3;EOID=9C43DBBE;SOID=001BAF1D;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D" style="Mode=3;EOID=2A9C2D41;SOID=001BAF1D;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6" style="Mode=3;EOID=9619E191;SOID=9C43DBBE;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50" style="Mode=3;EOID=9619E191;SOID=2A9C2D41;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1" style="Mode=3;EOID=BF51B4D3;SOID=9C43DBBE;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325" style="Mode=3;EOID=BF51B4D3;SOID=2A9C2D41;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_A21F184A_D106_0229_9C6B_1B1378FDAFFB" style="Mode=3;EOID=9C43DBBE;SOID=68B27B35;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_99CE5B4B_9DDC_A903_1FA5_00C84654F0DF" style="Mode=3;EOID=2A9C2D41;SOID=68B27B35;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_10027B08_22C4_A782_0A4A_310E033496CA" style="Mode=3;EOID=001BAF1D;SOID=68B27B35;Color=-1;LWidth=0;Hidden=0;"/>
@@ -35050,12 +35050,12 @@
           <element geometry="Left=187;Top=380;Right=370;Bottom=416;" subject="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" seqno="6" style="HideIcon=0;DUID=DE257A7F;"/>
           <element geometry="Left=1173;Top=84;Right=1422;Bottom=120;" subject="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" seqno="7" style="HideIcon=0;DUID=213FA852;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_7C9D95C5_8D2D_0005_B3D4_A72BCF8D047C" style="Mode=3;EOID=A13F9389;SOID=0992086B;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_33869F9F_F871_664E_730D_03388982B986" style="Mode=3;EOID=EADDE6B2;SOID=0992086B;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B" style="Mode=3;EOID=EADDE6B2;SOID=A13F9389;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714" style="Mode=3;EOID=72F72928;SOID=A13F9389;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_C9B67899_EDF9_924D_18E4_909916F141C2" style="Mode=3;EOID=2E09E122;SOID=EADDE6B2;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2" style="Mode=3;EOID=2E09E122;SOID=72F72928;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA" style="Mode=3;EOID=DE257A7F;SOID=EADDE6B2;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" style="Mode=3;EOID=EADDE6B2;SOID=0992086B;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" style="Mode=3;EOID=EADDE6B2;SOID=A13F9389;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_8ACACD61_A48D_3826_0186_4014783054E8" style="Mode=3;EOID=72F72928;SOID=A13F9389;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742" style="Mode=3;EOID=2E09E122;SOID=EADDE6B2;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8" style="Mode=3;EOID=2E09E122;SOID=72F72928;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7" style="Mode=3;EOID=DE257A7F;SOID=EADDE6B2;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_3C0AFC05_5E24_25C3_77F6_BB465FEC6BC2" style="Mode=3;EOID=EADDE6B2;SOID=213FA852;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_ACD8FBE1_909C_B575_AA7C_AE64059FD779" style="Mode=3;EOID=72F72928;SOID=213FA852;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_198CEBA7_D695_032C_81BE_FEEE0B82DBC1" style="Mode=3;EOID=A13F9389;SOID=213FA852;Color=-1;LWidth=0;Hidden=0;"/>

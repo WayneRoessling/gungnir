@@ -487,7 +487,7 @@ actual_resources:
   - {id: AR-04, name: Sensor feeds, description: "Radar, EO/IR, acoustic, RF, ISR video, cooperative receivers, spotter applications feeding the node or a desktop through adapters.", source: docs/mission/operational-environment.md}
   - {id: AR-05, name: Peer command-and-control nodes, description: "Neighbouring sectors, higher command, and coalition systems reached through the API and interop formats.", source: ARCHITECTURE.md §8.6}
   - {id: AR-06, name: Effector systems, description: Fire units and effector controllers that receive handoff messages and report outcomes., source: docs/mission/roles-and-stakeholders.md §3}
-  - {id: AR-07, name: Build and release infrastructure, description: Self-hosted GitLab with runners (including a GPU runner) and the container registry (D-10)., source: docs/release-governance.md}
+  - {id: AR-07, name: Build and release infrastructure, description: "GitHub, with GitHub Actions, a self-hosted runner labelled gpu, and the GitHub Container Registry (D-10, amended 2026-09-07).", source: docs/release-governance.md}
 
 # BEGIN generated requirements
 requirements:

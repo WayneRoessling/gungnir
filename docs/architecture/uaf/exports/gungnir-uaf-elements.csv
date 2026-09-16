@@ -385,7 +385,7 @@ AR-03,Actual Resources,ActualResource,Cloud service node host,The same container
 AR-04,Actual Resources,ActualResource,Sensor feeds,"Radar, EO/IR, acoustic, RF, ISR video, cooperative receivers, spotter applications feeding the node or a desktop through adapters.",Object
 AR-05,Actual Resources,ActualResource,Peer command-and-control nodes,"Neighbouring sectors, higher command, and coalition systems reached through the API and interop formats.",Object
 AR-06,Actual Resources,ActualResource,Effector systems,Fire units and effector controllers that receive handoff messages and report outcomes.,Object
-AR-07,Actual Resources,ActualResource,Build and release infrastructure,Self-hosted GitLab with runners (including a GPU runner) and the container registry (D-10).,Object
+AR-07,Actual Resources,ActualResource,Build and release infrastructure,"GitHub, with GitHub Actions, a self-hosted runner labelled gpu, and the GitHub Container Registry (D-10, amended 2026-09-07).",Object
 REQ-F-01,Requirements,requirement,Observations from heterogeneous sensors are ingested through one governed gateway that validates and quarantines,,Class
 REQ-F-02,Requirements,requirement,Every source is authenticated before its data enters the picture,,Class
 REQ-F-03,Requirements,requirement,"Sensor modes, tasking, and calibration are held in a registry and changeable by the sensor manager",,Class
