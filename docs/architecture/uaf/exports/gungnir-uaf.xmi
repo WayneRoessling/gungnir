@@ -2747,7 +2747,7 @@
           <tag xmi:id="EAID_6E545434_7BD8_A194_1EC4_4C552E0D04AC" name="uafKind" value="Capability" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
           <tag xmi:id="EAID_F8E6F5DB_613C_6683_D8CB_FEED3F125FB4" name="uafId" value="CAP-6.1" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
           <tag xmi:id="EAID_530E3054_C0EE_D154_8965_D41F42ED537A" name="registry.parent" value="CAP-6" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
-          <tag xmi:id="EAID_8CB3F09F_A4F4_FDBD_A0F7_F8B49E48C6AE" name="registry.coverage" value="GAP-057" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
+          <tag xmi:id="EAID_8CB3F09F_A4F4_FDBD_A0F7_F8B49E48C6AE" name="registry.coverage" value="REQ-S-06" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>

@@ -184,7 +184,7 @@ CAP-6,registry.owner,plan-04
 CAP-6.1,uafId,CAP-6.1
 CAP-6.1,uafKind,Capability
 CAP-6.1,registry.parent,CAP-6
-CAP-6.1,registry.coverage,GAP-057
+CAP-6.1,registry.coverage,REQ-S-06
 CAP-6.2,uafId,CAP-6.2
 CAP-6.2,uafKind,Capability
 CAP-6.2,registry.parent,CAP-6

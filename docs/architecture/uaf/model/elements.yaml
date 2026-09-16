@@ -111,7 +111,7 @@ capabilities:
     kind: area
     description: Control who can see and do what, and prove it afterwards.
     owner: plan-04
-  - {id: CAP-6.1, parent: CAP-6, name: Authenticate operators and callers, coverage: "GAP-057"}
+  - {id: CAP-6.1, parent: CAP-6, name: Authenticate operators and callers, coverage: "REQ-S-06"}
   - {id: CAP-6.2, parent: CAP-6, name: "Authorize by role, class, and layer"}
   - {id: CAP-6.3, parent: CAP-6, name: Audit everything that matters}
   - {id: CAP-6.4, parent: CAP-6, name: Protect data in transit and at rest}
