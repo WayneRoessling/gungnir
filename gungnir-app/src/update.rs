@@ -75,6 +75,9 @@ pub fn tick(state: &mut AppState) {
     crate::peers::tick(state);
     crate::cooperative::tick(state);
     crate::adsb::tick(state);
+    // 1a''. The third cooperative source (GAP-101): what a UAS said about itself over
+    //       ASTERIX Category 129, associated and fused the same way the two above are.
+    crate::uas::tick(state);
     crate::sapient::tick(state);
     crate::identity::tick(state);
 

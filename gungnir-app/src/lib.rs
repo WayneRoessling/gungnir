@@ -52,6 +52,7 @@ pub mod state;
 pub mod status;
 pub mod sustainment;
 pub mod terrain;
+pub mod uas;
 pub mod update;
 pub mod warnings;
 pub mod workspace;

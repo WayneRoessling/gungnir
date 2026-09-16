@@ -99,6 +99,12 @@ pub struct AppState {
     /// The association memory between ADS-B reports and tracks, for the platform class
     /// they declare (GAP-027); same purpose as `cooperative.by_track`, narrower.
     pub adsb_cooperative: std::collections::HashMap<TrackId, crate::adsb::LastAdsbCooperative>,
+    /// The radar feeds' Category 129 UAS identification reports, drained each frame
+    /// (GAP-101). One sink per bound feed, the same shape `service_sinks` has.
+    pub uas_sinks: Vec<gungnir_ingest::adapters::asterix::UasIdentificationSink>,
+    /// The association memory between Category 129 reports and tracks (GAP-101); same
+    /// purpose as `cooperative`, and see `crate::uas` for what it deliberately omits.
+    pub uas: crate::uas::UasState,
     /// Each bound MISB feed's counters, by name, for a future PN-09 row (GAP-099). No
     /// report sink is attached (see `crate::misb`'s module doc comment): nothing yet
     /// drains a `UasPlatformReport`, and evidence fusion over one is not part of
@@ -608,6 +614,8 @@ impl AppState {
             adsb_stats: adsb.stats,
             adsb_submitted: std::collections::HashSet::new(),
             adsb_cooperative: std::collections::HashMap::new(),
+            uas_sinks: feeds.uas_reports,
+            uas: crate::uas::UasState::default(),
             misb_stats: misb.stats,
             sapient_stats: sapient.stats,
             sapient_task_acks: sapient.task_acks,
@@ -1164,7 +1172,13 @@ fn build_encryption(
         // A connected desktop wanting a cloud key service would be a change to §5's
         // table, so it is a later question and not one to settle by quietly adding an arm.
         KeyProviderConfig::ManagedService { .. } => {
-            let reason = "a managed key service is the cloud node's custody row (DN-22                           §5), not the desktop's; this desktop's row is the operating                           system's keystore"
+            // Written with the line continuations a long literal needs: without them
+            // this alert reached the operator with runs of twenty-seven spaces in the
+            // middle of two of its sentences, which is what an indented multi-line
+            // string literal actually contains.
+            let reason = "a managed key service is the cloud node's custody row \
+                          (DN-22 §5), not the desktop's; this desktop's row is the \
+                          operating system's keystore"
                 .to_string();
             alerts.push(format!("Journal encryption is off: {reason}"));
             (

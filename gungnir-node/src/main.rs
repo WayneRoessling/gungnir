@@ -324,6 +324,14 @@ fn bind_peers(
 struct FeedReports {
     radar: Vec<(String, gungnir_ingest::adapters::asterix::FeedStatsSink)>,
     peers: Vec<BoundPeer>,
+    /// GAP-101: each radar feed's Category 129 UAS identification reports, by feed name.
+    /// Drained and dropped on every loop by [`discard_uas_reports`], which is not an
+    /// oversight -- see that function for why this binary fuses none of them and why a
+    /// sink is attached anyway.
+    uas: Vec<(
+        String,
+        gungnir_ingest::adapters::asterix::UasIdentificationSink,
+    )>,
 }
 
 impl FeedReports {
@@ -380,6 +388,7 @@ fn build_gateway(
     let mut reports = FeedReports {
         radar: Vec::new(),
         peers: Vec::new(),
+        uas: Vec::new(),
     };
     if !config.peers.is_empty() {
         reports.peers = bind_peers(config, &mut gateway, handle);
@@ -390,34 +399,7 @@ fn build_gateway(
         );
     }
     let mut sinks = Vec::new();
-    if !config.radar_feeds.is_empty() {
-        match local_frame(config) {
-            None => tracing::warn!(
-                feeds = config.radar_feeds.len(),
-                "radar feeds are configured and no local frame origin is declared: no \
-                 adapter is bound, because a plot cannot be placed without one"
-            ),
-            Some(frame) => {
-                for spec in feed_specs(config) {
-                    let feed_sinks = gungnir_ingest::adapters::asterix::FeedSinks::default();
-                    match gungnir_ingest::adapters::asterix::bind_feed(&spec, &frame, &feed_sinks) {
-                        Ok(adapter) => {
-                            tracing::info!(feed = %spec.name, addr = %spec.bind_addr, radars = spec.radars.len(), df_sites = spec.df_sites.len(), uas_sites = spec.uas_sites.len(), "radar feed bound");
-                            gateway.add_adapter(Box::new(adapter));
-                            gateway.set_expected_adapters(config.sensors.len() + sinks.len() + 1);
-                            // The node has no panel; its counters reach the log on the
-                            // health line, and the sink keeps them readable there.
-                            sinks.push(feed_sinks.observations);
-                            reports.radar.push((spec.name.clone(), feed_sinks.stats));
-                        }
-                        Err(err) => {
-                            tracing::error!(feed = %spec.name, %err, "radar feed not bound");
-                        }
-                    }
-                }
-            }
-        }
-    }
+    bind_radar_feeds(config, &mut gateway, &mut reports, &mut sinks);
     // GAP-010: AIS receivers. The reports go to a sink nobody on the node fuses.
     //
     // **The reason changed on 2026-09-06 and the conclusion did not**, which is worth
@@ -480,6 +462,55 @@ fn build_gateway(
     bind_misb_feeds(config, &mut gateway, &sinks);
     let sapient = bind_sapient_feeds(config, &mut gateway, &sinks);
     (gateway, sinks, reports, sapient)
+}
+
+/// GAP-001, GAP-064: the ASTERIX feeds, each bound to its socket with the sinks this
+/// binary drains. Split out of [`build_gateway`] for the same reason `bind_adsb_feeds`
+/// and `bind_misb_feeds` already are -- attaching the Category 129 sink took that
+/// function past `clippy::too_many_lines`, and a helper is the honest fix where an
+/// `allow` would only have hidden it.
+fn bind_radar_feeds(
+    config: &ConfigBaseline,
+    gateway: &mut IngestGateway,
+    reports: &mut FeedReports,
+    sinks: &mut Vec<gungnir_ingest::adapters::asterix::ServiceObservationSink>,
+) {
+    if config.radar_feeds.is_empty() {
+        return;
+    }
+    let Some(frame) = local_frame(config) else {
+        tracing::warn!(
+            feeds = config.radar_feeds.len(),
+            "radar feeds are configured and no local frame origin is declared: no \
+             adapter is bound, because a plot cannot be placed without one"
+        );
+        return;
+    };
+    for spec in feed_specs(config) {
+        let feed_sinks = gungnir_ingest::adapters::asterix::FeedSinks::default();
+        match gungnir_ingest::adapters::asterix::bind_feed(&spec, &frame, &feed_sinks) {
+            Ok(adapter) => {
+                tracing::info!(feed = %spec.name, addr = %spec.bind_addr, radars = spec.radars.len(), df_sites = spec.df_sites.len(), uas_sites = spec.uas_sites.len(), "radar feed bound");
+                // GAP-101: the sink exists so the reports have somewhere to go that this
+                // binary empties every loop. Without one the adapter queues every
+                // Category 129 report it ever maps and nothing takes them off, which is
+                // the unbounded growth this file's own AIS binding already refuses by
+                // name.
+                let uas_reports =
+                    gungnir_ingest::adapters::asterix::UasIdentificationSink::default();
+                reports.uas.push((spec.name.clone(), uas_reports.clone()));
+                gateway.add_adapter(Box::new(adapter.with_uas_report_sink(uas_reports)));
+                gateway.set_expected_adapters(config.sensors.len() + sinks.len() + 1);
+                // The node has no panel; its counters reach the log on the health line,
+                // and the sink keeps them readable there.
+                sinks.push(feed_sinks.observations);
+                reports.radar.push((spec.name.clone(), feed_sinks.stats));
+            }
+            Err(err) => {
+                tracing::error!(feed = %spec.name, %err, "radar feed not bound");
+            }
+        }
+    }
 }
 
 /// GAP-010: ADS-B receivers. Same reasoning and the same gap as AIS above: the codec
@@ -861,6 +892,46 @@ fn feed_specs(config: &ConfigBaseline) -> Vec<gungnir_ingest::adapters::asterix:
             })
         })
         .collect()
+}
+
+/// Drain the feeds' Category 129 UAS identification reports and drop them (GAP-101).
+///
+/// **The node fuses none of them, and that is a graph decision rather than a missing
+/// capability** -- the same one this file's AIS and ADS-B bindings already record: only
+/// the desktop has an edge to `gungnir-identification`, the crate that weighs a
+/// cooperative claim (`docs/design/dependency-edges.md`, edge (n)). What the node does
+/// do with a Category 129 report it already did before this function existed: the
+/// adapter turns the UAS's own broadcast position into a `DetectionView` like any other
+/// source's, so the UAS is *tracked* here; what is dropped is the identity claim beside
+/// it, which nothing on this binary can fuse.
+///
+/// **Dropping is why the drain exists.** The adapter queues every mapped report until a
+/// sink takes it, and nothing on a gateway-owned adapter calls `drain_uas_reports`, so a
+/// node with a Category 129 gateway configured and no sink attached grows that queue for
+/// as long as the feed talks. Counting what was dropped on the health line keeps the
+/// silence honest: a deployment can see the reports arriving and see that this binary
+/// does nothing with them.
+fn discard_uas_reports(
+    sinks: &[(
+        String,
+        gungnir_ingest::adapters::asterix::UasIdentificationSink,
+    )],
+) {
+    for (feed, sink) in sinks {
+        let dropped = match sink.lock() {
+            Ok(mut q) => q.drain(..).count(),
+            Err(_) => continue,
+        };
+        if dropped > 0 {
+            tracing::debug!(
+                feed = %feed,
+                reports = dropped,
+                "UAS identification reports dropped: this binary has no edge to the \
+                 crate that fuses a cooperative identity claim (GAP-101); their \
+                 positions were tracked like any other detection"
+            );
+        }
+    }
 }
 
 /// Drain the feeds' service observations into the registry (GAP-064): the radar
@@ -1825,6 +1896,8 @@ async fn run(
         for event in gateway.tick(now, &mut tracking) {
             bus.publish(now, Event::Ingest(event))?;
         }
+        // GAP-101: after the gateway tick, which is what fills the sink.
+        discard_uas_reports(&feed_reports.uas);
         issue_api_tasks(&api, &mut sensors, &bus, now)?;
         apply_sapient_task_acks(&sapient.task_ack_sinks, &mut sensors, &bus, now)?;
         record_effector_reports(&api, &bus, now)?;
@@ -2139,18 +2212,28 @@ fn seal_journal(
             }
         }
 
-        // Every remaining variant is a profile DN-22 §5 assigns to the desktop, not to a
-        // node. A wildcard rather than named arms, and this is a **known weakness**: a
-        // sixth variant would land here silently rather than failing to compile, which is
-        // how `ManagedService` sat unbuilt here without anything pointing at it.
-        other => EncryptionStatus::UnavailableWritingPlaintext {
-            reason: format!(
-                "the configured key provider is not one a node holds ({})",
-                other
-                    .owning_gap()
-                    .unwrap_or("DN-22 §5 assigns it to the disconnected desktop")
-            ),
-        },
+        // The two remaining profiles are the ones DN-22 §5 assigns to the disconnected
+        // desktop, and `gungnir-app`'s `build_encryption` is where their arms live -- the
+        // exact mirror of that function keeping no arm for `ManagedService`.
+        //
+        // **Named rather than matched by a wildcard** (GAP-084). The wildcard this
+        // replaces answered for every variant it had never been told about, so a sixth
+        // custody profile would have landed here as a run-time refusal instead of a
+        // compile error -- which is how `ManagedService` sat unbuilt in this function
+        // with nothing pointing at it. The refusal text is unchanged, and still reads
+        // the gap off `owning_gap`, so a profile filed against a future register entry
+        // still names it rather than this sentence.
+        provider @ (KeyProviderConfig::PassphraseSealedFile
+        | KeyProviderConfig::OperatingSystemKeystore { .. }) => {
+            EncryptionStatus::UnavailableWritingPlaintext {
+                reason: format!(
+                    "the configured key provider is not one a node holds ({})",
+                    provider
+                        .owning_gap()
+                        .unwrap_or("DN-22 §5 assigns it to the disconnected desktop")
+                ),
+            }
+        }
     }
 }
 
@@ -2396,6 +2479,60 @@ mod tests {
             1,
             "the one feed, bound for its UAS gateway alone"
         );
+        // GAP-101: and it got a sink, which is what `discard_uas_reports` empties every
+        // loop. Without one the adapter's own queue is where the reports pile up, with
+        // nothing on a gateway-owned adapter to take them off again.
+        assert_eq!(
+            reports.uas.len(),
+            1,
+            "a bound feed must hand its Category 129 reports somewhere this binary drains"
+        );
+    }
+
+    /// GAP-084: the two custody profiles DN-22 §5 assigns to the disconnected desktop are
+    /// refused here by name, and the refusal says so rather than falling through a
+    /// wildcard. The property this pins is the one a test cannot state directly -- a
+    /// sixth `KeyProviderConfig` variant now fails to compile in `seal_journal` instead
+    /// of landing silently in a catch-all arm -- so what is asserted is the behaviour
+    /// either shape has to keep: both refuse, and the journal is left unsealed.
+    #[test]
+    fn a_custody_profile_the_desktop_owns_is_refused_by_name_on_a_node() {
+        for provider in [
+            gungnir_config::KeyProviderConfig::PassphraseSealedFile,
+            gungnir_config::KeyProviderConfig::OperatingSystemKeystore {
+                account: "gungnir".into(),
+            },
+        ] {
+            let dir = std::env::temp_dir().join(format!(
+                "gungnir-node-custody-{}-{}",
+                std::process::id(),
+                match provider {
+                    gungnir_config::KeyProviderConfig::PassphraseSealedFile => "passphrase",
+                    _ => "os-keystore",
+                }
+            ));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("dir");
+            let config = ConfigBaseline {
+                security: gungnir_config::SecurityConfig {
+                    key_provider: provider,
+                    ..gungnir_config::SecurityConfig::default()
+                },
+                ..ConfigBaseline::default()
+            };
+            let mut journal = FileEventJournal::open(dir.clone()).expect("journal");
+            let status = seal_journal(&config, &dir, &mut journal);
+            match status {
+                gungnir_security::EncryptionStatus::UnavailableWritingPlaintext { reason } => {
+                    assert!(
+                        reason.contains("not one a node holds"),
+                        "the refusal must say whose profile it is: {reason}"
+                    );
+                }
+                other => panic!("a desktop custody profile must be refused here, got {other:?}"),
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
 
     /// GAP-060: the node's outbound peer-link identity is provider-issued, the same as

@@ -12,7 +12,7 @@
 use gungnir_config::ConfigBaseline;
 use gungnir_ingest::adapters::asterix::{
     bind_feed, DfBinding, FeedSinks, FeedSpec, FeedStatsSink, RadarBinding, ServiceObservationKind,
-    ServiceObservationSink, UasBinding,
+    ServiceObservationSink, UasBinding, UasIdentificationSink,
 };
 use gungnir_ingest::IngestGateway;
 use gungnir_model::{Geodetic, LocalFrame, SensorId};
@@ -106,6 +106,9 @@ pub struct BoundFeeds {
     pub observations: Vec<ServiceObservationSink>,
     /// Each feed by name with its counters, for PN-09.
     pub stats: Vec<(String, FeedStatsSink)>,
+    /// The Category 129 UAS identification reports each feed decoded, drained by
+    /// [`crate::uas::tick`] (GAP-101).
+    pub uas_reports: Vec<UasIdentificationSink>,
 }
 
 /// Bind every configured feed into the gateway. A feed that cannot be bound is an alert,
@@ -137,10 +140,18 @@ pub fn bind_feeds(
         let feed_sinks = FeedSinks::default();
         match bind_feed(&spec, &frame, &feed_sinks) {
             Ok(adapter) => {
-                gateway.add_adapter(Box::new(adapter));
+                // GAP-101: attached here at the call site rather than through
+                // `FeedSinks`, and the difference matters. A sink on `FeedSinks` would
+                // be attached for every host `bind_feed` serves, including one with
+                // nothing to drain it -- an unbounded queue behind a live feed. It is
+                // attached where something drains it, which on this binary is
+                // `crate::uas::tick` on every frame.
+                let uas_reports = UasIdentificationSink::default();
+                gateway.add_adapter(Box::new(adapter.with_uas_report_sink(uas_reports.clone())));
                 gateway.set_expected_adapters(config.sensors.len() + sinks.observations.len() + 1);
                 sinks.observations.push(feed_sinks.observations);
                 sinks.stats.push((spec.name.clone(), feed_sinks.stats));
+                sinks.uas_reports.push(uas_reports);
             }
             Err(err) => alerts.push(format!("radar feed {} not bound: {err}", spec.name)),
         }

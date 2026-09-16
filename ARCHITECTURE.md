@@ -5481,6 +5481,126 @@ not by finding, for the time between whenever each item landed and this correcti
     consumer GAP-015's action field names as remaining are unaffected by this signature
     and stay open.
 
+### Resolved on 2026-09-15
+
+129. **GAP-101's evidence-fusion consumer, and `seal_journal`'s wildcard arm
+    (GAP-084 item 3).** Two unrelated items from the same two register entries' own
+    "what remains" lists, taken together because both are one binary's end of a
+    contract another crate already offered and neither is large enough to be worth a
+    change of its own.
+
+    **The Category 129 consumer.** `AsterixFeedAdapter::with_uas_report_sink` had
+    existed since 2026-09-08 with **no caller anywhere**: the codec decoded a UAS's
+    claimed identity, the adapter mapped it to a `UasIdentificationReport`, and the
+    only thing that reached the picture was the position, as a `DetectionView` like any
+    other source's. `gungnir-app/src/uas.rs` is the reader GAP-101's action field named:
+    it drains the sink every frame, places the report's own claimed WGS-84 position in
+    the deployment's ENU frame (this report keeps its position geodetic, unlike AIS's
+    and ADS-B's, and `gungnir_model::uas_identification`'s own module comment says
+    why), associates it with the nearest track inside the gate AIS already uses, and
+    submits `Neutral` at the same modest confidence -- a claim for the fusion engine to
+    weigh under DN-08 §5's thresholds, never a declaration. PN-04 names the source kind
+    off the label's prefix, which is also how ADS-B's own evidence stopped reading as
+    the generic "identity evidence" it had read as since that reader was built.
+
+    **Two things the consumer deliberately does not do**, each stated in the module
+    rather than left for a reader to notice as an absence. No platform class (GAP-027):
+    AIS maps an M.1371-6 ship type and ADS-B a DO-260B category because the wire
+    carries a capability category and the mission document draws that distinction;
+    Category 129 carries a manufacturer and a model string allocated by a registration
+    authority, and a lethality weight derived from one would be a class invented at the
+    consumer. No disagreement flag: AIS's exists because DN-15's detectors read it, and
+    nothing reads one for this source.
+
+    **Where the sink is attached is the design, not a detail.** `FeedSinks` carries no
+    UAS sink, which GAP-101's own text had called deliberate "until something reads it";
+    it stays that way. The adapter queues every mapped report until something takes it,
+    and nothing on a gateway-owned adapter calls `drain_uas_reports`, so a sink on the
+    shared struct would be attached for every host `bind_feed` serves -- including one
+    that drains nothing, which is an unbounded queue behind a live feed. Each binary
+    attaches its own at its own call site instead. **That also closed a growth this gap
+    had already left behind**: before this change neither binary attached a sink, so on
+    any deployment with a Category 129 gateway configured the adapter's own queue was
+    where the reports accumulated, for as long as the feed talked. `gungnir-node` fuses
+    none of them -- the graph reason its AIS and ADS-B bindings already record, edge (n)
+    to `gungnir-identification` being the desktop's -- and drains the sink on every loop
+    (`discard_uas_reports`), counting what it dropped onto the health line so the
+    silence is legible rather than invisible.
+
+    **`seal_journal`'s wildcard.** The function's own comment called it a known
+    weakness, in those words: a sixth `KeyProviderConfig` variant would have landed in
+    the catch-all as a run-time refusal instead of failing to compile, "which is how
+    `ManagedService` sat unbuilt in this function without anything pointing at it". It
+    now names `PassphraseSealedFile` and `OperatingSystemKeystore`, the two profiles
+    DN-22 §5 assigns to the disconnected desktop, so the match is exhaustive by name and
+    the next profile is a compile error here. The refusal text and the `owning_gap`
+    lookup behind it are unchanged; a test pins both variants refusing, and says in as
+    many words that the property worth having is the one it cannot assert.
+
+    **GAP-084's other half of that item is not done and is not a corollary of it.**
+    Recording the Azure key version a secret was wrapped under changes what
+    `WRAPPED_SECRET_FILE` holds and what `CloudKeyService::wrap` returns -- a
+    persisted-format decision belonging in DN-22 amendment 5 §14e rather than a fix, and
+    one nothing in this workspace can verify against a real vault. It stays named in the
+    register as the one part of item (3) still open.
+
+    **One user-facing string fixed in passing**, in the desktop arm that mirrors the one
+    above: `build_encryption`'s `ManagedService` refusal was written as an indented
+    multi-line literal with no line continuations, so the alert an operator read carried
+    runs of twenty-seven spaces inside two of its sentences.
+
+    **Human-owned surface**: none of `gungnir-ingest`'s own code is touched -- the
+    attachment is at each host's call site through an API that already existed -- but
+    `seal_journal` is the node end of `gungnir-security`'s custody contract, so it went
+    to the owner with GAP-084's entry and is **signed by the owner 2026-09-15** (item 130
+    below, with three other signatures taken in the same pass). No dependency edge
+    changed.
+
+130. **Four signatures cleared in one pass, 2026-09-15, and one of them was a claim
+    rather than a change.** The owner walked what the register said was waiting on him.
+    Three were real signatures and the fourth was a sentence that had been wrong since
+    the 2026-09-10 sweep missed it.
+
+    **(a) `§2.9`'s `loom` row** (`docs/agentic-coding-standards.md`, Model checker),
+    written 2026-09-08 under GAP-061 and marked "not signed" in the standards document
+    itself. Signed on the reading the row states: Gate 4 had required `loom` since the
+    workflow was written, so the signature admits the *dependency those checks had been
+    missing* -- the reason twenty-two green runs model-checked nothing -- rather than a
+    second decision about the tool. The three terms it is admitted on are unchanged, and
+    the first is what keeps it out of everything that ships:
+    `[target.'cfg(loom)'.dev-dependencies]`, so no ordinary build, `cargo deny`,
+    `cargo about` or SBOM run resolves it at all. The model checks themselves were signed
+    with `gungnir-fusion-async` in items 115 and 128; this closes the row beside them.
+
+    **(b) `gungnir-policy/src/fires.rs`** (GAP-090): the three-state
+    `ReportedPositionSource`, so PN-05's friendly-position line cannot show a pass it has
+    not earned. Human-owned, written and gated, and **never queued** -- the one item of
+    that entry the 2026-09-10 sweep never saw, because nothing had put it in front of
+    anybody. Signed with its effect on a live verdict stated plainly: none today, since
+    the other three sources are permanently missing and the chain already denied every
+    fires task; what changed is that the display stopped claiming otherwise.
+
+    **(c) `gungnir-node`'s `seal_journal`** (GAP-084 item 3, item 129 above), the node end
+    of `gungnir-security`'s custody contract.
+
+    **(d) GAP-001's own "human-owned and unsigned" sentence, ruled stale and deleted.**
+    It referred to the sensor-position resolver's `gungnir-fusion-async` touch and had
+    read that way since the resolver landed, while the crate was reviewed and signed
+    twice in the meantime (items 115 and 128) and the gateway change beside it was signed
+    2026-09-06. **This is the fourth time a settled signature has gone on reading as an
+    open one** -- items 123, 125 and 126 each recorded the same failure -- and the cause
+    is the same every time: a signature reaches the `§10` item and the code, and the
+    register's own prose keeps its old sentence. The sweep that was supposed to catch
+    exactly this on 2026-09-10 did not reach GAP-001's entry.
+
+    **What it leaves.** Nothing in the register now says a human-owned change is waiting
+    on the owner. The formal ledger is clear as well: D-01 to D-43 are all Resolved. What
+    is actually blocking the next work is a different shape of thing -- decisions nobody
+    has filed a D-number for, and a handful of steps only the owner's own hands can take
+    (a workflow dispatch on the self-hosted runner, a recorded TAK corpus, the usability
+    sessions, a self-recorded 1090ES capture). Those are being walked in the same pass and
+    will land as their own items.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and

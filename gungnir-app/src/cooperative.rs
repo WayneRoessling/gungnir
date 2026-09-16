@@ -271,8 +271,16 @@ pub fn evidence_lines(state: &AppState, track: TrackId) -> Vec<OwnedEvidence> {
         .evidence_for(track)
         .iter()
         .map(|e| OwnedEvidence {
+            // The source label is the only thing the engine keeps of where a piece of
+            // evidence came from, so the kind is read back off its prefix -- the prefix
+            // each submitting module writes and tests (`crate::uas::claim_of` for the
+            // third one).
             kind: if e.source.starts_with("AIS") {
                 "cooperative identity (AIS)"
+            } else if e.source.starts_with("ADS-B") {
+                "cooperative identity (ADS-B)"
+            } else if e.source.starts_with("UAS") {
+                "cooperative identity (ASTERIX Category 129)"
             } else {
                 "identity evidence"
             },
