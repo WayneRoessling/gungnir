@@ -242,6 +242,8 @@ pub fn expiry_record(
         verdict: item.verdict,
         decision: crate::OperatorDecision::Expired { at },
         operator_id: None,
+        // Nobody decided, so no session carried a role either.
+        role: None,
         mission_time: at,
     }
 }

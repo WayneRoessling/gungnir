@@ -292,8 +292,11 @@ impl App {
         }
         let role_name = format!("{role:?}");
         let configured = self.state.config.ui.for_role(&role_name);
+        // The layout of the role read once above, not a second `state.layout()`: the role
+        // follows the session (the GAP-067 walk), and a session expiring between two reads
+        // would build one role's tree and record it as built for another.
         let arrangement = configured.map_or_else(
-            || dock::default_arrangement(self.state.layout()),
+            || dock::default_arrangement(&gungnir_workflow::WorkspaceLayout::for_role(role)),
             |l| l.main.clone(),
         );
         self.workspace.detached = configured

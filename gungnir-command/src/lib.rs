@@ -90,6 +90,14 @@ pub struct DecisionRecord {
     pub verdict: PolicyVerdict,
     pub decision: OperatorDecision,
     pub operator_id: Option<String>,
+    /// The role the deciding operator's authenticated session carried, as the caller of
+    /// [`ApprovalWorkflow::decide`] supplied it, and `None` when no session did (DN-23 §5
+    /// rule 1). Carried into `CommandEvent::Decided::role` so D-03's rule can rank the
+    /// decision if an outage leaves it in conflict with another (the GAP-067 walk,
+    /// 2026-09-16). A string rather than a role because this crate cannot see
+    /// `gungnir_security::Role`, the same reason `Concurrence::Operator` carries one.
+    #[serde(default)]
+    pub role: Option<String>,
     pub mission_time: MissionTime,
 }
 
@@ -129,6 +137,7 @@ impl DecisionRecord {
                 decision: self.id,
                 accepted: self.is_actionable(),
                 operator: self.operator_id.clone(),
+                role: self.role.clone(),
                 // MOE-05 reads both from the journal.
                 // The denial reason goes over in its debug spelling: the model may not
                 // depend on `DenialReason`, and the spelling is stable per variant.
@@ -208,11 +217,17 @@ pub trait ApprovalWorkflow: Send + Sync {
     ) -> Vec<(PlanId, PendingApprovalId, QueueOutcome)>;
 
     /// Record the operator's decision; the plan leaves the queue.
+    ///
+    /// `operator_id` and `role` come from one authenticated session and are both `None`
+    /// when there is none: a role is never recorded without the operator it was verified
+    /// for (DN-23 §5 rule 1), because a role nobody verified would be ranked by D-03's rule
+    /// as though somebody had.
     fn decide(
         &mut self,
         id: PendingApprovalId,
         decision: OperatorDecision,
         operator_id: Option<String>,
+        role: Option<String>,
         now: MissionTime,
     ) -> Result<DecisionRecord, CommandError>;
 
@@ -358,8 +373,13 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
         id: PendingApprovalId,
         decision: OperatorDecision,
         operator_id: Option<String>,
+        role: Option<String>,
         now: MissionTime,
     ) -> Result<DecisionRecord, CommandError> {
+        debug_assert!(
+            role.is_none() || operator_id.is_some(),
+            "a role was recorded with no operator: DN-23 §5 rule 1"
+        );
         let index = self
             .queue
             .iter()
@@ -373,6 +393,7 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
             verdict: item.verdict,
             decision,
             operator_id,
+            role,
             mission_time: now,
         };
         self.records.push(record.clone());
@@ -448,6 +469,7 @@ mod tests {
                 id,
                 OperatorDecision::Accepted,
                 Some("op-1".into()),
+                None,
                 MissionTime(5.0),
             )
             .expect("decide");
@@ -486,6 +508,7 @@ mod tests {
                     id,
                     OperatorDecision::Accepted,
                     Some("op".into()),
+                    None,
                     MissionTime(0.0),
                 )
                 .expect("decide");
@@ -506,6 +529,7 @@ mod tests {
                 OperatorDecision::Rejected {
                     reason: "test".into()
                 },
+                None,
                 None,
                 MissionTime(0.0)
             ),
@@ -665,6 +689,7 @@ mod tests {
                     reason: "friendly airliner".into(),
                 },
                 None,
+                None,
                 MissionTime(5.0),
             )
             .expect("decide");
@@ -708,6 +733,7 @@ mod tests {
                     reason: "track is a friendly airliner".into(),
                 },
                 None,
+                None,
                 MissionTime(5.0),
             )
             .expect("decide");
@@ -745,6 +771,7 @@ mod tests {
                     reason: "no".into(),
                 },
                 None,
+                None,
                 MissionTime(1.0),
             )
             .expect("decide");
@@ -770,9 +797,66 @@ mod tests {
                     reason: "friendly airliner".into(),
                 },
                 None,
+                None,
                 MissionTime(1.0),
             )
             .expect("decide");
         assert!(!record.is_actionable());
+    }
+
+    /// The role a session supplied reaches the record and the event, so D-03's rule can
+    /// rank the decision later; a decision given none records none, and an expiry never
+    /// carries one (the GAP-067 walk, 2026-09-16).
+    #[test]
+    fn the_deciding_role_reaches_the_record_and_the_event_and_is_never_invented() {
+        let mut wf = timed();
+        let signed_in = wf
+            .submit_for_approval(submission(1, PolicyVerdict::RequiresHumanApproval))
+            .expect("submit");
+        let record = wf
+            .decide(
+                signed_in,
+                OperatorDecision::Accepted,
+                Some("7".into()),
+                Some("Supervisor".into()),
+                MissionTime(5.0),
+            )
+            .expect("decide");
+        assert_eq!(record.role.as_deref(), Some("Supervisor"));
+        assert!(matches!(
+            record.to_event(),
+            CommandEvent::Decided { operator: Some(op), role: Some(role), .. }
+                if op == "7" && role == "Supervisor"
+        ));
+
+        let nobody = wf
+            .submit_for_approval(submission(2, PolicyVerdict::RequiresHumanApproval))
+            .expect("submit");
+        let record = wf
+            .decide(
+                nobody,
+                OperatorDecision::Rejected {
+                    reason: "friendly airliner".into(),
+                },
+                None,
+                None,
+                MissionTime(6.0),
+            )
+            .expect("decide");
+        assert!(matches!(
+            record.to_event(),
+            CommandEvent::Decided {
+                operator: None,
+                role: None,
+                ..
+            }
+        ));
+
+        wf.submit_for_approval(submission(3, PolicyVerdict::RequiresHumanApproval))
+            .expect("submit");
+        wf.sweep(MissionTime(100.0), &LADDER);
+        let expiry = wf.records().last().expect("the expiry left a record");
+        assert!(expiry.is_expiry());
+        assert_eq!(expiry.role, None, "nobody decided, so no role did");
     }
 }

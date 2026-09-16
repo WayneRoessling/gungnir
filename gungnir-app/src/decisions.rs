@@ -787,16 +787,25 @@ pub fn queue_view<'a>(
 /// record. That reasoning is unchanged -- what changed is that an operator who has
 /// actually been verified can now be named. An expired session and an unreachable
 /// account store both still yield `None`, and PN-07 says which.
+///
+/// The role is recorded by the same rule and from the same session read (the GAP-067
+/// walk, 2026-09-16): the signed-in account's role, so D-03's arbitration rule can rank
+/// this decision if an outage leaves it in conflict, and `None` with nobody signed in.
+/// **Not the selected role**, although the desktop has one then: a selection is nobody's
+/// verified authority, and recording it would let the rule rank it as though it were
+/// (DN-23 §5 rule 1).
 pub fn decide(
     state: &mut AppState,
     id: PendingId,
     decision: OperatorDecision,
 ) -> Result<(), CommandError> {
     let now = state.clock.now();
-    let operator = state.attributed_operator().map(|o| o.0.to_string());
+    let signed_in = state.signed_in();
+    let operator = signed_in.as_ref().map(|s| s.operator.0.to_string());
+    let role = signed_in.as_ref().map(|s| format!("{:?}", s.role));
     let record = state
         .approvals
-        .decide(PendingApprovalId(id.0), decision, operator, now)?;
+        .decide(PendingApprovalId(id.0), decision, operator, role, now)?;
     tracing::info!(
         plan = record.plan.id.0,
         decision = ?record.decision,

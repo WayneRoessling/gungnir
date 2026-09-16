@@ -451,6 +451,7 @@ mod tests {
                 decision: gungnir_model::DecisionId(1),
                 accepted: true,
                 operator: None,
+                role: None,
                 verdict: gungnir_model::events::VerdictSummary::RequiresHumanApproval,
                 rationale: None,
             }),
