@@ -157,11 +157,23 @@ jobs:
         run: |
           rustc --version --verbose
           cargo --version
-      - uses: Swatinem/rust-cache@v2
-        with:
-          # Written from main only; see ci.yml for the quota arithmetic.
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          cache-on-failure: true
+      # **No `Swatinem/rust-cache` on a self-hosted runner** (removed 2026-09-16, after it did
+      # damage). Its post-job step cleans `CARGO_HOME` whenever it saves, which here is only a
+      # push to main. On a hosted runner `CARGO_HOME` is a throwaway directory; on
+      # `gungnir-rtx-5060ti` it is **the owner's own `C:\Users\wayne\.cargo`**. The first
+      # save-enabled run on this runner -- the push that merged the 8.3-path fix -- logged
+      # `Cleaning cargo/bin ... Cleaning cargo git cache` against that directory and deleted
+      # `rustup.exe`, which every `cargo` and `rustc` proxy there links to: the owner's own
+      # toolchain stopped working, and so did the GPU job dispatched right after it
+      # (`rustc: command not found`, exit 127). The earlier branch runs never saved, so they
+      # never cleaned, which is why it surfaced only on main.
+      #
+      # Nothing is lost by removing it: a persistent runner already keeps the registry and
+      # the toolchain between runs, which is the whole of what the action restores. What
+      # this job still writes to `CARGO_HOME` is ordinary `cargo` behaviour -- registry
+      # downloads -- the same as a local build, and nothing deletes from it. **No action
+      # that cleans or prunes `CARGO_HOME` may be added to a job on this runner**; the same
+      # rule applies to `gpu-fusion.yml`, which never had one.
       # Per-commit key with a prefix fallback: a cache key is immutable, so saving every
       # main push under one fixed key would keep the first for ever and freeze the
       # baseline at the day it landed. `restore-keys` takes the most recent match.

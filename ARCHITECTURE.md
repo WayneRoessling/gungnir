@@ -5895,6 +5895,44 @@ not by finding, for the time between whenever each item landed and this correcti
     runner itself logged. On this runner the worker's `_diag` log is the evidence, and a
     check made in any other shell is not.
 
+136. **Gate 6 deleted the owner's `rustup.exe`, 2026-09-16 -- an incident this workspace's own
+    CI change caused, and what stops it recurring.** Item 135's shell fix merged as
+    `ee8064f`, and the push ran Gate 6 on `main` with cache saving enabled for the first time
+    on `gungnir-rtx-5060ti`. It passed and saved the first same-machine baseline. Its
+    `Swatinem/rust-cache` post-job step then logged `Cleaning cargo/bin ... Cleaning cargo git
+    cache` against `CARGO_HOME` -- which on a hosted runner is a throwaway directory and on
+    this runner is **the owner's own `C:\Users\wayne\.cargo`** -- and deleted
+    `rustup.exe`. Every `cargo`, `rustc`, `rustfmt` and `clippy` proxy in that directory is a
+    symbolic link to it, so the owner's own toolchain stopped starting, and the GPU job
+    dispatched from `main` a few seconds later failed with `rustc: command not found`, exit
+    127. The toolchains under `.rustup` were untouched. **Why it surfaced only on `main`**:
+    the action saves, and so cleans, only when `save-if` is true, which this workflow set for
+    `refs/heads/main`; both branch runs before it never cleaned.
+
+    **Two earlier changes made it possible, and neither was reviewed for it.** Item 133 moved
+    the job onto a machine where `CARGO_HOME` belongs to a person, without asking what the
+    job's actions do to it. Item 134 removed `dtolnay/rust-toolchain`, whose "install rustup
+    if needed" step would have masked the deletion on the next run and turned a loud failure
+    into a silent reinstall.
+
+    **The fix removes the action from the self-hosted job.** A persistent runner already
+    keeps the registry and the toolchain between runs, which is the whole of what the action
+    restores, so nothing is lost; the job still writes registry downloads to `CARGO_HOME` as
+    any local build does, and nothing deletes from it. The workflow now carries a rule: no
+    action that cleans or prunes `CARGO_HOME` may be added to a job on this runner.
+    `gpu-fusion.yml` never had one. The remaining `actions/cache` steps touch only
+    `target/criterion`, inside the job's own workspace.
+
+    **Containment worked where it was designed in.** The script running the post-merge
+    sequence stopped at the GPU failure and dispatched neither comparison run onto a broken
+    runner. **What it did not prevent is the part that matters more**: a CI job modified the
+    owner's personal toolchain. The deeper answer -- running the runner as its own account, so
+    no job can reach a person's home directory at all -- is an infrastructure decision, and is
+    recorded here rather than taken.
+
+    **Restoring `rustup.exe` is the owner's action**: it needs a download and an installer,
+    and reinstalling over the existing `.rustup` keeps every toolchain already present.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and
