@@ -1059,6 +1059,7 @@
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C" name="Plan 08 AI agent integration" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_6608D566_4540_8A24_522A_1FD6753390D6" name="Plan 09 ML model integration" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82" name="Plan 10 TOGAF ADM documentation" visibility="public"/>
+        <packagedElement xmi:type="uml:Class" xmi:id="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C" name="Plan 11 design gap closure" visibility="public"/>
       </packagedElement>
       <packagedElement xmi:type="uml:Package" xmi:id="EAPK_34896D57_5A99_007A_944A_6BA06B9C3D7F" name="Actual Resources Connectivity Ar-Cn" visibility="public">
         <packagedElement xmi:type="uml:InstanceSpecification" xmi:id="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" name="Operator workstation host" visibility="public"/>
@@ -7276,7 +7277,7 @@
           <tag xmi:id="EAID_BB096AF0_3AEF_078A_4C49_60328B99EE71" name="uafKind" value="Project" modelElement="EAID_695FC32C_1541_3825_39F1_44DA54D97828"/>
           <tag xmi:id="EAID_39AEBBFC_36B1_6543_C78A_1E46794E1881" name="uafId" value="PJ-P01" modelElement="EAID_695FC32C_1541_3825_39F1_44DA54D97828"/>
           <tag xmi:id="EAID_E0F1AAB1_3244_7FAC_03A4_72C51D2E576C" name="registry.source" value="docs/plans/01-product-business-plan.md" modelElement="EAID_695FC32C_1541_3825_39F1_44DA54D97828"/>
-          <tag xmi:id="EAID_99246D9B_FA18_9E12_54F2_734302BCD622" name="registry.status" value="not started" modelElement="EAID_695FC32C_1541_3825_39F1_44DA54D97828"/>
+          <tag xmi:id="EAID_99246D9B_FA18_9E12_54F2_734302BCD622" name="registry.status" value="held outside the repository by the owner's decision of 2026-09-07" modelElement="EAID_695FC32C_1541_3825_39F1_44DA54D97828"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7361,7 +7362,7 @@
           <tag xmi:id="EAID_68866F06_D01A_3366_5900_3D59B8E8ECE2" name="uafKind" value="Project" modelElement="EAID_B5ED80A5_BE0F_5427_04DC_946BBB6EC0C0"/>
           <tag xmi:id="EAID_DC695E2F_B641_8218_B06D_613B896F15B3" name="uafId" value="PJ-P06" modelElement="EAID_B5ED80A5_BE0F_5427_04DC_946BBB6EC0C0"/>
           <tag xmi:id="EAID_3CD198F0_C371_D370_6C7D_3CE5B90D31FA" name="registry.source" value="docs/plans/06-ux-design-by-role.md" modelElement="EAID_B5ED80A5_BE0F_5427_04DC_946BBB6EC0C0"/>
-          <tag xmi:id="EAID_5B26D156_185F_F238_4F52_86BDF26D1DDF" name="registry.status" value="not started" modelElement="EAID_B5ED80A5_BE0F_5427_04DC_946BBB6EC0C0"/>
+          <tag xmi:id="EAID_5B26D156_185F_F238_4F52_86BDF26D1DDF" name="registry.status" value="first draft 2026-09-04" modelElement="EAID_B5ED80A5_BE0F_5427_04DC_946BBB6EC0C0"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7378,7 +7379,7 @@
           <tag xmi:id="EAID_7C97E326_F63E_A5B0_03BF_DE8D177D0460" name="uafKind" value="Project" modelElement="EAID_F3DFBFDA_FA76_7389_4819_88E96ABB7E45"/>
           <tag xmi:id="EAID_642A6F87_3A54_F1DC_5A97_4DA0A9B487FC" name="uafId" value="PJ-P07" modelElement="EAID_F3DFBFDA_FA76_7389_4819_88E96ABB7E45"/>
           <tag xmi:id="EAID_2B59889D_9502_0303_42F5_7CFD58CDD12F" name="registry.source" value="docs/plans/07-test-track-suite.md" modelElement="EAID_F3DFBFDA_FA76_7389_4819_88E96ABB7E45"/>
-          <tag xmi:id="EAID_7E89F72F_6BF5_D068_6689_E7A955D52EDB" name="registry.status" value="not started" modelElement="EAID_F3DFBFDA_FA76_7389_4819_88E96ABB7E45"/>
+          <tag xmi:id="EAID_7E89F72F_6BF5_D068_6689_E7A955D52EDB" name="registry.status" value="first draft 2026-09-04" modelElement="EAID_F3DFBFDA_FA76_7389_4819_88E96ABB7E45"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7395,7 +7396,7 @@
           <tag xmi:id="EAID_BCD1F736_50CA_610F_EE48_02969BF27BB4" name="uafKind" value="Project" modelElement="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
           <tag xmi:id="EAID_3B00A3C6_B643_8FCD_FA50_1B7368C0531E" name="uafId" value="PJ-P08" modelElement="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
           <tag xmi:id="EAID_C093C095_EA3F_5495_6FCC_CDCED540A7B5" name="registry.source" value="docs/plans/08-ai-agent-integration.md" modelElement="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
-          <tag xmi:id="EAID_E455EE7D_6375_F4F6_A150_95F40A7F78F4" name="registry.status" value="not started" modelElement="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
+          <tag xmi:id="EAID_E455EE7D_6375_F4F6_A150_95F40A7F78F4" name="registry.status" value="first draft 2026-09-04" modelElement="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7412,7 +7413,7 @@
           <tag xmi:id="EAID_D945BF28_F220_5135_5FC5_4077A482456A" name="uafKind" value="Project" modelElement="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
           <tag xmi:id="EAID_6C72CDF6_A90E_AD7E_9A8B_712ED2CCCC32" name="uafId" value="PJ-P09" modelElement="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
           <tag xmi:id="EAID_3E23F4EF_9EC3_368A_F55F_90A52E864BD4" name="registry.source" value="docs/plans/09-ml-model-integration.md" modelElement="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
-          <tag xmi:id="EAID_3A498801_3490_4F05_813F_BD6B4372D8C9" name="registry.status" value="not started" modelElement="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
+          <tag xmi:id="EAID_3A498801_3490_4F05_813F_BD6B4372D8C9" name="registry.status" value="first draft 2026-09-04" modelElement="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7429,7 +7430,24 @@
           <tag xmi:id="EAID_485FB986_20A7_FBB5_9455_F50C53ABAEF9" name="uafKind" value="Project" modelElement="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
           <tag xmi:id="EAID_7EF8C1BE_67C2_AB3A_38DD_EF63DE76B0E4" name="uafId" value="PJ-P10" modelElement="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
           <tag xmi:id="EAID_B10F72BF_6837_8CD3_F356_D483775A2DED" name="registry.source" value="docs/plans/10-togaf-adm-documentation.md" modelElement="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
-          <tag xmi:id="EAID_DFCC5637_0261_4A41_3FB0_B34ED78EE51A" name="registry.status" value="not started" modelElement="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
+          <tag xmi:id="EAID_DFCC5637_0261_4A41_3FB0_B34ED78EE51A" name="registry.status" value="first draft 2026-09-04" modelElement="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
+        </tags>
+        <xrefs/>
+        <extendedProperties tagged="0"/>
+        <links>
+        </links>
+      </element>
+      <element xmi:idref="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C" xmi:type="uml:Class" name="Plan 11 design gap closure" scope="public">
+        <model package="EAPK_EFD9C4B9_D710_EB7E_EFF3_747F2BE3FB12" tpos="0" ea_eleType="element"/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Project" documentation=""/>
+        <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
+        <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
+        <alias alias="PJ-P11"/>
+        <tags>
+          <tag xmi:id="EAID_4D110725_46EA_4C17_CB01_34608A1E417A" name="uafKind" value="Project" modelElement="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C"/>
+          <tag xmi:id="EAID_D8F74E30_425C_5A2B_331F_F59B4BDFA0B5" name="uafId" value="PJ-P11" modelElement="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C"/>
+          <tag xmi:id="EAID_9F778285_A89D_343C_4C0F_68D04A9DD847" name="registry.source" value="docs/plans/11-design-gap-closure.md" modelElement="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C"/>
+          <tag xmi:id="EAID_0C59D885_A130_B501_2907_A427BAA3B1A1" name="registry.status" value="first draft 2026-09-05" modelElement="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -34108,7 +34126,8 @@
           <element geometry="Left=605;Top=184;Right=765;Bottom=244;" subject="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C" seqno="12" style="HideIcon=0;DUID=24EE1496;"/>
           <element geometry="Left=20;Top=266;Right=180;Bottom=326;" subject="EAID_6608D566_4540_8A24_522A_1FD6753390D6" seqno="13" style="HideIcon=0;DUID=86EAB5F0;"/>
           <element geometry="Left=215;Top=266;Right=375;Bottom=326;" subject="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82" seqno="14" style="HideIcon=0;DUID=1611411D;"/>
-          <element geometry="Left=10;Top=10;Right=785;Bottom=346;" subject="EAID_EFD9C4B9_D710_EB7E_EFF3_747F2BE3FB12" seqno="15" style="DUID=95DC4A3F;"/>
+          <element geometry="Left=410;Top=266;Right=570;Bottom=326;" subject="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C" seqno="15" style="HideIcon=0;DUID=F60C2EDF;"/>
+          <element geometry="Left=10;Top=10;Right=785;Bottom=346;" subject="EAID_EFD9C4B9_D710_EB7E_EFF3_747F2BE3FB12" seqno="16" style="DUID=95DC4A3F;"/>
         </elements>
       </diagram>
       <diagram xmi:id="EAID_7B61886A_72FC_4111_143D_EC31D6A94FC1">
@@ -35564,6 +35583,7 @@
     <UAF:Project base_Class="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
     <UAF:Project base_Class="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
     <UAF:Project base_Class="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
+    <UAF:Project base_Class="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C"/>
     <UAF:InformationElement base_Class="EAID_83BC5A4A_56F9_2ECD_716C_7DEA1FFA9436"/>
     <UAF:InformationElement base_Class="EAID_9C0DA999_3AF6_A061_31D0_FA3F4A819831"/>
     <UAF:InformationElement base_Class="EAID_A6A6F8DF_E482_9676_D80F_ABED1D882165"/>

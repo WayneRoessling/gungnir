@@ -325,16 +325,17 @@ projects:
   - {id: PJ-I2, name: Increment 2, description: Integrate real data, source: docs/gungnir-capabilities.md §7, status: planned}
   - {id: PJ-I3, name: Increment 3, description: Close the decision-support loop, source: docs/gungnir-capabilities.md §7, status: planned}
   - {id: PJ-I4, name: Increment 4, description: Operationalize and scale, source: docs/gungnir-capabilities.md §7, status: planned}
-  - {id: PJ-P01, name: Plan 01 product business plan, source: docs/plans/01-product-business-plan.md, status: not started}
+  - {id: PJ-P01, name: Plan 01 product business plan, source: docs/plans/01-product-business-plan.md, status: "held outside the repository by the owner's decision of 2026-09-07"}
   - {id: PJ-P02, name: Plan 02 mission analysis, source: docs/plans/02-mission-analysis.md, status: first draft 2026-09-04}
   - {id: PJ-P03, name: Plan 03 UAF views, source: docs/plans/03-uaf-views.md, status: first draft 2026-09-04}
   - {id: PJ-P04, name: Plan 04 mission capabilities, source: docs/plans/04-mission-capabilities.md, status: first draft 2026-09-04}
   - {id: PJ-P05, name: Plan 05 capability design gaps, source: docs/plans/05-capability-design-gaps.md, status: first draft 2026-09-04}
-  - {id: PJ-P06, name: Plan 06 UX designs by role, source: docs/plans/06-ux-design-by-role.md, status: not started}
-  - {id: PJ-P07, name: Plan 07 test-track suite, source: docs/plans/07-test-track-suite.md, status: not started}
-  - {id: PJ-P08, name: Plan 08 AI agent integration, source: docs/plans/08-ai-agent-integration.md, status: not started}
-  - {id: PJ-P09, name: Plan 09 ML model integration, source: docs/plans/09-ml-model-integration.md, status: not started}
-  - {id: PJ-P10, name: Plan 10 TOGAF ADM documentation, source: docs/plans/10-togaf-adm-documentation.md, status: not started}
+  - {id: PJ-P06, name: Plan 06 UX designs by role, source: docs/plans/06-ux-design-by-role.md, status: first draft 2026-09-04}
+  - {id: PJ-P07, name: Plan 07 test-track suite, source: docs/plans/07-test-track-suite.md, status: first draft 2026-09-04}
+  - {id: PJ-P08, name: Plan 08 AI agent integration, source: docs/plans/08-ai-agent-integration.md, status: first draft 2026-09-04}
+  - {id: PJ-P09, name: Plan 09 ML model integration, source: docs/plans/09-ml-model-integration.md, status: first draft 2026-09-04}
+  - {id: PJ-P10, name: Plan 10 TOGAF ADM documentation, source: docs/plans/10-togaf-adm-documentation.md, status: first draft 2026-09-04}
+  - {id: PJ-P11, name: Plan 11 design gap closure, source: docs/plans/11-design-gap-closure.md, status: first draft 2026-09-05}
 
 information_elements:
   - {id: IE-01, name: DetectionView, code: gungnir_model::DetectionView, description: "The canonical observation after validation; sensor, source time, receipt time, ENU measurement, provenance."}

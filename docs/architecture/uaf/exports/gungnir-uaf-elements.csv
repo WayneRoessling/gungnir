@@ -245,6 +245,7 @@ PJ-P07,Projects,Project,Plan 07 test-track suite,,Class
 PJ-P08,Projects,Project,Plan 08 AI agent integration,,Class
 PJ-P09,Projects,Project,Plan 09 ML model integration,,Class
 PJ-P10,Projects,Project,Plan 10 TOGAF ADM documentation,,Class
+PJ-P11,Projects,Project,Plan 11 design gap closure,,Class
 IE-01,Information Elements,InformationElement,DetectionView,"The canonical observation after validation; sensor, source time, receipt time, ENU measurement, provenance.",Class
 IE-02,Information Elements,InformationElement,TrackView,"The canonical track; state, covariance, classification, provenance, quality, mission time.",Class
 IE-03,Information Elements,InformationElement,ResourceView,"A taskable resource; position, capacity, readiness.",Class
