@@ -214,6 +214,168 @@ does the row's status move in `architecture.md`. Rows with no test are listed as
 | Cross-layer System-of-systems interop | `gungnir-interop/tests/conformance.rs` (GAP-063; STANAG asserts `NotImplemented`) | |
 | Cross-layer Disconnected reconciliation | `gungnir-app/tests/failover_e2e.rs` against a real transport (GAP-050) | |
 
+### The walk sheet (prepared 2026-09-15, GAP-067)
+
+**What this is.** The table above says which rows have a test. This says, for each,
+what the walk actually has to settle -- because a row becomes a gate only when the
+owner confirms the criterion is *the one the test checks* (D-16), and for six rows it
+demonstrably is not. Rows are grouped by what the walk owes them, so the confirmations
+that are quick are not mixed in with the ones that need a decision.
+
+**What it is not.** Six rows below were read test-by-test against their criterion and
+say what was found; the rest are **candidates**, where a test exists, its path
+resolves, and the criterion is qualitative enough that confirming it means reading the
+assertions with the owner rather than measuring anything. The distinction is stated
+rather than blurred, because a sheet that claimed forty-four verifications it had not
+done would be the same shortcut this section exists to refuse.
+
+**Two blockers the 2026-09-06 preparation named have closed since.** GAP-063, the
+interface conformance suite, was itself waiting on GAP-064's STANAG 4676 entry, and both
+closed 2026-09-15 under D-44, which descoped 4676; GAP-057's node account store closed
+2026-09-10. So neither the cross-layer interop row nor the `gungnir-workflow` concurrence
+row is blocked by the gap its note names, and both want re-reading before the walk reaches
+them.
+
+**Every test path in the table above resolves** -- 81 paths checked 2026-09-15, none
+missing. The three stale references that pass found (`gungnir-viewport3d/src/lib.rs`,
+a `los.rs` that never existed, `sensor_plans.rs` for the wrong row) were corrected
+2026-09-07 and nothing has drifted since.
+
+#### Group A -- candidates to gate (34 rows)
+
+A test exists and the criterion is qualitative (exact, expected, refused, recorded).
+The walk reads the named assertions against the criterion, one row at a time; the
+count is what is there to read.
+
+| Row | Test functions behind it |
+|---|---|
+| `gungnir-tracking-service` Whole-pipeline scenario replay | 1 |
+| `gungnir-intercept-service` Plan determinism and degradation | 8 |
+| `gungnir-data` Loader correctness per format | 21 |
+| `gungnir-data` Loading off the UI thread | 4 |
+| `gungnir-viewport3d` Glyph rebuild only on change | 6 |
+| `gungnir-app` Backend switching | 4 |
+| `gungnir-model` Schema round-trip and versioning | 4 |
+| `gungnir-eventing` Broadcast delivery and ordering | 4 |
+| `gungnir-remote` Store-and-forward and honest connection state | 2 |
+| `gungnir-interop` Arrow round-trip; catalog negotiation; ASTERIX decode | 21 |
+| `gungnir-analytics` Line-of-sight and coverage | 8 |
+| `gungnir-resilience` Bounded queue; reconciliation | 6 |
+| `gungnir-collab` Authority arbitration; stale envelopes | 4 |
+| `gungnir-workflow` Role layouts; alert lifecycle | 10 |
+| `gungnir-store` Journal round-trip; retention | 11 |
+| `gungnir-config` Validation and version gating | 108 |
+| `gungnir-time` Late-data policy; replay determinism | 7 |
+| `gungnir-ingest` Validation and quarantine; the ASTERIX radar, direction-finder and UAS-identification adapter | 144 |
+| `gungnir-ingest` The SAPIENT spotter adapter | 27 |
+| `gungnir-ingest` The UAS KLV metadata adapter | 26 |
+| `gungnir-identity` Identity persistence | 5 |
+| `gungnir-identification` Evidence fusion | 17 |
+| `gungnir-geo` Geofence containment | 5 |
+| `gungnir-policy` No-go and authority enforcement | 18 |
+| `gungnir-command` Decision recording | 14 |
+| `gungnir-assessment` Risk scoring | 12 |
+| `gungnir-decision` Alternatives and what-if | 7 |
+| `gungnir-modelops` Promotion gating and rollback | 19 |
+| `gungnir-security` Authentication, authorization, audit | 39 |
+| `gungnir-api` Contract compatibility and authorization | 4 |
+| `gungnir-observability` Health and alert correlation | 2 |
+| `gungnir-replay` Deterministic playback | 12 |
+| `gungnir-reporting` Traceability | 6 |
+| Cross-layer Disconnected reconciliation | 1 |
+
+#### Group B -- a named change first (6 rows)
+
+Each of these has a test and the test does not check the criterion. None is a defect
+in the code; each is a mismatch between a criterion agreed under D-16 and what was
+built to check it, and the walk's job is to say which of the two moves.
+
+1. **`gungnir-tracking-service` Non-blocking snapshot and health** (p99 under 1 ms).
+   `gungnir-app/tests/frame_budgets.rs` **measures and prints this and deliberately
+   does not assert it**, and says so in its own header: "promoting a Draft row to
+   gated is the owner's walk (GAP-067), not a test's". Gating it is a one-line change
+   the file has been shaped to accept. What is being confirmed is the criterion, not
+   the code.
+
+2. **`gungnir-ui` No duplicate state; no allocation in `ui()`** (egui pass p99 under
+   8 ms at Scenario 4 track counts). **Nothing anywhere measures an egui pass** --
+   `frame_budgets.rs`, which the table above names for this row, times `update()` and
+   the two snapshot calls and contains no egui timing at all. This row needs a
+   measurement built before it can be gated, and the table's pointer is misleading
+   until then. `gungnir-app/tests/rendered_workspace.rs` is the harness that already
+   drives a real egui pass, so it is where the measurement would go.
+
+3. **`gungnir-data-fusion` CPU ICP reference** (translation within 0.05 m, rotation
+   within 0.5 mrad). The tests assert something **stronger and differently shaped**:
+   every source point, mapped through the solved transform, lands within 2e-3 m of
+   where the known transform puts it. That implies the criterion comfortably, and it
+   never reports translation and rotation error as separate quantities. Accept the
+   stronger property as meeting the row, or ask for the two named errors to be
+   asserted in the criterion's own terms.
+
+4. **`gungnir-sensor-management` Mode transitions; coverage** (range within 1 percent,
+   bearing and elevation within 0.1 degree of the fixture). The mode half is covered
+   thoroughly. **The coverage-accuracy half is not tested at all**: the assertions
+   check that a scanning radar covers and a standby one does not -- presence, not
+   geometry -- and no test compares a coverage volume's range or angles against a
+   fixture. Gate the mode half by splitting the row, or hold the whole row until the
+   geometry is checked.
+
+5. **`gungnir-mission` Session lifecycle and replay.** Tested against synthetic
+   envelopes; the row's own data source names a Scenario 1 recording that does not
+   exist, which the criterion text already admits in parentheses. Gate on the
+   synthetic evidence and amend the data source, or hold the row for the recording.
+
+6. **Cross-layer System-of-systems interop.** `gungnir-interop/tests/conformance.rs`
+   asserts that STANAG 4676 returns `NotImplemented`. Until 2026-09-15 that was a
+   placeholder waiting on GAP-064; **since D-44 it is the recorded consequence of a
+   descope**, which is a different claim and a gateable one. The row's criterion still
+   reads as though 4676 is coming. Amend it to the interfaces this build speaks, then
+   gate.
+
+#### Group C -- nothing to gate, and the reasons differ (3 rows)
+
+- **`gungnir-render` Single device, no per-frame resource creation.** The crate has
+  **zero test functions**. The criterion needs the debug counter its own method names
+  and nothing counts anything today.
+- **`gungnir-viewport3d` SSE and tileset traversal.** **Unbuilt, not untested**:
+  `src/streaming/sse.rs` and `src/streaming/tileset.rs` both return
+  `ViewportError::NotImplemented`. A criterion of agreement within 1e-6 has nothing to
+  agree with, so this row is not a walk item at all -- it is engineering.
+- **`gungnir-node` Headless loop.** Recorded 2026-09-07 and still true: the smoke run
+  is a person running the binary. `gungnir-node/tests/` holds account provisioning and
+  encryption at rest, neither of which is this row's criterion.
+
+#### Group D -- one run away (1 row)
+
+**`gungnir-data-fusion` GPU path against CPU reference.** Four `#[ignore]`d
+`#[tokio::test]`s exist behind the `gpu-tests` feature and **compile** (checked
+2026-09-15 with `cargo test -p gungnir-data-fusion --features gpu-tests --no-run`);
+two of them assert this row's exact criterion. **None has ever executed on a GPU.**
+The row gates on the recorded dispatch that is GAP-024 item (3) -- one
+`gh workflow run gpu-fusion.yml` on the registered runner -- and not before, because a
+passing sandbox run and a recorded one are not the same claim.
+
+#### Group E -- the plan-11 and DN-25 rows (26 rows)
+
+Written before their code (AP-17), so most stay draft by construction and are not walk
+items yet. Four have tests and belong in the walk: `gungnir-sensor-management`
+outbound control (noted 2026-09-05), `gungnir-config` laydown validation, the PN-16
+laydown options table, and `gungnir-tracking-service` sensor-position resolution --
+each names its test in the row itself. One more wants re-reading rather than walking:
+the `gungnir-workflow` concurrence row is annotated "cannot be gated by any build"
+because no build had an operator session, and **GAP-057 closed 2026-09-10**, so that
+reason has expired even though the row's other blocker (the MT-08 replay, GAP-076)
+may not have.
+
+#### Order to walk it in
+
+Group B first, six rows, because each needs a decision rather than a reading and two
+of them (`gungnir-ui`, `gungnir-sensor-management`) may turn into engineering. Then
+Group A, which is reading, and which can stop and resume at any row. Group C needs
+nothing from the owner but a confirmation that it stays draft. Group D waits on the
+dispatch. Group E after the four tested rows are separated from the rest.
+
 ### Rows added by DN-25, agreed 2026-09-06
 
 Three rows, later than the plan-11 set and on the same terms: each was written before any of
