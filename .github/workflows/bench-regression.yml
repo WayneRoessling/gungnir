@@ -117,6 +117,20 @@ jobs:
     # would then match either box and silently restore the cross-machine comparison this
     # change exists to end.
     runs-on: [self-hosted, Windows, X64, gpu]
+    # **The shell is named by full path, and `shell: bash` is not used anywhere in this job**
+    # (2026-09-16). On this host the runner resolves `bash` for itself -- its own worker log
+    # records `Which2: 'bash'` then `Location: 'C:\WINDOWS\system32\bash.EXE'` -- and that
+    # is the WSL shim, a Linux bash that cannot read a Windows path and strips the
+    # backslashes out of the script path it is handed. Every run on this runner failed at
+    # its first bash step that way. A runner `.path` file putting Git's bin first was tried
+    # and **did not change the lookup**: the listener was restarted after writing it and the
+    # next run resolved `system32` again. Naming the executable is the fix that does not
+    # depend on how the runner searches, and the arguments are GitHub's own template for
+    # `shell: bash`, so behaviour is otherwise unchanged. Any step added to this job must
+    # use the default rather than writing `shell: bash`, or it reintroduces the lookup.
+    defaults:
+      run:
+        shell: 'C:\Program Files\Git\bin\bash.exe --noprofile --norc -e -o pipefail {0}'
     # Four to five minutes warm; a run past twenty is a hung benchmark, not a slow one.
     timeout-minutes: 20
     steps:
@@ -125,14 +139,13 @@ jobs:
       # is a composite action whose every step declares `shell: bash`, and it was the step
       # that failed the first run this workflow ever attempted here: the runner resolved
       # `bash` to the WSL shim at `C:\WINDOWS\system32\bash.exe`, which cannot see a
-      # Windows path and ate the backslashes out of the script it was handed. The runner's
-      # `.path` now puts Git's bash first and that failure is gone -- but the action was
+      # Windows path and ate the backslashes out of the script it was handed. The job's
+      # `defaults` now name Git's bash by full path and that failure is gone -- but the action was
       # installing a toolchain onto a machine that already has one, which is work and risk
       # for nothing. `rust-toolchain.toml` pins 1.98 with rustfmt and clippy, and rustup
       # honours it on every `cargo` invocation, so the pin is enforced by the repository
       # rather than by a workflow input that could drift from it.
       - name: Record the toolchain this run used
-        shell: bash
         run: |
           rustc --version --verbose
           cargo --version
@@ -153,7 +166,6 @@ jobs:
       # directory could only ever hold what the restore step put there. Clearing it first
       # makes the restore authoritative again.
       - name: Clear any criterion data this runner kept from an earlier run
-        shell: bash
         run: rm -rf target/criterion
       - name: Restore baseline from main
         uses: actions/cache/restore@v4
@@ -175,16 +187,10 @@ jobs:
       # `--baseline-lenient` compares when the baseline is there and skips the comparison
       # when it is not. The threshold step below already tolerates a missing baseline the
       # same way, so the two now agree.
-      # `shell: bash` on the two steps below, and it is required rather than stylistic: a
-      # Windows runner defaults to PowerShell, where `if [ "$GITHUB_REF" = ... ]` is a
-      # syntax error. **Which bash matters**: until 2026-09-16 the runner resolved it to
-      # the WSL shim in `C:\WINDOWS\system32`, because Windows composes a process PATH as
-      # machine-then-user and `system32` sits in the machine half -- ahead of the Git entry
-      # in the user half. The runner's own `.path` now puts `C:\Program Files\Git\bin`
-      # first. (The heredoc this comment used to also cite is gone: the comparison is a
-      # file now.)
+      # Bash, via the job's `defaults` above rather than `shell: bash` here, and it is
+      # required rather than stylistic: a Windows runner defaults to PowerShell, where
+      # `if [ "$GITHUB_REF" = ... ]` is a syntax error.
       - name: Run benchmarks against the baseline
-        shell: bash
         run: |
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
             cargo bench --workspace -- --save-baseline main --noplot
@@ -200,7 +206,6 @@ jobs:
       # is how the extraction was checked, and it is the first time this logic has been
       # run against a known answer.
       - name: Compare p99 against the threshold
-        shell: bash
         run: python3 .github/scripts/bench_compare.py
       - name: Save baseline (main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
