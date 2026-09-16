@@ -5793,6 +5793,54 @@ not by finding, for the time between whenever each item landed and this correcti
     it still prints every ratio and every threshold breach and still refuses to fail on a
     number it cannot attribute. What changed is where the numbers come from.
 
+134. **The self-hosted runner's first job failed on which `bash` it resolved, 2026-09-16
+    (GAP-093, GAP-024).** Item 133 moved gate 6 onto `gungnir-rtx-5060ti`. The first run
+    the move produced failed at step 3 -- `dtolnay/rust-toolchain` -- before reaching any
+    step this workspace wrote, with:
+
+        /bin/bash: C:actions-runner_work_tempf4789342-....sh: No such file or directory
+
+    Every backslash gone. The runner had resolved `bash` to
+    `C:\WINDOWS\system32\bash.exe`, which is the **WSL shim**: a Linux bash that
+    cannot see a Windows path and consumed the separators as escapes.
+
+    **Why it was not obvious, and why checking the wrong shell is easy here.** Git for
+    Windows is installed, and `C:\Program Files\Git\bin` sits *second* in the user PATH --
+    ahead of `system32`'s own entry there. But Windows composes a process PATH as
+    **machine-then-user**, and `system32` is in the machine half, so it wins regardless of
+    where Git sits among the user entries. An interactive check of `bash --version` in
+    this workspace's own shell reports Git Bash and proves nothing about what the runner
+    service resolves; that check was made and reported as evidence, and it was the wrong
+    shell. **The fix is the runner's own `.path` file**, which it applies to every job:
+    `C:\Program Files\Git\bin` prepended to machine-then-user, preserving `.cargo\bin`
+    from the user half, which a machine-PATH-only file would have dropped.
+
+    **Two workflow changes followed, and neither is a workaround for the above.**
+
+    **(a) No toolchain action on a self-hosted runner.** `dtolnay/rust-toolchain` is a
+    composite action whose every step declares `shell: bash`, which is why it was the step
+    that failed -- but it was also installing a toolchain onto a machine that already has
+    rustup, which is work and risk for nothing. Both self-hosted workflows now record
+    `rustc --version --verbose` instead, and the pin is `rust-toolchain.toml`'s 1.98,
+    enforced by the repository rather than by a workflow input that can drift from it.
+    `CARGO_INCREMENTAL: "0"` is set explicitly because the removed action used to set it.
+
+    **(b) The comparison became a file.** `bench_compare.py` was forty lines of Python
+    inside a YAML block scalar behind a bash heredoc, so it could be exercised only by
+    pushing to main and reading a log -- and it had already shipped two defects that made
+    this gate compare nothing and pass: a glob that matched one level against a two-level
+    layout, and a baseline that was never saved. It is now
+    `.github/scripts/bench_compare.py`, taking its root as an argument. **Tested against a
+    fixture the same day, which is the first time this logic has been run against a known
+    answer**: a grouped benchmark is found, a 1.40x regression is named and exits 1 under
+    enforcement, a 3 percent change passes, a benchmark with no baseline is skipped and
+    counted, and advisory mode exits 0 while still printing the regression.
+
+    **What this does not settle.** The port itself is still unproven: the run failed
+    before reaching `cargo bench`, so whether the benchmarks complete inside the
+    twenty-minute timeout on this host is unmeasured, and so is the machine's own
+    run-to-run spread that item 133 makes the condition for enforcement.
+
 ## Directory layout
 
 See the workspace `Cargo.toml` for the authoritative member list and
