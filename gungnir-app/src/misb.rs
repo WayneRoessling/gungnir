@@ -12,7 +12,7 @@
 //! (`crate::cooperative::tick`, `crate::adsb::tick`), associate each report with the
 //! nearest track, and submit identification evidence -- all of which GAP-010's own
 //! closing action named. GAP-099's own closing action names exactly two remaining
-//! pieces (`docs/mission/gap-analysis/tools/gen_gaps.py`, `gap(id="GAP-099", ...)`):
+//! pieces (`docs/mission/gap-analysis/data/gaps.yaml`, GAP-099):
 //! wiring, and confirming this decoder's tag table against MISB's own primary text.
 //! Evidence fusion over `UasPlatformReport` is not one of them, so it is not built
 //! here. Concretely: this module attaches

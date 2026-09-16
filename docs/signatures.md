@@ -13,10 +13,12 @@ A design and the code built from it are separate entries: a signature on a desig
 says the design is the right one to build, and a signature on code says the code does
 what it says.
 
-A row's commit is the first commit on `main` whose tree carried the written record of
-the signature, and its paths are the files and directories it covered as they were at
-that commit. A signature from before the repository existed on 2026-09-07 names the
-first commit and is marked as such. An entry is never edited; a withdrawn signature
+A row's commit is a commit on `main` whose tree holds what was signed, and its paths
+are the files and directories the signature covered, as they were at that commit. For
+the entries built from the record on 2026-09-16 it is the first commit that carried the
+written record of the signature; for a signature given since, it is the commit on `main`
+the owner reviewed. A signature from before the repository existed on 2026-09-07 names
+the first commit and is marked as such. An entry is never edited; a withdrawn signature
 gets a new entry.
 
 169 signatures.

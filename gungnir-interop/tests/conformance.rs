@@ -471,7 +471,7 @@ fn wire_coverage(name: &str) -> Option<WireCoverage> {
             )
         }
         "stanag.4676" => WireCoverage::NotCovered(
-            "there is no corpus and no decoder (D-09), so there is nothing to send; this is the other half of GAP-063 and is blocked on an owner decision",
+            "there is no corpus and no decoder, so there is nothing to send; STANAG 4676 is descoped from this release by D-44, and its entry refuses by name",
         ),
         _ => return None,
     })

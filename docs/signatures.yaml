@@ -1,8 +1,10 @@
 # The signature ledger: every change the owner has signed, oldest first. Rendered into
 # signatures.md by tools/signatures.py; `python docs/tools/signatures.py check` validates it.
 #
-# One entry per thing signed. `commit` is the first commit on main whose tree carried the
-# written record of the signature; `paths` are what it covered, as they were at that commit.
+# One entry per thing signed. `commit` is a commit on main whose tree holds what was signed:
+# the first commit that carried the written record, for the entries built from the record on
+# 2026-09-16, and the main commit the owner reviewed, for a signature given since. `paths` are
+# what it covered, as they were at that commit.
 # A signature made before the repository existed (2026-09-07) names the first commit and
 # sets `pre_repository`. Append new entries at the end; never edit or remove a merged one.
 #

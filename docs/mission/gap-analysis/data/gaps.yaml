@@ -7996,3 +7996,544 @@
       deliberately leaves `VerticalUnitsGeoKey` (4099) unread, refusing a LAS file in
       non-metre heights rather than mis-scaling it, which is the honest half of the same
       subject and stays in that entry until a fixture exists.
+
+- id: GAP-109
+  name: Nothing counts per-frame resource creation in gungnir-render
+  type: Technical
+  caps: [CAP-5.10]
+  layer: UI and data ecosystem
+  sev: 2
+  effort: S
+  target: I3
+  owner: UI engineer
+  deps: []
+  impact: >-
+    The gungnir-render verification row cannot be gated: its criterion is zero device
+    and buffer creations per frame, measured by a debug counter nothing implements, so a
+    per-frame resource leak would pass every test in the workspace.
+  evidence: >-
+    `verification-capability-table.md` §2, the `gungnir-render` row (method: a debug
+    counter of device and buffer creations per frame); `gungnir-render` has no test
+    functions
+  action: >-
+    Add the debug-build counter of device and buffer creations the row's method names,
+    and a test that runs frames and asserts no creation after the first; then walk the
+    row again.
+  ref: >-
+    The GAP-067 walk of 2026-09-16, Group C (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which kept the `gungnir-render` row Draft because
+      nothing counts per-frame resource creation.
+
+- id: GAP-110
+  name: The node's headless loop has no automated test
+  type: Technical
+  caps: [CAP-7.3]
+  layer: Deployment and API
+  sev: 2
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The node's own run cycle -- start on the default config, journal every envelope,
+    report health, exit cleanly on interrupt -- is checked only by a person running the
+    binary, so a regression in it reaches a deployment unseen.
+  evidence: >-
+    `verification-capability-table.md` §2, the `gungnir-node` Headless loop row;
+    `gungnir-node/tests/` holds account provisioning and encryption at rest only
+  action: >-
+    Add a test that starts `gungnir-node` on the default config in a temporary
+    directory, lets it journal and report health, interrupts it, and asserts a clean
+    exit and the journaled envelopes. On Windows the interrupt cannot rely on a signal
+    from Git Bash (`CLAUDE.md`). Then walk the row again.
+  ref: >-
+    The GAP-067 walk of 2026-09-16, Group C (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which kept the `gungnir-node` Headless loop row Draft
+      because only a person running the binary checks it.
+
+- id: GAP-111
+  name: >-
+    The security row's role matrix and audit rule are untested, and the node audits
+    nothing
+  type: Technical
+  caps: [CAP-6.2, CAP-6.3]
+  layer: "Productization: security"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Security engineer (human-owned crate)
+  deps: []
+  impact: >-
+    The `gungnir-security` verification row cannot be gated: no test checks every role
+    against every action, none checks that a gated act leaves exactly one audit entry,
+    and the node writes no audit entry at all, so a sign-in or a role-gated call on a
+    node leaves no trace.
+  evidence: >-
+    `verification-capability-table.md` §2, the `gungnir-security` row; nothing under
+    `gungnir-node/src` or `gungnir-api/src` records an audit entry
+  action: >-
+    (1) A table-driven test over `Role::ALL` against every action constant,
+    `REQUIREMENT` and `ASSIGN_ROLE` included, comparing `role_permits` with a matrix
+    transcribed from `mission/roles-and-stakeholders.md` §4. (2) A desktop test that
+    performs each audited act and asserts the log grows by exactly one entry naming that
+    action. (3) Audit the node's sign-in and role-gated routes, then the same test
+    there. Then walk the row again.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which held the `gungnir-security` row and amended its
+      first clause to `AuthFailure::Rejected`.
+
+- id: GAP-112
+  name: No test round-trips a fully populated v2 snapshot
+  type: Technical
+  caps: [CAP-7.1]
+  layer: Deployment and API
+  sev: 2
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The `gungnir-api` row's zero-loss clause is checked on sparse snapshots only, so a
+    field a serializer drops from a populated snapshot would pass every test.
+  evidence: >-
+    `verification-capability-table.md` §2, the `gungnir-api` row; the zero-loss evidence
+    that exists is `gungnir-remote/tests/wire_conformance.rs` and `mod tests` in
+    `gungnir-api/src/v2/mod.rs`
+  action: >-
+    Build a fully populated v2 `SnapshotResponse` -- tracks with non-default state,
+    covariance, classification and releasability; a plan; health flags; requirements;
+    bearing rays; pipeline stats -- round-trip it through serde and through an
+    operator's `GET /v2/snapshot` with a bearer token, and assert equality with the
+    original. Then walk the row again.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which held the `gungnir-api` row and amended its method
+      and criterion to the v2 interface.
+
+- id: GAP-113
+  name: An under-authority plan is counted, never escalated
+  type: Technical
+  caps: [CAP-3.6, CAP-4.3]
+  layer: "Productization: decision and policy"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    DN-09 §7 has PN-06 mark a plan the asking role may not accept for escalation to a
+    role that may. The desktop counts the authority denial and never queues the plan, so
+    an under-authority plan reaches nobody with the authority to take it.
+  evidence: >-
+    `gungnir-app/src/decisions.rs` (an authority denial is counted, not queued);
+    `design/DN-09-authority-and-control-status.md` §7; the `gungnir-policy` row, gated
+    2026-09-16 on the denial itself
+  action: >-
+    Queue a plan the asking role may not accept for a role holding that authority, as
+    DN-09 §7 describes, and test that an area-layer plan asked by an Operator reaches a
+    Supervisor in the queue.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which gated the `gungnir-policy` row on the denial and
+      left what follows a denial to this gap.
+
+- id: GAP-114
+  name: Nothing consumes LateDataPolicy
+  type: Technical
+  caps: [CAP-1.5]
+  layer: "Productization: sensing and time"
+  sev: 2
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The `gungnir-time` late-data criterion ('policy honoured') cannot be tested:
+    `LateDataPolicy` has no consumer, so a configured policy changes nothing. What
+    decides late data today is the fusion pipeline's reorder horizon.
+  evidence: >-
+    `gungnir-time/src/lib.rs` (`LateDataPolicy`, no caller outside its tests); the
+    `gungnir-time` Late-data policy row, split from replay determinism 2026-09-16
+  action: >-
+    Have the ingest gateway or the fusion pipeline take a `LateDataPolicy`, or record a
+    decision that the reorder horizon is the policy and re-scope the row. Then deliver
+    an out-of-order detection under each variant and assert `Reject` drops and counts
+    it, `BufferAndReorder { max_lateness_s }` reorders inside the bound and drops beyond
+    it, and `AcceptAsIs` processes it as delivered.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which split the `gungnir-time` row, gated replay
+      determinism and held the late-data clause.
+
+- id: GAP-115
+  name: The node never times out an unacknowledged sensor task
+  type: Technical
+  caps: [CAP-1.3]
+  layer: "Productization: sensing and time"
+  sev: 3
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    A task the node issues through its SAPIENT router and the sensor ignores stays Sent
+    on the node indefinitely, its mode request pending, and nothing alerts. The
+    desktop's handler for a node-published `SensorTaskEvent::Unacknowledged` has no
+    publisher.
+  evidence: >-
+    `gungnir-node/src/main.rs` (`issue_api_tasks`, `apply_sapient_task_acks`; no sweep);
+    `gungnir-app/src/node_tasks.rs`; the `gungnir-sensor-management` outbound control
+    row, gated 2026-09-16 on the crate and the desktop
+  action: >-
+    Sweep the node's sensor tasks against the baseline's acknowledgement window every
+    tick, publish `SensorTaskEvent::Unacknowledged` and raise an alert for each timeout,
+    never retry, and test it with a router that ignores a task.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which gated the outbound control row and found the node
+      has no sweep.
+
+- id: GAP-116
+  name: Seven interop clauses are unasserted or only partly asserted
+  type: Technical
+  caps: [CAP-7.2]
+  layer: Deployment and API
+  sev: 2
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The `gungnir-interop` row cannot be gated. Never asserted: a status-less Category
+    034 message carries no status; a Category 205 System Bearing report maps. Only
+    partly asserted: the older-version refusal, 034 losses and item names, truncation
+    (it stops at the length check), and the System Position reason.
+  evidence: >-
+    `verification-capability-table.md` §2, the `gungnir-interop` row; its tests are
+    `gungnir-interop/tests/{conformance,asterix_fixtures}.rs` and `mod tests` in
+    `gungnir-interop/src/{lib.rs,asterix/cat048.rs,asterix/cat034.rs,asterix/cat205.rs,asterix/cat129.rs}`
+  action: >-
+    (1) Map every Category 034 record of the capture and assert `status.is_some()`
+    exactly when the record carries I034/050's common subfield. (2) A System Bearing
+    report (I205/000 = 2) carrying I205/080, and one carrying only I205/070, map to
+    `Measurement::Bearing` with the site's variance. (3) `check(name, version - 1)` is
+    refused with `IncompatibleSchema` for every entry. (4) A lossy 034 message carries
+    `conversion_loss`. (5) Carried item names are asserted across the capture and on a
+    034 record carrying I034/SP. (6) Truncated blocks are re-lengthed so each reaches
+    its own parser. (7) The System Position `NotADetection` reason, data source and time
+    are asserted.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which held the `gungnir-interop` row and struck 'all
+      tested' from its criterion.
+
+- id: GAP-117
+  name: Most event and view types are never round-tripped through serde
+  type: Technical
+  caps: [CAP-7.2]
+  layer: Service facades and wiring
+  sev: 2
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The `gungnir-model` row cannot be gated: round trips cover four view types and one
+    event variant, so 20 of 21 event enums (about 77 variants) and `ResourceView`,
+    `BearingRayView` and `PipelineStatsView` could lose a field on the journal or the
+    wire unseen.
+  evidence: >-
+    `verification-capability-table.md` §2, the `gungnir-model` row; its tests are
+    `gungnir-interop/tests/conformance.rs`, `mod tests` in `gungnir-model`, and the
+    older-version refusal in `gungnir-api/tests/machine.rs`
+  action: >-
+    A table-driven serde_json round trip in `gungnir-model` of one value per variant of
+    every event enum in `gungnir_model::events` and of every `*View` type, with
+    non-dyadic floats, asserting equality; and `check_schema_version(SCHEMA_VERSION -
+    1)` refused with `SchemaVersion { expected, found }`. Then walk the row again.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: "Filed by the GAP-067 walk, which held the `gungnir-model` row."
+
+- id: GAP-118
+  name: Coverage accuracy is untested, and a coverage volume has no bearing
+  type: Technical
+  caps: [CAP-2.11]
+  layer: "Productization: decision and policy"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The coverage-accuracy criterion (range within 1 percent, bearing and elevation
+    within 0.1 degree of a fixture) has no fixture and no test, and `CoverageVolume` has
+    no azimuth sector, so a sectored sensor's coverage cannot be represented, let alone
+    checked.
+  evidence: >-
+    `verification-capability-table.md` §2, the `gungnir-analytics` Coverage accuracy
+    row, split from line of sight 2026-09-16; `gungnir-analytics/src/lib.rs`
+    (`CoverageVolume`)
+  action: >-
+    Give `CoverageVolume` an azimuth sector, or record a decision removing bearing from
+    the criterion. Build a fixture of sensor volumes with stated range, sector and
+    elevation limits, and test that each limit is recovered from computed coverage, with
+    sample spacing at most 1 percent of range, within the criterion.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which split the `gungnir-analytics` row, gated line of
+      sight and held coverage accuracy.
+
+- id: GAP-119
+  name: >-
+    No solve budget exists, and a stale plan is never compared with the last good one
+  type: Technical
+  caps: [CAP-3.3, CAP-5.5]
+  layer: "Productization: decision and policy"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The `gungnir-intercept-service` row cannot be gated: its degradation clause names an
+    over-budget solve and no solve budget exists anywhere, the stale plan returned is
+    never compared with the last good plan (which the tests leave empty), and
+    determinism is shown only on a one-by-one plan.
+  evidence: >-
+    `verification-capability-table.md` §2, the `gungnir-intercept-service` row; `mod
+    tests` in `gungnir-intercept-service/src/lib.rs`
+  action: >-
+    Add a solve budget whose overrun returns the last good plan, flagged stale with when
+    it was computed. Test that two fresh services given the same three tracks and three
+    ready resources return equal plans, with tied and then distinct rewards; and that a
+    solve at t=1 followed by an over-budget solve at t=2 returns `Stale { plan }` equal
+    to the t=1 plan with `is_healthy()` false.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which held the `gungnir-intercept-service` row.
+
+- id: GAP-120
+  name: Nothing compares the embedded and remote backends' projections
+  type: Technical
+  caps: [CAP-7.3]
+  layer: Deployment and API
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The `gungnir-app` backend-switching row cannot be gated: no test runs one scenario
+    through both backends, so a projection the remote backend gets wrong would reach an
+    operator on a linked desktop unseen.
+  evidence: >-
+    `verification-capability-table.md` §2, the `gungnir-app` Backend switching row;
+    `gungnir-app/tests/{failover,failover_e2e}.rs` test failover, not projections
+  action: >-
+    Feed one generated Scenario 1 timeline (`gungnir-scenario`) to an `AppState` on the
+    embedded backend and, through a real `NodeApi` or `gungnir-node`, to one linked to
+    it; after both drain, compare what the panels read -- tracks, plan outcome, health,
+    alerts -- field by field. Then walk the row again.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which held the backend-switching row and dropped
+      '(planned)' from its method.
+
+- id: GAP-121
+  name: StoreAndForwardQueue has no production caller
+  type: Technical
+  caps: [CAP-5.4]
+  layer: Deployment and API
+  sev: 1
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    `gungnir_resilience::StoreAndForwardQueue` is tested and used by nothing: the live
+    outbox is `gungnir-remote`'s own, though `ARCHITECTURE.md` §8.4 said the queue
+    carried envelopes during an outage. Two bounded queues with one rule, one of them
+    dead, is a place for the rule to drift.
+  evidence: >-
+    `gungnir-resilience/src/lib.rs` (no caller outside its tests); `gungnir-remote`'s
+    `OUTBOX_CAPACITY` outbox
+  action: >-
+    Adopt the queue for what a desktop records during an outage, or retire it and its §2
+    clause with a decision.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which gated the `gungnir-resilience` row on the queue's
+      own tests and found no caller.
+
+- id: GAP-122
+  name: Journal retention purge is unbuilt, and nothing says so
+  type: Technical
+  caps: [CAP-5.1]
+  layer: "Productization: sustainment"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    A deployment's `RetentionPolicy` purges nothing: it is two predicates no code calls,
+    so journals grow without bound, and because nothing returns `NotImplemented` for the
+    purge, `docs/unbuilt.md` does not list it.
+  evidence: >-
+    `gungnir-store` (`RetentionPolicy`); the `gungnir-store` Retention row, split from
+    journal round-trip 2026-09-16
+  action: >-
+    Build the purge, or have the unbuilt purge refuse with `NotImplemented` so
+    `docs/unbuilt.md` lists it until it is built. Then test a journal holding sessions
+    aged below, at and above `max_session_age_days`: only those past the limit are gone,
+    and the rest still read back exactly.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, which split the `gungnir-store` row, gated the round
+      trip and held retention.
+
+- id: GAP-123
+  name: An entity's GlobalEntityId changes at every restart
+  type: Technical
+  caps: [CAP-2.7]
+  layer: "Productization: picture and identity"
+  sev: 4
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    Both binaries rebuild the identity resolver from the journal at start and mint fresh
+    UUID v7 identifiers as they fold it, so the same object carries a different
+    `GlobalEntityId` after every restart and in a replay, which breaks the continuity
+    across sessions that CAP-2.7 exists for.
+  evidence: >-
+    `gungnir-app/src/identity.rs` and `gungnir-node/src/entities.rs` (`recover`);
+    `gungnir-identity/src/lib.rs` (a new id per unseen track);
+    `gungnir-app/tests/order_of_battle.rs` shows shared lineage, not a stable id
+  action: >-
+    Read journaled identities back at start, or derive identifiers deterministically.
+    Then test one object recorded in two sessions with a restart between them, and
+    replayed: the same `GlobalEntityId` in session one, session two and the replay.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: "Filed by the GAP-067 walk, which held the `gungnir-identity` row."
+
+- id: GAP-124
+  name: The risk score has no time-to-impact term
+  type: Technical
+  caps: [CAP-3.2]
+  layer: "Productization: decision and policy"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The `gungnir-assessment` criterion is a score monotonic in time-to-impact. The score
+    reads range and whether a track is closing at all, never how soon it arrives, so a
+    far, fast track with less time to impact scores below a near, slow one.
+  evidence: >-
+    `gungnir-assessment/src/assets.rs` (`weighted`: proximity, a closing factor of 1.0
+    or 0.5, priority and class); the `gungnir-assessment` Risk scoring row, whose only
+    fixture pair moves range at a constant speed
+  action: >-
+    Give the scorer a time-to-impact term, then test with fixtures that move
+    time-to-impact independently of range -- one range at two closing speeds, and
+    far-fast against near-slow -- asserting the score never rises as time-to-impact
+    grows.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: "Filed by the GAP-067 walk, which held the `gungnir-assessment` row."
+
+- id: GAP-125
+  name: Neither binary's health path is tested against a changing flag
+  type: Technical
+  caps: [CAP-5.5]
+  layer: "Productization: sustainment"
+  sev: 2
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The `gungnir-observability` row cannot be gated: both binaries build `SystemHealth`
+    directly from each service's `is_healthy()` rather than through
+    `SnapshotHealthMonitor`, and no test toggles a flag and watches the health follow,
+    so a health summary that stuck would pass.
+  evidence: >-
+    `gungnir-observability/src/lib.rs` (`SnapshotHealthMonitor`, set once in its test);
+    the desktop's `update::tick` and `gungnir-node/src/main.rs`
+  action: >-
+    Route both binaries through `SnapshotHealthMonitor`, or test the paths they use:
+    toggle each service's flag true, false, true and assert `SystemHealth` follows every
+    transition, on the desktop's tick and on the node's.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: "Filed by the GAP-067 walk, which held the `gungnir-observability` row."

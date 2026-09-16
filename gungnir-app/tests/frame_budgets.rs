@@ -358,7 +358,7 @@ fn snapshot_calls_meet_their_budget() {
     );
 }
 
-/// **Measured, not asserted.** The egui pass at Scenario 4 track counts.
+/// **Gated in release.** The egui pass at Scenario 4 track counts.
 ///
 /// **This budget had never been measured.** The `gungnir-ui` §2 row has carried "egui
 /// pass p99 under 8 ms at Scenario 4 track counts" since D-16 agreed it on 2026-09-04,
@@ -374,12 +374,12 @@ fn snapshot_calls_meet_their_budget() {
 /// empty one; measuring an empty workspace and calling it the row's figure is the same
 /// mistake `snapshot_calls_meet_their_budget` documents for its own row.
 ///
-/// **Printed and not asserted, deliberately.** The two rows gated above were measured
-/// for over a week before the owner promoted them, and this one has existed for minutes;
-/// promoting it in the same change would take the confirmation D-16 reserves for the
-/// owner. It gates when the owner has read a figure (GAP-067).
+/// **Asserted in release, printed in debug**, since the GAP-067 walk of 2026-09-16: the
+/// budget is a release figure, and `ci.yml`'s release step enforces it with `--release`,
+/// the same arrangement as `journal_append_meets_its_budget`. The debug run keeps
+/// printing, because a debug timing on a shared runner is a statement about the runner.
 #[test]
-fn the_egui_pass_is_measured() {
+fn the_egui_pass_meets_its_budget() {
     let timeline = generate(&Scenario::DenseSwarm { target_count: 200 }, 4);
     let mut state = state_for(&timeline, "egui");
     let mut clock = ReplayClockAuthority {
@@ -437,10 +437,20 @@ fn the_egui_pass_is_measured() {
     };
     println!(
         "egui pass (commander workspace, {} tracks): p99 {p:?}, worst {worst:?} over {} passes \
-         (budget {BUDGET_EGUI_P99:?}, {profile} profile; NOT a gate -- promotion is GAP-067's walk)",
+         (budget {BUDGET_EGUI_P99:?}, {profile} profile)",
         state.tracking.tracks().len(),
         samples.len()
     );
+    if cfg!(debug_assertions) {
+        println!(
+            "  not asserted in debug; the budget is a release figure and ci.yml enforces it with --release"
+        );
+    } else {
+        assert!(
+            p < BUDGET_EGUI_P99,
+            "the egui pass took p99 {p:?} over {EGUI_PASSES} passes, over the {BUDGET_EGUI_P99:?} budget"
+        );
+    }
 }
 
 /// **Gated.** Journal append: 50 envelopes in under 1 ms, under the D-04 desktop

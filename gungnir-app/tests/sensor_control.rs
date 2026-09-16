@@ -10,9 +10,12 @@
 //! nothing until a sensor acknowledges -- is only true end to end if every piece
 //! agrees. These run a real `AppState` through `update::tick`.
 //!
-//! **Nothing here acknowledges anything**, because nothing can: no adapter exists until
-//! GAP-001. That is what the last test is about. It is not a limitation of the test; it
-//! is the state of the system, and the test exists to make sure the system says so.
+//! **Nothing here acknowledges anything.** These desktops attach no control adapter, so a
+//! command stays unacknowledged until its window closes, and that is what the timeout
+//! test is about: an unanswered command times out, alerts once, and is never retried. The
+//! adapters that can deliver a task (the desktop's node link and the node's SAPIENT
+//! router, since GAP-001 and GAP-004) are tested where they are built, and the rules that
+//! acknowledgement exercises are tested against a stub in `gungnir-sensor-management`.
 
 use gungnir_app::state::AppState;
 use gungnir_app::sustainment;
