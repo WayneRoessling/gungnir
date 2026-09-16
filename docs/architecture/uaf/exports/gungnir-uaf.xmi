@@ -2321,7 +2321,7 @@
           <tag xmi:id="EAID_C147168B_14B3_51B5_F9D3_83186EF5B94C" name="uafKind" value="Capability" modelElement="EAID_1A1B4DFE_9EF1_9A74_50E1_CD9514926407"/>
           <tag xmi:id="EAID_FD222808_2137_B71C_E960_D31402F88FE6" name="uafId" value="CAP-4.2" modelElement="EAID_1A1B4DFE_9EF1_9A74_50E1_CD9514926407"/>
           <tag xmi:id="EAID_56D836B7_185B_C771_EA91_5C3ED03DE6BC" name="registry.parent" value="CAP-4" modelElement="EAID_1A1B4DFE_9EF1_9A74_50E1_CD9514926407"/>
-          <tag xmi:id="EAID_D45621AE_4BA6_3410_51E1_8650F32E2B50" name="registry.coverage" value="REQ-S-01 REQ-S-05" modelElement="EAID_1A1B4DFE_9EF1_9A74_50E1_CD9514926407"/>
+          <tag xmi:id="EAID_D45621AE_4BA6_3410_51E1_8650F32E2B50" name="registry.coverage" value="verification-table" modelElement="EAID_1A1B4DFE_9EF1_9A74_50E1_CD9514926407"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2584,7 +2584,7 @@
           <tag xmi:id="EAID_550B475A_7727_2E17_1447_3B53174C803D" name="uafKind" value="Capability" modelElement="EAID_E5AB8479_9B30_8547_C6B2_1F0D0439C9C0"/>
           <tag xmi:id="EAID_3AC228AD_46FD_D051_5760_290C269E2B2C" name="uafId" value="CAP-5.5" modelElement="EAID_E5AB8479_9B30_8547_C6B2_1F0D0439C9C0"/>
           <tag xmi:id="EAID_FC617904_C50F_F791_5FC5_B9EDE8C13D75" name="registry.parent" value="CAP-5" modelElement="EAID_E5AB8479_9B30_8547_C6B2_1F0D0439C9C0"/>
-          <tag xmi:id="EAID_03743FF2_05C6_DDB8_E1E0_0F4AAD024B5A" name="registry.coverage" value="REQ-U-03 REQ-C-04 -- the alert lifecycle half has no requirement" modelElement="EAID_E5AB8479_9B30_8547_C6B2_1F0D0439C9C0"/>
+          <tag xmi:id="EAID_03743FF2_05C6_DDB8_E1E0_0F4AAD024B5A" name="registry.coverage" value="verification-table" modelElement="EAID_E5AB8479_9B30_8547_C6B2_1F0D0439C9C0"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -2747,7 +2747,7 @@
           <tag xmi:id="EAID_6E545434_7BD8_A194_1EC4_4C552E0D04AC" name="uafKind" value="Capability" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
           <tag xmi:id="EAID_F8E6F5DB_613C_6683_D8CB_FEED3F125FB4" name="uafId" value="CAP-6.1" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
           <tag xmi:id="EAID_530E3054_C0EE_D154_8965_D41F42ED537A" name="registry.parent" value="CAP-6" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
-          <tag xmi:id="EAID_8CB3F09F_A4F4_FDBD_A0F7_F8B49E48C6AE" name="registry.coverage" value="REQ-S-06" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
+          <tag xmi:id="EAID_8CB3F09F_A4F4_FDBD_A0F7_F8B49E48C6AE" name="registry.coverage" value="verification-table" modelElement="EAID_028E91C8_7A0A_346F_78F3_5BCCD59A8BB1"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>

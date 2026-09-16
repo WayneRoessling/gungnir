@@ -168,19 +168,19 @@ already finished.
 | CAP-3.8 Recommend fires tasks with deconfliction | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-3.9 Recommend sensor re-tasking under degradation | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-4.1 Present recommendations for decision | Increment 3 | the roadmap has it *partial* at increment 1, full at increment 3 |
-| CAP-4.2 Record every decision | REQ-S-01, REQ-S-05 | stated by requirements that were derived from elsewhere, so the generated trace does not reach it |
+| CAP-4.2 Record every decision | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-4.4 Hand off to effector systems with provenance | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-4.5 Warn assets and authorities | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-4.6 Track engagements and assess effects | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-4.7 Assist roles without authority | GAP-044 | open in the gap register; the criterion arrives with the closure |
 | CAP-5.1 Journal every event durably | REQ-D-05, REQ-D-06, REQ-P-07 | stated by requirements that were derived from elsewhere, so the generated trace does not reach it |
 | CAP-5.4 Operate disconnected and reconcile | Increment 4 | the roadmap has it *partial* at increment 1, full at increment 4 |
-| CAP-5.5 Report health honestly and run the alert lifecycle | REQ-U-03, REQ-C-04 | stated by requirements that were derived from elsewhere, so the generated trace does not reach it; the alert lifecycle half has no requirement |
+| CAP-5.5 Report health honestly and run the alert lifecycle | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-5.6 Manage configuration baselines and mission plans | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-5.7 Govern algorithm and model baselines | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-5.8 Support the battle rhythm | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-5.10 Meet performance budgets per profile | GAP-093 | open in the gap register; the criterion arrives with the closure |
-| CAP-6.1 Authenticate operators and callers | REQ-S-06 | stated by requirements that were derived from elsewhere, so the generated trace does not reach it |
+| CAP-6.1 Authenticate operators and callers | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-6.7 Treat external input as untrusted | GAP-044 | open in the gap register; the criterion arrives with the closure |
 | CAP-7.3 Run as desktop, on-prem node, or cloud node | REQ-C-06, REQ-C-07 | stated by requirements that were derived from elsewhere, so the generated trace does not reach it |
 | CAP-7.4 Exchange with peers and coalition | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
