@@ -144,7 +144,7 @@ SV-19,Services,ServiceInterface,Model registry,"Validate, promote, roll back alg
 SV-20,Services,ServiceInterface,Authentication,Credential to OperatorId (trait only; mechanism D-02).,Class
 SV-21,Services,ServiceInterface,Authorization,Role-to-action matrix; unknown operators permitted nothing.,Class
 SV-22,Services,ServiceInterface,Audit log,Append-only audit entries per gated action.,Class
-SV-23,Services,ServiceInterface,API v1,"Snapshot, event stream, detection submission, plan decision, health; transport pending.",Class
+SV-23,Services,ServiceInterface,API v1,"Snapshot, event stream, detection submission and health are served over the v2 transport; the plan-decision route returns 501 because a node runs no approval queue.",Class
 SV-24,Services,ServiceInterface,Health monitor,Health snapshot from service flags; alert correlation; watchdog.,Class
 SV-25,Services,ServiceInterface,Store-and-forward and reconciliation,Bounded queue while disconnected; journal merge with conflict reporting.,Class
 SV-26,Services,ServiceInterface,Shared picture and arbitration,Apply node envelopes to a projection; role-rank arbitration of conflicts.,Class
@@ -217,15 +217,15 @@ PT-07,Personnel Types,Post,Planner,,Class
 PT-08,Personnel Types,Post,Commander,,Class
 SD-01,Standards,Standard,Gungnir canonical schema v1,The versioned JSON form of every view and event; the journal and the API carry it.,Class
 SD-02,Standards,Standard,Apache Arrow (arrow 53),Columnar form of detections for analytics and bulk exchange.,Class
-SD-03,Standards,Standard,ASTERIX Category 048 (Eurocontrol),Radar target reports; codec returns NotImplemented (GAP-064).,Class
-SD-04,Standards,Standard,STANAG 4676 (NATO ISR tracking standard),Track exchange with coalition; codec returns NotImplemented (GAP-064).,Class
+SD-03,Standards,Standard,ASTERIX Category 048 (Eurocontrol),Radar target reports; the codec decodes and encodes (GAP-064 closed).,Class
+SD-04,Standards,Standard,STANAG 4676 (NATO ISR tracking standard),Track exchange with coalition; the codec returns NotImplemented and cannot be written until AEDP-12 is obtained (external-standards.md \u00a72). GAP-064 closed on that finding.,Class
 SD-05,Standards,Standard,JSON (RFC 8259),"Serialization of configuration, journal lines, and API payloads.",Class
-SD-06,Standards,Standard,HTTP/1.1 (RFC 9112),Request and response transport for the API (GAP-041).,Class
-SD-07,Standards,Standard,WebSocket (RFC 6455),The API event stream (GAP-041).,Class
-SD-08,Standards,Standard,TLS 1.3 (RFC 8446),Encryption in transit and mutual authentication of machines (GAP-060).,Class
-SD-09,Standards,Standard,AIS (ITU-R M.1371),Cooperative maritime identity (GAP-010).,Class
-SD-10,Standards,Standard,ADS-B 1090 ES (RTCA DO-260B),Cooperative air identity (GAP-010).,Class
-SD-11,Standards,Standard,UUID version 7 (RFC 9562),Textual and time-ordered form of GlobalEntityId (GAP-069).,Class
+SD-06,Standards,Standard,HTTP/1.1 (RFC 9112),Request and response transport for the v2 API (GAP-041 closed).,Class
+SD-07,Standards,Standard,WebSocket (RFC 6455),The v2 API event stream (GAP-041 closed).,Class
+SD-08,Standards,Standard,TLS 1.3 (RFC 8446),Encryption in transit and mutual authentication of machines; GAP-060's engineering item was built and signed 2026-09-08.,Class
+SD-09,Standards,Standard,AIS (ITU-R M.1371),Cooperative maritime identity (GAP-010 closed).,Class
+SD-10,Standards,Standard,ADS-B 1090 ES (RTCA DO-260B),Cooperative air identity (GAP-010 closed).,Class
+SD-11,Standards,Standard,UUID version 7 (RFC 9562),Textual and time-ordered form of GlobalEntityId (GAP-069 closed).,Class
 SD-12,Standards,Standard,OCI container image,Packaging of the service node for Linux x86_64.,Class
 SD-13,Standards,Standard,Software bill of materials (CycloneDX JSON) and signed releases,Release evidence per docs/release-governance.md; exercised under GAP-061.,Class
 SD-14,Standards,Standard,UAF 1.2 (OMG),The framework these views follow.,Class

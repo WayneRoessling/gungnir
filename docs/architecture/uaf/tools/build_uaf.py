@@ -56,6 +56,12 @@ CAPABILITY_ROADMAP = DOCS / "mission/capabilities/capability-roadmap.md"
 # ratchet, not a target: it only ever goes down, and check() fails either way so
 # neither a new undermanaged capability nor a stale baseline can pass silently.
 CAPABILITIES_WITHOUT_REQUIREMENT = 27
+
+# `status: planned` is load-bearing, not decorative: it makes the consistency check
+# treat the relationship as satisfied, so a planned `realizes` is the only reason two
+# activities pass "realized by no service". A marker that suppresses a gate has to say
+# what will clear it, which is the `plan` field, and the same ratchet applies.
+RELATIONSHIPS_PLANNED = 8
 NL = "\n"
 DATE = "2026-09-04"
 
@@ -1431,6 +1437,36 @@ def coverage_problems(cap: str, disposition: str, requirement_ids: set[str],
     return out
 
 
+def planned_problems(kind: str, r: dict, gap_status: dict[str, str]) -> list[str]:
+    """Whether a `status: planned` relationship says what will clear it, truthfully.
+
+    The same rule the capability dispositions follow: a marker that points at a gap
+    stops being true the day that gap closes. Four of these pointed at gaps that had
+    already closed while the registry still said the code did not carry the standard --
+    the ASTERIX codec, the AIS and ADS-B adapters, and UUIDv7 were all shipped and
+    still marked planned.
+    """
+    label = f"{kind}: {r['from']} -> {', '.join(rel_targets(r)) or '(nothing)'}"
+    plan = str(r.get("plan") or "").strip()
+    if not plan:
+        return [f"{label} is planned with no plan: say which open gap clears it, or "
+                f"'blocked -- reason'"]
+    if plan.startswith("blocked"):
+        if "--" not in plan or not plan.split("--", 1)[1].strip():
+            return [f"{label}: a blocked plan must give a reason after --"]
+        return []
+    out = []
+    for p in plan.split():
+        if not re.fullmatch(r"GAP-\d+", p):
+            out.append(f"{label}: plan token {p!r} is not a GAP id or 'blocked -- reason'")
+        elif p not in gap_status:
+            out.append(f"{label}: plan names {p}, which is not in the gap register")
+        elif gap_status[p].startswith("Closed"):
+            out.append(f"{label}: plan waits on {p}, which is closed -- either the code "
+                       f"now carries this and the marker should go, or it needs a new plan")
+    return out
+
+
 def coverage_prose(disposition: str, maturity: dict[str, list[str]], cap: str) -> tuple[str, str]:
     """A `coverage` value rendered as the specification's two cells."""
     token, _, reason = disposition.partition("--")
@@ -1508,6 +1544,8 @@ def regenerate_coverage_section(elements, rels) -> None:
 def check(elements, rels) -> list[str]:
     problems, notes = [], []
     ids = names(elements)
+    in_table, gap_status_for_plans, maturity = coverage_evidence()
+    planned_rels: list[str] = []
     for e in elements["capabilities"]:
         if "parent" in e and e["parent"] not in ids:
             problems.append(f"{e['id']} has unknown parent {e['parent']}")
@@ -1535,12 +1573,40 @@ def check(elements, rels) -> list[str]:
                 # code does not carry.
                 notes.append(f"{kind}: {r['from']} -> {', '.join(rel_targets(r)) or '(nothing)'} "
                              f"is planned, not in the code")
+                planned_rels.append(f"{kind}: {r['from']}")
+                problems.extend(planned_problems(kind, r, gap_status_for_plans))
             for to in rel_targets(r):
                 if to not in ids:
                     problems.append(f"{kind}: unknown target {to} (from {r['from']})")
                 elif expected and section_of.get(to) != expected[1]:
                     problems.append(f"{kind}: target {to} is a {section_of.get(to)} entry, "
                                     f"but {kind} goes to {expected[1]}")
+    # A conforms_to and the standard it points at have to agree about whether the code
+    # carries it. They had drifted apart in both directions and nothing said so: the
+    # ASTERIX codec, the AIS and ADS-B adapters, UUIDv7, the HTTP/WebSocket transport
+    # and TLS were all shipped while the registry still called them planned. Reading
+    # each crate was how that was found, which is not a thing that happens on a
+    # schedule -- so the two statements are now checked against each other instead.
+    standard_status = {e["id"]: e.get("status") for e in elements.get("standards", [])}
+    for r in rels.get("conforms_to", []) or []:
+        planned = r.get("status") == "planned"
+        for to in rel_targets(r):
+            if to not in standard_status:
+                continue
+            if planned and standard_status[to] == "real":
+                problems.append(f"conforms_to: {r['from']} -> {to} is planned, but {to} is a "
+                                f"real standard -- one of the two is stale")
+            if not planned and standard_status[to] == "planned":
+                problems.append(f"conforms_to: {r['from']} -> {to} claims conformance, but {to} "
+                                f"is planned -- one of the two is stale")
+    if len(planned_rels) > RELATIONSHIPS_PLANNED:
+        problems.append(f"{len(planned_rels)} relationships are planned, above the ratchet of "
+                        f"{RELATIONSHIPS_PLANNED}: a planned edge was added. Build it, or raise "
+                        f"the number deliberately rather than as a side effect")
+    elif len(planned_rels) < RELATIONSHIPS_PLANNED:
+        problems.append(f"only {len(planned_rels)} relationships are planned, below the ratchet "
+                        f"of {RELATIONSHIPS_PLANNED}: set RELATIONSHIPS_PLANNED to "
+                        f"{len(planned_rels)} so the gate holds the ground that was just taken")
     exhibited = {to for r in rels["exhibits"] for to in rel_targets(r)}
     achieved = {to for r in rels["achieves"] for to in rel_targets(r)}
     for e in elements["capabilities"]:
@@ -1577,7 +1643,7 @@ def check(elements, rels) -> list[str]:
     # is not necessarily unspecified -- but it has to say where its criterion does
     # come from, which is what `coverage` carries and what §8.1 of the specification
     # publishes. Without that the capability is only visible as a note nobody acts on.
-    in_table, gap_status, maturity = coverage_evidence()
+    gap_status = gap_status_for_plans
     requirement_ids = {e["id"] for e in elements.get("requirements", [])}
     unrequired = []
     for e in elements["capabilities"]:

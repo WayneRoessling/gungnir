@@ -839,7 +839,7 @@ SD-02,registry.status,real
 SD-03,uafId,SD-03
 SD-03,uafKind,Standard
 SD-03,registry.source,gungnir_interop::AsterixCat048Codec
-SD-03,registry.status,planned
+SD-03,registry.status,real
 SD-04,uafId,SD-04
 SD-04,uafKind,Standard
 SD-04,registry.source,gungnir_interop::Stanag4676Codec
@@ -850,28 +850,28 @@ SD-05,registry.source,serde_json
 SD-05,registry.status,real
 SD-06,uafId,SD-06
 SD-06,uafKind,Standard
-SD-06,registry.source,docs/gungnir-api-v1.md
-SD-06,registry.status,planned
+SD-06,registry.source,gungnir_api::transport
+SD-06,registry.status,real
 SD-07,uafId,SD-07
 SD-07,uafKind,Standard
-SD-07,registry.source,docs/gungnir-api-v1.md
-SD-07,registry.status,planned
+SD-07,registry.source,gungnir_api::transport
+SD-07,registry.status,real
 SD-08,uafId,SD-08
 SD-08,uafKind,Standard
-SD-08,registry.source,ARCHITECTURE.md \u00a78.5; D-02
-SD-08,registry.status,planned
+SD-08,registry.source,gungnir_api::tls
+SD-08,registry.status,real
 SD-09,uafId,SD-09
 SD-09,uafKind,Standard
-SD-09,registry.source,D-09
-SD-09,registry.status,planned
+SD-09,registry.source,gungnir_ingest::adapters::ais
+SD-09,registry.status,real
 SD-10,uafId,SD-10
 SD-10,uafKind,Standard
-SD-10,registry.source,D-09
-SD-10,registry.status,planned
+SD-10,registry.source,gungnir_ingest::adapters::adsb
+SD-10,registry.status,real
 SD-11,uafId,SD-11
 SD-11,uafKind,Standard
-SD-11,registry.source,D-11
-SD-11,registry.status,planned
+SD-11,registry.source,gungnir_identity
+SD-11,registry.status,real
 SD-12,uafId,SD-12
 SD-12,uafKind,Standard
 SD-12,registry.source,deploy/node/Dockerfile
@@ -1958,10 +1958,10 @@ REQ-C-10,registry.owner,architecture-requirements-specification.md
 RS-model,conformsTo,SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259)
 RS-store,conformsTo,SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259)
 RS-config,conformsTo,SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259)
-RS-api,conformsTo,SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259); SD-06 HTTP/1.1 (RFC 9112) (planned); SD-07 WebSocket (RFC 6455) (planned); SD-08 TLS 1.3 (RFC 8446) (planned)
-RS-remote,conformsTo,SD-06 HTTP/1.1 (RFC 9112) (planned); SD-07 WebSocket (RFC 6455) (planned); SD-08 TLS 1.3 (RFC 8446) (planned); SD-16 Cursor-on-Target (CoT) (planned)
-RS-node,conformsTo,SD-12 OCI container image; SD-08 TLS 1.3 (RFC 8446) (planned); SD-13 Software bill of materials (CycloneDX JSON) and signed releases (planned)
-RS-interop,conformsTo,SD-02 Apache Arrow (arrow 53); SD-03 ASTERIX Category 048 (Eurocontrol) (planned); SD-04 STANAG 4676 (NATO ISR tracking standard) (planned); SD-16 Cursor-on-Target (CoT) (planned)
-RS-ingest,conformsTo,SD-16 Cursor-on-Target (CoT) (planned); SD-09 AIS (ITU-R M.1371) (planned); SD-10 ADS-B 1090 ES (RTCA DO-260B) (planned)
-RS-identity,conformsTo,SD-11 UUID version 7 (RFC 9562) (planned)
+RS-api,conformsTo,SD-01 Gungnir canonical schema v1; SD-05 JSON (RFC 8259); SD-06 HTTP/1.1 (RFC 9112); SD-07 WebSocket (RFC 6455); SD-08 TLS 1.3 (RFC 8446)
+RS-remote,conformsTo,SD-06 HTTP/1.1 (RFC 9112); SD-07 WebSocket (RFC 6455); SD-08 TLS 1.3 (RFC 8446); SD-16 Cursor-on-Target (CoT) (planned)
+RS-node,conformsTo,SD-12 OCI container image; SD-08 TLS 1.3 (RFC 8446); SD-13 Software bill of materials (CycloneDX JSON) and signed releases (planned)
+RS-interop,conformsTo,SD-02 Apache Arrow (arrow 53); SD-03 ASTERIX Category 048 (Eurocontrol); SD-04 STANAG 4676 (NATO ISR tracking standard) (planned); SD-16 Cursor-on-Target (CoT) (planned)
+RS-ingest,conformsTo,SD-16 Cursor-on-Target (CoT) (planned); SD-09 AIS (ITU-R M.1371); SD-10 ADS-B 1090 ES (RTCA DO-260B)
+RS-identity,conformsTo,SD-11 UUID version 7 (RFC 9562)
 RS-app,conformsTo,SD-13 Software bill of materials (CycloneDX JSON) and signed releases (planned)

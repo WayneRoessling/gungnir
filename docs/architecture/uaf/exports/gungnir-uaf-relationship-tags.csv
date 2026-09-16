@@ -285,13 +285,9 @@ REL:realizes:SV-15->OA-23,uafRelationship,realizes
 REL:realizes:SV-16->OA-07,uafRelationship,realizes
 REL:realizes:SV-16->OA-31,uafRelationship,realizes
 REL:realizes:SV-23->OA-08,uafRelationship,realizes
-REL:realizes:SV-23->OA-08,registry.status,planned
 REL:realizes:SV-23->OA-09,uafRelationship,realizes
-REL:realizes:SV-23->OA-09,registry.status,planned
 REL:realizes:SV-23->OA-15,uafRelationship,realizes
-REL:realizes:SV-23->OA-15,registry.status,planned
 REL:realizes:SV-23->OA-20,uafRelationship,realizes
-REL:realizes:SV-23->OA-20,registry.status,planned
 REL:realizes:SV-27->OA-09,uafRelationship,realizes
 REL:realizes:SV-27->OA-13,uafRelationship,realizes
 REL:realizes:SV-27->OA-16,uafRelationship,realizes
@@ -336,8 +332,10 @@ REL:realizes:SV-31->OA-12,uafRelationship,realizes
 REL:realizes:SV-31->OA-22,uafRelationship,realizes
 REL:realizes:SV-32->OA-02,uafRelationship,realizes
 REL:realizes:SV-32->OA-02,registry.status,planned
+REL:realizes:SV-32->OA-02,registry.plan,GAP-024
 REL:realizes:SV-18->OA-32,uafRelationship,realizes
 REL:realizes:SV-18->OA-32,registry.status,planned
+REL:realizes:SV-18->OA-32,registry.plan,GAP-044
 REL:implements:RS-tracking-service->SV-01,uafRelationship,implements
 REL:implements:RS-fusion-async->SV-01,uafRelationship,implements
 REL:implements:RS-filters->SV-01,uafRelationship,implements
@@ -400,41 +398,36 @@ REL:conforms_to:RS-config->SD-05,uafRelationship,conforms_to
 REL:conforms_to:RS-api->SD-01,uafRelationship,conforms_to
 REL:conforms_to:RS-api->SD-05,uafRelationship,conforms_to
 REL:conforms_to:RS-api->SD-06,uafRelationship,conforms_to
-REL:conforms_to:RS-api->SD-06,registry.status,planned
 REL:conforms_to:RS-api->SD-07,uafRelationship,conforms_to
-REL:conforms_to:RS-api->SD-07,registry.status,planned
 REL:conforms_to:RS-api->SD-08,uafRelationship,conforms_to
-REL:conforms_to:RS-api->SD-08,registry.status,planned
 REL:conforms_to:RS-remote->SD-06,uafRelationship,conforms_to
-REL:conforms_to:RS-remote->SD-06,registry.status,planned
 REL:conforms_to:RS-remote->SD-07,uafRelationship,conforms_to
-REL:conforms_to:RS-remote->SD-07,registry.status,planned
 REL:conforms_to:RS-remote->SD-08,uafRelationship,conforms_to
-REL:conforms_to:RS-remote->SD-08,registry.status,planned
 REL:conforms_to:RS-node->SD-12,uafRelationship,conforms_to
 REL:conforms_to:RS-node->SD-08,uafRelationship,conforms_to
-REL:conforms_to:RS-node->SD-08,registry.status,planned
 REL:conforms_to:RS-interop->SD-02,uafRelationship,conforms_to
 REL:conforms_to:RS-interop->SD-03,uafRelationship,conforms_to
-REL:conforms_to:RS-interop->SD-03,registry.status,planned
 REL:conforms_to:RS-interop->SD-04,uafRelationship,conforms_to
 REL:conforms_to:RS-interop->SD-04,registry.status,planned
+REL:conforms_to:RS-interop->SD-04,registry.plan,blocked -- AEDP-12 is not public; external-standards.md \u00a72
 REL:conforms_to:RS-interop->SD-16,uafRelationship,conforms_to
 REL:conforms_to:RS-interop->SD-16,registry.status,planned
+REL:conforms_to:RS-interop->SD-16,registry.plan,GAP-090 GAP-091
 REL:conforms_to:RS-ingest->SD-16,uafRelationship,conforms_to
 REL:conforms_to:RS-ingest->SD-16,registry.status,planned
+REL:conforms_to:RS-ingest->SD-16,registry.plan,GAP-090 GAP-091
 REL:conforms_to:RS-remote->SD-16,uafRelationship,conforms_to
 REL:conforms_to:RS-remote->SD-16,registry.status,planned
+REL:conforms_to:RS-remote->SD-16,registry.plan,GAP-090 GAP-091
 REL:conforms_to:RS-ingest->SD-09,uafRelationship,conforms_to
-REL:conforms_to:RS-ingest->SD-09,registry.status,planned
 REL:conforms_to:RS-ingest->SD-10,uafRelationship,conforms_to
-REL:conforms_to:RS-ingest->SD-10,registry.status,planned
 REL:conforms_to:RS-identity->SD-11,uafRelationship,conforms_to
-REL:conforms_to:RS-identity->SD-11,registry.status,planned
 REL:conforms_to:RS-app->SD-13,uafRelationship,conforms_to
 REL:conforms_to:RS-app->SD-13,registry.status,planned
+REL:conforms_to:RS-app->SD-13,registry.plan,GAP-061
 REL:conforms_to:RS-node->SD-13,uafRelationship,conforms_to
 REL:conforms_to:RS-node->SD-13,registry.status,planned
+REL:conforms_to:RS-node->SD-13,registry.plan,GAP-061
 REL:exchanges:OP-33->OP-30:NL-01,uafRelationship,exchanges
 REL:exchanges:OP-33->OP-30:NL-01,registry.needline,NL-01
 REL:exchanges:OP-33->OP-30:NL-01,registry.name,"observations, health"
