@@ -5874,6 +5874,20 @@ not by finding, for the time between whenever each item landed and this correcti
     already are by their labels, and it fails loudly rather than silently if Git moves or
     8.3 names are disabled.
 
+    **Both self-hosted workflows then ran to completion from this branch.** Gate 6
+    (run 35107188457) passed every step in 369 s: `rustc 1.98.1` on
+    `x86_64-pc-windows-msvc`, so `rust-toolchain.toml`'s pin held with no toolchain action;
+    `cargo bench --workspace` compiled in 2 m 58 s and ran; and the comparator reported
+    twelve benchmarks with no baseline to compare against, which is correct for a branch
+    dispatch and means no hosted-runner baseline was compared across machines. The GPU
+    workflow (run 35107957921) passed in 60 s and **executed its four GPU tests on the
+    RTX 5060 Ti for the first time** -- `gpu_matches_cpu_reference_transform_and_inlier_ratio`
+    and `gpu_matches_cpu_reference_with_normals_present` among them, which check the
+    §2 GPU row's own criterion -- with its guard logging `GPU tests executed: 4`.
+    **Neither is yet the record either gap asks for.** Both ran from an unmerged branch;
+    GAP-024 item (3) closes on a dispatch from main, and Gate 6's baseline is written only
+    by a push to main.
+
     **The pattern, which the last three items share.** Each wrong fix was reasoned correctly
     from a wrong premise -- that `Git Bash is on this host` meant the runner would use it,
     that the runner's documented `.path` would reach shell resolution, that a quoted or
