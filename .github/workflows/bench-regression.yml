@@ -31,6 +31,33 @@
 # by a person reading these ratios, and this comment exists so that nobody reads the
 # green tick as evidence that performance was checked.
 #
+# **The runner arrived on 2026-09-15 and enforcement did not come with it** (GAP-093).
+# This job now runs on `gungnir-rtx-5060ti`, so baseline and comparison come from one
+# machine, which is the condition the paragraph above names. Two things still stand
+# between that and `BENCH_REGRESSION_ENFORCE: "1"`, and neither is a formality:
+#
+# 1. **No baseline exists on this machine.** Every saved baseline was written by a
+#    GitHub-hosted runner, and comparing against one of those would be the cross-machine
+#    comparison this move exists to end. The first push to main after this change writes
+#    a fresh one; until it lands the job compares nothing and says so.
+#
+# 2. **This machine's own noise floor has never been measured, and it has a specific
+#    reason to be wide.** The host is an 8 P-core / 12 E-core hybrid, and a benchmark
+#    scheduled onto an efficiency core runs on the order of twice as slow as the same
+#    benchmark on a performance core -- a 2x swing with no code change, against a
+#    threshold of 10 percent. Same-machine is necessary and is not by itself sufficient:
+#    a single machine that schedules a run onto a different class of core reproduces the
+#    same unattributable difference that took enforcement off the hosted runners, in a
+#    smaller package. **The measurement that settles it is cheap**: once a baseline
+#    exists, dispatch this workflow twice with no code change and read the ratios. If
+#    they sit inside a few percent, the 10 percent threshold is enforceable; if a whole
+#    set moves together, that is the core class and enforcement needs affinity pinning
+#    (Windows `start /affinity`, or criterion's own statistical comparison in place of a
+#    raw mean ratio) before it means anything.
+#
+# So this change moves the machine and leaves the exit status alone, which is the half
+# that can be done without inventing a number.
+#
 # **Not on pull requests since 2026-09-09.** While the comparison is advisory and
 # cross-machine, a per-PR run is four to five minutes of benchmarks whose ratios the
 # job itself says cannot be attributed to the code, and 21 of the last 21 went green
@@ -69,13 +96,22 @@ env:
   # Report a regression when any benchmark's p99 is slower than baseline by more than
   # this fraction. Unchanged; see the header for why the job no longer fails on it.
   BENCH_REGRESSION_THRESHOLD: "0.10"
-  # 1 makes a reported regression fail the job. Set it once the comparison is
-  # same-machine; on GitHub-hosted runners it fails on runner variance.
+  # 1 makes a reported regression fail the job. The comparison is same-machine as of
+  # 2026-09-15; what it still waits on is a baseline written on that machine and a
+  # measurement of the machine's own run-to-run spread, both described in the header.
   BENCH_REGRESSION_ENFORCE: "0"
 
 jobs:
   bench:
-    runs-on: ubuntu-latest
+    # `gungnir-rtx-5060ti`, the one self-hosted runner registered to this repository
+    # (GAP-061). **The `gpu` label is pinning a machine, not requesting a GPU** -- no
+    # benchmark here touches one. It is in the list because it is what identifies this
+    # particular host today, and the whole point of the move is that every run happens on
+    # the same host. **If a second self-hosted runner is ever registered, this must move
+    # to a label of its own** (`bench`, on that one machine): `[self-hosted, Windows, X64]`
+    # would then match either box and silently restore the cross-machine comparison this
+    # change exists to end.
+    runs-on: [self-hosted, Windows, X64, gpu]
     # Four to five minutes warm; a run past twenty is a hung benchmark, not a slow one.
     timeout-minutes: 20
     steps:
@@ -91,6 +127,17 @@ jobs:
       # Per-commit key with a prefix fallback: a cache key is immutable, so saving every
       # main push under one fixed key would keep the first for ever and freeze the
       # baseline at the day it landed. `restore-keys` takes the most recent match.
+      # **A self-hosted runner keeps its working directory between runs, and a hosted one
+      # does not.** `actions/cache/restore` merges into whatever is already there, so a
+      # `target/criterion` left by an earlier run -- of a different branch, or of a
+      # dispatch, or of somebody's local `cargo bench` on this workstation -- would be
+      # read as the baseline without anything saying so. That is a way to compare against
+      # a number nobody chose, and it is new with the move: on `ubuntu-latest` the
+      # directory could only ever hold what the restore step put there. Clearing it first
+      # makes the restore authoritative again.
+      - name: Clear any criterion data this runner kept from an earlier run
+        shell: bash
+        run: rm -rf target/criterion
       - name: Restore baseline from main
         uses: actions/cache/restore@v4
         with:
@@ -111,7 +158,11 @@ jobs:
       # `--baseline-lenient` compares when the baseline is there and skips the comparison
       # when it is not. The threshold step below already tolerates a missing baseline the
       # same way, so the two now agree.
+      # `shell: bash` on both of the steps below, and it is required rather than stylistic:
+      # a Windows runner defaults to PowerShell, where `if [ "$GITHUB_REF" = ... ]` and a
+      # `<<'PY'` heredoc are both syntax errors. Git Bash is on this host.
       - name: Run benchmarks against the baseline
+        shell: bash
         run: |
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
             cargo bench --workspace -- --save-baseline main --noplot
@@ -119,6 +170,7 @@ jobs:
             cargo bench --workspace -- --baseline-lenient main --noplot
           fi
       - name: Compare p99 against the threshold
+        shell: bash
         run: |
           python3 - <<'PY'
           import json, os, pathlib, sys
