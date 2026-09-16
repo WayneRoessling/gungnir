@@ -128,9 +128,17 @@ jobs:
     # depend on how the runner searches, and the arguments are GitHub's own template for
     # `shell: bash`, so behaviour is otherwise unchanged. Any step added to this job must
     # use the default rather than writing `shell: bash`, or it reintroduces the lookup.
+    #
+    # **Why the 8.3 short name and not `C:\Program Files\Git\bin\bash.exe`**: the runner splits a
+    # custom shell string at its first space and does not honour quotes, so the
+    # readable path became the executable `C:\Program` (worker log: `Which2: 'C:\Program'`,
+    # then "Second path fragment must not be a drive or UNC name"). `PROGRA~1` is what
+    # this host maps `Program Files` to, checked with `for %I in (...) do @echo %~sI`. It is
+    # host-specific, which this job already is by its labels; if Git is reinstalled
+    # elsewhere or 8.3 names are disabled, the first step fails naming the missing file.
     defaults:
       run:
-        shell: 'C:\Program Files\Git\bin\bash.exe --noprofile --norc -e -o pipefail {0}'
+        shell: 'C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -e -o pipefail {0}'
     # Four to five minutes warm; a run past twenty is a hung benchmark, not a slow one.
     timeout-minutes: 20
     steps:
