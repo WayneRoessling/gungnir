@@ -85,7 +85,7 @@ capabilities:
     description: Put the recommendation in front of the person who holds authority, record what they decide, and hand off; never act without that record.
     owner: plan-04
   - {id: CAP-4.1, parent: CAP-4, name: Present recommendations for decision, coverage: "I3"}
-  - {id: CAP-4.2, parent: CAP-4, name: Record every decision, coverage: "REQ-S-01 REQ-S-05"}
+  - {id: CAP-4.2, parent: CAP-4, name: Record every decision, coverage: "verification-table"}
   - {id: CAP-4.3, parent: CAP-4, name: Never execute without a recorded human decision}
   - {id: CAP-4.4, parent: CAP-4, name: Hand off to effector systems with provenance, coverage: "verification-table"}
   - {id: CAP-4.5, parent: CAP-4, name: Warn assets and authorities, coverage: "verification-table"}
@@ -100,7 +100,7 @@ capabilities:
   - {id: CAP-5.2, parent: CAP-5, name: Replay and rehearse}
   - {id: CAP-5.3, parent: CAP-5, name: Produce reports and measures from the journal}
   - {id: CAP-5.4, parent: CAP-5, name: Operate disconnected and reconcile, coverage: "I4"}
-  - {id: CAP-5.5, parent: CAP-5, name: Report health honestly and run the alert lifecycle, coverage: "REQ-U-03 REQ-C-04 -- the alert lifecycle half has no requirement"}
+  - {id: CAP-5.5, parent: CAP-5, name: Report health honestly and run the alert lifecycle, coverage: "verification-table"}
   - {id: CAP-5.6, parent: CAP-5, name: Manage configuration baselines and mission plans, coverage: "verification-table"}
   - {id: CAP-5.7, parent: CAP-5, name: Govern algorithm and model baselines, coverage: "verification-table"}
   - {id: CAP-5.8, parent: CAP-5, name: Support the battle rhythm, coverage: "verification-table"}
@@ -111,7 +111,7 @@ capabilities:
     kind: area
     description: Control who can see and do what, and prove it afterwards.
     owner: plan-04
-  - {id: CAP-6.1, parent: CAP-6, name: Authenticate operators and callers, coverage: "REQ-S-06"}
+  - {id: CAP-6.1, parent: CAP-6, name: Authenticate operators and callers, coverage: "verification-table"}
   - {id: CAP-6.2, parent: CAP-6, name: "Authorize by role, class, and layer"}
   - {id: CAP-6.3, parent: CAP-6, name: Audit everything that matters}
   - {id: CAP-6.4, parent: CAP-6, name: Protect data in transit and at rest}
