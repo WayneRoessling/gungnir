@@ -1,0 +1,42 @@
+name: cross-document-recheck
+
+# After every push to main, re-run the cross-document checks of each open pull request
+# merged with that main, and post the result on the pull request as the commit status
+# "cross-document / against current main". .github/scripts/recheck_open_prs.sh says why.
+#
+# This is instead of GitHub's "require branches to be up to date" setting, which would
+# close the same gap by making every open branch rebuild after every merge. The status
+# costs one Python-only job per push to main and asks nothing of a branch until it is
+# actually broken by what merged.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+# A newer push to main supersedes a recheck against an older one.
+concurrency:
+  group: cross-document-recheck
+  cancel-in-progress: true
+
+jobs:
+  recheck:
+    name: Open pull requests against the new main
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - name: recheck
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/recheck_open_prs.sh
