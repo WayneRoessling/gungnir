@@ -134,7 +134,7 @@ realizes:
   - {from: SV-21, to: [OA-34]}
   - {from: SV-22, to: [OA-35]}
   - {from: SV-31, to: [OA-12, OA-22]}
-  - {from: SV-32, to: [OA-02], status: planned, plan: GAP-024}
+  - {from: SV-32, to: [OA-02]}
   # OA-32 (assist) is realized by plan 08's agent crate, not yet in the workspace.
   - {from: SV-18, to: [OA-32], status: planned, plan: GAP-044}
 

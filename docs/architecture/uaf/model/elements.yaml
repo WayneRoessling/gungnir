@@ -62,7 +62,7 @@ capabilities:
   - {id: CAP-2.7, parent: CAP-2, name: "Keep one identity across gaps, sorties, sessions, and peers"}
   - {id: CAP-2.8, parent: CAP-2, name: "Predict trajectory, time to impact, closest approach", coverage: "verification-table"}
   - {id: CAP-2.9, parent: CAP-2, name: Detect anomalies in tracks and feeds, coverage: "verification-table"}
-  - {id: CAP-2.10, parent: CAP-2, name: "Fuse terrain, imagery, point clouds, and map layers", coverage: "GAP-023 GAP-024"}
+  - {id: CAP-2.10, parent: CAP-2, name: "Fuse terrain, imagery, point clouds, and map layers", coverage: "verification-table"}
   - {id: CAP-2.11, parent: CAP-2, name: Answer geometric questions, coverage: "verification-table"}
   - {id: CAP-2.12, parent: CAP-2, name: Maintain pattern of life and order of battle, coverage: "verification-table"}
   - id: CAP-3
@@ -232,7 +232,7 @@ services:
   - {id: SV-29, name: Reporting, code: gungnir_reporting::ReportGenerator, status: real, description: Reports and exports with every figure traceable to the journal.}
   - {id: SV-30, name: Remote backends, code: gungnir_remote, status: scaffold, description: RemoteTrackingService and RemoteInterceptService over the API with an outbox; transport pending.}
   - {id: SV-31, name: Data loading, code: gungnir_data, status: scaffold, description: "Point cloud, VTK, terrain, glTF loaders off the UI thread (surface only)."}
-  - {id: SV-32, name: Point-cloud fusion, code: gungnir_data_fusion, status: scaffold, description: CPU reference and GPU ICP registration (trait surface).}
+  - {id: SV-32, name: Point-cloud fusion, code: gungnir_data_fusion, status: real, description: "CPU reference ICP (point-to-point and point-to-plane) and GPU ICP (point-to-point), registered each tick once a point-cloud pair is loaded; the GPU path is gated against the CPU reference on the registered runner."}
   - {id: SV-33, name: Tracking metrics, code: gungnir_metrics, status: scaffold, description: "MOTA, MOTP, purity, fragmentation against truth."}
   - {id: SV-34, name: Scenario generation, code: gungnir_scenario, status: scaffold, description: The five engineering scenarios with truth.}
 
@@ -321,10 +321,12 @@ standards:
   - {id: SD-16, name: Cursor-on-Target (CoT), source: docs/design/DN-25-cursor-on-target.md, status: planned, description: "Exchange with a participant that holds no machine identity here; no codec and no sink exist (GAP-090, GAP-091)."}
 
 projects:
-  - {id: PJ-I1, name: Increment 1, description: Productize the core, source: docs/gungnir-capabilities.md §7, status: in progress}
-  - {id: PJ-I2, name: Increment 2, description: Integrate real data, source: docs/gungnir-capabilities.md §7, status: planned}
-  - {id: PJ-I3, name: Increment 3, description: Close the decision-support loop, source: docs/gungnir-capabilities.md §7, status: planned}
-  - {id: PJ-I4, name: Increment 4, description: Operationalize and scale, source: docs/gungnir-capabilities.md §7, status: planned}
+  # An increment carries no status: how far it has got is its gaps' statuses, generated
+  # into docs/mission/gap-analysis/closure-roadmap.md §Counts from the gap data.
+  - {id: PJ-I1, name: Increment 1, description: Productize the core, source: docs/gungnir-capabilities.md §7}
+  - {id: PJ-I2, name: Increment 2, description: Integrate real data, source: docs/gungnir-capabilities.md §7}
+  - {id: PJ-I3, name: Increment 3, description: Close the decision-support loop, source: docs/gungnir-capabilities.md §7}
+  - {id: PJ-I4, name: Increment 4, description: Operationalize and scale, source: docs/gungnir-capabilities.md §7}
   - {id: PJ-P01, name: Plan 01 product business plan, source: docs/plans/01-product-business-plan.md, status: "held outside the repository by the owner's decision of 2026-09-07"}
   - {id: PJ-P02, name: Plan 02 mission analysis, source: docs/plans/02-mission-analysis.md, status: first draft 2026-09-04}
   - {id: PJ-P03, name: Plan 03 UAF views, source: docs/plans/03-uaf-views.md, status: first draft 2026-09-04}

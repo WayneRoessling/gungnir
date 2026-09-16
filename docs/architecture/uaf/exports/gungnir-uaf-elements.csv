@@ -153,7 +153,7 @@ SV-28,Services,ServiceInterface,Replay,Deterministic playback of a journal under
 SV-29,Services,ServiceInterface,Reporting,Reports and exports with every figure traceable to the journal.,Class
 SV-30,Services,ServiceInterface,Remote backends,RemoteTrackingService and RemoteInterceptService over the API with an outbox; transport pending.,Class
 SV-31,Services,ServiceInterface,Data loading,"Point cloud, VTK, terrain, glTF loaders off the UI thread (surface only).",Class
-SV-32,Services,ServiceInterface,Point-cloud fusion,CPU reference and GPU ICP registration (trait surface).,Class
+SV-32,Services,ServiceInterface,Point-cloud fusion,"CPU reference ICP (point-to-point and point-to-plane) and GPU ICP (point-to-point), registered each tick once a point-cloud pair is loaded; the GPU path is gated against the CPU reference on the registered runner.",Class
 SV-33,Services,ServiceInterface,Tracking metrics,"MOTA, MOTP, purity, fragmentation against truth.",Class
 SV-34,Services,ServiceInterface,Scenario generation,The five engineering scenarios with truth.,Class
 RS-allocation,Resources,ResourceArtifact,gungnir-allocation,Bellman/DP resource-to-track assignment.,Class

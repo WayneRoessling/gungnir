@@ -63,7 +63,7 @@ CAP-2.9,registry.coverage,verification-table
 CAP-2.10,uafId,CAP-2.10
 CAP-2.10,uafKind,Capability
 CAP-2.10,registry.parent,CAP-2
-CAP-2.10,registry.coverage,GAP-023 GAP-024
+CAP-2.10,registry.coverage,verification-table
 CAP-2.11,uafId,CAP-2.11
 CAP-2.11,uafKind,Capability
 CAP-2.11,registry.parent,CAP-2
@@ -524,7 +524,7 @@ SV-31,registry.status,scaffold
 SV-32,uafId,SV-32
 SV-32,uafKind,ServiceInterface
 SV-32,registry.code,gungnir_data_fusion
-SV-32,registry.status,scaffold
+SV-32,registry.status,real
 SV-33,uafId,SV-33
 SV-33,uafKind,ServiceInterface
 SV-33,registry.code,gungnir_metrics
@@ -895,19 +895,15 @@ SD-16,registry.status,planned
 PJ-I1,uafId,PJ-I1
 PJ-I1,uafKind,Project
 PJ-I1,registry.source,docs/gungnir-capabilities.md \u00a77
-PJ-I1,registry.status,in progress
 PJ-I2,uafId,PJ-I2
 PJ-I2,uafKind,Project
 PJ-I2,registry.source,docs/gungnir-capabilities.md \u00a77
-PJ-I2,registry.status,planned
 PJ-I3,uafId,PJ-I3
 PJ-I3,uafKind,Project
 PJ-I3,registry.source,docs/gungnir-capabilities.md \u00a77
-PJ-I3,registry.status,planned
 PJ-I4,uafId,PJ-I4
 PJ-I4,uafKind,Project
 PJ-I4,registry.source,docs/gungnir-capabilities.md \u00a77
-PJ-I4,registry.status,planned
 PJ-P01,uafId,PJ-P01
 PJ-P01,uafKind,Project
 PJ-P01,registry.source,docs/plans/01-product-business-plan.md

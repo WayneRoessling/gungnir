@@ -164,8 +164,8 @@ replaces.
 
 ## Counts
 
-| Increment | Gaps | Effort S / M / L / XL |
-|---|---|---|
-| I2 | 27 | 7 / 11 / 7 / 2 |
-| I3 | 63 | 8 / 42 / 12 / 1 |
-| I4 | 18 | 0 / 10 / 7 / 1 |
+| Increment | Gaps | Closed / In progress / Open / Planned | Effort S / M / L / XL |
+|---|---|---|---|
+| I2 | 27 | 23 / 4 / 0 / 0 | 7 / 11 / 7 / 2 |
+| I3 | 63 | 49 / 7 / 7 / 0 | 8 / 42 / 12 / 1 |
+| I4 | 18 | 12 / 3 / 2 / 1 | 0 / 10 / 7 / 1 |
