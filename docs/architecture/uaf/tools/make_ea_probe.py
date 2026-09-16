@@ -121,11 +121,11 @@ ELS = [
     ("RS-1", "gungnir-api", "ResourceArtifact", "Class", "Rs-Cn",
      {"conformsTo": "SD-1 TLS 1.3 (RFC 8446)"}),
     # A stereotype from another profile is written `Profile:Name`. UAF has no
-    # requirements domain and reuses SysML's; round trip 2 bound Requirement to
-    # SysML:requirement, and `satisfy` below is the one name still resting on
-    # SysML's vocabulary rather than on a list EA wrote.
+    # requirements domain and reuses SysML's, in the lowercase EA writes back on
+    # every round trip (see export_xmi.py's kind table for why that changed on
+    # round trip 4); `satisfy` below was already lowercase.
     ("REQ-1", "Every source is authenticated before its data enters the picture",
-     "SysML:Requirement", "Class", "Rq", {}),
+     "SysML:requirement", "Class", "Rq", {}),
 ]
 # (id, registry kind, stereotype or None, from, to, package). The names are the
 # ones round trip 2 settled against the profile's own list; the conforms_to

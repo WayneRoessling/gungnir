@@ -385,67 +385,67 @@ AR-04,Actual Resources,ActualResource,Sensor feeds,"Radar, EO/IR, acoustic, RF, 
 AR-05,Actual Resources,ActualResource,Peer command-and-control nodes,"Neighbouring sectors, higher command, and coalition systems reached through the API and interop formats.",Object
 AR-06,Actual Resources,ActualResource,Effector systems,Fire units and effector controllers that receive handoff messages and report outcomes.,Object
 AR-07,Actual Resources,ActualResource,Build and release infrastructure,Self-hosted GitLab with runners (including a GPU runner) and the container registry (D-10).,Object
-REQ-F-01,Requirements,Requirement,Observations from heterogeneous sensors are ingested through one governed gateway that validates and quarantines,,Class
-REQ-F-02,Requirements,Requirement,Every source is authenticated before its data enters the picture,,Class
-REQ-F-03,Requirements,Requirement,"Sensor modes, tasking, and calibration are held in a registry and changeable by the sensor manager",,Class
-REQ-F-04,Requirements,Requirement,Coverage is computed and coverage gaps are detected and displayed,,Class
-REQ-F-05,Requirements,Requirement,Data from sources with different clocks is time-disciplined and skew is detected,,Class
-REQ-F-06,Requirements,Requirement,Cooperative identity from open protocols is decoded and fused as evidence,,Class
-REQ-F-07,Requirements,Requirement,"A multi-sensor, multi-rate, out-of-sequence tracking pipeline maintains the picture",,Class
-REQ-F-08,Requirements,Requirement,Tracks carry a quality and a staleness that the interface renders differently from fresh data,,Class
-REQ-F-09,Requirements,Requirement,Classification and identification produce evidence with a margin rule and per-class thresholds set by policy,,Class
-REQ-F-10,Requirements,Requirement,Entities keep a global identity with lineage across sources and sessions,,Class
-REQ-F-11,Requirements,Requirement,Threats are scored against a defended-asset list with per-class lethality and asset weighting,,Class
-REQ-F-12,Requirements,Requirement,"The system recommends a cheapest-adequate assignment of resources to tracks within readiness, geometry, and policy",,Class
-REQ-F-13,Requirements,Requirement,Every recommendation carries a rationale and its alternatives,,Class
-REQ-F-14,Requirements,Requirement,"The queue orders pending decisions by priority and time remaining, and supports pre-delegation where policy allows",,Class
-REQ-F-15,Requirements,Requirement,"A session is journaled, replayable, and reproduces the same picture",,Class
-REQ-F-16,Requirements,Requirement,Measures are computed from the journal without manual collation,,Class
-REQ-D-01,Requirements,Requirement,Shared types have exactly one owning crate; everything above re-exports,,Class
-REQ-D-02,Requirements,Requirement,Every detection carries its source and its receipt time,,Class
-REQ-D-03,Requirements,Requirement,"Identification evidence names its producer, including model name and version for a machine-learning source",,Class
-REQ-D-04,Requirements,Requirement,Envelopes carry a bus sequence number and a mission time,,Class
-REQ-D-05,Requirements,Requirement,The node journal fsyncs every envelope; desktop journals fsync on session save and every five seconds,,Class
-REQ-D-06,Requirements,Requirement,"Journals merge in mission-time order, duplicates are dropped, and conflicting decisions are reported rather than resolved",,Class
-REQ-D-07,Requirements,Requirement,"Views, reports, and the interface contract carry a releasability marking",,Class
-REQ-D-08,Requirements,Requirement,Training data and model artefacts live outside this repository; only the manifest enters it,,Class
-REQ-I-01,Requirements,Requirement,"The node exposes a versioned contract for snapshot, event stream, detection submission, and plan decisions",,Class
-REQ-I-02,Requirements,Requirement,"Schema versions are negotiated explicitly and an incompatible peer is refused, not silently accepted",,Class
-REQ-I-03,Requirements,Requirement,Radar feeds decode from ASTERIX category 048,,Class
-REQ-I-04,Requirements,Requirement,Coalition track exchange uses STANAG 4676,,Class
-REQ-I-05,Requirements,Requirement,Each external party is a configurable endpoint with a message type rather than a bespoke integration,,Class
-REQ-I-06,Requirements,Requirement,Detections are exportable in a columnar format for analytics and bulk exchange,,Class
-REQ-S-01,Requirements,Requirement,"No engagement, effector command, or reserved identity declaration executes without a recorded human decision",,Class
-REQ-S-02,Requirements,Requirement,"Authority is enforced per role, per class, and per engagement layer, per the authority matrix",,Class
-REQ-S-03,Requirements,Requirement,Weapons control status is set by the authorized roles and constrains every recommendation,,Class
-REQ-S-04,Requirements,Requirement,Pending decisions escalate and time out rather than waiting indefinitely,,Class
-REQ-S-05,Requirements,Requirement,"Every consequential act is attributable to a person, a role, and a mission time in an audit log",,Class
-REQ-S-06,Requirements,Requirement,Machine identities authenticate with mutual transport-layer security; operator sessions use short-lived signed tokens,,Class
-REQ-S-07,Requirements,Requirement,Data is encrypted in transit on every network crossing and at rest where the deployment requires it,,Class
-REQ-S-08,Requirements,Requirement,The assistant has no tool that changes state and no dependency path to a crate that does,,Class
-REQ-S-09,Requirements,Requirement,"Untrusted text from sensors, peers, annotations, and reports is treated as data by the assistant, never as instruction",,Class
-REQ-S-10,Requirements,Requirement,"Every release carries a bill of materials, a signature, and its assurance reports",,Class
-REQ-P-01,Requirements,Requirement,The desktop sustains its frame-rate budget with the 3D viewport open under a dense-swarm scenario,,Class
-REQ-P-02,Requirements,Requirement,"The per-frame tick stays inside its budget with ingest, poll, plan, and journal all running",,Class
-REQ-P-03,Requirements,Requirement,Snapshot calls do not touch the pipeline and stay inside their budget,,Class
-REQ-P-04,Requirements,Requirement,Detection to on-screen update stays inside its end-to-end budget in the embedded profile,,Class
-REQ-P-05,Requirements,Requirement,The node sustains its detection ingest throughput through validation and quarantine,,Class
-REQ-P-06,Requirements,Requirement,Detection to event-stream publish stays inside its budget on-prem and in cloud,,Class
-REQ-P-07,Requirements,Requirement,"An accepted envelope is durable within its budget, and the node recovers to serving within its budget after restart",,Class
-REQ-P-08,Requirements,Requirement,"A desktop falls back to embedded operation within its budget after link loss, stores and forwards to capacity, and reconciles within its budget",,Class
-REQ-P-09,Requirements,Requirement,Covariances stay positive semi-definite and no value becomes non-finite over long runs,,Class
-REQ-U-01,Requirements,Requirement,Each role has a workspace containing what that role's threads need and not more,,Class
-REQ-U-02,Requirements,Requirement,Every layout carries a status strip stating what the system knows and does not know,,Class
-REQ-U-03,Requirements,Requirement,"Absence, staleness, and degradation are visible rather than inferred from silence",,Class
-REQ-U-04,Requirements,Requirement,"Machine assistance is labelled, sourced, and carries no authority in the interface",,Class
-REQ-U-05,Requirements,Requirement,"Default display vocabulary is the agreed standard terms, with a per-deployment override table",,Class
-REQ-C-01,Requirements,Requirement,No dependency edge exists that `ARCHITECTURE.md` does not draw,,Class
-REQ-C-02,Requirements,Requirement,Every dependency is recorded in the standards document \u00a72.9 and pinned once,,Class
-REQ-C-03,Requirements,Requirement,"No `unwrap()` or `expect()` outside tests, entry points, and debug-only invariant checks",,Class
-REQ-C-04,Requirements,Requirement,Unimplemented capability returns a named error on every reachable path,,Class
-REQ-C-05,Requirements,Requirement,The graphics and compute contexts stay separate and separately pinned,,Class
-REQ-C-06,Requirements,Requirement,"Deployment profiles differ by configuration and wiring, never by conditional logic in a domain crate",,Class
-REQ-C-07,Requirements,Requirement,"The two binaries contain wiring, not domain logic",,Class
-REQ-C-08,Requirements,Requirement,No pass criterion or measure target is widened to make a test pass,,Class
-REQ-C-09,Requirements,Requirement,Every artefact is unclassified and derived from public sources,,Class
-REQ-C-10,Requirements,Requirement,No verification gate is waived by an agent,,Class
+REQ-F-01,Requirements,requirement,Observations from heterogeneous sensors are ingested through one governed gateway that validates and quarantines,,Class
+REQ-F-02,Requirements,requirement,Every source is authenticated before its data enters the picture,,Class
+REQ-F-03,Requirements,requirement,"Sensor modes, tasking, and calibration are held in a registry and changeable by the sensor manager",,Class
+REQ-F-04,Requirements,requirement,Coverage is computed and coverage gaps are detected and displayed,,Class
+REQ-F-05,Requirements,requirement,Data from sources with different clocks is time-disciplined and skew is detected,,Class
+REQ-F-06,Requirements,requirement,Cooperative identity from open protocols is decoded and fused as evidence,,Class
+REQ-F-07,Requirements,requirement,"A multi-sensor, multi-rate, out-of-sequence tracking pipeline maintains the picture",,Class
+REQ-F-08,Requirements,requirement,Tracks carry a quality and a staleness that the interface renders differently from fresh data,,Class
+REQ-F-09,Requirements,requirement,Classification and identification produce evidence with a margin rule and per-class thresholds set by policy,,Class
+REQ-F-10,Requirements,requirement,Entities keep a global identity with lineage across sources and sessions,,Class
+REQ-F-11,Requirements,requirement,Threats are scored against a defended-asset list with per-class lethality and asset weighting,,Class
+REQ-F-12,Requirements,requirement,"The system recommends a cheapest-adequate assignment of resources to tracks within readiness, geometry, and policy",,Class
+REQ-F-13,Requirements,requirement,Every recommendation carries a rationale and its alternatives,,Class
+REQ-F-14,Requirements,requirement,"The queue orders pending decisions by priority and time remaining, and supports pre-delegation where policy allows",,Class
+REQ-F-15,Requirements,requirement,"A session is journaled, replayable, and reproduces the same picture",,Class
+REQ-F-16,Requirements,requirement,Measures are computed from the journal without manual collation,,Class
+REQ-D-01,Requirements,requirement,Shared types have exactly one owning crate; everything above re-exports,,Class
+REQ-D-02,Requirements,requirement,Every detection carries its source and its receipt time,,Class
+REQ-D-03,Requirements,requirement,"Identification evidence names its producer, including model name and version for a machine-learning source",,Class
+REQ-D-04,Requirements,requirement,Envelopes carry a bus sequence number and a mission time,,Class
+REQ-D-05,Requirements,requirement,The node journal fsyncs every envelope; desktop journals fsync on session save and every five seconds,,Class
+REQ-D-06,Requirements,requirement,"Journals merge in mission-time order, duplicates are dropped, and conflicting decisions are reported rather than resolved",,Class
+REQ-D-07,Requirements,requirement,"Views, reports, and the interface contract carry a releasability marking",,Class
+REQ-D-08,Requirements,requirement,Training data and model artefacts live outside this repository; only the manifest enters it,,Class
+REQ-I-01,Requirements,requirement,"The node exposes a versioned contract for snapshot, event stream, detection submission, and plan decisions",,Class
+REQ-I-02,Requirements,requirement,"Schema versions are negotiated explicitly and an incompatible peer is refused, not silently accepted",,Class
+REQ-I-03,Requirements,requirement,Radar feeds decode from ASTERIX category 048,,Class
+REQ-I-04,Requirements,requirement,Coalition track exchange uses STANAG 4676,,Class
+REQ-I-05,Requirements,requirement,Each external party is a configurable endpoint with a message type rather than a bespoke integration,,Class
+REQ-I-06,Requirements,requirement,Detections are exportable in a columnar format for analytics and bulk exchange,,Class
+REQ-S-01,Requirements,requirement,"No engagement, effector command, or reserved identity declaration executes without a recorded human decision",,Class
+REQ-S-02,Requirements,requirement,"Authority is enforced per role, per class, and per engagement layer, per the authority matrix",,Class
+REQ-S-03,Requirements,requirement,Weapons control status is set by the authorized roles and constrains every recommendation,,Class
+REQ-S-04,Requirements,requirement,Pending decisions escalate and time out rather than waiting indefinitely,,Class
+REQ-S-05,Requirements,requirement,"Every consequential act is attributable to a person, a role, and a mission time in an audit log",,Class
+REQ-S-06,Requirements,requirement,Machine identities authenticate with mutual transport-layer security; operator sessions use short-lived signed tokens,,Class
+REQ-S-07,Requirements,requirement,Data is encrypted in transit on every network crossing and at rest where the deployment requires it,,Class
+REQ-S-08,Requirements,requirement,The assistant has no tool that changes state and no dependency path to a crate that does,,Class
+REQ-S-09,Requirements,requirement,"Untrusted text from sensors, peers, annotations, and reports is treated as data by the assistant, never as instruction",,Class
+REQ-S-10,Requirements,requirement,"Every release carries a bill of materials, a signature, and its assurance reports",,Class
+REQ-P-01,Requirements,requirement,The desktop sustains its frame-rate budget with the 3D viewport open under a dense-swarm scenario,,Class
+REQ-P-02,Requirements,requirement,"The per-frame tick stays inside its budget with ingest, poll, plan, and journal all running",,Class
+REQ-P-03,Requirements,requirement,Snapshot calls do not touch the pipeline and stay inside their budget,,Class
+REQ-P-04,Requirements,requirement,Detection to on-screen update stays inside its end-to-end budget in the embedded profile,,Class
+REQ-P-05,Requirements,requirement,The node sustains its detection ingest throughput through validation and quarantine,,Class
+REQ-P-06,Requirements,requirement,Detection to event-stream publish stays inside its budget on-prem and in cloud,,Class
+REQ-P-07,Requirements,requirement,"An accepted envelope is durable within its budget, and the node recovers to serving within its budget after restart",,Class
+REQ-P-08,Requirements,requirement,"A desktop falls back to embedded operation within its budget after link loss, stores and forwards to capacity, and reconciles within its budget",,Class
+REQ-P-09,Requirements,requirement,Covariances stay positive semi-definite and no value becomes non-finite over long runs,,Class
+REQ-U-01,Requirements,requirement,Each role has a workspace containing what that role's threads need and not more,,Class
+REQ-U-02,Requirements,requirement,Every layout carries a status strip stating what the system knows and does not know,,Class
+REQ-U-03,Requirements,requirement,"Absence, staleness, and degradation are visible rather than inferred from silence",,Class
+REQ-U-04,Requirements,requirement,"Machine assistance is labelled, sourced, and carries no authority in the interface",,Class
+REQ-U-05,Requirements,requirement,"Default display vocabulary is the agreed standard terms, with a per-deployment override table",,Class
+REQ-C-01,Requirements,requirement,No dependency edge exists that `ARCHITECTURE.md` does not draw,,Class
+REQ-C-02,Requirements,requirement,Every dependency is recorded in the standards document \u00a72.9 and pinned once,,Class
+REQ-C-03,Requirements,requirement,"No `unwrap()` or `expect()` outside tests, entry points, and debug-only invariant checks",,Class
+REQ-C-04,Requirements,requirement,Unimplemented capability returns a named error on every reachable path,,Class
+REQ-C-05,Requirements,requirement,The graphics and compute contexts stay separate and separately pinned,,Class
+REQ-C-06,Requirements,requirement,"Deployment profiles differ by configuration and wiring, never by conditional logic in a domain crate",,Class
+REQ-C-07,Requirements,requirement,"The two binaries contain wiring, not domain logic",,Class
+REQ-C-08,Requirements,requirement,No pass criterion or measure target is widened to make a test pass,,Class
+REQ-C-09,Requirements,requirement,Every artefact is unclassified and derived from public sources,,Class
+REQ-C-10,Requirements,requirement,No verification gate is waived by an agent,,Class
