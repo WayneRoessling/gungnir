@@ -200,8 +200,22 @@ fn bench_tick(c: &mut Criterion) {
     group.finish();
 }
 
-/// The snapshot calls the UI makes every frame. These must stay cheap enough that a
-/// panel can call them without thinking about it.
+/// The snapshot calls the UI makes every frame, measured the way a panel makes them:
+/// ask whether the tracker is healthy, take the track slice, and read every track in it.
+///
+/// **One benchmark since 2026-09-16, and it reads the tracks.** It was two, timing
+/// `tracks().len()` and `is_healthy()` alone. Both are a field read -- `tracks()` hands
+/// back a slice of an already-projected snapshot -- so each measured about a nanosecond,
+/// where the timer and the processor's state are most of the number. Six runs of
+/// unchanged benchmark code on 2026-09-16 moved them between 0.75 and 1.59 in ratio, which a 10
+/// percent regression gate cannot read. A panel does not stop at the length; it walks
+/// the tracks, so that walk over Scenario 4's populated snapshot is what is timed. A
+/// change that made either call do work, such as cloning the snapshot, still shows here
+/// as a multiple rather than a percentage.
+///
+/// The row's own budget, p99 under 1 ms for each call on its own, is asserted where it
+/// always was, by `snapshot_calls_meet_their_budget` in `tests/frame_budgets.rs`; this
+/// benchmark is the regression comparison, not the budget.
 fn bench_snapshot_calls(c: &mut Criterion) {
     let timeline = generate(&Scenario::DenseSwarm { target_count: 200 }, 4);
     let mut state = state_for(&timeline, "snapshot");
@@ -211,13 +225,40 @@ fn bench_snapshot_calls(c: &mut Criterion) {
     for _ in 0..300 {
         step(&mut state, &mut clock);
     }
+    // The pipeline is asynchronous and has not drained those frames' detections when
+    // the loop ends. **Before 2026-09-16 this benchmark did not wait**, and it timed an
+    // empty snapshot: the assertion below failed the first time it was written. The
+    // wait is `snapshot_calls_meet_their_budget`'s, bounded the same way. Nothing polls
+    // inside the measured closure, so the snapshot it reads is fixed from here on.
+    for _ in 0..12_000 {
+        if !state.tracking.tracks().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        clock.advance(FRAME_S);
+        state.clock = Box::new(clock);
+        state.tracking.poll(clock.current);
+    }
+    assert!(
+        !state.tracking.tracks().is_empty(),
+        "the pipeline produced no tracks from a dense-swarm replay, so this would time          an empty slice"
+    );
+    eprintln!(
+        "snapshot_calls: reading {} tracks",
+        state.tracking.tracks().len()
+    );
 
     let mut group = c.benchmark_group("snapshot_calls");
-    group.bench_function("tracks", |b| {
-        b.iter(|| black_box(state.tracking.tracks().len()));
-    });
-    group.bench_function("is_healthy", |b| {
-        b.iter(|| black_box(state.tracking.is_healthy()));
+    group.bench_function("panel_read", |b| {
+        b.iter(|| {
+            let healthy = black_box(state.tracking.is_healthy());
+            let mut extent = 0.0_f64;
+            for track in black_box(state.tracking.tracks()) {
+                let [e, n, u] = track.position_enu();
+                extent += e.abs() + n.abs() + u.abs() + track.covariance.trace();
+            }
+            black_box((healthy, extent))
+        });
     });
     group.finish();
 }
