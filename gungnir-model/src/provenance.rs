@@ -45,7 +45,8 @@ pub enum SourceAuthentication {
     /// The sensor identifier was on the applied baseline's allow-list. Says the
     /// deployment expected this sensor; says nothing about who sent the bytes.
     AllowList,
-    /// A machine identity was verified (D-02: mutual TLS). Not produced by any
-    /// authenticator yet; the variant exists so the record can carry it when one is.
+    /// A machine identity was verified (D-02: mutual TLS). Stamped only by
+    /// `gungnir_ingest::MachineIdentityAuthenticator`, for the node's machine-submission
+    /// adapter; raw sensor feeds authenticate by allow-list.
     MachineIdentity,
 }

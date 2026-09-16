@@ -15,12 +15,12 @@ Diagram: [`Sc-Cn.puml`](Sc-Cn.puml).
 
 | Crossing | Profiles | Protection today | Protection designed |
 |---|---|---|---|
-| Sensor feed → gateway (NL-01) | all | allow-list by sensor id; validation; quarantine | mutual TLS for machine sensors (D-02, GAP-002); signed reports for spotter applications |
-| Workstation ↔ node (NL-15) | on-prem, cloud | none (transport absent) | mutual TLS (SD-08); operator token per session; every call authorized (GAP-041, GAP-057, GAP-060) |
-| Node ↔ peers and higher command (NL-02, NL-12) | on-prem, cloud | none | mutual TLS; releasability enforced per caller (GAP-062, GAP-065) |
-| Node → effector systems (NL-06) | on-prem, cloud | none | mutual TLS; handoff carries the decision record (GAP-040) |
-| Operator → workstation | all | local account (design); none today | tokens or local accounts (D-02) |
-| Node journal at rest | cloud | none | encryption with keys off-host (GAP-060) |
+| Sensor feed → gateway (NL-01) | all | allow-list by sensor id for raw feeds; mutual TLS machine identity for API submissions (D-02, GAP-002); validation; quarantine | signed reports for spotter applications |
+| Workstation ↔ node (NL-15) | on-prem, cloud | mutual TLS (SD-08); operator token on every route but sign-in; role checked on gated actions (GAP-041, GAP-057, GAP-058) | as today |
+| Node ↔ peers and higher command (NL-02, NL-12) | on-prem, cloud | mutual TLS; releasability enforced per caller (GAP-062, GAP-065) | as today, with a persistent outbound peer identity (GAP-060) |
+| Node → effector systems (NL-06) | on-prem, cloud | mutual TLS; a handoff cannot be built without its decision record (GAP-040) | as today |
+| Operator → workstation | all | local accounts with an enforced session lifetime (GAP-057) | as today |
+| Node journal at rest | cloud | encryption under a managed key service, when one is configured (GAP-060) | as today (GAP-084) |
 | Build → registry → host | all | `deny.toml` policy; unsigned | signed images and SBOM (SD-13, GAP-061) |
 | Assistant → cloud model (plan 08) | cloud (live picture), on-prem (derived text) | not built | egress policy per profile (D-14); no authority |
 

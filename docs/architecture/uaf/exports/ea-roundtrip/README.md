@@ -82,18 +82,67 @@ It also caught the probe drifting from the exporter it exists to model: the prob
 still emitted `<ownedComment>`, dropped from the exporter in round 8, and seven
 nameless Note elements came back with it.
 
+## Run 4: the full model again, and clean
+
+`run-4/` holds EA's export after importing the full model on 2026-09-16, the first
+full-model import since run 2 and the first to carry the coverage dispositions,
+relationship plans and standards corrections made that day. EA was asked for two
+exports; both logs are here, and one XML. The second export was the same model plus
+the 18 sample packages of EA's own UAF template, which is already recorded at this
+directory's root, so its 5 MB XML would have duplicated the model.
+
+**Nothing was lost.** Every one of the 4,771 xmi:ids came back. Every one of the
+3,267 tags, compared by its own preserved id, came back with the same name and
+value -- the 1,146 `registry.*` tags among them, including the 27 new
+`registry.coverage` and 8 new `registry.plan`. 989 connectors and 65 diagrams came
+back, no diagram empty and no placed object missing. The one non-ASCII value in a
+new tag, the `§` in `blocked -- AEDP-12 is not public; external-standards.md §2`,
+survived: EA read it from UTF-8 and wrote it as windows-1252's own `0xA7`.
+
+**Every stereotype name the full model uses is confirmed.** All 17 came back bound,
+count for count. Run 3 confirmed the probe's names; this is the first confirmation
+of the model's.
+
+**Two things run 3 recorded were wrong, or true only of the probe:**
+
+- `Requirement` did not come back as sent. EA wrote `SysML:requirement` and
+  `SysML1.4::requirement` on runs 2, 3 and 4; run 2 saw it and kept sending the
+  capital because the binding worked. It worked only through EA matching names
+  case-insensitively across every enabled profile -- the matching that bound
+  `Achieves` and `Realizes` to BIZBOK on run 2. The exporter now sends the lowercase
+  EA writes.
+- "Nothing landed in `thecustomprofile` except the `uafId` tag name" held for the
+  probe, which carried one tag. On the full model every element tag does: `uafId`
+  and `uafKind` on all 450 elements, and 1,056 applications across the
+  `registry.*` names, 1,956 in all. No value changes; it is clutter on EA's shapes.
+
+**Also observed, and left alone:** EA cuts a connector's `mt` label at 50
+characters -- 12 of 989 were longer, and the connector's own name, carrying the same
+text, came back whole -- and EA draws every relationship between elements already
+on a diagram, adding 1,244 connector placements, every one with both ends present.
+Neither loses anything; the second is EA's default display.
+
+The truncation exposed something that is not EA's doing: four of the twelve cut
+labels, on `Ar-Cn` and `Sc-Cn`, described the API transport, mutual TLS and operator
+tokens as planned or absent when all three are built. Those two views were corrected
+from the code in the same change as this record.
+
 ## How to use them for a stereotype name not yet confirmed
 
-Seven of our nine relationship stereotypes and five of our eleven element
-stereotypes are still literature-informed guesses. The round trip gives a
-mechanical test for each, because EA files a stereotype it cannot resolve under
+Every stereotype the model uses today is confirmed (run 4). This is the test for a
+new one, and it is mechanical, because EA files a stereotype it cannot resolve under
 `thecustomprofile` instead of `UAF`. That is how `Performs` was caught:
 
 1. `python docs/architecture/uaf/tools/make_ea_probe.py <out.xmi>` writes a small
    probe carrying the stereotypes to test.
 2. Import it into EA with the UAF MDG Technology enabled.
 3. Export the imported package as XMI 2.1.
-4. Grep the export for `thecustomprofile:`. Every hit is a wrong name.
+4. Grep the export for `thecustomprofile:` and discard the tag names -- `uafId`,
+   `uafKind`, and every `registry.*` -- which EA turns into a custom stereotype on
+   every element that carries them. Every hit that remains is a wrong name. On runs 3
+   and 4 nothing remains; on run 2 it left `Satisfies`, `CarriedBy` and
+   `ConformsTo`, the three relationship names corrected after it (run 2 also shows
+   the registry fields bare, from before the `registry.` prefix).
 
 The probe also carries a resource conforming to a standard, written the two
 ways EA writes a string property (an attribute on the stereotype application

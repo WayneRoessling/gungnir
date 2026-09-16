@@ -1059,6 +1059,7 @@
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C" name="Plan 08 AI agent integration" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_6608D566_4540_8A24_522A_1FD6753390D6" name="Plan 09 ML model integration" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82" name="Plan 10 TOGAF ADM documentation" visibility="public"/>
+        <packagedElement xmi:type="uml:Class" xmi:id="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C" name="Plan 11 design gap closure" visibility="public"/>
       </packagedElement>
       <packagedElement xmi:type="uml:Package" xmi:id="EAPK_34896D57_5A99_007A_944A_6BA06B9C3D7F" name="Actual Resources Connectivity Ar-Cn" visibility="public">
         <packagedElement xmi:type="uml:InstanceSpecification" xmi:id="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" name="Operator workstation host" visibility="public"/>
@@ -1071,12 +1072,12 @@
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_43203DB9_3D4A_24AB_6F06_226E5B15C67F" name="local sensors (adapters)" visibility="public" supplier="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_5F9F1426_B689_9EC9_7F53_460A6D028BCC" name="5,000 det/s (MOP-17)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_D0EBAA67_6D10_A6FA_F3CB_E93AC422B0A0" name="5,000 det/s (MOP-17)" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_A5998107_8D73_A34E_5AD7_3983C2678093" name="HTTP + WebSocket, p99 150 ms (MOP-02)\nplanned, GAP-041" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_42774E3B_EAB5_DE10_00E9_87831025F147" name="HTTP + WebSocket over TLS, p99 400 ms\nplanned, GAP-041" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_32C1255C_4101_B092_7F8B_C2613445C889" name="peer tracks, STANAG 4676, marking\nplanned" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A" name="as above, planned" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468" name="handoff under 500 ms (MOP-32), planned" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007" name="handoff, planned" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E" name="HTTP + WebSocket, p99 150 ms (MOP-02)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D" name="HTTP + WebSocket over TLS, p99 400 ms" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6" name="tracks, warnings, marking\nSTANAG 4676 blocked" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50" name="as above" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1" name="handoff under 500 ms (MOP-32)" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325" name="handoff" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_A21F184A_D106_0229_9C6B_1B1378FDAFFB" name="signed image (GAP-061)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_99CE5B4B_9DDC_A903_1FA5_00C84654F0DF" name="signed image (GAP-061)" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_10027B08_22C4_A782_0A4A_310E033496CA" name="signed installer (GAP-061)" visibility="public" supplier="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
@@ -1514,12 +1515,12 @@
       </packagedElement>
       <packagedElement xmi:type="uml:Package" xmi:id="EAPK_FD9D9961_5AA6_6A7B_B2E0_56F96AB50F15" name="Security Connectivity Sc-Cn" visibility="public">
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_7C9D95C5_8D2D_0005_B3D4_A72BCF8D047C" name="allow-list + validation (today)" visibility="public" supplier="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_33869F9F_F871_664E_730D_03388982B986" name="allow-list + validation (today)\nmTLS (planned, D-02)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B" name="mTLS + operator token (planned)\nno transport today" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714" name="mTLS + operator token (planned)" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_C9B67899_EDF9_924D_18E4_909916F141C2" name="mTLS + releasability (planned)" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2" name="mTLS + releasability (planned)" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA" name="mTLS handoff (planned)" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" name="allow-list + validation\nsubmissions: mTLS (D-02)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" name="mTLS + operator token" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_8ACACD61_A48D_3826_0186_4014783054E8" name="mTLS + operator token" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742" name="mTLS + releasability" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8" name="mTLS + releasability" visibility="public" supplier="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" client="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7" name="mTLS handoff" visibility="public" supplier="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" client="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_3C0AFC05_5E24_25C3_77F6_BB465FEC6BC2" name="signed image + SBOM (planned)" visibility="public" supplier="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_ACD8FBE1_909C_B575_AA7C_AE64059FD779" name="signed image + SBOM (planned)" visibility="public" supplier="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_198CEBA7_D695_032C_81BE_FEEE0B82DBC1" name="signed installer (planned)" visibility="public" supplier="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" client="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
@@ -7276,7 +7277,7 @@
           <tag xmi:id="EAID_BB096AF0_3AEF_078A_4C49_60328B99EE71" name="uafKind" value="Project" modelElement="EAID_695FC32C_1541_3825_39F1_44DA54D97828"/>
           <tag xmi:id="EAID_39AEBBFC_36B1_6543_C78A_1E46794E1881" name="uafId" value="PJ-P01" modelElement="EAID_695FC32C_1541_3825_39F1_44DA54D97828"/>
           <tag xmi:id="EAID_E0F1AAB1_3244_7FAC_03A4_72C51D2E576C" name="registry.source" value="docs/plans/01-product-business-plan.md" modelElement="EAID_695FC32C_1541_3825_39F1_44DA54D97828"/>
-          <tag xmi:id="EAID_99246D9B_FA18_9E12_54F2_734302BCD622" name="registry.status" value="not started" modelElement="EAID_695FC32C_1541_3825_39F1_44DA54D97828"/>
+          <tag xmi:id="EAID_99246D9B_FA18_9E12_54F2_734302BCD622" name="registry.status" value="held outside the repository by the owner's decision of 2026-09-07" modelElement="EAID_695FC32C_1541_3825_39F1_44DA54D97828"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7361,7 +7362,7 @@
           <tag xmi:id="EAID_68866F06_D01A_3366_5900_3D59B8E8ECE2" name="uafKind" value="Project" modelElement="EAID_B5ED80A5_BE0F_5427_04DC_946BBB6EC0C0"/>
           <tag xmi:id="EAID_DC695E2F_B641_8218_B06D_613B896F15B3" name="uafId" value="PJ-P06" modelElement="EAID_B5ED80A5_BE0F_5427_04DC_946BBB6EC0C0"/>
           <tag xmi:id="EAID_3CD198F0_C371_D370_6C7D_3CE5B90D31FA" name="registry.source" value="docs/plans/06-ux-design-by-role.md" modelElement="EAID_B5ED80A5_BE0F_5427_04DC_946BBB6EC0C0"/>
-          <tag xmi:id="EAID_5B26D156_185F_F238_4F52_86BDF26D1DDF" name="registry.status" value="not started" modelElement="EAID_B5ED80A5_BE0F_5427_04DC_946BBB6EC0C0"/>
+          <tag xmi:id="EAID_5B26D156_185F_F238_4F52_86BDF26D1DDF" name="registry.status" value="first draft 2026-09-04" modelElement="EAID_B5ED80A5_BE0F_5427_04DC_946BBB6EC0C0"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7378,7 +7379,7 @@
           <tag xmi:id="EAID_7C97E326_F63E_A5B0_03BF_DE8D177D0460" name="uafKind" value="Project" modelElement="EAID_F3DFBFDA_FA76_7389_4819_88E96ABB7E45"/>
           <tag xmi:id="EAID_642A6F87_3A54_F1DC_5A97_4DA0A9B487FC" name="uafId" value="PJ-P07" modelElement="EAID_F3DFBFDA_FA76_7389_4819_88E96ABB7E45"/>
           <tag xmi:id="EAID_2B59889D_9502_0303_42F5_7CFD58CDD12F" name="registry.source" value="docs/plans/07-test-track-suite.md" modelElement="EAID_F3DFBFDA_FA76_7389_4819_88E96ABB7E45"/>
-          <tag xmi:id="EAID_7E89F72F_6BF5_D068_6689_E7A955D52EDB" name="registry.status" value="not started" modelElement="EAID_F3DFBFDA_FA76_7389_4819_88E96ABB7E45"/>
+          <tag xmi:id="EAID_7E89F72F_6BF5_D068_6689_E7A955D52EDB" name="registry.status" value="first draft 2026-09-04" modelElement="EAID_F3DFBFDA_FA76_7389_4819_88E96ABB7E45"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7395,7 +7396,7 @@
           <tag xmi:id="EAID_BCD1F736_50CA_610F_EE48_02969BF27BB4" name="uafKind" value="Project" modelElement="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
           <tag xmi:id="EAID_3B00A3C6_B643_8FCD_FA50_1B7368C0531E" name="uafId" value="PJ-P08" modelElement="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
           <tag xmi:id="EAID_C093C095_EA3F_5495_6FCC_CDCED540A7B5" name="registry.source" value="docs/plans/08-ai-agent-integration.md" modelElement="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
-          <tag xmi:id="EAID_E455EE7D_6375_F4F6_A150_95F40A7F78F4" name="registry.status" value="not started" modelElement="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
+          <tag xmi:id="EAID_E455EE7D_6375_F4F6_A150_95F40A7F78F4" name="registry.status" value="first draft 2026-09-04" modelElement="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7412,7 +7413,7 @@
           <tag xmi:id="EAID_D945BF28_F220_5135_5FC5_4077A482456A" name="uafKind" value="Project" modelElement="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
           <tag xmi:id="EAID_6C72CDF6_A90E_AD7E_9A8B_712ED2CCCC32" name="uafId" value="PJ-P09" modelElement="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
           <tag xmi:id="EAID_3E23F4EF_9EC3_368A_F55F_90A52E864BD4" name="registry.source" value="docs/plans/09-ml-model-integration.md" modelElement="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
-          <tag xmi:id="EAID_3A498801_3490_4F05_813F_BD6B4372D8C9" name="registry.status" value="not started" modelElement="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
+          <tag xmi:id="EAID_3A498801_3490_4F05_813F_BD6B4372D8C9" name="registry.status" value="first draft 2026-09-04" modelElement="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7429,7 +7430,24 @@
           <tag xmi:id="EAID_485FB986_20A7_FBB5_9455_F50C53ABAEF9" name="uafKind" value="Project" modelElement="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
           <tag xmi:id="EAID_7EF8C1BE_67C2_AB3A_38DD_EF63DE76B0E4" name="uafId" value="PJ-P10" modelElement="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
           <tag xmi:id="EAID_B10F72BF_6837_8CD3_F356_D483775A2DED" name="registry.source" value="docs/plans/10-togaf-adm-documentation.md" modelElement="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
-          <tag xmi:id="EAID_DFCC5637_0261_4A41_3FB0_B34ED78EE51A" name="registry.status" value="not started" modelElement="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
+          <tag xmi:id="EAID_DFCC5637_0261_4A41_3FB0_B34ED78EE51A" name="registry.status" value="first draft 2026-09-04" modelElement="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
+        </tags>
+        <xrefs/>
+        <extendedProperties tagged="0"/>
+        <links>
+        </links>
+      </element>
+      <element xmi:idref="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C" xmi:type="uml:Class" name="Plan 11 design gap closure" scope="public">
+        <model package="EAPK_EFD9C4B9_D710_EB7E_EFF3_747F2BE3FB12" tpos="0" ea_eleType="element"/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Project" documentation=""/>
+        <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
+        <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
+        <alias alias="PJ-P11"/>
+        <tags>
+          <tag xmi:id="EAID_4D110725_46EA_4C17_CB01_34608A1E417A" name="uafKind" value="Project" modelElement="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C"/>
+          <tag xmi:id="EAID_D8F74E30_425C_5A2B_331F_F59B4BDFA0B5" name="uafId" value="PJ-P11" modelElement="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C"/>
+          <tag xmi:id="EAID_9F778285_A89D_343C_4C0F_68D04A9DD847" name="registry.source" value="docs/plans/11-design-gap-closure.md" modelElement="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C"/>
+          <tag xmi:id="EAID_0C59D885_A130_B501_2907_A427BAA3B1A1" name="registry.status" value="first draft 2026-09-05" modelElement="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -9789,12 +9807,12 @@
         <extendedProperties tagged="0"/>
         <links>
           <Dependency xmi:id="EAID_43203DB9_3D4A_24AB_6F06_226E5B15C67F" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-          <Dependency xmi:id="EAID_A5998107_8D73_A34E_5AD7_3983C2678093" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_42774E3B_EAB5_DE10_00E9_87831025F147" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+          <Dependency xmi:id="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
           <Dependency xmi:id="EAID_10027B08_22C4_A782_0A4A_310E033496CA" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
           <Dependency xmi:id="EAID_7C9D95C5_8D2D_0005_B3D4_A72BCF8D047C" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-          <Dependency xmi:id="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+          <Dependency xmi:id="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_8ACACD61_A48D_3826_0186_4014783054E8" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
           <Dependency xmi:id="EAID_198CEBA7_D695_032C_81BE_FEEE0B82DBC1" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
         </links>
       </element>
@@ -9813,14 +9831,14 @@
         <extendedProperties tagged="0"/>
         <links>
           <Dependency xmi:id="EAID_5F9F1426_B689_9EC9_7F53_460A6D028BCC" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_A5998107_8D73_A34E_5AD7_3983C2678093" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_32C1255C_4101_B092_7F8B_C2613445C889" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
           <Dependency xmi:id="EAID_A21F184A_D106_0229_9C6B_1B1378FDAFFB" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_33869F9F_F871_664E_730D_03388982B986" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
-          <Dependency xmi:id="EAID_C9B67899_EDF9_924D_18E4_909916F141C2" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
           <Dependency xmi:id="EAID_3C0AFC05_5E24_25C3_77F6_BB465FEC6BC2" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
         </links>
       </element>
@@ -9839,12 +9857,12 @@
         <extendedProperties tagged="0"/>
         <links>
           <Dependency xmi:id="EAID_D0EBAA67_6D10_A6FA_F3CB_E93AC422B0A0" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-          <Dependency xmi:id="EAID_42774E3B_EAB5_DE10_00E9_87831025F147" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-          <Dependency xmi:id="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+          <Dependency xmi:id="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
           <Dependency xmi:id="EAID_99CE5B4B_9DDC_A903_1FA5_00C84654F0DF" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-          <Dependency xmi:id="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
-          <Dependency xmi:id="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_8ACACD61_A48D_3826_0186_4014783054E8" start="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
+          <Dependency xmi:id="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
           <Dependency xmi:id="EAID_ACD8FBE1_909C_B575_AA7C_AE64059FD779" start="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" end="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD"/>
         </links>
       </element>
@@ -9874,7 +9892,7 @@
           <Dependency xmi:id="EAID_EBB8C9FC_D5EF_0F6B_ACCA_5F6B4B5BF5FA" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_E703F889_2FA0_8300_6C29_B6D4AE6F7A68"/>
           <Dependency xmi:id="EAID_6418A685_A5C9_3FD7_E90A_6778C9F96504" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_E703F889_2FA0_8300_6C29_B6D4AE6F7A68"/>
           <Dependency xmi:id="EAID_7C9D95C5_8D2D_0005_B3D4_A72BCF8D047C" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3"/>
-          <Dependency xmi:id="EAID_33869F9F_F871_664E_730D_03388982B986" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
+          <Dependency xmi:id="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" start="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" end="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF"/>
         </links>
       </element>
       <element xmi:idref="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" xmi:type="uml:Object" name="Peer command-and-control nodes" scope="public">
@@ -9891,10 +9909,10 @@
         <xrefs/>
         <extendedProperties tagged="0"/>
         <links>
-          <Dependency xmi:id="EAID_32C1255C_4101_B092_7F8B_C2613445C889" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_C9B67899_EDF9_924D_18E4_909916F141C2" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
-          <Dependency xmi:id="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
+          <Dependency xmi:id="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
         </links>
       </element>
       <element xmi:idref="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" xmi:type="uml:Object" name="Effector systems" scope="public">
@@ -9911,14 +9929,14 @@
         <xrefs/>
         <extendedProperties tagged="0"/>
         <links>
-          <Dependency xmi:id="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
-          <Dependency xmi:id="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
-          <Dependency xmi:id="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325" start="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
+          <Dependency xmi:id="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7" start="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" end="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
         </links>
       </element>
       <element xmi:idref="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" xmi:type="uml:Object" name="Build and release infrastructure" scope="public">
         <model package="EAPK_34896D57_5A99_007A_944A_6BA06B9C3D7F" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Object" nType="0" scope="public" stereotype="ActualResource" documentation="Self-hosted GitLab with runners (including a GPU runner) and the container registry (D-10)."/>
+        <properties isSpecification="false" sType="Object" nType="0" scope="public" stereotype="ActualResource" documentation="GitHub, with GitHub Actions, a self-hosted runner labelled gpu, and the GitHub Container Registry (D-10, amended 2026-09-07)."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="AR-07"/>
@@ -9940,12 +9958,12 @@
       </element>
       <element xmi:idref="EAID_754A39B4_FC16_3ADB_3952_CDC3FFF0CA3E" xmi:type="uml:Class" name="Observations from heterogeneous sensors are ingested through one governed gateway that validates and quarantines" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-01"/>
         <tags>
-          <tag xmi:id="EAID_C6F9209C_B245_1CE2_55A7_36FFC39AD4EE" name="uafKind" value="Requirement" modelElement="EAID_754A39B4_FC16_3ADB_3952_CDC3FFF0CA3E"/>
+          <tag xmi:id="EAID_C6F9209C_B245_1CE2_55A7_36FFC39AD4EE" name="uafKind" value="requirement" modelElement="EAID_754A39B4_FC16_3ADB_3952_CDC3FFF0CA3E"/>
           <tag xmi:id="EAID_FAAA81B2_6A39_99B1_7C7E_E6808BF54B6F" name="uafId" value="REQ-F-01" modelElement="EAID_754A39B4_FC16_3ADB_3952_CDC3FFF0CA3E"/>
           <tag xmi:id="EAID_BB60E6C0_BB18_DB52_D4F7_D1819A8C035E" name="registry.category" value="F" modelElement="EAID_754A39B4_FC16_3ADB_3952_CDC3FFF0CA3E"/>
           <tag xmi:id="EAID_BD4E07F5_7097_DED3_9022_20A718EEEEF3" name="registry.source" value="CAP-1.1, CAP-1.2" modelElement="EAID_754A39B4_FC16_3ADB_3952_CDC3FFF0CA3E"/>
@@ -9964,12 +9982,12 @@
       </element>
       <element xmi:idref="EAID_EBDE3D81_A0C8_B16D_EC69_4FA415AB4E47" xmi:type="uml:Class" name="Every source is authenticated before its data enters the picture" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-02"/>
         <tags>
-          <tag xmi:id="EAID_09476BD1_75C7_C55E_5369_37828638CDEB" name="uafKind" value="Requirement" modelElement="EAID_EBDE3D81_A0C8_B16D_EC69_4FA415AB4E47"/>
+          <tag xmi:id="EAID_09476BD1_75C7_C55E_5369_37828638CDEB" name="uafKind" value="requirement" modelElement="EAID_EBDE3D81_A0C8_B16D_EC69_4FA415AB4E47"/>
           <tag xmi:id="EAID_7DE816A2_322A_96E3_AA12_363BD23417A5" name="uafId" value="REQ-F-02" modelElement="EAID_EBDE3D81_A0C8_B16D_EC69_4FA415AB4E47"/>
           <tag xmi:id="EAID_108E8DB7_99A1_481D_4101_57B17746F0D6" name="registry.category" value="F" modelElement="EAID_EBDE3D81_A0C8_B16D_EC69_4FA415AB4E47"/>
           <tag xmi:id="EAID_1CF72FAD_3953_DC69_5585_5A5234A2CE82" name="registry.source" value="CAP-1.2, D-02" modelElement="EAID_EBDE3D81_A0C8_B16D_EC69_4FA415AB4E47"/>
@@ -9987,12 +10005,12 @@
       </element>
       <element xmi:idref="EAID_80F9610D_B2F6_5B09_6A5A_A93B7F1E095C" xmi:type="uml:Class" name="Sensor modes, tasking, and calibration are held in a registry and changeable by the sensor manager" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-03"/>
         <tags>
-          <tag xmi:id="EAID_9EA1E34F_40DC_564C_247A_4EAA9E5D8FA6" name="uafKind" value="Requirement" modelElement="EAID_80F9610D_B2F6_5B09_6A5A_A93B7F1E095C"/>
+          <tag xmi:id="EAID_9EA1E34F_40DC_564C_247A_4EAA9E5D8FA6" name="uafKind" value="requirement" modelElement="EAID_80F9610D_B2F6_5B09_6A5A_A93B7F1E095C"/>
           <tag xmi:id="EAID_E3DADA06_35D2_9CE3_C29F_7A0266D48B32" name="uafId" value="REQ-F-03" modelElement="EAID_80F9610D_B2F6_5B09_6A5A_A93B7F1E095C"/>
           <tag xmi:id="EAID_F8CED4CB_3F7D_19C3_2F26_FD40D3B38726" name="registry.category" value="F" modelElement="EAID_80F9610D_B2F6_5B09_6A5A_A93B7F1E095C"/>
           <tag xmi:id="EAID_C7DE5A06_0028_D2CE_558E_231474E4EFFF" name="registry.source" value="CAP-1.3" modelElement="EAID_80F9610D_B2F6_5B09_6A5A_A93B7F1E095C"/>
@@ -10010,12 +10028,12 @@
       </element>
       <element xmi:idref="EAID_1E73AFC4_4B2B_F3E2_D376_3982D715AFD8" xmi:type="uml:Class" name="Coverage is computed and coverage gaps are detected and displayed" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-04"/>
         <tags>
-          <tag xmi:id="EAID_6FD44B52_369F_3242_5D3D_14214CB2C818" name="uafKind" value="Requirement" modelElement="EAID_1E73AFC4_4B2B_F3E2_D376_3982D715AFD8"/>
+          <tag xmi:id="EAID_6FD44B52_369F_3242_5D3D_14214CB2C818" name="uafKind" value="requirement" modelElement="EAID_1E73AFC4_4B2B_F3E2_D376_3982D715AFD8"/>
           <tag xmi:id="EAID_ADA07A9F_E844_3492_AF72_0C8C0C0E08D6" name="uafId" value="REQ-F-04" modelElement="EAID_1E73AFC4_4B2B_F3E2_D376_3982D715AFD8"/>
           <tag xmi:id="EAID_D0B38A56_9EDA_DD25_B39E_0F728D457561" name="registry.category" value="F" modelElement="EAID_1E73AFC4_4B2B_F3E2_D376_3982D715AFD8"/>
           <tag xmi:id="EAID_135FE8ED_48E9_E8AC_53F6_A7FA050353C6" name="registry.source" value="CAP-1.4" modelElement="EAID_1E73AFC4_4B2B_F3E2_D376_3982D715AFD8"/>
@@ -10033,12 +10051,12 @@
       </element>
       <element xmi:idref="EAID_837A461C_EC33_A543_1490_61DBFD4B31A7" xmi:type="uml:Class" name="Data from sources with different clocks is time-disciplined and skew is detected" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-05"/>
         <tags>
-          <tag xmi:id="EAID_6871ACA7_6E40_6DAA_06AC_E43210678E18" name="uafKind" value="Requirement" modelElement="EAID_837A461C_EC33_A543_1490_61DBFD4B31A7"/>
+          <tag xmi:id="EAID_6871ACA7_6E40_6DAA_06AC_E43210678E18" name="uafKind" value="requirement" modelElement="EAID_837A461C_EC33_A543_1490_61DBFD4B31A7"/>
           <tag xmi:id="EAID_C441D786_4110_A03A_7079_505243CC681E" name="uafId" value="REQ-F-05" modelElement="EAID_837A461C_EC33_A543_1490_61DBFD4B31A7"/>
           <tag xmi:id="EAID_6DCE7674_A1E6_83E2_408E_CA8E41CC689F" name="registry.category" value="F" modelElement="EAID_837A461C_EC33_A543_1490_61DBFD4B31A7"/>
           <tag xmi:id="EAID_5BC2E6CD_77A7_9369_AC2B_386A427091E1" name="registry.source" value="CAP-1.5" modelElement="EAID_837A461C_EC33_A543_1490_61DBFD4B31A7"/>
@@ -10056,12 +10074,12 @@
       </element>
       <element xmi:idref="EAID_997F11C9_5890_20E5_C1D6_73FDC03350D8" xmi:type="uml:Class" name="Cooperative identity from open protocols is decoded and fused as evidence" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-06"/>
         <tags>
-          <tag xmi:id="EAID_CECD7093_1A1B_1C16_5A62_EC7CAFFF5966" name="uafKind" value="Requirement" modelElement="EAID_997F11C9_5890_20E5_C1D6_73FDC03350D8"/>
+          <tag xmi:id="EAID_CECD7093_1A1B_1C16_5A62_EC7CAFFF5966" name="uafKind" value="requirement" modelElement="EAID_997F11C9_5890_20E5_C1D6_73FDC03350D8"/>
           <tag xmi:id="EAID_8055918D_F963_16B2_8D37_FCA0B85E396B" name="uafId" value="REQ-F-06" modelElement="EAID_997F11C9_5890_20E5_C1D6_73FDC03350D8"/>
           <tag xmi:id="EAID_AFE70B35_CC7B_BD98_3677_ECFF101A75AD" name="registry.category" value="F" modelElement="EAID_997F11C9_5890_20E5_C1D6_73FDC03350D8"/>
           <tag xmi:id="EAID_690843AC_B8CB_BDFF_ED68_662D9DCF4986" name="registry.source" value="CAP-1.7, D-09" modelElement="EAID_997F11C9_5890_20E5_C1D6_73FDC03350D8"/>
@@ -10080,12 +10098,12 @@
       </element>
       <element xmi:idref="EAID_CCCA7BE3_968C_577E_D85F_CA872DB45232" xmi:type="uml:Class" name="A multi-sensor, multi-rate, out-of-sequence tracking pipeline maintains the picture" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-07"/>
         <tags>
-          <tag xmi:id="EAID_AE1BB3BE_EF8D_C92F_0D48_FABE902A0633" name="uafKind" value="Requirement" modelElement="EAID_CCCA7BE3_968C_577E_D85F_CA872DB45232"/>
+          <tag xmi:id="EAID_AE1BB3BE_EF8D_C92F_0D48_FABE902A0633" name="uafKind" value="requirement" modelElement="EAID_CCCA7BE3_968C_577E_D85F_CA872DB45232"/>
           <tag xmi:id="EAID_F0EF7239_891E_4432_45E9_22FE4E7F0EFA" name="uafId" value="REQ-F-07" modelElement="EAID_CCCA7BE3_968C_577E_D85F_CA872DB45232"/>
           <tag xmi:id="EAID_63B50E39_F7F0_688E_0816_9A1F1519177F" name="registry.category" value="F" modelElement="EAID_CCCA7BE3_968C_577E_D85F_CA872DB45232"/>
           <tag xmi:id="EAID_19680530_1CD6_CD50_F29F_2680CBE0A834" name="registry.source" value="CAP-2.1 to CAP-2.5" modelElement="EAID_CCCA7BE3_968C_577E_D85F_CA872DB45232"/>
@@ -10103,12 +10121,12 @@
       </element>
       <element xmi:idref="EAID_94DA5F09_C765_D69E_327F_9C5EC45FD34D" xmi:type="uml:Class" name="Tracks carry a quality and a staleness that the interface renders differently from fresh data" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-08"/>
         <tags>
-          <tag xmi:id="EAID_CCCFF9E5_29E0_16BB_064B_71344C2890F4" name="uafKind" value="Requirement" modelElement="EAID_94DA5F09_C765_D69E_327F_9C5EC45FD34D"/>
+          <tag xmi:id="EAID_CCCFF9E5_29E0_16BB_064B_71344C2890F4" name="uafKind" value="requirement" modelElement="EAID_94DA5F09_C765_D69E_327F_9C5EC45FD34D"/>
           <tag xmi:id="EAID_A2B99855_FF74_7758_12E3_40A1AB864353" name="uafId" value="REQ-F-08" modelElement="EAID_94DA5F09_C765_D69E_327F_9C5EC45FD34D"/>
           <tag xmi:id="EAID_33FF7A33_B5D1_C525_985C_700A8F82AFCB" name="registry.category" value="F" modelElement="EAID_94DA5F09_C765_D69E_327F_9C5EC45FD34D"/>
           <tag xmi:id="EAID_CBB5EE5C_A359_332C_4055_F55E7D09521F" name="registry.source" value="CAP-2.2" modelElement="EAID_94DA5F09_C765_D69E_327F_9C5EC45FD34D"/>
@@ -10126,12 +10144,12 @@
       </element>
       <element xmi:idref="EAID_83AF5CD4_5122_CB59_143C_253B51573034" xmi:type="uml:Class" name="Classification and identification produce evidence with a margin rule and per-class thresholds set by policy" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-09"/>
         <tags>
-          <tag xmi:id="EAID_4B93F55E_762C_18DB_017C_EB8761545FFA" name="uafKind" value="Requirement" modelElement="EAID_83AF5CD4_5122_CB59_143C_253B51573034"/>
+          <tag xmi:id="EAID_4B93F55E_762C_18DB_017C_EB8761545FFA" name="uafKind" value="requirement" modelElement="EAID_83AF5CD4_5122_CB59_143C_253B51573034"/>
           <tag xmi:id="EAID_23049EB1_A261_52E5_A98F_8CB0142D99CF" name="uafId" value="REQ-F-09" modelElement="EAID_83AF5CD4_5122_CB59_143C_253B51573034"/>
           <tag xmi:id="EAID_DE7DBF27_538C_0169_1BB2_4A4CAC042F7F" name="registry.category" value="F" modelElement="EAID_83AF5CD4_5122_CB59_143C_253B51573034"/>
           <tag xmi:id="EAID_8B3924A2_32FB_D688_3884_7A33FC22F7D0" name="registry.source" value="CAP-2.6" modelElement="EAID_83AF5CD4_5122_CB59_143C_253B51573034"/>
@@ -10150,12 +10168,12 @@
       </element>
       <element xmi:idref="EAID_E4F45DFF_A346_6873_3810_0B8E94056903" xmi:type="uml:Class" name="Entities keep a global identity with lineage across sources and sessions" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-10"/>
         <tags>
-          <tag xmi:id="EAID_8CC1ED74_D246_CCE7_AC50_0BC70BC87B77" name="uafKind" value="Requirement" modelElement="EAID_E4F45DFF_A346_6873_3810_0B8E94056903"/>
+          <tag xmi:id="EAID_8CC1ED74_D246_CCE7_AC50_0BC70BC87B77" name="uafKind" value="requirement" modelElement="EAID_E4F45DFF_A346_6873_3810_0B8E94056903"/>
           <tag xmi:id="EAID_F3BB1D88_4022_9896_D069_BB00DB49DED5" name="uafId" value="REQ-F-10" modelElement="EAID_E4F45DFF_A346_6873_3810_0B8E94056903"/>
           <tag xmi:id="EAID_566FCA27_9F37_6969_AE27_AD73E6833DAB" name="registry.category" value="F" modelElement="EAID_E4F45DFF_A346_6873_3810_0B8E94056903"/>
           <tag xmi:id="EAID_F84A1908_055E_85A3_2E0D_4C30DE27FE60" name="registry.source" value="CAP-2.7" modelElement="EAID_E4F45DFF_A346_6873_3810_0B8E94056903"/>
@@ -10173,12 +10191,12 @@
       </element>
       <element xmi:idref="EAID_E7E5D897_3431_65D6_8829_0028E670D972" xmi:type="uml:Class" name="Threats are scored against a defended-asset list with per-class lethality and asset weighting" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-11"/>
         <tags>
-          <tag xmi:id="EAID_2B4E9964_3C5D_B755_D607_48325AC2D1C5" name="uafKind" value="Requirement" modelElement="EAID_E7E5D897_3431_65D6_8829_0028E670D972"/>
+          <tag xmi:id="EAID_2B4E9964_3C5D_B755_D607_48325AC2D1C5" name="uafKind" value="requirement" modelElement="EAID_E7E5D897_3431_65D6_8829_0028E670D972"/>
           <tag xmi:id="EAID_25495F5C_4367_1938_2CE1_6EF1E8484393" name="uafId" value="REQ-F-11" modelElement="EAID_E7E5D897_3431_65D6_8829_0028E670D972"/>
           <tag xmi:id="EAID_EF24C93A_C93D_6209_7A30_325003D04024" name="registry.category" value="F" modelElement="EAID_E7E5D897_3431_65D6_8829_0028E670D972"/>
           <tag xmi:id="EAID_5D30BA31_746F_F545_892C_1178D1B8CB14" name="registry.source" value="CAP-3.1, CAP-3.2" modelElement="EAID_E7E5D897_3431_65D6_8829_0028E670D972"/>
@@ -10197,12 +10215,12 @@
       </element>
       <element xmi:idref="EAID_4047B9AA_706B_792A_7554_5654C0DB54AD" xmi:type="uml:Class" name="The system recommends a cheapest-adequate assignment of resources to tracks within readiness, geometry, and policy" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-12"/>
         <tags>
-          <tag xmi:id="EAID_BF132A57_EB46_CF0E_A2C7_DEBDE9D7B53F" name="uafKind" value="Requirement" modelElement="EAID_4047B9AA_706B_792A_7554_5654C0DB54AD"/>
+          <tag xmi:id="EAID_BF132A57_EB46_CF0E_A2C7_DEBDE9D7B53F" name="uafKind" value="requirement" modelElement="EAID_4047B9AA_706B_792A_7554_5654C0DB54AD"/>
           <tag xmi:id="EAID_988F3005_BD1E_C16D_5CB7_CB77DFBCD98D" name="uafId" value="REQ-F-12" modelElement="EAID_4047B9AA_706B_792A_7554_5654C0DB54AD"/>
           <tag xmi:id="EAID_7EAF7B78_811D_AB68_FCC8_35FDC45A56A1" name="registry.category" value="F" modelElement="EAID_4047B9AA_706B_792A_7554_5654C0DB54AD"/>
           <tag xmi:id="EAID_CE733344_607B_3ECE_B8B1_236AD4C53C4E" name="registry.source" value="CAP-3.3, CAP-3.4" modelElement="EAID_4047B9AA_706B_792A_7554_5654C0DB54AD"/>
@@ -10222,12 +10240,12 @@
       </element>
       <element xmi:idref="EAID_92AF3D03_50D3_2580_CF16_D978BB7FABE8" xmi:type="uml:Class" name="Every recommendation carries a rationale and its alternatives" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-13"/>
         <tags>
-          <tag xmi:id="EAID_956C1312_CBF1_D65D_2CD9_3793F4CBE3E1" name="uafKind" value="Requirement" modelElement="EAID_92AF3D03_50D3_2580_CF16_D978BB7FABE8"/>
+          <tag xmi:id="EAID_956C1312_CBF1_D65D_2CD9_3793F4CBE3E1" name="uafKind" value="requirement" modelElement="EAID_92AF3D03_50D3_2580_CF16_D978BB7FABE8"/>
           <tag xmi:id="EAID_2C6C082E_5172_3765_F732_FD10184A78B7" name="uafId" value="REQ-F-13" modelElement="EAID_92AF3D03_50D3_2580_CF16_D978BB7FABE8"/>
           <tag xmi:id="EAID_CFD73731_0933_E578_E3CF_2B4D6EC557C2" name="registry.category" value="F" modelElement="EAID_92AF3D03_50D3_2580_CF16_D978BB7FABE8"/>
           <tag xmi:id="EAID_3B470927_CBC7_840B_2A71_05DDF40AF98D" name="registry.source" value="CAP-3.5" modelElement="EAID_92AF3D03_50D3_2580_CF16_D978BB7FABE8"/>
@@ -10245,12 +10263,12 @@
       </element>
       <element xmi:idref="EAID_0DFC3E72_A06A_4FBF_B086_20FDF2C125C2" xmi:type="uml:Class" name="The queue orders pending decisions by priority and time remaining, and supports pre-delegation where policy allows" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-14"/>
         <tags>
-          <tag xmi:id="EAID_7D6046FB_9F01_51EF_F25D_06660DBAC8FC" name="uafKind" value="Requirement" modelElement="EAID_0DFC3E72_A06A_4FBF_B086_20FDF2C125C2"/>
+          <tag xmi:id="EAID_7D6046FB_9F01_51EF_F25D_06660DBAC8FC" name="uafKind" value="requirement" modelElement="EAID_0DFC3E72_A06A_4FBF_B086_20FDF2C125C2"/>
           <tag xmi:id="EAID_76EEC1D0_0F64_8391_1E76_0C7E7798743E" name="uafId" value="REQ-F-14" modelElement="EAID_0DFC3E72_A06A_4FBF_B086_20FDF2C125C2"/>
           <tag xmi:id="EAID_4F7560A8_6381_4404_0407_2EDF396FA36C" name="registry.category" value="F" modelElement="EAID_0DFC3E72_A06A_4FBF_B086_20FDF2C125C2"/>
           <tag xmi:id="EAID_F7164F17_8316_E80B_140C_A23DA9DBFE52" name="registry.source" value="CAP-3.7, D-15" modelElement="EAID_0DFC3E72_A06A_4FBF_B086_20FDF2C125C2"/>
@@ -10268,12 +10286,12 @@
       </element>
       <element xmi:idref="EAID_D4E46CF1_62C2_70A9_008D_EBAE8CA59AB1" xmi:type="uml:Class" name="A session is journaled, replayable, and reproduces the same picture" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-15"/>
         <tags>
-          <tag xmi:id="EAID_BF7836E2_C4C2_CDC4_C289_9CEB281B9C19" name="uafKind" value="Requirement" modelElement="EAID_D4E46CF1_62C2_70A9_008D_EBAE8CA59AB1"/>
+          <tag xmi:id="EAID_BF7836E2_C4C2_CDC4_C289_9CEB281B9C19" name="uafKind" value="requirement" modelElement="EAID_D4E46CF1_62C2_70A9_008D_EBAE8CA59AB1"/>
           <tag xmi:id="EAID_08E62D48_1FC4_F112_DED7_7000A7D33E57" name="uafId" value="REQ-F-15" modelElement="EAID_D4E46CF1_62C2_70A9_008D_EBAE8CA59AB1"/>
           <tag xmi:id="EAID_D55B483C_669F_3035_55B0_39B23F87D13F" name="registry.category" value="F" modelElement="EAID_D4E46CF1_62C2_70A9_008D_EBAE8CA59AB1"/>
           <tag xmi:id="EAID_434431F2_8480_D2E3_C4AD_53C193917225" name="registry.source" value="CAP-5.2" modelElement="EAID_D4E46CF1_62C2_70A9_008D_EBAE8CA59AB1"/>
@@ -10292,12 +10310,12 @@
       </element>
       <element xmi:idref="EAID_3B65DC64_B2A1_976A_A837_36CD7C0888BB" xmi:type="uml:Class" name="Measures are computed from the journal without manual collation" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-F-16"/>
         <tags>
-          <tag xmi:id="EAID_9F49A28E_BCB3_7509_8D4B_500ABB35DCF1" name="uafKind" value="Requirement" modelElement="EAID_3B65DC64_B2A1_976A_A837_36CD7C0888BB"/>
+          <tag xmi:id="EAID_9F49A28E_BCB3_7509_8D4B_500ABB35DCF1" name="uafKind" value="requirement" modelElement="EAID_3B65DC64_B2A1_976A_A837_36CD7C0888BB"/>
           <tag xmi:id="EAID_682746CA_44DB_4138_70CB_1BFF5441F0CA" name="uafId" value="REQ-F-16" modelElement="EAID_3B65DC64_B2A1_976A_A837_36CD7C0888BB"/>
           <tag xmi:id="EAID_C5CD973C_37AB_E8E3_0AAC_2CBF1EED898E" name="registry.category" value="F" modelElement="EAID_3B65DC64_B2A1_976A_A837_36CD7C0888BB"/>
           <tag xmi:id="EAID_BAFE1144_FA62_0E73_0450_149605AF7BB6" name="registry.source" value="CAP-5.3" modelElement="EAID_3B65DC64_B2A1_976A_A837_36CD7C0888BB"/>
@@ -10315,12 +10333,12 @@
       </element>
       <element xmi:idref="EAID_F76DF953_D53C_DCC6_4C1A_0BD98315CFE7" xmi:type="uml:Class" name="Shared types have exactly one owning crate; everything above re-exports" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-D-01"/>
         <tags>
-          <tag xmi:id="EAID_778A0652_C546_1DA0_79A1_7EB3711FDD11" name="uafKind" value="Requirement" modelElement="EAID_F76DF953_D53C_DCC6_4C1A_0BD98315CFE7"/>
+          <tag xmi:id="EAID_778A0652_C546_1DA0_79A1_7EB3711FDD11" name="uafKind" value="requirement" modelElement="EAID_F76DF953_D53C_DCC6_4C1A_0BD98315CFE7"/>
           <tag xmi:id="EAID_04577A3D_321B_2BB3_57BE_83EEACEF069C" name="uafId" value="REQ-D-01" modelElement="EAID_F76DF953_D53C_DCC6_4C1A_0BD98315CFE7"/>
           <tag xmi:id="EAID_26D3D9E8_9C15_0A37_F67C_56ECAB0D18FE" name="registry.category" value="D" modelElement="EAID_F76DF953_D53C_DCC6_4C1A_0BD98315CFE7"/>
           <tag xmi:id="EAID_38C9D8FE_2316_955F_CC9F_0EEF21BD666A" name="registry.source" value="AP-06" modelElement="EAID_F76DF953_D53C_DCC6_4C1A_0BD98315CFE7"/>
@@ -10338,12 +10356,12 @@
       </element>
       <element xmi:idref="EAID_1BCD2617_2558_5ADA_1C95_8EB659D0B3AC" xmi:type="uml:Class" name="Every detection carries its source and its receipt time" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-D-02"/>
         <tags>
-          <tag xmi:id="EAID_BAB8C98D_D96E_561D_ED77_C6AC180AAB4D" name="uafKind" value="Requirement" modelElement="EAID_1BCD2617_2558_5ADA_1C95_8EB659D0B3AC"/>
+          <tag xmi:id="EAID_BAB8C98D_D96E_561D_ED77_C6AC180AAB4D" name="uafKind" value="requirement" modelElement="EAID_1BCD2617_2558_5ADA_1C95_8EB659D0B3AC"/>
           <tag xmi:id="EAID_17926252_DD88_7512_8F5F_4164F079E3E8" name="uafId" value="REQ-D-02" modelElement="EAID_1BCD2617_2558_5ADA_1C95_8EB659D0B3AC"/>
           <tag xmi:id="EAID_57D06632_ACCB_D5C6_17D0_2FACE349CC98" name="registry.category" value="D" modelElement="EAID_1BCD2617_2558_5ADA_1C95_8EB659D0B3AC"/>
           <tag xmi:id="EAID_2669FA81_11D8_34D1_169C_DD43CEE500D5" name="registry.source" value="AP-07, CAP-1.2" modelElement="EAID_1BCD2617_2558_5ADA_1C95_8EB659D0B3AC"/>
@@ -10360,12 +10378,12 @@
       </element>
       <element xmi:idref="EAID_35852511_F61D_A317_433A_BDC100543F87" xmi:type="uml:Class" name="Identification evidence names its producer, including model name and version for a machine-learning source" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-D-03"/>
         <tags>
-          <tag xmi:id="EAID_06FA931E_E9D1_9DA0_9597_D9223489252B" name="uafKind" value="Requirement" modelElement="EAID_35852511_F61D_A317_433A_BDC100543F87"/>
+          <tag xmi:id="EAID_06FA931E_E9D1_9DA0_9597_D9223489252B" name="uafKind" value="requirement" modelElement="EAID_35852511_F61D_A317_433A_BDC100543F87"/>
           <tag xmi:id="EAID_E14BFE71_4BA4_FC23_3A3B_235BF593A468" name="uafId" value="REQ-D-03" modelElement="EAID_35852511_F61D_A317_433A_BDC100543F87"/>
           <tag xmi:id="EAID_EF38BE5B_C569_ADC8_CCB1_A19C8360CEBF" name="registry.category" value="D" modelElement="EAID_35852511_F61D_A317_433A_BDC100543F87"/>
           <tag xmi:id="EAID_2E19F780_EB3E_64ED_F11E_721E5821D51C" name="registry.source" value="AP-07, ML-01" modelElement="EAID_35852511_F61D_A317_433A_BDC100543F87"/>
@@ -10382,12 +10400,12 @@
       </element>
       <element xmi:idref="EAID_92178A91_BA84_4246_496A_69701070B8F5" xmi:type="uml:Class" name="Envelopes carry a bus sequence number and a mission time" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-D-04"/>
         <tags>
-          <tag xmi:id="EAID_9ADB4126_2110_47D2_28A9_D7153D41648E" name="uafKind" value="Requirement" modelElement="EAID_92178A91_BA84_4246_496A_69701070B8F5"/>
+          <tag xmi:id="EAID_9ADB4126_2110_47D2_28A9_D7153D41648E" name="uafKind" value="requirement" modelElement="EAID_92178A91_BA84_4246_496A_69701070B8F5"/>
           <tag xmi:id="EAID_7959CC9B_52C2_7767_3055_E2DE60D61F2C" name="uafId" value="REQ-D-04" modelElement="EAID_92178A91_BA84_4246_496A_69701070B8F5"/>
           <tag xmi:id="EAID_3A43D9BB_2079_F603_FF18_D91A886B511D" name="registry.category" value="D" modelElement="EAID_92178A91_BA84_4246_496A_69701070B8F5"/>
           <tag xmi:id="EAID_72CF8758_A17F_93B2_0F79_B0B9581DBB53" name="registry.source" value="AP-08" modelElement="EAID_92178A91_BA84_4246_496A_69701070B8F5"/>
@@ -10403,12 +10421,12 @@
       </element>
       <element xmi:idref="EAID_8C5CA54F_235A_17FE_6DF9_4E97F9B9750E" xmi:type="uml:Class" name="The node journal fsyncs every envelope; desktop journals fsync on session save and every five seconds" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-D-05"/>
         <tags>
-          <tag xmi:id="EAID_971C8169_6A66_4793_1F04_574A429686F5" name="uafKind" value="Requirement" modelElement="EAID_8C5CA54F_235A_17FE_6DF9_4E97F9B9750E"/>
+          <tag xmi:id="EAID_971C8169_6A66_4793_1F04_574A429686F5" name="uafKind" value="requirement" modelElement="EAID_8C5CA54F_235A_17FE_6DF9_4E97F9B9750E"/>
           <tag xmi:id="EAID_00AF6B2B_37B1_B933_3748_4A3FB1E0E5E2" name="uafId" value="REQ-D-05" modelElement="EAID_8C5CA54F_235A_17FE_6DF9_4E97F9B9750E"/>
           <tag xmi:id="EAID_88F8B302_46FD_C3AE_43F4_2B15B36604A4" name="registry.category" value="D" modelElement="EAID_8C5CA54F_235A_17FE_6DF9_4E97F9B9750E"/>
           <tag xmi:id="EAID_E6201AB1_37A6_F364_FEAB_F8FB655109ED" name="registry.source" value="D-04" modelElement="EAID_8C5CA54F_235A_17FE_6DF9_4E97F9B9750E"/>
@@ -10424,12 +10442,12 @@
       </element>
       <element xmi:idref="EAID_D136AE0D_ECAA_B67F_E757_FAE55321244C" xmi:type="uml:Class" name="Journals merge in mission-time order, duplicates are dropped, and conflicting decisions are reported rather than resolved" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-D-06"/>
         <tags>
-          <tag xmi:id="EAID_0462613B_0A13_DBA8_AC9E_63F4EBA29A8A" name="uafKind" value="Requirement" modelElement="EAID_D136AE0D_ECAA_B67F_E757_FAE55321244C"/>
+          <tag xmi:id="EAID_0462613B_0A13_DBA8_AC9E_63F4EBA29A8A" name="uafKind" value="requirement" modelElement="EAID_D136AE0D_ECAA_B67F_E757_FAE55321244C"/>
           <tag xmi:id="EAID_E413A948_F905_5810_798F_4FE650212868" name="uafId" value="REQ-D-06" modelElement="EAID_D136AE0D_ECAA_B67F_E757_FAE55321244C"/>
           <tag xmi:id="EAID_ECD28374_2680_EFE4_35C8_99670B65ED8E" name="registry.category" value="D" modelElement="EAID_D136AE0D_ECAA_B67F_E757_FAE55321244C"/>
           <tag xmi:id="EAID_6295806D_651C_436A_A793_F948023C2CC9" name="registry.source" value="D-03" modelElement="EAID_D136AE0D_ECAA_B67F_E757_FAE55321244C"/>
@@ -10446,12 +10464,12 @@
       </element>
       <element xmi:idref="EAID_9A13BFC2_8B25_DC8E_4BD6_2F15FFA1F106" xmi:type="uml:Class" name="Views, reports, and the interface contract carry a releasability marking" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-D-07"/>
         <tags>
-          <tag xmi:id="EAID_1FBF362B_DA1C_DF56_6F53_F36489D6DCAC" name="uafKind" value="Requirement" modelElement="EAID_9A13BFC2_8B25_DC8E_4BD6_2F15FFA1F106"/>
+          <tag xmi:id="EAID_1FBF362B_DA1C_DF56_6F53_F36489D6DCAC" name="uafKind" value="requirement" modelElement="EAID_9A13BFC2_8B25_DC8E_4BD6_2F15FFA1F106"/>
           <tag xmi:id="EAID_3628BD9E_752C_B940_C030_BAF10E0E9653" name="uafId" value="REQ-D-07" modelElement="EAID_9A13BFC2_8B25_DC8E_4BD6_2F15FFA1F106"/>
           <tag xmi:id="EAID_0C9BC8DC_30E8_3B10_A5E1_6B5907FBD2E6" name="registry.category" value="D" modelElement="EAID_9A13BFC2_8B25_DC8E_4BD6_2F15FFA1F106"/>
           <tag xmi:id="EAID_E8673109_4779_CFE9_0C75_82CD01325642" name="registry.source" value="D-06, CAP-6.6" modelElement="EAID_9A13BFC2_8B25_DC8E_4BD6_2F15FFA1F106"/>
@@ -10470,12 +10488,12 @@
       </element>
       <element xmi:idref="EAID_3B0A0128_B1A9_1BA9_7012_82246760BBFE" xmi:type="uml:Class" name="Training data and model artefacts live outside this repository; only the manifest enters it" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-D-08"/>
         <tags>
-          <tag xmi:id="EAID_9DFE2E3D_891B_00E3_3B83_A1EC2C2EDC51" name="uafKind" value="Requirement" modelElement="EAID_3B0A0128_B1A9_1BA9_7012_82246760BBFE"/>
+          <tag xmi:id="EAID_9DFE2E3D_891B_00E3_3B83_A1EC2C2EDC51" name="uafKind" value="requirement" modelElement="EAID_3B0A0128_B1A9_1BA9_7012_82246760BBFE"/>
           <tag xmi:id="EAID_50E9975E_2FF6_B6D7_7237_142F92398242" name="uafId" value="REQ-D-08" modelElement="EAID_3B0A0128_B1A9_1BA9_7012_82246760BBFE"/>
           <tag xmi:id="EAID_DA0DE97F_C4FE_1AFF_C144_2A38A9AA0A53" name="registry.category" value="D" modelElement="EAID_3B0A0128_B1A9_1BA9_7012_82246760BBFE"/>
           <tag xmi:id="EAID_4B82A885_2A69_0637_A78B_3E0FD9D9DC23" name="registry.source" value="ML plan" modelElement="EAID_3B0A0128_B1A9_1BA9_7012_82246760BBFE"/>
@@ -10492,12 +10510,12 @@
       </element>
       <element xmi:idref="EAID_13747F8E_2AE9_C284_49BB_B67F6550A665" xmi:type="uml:Class" name="The node exposes a versioned contract for snapshot, event stream, detection submission, and plan decisions" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-I-01"/>
         <tags>
-          <tag xmi:id="EAID_C7C3DCEE_77DD_CB8C_6032_3174C1ADB960" name="uafKind" value="Requirement" modelElement="EAID_13747F8E_2AE9_C284_49BB_B67F6550A665"/>
+          <tag xmi:id="EAID_C7C3DCEE_77DD_CB8C_6032_3174C1ADB960" name="uafKind" value="requirement" modelElement="EAID_13747F8E_2AE9_C284_49BB_B67F6550A665"/>
           <tag xmi:id="EAID_BB3DC68D_9A0A_40C4_5A7C_E172DC519B38" name="uafId" value="REQ-I-01" modelElement="EAID_13747F8E_2AE9_C284_49BB_B67F6550A665"/>
           <tag xmi:id="EAID_FED2EBEE_5AF8_31D3_AAF3_1BD8AE2A3E64" name="registry.category" value="I" modelElement="EAID_13747F8E_2AE9_C284_49BB_B67F6550A665"/>
           <tag xmi:id="EAID_885324E8_F9B0_E0DF_B232_D318E6F5C11B" name="registry.source" value="CAP-7.1" modelElement="EAID_13747F8E_2AE9_C284_49BB_B67F6550A665"/>
@@ -10515,12 +10533,12 @@
       </element>
       <element xmi:idref="EAID_489BEE20_483D_3204_7D8B_C110C30FF220" xmi:type="uml:Class" name="Schema versions are negotiated explicitly and an incompatible peer is refused, not silently accepted" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-I-02"/>
         <tags>
-          <tag xmi:id="EAID_797450F6_7200_0C69_F0D8_9EC26823DFE2" name="uafKind" value="Requirement" modelElement="EAID_489BEE20_483D_3204_7D8B_C110C30FF220"/>
+          <tag xmi:id="EAID_797450F6_7200_0C69_F0D8_9EC26823DFE2" name="uafKind" value="requirement" modelElement="EAID_489BEE20_483D_3204_7D8B_C110C30FF220"/>
           <tag xmi:id="EAID_8E6EF3D3_7B7C_F80B_5F43_5261DF373657" name="uafId" value="REQ-I-02" modelElement="EAID_489BEE20_483D_3204_7D8B_C110C30FF220"/>
           <tag xmi:id="EAID_C50C5421_959C_0E99_ECCF_F97764F92992" name="registry.category" value="I" modelElement="EAID_489BEE20_483D_3204_7D8B_C110C30FF220"/>
           <tag xmi:id="EAID_519F0693_50AF_4CEF_6665_522CA34DAA4C" name="registry.source" value="CAP-7.2" modelElement="EAID_489BEE20_483D_3204_7D8B_C110C30FF220"/>
@@ -10537,12 +10555,12 @@
       </element>
       <element xmi:idref="EAID_C7E98DD5_7852_9E70_7246_8FD9D1263781" xmi:type="uml:Class" name="Radar feeds decode from ASTERIX category 048" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-I-03"/>
         <tags>
-          <tag xmi:id="EAID_23DCD0A5_310E_97D8_6017_E33E967FD885" name="uafKind" value="Requirement" modelElement="EAID_C7E98DD5_7852_9E70_7246_8FD9D1263781"/>
+          <tag xmi:id="EAID_23DCD0A5_310E_97D8_6017_E33E967FD885" name="uafKind" value="requirement" modelElement="EAID_C7E98DD5_7852_9E70_7246_8FD9D1263781"/>
           <tag xmi:id="EAID_1E31289E_48C7_2C16_1FFC_9BCAD8E815EA" name="uafId" value="REQ-I-03" modelElement="EAID_C7E98DD5_7852_9E70_7246_8FD9D1263781"/>
           <tag xmi:id="EAID_6F6D8207_0ACB_C458_CCF6_4DC2862201B6" name="registry.category" value="I" modelElement="EAID_C7E98DD5_7852_9E70_7246_8FD9D1263781"/>
           <tag xmi:id="EAID_E52BEB3F_DDDC_20AB_B55E_3A9802646E74" name="registry.source" value="SD-03, D-09" modelElement="EAID_C7E98DD5_7852_9E70_7246_8FD9D1263781"/>
@@ -10559,12 +10577,12 @@
       </element>
       <element xmi:idref="EAID_406148DA_E154_7739_D279_8D506295282A" xmi:type="uml:Class" name="Coalition track exchange uses STANAG 4676" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-I-04"/>
         <tags>
-          <tag xmi:id="EAID_789907B8_0DEF_D90D_4D27_2DE3B44F2500" name="uafKind" value="Requirement" modelElement="EAID_406148DA_E154_7739_D279_8D506295282A"/>
+          <tag xmi:id="EAID_789907B8_0DEF_D90D_4D27_2DE3B44F2500" name="uafKind" value="requirement" modelElement="EAID_406148DA_E154_7739_D279_8D506295282A"/>
           <tag xmi:id="EAID_DDFA3B7D_2122_DB0F_A312_D0DFC509F849" name="uafId" value="REQ-I-04" modelElement="EAID_406148DA_E154_7739_D279_8D506295282A"/>
           <tag xmi:id="EAID_6C64B542_4B81_6584_CFF4_CE8116F3D7E8" name="registry.category" value="I" modelElement="EAID_406148DA_E154_7739_D279_8D506295282A"/>
           <tag xmi:id="EAID_732E4288_CAB7_A154_CF0A_8C184890EA9E" name="registry.source" value="SD-04, D-06" modelElement="EAID_406148DA_E154_7739_D279_8D506295282A"/>
@@ -10581,12 +10599,12 @@
       </element>
       <element xmi:idref="EAID_0C777A2B_C0DE_AB1C_4826_1F29F4B3C31A" xmi:type="uml:Class" name="Each external party is a configurable endpoint with a message type rather than a bespoke integration" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-I-05"/>
         <tags>
-          <tag xmi:id="EAID_0EA18731_CC24_77A5_324A_BA6F4BB07311" name="uafKind" value="Requirement" modelElement="EAID_0C777A2B_C0DE_AB1C_4826_1F29F4B3C31A"/>
+          <tag xmi:id="EAID_0EA18731_CC24_77A5_324A_BA6F4BB07311" name="uafKind" value="requirement" modelElement="EAID_0C777A2B_C0DE_AB1C_4826_1F29F4B3C31A"/>
           <tag xmi:id="EAID_B7EF7182_B645_76E6_D606_2FD049D0C565" name="uafId" value="REQ-I-05" modelElement="EAID_0C777A2B_C0DE_AB1C_4826_1F29F4B3C31A"/>
           <tag xmi:id="EAID_9DA92D7A_6EE9_2E33_EC58_295005FCC3C7" name="registry.category" value="I" modelElement="EAID_0C777A2B_C0DE_AB1C_4826_1F29F4B3C31A"/>
           <tag xmi:id="EAID_2A30B514_548C_38F2_0B86_B2F4B58DE188" name="registry.source" value="D-08" modelElement="EAID_0C777A2B_C0DE_AB1C_4826_1F29F4B3C31A"/>
@@ -10603,12 +10621,12 @@
       </element>
       <element xmi:idref="EAID_80985EB0_812E_20E0_9789_13022A644EA2" xmi:type="uml:Class" name="Detections are exportable in a columnar format for analytics and bulk exchange" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-I-06"/>
         <tags>
-          <tag xmi:id="EAID_89C25FEA_281A_232D_86D9_73B0555FAAF0" name="uafKind" value="Requirement" modelElement="EAID_80985EB0_812E_20E0_9789_13022A644EA2"/>
+          <tag xmi:id="EAID_89C25FEA_281A_232D_86D9_73B0555FAAF0" name="uafKind" value="requirement" modelElement="EAID_80985EB0_812E_20E0_9789_13022A644EA2"/>
           <tag xmi:id="EAID_11437342_84EE_4BAE_8107_2969DEF0A092" name="uafId" value="REQ-I-06" modelElement="EAID_80985EB0_812E_20E0_9789_13022A644EA2"/>
           <tag xmi:id="EAID_BE68CF3E_E638_FA36_D14C_EDA586371A32" name="registry.category" value="I" modelElement="EAID_80985EB0_812E_20E0_9789_13022A644EA2"/>
           <tag xmi:id="EAID_9BB6CFA8_B471_3AF2_A0D6_FFCE647733F4" name="registry.source" value="SD-02" modelElement="EAID_80985EB0_812E_20E0_9789_13022A644EA2"/>
@@ -10624,12 +10642,12 @@
       </element>
       <element xmi:idref="EAID_D49DE76C_B653_2EED_9503_20478C9E6A0B" xmi:type="uml:Class" name="No engagement, effector command, or reserved identity declaration executes without a recorded human decision" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-S-01"/>
         <tags>
-          <tag xmi:id="EAID_FE3FDD25_57E5_6181_C253_2F384AEF4C89" name="uafKind" value="Requirement" modelElement="EAID_D49DE76C_B653_2EED_9503_20478C9E6A0B"/>
+          <tag xmi:id="EAID_FE3FDD25_57E5_6181_C253_2F384AEF4C89" name="uafKind" value="requirement" modelElement="EAID_D49DE76C_B653_2EED_9503_20478C9E6A0B"/>
           <tag xmi:id="EAID_52E450CA_9C60_7FBB_8C61_A2362EA5878C" name="uafId" value="REQ-S-01" modelElement="EAID_D49DE76C_B653_2EED_9503_20478C9E6A0B"/>
           <tag xmi:id="EAID_ADE54D32_638A_1EC7_E52A_7E3EBA2DA4BD" name="registry.category" value="S" modelElement="EAID_D49DE76C_B653_2EED_9503_20478C9E6A0B"/>
           <tag xmi:id="EAID_BBBEA066_83D2_23AD_7515_9D01C7899BB2" name="registry.source" value="AP-01, CAP-4.3" modelElement="EAID_D49DE76C_B653_2EED_9503_20478C9E6A0B"/>
@@ -10648,12 +10666,12 @@
       </element>
       <element xmi:idref="EAID_0736A4E2_000D_22FF_7C86_7BA1106B76CF" xmi:type="uml:Class" name="Authority is enforced per role, per class, and per engagement layer, per the authority matrix" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-S-02"/>
         <tags>
-          <tag xmi:id="EAID_F064274C_04B7_3B49_C45D_D25F465BFB53" name="uafKind" value="Requirement" modelElement="EAID_0736A4E2_000D_22FF_7C86_7BA1106B76CF"/>
+          <tag xmi:id="EAID_F064274C_04B7_3B49_C45D_D25F465BFB53" name="uafKind" value="requirement" modelElement="EAID_0736A4E2_000D_22FF_7C86_7BA1106B76CF"/>
           <tag xmi:id="EAID_B342C3A6_27FA_B412_64B9_AD3002B93A2B" name="uafId" value="REQ-S-02" modelElement="EAID_0736A4E2_000D_22FF_7C86_7BA1106B76CF"/>
           <tag xmi:id="EAID_44D695AC_8122_BEE4_8D22_3524FB2B1B19" name="registry.category" value="S" modelElement="EAID_0736A4E2_000D_22FF_7C86_7BA1106B76CF"/>
           <tag xmi:id="EAID_92884E81_D9F2_2AB5_3436_74F9467AE2AD" name="registry.source" value="CAP-6.2, D-05" modelElement="EAID_0736A4E2_000D_22FF_7C86_7BA1106B76CF"/>
@@ -10671,12 +10689,12 @@
       </element>
       <element xmi:idref="EAID_E2946A7C_DA7F_35BD_0637_CA05716B3E25" xmi:type="uml:Class" name="Weapons control status is set by the authorized roles and constrains every recommendation" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-S-03"/>
         <tags>
-          <tag xmi:id="EAID_454BADC1_B35D_DBCB_C313_0410F952F325" name="uafKind" value="Requirement" modelElement="EAID_E2946A7C_DA7F_35BD_0637_CA05716B3E25"/>
+          <tag xmi:id="EAID_454BADC1_B35D_DBCB_C313_0410F952F325" name="uafKind" value="requirement" modelElement="EAID_E2946A7C_DA7F_35BD_0637_CA05716B3E25"/>
           <tag xmi:id="EAID_C11DAE38_8E3C_E711_5625_5EB6B5EA91DF" name="uafId" value="REQ-S-03" modelElement="EAID_E2946A7C_DA7F_35BD_0637_CA05716B3E25"/>
           <tag xmi:id="EAID_A10205FA_969D_BCE2_F24E_741BC7DCFB01" name="registry.category" value="S" modelElement="EAID_E2946A7C_DA7F_35BD_0637_CA05716B3E25"/>
           <tag xmi:id="EAID_2F21A351_9ADE_519C_90CC_101E09B7574E" name="registry.source" value="CAP-3.6" modelElement="EAID_E2946A7C_DA7F_35BD_0637_CA05716B3E25"/>
@@ -10694,12 +10712,12 @@
       </element>
       <element xmi:idref="EAID_D8DEF058_94A6_4713_97A1_0975D2923E03" xmi:type="uml:Class" name="Pending decisions escalate and time out rather than waiting indefinitely" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-S-04"/>
         <tags>
-          <tag xmi:id="EAID_89FE7C03_2047_5B6C_C9BB_0A52A9342A0E" name="uafKind" value="Requirement" modelElement="EAID_D8DEF058_94A6_4713_97A1_0975D2923E03"/>
+          <tag xmi:id="EAID_89FE7C03_2047_5B6C_C9BB_0A52A9342A0E" name="uafKind" value="requirement" modelElement="EAID_D8DEF058_94A6_4713_97A1_0975D2923E03"/>
           <tag xmi:id="EAID_0C2DBCDE_FCB2_DEB0_C741_1392B2E157CB" name="uafId" value="REQ-S-04" modelElement="EAID_D8DEF058_94A6_4713_97A1_0975D2923E03"/>
           <tag xmi:id="EAID_FA280B1C_5B3A_0379_1EB5_DF815857A3D3" name="registry.category" value="S" modelElement="EAID_D8DEF058_94A6_4713_97A1_0975D2923E03"/>
           <tag xmi:id="EAID_7816F266_8973_D3A5_2608_942135F18750" name="registry.source" value="CAP-3.6, CAP-3.7" modelElement="EAID_D8DEF058_94A6_4713_97A1_0975D2923E03"/>
@@ -10718,12 +10736,12 @@
       </element>
       <element xmi:idref="EAID_3B009CFE_5F5E_BE9C_3FBA_F8247BC5D95D" xmi:type="uml:Class" name="Every consequential act is attributable to a person, a role, and a mission time in an audit log" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-S-05"/>
         <tags>
-          <tag xmi:id="EAID_C2D1811C_D418_7355_A0F0_49A262ED12A5" name="uafKind" value="Requirement" modelElement="EAID_3B009CFE_5F5E_BE9C_3FBA_F8247BC5D95D"/>
+          <tag xmi:id="EAID_C2D1811C_D418_7355_A0F0_49A262ED12A5" name="uafKind" value="requirement" modelElement="EAID_3B009CFE_5F5E_BE9C_3FBA_F8247BC5D95D"/>
           <tag xmi:id="EAID_97FADC34_1F8C_F7BF_F58D_5D9B2444AFCB" name="uafId" value="REQ-S-05" modelElement="EAID_3B009CFE_5F5E_BE9C_3FBA_F8247BC5D95D"/>
           <tag xmi:id="EAID_798AF35F_C7E4_028C_73BB_E4EC2F6C38CC" name="registry.category" value="S" modelElement="EAID_3B009CFE_5F5E_BE9C_3FBA_F8247BC5D95D"/>
           <tag xmi:id="EAID_CE02C81C_4734_6920_D6F1_9C44299C41E2" name="registry.source" value="AP-03, CAP-6.3" modelElement="EAID_3B009CFE_5F5E_BE9C_3FBA_F8247BC5D95D"/>
@@ -10741,12 +10759,12 @@
       </element>
       <element xmi:idref="EAID_220EACC6_9864_4DCC_AEEA_B18EEDF2C059" xmi:type="uml:Class" name="Machine identities authenticate with mutual transport-layer security; operator sessions use short-lived signed tokens" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-S-06"/>
         <tags>
-          <tag xmi:id="EAID_9A97F4F7_FD65_A438_A691_923C53A60C46" name="uafKind" value="Requirement" modelElement="EAID_220EACC6_9864_4DCC_AEEA_B18EEDF2C059"/>
+          <tag xmi:id="EAID_9A97F4F7_FD65_A438_A691_923C53A60C46" name="uafKind" value="requirement" modelElement="EAID_220EACC6_9864_4DCC_AEEA_B18EEDF2C059"/>
           <tag xmi:id="EAID_68B9AA6F_E409_E1CA_8907_51EE46B283BF" name="uafId" value="REQ-S-06" modelElement="EAID_220EACC6_9864_4DCC_AEEA_B18EEDF2C059"/>
           <tag xmi:id="EAID_A8F4BCEC_F451_ED16_39FA_015E7726E277" name="registry.category" value="S" modelElement="EAID_220EACC6_9864_4DCC_AEEA_B18EEDF2C059"/>
           <tag xmi:id="EAID_CB92819F_C457_6BF4_6357_1D5070941E74" name="registry.source" value="D-02" modelElement="EAID_220EACC6_9864_4DCC_AEEA_B18EEDF2C059"/>
@@ -10763,12 +10781,12 @@
       </element>
       <element xmi:idref="EAID_7FD80E54_0996_2FC4_0DBA_D8ED126ECA35" xmi:type="uml:Class" name="Data is encrypted in transit on every network crossing and at rest where the deployment requires it" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-S-07"/>
         <tags>
-          <tag xmi:id="EAID_496D4215_B512_7E04_C597_31BDBCE1ADD6" name="uafKind" value="Requirement" modelElement="EAID_7FD80E54_0996_2FC4_0DBA_D8ED126ECA35"/>
+          <tag xmi:id="EAID_496D4215_B512_7E04_C597_31BDBCE1ADD6" name="uafKind" value="requirement" modelElement="EAID_7FD80E54_0996_2FC4_0DBA_D8ED126ECA35"/>
           <tag xmi:id="EAID_68D78B58_3003_FAFD_C876_687BD3E02ED9" name="uafId" value="REQ-S-07" modelElement="EAID_7FD80E54_0996_2FC4_0DBA_D8ED126ECA35"/>
           <tag xmi:id="EAID_866CC524_AB11_C093_F581_61FDBDFFF37B" name="registry.category" value="S" modelElement="EAID_7FD80E54_0996_2FC4_0DBA_D8ED126ECA35"/>
           <tag xmi:id="EAID_14EAF43F_0E85_5370_6025_E7D75ED5DBEA" name="registry.source" value="CAP-6.4" modelElement="EAID_7FD80E54_0996_2FC4_0DBA_D8ED126ECA35"/>
@@ -10785,12 +10803,12 @@
       </element>
       <element xmi:idref="EAID_5EC38E56_A9FB_7043_7E6A_B521E1646646" xmi:type="uml:Class" name="The assistant has no tool that changes state and no dependency path to a crate that does" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-S-08"/>
         <tags>
-          <tag xmi:id="EAID_44C5C0EF_54CE_2662_BF3A_3A00FEF85FB9" name="uafKind" value="Requirement" modelElement="EAID_5EC38E56_A9FB_7043_7E6A_B521E1646646"/>
+          <tag xmi:id="EAID_44C5C0EF_54CE_2662_BF3A_3A00FEF85FB9" name="uafKind" value="requirement" modelElement="EAID_5EC38E56_A9FB_7043_7E6A_B521E1646646"/>
           <tag xmi:id="EAID_B49A8EB5_F0FF_C783_099E_B811B785A6C8" name="uafId" value="REQ-S-08" modelElement="EAID_5EC38E56_A9FB_7043_7E6A_B521E1646646"/>
           <tag xmi:id="EAID_B24F138A_563D_A9A8_9599_FCED3DBF858D" name="registry.category" value="S" modelElement="EAID_5EC38E56_A9FB_7043_7E6A_B521E1646646"/>
           <tag xmi:id="EAID_D8FEC7AD_E709_CBB3_3BD8_F9712C1A7F6B" name="registry.source" value="AI plan" modelElement="EAID_5EC38E56_A9FB_7043_7E6A_B521E1646646"/>
@@ -10807,12 +10825,12 @@
       </element>
       <element xmi:idref="EAID_636E41EF_011A_2087_065D_FC39C6CC544D" xmi:type="uml:Class" name="Untrusted text from sensors, peers, annotations, and reports is treated as data by the assistant, never as instruction" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-S-09"/>
         <tags>
-          <tag xmi:id="EAID_B3C65033_0656_26DE_D35B_DDD03B575761" name="uafKind" value="Requirement" modelElement="EAID_636E41EF_011A_2087_065D_FC39C6CC544D"/>
+          <tag xmi:id="EAID_B3C65033_0656_26DE_D35B_DDD03B575761" name="uafKind" value="requirement" modelElement="EAID_636E41EF_011A_2087_065D_FC39C6CC544D"/>
           <tag xmi:id="EAID_E1D45733_00D1_3D19_942D_81BB9F82A94C" name="uafId" value="REQ-S-09" modelElement="EAID_636E41EF_011A_2087_065D_FC39C6CC544D"/>
           <tag xmi:id="EAID_C9DB91B0_78DD_293F_3379_4EEDBA837BB2" name="registry.category" value="S" modelElement="EAID_636E41EF_011A_2087_065D_FC39C6CC544D"/>
           <tag xmi:id="EAID_A1E4AA00_EE6B_97F8_06F2_8C03CAA60C00" name="registry.source" value="AI plan" modelElement="EAID_636E41EF_011A_2087_065D_FC39C6CC544D"/>
@@ -10828,12 +10846,12 @@
       </element>
       <element xmi:idref="EAID_7F1EA461_FEC5_968B_A43D_D8862C06EEC5" xmi:type="uml:Class" name="Every release carries a bill of materials, a signature, and its assurance reports" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-S-10"/>
         <tags>
-          <tag xmi:id="EAID_F2D61C84_8549_B444_7C7A_AEF90C959C5A" name="uafKind" value="Requirement" modelElement="EAID_7F1EA461_FEC5_968B_A43D_D8862C06EEC5"/>
+          <tag xmi:id="EAID_F2D61C84_8549_B444_7C7A_AEF90C959C5A" name="uafKind" value="requirement" modelElement="EAID_7F1EA461_FEC5_968B_A43D_D8862C06EEC5"/>
           <tag xmi:id="EAID_71D0149F_60FE_CE15_1DD2_2C23C08885BA" name="uafId" value="REQ-S-10" modelElement="EAID_7F1EA461_FEC5_968B_A43D_D8862C06EEC5"/>
           <tag xmi:id="EAID_1C5C4C23_BA63_3A2C_9785_7087B24B9979" name="registry.category" value="S" modelElement="EAID_7F1EA461_FEC5_968B_A43D_D8862C06EEC5"/>
           <tag xmi:id="EAID_575CA77C_FBE7_471E_A793_E9B5241FA1AE" name="registry.source" value="CAP-6.5" modelElement="EAID_7F1EA461_FEC5_968B_A43D_D8862C06EEC5"/>
@@ -10850,12 +10868,12 @@
       </element>
       <element xmi:idref="EAID_1747C6EC_FC72_0105_046D_6A05E1F20195" xmi:type="uml:Class" name="The desktop sustains its frame-rate budget with the 3D viewport open under a dense-swarm scenario" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-P-01"/>
         <tags>
-          <tag xmi:id="EAID_451C3536_8522_C769_A2D6_5594EE7A325A" name="uafKind" value="Requirement" modelElement="EAID_1747C6EC_FC72_0105_046D_6A05E1F20195"/>
+          <tag xmi:id="EAID_451C3536_8522_C769_A2D6_5594EE7A325A" name="uafKind" value="requirement" modelElement="EAID_1747C6EC_FC72_0105_046D_6A05E1F20195"/>
           <tag xmi:id="EAID_57D56AB5_D515_8A91_8E4C_47BBCC50AB29" name="uafId" value="REQ-P-01" modelElement="EAID_1747C6EC_FC72_0105_046D_6A05E1F20195"/>
           <tag xmi:id="EAID_DB404795_B3A8_9B4D_A5BE_647DEAF15921" name="registry.category" value="P" modelElement="EAID_1747C6EC_FC72_0105_046D_6A05E1F20195"/>
           <tag xmi:id="EAID_17190452_DDFF_3D04_D55C_C13F650B7052" name="registry.source" value="Budgets, desktop" modelElement="EAID_1747C6EC_FC72_0105_046D_6A05E1F20195"/>
@@ -10870,12 +10888,12 @@
       </element>
       <element xmi:idref="EAID_6006039F_A90C_64CB_E094_4F0058DDD247" xmi:type="uml:Class" name="The per-frame tick stays inside its budget with ingest, poll, plan, and journal all running" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-P-02"/>
         <tags>
-          <tag xmi:id="EAID_C52F7C44_ED94_6A80_0F13_53EE8EDF2552" name="uafKind" value="Requirement" modelElement="EAID_6006039F_A90C_64CB_E094_4F0058DDD247"/>
+          <tag xmi:id="EAID_C52F7C44_ED94_6A80_0F13_53EE8EDF2552" name="uafKind" value="requirement" modelElement="EAID_6006039F_A90C_64CB_E094_4F0058DDD247"/>
           <tag xmi:id="EAID_F36C46A6_54F2_979F_1502_85FD0A9893F9" name="uafId" value="REQ-P-02" modelElement="EAID_6006039F_A90C_64CB_E094_4F0058DDD247"/>
           <tag xmi:id="EAID_FCDF42D6_A95F_0E53_FDB8_BEBE06395D77" name="registry.category" value="P" modelElement="EAID_6006039F_A90C_64CB_E094_4F0058DDD247"/>
           <tag xmi:id="EAID_6054B90C_01C0_3AE4_91B4_BBBF285FF965" name="registry.source" value="Budgets, desktop" modelElement="EAID_6006039F_A90C_64CB_E094_4F0058DDD247"/>
@@ -10890,12 +10908,12 @@
       </element>
       <element xmi:idref="EAID_D8BCFE4E_CB4A_600A_BE76_948ED4B628D1" xmi:type="uml:Class" name="Snapshot calls do not touch the pipeline and stay inside their budget" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-P-03"/>
         <tags>
-          <tag xmi:id="EAID_79A2C31F_6A4D_D49E_C284_7E9CEB479DC4" name="uafKind" value="Requirement" modelElement="EAID_D8BCFE4E_CB4A_600A_BE76_948ED4B628D1"/>
+          <tag xmi:id="EAID_79A2C31F_6A4D_D49E_C284_7E9CEB479DC4" name="uafKind" value="requirement" modelElement="EAID_D8BCFE4E_CB4A_600A_BE76_948ED4B628D1"/>
           <tag xmi:id="EAID_E2BBC111_6E53_CD8A_8121_82D3287FEC2F" name="uafId" value="REQ-P-03" modelElement="EAID_D8BCFE4E_CB4A_600A_BE76_948ED4B628D1"/>
           <tag xmi:id="EAID_C3235AA9_2691_4F81_7FEA_01637E9C0193" name="registry.category" value="P" modelElement="EAID_D8BCFE4E_CB4A_600A_BE76_948ED4B628D1"/>
           <tag xmi:id="EAID_97413987_7829_83E9_3AF8_EA401FE9548A" name="registry.source" value="Budgets, desktop" modelElement="EAID_D8BCFE4E_CB4A_600A_BE76_948ED4B628D1"/>
@@ -10910,12 +10928,12 @@
       </element>
       <element xmi:idref="EAID_6229A68A_C397_6DB2_FA70_A006957DDD7F" xmi:type="uml:Class" name="Detection to on-screen update stays inside its end-to-end budget in the embedded profile" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-P-04"/>
         <tags>
-          <tag xmi:id="EAID_6B817F46_4DF0_570C_EFC7_2394CEE334B8" name="uafKind" value="Requirement" modelElement="EAID_6229A68A_C397_6DB2_FA70_A006957DDD7F"/>
+          <tag xmi:id="EAID_6B817F46_4DF0_570C_EFC7_2394CEE334B8" name="uafKind" value="requirement" modelElement="EAID_6229A68A_C397_6DB2_FA70_A006957DDD7F"/>
           <tag xmi:id="EAID_938B6657_0515_2EA6_9BB9_BBEB20973B74" name="uafId" value="REQ-P-04" modelElement="EAID_6229A68A_C397_6DB2_FA70_A006957DDD7F"/>
           <tag xmi:id="EAID_325B6AB1_5FF6_2333_0FE1_D75A64493081" name="registry.category" value="P" modelElement="EAID_6229A68A_C397_6DB2_FA70_A006957DDD7F"/>
           <tag xmi:id="EAID_1713F725_ADCA_7071_0A90_CDCF0D069A4B" name="registry.source" value="Budgets, desktop" modelElement="EAID_6229A68A_C397_6DB2_FA70_A006957DDD7F"/>
@@ -10930,12 +10948,12 @@
       </element>
       <element xmi:idref="EAID_E0D01803_25A7_4112_E438_937D53C3673C" xmi:type="uml:Class" name="The node sustains its detection ingest throughput through validation and quarantine" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-P-05"/>
         <tags>
-          <tag xmi:id="EAID_C6DB9C34_D53A_52AC_AB50_2FF2EDA46982" name="uafKind" value="Requirement" modelElement="EAID_E0D01803_25A7_4112_E438_937D53C3673C"/>
+          <tag xmi:id="EAID_C6DB9C34_D53A_52AC_AB50_2FF2EDA46982" name="uafKind" value="requirement" modelElement="EAID_E0D01803_25A7_4112_E438_937D53C3673C"/>
           <tag xmi:id="EAID_B711A74D_E83E_7EE7_57B1_BAD4D311A89E" name="uafId" value="REQ-P-05" modelElement="EAID_E0D01803_25A7_4112_E438_937D53C3673C"/>
           <tag xmi:id="EAID_4F4B42F6_57A4_C002_EDF9_140D2EC2BDBA" name="registry.category" value="P" modelElement="EAID_E0D01803_25A7_4112_E438_937D53C3673C"/>
           <tag xmi:id="EAID_6428DC73_460F_4462_F84C_618C3ED9CCE0" name="registry.source" value="Budgets, node" modelElement="EAID_E0D01803_25A7_4112_E438_937D53C3673C"/>
@@ -10950,12 +10968,12 @@
       </element>
       <element xmi:idref="EAID_5707817D_88E4_E906_47C6_824D052A6031" xmi:type="uml:Class" name="Detection to event-stream publish stays inside its budget on-prem and in cloud" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-P-06"/>
         <tags>
-          <tag xmi:id="EAID_BB319B9D_30A4_0019_6C33_8DAC70F0FF11" name="uafKind" value="Requirement" modelElement="EAID_5707817D_88E4_E906_47C6_824D052A6031"/>
+          <tag xmi:id="EAID_BB319B9D_30A4_0019_6C33_8DAC70F0FF11" name="uafKind" value="requirement" modelElement="EAID_5707817D_88E4_E906_47C6_824D052A6031"/>
           <tag xmi:id="EAID_72C2131C_D9B0_DDC7_AE1F_4EAEFEABE4BF" name="uafId" value="REQ-P-06" modelElement="EAID_5707817D_88E4_E906_47C6_824D052A6031"/>
           <tag xmi:id="EAID_407758CA_954D_1696_51B6_07F64C6CBDAE" name="registry.category" value="P" modelElement="EAID_5707817D_88E4_E906_47C6_824D052A6031"/>
           <tag xmi:id="EAID_86826B17_4369_7ABF_8500_E3D6141BBD88" name="registry.source" value="Budgets, node" modelElement="EAID_5707817D_88E4_E906_47C6_824D052A6031"/>
@@ -10970,12 +10988,12 @@
       </element>
       <element xmi:idref="EAID_AE351544_B7F4_067F_6C11_5CC4BF37A5E6" xmi:type="uml:Class" name="An accepted envelope is durable within its budget, and the node recovers to serving within its budget after restart" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-P-07"/>
         <tags>
-          <tag xmi:id="EAID_B224B038_35F4_2B18_CEE7_17498065E2AE" name="uafKind" value="Requirement" modelElement="EAID_AE351544_B7F4_067F_6C11_5CC4BF37A5E6"/>
+          <tag xmi:id="EAID_B224B038_35F4_2B18_CEE7_17498065E2AE" name="uafKind" value="requirement" modelElement="EAID_AE351544_B7F4_067F_6C11_5CC4BF37A5E6"/>
           <tag xmi:id="EAID_CE5BD100_54C7_6628_4249_92461D0727B8" name="uafId" value="REQ-P-07" modelElement="EAID_AE351544_B7F4_067F_6C11_5CC4BF37A5E6"/>
           <tag xmi:id="EAID_4953AE16_DA62_ED4D_D25D_2BAFD044B9B9" name="registry.category" value="P" modelElement="EAID_AE351544_B7F4_067F_6C11_5CC4BF37A5E6"/>
           <tag xmi:id="EAID_D4AE817C_804C_EAC5_1EA6_00F7AC2AC5CD" name="registry.source" value="Budgets, node" modelElement="EAID_AE351544_B7F4_067F_6C11_5CC4BF37A5E6"/>
@@ -10990,12 +11008,12 @@
       </element>
       <element xmi:idref="EAID_947842AC_3EC8_D8A4_0FA0_2B8F9768654A" xmi:type="uml:Class" name="A desktop falls back to embedded operation within its budget after link loss, stores and forwards to capacity, and reconciles within its budget" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-P-08"/>
         <tags>
-          <tag xmi:id="EAID_3993449D_F9CE_C2D2_7BC9_B4A84CBD55DC" name="uafKind" value="Requirement" modelElement="EAID_947842AC_3EC8_D8A4_0FA0_2B8F9768654A"/>
+          <tag xmi:id="EAID_3993449D_F9CE_C2D2_7BC9_B4A84CBD55DC" name="uafKind" value="requirement" modelElement="EAID_947842AC_3EC8_D8A4_0FA0_2B8F9768654A"/>
           <tag xmi:id="EAID_86A7FEA9_880E_7874_C97C_E8BCC14777BC" name="uafId" value="REQ-P-08" modelElement="EAID_947842AC_3EC8_D8A4_0FA0_2B8F9768654A"/>
           <tag xmi:id="EAID_E39DBCB1_A66A_4E1D_2A23_CFFA4FEB428B" name="registry.category" value="P" modelElement="EAID_947842AC_3EC8_D8A4_0FA0_2B8F9768654A"/>
           <tag xmi:id="EAID_B0992E70_0E16_EC94_BED8_5A27618F04FD" name="registry.source" value="Budgets, connectivity" modelElement="EAID_947842AC_3EC8_D8A4_0FA0_2B8F9768654A"/>
@@ -11010,12 +11028,12 @@
       </element>
       <element xmi:idref="EAID_02470145_CD18_24DF_F261_C0BE51A30A06" xmi:type="uml:Class" name="Covariances stay positive semi-definite and no value becomes non-finite over long runs" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-P-09"/>
         <tags>
-          <tag xmi:id="EAID_64B3C6B2_796E_124E_C6D2_ABAD46B2439A" name="uafKind" value="Requirement" modelElement="EAID_02470145_CD18_24DF_F261_C0BE51A30A06"/>
+          <tag xmi:id="EAID_64B3C6B2_796E_124E_C6D2_ABAD46B2439A" name="uafKind" value="requirement" modelElement="EAID_02470145_CD18_24DF_F261_C0BE51A30A06"/>
           <tag xmi:id="EAID_BC604CE2_A6F6_BEBB_ED77_D44DEED3C365" name="uafId" value="REQ-P-09" modelElement="EAID_02470145_CD18_24DF_F261_C0BE51A30A06"/>
           <tag xmi:id="EAID_828B857D_28DA_A54D_38F1_EBB99EEBB2E2" name="registry.category" value="P" modelElement="EAID_02470145_CD18_24DF_F261_C0BE51A30A06"/>
           <tag xmi:id="EAID_4139F2E9_1D90_0D72_30D2_5D2F78962FE3" name="registry.source" value="Verification table §1" modelElement="EAID_02470145_CD18_24DF_F261_C0BE51A30A06"/>
@@ -11030,12 +11048,12 @@
       </element>
       <element xmi:idref="EAID_D37F1158_1F25_90E2_E587_DCDE97880BD3" xmi:type="uml:Class" name="Each role has a workspace containing what that role's threads need and not more" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-U-01"/>
         <tags>
-          <tag xmi:id="EAID_8C42E59D_6A4B_D55C_E6D4_E624436CB5B3" name="uafKind" value="Requirement" modelElement="EAID_D37F1158_1F25_90E2_E587_DCDE97880BD3"/>
+          <tag xmi:id="EAID_8C42E59D_6A4B_D55C_E6D4_E624436CB5B3" name="uafKind" value="requirement" modelElement="EAID_D37F1158_1F25_90E2_E587_DCDE97880BD3"/>
           <tag xmi:id="EAID_25797D93_E2FF_1421_815D_C9E16AB82675" name="uafId" value="REQ-U-01" modelElement="EAID_D37F1158_1F25_90E2_E587_DCDE97880BD3"/>
           <tag xmi:id="EAID_53D24CD1_8FD8_FB0F_FBF5_F3B2FE38F895" name="registry.category" value="U" modelElement="EAID_D37F1158_1F25_90E2_E587_DCDE97880BD3"/>
           <tag xmi:id="EAID_908F673F_8EB1_0B00_5DA9_6F40EF909EB3" name="registry.source" value="CAP-5.9, D-05" modelElement="EAID_D37F1158_1F25_90E2_E587_DCDE97880BD3"/>
@@ -11052,12 +11070,12 @@
       </element>
       <element xmi:idref="EAID_88796AF2_645F_A440_3ED9_E9A6E788E3BB" xmi:type="uml:Class" name="Every layout carries a status strip stating what the system knows and does not know" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-U-02"/>
         <tags>
-          <tag xmi:id="EAID_74F797A5_526C_806A_E227_02F127BC83CF" name="uafKind" value="Requirement" modelElement="EAID_88796AF2_645F_A440_3ED9_E9A6E788E3BB"/>
+          <tag xmi:id="EAID_74F797A5_526C_806A_E227_02F127BC83CF" name="uafKind" value="requirement" modelElement="EAID_88796AF2_645F_A440_3ED9_E9A6E788E3BB"/>
           <tag xmi:id="EAID_5C8D08F6_BFE1_921A_4634_C3827A753E96" name="uafId" value="REQ-U-02" modelElement="EAID_88796AF2_645F_A440_3ED9_E9A6E788E3BB"/>
           <tag xmi:id="EAID_771BDEEF_64C9_D998_FE1B_016EFE83753D" name="registry.category" value="U" modelElement="EAID_88796AF2_645F_A440_3ED9_E9A6E788E3BB"/>
           <tag xmi:id="EAID_03AA9CB3_F371_D92E_0277_F37B50DE6199" name="registry.source" value="UX plan" modelElement="EAID_88796AF2_645F_A440_3ED9_E9A6E788E3BB"/>
@@ -11073,12 +11091,12 @@
       </element>
       <element xmi:idref="EAID_A07C6DDB_27FC_F6B6_5DE9_CD4F61390254" xmi:type="uml:Class" name="Absence, staleness, and degradation are visible rather than inferred from silence" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-U-03"/>
         <tags>
-          <tag xmi:id="EAID_195D815C_0F80_B51D_CA90_A359A7D39A70" name="uafKind" value="Requirement" modelElement="EAID_A07C6DDB_27FC_F6B6_5DE9_CD4F61390254"/>
+          <tag xmi:id="EAID_195D815C_0F80_B51D_CA90_A359A7D39A70" name="uafKind" value="requirement" modelElement="EAID_A07C6DDB_27FC_F6B6_5DE9_CD4F61390254"/>
           <tag xmi:id="EAID_A17A8842_F030_85D2_7BEF_5BF1FEEBB81A" name="uafId" value="REQ-U-03" modelElement="EAID_A07C6DDB_27FC_F6B6_5DE9_CD4F61390254"/>
           <tag xmi:id="EAID_58CCAA68_A628_AAC5_1D1A_733D12B62FDC" name="registry.category" value="U" modelElement="EAID_A07C6DDB_27FC_F6B6_5DE9_CD4F61390254"/>
           <tag xmi:id="EAID_E4821898_F0C5_00E6_D641_983DB26B0F04" name="registry.source" value="AP-02" modelElement="EAID_A07C6DDB_27FC_F6B6_5DE9_CD4F61390254"/>
@@ -11094,12 +11112,12 @@
       </element>
       <element xmi:idref="EAID_DD90FEEB_A560_8430_07BB_A36BF02FEF45" xmi:type="uml:Class" name="Machine assistance is labelled, sourced, and carries no authority in the interface" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-U-04"/>
         <tags>
-          <tag xmi:id="EAID_905901B7_CD61_0D5B_814B_56C33CC60D12" name="uafKind" value="Requirement" modelElement="EAID_DD90FEEB_A560_8430_07BB_A36BF02FEF45"/>
+          <tag xmi:id="EAID_905901B7_CD61_0D5B_814B_56C33CC60D12" name="uafKind" value="requirement" modelElement="EAID_DD90FEEB_A560_8430_07BB_A36BF02FEF45"/>
           <tag xmi:id="EAID_C9469775_A5C7_55FB_F706_4ADDD904DEEA" name="uafId" value="REQ-U-04" modelElement="EAID_DD90FEEB_A560_8430_07BB_A36BF02FEF45"/>
           <tag xmi:id="EAID_D45111B4_2BA2_2A21_53A9_E4495CFF4B3F" name="registry.category" value="U" modelElement="EAID_DD90FEEB_A560_8430_07BB_A36BF02FEF45"/>
           <tag xmi:id="EAID_828B2748_A67C_85D6_9689_537BA40A8460" name="registry.source" value="AI plan, UX principle 7" modelElement="EAID_DD90FEEB_A560_8430_07BB_A36BF02FEF45"/>
@@ -11115,12 +11133,12 @@
       </element>
       <element xmi:idref="EAID_43CD6935_E382_3F76_2F13_C6E2CA785239" xmi:type="uml:Class" name="Default display vocabulary is the agreed standard terms, with a per-deployment override table" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-U-05"/>
         <tags>
-          <tag xmi:id="EAID_9F90B8BE_B320_59AF_18BF_DC96197C349B" name="uafKind" value="Requirement" modelElement="EAID_43CD6935_E382_3F76_2F13_C6E2CA785239"/>
+          <tag xmi:id="EAID_9F90B8BE_B320_59AF_18BF_DC96197C349B" name="uafKind" value="requirement" modelElement="EAID_43CD6935_E382_3F76_2F13_C6E2CA785239"/>
           <tag xmi:id="EAID_4A3DEC65_8791_6DA7_D0F0_D716BAEAF490" name="uafId" value="REQ-U-05" modelElement="EAID_43CD6935_E382_3F76_2F13_C6E2CA785239"/>
           <tag xmi:id="EAID_2CCE2441_6333_DF50_A858_DB32C6035F79" name="registry.category" value="U" modelElement="EAID_43CD6935_E382_3F76_2F13_C6E2CA785239"/>
           <tag xmi:id="EAID_62263BA6_AE9F_21A2_90A4_7BA65CF03E50" name="registry.source" value="D-12" modelElement="EAID_43CD6935_E382_3F76_2F13_C6E2CA785239"/>
@@ -11136,12 +11154,12 @@
       </element>
       <element xmi:idref="EAID_7E2FB2F1_48B3_F986_D77E_5E7BA93088E2" xmi:type="uml:Class" name="No dependency edge exists that `ARCHITECTURE.md` does not draw" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-C-01"/>
         <tags>
-          <tag xmi:id="EAID_F949B74F_49B0_4C75_75B3_C3438F7D057F" name="uafKind" value="Requirement" modelElement="EAID_7E2FB2F1_48B3_F986_D77E_5E7BA93088E2"/>
+          <tag xmi:id="EAID_F949B74F_49B0_4C75_75B3_C3438F7D057F" name="uafKind" value="requirement" modelElement="EAID_7E2FB2F1_48B3_F986_D77E_5E7BA93088E2"/>
           <tag xmi:id="EAID_E6E55C29_19C5_AA6C_79AF_F5EAC1D99A19" name="uafId" value="REQ-C-01" modelElement="EAID_7E2FB2F1_48B3_F986_D77E_5E7BA93088E2"/>
           <tag xmi:id="EAID_CB1BA2C9_EA31_09DD_DE2C_850E01E1D15C" name="registry.category" value="C" modelElement="EAID_7E2FB2F1_48B3_F986_D77E_5E7BA93088E2"/>
           <tag xmi:id="EAID_C3CEFCE4_9626_60F7_3FC9_DDABA8BCBB3A" name="registry.source" value="AP-10" modelElement="EAID_7E2FB2F1_48B3_F986_D77E_5E7BA93088E2"/>
@@ -11156,12 +11174,12 @@
       </element>
       <element xmi:idref="EAID_901D5CF2_DB01_167E_E55E_81D4902891D8" xmi:type="uml:Class" name="Every dependency is recorded in the standards document §2.9 and pinned once" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-C-02"/>
         <tags>
-          <tag xmi:id="EAID_2626B268_5A3B_3BBE_6521_3B537697B164" name="uafKind" value="Requirement" modelElement="EAID_901D5CF2_DB01_167E_E55E_81D4902891D8"/>
+          <tag xmi:id="EAID_2626B268_5A3B_3BBE_6521_3B537697B164" name="uafKind" value="requirement" modelElement="EAID_901D5CF2_DB01_167E_E55E_81D4902891D8"/>
           <tag xmi:id="EAID_D4C2DB90_969F_2845_1569_7997D8396A77" name="uafId" value="REQ-C-02" modelElement="EAID_901D5CF2_DB01_167E_E55E_81D4902891D8"/>
           <tag xmi:id="EAID_0E7CEFCB_2315_6C88_9721_CBFEC853A8AD" name="registry.category" value="C" modelElement="EAID_901D5CF2_DB01_167E_E55E_81D4902891D8"/>
           <tag xmi:id="EAID_070C67C5_7F8F_B440_4711_A070782A9501" name="registry.source" value="AP-14" modelElement="EAID_901D5CF2_DB01_167E_E55E_81D4902891D8"/>
@@ -11176,12 +11194,12 @@
       </element>
       <element xmi:idref="EAID_7967AF56_988C_98DC_3DE3_18A89053EE49" xmi:type="uml:Class" name="No `unwrap()` or `expect()` outside tests, entry points, and debug-only invariant checks" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-C-03"/>
         <tags>
-          <tag xmi:id="EAID_21FF6D95_61C4_8890_B1D2_65C37B1DB21B" name="uafKind" value="Requirement" modelElement="EAID_7967AF56_988C_98DC_3DE3_18A89053EE49"/>
+          <tag xmi:id="EAID_21FF6D95_61C4_8890_B1D2_65C37B1DB21B" name="uafKind" value="requirement" modelElement="EAID_7967AF56_988C_98DC_3DE3_18A89053EE49"/>
           <tag xmi:id="EAID_C7B427E5_5055_B865_93AE_EA339E27D8A5" name="uafId" value="REQ-C-03" modelElement="EAID_7967AF56_988C_98DC_3DE3_18A89053EE49"/>
           <tag xmi:id="EAID_F671DFC4_6D81_7930_4CE9_A4DC0F303A73" name="registry.category" value="C" modelElement="EAID_7967AF56_988C_98DC_3DE3_18A89053EE49"/>
           <tag xmi:id="EAID_E4628691_3AB6_127A_F53D_FB0ADD4EB252" name="registry.source" value="AP-12" modelElement="EAID_7967AF56_988C_98DC_3DE3_18A89053EE49"/>
@@ -11196,12 +11214,12 @@
       </element>
       <element xmi:idref="EAID_F118E997_66BF_3348_8DA3_857C0D90E8CF" xmi:type="uml:Class" name="Unimplemented capability returns a named error on every reachable path" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-C-04"/>
         <tags>
-          <tag xmi:id="EAID_C7C8FF09_2F76_BB67_2759_FFEF87B7F6C2" name="uafKind" value="Requirement" modelElement="EAID_F118E997_66BF_3348_8DA3_857C0D90E8CF"/>
+          <tag xmi:id="EAID_C7C8FF09_2F76_BB67_2759_FFEF87B7F6C2" name="uafKind" value="requirement" modelElement="EAID_F118E997_66BF_3348_8DA3_857C0D90E8CF"/>
           <tag xmi:id="EAID_951B0714_B4CA_C3C0_E6DF_C7F8E287B52A" name="uafId" value="REQ-C-04" modelElement="EAID_F118E997_66BF_3348_8DA3_857C0D90E8CF"/>
           <tag xmi:id="EAID_38474461_F6C1_18B7_048A_64F628F7A048" name="registry.category" value="C" modelElement="EAID_F118E997_66BF_3348_8DA3_857C0D90E8CF"/>
           <tag xmi:id="EAID_E9F3B740_8B99_55B1_8DC1_53FB8548E1FF" name="registry.source" value="AP-12" modelElement="EAID_F118E997_66BF_3348_8DA3_857C0D90E8CF"/>
@@ -11216,12 +11234,12 @@
       </element>
       <element xmi:idref="EAID_A1313DAF_007E_ADE9_1E86_B66791E3BB4C" xmi:type="uml:Class" name="The graphics and compute contexts stay separate and separately pinned" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-C-05"/>
         <tags>
-          <tag xmi:id="EAID_EDF4CA23_9F5F_5DE2_9CE9_EBDB37751034" name="uafKind" value="Requirement" modelElement="EAID_A1313DAF_007E_ADE9_1E86_B66791E3BB4C"/>
+          <tag xmi:id="EAID_EDF4CA23_9F5F_5DE2_9CE9_EBDB37751034" name="uafKind" value="requirement" modelElement="EAID_A1313DAF_007E_ADE9_1E86_B66791E3BB4C"/>
           <tag xmi:id="EAID_EADCA446_475C_C3F0_9927_3B26C6EFFFC0" name="uafId" value="REQ-C-05" modelElement="EAID_A1313DAF_007E_ADE9_1E86_B66791E3BB4C"/>
           <tag xmi:id="EAID_F92BD3DA_A79C_BA2B_893D_6CE256F1794A" name="registry.category" value="C" modelElement="EAID_A1313DAF_007E_ADE9_1E86_B66791E3BB4C"/>
           <tag xmi:id="EAID_B4A11586_E8F1_78FF_A0CC_BB34739BF344" name="registry.source" value="AP-15" modelElement="EAID_A1313DAF_007E_ADE9_1E86_B66791E3BB4C"/>
@@ -11236,12 +11254,12 @@
       </element>
       <element xmi:idref="EAID_721CECFE_BF9B_CA91_E19D_1EED351334AD" xmi:type="uml:Class" name="Deployment profiles differ by configuration and wiring, never by conditional logic in a domain crate" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-C-06"/>
         <tags>
-          <tag xmi:id="EAID_CDF92730_84AB_9EF8_B222_B4809D98FC3C" name="uafKind" value="Requirement" modelElement="EAID_721CECFE_BF9B_CA91_E19D_1EED351334AD"/>
+          <tag xmi:id="EAID_CDF92730_84AB_9EF8_B222_B4809D98FC3C" name="uafKind" value="requirement" modelElement="EAID_721CECFE_BF9B_CA91_E19D_1EED351334AD"/>
           <tag xmi:id="EAID_6606DC9F_5BC4_CE31_A506_E7E4F7A33882" name="uafId" value="REQ-C-06" modelElement="EAID_721CECFE_BF9B_CA91_E19D_1EED351334AD"/>
           <tag xmi:id="EAID_1081C148_76DE_816B_F0EC_1806523E80B6" name="registry.category" value="C" modelElement="EAID_721CECFE_BF9B_CA91_E19D_1EED351334AD"/>
           <tag xmi:id="EAID_86A6C93A_F625_50F6_2ECD_303463D2A5F7" name="registry.source" value="AP-05" modelElement="EAID_721CECFE_BF9B_CA91_E19D_1EED351334AD"/>
@@ -11256,12 +11274,12 @@
       </element>
       <element xmi:idref="EAID_B52CD98C_4C72_DCBA_8D47_1EF441B7D4A7" xmi:type="uml:Class" name="The two binaries contain wiring, not domain logic" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-C-07"/>
         <tags>
-          <tag xmi:id="EAID_C29C14DB_6599_D83B_B64B_CAF6D74A0253" name="uafKind" value="Requirement" modelElement="EAID_B52CD98C_4C72_DCBA_8D47_1EF441B7D4A7"/>
+          <tag xmi:id="EAID_C29C14DB_6599_D83B_B64B_CAF6D74A0253" name="uafKind" value="requirement" modelElement="EAID_B52CD98C_4C72_DCBA_8D47_1EF441B7D4A7"/>
           <tag xmi:id="EAID_4C534247_01A2_BC93_D023_2646F07E32E7" name="uafId" value="REQ-C-07" modelElement="EAID_B52CD98C_4C72_DCBA_8D47_1EF441B7D4A7"/>
           <tag xmi:id="EAID_6C879A94_5572_8784_8B72_E8C1A8AA392C" name="registry.category" value="C" modelElement="EAID_B52CD98C_4C72_DCBA_8D47_1EF441B7D4A7"/>
           <tag xmi:id="EAID_FD191324_C5B0_39AB_2AC6_0255BE8B85B3" name="registry.source" value="AP-13" modelElement="EAID_B52CD98C_4C72_DCBA_8D47_1EF441B7D4A7"/>
@@ -11276,12 +11294,12 @@
       </element>
       <element xmi:idref="EAID_10CB20BE_AEC0_5967_3B0C_B6612C2B88AB" xmi:type="uml:Class" name="No pass criterion or measure target is widened to make a test pass" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-C-08"/>
         <tags>
-          <tag xmi:id="EAID_3E14FD41_8713_4034_7BCC_0EA9CD44FFE3" name="uafKind" value="Requirement" modelElement="EAID_10CB20BE_AEC0_5967_3B0C_B6612C2B88AB"/>
+          <tag xmi:id="EAID_3E14FD41_8713_4034_7BCC_0EA9CD44FFE3" name="uafKind" value="requirement" modelElement="EAID_10CB20BE_AEC0_5967_3B0C_B6612C2B88AB"/>
           <tag xmi:id="EAID_340F47D0_42DF_0591_C233_C9C525C48B50" name="uafId" value="REQ-C-08" modelElement="EAID_10CB20BE_AEC0_5967_3B0C_B6612C2B88AB"/>
           <tag xmi:id="EAID_1EE9FEC3_635F_1A2C_2582_81DD5F29E645" name="registry.category" value="C" modelElement="EAID_10CB20BE_AEC0_5967_3B0C_B6612C2B88AB"/>
           <tag xmi:id="EAID_109060DB_ACCE_7284_01C6_8B886B3F09FF" name="registry.source" value="AP-17" modelElement="EAID_10CB20BE_AEC0_5967_3B0C_B6612C2B88AB"/>
@@ -11296,12 +11314,12 @@
       </element>
       <element xmi:idref="EAID_7A3DB3B9_174A_A896_473D_0DC30B405B40" xmi:type="uml:Class" name="Every artefact is unclassified and derived from public sources" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-C-09"/>
         <tags>
-          <tag xmi:id="EAID_947ADC40_73B1_BF66_0500_C5BF00D5E86A" name="uafKind" value="Requirement" modelElement="EAID_7A3DB3B9_174A_A896_473D_0DC30B405B40"/>
+          <tag xmi:id="EAID_947ADC40_73B1_BF66_0500_C5BF00D5E86A" name="uafKind" value="requirement" modelElement="EAID_7A3DB3B9_174A_A896_473D_0DC30B405B40"/>
           <tag xmi:id="EAID_1EE8C4D4_8463_950A_F0E9_E978C02C5854" name="uafId" value="REQ-C-09" modelElement="EAID_7A3DB3B9_174A_A896_473D_0DC30B405B40"/>
           <tag xmi:id="EAID_3EC76DC0_C2C1_A92C_294B_BECB849AC49C" name="registry.category" value="C" modelElement="EAID_7A3DB3B9_174A_A896_473D_0DC30B405B40"/>
           <tag xmi:id="EAID_9B970120_E309_E452_C486_2C6DFDDA4150" name="registry.source" value="AP-04" modelElement="EAID_7A3DB3B9_174A_A896_473D_0DC30B405B40"/>
@@ -11316,12 +11334,12 @@
       </element>
       <element xmi:idref="EAID_4773AE09_3D8B_2921_2B5C_B5724552C898" xmi:type="uml:Class" name="No verification gate is waived by an agent" scope="public">
         <model package="EAPK_0598B85C_2AC8_5479_6D33_130959E6B742" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Requirement" documentation=""/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="requirement" documentation=""/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="REQ-C-10"/>
         <tags>
-          <tag xmi:id="EAID_0BD465A6_C3D7_CA95_02DA_4528685C8623" name="uafKind" value="Requirement" modelElement="EAID_4773AE09_3D8B_2921_2B5C_B5724552C898"/>
+          <tag xmi:id="EAID_0BD465A6_C3D7_CA95_02DA_4528685C8623" name="uafKind" value="requirement" modelElement="EAID_4773AE09_3D8B_2921_2B5C_B5724552C898"/>
           <tag xmi:id="EAID_675BCDE1_697E_4AF1_7918_AA1FA4BC7CAD" name="uafId" value="REQ-C-10" modelElement="EAID_4773AE09_3D8B_2921_2B5C_B5724552C898"/>
           <tag xmi:id="EAID_B6074730_14A7_09BA_5A21_E4E36A1AFCE1" name="registry.category" value="C" modelElement="EAID_4773AE09_3D8B_2921_2B5C_B5724552C898"/>
           <tag xmi:id="EAID_44CFEDAD_B11B_7DCC_FCD6_06DE128FDC91" name="registry.source" value="AP-16" modelElement="EAID_4773AE09_3D8B_2921_2B5C_B5724552C898"/>
@@ -27005,7 +27023,7 @@
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_A5998107_8D73_A34E_5AD7_3983C2678093" name="HTTP + WebSocket, p99 150 ms (MOP-02)\nplanned, GAP-041">
+      <connector xmi:idref="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E" name="HTTP + WebSocket, p99 150 ms (MOP-02)">
         <source xmi:idref="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27019,14 +27037,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="HTTP + WebSocket, p99 150 ms (MOP-02)\nplanned, GAP-041"/>
+        <labels mt="HTTP + WebSocket, p99 150 ms (MOP-02)"/>
         <tags>
-          <tag xmi:id="EAID_640B0B98_4ABF_8E8B_2680_AE98D674900E" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_A5998107_8D73_A34E_5AD7_3983C2678093"/>
-          <tag xmi:id="EAID_584CFCCF_122F_D514_FFBC_15C8EF9CD483" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_A5998107_8D73_A34E_5AD7_3983C2678093"/>
+          <tag xmi:id="EAID_425C6492_9418_7F89_04B3_B64D0F85E5C8" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E"/>
+          <tag xmi:id="EAID_B08A03A8_BB98_781C_5E32_740DCA1DCF4B" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_42774E3B_EAB5_DE10_00E9_87831025F147" name="HTTP + WebSocket over TLS, p99 400 ms\nplanned, GAP-041">
+      <connector xmi:idref="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D" name="HTTP + WebSocket over TLS, p99 400 ms">
         <source xmi:idref="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27040,14 +27058,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="HTTP + WebSocket over TLS, p99 400 ms\nplanned, GAP-041"/>
+        <labels mt="HTTP + WebSocket over TLS, p99 400 ms"/>
         <tags>
-          <tag xmi:id="EAID_A63D18CA_11DD_A722_4DDF_7073875F8F89" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_42774E3B_EAB5_DE10_00E9_87831025F147"/>
-          <tag xmi:id="EAID_6AE0CF0D_D8AA_62CC_CA7F_68277D42F095" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_42774E3B_EAB5_DE10_00E9_87831025F147"/>
+          <tag xmi:id="EAID_B0C32D21_A30F_132F_7981_5C1E0012A76A" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D"/>
+          <tag xmi:id="EAID_C9D81074_A489_0B4B_EB14_58F16C8AD77E" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_32C1255C_4101_B092_7F8B_C2613445C889" name="peer tracks, STANAG 4676, marking\nplanned">
+      <connector xmi:idref="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6" name="tracks, warnings, marking\nSTANAG 4676 blocked">
         <source xmi:idref="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27061,14 +27079,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="peer tracks, STANAG 4676, marking\nplanned"/>
+        <labels mt="tracks, warnings, marking\nSTANAG 4676 blocked"/>
         <tags>
-          <tag xmi:id="EAID_3182C16A_8031_1E21_4EE1_4ED0B8BE0D41" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_32C1255C_4101_B092_7F8B_C2613445C889"/>
-          <tag xmi:id="EAID_414E7C85_2061_0C31_A6AB_5517D0BCE848" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_32C1255C_4101_B092_7F8B_C2613445C889"/>
+          <tag xmi:id="EAID_AF26902D_58C6_C8BC_9A7F_EAC880A9F3D6" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6"/>
+          <tag xmi:id="EAID_BF0ABBD4_DE61_D2BD_3269_60F62F59329B" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A" name="as above, planned">
+      <connector xmi:idref="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50" name="as above">
         <source xmi:idref="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27082,14 +27100,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="as above, planned"/>
+        <labels mt="as above"/>
         <tags>
-          <tag xmi:id="EAID_E8774A62_67FF_270F_66A8_8FE603E1B0EC" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A"/>
-          <tag xmi:id="EAID_E7DE0799_1535_FE35_DC91_5A7AC90CD7EB" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A"/>
+          <tag xmi:id="EAID_5491C7BB_C69E_A865_885B_52E32CDE6021" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50"/>
+          <tag xmi:id="EAID_89455B9E_F5EF_02D9_C545_3E7EFFE50C0E" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468" name="handoff under 500 ms (MOP-32), planned">
+      <connector xmi:idref="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1" name="handoff under 500 ms (MOP-32)">
         <source xmi:idref="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27103,14 +27121,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="handoff under 500 ms (MOP-32), planned"/>
+        <labels mt="handoff under 500 ms (MOP-32)"/>
         <tags>
-          <tag xmi:id="EAID_F7AF8C4E_EEDB_E95C_5279_5D8A4B55F1CC" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468"/>
-          <tag xmi:id="EAID_009C57A8_431D_219E_25F0_5E6C5857F958" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468"/>
+          <tag xmi:id="EAID_B2C0D5D9_32C8_7B1C_9F24_5BAA1FA39F94" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1"/>
+          <tag xmi:id="EAID_AFA6E951_3685_9A4C_483A_BB4A19EBD448" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007" name="handoff, planned">
+      <connector xmi:idref="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325" name="handoff">
         <source xmi:idref="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -27124,10 +27142,10 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="handoff, planned"/>
+        <labels mt="handoff"/>
         <tags>
-          <tag xmi:id="EAID_49EAE3E1_1612_21F5_A298_05072EE3E7C3" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007"/>
-          <tag xmi:id="EAID_9F7688A0_2048_4EDC_D853_D27A2FE3D73A" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007"/>
+          <tag xmi:id="EAID_8468A436_C183_C653_211C_E571DD53A4C2" name="uafViewEdge" value="Ar-Cn" modelElement="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325"/>
+          <tag xmi:id="EAID_3DDF5D83_3B3C_EC34_7D2F_2D75530080DB" name="uafViewSource" value="actual-resources/Ar-Cn.puml" modelElement="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325"/>
         </tags>
         <xrefs/>
       </connector>
@@ -29945,7 +29963,7 @@
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_33869F9F_F871_664E_730D_03388982B986" name="allow-list + validation (today)\nmTLS (planned, D-02)">
+      <connector xmi:idref="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" name="allow-list + validation\nsubmissions: mTLS (D-02)">
         <source xmi:idref="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -29959,14 +29977,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="allow-list + validation (today)\nmTLS (planned, D-02)"/>
+        <labels mt="allow-list + validation\nsubmissions: mTLS (D-02)"/>
         <tags>
-          <tag xmi:id="EAID_73449FDC_A51B_135E_6201_3FBE0E234C41" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_33869F9F_F871_664E_730D_03388982B986"/>
-          <tag xmi:id="EAID_41AF4DDF_C5B5_606C_DC29_CC6522CC886B" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_33869F9F_F871_664E_730D_03388982B986"/>
+          <tag xmi:id="EAID_45F49C9E_CF73_2648_9592_D8DD33924EA9" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5"/>
+          <tag xmi:id="EAID_E3B8FB16_B5AF_16EC_7B30_4195556BD400" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B" name="mTLS + operator token (planned)\nno transport today">
+      <connector xmi:idref="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" name="mTLS + operator token">
         <source xmi:idref="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -29980,14 +29998,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="mTLS + operator token (planned)\nno transport today"/>
+        <labels mt="mTLS + operator token"/>
         <tags>
-          <tag xmi:id="EAID_AB4764C5_08FD_3E14_62BA_591F0842929A" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B"/>
-          <tag xmi:id="EAID_7E36592E_1F54_DE92_5955_3C6BD6F2BCB6" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B"/>
+          <tag xmi:id="EAID_2B43FD26_7F7E_AE83_1FEE_33CB0BD4236E" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137"/>
+          <tag xmi:id="EAID_38527719_F10F_D510_452C_B82C6142EFC6" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714" name="mTLS + operator token (planned)">
+      <connector xmi:idref="EAID_8ACACD61_A48D_3826_0186_4014783054E8" name="mTLS + operator token">
         <source xmi:idref="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -30001,14 +30019,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="mTLS + operator token (planned)"/>
+        <labels mt="mTLS + operator token"/>
         <tags>
-          <tag xmi:id="EAID_93775DE0_E4D1_A5E6_D737_E86B2C5E3D28" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714"/>
-          <tag xmi:id="EAID_B14A5207_1626_F5BE_028B_E8D32B4195B3" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714"/>
+          <tag xmi:id="EAID_60A9D4A8_6B0F_8E2C_6C2C_E7014ECA399C" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_8ACACD61_A48D_3826_0186_4014783054E8"/>
+          <tag xmi:id="EAID_345D861D_7B06_2B3A_4103_690A49AB8097" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_8ACACD61_A48D_3826_0186_4014783054E8"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_C9B67899_EDF9_924D_18E4_909916F141C2" name="mTLS + releasability (planned)">
+      <connector xmi:idref="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742" name="mTLS + releasability">
         <source xmi:idref="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -30022,14 +30040,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="mTLS + releasability (planned)"/>
+        <labels mt="mTLS + releasability"/>
         <tags>
-          <tag xmi:id="EAID_62C1DD51_4B9D_1F51_BCDB_F1B8BDD42020" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_C9B67899_EDF9_924D_18E4_909916F141C2"/>
-          <tag xmi:id="EAID_052CD315_1385_D4D7_4033_945A68095840" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_C9B67899_EDF9_924D_18E4_909916F141C2"/>
+          <tag xmi:id="EAID_A851457E_95B0_7DDD_1D65_4C991056B8FE" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742"/>
+          <tag xmi:id="EAID_D91D61DD_0DB6_0FA0_EA04_C5F625EBBF92" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2" name="mTLS + releasability (planned)">
+      <connector xmi:idref="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8" name="mTLS + releasability">
         <source xmi:idref="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -30043,14 +30061,14 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="mTLS + releasability (planned)"/>
+        <labels mt="mTLS + releasability"/>
         <tags>
-          <tag xmi:id="EAID_B47B0677_C36A_135D_A51A_B399F0DD6F17" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2"/>
-          <tag xmi:id="EAID_B9D43636_CEDB_FB1A_DEA4_2A8717D0C4C8" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2"/>
+          <tag xmi:id="EAID_F25AF645_EC23_D6CB_040D_E5DC02B2CF61" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8"/>
+          <tag xmi:id="EAID_87F2A91C_C519_EF0A_721A_958424AE42B1" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8"/>
         </tags>
         <xrefs/>
       </connector>
-      <connector xmi:idref="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA" name="mTLS handoff (planned)">
+      <connector xmi:idref="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7" name="mTLS handoff">
         <source xmi:idref="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF">
           <role visibility="Public" targetScope="instance"/>
           <type aggregation="none" containment="Unspecified"/>
@@ -30064,10 +30082,10 @@
         <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
         <modifiers isRoot="false" isLeaf="false"/>
         <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
-        <labels mt="mTLS handoff (planned)"/>
+        <labels mt="mTLS handoff"/>
         <tags>
-          <tag xmi:id="EAID_F159768A_88A7_F875_6537_0DD0B4F3A065" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA"/>
-          <tag xmi:id="EAID_E7AB8C32_B3F2_C82E_EA38_AD811B66F635" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA"/>
+          <tag xmi:id="EAID_9067D787_053C_1ECE_73C2_540C00523EE1" name="uafViewEdge" value="Sc-Cn" modelElement="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7"/>
+          <tag xmi:id="EAID_80B7DE6A_FBED_564A_60EE_37C019D2A928" name="uafViewSource" value="security/Sc-Cn.puml" modelElement="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7"/>
         </tags>
         <xrefs/>
       </connector>
@@ -34108,7 +34126,8 @@
           <element geometry="Left=605;Top=184;Right=765;Bottom=244;" subject="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C" seqno="12" style="HideIcon=0;DUID=24EE1496;"/>
           <element geometry="Left=20;Top=266;Right=180;Bottom=326;" subject="EAID_6608D566_4540_8A24_522A_1FD6753390D6" seqno="13" style="HideIcon=0;DUID=86EAB5F0;"/>
           <element geometry="Left=215;Top=266;Right=375;Bottom=326;" subject="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82" seqno="14" style="HideIcon=0;DUID=1611411D;"/>
-          <element geometry="Left=10;Top=10;Right=785;Bottom=346;" subject="EAID_EFD9C4B9_D710_EB7E_EFF3_747F2BE3FB12" seqno="15" style="DUID=95DC4A3F;"/>
+          <element geometry="Left=410;Top=266;Right=570;Bottom=326;" subject="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C" seqno="15" style="HideIcon=0;DUID=F60C2EDF;"/>
+          <element geometry="Left=10;Top=10;Right=785;Bottom=346;" subject="EAID_EFD9C4B9_D710_EB7E_EFF3_747F2BE3FB12" seqno="16" style="DUID=95DC4A3F;"/>
         </elements>
       </diagram>
       <diagram xmi:id="EAID_7B61886A_72FC_4111_143D_EC31D6A94FC1">
@@ -34155,12 +34174,12 @@
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_43203DB9_3D4A_24AB_6F06_226E5B15C67F" style="Mode=3;EOID=001BAF1D;SOID=50B9742C;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_5F9F1426_B689_9EC9_7F53_460A6D028BCC" style="Mode=3;EOID=9C43DBBE;SOID=50B9742C;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_D0EBAA67_6D10_A6FA_F3CB_E93AC422B0A0" style="Mode=3;EOID=2A9C2D41;SOID=50B9742C;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_A5998107_8D73_A34E_5AD7_3983C2678093" style="Mode=3;EOID=9C43DBBE;SOID=001BAF1D;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_42774E3B_EAB5_DE10_00E9_87831025F147" style="Mode=3;EOID=2A9C2D41;SOID=001BAF1D;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_32C1255C_4101_B092_7F8B_C2613445C889" style="Mode=3;EOID=9619E191;SOID=9C43DBBE;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_29D9437F_4B34_C8F5_6233_2570691EB86A" style="Mode=3;EOID=9619E191;SOID=2A9C2D41;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_BC1B46DF_D95A_CFCF_7676_B7FF2826E468" style="Mode=3;EOID=BF51B4D3;SOID=9C43DBBE;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_73719C4C_2715_D8FD_C36F_B38DA63D7007" style="Mode=3;EOID=BF51B4D3;SOID=2A9C2D41;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_ED3A897D_BAF3_A8BB_B578_3037D8D2DE7E" style="Mode=3;EOID=9C43DBBE;SOID=001BAF1D;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_6C3C5AD9_C2D1_226D_8E75_CA848208874D" style="Mode=3;EOID=2A9C2D41;SOID=001BAF1D;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_3F796F0B_F22A_0551_C684_89EB8F8CDEB6" style="Mode=3;EOID=9619E191;SOID=9C43DBBE;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_00ED46BC_F2B0_CE4F_6B23_85E6F3EA0E50" style="Mode=3;EOID=9619E191;SOID=2A9C2D41;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_141A3236_AA89_EF81_F00F_D8F0782C8CD1" style="Mode=3;EOID=BF51B4D3;SOID=9C43DBBE;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_36EB783B_6891_7AF4_9C7C_6249C1A23325" style="Mode=3;EOID=BF51B4D3;SOID=2A9C2D41;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_A21F184A_D106_0229_9C6B_1B1378FDAFFB" style="Mode=3;EOID=9C43DBBE;SOID=68B27B35;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_99CE5B4B_9DDC_A903_1FA5_00C84654F0DF" style="Mode=3;EOID=2A9C2D41;SOID=68B27B35;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_10027B08_22C4_A782_0A4A_310E033496CA" style="Mode=3;EOID=001BAF1D;SOID=68B27B35;Color=-1;LWidth=0;Hidden=0;"/>
@@ -35031,12 +35050,12 @@
           <element geometry="Left=187;Top=380;Right=370;Bottom=416;" subject="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" seqno="6" style="HideIcon=0;DUID=DE257A7F;"/>
           <element geometry="Left=1173;Top=84;Right=1422;Bottom=120;" subject="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" seqno="7" style="HideIcon=0;DUID=213FA852;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_7C9D95C5_8D2D_0005_B3D4_A72BCF8D047C" style="Mode=3;EOID=A13F9389;SOID=0992086B;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_33869F9F_F871_664E_730D_03388982B986" style="Mode=3;EOID=EADDE6B2;SOID=0992086B;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_05B9F818_50A1_8D17_8FE0_941979F4798B" style="Mode=3;EOID=EADDE6B2;SOID=A13F9389;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_0959159F_1445_660A_1FF7_B1B7AA38E714" style="Mode=3;EOID=72F72928;SOID=A13F9389;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_C9B67899_EDF9_924D_18E4_909916F141C2" style="Mode=3;EOID=2E09E122;SOID=EADDE6B2;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_59B981B4_FFE4_71D6_9046_4194131A2DF2" style="Mode=3;EOID=2E09E122;SOID=72F72928;Color=-1;LWidth=0;Hidden=0;"/>
-          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_3708CD46_EB3B_9295_8A03_597A818A93BA" style="Mode=3;EOID=DE257A7F;SOID=EADDE6B2;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" style="Mode=3;EOID=EADDE6B2;SOID=0992086B;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" style="Mode=3;EOID=EADDE6B2;SOID=A13F9389;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_8ACACD61_A48D_3826_0186_4014783054E8" style="Mode=3;EOID=72F72928;SOID=A13F9389;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_2A0ED0AA_575F_80D1_2A9E_77036AB82742" style="Mode=3;EOID=2E09E122;SOID=EADDE6B2;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_00FEEEE6_57FF_A6E1_C2F5_48E47B1611A8" style="Mode=3;EOID=2E09E122;SOID=72F72928;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_F3CEEBEC_20F1_A1FC_03B1_9C4001413DA7" style="Mode=3;EOID=DE257A7F;SOID=EADDE6B2;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_3C0AFC05_5E24_25C3_77F6_BB465FEC6BC2" style="Mode=3;EOID=EADDE6B2;SOID=213FA852;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_ACD8FBE1_909C_B575_AA7C_AE64059FD779" style="Mode=3;EOID=72F72928;SOID=213FA852;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_198CEBA7_D695_032C_81BE_FEEE0B82DBC1" style="Mode=3;EOID=A13F9389;SOID=213FA852;Color=-1;LWidth=0;Hidden=0;"/>
@@ -35564,6 +35583,7 @@
     <UAF:Project base_Class="EAID_EA1AFEA6_FF9B_1B54_31C0_36580177D51C"/>
     <UAF:Project base_Class="EAID_6608D566_4540_8A24_522A_1FD6753390D6"/>
     <UAF:Project base_Class="EAID_89357FFF_14B5_BA74_8B5E_FC9F1A6AEE82"/>
+    <UAF:Project base_Class="EAID_58D75625_D8C7_88A1_495E_0D7D61E3914C"/>
     <UAF:InformationElement base_Class="EAID_83BC5A4A_56F9_2ECD_716C_7DEA1FFA9436"/>
     <UAF:InformationElement base_Class="EAID_9C0DA999_3AF6_A061_31D0_FA3F4A819831"/>
     <UAF:InformationElement base_Class="EAID_A6A6F8DF_E482_9676_D80F_ABED1D882165"/>
@@ -35704,70 +35724,70 @@
     <UAF:ActualResource base_InstanceSpecification="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884"/>
     <UAF:ActualResource base_InstanceSpecification="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06"/>
     <UAF:ActualResource base_InstanceSpecification="EAID_F2F535E7_5731_D8E1_5255_157D735984F7"/>
-    <SysML:Requirement base_Class="EAID_754A39B4_FC16_3ADB_3952_CDC3FFF0CA3E"/>
-    <SysML:Requirement base_Class="EAID_EBDE3D81_A0C8_B16D_EC69_4FA415AB4E47"/>
-    <SysML:Requirement base_Class="EAID_80F9610D_B2F6_5B09_6A5A_A93B7F1E095C"/>
-    <SysML:Requirement base_Class="EAID_1E73AFC4_4B2B_F3E2_D376_3982D715AFD8"/>
-    <SysML:Requirement base_Class="EAID_837A461C_EC33_A543_1490_61DBFD4B31A7"/>
-    <SysML:Requirement base_Class="EAID_997F11C9_5890_20E5_C1D6_73FDC03350D8"/>
-    <SysML:Requirement base_Class="EAID_CCCA7BE3_968C_577E_D85F_CA872DB45232"/>
-    <SysML:Requirement base_Class="EAID_94DA5F09_C765_D69E_327F_9C5EC45FD34D"/>
-    <SysML:Requirement base_Class="EAID_83AF5CD4_5122_CB59_143C_253B51573034"/>
-    <SysML:Requirement base_Class="EAID_E4F45DFF_A346_6873_3810_0B8E94056903"/>
-    <SysML:Requirement base_Class="EAID_E7E5D897_3431_65D6_8829_0028E670D972"/>
-    <SysML:Requirement base_Class="EAID_4047B9AA_706B_792A_7554_5654C0DB54AD"/>
-    <SysML:Requirement base_Class="EAID_92AF3D03_50D3_2580_CF16_D978BB7FABE8"/>
-    <SysML:Requirement base_Class="EAID_0DFC3E72_A06A_4FBF_B086_20FDF2C125C2"/>
-    <SysML:Requirement base_Class="EAID_D4E46CF1_62C2_70A9_008D_EBAE8CA59AB1"/>
-    <SysML:Requirement base_Class="EAID_3B65DC64_B2A1_976A_A837_36CD7C0888BB"/>
-    <SysML:Requirement base_Class="EAID_F76DF953_D53C_DCC6_4C1A_0BD98315CFE7"/>
-    <SysML:Requirement base_Class="EAID_1BCD2617_2558_5ADA_1C95_8EB659D0B3AC"/>
-    <SysML:Requirement base_Class="EAID_35852511_F61D_A317_433A_BDC100543F87"/>
-    <SysML:Requirement base_Class="EAID_92178A91_BA84_4246_496A_69701070B8F5"/>
-    <SysML:Requirement base_Class="EAID_8C5CA54F_235A_17FE_6DF9_4E97F9B9750E"/>
-    <SysML:Requirement base_Class="EAID_D136AE0D_ECAA_B67F_E757_FAE55321244C"/>
-    <SysML:Requirement base_Class="EAID_9A13BFC2_8B25_DC8E_4BD6_2F15FFA1F106"/>
-    <SysML:Requirement base_Class="EAID_3B0A0128_B1A9_1BA9_7012_82246760BBFE"/>
-    <SysML:Requirement base_Class="EAID_13747F8E_2AE9_C284_49BB_B67F6550A665"/>
-    <SysML:Requirement base_Class="EAID_489BEE20_483D_3204_7D8B_C110C30FF220"/>
-    <SysML:Requirement base_Class="EAID_C7E98DD5_7852_9E70_7246_8FD9D1263781"/>
-    <SysML:Requirement base_Class="EAID_406148DA_E154_7739_D279_8D506295282A"/>
-    <SysML:Requirement base_Class="EAID_0C777A2B_C0DE_AB1C_4826_1F29F4B3C31A"/>
-    <SysML:Requirement base_Class="EAID_80985EB0_812E_20E0_9789_13022A644EA2"/>
-    <SysML:Requirement base_Class="EAID_D49DE76C_B653_2EED_9503_20478C9E6A0B"/>
-    <SysML:Requirement base_Class="EAID_0736A4E2_000D_22FF_7C86_7BA1106B76CF"/>
-    <SysML:Requirement base_Class="EAID_E2946A7C_DA7F_35BD_0637_CA05716B3E25"/>
-    <SysML:Requirement base_Class="EAID_D8DEF058_94A6_4713_97A1_0975D2923E03"/>
-    <SysML:Requirement base_Class="EAID_3B009CFE_5F5E_BE9C_3FBA_F8247BC5D95D"/>
-    <SysML:Requirement base_Class="EAID_220EACC6_9864_4DCC_AEEA_B18EEDF2C059"/>
-    <SysML:Requirement base_Class="EAID_7FD80E54_0996_2FC4_0DBA_D8ED126ECA35"/>
-    <SysML:Requirement base_Class="EAID_5EC38E56_A9FB_7043_7E6A_B521E1646646"/>
-    <SysML:Requirement base_Class="EAID_636E41EF_011A_2087_065D_FC39C6CC544D"/>
-    <SysML:Requirement base_Class="EAID_7F1EA461_FEC5_968B_A43D_D8862C06EEC5"/>
-    <SysML:Requirement base_Class="EAID_1747C6EC_FC72_0105_046D_6A05E1F20195"/>
-    <SysML:Requirement base_Class="EAID_6006039F_A90C_64CB_E094_4F0058DDD247"/>
-    <SysML:Requirement base_Class="EAID_D8BCFE4E_CB4A_600A_BE76_948ED4B628D1"/>
-    <SysML:Requirement base_Class="EAID_6229A68A_C397_6DB2_FA70_A006957DDD7F"/>
-    <SysML:Requirement base_Class="EAID_E0D01803_25A7_4112_E438_937D53C3673C"/>
-    <SysML:Requirement base_Class="EAID_5707817D_88E4_E906_47C6_824D052A6031"/>
-    <SysML:Requirement base_Class="EAID_AE351544_B7F4_067F_6C11_5CC4BF37A5E6"/>
-    <SysML:Requirement base_Class="EAID_947842AC_3EC8_D8A4_0FA0_2B8F9768654A"/>
-    <SysML:Requirement base_Class="EAID_02470145_CD18_24DF_F261_C0BE51A30A06"/>
-    <SysML:Requirement base_Class="EAID_D37F1158_1F25_90E2_E587_DCDE97880BD3"/>
-    <SysML:Requirement base_Class="EAID_88796AF2_645F_A440_3ED9_E9A6E788E3BB"/>
-    <SysML:Requirement base_Class="EAID_A07C6DDB_27FC_F6B6_5DE9_CD4F61390254"/>
-    <SysML:Requirement base_Class="EAID_DD90FEEB_A560_8430_07BB_A36BF02FEF45"/>
-    <SysML:Requirement base_Class="EAID_43CD6935_E382_3F76_2F13_C6E2CA785239"/>
-    <SysML:Requirement base_Class="EAID_7E2FB2F1_48B3_F986_D77E_5E7BA93088E2"/>
-    <SysML:Requirement base_Class="EAID_901D5CF2_DB01_167E_E55E_81D4902891D8"/>
-    <SysML:Requirement base_Class="EAID_7967AF56_988C_98DC_3DE3_18A89053EE49"/>
-    <SysML:Requirement base_Class="EAID_F118E997_66BF_3348_8DA3_857C0D90E8CF"/>
-    <SysML:Requirement base_Class="EAID_A1313DAF_007E_ADE9_1E86_B66791E3BB4C"/>
-    <SysML:Requirement base_Class="EAID_721CECFE_BF9B_CA91_E19D_1EED351334AD"/>
-    <SysML:Requirement base_Class="EAID_B52CD98C_4C72_DCBA_8D47_1EF441B7D4A7"/>
-    <SysML:Requirement base_Class="EAID_10CB20BE_AEC0_5967_3B0C_B6612C2B88AB"/>
-    <SysML:Requirement base_Class="EAID_7A3DB3B9_174A_A896_473D_0DC30B405B40"/>
-    <SysML:Requirement base_Class="EAID_4773AE09_3D8B_2921_2B5C_B5724552C898"/>
+    <SysML:requirement base_Class="EAID_754A39B4_FC16_3ADB_3952_CDC3FFF0CA3E"/>
+    <SysML:requirement base_Class="EAID_EBDE3D81_A0C8_B16D_EC69_4FA415AB4E47"/>
+    <SysML:requirement base_Class="EAID_80F9610D_B2F6_5B09_6A5A_A93B7F1E095C"/>
+    <SysML:requirement base_Class="EAID_1E73AFC4_4B2B_F3E2_D376_3982D715AFD8"/>
+    <SysML:requirement base_Class="EAID_837A461C_EC33_A543_1490_61DBFD4B31A7"/>
+    <SysML:requirement base_Class="EAID_997F11C9_5890_20E5_C1D6_73FDC03350D8"/>
+    <SysML:requirement base_Class="EAID_CCCA7BE3_968C_577E_D85F_CA872DB45232"/>
+    <SysML:requirement base_Class="EAID_94DA5F09_C765_D69E_327F_9C5EC45FD34D"/>
+    <SysML:requirement base_Class="EAID_83AF5CD4_5122_CB59_143C_253B51573034"/>
+    <SysML:requirement base_Class="EAID_E4F45DFF_A346_6873_3810_0B8E94056903"/>
+    <SysML:requirement base_Class="EAID_E7E5D897_3431_65D6_8829_0028E670D972"/>
+    <SysML:requirement base_Class="EAID_4047B9AA_706B_792A_7554_5654C0DB54AD"/>
+    <SysML:requirement base_Class="EAID_92AF3D03_50D3_2580_CF16_D978BB7FABE8"/>
+    <SysML:requirement base_Class="EAID_0DFC3E72_A06A_4FBF_B086_20FDF2C125C2"/>
+    <SysML:requirement base_Class="EAID_D4E46CF1_62C2_70A9_008D_EBAE8CA59AB1"/>
+    <SysML:requirement base_Class="EAID_3B65DC64_B2A1_976A_A837_36CD7C0888BB"/>
+    <SysML:requirement base_Class="EAID_F76DF953_D53C_DCC6_4C1A_0BD98315CFE7"/>
+    <SysML:requirement base_Class="EAID_1BCD2617_2558_5ADA_1C95_8EB659D0B3AC"/>
+    <SysML:requirement base_Class="EAID_35852511_F61D_A317_433A_BDC100543F87"/>
+    <SysML:requirement base_Class="EAID_92178A91_BA84_4246_496A_69701070B8F5"/>
+    <SysML:requirement base_Class="EAID_8C5CA54F_235A_17FE_6DF9_4E97F9B9750E"/>
+    <SysML:requirement base_Class="EAID_D136AE0D_ECAA_B67F_E757_FAE55321244C"/>
+    <SysML:requirement base_Class="EAID_9A13BFC2_8B25_DC8E_4BD6_2F15FFA1F106"/>
+    <SysML:requirement base_Class="EAID_3B0A0128_B1A9_1BA9_7012_82246760BBFE"/>
+    <SysML:requirement base_Class="EAID_13747F8E_2AE9_C284_49BB_B67F6550A665"/>
+    <SysML:requirement base_Class="EAID_489BEE20_483D_3204_7D8B_C110C30FF220"/>
+    <SysML:requirement base_Class="EAID_C7E98DD5_7852_9E70_7246_8FD9D1263781"/>
+    <SysML:requirement base_Class="EAID_406148DA_E154_7739_D279_8D506295282A"/>
+    <SysML:requirement base_Class="EAID_0C777A2B_C0DE_AB1C_4826_1F29F4B3C31A"/>
+    <SysML:requirement base_Class="EAID_80985EB0_812E_20E0_9789_13022A644EA2"/>
+    <SysML:requirement base_Class="EAID_D49DE76C_B653_2EED_9503_20478C9E6A0B"/>
+    <SysML:requirement base_Class="EAID_0736A4E2_000D_22FF_7C86_7BA1106B76CF"/>
+    <SysML:requirement base_Class="EAID_E2946A7C_DA7F_35BD_0637_CA05716B3E25"/>
+    <SysML:requirement base_Class="EAID_D8DEF058_94A6_4713_97A1_0975D2923E03"/>
+    <SysML:requirement base_Class="EAID_3B009CFE_5F5E_BE9C_3FBA_F8247BC5D95D"/>
+    <SysML:requirement base_Class="EAID_220EACC6_9864_4DCC_AEEA_B18EEDF2C059"/>
+    <SysML:requirement base_Class="EAID_7FD80E54_0996_2FC4_0DBA_D8ED126ECA35"/>
+    <SysML:requirement base_Class="EAID_5EC38E56_A9FB_7043_7E6A_B521E1646646"/>
+    <SysML:requirement base_Class="EAID_636E41EF_011A_2087_065D_FC39C6CC544D"/>
+    <SysML:requirement base_Class="EAID_7F1EA461_FEC5_968B_A43D_D8862C06EEC5"/>
+    <SysML:requirement base_Class="EAID_1747C6EC_FC72_0105_046D_6A05E1F20195"/>
+    <SysML:requirement base_Class="EAID_6006039F_A90C_64CB_E094_4F0058DDD247"/>
+    <SysML:requirement base_Class="EAID_D8BCFE4E_CB4A_600A_BE76_948ED4B628D1"/>
+    <SysML:requirement base_Class="EAID_6229A68A_C397_6DB2_FA70_A006957DDD7F"/>
+    <SysML:requirement base_Class="EAID_E0D01803_25A7_4112_E438_937D53C3673C"/>
+    <SysML:requirement base_Class="EAID_5707817D_88E4_E906_47C6_824D052A6031"/>
+    <SysML:requirement base_Class="EAID_AE351544_B7F4_067F_6C11_5CC4BF37A5E6"/>
+    <SysML:requirement base_Class="EAID_947842AC_3EC8_D8A4_0FA0_2B8F9768654A"/>
+    <SysML:requirement base_Class="EAID_02470145_CD18_24DF_F261_C0BE51A30A06"/>
+    <SysML:requirement base_Class="EAID_D37F1158_1F25_90E2_E587_DCDE97880BD3"/>
+    <SysML:requirement base_Class="EAID_88796AF2_645F_A440_3ED9_E9A6E788E3BB"/>
+    <SysML:requirement base_Class="EAID_A07C6DDB_27FC_F6B6_5DE9_CD4F61390254"/>
+    <SysML:requirement base_Class="EAID_DD90FEEB_A560_8430_07BB_A36BF02FEF45"/>
+    <SysML:requirement base_Class="EAID_43CD6935_E382_3F76_2F13_C6E2CA785239"/>
+    <SysML:requirement base_Class="EAID_7E2FB2F1_48B3_F986_D77E_5E7BA93088E2"/>
+    <SysML:requirement base_Class="EAID_901D5CF2_DB01_167E_E55E_81D4902891D8"/>
+    <SysML:requirement base_Class="EAID_7967AF56_988C_98DC_3DE3_18A89053EE49"/>
+    <SysML:requirement base_Class="EAID_F118E997_66BF_3348_8DA3_857C0D90E8CF"/>
+    <SysML:requirement base_Class="EAID_A1313DAF_007E_ADE9_1E86_B66791E3BB4C"/>
+    <SysML:requirement base_Class="EAID_721CECFE_BF9B_CA91_E19D_1EED351334AD"/>
+    <SysML:requirement base_Class="EAID_B52CD98C_4C72_DCBA_8D47_1EF441B7D4A7"/>
+    <SysML:requirement base_Class="EAID_10CB20BE_AEC0_5967_3B0C_B6612C2B88AB"/>
+    <SysML:requirement base_Class="EAID_7A3DB3B9_174A_A896_473D_0DC30B405B40"/>
+    <SysML:requirement base_Class="EAID_4773AE09_3D8B_2921_2B5C_B5724552C898"/>
     <UAF:Exhibits base_Abstraction="EAID_CCA52566_C7F2_95D8_AC42_8DBE10E87EDD"/>
     <UAF:Exhibits base_Abstraction="EAID_4EB3CD59_856E_C602_39B2_0DC0CB7E7565"/>
     <UAF:Exhibits base_Abstraction="EAID_5D2DCE5E_3A7A_A628_A218_3E781762F966"/>

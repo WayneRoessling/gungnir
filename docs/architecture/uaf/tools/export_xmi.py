@@ -264,6 +264,30 @@ back as `base_Dependency` where this export sends `base_Abstraction` on a
 to the metaclass SysML's profile declares; the binding worked as sent, so the
 form that is known to work is kept rather than swapped for one that is not.
 
+Thirteenth version. Round trip 4 (exports/ea-roundtrip/run-4/), the first of
+the full model rather than the probe since round 2, after the coverage
+dispositions, relationship plans and standards corrections of 2026-09-16. It is
+clean: every one of the 4,771 xmi:ids came back, and every one of the 3,267
+tags compared by its own id came back with the same name and value, 1,146
+`registry.*` tags among them; 989 connectors and 65 diagrams, none empty and no
+placed object lost. Two things the twelfth version recorded were corrected by it:
+
+  - The requirement stereotype. The twelfth said Requirement "came back under
+    SysML:", which is true of the namespace and silent on the case: it came
+    back `requirement`, as it had on rounds 2 and 3. Now emitted lowercase; see
+    the kind table.
+  - "Nothing landed in `thecustomprofile` except the `uafId` tag name." True of
+    the probe, which carried one tag. On the full model every element tag does:
+    `uafId` and `uafKind` on all 450 elements and 1,056 applications across the
+    `registry.*` names, each carrying its value. Harmless to the data -- no
+    value changed -- but it is shape clutter in EA, and left alone.
+
+Also observed, and left alone deliberately: EA cuts a connector's `mt` label at
+50 characters (12 of 989 were longer; the connector's own name, which carries
+the same text, came back whole), and EA draws every relationship between
+elements already on a diagram, adding 1,244 connector placements, each with both
+ends present. Neither loses anything, and the second is EA's default display.
+
 Note for anyone reading the output: inside an EA `<links>` block the child
 elements carry `xmi:id`, not `xmi:idref`, even though they are references to
 a relationship declared elsewhere (verified against the sample, which does
@@ -273,11 +297,10 @@ its `packagedElement` declaration and once in each endpoint's `<links>`.
 What is confirmed: every stereotype name in ELEMENT_KIND_INFO and
 RELATIONSHIP_KIND_INFO is now checked against the UAF profile's own declared
 list (run-2's <profiles> block), and every one that is UAF's bound as UAF's on
-the second round trip. The two that are SysML's (Requirement, satisfy) are the
-correct reuse -- UAF has no requirements domain -- with satisfy resting on
-SysML's vocabulary rather than on a list EA wrote, since SysML's block is not
-declared in the export; the next round trip shows it under SysML: or
-thecustomprofile:. Each table entry says which.
+the second round trip. The two that are SysML's (requirement, satisfy) are the
+correct reuse -- UAF has no requirements domain -- and round trip 4 showed both
+under SysML: on the full model, in the lowercase EA's own SysML profile uses
+(see the thirteenth version). Each table entry says which.
 
 The authored views. Through round 8 this export carried the registry and one
 mechanically gridded diagram per view package -- 15 diagrams, while this
@@ -409,10 +432,15 @@ ELEMENT_KIND_INFO = {
     # uml:Object / sType="Object". See element_ext_xml.
     "actual_resources": ("ActualResource", "InstanceSpecification", "Ar-Cn"),
     # Not in the UAF profile: UAF has no requirement of its own and reuses
-    # SysML's. Round trip 2 resolved this to SysML:requirement, which is the
-    # correct binding, so the name is kept and it is emitted in the SysML
-    # namespace (see stereo_app).
-    "requirements": ("SysML:Requirement", "Class", "Rq"),
+    # SysML's, emitted in the SysML namespace (see stereo_app). Written in EA's
+    # own lowercase since round trip 4. Round trips 2, 3 and 4 all came back as
+    # `SysML:requirement` / `SysML1.4::requirement`; round 2 saw that and kept
+    # sending `Requirement` because the binding worked as sent. It worked only
+    # through EA matching stereotype names case-insensitively across every enabled
+    # profile -- the same matching that bound `Achieves` and `Realizes` to BIZBOK
+    # on round trip 2. The lowercase name is the one EA itself writes on every
+    # export, so it matches exactly and does not depend on that.
+    "requirements": ("SysML:requirement", "Class", "Rq"),
 }
 
 # Registry relationship kind -> (UAF stereotype or None, UML base metaclass,
