@@ -1,0 +1,1316 @@
+# The decision ledger's data: one entry per decision the owner takes. `../tools/gen_gaps.py`
+# renders decisions-needed.md from it.
+#
+# A decision is Open until it has a `resolved` date, and its status column is rendered
+# from `resolved` and `amended`, never written by hand. An amendment appends its date to
+# `amended` and its substance to `outcome`. Ids are never reused.
+
+- id: D-01
+  decision: Scope lock
+  question: >-
+    Which crates and capabilities ship in the first release. Everything appropriate is
+    scaffolded; the register assumes all of it is in scope until locked.
+  raised_in: "`ARCHITECTURE.md` §10"
+  decider: Owner
+  unblocks: "All gaps; the roadmap's I4 column"
+  resolved: 2026-09-04
+  outcome: >-
+    Everything in one release: all scaffolded crates and all 56 capabilities through I4
+    ship together. The register's I4 column is the release content; no crate is dropped
+    at lock.
+
+- id: D-02
+  decision: Credential mechanism
+  question: >-
+    Mutual TLS or tokens for operators and API callers, and how sensor owners are issued
+    credentials.
+  raised_in: "`ARCHITECTURE.md` §10; `ARCHITECTURE.md` §8.5"
+  decider: Owner with the security engineer
+  unblocks: GAP-002, GAP-041, GAP-057, GAP-060
+  resolved: 2026-09-04
+  outcome: >-
+    Mutual TLS for machine identities (desktops, nodes, peers, sensors); short-lived
+    signed tokens for operator sessions issued by the node or a local identity provider;
+    local accounts as the disconnected-desktop fallback.
+
+- id: D-03
+  decision: Lock the reconciliation and arbitration rules
+  question: >-
+    Confirm `gungnir-resilience` merge semantics and `RoleRankArbiter` as the rules, or
+    replace them, before failover is built on them.
+  raised_in: "`ARCHITECTURE.md` §10"
+  decider: Owner
+  unblocks: GAP-050
+  resolved: 2026-09-04
+  outcome: >-
+    Defaults locked: journals merge in mission-time order, duplicates dropped,
+    conflicting decisions reported; the higher role wins a conflict, the earlier
+    decision wins a tie.
+
+- id: D-04
+  decision: Confirm the performance budgets and the fsync policy
+  question: >-
+    Every value in `performance-budgets.md` is a draft; the journal durability budget
+    depends on the fsync policy.
+  raised_in: "`performance-budgets.md`; `ARCHITECTURE.md` §10"
+  decider: Owner with the deployment owner
+  unblocks: GAP-056, GAP-067
+  resolved: 2026-09-04
+  outcome: >-
+    Draft budgets confirmed as provisional gates. Fsync per profile: the node journal
+    fsyncs every envelope; desktop journals use buffered writes with fsync on session
+    save and every 5 s.
+
+- id: D-05
+  decision: Adopt the proposed roles
+  question: >-
+    Whether commander, planner, and intelligence analyst enter `gungnir-security::Role`
+    now or stay proposed.
+  raised_in: "`mission/roles-and-stakeholders.md` §4; `mission-analysis.md` §11"
+  decider: Owner
+  unblocks: GAP-033, GAP-055, GAP-058
+  resolved: 2026-09-04
+  outcome: >-
+    All three roles adopted: commander, planner, intelligence analyst. Eight roles
+    total; the authority matrix is the specification (GAP-058); code change under
+    GAP-068.
+
+- id: D-06
+  decision: Releasability marking in this revision
+  question: >-
+    Whether coalition data-exchange constraints are modelled now or deferred.
+  raised_in: "`mission-analysis.md` §11"
+  decider: Owner
+  unblocks: GAP-062, GAP-065
+  resolved: 2026-09-04
+  outcome: >-
+    Releasability modelled now: a marking field on views, reports, and the v1 contract
+    in I3; enforcement per caller at the API in I4 (GAP-062).
+
+- id: D-07
+  decision: Fires in scope for the lead product
+  question: >-
+    Whether the fires task (land, MT-06) is a first-release capability or a later domain
+    extension.
+  raised_in: "`mission/land.md` §4.1; plans README primary-mission decision"
+  decider: Owner
+  unblocks: GAP-036
+  resolved: 2026-09-04
+  outcome: >-
+    Fires in the first release: GAP-036 moves to I3 alongside the allocator; fires
+    deconfliction becomes part of the policy model.
+
+- id: D-08
+  decision: External agreements
+  question: >-
+    Which warning channels and civil authorities, which peers and coalition partners,
+    and which sensor and effector interfaces the product must integrate with; each needs
+    an interface agreement before its adapter or endpoint can be specified.
+  raised_in: >-
+    `mission/air-defense-and-counter-uas.md` §3; `mission/intelligence.md` §6
+  decider: Owner
+  unblocks: GAP-004, GAP-009, GAP-040, GAP-042, GAP-065
+  resolved: 2026-09-04
+  outcome: >-
+    Generic endpoints now: each external party is a configurable endpoint with a message
+    type in the v1 contract (warning, handoff, peer stream); real agreements are per
+    deployment; synthetic peers for I3 and I4 work.
+
+- id: D-09
+  decision: Cooperative identity sources and codec corpora
+  question: >-
+    Whether IFF (needs key material), ADS-B, and AIS are in scope, and how ASTERIX and
+    STANAG 4676 test corpora and specification licences are obtained.
+  raised_in: >-
+    `mission/air-defense-and-counter-uas.md` §9; `verification-capability-table.md` §2
+    cross-layer row
+  decider: Owner
+  unblocks: GAP-010, GAP-064
+  resolved: 2026-09-04
+  outcome: >-
+    AIS and ADS-B decoders now from open protocols; IFF deferred (controlled key
+    material); ASTERIX from the public Eurocontrol specifications and STANAG 4676 from
+    the public NATO standard, synthetic and vendor-sample corpora only.
+
+- id: D-10
+  decision: Repository hosting, runners, registry, vulnerability response
+  question: >-
+    The CI and release workflows run only once the repository is hosted with runners;
+    the container registry and the vulnerability-response objective are open in
+    `release-governance.md`.
+  raised_in: "`release-governance.md`; `ARCHITECTURE.md` §10"
+  decider: Owner
+  unblocks: GAP-061, GAP-067
+  resolved: 2026-09-04
+  amended: [2026-09-07, 2026-09-08]
+  outcome: >-
+    **Amended 2026-09-08: the `gpu` runner exists, and `gpu-fusion.yml` stays on
+    `workflow_dispatch` permanently.** The runner the 2026-09-07 amendment said this
+    workflow still needed is registered: `gungnir-rtx-5060ti`, labels `self-hosted,
+    Windows, X64, gpu`, on the owner's workstation and its NVIDIA RTX 5060 Ti. **The
+    trigger is not restored with it, and that is a decision rather than a wait.** A
+    `workflow_dispatch` job on a self-hosted runner already *is* local execution -- the
+    compute happens on the owner's hardware, and GitHub contributes the trigger and the
+    log -- and dispatch can only be fired by a caller with write access, so no fork's
+    pull request can reach the machine. A `pull_request` trigger would reverse exactly
+    that: this repository is public, the runner is a workstation, and GitHub's own
+    guidance is against the pairing. The cost accepted is that each GPU validation run
+    is fired by hand (`gh workflow run gpu-fusion.yml`), which is a trivial cadence for
+    a path that changes rarely. The alternative considered and declined was dropping the
+    workflow and running `cargo test -p gungnir-data-fusion --features gpu-tests --
+    --ignored` on the host: it is the same command and the same hardware, but it
+    produces no CI log, and `release-governance.md` defines the evidence package as the
+    logs of every gate that ran, assembled by nobody. The repository's fork-PR approval
+    policy is therefore left as it stands, because no self-hosted job is reachable from
+    a pull request. **Amended 2026-09-07: GitHub, not a self-hosted GitLab.** The
+    repository is hosted at `https://github.com/WayneRoessling/gungnir`, CI is GitHub
+    Actions, and images go to the GitHub Container Registry. The eight workflows under
+    `.github/workflows/` therefore stay where they are and are not ported, and the gate
+    names and pass criteria do not change. **Two things the forge change does not
+    remove.** `gpu-fusion.yml` still needs a self-hosted runner labelled `gpu`
+    registered to the repository, because GitHub's hosted runners have no GPU -- that
+    requirement belonged to the workflow rather than to the forge it ran on
+    (`docs/agentic-workflow.md` already says so). And this workspace **is not a git
+    repository**, so GAP-061 begins with an initial commit; the amendment changes where
+    the history goes, not the fact that there is not one yet. **No forge credential
+    appears in this repository or in any configuration baseline**, and none can: GitHub
+    does not accept a password for git operations, so access is a personal access token
+    or an SSH key held by the owner outside the workspace. Repository visibility is not
+    fixed by this decision; nothing in the register depends on it, except that a public
+    repository publishes the evidence package -- the `cargo deny` and `cargo audit`
+    reports, the SBOM and the CI logs -- along with the code. The vulnerability-response
+    objective is unchanged: critical advisories within 7 days of publication, high
+    within 30 days, lower at the next release. **What this replaced**, resolved
+    2026-09-04: a self-hosted GitLab with its runners (including a GPU runner) and the
+    GitLab Container Registry, with the GitHub workflows ported to GitLab CI under
+    GAP-061.
+
+- id: D-11
+  decision: "`uuid` for `GlobalEntityId`"
+  question: "Whether to adopt `uuid` (a §2.9 sign-off) or keep the `u128` newtype."
+  raised_in: "`ARCHITECTURE.md` §10"
+  decider: Owner
+  unblocks: None blocking
+  resolved: 2026-09-04
+  outcome: >-
+    Adopt the `uuid` crate, UUID v7, for `GlobalEntityId`; §2.9 sign-off recorded; code
+    change under GAP-069.
+
+- id: D-12
+  decision: Default display vocabulary
+  question: >-
+    Which nation's terminology the UI shows by default; the documents use function
+    vocabulary with mappings in `mission/glossary.md`.
+  raised_in: "`mission-analysis.md` §11"
+  decider: Owner with plan 06
+  unblocks: GAP-055
+  resolved: 2026-09-04
+  outcome: >-
+    NATO and joint terms from `mission/glossary.md` as the default UI labels, with a
+    glossary override table in the configuration baseline per deployment (GAP-070).
+
+- id: D-13
+  decision: Home for anomaly-detection rules
+  question: >-
+    An architecture decision: whether rule-based track and feed anomaly detection lives
+    in `gungnir-analytics` (raising alerts through `gungnir-observability`) or in a new
+    crate; either adds a dependency edge that `ARCHITECTURE.md` must show first.
+  raised_in: "`mission/capabilities/capability-statements.md` CAP-2.9"
+  decider: Owner with the services engineer
+  unblocks: GAP-021
+  resolved: 2026-09-04
+  outcome: >-
+    Detectors are pure functions in `gungnir-analytics` over track and health snapshots;
+    the app and node tick call them and raise alerts through `gungnir-observability`. No
+    new dependency edge.
+
+- id: D-14
+  decision: Data-egress policy per profile for the assistant
+  question: >-
+    What may leave a connected desktop or node to a cloud model, and what must stay
+    local.
+  raised_in: "`docs/plans/08-ai-agent-integration.md`"
+  decider: Owner
+  unblocks: GAP-044
+  resolved: 2026-09-04
+  outcome: >-
+    Cloud profile: the cloud node may send the live picture to the cloud model. On-prem
+    profile: derived text only, allow-listed per view kind. Disconnected profile: local
+    model only.
+
+- id: D-15
+  decision: Delegation policy
+  question: >-
+    Which engagement cases may be pre-delegated to the operator or handled by policy
+    under saturation, and what authority a disconnected desktop holds.
+  raised_in: >-
+    `mission/air-defense-and-counter-uas.md` §6; `mission/mission-threads.md` MT-10
+  decider: Owner
+  unblocks: GAP-034, GAP-035, GAP-050
+  resolved: 2026-09-04
+  outcome: >-
+    Supervisor may pre-delegate point-layer engagements of confirmed-hostile small UAS
+    classes to operators per configuration; area layer and missiles never. A
+    disconnected desktop keeps the delegations in force at disconnection, expiring after
+    a configured interval; no new delegation while disconnected.
+
+- id: D-16
+  decision: Agree the open targets
+  question: >-
+    The measures marked proposed or to be agreed in `mission/measures.md` and
+    `mission/capabilities/measures-catalogue.md`, and the verification rows marked to be
+    agreed, cannot become gates until the owner sets them.
+  raised_in: >-
+    `mission/capabilities/measures-catalogue.md`; `verification-capability-table.md` §2
+  decider: Owner
+  unblocks: GAP-047, GAP-067
+  resolved: 2026-09-04
+  outcome: >-
+    Walked measure by measure. Every proposed value confirmed or adjusted (raised MOE-08
+    to 0.9; tightened MOE-10 to 30 s and MOP-07 to 500 ms; loosened MOE-13 to 0.95,
+    MOP-19 calibration optional, MOP-22 timing where supplied, MOP-23, MOP-27, and
+    MOP-34 to two cycles; set MOP-04 under 1 per hour, MOP-32 under 500 ms, MOP-40 zero
+    open findings); absolutes marked doctrine or table; MOP-25, MOP-35, MOP-37 deferred
+    to plans 07, 08, 06. The six to-be-agreed verification rows were set: snapshot p99 1
+    ms, ICP 0.05 m and 0.5 mrad, GPU within 1e-3 and inlier ratio 0.01, egui pass p99 8
+    ms, coverage 1 percent and 0.1 degree, interop round-trip exact with best-effort
+    decoding. Recorded in `mission/measures.md`,
+    `mission/capabilities/measures-catalogue.md`, and `verification-capability-table.md`
+    §2.
+
+- id: D-17
+  decision: Docking and multi-window
+  question: >-
+    Whether operators need detachable panels or a second window (for example the map on
+    one screen and the queue on another). The plan 06 designs assume one window with a
+    fixed grid per role and collapsible panels; docking would add a dependency
+    (`egui_dock` or similar, a §2.9 sign-off).
+  raised_in: >-
+    `docs/ux/information-architecture.md` §1; `rust-ui-tech-stack-summary.md` §5
+  decider: Owner with the UI engineer
+  unblocks: GAP-055
+  resolved: 2026-09-04
+  outcome: >-
+    Docking and multi-window where appropriate: panels may be docked and rearranged
+    within the role's layout, and the viewport, the approval queue, and the replay
+    timeline may be detached to a second window; decision dialogs stay with the queue;
+    the arrangement is saved per role in the configuration baseline. Multi-window uses
+    egui's native viewports; the docking crate was the remaining §2.9 question and was
+    settled by D-19 (`egui_tiles`) on 2026-09-05.
+
+- id: D-18
+  decision: API transport stack
+  question: >-
+    Which HTTP, WebSocket, and TLS crates the `gungnir-api` transport is built on; a
+    §2.9 sign-off, and the last decision standing between the decided contract and
+    writing the transport.
+  raised_in: "`ARCHITECTURE.md` §10; `gungnir-api-v1.md`"
+  decider: Owner with the services engineer
+  unblocks: GAP-041, GAP-050, GAP-063, GAP-065
+  resolved: 2026-09-05
+  outcome: >-
+    Signed off: `axum` with its `ws` feature for the node's HTTP surface and the event
+    stream, `tokio-tungstenite` for the desktop's WebSocket client, `reqwest` for its
+    HTTP client, and `rustls`, `tokio-rustls`, and `rustls-pemfile` for the mutual TLS
+    D-02 requires, with `tower-http` for request tracing and body limits. rustls rather
+    than `native-tls`, so neither the node container nor the desktop needs a system
+    OpenSSL and one TLS implementation appears in the SBOM; the pins keep exactly one
+    `tungstenite` and one `tower-http` in the binary. Recorded in
+    `agentic-coding-standards.md` §2.9 and in the workspace manifest; no member depends
+    on them yet. gRPC is not included and stays a later question.
+
+- id: D-19
+  decision: Docking crate
+  question: >-
+    Which docking crate implements the in-window half of D-17: `egui_tiles` or
+    `egui_dock`. The last open §2.9 question, and the only stack decision the UI work
+    still needed.
+  raised_in: "`../../ux/ux-to-code-map.md` §2; `agentic-coding-standards.md` §2.9"
+  decider: Owner with the UI engineer
+  unblocks: GAP-075
+  resolved: 2026-09-05
+  outcome: >-
+    Signed off: `egui_tiles`, pinned to 0.10. That is the line depending on `egui
+    ^0.29`, the workspace pin; `egui_tiles` 0.11 moved to `egui ^0.30` and would link a
+    second `egui`. Resolution was checked on the pinned 1.98 toolchain against
+    `eframe`/`egui` 0.29: `cargo tree -d` reports no duplicate `egui`, `eframe`,
+    `emath`, or `epaint`. Chosen over `egui_dock` because a tree of tabs and splits maps
+    directly onto the per-role panel lists `WorkspaceLayout::for_role` already produces,
+    and fits the detached-window half of D-17 better. Detached panels themselves need no
+    crate: egui 0.29's native viewports provide them. Recorded in
+    `agentic-coding-standards.md` §2.9 and in the workspace manifest; no member depends
+    on it yet, and it enters a member manifest under GAP-075.
+
+- id: D-22
+  decision: Cipher and test-certificate crates
+  question: >-
+    Which authenticated cipher stands behind DN-22's `seal`/`unseal`, and how a test
+    makes a certificate so mutual TLS can be verified at all. D-20 covered
+    authentication and **explicitly not these**: `hmac` authenticates and does not
+    encrypt, and the workspace has no certificate-generation crate and must not gain a
+    checked-in private key. DN-22 amendment 1 (§9) recommends `aes-gcm` for the cipher
+    and `rcgen` as a dev-dependency only.
+  raised_in: >-
+    `docs/design/DN-22-key-management.md` §9; `agentic-coding-standards.md` §2.9
+  decider: Owner with the security engineer
+  unblocks: GAP-060, GAP-084
+  resolved: 2026-09-05
+  outcome: >-
+    **Raised by GAP-060, which could not start without it.** DN-22 designs a custody
+    boundary and names no algorithm; `seal` and `unseal` need an authenticated cipher,
+    and none is in the workspace. Mutual TLS additionally needs certificates **in
+    tests**, and a private key checked into the repository is key material in the
+    repository whatever the comment above it says. Recommended: `aes-gcm` (AES-256-GCM,
+    FIPS-approved and hardware-accelerated on both targets) and `rcgen` in
+    `[dev-dependencies]` only. AES-256-GCM rather than ChaCha20-Poly1305 because both
+    targets have AES hardware acceleration and AES-GCM is FIPS-approved; `rcgen` never
+    ships, because a certificate generator in a deployed binary is a way to mint an
+    identity. Duplicate linkage checked the same day. **The third row was taken later
+    the same day**: `p256` (ECDSA P-256) for `KeyPurpose::BaselineSigning` and for the
+    asymmetric provider a cloud deployment's TLS identity needs. It had been left open
+    because no gap needed it, and what it was actually blocking was a *decision* rather
+    than code -- GAP-060's remaining half could not be argued without it. P-256 rather
+    than Ed25519 because it is FIPS-approved, which is what the accreditor these
+    documents keep in view will ask; Ed25519 is the better curve on most other grounds
+    and loses on that one. A signature scheme at all rather than reusing `hmac`, because
+    DN-22 amendment 1 (a) needs a signature over a TLS transcript and there is no shared
+    secret with the peer to MAC against. **In the workspace manifest and used by
+    nothing**: no gap builds the asymmetric provider and none may depend on it until one
+    does, the same condition D-21 put on `tonic`. Duplicate linkage checked, and
+    checking it surfaced something worth writing down -- **an unused
+    `[workspace.dependencies]` entry is never resolved at all**, so it is absent from
+    the lockfile and `cargo tree -i` reports the package does not exist; the crate has
+    to be added to a member temporarily and the lockfile read. Done that way: one copy
+    each of `p256` 0.13.2, `elliptic-curve` 0.13.8, `ecdsa` 0.16.9, `primeorder` 0.13.6
+    and `sec1` 0.7.3, and no second copy of the `sha2`, `digest`, `generic-array`,
+    `crypto-common`, `base64ct` or `subtle` beneath D-20's crates.
+
+- id: D-23
+  decision: Heartbeat interval and the connectivity budget
+  question: >-
+    The connectivity budget said fallback under 2 s from the last heartbeat; the node
+    beat every 10 s with an independent 35 s timeout, so a node that went silent with
+    the socket open -- the case the budget exists for -- was unnoticed for 35 s. Found
+    by GAP-056's connectivity test. Tightening the timeout alone cannot meet the figure,
+    and meeting it by force would make every 2 s stall on an intermittent link a full
+    reconnect.
+  raised_in: "`performance-budgets.md` connectivity; `gungnir-api/src/transport.rs`"
+  decider: Owner
+  unblocks: GAP-056
+  resolved: 2026-09-06
+  outcome: >-
+    **Recommended by the agent, accepted by the owner, implemented the same day.** The
+    budget was conflating two things and both are now stated: **visibility** -- the
+    operator can see the picture going stale within 2 s of the last beat, which needs no
+    timeout because PN-01 shows 'heard N s ago' ticking up in real time -- and
+    **declaration** -- the desktop decides the link is gone within four beats.
+    `HEARTBEAT_INTERVAL` 10 s to 2 s: a WebSocket ping is a handful of bytes, half a
+    ping per second per desktop and five per second per node at the ten-desktop fan-out
+    budget, and at 10 s the display would have read '9 s' on a perfectly healthy quiet
+    link. `HEARTBEAT_TIMEOUT` 35 s to 7 s, and **derived in code from the beat** (three
+    tolerated misses plus a one-second margin) rather than written down beside it,
+    because two independently edited constants is precisely how the conflict was created
+    and how it would recur. Three misses rather than one so a single stall on an
+    intermittent link does not cost a reconnect. Raising the budget to 35 s to match the
+    code was rejected: that is the widen-the-criterion move the workspace forbids for
+    verification rows, and the spirit applies. The plan was recorded here and executed
+    in order: constants, the link's `last_heard`, `LinkFreshness` on PN-01 judged by the
+    binary against the beat, the pinned test flipped from 'the budget is not met' to
+    'the relationship holds', and the documents. `gungnir-app` reaches the beat through
+    `gungnir_remote::link`'s re-export rather than a new manifest edge to `gungnir-api`.
+
+- id: D-21
+  decision: gRPC as a second transport
+  question: >-
+    Whether `tonic` and `prost` enter the stack for the gRPC surface `gungnir-api-v1.md`
+    plans for peer C2 systems that cannot speak the v2 HTTP contract; a §2.9 sign-off
+    that D-18 explicitly left open.
+  raised_in: "`agentic-coding-standards.md` §2.9 rule 5; `gungnir-api-v1.md`"
+  decider: Owner with the services engineer
+  unblocks: None blocking
+  resolved: 2026-09-05
+  outcome: >-
+    Signed off: `tonic` 0.14 and `prost` 0.14 for the gRPC surface, which D-18 had left
+    a later question. Resolution checked the same day against the whole transport stack
+    -- one `hyper` (1.11.1), one `tower` (0.5.3) and one `http` (1.5.0) shared with
+    `axum` 0.8.9 -- because a gRPC stack that pulled a second HTTP implementation into
+    the SBOM would have failed D-18's own test. In the workspace manifest and used by no
+    member: **no gap builds the gRPC surface yet**, and one must be opened before a
+    `.proto` schema or the `tonic-build` codegen dependency is added. It is a second
+    transport and never a replacement; the v2 contract stays primary, and both are
+    generated from the same `gungnir-model` types so that two transports do not become
+    two contracts.
+
+- id: D-20
+  decision: Authentication crates
+  question: >-
+    Which key-derivation, message-authentication, and constant-time-comparison crates
+    operator authentication is built on; a §2.9 sign-off. **No cryptographic crate is in
+    the workspace at all**, and D-02 chose the mechanism without choosing the libraries
+    -- the same gap D-18 filled for the transport before GAP-041 could be written. DN-23
+    §9 recommends `argon2` with `password-hash`, `hmac` with `sha2`, and `subtle`, and
+    argues the load-bearing choice: a symmetric MAC rather than public-key signing,
+    because the node issues and verifies its own tokens, and a public-key scheme would
+    put a private key in the process -- the same conflict that stopped TLS in GAP-041.
+  raised_in: >-
+    `docs/design/DN-23-operator-authentication.md` §9; `agentic-coding-standards.md`
+    §2.9
+  decider: Owner with the security engineer
+  unblocks: GAP-057, GAP-059
+  resolved: 2026-09-05
+  outcome: >-
+    **Signed off: `argon2` with `password-hash`, `hmac` with `sha2`, and `subtle`.** No
+    cryptographic crate was in the workspace at all before this, and DN-23 needs a
+    memory-hard key-derivation function for passphrases and a message authentication
+    code for short-lived tokens. DN-23 §9 recommended `argon2` with `password-hash`,
+    `hmac` with `sha2`, and `subtle`. **Signed off 2026-09-05.** The load-bearing choice
+    is a symmetric MAC rather than public-key signing: D-02 has the node issue and
+    verify its own tokens, so there is no third party to verify a signature, and a
+    public-key scheme would put a private key in the process -- the conflict that
+    stopped TLS in GAP-041 against DN-22's `seal`/`unseal` boundary. All RustCrypto, so
+    one audit surface; resolution checked the same day, one copy each of the five and of
+    `digest`, `generic-array`, `crypto-common` and `base64ct` beneath them. **Two
+    purposes stay unnamed and are not covered**: DN-22 needs an authenticated cipher for
+    the journal at rest and a signature scheme for baseline signing, and `hmac`
+    authenticates without encrypting. Those are GAP-060 and GAP-084 to raise, with
+    AES-256-GCM and ECDSA P-256 the recommendation to argue there. DN-23 itself remains
+    an unsigned draft.
+
+- id: D-24
+  decision: AIS and ADS-B editions and fixtures
+  question: >-
+    Which ITU-R M.1371 edition and which ICAO Doc 9871 edition the cooperative-identity
+    codecs are written against, and which public captures may be fixtures under what
+    terms -- the same decision GAP-064 needed for ASTERIX, without which a codec is
+    written from memory.
+  raised_in: "`docs/design/external-standards.md` §3, §4"
+  decider: Owner
+  unblocks: GAP-010
+  resolved: 2026-09-06
+  outcome: >-
+    **Pin both, verify first** (the recommended option). AIS: ITU-R M.1371-6 (02/2026)
+    is current and M.1371-5 (02/2014) is what deployed transponders were certified to;
+    the gpsd AIVDM/AIVDO document v1.58 is the public framing reference and gpsd's five
+    AIS regression logs with their `.chk` decodes, BSD-2-Clause, are the fixture
+    candidate. ADS-B: ICAO Doc 9871 2nd edition with Amendment 2 (2023), paid; *The
+    1090MHz Riddle* is CC BY-NC-SA 4.0 and flagged as reading only; pyModeS and dump1090
+    are GPL with no visible captures; a self-recorded 1090ES capture is recommended. All
+    recorded in `external-standards.md` §3 and §4 with what was and was not verified.
+    **Nothing is pinned**: the owner pins once the M.1371 -5 to -6 layout delta for the
+    message types in scope is checked and the fixtures are copied with a `SOURCE.md`. No
+    codec until then.
+
+- id: D-25
+  decision: GeoTIFF decoder crate
+  question: >-
+    Whether a TIFF decoder enters §2.9 for GeoTIFF DEMs, and whether the georeferencing
+    is read by a dependency or by this project; the ASCII-grid route needs no crate
+    either way.
+  raised_in: >-
+    `agentic-coding-standards.md` §2.9; `verification-capability-table.md` §2,
+    `gungnir-data` row
+  decider: Owner
+  unblocks: GAP-023
+  resolved: 2026-09-06
+  outcome: >-
+    **`tiff` (image-rs, MIT, pure Rust), and own the geo tags** (the recommended
+    option). `tiff` 0.11 decodes the raster; `gungnir-data` reads `ModelPixelScale`,
+    `ModelTiepoint`, `GeoKeyDirectory` and `GDAL_NODATA` itself per OGC GeoTIFF 1.1.
+    ASCII grid first, GeoTIFF second, both landed the same day with repository-generated
+    fixtures. `oxigdal-3d`, named by the 3D-data plan and never pinned, leaves the
+    version table.
+
+- id: D-26
+  decision: Interceptor speed in the effector model
+  question: >-
+    Whether DN-04's effector model gains a closing speed so GAP-031's geometry has an
+    input, and in what form: one optional number, or an envelope.
+  raised_in: "`docs/design/DN-04-effector-model.md` §9"
+  decider: Owner
+  unblocks: GAP-031
+  resolved: 2026-09-06
+  outcome: >-
+    **`intercept_speed_mps: Option<f64>`** (the recommended option): one closing speed
+    for a constant-velocity closest-approach solution, not an envelope; `None` means no
+    geometry for the resource, never a default. DN-04 amendment 1 (§9), signed by the
+    owner the same day; the field, validation and test landed with it. Read by nothing
+    until GAP-031's solver, which waits on GAP-029.
+
+- id: D-27
+  decision: The escrow key holder
+  question: >-
+    Who holds the escrow key DN-22 §10 describes: a deployment's question the note
+    deliberately did not answer.
+  raised_in: "`docs/design/DN-22-key-management.md` §10, §11"
+  decider: Owner
+  unblocks: GAP-084
+  resolved: 2026-09-06
+  outcome: >-
+    **A named security-officer role, per deployment** (the recommended option). DN-22
+    amendment 2 (§11) records it: a role that operates nothing and may only recover,
+    held by a named account; journal data keys wrapped to the officer's public key
+    (P-256 ECDH, HKDF, AES-GCM, all already in the stack), the private half never on a
+    node, recovery offline and audited under `KEY_ESCROW_RECOVER`, the public key inline
+    in the baseline and never a path. Signed by the owner the same day; unbuilt: waits
+    on the asymmetric provider.
+
+- id: D-29
+  decision: An X.509 crate at runtime
+  question: >-
+    The node's TLS identity must be a certificate over a key the P-256 provider holds
+    and never exports; rcgen 0.14 signs through its `SigningKey` trait without seeing
+    the private half, but §2.9 admits rcgen as a dev-dependency only.
+  raised_in: >-
+    `agentic-coding-standards.md` §2.9; `docs/design/DN-22-key-management.md` §9a
+  decider: Owner
+  unblocks: GAP-060
+  resolved: 2026-09-06
+  outcome: >-
+    **rcgen at runtime, for the node only** (the recommended option). rcgen 0.14 is
+    promoted from `[dev-dependencies]` to a runtime dependency of `gungnir-node` alone,
+    its §2.9 row rewritten to say so and why: one crate already vetted, and remote
+    signing through its `SigningKey` trait means the provider signs and the private half
+    never leaves custody. The desktop keeps rcgen for tests. Not yet landed: the
+    `SigningKey` implementation over `P256KeyProvider::sign`, the node issuing its
+    identity through it, and the environment-path TLS becoming the development fallback.
+    **Landed 2026-09-06**: `gungnir-remote/src/identity.rs` (moved there from
+    `gungnir-node` the same day), rcgen a runtime dependency of `gungnir-remote` alone,
+    §2.9 rewritten; reviewed and signed by the owner 2026-09-10 (GAP-060,
+    `ARCHITECTURE.md` §10 item 126).
+
+- id: D-30
+  decision: The SecurityOfficer role
+  question: >-
+    DN-22 §11 (signed) names a role that operates nothing and may only recover an
+    escrowed key; `gungnir_security::Role` has no such variant, and adding one touches
+    every exhaustive match on `Role`.
+  raised_in: >-
+    `docs/design/DN-22-key-management.md` §11;
+    `docs/design/DN-20-after-action-review.md` role table
+  decider: Owner
+  unblocks: GAP-084
+  resolved: 2026-09-06
+  outcome: >-
+    **Add `Role::SecurityOfficer` now** (the recommended option): a real variant with an
+    empty layout (PN-20 and PN-09 only), no authority rule may name it for an operating
+    action, `key.escrow_recover` is the one action it holds, every exhaustive match
+    updated in one change, and DN-20's role table gains the row. Not yet landed.
+    **Landed 2026-09-06**: the variant, its layout, its one action, DN-20's row;
+    unsigned (GAP-084).
+
+- id: D-31
+  decision: A YAML crate
+  question: >-
+    Regenerating a test-track set from Rust byte for byte needs the YAML composition of
+    `gen_tracks.py`; `serde_yaml` is deprecated and §2.9 has no YAML crate.
+  raised_in: "`agentic-coding-standards.md` §2.9"
+  decider: Owner
+  unblocks: GAP-016
+  resolved: 2026-09-06
+  outcome: >-
+    **`yaml_serde`** (the recommended option): the YAML organisation's maintained fork
+    of `serde_yaml`, same API, for `gungnir-scenario` only, to read the TT-01 to TT-10
+    scenario files and the catalogue tables. Enters §2.9 with the port. Not yet landed.
+    **Landed 2026-09-06**: `yaml_serde` 0.10 in §2.9 and `gungnir-scenario`;
+    `TrackLibrary` loads and cross-checks the four files (GAP-016).
+
+- id: D-33
+  decision: Whether SD-16 (Cursor-on-Target) is in scope, and what it is pinned to
+  question: >-
+    D-01 locked the release to the capabilities and crates then registered, and DN-25
+    adds a standard that was not among them. Three sub-questions: is SD-16 release
+    content or a later increment; is the schema pinned now or with the codec; and is the
+    protobuf framing pinned at a commit of a GPLv3 repository. Extended 2026-09-07 by a
+    fourth: the type tree, which gives the `type` attribute its meaning and which the
+    schema pin does not cover. Extended 2026-09-08 by three more, out of
+    `docs/design/tak-interoperability-research.md` §7: (e) whether the framing is pinned
+    now that a stock client is known to send it on the mesh; (f) how the codec learns
+    the field numbers; (g) which client pair records the corpus.
+  raised_in: >-
+    `docs/design/DN-25-cursor-on-target.md`; `docs/design/external-standards.md` §5
+  decider: Owner
+  unblocks: GAP-090, GAP-091
+  resolved: 2026-09-06
+  amended: [2026-09-07, 2026-09-08]
+  outcome: >-
+    **In scope; three artifacts, two of them pinned.** SD-16 is release content and not
+    a later increment: GAP-090 and GAP-091 target I3 with the stream sink in I4, so
+    under D-01's rule the release carries them. That is an addition to the scope lock,
+    taken deliberately and recorded, not an exception granted quietly. **The schema is
+    pinned now**, ahead of the codec rather than behind it: the CoT event schema version
+    2.0 (13 June 2003, MITRE case #11-3895, approved for public release), with the
+    attributes the mapping depends on transcribed in `docs/design/external-standards.md`
+    §5.2 -- including the finding that `ce` and `le` carry no stated confidence level,
+    so the mapping must declare which multiple of sigma it writes. **The protobuf
+    framing is deliberately not pinned**: it carries no version and no date, its only
+    identifier is a commit of a GPLv3 repository, and nothing in the first increment
+    needs it because negotiation begins in XML. The licence question a commit-pin would
+    raise is deferred with the pin rather than answered by taking it. Edge (s),
+    `gungnir-remote` to `gungnir-interop`, accepted the same day by the owner as
+    engineering reviewer and recorded in `docs/design/dependency-edges.md` §13.
+    **Extended 2026-09-07 at the owner's direction: the type tree is pinned too**, which
+    the 2026-09-06 answer had left open and `docs/design/external-standards.md` §5.6 had
+    named as the gap. The specification of record is MITRE's *The Developer's Guide to
+    Cursor on Target*, August 2005, case #06-0249, approved for public release and read
+    rather than summarised; the pin this system acts on is the guide's own `friend`
+    predicate, the anchored case-sensitive expression `^a-f-`, and nothing else -- the
+    other affiliations are recorded and act on nothing, so pinning their letters would
+    be pinning from memory. Two findings came back to DN-25 with it: affiliation exists
+    only in the atoms branch, so a positional read would invent one for a chat message,
+    and case is significant, upper case being MIL-STD-2525B and lower case a CoT
+    extension. **MIL-STD-2525 is deliberately not the pin**: the guide records that
+    CoT's atoms tree is 2525B pruned, so pinning any edition of 2525 would name the
+    ancestor rather than the artifact. The official predicate file is unobtainable (it
+    ships with a non-public debugger) and the permissively licensed type-mapping file is
+    named at revision 1.80 rather than copied, because one predicate is all this system
+    asks of a type. **Extended 2026-09-08 at the owner's direction, adopting the
+    recommendations of `docs/design/tak-interoperability-research.md` §7 as written.**
+    (e) **The framing is pinned now**, at `TAK-Product-Center/atak-civ` release tag
+    5.5.1.8, because the client's own contact manager starts a mesh client at protocol
+    version 1 and drops to XML only for a contact that advertises nothing higher than 0:
+    the I3 mesh feed and mesh sink meet protobuf on their first datagram, so 'nothing in
+    the first increment needs it' was false and is withdrawn. The 2026-09-06 refusal is
+    kept in `docs/design/external-standards.md` §5.4 as history. (f) **Transcription**:
+    the framing and the ten-message set are transcribed into
+    `docs/design/external-standards.md` §5.4.1 and §5.4.2, the codec's `prost` structs
+    are hand-written against that table, no `.proto` file is copied and no code is
+    generated from the reference tree -- the route §5.2 took for the XSD. Recorded as
+    the owner's decision, not as a reading of the licence. (g) **ATAK-CIV on an Android
+    phone plus WinTAK-CIV on the recording host** records the corpus, giving two
+    senders, both wire forms and a client on each side of the emulator limitation;
+    ATAK-CIV plus iTAK is the no-account alternative and tests iTAK's mesh wire form in
+    passing. The recorder's `--tcp` and `--unicast` modes were built the same day; **the
+    recording itself remains the one open step.**
+
+- id: D-32
+  decision: Who verifies and pins AIS and ADS-B
+  question: >-
+    `external-standards.md` §3 and §4 hold candidates with named unverified claims (the
+    M.1371-5 to -6 layout delta, the gpsd logs' licence header, a permissively licensed
+    1090ES capture); D-24 said pin both, verify first, and left who does the verifying
+    open.
+  raised_in: "`docs/design/external-standards.md` §3, §4"
+  decider: Owner
+  unblocks: GAP-010
+  resolved: 2026-09-06
+  outcome: >-
+    **The agent verifies and pins, the owner reviews** (the recommended option): fetch
+    M.1371-6 from the ITU and diff the eight message tables in scope against -5; copy
+    gpsd's five AIS logs under `testdata/ais/` with a `SOURCE.md` on §1.5's terms; pin
+    M.1371-6 and ICAO Doc 9871 2nd edition Amendment 2 in `external-standards.md` with
+    what was and was not confirmed. The AIS codec follows the pins; ADS-B waits for a
+    capture the owner records. The owner reviews the note before any codec is written.
+    Not yet done. **Done 2026-09-06**: M.1371-6 pinned after the two editions were
+    compared table by table (identical for the eight types; two backward-compatible
+    additions read); the gpsd captures copied with `SOURCE.md` and the contributor
+    headers stripped; the AIS decoder built and gated on gpsd's decodes. ADS-B: Doc 9871
+    2nd edition with Amendment 2 pinned as the specification of record; no permissively
+    licensed capture exists, so the fixture is the owner's self-recorded one (GAP-010).
+
+- id: D-28
+  decision: How MOP-37 gets its targets
+  question: >-
+    The usability measure has no target because no session with participants has
+    completed, and the test plan's round 1 was written for wireframes the built panels
+    have outrun: run round 1 on the built panels, set provisional targets from the
+    heuristic walkthrough, or leave it open until increment 3.
+  raised_in: "`docs/ux/usability-test-plan.md` §7"
+  decider: Owner with the plan 06 lead
+  unblocks: GAP-074
+  resolved: 2026-09-06
+  outcome: >-
+    **Round 1 on the built panels** (the recommended option): skip the wireframe round,
+    run one participant per role against the rendered panels, and propose the MOP-37
+    targets from the measured values (median as target, worst case as floor, provisional
+    under four sessions). The session package is written; the owner names participants
+    and dates. Ten of sixteen tasks can run, six of those only once GAP-089 seeds the
+    desktop with tracks and plans, and six tasks are round 2's because their panel is
+    unbuilt or their write does not reach the desktop; those are reported as not run,
+    never scored. **Re-examined 2026-09-08 against the code the round was going to be
+    run on.** Three of D-28's own numbers had gone stale in the two days since: the
+    allocator and the tracking pipeline the six-task split rested on both closed the
+    same day D-28 was resolved (GAP-011, GAP-029), and GAP-050, GAP-057 and
+    GAP-041/GAP-004 closed the day after -- so the round's queue-emptiness rationale for
+    group B no longer holds, and three of the six 'round 2' tasks (US-04, US-08, US-09)
+    and part of a fourth (US-15, via GAP-045's PN-16 rehearsal, landed 2026-09-08) are
+    no longer blocked by an unbuilt panel or an unwired write. **The re-plan is held
+    rather than executed**: proving this by tracing the seed found that the live
+    allocator now re-proposes an unchanged assignment every tick, flooding the approval
+    queue at the redraw cadence (GAP-097, filed the same day) -- a general defect, not a
+    rehearsal artifact, since a node's own tick runs the same service and would flood
+    identically under US-04/US-08/US-09. Round 1 does not run, on the ten tasks or the
+    fourteen, until GAP-097 closes. Once it does, the plan is fourteen tasks (the
+    original ten, plus US-04, US-08, US-09 and US-15, each carrying the heavier session
+    setup a real node or a real rehearsal needs beyond the single `--rehearsal` flag),
+    and US-07 and US-16 stay round 2's -- their blockers (an unwired control-status
+    write; an undesigned gap-acceptance control) are unchanged. **Confirmed by the owner
+    2026-09-08**: the hold, the fourteen-task re-plan, and GAP-097's filing. **The hold
+    lifted the same day**: GAP-097 closed, and with it the reason round 1 could not run
+    on either scope. The session package is now prepared to the fourteen-task plan --
+    setups and a required dry run per group D task, both seed timing gaps fixed and
+    pinned by tests that fail when they regress, US-15's card corrected to what PN-16
+    actually draws, and the report's stale seed hash replaced -- so what D-28 still owes
+    is the fourteen sessions themselves and the target proposal they feed. That is the
+    one part of this decision no agent can discharge: rule 3 above admits only measured
+    values, and this round's participant is the owner. GAP-074 carries the detail,
+    including a scenario-design question D-28 did not anticipate: PN-16 reads coverage
+    from sensor placements alone, so round-1's two laydowns -- which differ only in
+    where a battery stands -- cannot be told apart on the table US-15 compares them on.
+    **The owner ruled on that question the same day and it is built**: `round-1.json`
+    declares a third laydown `c`, the same two radars with S2 forward-sited 10 km up the
+    declared approach, and US-15 now compares `current` with `c` on a measured
+    difference of -5 250 m uncovered approach (7 000 m against 1 750 m) with `b` kept as
+    the option that changes no coverage. It is scenario content only: the seed and its
+    hash are untouched.
+
+- id: D-34
+  decision: The repository's licence
+  question: >-
+    The workspace shipped `license = "UNLICENSED"` and no `LICENSE` file, so nothing
+    said what a reader of the hosted repository may do with the code, and plan 01 §8's
+    licence-plus-support model had no instrument behind it. Three sub-questions: which
+    licence; whether crediting Roessling Digital Solutions LLC is a request or an
+    enforceable term; and whether contributions can be relicensed commercially.
+  raised_in: >-
+    `../../plans/01-product-business-plan.md` §8;
+    `../../gungnir-workspace-structure.md`; D-10 (visibility left open)
+  decider: Owner
+  unblocks: GAP-061
+  resolved: 2026-09-07
+  outcome: >-
+    **AGPL-3.0-or-later, with additional terms under section 7, a commercial licence
+    beside it, and a CLA.** Chosen over the permissive options because of what the
+    deployment profiles are: under Apache-2.0 or MIT a competitor could run a modified
+    `gungnir-node` as a hosted service for a customer, never convey a binary, and owe
+    nothing — and `../../../ARCHITECTURE.md` §8 makes exactly that shape the normal
+    deployment. AGPL section 13 closes it. **Attribution is a term, not a request**:
+    section 7(b) requires the `NOTICE` text be preserved in the Appropriate Legal
+    Notices of a derivative's interactive interface, 7(c) forbids misrepresenting origin
+    and requires modified versions be marked as different, and 7(e) declines trademark
+    rights — the last of these restoring a protection Apache-2.0 §6 would have given for
+    free and AGPL's base text does not. All three are in
+    `../../../LICENSE-ADDITIONAL-TERMS.md`. **The commercial half is the reason the CLA
+    exists**: `../../../CLA.md` takes a relicensing grant, without which one outside
+    contribution freezes the dual licence permanently. **Two consequences that are not
+    licence text.** Section 5(d) makes the interface obligation conditional on Gungnir's
+    own interface carrying the notices first, so `gungnir-app` needs an About panel
+    displaying them or every future fork is released from the requirement — **built
+    2026-09-07 as PN-21**, opened from the status strip so that every role reaches it
+    and none docks it (`WorkspaceLayout::ALWAYS_AVAILABLE`), with a render test
+    asserting all four of section 0's elements reach the screen and
+    `appropriate_legal_notices.rs` asserting the panel still says what `NOTICE` says.
+    And `deny.toml`'s allow-list is now a distributability control rather than hygiene:
+    `OpenSSL` was removed the same day, being the only GPL-incompatible entry on it,
+    though nothing in the resolved graph declared it. **Landed 2026-09-07**: `LICENSE`
+    (AGPL-3.0 verbatim), `LICENSE-ADDITIONAL-TERMS.md`, `NOTICE`, `CLA.md`, `license =
+    "AGPL-3.0-or-later"` inherited by all 50 crates, and the three-line SPDX header on
+    all 365 source files. `testdata/asterix/` stays GPL-2.0 as an aggregate and gained
+    the `COPYING` its redistribution requires. **Not reviewed by counsel**; plan 01 §10
+    owes that pass, together with the export-control question D-10 left open when it
+    declined to fix repository visibility.
+
+- id: D-35
+  decision: "Theme tokens: flat constants, or a swappable Palette"
+  question: >-
+    An outside review of `gungnir-ui/src/theme.rs` (item 89) asked whether the theme's
+    DS-01 tokens should become a `Palette` value so a night variant could be swapped in,
+    or stay `Color32` constants read directly at 239 call sites across three crates.
+  raised_in: "`ARCHITECTURE.md` §10 item 89; `docs/ux/design-system.md` DS-01"
+  decider: Owner
+  unblocks: GAP-095
+  resolved: 2026-09-06
+  outcome: >-
+    **Keep the tokens as flat constants; file the night variant as its own gap rather
+    than build it now.** Threading a `Palette` value through 239 call sites across three
+    crates to make a token set swappable is its own tranche of work, not a corollary of
+    the theme review that raised it. The night variant is GAP-095 -- filed as GAP-090,
+    renumbered to GAP-094 the same day when GAP-090 was taken by an unrelated gap out of
+    DN-25, and renumbered again 2026-09-07 on discovering GAP-094 was by then also
+    carrying the advisories-gate gap, a second collision this row itself was silent
+    about until the development-status review found it.
+
+- id: D-36
+  decision: "Selection halo colour: white, or a fourth map colour"
+  question: >-
+    The review proposed a cyan selection halo so a selected glyph reads faster; DS-04
+    already reserves white as the one colour nothing else on the map uses, and the
+    assignment line sat only ten units from the friendly frame's blue.
+  raised_in: "`ARCHITECTURE.md` §10 item 89; `docs/ux/design-system.md` DS-04"
+  decider: Owner
+  unblocks: None blocking
+  resolved: 2026-09-06
+  outcome: >-
+    **The halo stays white; the assignment line moves instead.** DS-04's rule holds --
+    white is reserved for selection and drawn by nothing else on the map -- and the line
+    that sat too close to the friendly frame's blue is teal now, so the five colours
+    sharing the map stay pairwise apart rather than the halo gaining a sixth.
+
+- id: D-37
+  decision: "Compared numerals: monospace, or the proportional face"
+  question: >-
+    Time remaining, scores, positions, speeds, ages and evidence weights are numbers an
+    operator compares down a column; the proportional face has no tabular figures, so a
+    column of them does not line up.
+  raised_in: "`ARCHITECTURE.md` §10 item 89; `docs/ux/design-system.md` DS-05"
+  decider: Owner
+  unblocks: None blocking
+  resolved: 2026-09-06
+  outcome: >-
+    **Monospace, through `theme::numeral`.** Every compared numeral -- time remaining,
+    scores, positions, speeds, ages, evidence weights -- is set in egui's monospace face
+    at body size so a column of them lines up; DS-05 gained a 16 pt size for a panel's
+    title and nothing else, declining the six-size scale the same review proposed.
+
+- id: D-38
+  decision: Viewport surface colour and coverage-ring alpha
+  question: >-
+    The same review's colour pass covered the viewport surfaces (`VIEWPORT_BACKGROUND`,
+    the grid) and `COVERAGE_MAX_ALPHA` alongside the chrome tokens D-35 to D-37 settle.
+  raised_in: "`ARCHITECTURE.md` §10 item 89; `docs/ux/design-system.md` DS-01"
+  decider: Owner
+  unblocks: None blocking
+  resolved: 2026-09-06
+  outcome: >-
+    **The blue-black viewport set and the coverage alpha, both already built.**
+    `VIEWPORT_BACKGROUND` (8, 16, 24), `VIEWPORT_GRID_COLOR` (31, 56, 70), and
+    `COVERAGE_MAX_ALPHA` at 80 stood unchanged by the review; recorded as its own
+    decision because item 89 filed all four viewport and theme questions from one pass
+    and this one needed no further code.
+
+- id: D-39
+  decision: OS-keystore crate
+  question: >-
+    Which crate reaches the operating system's keystore behind `KeyProvider`'s
+    persistent custody, the condition DN-22 amendment 3 (§12) named for retiring the
+    passphrase-sealed file: "until a §2.9 decision admits an OS-keystore crate." The
+    same decision closes GAP-057's and GAP-060's remaining items, both of which reduce
+    to it from authentication and transport identity respectively.
+  raised_in: >-
+    `docs/design/DN-22-key-management.md` §12; `agentic-coding-standards.md` §2.9
+  decider: Owner with the security engineer
+  unblocks: GAP-057, GAP-060, GAP-084
+  resolved: 2026-09-08
+  outcome: >-
+    **`keyring` 4.2.0, `v1` feature only.** Backward-compatible, auto-selecting per
+    target: Windows Credential Manager, macOS Keychain, Linux Secret Service. Recorded
+    in `agentic-coding-standards.md` §2.9 with the duplicate-linkage check, which found
+    two real ones on the Linux target alone (a second RustCrypto generation and a second
+    `zbus`, both `secret-service`'s and `zbus-secret-service-keyring-store`'s own pins,
+    neither this workspace's to fix) and none on Windows or macOS. Built the same day as
+    `PersistentKeyProvider::open_or_create_via_os_keystore` in `gungnir-security`, wired
+    into `gungnir-app`'s `build_encryption` alongside the existing passphrase-sealed
+    file; not wired into `gungnir-node`, which DN-22 §5 never assigned this row to.
+    Human-owned code (`gungnir-security`, `gungnir-app`); written, gated, and signed by
+    the owner 2026-09-08 (`../../../ARCHITECTURE.md` item 103, with items 104 and 111).
+
+- id: D-40
+  decision: The inference runtime GAP-077 deferred
+  question: >-
+    GAP-077 built `gungnir-ml`'s traits and `ModelSet` but deliberately deferred signing
+    off an inference runtime under §2.9 on 2026-09-05, on two grounds: no model had been
+    trained yet to need one, and `docs/ml/architecture.md`'s own condition for a native
+    ML dependency -- a security reviewer appointed for it -- had not been met. Neither
+    ground has since changed on its own; the question is whether to proceed anyway.
+  raised_in: >-
+    `docs/plans/09-ml-model-integration.md`; `docs/ml/architecture.md`;
+    `agentic-coding-standards.md` §2.9
+  decider: Owner
+  unblocks: GAP-077, GAP-078, GAP-080
+  resolved: 2026-09-08
+  outcome: >-
+    **`ort` (MIT OR Apache-2.0), un-deferring GAP-077 on the owner's own authority as
+    the reviewer the deferral named.** Chosen over `tract` for full ONNX op coverage,
+    since Plan 09's intended models are not yet known well enough to confirm they fit
+    `tract`'s smaller pure-Rust subset. **`ort`'s default `download-binaries` feature is
+    refused**: it fetches prebuilt ONNX Runtime from a third-party CDN, and those
+    binaries may carry telemetry -- not acceptable for this system. Recorded in
+    `agentic-coding-standards.md` §2.9 and built the same day: `2.0.0-rc.13`,
+    `load-dynamic` rather than a from-source static link, so no C++ toolchain is needed
+    to compile this workspace either way (confirmed with none installed at all).
+    **`load-dynamic` turned out to be load-bearing rather than a convenience**: `ort`
+    2.0.0-rc.13 panics, and was confirmed by reproduction to panic twice over in a way
+    that hard-aborts the process at exit, when no compatible ONNX Runtime is reachable
+    -- true of every environment this landed in -- so `OnnxModel` sits behind
+    `gungnir-ml`'s own `onnx-runtime` feature, off by default, until a real ONNX Runtime
+    binary is known to be reachable. GAP-077's own entry carries the full account.
+
+- id: D-41
+  decision: Real-world CRS support for DEM and point-cloud files
+  question: >-
+    Neither the DEM loader (GAP-023) nor the point-cloud loader (GAP-098) converts a
+    file's coordinates: each requires the file already be in the deployment's local-ENU
+    frame and refuses it by name otherwise, because the approved stack has never
+    admitted a projection library. Most real DEM and LIDAR data ships in a real-world
+    CRS (geographic WGS84 or a projected system such as UTM), so this is a live
+    usability limit on both capabilities, not a hypothetical one.
+  raised_in: >-
+    `agentic-coding-standards.md` §2.9; `gungnir-config` (`validate_terrain`,
+    `validate_point_cloud`); GAP-023, GAP-098
+  decider: Owner
+  unblocks: GAP-023, GAP-098
+  resolved: 2026-09-08
+  outcome: >-
+    **`proj` (MIT OR Apache-2.0), binding `libproj` v9.6.x (X/MIT, OSGeo) via
+    `proj-sys`.** Full projection support, not a WGS84-only first step: both geographic
+    and projected (e.g. UTM) coordinate reference systems become usable for a DEM or a
+    point-cloud file, closing the live usability gap where either loader refuses any
+    file not already pre-converted to local-ENU. `proj-sys` finds a system `libproj` or
+    builds it from source when none is found, the same two-path shape `vtkio`'s and
+    `rcgen`'s own native dependencies already follow. Not yet recorded in
+    `agentic-coding-standards.md` §2.9 or built; GAP-023 and GAP-098 carry the remaining
+    engineering, including whichever validation and fixture rules
+    `validate_terrain`/`validate_point_cloud` need once `"local-enu"` is no longer the
+    only accepted frame.
+
+- id: D-42
+  decision: Cloud KMS crate(s) for the ManagedService custody profile
+  question: >-
+    GAP-084 built the disconnected desktop's OS-keystore custody (D-39) but the cloud
+    deployment profile's equivalent, `ManagedService`, has never been designed: DN-22 §5
+    names it and nothing implements it, and no §2.9 decision has admitted a cloud KMS
+    crate for it.
+  raised_in: >-
+    `docs/design/DN-22-key-management.md` §5; `agentic-coding-standards.md` §2.9
+  decider: Owner
+  unblocks: GAP-084
+  resolved: 2026-09-08
+  outcome: >-
+    **AWS and Azure, both via their official Rust SDKs: `aws-sdk-kms` (Apache-2.0) and
+    `azure_security_keyvault_keys` (MIT, pre-1.0 at 0.9.0 -- noted rather than hidden,
+    since a pre-1.0 crate's API may still move) with `azure_identity` for
+    authentication.** `azure_security_keyvault` (the older, unofficial crate of a
+    similar name) is explicitly not the pin: Microsoft has said it will not be updated
+    further now that the official per-service crates exist. Neither GCP KMS nor
+    HashiCorp Vault is in scope; a deployment needing either is a future decision, not a
+    gap in this one. **Recorded in `agentic-coding-standards.md` §2.9 and built the same
+    day**, after the design note this decision said was owed: DN-22 amendment 5 (§14)
+    designs the `ManagedService` profile and `gungnir-security/src/managed_service.rs`
+    implements it, both human-owned, reviewed and signed by the owner 2026-09-10
+    (`ARCHITECTURE.md` §10 item 127). **Two corrections to this decision's own text,
+    found when the crates were actually added.** `azure_security_keyvault_keys` is
+    **1.0.1**, not pre-1.0 at 0.9.0: it reached 1.0.0 on 2026-05-13, so the 'a pre-1.0
+    API may still move' caveat above is retired rather than carried forward as a current
+    fact, and `azure_identity` pins 1.0.0 rather than the 1.1.0-beta.1 that also exists.
+    And **`aws-config` joins the two crates this decision named**, because `aws-sdk-kms`
+    is the service client and carries no credential resolution at all -- the default
+    chain that lets DN-22 §6's no-secret-in-a-baseline rule hold for a cloud client
+    lives in `aws-config`. It is the crate AWS's own documentation pairs with every
+    service SDK, so this is the decision's evident intent rather than a widening of it,
+    and it is called out here rather than folded in silently. GAP-084 carries what
+    remains: a real cloud round trip that needs credentials this workspace does not
+    have; the owner's signature landed 2026-09-10.
+
+- id: D-43
+  decision: "What `solve_assignment` promises about a finite total"
+  question: >-
+    `gungnir_association::solve_assignment` checks that every *entry* of a cost matrix
+    is finite and says nothing about the *total* it returns. On an all-finite matrix
+    with entries near the representable limit the sum of the selected entries overflows
+    and the function returns `Ok` with `total_cost = -inf` (GAP-103, where the behaviour
+    is reproduced and characterised). Three answers are available and they are mutually
+    exclusive. **(a) Refuse the input**: state a precondition bounding entry magnitudes
+    so that an `n`-term sum cannot overflow, and reject a matrix that breaks it. Keeps
+    the promise absolute and fails early, but refuses matrices whose optimum is
+    perfectly representable, and any bound tight enough to be safe is a magic number of
+    the kind this module's own doc comment already rejects for the rectangular-padding
+    case. **(b) Check the output**: keep accepting every finite matrix and return a new
+    `AssociationError` when the accumulated total is not finite. Never refuses a
+    solvable problem, but makes every caller handle an error no real cost matrix can
+    produce, and throws away a pairing that GAP-103's measurements show is correct even
+    when the total is not representable. **(c) State that no finite total was ever
+    promised**: document that the returned total is IEEE-754 arithmetic over the
+    selected entries and overflows exactly when the true optimum is not a representable
+    `f64`. This is what the code does today, and GAP-103's measurements are the case for
+    it being defensible rather than merely convenient; it leaves any caller reading
+    `total_cost` to check it. The choice fixes what `verification-capability-table.md`
+    §1's Hungarian / Jonker-Volgenant row must say about the domain and the promise --
+    it says nothing about either today -- and only then what `gungnir-fuzz`'s own
+    postcondition should assert.
+  raised_in: >-
+    `verification-capability-table.md` §1 (Hungarian / Jonker-Volgenant, and the limits
+    list beneath the §1 gate table); `gungnir-association/src/assignment.rs`;
+    `gungnir-fuzz/fuzz_targets/cost_matrix_construction.rs`; `docs/agentic-workflow.md`
+    (low-trust tier: numerical stability guarantees, no silent NaN propagation)
+  decider: Owner with the tracking engineer
+  unblocks: GAP-103
+  resolved: 2026-09-09
+  outcome: >-
+    **`Assignment::total_cost` becomes `Option<f64>`; `None` means this problem's
+    optimum is not a representable `f64`.** Chosen over the three answers the register
+    framed, for reasons that were measured rather than argued. **Refusing the input was
+    rejected**: no precondition can be both safe and tight, because which entries the
+    optimum selects is not known until it has been solved, so any bound would refuse
+    matrices whose optimum is perfectly representable -- and `assignment.rs`'s own
+    module documentation already rejects that reasoning for rectangular padding, calling
+    a large-enough pad value the kind of magic number that breaks quietly on a matrix
+    with an unexpected scale. **Erroring on a non-finite total was rejected**: the
+    pairing is provably correct in that case, and all three production callers consume
+    only the pairing -- `GlobalNearestNeighbor::associate`, `gungnir-fusion-async`'s
+    associate step, and `gungnir-metrics`'s CLEAR stage 2 each take `row_to_col` and
+    discard the total -- so an error would have dropped a whole scan of tracking over a
+    number none of them reads. **Promising nothing was rejected** as the weakest of the
+    three on the table: it is true, and `-inf` is the correct IEEE-754 value of that
+    sum, but it leaves a non-finite value reachable through a `pub f64` field on a
+    function whose input guard exists precisely to stop non-finite values, guarded only
+    by a doc comment -- the silent propagation `docs/agentic-workflow.md`'s low-trust
+    tier names. **The `Option` is a fourth answer, raised when the owner walked the
+    decision, and it says the one thing that is true**: there is an optimal assignment,
+    and its cost is not a number. It refuses no solvable input, discards no correct
+    pairing, and makes the unrepresentable case impossible to read by accident, because
+    the type enforces it rather than the documentation. Its migration cost was near zero
+    for the same reason erroring was wrong: nothing in production reads the field, so
+    only the oracle diff test and the benchmark changed. **Built the same day**
+    (GAP-103). Human-owned change, being a numerical stability guarantee: **written,
+    gated and signed by the owner 2026-09-09**, the same day he took the decision and on
+    his own owner authority. The signature covers the contract change, its tests, and
+    the reconciled fuzz postcondition, and it was given with the one judgement call
+    inside it stated rather than buried: floating-point addition is not associative, so
+    `Some` versus `None` is exact about the solver's own accumulation and not about the
+    ideal real-number sum, and making it order-free would need exact or scaled
+    summation. That was judged not worth the added subtlety in a human-owned file whose
+    one production cost matrix is bounded near 1.1e4 by construction, and
+    `assignment.rs` documents the limit.
+
+- id: D-44
+  decision: STANAG 4676 in this release, or out of it
+  question: >-
+    GAP-064's own rule is a pinned edition and a public sample before a codec is
+    written, and `../../design/external-standards.md` §2 records that neither is
+    obtainable: STANAG 4676 is the cover agreement, AEDP-12 is the implementation
+    document, and no download link for either could be confirmed -- the note's own open
+    action is that somebody with NSO access retrieves AEDP-12 Ed A v1 and records its
+    marking. Meanwhile the entry gates GAP-001's last dependency and the whole of
+    GAP-063, whose closing action says the 4676 row is all that is left of the
+    conformance suite. Three answers: retrieve it, descope it, or write the codec from
+    secondary descriptions -- the last being exactly the outcome GAP-064 exists to
+    prevent.
+  raised_in: "`../../design/external-standards.md` §2; GAP-064; GAP-063"
+  decider: Owner
+  unblocks: GAP-064, GAP-063, GAP-001
+  resolved: 2026-09-15
+  outcome: >-
+    **Descoped, and recorded as an amendment to D-01's scope lock rather than allowed to
+    lapse quietly** -- the same way D-33 recorded an *addition* to it. STANAG 4676
+    leaves the first release: `Stanag4676Codec` keeps returning `NotImplemented` naming
+    the reason, GAP-064 closes as ASTERIX-done-and-4676-deferred-by-decision, and
+    GAP-063's conformance suite closes without the row its own action called the whole
+    of what was left. The reason is the specification, not the effort:
+    `external-standards.md` §2 records that neither STANAG 4676 nor AEDP-12 could be
+    obtained in any verifiable form, and the owner's own note on this decision is that a
+    NATO marking might forbid transcribing the tables into a public AGPL repository even
+    if a copy arrived -- so retrieval could end in the same place after the cost.
+    Writing the codec from secondary descriptions was refused by name:
+    `external-standards.md` §2 calls that the written-from-memory outcome GAP-064 exists
+    to prevent, and a conformance suite gated on a guessed wire format would be the kind
+    of false claim this workspace's rules forbid. The route back in is unchanged and
+    stays recorded: somebody with NSO access retrieves AEDP-12 Ed A v1, records its
+    marking, and the gap is re-filed.
+
+- id: D-45
+  decision: How predictions over a rehearsal become one first-engagement range
+  question: >-
+    DN-02 §7 names the aggregation and specifies nothing, and three entries stop at it:
+    GAP-020 (whose predictor half is built), GAP-045's rehearsal and GAP-087's panel,
+    which has the column and no rule to fill it. The choice is what a laydown's
+    first-engagement range means when a run produced many predictions per approach --
+    the worst case, the typical one, or a stated percentile -- and it is load-bearing
+    because US-15 compares two laydowns on exactly that column.
+  raised_in: >-
+    `../../design/DN-02-prediction-and-approach.md` §7;
+    `../../ux/usability-test-plan.md` US-15
+  decider: Owner
+  unblocks: GAP-020, GAP-045, GAP-087
+  resolved: 2026-09-15
+  outcome: >-
+    **The worst case: the minimum first-engagement range over the run**, labelled as the
+    worst case and carrying the number of predictions behind it, rather than a mean, a
+    median or a percentile. The argument is US-15's own table: it compares two laydowns
+    on this one column, and a best-case or averaged figure flatters the weaker laydown
+    on exactly the comparison the column exists to make. The count travels with it so a
+    figure from three predictions is not read as a figure from three hundred. DN-02 §7
+    gains the rule as an amendment; GAP-020's predictor half is already built, so what
+    follows is the aggregation and PN-16's column.
+
+- id: D-46
+  decision: The dense-group pipeline's default filter
+  question: >-
+    `DenseGroupFilter::Phd` is the default and its doc comment gave the CPHD's
+    then-unsigned derivation as the reason. That reason expired when item 109 signed
+    CPHD and item 128 signed the LMB and the dense-group wiring, so the default is now a
+    live choice rather than a consequence: PHD is cheaper and assumes a Poisson
+    cardinality, CPHD estimates cardinality properly under clutter and costs more per
+    scan. Item 128 named the question and deliberately did not answer it, flipping a
+    pipeline's default being a behaviour change nobody had asked for.
+  raised_in: >-
+    `../../../ARCHITECTURE.md` §10 item 128; `gungnir-fusion-async`
+    (`DenseGroupFilter`); GAP-015
+  decider: Owner with the tracking engineer
+  unblocks: GAP-015
+  resolved: 2026-09-15
+  outcome: >-
+    **PHD stays the default, and the choice becomes configurable** through the
+    `TrackingConfig` vocabulary GAP-015's closing action already owed for the
+    dense-group mode's settings. So a deployment that wants CPHD's cardinality estimate
+    under clutter asks for it by name, and no shipped deployment's behaviour changes
+    underneath it. `DenseGroupFilter::Phd`'s doc comment, corrected in item 128 to say
+    the flip was an open question, now records the answer and the reason for it.
+
+- id: D-47
+  decision: >-
+    Whether a node's TLS identities persist, and whether the two roles share one
+  question: >-
+    Item 105 closed the provider-issued gap between a node's serving identity and its
+    outbound peer-link identity and left the ephemeral-or-persistent one open for both:
+    `issue_for_client` builds a fresh `P256KeyProvider` every start, so a node presents
+    a new certificate after every restart and no peer can pin it. Making either survive
+    a restart needs a `gungnir-security` generalisation -- the service-name
+    parameterisation item 104 already made for `wrapping_secret` -- and a decision about
+    whether the serving and outbound roles then share one persisted identity or hold
+    two.
+  raised_in: >-
+    `../../../ARCHITECTURE.md` §10 item 105; `gungnir-node/src/main.rs::host_tls`;
+    `../../design/DN-22-key-management.md` §5
+  decider: Owner with the security engineer
+  unblocks: GAP-060
+  resolved: 2026-09-15
+  outcome: >-
+    **One persisted identity, held by both roles.** A node is one machine identity,
+    which is what D-02's mutual-TLS model already assumes and what a peer's trust store
+    can pin across a restart; two identities would double the custody surface -- two
+    keys, two rotations, two escrow records per node -- for a blast-radius argument that
+    a single-process binary does not really earn. What it needs is the
+    `gungnir-security` generalisation item 105 named:
+    `PersistentKeyProvider::open_or_create_via_os_keystore`'s hardcoded desktop service
+    name becomes a parameter, exactly as item 104 did for `wrapping_secret`, and
+    `host_tls` and `spawn_tls_from_provider` then issue from the same persisted
+    provider. Human-owned crate; it comes to the owner as a review.
+
+- id: D-48
+  decision: What the wrapped-secret file records about the key that wrapped it
+  question: >-
+    GAP-084 item (3): `AzureKeyVaultKeyService`'s unwrap asks Key Vault for the key's
+    latest version, and `WRAPPED_SECRET_FILE` records nothing about the version a secret
+    was actually wrapped under. A deployment that rotates its master key therefore holds
+    a blob the service will not open -- and that blob is what unlocks the keystore
+    protecting the journal. Recording the version changes both the file's format and
+    what `CloudKeyService::wrap` returns, which is a persisted-format decision rather
+    than a fix, and one no test here can verify against a real vault.
+  raised_in: >-
+    `../../design/DN-22-key-management.md` §14e;
+    `gungnir-security/src/managed_service.rs`; `../../../ARCHITECTURE.md` §10 item 129
+  decider: Owner with the security engineer
+  unblocks: GAP-084
+  resolved: 2026-09-15
+  outcome: >-
+    **Record the version.** `CloudKeyService::wrap` returns the key version alongside
+    the wrapped bytes, `WRAPPED_SECRET_FILE` gains a small versioned header, and unwrap
+    asks for that exact version instead of the latest. Chosen over documenting a
+    rotation procedure because the failure the procedure would be guarding against is a
+    node that cannot open its own keystore after a routine key rotation -- a lost
+    journal record, arrived at by following ordinary operational advice -- and over
+    re-wrapping at every start because a rotation while the node is down still strands
+    the old blob, narrowing the window rather than closing it. It lands the way the rest
+    of this profile did: tested against the `CloudKeyService` fake, with `#[ignore]`d
+    tests naming the environment variables a real vault would need, and **no claim of a
+    cloud round trip**.
+
+- id: D-49
+  decision: Whether GAP-082's central differential-test harness is still wanted
+  question: >-
+    GAP-061 item (5). The differential suite that actually runs is distributed across
+    the nine crates it verifies and is what Gate 1 gates; `docs/agentic-workflow.md` §1
+    still names `gungnir-oracle` as the vehicle, and GAP-082's closing action still
+    carries a central harness as an intention. One of the two has to give.
+  raised_in: "`docs/agentic-workflow.md` §1; GAP-061 item (5); GAP-082"
+  decider: Owner
+  unblocks: GAP-061
+  resolved: 2026-09-15
+  outcome: >-
+    **Retire the central harness; fix the document.** The distributed suite is what
+    runs, what Gate 1 gates and what every oracle row in
+    `../../verification-capability-table.md` cites, so `docs/agentic-workflow.md` §1 is
+    re-pointed at where the differential tests actually live and GAP-082's
+    central-harness intention is struck rather than built. Building it would duplicate
+    what nine crates already do and add a second thing to keep in step with them -- and
+    the drift this decision closes is the ordinary one this workspace's rules exist to
+    catch: a document naming a vehicle that is not the vehicle.
+
+- id: D-50
+  decision: Which of GAP-045's three undesigned controls are scoped now
+  question: >-
+    GAP-045's closing action names three things that are each a decision rather than a
+    build: laydown-aware sensor geometry (a rehearsal cannot move the sensors a laydown
+    declares, because `gungnir-scenario` accepts no placement override and no gap scopes
+    one), the gap-acceptance control (US-16 waits on it and it has no design), and the
+    rehearsal-gated submit (DN-26 §6 rule 4 deliberately built no adoption workflow to
+    gate). The first is why round 1 needed a third laydown invented purely to produce a
+    measurable coverage difference.
+  raised_in: >-
+    GAP-045; GAP-087; `../../design/DN-26-laydown-options.md` §6;
+    `../../ux/usability-test-plan.md` US-16
+  decider: Owner with the plan 06 lead
+  unblocks: GAP-045, GAP-087, GAP-074
+  resolved: 2026-09-15
+  outcome: >-
+    **All three, scoped now** -- the owner's answer, against a recommendation to take
+    only the first. The placement override is filed as GAP-105, the gap-acceptance
+    control as GAP-106 and the rehearsal-gated submit as GAP-107. Two of the three have
+    no design at all yet, so each gets a design note before code, and GAP-105 comes
+    first regardless of that order because it is the one that makes a laydown comparison
+    rest on real geometry: today a rehearsal cannot move the sensors a laydown declares,
+    which is why round 1 had to declare a third laydown purely to produce a coverage
+    difference US-15 could measure. Closing all three closes GAP-045's and GAP-087's
+    tails and unblocks US-07 and US-16, which GAP-074 currently holds for round 2.
+
+- id: D-51
+  decision: >-
+    The CRS tail: whether `proj` becomes a default feature, and where the vertical datum
+    lives
+  question: >-
+    GAP-102 left both named. `proj` is behind a default-off feature because `proj-sys`
+    links libproj and needs cmake and SQLite3, so CI is the only place the conversion
+    has ever run; making it default puts that toolchain in front of every contributor
+    and every `cargo deny` run. Separately, a converted height is the file's own
+    vertical datum in metres rather than a WGS-84 ellipsoidal height, because no geoid
+    model is applied -- GAP-102's own text calls that its own gap without filing one.
+  raised_in: >-
+    GAP-102 items (3) and (5); `docs/agentic-coding-standards.md` §2.9 (D-41);
+    `deny.toml`
+  decider: Owner
+  unblocks: GAP-102
+  resolved: 2026-09-15
+  outcome: >-
+    **`proj` stays opt-in, and the geoid model is filed as GAP-108.** Default-off stays
+    because making it default puts libproj, cmake and SQLite3 in front of every
+    contributor's build and every `cargo deny` run, for a conversion few deployments
+    need -- and `deny.toml`'s `all-features = false` would then have to be revisited
+    with new crates in the licence graph. The vertical datum gets a register entry of
+    its own so that a converted height being the file's own vertical datum rather than a
+    WGS-84 ellipsoidal height is a named gap in the summary table, rather than a
+    sentence inside another entry's text, which is where GAP-102 left it.
+
+- id: D-52
+  decision: Whether a cooperatively-identified UAS gets a platform class
+  question: >-
+    GAP-101's consumer (item 129) submits identity evidence for a Category 129 contact
+    and maps no platform class, so `assessment.lethality_by_class` weighs such a track
+    1.0 while AIS maps an M.1371-6 ship type to `surface.*` and ADS-B a DO-260B category
+    to `air.crewed`. Category 129 carries a manufacturer and a model string allocated by
+    a registration authority rather than a capability category, and the class catalogue
+    draws its air classes by threat type -- so a mapping here would be a class invented
+    at the consumer, or a new catalogue entry with a mission argument behind it.
+  raised_in: >-
+    `../../../ARCHITECTURE.md` §10 item 129; `gungnir-app/src/uas.rs`;
+    `docs/test-tracks/classes.yaml`; GAP-027
+  decider: Owner
+  unblocks: GAP-027, GAP-101
+  resolved: 2026-09-15
+  outcome: >-
+    **No platform class for a cooperatively-identified UAS; GAP-080's classifier owns
+    the question.** The refusal `gungnir-app/src/uas.rs` already states is confirmed as
+    the decision: Category 129's manufacturer and model strings are
+    registration-authority allocations rather than a capability category, and the
+    mission's air classes are drawn by threat type, so a lethality weight derived from
+    one would be a guess wearing a number. A cooperative UAS therefore weighs 1.0 in
+    `lethality_by_class` -- unknown is not harmless, which is the same rule the register
+    already states for a track no source has classified.
