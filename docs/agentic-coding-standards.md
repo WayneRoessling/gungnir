@@ -1056,11 +1056,6 @@ Three things are deliberate:
    the pipeline and the consumer protocol are real, the channel beneath them is a model,
    and nothing here is evidence about `crossbeam-channel`'s own implementation.
 
-**Not signed.** `gungnir-fusion-async` is a human-owned, low-trust crate
-(`agentic-workflow.md`), so this row and the model checks it serves are written and
-gated and await the owner's review. §5's sign-off requirement is not satisfied by this
-entry existing.
-
 ---
 
 ## 3. General Rust standards
