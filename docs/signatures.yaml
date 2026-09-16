@@ -1,0 +1,1968 @@
+# The signature ledger: every change the owner has signed, oldest first. Rendered into
+# signatures.md by tools/signatures.py; `python docs/tools/signatures.py check` validates it.
+#
+# One entry per thing signed. `commit` is the first commit on main whose tree carried the
+# written record of the signature; `paths` are what it covered, as they were at that commit.
+# A signature made before the repository existed (2026-09-07) names the first commit and
+# sets `pre_repository`. Append new entries at the end; never edit or remove a merged one.
+#
+# Built on 2026-09-16 from the record on main at 6374649, one row per signing sentence;
+# docs/record/2026-09-16/signature-ledger.md says how, and which claims were left out.
+
+- date: 2026-09-04
+  signer: Owner
+  subject: >-
+    §2.9 approved stack additions: thiserror, crossbeam-channel, serde_json, rand_distr
+    and tracing-subscriber.
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 9; docs/agentic-coding-standards.md §2.9"
+
+- date: 2026-09-04
+  signer: Owner
+  subject: "D-11: uuid (UUID v7) for GlobalEntityId admitted to §2.9, Identity."
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 item 20; docs/agentic-coding-standards.md §2.9 Identity
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    D-18: API transport stack (axum ws, tokio-tungstenite, reqwest, rustls,
+    tokio-rustls, rustls-pemfile, tower-http).
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 item 26; docs/agentic-coding-standards.md §2.9 API transport
+    stack
+
+- date: 2026-09-05
+  signer: Owner
+  subject: "D-19: docking crate egui_tiles pinned to 0.10."
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 item 31; docs/agentic-coding-standards.md §2.9 Docking crate
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    GAP-085 journal durability fix: explicit DurabilityPolicy in gungnir-store and the
+    desktop's sync_if_due each tick.
+  kind: code
+  paths:
+  - gungnir-store
+  - gungnir-app
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 32"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    Item 36 sign-off 1 of 4: Joseph-form linear Kalman filter math and
+    numerical-stability guarantees.
+  kind: code
+  paths:
+  - gungnir-filters
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 36"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    Item 36 sign-off 2 of 4: Jonker-Volgenant assignment solver and the fallible
+    Associator surface.
+  kind: code
+  paths:
+  - gungnir-association
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 36"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    Item 36 sign-off 3 of 4: gungnir-metrics to gungnir-association edge, with the
+    per-frame compute_metrics signature.
+  kind: edge
+  paths:
+  - gungnir-metrics
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 36"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    Item 36 sign-off 4 of 4: cumulative rather than consecutive hits for track
+    confirmation.
+  kind: code
+  paths:
+  - gungnir-track
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 36"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    gungnir-coord coordinate transforms, signed on their gates (item 36, separately from
+    the four line-by-line sign-offs).
+  kind: code
+  paths:
+  - gungnir-coord
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 36"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    gungnir-core CV/CA/CT motion models, signed on their gates (item 36 group of four).
+  kind: code
+  paths:
+  - gungnir-core
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 36"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    Five-scenario generator in gungnir-scenario, signed on its gates (item 36 group of
+    four).
+  kind: code
+  paths:
+  - gungnir-scenario
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 36"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    CLEAR MOT metrics implementation in gungnir-metrics, signed on its gates (item 36
+    group of four).
+  kind: code
+  paths:
+  - gungnir-metrics
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 36"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    MOP-25 confirmed at plan 07's per-class prediction-error tolerances, in the
+    outstanding sign-offs walk.
+  kind: criterion
+  paths:
+  - docs/test-tracks/validation.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 37; docs/test-tracks/validation.md §7"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    GAP-038: lifetime parameter on gungnir_policy::PolicyChain so borrowing engines can
+    be chained.
+  kind: code
+  paths:
+  - gungnir-policy
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 42; docs/agentic-workflow.md low-trust tier"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    GAP-034/GAP-035: queue wired into the approval workflow; escalation bound,
+    offered_to, Submission/queue/sweep additions.
+  kind: code
+  paths:
+  - gungnir-command
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 44; docs/agentic-workflow.md low-trust tier"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-10 amendment 1 (§9), signed with the OperatorDecision conformance and the
+    arbiter's expiry rule.
+  kind: design-note
+  paths:
+  - docs/design/DN-10-queue-expiry-and-escalation.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 45; DN-10 §9"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    OperatorDecision conformed to DN-10 §3 (Accepted, Overridden, Rejected with reason,
+    Expired); grouped with DN-10 amendment 1.
+  kind: code
+  paths:
+  - gungnir-command
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 45; docs/agentic-workflow.md low-trust tier"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    Arbiter's expiry rule in gungnir-collab (resolve for whoever chose before rank);
+    grouped with DN-10 amendment 1.
+  kind: code
+  paths:
+  - gungnir-collab
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 45; DN-10 §9"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-11 amendment 1 (§9): RequirementEvent and six other corrections from
+    GAP-004/GAP-005; covers conforming code.
+  kind: design-note
+  paths:
+  - docs/design/DN-11-sensor-control-and-tasking.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 58; DN-11 §9"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    The GAP-057 finding: authentication cannot be implemented yet (no cryptographic
+    crate); the blocker, not the answer.
+  kind: other
+  paths: []
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 60; docs/agentic-workflow.md low-trust tier"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    D-20 cryptography: argon2 with password-hash, hmac with sha2, and subtle.
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 item 60; docs/agentic-coding-standards.md §2.9 Cryptography
+
+- date: 2026-09-05
+  signer: Owner
+  subject: DN-23 operator authentication and sessions signed off.
+  kind: design-note
+  paths:
+  - docs/design/DN-23-operator-authentication.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 61; DN-23 status"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-22 amendment 1 (§9): a sign operation, the sealed form, certificates in tests;
+    covers conforming code.
+  kind: design-note
+  paths:
+  - docs/design/DN-22-key-management.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 63; DN-22 §9"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    D-22 data protection, first two rows: aes-gcm, and rcgen for certificates in tests.
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 item 63; docs/agentic-coding-standards.md §2.9 Data protection
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    D-22 third row: p256 (ECDSA P-256) for baseline signing and the asymmetric provider,
+    taken separately later that day.
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 item 64; docs/agentic-coding-standards.md §2.9 Data protection
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-12 §6 correction (GAP-006): GET /v2/coverage returns the whole CoverageReport;
+    also covers CoverageResponse::NotComputed.
+  kind: design-note
+  paths:
+  - docs/design/DN-12-coverage-and-gaps.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 67; DN-12 §6"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-08 amendment 1 (§9): apply takes now, caller-supplied action vocabulary; also
+    covers the conforming gungnir-config code.
+  kind: design-note
+  paths:
+  - docs/design/DN-08-policy-configuration.md
+  - gungnir-config
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 72; DN-08 §9"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-21 amendment 1 (§9): three departures (model-owned types, Event::Rhythm,
+    undelivered product); covers conforming code.
+  kind: design-note
+  paths:
+  - docs/design/DN-21-battle-rhythm.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 74; DN-21 §9"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-24 mission profiles and algorithm baselines signed; the sign-off covers the code
+    that conforms to it.
+  kind: design-note
+  paths:
+  - docs/design/DN-24-mission-profiles-and-algorithm-baselines.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 76; DN-24 status"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-24 §5 correction: the missed gungnir-modelops to gungnir-model edge (part of edge
+    (h)); second DN-24 sign-off.
+  kind: edge
+  paths:
+  - docs/design/DN-24-mission-profiles-and-algorithm-baselines.md
+  - gungnir-modelops
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 76; DN-24 §5; dependency-edges.md header"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-24 §6 correction: nothing checks model.promote this increment, resolving §6
+    against §9; second DN-24 sign-off.
+  kind: design-note
+  paths:
+  - docs/design/DN-24-mission-profiles-and-algorithm-baselines.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 76; DN-24 §6"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-24 §8 correction: two event variants (InForceAtStart, NoneInForce) the note did
+    not name; second DN-24 sign-off.
+  kind: design-note
+  paths:
+  - docs/design/DN-24-mission-profiles-and-algorithm-baselines.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 76; DN-24 §8"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    Plan 10: the seventeen TOGAF architecture principles, signed in batches with
+    recorded findings.
+  kind: other
+  paths:
+  - docs/architecture/togaf/preliminary/architecture-principles.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 (Resolved on 2026-09-06, Plan 10 bullet);
+    architecture-principles.md status
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    Plan 10: the seventeen TOGAF architecture contracts, signed in the same four
+    batches.
+  kind: other
+  paths:
+  - >-
+    docs/architecture/togaf/phase-g-implementation-governance/architecture-contracts.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 (Resolved on 2026-09-06, Plan 10 bullet);
+    architecture-contracts.md status
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-08 policy configuration and plan validity signed off (human-owned note).
+  kind: design-note
+  paths:
+  - docs/design/DN-08-policy-configuration.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 Plan 11 bullet; DN-08 status; docs/design/README.md"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-09 weapons control status and engagement authority signed off (human-owned note).
+  kind: design-note
+  paths:
+  - docs/design/DN-09-authority-and-control-status.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 Plan 11 bullet; DN-09 status; docs/design/README.md"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: DN-10 queue expiry and escalation signed off (human-owned note).
+  kind: design-note
+  paths:
+  - docs/design/DN-10-queue-expiry-and-escalation.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 Plan 11 bullet; DN-10 status; docs/design/README.md"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    DN-17 releasability marking and enforcement signed off (human-owned note).
+  kind: design-note
+  paths:
+  - docs/design/DN-17-releasability.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 Plan 11 bullet; DN-17 status; docs/design/README.md"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: DN-22 key custody, rotation and escrow signed off (human-owned note).
+  kind: design-note
+  paths:
+  - docs/design/DN-22-key-management.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 Plan 11 bullet; DN-22 status; docs/design/README.md"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    All 23 plan-11 verification rows agreed as criteria in
+    verification-capability-table.md §2.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - docs/design/verification-rows.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 Plan 11 bullet; docs/design/README.md;
+    verification-capability-table.md §2 (Rows added by plan 11)
+
+- date: 2026-09-05
+  signer: Owner
+  subject: "D-21: tonic and prost admitted as the gRPC second transport."
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "docs/agentic-coding-standards.md §2.9 gRPC as the second transport"
+
+- date: 2026-09-05
+  signer: Owner
+  subject: >-
+    Option B for the one breaking change: PlanView.kind replaces solutions, schema
+    version 2, path /v2, no mirror.
+  kind: other
+  paths:
+  - docs/design/model-and-schema-deltas.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "docs/design/README.md (status); docs/plans/README.md plan 11 row"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: >-
+    Edge (h): gungnir-app and gungnir-node to gungnir-modelops, and gungnir-modelops to
+    gungnir-model.
+  kind: edge
+  paths:
+  - gungnir-app
+  - gungnir-node
+  - gungnir-modelops
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 80; docs/design/dependency-edges.md §7"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: "Edge (i): gungnir-app to gungnir-decision (GAP-037, DN-13)."
+  kind: edge
+  paths:
+  - gungnir-app
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 80; docs/design/dependency-edges.md §7"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: >-
+    Edge (j): gungnir-ingest to gungnir-interop for the ASTERIX radar adapter (GAP-001).
+  kind: edge
+  paths:
+  - gungnir-ingest
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 80; docs/design/dependency-edges.md §7"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-047: CommandEvent::Decided carries the verdict and the rationale the record has.
+  kind: code
+  paths:
+  - gungnir-command
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 80 (4); gen_gaps.py GAP-047"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-14 amendment 1 (§9): the policy-chain source scan as the guard, and revision not
+    schema version; covers conforming code.
+  kind: design-note
+  paths:
+  - docs/design/DN-14-hazard-layer.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 80; DN-14 §9"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-01 amendment 1 (§9): asset list stamped with the per-promotion baseline revision;
+    covers conforming code.
+  kind: design-note
+  paths:
+  - docs/design/DN-01-defended-assets.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 80; DN-01 §9"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-06 amendment 1 (§9): 'superseded' means PlanSuperseded, and no engagement without
+    an effect window; covers conforming code.
+  kind: design-note
+  paths:
+  - docs/design/DN-06-engagement-and-effect.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 80; DN-06 §9"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-028: PolicyVerdict::summary() in gungnir-policy replaced three private matches.
+  kind: code
+  paths:
+  - gungnir-policy
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 82; gen_gaps.py GAP-028"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-081: the HMAC key-length expect in token.rs became a Result mapped to the
+    caller's error.
+  kind: code
+  paths:
+  - gungnir-security/src/token.rs
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 82; gen_gaps.py GAP-081"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: "Edge (k): gungnir-node to gungnir-policy (GAP-028 node half)."
+  kind: edge
+  paths:
+  - gungnir-node
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 82; docs/design/dependency-edges.md §7a"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: "Edge (l): gungnir-node to gungnir-geo (GAP-028 node half)."
+  kind: edge
+  paths:
+  - gungnir-node
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 82; docs/design/dependency-edges.md §7a"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-057/GAP-059: FileAccountStore and two gungnir_security::actions constants.
+  kind: code
+  paths:
+  - gungnir-security
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 83; gen_gaps.py GAP-057 and GAP-059"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-002: the ingest gateway stamps the authenticator's strength on provenance.
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 83; gen_gaps.py GAP-002"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-04 amendment 1 (§9): intercept_speed_mps closing speed on resources (D-26).
+  kind: design-note
+  paths:
+  - docs/design/DN-04-effector-model.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 84; DN-04 §9; gen_gaps.py D-26"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-22 amendment 2 (§11): the escrow holder is a named security-officer role per
+    deployment (D-27).
+  kind: design-note
+  paths:
+  - docs/design/DN-22-key-management.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 84; DN-22 §11; gen_gaps.py D-27"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-057 node half: the node's file account store and the token signing key from the
+    environment.
+  kind: code
+  paths:
+  - gungnir-node/src/auth.rs
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 85; gen_gaps.py GAP-057"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-084: P256KeyProvider asymmetric provider with escrow (built, unwired).
+  kind: code
+  paths:
+  - gungnir-security
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 86; gen_gaps.py GAP-084"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-058: MOP-38 twenty-four-cell role-by-layer-by-class authority matrix test.
+  kind: code
+  paths:
+  - gungnir-policy/src/authority.rs
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 86; gen_gaps.py GAP-058"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    Batch 6 gungnir-security items: Role::SecurityOfficer, passphrase-sealed
+    PersistentKeyProvider, LocalAccountAuthority::with_lifetime.
+  kind: code
+  paths:
+  - gungnir-security
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 items 88 and 91; DN-22 §12; docs/design/README.md DN-22 and
+    DN-23 rows
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    FeedStatsSink counter sink on the ASTERIX adapter, put to the owner on its own.
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 items 88 and 91"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-062: gungnir-api party-bearing TLS listener and operator-only refusal on both
+    write paths.
+  kind: code
+  paths:
+  - gungnir-api
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 90"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: "GAP-010: the AIS receiver adapter in gungnir-ingest."
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 90"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: "Edge (n): gungnir-app to gungnir-identification."
+  kind: edge
+  paths:
+  - gungnir-app
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 90; docs/design/dependency-edges.md §10"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: "Edge (o): gungnir-app to gungnir-identity."
+  kind: edge
+  paths:
+  - gungnir-app
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 90; docs/design/dependency-edges.md §10"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-004/GAP-040/GAP-002: gungnir-api sensor task and effector report routes, and the
+    machine path on detections.
+  kind: code
+  paths:
+  - gungnir-api
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 91; gen_gaps.py GAP-004, GAP-040, GAP-002"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-002: per-adapter authenticator and MachineIdentityAuthenticator in the ingest
+    gateway.
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 91; gen_gaps.py GAP-002"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-057: assign_role, save, the store re-reading its file, and the ASSIGN_ROLE
+    action.
+  kind: code
+  paths:
+  - gungnir-security
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 91; gen_gaps.py GAP-057"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-03 amendment 2 (§10): pass-close warning due time from the time to closest
+    approach.
+  kind: design-note
+  paths:
+  - docs/design/DN-03-warning.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 91; DN-03 §10"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: "Edge (p): gungnir-node to gungnir-remote for peer links (GAP-009)."
+  kind: edge
+  paths:
+  - gungnir-node
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 91; docs/design/dependency-edges.md §11"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: >-
+    Edge (q): gungnir-ml to gungnir-model and gungnir-interop (GAP-077, GAP-079).
+  kind: edge
+  paths:
+  - gungnir-ml
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 91; docs/design/dependency-edges.md §11"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-03 amendment 1 (§9): the pass-close distance, signed separately from item 91's
+    batch signature.
+  kind: design-note
+  paths:
+  - docs/design/DN-03-warning.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 91; DN-03 §9"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-22 amendment 3 (§12): passphrase-sealed keystore for the disconnected desktop,
+    put separately from its code.
+  kind: design-note
+  paths:
+  - docs/design/DN-22-key-management.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 91; DN-22 §12"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-011: the out-of-sequence tracking pipeline and ingest task, with
+    TrackManager::update_estimate and LiveTrackingService additions.
+  kind: code
+  paths:
+  - gungnir-fusion-async
+  - gungnir-track
+  - gungnir-tracking-service
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 92; gen_gaps.py GAP-011"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-029: the exact Bellman dynamic-program allocator (bellman module and its trait
+    implementation).
+  kind: code
+  paths:
+  - gungnir-allocation
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 92; gen_gaps.py GAP-029"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: >-
+    Edge (r): gungnir-fusion-async to gungnir-core, gungnir-filters and
+    gungnir-association.
+  kind: edge
+  paths:
+  - gungnir-fusion-async
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 92; docs/design/dependency-edges.md §12"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-053 governance wiring: PipelineSettings::from_baseline, with_algorithm_baseline,
+    and both binaries' use of them.
+  kind: code
+  paths:
+  - gungnir-fusion-async
+  - gungnir-tracking-service
+  - gungnir-app
+  - gungnir-node
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 93; gen_gaps.py GAP-053"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-020: FilterPredictor propagating covariance with the pipeline's own process
+    noise.
+  kind: code
+  paths:
+  - gungnir-assessment
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 93; gen_gaps.py GAP-020"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    EKF, UKF and RTS smoother in gungnir-filters (three §1 rows gated against filterpy).
+  kind: code
+  paths:
+  - gungnir-filters
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 93; gen_gaps.py GAP-011"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    Item 94 in gungnir-filters: IMM, particle filter with three resamplers, square-root
+    form.
+  kind: code
+  paths:
+  - gungnir-filters
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 94; gen_gaps.py GAP-011"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    Item 94 in gungnir-association: JPDA by joint-event enumeration and bounded MHT.
+  kind: code
+  paths:
+  - gungnir-association
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 94; gen_gaps.py GAP-011"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-013 in gungnir-track-fusion: covariance intersection, information-matrix fuser,
+    sensor registration.
+  kind: code
+  paths:
+  - gungnir-track-fusion
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 94; gen_gaps.py GAP-013"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: "GAP-015 in gungnir-rfs: the Gaussian-mixture PHD filter."
+  kind: code
+  paths:
+  - gungnir-rfs
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 94; gen_gaps.py GAP-015"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: "GAP-042: warning.acknowledge action constant in gungnir-security."
+  kind: code
+  paths:
+  - gungnir-security
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 95; gen_gaps.py GAP-042"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: "GAP-042: acknowledgement write route in gungnir-api."
+  kind: code
+  paths:
+  - gungnir-api
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 95; gen_gaps.py GAP-042"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: >-
+    Edge (v), formerly (s): gungnir-remote to gungnir-interop for DN-25's CoT sink,
+    accepted ahead of code.
+  kind: edge
+  paths:
+  - gungnir-remote
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    ARCHITECTURE.md §10 item 96; DN-25 §4; docs/design/dependency-edges.md §16
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    Item 96A: both allocator fixes (assignment returns positions; ties prefer the policy
+    that acts).
+  kind: code
+  paths:
+  - gungnir-allocation
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 96A; gen_gaps.py GAP-029"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-009: peer adapter launch-warning validation and quarantine in the ingest
+    gateway.
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 97; gen_gaps.py GAP-009"
+
+- date: 2026-09-06
+  signer: Owner, as engineering reviewer
+  subject: >-
+    Edge (s): gungnir-node to gungnir-identity, cross-session identity for the record
+    (GAP-019).
+  kind: edge
+  paths:
+  - gungnir-node
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 98; docs/design/dependency-edges.md §13"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-27 bearing path in gungnir-fusion-async (bearing applied at the cursor; outside
+    the reorder horizon refused).
+  kind: code
+  paths:
+  - gungnir-fusion-async
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 99; gen_gaps.py GAP-011"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: BearingOnly and AzimuthElevation measurement models in gungnir-filters.
+  kind: code
+  paths:
+  - gungnir-filters
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 99; gen_gaps.py GAP-011"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: "cross_bearings with its Fisher-information covariance in gungnir-coord."
+  kind: code
+  paths:
+  - gungnir-coord
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 99"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: "GAP-001: the SAPIENT spotter adapter in the ingest gateway."
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "ARCHITECTURE.md §10 item 99; gen_gaps.py GAP-001"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-26 laydown options signed (later confirmed 2026-09-07 because nobody present
+    could vouch for it).
+  kind: design-note
+  paths:
+  - docs/design/DN-26-laydown-options.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    docs/design/DN-26-laydown-options.md status; docs/design/README.md DN-26 row;
+    gen_gaps.py GAP-087
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-25 verification row CAP-7.4: SD-16 exchange over a bearer with no party
+    (gungnir-remote), agreed with D-33.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "DN-25 §8; docs/verification-capability-table.md §2 (Rows added by DN-25)"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-25 verification row CAP-3.8: friendly-set provenance in fires deconfliction
+    (gungnir-policy), agreed with D-33.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "DN-25 §8; docs/verification-capability-table.md §2 (Rows added by DN-25)"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    DN-25 verification row CAP-1.6: self-reported positions through the gateway
+    (gungnir-ingest), agreed with D-33.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: "DN-25 §8; docs/verification-capability-table.md §2 (Rows added by DN-25)"
+
+- date: 2026-09-06
+  signer: Owner
+  subject: >-
+    GAP-014: CalibrationEvent, ReferenceObservation and the service-layer
+    RegistrationLedger joining them.
+  kind: code
+  paths:
+  - gungnir-model
+  - gungnir-track-fusion
+  - gungnir-tracking-service
+  commit: eb89a9354f57629f7a642caa4fa0a81042d08f24
+  pre_repository: true
+  record: >-
+    gen_gaps.py GAP-014 (also inside ARCHITECTURE.md §10 item 94's 'all of it')
+
+- date: 2026-09-07
+  signer: Owner
+  subject: >-
+    DN-30: measurement_noise_var reaches PipelineSettings::from_baseline; the
+    gungnir-fusion-async diff signed as built.
+  kind: code
+  paths:
+  - gungnir-fusion-async
+  commit: a50399c33dea10e484b068e75a5b4a4c7f226738
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 124; DN-30 §7 (record first written on an unmerged branch);
+    PR #92
+
+- date: 2026-09-07
+  signer: Owner
+  subject: >-
+    DN-23 amendment 1 (§10): the account nobody could create; gungnir-node account
+    add|list writes the file.
+  kind: design-note
+  paths:
+  - docs/design/DN-23-operator-authentication.md
+  commit: 5d80dcc1126f91e17b54e6a3fba8a01d04a93aa4
+  pre_repository: false
+  record: "DN-23 §10; docs/design/README.md DN-23 row; PR #16"
+
+- date: 2026-09-07
+  signer: Owner
+  subject: >-
+    DN-11 amendment 2 (§10): the first SensorControlAdapter, SAPIENT task delivery.
+  kind: design-note
+  paths:
+  - docs/design/DN-11-sensor-control-and-tasking.md
+  commit: 5d80dcc1126f91e17b54e6a3fba8a01d04a93aa4
+  pre_repository: false
+  record: "DN-11 §10; docs/design/README.md DN-11 row; PR #16"
+
+- date: 2026-09-07
+  signer: Owner
+  subject: "DN-03 amendment 3 (§11): how a warning acknowledgement arrives."
+  kind: design-note
+  paths:
+  - docs/design/DN-03-warning.md
+  commit: 5d80dcc1126f91e17b54e6a3fba8a01d04a93aa4
+  pre_repository: false
+  record: "DN-03 §11; docs/design/README.md DN-03 row; PR #16"
+
+- date: 2026-09-07
+  signer: Owner
+  subject: >-
+    DN-16 amendment 1 (§9): LaunchWarningReport type, gated under
+    ExchangeItem::Warnings.
+  kind: design-note
+  paths:
+  - docs/design/DN-16-peer-sources.md
+  commit: 5d80dcc1126f91e17b54e6a3fba8a01d04a93aa4
+  pre_repository: false
+  record: "DN-16 §9; docs/design/README.md DN-16 row; PR #16"
+
+- date: 2026-09-07
+  signer: Owner
+  subject: >-
+    DN-18 amendment 1 (§9): three /v2/exchange read routes, recording the divergence
+    from §6.
+  kind: design-note
+  paths:
+  - docs/design/DN-18-coalition-exchange.md
+  commit: 5d80dcc1126f91e17b54e6a3fba8a01d04a93aa4
+  pre_repository: false
+  record: "DN-18 §9; docs/design/README.md DN-18 row; PR #16"
+
+- date: 2026-09-07
+  signer: Owner
+  subject: DN-27 bearing-only detections signed in full as a design.
+  kind: design-note
+  paths:
+  - docs/design/DN-27-bearing-only-detections.md
+  commit: 5d80dcc1126f91e17b54e6a3fba8a01d04a93aa4
+  pre_repository: false
+  record: "DN-27 status; docs/design/README.md DN-27 row; PR #16"
+
+- date: 2026-09-07
+  signer: Owner
+  subject: >-
+    Owner confirmed the DN-26 signature recorded 2026-09-06 is his, resolving GAP-087's
+    flagged discrepancy.
+  kind: record-correction
+  paths:
+  - docs/design/DN-26-laydown-options.md
+  - "docs/mission/gap-analysis/tools/gen_gaps.py"
+  commit: 502e0215345a33671fa099eec0535880eb6ceeaa
+  pre_repository: false
+  record: "DN-26 status; gen_gaps.py GAP-087; PR #9"
+
+- date: 2026-09-07
+  signer: Owner
+  subject: >-
+    DN-28 design signed: IMM (CV/CT) selectable in the fusion pipeline; scope, gating
+    question, sizing.
+  kind: design-note
+  paths:
+  - docs/design/DN-28-imm-in-the-pipeline.md
+  commit: 632a1844f7171b682ea22c716c7d2e5f530ccf72
+  pre_repository: false
+  record: "DN-28 status; docs/design/README.md DN-28 row; PR #12"
+
+- date: 2026-09-07
+  signer: Owner
+  subject: >-
+    DN-28 implementation: TrackFilter enum, Imm gating pair, imm-cv-ct configuration
+    validation.
+  kind: code
+  paths:
+  - gungnir-fusion-async
+  - gungnir-filters
+  - gungnir-config
+  commit: 632a1844f7171b682ea22c716c7d2e5f530ccf72
+  pre_repository: false
+  record: "DN-28 status and §8; docs/design/README.md DN-28 row; PR #12"
+
+- date: 2026-09-07
+  signer: Owner, as subject-matter reviewer (air defense)
+  subject: >-
+    GAP-046: air domain table of the vehicle catalogue reviewed and approved.
+  kind: other
+  paths:
+  - docs/test-tracks/catalogue-air.yaml
+  - docs/test-tracks/vehicle-catalogue.md
+  commit: 598210f65d61aadac7af33d1a64977c1e0b6a3b7
+  pre_repository: false
+  record: "gen_gaps.py GAP-046; catalogue-air.yaml reviewer field; PR #10"
+
+- date: 2026-09-07
+  signer: Owner, as subject-matter reviewer (land and fires)
+  subject: >-
+    GAP-046: land domain table of the vehicle catalogue reviewed and approved.
+  kind: other
+  paths:
+  - docs/test-tracks/catalogue-land.yaml
+  - docs/test-tracks/vehicle-catalogue.md
+  commit: 598210f65d61aadac7af33d1a64977c1e0b6a3b7
+  pre_repository: false
+  record: "gen_gaps.py GAP-046; catalogue-land.yaml reviewer field; PR #10"
+
+- date: 2026-09-07
+  signer: Owner, as subject-matter reviewer (maritime)
+  subject: >-
+    GAP-046: sea domain table of the vehicle catalogue reviewed and approved.
+  kind: other
+  paths:
+  - docs/test-tracks/catalogue-sea.yaml
+  - docs/test-tracks/vehicle-catalogue.md
+  commit: 598210f65d61aadac7af33d1a64977c1e0b6a3b7
+  pre_repository: false
+  record: "gen_gaps.py GAP-046; catalogue-sea.yaml reviewer field; PR #10"
+
+- date: 2026-09-07
+  signer: Owner
+  subject: >-
+    GAP-094: six unmaintained-crate advisories accepted in deny.toml, each naming what
+    brings it in.
+  kind: other
+  paths:
+  - deny.toml
+  commit: 1ef58454f1aa2665b1bd21c727acdbde536de058
+  pre_repository: false
+  record: "gen_gaps.py GAP-094; PR #6"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    GAP-096: four pipeline.rs doc comments corrected from a present-tense drawing claim
+    to 'retained for a caller'.
+  kind: code
+  paths:
+  - gungnir-fusion-async/src/pipeline.rs
+  commit: 11d20f5240ff4f9627b2954728583aa9b7539ea2
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 Open (GAP-096 bullet) and item 115; gen_gaps.py GAP-096; PR #29
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    GAP-065: PUBLISH_EXCHANGE action and its role grants in gungnir-security.
+  kind: code
+  paths:
+  - gungnir-security
+  commit: b9e565341f11909b40c8f79eb06af2eda02d51b3
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 102; DN-18 §10; gen_gaps.py GAP-065; PR #20"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: "GAP-065: POST /v2/exchange write path in gungnir-api."
+  kind: code
+  paths:
+  - gungnir-api
+  commit: b9e565341f11909b40c8f79eb06af2eda02d51b3
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 102; DN-18 §10; gen_gaps.py GAP-065; PR #20"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    D-39 desktop OS-keystore key provider (os_keystore.rs and its gungnir-app wiring);
+    items 103, 104, 111 reviewed as one mechanism.
+  kind: code
+  paths:
+  - "gungnir-security/src/os_keystore.rs"
+  - gungnir-app/src/state.rs
+  commit: 66ca34c2e319f24e131ec6a8f631da7c9e3974b1
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 103; DN-22 §13; PR #63"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    GAP-057 node account store (EncryptedAccountStore) and os_keystore service
+    parameter; items 103, 104, 111 reviewed as one mechanism.
+  kind: code
+  paths:
+  - "gungnir-security/src/account_store.rs"
+  - "gungnir-security/src/os_keystore.rs"
+  commit: 66ca34c2e319f24e131ec6a8f631da7c9e3974b1
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 104; DN-23 §11; PR #63"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    GAP-004: TaskAck reader in the SAPIENT adapter (gateway), signed with GAP-001's
+    node-type widening.
+  kind: code
+  paths:
+  - gungnir-ingest/src/adapters/sapient.rs
+  commit: bec37c3bd77b3626b69262e1c99ab0a80b599e25
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 106; gen_gaps.py GAP-004; commit bec37c3; PR #19
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    GAP-004 node half: TcpSapientSource::sink and TcpTaskSink, signed over the
+    WouldBlock fix.
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: b8ebbd0a24a964f7af8750db43c9a1327174ef77
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 106; PR #80"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    GAP-060: PersistentKeyProvider::open_or_create_via_os_keystore generalised, constant
+    made public; items 103, 104, 111 as one mechanism.
+  kind: code
+  paths:
+  - gungnir-security/src/keystore.rs
+  commit: 66ca34c2e319f24e131ec6a8f631da7c9e3974b1
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 111; PR #63"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    GAP-060: issue_node_serving_identity and issue_desktop_outbound_identity in
+    gungnir-remote/src/identity.rs; items 103, 104, 111 as one mechanism.
+  kind: code
+  paths:
+  - gungnir-remote/src/identity.rs
+  commit: 66ca34c2e319f24e131ec6a8f631da7c9e3974b1
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 111; PR #63"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: "D-39 OS keystore: keyring (v1 feature) and keyring-core."
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: c75139538d51c66de7f07c90ac698b4a4057f1f3
+  pre_repository: false
+  record: >-
+    docs/agentic-coding-standards.md §2.9 OS keystore; ARCHITECTURE.md §10 item 103; PR
+    #24
+
+- date: 2026-09-08
+  signer: Owner, as security reviewer
+  subject: >-
+    D-40 ONNX inference runtime: ort 2.0.0-rc.13, load-dynamic, behind a default-off
+    feature.
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: 6ddc048b280db793e0d72e581bac70a14c13c9af
+  pre_repository: false
+  record: >-
+    docs/agentic-coding-standards.md §2.9 ONNX inference runtime; ARCHITECTURE.md §10
+    item 120; PR #59
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    D-41 coordinate reference system projection: proj and proj-sys, optional behind a
+    default-off feature.
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: 6ddc048b280db793e0d72e581bac70a14c13c9af
+  pre_repository: false
+  record: >-
+    docs/agentic-coding-standards.md §2.9 Coordinate reference system projection;
+    ARCHITECTURE.md §10 item 120; PR #59
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    D-42 cloud KMS for ManagedService: aws-sdk-kms, aws-config,
+    azure_security_keyvault_keys, azure_identity, azure_core.
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: 6ddc048b280db793e0d72e581bac70a14c13c9af
+  pre_repository: false
+  record: >-
+    docs/agentic-coding-standards.md §2.9 Cloud KMS; ARCHITECTURE.md §10 item 120; PR
+    #59
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    DN-23 amendment 2 (§11): the OS keystore for a node's own accounts; one review with
+    DN-22 §13 and item 111.
+  kind: design-note
+  paths:
+  - docs/design/DN-23-operator-authentication.md
+  commit: 66ca34c2e319f24e131ec6a8f631da7c9e3974b1
+  pre_repository: false
+  record: "DN-23 §11; docs/design/README.md DN-23 row; PR #63"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    DN-18 amendment 2 (§10): exchange write path, store-and-forward, and the handoffs
+    producer.
+  kind: design-note
+  paths:
+  - docs/design/DN-18-coalition-exchange.md
+  commit: b9e565341f11909b40c8f79eb06af2eda02d51b3
+  pre_repository: false
+  record: "DN-18 §10; docs/design/README.md DN-18 row; PR #20"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    Supervisor granted RELEASE_PRODUCT and PUBLISH_EXCHANGE, matching
+    roles-and-stakeholders §4; confirmed in-session.
+  kind: code
+  paths:
+  - gungnir-security/src/authz.rs
+  - docs/mission/roles-and-stakeholders.md
+  commit: ac95e22b5f814c5d0af33cdd65f7389c1c9cf3bb
+  pre_repository: false
+  record: "DN-18 §10 signature scope; commit ac95e22 message; PR #22"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    DN-22 amendment 4 (§13): the OS keystore itself (D-39); one review with items 104
+    and 111.
+  kind: design-note
+  paths:
+  - docs/design/DN-22-key-management.md
+  commit: 66ca34c2e319f24e131ec6a8f631da7c9e3974b1
+  pre_repository: false
+  record: "DN-22 §13; docs/design/README.md DN-22 row; PR #63"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    GAP-001: SAPIENT adapter accepts acoustic and passive-RF node types (node-type
+    widening), signed with the TaskAck reader.
+  kind: code
+  paths:
+  - gungnir-ingest/src/adapters/sapient.rs
+  commit: bec37c3bd77b3626b69262e1c99ab0a80b599e25
+  pre_repository: false
+  record: "gen_gaps.py GAP-001; commit bec37c3; PR #19"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    GAP-057 entry's desktop-expiry (with_lifetime) signature confirmed as 2026-09-06
+    directly with the owner; stale claim corrected.
+  kind: record-correction
+  paths:
+  - "docs/mission/gap-analysis/tools/gen_gaps.py"
+  - docs/mission/gap-analysis/gap-register.md
+  commit: 2d7e6f7a3bd493add9557b61450847bc9f3564c1
+  pre_repository: false
+  record: "gen_gaps.py GAP-057; commit 2d7e6f7; PR #21"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    keystore.rs header's stale signature status corrected after the owner confirmed the
+    2026-09-06 PersistentKeyProvider signature.
+  kind: record-correction
+  paths:
+  - gungnir-security/src/keystore.rs
+  commit: 2d7e6f7a3bd493add9557b61450847bc9f3564c1
+  pre_repository: false
+  record: "gungnir-security/src/keystore.rs module doc; commit 2d7e6f7; PR #21"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    Backtick IntelligenceAnalyst in an authz.rs test doc comment (clippy doc-markdown),
+    no behaviour change; recorded in two commit messages.
+  kind: code
+  paths:
+  - gungnir-security/src/authz.rs
+  commit: b777cb89a87225433602165d885c02613db4fb6d
+  pre_repository: false
+  record: "commit b777cb8 message (repeated in a04bec4); PR #42"
+
+- date: 2026-09-08
+  signer: Owner
+  subject: >-
+    roles-and-stakeholders §4 'Publish to coalition exchange' row confirmed, then
+    amended the same day to add Supervisor.
+  kind: other
+  paths:
+  - docs/mission/roles-and-stakeholders.md
+  commit: b9e565341f11909b40c8f79eb06af2eda02d51b3
+  pre_repository: false
+  record: "docs/mission/roles-and-stakeholders.md §4; PR #20"
+
+- date: 2026-09-09
+  signer: Owner
+  subject: >-
+    GAP-015: Gaussian-mixture CPHD filter, signed over the replaced leave-one-out ESF
+    recurrence.
+  kind: code
+  paths:
+  - gungnir-rfs
+  commit: 39320038d5e0924083681a2eeb1b2dd3688b2881
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 109; PR #80"
+
+- date: 2026-09-09
+  signer: Owner
+  subject: >-
+    GAP-099: MISB ST 0601 UasMetadataAdapter in the gateway, signed over the
+    bounded-frame fix.
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: 0b4f4e3bcd12a2cfff13b27ccc6114a6931f2a6a
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 113; PR #83"
+
+- date: 2026-09-09
+  signer: Owner
+  subject: >-
+    GAP-100: ASTERIX Category 205 adapter arm, reviewed against the primary text, with
+    out-of-range angle refusals.
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: 0b4f4e3bcd12a2cfff13b27ccc6114a6931f2a6a
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 114; gen_gaps.py GAP-100; PR #83"
+
+- date: 2026-09-09
+  signer: Owner
+  subject: >-
+    GAP-100: Category 205 host-configuration wiring change in gungnir-ingest (struct
+    field and one method call).
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: 9916a3c1c53b36d6b70587770bf59091ce031c04
+  pre_repository: false
+  record: "gen_gaps.py GAP-100; ARCHITECTURE.md §10 item 114; PR #85"
+
+- date: 2026-09-09
+  signer: Owner
+  subject: >-
+    GAP-096: PipelineSnapshot bundling in gungnir-fusion-async, signed after the
+    retained-bearing lifetime fix.
+  kind: code
+  paths:
+  - gungnir-fusion-async
+  commit: c10d5221d4206edb0ce760e347890ef4a39fafa7
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 115; gungnir-fusion-async/src/lib.rs doc; PR #84
+
+- date: 2026-09-09
+  signer: Owner
+  subject: >-
+    D-43/GAP-103: solve_assignment's Assignment::total_cost becomes Option<f64>, with
+    tests and reconciled fuzz postcondition.
+  kind: code
+  paths:
+  - gungnir-association
+  commit: dffdb470d5071533e22560c7783791f7ef61c8f3
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 122; docs/agentic-workflow.md numerical-stability entry; PR
+    #81
+
+- date: 2026-09-09
+  signer: Owner
+  subject: >-
+    GAP-101: ASTERIX Category 129 adapter arm, signed over the codec reading I129/120 as
+    one octet.
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: 9916a3c1c53b36d6b70587770bf59091ce031c04
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 123; gen_gaps.py GAP-101; PR #85"
+
+- date: 2026-09-09
+  signer: Owner
+  subject: >-
+    GAP-101: Category 129 host-configuration wiring change in gungnir-ingest.
+  kind: code
+  paths:
+  - gungnir-ingest
+  commit: 9916a3c1c53b36d6b70587770bf59091ce031c04
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 123; gen_gaps.py GAP-101; PR #85"
+
+- date: 2026-09-09
+  signer: Owner
+  subject: >-
+    DN-30 re-review: from_baseline returns BaselineError instead of silently
+    substituting default noise or gate values.
+  kind: code
+  paths:
+  - gungnir-fusion-async
+  commit: a50399c33dea10e484b068e75a5b4a4c7f226738
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 124; DN-30 §7; PR #92"
+
+- date: 2026-09-09
+  signer: Owner
+  subject: >-
+    DN-29 §5 recommendation signed: augmented-state IMM is the design to build; no code
+    signed.
+  kind: design-note
+  paths:
+  - docs/design/DN-29-a-third-mode-for-the-imm.md
+  commit: a50399c33dea10e484b068e75a5b4a4c7f226738
+  pre_repository: false
+  record: "DN-29 §5; docs/design/README.md DN-29 row; PR #92"
+
+- date: 2026-09-10
+  signer: Owner
+  subject: >-
+    GAP-057 account CLI (gungnir-node account add/add-os-keystore), signed after adding
+    the missing IntelligenceAnalyst role.
+  kind: code
+  paths:
+  - gungnir-node/src/account.rs
+  commit: a50399c33dea10e484b068e75a5b4a4c7f226738
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 125; PR #92"
+
+- date: 2026-09-10
+  signer: Owner
+  subject: >-
+    GAP-060/D-29: certificate and key-custody path in gungnir-remote/src/identity.rs
+    reviewed and signed as code.
+  kind: code
+  paths:
+  - gungnir-remote/src/identity.rs
+  commit: a50399c33dea10e484b068e75a5b4a4c7f226738
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 126; PR #92"
+
+- date: 2026-09-10
+  signer: Owner
+  subject: >-
+    DN-22 amendment 5 (§14): ManagedService cloud custody profile (D-42), signed
+    together with its code.
+  kind: design-note
+  paths:
+  - docs/design/DN-22-key-management.md
+  commit: a50399c33dea10e484b068e75a5b4a4c7f226738
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 127; DN-22 §14; PR #92"
+
+- date: 2026-09-10
+  signer: Owner
+  subject: >-
+    ManagedService code (managed_service.rs, open_or_create_via_managed_service, node
+    arm), signed over the Azure signature-format fix.
+  kind: code
+  paths:
+  - "gungnir-security/src/managed_service.rs"
+  - gungnir-node/src/main.rs
+  commit: a50399c33dea10e484b068e75a5b4a4c7f226738
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 127; DN-22 §14 i; PR #92"
+
+- date: 2026-09-10
+  signer: Owner
+  subject: >-
+    GAP-015: labelled multi-Bernoulli filter in gungnir-rfs, signed over the log-domain
+    association_marginals rewrite.
+  kind: code
+  paths:
+  - gungnir-rfs
+  commit: bfd105b957162b983c431f624e6eca4125947c15
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 128; PR #93"
+
+- date: 2026-09-10
+  signer: Owner
+  subject: >-
+    GAP-015: dense-group mode wiring in gungnir-fusion-async (run_dense_group,
+    PipelineSnapshot::dense_group), with extended loom coverage.
+  kind: code
+  paths:
+  - gungnir-fusion-async
+  commit: bfd105b957162b983c431f624e6eca4125947c15
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 128; PR #93"
+
+- date: 2026-09-10
+  signer: Owner
+  subject: >-
+    DN-25 Cursor-on-Target design (§1 to §9) signed as the one to build; no code exists.
+  kind: design-note
+  paths:
+  - docs/design/DN-25-cursor-on-target.md
+  commit: a50399c33dea10e484b068e75a5b4a4c7f226738
+  pre_repository: false
+  record: "DN-25 status and §2; docs/design/README.md DN-25 row; PR #92"
+
+- date: 2026-09-15
+  signer: Owner
+  subject: >-
+    GAP-084 item 3: seal_journal's wildcard arm replaced by named PassphraseSealedFile
+    and OperatingSystemKeystore arms.
+  kind: code
+  paths:
+  - gungnir-node/src/main.rs
+  commit: 5ec1de8507c29094f00860a71353f38e860134cd
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 items 129 and 130 (c); PR #103"
+
+- date: 2026-09-15
+  signer: Owner
+  subject: >-
+    §2.9 Model checker row: loom under [target.'cfg(loom)'.dev-dependencies] for
+    gungnir-fusion-async (GAP-061).
+  kind: stack
+  paths:
+  - docs/agentic-coding-standards.md
+  commit: 5ec1de8507c29094f00860a71353f38e860134cd
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 130 (a); docs/agentic-coding-standards.md §2.9 Model
+    checker; PR #103
+
+- date: 2026-09-15
+  signer: Owner
+  subject: >-
+    GAP-090: three-state ReportedPositionSource in gungnir-policy/src/fires.rs, never
+    previously queued for signature.
+  kind: code
+  paths:
+  - gungnir-policy/src/fires.rs
+  commit: 5ec1de8507c29094f00860a71353f38e860134cd
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 130 (b); gen_gaps.py GAP-090; PR #103"
+
+- date: 2026-09-15
+  signer: Owner
+  subject: >-
+    GAP-001's 'human-owned and unsigned' sentence about the resolver's
+    gungnir-fusion-async touch ruled stale and deleted.
+  kind: record-correction
+  paths:
+  - "docs/mission/gap-analysis/tools/gen_gaps.py"
+  - docs/mission/gap-analysis/gap-register.md
+  commit: 5ec1de8507c29094f00860a71353f38e860134cd
+  pre_repository: false
+  record: "ARCHITECTURE.md §10 item 130 (d); gen_gaps.py GAP-001; PR #103"
+
+- date: 2026-09-15
+  signer: Owner
+  subject: >-
+    GAP-067 group B: tracking-service snapshot p99 and per-frame update() budgets gated
+    on figures the owner read.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - "gungnir-app/tests/frame_budgets.rs"
+  commit: 05a7bc65c5c82bb417c5d317629d6c99964d4ebe
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 132; verification-capability-table.md walk sheet group B;
+    PR #109
+
+- date: 2026-09-15
+  signer: Owner
+  subject: >-
+    GAP-067 group B: CPU ICP row now asserts its own translation and rotation criterion,
+    and is gated.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: 05a7bc65c5c82bb417c5d317629d6c99964d4ebe
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 132; verification-capability-table.md walk sheet group B;
+    PR #109
+
+- date: 2026-09-15
+  signer: Owner
+  subject: >-
+    GAP-067 group B: sensor-management row split; mode transitions gated,
+    coverage-accuracy criterion moved to gungnir-analytics.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: 05a7bc65c5c82bb417c5d317629d6c99964d4ebe
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 132; verification-capability-table.md walk sheet group B;
+    PR #109
+
+- date: 2026-09-15
+  signer: Owner
+  subject: >-
+    GAP-067 group B: gungnir-mission row gated on synthetic envelopes, data source
+    corrected.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: 05a7bc65c5c82bb417c5d317629d6c99964d4ebe
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 132; verification-capability-table.md walk sheet group B;
+    PR #109
+
+- date: 2026-09-15
+  signer: Owner
+  subject: >-
+    GAP-067 group B: cross-layer interop criterion amended to the interfaces this
+    release speaks, and gated.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: 05a7bc65c5c82bb417c5d317629d6c99964d4ebe
+  pre_repository: false
+  record: >-
+    ARCHITECTURE.md §10 item 132; verification-capability-table.md walk sheet group B;
+    PR #109
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    Owner-accepted #114 review recommendations: capability labels on five §2 rows and
+    three coverage dispositions moved.
+  kind: other
+  paths:
+  - docs/verification-capability-table.md
+  - docs/architecture/uaf/model/elements.yaml
+  commit: 2c3174308391676597563f7407f84e374e47b2fa
+  pre_repository: false
+  record: "commit 2c31743 message; PR #115"

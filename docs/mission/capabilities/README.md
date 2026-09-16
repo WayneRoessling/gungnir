@@ -5,8 +5,9 @@ view of capability, derived from the mission threads in `../mission-threads.md`.
 `../../gungnir-capabilities.md` remains the solution view of what each crate does;
 the capability-to-crate matrix here is the bridge between the two.
 
-Status: first draft 2026-09-04; statements, measures, and maturity targets await
-the owner's confirmation (open items in each file).
+Status: first draft 2026-09-04; open items are listed in each file, and what the
+owner has confirmed of the statements, measures and maturity targets is in
+[`../../signatures.md`](../../signatures.md).
 
 | File | Content |
 |---|---|

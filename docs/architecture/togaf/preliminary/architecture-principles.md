@@ -1,9 +1,9 @@
 # Architecture principles
 
-Status: first draft 2026-09-04; **signed by the owner 2026-09-05** (plan 10 method
-step 1). Five findings were recorded at signature and are listed at the end of this
-document; AP-12 and AP-16 in particular are signed as intended rules whose enforcement
-does not yet exist.
+Status: first draft 2026-09-04 (plan 10 method step 1); what the owner has signed of it
+is in [`../../../signatures.md`](../../../signatures.md). Five findings recorded at the
+2026-09-05 review are listed at the end of this document; AP-12 and AP-16 in particular
+were intended rules whose enforcement did not exist on that date.
 
 Seventeen principles in the four TOGAF categories. Most are not new: they are the rules
 the workspace already enforces, written in the form the ADM asks for so that a reviewer
@@ -261,12 +261,13 @@ Changing a criterion is a change request under phase H, not an edit. Contract C-
 | AP-16 | `../../../agentic-workflow.md` verification stack | C-16 |
 | AP-17 | `../../../verification-capability-table.md`; D-16 | C-17 |
 
-## Signed 2026-09-05, with findings
+## Findings of the 2026-09-05 review
 
-All seventeen principles and all seventeen contracts were signed by the owner on
-2026-09-05, in the four TOGAF batches, after each batch was checked against what the
-code actually does rather than against what the document asserts. Five findings were
-recorded at signature rather than resolved first, because a signature that hid them
+All seventeen principles and all seventeen contracts were reviewed on 2026-09-05, in
+the four TOGAF batches, after each batch was checked against what the code actually does
+rather than against what the document asserts; the signature is in
+`../../../signatures.md`. Five findings were recorded at that review rather than resolved
+first, because a signature that hid them
 would be worth less than one that names them.
 
 | Finding | Affects | State |

@@ -1,6 +1,6 @@
 # DN-03 Warning function
 
-Closes GAP-042. Status: first draft 2026-09-05; **implemented the same day** (`gungnir-workflow/src/warning.rs`) and **wired on 2026-09-06** through a ledger the desktop tick evaluates. Delivery to an `http` endpoint is real (GAP-040's transport); a refusal or silence fails loudly (§5). **Amendment 1 (§9) gives the pass-close trigger its distance, and amendment 2 (§10) its due time, both signed by the owner 2026-09-06** (corrected 2026-09-07: this line had called amendment 1 unsigned a full day after §9's own header recorded the signature). **Amendment 3 (§11, how an acknowledgement arrives) is signed by the owner 2026-09-07.**
+Closes GAP-042. Status: first draft 2026-09-05; **implemented the same day** (`gungnir-workflow/src/warning.rs`) and **wired on 2026-09-06** through a ledger the desktop tick evaluates. Delivery to an `http` endpoint is real (GAP-040's transport); a refusal or silence fails loudly (§5). **Amendment 1 (§9) gives the pass-close trigger its distance, and amendment 2 (§10) its due time.** **Amendment 3 (§11) says how an acknowledgement arrives.** What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -125,7 +125,7 @@ ignorable, which the compatibility rules already require.
 |---|---|---|---|
 | CAP-4.5 Warn assets and authorities | Replay with a configured obligation, plus a fault-injection test on the endpoint | A warning is raised no later than the obligation's lead time before predicted impact; an unreachable endpoint yields `Failed` with an alert and never a silent close; a warning past due becomes `Late` and stays open; every state change carries a mission time and, where a person acted, an operator | TT-02 and TT-04 sample sets; a stub endpoint that can be made to fail |
 
-## 9. Amendment 1: the pass-close distance (2026-09-06, **signed by the owner the same day**)
+## 9. Amendment 1: the pass-close distance (2026-09-06)
 
 §5 rule 1 says an obligation triggers when a track's "predicted impact **or closest
 approach** against that asset is inside `lead_time_s`", and the obligation carried no
@@ -153,7 +153,7 @@ Verification row (§8) unchanged in criterion: "no later than the obligation's l
 before predicted impact" still holds for rule 1, and the ledger test
 `a_pass_inside_the_distance_triggers_and_moving_out_closes` covers rule 2.
 
-## 10. Amendment 2: the pass-close due time (2026-09-06, **signed by the owner the same day**)
+## 10. Amendment 2: the pass-close due time (2026-09-06)
 
 Amendment 1 owed a pass-close warning within `lead_time_s` of the prediction because
 `AssetExposure` carried no time to closest approach. It carries one now
@@ -167,7 +167,7 @@ that is not moving) keeps amendment 1's rule.
 Verification row (§8) unchanged in criterion; the ledger test
 `a_pass_close_warning_is_due_by_the_closest_approach` covers the due time.
 
-## 11. Amendment 3: how an acknowledgement arrives (2026-09-06, **signed by the owner 2026-09-07**)
+## 11. Amendment 3: how an acknowledgement arrives (2026-09-06)
 
 §5 rule 2 says a warning stands until the party acknowledges it. Until 2026-09-06 nothing
 in the workspace could receive an acknowledgement: `WarningState::Acknowledged` existed,

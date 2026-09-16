@@ -31,8 +31,8 @@
 //! this family. They agree.
 //!
 //! **One discrepancy inside the primary text itself, recorded so a later reader does
-//! not "correct" this decoder the wrong way (2026-09-09, found in review before the
-//! adapter was signed).** Edition 1.0's own Table 1, its summary of least significant
+//! not "correct" this decoder the wrong way (2026-09-09, found in review of the
+//! adapter).** Edition 1.0's own Table 1, its summary of least significant
 //! bits, lists I205/070 and I205/080 at 0.1 degrees; the item definitions §5.2.8 and
 //! §5.2.9 both state `LSB = 0.01deg`, "in clock-wise notation, starting with 0 degrees
 //! for the geographical North", with `0.00 deg <= THETA < 360.00 deg`, and

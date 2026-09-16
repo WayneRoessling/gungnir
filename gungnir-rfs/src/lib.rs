@@ -22,12 +22,11 @@
 //! naming a type for a filter it does not implement is how a reader ends up believing
 //! the build has something it does not.
 //!
-//! **The CPHD build was signed by the owner on 2026-09-09**, after the review before
-//! signing found and closed a numerical instability in its leave-one-out elementary
-//! symmetric functions (see `elementary_symmetric_leave_one_out`'s own doc comment).
-//! **The LMB build is signed by the owner on 2026-09-10**, after the same review found
-//! and closed a different instability: [`association_marginals`]'s doc comment on the
-//! log-domain rewrite has the finding, a genuine underflow at the settings' own stated
+//! The CPHD build's review found and closed a numerical instability in its leave-one-out
+//! elementary symmetric functions (see `elementary_symmetric_leave_one_out`'s own doc
+//! comment). The LMB build's review found and closed a different instability:
+//! [`association_marginals`]'s doc comment on the log-domain rewrite has the finding, a
+//! genuine underflow at the settings' own stated
 //! label ceiling. Both are reached by `docs/agentic-workflow.md`'s numerical-stability
 //! clause the same way the PHD filter is (`ARCHITECTURE.md` §10), and neither has a
 //! library oracle -- Stone Soup 1.9.1 has no CPHD updater and no labelled filter at all,
@@ -674,7 +673,7 @@ fn elementary_symmetric(values: &[f64]) -> Vec<f64> {
 /// the `O(m^2)` dynamic program once per index: `O(m^3)` in all.
 ///
 /// **Deliberately not the `O(m^2)` synthetic-division shortcut this replaced
-/// (2026-09-09, found in review before signing).** `E(x) = Π(1 + v_i x)` factors as
+/// (2026-09-09, found in review).** `E(x) = Π(1 + v_i x)` factors as
 /// `(1 + v_j x) · Q_j(x)`, and `Q_j`'s coefficients are exactly the leave-`j`-out
 /// functions, so one forward pass of `q_k = e_k - v_j q_{k-1}` from `q_0 = 1` appears
 /// to deliver them in `O(m)` per index. It does -- when `v_j` is small. Deflating a
@@ -1452,7 +1451,7 @@ fn lse2(a: f64, b: f64) -> f64 {
     m + ((a - m).exp() + (b - m).exp()).ln()
 }
 
-/// # Log domain, and why: a real underflow found reviewing this before signing
+/// # Log domain, and why: a real underflow found reviewing this
 ///
 /// An earlier version scaled each label's weight vector by its own largest entry
 /// (bounding every per-label factor at 1, to stop the products taken across labels
@@ -3038,7 +3037,7 @@ mod tests {
         }
     }
 
-    /// **Found and fixed reviewing this file for the owner's signature.** No fixture
+    /// **Found and fixed reviewing this file.** No fixture
     /// exercised anywhere near the settings' own stated ceiling (100 Bernoullis, 12
     /// detections) -- the largest oracle scenario has 3 labels and 4 detections. The
     /// filter's earlier row-peak scaling bounded every per-label factor at 1 but still

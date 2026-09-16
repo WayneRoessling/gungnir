@@ -1,7 +1,7 @@
 # DN-25 Cursor-on-Target exchange
 
-Closes GAP-090 and GAP-091. Status: first draft, 2026-09-06; **the design (§1 to §9) signed
-by the owner as the one to build, 2026-09-10. No code exists.**
+Closes GAP-090 and GAP-091. Status: first draft, 2026-09-06. **No code exists.** What the
+owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gaps and the thread steps they block
 
@@ -47,15 +47,12 @@ things that exist:
 | The outbound sink | `gungnir-remote` | `endpoint.rs` and `peer.rs` are where outbound connections, retries and refusals already live |
 | Which data may go where | `gungnir-model` and the existing gates | `ExchangeSet::may_send` and `Releasability::permits`, unchanged. This note adds no second answer to a question already answered |
 
-**Signed by the owner 2026-09-10: this table's four-way split, and the "no new crate"
-finding it rests on, is the right shape.** Checked before that signature against what each
-named type and function actually does today (`PeerOrigin`'s `assigned_quality`/`age_s`/
-`is_stale_beyond`, `ExchangeFormat::is_lossy`, `ExchangeSet::may_send`,
-`Releasability::permits`), against `external-standards.md` §5's pinned schema, §5.7's
-`friend` predicate and §1.5's copyleft rule, and against `dependency-edges.md` (see §4's
-note on what that check turned up). No code exists; this signature is on the design alone,
-the same two-step DN-28 and DN-29 went through -- a future `gungnir-model`/`gungnir-interop`/
-`gungnir-ingest`/`gungnir-remote` diff is signed on its own account, against this design.
+This table's four-way split, and the "no new crate" finding it rests on, were checked
+against what each named type and function actually does today (`PeerOrigin`'s
+`assigned_quality`/`age_s`/`is_stale_beyond`, `ExchangeFormat::is_lossy`,
+`ExchangeSet::may_send`, `Releasability::permits`), against `external-standards.md` §5's
+pinned schema, §5.7's `friend` predicate and §1.5's copyleft rule, and against
+`dependency-edges.md` (see §4's note on what that check turned up). No code exists.
 
 ## 3. Types
 
@@ -122,7 +119,7 @@ desktop and the node would each grow a socket, a retry loop and a refusal count 
 `endpoint.rs` already has, and DN-07's handoff already proved that path belongs in
 `gungnir-remote`.
 
-**Accepted by the owner as engineering reviewer, 2026-09-06**, and recorded as edge (v) in
+Recorded as edge (v) in
 [`dependency-edges.md`](dependency-edges.md) §16 -- relabelled 2026-09-09 from (s)/§13, which
 collided with the real, already-drawn `gungnir-node` to `gungnir-identity` edge of the same
 letter (`dependency-edges.md` §16's own note has the finding). Per the rule it enters a
@@ -252,7 +249,7 @@ evaluates.
 
 ## 8. Verification
 
-**All three rows were agreed by the owner on 2026-09-06 and have moved into**
+**All three rows have moved into**
 [`../verification-capability-table.md`](../verification-capability-table.md) §2, under
 "Rows added by DN-25"; [`verification-rows.md`](verification-rows.md) maps them back here.
 They are reproduced below as this note drafted them, and **the table is their one home**: a
@@ -307,7 +304,7 @@ DN-05 for the deconfliction rule GAP-090 feeds; on DN-03 for the warning ledger 
 [`external-standards.md`](external-standards.md) §5 for the pinned schema, the transcribed
 attributes and the licence finding, and §5.7 for the type tree, the `friend` predicate and
 the case-sensitivity finding; **D-33** for the scope decision and the pins, extended
-2026-09-07 to cover the type tree; edge (v) accepted 2026-09-06 and recorded in
+2026-09-07 to cover the type tree; edge (v) recorded in
 [`dependency-edges.md`](dependency-edges.md) §16 (relabelled 2026-09-09 from (s)/§13, which
 collided with a different, real edge of the same letter -- §16's own note has the finding).
 Principles AP-02 (honest status: §5 rules 5, 6 and 8), AP-06 (one owning crate per type: §2),

@@ -12,9 +12,9 @@ The requirements half followed the same day (GAP-005): §3's `CollectionRequirem
 §4's edge, §5's **Requirements** paragraph, and §7's PN-15 row are built, and the model
 gained the `priority` field §3 shows and this note's implementation had omitted.
 
-Where the implementation departs from this note, §9 and §10 record it: amendment 1,
-signed by the owner on 2026-09-05, and amendment 2 (the first `SensorControlAdapter`),
-signed by the owner on 2026-09-07.
+Where the implementation departs from this note, §9 and §10 record it: amendment 1 and
+amendment 2 (the first `SensorControlAdapter`). What the owner has signed of this note is
+in [`../signatures.md`](../signatures.md).
 
 What is **not** built: the delivery itself, which needs an adapter (GAP-001); the
 `POST /v2/sensors/{sensor_id}/task` endpoint, which needs the transport (GAP-041);
@@ -198,11 +198,10 @@ Interface:
 | CAP-1.3 Sensor modes and tasking | Unit tests with a stub adapter that can acknowledge, refuse, or ignore | Local mode never changes before acknowledgement; an ignored task becomes `Unacknowledged` inside the window and alerts; a sensor with no control endpoint returns a not-implemented error and no state changes; no automatic retry occurs | Stub adapter; generated sensor sets |
 | CAP-2.12 Pattern of life and order of battle, tasking part | MT-08 replay | A requirement moves Stated to Tasked only with a concurrence carrying an operator; satisfaction always references evidence; a requirement past `needed_by` lapses rather than remaining open | TT-08 sample set |
 
-## 9. Amendment 1 -- **signed by the owner 2026-09-05**
+## 9. Amendment 1
 
 Raised when GAP-004 and GAP-005 implemented this note. Each item is a correction of the
-note against what implementing it showed. The same sign-off covers the code that conforms
-to it.
+note against what implementing it showed.
 
 **a. `Event` gains `Requirement(RequirementEvent)`.** §6 lists the interface delta and the
 `SensorTask` event, and no requirement event. Without one the requirement lifecycle exists
@@ -258,8 +257,6 @@ attaches one outside tests: GAP-001 brings the adapters, and until then every ta
 at `Issued` and `has_adapter()` reports false rather than leaving it to be inferred.
 
 ## 10. Amendment 2 (2026-09-07): the first `SensorControlAdapter`, and what it cannot say
-
-**Signed by the owner 2026-09-07.**
 
 Item g of amendment 1 built the seam and said "GAP-001 brings the adapters." One does now:
 `gungnir_sensor_management::sapient_task::SapientTaskAdapter`, the outbound counterpart of

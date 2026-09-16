@@ -4,7 +4,7 @@
 
 //! The asymmetric provider (GAP-084; docs/design/DN-22-key-management.md §9a and §11).
 //!
-//! **Signed by the owner 2026-09-06** (`gungnir-security` is human-owned).
+//! `gungnir-security` is human-owned (signatures: docs/signatures.md).
 //!
 //! Two things the symmetric provider cannot do. A **signature** for a transport identity
 //! or a baseline: ECDSA over P-256 with SHA-256, DER-encoded, so a TLS handshake or a

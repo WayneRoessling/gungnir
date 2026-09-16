@@ -9,7 +9,7 @@
 //! records and `hash_passphrase` produces the `phc`. Until 2026-09-07 that function was
 //! called from tests and from nowhere else, so a deployment following DN-23 had a
 //! documented file format, a node that refused to authenticate anybody without it, and
-//! **no way to write one**. The authentication half of GAP-057 was built, signed, and
+//! **no way to write one**. The authentication half of GAP-057 was built and
 //! unreachable in practice: the node warned `no caller authority` and the only remedy
 //! was to run a Rust test.
 //!
@@ -29,7 +29,7 @@
 //!
 //! **Human-owned: this CLI writes credential material** (`hash_passphrase`'s output)
 //! **into the account store both `gungnir-security` and `gungnir-app`/`gungnir-node`
-//! trust; signed by the owner 2026-09-10** (`ARCHITECTURE.md` §10 item 125), after the
+//! trust** (`ARCHITECTURE.md` §10 item 125; signatures: docs/signatures.md). Its
 //! review found and closed a real gap: `role_from_str` had every role this workspace had
 //! when this file was written (2026-09-07) but not `Role::IntelligenceAnalyst`, added to
 //! the enum afterward and never re-checked against this CLI -- the one role this system

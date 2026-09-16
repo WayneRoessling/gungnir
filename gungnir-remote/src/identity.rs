@@ -8,13 +8,7 @@
 //! **Human-owned (the certificate and key-custody path, added to
 //! `docs/agentic-workflow.md`'s low-trust list by name on 2026-09-06): the issuance code
 //! below -- `ProviderKey`, `issue`, `issue_for_client`, and the invariant they exist
-//! for -- is signed by the owner 2026-09-10.** The gap register's own account of this
-//! path's history said both "signed by the owner 2026-09-06" and, a few sentences later,
-//! "unsigned" for the same code; that contradiction, not a code defect, is what made this
-//! review overdue, and it is corrected in the same change as this signature. The
-//! "Persistent identities" section below was already reviewed and signed on 2026-09-08
-//! (`ARCHITECTURE.md` §10 item 111); this signature is the one the code above it never
-//! had a documented instance of.
+//! for** (signatures: docs/signatures.md).
 //!
 //! **What the review checked.** The invariant this module's own heading states --
 //! `der_bytes()`'s slice of `spki_der` is what actually ends up embedded in the issued
@@ -26,7 +20,7 @@
 //! alone, with no path that reads or returns the private scalar, which is what
 //! `gungnir-app/tests/architecture_compliance.rs` also pins at the crate-surface level;
 //! the ephemeral-vs-persistent fallback in the later section falls back honestly rather
-//! than silently, per its own already-signed review.
+//! than silently, per its own review.
 //!
 //! # The invariant, which is the point of the whole module
 //!
@@ -53,8 +47,7 @@
 //! production edge.
 //!
 //! # Persistent identities (2026-09-08, GAP-060's remaining slice; human-owned per
-//! `docs/agentic-workflow.md` -- signed by the owner 2026-09-08, `ARCHITECTURE.md` §10
-//! item 111)
+//! `docs/agentic-workflow.md`; `ARCHITECTURE.md` §10 item 111)
 //!
 //! [`issue_for_client`] and [`issue`] build a fresh ephemeral `P256KeyProvider` (the
 //! node's serving identity in `gungnir-node/src/main.rs::spawn_tls_from_provider`) or
@@ -462,7 +455,7 @@ mod tests {
     use gungnir_security::P256KeyProvider;
     use p256::ecdsa::signature::Verifier;
 
-    /// **Found reviewing this file for the owner's 2026-09-10 signature.** The existing
+    /// **Found reviewing this file.** The existing
     /// round-trip test above proves the provider's true key produces a valid signature,
     /// but never inspects `identity.certificate_der` itself -- so a bug in
     /// `ProviderKey::der_bytes()`'s slice of `spki_der` (the module's own doc comment

@@ -39,18 +39,12 @@ capability statements specify.
 
 ## 3. What is real, what is scaffold
 
-Restated from the status the repository already carries, not re-judged here:
-
-| Group | Status |
-|---|---|
-| Productization layer, 25 crates | Implemented and tested |
-| The canonical model, eventing, journal, configuration, session lifecycle | Implemented and tested |
-| Tracking mathematics, association, lifecycle, random finite sets, fusion, allocation | **Scaffold.** Trait surfaces with `todo!()` or not-implemented bodies; the pipeline flag is false |
-| Intercept planning | **Scaffold.** Returns not-implemented |
-| Interoperability codecs | **Scaffold.** ASTERIX and STANAG return not-implemented |
-| Interface transport | **Scaffold.** The contract is written, the crates are not signed off |
-| User interface | Track table, intercept panel, health, alerts, and a 2D viewport are implemented; the 3D scene and the decision panels are designed and not built |
-| Both binaries | Start and run without sensors |
+This section kept a table restating the repository's status on 2026-09-04, and by
+2026-09-16 most of its rows had been built past. What is not built is now read from the
+code: [`../../../unbuilt.md`](../../../unbuilt.md) is generated from every
+`NotImplemented` error the crates return, and the open entries of the gap register
+(`../../../mission/gap-analysis/gap-register.md`) carry what is unfinished. The table is
+kept in `../../../record/2026-09-16/signature-restatements-in-documents.md`.
 
 ## 4. Technical gaps by layer
 

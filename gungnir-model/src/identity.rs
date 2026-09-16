@@ -5,7 +5,7 @@
 //! Global entity identity primitive, extended by gungnir-identity into full
 //! lineage/merge-split tracking.
 //!
-//! **The newtype is a UUID** as of GAP-069 (D-11, signed 2026-09-04). It stayed a bare
+//! **The newtype is a UUID** as of GAP-069 (D-11). It stayed a bare
 //! `u128` until then because a new dependency needs a sign-off, and the comment that used
 //! to stand here said `uuid` could be adopted "later behind this same newtype". That is
 //! what happened: the representation did not change, and everything that stored or

@@ -166,11 +166,13 @@ jobs:
         run: bash .github/scripts/check_documents.sh tracks
 
   records:
-    name: The record and the unbuilt list are consistent with the code
+    name: The record, the unbuilt list, and the signature ledger are consistent
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # docs/record/ items are never edited once merged, every "§10 item N" citation names
-    # one, and docs/unbuilt.md is what the code's NotImplemented errors say.
+    # one, docs/unbuilt.md is what the code's NotImplemented errors say, every signature in
+    # docs/signatures.md names paths that existed at its commit, and no document outside
+    # the history says something still waits for the owner.
     steps:
       - uses: actions/checkout@v4
         with:

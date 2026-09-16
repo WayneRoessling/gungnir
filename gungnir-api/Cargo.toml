@@ -27,7 +27,7 @@ thiserror.workspace = true
 # agentic-coding-standards.md section 2.9; the `ws` feature is the server side, so no
 # separate server WebSocket crate is needed.
 axum.workspace = true
-# GAP-060, D-18: mutual TLS on the node's surface. Signed off 2026-09-05 and unused
+# GAP-060, D-18: mutual TLS on the node's surface. Unused
 # until now; `rustls::pki_types::pem` reads the PEM and never logs what it read.
 rustls.workspace = true
 tokio-rustls.workspace = true

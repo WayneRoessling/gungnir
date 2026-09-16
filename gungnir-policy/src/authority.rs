@@ -4,8 +4,8 @@
 
 //! Weapons control status and engagement authority.
 //!
-//! Design: docs/design/DN-09-authority-and-control-status.md, **signed by the owner
-//! on 2026-09-05**. Capabilities CAP-3.6 and CAP-6.2; measure MOP-38.
+//! Design: docs/design/DN-09-authority-and-control-status.md. Capabilities CAP-3.6 and
+//! CAP-6.2; measure MOP-38.
 //!
 //! **Human-owned** (docs/agentic-workflow.md): this file decides who may engage
 //! what. Agents may draft; a change merges only with the owner's sign-off, and a
@@ -432,7 +432,7 @@ mod tests {
 
     /// MOP-38 over both qualifiers (GAP-058): every role, layer and class cell of a
     /// matrix that grants by class as well as by layer is exercised, none sampled.
-    /// **Signed by the owner 2026-09-06** (this crate is human-owned).
+    /// This crate is human-owned (signatures: docs/signatures.md).
     #[test]
     fn every_cell_of_a_class_and_layer_matrix_is_honoured() {
         let settings = AuthoritySettings {

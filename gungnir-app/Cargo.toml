@@ -128,7 +128,7 @@ gungnir-geo = { path = "../gungnir-geo", version = "0.1.0" }
 # journal this desktop already owns, so neither adds a new source of truth; they add a
 # second and third reader of the existing one. `ARCHITECTURE.md` §7.3 listed both as
 # "not yet called from the tick", and its edge table carries them from this change.
-# GAP-075 / D-19: the in-window dock tree. Signed off in `agentic-coding-standards.md`
+# GAP-075 / D-19: the in-window dock tree. Admitted in `agentic-coding-standards.md`
 # §2.9 and pinned at 0.10, which is the line depending on egui 0.29, the workspace pin.
 # The detached-window half of D-17 needs no crate: egui 0.29's native viewports provide
 # it. `gungnir-ui` does not depend on this -- the `Behavior` implementation has to render

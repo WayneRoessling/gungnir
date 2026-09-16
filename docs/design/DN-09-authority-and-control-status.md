@@ -1,9 +1,9 @@
 # DN-09 Weapons control status and engagement authority
 
-Closes GAP-033. Status: **signed off by the owner 2026-09-05.** Design only; no code exists yet.
-**Human-owned and signed**: `gungnir-policy` is a low-trust crate and this note defines
-who may engage what. The owner signed it on 2026-09-05; it may now be implemented, and a
-change to it is a change request under phase H rather than an edit.
+Closes GAP-033. Status: design only; no code exists yet.
+**Human-owned**: `gungnir-policy` is a low-trust crate and this note defines
+who may engage what. A change to it is a change request under phase H rather than an edit.
+What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 

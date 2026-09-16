@@ -10,10 +10,10 @@ deliverables are omitted or merged, each with a stated reason
 ([`preliminary/tailored-adm.md`](preliminary/tailored-adm.md) §2).
 
 Status: first draft 2026-09-04. The seventeen principles and seventeen contracts were
-**signed by the owner on 2026-09-05**, with five findings recorded at signature (see the
-findings table in `preliminary/architecture-principles.md`); C-07 and C-11 were run
-against the tree that day and both passed. The governance framework is owner-approved
-content. Phases B, C, and D await their reviewers. The compliance assessment is the exception: it ran today against the
+reviewed on 2026-09-05, with five findings recorded at that review (see the findings
+table in `preliminary/architecture-principles.md`); C-07 and C-11 were run against the
+tree that day and both passed. What the owner has signed or approved of this set, and any
+review of phases B, C and D, is in [`../../signatures.md`](../../signatures.md). The compliance assessment is the exception: it ran today against the
 code and its results are measurements, not proposals.
 
 Start with [`architecture-definition-document.md`](architecture-definition-document.md).

@@ -19,14 +19,14 @@
 //! that assumes a human observer: no default accuracy, no instrument-specific unit, no
 //! error model invented where the report states none. The registration gate is what
 //! encoded the restriction, not the measurement mapping underneath it, so widening the
-//! gate is the whole of this change. **Human-owned (the `gungnir-ingest` gateway),
-//! signed by the owner 2026-09-08.**
+//! gate is the whole of this change. **Human-owned (the `gungnir-ingest` gateway;
+//! signatures: docs/signatures.md).**
 //!
 //! **Extended again 2026-09-08, GAP-004: a `TaskAck` reader** ([`TaskAckReport`],
 //! [`TaskAckStatus`], [`TaskAckSink`], `handle_task_ack`, `parse_task_ack`). Reading a
 //! message off this same inbound stream is exactly what the rest of this file already
 //! does, so the addition sits on the same trust boundary the GAP-001 widening above does.
-//! **Human-owned (the `gungnir-ingest` gateway), signed by the owner 2026-09-08.**
+//! **Human-owned (the `gungnir-ingest` gateway).**
 //!
 //! **Extended again 2026-09-08, GAP-004: [`TcpSapientSource::sink`], the wire transport
 //! `SapientTaskAdapter`'s own documentation had left open.** That adapter hands a task's
@@ -37,8 +37,8 @@
 //! `TcpStream::try_clone` gives an independent handle to the *same* connection for
 //! writing, one JSON object per line outbound exactly as `take_messages` reads them
 //! inbound. [`TcpTaskSink::send`]'s own doc comment records a `WouldBlock` handling bug
-//! found in review and closed the same day, before signing. **Human-owned (the
-//! `gungnir-ingest` gateway); signed by the owner 2026-09-08.**
+//! found in review and closed the same day. **Human-owned (the
+//! `gungnir-ingest` gateway).**
 //!
 //! So a spotter, an acoustic array, or a passive-RF direction finder each need no design
 //! of our own: they need this adapter, accepting their node type, and the measurement
@@ -280,7 +280,7 @@ impl TcpTaskSink {
     /// (or its absence) reports, not this call.
     ///
     /// **Retries on `WouldBlock` instead of treating it like any other error
-    /// (2026-09-08, found in review before signing).** This connection is nonblocking
+    /// (2026-09-08, found in review).** This connection is nonblocking
     /// (`TcpSapientSource::connect` sets it, and `try_clone` shares that as live, shared
     /// kernel state with this handle -- confirmed empirically rather than assumed, since
     /// std does not document it either way), so a full send buffer is not a rare event:
@@ -1624,7 +1624,7 @@ mod tests {
         );
     }
 
-    /// The bug `send_within` closes (2026-09-08, found in review before signing):
+    /// The bug `send_within` closes (2026-09-08, found in review):
     /// `write_all` treated a transient `WouldBlock` like a dead connection and gave up
     /// mid-message. This forces a real `WouldBlock` -- not a mocked one -- with many
     /// separate small sends rather than one large one: measured directly against this

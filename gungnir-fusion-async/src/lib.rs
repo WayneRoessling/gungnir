@@ -125,11 +125,11 @@ impl From<BearingDetection> for Submission {
 /// Everything one pass through [`ingest_with`]'s loop produced, bundled into one
 /// channel message rather than sent as three (GAP-096).
 ///
-/// **Signed by the owner 2026-09-09.** This crate is human-owned
-/// (`docs/agentic-workflow.md`); this struct and the channel type change below were the
+/// This crate is human-owned (`docs/agentic-workflow.md`; signatures:
+/// docs/signatures.md); this struct and the channel type change below were the
 /// mechanical part of wiring [`FusionPipeline::retained_bearings`] and
-/// [`FusionPipeline::stats`] out to a caller, written and gated 2026-09-08 and reviewed
-/// before signing. The bundling claim below is not only gated but model-checked:
+/// [`FusionPipeline::stats`] out to a caller, written and gated 2026-09-08 and then
+/// reviewed. The bundling claim below is not only gated but model-checked:
 /// `loom_model::snapshot_fields_come_from_one_epoch` holds it over every interleaving of
 /// the outbound channel, and `loom_model::unbundled_publication_is_caught` proves the
 /// two-channel shape this replaced *does* skew under preemption. What the review found
@@ -196,7 +196,7 @@ fn snapshot_output(pipeline: &FusionPipeline) -> PipelineSnapshot {
 /// is false, so no dashboard can claim a working tracker before one exists.
 ///
 /// **True since 2026-09-06** (GAP-011): [`pipeline::FusionPipeline`] composes the
-/// signed linear Kalman filter, the Jonker-Volgenant associator, the chi-square gate
+/// linear Kalman filter, the Jonker-Volgenant associator, the chi-square gate
 /// and the `gungnir-track` lifecycle over a reorder buffer, and
 /// `tests/oos_convergence.rs` gates the `fusion-async` row -- the async path against
 /// the offline batch over the same multi-sensor timeline.

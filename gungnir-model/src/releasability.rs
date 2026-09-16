@@ -4,7 +4,7 @@
 
 //! Releasability: who may receive a piece of data.
 //!
-//! Design: docs/design/DN-17-releasability.md, **signed by the owner 2026-09-05**.
+//! Design: docs/design/DN-17-releasability.md.
 //! Capabilities CAP-6.6 and CAP-7.4; decision D-06 settled that it is modelled now
 //! and enforced per caller later.
 //!

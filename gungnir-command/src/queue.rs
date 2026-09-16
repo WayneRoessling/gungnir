@@ -4,16 +4,15 @@
 
 //! Queue ordering, expiry, and escalation for pending decisions.
 //!
-//! Design: docs/design/DN-10-queue-expiry-and-escalation.md, **signed by the owner
-//! on 2026-09-05**. Capabilities CAP-3.6 and CAP-3.7; mission thread MT-01 under
-//! saturation.
+//! Design: docs/design/DN-10-queue-expiry-and-escalation.md. Capabilities CAP-3.6 and
+//! CAP-3.7; mission thread MT-01 under saturation.
 //!
 //! **Human-owned** (docs/agentic-workflow.md): this file changes what happens to a
 //! decision nobody takes.
 //!
-//! Wired into [`crate::InMemoryApprovalWorkflow`] under GAP-034 and GAP-035, **signed by
-//! the owner on 2026-09-05**. Until then every function here was correct, fully tested
-//! and called by nothing, and connecting them found two places where the code did not
+//! Wired into [`crate::InMemoryApprovalWorkflow`] under GAP-034 and GAP-035. Until then
+//! every function here was correct, fully tested and called by nothing, and connecting
+//! them found two places where the code did not
 //! match §5 of the design note: [`PendingApproval::is_due_for_escalation`] bounded
 //! escalation at once *ever* rather than once *per rank step*, and a single
 //! `escalated_from` could not express "both roles see it". Each carries its own note

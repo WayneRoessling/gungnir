@@ -44,8 +44,7 @@ pub trait ProtocolAdapter: Send {
 pub trait SourceAuthenticator: Send + Sync {
     fn authenticate(&self, sensor: SensorId) -> Result<(), IngestError>;
 
-    /// How strong an admission by this authenticator is (GAP-002; **signed by the owner
-    /// 2026-09-06**). The gateway stamps
+    /// How strong an admission by this authenticator is (GAP-002). The gateway stamps
     /// it on every accepted detection's provenance. Defaults to the weakest claim, so
     /// an authenticator that does not say is never read as stronger than it is.
     fn strength(&self) -> gungnir_model::SourceAuthentication {
@@ -233,7 +232,7 @@ impl IngestGateway {
                 let checked = authenticator
                     .authenticate(detection.sensor)
                     .and_then(|()| gateway::validate_detection(&detection, now));
-                // GAP-002 (signed by the owner 2026-09-06): the record says how strongly the
+                // GAP-002: the record says how strongly the
                 // source was authenticated, from the authenticator that admitted it, never
                 // from the adapter.
                 if checked.is_ok() {

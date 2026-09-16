@@ -414,10 +414,10 @@ L.append(f"Status: first draft, {DATE}. For each leaf capability: **design cover
          "coverage and partial implementation has technical gaps only; anything less than\n"
          "full design coverage has at least one mission gap.\n\n"
          "Twenty-two rows reached full design coverage on 2026-09-05 through plan 11's\n"
-         "design notes in `../../design/`. That set is signed and reviewed: the owner signed\n"
-         "all five human-owned notes, the engineering reviewer accepted the five new\n"
-         "dependency edges, and a domain reviewer checked each note against the mission\n"
-         "thread step it names. Full design coverage means a reviewed component is named for\n"
+         "design notes in `../../design/`. That set is reviewed: the engineering reviewer\n"
+         "accepted the five new dependency edges, a domain reviewer checked each note against\n"
+         "the mission thread step it names, and what the owner signed of it is in\n"
+         "`../../signatures.md`. Full design coverage means a reviewed component is named for\n"
          "every part of the capability; implementation is what remains.\n")
 L.append(GENERATED)
 L.append("| Capability | Design | Implementation | Evidence | Gaps |")

@@ -1,10 +1,10 @@
 # DN-10 Queue expiry and escalation
 
-Closes GAP-034 and GAP-035. Status: **signed off by the owner 2026-09-05**, implemented
-the same day, and **amendment 1 (§9) signed by the owner 2026-09-05**.
-**Human-owned and signed**: `gungnir-command` is a low-trust crate and this note changes
-what happens to a decision nobody takes. The owner signed it on 2026-09-05. The rule that
-no configuration can make an expiry accept is now settled, not proposed.
+Closes GAP-034 and GAP-035. Status: implemented 2026-09-05; **amendment 1** is §9.
+**Human-owned**: `gungnir-command` is a low-trust crate and this note changes
+what happens to a decision nobody takes. The rule that
+no configuration can make an expiry accept is now settled, not proposed. What the owner has
+signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -142,12 +142,12 @@ The first clause of the third criterion is tested by an exhaustive search over t
 settings space for any path that produces `Accepted` without an operator. That test exists
 because this is the note where such a path would most plausibly be added later.
 
-## 9. Amendment 1 — **signed by the owner 2026-09-05**
+## 9. Amendment 1
 
 Raised when GAP-034 and GAP-035 wired this note's module into
 `InMemoryApprovalWorkflow`. Everything here is a correction of the note against what
-implementing it showed, not a change of intent. The same sign-off covers the code that
-conforms to it: `OperatorDecision` in `gungnir-command`, and the expiry rule in
+implementing it showed, not a change of intent. The code that conforms to it is
+`OperatorDecision` in `gungnir-command`, and the expiry rule in
 `gungnir-collab`'s `RoleRankArbiter`.
 
 **a. `Escalated` is not an `OperatorDecision`.** §3 listed it as one. An escalated item

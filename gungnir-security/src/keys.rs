@@ -4,7 +4,7 @@
 
 //! Key custody, rotation, and escrow.
 //!
-//! Design: docs/design/DN-22-key-management.md, **signed by the owner 2026-09-05**.
+//! Design: docs/design/DN-22-key-management.md.
 //! Capability CAP-6.4; decision D-02 fixed the credential mechanism, and
 //! `ARCHITECTURE.md` §8.5 states the protection intent. Between those two there was
 //! nothing: no component owned key material.

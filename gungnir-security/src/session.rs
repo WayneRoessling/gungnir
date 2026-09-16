@@ -4,7 +4,7 @@
 
 //! Operator sessions: who is signed in, and why nobody is (GAP-057).
 //!
-//! Design: `docs/design/DN-23-operator-authentication.md`, signed off 2026-09-05.
+//! Design: `docs/design/DN-23-operator-authentication.md`.
 //! Mechanism: D-02. Crates: D-20 (`argon2`, `hmac`/`sha2`, `subtle`).
 //!
 //! # The rule the whole module exists for
@@ -257,8 +257,7 @@ impl InMemoryAccountStore {
 }
 
 /// Local accounts in a JSON file: `[{"operator": 7, "role": "Operator", "phc": "$argon2id$..."}]`
-/// (DN-23 §5, the disconnected desktop's store; GAP-057; **signed by the owner
-/// 2026-09-06**).
+/// (DN-23 §5, the disconnected desktop's store; GAP-057).
 ///
 /// Read once at start. An unreadable or malformed file is an unavailable store, which
 /// the desktop reports as `SessionState::StoreUnavailable` and starts anyway (rule 5).

@@ -9,11 +9,9 @@
 //! Decision D-42 admitted the crates. Register entry GAP-084.
 //!
 //! **Human-owned** (docs/agentic-workflow.md: `gungnir-security` decides who can read
-//! what); signed by the owner 2026-09-10, over both halves together -- the design
-//! (DN-22 amendment 5, §14) and this code -- per the register's own rule that this
-//! profile needed both signed at once.
+//! what; signatures: docs/signatures.md).
 //!
-//! **One real defect found and fixed before signing.** Key Vault's `sign` returns an
+//! **One real defect found and fixed in review.** Key Vault's `sign` returns an
 //! ES256 signature as the raw 64-byte `r || s` concatenation (RFC 7518 §3.4), never the
 //! ASN.1 DER encoding this crate's `KeyProvider::sign` contract uses everywhere else --
 //! `P256KeyProvider::sign` converts to DER before returning, AWS KMS's own algorithm
@@ -705,7 +703,7 @@ async fn azure_call(
 /// parse as a different (wrong) signature under a decoder lenient enough to try, and
 /// every TLS handshake signed by an `AzureKeyVaultKeyService`-backed identity would be
 /// unusable -- invisible to every test here, since none of them reaches a real vault.
-/// **Found and fixed 2026-09-10, reviewing this file for the owner's signature.**
+/// **Found and fixed 2026-09-10, reviewing this file.**
 /// PS256 (RSA) has no such split -- an RSA signature is one raw integer under either
 /// convention -- so this only converts the one scheme that needs it.
 fn azure_signature_to_provider_format(
@@ -1159,7 +1157,7 @@ mod tests {
         assert!(azure_signing_algorithm(SignatureScheme::EcdsaP256Sha256).is_ok());
     }
 
-    /// **Found and fixed reviewing this file for the owner's 2026-09-10 signature.** Key
+    /// **Found and fixed reviewing this file.** Key
     /// Vault's `sign` returns ES256 as the raw 64-byte `r || s` concatenation (RFC 7518
     /// §3.4); every consumer of this crate's `KeyProvider::sign` -- `P256KeyProvider`
     /// itself, and `gungnir_remote::identity`'s TLS bridge -- expects the ASN.1 DER

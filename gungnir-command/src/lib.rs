@@ -12,14 +12,13 @@
 //! Invariants: a plan the policy denied can never enter the queue; no plan is
 //! actionable without a record; records are append-only.
 //!
-//! The queue is timed as of GAP-034 and GAP-035 (**signed by the owner on
-//! 2026-09-05**): [`InMemoryApprovalWorkflow`] holds [`PendingApproval`]s carrying the
-//! deadlines [`queue::deadlines`] computes from the baseline, [`ApprovalWorkflow::sweep`]
-//! applies expiry and escalation, and the desktop tick calls it every frame.
+//! The queue is timed as of GAP-034 and GAP-035: [`InMemoryApprovalWorkflow`] holds
+//! [`PendingApproval`]s carrying the deadlines [`queue::deadlines`] computes from the
+//! baseline, [`ApprovalWorkflow::sweep`] applies expiry and escalation, and the desktop
+//! tick calls it every frame.
 //!
 //! `DecisionRecord::to_event` carries the verdict and the rationale as of GAP-047's
-//! resolution (**signed by the owner on 2026-09-06**), so MOE-05 can be read from the
-//! journal alone.
+//! resolution, so MOE-05 can be read from the journal alone.
 //!
 //! # A distinction the record cannot yet make
 //!
@@ -48,7 +47,8 @@ use gungnir_policy::{DenialReason, PolicyVerdict};
 /// What ended a pending approval.
 ///
 /// This is `docs/design/DN-10-queue-expiry-and-escalation.md` §3's type, conformed to
-/// on 2026-09-05 and **signed by the owner** the same day with amendment 1 (§9). Two things had drifted from the signed note and both mattered:
+/// on 2026-09-05 with amendment 1 (§9). Two things had drifted from the note and both
+/// mattered:
 ///
 /// - `Rejected` carried no reason, so PN-07 collected one from the operator and threw
 ///   it away. MOE-01 needs a considered rejection to be distinguishable from an
@@ -129,7 +129,7 @@ impl DecisionRecord {
                 decision: self.id,
                 accepted: self.is_actionable(),
                 operator: self.operator_id.clone(),
-                // MOE-05 reads both from the journal (signed by the owner 2026-09-06).
+                // MOE-05 reads both from the journal.
                 // The denial reason goes over in its debug spelling: the model may not
                 // depend on `DenialReason`, and the spelling is stable per variant.
                 verdict: self.verdict.summary(),

@@ -166,7 +166,6 @@ impl InProcessKeyProvider {
 
     /// The raw key, for the escrow wrap and nothing else (DN-22 §11). Crate-private:
     /// the provider boundary exists so no caller outside custody sees key material.
-    /// Signed by the owner 2026-09-06 with the asymmetric provider.
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub(crate) fn key_material(&self, id: &KeyId) -> Result<[u8; 32], SecurityError> {
         let entry = self

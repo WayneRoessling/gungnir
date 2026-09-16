@@ -48,7 +48,7 @@
 //! octet long; its detailed description (§5.2.12) opens "Three-octet fixed length Data
 //! Item". A wire decoder must pick one to keep every following item aligned. This module
 //! first followed the Format line (three octets, two of them carried raw as
-//! undocumented). The review before the adapter was signed weighed everything the
+//! undocumented). The 2026-09-09 review of the adapter weighed everything the
 //! document itself says about the item, and all of it but that one line says one octet:
 //! Table 2's length column says 1; the item's structure diagram is headed "Octet no. 1"
 //! and numbers bits 8 to 1 and nothing above them, where every genuinely three-octet item

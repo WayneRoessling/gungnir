@@ -3,9 +3,10 @@
 Closes GAP-009. Status: first draft, 2026-09-05. **Corrected 2026-09-08, again: the line
 below said the producer was what remained, and §10 (amendment 2) is that producer.** §3's
 `PeerOrigin` and `PeerSourceAdapter` are built (`gungnir-model/src/exchange.rs`,
-`gungnir-ingest/src/adapters/peer.rs`), §9's launch-warning types are built and signed, and
+`gungnir-ingest/src/adapters/peer.rs`), §9's launch-warning types are built, and
 §10 gives `LaunchWarningReport` its one caller: `gungnir-app/src/launch_warning.rs::declare`,
-a manual operator action gated on `RELEASE_PRODUCT`.
+a manual operator action gated on `RELEASE_PRODUCT`. What the owner has signed of this note
+is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -134,7 +135,7 @@ our own move to `/v2` does not strand a peer.
 |---|---|---|---|
 | CAP-1.6 Peer early warning | Two nodes in one test process, one feeding the other, plus fault injection | A peer track never carries a quality higher than its assigned value; peer age is present on every peer-sourced track; a malformed peer track is quarantined with a reason and does not enter the picture; an uncertain correlation leaves both tracks visible; a launch warning creates an alert and no track | Generated peer streams; TT-01 and TT-02 replayed as the peer's picture |
 
-## 9. Amendment 1: the launch-warning type, and which exchange item gates it (2026-09-06, **signed by the owner 2026-09-07**)
+## 9. Amendment 1: the launch-warning type, and which exchange item gates it (2026-09-06)
 
 §5 says what a launch warning **is** and what it must never do. §3 names the types this
 note owns and does not name one for it, and §5 names no `ExchangeItem` under which it may
@@ -219,10 +220,10 @@ note's decision to make. An operator today would need a caller this workspace do
 yet provide one for outside tests -- recorded so the gap is visible rather than implied
 closed by the producer existing.
 
-**Not human-owned, and so not signed.** `gungnir-app` is not on the low-trust list;
+**Not human-owned.** `gungnir-app` is not on the low-trust list;
 `RELEASE_PRODUCT` is reused rather than defined, so no `gungnir-security` edge is touched;
 nothing here reaches `gungnir-api`. The engineering stands on its own tests
-(`gungnir-app/tests/launch_warning.rs`) rather than on a signature, the same way GAP-065
+(`gungnir-app/tests/launch_warning.rs`), the same way GAP-065
 recorded its outbox and producer as "ordinary transport and wiring work" separately from
 the one new action that did need the owner's sign-off.
 

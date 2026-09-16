@@ -49,7 +49,9 @@ records() {
   python docs/record/tools/record.py
   python docs/record/tools/record.py check ${base:+--base "$base"}
   python docs/tools/gen_unbuilt.py
-  committed docs/record docs/unbuilt.md
+  python docs/tools/signatures.py
+  python docs/tools/signatures.py check ${base:+--base "$base"}
+  committed docs/record docs/unbuilt.md docs/signatures.md
 }
 
 groups=()

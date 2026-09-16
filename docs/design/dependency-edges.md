@@ -1,8 +1,9 @@
 # Dependency edges
 
-Status: **reviewed and accepted by the engineering reviewer, 2026-09-05; edges (h), (i) and (j) accepted 2026-09-06 (§7).** Every dependency
+Status: **reviewed and accepted by the engineering reviewer, 2026-09-05.** Every dependency
 edge the design set adds, in one place, so the graph is reviewed once rather than
-twenty-two times.
+twenty-two times. What the owner has signed of this document is in
+[`../signatures.md`](../signatures.md).
 
 All five edges are accepted, including the one flagged in §4 as the weakest. Each is
 cleared to enter a manifest, and is drawn in `ARCHITECTURE.md` §7.1 in the change that adds
@@ -16,9 +17,7 @@ is natural, each drawn in `ARCHITECTURE.md` §7.1 in the same change that introd
 describes as depending on everything above it; and **`gungnir-modelops` to `gungnir-model`,
 which DN-24 §5 did not list** -- the crate was one of the four the graph names as not using
 the model, and identity has to live there because `Provenance` does. All three are in the
-manifests and drawn in §7.1 as edge (h), and the owner signed the third as a correction to
-DN-24 §5 on 2026-09-05. **None was seen by the engineering reviewer**, which is a separate
-review from the owner's sign-off and is still outstanding for these three.
+manifests and drawn in §7.1 as edge (h).
 Every edge is argued in its note, checked for cycles, and may be rejected by the
 engineering reviewer in favour of passing the data in.
 
@@ -99,7 +98,7 @@ one crate can talk to a sensor.
 | `gungnir-ingest` to `gungnir-interop` | GAP-001 | 2026-09-06 | Yes, as (j) |
 | `gungnir-app` to `gungnir-identification` | GAP-010 | 2026-09-06 | Yes, as (n) |
 | `gungnir-app` to `gungnir-identity` | GAP-019, GAP-025 | 2026-09-06 | Yes, as (o) |
-| `gungnir-remote` to `gungnir-interop` | DN-25, GAP-091 | **No: accepted 2026-09-06, no code yet** | Not yet; §7.1 gains (v) in the change that adds the sink (§16, correcting a collision with the real (s) below -- see §16's own note) |
+| `gungnir-remote` to `gungnir-interop` | DN-25, GAP-091 | **No: no code yet** | Not yet; §7.1 gains (v) in the change that adds the sink (§16, correcting a collision with the real (s) below -- see §16's own note) |
 | `gungnir-remote` to `gungnir-security` | GAP-060, D-29 | 2026-09-06, with the `identity.rs` move out of `gungnir-node` | Yes, as (t) -- **the entry is dated 2026-09-07; the manifest line is older, see §14** |
 
 **All five are in manifests and drawn.** The acyclicity check was re-run with the full set
@@ -147,20 +146,19 @@ fails on a cycle, an upward edge by layer (§1.1, AP-10), a crate not placed in 
 table, or a recorded edge missing from the manifests. It runs with `cargo test`. It is
 the first of GAP-081's five checks and is recorded against that entry.
 
-## 7. Edges (h), (i) and (j) -- **accepted by the owner as engineering reviewer, 2026-09-06**
+## 7. Edges (h), (i) and (j)
 
 Five edges were added after the 2026-09-05 review and none was seen by it: (h)
 `gungnir-app` and `gungnir-node` to `gungnir-modelops`, and `gungnir-modelops` to
 `gungnir-model` (GAP-086, DN-24); (i) `gungnir-app` to `gungnir-decision` (GAP-037,
 DN-13); (j) `gungnir-ingest` to `gungnir-interop` (GAP-001, the ASTERIX radar adapter,
-landed by a parallel session the same day). This is the record drafted for one
-acceptance covering all five, drafted and accepted the same day. What the reviewer
-accepted, and the evidence for each:
+landed by a parallel session the same day). This is the record drafted for all five. What
+each is, and the evidence for each:
 
 | Edge | What it is | Evidence |
 |---|---|---|
 | app → modelops, node → modelops, app → decision | A binary reaching a productization crate. The graph in `ARCHITECTURE.md` already draws `gungnir-app ──► everything above it`, and (g) established node → productization on 2026-09-05. These were drawn because each crate had **no dependents at all** before them, which is a finding about the crates, not a new class of edge | `dependency_graph.rs`: acyclic; `Binary → Productization` is downward; both crates placed in the productization layer |
-| modelops → model | A productization crate joining the model. The identity type `AlgorithmBaselineId` has to live in the model because `Provenance` carries one; the alternative was two bare strings assembled in every caller, a second answer to "what is a baseline" outside the crate that owns them (DN-24 §5 correction, signed) | `dependency_graph.rs`: `Productization → Model` is downward; no cycle |
+| modelops → model | A productization crate joining the model. The identity type `AlgorithmBaselineId` has to live in the model because `Provenance` carries one; the alternative was two bare strings assembled in every caller, a second answer to "what is a baseline" outside the crate that owns them (DN-24 §5 correction) | `dependency_graph.rs`: `Productization → Model` is downward; no cycle |
 | (j) ingest → interop | A productization crate reaching a sibling. `ARCHITECTURE.md` §8.6 described this edge from the first draft ("`gungnir-ingest` adapters using `gungnir-interop` codecs"); no manifest carried it because no adapter existed. `gungnir-interop` depends on `gungnir-model` alone, so the edge adds no transitive reach | `dependency_graph.rs`: `Productization → Productization` is permitted and acyclic; the test's recorded-edge list names (j) |
 | (i) specifically | DN-13 §4 designed the split: "the caller enumerates candidates because only the registry knows which mode transitions are legal, and this crate may not depend on it." The app edge is the one the note intended; the refused alternative was decision → sensor-management | `sustainment::sensor_plans` builds candidates from the registry's transition table and hands them to the planner; `gungnir-decision`'s manifest has no sensor-management edge |
 
@@ -181,13 +179,9 @@ against the two changes that added the edges:
 - *Numerical stability, `unwrap()`, doc citations*: no numerics added; no `unwrap()`
   outside tests; every citation named a section that exists at the time of writing.
 
-Accepted by the owner on 2026-09-06, as engineering reviewer, on the evidence above and
-with `gungnir-app/tests/dependency_graph.rs` passing; the same line stands in
-`ARCHITECTURE.md` §7.1 against (h), (i) and (j). Every edge in the graph is now reviewed.
+## 7a. Edges (k) and (l)
 
-## 7a. Edges (k) and (l) -- **accepted by the owner as engineering reviewer, 2026-09-06**
-
-Added by GAP-028's node half, after the §7 acceptance, and accepted the same day on the evidence below with `gungnir-app/tests/dependency_graph.rs` passing.
+Added by GAP-028's node half, after the §7 edges; the evidence is below, with `gungnir-app/tests/dependency_graph.rs` passing.
 
 | Edge | What it is | Evidence |
 |---|---|---|
@@ -203,23 +197,23 @@ Added by the reconciliation half of GAP-050 and recorded here in the same change
 |---|---|---|
 | (m) app → resilience | The binary reaching a productization crate. `ARCHITECTURE.md` §7.1 draws `gungnir-app ──► everything above it`, and `gungnir-resilience` (model, eventing, store) had **no dependent at all** before this: `reconcile` existed and nothing ran it. The desktop runs it over its own journal and the node's `GET /v2/history` after an outage, and PN-18 shows the report. The refused alternative was computing the merge on the node, which would have put the desktop's journal on the wire before a person had seen the conflicts | `dependency_graph.rs`: `Binary → Productization` is downward, acyclic, listed as (m); `gungnir-app/tests/failover.rs` |
 
-## 10. Edges (n) and (o) -- **accepted by the owner as engineering reviewer, 2026-09-06**
+## 10. Edges (n) and (o)
 
 `gungnir-app` to `gungnir-identification` and to `gungnir-identity`. Added by GAP-010
 (the first evidence source) and GAP-019 with GAP-025 (the resolver and the order of
 battle), recorded here in the same change, with `gungnir-app/tests/dependency_graph.rs`
-naming both. Reviewed and accepted the same day.
+naming both.
 
 | Edge | What it is | Evidence |
 |---|---|---|
 | (n) app → identification | The binary reaching the productization crate that fuses evidence. `EvidenceFusionEngine` had been built with settings (GAP-018) and nothing constructed it, because nothing produced evidence; the AIS adapter does now, and the desktop is where the tracks it is associated with live. The refused alternative was fusing on the node, which has no tracks until GAP-011. **That reason expired 2026-09-06**: GAP-011 is closed and the node has tracks, so the edge stands on the second half of its argument -- the desktop is where the tracks are -- and a node-side alternative would now be a fresh decision rather than an impossibility. Recorded here rather than left to be read as still-current |  `dependency_graph.rs`: `Binary → Productization`, acyclic, listed as (n); `gungnir-app/tests/cooperative_identity.rs` |
 | (o) app → identity | The binary reaching the resolver. The desktop holds several sessions of its own journal and is the host that can fold them; `gungnir-reporting` already had its edge to `gungnir-identity` (d), so the app reaching both is the same direction. The refused alternative was a resolver inside `gungnir-reporting`, which would make a report own identity | `dependency_graph.rs`: listed as (o); `gungnir-app/tests/order_of_battle.rs` |
 
-## 11. Edges (p) and (q) -- **accepted by the owner as engineering reviewer, 2026-09-06**
+## 11. Edges (p) and (q)
 
 `gungnir-node` to `gungnir-remote`; `gungnir-ml` to `gungnir-model` and
 `gungnir-interop`. Recorded in the same change as the manifests, with
-`gungnir-app/tests/dependency_graph.rs` naming both. Reviewed and accepted the same day.
+`gungnir-app/tests/dependency_graph.rs` naming both.
 
 | Edge | What it is | Evidence |
 |---|---|---|
@@ -231,10 +225,10 @@ One dev-only edge was added and is not drawn, per the convention for `gungnir-sc
 real node transport in the test process (GAP-050). The runtime edge stays through
 `gungnir-remote`.
 
-## 13. Edge (s) -- **accepted by the owner as engineering reviewer, 2026-09-06**
+## 13. Edge (s)
 
 `gungnir-node` to `gungnir-identity`. Added by GAP-019, recorded here in the same change,
-with `gungnir-app/tests/dependency_graph.rs` naming it. Reviewed and accepted the same day.
+with `gungnir-app/tests/dependency_graph.rs` naming it.
 
 | Edge | What it is | Evidence |
 |---|---|---|
@@ -252,33 +246,33 @@ contradict it: identity correlation belongs where the journal is, and evidence f
 belongs where the operator working the picture is. Edge (n) now stands on that second half
 of its argument rather than on an impossibility.
 
-## 12. Edge (r) -- **accepted by the owner as engineering reviewer, 2026-09-06**
+## 12. Edge (r)
 
 `gungnir-fusion-async` to `gungnir-core`, `gungnir-filters` and `gungnir-association`.
 Added by the tracking pipeline (GAP-011), recorded here in the same change, with
-`gungnir-app/tests/dependency_graph.rs` naming it. Reviewed and accepted the same day.
+`gungnir-app/tests/dependency_graph.rs` naming it.
 
 | Edge | What it is | Evidence |
 |---|---|---|
-| (r) fusion-async → core, filters, association | The pipeline predicts a track to a measurement's time, gates the measurement, assigns and updates: a motion model, a filter and an associator. It names the three crates that own them rather than carrying its own. **All three were already beneath this crate** through `gungnir-track` → `gungnir-association` → `gungnir-filters` → `gungnir-core`, so the graph gains no reach and no depth; what changed is that the manifest now says what the code imports. The refused alternative was a filter inside `gungnir-fusion-async`, which would have put a second Kalman update in the workspace beside the signed one | `dependency_graph.rs`; `gungnir-fusion-async/tests/oos_convergence.rs` |
+| (r) fusion-async → core, filters, association | The pipeline predicts a track to a measurement's time, gates the measurement, assigns and updates: a motion model, a filter and an associator. It names the three crates that own them rather than carrying its own. **All three were already beneath this crate** through `gungnir-track` → `gungnir-association` → `gungnir-filters` → `gungnir-core`, so the graph gains no reach and no depth; what changed is that the manifest now says what the code imports. The refused alternative was a filter inside `gungnir-fusion-async`, which would have put a second Kalman update in the workspace beside the existing one | `dependency_graph.rs`; `gungnir-fusion-async/tests/oos_convergence.rs` |
 
 One dev-only edge was added and is not drawn, per the convention for `gungnir-scenario`:
 `gungnir-tracking-service` dev-depends on it for the §2 whole-pipeline replay row, which
 names the five scenarios. `ARCHITECTURE.md` §7.1's list of dev-dependents was updated in
 the same change.
 
-## 16. Edge (v) -- **accepted by the owner as engineering reviewer, 2026-09-06; relabelled 2026-09-09**
+## 16. Edge (v) -- **relabelled 2026-09-09**
 
-`gungnir-remote` to `gungnir-interop`, for DN-25's outbound Cursor-on-Target sink. Accepted
+`gungnir-remote` to `gungnir-interop`, for DN-25's outbound Cursor-on-Target sink. Recorded
 ahead of the code rather than with it, because DN-25 is a design-only note and it had to say
 which crate owns the sink before it could say anything else about it.
 
 **Relabelled from (s) to (v), and from §13 to §16, 2026-09-09.** This section and §13 below
 were both numbered 13 and both named their edge (s) -- a genuine collision found reviewing
-DN-25 for the owner's design sign-off, between this still-unbuilt edge and §13's real,
+DN-25, between this still-unbuilt edge and §13's real,
 already-drawn `gungnir-node` to `gungnir-identity` (`dependency_graph.rs` hardcodes that one
 as `"(s)"`; ARCHITECTURE.md §10 item 98 is where it closed). (s) is legitimately item 98's;
-this section keeps its 2026-09-06 acceptance date but takes the next letter and number
+this section takes the next letter and number
 actually free, following (u) at §15. No manifest or drawing changes: this edge is still not
 in either, exactly as it was under its old label, so nothing here contradicts a graph anyone
 has already checked in.
@@ -353,10 +347,8 @@ marked `gungnir-collab`'s and `gungnir-mission`'s.
 |---|---|---|
 | (u) app → coord | A laydown's sensor and resource placements are local ENU offsets from the deployment's origin (`gungnir-model::laydown`, DN-26 §4); `ConfigBaseline.resources` and `.sensors` take geodetic positions. Building a rehearsal's own throwaway configuration from a candidate laydown needs the one conversion between them, and `gungnir-coord::Wgs84` (`agentic-coding-standards.md` §1.3's oracle-comparable transform surface) is where every other geodetic/ENU conversion in the workspace already lives. Downward from the binary to a foundational crate with no workspace dependencies of its own; `gungnir-app` had no edge to it before | `gungnir-app/src/laydown_rehearsal.rs`; `gungnir-app/tests/laydown_rehearsal.rs` |
 
-**Not yet put to the owner.** Unlike the lettered edges above, this one has not been
-individually reviewed; it is recorded here in the same change that adds it to the
-manifest, per §5's rule that the two land together, so the review has something
-concrete to look at rather than a bare Cargo.toml line.
+It is recorded here in the same change that adds it to the
+manifest, per §5's rule that the two land together.
 
 ## Traceability
 

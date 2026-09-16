@@ -1,9 +1,10 @@
 # DN-27 Bearing-only detections
 
 Unblocks the acoustic, passive-RF and spotter halves of GAP-001, and the sensor-side half
-of GAP-004. Status: **proposed 2026-09-06; signed by the owner 2026-09-07.**
+of GAP-004. Status: **proposed 2026-09-06.** What the owner has signed of this note is in
+[`../signatures.md`](../signatures.md).
 
-**Built 2026-09-06 and gated; signed 2026-09-07, and the note is unchanged below.** What
+**Built 2026-09-06 and gated, and the note is unchanged below.** What
 was built, so a reader is not left comparing a specification against a guess:
 
 | Section | Where it landed | What is *not* there |
@@ -21,7 +22,7 @@ was built, so a reader is not left comparing a specification against a guess:
 refused every bearing with `SubmitError::NotAPosition` rather than offering it to
 `FusionPipeline::offer_bearing`, because a bearing needs the reporting sensor's position
 in the local frame and `DetectionView` carries a `SensorId` and no position, and nothing
-in this workspace resolved one for that service. That was true when this note was signed
+in this workspace resolved one for that service. That was true when it was written
 and stopped being true the next day: **GAP-001's closing action built the resolver**
 (`gungnir_tracking_service::SensorPositions`, `with_sensor_positions`, 2026-09-07), so a
 bearing whose sensor has a declared position now reaches `offer_bearing` as a

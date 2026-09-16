@@ -1,6 +1,7 @@
 # Architecture contracts
 
-Status: first draft 2026-09-04; **signed by the owner 2026-09-05.** Phase G. What every
+Status: first draft 2026-09-04; what the owner has signed of it is in
+[`../../../signatures.md`](../../../signatures.md). Phase G. What every
 change must honour, expressed as checks rather than as prose, because a contract nobody
 can run is a preference.
 

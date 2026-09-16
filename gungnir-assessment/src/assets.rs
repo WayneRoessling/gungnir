@@ -4,7 +4,7 @@
 
 //! Scoring tracks against the defended-asset list.
 //!
-//! Design: docs/design/DN-01-defended-assets.md §5 (signed 2026-09-05). Capability
+//! Design: docs/design/DN-01-defended-assets.md §5. Capability
 //! CAP-3.1 and CAP-3.2; measures MOP-27 and MOP-28.
 //!
 //! **Frame refinement made during implementation.** The design showed

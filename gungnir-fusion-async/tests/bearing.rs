@@ -302,7 +302,7 @@ fn the_position_path_is_unchanged() {
 }
 
 /// A position ages the retained set on its own clock, not only another bearing
-/// (2026-09-09, found in review before item 115 was signed). A bearing retained at
+/// (2026-09-09, found in the review recorded as item 115). A bearing retained at
 /// 10 s under a 5 s lifetime, followed by nothing but a position at 30 s, must be gone
 /// from the snapshot that follows -- before this, `ingest_with` expired only on the
 /// bearing arm, so a busy radar beside a quiet acoustic feed carried the last unmatched

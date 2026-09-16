@@ -85,7 +85,7 @@ checks is not governance.
 | Documentation weight exceeds engineering value for a team of one | The tailoring omits or merges nine TOGAF deliverables, each with a stated reason |
 | TOGAF and UAF content diverge | No view is redrawn here; phase documents reference them |
 | The description drifts from the code | Generated views, a registry check in continuous integration, and a compliance assessment per increment |
-| The principles are written and never signed | Owner sign-off is criterion 2 and is not deemed complete by drafting |
+| The principles are drafted and the owner never signs them | Owner sign-off is criterion 2 and is not deemed complete by drafting |
 
 ## 8. What is explicitly not committed
 

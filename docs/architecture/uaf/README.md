@@ -7,8 +7,8 @@ and Mermaid in the repository, built on one element registry. Start with
 
 Status: first draft 2026-09-04. The code-derived views are generated and checked;
 the operational and strategic content inherits the first-draft status of plans 02
-and 04 and awaits the owner's review; the resource content awaits engineering
-review.
+and 04, and any review of it or of the resource content is recorded in
+[`../../signatures.md`](../../signatures.md).
 
 ## The grid
 

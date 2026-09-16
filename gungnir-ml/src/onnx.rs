@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! `OnnxModel`: the [`Model`] trait's real backend, now that GAP-077's runtime sign-off
+//! `OnnxModel`: the [`Model`] trait's real backend, now that GAP-077's runtime decision
 //! (D-40) is built rather than deferred (`docs/ml/architecture.md` §3). Runs an ONNX
 //! graph through `ort::session::Session` on the CPU execution provider -- the two rows
 //! of architecture.md §3's table that need no GPU; the GPU-ordered-provider row is not

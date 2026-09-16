@@ -47,7 +47,7 @@ rustls.workspace = true
 # "what was this session running" has to be answerable from its journal. Downward from the
 # binary and drawn in ARCHITECTURE.md §7.1 in the same change.
 gungnir-modelops = { path = "../gungnir-modelops", version = "0.1.0" }
-# Edge (s), accepted by the owner as engineering reviewer 2026-09-06 (GAP-019): the node
+# Edge (s), GAP-019 (`docs/design/dependency-edges.md`): the node
 # resolves cross-session entity identity for the RECORD. Its journal is the authoritative
 # account of a mission (ARCHITECTURE.md §8.1), and a deployment whose desktops were not
 # connected for part of a watch has nowhere else the correlation could be made. It could

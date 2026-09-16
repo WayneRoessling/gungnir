@@ -44,10 +44,9 @@ things above have moved, and the words above are left as they were written:
   landed (`ConfigBaseline.revision`, a per-promotion counter). Step 1 can proceed.
 - The dependency edge is **(j)**, not (i): (i) had been assigned to `gungnir-app` to
   `gungnir-decision` earlier the same day. It is drawn as (j) in `ARCHITECTURE.md` §7.1
-  and listed in `dependency-edges.md` §4a; and it was reviewed -- `dependency-edges.md`
-  §7, accepted by the owner as engineering reviewer on 2026-09-06, on the evidence of
-  `gungnir-app/tests/dependency_graph.rs`, which now checks every edge's direction and
-  the graph's acyclicity on every `cargo test`.
+  and listed in `dependency-edges.md` §4a; and `dependency-edges.md` §7 records it, on the
+  evidence of `gungnir-app/tests/dependency_graph.rs`, which now checks every edge's
+  direction and the graph's acyclicity on every `cargo test`.
 - The register had not been updated for this work: GAP-064 still said "deliberately not
   built" beside a built codec, and GAP-001 did not mention the adapter. Both entries were
   reconciled from the code and stay Open (STANAG 4676; every sensor class but radar), and

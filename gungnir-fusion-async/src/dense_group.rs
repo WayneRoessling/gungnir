@@ -50,7 +50,7 @@
 //! variant whose output *does* carry labels, and that variant -- not this one -- is what
 //! may be presented as tracks.
 //!
-//! **Human-owned (concurrency), signed by the owner 2026-09-10**: see
+//! **Human-owned (concurrency)** (signatures: docs/signatures.md): see
 //! `crate::pipeline`'s module documentation, "The dense-group mode", for what the
 //! review covered and what it found (`ARCHITECTURE.md` §10 item 128).
 //!
@@ -137,11 +137,9 @@ pub enum DenseGroupFilter {
     /// The Gaussian-mixture PHD (`gungnir_rfs::PhdFilter`). Propagates the intensity
     /// alone, so the count it reports is that distribution's *mean* and nothing more.
     ///
-    /// **The default.** Both derivations are now signed by the owner (PHD 2026-09-06,
-    /// CPHD 2026-09-09, item 109; this mode's own wiring, item 128) -- the reason this
-    /// used to be the default (the cheaper filter being the only one reviewed) no
-    /// longer holds, and whether to flip it is left to the owner rather than changed in
-    /// passing here. See [`Self::Cphd`] for the case for the flip.
+    /// **The default.** Whether to flip it is left to the owner rather than changed in
+    /// passing here (the CPHD derivation: item 109; this mode's own wiring: item 128).
+    /// See [`Self::Cphd`] for the case for the flip.
     #[default]
     Phd,
     /// The Gaussian-mixture CPHD (`gungnir_rfs::CphdFilter`). Propagates the whole
@@ -154,11 +152,9 @@ pub enum DenseGroupFilter {
     /// also fills [`DenseGroupEstimate::most_probable_count`] and
     /// [`DenseGroupEstimate::count_distribution`], which the PHD cannot: a commander told
     /// "about 2.4 targets" is owed the difference between "almost always 2, sometimes 3"
-    /// and "often 0, occasionally 5". **No longer not-the-default for the reason this
-    /// comment used to give**: the derivation is signed (2026-09-09, item 109), and
-    /// this mode's own wiring around it is now signed too (item 128). Whether to make
-    /// this the default is a live open question left to the owner, named rather than
-    /// decided here.
+    /// and "often 0, occasionally 5". Whether to make this the default is a live open
+    /// question left to the owner, named rather than decided here (the derivation:
+    /// item 109; this mode's own wiring around it: item 128).
     Cphd,
 }
 
@@ -553,7 +549,7 @@ mod tests {
     }
 
     /// The default threshold cites the workspace's own association limit rather than
-    /// inventing one, and the default filter is the signed one.
+    /// inventing one, and the default filter is `DenseGroupFilter::Phd`.
     #[test]
     fn the_engagement_threshold_is_the_workspaces_own_association_limit() {
         let settings = DenseGroupSettings::default();

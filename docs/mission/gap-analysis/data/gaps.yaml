@@ -332,11 +332,12 @@
   action: >-
     Done 2026-09-08: the node attaches a SapientTaskAdapter per taskable feed, issues
     over the same connection a feed already reads from, and reads the TaskAck back, the
-    same as the desktop's own reader. Human-owned crate touched (`gungnir-ingest`),
-    reviewed and **signed by the owner 2026-09-08** (`../../../ARCHITECTURE.md` §10 item
-    106). **Closed 2026-09-15**, when a walk of everything the register said was waiting
-    on the owner found this entry still asking for a signature that had landed a week
-    earlier -- the same stale-claim failure items 123, 125, 126 and 130 each record.
+    same as the desktop's own reader. Human-owned crate touched (`gungnir-ingest`); the
+    review is `../../../ARCHITECTURE.md` §10 item 106, and the signature is in
+    `../../signatures.md`. **Closed 2026-09-15**, when a walk of everything the register
+    said was waiting on the owner found this entry still asking for a signature that had
+    landed a week earlier -- the same stale-claim failure items 123, 125, 126 and 130
+    each record.
   ref: "`ARCHITECTURE.md` §10 item 57"
   history:
   - date: 2026-09-15
@@ -605,9 +606,9 @@
   action: >-
     Done 2026-09-08: the producer is built (above) and DN-16 §10 records the decision --
     manual, gated on the existing `RELEASE_PRODUCT` action, no new action minted and no
-    `gungnir-security` or `gungnir-api` edge touched, so not human-owned work and not
-    signed. Remaining is only the UI control DN-16 does not assign to a wireframe; no
-    gap number is opened for it since no design names one to build against.
+    `gungnir-security` or `gungnir-api` edge touched, so not human-owned work. Remaining
+    is only the UI control DN-16 does not assign to a wireframe; no gap number is opened
+    for it since no design names one to build against.
   ref: "`docs/design/DN-16-peer-sources.md` §10"
   history:
   - date: 2026-09-08
@@ -2945,21 +2946,20 @@
     the measurement and is marked ignored so a green suite still means something;
     `performance-budgets.md`.
   action: >-
-    **Closed 2026-09-05.** The owner signed off the change the same day. `gungnir-store`
-    gained an explicit `DurabilityPolicy`: the node profile fsyncs every envelope, the
-    desktop profile buffers behind a held-open `BufWriter` and fsyncs on session save
-    and every 5 s, and the default is the strong profile so nothing becomes less durable
-    by omission. `gungnir-app` takes the desktop profile and calls `sync_if_due` each
-    tick, which is what makes the 5 s a wall-clock bound rather than a write-triggered
-    one; `gungnir-node` takes the default. Measured after: 50 envelopes in 157
-    microseconds release and 679 microseconds debug against the 1 ms budget, from 5.7 ms
-    and 8.3 ms. The budget is now a gate in `gungnir-app/tests/frame_budgets.rs`, and
-    the per-frame `update()` path improved with it, from a 533 microsecond debug p99 to
-    40.8 microseconds, because the journal was its dominant term. A second defect was
-    found on the way: the old code called `Write::flush` on a `File`, which is a no-op,
-    so the node profile was never actually fsyncing either. Superseded note: changing
-    the durability semantics of the desktop system of record needed the owner's
-    sign-off, which it had.
+    **Closed 2026-09-05.** `gungnir-store` gained an explicit `DurabilityPolicy`: the
+    node profile fsyncs every envelope, the desktop profile buffers behind a held-open
+    `BufWriter` and fsyncs on session save and every 5 s, and the default is the strong
+    profile so nothing becomes less durable by omission. `gungnir-app` takes the desktop
+    profile and calls `sync_if_due` each tick, which is what makes the 5 s a wall-clock
+    bound rather than a write-triggered one; `gungnir-node` takes the default. Measured
+    after: 50 envelopes in 157 microseconds release and 679 microseconds debug against
+    the 1 ms budget, from 5.7 ms and 8.3 ms. The budget is now a gate in
+    `gungnir-app/tests/frame_budgets.rs`, and the per-frame `update()` path improved
+    with it, from a 533 microsecond debug p99 to 40.8 microseconds, because the journal
+    was its dominant term. A second defect was found on the way: the old code called
+    `Write::flush` on a `File`, which is a no-op, so the node profile was never actually
+    fsyncing either. Superseded note: changing the durability semantics of the desktop
+    system of record needed the owner's sign-off (`../../signatures.md`).
   ref: "`ARCHITECTURE.md` §10, performance budgets"
   history:
   - date: 2026-09-05
@@ -2990,7 +2990,7 @@
     `gungnir-model/src/events.rs`; `gungnir-api/src/transport.rs`;
     `gungnir-api/tests/acknowledgement.rs`; `gungnir-workflow/src/warning.rs`;
     `gungnir-app/src/warnings.rs`; `gungnir-app/tests/node_tasks.rs`
-  action: Closed. DN-03 amendment 3 awaits the owner's signature.
+  action: Closed.
   ref: >-
     `docs/design/DN-03-warning.md`; `gungnir-workflow/src/warning.rs`;
     `gungnir-app/tests/predictions_and_warnings.rs`
@@ -3977,7 +3977,7 @@
   action: >-
     Closed. Each refused row computes the day its named input reaches the journal.
     `CommandEvent::Decided` gained `verdict` and `rationale` in `gungnir-command`
-    (human-owned), signed by the owner 2026-09-06.
+    (human-owned).
   ref: "`verification-capability-table.md` §2, `gungnir-reporting` row"
   history:
   - date: 2026-09-06
@@ -4719,16 +4719,15 @@
     `gungnir-security/tests/account_store_os_keystore.rs`;
     `gungnir-ui/src/panels/audit.rs`
   action: >-
-    Signed 2026-09-06 (`assign_role`, `save`, the `ASSIGN_ROLE` action). Built
-    2026-09-08 (human-owned; signed by the owner 2026-09-08, `ARCHITECTURE.md` §10 item
-    104): the node's account store on `keyring` (`EncryptedAccountStore`),
-    `AuthenticationProvider::OsKeystoreAccounts`, and `gungnir-node account
-    add-os-keystore`/`list-os-keystore`. Signed by the owner 2026-09-10
-    (`ARCHITECTURE.md` §10 item 125), after the review found and closed the missing
+    2026-09-06: `assign_role`, `save`, the `ASSIGN_ROLE` action. Built 2026-09-08
+    (human-owned; `ARCHITECTURE.md` §10 item 104): the node's account store on `keyring`
+    (`EncryptedAccountStore`), `AuthenticationProvider::OsKeystoreAccounts`, and
+    `gungnir-node account add-os-keystore`/`list-os-keystore`. Reviewed 2026-09-10
+    (`ARCHITECTURE.md` §10 item 125); the review found and closed the missing
     `IntelligenceAnalyst` role in the CLI's parser (see the description above). **Closed
-    2026-09-15**: every item this entry names is built and signed (2026-09-06,
-    2026-09-08 and 2026-09-10, `../../../ARCHITECTURE.md` §10 items 104 and 125), and
-    the status had simply never moved with them.
+    2026-09-15**: every item this entry names is built (`../../../ARCHITECTURE.md` §10
+    items 104 and 125; signatures in `../../signatures.md`), and the status had simply
+    never moved with them.
   ref: "`verification-capability-table.md` §2, `gungnir-security` row"
   history:
   - date: 2026-09-15
@@ -4935,14 +4934,13 @@
     `gungnir-app/src/state.rs` (`build_encryption`); `gungnir-app/src/session.rs`
     (`link_tls_for`); `gungnir-app/tests/encryption_status.rs`
   action: >-
-    Built 2026-09-08 (human-owned; signed by the owner 2026-09-08, `ARCHITECTURE.md` §10
-    item 111): the node's serving identity and the desktop's outbound identity both now
-    issue from a persistent, operating-system-keystore-backed provider first and an
-    ephemeral one as an honest fallback; `open_or_create_via_os_keystore` is generalised
-    the way `wrapping_secret` already was. This entry's own remaining engineering item
-    is done. Remaining: the owner's review and signature (the same shape GAP-057 is in),
-    and, recorded rather than tracked as a task, the standing design question of whether
-    the node's own outbound (peer-link) identity should ever persist too or share the
+    Built 2026-09-08 (human-owned; `ARCHITECTURE.md` §10 item 111): the node's serving
+    identity and the desktop's outbound identity both now issue from a persistent,
+    operating-system-keystore-backed provider first and an ephemeral one as an honest
+    fallback; `open_or_create_via_os_keystore` is generalised the way `wrapping_secret`
+    already was. This entry's own remaining engineering item is done. Remaining,
+    recorded rather than tracked as a task: the standing design question of whether the
+    node's own outbound (peer-link) identity should ever persist too or share the
     serving identity above -- undecided, and `host_tls` stays ephemeral until somebody
     decides it (ARCHITECTURE.md item 105). **D-47 (2026-09-15) settles the standing
     question this entry recorded rather than tracked**: a node holds **one persisted
@@ -5163,21 +5161,21 @@
     Done 2026-09-08, in the order this entry itself set: the DN-22 amendment first (§14,
     amendment 5), then the two backends against it. **All three of §5's custody rows now
     have a design and code**, which this entry has been open on since it was filed. What
-    remains is one thing engineering cannot do from here. (1) **Done**: the owner's
-    signature, on both halves together (amendment 5 as a design and the human-owned code
-    behind it -- `gungnir-security/src/managed_service.rs`, `gungnir-node/src/main.rs`'s
-    `seal_journal`, the `gungnir-config` reshape), landed 2026-09-10 (`ARCHITECTURE.md`
-    §10 item 127). The review before signing found and fixed a real defect the review
-    itself turned up rather than one either decision worth disagreeing with (envelope
-    encryption over a call per envelope, §14a; the new rule that a managed-service
-    baseline **must** name an escrow officer, §14f, which no other custody profile
-    carries) -- Azure Key Vault's `sign` returns a raw ECDSA signature this crate's
-    `KeyProvider::sign` contract never expected, and every TLS handshake an
-    `AzureKeyVaultKeyService`-backed identity signed would have failed silently on a
-    real deployment. Fixed and tested without a real vault, the same way the rest of
-    this profile is. (2) **A real cloud round trip, which needs credentials this
-    workspace does not have and must not pretend to.** Every claim the design makes is
-    tested against a `CloudKeyService` fake, and both SDK-backed services are
+    remains is one thing engineering cannot do from here. (1) **Done**: the review of
+    both halves together (amendment 5 as a design and the human-owned code behind it --
+    `gungnir-security/src/managed_service.rs`, `gungnir-node/src/main.rs`'s
+    `seal_journal`, the `gungnir-config` reshape), 2026-09-10 (`ARCHITECTURE.md` §10
+    item 127; signatures in `../../signatures.md`). The review before signing found and
+    fixed a real defect the review itself turned up rather than one either decision
+    worth disagreeing with (envelope encryption over a call per envelope, §14a; the new
+    rule that a managed-service baseline **must** name an escrow officer, §14f, which no
+    other custody profile carries) -- Azure Key Vault's `sign` returns a raw ECDSA
+    signature this crate's `KeyProvider::sign` contract never expected, and every TLS
+    handshake an `AzureKeyVaultKeyService`-backed identity signed would have failed
+    silently on a real deployment. Fixed and tested without a real vault, the same way
+    the rest of this profile is. (2) **A real cloud round trip, which needs credentials
+    this workspace does not have and must not pretend to.** Every claim the design makes
+    is tested against a `CloudKeyService` fake, and both SDK-backed services are
     compile-verified and construct; what is unverified is whether a real service's
     wrapped-blob format, error text, latency and credential-chain behaviour match what
     the fake models. Three `#[ignore]`d tests in
@@ -5188,29 +5186,28 @@
     (§14e), and `gungnir-node`'s `seal_journal` ended in a wildcard arm, so a sixth
     `KeyProviderConfig` variant would have landed there silently rather than failing to
     compile -- which is how `ManagedService` sat unbuilt in that function without
-    anything pointing at it. **The wildcard half is done 2026-09-15 and signed by the
-    owner the same day** (`ARCHITECTURE.md` §10 items 129 and 130): named arms for
-    `PassphraseSealedFile` and `OperatingSystemKeystore`, the two profiles DN-22 §5
-    assigns to the disconnected desktop, so the match is exhaustive by name and a sixth
-    variant is a compile error in this function rather than a run-time refusal. The
-    refusal text and the `owning_gap` lookup behind it are unchanged, and a test pins
-    both variants refusing -- the compile-time property itself is the one thing a test
-    cannot state, which that test says in as many words. **The key-version half is not
-    done, and is not a corollary of it**: recording the version a secret was wrapped
-    under changes both what `WRAPPED_SECRET_FILE` holds and what `CloudKeyService::wrap`
-    returns, which is a persisted-format decision belonging in §14e rather than a fix,
-    and nothing here can verify the result against a real vault (item 2 above). It stays
-    named as the one part of item (3) still open. GAP-057's node account store on the
-    OS-keystore crate is that gap's own separate item. **D-48 (2026-09-15) settles the
-    key-version half of item (3)**: the wrapped-secret file records the key version it
-    was wrapped under -- `CloudKeyService::wrap` returns it, `WRAPPED_SECRET_FILE` gains
-    a versioned header, and unwrap asks for that exact version instead of the latest.
-    Chosen over documenting a rotation procedure, because the failure that procedure
-    would guard against is a node unable to open its own keystore after a routine
-    rotation, reached by following ordinary operational advice. Not yet built; it lands
-    the way the rest of this profile did, against the `CloudKeyService` fake with
-    `#[ignore]`d tests naming what a real vault would need, and with no claim of a cloud
-    round trip.
+    anything pointing at it. **The wildcard half is done 2026-09-15** (`ARCHITECTURE.md`
+    §10 items 129 and 130): named arms for `PassphraseSealedFile` and
+    `OperatingSystemKeystore`, the two profiles DN-22 §5 assigns to the disconnected
+    desktop, so the match is exhaustive by name and a sixth variant is a compile error
+    in this function rather than a run-time refusal. The refusal text and the
+    `owning_gap` lookup behind it are unchanged, and a test pins both variants refusing
+    -- the compile-time property itself is the one thing a test cannot state, which that
+    test says in as many words. **The key-version half is not done, and is not a
+    corollary of it**: recording the version a secret was wrapped under changes both
+    what `WRAPPED_SECRET_FILE` holds and what `CloudKeyService::wrap` returns, which is
+    a persisted-format decision belonging in §14e rather than a fix, and nothing here
+    can verify the result against a real vault (item 2 above). It stays named as the one
+    part of item (3) still open. GAP-057's node account store on the OS-keystore crate
+    is that gap's own separate item. **D-48 (2026-09-15) settles the key-version half of
+    item (3)**: the wrapped-secret file records the key version it was wrapped under --
+    `CloudKeyService::wrap` returns it, `WRAPPED_SECRET_FILE` gains a versioned header,
+    and unwrap asks for that exact version instead of the latest. Chosen over
+    documenting a rotation procedure, because the failure that procedure would guard
+    against is a node unable to open its own keystore after a routine rotation, reached
+    by following ordinary operational advice. Not yet built; it lands the way the rest
+    of this profile did, against the `CloudKeyService` fake with `#[ignore]`d tests
+    naming what a real vault would need, and with no claim of a cloud round trip.
   ref: "`docs/plans/11-design-gap-closure.md` finding F-3"
   history:
   - date: 2026-09-15
@@ -5700,15 +5697,14 @@
     `gungnir-app/src/handoffs.rs::issue_for` republishes the whole handoff set on every
     new one, unfiltered by marking since `NodeApi::exchange_for` already applies that
     gate per party at serve time. The new `gungnir_security::actions::PUBLISH_EXCHANGE`
-    action and the `gungnir-api` write path are human-owned and signed by the owner the
-    same day; the outbox and the producer are ordinary transport and wiring work. DN-18
-    amendment 2 records the decision and what remains. **`Warnings` gained its producer
-    2026-09-08 (GAP-009, closed; DN-16 §10)**:
-    `gungnir-app/src/launch_warning.rs::declare` publishes to this same exchange queue.
-    The blocker this line named for it named the wrong type -- `LaunchWarningReport`
-    already carried `releasability` from DN-16 §9 (amendment 1, signed 2026-09-07); it
-    was never `gungnir_workflow::warning::Warning`, which DN-17 leaves alone and which
-    this line should not have named. **`Reports` gained its producer 2026-09-08**:
+    action and the `gungnir-api` write path are human-owned; the outbox and the producer
+    are ordinary transport and wiring work. DN-18 amendment 2 records the decision and
+    what remains. **`Warnings` gained its producer 2026-09-08 (GAP-009, closed; DN-16
+    §10)**: `gungnir-app/src/launch_warning.rs::declare` publishes to this same exchange
+    queue. The blocker this line named for it named the wrong type --
+    `LaunchWarningReport` already carried `releasability` from DN-16 §9 (amendment 1);
+    it was never `gungnir_workflow::warning::Warning`, which DN-17 leaves alone and
+    which this line should not have named. **`Reports` gained its producer 2026-09-08**:
     `gungnir-app/src/sustainment.rs`'s `ReportState::generate` and `::export` -- PN-13's
     two operator actions, and already the point a `MissionReport` comes into existence
     on this desktop -- each publish it to this same exchange queue as
@@ -5902,9 +5898,9 @@
     `NotConfigured` at the two sites in `gungnir-app/src/decisions.rs` -- no further
     change to `gungnir-policy` is needed, which is the point of gating the three-state
     logic against directly constructed values now. The `gungnir-policy` change from this
-    entry is **signed by the owner 2026-09-15** (`../../../ARCHITECTURE.md` §10 item
-    130), so nothing of this gap's own half is now unsigned; what is left is GAP-091's,
-    and the corpus is the first step of it.
+    entry is reviewed (`../../../ARCHITECTURE.md` §10 item 130), so nothing of this
+    gap's own half remains; what is left is GAP-091's, and the corpus is the first step
+    of it.
   ref: >-
     `docs/design/DN-25-cursor-on-target.md`; `docs/design/DN-05-fires.md` §5;
     `gungnir-policy/src/fires.rs`
@@ -6484,9 +6480,9 @@
     `gungnir-model/src/lib.rs` (`BearingRayView`); `gungnir-tracking-service/src/lib.rs`
     (`project_bearing_ray`, `TrackingService::bearing_rays`/`pipeline_stats`,
     `tests::a_retained_bearing_appears_in_the_view_and_leaves_it_once_expired`);
-    `gungnir-fusion-async/src/lib.rs` (`PipelineSnapshot`; written and gated, not
-    signed); `gungnir-viewport3d/src/tracks.rs` (`draw_bearing_rays_2d`,
-    `BearingRayGlyph`, and their tests), `src/lib.rs` (`render`/`prepare_3d` wiring);
+    `gungnir-fusion-async/src/lib.rs` (`PipelineSnapshot`);
+    `gungnir-viewport3d/src/tracks.rs` (`draw_bearing_rays_2d`, `BearingRayGlyph`, and
+    their tests), `src/lib.rs` (`render`/`prepare_3d` wiring);
     `gungnir-app/src/bearings.rs` (PN-08's alert and its tests), `src/sapient.rs`
     (`bearing_feed_lines`, `bearing_pipeline_line`);
     `gungnir-ui/src/panels/sensor_health.rs` (`BearingFeedLine`, `BearingPipelineLine`,
@@ -6516,10 +6512,9 @@
     `render` and `prepare_3d`. (3) `gungnir-app/src/bearings.rs::tick`, one alert per
     newly retained bearing naming the sensor and azimuth and nothing invented. (4)
     `SensorHealthView::bearing_feeds`/`bearing_pipeline`, read from `sapient_stats` and
-    the pipeline's own counters. (5) **Done 2026-09-08, signed by the owner the same
-    day**: the four present-tense doc comments in `pipeline.rs` now say the bearing is
-    retained *for a caller to draw* and name this gap as the reason none did; unchanged
-    by the rest of this closure. (6)
+    the pipeline's own counters. (5) **Done 2026-09-08**: the four present-tense doc
+    comments in `pipeline.rs` now say the bearing is retained *for a caller to draw* and
+    name this gap as the reason none did; unchanged by the rest of this closure. (6)
     `gungnir-tracking-service::tests::a_retained_bearing_appears_in_the_view_and_leaves_it_once_expired`,
     plus `gungnir-viewport3d::tracks`'s ray-geometry tests, in the shape of DN-27 §10's
     three. **A seventh item, closed 2026-09-08: the wire contract.** `SnapshotResponse`
@@ -6996,14 +6991,14 @@
     gap GAP-001 left open for Category 034 and closed later the same week. What remains,
     named rather than silently dropped: (1) done -- the owner reviewed both
     `gungnir-ingest` changes, the original adapter and this wiring, against the primary
-    text and signed them 2026-09-09 (`ARCHITECTURE.md` §10 item 114); (2) Category 129
-    (UAS Identification Reports), surveyed alongside this category and deliberately not
-    built here -- **picked up 2026-09-08 by GAP-101, pinned and built the same day, and
-    its own host configuration wiring closed hours after this entry's wiring paragraph
+    text on 2026-09-09 (`ARCHITECTURE.md` §10 item 114); (2) Category 129 (UAS
+    Identification Reports), surveyed alongside this category and deliberately not built
+    here -- **picked up 2026-09-08 by GAP-101, pinned and built the same day, and its
+    own host configuration wiring closed hours after this entry's wiring paragraph
     above, in the identical shape. Nothing of this item is left open here**: GAP-101
     owns both halves of Category 129 and whatever it still names as remaining; (3)
     GAP-096, unrelated to this gap but the reason a bearing this adapter produces still
-    does not reach an operator. **Closed 2026-09-15.** Item (1) was signed 2026-09-09;
+    does not reach an operator. **Closed 2026-09-15.** Item (1) was done 2026-09-09;
     item (2) belongs to GAP-101 in full, which closed the same week; item (3) was
     GAP-096, closed 2026-09-08 when a retained bearing reached the operator. Nothing of
     this entry is open, and the status had not followed.
@@ -7169,9 +7164,9 @@
     -- the same wiring gap GAP-100 left open for Category 205 and closed hours earlier
     the same day. What remains, named rather than silently dropped: (1) done -- the
     owner reviewed both `gungnir-ingest` changes, the original adapter and this wiring,
-    against the primary text and signed them 2026-09-09 (`ARCHITECTURE.md` §10 item
-    123), the review reversing the codec's reading of I129/120 to one octet; (2) an
-    evidence-fusion consumer for the `UasIdentificationReport` queue, mirroring
+    against the primary text on 2026-09-09 (`ARCHITECTURE.md` §10 item 123), the review
+    reversing the codec's reading of I129/120 to one octet; (2) an evidence-fusion
+    consumer for the `UasIdentificationReport` queue, mirroring
     `gungnir-app/src/cooperative.rs`'s own AIS/ADS-B reader, so a UAS's claimed identity
     reaches `gungnir-identification` the way AIS's and ADS-B's already do --
     `AsterixFeedAdapter::with_uas_report_sink` is the seam it attaches to, and
@@ -7608,10 +7603,10 @@
     the same input space crashed in **0.07 s on its 25,000th input** before this change.
     The other two targets ran clean in the same dispatch (`sensor_ingestion_parser`
     104,330,559 runs, `asterix_feed` 25,923,346), so the matrix is green on all three
-    for the first time since the defect was found. **Signed by the owner 2026-09-09**,
-    the same day he took D-43, so nothing remains: the `gungnir-association` change is
-    human-owned as a numerical stability guarantee (`docs/agentic-workflow.md`) and the
-    signature covers the contract, its tests and the reconciled fuzz postcondition.
+    for the first time since the defect was found. Nothing remains: the owner took D-43
+    on 2026-09-09, and the `gungnir-association` change is human-owned as a numerical
+    stability guarantee (`docs/agentic-workflow.md`); its signature, over the contract,
+    its tests and the reconciled fuzz postcondition, is in `../../signatures.md`.
     Closed.
   ref: >-
     `verification-capability-table.md` §1 (Hungarian / Jonker-Volgenant);

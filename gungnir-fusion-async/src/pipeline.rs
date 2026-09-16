@@ -11,15 +11,14 @@
 //!
 //! # What this composes, and what it does not invent
 //!
-//! Every piece of mathematics here already existed and was signed off on 2026-09-05
-//! (`ARCHITECTURE.md` §10 item 36): the Joseph-form linear Kalman filter, the
-//! Jonker-Volgenant assignment solver behind [`GlobalNearestNeighbor`], the chi-square
-//! gate, and the confirm/coast/delete state machine in `gungnir-track`. What was
-//! missing was the composition: a loop that predicts each track to a measurement's
-//! time, gates, associates, updates, initiates and ages. That is this module, and it
-//! adds no new estimator of its own -- **the one exception is `imm-cv-ct`'s selection
-//! logic** (DN-28, [`TrackFilter::ImmCvCt`]), which composes the already-signed IMM
-//! (item 94) rather than estimating anything new either.
+//! Every piece of mathematics here already existed (`ARCHITECTURE.md` §10 item 36): the
+//! Joseph-form linear Kalman filter, the Jonker-Volgenant assignment solver behind
+//! [`GlobalNearestNeighbor`], the chi-square gate, and the confirm/coast/delete state
+//! machine in `gungnir-track`. What was missing was the composition: a loop that
+//! predicts each track to a measurement's time, gates, associates, updates, initiates
+//! and ages. That is this module, and it adds no new estimator of its own -- **the one
+//! exception is `imm-cv-ct`'s selection logic** (DN-28, [`TrackFilter::ImmCvCt`]),
+//! which composes the IMM (item 94) rather than estimating anything new either.
 //!
 //! **Not in the pipeline yet, and named rather than implied**: the nonlinear
 //! estimators are not selected here beyond the CV/CT IMM (EKF, UKF and the particle and
@@ -48,17 +47,16 @@
 //! idle or configured away, which `tests/dense_group.rs` asserts by comparing the two
 //! runs field for field over a raid that engages it.
 //!
-//! **Human-owned (concurrency; `docs/agentic-workflow.md`): the wiring above --
-//! [`FusionPipeline::run_dense_group`], its engage/release state machine, and
-//! [`PipelineSnapshot::dense_group`]'s epoch coherence with everything else in the
-//! same bundle -- is signed by the owner 2026-09-10** (`ARCHITECTURE.md` §10 item
-//! 128), reviewed alongside `gungnir-rfs`'s LMB derivation (item 128 also carries
-//! that). `crate::loom_model`'s epoch-coherence assertion checked `tracks`,
-//! `retained_bearings` and `stats` but never `dense_group`, added to
-//! `PipelineSnapshot` after that check was written; extended in the same review so a
-//! future change that split it onto a second channel -- the exact failure the loom
-//! suite exists to catch -- would actually be caught rather than assumed safe by the
-//! same argument that covers the older three fields.
+//! **Human-owned (concurrency; `docs/agentic-workflow.md`; signatures:
+//! docs/signatures.md): the wiring above -- [`FusionPipeline::run_dense_group`], its
+//! engage/release state machine, and [`PipelineSnapshot::dense_group`]'s epoch
+//! coherence with everything else in the same bundle** (`ARCHITECTURE.md` §10 item
+//! 128, which also carries `gungnir-rfs`'s LMB derivation). `crate::loom_model`'s
+//! epoch-coherence assertion checked `tracks`, `retained_bearings` and `stats` but never
+//! `dense_group`, added to `PipelineSnapshot` after that check was written; extended
+//! under item 128 so a future change that split it onto a second channel -- the exact
+//! failure the loom suite exists to catch -- would actually be caught rather than
+//! assumed safe by the same argument that covers the older three fields.
 //!
 //! # Out of sequence, and why a horizon rather than a re-filter
 //!
@@ -910,7 +908,7 @@ impl FusionPipeline {
     /// this comment offered: the pipeline is owned by the ingest task and reachable only
     /// through the snapshot channel. So a feed that has gone quiet is aged where the
     /// picture is -- `LiveTrackingService::poll` drops a ray whose `valid_until` its own
-    /// clock has passed -- rather than here. Found in review before signing (item 115):
+    /// clock has passed -- rather than here. Found in review (item 115):
     /// until then, with no further bearing arriving, the last unmatched bearing was
     /// drawn for as long as the session lasted, while PN-08 had told the operator it was
     /// retained for `bearing_retention_s`.

@@ -4,10 +4,7 @@
 
 //! A persistent keystore for the disconnected desktop (GAP-084; DN-22 amendment 3, §12).
 //!
-//! **Signed by the owner 2026-09-06** (`gungnir-security` is human-owned). The header
-//! here had not caught up with `ARCHITECTURE.md`'s own record of that day; corrected
-//! 2026-09-08 after the owner confirmed it directly, the same way DN-26's laydown
-//! signature needed a direct confirmation before this register could act on it.
+//! `gungnir-security` is human-owned (signatures: docs/signatures.md).
 //!
 //! DN-22 §5's disconnected row says the operating system's keystore, unlocked at operator
 //! login. No crate in the approved stack reaches the OS keystore, and adding one is a
@@ -31,8 +28,7 @@
 //! wrapping key, the same escrow wiring -- and differs only in where the string fed to
 //! argon2 comes from: a high-entropy secret `os_keystore` generates once and the
 //! platform's own credential manager holds from then on, rather than a passphrase typed
-//! at every sign-in. **Human-owned; signed by the owner 2026-09-08 (`ARCHITECTURE.md`
-//! §10 item 103).**
+//! at every sign-in. **Human-owned (`ARCHITECTURE.md` §10 item 103).**
 //!
 //! **Generalised 2026-09-08 (GAP-060's remaining slice): `service` is now a parameter
 //! of [`PersistentKeyProvider::open_or_create_via_os_keystore`], not a name it bakes in
@@ -43,8 +39,7 @@
 //! under its own service name, so a single fixed name stopped being correct -- the
 //! same reason `crate::os_keystore::wrapping_secret` itself took `service` as a
 //! parameter when GAP-057's node account store needed a second name under the
-//! identical mechanism. **Human-owned; signed by the owner 2026-09-08 (`ARCHITECTURE.md`
-//! §10 item 111).**
+//! identical mechanism. **Human-owned (`ARCHITECTURE.md` §10 item 111).**
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;

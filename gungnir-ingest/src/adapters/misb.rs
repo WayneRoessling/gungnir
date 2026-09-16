@@ -43,10 +43,10 @@
 //! UAS Datalink LS key at all is trimmed to the fifteen bytes a key could be
 //! straddling, as before.
 //!
-//! **Human-owned (the `gungnir-ingest` gateway); signed by the owner 2026-09-09**,
-//! after the review before signing found and closed the corrupt-length stall above,
-//! recorded the missing-altitude axis a placed fix silently carried, and made the
-//! codec's fixed tag widths strict (`gungnir_interop::misb0601`).
+//! **Human-owned (the `gungnir-ingest` gateway; signatures: docs/signatures.md)**; its
+//! review found and closed the corrupt-length stall above, recorded the missing-altitude
+//! axis a placed fix silently carried, and made the codec's fixed tag widths strict
+//! (`gungnir_interop::misb0601`).
 
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Read};
@@ -78,7 +78,7 @@ const BASELINE_POSITION_VARIANCE_M2: [f64; 3] = [400.0, 400.0, 900.0];
 /// 228), so a header promising more than this is far more likely one corrupt length
 /// byte than a frame worth waiting for. Waiting is not free: every byte that arrives
 /// behind such a header is swallowed until the promised count is met, so before this
-/// bound existed (2026-09-09, found in review before signing) a single corrupt length
+/// bound existed (2026-09-09, found in review) a single corrupt length
 /// stalled the feed for good -- twenty valid frames queued behind a header claiming
 /// four gigabytes produced nothing across two hundred polls, with no error, no
 /// resynchronization, and a buffer that only grew. A header past this bound is now
@@ -377,7 +377,7 @@ impl<S: KlvSource> UasMetadataAdapter<S> {
                 // at 0 m in the local frame, and that axis is then not a measurement:
                 // named in the provenance, the same way `cat048::map` records "no
                 // height in report" rather than passing the radar site's height off
-                // as measured (2026-09-09, found in review before signing).
+                // as measured (2026-09-09, found in review).
                 let loss = (!point.elevation_reported).then_some(
                     "no Sensor True Altitude (Tag 15) in frame; up set to 0 m in the \
                      local frame",
@@ -610,7 +610,7 @@ mod tests {
         assert_eq!(stats.resynchronized, 1);
     }
 
-    /// The stall `MAX_FRAME_BYTES` closes (2026-09-09, found in review before signing):
+    /// The stall `MAX_FRAME_BYTES` closes (2026-09-09, found in review):
     /// one header claiming four gigabytes, then twenty valid frames. Before the bound,
     /// every one of those frames was swallowed behind the header -- nothing decoded,
     /// nothing counted, nothing resynchronized, across two hundred polls -- because a
@@ -694,7 +694,7 @@ mod tests {
     /// A fix with no Sensor True Altitude is still placed -- at 0 m in the local
     /// frame -- and says so in its provenance rather than carrying a 30 m vertical
     /// sigma for an axis nobody measured, the same record `cat048::map` keeps for a
-    /// plot with no height (2026-09-09, found in review before signing).
+    /// plot with no height (2026-09-09, found in review).
     #[test]
     fn a_frame_without_an_altitude_is_placed_and_the_missing_axis_is_recorded() {
         let sink = PlatformReportSink::default();

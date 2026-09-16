@@ -80,8 +80,8 @@
 //! (2 octets for the platform angles and the two altitudes, 4 for the latitudes,
 //! longitudes, sensor-relative angles and slant range -- the widths klvdata's tag table
 //! and the vendored fixture use; valid UTF-8 for a string) is carried the same way
-//! rather than scaled as if it were. **Made strict 2026-09-09, in review before the
-//! adapter was signed**: until then any 1-, 2- or 4-octet value was scaled by the
+//! rather than scaled as if it were. **Made strict 2026-09-09, in review of the
+//! adapter**: until then any 1-, 2- or 4-octet value was scaled by the
 //! tag's fixed domain, so a 2-octet latitude would have decoded as a value near zero
 //! degrees instead of being carried raw as this paragraph already promised. A producer
 //! that encodes a field more compactly than its fixed width is a real MISB possibility

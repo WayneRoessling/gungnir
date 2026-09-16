@@ -27,18 +27,17 @@
 //! the public capture, and `tests/asterix_seeds.rs` checks the corpus still decodes.
 //!
 //! **The Category 205 arm and its [`DfBinding`] (GAP-100): human-owned (the
-//! `gungnir-ingest` gateway), signed by the owner 2026-09-09**, after the review before
-//! signing confirmed the codec's bearing scale and angular reference against the
-//! primary text's own item definitions (`gungnir_interop::asterix::cat205`'s module
-//! documentation records the one discrepancy inside that text) and added the angular
-//! range refusals those definitions state.
+//! `gungnir-ingest` gateway; signatures: docs/signatures.md)**; its review confirmed
+//! the codec's bearing scale and angular reference against the primary text's own item
+//! definitions (`gungnir_interop::asterix::cat205`'s module documentation records the
+//! one discrepancy inside that text) and added the angular range refusals those
+//! definitions state.
 //!
 //! **The Category 129 arm, its [`UasBinding`] and `uas_detection` (GAP-101): human-owned
-//! (the `gungnir-ingest` gateway), signed by the owner 2026-09-09**, after the review
-//! before signing checked every item's scale, width and sign against the primary
-//! text's own item pages and reversed the codec's reading of the one item that text
-//! contradicts itself on (`gungnir_interop::asterix::cat129`'s module documentation:
-//! I129/120, one octet).
+//! (the `gungnir-ingest` gateway)**; its review checked every item's scale, width and
+//! sign against the primary text's own item pages and reversed the codec's reading of
+//! the one item that text contradicts itself on (`gungnir_interop::asterix::cat129`'s
+//! module documentation: I129/120, one octet).
 
 use crate::{DetectionView, IngestError, ProtocolAdapter};
 use gungnir_interop::asterix::{cat034, cat048, cat129, cat205, data_blocks, RadarSite};

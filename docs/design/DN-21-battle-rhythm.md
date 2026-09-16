@@ -1,7 +1,8 @@
 # DN-21 Battle rhythm
 
 Closes GAP-054. Status: first draft 2026-09-05; **implemented 2026-09-05**, see
-amendment 1 for the three places the implementation departed from this note.
+amendment 1 for the three places the implementation departed from this note. What the owner
+has signed of this note is in [`../signatures.md`](../signatures.md).
 
 The line that used to stand here said "design only; no code exists". It was already
 wrong when GAP-054 was picked up: `gungnir-reporting/src/rhythm.rs` held the types and
@@ -178,11 +179,10 @@ Interface, additive:
 The first criterion is the one that proves the scheduler is on mission time, and it is
 worth a dedicated test because a wall-clock implementation would pass every other check.
 
-## 9. Amendment 1 -- **signed by the owner 2026-09-05**
+## 9. Amendment 1
 
 Raised by GAP-054 on 2026-09-05, by implementing this note. Three departures, each because
-the note's placement could not be built as written. The same sign-off covers the code that
-conforms to it.
+the note's placement could not be built as written.
 
 **(a) The shared types are in `gungnir-model`, not in one consumer.** §3 puts
 `MaintenanceWindow` in `gungnir-sensor-management`; the first draft of the code put it,
