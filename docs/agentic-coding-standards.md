@@ -160,7 +160,8 @@ carry verification scaffolding.
   mandatory human sign-off exist for.
 - **Every `async fn` in `fusion-async`'s public API takes a cancellation-safety note in its
   doc comment** (does it hold partial state across an `.await` point that would be corrupted
-  by a dropped future?). This is cheap to write and expensive to reconstruct later.
+  by a dropped future?). This is cheap to write and expensive to reconstruct later, and
+  `gungnir-app/tests/architecture_compliance.rs` fails an `async fn` that has none.
 
 ### 2.3 `serde`
 
@@ -226,89 +227,50 @@ carry verification scaffolding.
 
 ### 2.8 `tracing` (approved stack addition)
 
-Logging/diagnostics wasn't part of the original fixed stack and was flagged for sign-off per
-§6 rule 4. **Approved.** `tracing` (+ `tracing-subscriber`, and `tracing-appender` if
-file-based capture is wanted for CI artifact upload) is now part of the standard Gungnir
-stack alongside `nalgebra`, `tokio`, `serde`, `rand`, `proptest`, `criterion`, and
-`arrow-rs` — the eight dependencies plus the five additions signed off in §2.9 are the
-full approved set. The conventions below
-are binding: crates should have no logging calls outside these conventions, and
-`println!`/`eprintln!`/the `log` crate should not be reached for as substitutes anywhere
-`tracing` conventions apply.
+`tracing` is the logging and diagnostics crate everywhere, with `tracing-subscriber` in
+the two binaries and in test-scoped subscribers (§2.9). `println!`, `eprintln!` and the
+`log` crate are not substitutes for it. A binary's own command-line output, such as a
+usage message, is output and not logging.
 
 **Why `tracing` specifically, not `log`:** `fusion-async` is the one crate with genuine
 concurrent, multi-stage execution (OOS buffer, multi-rate scheduler, multiple sensor feeds
 in flight at once). `tracing`'s span model is what makes a log line traceable back to *which*
 in-flight fusion task or *which* filter cycle produced it — a flat `log`-style line doesn't
-carry that context across an `.await` point. `tracing`'s async-aware instrumentation
-(`#[instrument]`, span-following across task boundaries) is built for exactly this problem,
-and it composes with `tokio` directly (`tokio-console` and `tracing-subscriber` both consume
-its output), so it doesn't introduce a second, uncoordinated diagnostics story alongside the
-existing async runtime choice.
+carry that context across an `.await` point. It composes with `tokio` directly
+(`tokio-console` and `tracing-subscriber` both consume its output), so it doesn't introduce
+a second, uncoordinated diagnostics story alongside the async runtime.
 
-**Levels — used for their capability-table meaning, not generic severity:**
+**Levels in the tracking core carry the capability table's meaning.** The UI, data and
+productization crates use ordinary severity (§7). In the core, and in
+`gungnir-fusion-async` above all, where most of the core's logging is:
 
-- `error!` — reserved for the things the capability table treats as hard failures: a PSD
-  violation, a NaN/Inf in a covariance or state vector, a `loom`-detected race surfaced at
-  runtime outside the test harness, an association solver returning an infeasible assignment.
-  An `error!` in Gungnir should always correspond to a definition-of-done criterion being
-  violated, not general-purpose "something looked off."
-- `warn!` — degraded-but-recoverable conditions the table treats as expected edge cases:
-  a track entering coast state, a gate rejecting all candidate detections for a cycle, a
-  sensor's OOS buffer approaching its configured depth limit.
-- `info!` — capability-table-visible lifecycle events: track init/confirm/delete transitions,
-  IMM mode switches, scenario generation start/end. Sparse enough that a human tailing
-  production logs gets a readable narrative of what the tracker is doing, not a firehose.
-- `debug!` — pipeline-stage detail useful when reproducing a specific test failure: per-cycle
-  predict/update calls, association cost-matrix dimensions, fusion input track counts. Off by
-  default; enabled per-crate when debugging a specific oracle mismatch.
-- `trace!` — full numeric dumps (state vectors, covariance matrices, cost matrices). Gated
-  behind a `trace-numeric` feature flag in addition to the log-level filter, since these lines
-  are expensive to format and privacy/size-irrelevant here but still not something to pay for
-  in a release build even when the level is filtered — the feature flag keeps the formatting
-  code out of the binary entirely when unused.
+- `error!` — a definition-of-done criterion violated at run time, never "something looked
+  off": a covariance that stopped being PSD, a NaN or infinity in a state, an infeasible
+  assignment, a track initiated with no filter behind it, a filter refusing its own
+  settings.
+- `warn!` — degraded but recoverable, and expected as an edge case: a detection the
+  reorder buffer refused, a scan whose association failed, a consumer that has gone.
+- `info!` — lifecycle a person tailing the log should be able to read as a narrative: a
+  pipeline starting and stopping, a mode engaging.
+- `debug!` — per-cycle detail for reproducing one failure: a bearing that refined a track,
+  or matched nothing and was retained.
+- `trace!` — full numeric dumps of states, covariances and cost matrices, for a local
+  debugging session.
 
-**Spans, not ad hoc context strings:** every `Filter::predict`/`update`, `Associator::solve`,
-and `fusion-async` task uses `#[instrument]` (or an explicit `tracing::span!` where
-`#[instrument]`'s auto-derived fields aren't the right shape) rather than folding identifying
-context into the log message text. Structured fields use the same names as the capability
-table and the error-enum conventions in §3.1 (`cycle`, `track_id`, `min_eigenvalue`,
-`sensor_id`) so a span's fields, an error variant's fields, and a proptest failure's shrunk
-input can all be cross-referenced by the same names.
-
-```rust
-#[tracing::instrument(skip(self, z), fields(track_id = self.id))]
-fn update(&mut self, z: &Measurement) {
-    if let Some(min_eig) = self.covariance.min_eigenvalue_if_below_threshold() {
-        tracing::error!(min_eigenvalue = min_eig, "covariance PSD violation");
-    }
-    // ...
-}
-```
+**Structured fields, not context folded into the message.** Fields are named the way the
+error enums in §3.1 name them (`cycle`, `track_id`, `min_eigenvalue`, `sensor_id`), so a
+log line, an error variant and a shrunk proptest input can be cross-referenced by the same
+names.
 
 **No logging in `core`, `coord`, or `allocation`.** These are the exact-match,
-closed-form-oracle capabilities (§ table notes) — deterministic math with a single correct
-answer doesn't benefit from runtime diagnostics, and adding spans there is noise that would
-never get read. Tracing effort is concentrated in `filters`, `association`, `rfs`,
-`fusion-async`, and `track-manager`, where behavior is statistical, stateful, or
-timing-sensitive enough that a human debugging a failure actually needs the trail.
+closed-form-oracle capabilities: deterministic math with a single correct answer doesn't
+benefit from runtime diagnostics, and a span there is noise nobody reads.
 
-**Test and CI integration:** `gungnir-oracle`'s differential-test harness captures the
-`trace!`-level span output (via `tracing-subscriber`'s `EnvFilter` and a test-scoped
-subscriber, not a global one — global subscribers in test code cause cross-test interference)
-for any comparison that fails, and attaches it to the CI failure artifact. This means a failed
-oracle-diff run comes with the actual predict/update sequence that produced the mismatch,
-rather than requiring the failure to be reproduced locally with logging manually turned on
-after the fact.
-
-**What this section does not cover:** metrics/observability for a production deployment
-(dashboards, alerting thresholds) is out of scope for a library — Gungnir emits `tracing`
-spans and events; what a downstream binary does with them (write to a file, forward to an
-OpenTelemetry collector, ignore them entirely) is the downstream application's decision, not
-something this workspace should couple itself to. Within this workspace that downstream
-application is `gungnir-observability`, which turns `tracing` output into operator-facing
-health (`gungnir-capabilities.md` §5.5); the library crates still emit spans and events
-only.
+**What this section does not cover:** metrics and observability for a production
+deployment (dashboards, alerting thresholds). The library crates emit spans and events;
+what a binary does with them is the binary's decision. Within this workspace that consumer
+is `gungnir-observability`, which turns `tracing` output into operator-facing health
+(`gungnir-capabilities.md` §5.5).
 
 ### 2.9 Approved stack additions (signed off 2026-09-04)
 
@@ -1096,8 +1058,6 @@ Three things are deliberate:
 - Every public item has a doc comment. For anything appearing in the capability table, the
   doc comment states the pass criterion inline, so the two documents never drift silently out
   of sync.
-- Doc examples (`/// ```` blocks) are required on every public trait and are run as doctests —
-  they double as cheap regression coverage for the API surface.
 
 ### 3.5 Lints
 
