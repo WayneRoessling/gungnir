@@ -530,7 +530,7 @@ const PRIVATE_KEY_EXPORT_NAMES: &[&str] = &[
     "private_pem",
 ];
 
-/// `docs/agentic-coding-standards.md` §2.9 point 2: **no code path may build a
+/// `docs/agentic-coding-standards.md` §2.9, the `rcgen` row: **no code path may build a
 /// certificate over private key material that has left a `KeyProvider`.**
 ///
 /// # Why this test exists even though the rule holds by construction
@@ -577,7 +577,7 @@ fn no_path_exports_private_key_material() {
     assert!(
         offenders.is_empty(),
         "a `gungnir-security` function appears to return private key material, which \
-         would break docs/agentic-coding-standards.md §2.9 point 2 -- no code path may \
+         would break docs/agentic-coding-standards.md §2.9's `rcgen` row -- no code path may \
          build a certificate over private key material that has left a `KeyProvider`. \
          The whole certificate path (`gungnir-remote::identity`) depends on there being \
          no way to obtain the private half. If this is deliberate, it is an owner \
@@ -621,7 +621,7 @@ fn the_key_provider_surface_is_the_one_the_certificate_path_relies_on() {
         "`KeyProvider`'s method set changed. None of the six it had returns private key \
          material, and the certificate path in `gungnir-remote::identity` is safe only \
          because of that. If a method was added, say here whether it hands a caller a \
-         private key; if it does, docs/agentic-coding-standards.md §2.9 point 2 has to \
+         private key; if it does, docs/agentic-coding-standards.md §2.9's `rcgen` row has to \
          change first, and that is the owner's decision"
     );
 }

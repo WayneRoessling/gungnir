@@ -1,0 +1,35 @@
+name: pr-rules
+
+# Rules about a pull request itself rather than about the code it carries. A workflow of
+# its own, not jobs in ci.yml, because editing a description has to re-run these checks
+# and must not re-run the whole build.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # docs/agentic-coding-standards.md §2.9: a change to [workspace.dependencies] names the
+  # decision that admits it and the duplicate-linkage check it passed. The description is
+  # passed through the environment, never interpolated into the script, because it is
+  # text anyone opening a pull request controls.
+  dependency-sign-off:
+    name: A dependency change states its decision and duplicate linkage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: check the description
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 .github/scripts/check_pr_rules.py dependencies
