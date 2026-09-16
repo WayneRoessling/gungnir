@@ -5663,6 +5663,19 @@ not by finding, for the time between whenever each item landed and this correcti
     is the document this project uses to answer "what is next", and a status column that
     lags its own prose is how a closed gap goes on looking like work.
 
+    **Two things found while preparing the owner's own steps, and fixed rather than
+    handed over broken.** `gpu-fusion.yml`'s header still said the `gpu-tests` feature was
+    empty and would run zero tests; GAP-024 has since written four `#[ignore]`d
+    `#[tokio::test]`s behind it, and `cargo test -p gungnir-data-fusion --features
+    gpu-tests --no-run` compiles them, so the comment was a year-old-sounding claim about
+    a state that had changed under it. And `release.yml`'s `workflow_dispatch` ran every
+    job: the assurance half GAP-061 item (2) calls "the half that can be rehearsed without
+    publishing anything" was followed by `build` and then by `sign`, which uses keyless
+    cosign and records every signature in Sigstore's **public, append-only transparency
+    log**. A rehearsal would have published. The dispatch now takes an `assurance_only`
+    input defaulting to true, and `build`, `sign` and `container` are guarded on it; a tag
+    push is unaffected and still runs the whole workflow.
+
     **What is left is not decisions.** After this pass the ledger has no open row and no
     entry says a human-owned change is waiting on a signature. What remains that only the
     owner can do is physical: a recorded `gpu-fusion.yml` dispatch on the self-hosted

@@ -7,6 +7,18 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      # GAP-061 item (2): the assurance half is the part that can be rehearsed without
+      # publishing anything, and until 2026-09-15 a dispatch could not stop at it. That
+      # mattered more than it looks: `sign` uses keyless cosign, which records every
+      # signature in Sigstore's **public, append-only transparency log**, so a rehearsal
+      # of "the half that publishes nothing" would in fact have published. Default true,
+      # so the safe run is the one you get by not thinking about it; a tag push is
+      # unaffected and still runs every job.
+      assurance_only:
+        description: "Run only the assurance job (no builds, no signatures, no image)"
+        type: boolean
+        default: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -59,6 +71,7 @@ jobs:
             THIRD-PARTY-NOTICES.md
 
   build:
+    if: github.event_name != 'workflow_dispatch' || inputs.assurance_only != true
     name: release build (${{ matrix.target }})
     needs: assurance
     runs-on: ${{ matrix.os }}
@@ -92,6 +105,7 @@ jobs:
           path: target/${{ matrix.target }}/release/${{ matrix.package }}*
 
   sign:
+    if: github.event_name != 'workflow_dispatch' || inputs.assurance_only != true
     name: sign artifacts
     needs: build
     runs-on: ubuntu-latest
@@ -111,6 +125,7 @@ jobs:
           path: artifacts/**/*.sig
 
   container:
+    if: github.event_name != 'workflow_dispatch' || inputs.assurance_only != true
     name: gungnir-node container image
     needs: assurance
     runs-on: ubuntu-latest
