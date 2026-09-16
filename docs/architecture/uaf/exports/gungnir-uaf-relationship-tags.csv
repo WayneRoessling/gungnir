@@ -331,8 +331,6 @@ REL:realizes:SV-22->OA-35,uafRelationship,realizes
 REL:realizes:SV-31->OA-12,uafRelationship,realizes
 REL:realizes:SV-31->OA-22,uafRelationship,realizes
 REL:realizes:SV-32->OA-02,uafRelationship,realizes
-REL:realizes:SV-32->OA-02,registry.status,planned
-REL:realizes:SV-32->OA-02,registry.plan,GAP-024
 REL:realizes:SV-18->OA-32,uafRelationship,realizes
 REL:realizes:SV-18->OA-32,registry.status,planned
 REL:realizes:SV-18->OA-32,registry.plan,GAP-044

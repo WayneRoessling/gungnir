@@ -61,7 +61,7 @@ CAPABILITIES_WITHOUT_REQUIREMENT = 27
 # treat the relationship as satisfied, so a planned `realizes` is the only reason two
 # activities pass "realized by no service". A marker that suppresses a gate has to say
 # what will clear it, which is the `plan` field, and the same ratchet applies.
-RELATIONSHIPS_PLANNED = 8
+RELATIONSHIPS_PLANNED = 7
 NL = "\n"
 DATE = "2026-09-04"
 
