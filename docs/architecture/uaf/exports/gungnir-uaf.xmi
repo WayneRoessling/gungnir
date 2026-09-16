@@ -1986,7 +1986,7 @@
           <tag xmi:id="EAID_CE22832F_00E6_5031_D9FC_2B4DB44B8987" name="uafKind" value="Capability" modelElement="EAID_CAC0EFC8_4724_3BE4_1923_2A4A3A6FFB94"/>
           <tag xmi:id="EAID_F48E4E69_713A_DAB8_3A0D_76093E3E69B0" name="uafId" value="CAP-2.11" modelElement="EAID_CAC0EFC8_4724_3BE4_1923_2A4A3A6FFB94"/>
           <tag xmi:id="EAID_A370B587_EBBA_2406_0919_76F2D2A9AC3D" name="registry.parent" value="CAP-2" modelElement="EAID_CAC0EFC8_4724_3BE4_1923_2A4A3A6FFB94"/>
-          <tag xmi:id="EAID_FA87D042_9C1A_ED41_5FA9_8BEACC78810E" name="registry.coverage" value="none -- built and ungated; no requirement was derived from it and none bears on it" modelElement="EAID_CAC0EFC8_4724_3BE4_1923_2A4A3A6FFB94"/>
+          <tag xmi:id="EAID_FA87D042_9C1A_ED41_5FA9_8BEACC78810E" name="registry.coverage" value="verification-table" modelElement="EAID_CAC0EFC8_4724_3BE4_1923_2A4A3A6FFB94"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
