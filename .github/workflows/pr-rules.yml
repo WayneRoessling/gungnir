@@ -33,3 +33,21 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 .github/scripts/check_pr_rules.py dependencies
+
+  # CONTRIBUTING.md, "Commit messages": a body names the row, gap or decision, the
+  # standards section and the why, in at most 120 words; a change that needs more has a
+  # docs/record/ item and the message links it. Skipped when only the description changed.
+  commit-messages:
+    name: Commit messages stay short
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: check each commit's body
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 .github/scripts/check_pr_rules.py commits

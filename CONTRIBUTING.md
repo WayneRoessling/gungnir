@@ -114,10 +114,21 @@ in the PR description which of them you ran by hand.
 
 ## Pull request description
 
-State what changed, which capability-table row or capability it serves, which
-standards sections apply, and why the approach was chosen (for numerical code, cite
-the reference, e.g. "Joseph form, Bar-Shalom §5.3"). For `gungnir-fusion-async`
-changes, describe in plain language what interleaving could be affected. For
-human-owned crates, say so explicitly rather than assuming the reviewer will notice.
+`.github/pull_request_template.md` asks for these, in order: what changed, which
+capability-table row, gap or decision it serves, which standards sections apply, and why
+the approach was chosen (for numerical code, cite the reference, e.g. "Joseph form,
+Bar-Shalom §5.3"). For `gungnir-fusion-async` changes, describe in plain language what
+interleaving could be affected. For human-owned paths, name them rather than assuming the
+reviewer will notice. A change to `[workspace.dependencies]` adds a line beginning
+`Decision:` and a line beginning `Duplicate linkage:`, and `pr-rules.yml` checks both.
+
+## Commit messages
+
+A subject line, then a body of at most 120 words that says three things: the row, gap or
+decision the change serves, the standards section that applies, and why. What happened on
+the way there, what was tried and what was found, is narrative. When a change needs it, it
+goes in a `docs/record/` item, which the message and the pull request link.
+`.github/workflows/pr-rules.yml` fails a pull request whose commits have a longer body;
+trailers such as `Co-Authored-By` do not count.
 
 Commits made with an agent's help end with the attribution line the agent supplies.
