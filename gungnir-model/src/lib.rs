@@ -696,6 +696,7 @@ impl SystemHealth {
     }
 }
 
+/// Why data offered to this model could not be accepted.
 #[derive(Debug, thiserror::Error)]
 pub enum ModelError {
     #[error("schema version mismatch: expected {expected}, found {found}")]

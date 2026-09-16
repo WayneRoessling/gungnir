@@ -125,6 +125,11 @@ impl DeconflictionResult {
     }
 }
 
+/// One deconfliction check and how it came out.
+///
+/// Carries `detail` whether it passed or failed, because a check that failed has to say
+/// why in the words the panel shows, and one that could not be evaluated has to say that
+/// rather than read as a pass.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct DeconflictionCheck {
     pub kind: DeconflictionKind,
@@ -134,6 +139,10 @@ pub struct DeconflictionCheck {
     pub detail: String,
 }
 
+/// What a deconfliction check examined before a fires task is offered.
+///
+/// A closed set rather than free text, so the panel can name every check it displays and
+/// two deployments' results mean the same thing to whoever compares them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DeconflictionKind {
