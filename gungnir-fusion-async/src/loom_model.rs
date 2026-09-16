@@ -198,7 +198,7 @@ fn assert_epoch_coherent_parts(
     stats: &PipelineStats,
     dense_group: Option<&crate::DenseGroupEstimate>,
 ) {
-    // **Found reviewing this file for the owner's signature.** `dense_group` and
+    // **Found reviewing this file.** `dense_group` and
     // `dense_group_refusals` (GAP-015) were added to `PipelineSnapshot` and to
     // `snapshot_output` without extending this check, which is the exact class of bug
     // this whole assertion exists to catch -- just left uncovered in the two newest

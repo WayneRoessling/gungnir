@@ -8,7 +8,7 @@ are defined in `gungnir-api/src/v1/mod.rs` and reuse `gungnir-model` views and
 what a track or a plan is.
 
 Status: the types exist and are covered by serialization tests; the transport crates
-were signed off on 2026-09-05 (D-18, `agentic-coding-standards.md` §2.9) and are in the
+were admitted by D-18 on 2026-09-05 (`agentic-coding-standards.md` §2.9) and are in the
 workspace manifest, but no code uses them yet. `gungnir_api::ApiServer::serve` returns
 `TransportNotImplemented` until it does, and will keep saying so rather than reporting a
 server that is not listening.

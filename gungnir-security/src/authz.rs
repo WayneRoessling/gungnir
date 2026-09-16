@@ -40,7 +40,7 @@ pub fn role_permits(role: Role, action: &str) -> bool {
         // declaration per class and coverage-gap acceptance have no coarse action yet
         // and stay with GAP-058's per-class refinement.
         //
-        // PUBLISH_EXCHANGE (GAP-065, signed by the owner the same day): granted alongside
+        // PUBLISH_EXCHANGE (GAP-065): granted alongside
         // RELEASE_PRODUCT on the judgment that whoever may mark a product releasable
         // should be who may send it, matching the §4 row this change added in
         // `docs/mission/roles-and-stakeholders.md`.
@@ -58,7 +58,7 @@ pub fn role_permits(role: Role, action: &str) -> bool {
         // Intelligence analyst: product release and reporting. Sensor tasking is a
         // *request* in §4, not authority, so TASK_SENSOR is deliberately absent.
         // PUBLISH_EXCHANGE joins RELEASE_PRODUCT here for the same reason it joins it
-        // above (GAP-065, signed by the owner the same day).
+        // above (GAP-065).
         Role::IntelligenceAnalyst => {
             matches!(
                 action,
@@ -80,7 +80,7 @@ pub fn role_permits(role: Role, action: &str) -> bool {
         // it joins RELEASE_PRODUCT on Commander and IntelligenceAnalyst above: GAP-065's
         // rule is whoever may release, may publish, so the §4 exchange row is amended
         // to match rather than left as an exception with no stated reason. Human-owned
-        // (gungnir-security); signed by the owner 2026-09-08.
+        // (gungnir-security).
         Role::Supervisor => matches!(
             action,
             VIEW_PICTURE
@@ -196,7 +196,7 @@ mod tests {
         );
     }
 
-    /// GAP-065 (signed by the owner the same day) tied `PUBLISH_EXCHANGE` to
+    /// GAP-065 tied `PUBLISH_EXCHANGE` to
     /// `RELEASE_PRODUCT` by rule: whoever may release, may publish. Amended the same
     /// day when the Supervisor/`RELEASE_PRODUCT` gap below was fixed and the rule
     /// applied to it in turn, so the pair now holds on `Supervisor`, `Commander`, and
@@ -224,7 +224,7 @@ mod tests {
     /// Intelligence analyst, and is blank for Operator, Sensor manager, and Analyst.
     /// `role_permits` had granted only Commander and `IntelligenceAnalyst` since the
     /// initial commit, a discrepancy against the row flagged but not fixed in the
-    /// GAP-065 commit. Investigated and signed by the owner 2026-09-08 -- see the
+    /// GAP-065 commit. Investigated 2026-09-08 -- see the
     /// comment on `Role::Supervisor`'s arm.
     #[test]
     fn product_release_matches_the_section_4_row() {

@@ -38,8 +38,7 @@ impl PolicyVerdict {
     /// The verdict as the record carries it (`CommandEvent::Decided`,
     /// `InterceptEvent::PlanEvaluated`). The denial reason travels in its debug
     /// spelling: the model may not depend on [`DenialReason`], and the spelling is
-    /// stable per variant. One mapping, used by every publisher (GAP-028; **signed by
-    /// the owner 2026-09-06**).
+    /// stable per variant. One mapping, used by every publisher (GAP-028).
     #[must_use]
     pub fn summary(&self) -> VerdictSummary {
         match self {
@@ -126,7 +125,7 @@ impl PolicyEngine for GeofencePolicy<'_> {
 /// required if any engine asks for it; `Approved` only if every engine approved.
 ///
 /// The lifetime is what lets a chain hold engines that borrow, and it was added
-/// under GAP-038, **signed by the owner on 2026-09-05**.
+/// under GAP-038.
 ///
 /// It fixed a latent defect rather than enabling a new use. `Box<dyn PolicyEngine>`
 /// means `Box<dyn PolicyEngine + 'static>`, a promise the boxed value holds no borrowed

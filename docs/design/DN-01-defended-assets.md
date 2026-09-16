@@ -1,6 +1,7 @@
 # DN-01 Defended assets
 
-Closes GAP-026. Status: first draft, 2026-09-05. **Design only; no code exists.**
+Closes GAP-026. Status: first draft, 2026-09-05. **Design only; no code exists.** What the
+owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -221,9 +222,9 @@ GAP-026; CAP-3.1, and CAP-5.6 for the baseline section; MOP-27, MOP-28; MT-01 st
 MT-02, MT-04, MT-09; `../ux/wireframes/WF-16-planning.puml`; principles AP-02, AP-06.
 Read by DN-02, DN-03, DN-04, DN-05, DN-19.
 
-## 9. Amendment 1 -- **signed by the owner 2026-09-06**
+## 9. Amendment 1
 
-Raised 2026-09-06; signed the same day. The same sign-off covers the code that conforms to it.
+Raised 2026-09-06.
 
 Raised by GAP-017's implementation, which found the same fault here. §3 has
 `AssetListView::baseline_version` "so a score can be traced to the list that produced

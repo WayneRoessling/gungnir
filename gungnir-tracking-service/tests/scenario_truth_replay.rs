@@ -325,8 +325,8 @@ fn the_maneuvering_aircraft_is_tracked_to_within_the_stated_bound() {
 /// modes are both six-dimensional (DN-28 §2). No amount of process noise or gating makes
 /// a six-dimensional filter represent a nine-dimensional dynamic; that is the same kind
 /// of mismatch DN-28 §6 excludes EKF/UKF/particle for, found here rather than argued in
-/// advance. **A three-mode CV/CT/CA IMM is not what DN-28 scoped or what the owner
-/// signed**, so this row scores only the phase the signed scope actually covers:
+/// advance. **A three-mode CV/CT/CA IMM is not what DN-28 scoped**, so this row scores
+/// only the phase DN-28's scope actually covers:
 /// replaying observations through the end of the coordinated-turn phase (source time
 /// < 199 s, safely inside it, truth still six-dimensional).
 ///

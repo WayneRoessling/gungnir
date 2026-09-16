@@ -166,8 +166,8 @@ impl TokenIssuer {
     /// HMAC accepts a key of any length, so the error is unreachable in practice; it is
     /// still returned rather than unwrapped, because the unwrap policy (CONTRIBUTING,
     /// checked by `gungnir-app/tests/architecture_compliance.rs`) allows no exception
-    /// on a request path, and a panic here would take the transport down with it.
-    /// **Signed by the owner 2026-09-06** (GAP-081).
+    /// on a request path, and a panic here would take the transport down with it
+    /// (GAP-081).
     fn mac(&self, payload: &[u8]) -> Result<Vec<u8>, hmac::digest::InvalidLength> {
         let mut mac = <HmacSha256 as Mac>::new_from_slice(&self.key)?;
         mac.update(payload);

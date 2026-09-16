@@ -6,7 +6,7 @@
 //!
 //! **Certificates are generated here and never checked in.** A private key in the
 //! repository is key material in the repository whatever the comment above it says, which
-//! is why D-22 signed off `rcgen` as a development dependency and nothing else.
+//! is why D-22 admitted `rcgen` as a development dependency and nothing else.
 //!
 //! The property that matters is the one a configuration mistake would silently lose: a
 //! client without a certificate, or with one from another authority, **must not get in**.

@@ -3,7 +3,6 @@
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
 //! Who may sign in to this node (GAP-057's node half, docs/design/DN-23-operator-authentication.md).
-//! **Signed by the owner 2026-09-06.**
 //!
 //! The account store comes from the baseline's authentication section; the token
 //! signing key comes from the environment, because a baseline may carry neither key

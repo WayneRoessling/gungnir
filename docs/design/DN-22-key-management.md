@@ -1,8 +1,8 @@
 # DN-22 Key custody, rotation, and escrow
 
-Closes GAP-084, filed by plan 11 finding F-3. Status: **signed off by the owner 2026-09-05**, with **amendment 1 (§9) signed the same day** after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11), signed by the owner 2026-09-06**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12), signed by the owner 2026-09-06**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08, signed by the owner the same day**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. The owner's review found a first-run race in the secret-generation helper before signing; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08, signed by the owner 2026-09-10**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over. The review before signing found and closed a real defect in the code behind it: Azure Key Vault's raw ECDSA signature format, handed through unconverted, would have broken every TLS handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127).
-**Human-owned and signed**: `gungnir-security` is a low-trust crate and this note decides
-who can read what. The owner signed it on 2026-09-05.
+Closes GAP-084, filed by plan 11 finding F-3. Status: **amendment 1 (§9)**, after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11)**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12)**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. A first-run race was found in the secret-generation helper; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over. A real defect in the code behind it was found and closed: Azure Key Vault's raw ECDSA signature format, handed through unconverted, would have broken every TLS handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127).
+**Human-owned**: `gungnir-security` is a low-trust crate and this note decides
+who can read what. What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -144,18 +144,18 @@ encryption is active per profile, which is a boolean and not a disclosure.
 
 The first criterion is enforced by the trait's shape, which is why the trait has no getter.
 
-## 9. Amendment 1 -- **signed by the owner 2026-09-05**
+## 9. Amendment 1
 
 Raised by GAP-060, which is the gap that implements against this note and could not
-start. Three things this note settled in principle and left unusable in practice. The same
-sign-off covers the code that conforms to it, and D-22 settled the crates the same day.
+start. Three things this note settled in principle and left unusable in practice. D-22
+settled the crates on 2026-09-05.
 
 **Implemented 2026-09-05.** `gungnir-security/src/provider.rs` is the first
 `KeyProvider` there has ever been: AES-256-GCM behind `seal`/`unseal`, the sealed form of
 (b), rotation that retires rather than rewrites, and destruction that says what it has made
 unreadable. `KeyProvider::sign` exists per (a) and this provider refuses it, because it
 holds symmetric keys only -- the asymmetric provider a cloud deployment wants needed D-22's
-third row, signed by the owner 2026-09-05 (`p256`, ECDSA P-256). The decision is taken; no
+third row (`p256`, ECDSA P-256). The decision is taken; no
 gap builds the provider yet.
 
 Mutual TLS is `gungnir-api/src/tls.rs`, verified against real handshakes in
@@ -220,7 +220,7 @@ The nonce is per-operation and never reused under one key, which is the failure 
 makes AES-GCM catastrophic rather than merely broken.
 
 **No cipher is named** anywhere in this note or the register, and none is in the workspace:
-D-20 signed off `argon2`, `hmac`, `sha2` and `subtle` for authentication and **explicitly
+D-20 admitted `argon2`, `hmac`, `sha2` and `subtle` for authentication and **explicitly
 did not cover this**. `hmac` authenticates and does not encrypt. That is D-22 below.
 
 ### c. The verification row cannot be met without a way to make certificates
@@ -251,18 +251,18 @@ those are the questions an accreditor asks second, right after custody.
 The shape of an answer, for the owner to accept or replace: seal each journal's data key
 to a second **escrow** key held by a different authority, so the record can be recovered
 without that authority being able to read anything live. That needs the asymmetric scheme
-D-22 left as its third row -- signed 2026-09-05, so **that half is no longer the blocker** --
+D-22 left as its third row -- **that half is no longer the blocker** --
 and it needs a decision about who holds the escrow key, which is a deployment's question
 and not a design's, and which remains open.
 
 Recorded rather than designed, because inventing an escrow model in a pull request is the
 thing §1 of this note exists to stop.
 
-## 11. Amendment 2 -- the escrow holder is a named security-officer role, per deployment (**signed by the owner 2026-09-06**)
+## 11. Amendment 2 -- the escrow holder is a named security-officer role, per deployment
 
 **Answers §10's open question.** On 2026-09-06 the owner decided (D-27) who holds the
 escrow key: **a security officer**, a named role filled by a named person in each
-deployment. This section records the consequences, **signed by the owner the same day**; none
+deployment. This section records the consequences; none
 of it is built, because all of it waits on the asymmetric provider (§9a's third row,
 `p256`, "not yet").
 
@@ -278,7 +278,7 @@ the same role, and both are named in the baseline.
 **The mechanism.** At sealing time the provider wraps each journal segment's data key to
 the officer's **public** key: ECDH over P-256 with HKDF-SHA-256 deriving a wrapping key
 and AES-256-GCM wrapping the data key, all of which the approved stack already holds
-(`p256` with its `ecdh` feature, `sha2`, `aes-gcm`; a feature flag on a signed-off crate,
+(`p256` with its `ecdh` feature, `sha2`, `aes-gcm`; a feature flag on a crate the stack already holds,
 recorded in §2.9 when it lands, and no new crate). The wrapped key travels with the
 segment. The officer's private half **never enters a node or a desktop**: recovery is an
 offline act, on a machine the officer controls, that produces a readable copy of one
@@ -306,11 +306,11 @@ byte-identical, and that the audit row names the officer. Fixture keys are gener
 the test.
 
 **What is decided.** The holder, the mechanism above (the least scheme the stack already
-supports), the role's name and the rule that it operates nothing: all signed 2026-09-06.
+supports), the role's name and the rule that it operates nothing.
 GAP-084 stays open on the asymmetric provider and on the persistent keystores §5 names;
 this amendment is now the design to build against.
 
-## 12. Amendment 3 -- a passphrase-sealed keystore for the disconnected desktop (2026-09-06, **signed by the owner the same day**)
+## 12. Amendment 3 -- a passphrase-sealed keystore for the disconnected desktop (2026-09-06)
 
 **Raised by GAP-084.** §5's disconnected row names the operating system's keystore,
 unlocked at operator login. No crate in the approved stack reaches an OS keystore, and
@@ -344,15 +344,10 @@ file holds no legible key; an escrowed journal key recovers under the officer's 
 (`gungnir-security/src/keystore.rs`); the desktop's journal reports sealing only after a
 sign-in (`gungnir-app/tests/keystore.rs`).
 
-**Landed 2026-09-06, and both halves are signed**: the code (`Role::SecurityOfficer` and
-the passphrase-sealed `PersistentKeyProvider`) and then this amendment as a design, each
-put to the owner separately on the same day. They were kept apart on purpose while one
-was signed and the other was not, because a signature on an implementation says the code
-does what it says and a signature on a design says the design is the right one; recording
-the first as though it were the second is how a note nobody agreed to becomes the thing
-later work cites.
+**Landed 2026-09-06**: the code (`Role::SecurityOfficer` and
+the passphrase-sealed `PersistentKeyProvider`) and then this amendment as a design.
 
-## 13. Amendment 4 -- the operating system's keystore, the row §5 actually named (2026-09-08, **signed by the owner the same day**)
+## 13. Amendment 4 -- the operating system's keystore, the row §5 actually named (2026-09-08)
 
 **Raised by D-39.** §5's disconnected row never named a passphrase-sealed file; it named
 "the operating system's keystore, unlocked at operator login." Amendment 3 built the
@@ -390,7 +385,7 @@ same machine, exactly as `dir` already distinguishes their keystore files.
 `keyring-core`'s always-on mock store: a first run generates and stores a secret, a
 second returns the one already stored, two generated secrets differ, and a fault
 distinct from "nothing stored yet" is reported rather than read as first-run and
-overwritten. **Found in review and closed the same day (2026-09-08), before signing:**
+overwritten. **Found in review and closed the same day (2026-09-08):**
 a first-run race where a second writer's `set_password` lands between this process's
 own write and its return -- `ensure_secret` now re-reads the store rather than trusting
 what it generated, so the loser adopts the winner's secret instead of sealing its file
@@ -403,18 +398,15 @@ secret round-trips for real and the entry is cleaned up; where none is reachable
 headless Linux CI runner with no Secret Service session) the function's own error path
 is what fires, which is §5's fallback and not a gap in coverage.
 
-**Human-owned; signed by the owner 2026-09-08, together with item 104's node account
-store and item 111's TLS-identity generalisation -- one review over the whole
-OS-keystore mechanism and its four services.** The mechanism this amendment describes
-and the code behind it (`gungnir-security/src/os_keystore.rs`,
+**Human-owned, together with item 104's node account store and item 111's TLS-identity
+generalisation -- the whole OS-keystore mechanism and its four services.** The code behind
+the mechanism this amendment describes is `gungnir-security/src/os_keystore.rs`,
 `PersistentKeyProvider::open_or_create_via_os_keystore`, and the wiring in
-`gungnir-app/src/state.rs`) were put to the owner together rather than kept apart the way
-amendment 3's design and code were: amendment 3 was a real design decision the owner
+`gungnir-app/src/state.rs`. Amendment 3 was a real design decision the owner
 could have taken differently, where this one is D-39 with no room left for a different
-shape once the crate was chosen -- the string source changes, the reviewed and signed
-custody model does not.
+shape once the crate was chosen -- the string source changes, the custody model does not.
 
-## 14. Amendment 5 -- `ManagedService`, the cloud node's row, designed (2026-09-08, **signed by the owner 2026-09-10**)
+## 14. Amendment 5 -- `ManagedService`, the cloud node's row, designed (2026-09-08)
 
 **Raised by D-42.** §5's table has three rows and until now only two of them had a
 design. The cloud row says "a managed key service, **off-host**. The node process may
@@ -662,16 +654,14 @@ was reachable on the machine running the suite and half the tests actually used 
 no real backend is reachable at all, so the real path has exactly the coverage a
 compiler gives it and no more.
 
-**Human-owned; signed by the owner 2026-09-10.** The design here and the code behind it
-(`gungnir-security/src/managed_service.rs`, `PersistentKeyProvider::open_or_create_via_managed_service`,
-and the arm in `gungnir-node/src/main.rs`) were put to the owner together, as amendment 4
-was. Unlike amendment 4, this one had real room for a different shape -- (a)'s choice
-between a call per envelope and envelope encryption, and (f)'s new mandatory-escrow rule
-are both decisions the owner could take differently -- so the signature is on a design,
-not only on a conformance. The review before it found and fixed a real defect: Azure Key
-Vault's `sign` returns a raw ECDSA signature this crate's `KeyProvider::sign` contract
-never expected, which would have broken every TLS handshake a Key-Vault-backed identity
-signed (`ARCHITECTURE.md` §10 item 127).
+**Human-owned.** The code behind the design here is
+`gungnir-security/src/managed_service.rs`, `PersistentKeyProvider::open_or_create_via_managed_service`,
+and the arm in `gungnir-node/src/main.rs`. Unlike amendment 4, this one had real room for a
+different shape -- (a)'s choice between a call per envelope and envelope encryption, and
+(f)'s new mandatory-escrow rule are both decisions the owner could take differently. A real
+defect was found and fixed: Azure Key Vault's `sign` returns a raw ECDSA signature this
+crate's `KeyProvider::sign` contract never expected, which would have broken every TLS
+handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127).
 
 ## Traceability
 

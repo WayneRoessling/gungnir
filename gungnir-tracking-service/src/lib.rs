@@ -723,7 +723,7 @@ impl TrackingService for LiveTrackingService {
             }
         }
         // A retained bearing's lifetime is honoured here, on this clock, whether or not
-        // a snapshot arrived (2026-09-09, found in review before item 115 was signed).
+        // a snapshot arrived (2026-09-09, found in the review recorded as item 115).
         // The pipeline can only age its own set on a submission's clock, and a feed
         // that has gone quiet sends none -- so without this, the last unmatched bearing
         // stayed on PN-02 for the rest of the session while PN-08 had said "retained
@@ -1179,8 +1179,8 @@ mod tests {
         );
     }
 
-    /// The other half of the lifetime (2026-09-09, found in review before item 115 was
-    /// signed): a retained bearing leaves the view when the host's clock passes its
+    /// The other half of the lifetime (2026-09-09, found in the review recorded as item
+    /// 115): a retained bearing leaves the view when the host's clock passes its
     /// `valid_until` with nothing else arriving. The pipeline can only age its set on a
     /// submission's clock, and a quiet feed sends none, so this is the case only the
     /// view can honour -- and before this it did not: the ray stayed for the session.

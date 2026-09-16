@@ -3,18 +3,13 @@
 Scopes the follow-up `docs/design/DN-28-imm-in-the-pipeline.md` §7 named and deliberately
 did not close: "the whole-scenario-1 acceptance question... a third IMM mode needs a
 heterogeneous-state-dimension redesign `Imm<N, M>` does not have, which is its own design
-note." This is that note. Status: **proposed 2026-09-07; §5's recommendation signed by the
-owner 2026-09-09. No code exists.**
+note." This is that note. Status: **proposed 2026-09-07. No code exists.** What the owner
+has signed of this note is in [`../signatures.md`](../signatures.md).
 
-This is a scoping document, matching DN-28's own two-signature discipline (a signature on
-a design says the design is the right one to build; a signature on an implementation says
-the code does what it says): it names the problem, weighs two designs, recommends one, and
-states what is explicitly out of scope, so an owner can sign the shape of the work before
-anyone writes the `gungnir-core` or `gungnir-filters` diff. **That signature is what is
-recorded here** -- the augmented-state design (§5) is the right one to build. It is not a
-signature on any code, because none exists yet: **the implementation still needs §6's
-three open questions answered or explicitly deferred to its own verification gate before
-that future diff is itself signed**, the identical two-step DN-28 went through.
+This is a scoping document: it names the problem, weighs two designs, recommends one, and
+states what is explicitly out of scope before anyone writes the `gungnir-core` or
+`gungnir-filters` diff. **The implementation still needs §6's three open questions answered
+or explicitly deferred to its own verification gate.**
 
 ## 1. The gap DN-28 left, stated precisely
 
@@ -127,7 +122,7 @@ behind an `EmbeddedMode<_, 6, 9>`, alongside the native
 
 This is a real generalization — a future mode at any dimension could join an `Imm` without
 a bespoke padded motion model — but it is materially bigger for what this system needs
-today, for three reasons. First, it changes public, already-signed, already-gated surface
+today, for three reasons. First, it changes public, already-gated surface
 (`Imm`, `ModeFilter`; item 94's oracle gate and DN-28's `imm.rs` tests) rather than adding
 beside it, so every existing guarantee about those types has to be re-argued rather than
 inherited. Second, the embedding has to behave correctly inside `predict`'s mixing step,
@@ -141,10 +136,10 @@ lives. Third, nothing in this workspace's baselines needs a fourth mode at a thi
 dimension today, so building the general mechanism now is exactly the kind of unrequested
 generality `CLAUDE.md` asks not to design for.
 
-## 5. Recommendation (signed by the owner 2026-09-09: this is the design to build)
+## 5. Recommendation
 
 **§4a, the augmented-state IMM.** It needs zero changes to `gungnir-filters::Imm` or
-`ModeFilter`, both signed off under item 94 and exercised by `imm_diff.rs`'s oracle gate;
+`ModeFilter`, both built under item 94 and exercised by `imm_diff.rs`'s oracle gate;
 it needs zero changes to the `TrackFilter`/`FilterSelection`/`PipelineSettings` shape DN-28
 just built and tested, beyond one more enum arm and wider arrays, which is exactly the
 one-line-per-touch-point change `pipeline.rs`'s `match` arms are built for (DN-28 §4); and
@@ -156,13 +151,10 @@ item 94's blanket statement: the smaller, concrete case is not the general probl
 building the general mechanism to solve the concrete case is solving the wrong amount of
 problem.
 
-**The owner signed this recommendation on 2026-09-09, on its design merits alone**: no
-`gungnir-core`, `gungnir-filters`, or `gungnir-fusion-async` diff exists yet, and this
-signature does not stand in for the one that diff will need on its own account (per this
-note's own two-signature discipline, restated at the top). §6's three questions are
-unanswered as of this signature and remain the gate before any implementation lands.
+No `gungnir-core`, `gungnir-filters`, or `gungnir-fusion-async` diff exists yet. §6's three
+questions remain the gate before any implementation lands.
 
-## 6. The open numerical-stability question §5 still has to answer before sign-off
+## 6. The open numerical-stability question §5 still has to answer
 
 This note recommends a design; it does not settle its numbers. Three questions, to be
 argued from the same oracle-comparison discipline the rest of this table uses rather than
@@ -209,7 +201,7 @@ assumed, before any implementation PR:
   `[625, 3600, 22500]`). Orthogonal to the dimension problem and already named as its own
   follow-up.
 - **No claim that scenario 1 is tracked through its full 300 s duration.** That is the
-  acceptance test §8 proposes building, once this note is signed and implemented — not a
+  acceptance test §8 proposes building, once this note is implemented — not a
   result this note reports.
 
 ## 8. Verification plan (proposed; not built)
@@ -236,14 +228,12 @@ handling) exactly as DN-28 did, plus `gungnir-filters` only if §6's investigati
 inertness property does not hold as argued and some (still API-compatible) adjustment to
 `Imm`'s combination step is needed.
 
-Per `docs/agentic-workflow.md`, this was a design note only, and the precondition its own
-opening paragraph named — an owner's signature on §5's recommendation — is now met
-(2026-09-09). An agent may now draft the `gungnir-core`/`gungnir-filters`/
-`gungnir-fusion-async` diff on that basis, but the mandatory verification gate still has
+Per `docs/agentic-workflow.md`, this was a design note only. The mandatory verification
+gate for the `gungnir-core`/`gungnir-filters`/`gungnir-fusion-async` diff still has
 to include §6's three questions answered — either here in a signed amendment or in the
 implementation PR's own written argument — before the code is `main`-worthy, per the same
-low-trust-tier reasoning DN-28 §8 stated for itself. **Not requested this session**: the
-signature above covers the design only, and no implementation PR was asked for.
+low-trust-tier reasoning DN-28 §8 stated for itself. **Not requested this session**: no
+implementation PR was asked for.
 
 ## Traceability
 

@@ -1,10 +1,9 @@
 # DN-24 Mission profiles and algorithm baselines
 
-Unblocks GAP-053. Status: **signed by the owner 2026-09-05**, and implemented the same day
-under GAP-086. The sign-off covers the code that conforms to this note, and a second
-sign-off the same day covers the three corrections in §5, §6 and §8 that building it
-raised — the missed dependency edge, the contradiction between §6 and §9 about
-`model.promote`, and the two event variants §8 did not name.
+Unblocks GAP-053. Status: implemented 2026-09-05 under GAP-086. Building it raised three
+corrections, in §5, §6 and §8 — the missed dependency edge, the contradiction between §6
+and §9 about `model.promote`, and the two event variants §8 did not name. What the owner
+has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -104,7 +103,7 @@ downward from a binary, which `ARCHITECTURE.md` §7.1 already describes as depen
 everything above it, and both are drawn in its edge table in the change that adds them.
 `gungnir-modelops` → `gungnir-config` already exists and is already drawn.
 
-**Correction, 2026-09-05 (GAP-086), signed by the owner 2026-09-05.** This section
+**Correction, 2026-09-05 (GAP-086).** This section
 missed one:
 `gungnir-modelops` → `gungnir-model`. The crate had no edge to the model — it is one of the
 four the §7.1 graph names as not using it — and §4 puts `MissionProfile` and
@@ -159,7 +158,7 @@ every default deployment and is reported as such rather than defaulted to a gues
 `role_permits` grants it to the analyst — and **nothing has ever checked it**, because
 nothing promotes.
 
-**Correction, 2026-09-05 (GAP-086), signed by the owner 2026-09-05.** This paragraph and
+**Correction, 2026-09-05 (GAP-086).** This paragraph and
 §9 could not both be
 true, and §9 is the one that holds. It defers the panel that would make a runtime promotion
 reachable, so **nothing in this increment promotes at runtime and nothing checks
@@ -203,7 +202,7 @@ by: String }`, `RolledBack { profile: MissionProfile, restored: Option<Algorithm
 exists for the same reason a denied plan is recorded: a refusal nobody can see is a refusal
 that will be argued about later.
 
-**Correction, 2026-09-05 (GAP-086), signed by the owner 2026-09-05.** Two more variants,
+**Correction, 2026-09-05 (GAP-086).** Two more variants,
 both because the
 alternative was to say something untrue at session start. `InForceAtStart { baseline }` is
 not a `Promoted`: at startup the file said what is in force, nobody promoted anything, and

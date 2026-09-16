@@ -1,0 +1,340 @@
+# Design coverage per leaf capability: whether the architecture names a component for
+# every part of it (full, partial, none, or planned when a plan owns it), and the
+# evidence. `../tools/gen_gaps.py` renders coverage-matrix.md from it, and refuses a
+# capability whose coverage is less than full and which has no gap.
+
+- capability: CAP-1.1
+  design: full
+  evidence: >-
+    `gungnir-ingest` gateway and adapter trait; `gungnir-interop` codec boundary;
+    `DetectionView` carries provenance
+
+- capability: CAP-1.2
+  design: full
+  evidence: >-
+    `IngestGateway` validation and quarantine; `gungnir-security` authentication trait
+
+- capability: CAP-1.3
+  design: full
+  evidence: >-
+    Registry, modes, coverage regions, and the outbound control path are built as of
+    2026-09-05 (GAP-003, GAP-004): a command is recorded, published, and swept for
+    acknowledgement, and a requested mode is kept apart from the confirmed one. No
+    adapter carries a command to a real sensor (GAP-001) and collection requirements are
+    built and tasked from PN-15 but the list is not rebuilt at startup (GAP-005); DN-11
+    (`docs/design/`) names a component for every remaining part
+
+- capability: CAP-1.4
+  design: full
+  evidence: >-
+    Coverage volumes in `gungnir-analytics`; gap detection as a function and map
+    rendering of coverage are not designed; a component is now named for every part of
+    it by DN-12 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-1.5
+  design: full
+  evidence: >-
+    `gungnir-time` clocks and late-data policy; `DetectionView` source and receipt time
+
+- capability: CAP-1.6
+  design: full
+  evidence: >-
+    API snapshot and event stream exist for peers; no designed path that merges peer
+    tracks as a source with visible staleness; a component is now named for every part
+    of it by DN-16 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-1.7
+  design: full
+  evidence: >-
+    Codec boundary in `gungnir-interop`; evidence model in `gungnir-identification`
+
+- capability: CAP-2.1
+  design: full
+  evidence: >-
+    Tracking core trait surfaces, `gungnir-fusion-async`, `gungnir-tracking-service`
+    facade
+
+- capability: CAP-2.2
+  design: full
+  evidence: "`Quality` on `TrackView`; stale drawn muted; stale never allocated"
+
+- capability: CAP-2.3
+  design: full
+  evidence: >-
+    `gungnir-track-fusion` registration traits; integration with `gungnir-data-fusion`
+    flagged as a risk in `gungnir-capabilities.md` §9
+
+- capability: CAP-2.4
+  design: full
+  evidence: "`gungnir-rfs` PHD/CPHD and LMB traits"
+
+- capability: CAP-2.5
+  design: full
+  evidence: >-
+    Scenario 2 and its verification rows; no static hazard or barrier layer in
+    `gungnir-geo`; a component is now named for every part of it by DN-14
+    (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-2.6
+  design: full
+  evidence: >-
+    `gungnir-identification` engine with margin rule; per-class thresholds belong to
+    `gungnir-policy`; plan 09 ML-01
+
+- capability: CAP-2.7
+  design: full
+  evidence: >-
+    `gungnir-identity` resolver with lineage; cross-session correlation is an
+    `ARCHITECTURE.md` §10 item
+
+- capability: CAP-2.8
+  design: full
+  evidence: >-
+    `gungnir-assessment` scores closing speed to one point; trajectory prediction and
+    closest point of approach are not designed; a component is now named for every part
+    of it by DN-02 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-2.9
+  design: full
+  evidence: >-
+    Alerts and correlation exist in `gungnir-observability`; no designated home for
+    anomaly rules; plan 09 ML-04 for learned detection; a component is now named for
+    every part of it by DN-15 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-2.10
+  design: full
+  evidence: >-
+    `gungnir-data` loaders, `gungnir-data-fusion`, `gungnir-geo` layers,
+    `gungnir-viewport3d` scene
+
+- capability: CAP-2.11
+  design: full
+  evidence: "`gungnir-analytics` implemented and tested"
+
+- capability: CAP-2.12
+  design: full
+  evidence: >-
+    Entities with lineage and reports over journals; collection requirements and the
+    tasking concurrence are built as of 2026-09-05 (GAP-005), with the lifecycle on the
+    event bus; no designed pattern-of-life or order-of-battle product (GAP-019); a
+    component is now named for every part of it by DN-11 and DN-19 (`docs/design/`)
+
+- capability: CAP-3.1
+  design: full
+  evidence: >-
+    Not in the `gungnir-config` schema; `gungnir-assessment` takes one protected point;
+    a component is now named for every part of it by DN-01 (`docs/design/`, first draft
+    2026-09-05)
+
+- capability: CAP-3.2
+  design: full
+  evidence: >-
+    `gungnir-assessment` scoring and reward matrix; class lethality and asset weighting
+    are extensions of the baseline
+
+- capability: CAP-3.3
+  design: full
+  evidence: >-
+    `gungnir-allocation` value function and `gungnir-intercept-service`; effector layers
+    and costs have no model in `ResourceConfig`; a component is now named for every part
+    of it by DN-04 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-3.4
+  design: full
+  evidence: "`InterceptSolutionView` fields; solver is an `ARCHITECTURE.md` §10 item"
+
+- capability: CAP-3.5
+  design: full
+  evidence: "`gungnir-decision` rationale, alternatives, and what-if traits"
+
+- capability: CAP-3.6
+  design: full
+  evidence: >-
+    `gungnir-policy` geofence and readiness chain; weapons control status, authority by
+    role and class, escalation and timeout are not designed; a component is now named
+    for every part of it by DN-08 and DN-09 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-3.7
+  design: full
+  evidence: >-
+    `gungnir-command` pending list; ordering by priority and time remaining and
+    pre-delegation are not designed; a component is now named for every part of it by
+    DN-10 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-3.8
+  design: full
+  evidence: >-
+    Plan and approval machinery are domain-neutral; no fires plan type, deconfliction
+    rules, or handoff; a component is now named for every part of it by DN-05
+    (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-3.9
+  design: full
+  evidence: >-
+    `gungnir-decision` is domain-neutral; no sensor-plan recommendation; a component is
+    now named for every part of it by DN-13 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-4.1
+  design: full
+  evidence: >-
+    Intercept panel in `gungnir-ui`; approval queue in `gungnir-workflow` layouts; plan
+    06 designs the panel
+
+- capability: CAP-4.2
+  design: full
+  evidence: "`InMemoryApprovalWorkflow` records every decision"
+
+- capability: CAP-4.3
+  design: full
+  evidence: >-
+    Recommendation-only rule in `gungnir-capabilities.md` §5.4; `PolicyChain` never
+    self-approves
+
+- capability: CAP-4.4
+  design: full
+  evidence: >-
+    `gungnir-api` v1 has submit and decide; no handoff endpoint in the ICD; a component
+    is now named for every part of it by DN-07 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-4.5
+  design: full
+  evidence: >-
+    Alert lifecycle in `gungnir-workflow`; no warning function, threshold, or channel; a
+    component is now named for every part of it by DN-03 (`docs/design/`, first draft
+    2026-09-05)
+
+- capability: CAP-4.6
+  design: full
+  evidence: >-
+    `InterceptEvent` in the event schema; no engagement tracking or effect linkage; a
+    component is now named for every part of it by DN-06 (`docs/design/`, first draft
+    2026-09-05)
+
+- capability: CAP-4.7
+  design: planned
+  evidence: "Plan 08 (`docs/plans/08-ai-agent-integration.md`)"
+
+- capability: CAP-5.1
+  design: full
+  evidence: "`gungnir-store` journal; fsync policy open in `performance-budgets.md`"
+
+- capability: CAP-5.2
+  design: partial
+  evidence: >-
+    `gungnir-replay` over journals; scenario replay through the live pipeline under a
+    chosen plan is not designed; plan 07 for scenarios
+
+- capability: CAP-5.3
+  design: full
+  evidence: >-
+    `gungnir-reporting` counts and export; measures per catalogue and a review workflow
+    are not designed; a component is now named for every part of it by DN-20
+    (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-5.4
+  design: full
+  evidence: >-
+    `gungnir-remote`, `gungnir-resilience`, `gungnir-collab`; mid-session failover waits
+    on the transport
+
+- capability: CAP-5.5
+  design: full
+  evidence: "`gungnir-observability` and `gungnir-workflow` implemented"
+
+- capability: CAP-5.6
+  design: full
+  evidence: >-
+    `ConfigBaseline` validation and store; asset list, policy configuration, and plan
+    validity periods are not in the schema; a component is now named for every part of
+    it by DN-01 and DN-08 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-5.7
+  design: full
+  evidence: >-
+    `gungnir-modelops` registry, wired 2026-09-05 (GAP-086, DN-24): the baseline
+    declares mission profiles and candidate baselines, both binaries build the registry
+    through the real promotion state machine and journal what the session opened with,
+    and a rollback names the candidate it restored. Applying a promoted configuration to
+    the picture waits on GAP-011
+
+- capability: CAP-5.8
+  design: full
+  evidence: >-
+    Reports exist; handover summaries and maintenance windows built 2026-09-05 (GAP-054,
+    DN-21): the scheduler runs on mission time, planned downtime is distinguished from
+    failure and from an overrun, and a handover is incomplete until acknowledged by
+    name; scheduled-product delivery waits on GAP-040 and assistant drafts on GAP-044
+
+- capability: CAP-5.9
+  design: full
+  evidence: >-
+    `gungnir-workflow` role layouts, wired 2026-09-05 (GAP-055): the desktop draws the
+    signed-in role's workspace, all eight layouts are transcribed from the UX documents
+    and tested against them, and sixteen of the twenty panels are built. The four that
+    are not name the entry that will build them, checked against the register by a test
+
+- capability: CAP-5.10
+  design: full
+  evidence: "`performance-budgets.md` budgets; harnesses named but absent"
+
+- capability: CAP-6.1
+  design: full
+  evidence: >-
+    Operator sessions are implemented for the disconnected desktop as of 2026-09-05
+    (GAP-057, DN-23 signed): local accounts verified with `argon2`, a back-off that
+    never locks out, every attempt audited, and attribution that follows from a real
+    sign-in. The node-issued token and the API caller check are not built; machine
+    identity is GAP-060
+
+- capability: CAP-6.2
+  design: partial
+  evidence: >-
+    `role_permits` coarse matrix; per-class and per-layer refinements are gaps
+    (`roles-and-stakeholders.md` §4)
+
+- capability: CAP-6.3
+  design: full
+  evidence: "`gungnir-security` audit log; wiring pending"
+
+- capability: CAP-6.4
+  design: full
+  evidence: >-
+    `ARCHITECTURE.md` §8.5 states the intent; no component or key management designed; a
+    component is now named for every part of it by DN-22 (`docs/design/`, first draft
+    2026-09-05)
+
+- capability: CAP-6.5
+  design: full
+  evidence: "`deny.toml`, `release.yml`, `release-governance.md`"
+
+- capability: CAP-6.6
+  design: full
+  evidence: >-
+    Open question in `mission-analysis.md` §11; nothing designed; a component is now
+    named for every part of it by DN-17 (`docs/design/`, first draft 2026-09-05)
+
+- capability: CAP-6.7
+  design: full
+  evidence: "Gateway treats input as data; plan 08 covers free text"
+
+- capability: CAP-7.1
+  design: full
+  evidence: >-
+    `gungnir-api-v1.md` contract; the read paths are served over HTTP and a WebSocket as
+    of 2026-09-05 (GAP-041), loopback only and with the write paths refusing until a
+    caller can be authenticated
+
+- capability: CAP-7.2
+  design: full
+  evidence: "`SchemaCatalog` with Arrow; codecs pending"
+
+- capability: CAP-7.3
+  design: full
+  evidence: "`ARCHITECTURE.md` §8 profiles; both binaries run"
+
+- capability: CAP-7.4
+  design: full
+  evidence: >-
+    API and interop provide the mechanism; releasability and peer merge are not
+    designed; a component is now named for every part of it by DN-18 (`docs/design/`,
+    first draft 2026-09-05)

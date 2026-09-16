@@ -2,23 +2,18 @@
 
 Closes the gap `ARCHITECTURE.md` §10 item 94 named but did not build: "selecting between
 filters per mission profile needs the pipeline to hold more than one filter type... that
-is its own increment." Status: **proposed 2026-09-07, signed by the owner 2026-09-07.
-Built and gated 2026-09-07, and signed by the owner the same day.**
+is its own increment." Status: **proposed 2026-09-07. Built and gated 2026-09-07.** What
+the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
-**What each signature settled.** The design signature is on the design -- the scope in
-§6, the gating question raised as open in §3, and the sizing in §8. The code signature is
-on the `gungnir-fusion-async`/`gungnir-filters`/`gungnir-config` diff built from it (§4,
-§5): the `TrackFilter` enum and its interleaving with the reorder buffer
+The `gungnir-fusion-async`/`gungnir-filters`/`gungnir-config` diff built from this design
+(§4, §5) is the `TrackFilter` enum and its interleaving with the reorder buffer
 (`gungnir-fusion-async`, concurrency correctness), the gating formula on `Imm`'s combined
 estimate (`gungnir-filters`, numerical stability), and the config validation mirroring
-`Imm::new`'s own rules (`gungnir-config`). Per the distinction this directory's other
-notes draw throughout (DN-16, DN-18, DN-27): a signature on an implementation says the
-code does what it says; a signature on a note says the design is the right one to build.
+`Imm::new`'s own rules (`gungnir-config`).
 §3's gating question -- whether gating against the IMM's combined, spread-widened
 covariance is the right choice -- is answered by §7 item 2's clean isolation (identical
 settings, only `filter_selection` differs, `kf-cv` still does not confirm through the
-turn and `imm-cv-ct` does) rather than by argument alone, and that evidence is what the
-code signature is on.
+turn and `imm-cv-ct` does) rather than by argument alone.
 
 Motivated by a defect, not a feature request: the track-fragmentation finding recorded on
 GAP-011 (scenario 1's single manoeuvring aircraft produces three tracks, none confirmed;
@@ -210,7 +205,7 @@ as well as scenario 1.
 ## 8. Sizing and sign-off
 
 Medium-to-large, not XL: the estimator, its oracle gate, and the association/lifecycle
-machinery around it are all already built and signed (item 94). The new work is the
+machinery around it are all already built (item 94). The new work is the
 `TrackFilter` enum and its dispatch, the gating pair on `Imm` (§3), the config schema
 additions (§5), and the two verification rows (§7) -- comparable in scope to GAP-013
 (track-to-track fusion) or GAP-014, each closed in the batch that also closed GAP-011,
@@ -218,8 +213,8 @@ not to GAP-011 itself.
 
 Touches `gungnir-fusion-async` (low-trust: concurrency correctness, out-of-order
 measurement handling) and `gungnir-filters` (low-trust: numerical stability). Per
-`docs/agentic-workflow.md`, the mandatory verification gate ran (§7, all rows passing)
-and the owner signed the diff 2026-09-07: `TrackFilter`'s interleaving with the reorder
+`docs/agentic-workflow.md`, the mandatory verification gate ran (§7, all rows passing):
+`TrackFilter`'s interleaving with the reorder
 buffer adds no new await point and no new shared state -- the enum is matched on and
 mutated exactly where the old concrete type was, under the same `&mut self` the pipeline
 already serializes through one task -- and the gating formula in §3 is the right one

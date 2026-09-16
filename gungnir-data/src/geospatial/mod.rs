@@ -18,7 +18,7 @@
 //! is a `DataError`, never a panic (`verification-capability-table.md` §2, `gungnir-data`
 //! row). Terrain classification (GAP-082) stays unwritten and says so.
 //!
-//! **Real-world CRS conversion** (signed off 2026-09-08, D-41): a file's `GridCrs` no
+//! **Real-world CRS conversion** (D-41): a file's `GridCrs` no
 //! longer has to be `Unstated` or the deployment's own local frame. `crs::to_wgs84`
 //! (behind the `crs` feature) converts a geographic or projected CRS with a
 //! known EPSG code into WGS84 geographic via `proj`; `gungnir-app` carries the result

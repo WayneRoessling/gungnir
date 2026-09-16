@@ -1,8 +1,8 @@
 # DN-17 Releasability marking and enforcement
 
-Closes GAP-062. Status: **signed off by the owner 2026-09-05.** Design only; no code exists yet.
-**Human-owned and signed**: this is `gungnir-security`'s enforcement and the interface's
-write path. The owner signed it on 2026-09-05.
+Closes GAP-062. Status: design only; no code exists yet.
+**Human-owned**: this is `gungnir-security`'s enforcement and the interface's
+write path. What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 D-06 settled the shape: **modelled in increment 3, enforced per caller in increment 4.**
 This note designs both halves at once so the marking is not designed twice.

@@ -50,8 +50,8 @@
 //! deciding, and reporting what they withheld. Tracks and health keep their existing
 //! doors, `/v2/snapshot` and `/v2/health`.
 //!
-//! **`POST` on those same three paths (GAP-065, DN-18 §5 amendment 2, human-owned,
-//! signed by the owner the same day) is the write path DN-18's own amendment 1 said
+//! **`POST` on those same three paths (GAP-065, DN-18 §5 amendment 2, human-owned;
+//! signatures: docs/signatures.md) is the write path DN-18's own amendment 1 said
 //! neither existed nor was decided.** The caller is this deployment's own desktop,
 //! posting under its operator session token what it currently holds; the node replaces
 //! its held set for that item and the existing `GET` route serves it onward, still
@@ -1510,8 +1510,8 @@ async fn publish_handoffs(
 }
 
 /// The three exchange publish routes, which differ only in the item (GAP-065, DN-18 §5
-/// amendment 2). **`gungnir-api` write path: human-owned, signed by the owner the same
-/// day** (`docs/agentic-workflow.md`).
+/// amendment 2). **`gungnir-api` write path: human-owned** (`docs/agentic-workflow.md`;
+/// signatures: docs/signatures.md).
 ///
 /// The caller is this deployment's own desktop link, posting under its own operator
 /// session token to tell its node what it now holds -- the same caller [`task_sensor`]

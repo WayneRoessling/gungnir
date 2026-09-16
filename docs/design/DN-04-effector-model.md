@@ -1,6 +1,6 @@
 # DN-04 Effector layer and cost model
 
-Closes GAP-030. Status: signed and **implemented and wired** (GAP-030, 2026-09-06). **Amendment 1 (§9), signed by the owner 2026-09-06**: the closing speed GAP-031's geometry needs.
+Closes GAP-030. Status: **implemented and wired** (GAP-030, 2026-09-06). **Amendment 1 (§9)**: the closing speed GAP-031's geometry needs. What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -129,7 +129,7 @@ Interface: `ResourceView` appears inside `SnapshotResponse`; the added fields ar
 |---|---|---|---|
 | CAP-3.3 Assignment recommendation | Scenario replay with mixed-layer resources, plus a property test on the preference rule | The innermost adequate layer is always preferred; no plan proposes a resource at or below its reserve; MOE-03 computed over a TT-01 replay is at least 0.9 with a correctly configured laydown | TT-01 and TT-03 sample sets; generated resource sets |
 
-## 9. Amendment 1 -- a closing speed, for the intercept geometry (**signed by the owner 2026-09-06**)
+## 9. Amendment 1 -- a closing speed, for the intercept geometry
 
 **Raised by GAP-031.** The geometry solver needs to know how fast an effector closes on
 a track, and §3 gives a resource a layer, a cost and a magazine and no motion at all. A

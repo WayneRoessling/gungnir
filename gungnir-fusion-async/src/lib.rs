@@ -125,11 +125,11 @@ impl From<BearingDetection> for Submission {
 /// Everything one pass through [`ingest_with`]'s loop produced, bundled into one
 /// channel message rather than sent as three (GAP-096).
 ///
-/// **Signed by the owner 2026-09-09.** This crate is human-owned
-/// (`docs/agentic-workflow.md`); this struct and the channel type change below were the
+/// This crate is human-owned (`docs/agentic-workflow.md`; signatures:
+/// docs/signatures.md); this struct and the channel type change below were the
 /// mechanical part of wiring [`FusionPipeline::retained_bearings`] and
-/// [`FusionPipeline::stats`] out to a caller, written and gated 2026-09-08 and reviewed
-/// before signing. The bundling claim below is not only gated but model-checked:
+/// [`FusionPipeline::stats`] out to a caller, written and gated 2026-09-08 and then
+/// reviewed. The bundling claim below is not only gated but model-checked:
 /// `loom_model::snapshot_fields_come_from_one_epoch` holds it over every interleaving of
 /// the outbound channel, and `loom_model::unbundled_publication_is_caught` proves the
 /// two-channel shape this replaced *does* skew under preemption. What the review found
@@ -196,7 +196,7 @@ fn snapshot_output(pipeline: &FusionPipeline) -> PipelineSnapshot {
 /// is false, so no dashboard can claim a working tracker before one exists.
 ///
 /// **True since 2026-09-06** (GAP-011): [`pipeline::FusionPipeline`] composes the
-/// signed linear Kalman filter, the Jonker-Volgenant associator, the chi-square gate
+/// linear Kalman filter, the Jonker-Volgenant associator, the chi-square gate
 /// and the `gungnir-track` lifecycle over a reorder buffer, and
 /// `tests/oos_convergence.rs` gates the `fusion-async` row -- the async path against
 /// the offline batch over the same multi-sensor timeline.
@@ -223,11 +223,8 @@ pub const PIPELINE_IMPLEMENTED: bool = true;
 ///
 /// The default settings are used; [`ingest_with`] takes a deployment's.
 ///
-/// Cancellation-safety note (required on every async fn per §2.2): the pipeline lives
-/// on the stack of this task and is mutated only between awaits. A detection is taken
-/// from the channel and pushed into the reorder buffer with no await in between, so a
-/// dropped future loses at most one in-flight detection and never leaves the buffer
-/// half-updated.
+/// **Cancellation safety** (`docs/agentic-coding-standards.md` §2.2): as for
+/// [`ingest_with`], which this runs under the default settings.
 ///
 /// The inbound channel is a `crossbeam` channel because it is the boundary with the
 /// synchronous render/UI thread (§2.2); it is polled with `try_recv` plus a yield
@@ -242,6 +239,14 @@ pub async fn ingest(rx: Receiver<Submission>, out: Sender<PipelineSnapshot>) {
 /// whatever is still inside the reorder horizon is processed and a final snapshot is
 /// emitted before the task stops. Dropping it would lose the last horizon of every
 /// session, and a replay would then end short of the recording it replayed.
+///
+/// **Cancellation safety** (`docs/agentic-coding-standards.md` §2.2). The loop's only
+/// await is the idle back-off, reached when the inbound channel is empty, so a detection
+/// or bearing taken from the channel is always applied before the next suspension point:
+/// the pipeline is never left holding half of an update. Dropping the future drops the
+/// pipeline with it. What the reorder buffer still holds is lost and the end-of-stream
+/// flush above does not run; the consumer keeps every snapshot already sent, each built
+/// whole before it was sent.
 pub async fn ingest_with(
     rx: Receiver<Submission>,
     out: Sender<PipelineSnapshot>,

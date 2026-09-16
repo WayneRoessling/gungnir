@@ -1,8 +1,8 @@
 # DN-23 Operator authentication and sessions
 
-Closes GAP-057. Status: **signed off by the owner 2026-09-05**, with D-20 (the crates)
-settled the same day. **Human-owned**: `gungnir-security` is a low-trust crate and this note
-decides who the system believes you are.
+Closes GAP-057. Status: D-20 (the crates) settled 2026-09-05. **Human-owned**:
+`gungnir-security` is a low-trust crate and this note decides who the system believes you
+are. What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 **Implementation status, 2026-09-05.** The desktop half is built: §3's session types,
 §5's rules 1 to 7, and the local-account authority D-02 makes the disconnected fallback.
@@ -256,8 +256,6 @@ D-18's rows carry.
 
 ## 10. Amendment 1 (2026-09-07): the account nobody could create
 
-**Signed by the owner 2026-09-07.**
-
 This note gives the account file a format, gives `FileAccountStore` a file to read, and
 gives the node a reason to refuse callers when it has neither. What it never said is
 **who writes the file**.
@@ -266,7 +264,7 @@ gives the node a reason to refuse callers when it has neither. What it never sai
 from tests in six crates and **from nowhere else** -- no binary, no example, no
 documented command. So a deployment following this note arrived at a node that warned
 `no caller authority` and had no way forward that did not involve writing Rust. The
-authentication half of GAP-057 was implemented and signed on 2026-09-06 and was, in the
+authentication half of GAP-057 was implemented on 2026-09-06 and was, in the
 only sense that matters to a deployment, unreachable.
 
 That is the failure mode this workspace calls a silent stub seen from the other side:
@@ -302,12 +300,11 @@ signing key, which is `GUNGNIR_TOKEN_KEY` and DN-22's business. It does not crea
 first account automatically at start-up: a node that provisions itself is a node with a
 default credential.
 
-## 11. Amendment 2 (2026-09-08, **signed by the owner the same day**): the operating system's keystore for a node's own accounts
+## 11. Amendment 2 (2026-09-08): the operating system's keystore for a node's own accounts
 
-**Human-owned; signed by the owner 2026-09-08, together with DN-22 §13's OS-keystore
-mechanism and item 111's TLS-identity generalisation -- one review over the whole
-mechanism and its four services.** The owner's review found and closed a first-run race
-in `os_keystore::ensure_secret` before signing (DN-22 §13 records the fix); this
+**Human-owned, together with DN-22 §13's OS-keystore mechanism and item 111's TLS-identity
+generalisation -- the whole mechanism and its four services.** A first-run race in
+`os_keystore::ensure_secret` was found and closed (DN-22 §13 records the fix); this
 amendment shares that helper and the fix applies here too.
 
 Amendment 1 gave the node a way to write its account file; that file is still plaintext

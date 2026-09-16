@@ -32,8 +32,9 @@ make the commercial edition undistributable.
    for the UI, rendering, and 3D-data crates.
 3. Check the trust tier in `docs/agentic-workflow.md`. Changes to `unsafe`,
    `gungnir-fusion-async`, numerical stability, `gungnir-policy`, `gungnir-command`,
-   `gungnir-security`, the `gungnir-ingest` gateway, and `gungnir-api` write paths
-   are human-owned: draft them, but a human merges them.
+   `gungnir-security`, the `gungnir-ingest` gateway, `gungnir-api` write paths,
+   `gungnir-remote`'s TLS identity path, and any pass criterion are human-owned: draft
+   them, but a human merges them.
 
 ## Rules that are checked in review
 
@@ -62,6 +63,14 @@ make the commercial edition undistributable.
   `DecisionRecord` that `is_actionable()`. `gungnir-app/tests/no_execution_without_decision.rs`
   scans the sources for those constructions and drives the desktop to prove the order;
   a new execution path has to be added to that test's list with its gate.
+- **One source per current fact.** A status, a signature, an approved crate, or what is
+  unbuilt is read from its one source (`docs/README.md`, "Keeping the set consistent"),
+  never restated. Say whether something is signed only in `docs/signatures.yaml`; a
+  sentence elsewhere saying something still waits for the owner fails CI.
+- **History is append-only.** A merged `docs/record/` item, gap history entry, or
+  signature entry is never edited; add a new one. A new record item is
+  `docs/record/<YYYY-MM-DD>/<subject>.md`, never a number, so parallel changes cannot
+  collide.
 - **No fake wiring.** A capability that is not implemented returns an explicit
   "not implemented" error or is left as `todo!()` off every runtime path; it is
   never stitched into a loop pretending to work, and health flags never claim a
@@ -101,6 +110,10 @@ cargo test --workspace
 cargo bench --workspace --no-run
 ```
 
+```bash
+BASE_REF=origin/main bash .github/scripts/check_documents.sh all
+```
+
 The CI workflows under `.github/workflows/` run the same commands plus the gated
 checks (`oracle-diff`, `miri`, `loom`, `fuzz-nightly`, `bench-regression`,
 `gpu-fusion`, `release`). One difference from the list above is deliberate:
@@ -109,15 +122,28 @@ profile, but every test binary is scheduled at once instead of one after another
 followed by `cargo test --workspace --doc` for the doctests nextest does not run.
 `cargo test --workspace` locally remains exactly right; nextest is optional there
 (`cargo install cargo-nextest --locked`). `bench-regression.yml` runs on main and
-by dispatch, not per pull request, since 2026-09-09; its header says why. Until those workflows are enabled on a hosted runner, say
-in the PR description which of them you ran by hand.
+by dispatch, not per pull request, since 2026-09-09; its header says why.
+`cross-document-recheck.yml` re-runs the document checks of every open pull request after
+each merge to `main` and posts the result on it, and `pr-rules.yml` checks the description
+and the commit messages.
 
 ## Pull request description
 
-State what changed, which capability-table row or capability it serves, which
-standards sections apply, and why the approach was chosen (for numerical code, cite
-the reference, e.g. "Joseph form, Bar-Shalom §5.3"). For `gungnir-fusion-async`
-changes, describe in plain language what interleaving could be affected. For
-human-owned crates, say so explicitly rather than assuming the reviewer will notice.
+`.github/pull_request_template.md` asks for these, in order: what changed, which
+capability-table row, gap or decision it serves, which standards sections apply, and why
+the approach was chosen (for numerical code, cite the reference, e.g. "Joseph form,
+Bar-Shalom §5.3"). For `gungnir-fusion-async` changes, describe in plain language what
+interleaving could be affected. For human-owned paths, name them rather than assuming the
+reviewer will notice. A change to `[workspace.dependencies]` adds a line beginning
+`Decision:` and a line beginning `Duplicate linkage:`, and `pr-rules.yml` checks both.
+
+## Commit messages
+
+A subject line, then a body of at most 120 words that says three things: the row, gap or
+decision the change serves, the standards section that applies, and why. What happened on
+the way there, what was tried and what was found, is narrative. When a change needs it, it
+goes in a `docs/record/` item, which the message and the pull request link.
+`.github/workflows/pr-rules.yml` fails a pull request whose commits have a longer body;
+trailers such as `Co-Authored-By` do not count.
 
 Commits made with an agent's help end with the attribution line the agent supplies.

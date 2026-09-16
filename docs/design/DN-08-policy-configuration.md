@@ -1,11 +1,11 @@
 # DN-08 Policy configuration and plan validity
 
 Closes GAP-052, which finding F-1 retyped to Mission because nothing was designed, and
-which returns to Technical now that this note exists. Status: **signed off by the owner
-2026-09-05.** Design only; no code exists yet.
-**Human-owned and signed**: everything this note configures is a rule about who may do
-what. The owner signed it on 2026-09-05, which also unblocks DN-09 and DN-10, both of which
-read the schema defined here. A change to it is a change request under phase H.
+which returns to Technical now that this note exists. Status: design only; no code exists
+yet.
+**Human-owned**: everything this note configures is a rule about who may do
+what. DN-09 and DN-10 both read the schema defined here. A change to it is a change request
+under phase H. What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -176,13 +176,13 @@ do is answered by authorization, not by reading the rules.
 
 The defaults table is the test fixture. That is the point of writing it as a table.
 
-## 9. Amendment 1 -- **signed by the owner 2026-09-05**
+## 9. Amendment 1
 
 Raised by GAP-052 on 2026-09-05, by implementing this note's §5 and §8 rather than by
-reading it. The same sign-off covers the code that conforms to it. Three of the four criteria in §8 were unmet, and the entry had been closed on
-§6's schema alone. The behaviour below is what the note already asks for; what is new, and
-what needs a signature, is **how** two of them are reached, because §6 said "Interface: no
-change" and both of these change one.
+reading it. Three of the four criteria in §8 were unmet, and the entry had been closed on
+§6's schema alone. The behaviour below is what the note already asks for; what is new is
+**how** two of them are reached, because §6 said "Interface: no change" and both of these
+change one.
 
 **(a) `ConfigStore::apply` takes the time.** §5 says a baseline outside its window may not
 be promoted, and `ConfigBaseline::is_promotable_at` was written for exactly that and never

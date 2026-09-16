@@ -196,7 +196,7 @@ pub mod actions {
     /// with the operator who made them" are two different audit facts a shared name
     /// would blur into each other.
     ///
-    /// **Signed by the owner the same day.** Granting this to `Commander` and
+    /// Granting this to `Commander` and
     /// `IntelligenceAnalyst` in [`crate::authz::role_permits`] mirrors `RELEASE_PRODUCT`'s
     /// existing grant on the reasoning that the roles trusted to mark a product
     /// releasable are the roles trusted to send it, but that was this change's own
@@ -206,12 +206,10 @@ pub mod actions {
     /// authority.
     pub const PUBLISH_EXCHANGE: &str = "exchange.publish";
     /// Conducting an after-action review: open, record, conclude, close, promote
-    /// (DN-20 §6). Audited under this name (GAP-059; signed by the owner 2026-09-06);
-    /// not yet in the role table.
+    /// (DN-20 §6). Audited under this name (GAP-059); not yet in the role table.
     pub const REVIEW_CONDUCT: &str = "review.conduct";
     /// Stating, tasking, declining or satisfying a collection requirement (DN-11).
-    /// Audited under this name (GAP-059; signed by the owner 2026-09-06); tasking
-    /// authority is `TASK_SENSOR`.
+    /// Audited under this name (GAP-059); tasking authority is `TASK_SENSOR`.
     pub const REQUIREMENT: &str = "requirement.state";
     /// Conducting an after-action review (docs/design/DN-20-after-action-review.md).
     pub const CONDUCT_REVIEW: &str = "review.conduct";

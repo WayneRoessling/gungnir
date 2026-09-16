@@ -4,7 +4,7 @@
 
 //! Mutual TLS for the v2 transport (GAP-060, D-02).
 //!
-//! Crates: `rustls` and `tokio-rustls`, signed off under D-18 on 2026-09-05 and unused
+//! Crates: `rustls` and `tokio-rustls`, admitted by D-18 on 2026-09-05 and unused
 //! until now. PEM is read with `rustls::pki_types::pem`, rustls's own type crate; it
 //! replaced `rustls-pemfile` on 2026-09-07 (RUSTSEC-2025-0134, unmaintained).
 //!

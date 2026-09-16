@@ -249,7 +249,6 @@ then.
 **Recorded 2026-09-06 for GAP-010, as candidates; pinned later the same day under D-32
 ("the agent verifies and pins, the owner reviews").** D-24 said pin both and verify first;
 the verification is §3.1's table, the fixtures are §3.3's copy, and the decoder is §3.5.
-**For the owner's review**: the pin, the delta reading, and the copies' provenance.
 
 ### 3.1 The message payloads
 
@@ -420,7 +419,7 @@ open-source-consensus route does not make, and section 4.5 says what it makes in
 
 ### 4.5 What is built (2026-09-06)
 
-`gungnir_interop::adsb`, on the open-source-consensus route the owner approved under
+`gungnir_interop::adsb`, on the open-source-consensus route the owner chose under
 GAP-010. **It pins no normative source and says so in three places** — the module doc
 comment, the `SchemaKind::Adsb1090Es { normative_source_pinned: false }` catalogue entry a
 peer negotiates against, and the verification-capability-table row's oracle column.
@@ -1169,7 +1168,7 @@ acceptances and every refusal path, two `gungnir-node` tests, and two
 a hand-built, well-formed frame reaches the real gateway as an accepted detection, and
 one with no local frame origin binds nothing.
 
-**Reviewed before signing, 2026-09-09.** One corrupt BER length byte stalled the adapter
+**Reviewed 2026-09-09** (`ARCHITECTURE.md` §10 item 113). One corrupt BER length byte stalled the adapter
 for good: every later frame became part of a frame that never completed, with no error
 and a buffer that only grew. The adapter now bounds the frame it will wait for
 (`MAX_FRAME_BYTES`, its own stated bound since ST 0601 sets none) and resynchronizes past
@@ -1177,8 +1176,7 @@ a header promising more, and it records a missing Sensor True Altitude as a conv
 loss on the placed fix rather than carrying the baseline's vertical sigma for an axis
 nobody measured. The codec's fixed tag widths were made strict, so a known tag at another
 width is carried raw as its documentation already promised rather than scaled by the
-fixed width's domain. The adapter was signed by the owner the same day
-(`ARCHITECTURE.md` §10 item 113); the tag semantics remain this secondary source's
+fixed width's domain. The tag semantics remain this secondary source's
 reading, and the primary text remains unpinned.
 
 ## 9. Radio direction finding and UAS identification: ASTERIX Categories 205 and 129 -- surveyed 2026-09-06, both pinned and built 2026-09-08 (GAP-100, GAP-101)
@@ -1224,7 +1222,7 @@ per §1.4's own rule (to cross-check, never as the authority): the two agree on 
 and lengths.
 
 **Nothing new has to be licensed to use it.** What was needed was the same bearing-only
-decision §7.3 names, and it was already built and signed (DN-27) before this section's
+decision §7.3 names, and it was already built (DN-27) before this section's
 survey was written.
 
 ### 9.2 What is built (2026-09-08)
@@ -1278,7 +1276,7 @@ capture, the catalogue's own conformance and wire-coverage declarations in
 `gungnir-interop/tests/conformance.rs`, and two adapter-routing tests in
 `gungnir-ingest/src/adapters/asterix.rs`.
 
-**Reviewed before signing, 2026-09-09.** The bearing's scale was checked against the
+**Reviewed 2026-09-09** (`ARCHITECTURE.md` §10 item 114). The bearing's scale was checked against the
 primary PDF itself rather than the codec's own tests, and the PDF disagrees with itself:
 its Table 1, the summary of least significant bits, lists I205/070 and I205/080 at
 0.1 degrees, while the item definitions §5.2.8 and §5.2.9 both state `LSB = 0.01deg`,
@@ -1288,8 +1286,7 @@ definitions govern and the codec follows them; the summary table is the typo, re
 here and in the codec's module documentation so nobody corrects the decoder against the
 wrong table. The same review added the range refusals those definitions state -- a bearing
 at or past 36 000 counts, a signal elevation outside plus or minus 9 000 -- since the
-gateway's validation bounds a bearing's variance and not its angle. The adapter's
-Category 205 arm was signed by the owner the same day (`ARCHITECTURE.md` §10 item 114).
+gateway's validation bounds a bearing's variance and not its angle.
 
 ### 9.3 Category 129, UAS Identification and Target Reports -- pinned and built 2026-09-08 (GAP-101)
 
@@ -1325,7 +1322,7 @@ the UAP table (§5.3.1) disagreed with each other, the one that agreed with the
 specification's own per-item detailed sections (§5.2.x) is what the decoder follows.
 
 **A genuine discrepancy in the primary source, found and not silently resolved -- and
-re-read at the owner's review, 2026-09-09.** Edition 1.2's own UAP table states data
+re-read at review, 2026-09-09.** Edition 1.2's own UAP table states data
 item I129/120 (Operational Risk Levels) is one octet long; its detailed description
 opens "Three-octet fixed length Data Item". `gungnir-interop/src/asterix/cat129.rs`
 first followed the Format line, carrying two undocumented octets raw; the review weighed
@@ -1406,16 +1403,14 @@ item refused by the block-length rule, the no-blocking rule, a reserved FRN, tru
 at every length), four fixture tests in `gungnir-interop/tests/asterix_fixtures.rs`
 against the hand-built fixture, the catalogue's own conformance and wire-coverage
 declarations in `gungnir-interop/tests/conformance.rs`, and two adapter-routing tests in
-`gungnir-ingest/src/adapters/asterix.rs`. **`gungnir-ingest` is human-owned; signed by
-the owner 2026-09-09 (next paragraph).**
+`gungnir-ingest/src/adapters/asterix.rs`. **`gungnir-ingest` is human-owned.**
 
-**Reviewed before signing, 2026-09-09 (GAP-101).** Every item's scale, width and sign in
+**Reviewed 2026-09-09 (GAP-101; `ARCHITECTURE.md` §10 item 123).** Every item's scale, width and sign in
 `cat129.rs` was checked against this PDF's own item pages -- the position at 180/2^30
 degrees, the two's-complement 0.1 m altitudes, the packed five-octet velocity pair, the
 twenty-bit vertical velocity, the 1/128 s time of day, the ASCII identity widths,
 Table 2's FSPEC order -- and all agree. The one reading reversed is I129/120's length,
-above. The adapter's Category 129 arm and its wiring were signed by the owner the same
-day (`ARCHITECTURE.md` §10 item 123).
+above.
 
 ## 6. Consequences for GAP-064, GAP-010 and GAP-091
 

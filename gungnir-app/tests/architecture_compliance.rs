@@ -255,6 +255,55 @@ fn no_unwrap_or_expect_outside_tests_and_main() {
     );
 }
 
+/// **Cancellation safety is stated** (`docs/agentic-coding-standards.md` §2.2): every
+/// `pub async fn` in `gungnir-fusion-async` says in its doc comment what a dropped future
+/// loses. The rule was written with the crate and followed on one of its two async
+/// functions, which is how a rule stops being one; this makes a third fail instead.
+#[test]
+fn every_public_async_fn_in_fusion_async_states_its_cancellation_safety() {
+    let mut checked = 0usize;
+    let mut missing = Vec::new();
+    for (rel, text) in rust_sources() {
+        if !rel.starts_with("gungnir-fusion-async/src/") {
+            continue;
+        }
+        let body = without_test_modules(&text);
+        let lines: Vec<&str> = body.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            let Some(rest) = line.trim_start().strip_prefix("pub async fn ") else {
+                continue;
+            };
+            checked += 1;
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            let mut doc = String::new();
+            for above in lines[..i].iter().rev() {
+                let above = above.trim_start();
+                if above.starts_with("///") {
+                    doc.push_str(above);
+                    doc.push('\n');
+                } else if !above.starts_with("#[") {
+                    break;
+                }
+            }
+            if !doc.to_ascii_lowercase().contains("cancellation safety") {
+                missing.push(format!("{rel}: `{name}`"));
+            }
+        }
+    }
+    assert!(
+        checked > 0,
+        "no `pub async fn` found in gungnir-fusion-async; the scanner is broken"
+    );
+    assert!(
+        missing.is_empty(),
+        "async functions with no \"Cancellation safety\" paragraph in their doc comment:\n  {}",
+        missing.join("\n  ")
+    );
+}
+
 /// Every Markdown file under the workspace root and `docs/`, by basename, with the
 /// paths that carry it.
 fn markdown_index(root: &Path) -> BTreeMap<String, Vec<PathBuf>> {
@@ -481,7 +530,7 @@ const PRIVATE_KEY_EXPORT_NAMES: &[&str] = &[
     "private_pem",
 ];
 
-/// `docs/agentic-coding-standards.md` §2.9 point 2: **no code path may build a
+/// `docs/agentic-coding-standards.md` §2.9, the `rcgen` row: **no code path may build a
 /// certificate over private key material that has left a `KeyProvider`.**
 ///
 /// # Why this test exists even though the rule holds by construction
@@ -528,7 +577,7 @@ fn no_path_exports_private_key_material() {
     assert!(
         offenders.is_empty(),
         "a `gungnir-security` function appears to return private key material, which \
-         would break docs/agentic-coding-standards.md §2.9 point 2 -- no code path may \
+         would break docs/agentic-coding-standards.md §2.9's `rcgen` row -- no code path may \
          build a certificate over private key material that has left a `KeyProvider`. \
          The whole certificate path (`gungnir-remote::identity`) depends on there being \
          no way to obtain the private half. If this is deliberate, it is an owner \
@@ -572,7 +621,7 @@ fn the_key_provider_surface_is_the_one_the_certificate_path_relies_on() {
         "`KeyProvider`'s method set changed. None of the six it had returns private key \
          material, and the certificate path in `gungnir-remote::identity` is safe only \
          because of that. If a method was added, say here whether it hands a caller a \
-         private key; if it does, docs/agentic-coding-standards.md §2.9 point 2 has to \
+         private key; if it does, docs/agentic-coding-standards.md §2.9's `rcgen` row has to \
          change first, and that is the owner's decision"
     );
 }

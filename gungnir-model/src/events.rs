@@ -391,7 +391,7 @@ impl SensorTaskEvent {
 /// The life of one collection requirement
 /// (docs/design/DN-11-sensor-control-and-tasking.md, GAP-005).
 ///
-/// **Not in DN-11 §6**: added by amendment 1 (a), signed by the owner 2026-09-05. §6
+/// **Not in DN-11 §6**: added by amendment 1 (a). §6
 /// lists the interface delta and the `SensorTask` event but no requirement event, and
 /// without one the requirement lifecycle exists only in memory -- it would vanish on
 /// exit, and the CAP-2.12 row's method is an MT-08 *replay*, which can read nothing but

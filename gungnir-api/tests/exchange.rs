@@ -238,7 +238,7 @@ fn product(id: &str, at: f64, releasability: Releasability) -> ExchangeProduct {
 }
 
 const PASSPHRASE: &str = "correct horse battery staple";
-/// Holds `PUBLISH_EXCHANGE` (GAP-065, written and gated, signed by the owner the same day).
+/// Holds `PUBLISH_EXCHANGE` (GAP-065, written and gated).
 const COMMANDER: u64 = 70;
 /// Holds neither `PUBLISH_EXCHANGE` nor `RELEASE_PRODUCT`.
 const OPERATOR: u64 = 71;

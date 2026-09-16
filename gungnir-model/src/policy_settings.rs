@@ -5,7 +5,7 @@
 //! How this deployment decides: identification thresholds, staleness, weapons
 //! control status, the authority matrix, decision timeouts, and baseline validity.
 //!
-//! Design: docs/design/DN-08-policy-configuration.md (signed 2026-09-05), with
+//! Design: docs/design/DN-08-policy-configuration.md, with
 //! `WeaponsControlStatus` from docs/design/DN-09-authority-and-control-status.md.
 //! Capabilities CAP-5.6 and CAP-3.6.
 //!

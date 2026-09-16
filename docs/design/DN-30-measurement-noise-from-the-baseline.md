@@ -3,10 +3,11 @@
 Closes the follow-up DN-28 §7 named and did not fix: "the `measurement_noise_var`
 mismatch between `PipelineSettings::default()` and each scenario's actual sensor model,
 which predates this note and likely affects the fragmentation counts recorded for
-scenarios 2 through 4 as well as scenario 1." Status: **proposed, built, gated and
-signed by the owner 2026-09-07; re-reviewed 2026-09-09** (§7), the review finding one
+scenarios 2 through 4 as well as scenario 1." Status: **proposed, built and gated
+2026-09-07; re-reviewed 2026-09-09** (§7), the review finding one
 thing to change in the low-trust crate: `from_baseline` no longer keeps a value it cannot
-honour by silently substituting the default (§4).
+honour by silently substituting the default (§4). What the owner has signed of this note is
+in [`../signatures.md`](../signatures.md).
 
 Motivated by the same diagnosed defect DN-28 was, one layer down: DN-28 §7 found that
 `PipelineSettings::default().measurement_noise_var` (`[400, 400, 900]`) understated
@@ -36,8 +37,8 @@ exist was a way for a baseline to set it to anything but `Self::default()`'s pla
 `sigma_height_m`) is in the sensor's line-of-sight frame, rotated into ENU per detection
 by the actual bearing to the target. `PipelineSettings::measurement_noise_var` is one
 fixed ENU triple applied to every detection regardless of source or bearing. **This note
-does not close that gap.** It follows the exact approximation DN-28 §7 already used and
-got signed off on for scenario 1's own test -- treating a sensor's
+does not close that gap.** It follows the exact approximation DN-28 §7 already used
+for scenario 1's own test -- treating a sensor's
 `[sigma_range², sigma_cross², sigma_height²]` as if it were `[east, north, height]`
 variance -- because a deployment naming one sensor's noise as its baseline figure is the
 same approximation, made once at configuration time instead of once per test. A
@@ -157,17 +158,13 @@ already covered.
 
 Small: no new estimator, no new type, one field threaded through a schema and a function
 signature already carrying two other fields the same way (DN-28 §5). Built and gated
-2026-09-07, and **signed by the owner the same day** over the `gungnir-fusion-async`
-diff. `docs/agentic-workflow.md`'s low-trust tier names `gungnir-fusion-async` for
+2026-09-07. `docs/agentic-workflow.md`'s low-trust tier names `gungnir-fusion-async` for
 concurrency correctness and numerical stability; this change touches neither
 (`from_baseline` gains an argument it validates and stores, with no new await point, no
 new shared state, and no change to how a filter is predicted or updated), but the crate
-is named by the tier itself rather than by what any one change inside it does, so the
-signature was sought rather than assumed unnecessary. The record of that signature was
-written on a branch that was never merged (`claude/dn-29-measurement-noise-baseline`,
-under the note's number at the time) and is carried here instead.
+is named by the tier itself rather than by what any one change inside it does.
 
-**Re-reviewed 2026-09-09, on the owner's request, before the record was made** (the
+**Re-reviewed 2026-09-09, on the owner's request** (the
 review `ARCHITECTURE.md` §10 item 124 carries). What the review checked: that the
 configured noise reaches every filter selection and the dense-group mode through the
 pipeline's one `measurement_model()`, and the freshly initiated prior through its one

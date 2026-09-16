@@ -2,7 +2,7 @@
 
 Closes GAP-017. Status: first draft, 2026-09-05. **Design only; no code exists.**
 The smallest note in the set, and it is small because `gungnir-geo` already has the shape
-of the answer.
+of the answer. What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -127,12 +127,12 @@ later wires hazards into the policy chain.
 GAP-017; CAP-2.5; MT-04; feeds DN-02 and DN-05's no-fire variant;
 `../ux/wireframes/WF-02-viewport.puml`, `WF-16-planning.puml`; principles AP-01, AP-02.
 
-## 9. Amendment 1 -- **signed by the owner 2026-09-06**
+## 9. Amendment 1
 
-Raised 2026-09-06; signed the same day. The same sign-off covers the code that conforms to it.
+Raised 2026-09-06.
 
 Raised by GAP-017 on 2026-09-06, by implementing §5 and §8 rather than by reading them.
-Two corrections; both change what the note says, and each needs a signature.
+Two corrections; both change what the note says.
 
 **(a) The negative test is a source scan, not the absence of an edge.** §8 says no hazard
 ever contributes to a policy verdict, and §4 says the note adds no edge, which reads as if

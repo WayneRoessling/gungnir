@@ -24,7 +24,7 @@ workspace = true
 # identity from its key provider, so it needs `KeyProvider` at runtime and not only in a
 # test. Reviewed and accepted with the same decision that widened §2.9's rcgen rule.
 gungnir-security = { path = "../gungnir-security", version = "0.1.0" }
-# GAP-060, and the widening of §2.9 point 2. `rcgen` builds the certificate through its
+# GAP-060, and the widening of §2.9's `rcgen` row. `rcgen` builds the certificate through its
 # `SigningKey` trait, which calls the provider's `sign`, so the private half never leaves
 # custody. It lives here rather than in either binary because two binaries cannot depend
 # on each other and this is the only crate both already depend on at runtime that already

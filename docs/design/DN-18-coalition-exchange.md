@@ -1,10 +1,11 @@
 # DN-18 Peer and coalition exchange
 
-Closes GAP-065. Status: first draft, 2026-09-05; amendment 1 (2026-09-06, signed
-2026-09-07) built the three read routes; amendment 2 (2026-09-08, written and gated where
-human-owned, signed by the owner the same day) built the write path, its store-and-forward,
-and the handoffs producer. **Not fully closed**: no producer exists yet for `Warnings` or
-`Reports`, and the format round-trips and interop suite (GAP-063, GAP-064) are untouched.
+Closes GAP-065. Status: first draft, 2026-09-05; amendment 1 (2026-09-06) built the three
+read routes; amendment 2 (2026-09-08, written and gated where human-owned) built the write
+path, its store-and-forward, and the handoffs producer. **Not fully closed**: no producer
+exists yet for `Warnings` or `Reports`, and the format round-trips and interop suite
+(GAP-063, GAP-064) are untouched. What the owner has signed of this note is in
+[`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -123,7 +124,7 @@ DN-07's handoff path, all filtered by DN-17.
 The second criterion is the one that proves the two gates are independent, and it is the
 one an implementation shortcut would break by checking only the agreement.
 
-## 9. Amendment 1: the exchange endpoints §6 said would not exist (2026-09-06, **signed by the owner 2026-09-07**)
+## 9. Amendment 1: the exchange endpoints §6 said would not exist (2026-09-06)
 
 **§6 says "Interface: no new endpoints." Three were added, and this records the
 divergence rather than leaving §6 to be read as still true.**
@@ -160,7 +161,7 @@ hold them has no `NodeApi`, and `../../ARCHITECTURE.md` refuses a `gungnir-app` 
 which a desktop posts marked products to its node, or a desktop-hosted transport -- and
 neither was invented here.
 
-## 10. Amendment 2: the write path, its store-and-forward, and one producer (2026-09-08, **written and gated where human-owned, signed by the owner the same day**)
+## 10. Amendment 2: the write path, its store-and-forward, and one producer (2026-09-08, **written and gated where human-owned**)
 
 **Amendment 1 ended by naming the decision this needed and not making it: "a write path by
 which a desktop posts marked products to its node, or a desktop-hosted transport." The
@@ -230,8 +231,7 @@ remain GAP-065's own open items.
 
 **Signature scope.** `gungnir-security` (the `PUBLISH_EXCHANGE` action and its role
 grants, now three: `Commander`, `IntelligenceAnalyst`, and `Supervisor`) and the
-`gungnir-api` write path are human-owned (`docs/agentic-workflow.md`); both are signed by
-the owner the same day this amendment was written. `gungnir-remote`'s outbox and
+`gungnir-api` write path are human-owned (`docs/agentic-workflow.md`). `gungnir-remote`'s outbox and
 `gungnir-app`'s producer are ordinary transport and wiring work and carry no signature
 requirement of their own.
 

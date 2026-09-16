@@ -1,8 +1,9 @@
 # Verification rows
 
-Status: **agreed by the owner 2026-09-05.** The rows this design set contributed to
+The rows this design set contributed to
 [`../verification-capability-table.md`](../verification-capability-table.md) §2, and the
-map from each row back to the note that produced it.
+map from each row back to the note that produced it. What the owner has signed of these
+rows is in [`../signatures.md`](../signatures.md).
 
 **The criteria themselves are not repeated here.** They live in the verification table,
 which is their one home. This file is the mapping, so that a row can be traced to the
@@ -12,7 +13,7 @@ design that justified it and to the crate that will implement it.
 
 Twenty-three rows across twenty-two capabilities were written before any of their code
 exists, so no criterion could be fitted to an implementation. That is AP-17, and it is the
-rule most likely to erode quietly under delivery pressure. Having the owner agree them at
+rule most likely to erode quietly under delivery pressure. Agreeing them at
 design time rather than at review time is what makes contract C-17 enforceable: a later
 change to any of these is a change request under phase H, not an edit.
 

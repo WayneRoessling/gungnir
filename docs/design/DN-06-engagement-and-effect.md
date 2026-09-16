@@ -1,6 +1,7 @@
 # DN-06 Engagement tracking and effect assessment
 
-Closes GAP-043. Status: first draft, 2026-09-05. **Design only; no code exists.**
+Closes GAP-043. Status: first draft, 2026-09-05. **Design only; no code exists.** What the
+owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -151,9 +152,9 @@ GAP-043; CAP-4.6; MOE-01; MT-01 step 8; depends on DN-04 for the layer window an
 for effector reports; `../ux/wireframes/WF-04-track-detail-evidence.puml`,
 `WF-17-commander-summary.puml`; principles AP-02, AP-03, AP-10.
 
-## 9. Amendment 1 -- **signed by the owner 2026-09-06**
+## 9. Amendment 1
 
-Raised 2026-09-06; signed the same day. The same sign-off covers the code that conforms to it.
+Raised 2026-09-06.
 
 Raised by GAP-043 on 2026-09-06, by implementing §5's transition table. One row of it
 needed a reading the note does not give.

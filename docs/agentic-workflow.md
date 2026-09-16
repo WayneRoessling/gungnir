@@ -48,16 +48,17 @@ core, service layer, productization layer) and `rust-ui-architecture-coding-stan
 - Reconciliation in `gungnir-resilience` and arbitration in `gungnir-collab`, gated on
   their invariant tests, because they decide what the shared record contains.
 
-**Low-trust. Human-owned; agents may draft but not merge unsupervised:**
+**Low-trust. Human-owned; agents may draft but not merge unsupervised.** What the owner
+has signed under these rules is in [`signatures.md`](signatures.md); the precedents below
+record where each rule's edge turned out to be.
 
 - Any `unsafe` block, anywhere in the workspace.
 - Concurrency correctness in `gungnir-fusion-async`: lock-free structures, channel
   backpressure, out-of-order measurement handling.
 - Numerical stability guarantees: covariance must stay positive semi-definite; no silent
   NaN propagation.
-  - Signed off so far: `gungnir_association::solve_assignment`'s output contract
-    (2026-09-09, D-43 and GAP-103). The first signature under this clause, and worth
-    recording as the precedent for where its edge is. A fuzz target found the function
+  - Precedent (D-43, GAP-103): `gungnir_association::solve_assignment`'s output
+    contract, the first change brought under this clause. A fuzz target found the function
     returning `Ok` with `total_cost = -inf` on an all-finite cost matrix -- an infinity
     rather than a NaN, and reached by arithmetic on valid input rather than by a missing
     guard, so whether the clause covered it at all was itself the borderline question.
@@ -65,8 +66,8 @@ core, service layer, productization layer) and `rust-ui-architecture-coding-stan
     bullet below already states for its own edge: bring the borderline ones, do not
     decide the edge unilaterally. **What the owner decided
     was the contract, not the fix**: the three answers the register framed were
-    mutually exclusive statements about what the function promises, and he chose a
-    fourth (`total_cost` became `Option<f64>`). The pattern worth carrying: when a
+    mutually exclusive statements about what the function promises, and the owner chose
+    a fourth (`total_cost` became `Option<f64>`). The pattern worth carrying: when a
     defect's repair is a choice between contracts rather than a correction to one,
     the drafting agent's job is to measure what distinguishes them and frame the
     choice, not to pick.
@@ -74,19 +75,18 @@ core, service layer, productization layer) and `rust-ui-architecture-coding-stan
   authority enforcement, and the `gungnir-command` approval workflow. The system must
   never execute an intercept without a recorded human decision, and no agent-written
   change may weaken that.
-  - Signed off so far: the `PolicyChain` lifetime parameter (2026-09-05, GAP-038), which
-    is a type-level change that let the chain hold the borrowing engines the crate
-    already shipped. Worth recording as the precedent for where this rule's edge is: the
-    rule names *verdict logic*, the change touched none, and it was still brought to the
+  - Precedent (GAP-038): the `PolicyChain` lifetime parameter, a type-level change that
+    let the chain hold the borrowing engines the crate already shipped. The rule names
+    *verdict logic*, the change touched none, and it was still brought to the
     owner because the crate is on this list. Bring the borderline ones; do not decide
     the edge unilaterally.
-  - Also signed off: wiring `gungnir_command::queue` into `InMemoryApprovalWorkflow`
-    (2026-09-05, GAP-034 and GAP-035). This one *did* change behaviour -- the escalation
+  - Precedent (GAP-034, GAP-035): wiring `gungnir_command::queue` into
+    `InMemoryApprovalWorkflow`. This one *did* change behaviour -- the escalation
     bound and the roles an item is offered to -- in both cases to match DN-10 §5, which
     the uncalled code did not. Both corrections and the trait additions were put to the
     owner together with what they changed and why.
-  - Also signed off: conforming `OperatorDecision` to DN-10 §3 and the expiry rule in
-    `gungnir-collab`'s arbiter (2026-09-05), together with DN-10 amendment 1. This one
+  - Precedent (DN-10 amendment 1): conforming `OperatorDecision` to DN-10 §3 and the
+    expiry rule in `gungnir-collab`'s arbiter. This one
     was not an agent proposing a change to a signed design; it was an agent finding that
     the code had **lost two of the four variants the signed design specified**, and
     conforming to it.
@@ -111,14 +111,14 @@ core, service layer, productization layer) and `rust-ui-architecture-coding-stan
     link, the endpoint client -- is ordinary transport work and stays outside, because a
     list that swallowed the whole crate would make routine work need a signature and the
     signatures would stop meaning anything.
-  - **Signed off 2026-09-05: the finding that GAP-057 cannot be implemented yet**, and
-    only that. An agent picking up authentication found `Authenticator` to be a trait
+  - Precedent (GAP-057, D-20): **the finding that GAP-057 could not be implemented yet**,
+    and only that. An agent picking up authentication found `Authenticator` to be a trait
     with no implementor and **no cryptographic crate anywhere in the workspace** --
     passphrase verification and token integrity each need one, and D-02 chose the
     mechanism without choosing the libraries. That is the same shape as D-18 before the
     transport, so it was raised as D-20 rather than answered in a pull request.
-    - **What was signed is the blocker, not the answer.** D-20 stays open, the crates are
-      not chosen, and DN-23 is an unsigned draft. Nothing was implemented.
+    - **What the owner took was the blocker, not the answer.** Nothing was implemented
+      until D-20 chose the crates and DN-23 was settled.
     - Worth recording as the precedent for this crate's edge: the tempting move was a
       session model without credential verification, which would have produced a
       signed-in operator nobody had checked and filled
@@ -227,4 +227,8 @@ access can fire it, which a `pull_request` trigger on a public repository would 
   update because it is numerically stable under repeated updates; see Bar-Shalom
   §5.3"), not just that it passes. For `gungnir-fusion-async` the PR must state in
   plain language what interleaving the change could affect
-  (`agentic-coding-standards.md` §5).
+  (`agentic-coding-standards.md` §5). The signature is recorded in
+  [`signatures.md`](signatures.md) and nowhere else. A design and the code built from it
+  are signed separately: a signature on a design note says the design is the right one to
+  build, a signature on code says the code does what it says, and recording one as though
+  it were the other is how a note nobody agreed to becomes what later work cites.

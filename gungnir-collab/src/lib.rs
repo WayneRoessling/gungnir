@@ -58,8 +58,7 @@ pub trait AuthorityArbiter: Send + Sync {
 /// A real decision beats an expiry; otherwise the higher role wins, and on equal rank
 /// the earlier decision wins.
 ///
-/// The expiry rule is a decision-authority rule and was **signed by the owner on
-/// 2026-09-05** with DN-10 amendment 1 (§9).
+/// The expiry rule is a decision-authority rule (DN-10 amendment 1, §9).
 ///
 /// The expiry rule comes first because it is not a tie-break at all. If one site's
 /// window closed and another site's operator decided, there is nothing to arbitrate:

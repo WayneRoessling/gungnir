@@ -1,6 +1,7 @@
 # DN-12 Combined coverage and gap detection
 
-Closes GAP-006. Status: first draft, 2026-09-05. **Design only; no code exists.**
+Closes GAP-006. Status: first draft, 2026-09-05. **Design only; no code exists.** What the
+owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and the thread step it blocks
 
@@ -127,7 +128,7 @@ finite and positive.
 Interface: `GET /v2/coverage` for the configured approaches, authorization action
 `picture.view`. New endpoint, additive.
 
-**Correction, 2026-09-05 (GAP-006), signed by the owner 2026-09-05.** This section wrote the
+**Correction, 2026-09-05 (GAP-006).** This section wrote the
 response as a bare `Vec<CoverageGap>`. §5 of this note puts the sample spacing and whether
 terrain masking was applied **on the result**, so that a coarse run cannot be mistaken for
 a fine one -- and a response carrying only the gaps throws away exactly what that rule
