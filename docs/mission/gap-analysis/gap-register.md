@@ -114,8 +114,12 @@ drafting agent's proposals for the owner and the engineering reviewer to confirm
 | GAP-102 | A point cloud in a real-world CRS cannot be loaded | Technical | CAP-2.10 | 3 | 8 | M | 24 | I3 | UI engineer | In progress |
 | GAP-103 | `solve_assignment` returns an infinite total on an all-finite cost matrix | Technical | CAP-2.1 | 2 | 8 | S | 16 | I2 | Tracking engineer (human-owned crate) | Closed 2026-09-09 |
 | GAP-104 | Sensor positions reached the tracker as geodetic radians | Technical | CAP-1.1, CAP-2.1 | 4 | 9 | S | 36 | I2 | Services engineer | Closed |
+| GAP-105 | A rehearsal cannot move the sensors a laydown declares | Technical | CAP-5.2, CAP-1.4 | 3 | 4 | M | 12 | I3 | Services engineer | Open |
+| GAP-106 | An operator cannot accept a coverage gap | Technical | CAP-1.4, CAP-5.9 | 2 | 10 | M | 20 | I3 | UI engineer | Open |
+| GAP-107 | Nothing gates a plan on having been rehearsed | Technical | CAP-5.2, CAP-5.9 | 2 | 10 | M | 20 | I3 | UI engineer | Open |
+| GAP-108 | A converted height carries no vertical datum shift | Technical | CAP-2.10 | 2 | 8 | M | 16 | I4 | UI engineer | Open |
 
-Counts: 104 gaps, 3 mission, 101 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 108 gaps, 3 mission, 105 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1455,4 +1459,56 @@ Counts: 104 gaps, 3 mission, 101 technical; 1 already covered by a plan in `../.
 - Target: I2. Owner: Services engineer. Status: Closed.
 - Reference: `../../../ARCHITECTURE.md` §10 item 121; GAP-001 (whose closing action built the resolver this defeated); GAP-096 (whose bearing rays are drawn from this position); `../../design/DN-27-bearing-only-detections.md` §2.
 - Depends on: GAP-001.
+
+**GAP-105 A rehearsal cannot move the sensors a laydown declares**
+
+- Type: Technical.
+- Capability: CAP-5.2 Replay and rehearse; CAP-1.4 Coverage and gaps.
+- Description: **Filed 2026-09-15 by D-50**, which scoped all three of GAP-045's undesigned controls. A laydown option (DN-26) states where a battery or a sensor stands, and PN-16 reads coverage from the sensor placements in the baseline -- but `gungnir-scenario` accepts no placement override, so *running* a rehearsal against a laydown replays the same geometry whichever option is selected. The consequence was visible before this entry existed and was worked around rather than fixed: round 1's two laydowns differed only in where a battery stood, could not be told apart on the table US-15 compares them on, and a third laydown `c` had to be declared -- the same two radars with S2 forward-sited 10 km up the declared approach -- purely to produce a coverage difference the test could measure. That is scenario content standing in for a missing capability, and D-28 records it as such. What is needed is a placement override `gungnir-scenario` accepts at generation time, threaded from the selected laydown through the rehearsal, so the detections a rehearsal produces come from the sensors that laydown actually sites.
+- Evidence: `../../design/DN-26-laydown-options.md`; `gungnir-scenario` (no placement override); `../../ux/usability-test-plan.md` US-15 and its `round-1.json` laydown `c`; GAP-045.
+- Severity: 3. Reach: 4 threads. Effort: M. Priority: 12.
+- Impact: A laydown comparison rests on coverage arithmetic over declared placements and never on a run, so an option cannot be judged by what it would actually have detected -- which is the question a rehearsal exists to answer.
+- Closing action: Extend `gungnir-scenario` to accept a placement override (sensor id to position) at generation, thread the selected laydown's placements through the rehearsal, and make the comparison table read from the run rather than from the baseline's static placements. Then retire round 1's laydown `c` workaround, or keep it deliberately and say why.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: D-50 (the decision that scoped this); GAP-045 (the rehearsal); GAP-087 (the panel); `../../ux/usability-test-plan.md` US-15.
+- Depends on: D-50, GAP-045.
+
+**GAP-106 An operator cannot accept a coverage gap**
+
+- Type: Technical.
+- Capability: CAP-1.4 Coverage and gaps; CAP-5.9 Role workspaces and workflow.
+- Description: **Filed 2026-09-15 by D-50.** Coverage-gap detection is built (GAP-006, `gungnir-analytics::coverage`) and PN-11 draws what it finds, but nothing lets an operator record that a gap is *accepted* -- deliberately tolerated for this mission, with a reason and a name against it -- so a known, argued-about gap reads identically to one nobody has looked at. US-16 waits on this control and is held for round 2 for exactly that reason. **The control has no design at all**, which is why D-50 scoped it rather than building it: what acceptance records (an event on the journal, a field on the laydown, or both), who may do it, whether it expires, and whether an accepted gap still counts against the coverage measure are each open.
+- Evidence: `../../ux/usability-test-plan.md` US-16; `gungnir-analytics/src/coverage.rs`; PN-11; GAP-045.
+- Severity: 2. Reach: 10 threads. Effort: M. Priority: 20.
+- Impact: Every coverage gap looks unexamined, so the picture cannot distinguish a risk somebody took on purpose from one nobody has noticed.
+- Closing action: Design it first -- a note in `../../design/` naming what acceptance records, who may record it, whether it expires, and how it meets the coverage measure -- then build the control on PN-11 and the event behind it. US-16 moves into round 1's scope when it lands.
+- Target: I3. Owner: UI engineer. Status: Open.
+- Reference: D-50 (the decision that scoped this); GAP-006 (the detection this annotates); GAP-074 (US-16, held for round 2).
+- Depends on: D-50, GAP-006.
+
+**GAP-107 Nothing gates a plan on having been rehearsed**
+
+- Type: Technical.
+- Capability: CAP-5.2 Replay and rehearse; CAP-5.9 Role workspaces and workflow.
+- Description: **Filed 2026-09-15 by D-50.** DN-26 §6 rule 4 deliberately built no adoption workflow, so there is no step at which a laydown or a plan is *adopted* -- and therefore nothing for a rehearsal to gate. A rehearsal can be run and its result read, and then the plan proceeds exactly as it would have without one. **Two things have to be decided before any code**: whether an adoption step exists at all (DN-26 declined to invent one, and this gap does not overturn that by itself), and, if it does, whether a rehearsal is advisory beside it or a precondition of it -- a gate that refuses an unrehearsed submit is a policy claim about how this system is operated, not a UI affordance.
+- Evidence: `../../design/DN-26-laydown-options.md` §6 rule 4; GAP-045; `../../ux/usability-test-plan.md` US-07.
+- Severity: 2. Reach: 10 threads. Effort: M. Priority: 20.
+- Impact: A rehearsal is an optional aside rather than a step in a decision, so the record cannot say whether the plan in force was ever tried.
+- Closing action: Decide the adoption step first, in its own design note extending or amending DN-26 §6, then build the gate if the answer is that one exists. Advisory-beside-it is a legitimate answer and would close this gap without a gate.
+- Target: I3. Owner: UI engineer. Status: Open.
+- Reference: D-50 (the decision that scoped this); `../../design/DN-26-laydown-options.md` §6 rule 4; GAP-045; GAP-074 (US-07, held for round 2).
+- Depends on: D-50, GAP-045.
+
+**GAP-108 A converted height carries no vertical datum shift**
+
+- Type: Technical.
+- Capability: CAP-2.10 Terrain and map context.
+- Description: **Filed 2026-09-15 by D-51**, out of GAP-102's own text, which named it and did not file it. A point cloud or DEM converted from a real-world CRS arrives with its horizontal position correct and its **height still in the file's own vertical datum, in metres** -- not a WGS-84 ellipsoidal height, because no geoid model is applied anywhere in `gungnir-data`. For a terrain surface or a point cloud drawn beside tracks whose altitudes are geodetic, the error is the geoid-ellipsoid separation at that place: tens of metres over much of the world, and a systematic offset rather than noise. GAP-102 records it accurately; what it did not do is give it a row in the summary table, so it was invisible to anyone reading the register rather than the entry. **Related but distinct**: GAP-102 also deliberately leaves `VerticalUnitsGeoKey` (4099) unread, refusing a LAS file in non-metre heights rather than mis-scaling it, which is the honest half of the same subject and stays in that entry until a fixture exists.
+- Evidence: GAP-102 items (2) and (3); `gungnir-data/src/geospatial/`; `gungnir-coord` (the local-ENU transform the converted value feeds).
+- Severity: 2. Reach: 8 threads. Effort: M. Priority: 16.
+- Impact: Converted elevation data sits tens of metres off in the vertical, consistently and silently, wherever the geoid separates from the ellipsoid.
+- Closing action: Decide whether a geoid model ships (which one, under what licence, at what size) or whether a converted height is refused unless the file already states an ellipsoidal datum -- the same shape of answer GAP-102 gave for vertical units. Then build it behind the same `crs` feature and gate it in CI, since that is the only place PROJ builds.
+- Target: I4. Owner: UI engineer. Status: Open.
+- Reference: D-51 (the decision that filed this); GAP-102 (where it was recorded before it had a row); GAP-023 (the DEM half of the same conversion).
+- Depends on: D-51, GAP-102.
 

@@ -43,6 +43,7 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-028 Decision-loop crates not wired | CAP-3.2, CAP-3.6, CAP-4.2 | 4 | M | I3 | `../../verification-capability-table.md` §2, `gungnir-policy` and `gungnir-command` rows |
 | GAP-045 Scenario replay through the live pipeline | CAP-5.2 | 3 | M | I3 | `../../verification-capability-table.md` §2, `gungnir-mission` row |
 | GAP-066 Service contracts too thin | CAP-7.1, CAP-2.1 | 3 | M | I2 | `../../../ARCHITECTURE.md` §7.2 |
+| GAP-105 A rehearsal cannot move the sensors a laydown declares | CAP-5.2, CAP-1.4 | 3 | M | I3 | D-50 (the decision that scoped this); GAP-045 (the rehearsal); GAP-087 (the panel); `../../ux/usability-test-plan.md` US-15 |
 
 ### Productization: sensing and time
 
@@ -153,6 +154,9 @@ tracks it. Mission gaps appear only in the register and the roadmap.
 | GAP-096 Bearing-only detections never reach the operator | CAP-2.1, CAP-5.9 | 4 | M | I3 | `../../design/DN-27-bearing-only-detections.md` §5 rule 3 and §7; `../../ux/ux-to-code-map.md` PN-02, PN-08, PN-09; GAP-001 (the three feeds this makes visible); GAP-011 (whose entry recorded §7 unbuilt); `docs/gungnir-api-v1.md` (the v2 wire's compatibility rule this closure follows) |
 | GAP-098 No runtime point cloud: nothing loads one and nothing draws one | CAP-2.10 | 3 | M | I3 | `../../../ARCHITECTURE.md` §3 (the two contexts and the read-back); GAP-023 (the loaders and fixtures, reused rather than duplicated); GAP-024 (the registration engine, unblocked and independent of this) |
 | GAP-102 A point cloud in a real-world CRS cannot be loaded | CAP-2.10 | 3 | M | I3 | D-41 (the decision this builds); GAP-023 (the DEM half, the sibling doing the same work for terrain); GAP-098 (the point-cloud capability this extends, closed and not reopened); `docs/agentic-coding-standards.md` §2.9 |
+| GAP-106 An operator cannot accept a coverage gap | CAP-1.4, CAP-5.9 | 2 | M | I3 | D-50 (the decision that scoped this); GAP-006 (the detection this annotates); GAP-074 (US-16, held for round 2) |
+| GAP-107 Nothing gates a plan on having been rehearsed | CAP-5.2, CAP-5.9 | 2 | M | I3 | D-50 (the decision that scoped this); `../../design/DN-26-laydown-options.md` §6 rule 4; GAP-045; GAP-074 (US-07, held for round 2) |
+| GAP-108 A converted height carries no vertical datum shift | CAP-2.10 | 2 | M | I4 | D-51 (the decision that filed this); GAP-102 (where it was recorded before it had a row); GAP-023 (the DEM half of the same conversion) |
 
 ### Verification and governance
 
