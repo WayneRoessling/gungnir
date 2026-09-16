@@ -7209,7 +7209,6 @@
           <tag xmi:id="EAID_F27F4B0A_7767_71C9_96F9_DE52936497DA" name="uafKind" value="Project" modelElement="EAID_A678B969_45A8_11CE_B1C7_F13C80404AC8"/>
           <tag xmi:id="EAID_9BFAFEB3_D7C5_588B_DF7B_3A55AB08AAF5" name="uafId" value="PJ-I1" modelElement="EAID_A678B969_45A8_11CE_B1C7_F13C80404AC8"/>
           <tag xmi:id="EAID_F2867402_0FE5_F55C_AD37_567C72F3A1C8" name="registry.source" value="docs/gungnir-capabilities.md §7" modelElement="EAID_A678B969_45A8_11CE_B1C7_F13C80404AC8"/>
-          <tag xmi:id="EAID_2C56C478_D5D4_E9C8_A804_7801F6E879CC" name="registry.status" value="in progress" modelElement="EAID_A678B969_45A8_11CE_B1C7_F13C80404AC8"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7226,7 +7225,6 @@
           <tag xmi:id="EAID_D2007B18_092D_70C1_3B00_AA286BA70E62" name="uafKind" value="Project" modelElement="EAID_65E8A9D8_734F_4A5E_3170_10F8DF602882"/>
           <tag xmi:id="EAID_763F5D76_6ACA_C715_9D1E_0A91DA049201" name="uafId" value="PJ-I2" modelElement="EAID_65E8A9D8_734F_4A5E_3170_10F8DF602882"/>
           <tag xmi:id="EAID_3702BFE1_DAF6_786E_501D_EA3C8B4E4425" name="registry.source" value="docs/gungnir-capabilities.md §7" modelElement="EAID_65E8A9D8_734F_4A5E_3170_10F8DF602882"/>
-          <tag xmi:id="EAID_00837BD4_5EDB_C6CF_A484_CA6B614AEAF7" name="registry.status" value="planned" modelElement="EAID_65E8A9D8_734F_4A5E_3170_10F8DF602882"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7243,7 +7241,6 @@
           <tag xmi:id="EAID_1B0A1AC9_0F7E_2372_E572_00048C009303" name="uafKind" value="Project" modelElement="EAID_D9AE526D_3763_93E3_98EC_5044B451B85E"/>
           <tag xmi:id="EAID_652567AE_5016_C126_7B3E_6478DF71081F" name="uafId" value="PJ-I3" modelElement="EAID_D9AE526D_3763_93E3_98EC_5044B451B85E"/>
           <tag xmi:id="EAID_0A06C2A9_27E5_05B9_D1E2_50B8B9E4F3E0" name="registry.source" value="docs/gungnir-capabilities.md §7" modelElement="EAID_D9AE526D_3763_93E3_98EC_5044B451B85E"/>
-          <tag xmi:id="EAID_42A88BD5_0601_85C2_7B1C_672DEBF6537E" name="registry.status" value="planned" modelElement="EAID_D9AE526D_3763_93E3_98EC_5044B451B85E"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -7260,7 +7257,6 @@
           <tag xmi:id="EAID_F1FA394E_7A26_8C5F_A24B_B7382B3FEB68" name="uafKind" value="Project" modelElement="EAID_D65F5DAA_F75C_CFBB_81CA_EE55F01485CC"/>
           <tag xmi:id="EAID_3E3FA5DB_8A3D_005C_CDF6_9489DBE56E0F" name="uafId" value="PJ-I4" modelElement="EAID_D65F5DAA_F75C_CFBB_81CA_EE55F01485CC"/>
           <tag xmi:id="EAID_B8EB477C_B749_9B37_5A47_DAB35A829861" name="registry.source" value="docs/gungnir-capabilities.md §7" modelElement="EAID_D65F5DAA_F75C_CFBB_81CA_EE55F01485CC"/>
-          <tag xmi:id="EAID_B888C605_CF81_A1B2_1F1A_19CD84038071" name="registry.status" value="planned" modelElement="EAID_D65F5DAA_F75C_CFBB_81CA_EE55F01485CC"/>
         </tags>
         <xrefs/>
         <extendedProperties tagged="0"/>
@@ -34164,13 +34160,13 @@
         <persistentstyle value="DGS=On=0:CNT=8:W=120:H=40:SG=0:SGH=0:AEB=0:;AR=0;DCL=0;"/>
         <xrefs/>
         <elements>
-          <element geometry="Left=266;Top=173;Right=520;Bottom=252;" subject="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" seqno="1" style="HideIcon=0;DUID=001BAF1D;"/>
-          <element geometry="Left=594;Top=344;Right=836;Bottom=423;" subject="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" seqno="2" style="HideIcon=0;DUID=9C43DBBE;"/>
-          <element geometry="Left=16;Top=344;Right=236;Bottom=423;" subject="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" seqno="3" style="HideIcon=0;DUID=2A9C2D41;"/>
-          <element geometry="Left=256;Top=52;Right=413;Bottom=88;" subject="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" seqno="4" style="HideIcon=0;DUID=50B9742C;"/>
-          <element geometry="Left=198;Top=515;Right=366;Bottom=551;" subject="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" seqno="5" style="HideIcon=0;DUID=9619E191;"/>
-          <element geometry="Left=512;Top=515;Right=696;Bottom=551;" subject="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" seqno="6" style="HideIcon=0;DUID=BF51B4D3;"/>
-          <element geometry="Left=837;Top=44;Right=1039;Bottom=96;" subject="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" seqno="7" style="HideIcon=0;DUID=68B27B35;"/>
+          <element geometry="Left=203;Top=173;Right=457;Bottom=252;" subject="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" seqno="1" style="HideIcon=0;DUID=001BAF1D;"/>
+          <element geometry="Left=438;Top=329;Right=680;Bottom=408;" subject="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" seqno="2" style="HideIcon=0;DUID=9C43DBBE;"/>
+          <element geometry="Left=47;Top=329;Right=267;Bottom=408;" subject="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" seqno="3" style="HideIcon=0;DUID=2A9C2D41;"/>
+          <element geometry="Left=193;Top=52;Right=351;Bottom=88;" subject="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" seqno="4" style="HideIcon=0;DUID=50B9742C;"/>
+          <element geometry="Left=168;Top=500;Right=336;Bottom=536;" subject="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" seqno="5" style="HideIcon=0;DUID=9619E191;"/>
+          <element geometry="Left=419;Top=500;Right=603;Bottom=536;" subject="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" seqno="6" style="HideIcon=0;DUID=BF51B4D3;"/>
+          <element geometry="Left=698;Top=44;Right=1052;Bottom=96;" subject="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" seqno="7" style="HideIcon=0;DUID=68B27B35;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_43203DB9_3D4A_24AB_6F06_226E5B15C67F" style="Mode=3;EOID=001BAF1D;SOID=50B9742C;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_5F9F1426_B689_9EC9_7F53_460A6D028BCC" style="Mode=3;EOID=9C43DBBE;SOID=50B9742C;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_D0EBAA67_6D10_A6FA_F3CB_E93AC422B0A0" style="Mode=3;EOID=2A9C2D41;SOID=50B9742C;Color=-1;LWidth=0;Hidden=0;"/>
@@ -35042,13 +35038,13 @@
         <persistentstyle value="DGS=On=0:CNT=8:W=120:H=40:SG=0:SGH=0:AEB=0:;AR=0;DCL=0;"/>
         <xrefs/>
         <elements>
-          <element geometry="Left=1172;Top=238;Right=1443;Bottom=301;" subject="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" seqno="1" style="HideIcon=0;DUID=A13F9389;"/>
-          <element geometry="Left=196;Top=238;Right=439;Bottom=301;" subject="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" seqno="2" style="HideIcon=0;DUID=EADDE6B2;"/>
-          <element geometry="Left=340;Top=84;Right=497;Bottom=120;" subject="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" seqno="3" style="HideIcon=0;DUID=0992086B;"/>
-          <element geometry="Left=574;Top=238;Right=865;Bottom=301;" subject="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" seqno="4" style="HideIcon=0;DUID=72F72928;"/>
-          <element geometry="Left=521;Top=380;Right=688;Bottom=416;" subject="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" seqno="5" style="HideIcon=0;DUID=2E09E122;"/>
-          <element geometry="Left=187;Top=380;Right=370;Bottom=416;" subject="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" seqno="6" style="HideIcon=0;DUID=DE257A7F;"/>
-          <element geometry="Left=1173;Top=84;Right=1422;Bottom=120;" subject="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" seqno="7" style="HideIcon=0;DUID=213FA852;"/>
+          <element geometry="Left=1080;Top=246;Right=1351;Bottom=309;" subject="EAID_34F2213B_561F_EEE0_EAA8_7ECC0FC87DD3" seqno="1" style="HideIcon=0;DUID=A13F9389;"/>
+          <element geometry="Left=174;Top=246;Right=417;Bottom=309;" subject="EAID_57CA4D1A_98B5_FC6C_C438_6606BC1EBDBF" seqno="2" style="HideIcon=0;DUID=EADDE6B2;"/>
+          <element geometry="Left=301;Top=84;Right=458;Bottom=120;" subject="EAID_C1498CFA_F6BD_F63B_0601_825CE4A9AA25" seqno="3" style="HideIcon=0;DUID=0992086B;"/>
+          <element geometry="Left=515;Top=238;Right=806;Bottom=317;" subject="EAID_FF1D541B_C393_2D83_7CBD_735C4D0223CD" seqno="4" style="HideIcon=0;DUID=72F72928;"/>
+          <element geometry="Left=495;Top=396;Right=662;Bottom=432;" subject="EAID_F255CD5C_865C_FE4F_28AF_6DB1797DD884" seqno="5" style="HideIcon=0;DUID=2E09E122;"/>
+          <element geometry="Left=204;Top=396;Right=387;Bottom=432;" subject="EAID_F4198540_395C_7234_4D4E_653E4F6B8E06" seqno="6" style="HideIcon=0;DUID=DE257A7F;"/>
+          <element geometry="Left=1053;Top=84;Right=1306;Bottom=120;" subject="EAID_F2F535E7_5731_D8E1_5255_157D735984F7" seqno="7" style="HideIcon=0;DUID=213FA852;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_7C9D95C5_8D2D_0005_B3D4_A72BCF8D047C" style="Mode=3;EOID=A13F9389;SOID=0992086B;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_1765D96A_249E_EAC9_01A6_FCACB03FBFD5" style="Mode=3;EOID=EADDE6B2;SOID=0992086B;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_89D4D3F4_7CE8_2B7D_26C3_F5C91551A137" style="Mode=3;EOID=EADDE6B2;SOID=A13F9389;Color=-1;LWidth=0;Hidden=0;"/>

@@ -14,12 +14,17 @@ Diagram: [`Pj-Rm.mmd`](Pj-Rm.mmd).
 
 ## Engineering increments
 
-| Project | Delivers | Gaps closed (count, `../../../mission/gap-analysis/closure-roadmap.md`) | Status |
-|---|---|---|---|
-| PJ-I1 Productize the core | canonical model, service contracts, session lifecycle, eventing and journal, replay | the scaffold as it stands | in progress |
-| PJ-I2 Integrate real data | ingest adapters, time discipline, sensor management, the tracking pipeline, scenarios and metrics, harnesses, hosting | 17 | planned |
-| PJ-I3 Close the decision loop | assessment, allocator, geometry, policy model, queue, panels, warnings, effects, fires, roles in code, codecs | 38 | planned |
-| PJ-I4 Operationalize and scale | transport, connected profiles, failover, authentication for callers, encryption, releasability, peers, the assistant; the single release (D-01) | 15 | planned |
+| Project | Delivers |
+|---|---|
+| PJ-I1 Productize the core | canonical model, service contracts, session lifecycle, eventing and journal, replay |
+| PJ-I2 Integrate real data | ingest adapters, time discipline, sensor management, the tracking pipeline, scenarios and metrics, harnesses, hosting |
+| PJ-I3 Close the decision loop | assessment, allocator, geometry, policy model, queue, panels, warnings, effects, fires, roles in code, codecs |
+| PJ-I4 Operationalize and scale | transport, connected profiles, failover, authentication for callers, encryption, releasability, peers, the assistant; the single release (D-01) |
+
+How far each increment has got -- its gaps closed, in progress, open and planned -- is
+generated from the gap data into `../../../mission/gap-analysis/closure-roadmap.md`
+§Counts, and is not restated here. PJ-I1 has no gaps of its own: it is the scaffold the
+others build on.
 
 ## Documentation and design plans
 
