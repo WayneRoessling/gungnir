@@ -63,7 +63,7 @@ capabilities:
   - {id: CAP-2.8, parent: CAP-2, name: "Predict trajectory, time to impact, closest approach", coverage: "verification-table"}
   - {id: CAP-2.9, parent: CAP-2, name: Detect anomalies in tracks and feeds, coverage: "verification-table"}
   - {id: CAP-2.10, parent: CAP-2, name: "Fuse terrain, imagery, point clouds, and map layers", coverage: "GAP-023 GAP-024"}
-  - {id: CAP-2.11, parent: CAP-2, name: Answer geometric questions, coverage: "none -- built and ungated; no requirement was derived from it and none bears on it"}
+  - {id: CAP-2.11, parent: CAP-2, name: Answer geometric questions, coverage: "verification-table"}
   - {id: CAP-2.12, parent: CAP-2, name: Maintain pattern of life and order of battle, coverage: "verification-table"}
   - id: CAP-3
     name: Decide

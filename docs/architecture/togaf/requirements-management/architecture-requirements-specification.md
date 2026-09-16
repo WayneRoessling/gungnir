@@ -163,7 +163,7 @@ already finished.
 | CAP-2.8 Predict trajectory, time to impact, closest approach | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-2.9 Detect anomalies in tracks and feeds | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-2.10 Fuse terrain, imagery, point clouds, and map layers | GAP-023, GAP-024 | open in the gap register; the criterion arrives with the closure |
-| CAP-2.11 Answer geometric questions | None | built and ungated; no requirement was derived from it and none bears on it |
+| CAP-2.11 Answer geometric questions | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-2.12 Maintain pattern of life and order of battle | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-3.8 Recommend fires tasks with deconfliction | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-3.9 Recommend sensor re-tasking under degradation | Verification table | a row in `../../../verification-capability-table.md` states the criterion |

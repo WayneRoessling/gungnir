@@ -67,7 +67,7 @@ CAP-2.10,registry.coverage,GAP-023 GAP-024
 CAP-2.11,uafId,CAP-2.11
 CAP-2.11,uafKind,Capability
 CAP-2.11,registry.parent,CAP-2
-CAP-2.11,registry.coverage,none -- built and ungated; no requirement was derived from it and none bears on it
+CAP-2.11,registry.coverage,verification-table
 CAP-2.12,uafId,CAP-2.12
 CAP-2.12,uafKind,Capability
 CAP-2.12,registry.parent,CAP-2
