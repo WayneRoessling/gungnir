@@ -16,8 +16,11 @@ core, service layer, productization layer) and `rust-ui-architecture-coding-stan
   and `Measurement` traits are human-designed.
 - Property-based test and edge-case generation for association and assignment
   algorithms.
-- Differential-test harness plumbing (`gungnir-oracle`) against reference
-  implementations (`filterpy`, `motpy`, Stone Soup, textbook closed-form solutions).
+- Differential-test plumbing against reference implementations (`filterpy`, `motpy`,
+  Stone Soup, textbook closed-form solutions). **The vehicle is the per-crate
+  `tests/*_diff.rs` suite, not a central harness** -- `gungnir-oracle` was designed as
+  one and never populated, and D-49 (2026-09-15) retired that intention rather than
+  building it, because the distributed suite is what runs and what Gate 1 gates.
 - Docs, examples, and tutorials, including keeping doc comments and the `docs/` set in
   agreement.
 - Dependency upgrades within the pinned set, clippy and lint cleanup, benchmark-report
@@ -143,6 +146,9 @@ covariance update). The gates are structural:
    `gungnir-oracle` was designed as a single central harness for this and never
    populated (GAP-082); until 2026-09-08 this gate ran that empty crate instead of the
    suite and compared nothing, which is GAP-061 and not a statement about the suite.
+   **D-49 (2026-09-15) retired the central harness as an intention**: the distributed
+   suite above is the vehicle, this section says so in its own right, and GAP-082 no
+   longer carries a harness to build.
 2. **Property-based invariant testing** (`gungnir-testkit`, `proptest`, runs inside
    `cargo test`): posterior covariance stays PSD, track IDs are never reused while
    active, assignment solutions respect the constraint matrix. Agents write the test
