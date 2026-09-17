@@ -237,8 +237,20 @@ jobs:
       # root argument, so a fixture directory tests the arithmetic without CI; that test
       # is how the extraction was checked, and it is the first time this logic has been
       # run against a known answer.
+      #
+      # **`--wrote-baseline` on main, because a main run has nothing to compare against**
+      # (2026-09-17). `--save-baseline main` overwrites `main/` with this run's own
+      # estimates before this step, so the comparison was the run against itself and
+      # printed eleven exact `1.000x` lines -- a log that reads like a clean comparison
+      # and measures nothing. The script now counts the benchmarks and says the run is
+      # the baseline. The real comparison is the next branch dispatch against it.
       - name: Compare p99 against the threshold
-        run: python3 .github/scripts/bench_compare.py
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            python3 .github/scripts/bench_compare.py --wrote-baseline
+          else
+            python3 .github/scripts/bench_compare.py
+          fi
       - name: Save baseline (main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4
