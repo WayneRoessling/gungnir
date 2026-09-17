@@ -61,10 +61,27 @@ gungnir-identity = { path = "../gungnir-identity", version = "0.1.0" }
 # (DN-23 §4, GAP-057). Edges (k) and (l) in ARCHITECTURE.md §7.1.
 gungnir-policy = { path = "../gungnir-policy", version = "0.1.0" }
 gungnir-geo = { path = "../gungnir-geo", version = "0.1.0" }
+# Edge (y), GAP-132, D-55 and D-57 (`docs/design/dependency-edges.md` §17): the node holds
+# the approval queue for the desktops linked to it and names its types. The decision path
+# is `gungnir-approval`'s and this binary runs it rather than holding a second copy of the
+# safety rules, which is what D-55 refused. `gungnir-command` is the queue itself, its
+# deadlines and the append-only record. Both downward from a binary, and drawn in
+# ARCHITECTURE.md §7.1 in this change.
+gungnir-approval = { path = "../gungnir-approval", version = "0.1.0" }
+gungnir-command = { path = "../gungnir-command", version = "0.1.0" }
 # ARCHITECTURE.md §7.1 edge (g), GAP-006: the node computes the coverage report it
 # serves on `GET /v2/coverage`. There is nobody else to compute it.
 gungnir-analytics = { path = "../gungnir-analytics", version = "0.1.0" }
 gungnir-observability = { path = "../gungnir-observability", version = "0.1.0" }
+
+[lib]
+# GAP-132: a library beside the binary so DN-31 §9 rows 3 to 6 can drive the node's own
+# approval wiring rather than a copy of it. `gungnir-app` has had the same pair since it
+# was written. `bench = false` for the reason the binary's does: an implicit bench harness
+# is libtest and rejects criterion's flags.
+bench = false
+name = "gungnir_node"
+path = "src/lib.rs"
 
 [[bin]]
 name = "gungnir-node"
@@ -86,6 +103,12 @@ keyring.workspace = true
 nalgebra.workspace = true
 criterion.workspace = true
 rand.workspace = true
+# GAP-132: DN-31 §9 row 3 races two operator clients against one queue item over the real
+# transport, so the test needs an HTTP client that can hold a session token and post two
+# requests at once. Dev-only, and no new crate in this binary's graph: `reqwest` is already
+# compiled into `gungnir-node` through `gungnir-remote` (edge (p)). The alternative was a
+# third hand-written HTTP/1.1 client beside the two in `gungnir-api/tests`.
+reqwest.workspace = true
 # Dev-only: the load harness is fed from generated scenario output at realistic rates,
 # as benches/README.md requires. No runtime edge (GAP-056).
 gungnir-scenario = { path = "../gungnir-scenario", version = "0.1.0" }

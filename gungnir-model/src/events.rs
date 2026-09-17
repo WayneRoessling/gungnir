@@ -8,8 +8,9 @@
 //! enums and `gungnir-store` journals them.
 
 use crate::{
-    CollectionRequirement, Concurrence, DecisionId, DetectionView, MissionTime, PlanId, PlanView,
-    RequirementId, SensorId, SensorTaskId, TrackId, TrackView,
+    CollectionRequirement, Concurrence, DecisionId, DetectionView, EffectorLayer, MissionTime,
+    PendingApprovalId, PlanId, PlanView, RequestId, RequirementId, SensorId, SensorTaskId, TrackId,
+    TrackView,
 };
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -493,11 +494,49 @@ pub enum CommandEvent {
         /// acceptance records no rationale until the course of action reaches the
         /// record (GAP-032), and MOE-05 counts that absence rather than hiding it.
         rationale: Option<String>,
+        /// The client's idempotency key, so a retry is the same request rather than a
+        /// second decision (DN-31 §5.2 and §5.3, GAP-132).
+        ///
+        /// `None` for a decision taken where no route carried one -- a desktop's own
+        /// queue, and every journal written before this field existed. Defaulted, so the
+        /// change is additive and `SCHEMA_VERSION` stands
+        /// (`docs/gungnir-api-v1.md`, "Adding a field with a default is compatible").
+        #[serde(default)]
+        request: Option<RequestId>,
+        /// The machine a forwarded decision was taken on (DN-31 §5.3, §6.8).
+        ///
+        /// **Always `None` in this build**: forwarding is GAP-134's, and this field is
+        /// what it fills. It is declared with the rest of the decision's shape rather
+        /// than added later so the event and
+        /// `gungnir_command::DecisionRecord` carry one description of a decision between
+        /// them. `None` means "taken here", which is what every decision is today.
+        #[serde(default)]
+        origin: Option<String>,
     },
     /// The window closed with nobody deciding. **Not a rejection**: nobody chose,
     /// and an after-action review must be able to tell the two apart
     /// (docs/design/DN-10-queue-expiry-and-escalation.md).
     Expired { plan: PlanId, at: MissionTime },
+    /// A plan entered a queue and is waiting for a person (DN-31 §5.3 and §6.2,
+    /// GAP-132).
+    ///
+    /// **Additive**, so a client that does not know the variant ignores it rather than
+    /// failing (`docs/gungnir-api-v1.md`, "Enum variants may be added"), and a desktop
+    /// that does builds the node's queue from the stream without polling for it.
+    ///
+    /// It carries what a queue row is judged by, because a reader that had to ask the
+    /// node for the rest would be back to polling: which item, which plan, the layer
+    /// whose window governs the deadline, every role it is offered to in escalation
+    /// order, and the two deadlines. `None` for a deadline means the layer configures
+    /// none, which is DN-08's silence-preserves default and not "no deadline yet".
+    Queued {
+        item: PendingApprovalId,
+        plan: PlanId,
+        layer: EffectorLayer,
+        offered_to: Vec<String>,
+        expires_at: Option<MissionTime>,
+        escalate_at: Option<MissionTime>,
+    },
     /// Offered to a role with the authority or the attention to take it. The item
     /// does not leave the original role's view.
     Escalated {
@@ -879,6 +918,8 @@ mod tests {
             role: None,
             verdict: VerdictSummary::RequiresHumanApproval,
             rationale: Some("friendly airliner".into()),
+            request: None,
+            origin: None,
         };
         let mut before = serde_json::to_value(&decided).expect("encode");
         let removed = before
@@ -901,11 +942,103 @@ mod tests {
             role: Some("Supervisor".into()),
             verdict: VerdictSummary::RequiresHumanApproval,
             rationale: None,
+            request: None,
+            origin: None,
         };
         let json = serde_json::to_string(&now).expect("encode");
         assert_eq!(
             serde_json::from_str::<CommandEvent>(&json).expect("decode"),
             now
+        );
+    }
+
+    /// GAP-132, DN-31 §5.3: the request key and the origin are additive in exactly the way
+    /// the deciding role was, so `SCHEMA_VERSION` stands. The older shape is made by taking
+    /// both fields out of today's encoding, so the test cannot pass against a shape no
+    /// journal ever held.
+    #[test]
+    fn a_decision_journaled_before_request_keys_still_reads_with_neither() {
+        let decided = CommandEvent::Decided {
+            plan: PlanId(7),
+            decision: DecisionId(3),
+            accepted: true,
+            operator: Some("7".into()),
+            role: Some("Operator".into()),
+            verdict: VerdictSummary::RequiresHumanApproval,
+            rationale: None,
+            request: None,
+            origin: None,
+        };
+        let mut before = serde_json::to_value(&decided).expect("encode");
+        let fields = before
+            .get_mut("Decided")
+            .and_then(serde_json::Value::as_object_mut)
+            .expect("a struct variant");
+        for field in ["request", "origin"] {
+            assert_eq!(
+                fields.remove(field),
+                Some(serde_json::Value::Null),
+                "{field} is written, so removing it is the older shape"
+            );
+        }
+        let read: CommandEvent = serde_json::from_value(before).expect("an older line reads");
+        assert_eq!(read, decided);
+
+        // Struct-variant update syntax is not a thing, so the one field that differs is
+        // set by rebuilding: what the assertion is about is that the key survives the
+        // round trip, not how the value was made.
+        let CommandEvent::Decided {
+            plan,
+            decision,
+            accepted,
+            operator,
+            role,
+            verdict,
+            rationale,
+            origin,
+            ..
+        } = decided
+        else {
+            unreachable!("built as a decision just above")
+        };
+        let with_key = CommandEvent::Decided {
+            plan,
+            decision,
+            accepted,
+            operator,
+            role,
+            verdict,
+            rationale,
+            origin,
+            request: Some(RequestId::new("console-2/17").expect("a key")),
+        };
+        let json = serde_json::to_string(&with_key).expect("encode");
+        assert_eq!(
+            serde_json::from_str::<CommandEvent>(&json).expect("decode"),
+            with_key
+        );
+    }
+
+    /// GAP-132: a queued item round-trips with both deadlines and every role it is offered
+    /// to, which is what a desktop builds its row from without polling (DN-31 §5.3).
+    #[test]
+    fn a_queued_item_round_trips_with_its_deadlines_and_offers() {
+        let event = CommandEvent::Queued {
+            item: PendingApprovalId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_61c2),
+            plan: PlanId(11),
+            layer: EffectorLayer::Point,
+            offered_to: vec!["Operator".into(), "Supervisor".into()],
+            expires_at: Some(MissionTime(130.0)),
+            escalate_at: None,
+        };
+        let json = serde_json::to_string(&event).expect("encode");
+        assert!(
+            json.contains("01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2"),
+            "the item goes over as the hyphenated form (D-60): {json}"
+        );
+        assert_eq!(
+            serde_json::from_str::<CommandEvent>(&json).expect("decode"),
+            event
         );
     }
 

@@ -154,11 +154,14 @@ mod tests {
     fn record(t: f64, decision: OperatorDecision) -> DecisionRecord {
         DecisionRecord {
             id: gungnir_model::DecisionId(1),
+            item: None,
             plan: PlanView::default(),
             verdict: PolicyVerdict::RequiresHumanApproval,
             decision,
             operator_id: None,
             role: None,
+            request: None,
+            origin: None,
             mission_time: MissionTime(t),
         }
     }

@@ -8158,6 +8158,16 @@
     note: >-
       Filed by the GAP-067 walk, which gated the `gungnir-policy` row on the denial and
       left what follows a denial to this gap.
+  - date: 2026-09-17
+    status: In progress
+    note: >-
+      Answered on the node, not on a desktop. GAP-132 runs the chain for every role on the
+      escalation ladder and offers the item to the lowest role holding authority for every
+      solution, so an area-layer plan an Operator may not accept is queued for a Supervisor
+      rather than counted; DN-31 §9 row 5's test asserts it. `gungnir-app`'s own submission
+      still runs the chain for the role at the console and counts the denial, which is what
+      a desktop does for its own plans while cut off (DN-31 §6.7), so the desktop half
+      stays open.
 
 - id: GAP-114
   name: Nothing consumes LateDataPolicy
@@ -8802,6 +8812,19 @@
   - date: 2026-09-17
     status: Open
     note: Filed with DN-31 (D-55).
+  - date: 2026-09-17
+    status: Closed
+    note: >-
+      Built. The node loop holds one `ApprovalDesk` and one audit log (edge (y)). A fresh
+      plan runs the whole chain for every role on the ladder and is queued for the lowest
+      role holding authority, or is `Denied { Authority }` and never queued; `Queued` is
+      published in that tick. Expiry and escalation run on the node's clock.
+      `GET /v3/queue` serves it; `POST /v3/queue/{item}/decision` runs §6.3's four checks
+      and hands the request to the loop, which takes them in arrival order: one
+      `DecisionRecord` per item, a later decision `409` naming the one that stands, a
+      repeated request key answered with its first outcome. `/v3` serves no plan-keyed
+      route. Rows 3 to 6 are written; the findings are in
+      `../../record/2026-09-17/the-node-runs-the-approval-queue.md`.
 
 - id: GAP-133
   name: A linked desktop decides the node's plans itself
@@ -8939,3 +8962,120 @@
       and three against an idle one all report five tracks, and a new test pins two runs to one
       record. The outage tee's dropped `bearing_rays` and `pipeline_stats` were found next to it and
       forwarded."
+
+- id: GAP-137
+  name: A handoff the node issues reaches no exchange partner
+  type: Technical
+  caps: [CAP-5.7]
+  layer: Deployment and API
+  sev: 2
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: [GAP-133]
+  impact: >-
+    The node issues handoffs of its own since GAP-132, and its
+    `ApprovalHost::republish_handoffs` is a no-op, so a partner reading
+    `GET /v3/exchange/handoffs` sees only what a desktop published. A coalition partner is
+    told about an engagement a desktop decided and not about one the node decided, with
+    nothing saying the list is partial -- which is the silence DN-17 §5 rule 3 exists to
+    prevent.
+  evidence: >-
+    `gungnir-node/src/approval.rs` (`republish_handoffs`, a documented no-op);
+    `gungnir-api/src/transport.rs` (`publish_exchange` replaces a set rather than adding
+    to it); DN-18 §5 amendment 2; DN-31 §6.5
+  action: >-
+    Decide how the node's own handoff set and a desktop's published set share one register
+    -- a second writer would silently overwrite the first -- and wire the node's set in
+    once GAP-133 has stopped a linked desktop issuing handoffs for a node plan. Then assert
+    a partner with an agreement receives a handoff the node issued.
+  ref: >-
+    Found building GAP-132 (`../../record/2026-09-17/the-node-runs-the-approval-queue.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: >-
+      Filed by GAP-132 rather than half-wired there: while a linked desktop still issues
+      handoffs for a node's plans, two writers to one register would each overwrite the
+      other, and which one a partner saw would depend on tick order.
+
+- id: GAP-138
+  name: An unreachable decision type still describes the interface
+  type: Technical
+  caps: [CAP-5.7]
+  layer: Deployment and API
+  sev: 1
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    `gungnir_api::v3::ApprovalRequest` describes a plan decision keyed on a plan and naming
+    its own operator in the body. No route serves it since GAP-132 and no caller believes a
+    body's operator, but the type is still exported and still documented as "an operator's
+    decision on a plan the node proposed" -- a second, divergent description of a decision
+    beside `DecisionRequest`, which is what `gungnir-api`'s own module documentation exists
+    to prevent. `ApiHandler`, the trait that names it, has no implementation anywhere in
+    the workspace.
+  evidence: >-
+    `gungnir-api/src/v3/mod.rs` (`ApprovalRequest`); `gungnir-api/src/lib.rs`
+    (`ApiHandler::decide`, no implementor); `gungnir-api/src/transport.rs`'s module
+    documentation, which has to name the type to say it is not believed
+  action: >-
+    Remove `ApprovalRequest` and `ApiHandler::decide`, or say in the trait what implements
+    it and when. Regenerate the UAF, which reads the code and carries `ApprovalRequest` as
+    an information element today.
+  ref: >-
+    Found building GAP-132 (`../../record/2026-09-17/the-node-runs-the-approval-queue.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: >-
+      Found while moving the decision route to the queue item. Not removed in that change:
+      the type is unreachable and harmless, and deleting it moves the UAF model, which is
+      its own change with its own regeneration.
+
+- id: GAP-139
+  name: An If-Sr diagram no longer renders under the layout its generator pins
+  type: Technical
+  caps: [CAP-7.1]
+  layer: Verification and governance
+  sev: 2
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    `docs/architecture/uaf/render.sh` crashes on
+    `information/If-Sr-plans-effectors-handoff.puml`. `build_uaf.py` writes
+    `!pragma layout smetana` on every If-Sr detail diagram -- a measured choice, because
+    smetana wraps these edge-sparse class diagrams into a far squarer layout than
+    Graphviz -- and smetana throws `ArrayIndexOutOfBoundsException: Index 14 out of bounds
+    for length 10` in `mincross__c.left2right` on that diagram. It is deterministic and it
+    reproduces on the committed source, so the whole render is broken rather than flaky,
+    and `build_uaf.py` then reports a problem and exits 1 because the rendered SVG cannot
+    position every element.
+  evidence: >-
+    `plantuml/plantuml` 1.2026.8, `docker run --rm plantuml/plantuml -tsvg
+    information/If-Sr-plans-effectors-handoff.puml`; the same source with the pragma line
+    removed renders cleanly through the image's own Graphviz 14.0.1; the version of the
+    diagram before GAP-132 renders under smetana, so what changed is the graph rather than
+    the toolchain; `docs/architecture/uaf/tools/build_uaf.py` (`write_if_sr_domain`, and
+    its comment recording why smetana is pinned)
+  action: >-
+    Decide whether this diagram keeps the pinned layout. Either pin the engine per diagram
+    and give this one Graphviz, raise the PlantUML defect and pin a version that has it
+    fixed, or drop the pragma for If-Sr and accept the wider layout its comment measured.
+    Then re-render every If-Sr diagram from one engine, so a reader is not comparing two.
+  ref: >-
+    Found building GAP-132 (`../../record/2026-09-17/the-node-runs-the-approval-queue.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: >-
+      Found when GAP-132 added `PendingApprovalId` to the model and the diagram grew by one
+      class. The committed SVG for that diagram is a Graphviz render, because the check
+      needs every element positioned and smetana will not produce one; every other If-Sr
+      SVG is a smetana render, so the two are laid out differently until this is settled.
+      The code was not moved to another module to dodge the crash: the type belongs beside
+      `DecisionId`.

@@ -358,6 +358,13 @@ fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
             | Event::Intercept(
                 InterceptEvent::PlanSuperseded(_) | InterceptEvent::PlanEvaluated { .. },
             )
+            // GAP-132: an item entering a queue is not one of this watch's counts. The
+            // plan it carries was already counted as `plans_proposed`, and counting the
+            // queueing as well would report one plan as two pieces of work, which is
+            // what MOE-01 reads these figures as. What became of it is counted at its
+            // ending -- `decisions`, `decisions_expired` -- which is where a queue's
+            // performance is actually visible.
+            | Event::Command(CommandEvent::Queued { .. })
             | Event::Rhythm(_)
             | Event::Governance(_)
             | Event::Review(_)
@@ -457,6 +464,8 @@ mod tests {
                 role: None,
                 verdict: gungnir_model::events::VerdictSummary::RequiresHumanApproval,
                 rationale: None,
+                request: None,
+                origin: None,
             }),
         ];
         for (seq, event) in events.into_iter().enumerate() {
@@ -598,6 +607,8 @@ mod tests {
                 role: Some("Supervisor".into()),
                 verdict: VerdictSummary::RequiresHumanApproval,
                 rationale: Some("inbound on the northern approach".into()),
+                request: None,
+                origin: None,
             }),
             Event::Intercept(InterceptEvent::PlanApproved(plan)),
             Event::Engagement(EngagementEvent::Opened {

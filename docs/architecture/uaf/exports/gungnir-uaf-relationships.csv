@@ -572,6 +572,8 @@ REL:uses:RS-node->RS-modelops,uses,,RS-node,RS-modelops,uses: RS-node -> RS-mode
 REL:uses:RS-node->RS-identity,uses,,RS-node,RS-identity,uses: RS-node -> RS-identity,Dependency
 REL:uses:RS-node->RS-policy,uses,,RS-node,RS-policy,uses: RS-node -> RS-policy,Dependency
 REL:uses:RS-node->RS-geo,uses,,RS-node,RS-geo,uses: RS-node -> RS-geo,Dependency
+REL:uses:RS-node->RS-approval,uses,,RS-node,RS-approval,uses: RS-node -> RS-approval,Dependency
+REL:uses:RS-node->RS-command,uses,,RS-node,RS-command,uses: RS-node -> RS-command,Dependency
 REL:uses:RS-node->RS-analytics,uses,,RS-node,RS-analytics,uses: RS-node -> RS-analytics,Dependency
 REL:uses:RS-node->RS-observability,uses,,RS-node,RS-observability,uses: RS-node -> RS-observability,Dependency
 REL:uses:RS-node->RS-scenario,uses,,RS-node,RS-scenario,uses: RS-node -> RS-scenario,Dependency

@@ -575,7 +575,7 @@ async fn every_other_route_refuses_without_a_token() {
     let url = serve(authenticating(snapshot(Vec::new()))).await;
     let client = reqwest::Client::new();
 
-    for path in ["/v3/snapshot", "/v3/health", "/v3/session"] {
+    for path in ["/v3/snapshot", "/v3/health", "/v3/session", "/v3/queue"] {
         let status = client
             .get(format!("{url}{path}"))
             .send()
@@ -588,7 +588,12 @@ async fn every_other_route_refuses_without_a_token() {
             "{path} served an unauthenticated caller"
         );
     }
-    for path in ["/v3/detections", "/v3/plans/1/decision"] {
+    // The decision route moved from the plan to the queue item in GAP-132 (DN-31 §7); it
+    // refuses an unauthenticated caller exactly as the plan-keyed one did.
+    for path in [
+        "/v3/detections",
+        "/v3/queue/01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2/decision",
+    ] {
         let status = client
             .post(format!("{url}{path}"))
             .json(&serde_json::json!({}))
@@ -663,27 +668,77 @@ async fn an_authenticated_caller_may_submit_a_detection() {
     );
 }
 
-/// The decision route still refuses, and **for a different reason than before**: this
-/// node runs no approval queue. Inventing one in a request handler would put the
-/// recommend-versus-act boundary in the transport.
+/// The decision route no longer refuses at all, and it is no longer keyed on a plan
+/// (GAP-132, DN-31 §6.3, §7).
+///
+/// **What this test used to hold, and why it says something else now.** Until GAP-132 the
+/// node ran no approval queue, so `POST /v3/plans/{plan_id}/decision` answered `501` with
+/// "this node runs no approval queue" -- a refusal that was architectural rather than for
+/// want of a caller. D-55 gave the node the queue, so that sentence became false, and
+/// DN-31 §7's table keys the decision on the queue item rather than on the plan. There is
+/// deliberately no plan-keyed door beside it: the item is what carries the deadline and
+/// the roles the item is offered to, and a second door would be a second place §6.3's
+/// four checks could differ.
+///
+/// So: `/v3` serves no plan-keyed decision route, the retired `/v2` one names the queue
+/// route as its successor, and the queue route answers a real decision rather than a
+/// refusal about what this node does not run.
 #[tokio::test(flavor = "multi_thread")]
-async fn the_decision_route_refuses_because_a_node_runs_no_queue() {
+async fn the_decision_route_is_keyed_on_the_queue_item() {
     let url = serve(authenticating(snapshot(Vec::new()))).await;
     let token = token(&url).await;
+    let client = reqwest::Client::new();
 
-    let response = reqwest::Client::new()
+    // Gone from `/v3`: not found, because `/v3` never served it.
+    let response = client
         .post(format!("{url}/v3/plans/1/decision"))
         .bearer_auth(&token)
         .json(&serde_json::json!({}))
         .send()
         .await
+        .expect("a routed node");
+    assert_eq!(
+        response.status().as_u16(),
+        404,
+        "a decision is taken on a queue item, not on a plan"
+    );
+
+    // The retired route names the successor, and names the template rather than the
+    // caller's own path: a plan identifier is not a queue item's.
+    let response = client
+        .post(format!("{url}/v2/plans/1/decision"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
         .expect("the route exists");
-    assert_eq!(response.status().as_u16(), 501);
+    assert_eq!(response.status().as_u16(), 410);
     let body = response.text().await.expect("body");
-    assert!(body.contains("no approval queue"), "{body}");
-    // The old reason was that nobody could be authenticated. That is no longer true and
-    // must not still be the message.
-    assert!(!body.contains("authenticate"), "{body}");
+    assert!(body.contains("/v3/queue/{item}/decision"), "{body}");
+
+    // And the successor is served. This node has no loop running behind it, so the
+    // answer is the reply window rather than a decision -- which is itself the point:
+    // the route waits for the loop instead of deciding in a request handler.
+    let response = client
+        .post(format!(
+            "{url}/v3/queue/01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2/decision"
+        ))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({
+            "request": "retry-key-1",
+            "item": "01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2",
+            "choice": "accept",
+        }))
+        .send()
+        .await
+        .expect("the route exists");
+    assert_eq!(
+        response.status().as_u16(),
+        504,
+        "with no node loop behind it the route must time out, not answer for one"
+    );
+    let body = response.text().await.expect("body");
+    assert!(body.contains("same request key"), "{body}");
 }
 
 /// A node with no account store authenticates nobody and says so, rather than serving

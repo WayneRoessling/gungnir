@@ -8,7 +8,7 @@
 //! that ran, whatever the verdict was. A denial that reached only a counter would be a
 //! decision nobody could review.
 
-use gungnir_app::decisions::{self, DESKTOP_ENGINES};
+use gungnir_app::decisions::{self, CHAIN_ENGINES};
 use gungnir_app::state::AppState;
 use gungnir_config::ConfigBaseline;
 use gungnir_eventing::Event;
@@ -47,7 +47,7 @@ fn every_submitted_plan_leaves_its_verdict_and_engines_on_the_record() {
     assert_eq!(evaluated[0].0, PlanId(9));
     assert_eq!(
         evaluated[0].1,
-        DESKTOP_ENGINES
+        CHAIN_ENGINES
             .iter()
             .map(|e| (*e).to_string())
             .collect::<Vec<_>>()

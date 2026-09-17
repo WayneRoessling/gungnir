@@ -21,9 +21,11 @@
 //! routes answers `410 Gone` naming its successor, after authenticating the caller as the
 //! successor does (`crate::transport::router`; docs/gungnir-api-v1.md, "Version 3").
 
+use gungnir_model::events::VerdictSummary;
 use gungnir_model::{
-    BearingRayView, CollectionRequirement, DetectionView, ExchangeItem, MissionTime,
-    PipelineStatsView, PlanId, PlanView, Releasability, SystemHealth, TrackView, SCHEMA_VERSION,
+    BearingRayView, CollectionRequirement, DecisionId, DetectionView, EffectorLayer, ExchangeItem,
+    MissionTime, PendingApprovalId, PipelineStatsView, PlanId, PlanView, Releasability,
+    SystemHealth, TrackView, SCHEMA_VERSION,
 };
 use gungnir_security::OperatorId;
 
@@ -67,6 +69,19 @@ pub struct SnapshotResponse {
     /// the whole picture.
     #[serde(default)]
     pub withheld: usize,
+    /// The node's approval queue, in its own order (DN-31 §5.3, GAP-132).
+    ///
+    /// **Additive and defaulted**, exactly as `bearing_rays` above: a client built before
+    /// the node had a queue still decodes the payload and reads none, which is what a
+    /// node with no queue honestly has. No `SCHEMA_VERSION` bump, because nothing that
+    /// already read this payload is misled by the addition
+    /// (`docs/gungnir-api-v1.md`, "Adding a field with a default is compatible").
+    ///
+    /// Beside `plan` rather than inside it: the plan is what this node last proposed and
+    /// the queue is what is waiting for a person, and a desktop shows the two in
+    /// different panels (PN-05 and PN-06).
+    #[serde(default)]
+    pub queue: Vec<QueueItemView>,
 }
 
 impl SnapshotResponse {
@@ -85,7 +100,17 @@ impl SnapshotResponse {
             bearing_rays: Vec::new(),
             pipeline_stats: PipelineStatsView::default(),
             withheld: 0,
+            queue: Vec::new(),
         }
+    }
+
+    /// Attach the node's approval queue (DN-31 §5.3, GAP-132), the same builder idiom
+    /// [`SnapshotResponse::with_bearing_data`] uses rather than growing `new`'s
+    /// positional list again.
+    #[must_use]
+    pub fn with_queue(mut self, queue: Vec<QueueItemView>) -> Self {
+        self.queue = queue;
+        self
     }
 
     /// Attach the node pipeline's retained bearings and counters (GAP-096's wire
@@ -342,6 +367,99 @@ pub struct ApprovalRequest {
     pub plan: PlanId,
     pub accepted: bool,
     pub operator: OperatorId,
+}
+
+/// One item in a node's queue, as `GET /v3/queue` and the snapshot carry it
+/// (DN-31 §5.2, GAP-132).
+///
+/// Everything PN-06 draws a row from, so a desktop needs no second request to show one:
+/// which item, the plan, what policy said, the layer whose window governs the deadline,
+/// when it was submitted, when it expires and escalates, every role it is offered to, and
+/// whether it was pre-delegated.
+///
+/// **`offered_to` is a list, not the current role.** DN-10 amendment 1 c: escalation adds
+/// a role without removing the first, and "whoever decides first ends it" is only
+/// meaningful if a reader can see all of them.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct QueueItemView {
+    pub item: PendingApprovalId,
+    pub plan: PlanView,
+    pub verdict: VerdictSummary,
+    /// The layer whose window governs the deadline (`gungnir_command::governing_layer`).
+    pub layer: EffectorLayer,
+    pub submitted: MissionTime,
+    /// `None` means the governing layer configures no expiry, which is DN-08's
+    /// silence-preserves default and not "no deadline yet".
+    pub expires_at: Option<MissionTime>,
+    pub escalate_at: Option<MissionTime>,
+    /// Every role the item is offered to, in escalation order (DN-10 amendment 1 c).
+    pub offered_to: Vec<String>,
+    /// Actionable for the Operator from submission under D-15's delegation. **It still
+    /// expires and escalates** (D-59), so this changes what a panel says and nothing
+    /// about the deadlines beside it.
+    pub pre_delegated: bool,
+    pub priority: f32,
+}
+
+/// What a person chose, as PN-07 offers it (DN-31 §5.2).
+///
+/// An override records the queued plan under the override permission; a substituted
+/// assignment is not built and DN-31 §11 does not design one.
+///
+/// Externally tagged and kebab-cased, because this is a *field* of
+/// [`DecisionRequest`] rather than a body of its own: `"choice": "accept"` and
+/// `"choice": { "reject": { "reason": "..." } }`. An internal tag would write the word
+/// "choice" twice for a client to read once.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DecisionChoice {
+    Accept,
+    Override,
+    /// A person considered this and declined it, and said why. An empty reason is
+    /// refused `400` (DN-10 §3): MOE-01 tells a considered rejection from an abandoned
+    /// decision by the reason alone.
+    Reject {
+        reason: String,
+    },
+}
+
+/// A person's decision on one queue item: the body of
+/// `POST /v3/queue/{item}/decision` (DN-31 §5.2).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DecisionRequest {
+    /// Chosen by the client and journaled with the decision, so a retry is the same
+    /// request rather than a second decision. What makes a retry after a `504` safe.
+    pub request: gungnir_model::RequestId,
+    /// The item, which is also in the path. Carried here as well so a body cannot be
+    /// replayed against a different item: the route refuses a mismatch rather than
+    /// silently preferring one of the two.
+    pub item: PendingApprovalId,
+    pub choice: DecisionChoice,
+}
+
+/// `201`: the decision this request recorded, or recorded before under the same
+/// `request` (DN-31 §5.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DecisionRecorded {
+    pub decision: DecisionId,
+}
+
+/// `409`: why the item takes no decision now (DN-31 §5.2).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "refused", rename_all = "kebab-case")]
+pub enum DecisionRefused {
+    /// Somebody decided first; their decision stands. Named in full so PN-07 can say who
+    /// decided, as which role and when (DN-31 §6.6).
+    AlreadyDecided {
+        decision: DecisionId,
+        /// `None` when the decision that stands was taken with nobody signed in, which a
+        /// desktop's own queue allows (DN-23 §5 rule 1). Never invented.
+        operator: Option<String>,
+        role: Option<String>,
+        at: MissionTime,
+    },
+    /// The window closed (DN-10 §6). **Not a rejection**: nobody chose.
+    Expired { at: MissionTime },
 }
 
 #[cfg(test)]

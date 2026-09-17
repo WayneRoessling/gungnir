@@ -1452,13 +1452,10 @@ pub fn local_frame(state: &AppState) -> Option<gungnir_model::LocalFrame> {
 pub fn local_frame_of(
     config: &gungnir_config::ConfigBaseline,
 ) -> Option<gungnir_model::LocalFrame> {
-    config.origin.map(|[lat_rad, lon_rad, alt_m]| {
-        gungnir_model::LocalFrame::new(gungnir_model::Geodetic {
-            lat_rad,
-            lon_rad,
-            alt_m,
-        })
-    })
+    // The construction itself moved to `gungnir-config` in GAP-132, when the node came to
+    // need the same frame: one origin, one frame, so a node and a desktop cannot draw a
+    // picture against two.
+    config.local_frame()
 }
 
 /// Build the viewport's coverage layer for this frame.

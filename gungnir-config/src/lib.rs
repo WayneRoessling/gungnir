@@ -1390,6 +1390,24 @@ impl ConfigBaseline {
         self.resources.iter().map(ResourceConfig::to_view).collect()
     }
 
+    /// This deployment's local frame, and `None` where it declares no origin.
+    ///
+    /// Here rather than in a binary since GAP-132, when the node came to need it for the
+    /// same reason the desktop does -- the fires engine can only place a friendly track
+    /// in a declared frame (DN-05 §5 rule 1). One origin, one frame: a node and a desktop
+    /// that each built one would be a picture drawn against two origins.
+    /// `gungnir-app`'s `sustainment::local_frame_of` calls this.
+    #[must_use]
+    pub fn local_frame(&self) -> Option<gungnir_model::LocalFrame> {
+        self.origin.map(|[lat_rad, lon_rad, alt_m]| {
+            gungnir_model::LocalFrame::new(gungnir_model::Geodetic {
+                lat_rad,
+                lon_rad,
+                alt_m,
+            })
+        })
+    }
+
     /// The asset list as the picture sees it, stamped with this baseline's version
     /// so a score can be traced to the list that produced it.
     pub fn asset_list(&self) -> AssetListView {

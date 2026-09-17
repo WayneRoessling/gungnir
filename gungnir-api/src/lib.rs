@@ -16,10 +16,12 @@
 //! certificate speaks for the right role or an operator holding the right action. This
 //! sentence previously read "the write paths refuse, because nothing can authenticate a
 //! caller yet", which stopped being true when GAP-057 landed the operator session and
-//! GAP-041 the machine identity, and was still being said. `POST /v3/plans/{id}/decision`
-//! is the one write path that refuses, and it refuses **architecturally** rather than for
-//! want of authentication: a node runs no approval queue. [`UnimplementedServer`] remains
-//! for a node that serves nothing at all.
+//! GAP-041 the machine identity, and was still being said. **Since GAP-132 the node
+//! decides too**: it holds the queue (D-55), `GET /v3/queue` serves it and
+//! `POST /v3/queue/{item}/decision` takes a person's decision, each handed to the node
+//! loop and answered from it rather than acted on in a request handler. `/v3` serves no
+//! plan-keyed decision route; the retired `/v2` one names the queue route as its
+//! successor. [`UnimplementedServer`] remains for a node that serves nothing at all.
 
 pub mod tls;
 pub mod transport;
@@ -65,6 +67,14 @@ pub mod routes {
     pub const EXCHANGE_WARNINGS: &str = "/exchange/warnings";
     pub const EXCHANGE_REPORTS: &str = "/exchange/reports";
     pub const EXCHANGE_HANDOFFS: &str = "/exchange/handoffs";
+    /// The node's approval queue (DN-31 §7, GAP-132).
+    pub const QUEUE: &str = "/queue";
+    /// One queue item's decision. **The decision route since GAP-132**: a decision is
+    /// taken on a queue item rather than on a plan, because the item is what carries the
+    /// deadline and the roles it is offered to.
+    pub const QUEUE_DECISION: &str = "/queue/{item}/decision";
+    /// Retired. Served under `/v2` alone, answering `410 Gone` and naming
+    /// [`QUEUE_DECISION`] as its successor; `/v3` never served it (GAP-132).
     pub const PLAN_DECISION: &str = "/plans/{plan_id}/decision";
 }
 

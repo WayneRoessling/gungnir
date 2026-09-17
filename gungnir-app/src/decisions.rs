@@ -43,7 +43,7 @@ use gungnir_ui::panels::unavailable::Unavailable;
 /// rather than choosing between two names for it (`agentic-coding-standards.md` §1.2).
 pub use gungnir_approval::{
     chain_report, chain_report_for, escalation_ladder, may_override, PolicyChainReport, Submitted,
-    DECISION_ACTION, DESKTOP_ENGINES,
+    CHAIN_ENGINES, DECISION_ACTION,
 };
 
 /// The priority tie-break in the queue ordering needs a threat score, and nothing

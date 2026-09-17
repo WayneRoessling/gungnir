@@ -15,25 +15,45 @@
 //!
 //! **Every route but `POST /v3/session` requires a session token** (DN-23 §6, GAP-057).
 //! The token is minted by the node against its own account store and verified per
-//! request; a caller who presents none, or a bad one, gets `401`. `ApprovalRequest`
-//! carries an operator in its body and that field is **not** believed: the caller is
-//! whoever the token says, and nobody else.
+//! request; a caller who presents none, or a bad one, gets `401`. **No route believes a
+//! body that names its own operator**: the caller is whoever the token says, and nobody
+//! else. [`v3::DecisionRequest`] names no operator at all, for that reason -- the
+//! unreachable [`crate::v3::ApprovalRequest`] still carries one, and is why the rule had
+//! to be written down (GAP-138).
 //!
 //! A node with no caller authority configured refuses every route but the session one,
 //! and says so. That is a deployment with no account store, which is the default: it
 //! runs its pipeline, journals it, and serves nobody.
 //!
-//! **`POST /v3/detections` is served; `POST /v3/plans/{plan_id}/decision` is not**, and
-//! for a different reason than before. A submitted detection is queued for the ingest
-//! gateway, which authenticates and validates it exactly as it does a sensor's -- see
-//! [`NodeApi::submit_detection`]. A plan decision has nothing to decide against: **this
-//! node runs no approval queue.** The desktop routes plans through the policy chain and
-//! the queue (GAP-038); a node publishes `PlanProposed` and stops. Serving the route
-//! would mean inventing a queue here, so it returns `501` naming that, which is now the
-//! true reason rather than the authentication one.
+//! **`POST /v3/detections` is served, and so is the decision route** -- which until
+//! GAP-132 was the one write path that refused. A submitted detection is queued for the
+//! ingest gateway, which authenticates and validates it exactly as it does a sensor's --
+//! see [`NodeApi::submit_detection`].
 //!
-//! Routing a refused endpoint rather than leaving it absent is deliberate: a `404` would
-//! tell a client the endpoint is not part of the contract, which is false.
+//! # The queue, and why its routes wait for the loop
+//!
+//! D-55 gave the node the approval queue for the desktops linked to it, so
+//! `GET /v3/queue` serves what is waiting and `POST /v3/queue/{item}/decision` takes a
+//! person's decision on one item. **Neither decides anything here.** The queue lives on
+//! the node loop, and the decision route hands its request over through
+//! [`PendingDecision`] and waits for the loop's answer, exactly as the sensor-tasking
+//! route hands a command over: one loop taking requests in arrival order is what makes
+//! "the first valid decision wins" a property of the design rather than the outcome of a
+//! race (`docs/design/DN-31-node-approval-queue.md` §3). A queue invented in a request
+//! handler would put the recommend-versus-act boundary in the transport, which is the
+//! sentence this module carried while the route refused.
+//!
+//! The route does answer four questions of its own before the loop sees anything, because
+//! each is about the caller rather than about the queue: the token, the permission, whether
+//! the item is offered to that role, and whether a rejection says why (§6.3). Each refusal
+//! is recorded for the loop to audit, so the node's record holds one entry per decision and
+//! per refusal alike.
+//!
+//! **There is no `/v3/plans/{plan_id}/decision`**: a decision is taken on the queue item,
+//! which is what carries the deadline and the roles it is offered to, and a plan-keyed door
+//! beside it would be a second place those four checks could differ. The retired `/v2` one
+//! names the queue route as its successor rather than its own path, which is the one place
+//! a retired route's successor is not simply the same path under `/v3`.
 //!
 //! # What the outside world may say back, and what it may be sent
 //!
@@ -321,6 +341,14 @@ pub struct NodeApi {
     machine_submissions: Mutex<Vec<gungnir_model::DetectionView>>,
     /// Sensor tasks waiting for the node loop to issue them (GAP-004).
     tasks: Mutex<Vec<PendingSensorTask>>,
+    /// Decisions waiting for the node loop to take them (GAP-132, DN-31 §6.3). A
+    /// separate queue from `tasks` for the same reason `reports` is separate from
+    /// `submissions`: two different facts, arriving under different authority.
+    decisions: Mutex<Vec<PendingDecision>>,
+    /// Decision requests the routes refused, waiting for the loop to audit them
+    /// (GAP-132, DN-31 §9 row 4). The caller has already been answered; what is owed is
+    /// the entry in the record.
+    refusals: Mutex<Vec<RefusedDecision>>,
     /// Effector reports waiting for the node loop to put on the record (GAP-040).
     reports: Mutex<Vec<EffectorReportRecord>>,
     /// Warning acknowledgements waiting for the node loop to put on the record
@@ -374,6 +402,81 @@ impl std::fmt::Debug for PendingSensorTask {
             .field("command", &self.command)
             .finish_non_exhaustive()
     }
+}
+
+/// A decision the route accepted and the node loop has not yet taken (GAP-132,
+/// DN-31 §6.3).
+///
+/// The second of these carriers, after [`PendingSensorTask`] and for the same reason: the
+/// queue lives on the node loop, so the route hands the request over and waits for the
+/// loop's answer rather than deciding in a request handler. `refuse_decision` used to say
+/// why that mattered -- a queue invented in a request handler would put the
+/// recommend-versus-act boundary in the transport -- and one loop taking requests in
+/// arrival order is what makes "the first valid decision wins" a property of the design
+/// rather than the outcome of a race (DN-31 §3).
+pub struct PendingDecision {
+    pub item: gungnir_model::PendingApprovalId,
+    pub choice: v3::DecisionChoice,
+    /// The client's key, so a retry is the same request (DN-31 §5.2).
+    pub request: gungnir_model::RequestId,
+    /// The verified session the decision is attributed to. Both halves or neither, read
+    /// from one token (DN-23 §5 rule 1).
+    ///
+    /// **The identifier, not its text.** A decision's attribution is what D-53's
+    /// arbitration ranks and what an audit entry is searched by. Carrying it as a string
+    /// puts a parse between the token and the record, and a parse has a failing branch
+    /// that has to answer to somebody: the loop's answered `unwrap_or_default()`, which
+    /// would have attributed the decision to operator 0. There is nothing to parse if
+    /// nothing is written down.
+    pub operator: gungnir_security::OperatorId,
+    pub role: gungnir_security::Role,
+    /// What the loop decided, or why it would not.
+    pub reply: tokio::sync::oneshot::Sender<DecisionAnswer>,
+}
+
+/// What the node loop says about one decision request (DN-31 §6.3).
+///
+/// The three outcomes the route turns into `201`, `409` and `404`. A refusal the *route*
+/// made -- an expired token, a missing permission, a role the item is not offered to, a
+/// rejection with no reason -- never reaches the loop and is not in here.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DecisionAnswer {
+    /// Recorded now, or recorded before under the same request key. The client cannot
+    /// tell the two apart, and does not need to: both mean "this request produced that
+    /// decision, exactly once".
+    Recorded(DecisionId),
+    /// The item takes no decision now, and why.
+    Refused(v3::DecisionRefused),
+    /// No item, decided or queued, answers to that identifier on this node.
+    Unknown,
+}
+
+impl std::fmt::Debug for PendingDecision {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PendingDecision")
+            .field("item", &self.item)
+            .field("choice", &self.choice)
+            .field("role", &self.role)
+            .finish_non_exhaustive()
+    }
+}
+
+/// A decision request the route refused, for the node loop to audit (GAP-132).
+///
+/// DN-31 §9 row 4: **every decision and every refusal writes exactly one audit entry on
+/// the node**, and the four pre-loop checks refuse before the loop sees anything. The
+/// audit log is the loop's, so a refusal is queued for it exactly as an effector's report
+/// is -- one fact, recorded once, by the one owner of the record. Nothing is owed to the
+/// caller in return, so there is no reply channel: it has already been answered.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RefusedDecision {
+    /// The item the caller named, and `None` when the path did not parse as one.
+    pub item: Option<gungnir_model::PendingApprovalId>,
+    /// Who was refused: the operator's identifier, or `unauthenticated` when no token
+    /// resolved. Never invented.
+    pub operator: String,
+    /// Why, in the words the caller was given.
+    pub reason: String,
 }
 
 /// An effector's report the route accepted and the node loop has not yet recorded.
@@ -430,6 +533,8 @@ impl NodeApi {
             identities: std::collections::HashMap::new(),
             machine_submissions: Mutex::new(Vec::new()),
             tasks: Mutex::new(Vec::new()),
+            decisions: Mutex::new(Vec::new()),
+            refusals: Mutex::new(Vec::new()),
             reports: Mutex::new(Vec::new()),
             acknowledgements: Mutex::new(Vec::new()),
             exchange_products: RwLock::new(BTreeMap::new()),
@@ -472,6 +577,62 @@ impl NodeApi {
         self.tasks
             .lock()
             .map(|mut queue| std::mem::take(&mut *queue))
+            .unwrap_or_default()
+    }
+
+    /// Take the decisions the routes accepted since the last call, **in arrival order**
+    /// (GAP-132, DN-31 §6.3).
+    ///
+    /// The order is the property, not an implementation detail: the loop takes them in
+    /// the order they arrived and the first valid one on an item wins, so two operators
+    /// racing on one item get one decision and one `409` rather than two decisions. The
+    /// loop answers each through its `reply`.
+    #[must_use]
+    pub fn take_decisions(&self) -> Vec<PendingDecision> {
+        self.decisions
+            .lock()
+            .map(|mut queue| std::mem::take(&mut *queue))
+            .unwrap_or_default()
+    }
+
+    /// Record that a route refused a decision request, for the loop to audit
+    /// (GAP-132, DN-31 §9 row 4).
+    ///
+    /// A poisoned lock loses the entry and says so in the log rather than failing the
+    /// request: the caller has already been refused correctly, and turning a refusal into
+    /// a `500` would tell them the opposite of what happened.
+    pub fn refuse_decision(&self, refusal: RefusedDecision) {
+        if let Ok(mut queue) = self.refusals.lock() {
+            queue.push(refusal);
+        } else {
+            tracing::error!(
+                ?refusal,
+                "the refusal queue lock was poisoned; this refusal reaches no audit entry"
+            );
+        }
+    }
+
+    /// Take the decision requests the routes refused since the last call, for the loop to
+    /// audit (GAP-132, DN-31 §9 row 4).
+    #[must_use]
+    pub fn take_refused_decisions(&self) -> Vec<RefusedDecision> {
+        self.refusals
+            .lock()
+            .map(|mut queue| std::mem::take(&mut *queue))
+            .unwrap_or_default()
+    }
+
+    /// The queue as the node last published it (DN-31 §5.3).
+    ///
+    /// Read off the published snapshot rather than from a register of its own, so
+    /// `GET /v3/queue` and the `queue` field of `GET /v3/snapshot` cannot disagree about
+    /// what is waiting: one publish, two doors. Empty for a node whose loop has published
+    /// nothing yet, which is what such a node honestly has.
+    #[must_use]
+    pub fn queue(&self) -> Vec<v3::QueueItemView> {
+        self.snapshot
+            .read()
+            .map(|s| s.queue.clone())
             .unwrap_or_default()
     }
 
@@ -631,6 +792,11 @@ impl NodeApi {
         // desktop is the only caller `snapshot` hands the unfiltered `full` to.
         withheld += full.bearing_rays.len();
         withheld += usize::from(full.pipeline_stats != gungnir_model::PipelineStatsView::default());
+        // GAP-132: the queue is what this deployment's own people are deciding, and DN-18
+        // names no exchange item for it -- the same reasoning as the plan two lines above,
+        // which is a recommendation for this deployment's own effectors. Withheld and
+        // counted, never silently empty.
+        withheld += full.queue.len();
         let health = if self.exchange.may_send(
             party,
             ExchangeItem::Health,
@@ -650,6 +816,7 @@ impl NodeApi {
             bearing_rays: Vec::new(),
             pipeline_stats: gungnir_model::PipelineStatsView::default(),
             withheld,
+            queue: Vec::new(),
         })
     }
 
@@ -883,17 +1050,23 @@ pub fn router(api: Arc<NodeApi>) -> Router {
             &crate::path(routes::EXCHANGE_HANDOFFS),
             get(exchange_handoffs).post(publish_handoffs),
         )
-        .route(&crate::path(routes::PLAN_DECISION), post(refuse_decision));
+        // GAP-132: the queue, and the decision on one of its items. There is no
+        // `/v3/plans/{plan_id}/decision`: a decision is taken on the item, which is what
+        // carries the deadline and the roles it is offered to, and a second door keyed by
+        // plan would be a second place the four checks could differ.
+        .route(&crate::path(routes::QUEUE), get(queue))
+        .route(&crate::path(routes::QUEUE_DECISION), post(decide_queued));
     RETIRED
         .iter()
         .fold(served, |router, retired| {
             let path = format!("/{}{}", crate::RETIRED_API_VERSION, retired.route);
             let authentication = retired.authentication;
+            let successor = retired.successor;
             let answer = move |State(api): State<Arc<NodeApi>>,
                                ConnectInfo(peer): ConnectInfo<Peer>,
                                headers: axum::http::HeaderMap,
                                uri: axum::http::Uri| async move {
-                gone(&api, &headers, &peer, uri.path(), authentication)
+                gone(&api, &headers, &peer, uri.path(), authentication, successor)
             };
             match retired.method {
                 RetiredMethod::Get => router.route(&path, get(answer)),
@@ -933,13 +1106,26 @@ enum RetiredMethod {
     Post,
 }
 
-/// One `/v2` route: its path below the version, its method, and how its successor
-/// authenticates.
+/// One `/v2` route: its path below the version, its method, how its successor
+/// authenticates, and -- where the successor is not the same path under `/v3` -- what it
+/// is instead.
 #[derive(Debug, Clone, Copy)]
 struct RetiredRoute {
     route: &'static str,
     method: RetiredMethod,
     authentication: Authentication,
+    /// The successor path, when it is not this route's own path under `/v3`.
+    ///
+    /// `None` for every route whose shape and meaning survived the version move, which is
+    /// all but one: the successor is then the request's own path, parameters included, so
+    /// a client is told exactly where to send what it sent. `Some` is for a route whose
+    /// *key* changed -- `/v2/plans/{plan_id}/decision` became
+    /// `/v3/queue/{item}/decision` in GAP-132 -- where the caller's own path cannot be
+    /// rewritten into the successor, because a plan identifier is not a queue item's.
+    /// The template is named instead, which is honest about what the client has to do
+    /// (DN-31 §7; amendment 1's erratum, which fixed the successor at
+    /// `/v3/plans/{plan_id}/decision` only "until GAP-132 builds §7's queue routes").
+    successor: Option<&'static str>,
 }
 
 /// Every `/v2` route as it stood when `/v3` replaced it on 2026-09-17 (GAP-130).
@@ -952,91 +1138,113 @@ const RETIRED: &[RetiredRoute] = &[
         route: routes::SESSION,
         method: RetiredMethod::Post,
         authentication: Authentication::SignIn,
+        successor: None,
     },
     RetiredRoute {
         route: routes::SESSION,
         method: RetiredMethod::Get,
         authentication: Authentication::Operator("the session route"),
+        successor: None,
     },
     RetiredRoute {
         route: routes::SNAPSHOT,
         method: RetiredMethod::Get,
         authentication: Authentication::Caller,
+        successor: None,
     },
     RetiredRoute {
         route: routes::HEALTH,
         method: RetiredMethod::Get,
         authentication: Authentication::Caller,
+        successor: None,
     },
     RetiredRoute {
         route: routes::COVERAGE,
         method: RetiredMethod::Get,
         authentication: Authentication::Operator("coverage"),
+        successor: None,
     },
     RetiredRoute {
         route: routes::EVENTS,
         method: RetiredMethod::Get,
         authentication: Authentication::Stream,
+        successor: None,
     },
     RetiredRoute {
         route: routes::HISTORY,
         method: RetiredMethod::Get,
         authentication: Authentication::Caller,
+        successor: None,
     },
     RetiredRoute {
         route: routes::DETECTIONS,
         method: RetiredMethod::Post,
         authentication: Authentication::MachineOrOperator("detection submission"),
+        successor: None,
     },
     RetiredRoute {
         route: routes::SENSOR_TASK,
         method: RetiredMethod::Post,
         authentication: Authentication::Operator("sensor tasking"),
+        successor: None,
     },
     RetiredRoute {
         route: routes::HANDOFF_REPORT,
         method: RetiredMethod::Post,
         authentication: Authentication::MachineOrOperator("effector reporting"),
+        successor: None,
     },
     RetiredRoute {
         route: routes::WARNING_ACKNOWLEDGE,
         method: RetiredMethod::Post,
         authentication: Authentication::MachineOrOperator("warning acknowledgement"),
+        successor: None,
     },
     RetiredRoute {
         route: routes::EXCHANGE_WARNINGS,
         method: RetiredMethod::Get,
         authentication: Authentication::Caller,
+        successor: None,
     },
     RetiredRoute {
         route: routes::EXCHANGE_WARNINGS,
         method: RetiredMethod::Post,
         authentication: Authentication::Operator("publishing to exchange"),
+        successor: None,
     },
     RetiredRoute {
         route: routes::EXCHANGE_REPORTS,
         method: RetiredMethod::Get,
         authentication: Authentication::Caller,
+        successor: None,
     },
     RetiredRoute {
         route: routes::EXCHANGE_REPORTS,
         method: RetiredMethod::Post,
         authentication: Authentication::Operator("publishing to exchange"),
+        successor: None,
     },
     RetiredRoute {
         route: routes::EXCHANGE_HANDOFFS,
         method: RetiredMethod::Get,
         authentication: Authentication::Caller,
+        successor: None,
     },
     RetiredRoute {
         route: routes::EXCHANGE_HANDOFFS,
         method: RetiredMethod::Post,
         authentication: Authentication::Operator("publishing to exchange"),
+        successor: None,
     },
     RetiredRoute {
         route: routes::PLAN_DECISION,
         method: RetiredMethod::Post,
         authentication: Authentication::Operator("the decision route"),
+        // The one route whose successor is not its own path under `/v3`: GAP-132 keyed the
+        // decision on the queue item rather than on the plan, and `/v3` serves no
+        // plan-keyed decision route at all. Naming the client's own path would send it to
+        // a `404`; naming the template says what actually changed.
+        successor: Some(routes::QUEUE_DECISION),
     },
 ];
 
@@ -1052,6 +1260,7 @@ fn gone(
     peer: &Peer,
     path: &str,
     authentication: Authentication,
+    named_successor: Option<&'static str>,
 ) -> Response {
     let authenticated = match authentication {
         Authentication::SignIn | Authentication::Stream => Ok(()),
@@ -1068,7 +1277,9 @@ fn gone(
     let below = path
         .strip_prefix(&format!("/{}", crate::RETIRED_API_VERSION))
         .unwrap_or(path);
-    let successor = crate::path(below);
+    // The request's own path under `/v3`, unless the route's key changed and the caller's
+    // path cannot be rewritten into the successor at all (see `RetiredRoute::successor`).
+    let successor = crate::path(named_successor.unwrap_or(below));
     (
         StatusCode::GONE,
         Json(serde_json::json!({
@@ -1828,27 +2039,248 @@ fn serve_exchange(
     }
 }
 
-/// `POST /v3/plans/{plan_id}/decision`: refused, and no longer for want of a caller.
+/// Why a decision request was refused before the loop saw it: the status, the item it
+/// named if it named a readable one, and the sentence the caller and the audit entry both
+/// get.
+type DecisionRefusal = (StatusCode, Option<gungnir_model::PendingApprovalId>, String);
+
+/// Checks 2 to 4 of DN-31 §6.3's table, and the decoding either side of them.
 ///
-/// **This node runs no approval queue.** The desktop routes plans through the policy
-/// chain and the queue (GAP-038); a node publishes `PlanProposed` and stops. There is
-/// nothing here for a decision to be about, and inventing a queue in a request handler
-/// would put the recommend-versus-act boundary in the transport.
-async fn refuse_decision(
+/// Separated from [`decide_queued`] so the list reads as a list. Every arm returns the
+/// same three things, because every refusal here owes the caller an answer *and* the
+/// node's record an entry saying the same words (§9 row 4).
+///
+/// # Errors
+///
+/// The refusal, which the caller turns into both.
+fn vet_decision(
+    api: &NodeApi,
+    session: &OperatorSession,
+    item: &Result<
+        axum::extract::Path<gungnir_model::PendingApprovalId>,
+        axum::extract::rejection::PathRejection,
+    >,
+    body: Result<Json<v3::DecisionRequest>, axum::extract::rejection::JsonRejection>,
+) -> Result<(gungnir_model::PendingApprovalId, v3::DecisionRequest), DecisionRefusal> {
+    let Ok(axum::extract::Path(item)) = *item else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            None,
+            "the queue item in the path is neither a hyphenated identifier nor a decimal \
+             number (D-60)"
+                .into(),
+        ));
+    };
+    let Ok(Json(request)) = body else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Some(item),
+            "the decision could not be decoded".into(),
+        ));
+    };
+    if request.item != item {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Some(item),
+            format!(
+                "the decision names item {} and the path names {item}; a body meant for one \
+                 item is not applied to another",
+                request.item
+            ),
+        ));
+    }
+    // 2. The permission, and the stricter one for an override.
+    let action = match request.choice {
+        v3::DecisionChoice::Override => gungnir_security::actions::OVERRIDE_PLAN,
+        v3::DecisionChoice::Accept | v3::DecisionChoice::Reject { .. } => {
+            gungnir_security::actions::DECIDE_PLAN
+        }
+    };
+    if !gungnir_security::authz::role_permits(session.role, action) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Some(item),
+            format!(
+                "role {:?} may not take this decision ({action})",
+                session.role
+            ),
+        ));
+    }
+    // 3. Whether this item is offered to that role. Answered from the queue the loop last
+    // published: a role the item was never offered to is refused at the door rather than
+    // occupying the loop, and an item the published queue does not hold goes to the loop,
+    // which is the only place that can say whether it was decided, expired or never
+    // issued.
+    let role_name = format!("{:?}", session.role);
+    if let Some(row) = api.queue().into_iter().find(|row| row.item == item) {
+        if !row.offered_to.contains(&role_name) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Some(item),
+                format!(
+                    "item {item} is offered to {:?} and not to {role_name}",
+                    row.offered_to
+                ),
+            ));
+        }
+    }
+    // 4. A rejection says why (DN-10 §3): MOE-01 tells a considered rejection from an
+    // abandoned decision by the reason alone, so an empty one is refused rather than
+    // recorded as a blank.
+    if let v3::DecisionChoice::Reject { reason } = &request.choice {
+        if reason.trim().is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Some(item),
+                "a rejection carries a reason; an empty one is refused rather than recorded \
+                 as a blank (DN-10 §3)"
+                    .into(),
+            ));
+        }
+    }
+    Ok((item, request))
+}
+
+/// How long the decision route waits for the node loop to take a decision.
+///
+/// The same bound the sensor-task route uses and for the same reason: the loop ticks far
+/// faster, and the bound exists so a stalled loop answers rather than hangs. **A `504`
+/// does not mean nothing was recorded** (DN-31 §6.3): the client retries with the same
+/// request key and is told which.
+const DECISION_REPLY_TIMEOUT: std::time::Duration = TASK_REPLY_TIMEOUT;
+
+/// `GET /v3/queue` (DN-31 §7, GAP-132): what this node is waiting for a person to decide.
+///
+/// The queue the loop last published, in its own order -- time remaining, then priority
+/// (DN-10 §5) -- so every desktop linked to this node shows the same queue in the same
+/// order. Read authority, `picture.view`: seeing what is waiting is not deciding it, and
+/// a role that may not decide still has to be able to see that somebody must.
+async fn queue(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
     headers: axum::http::HeaderMap,
 ) -> Response {
-    // Authenticated first: an unauthenticated caller learns nothing about what this node
-    // does or does not run.
-    if let Err(response) = operator_caller(&api, &headers, &peer, "the decision route") {
-        return response;
+    let session = match operator_caller(&api, &headers, &peer, "the approval queue") {
+        Ok(session) => session,
+        Err(response) => return response,
+    };
+    if !gungnir_security::authz::role_permits(session.role, gungnir_security::actions::VIEW_PICTURE)
+    {
+        return problem(
+            StatusCode::FORBIDDEN,
+            &format!(
+                "role {:?} may not read the queue ({})",
+                session.role,
+                gungnir_security::actions::VIEW_PICTURE
+            ),
+        );
     }
-    problem(
-        StatusCode::NOT_IMPLEMENTED,
-        "this node runs no approval queue, so there is nothing here to decide. Plans are \
-         decided on a desktop, which routes them through the policy chain first.",
-    )
+    Json(api.queue()).into_response()
+}
+
+/// `POST /v3/queue/{item}/decision` (DN-31 §6.3, GAP-132): a person decides one item.
+///
+/// **Four checks here, in this order, and then the loop.** Each is a question the route
+/// can answer without the queue's state, and each refuses without recording, publishing
+/// or engaging anything:
+///
+/// 1. a valid, unexpired operator token -- `401`, and a decision under an expired session
+///    is not recorded at all (DN-23 §5 rule 2);
+/// 2. `plan.decide`, or `plan.override` for an override -- `403` naming the role and the
+///    action;
+/// 3. the item is offered to the token's role -- `403` naming the roles it is offered to;
+/// 4. a rejection carries a non-empty reason -- `400` (DN-10 §3).
+///
+/// Then the request goes to the node loop, which takes the requests in arrival order: an
+/// item still pending is decided and answered `201`; one already decided is `409
+/// AlreadyDecided` naming the decision that stands; an expired one is `409 Expired`; a
+/// request key already recorded is answered with its first outcome and records nothing.
+///
+/// Every refusal above is queued for the loop to audit, because the audit log is the
+/// loop's and DN-31 §9 row 4 wants exactly one entry per decision *and per refusal*.
+///
+/// Checks 2 to 4 and the decoding are [`vet_decision`], so that what this function shows
+/// is the shape of the route -- authenticate, vet, hand over, wait -- and the checks are
+/// read as one list in the order DN-31 §6.3's table gives them.
+async fn decide_queued(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    item: Result<
+        axum::extract::Path<gungnir_model::PendingApprovalId>,
+        axum::extract::rejection::PathRejection,
+    >,
+    headers: axum::http::HeaderMap,
+    body: Result<Json<v3::DecisionRequest>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    // 1. Who is asking. An unauthenticated caller is refused before anything about this
+    // node's queue is said, and nothing about the attempt reaches the record under a name
+    // nobody verified -- the entry says `unauthenticated`, which is what it was.
+    let session = match operator_caller(&api, &headers, &peer, "the decision route") {
+        Ok(session) => session,
+        Err(response) => {
+            api.refuse_decision(RefusedDecision {
+                item: None,
+                operator: "unauthenticated".into(),
+                reason: "no valid operator session".into(),
+            });
+            return response;
+        }
+    };
+    // The refusal path records who was refused as text, because "unauthenticated" above is
+    // one of its values and no identifier stands for it. The decision path below carries
+    // the identifier itself; see `PendingDecision::operator`.
+    let refused_as = session.operator.0.to_string();
+    let (item, request) = match vet_decision(&api, &session, &item, body) {
+        Ok(vetted) => vetted,
+        Err((status, item, why)) => {
+            api.refuse_decision(RefusedDecision {
+                item,
+                operator: refused_as,
+                reason: why.clone(),
+            });
+            return problem(status, &why);
+        }
+    };
+    let (reply, answer) = tokio::sync::oneshot::channel();
+    {
+        let Ok(mut queue) = api.decisions.lock() else {
+            return problem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "the decision queue lock was poisoned",
+            );
+        };
+        queue.push(PendingDecision {
+            item,
+            choice: request.choice,
+            request: request.request,
+            operator: session.operator,
+            role: session.role,
+            reply,
+        });
+    }
+    match tokio::time::timeout(DECISION_REPLY_TIMEOUT, answer).await {
+        Ok(Ok(DecisionAnswer::Recorded(decision))) => {
+            (StatusCode::CREATED, Json(v3::DecisionRecorded { decision })).into_response()
+        }
+        Ok(Ok(DecisionAnswer::Refused(refused))) => {
+            (StatusCode::CONFLICT, Json(refused)).into_response()
+        }
+        Ok(Ok(DecisionAnswer::Unknown)) => problem(
+            StatusCode::NOT_FOUND,
+            &format!("this node has no queue item {item}, decided or waiting"),
+        ),
+        Ok(Err(_)) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the node loop dropped the decision without answering",
+        ),
+        // **Not "nothing was recorded"** (DN-31 §6.3): the loop may have taken it. The
+        // client retries with the same request key and is told which.
+        Err(_) => problem(
+            StatusCode::GATEWAY_TIMEOUT,
+            "the node loop did not decide within the reply window; retry with the same \
+             request key to learn whether it was recorded",
+        ),
+    }
 }
 
 fn problem(status: StatusCode, message: &str) -> Response {

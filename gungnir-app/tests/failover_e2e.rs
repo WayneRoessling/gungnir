@@ -46,6 +46,8 @@ fn decided(plan: u128, accepted: bool, operator: &str, role: &str) -> Event {
         role: Some(role.into()),
         verdict: VerdictSummary::RequiresHumanApproval,
         rationale: (!accepted).then(|| "no".to_string()),
+        request: None,
+        origin: None,
     })
 }
 

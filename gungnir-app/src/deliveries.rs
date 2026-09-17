@@ -32,8 +32,9 @@ use crate::update::publish;
 pub use gungnir_approval::{PendingHandoff, RETRY_AFTER_S};
 
 /// The endpoint kind the transport carries. Anything else has no transport and the
-/// record says so.
-pub const HTTP_KIND: &str = "http";
+/// record says so. Re-exported, not declared: it moved with the rule that reads it
+/// (GAP-132).
+pub use gungnir_approval::HTTP_KIND;
 
 /// A warning posted and not yet answered.
 #[derive(Debug)]
@@ -71,21 +72,11 @@ pub fn http_address_in(
     client_available: bool,
     endpoint: &str,
 ) -> Result<String, String> {
-    let Some(e) = endpoints.iter().find(|e| e.name == endpoint) else {
-        return Err(format!(
-            "endpoint {endpoint:?} is not in the endpoint table"
-        ));
-    };
-    if e.kind != HTTP_KIND {
-        return Err(format!(
-            "endpoint {endpoint:?} is kind {:?}, which no transport carries",
-            e.kind
-        ));
-    }
-    if !client_available {
-        return Err("the endpoint client could not be built at start (see the alerts)".into());
-    }
-    Ok(e.address.clone())
+    // The rule itself moved to `gungnir-approval` in GAP-132, when the node began handing
+    // off too: which endpoint kinds a transport carries is one fact about the transport,
+    // and two binaries answering it separately is how they come to refuse different
+    // endpoints for the same baseline.
+    gungnir_approval::http_address_in(endpoints, client_available, endpoint)
 }
 
 /// The tick step.

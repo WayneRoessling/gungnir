@@ -315,13 +315,26 @@ async fn sign_in(addr: std::net::SocketAddr) -> String {
         .to_owned()
 }
 
+/// The successor a retired route names, where it is not the route's own path under `/v3`.
+///
+/// One entry, and it is the whole of GAP-132's change to this surface: the decision route
+/// was keyed on a plan and is keyed on a queue item, so a caller's own path cannot be
+/// rewritten into the successor -- a plan identifier is not a queue item's -- and `/v3`
+/// serves no plan-keyed decision route to rewrite it into. The template is named instead
+/// (DN-31 §7, and amendment 1's erratum, which held the successor at
+/// `/v3/plans/{plan_id}/decision` only "until GAP-132 builds §7's queue routes").
+fn named_successor(route: &str) -> Option<&'static str> {
+    (route == "/plans/1/decision").then_some("/v3/queue/{item}/decision")
+}
+
 /// The problem a retired route answers with, checked for the successor it names.
 fn assert_gone(route: &str, status: u16, body: &str) {
     assert_eq!(status, 410, "/v2{route} was not gone: {body}");
     let problem: serde_json::Value =
         serde_json::from_str(body).unwrap_or_else(|e| panic!("/v2{route}: {e}: {body}"));
     let below = route.split('?').next().unwrap_or(route);
-    let successor = format!("/v3{below}");
+    let successor =
+        named_successor(below).map_or_else(|| format!("/v3{below}"), ToString::to_string);
     assert_eq!(
         problem["successor"].as_str(),
         Some(successor.as_str()),
@@ -348,7 +361,14 @@ async fn a_retired_route_authenticates_as_its_successor_and_then_names_it() {
         let (v2, v2_body) = plain(addr, method, &format!("/v2{route}"), None).await;
         match door {
             Door::SignIn | Door::Stream => assert_gone(route, v2, &v2_body),
-            Door::Caller | Door::Operator | Door::MachineOrOperator => {
+            // A route whose key changed has no `/v3` path to compare against: the
+            // successor takes a queue item where this took a plan. What still has to hold
+            // is that the retired route authenticates -- `401` without a token, before
+            // anything about this node's queue is said -- which is the assertion below,
+            // unchanged (GAP-132).
+            Door::Caller | Door::Operator | Door::MachineOrOperator
+                if named_successor(route).is_none() =>
+            {
                 let (v3, v3_body) = plain(addr, method, &format!("/v3{route}"), None).await;
                 assert_eq!(
                     (v2, v2_body.clone()),
@@ -356,6 +376,9 @@ async fn a_retired_route_authenticates_as_its_successor_and_then_names_it() {
                     "{method} /v2{route} did not refuse an unauthenticated caller as its \
                      successor does"
                 );
+                assert_eq!(v2, 401, "{method} /v2{route}: {v2_body}");
+            }
+            Door::Caller | Door::Operator | Door::MachineOrOperator => {
                 assert_eq!(v2, 401, "{method} /v2{route}: {v2_body}");
             }
         }
@@ -370,6 +393,27 @@ async fn a_retired_route_authenticates_as_its_successor_and_then_names_it() {
     // A route `/v2` never had is not found there, rather than gone.
     let (status, _) = plain(addr, "GET", "/v2/queue", Some(&token)).await;
     assert_eq!(status, 404);
+
+    // **And the plan-keyed decision route is gone from `/v3` as well as from `/v2`**
+    // (GAP-132): a decision is taken on a queue item, so there is no plan-keyed door for
+    // the four checks of DN-31 §6.3 to be duplicated in. Not found rather than refused,
+    // because `/v3` never served it.
+    let (status, _) = plain(addr, "POST", "/v3/plans/1/decision", Some(&token)).await;
+    assert_eq!(
+        status, 404,
+        "/v3 must serve no plan-keyed decision route (DN-31 §7)"
+    );
+    // The successor it names is served, and refuses this caller for a reason about the
+    // decision rather than about the route: a Supervisor holds `plan.decide`, and the
+    // node's loop is not running in this test, so the answer is the reply-window timeout.
+    let (status, body) = plain(
+        addr,
+        "POST",
+        "/v3/queue/01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2/decision",
+        Some(&token),
+    )
+    .await;
+    assert_ne!(status, 404, "the successor must be routed: {body}");
 }
 
 /// **A machine is refused where its successor refuses it, in the successor's words, and
@@ -395,7 +439,11 @@ async fn a_machine_is_refused_as_its_successor_would_refuse_it() {
         .await;
         match door {
             Door::SignIn | Door::Stream | Door::Caller => assert_gone(route, v2, &v2_body),
-            Door::Operator | Door::MachineOrOperator => {
+            // As in the test above: a route whose key changed has no `/v3` path of its own
+            // to compare against (GAP-132). What still has to hold is that the retired
+            // route refuses a party `403` as something internal to this deployment, which
+            // is the assertion it shares with every other operator-only route.
+            Door::Operator | Door::MachineOrOperator if named_successor(route).is_none() => {
                 let (v3, v3_body) = as_party(
                     &pki,
                     addr,
@@ -412,7 +460,27 @@ async fn a_machine_is_refused_as_its_successor_would_refuse_it() {
                     "{method} /v2{route} refused a party differently from its successor"
                 );
             }
+            Door::Operator | Door::MachineOrOperator => {
+                assert_eq!(v2, 403, "{method} /v2{route}: {v2_body}");
+            }
         }
+    }
+
+    // The successor of the one route whose key changed refuses a party the same way: the
+    // queue and the decisions on it are internal to this deployment, not an exchange item.
+    for (method, route) in [
+        ("GET", "/v3/queue"),
+        (
+            "POST",
+            "/v3/queue/01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2/decision",
+        ),
+    ] {
+        let (status, body) = as_party(&pki, addr, "sector-north", method, route, "").await;
+        assert_eq!(status, 403, "{method} {route}: {body}");
+        assert!(
+            body.contains("internal to this deployment"),
+            "{method} {route}: {body}"
+        );
     }
 
     let report = serde_json::to_string(&EffectorReportRequest {

@@ -43,6 +43,43 @@ pub trait HandoffInFlight: std::fmt::Debug + Send {
     fn poll(&self) -> Option<DeliveryAnswer>;
 }
 
+/// The endpoint kind an HTTP transport carries. Anything else is refused by name.
+pub const HTTP_KIND: &str = "http";
+
+/// The configured endpoint's address, when it is one an HTTP transport carries.
+///
+/// Here rather than in a binary since GAP-132, because both binaries now hand off: which
+/// endpoint kinds a transport carries is one fact, and a node and a desktop that answered
+/// it separately would refuse different endpoints for the same baseline. `gungnir-app`'s
+/// `deliveries::http_address_in` calls this.
+///
+/// # Errors
+///
+/// Why the endpoint cannot be posted to, in words for the record and for the operator: an
+/// endpoint that is not in the table, one of a kind no transport carries, or a transport
+/// that could not be built.
+pub fn http_address_in(
+    endpoints: &[gungnir_config::EndpointConfig],
+    client_available: bool,
+    endpoint: &str,
+) -> Result<String, String> {
+    let Some(e) = endpoints.iter().find(|e| e.name == endpoint) else {
+        return Err(format!(
+            "endpoint {endpoint:?} is not in the endpoint table"
+        ));
+    };
+    if e.kind != HTTP_KIND {
+        return Err(format!(
+            "endpoint {endpoint:?} is kind {:?}, which no transport carries",
+            e.kind
+        ));
+    }
+    if !client_available {
+        return Err("the endpoint client could not be built at start (see the alerts)".into());
+    }
+    Ok(e.address.clone())
+}
+
 /// How a host carries a handoff to an effector (DN-31 §3 point 5).
 ///
 /// Two questions, both of which only the host can answer: whether a configured endpoint is

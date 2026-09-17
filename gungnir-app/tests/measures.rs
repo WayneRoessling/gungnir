@@ -68,6 +68,7 @@ fn track(id: u64, classification: Classification) -> TrackView {
 fn accepted(decision: u128, track: u64) -> DecisionRecord {
     DecisionRecord {
         id: DecisionId(decision),
+        item: None,
         plan: PlanView {
             id: PlanId(decision),
             kind: PlanKind::Intercept {
@@ -84,6 +85,8 @@ fn accepted(decision: u128, track: u64) -> DecisionRecord {
         decision: OperatorDecision::Accepted,
         operator_id: None,
         role: None,
+        request: None,
+        origin: None,
         mission_time: MissionTime(0.0),
     }
 }
