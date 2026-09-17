@@ -20,7 +20,14 @@ that buys, and the first is why it moved:
 Nothing about the comparison itself changed, and the comments below are the ones the
 inline version carried, because each records a defect this gate actually had.
 
-Usage: python3 .github/scripts/bench_compare.py [criterion-root]
+Usage: python3 .github/scripts/bench_compare.py [--wrote-baseline] [criterion-root]
+
+`--wrote-baseline` says this run saved the baseline it would compare against, which
+is what a run on `main` does. There is then nothing to compare: criterion has already
+overwritten `main/` with this run's own numbers, so every ratio is the run against
+itself and comes out at exactly 1.000x. Printing those was how the 2026-09-17 run on
+`fe97fa3` came to show eleven perfect ratios in a log that reads like a clean
+comparison. This counts the benchmarks and says so instead.
 
 Environment: BENCH_REGRESSION_THRESHOLD (fraction, default 0.10),
 BENCH_REGRESSION_ENFORCE ("1" to make a reported regression fail; see the workflow
@@ -35,9 +42,25 @@ import sys
 
 def main(argv: list[str]) -> int:
     threshold = float(os.environ.get("BENCH_REGRESSION_THRESHOLD", "0.10"))
-    root = pathlib.Path(argv[1] if len(argv) > 1 else "target/criterion")
+    args = [a for a in argv[1:] if a != "--wrote-baseline"]
+    wrote_baseline = len(args) != len(argv[1:])
+    root = pathlib.Path(args[0] if args else "target/criterion")
     failed = False
     compared = skipped = 0
+    # A run that saved the baseline cannot compare against it: `--save-baseline main`
+    # replaced `main/` with this run's own estimates before this script ran, so each
+    # ratio would be 1.000x by construction and would say nothing about a regression.
+    # Counting what was measured is the honest output for that run.
+    if wrote_baseline:
+        benchmarks = sorted(root.glob("**/new/estimates.json"))
+        for est in benchmarks:
+            print(est.relative_to(root).parent.parent.as_posix())
+        print(
+            f"saved the baseline from {len(benchmarks)} benchmark(s); NOT COMPARED: this "
+            "run is the baseline, so a ratio here would be the run against itself. The "
+            "comparison happens on the next branch dispatch against this baseline."
+        )
+        return 0
     # Recursive: criterion writes <group>/<bench>/new/estimates.json for a grouped
     # benchmark and <bench>/new/estimates.json for an ungrouped one. This globbed one
     # level only, matched nothing at all against the real layout, and so compared
