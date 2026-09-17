@@ -2544,3 +2544,28 @@
   commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
   pre_repository: false
   record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    DN-31, a node approval queue: the design built on D-55 to D-59, its edges (w) to (y) and
+    the gungnir-approval crate, and its five build increments, GAP-130 to GAP-134.
+  kind: design-note
+  paths:
+  - docs/design/DN-31-node-approval-queue.md
+  commit: 7d6f2019fe635987dff7920865e7169bb2a145b0
+  pre_repository: false
+  record: "PR #127; D-55 to D-59 in docs/mission/gap-analysis/data/decisions.yaml"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    DN-31 §9's ten verification rows agreed as pass criteria, entering
+    verification-capability-table.md §2 as Draft rows; each gates when its test exists and the
+    owner confirms it checks the criterion.
+  kind: criterion
+  paths:
+  - docs/design/DN-31-node-approval-queue.md
+  commit: 7d6f2019fe635987dff7920865e7169bb2a145b0
+  pre_repository: false
+  record: "PR #127; DN-31 §9"
