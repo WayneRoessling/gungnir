@@ -341,6 +341,8 @@ fn the_recorded_edges_are_in_the_manifests() {
         ("gungnir-approval", "gungnir-eventing", "(w)"),
         ("gungnir-approval", "gungnir-model", "(w)"),
         ("gungnir-app", "gungnir-approval", "(x)"),
+        ("gungnir-node", "gungnir-approval", "(y)"),
+        ("gungnir-node", "gungnir-command", "(y)"),
     ] {
         assert!(
             has(from, to),

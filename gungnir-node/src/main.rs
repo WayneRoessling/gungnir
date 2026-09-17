@@ -9,17 +9,27 @@
 //! Usage: `gungnir-node [config.json]`. Without a config path the default baseline
 //! is used (no sensors, no resources), which is enough to prove the loop runs.
 //!
-//! **Status, 2026-09-06:** the tracking pipeline, the allocator and the transport are
-//! all real. This node tracks, plans, and serves the read paths plus four write paths
-//! -- submitting a detection, tasking a sensor, reporting on a handoff, acknowledging a
-//! warning -- each authorising its caller. This paragraph said the opposite until today,
-//! and understating what a deployment does is read as carelessly as overstating it.
+//! **Status, 2026-09-17:** the tracking pipeline, the allocator and the transport are
+//! all real. This node tracks, plans, and serves the read paths plus the write paths --
+//! submitting a detection, tasking a sensor, reporting on a handoff, acknowledging a
+//! warning, reading the queue and deciding one of its items -- each authorising its
+//! caller. This paragraph said the opposite until 2026-09-06, and understating what a
+//! deployment does is read as carelessly as overstating it.
 //!
-//! What it still does not do: run an approval queue, which is a desktop's job and which
-//! `POST /v3/plans/{id}/decision` refuses architecturally rather than for want of a
-//! feature; fuse cooperative evidence or correlate identity across sessions, for which it
-//! has no dependency edge (GAP-010, GAP-019); and produce any exchange product, so the
-//! three `/v3/exchange` routes answer `NotHeld` with a reason (GAP-065).
+//! **It runs the approval queue** for the desktops linked to it (GAP-132, D-55): it
+//! proposes a plan, runs the whole policy chain for every role on the escalation ladder,
+//! offers the item to the lowest role that may take it, sweeps expiry and escalation on
+//! its own clock, and takes one decision per item -- opening the engagement, issuing the
+//! handoff and journalling all of it. The queue belongs to the loop, not to a request
+//! handler: `src/approval.rs` holds the three steps the loop calls, and the routes hand
+//! their requests to it and wait (`docs/design/DN-31-node-approval-queue.md` §3, §6).
+//!
+//! What it still does not do: project its queue onto a desktop or stop a linked desktop
+//! deciding a node plan itself (GAP-133); take a desktop's offline decisions on reconnect
+//! (GAP-134); fuse cooperative evidence or correlate identity across sessions, for which
+//! it has no dependency edge (GAP-010, GAP-019); and produce any exchange product, so the
+//! three `/v3/exchange` routes answer `NotHeld` with a reason (GAP-065) and its own
+//! handoffs reach no partner (GAP-137).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -27,6 +37,10 @@ use std::sync::Arc;
 mod account;
 mod auth;
 mod entities;
+
+// GAP-132: the node's approval wiring is a library module so DN-31 §9 rows 3 to 6 can
+// drive the same source this binary runs (see `lib.rs`).
+use gungnir_node::approval;
 
 use gungnir_api::transport::NodeApi;
 use gungnir_api::v3::{CoverageResponse, SnapshotResponse};
@@ -40,7 +54,6 @@ use gungnir_mission::{JournalMissionManager, MissionManager, MissionState};
 use gungnir_model::events::InterceptEvent;
 use gungnir_model::{PlanView, SensorId, SystemHealth};
 use gungnir_observability::WatchdogConfig;
-use gungnir_policy::{ControlStatusPolicy, GeofencePolicy, PolicyChain, PolicyEngine};
 use gungnir_sensor_management::{InMemorySensorRegistry, SensorRegistry};
 use gungnir_store::{EventJournal, FileEventJournal};
 use gungnir_time::{TimeAuthority, WallClockAuthority};
@@ -1356,12 +1369,14 @@ fn publish_picture(
     pipeline_stats: PipelineStats,
     plan: &PlanView,
     health: SystemHealth,
+    queue: Vec<gungnir_api::v3::QueueItemView>,
 ) {
     let snapshot = SnapshotResponse::new(tracks.to_vec(), Some(plan.clone()), health, Vec::new())
         .with_bearing_data(
             bearing_rays.to_vec(),
             project_pipeline_stats(pipeline_stats),
-        );
+        )
+        .with_queue(queue);
     if let Err(err) = api.publish_snapshot(snapshot) {
         tracing::error!(%err, "could not publish the snapshot");
     }
@@ -1873,6 +1888,29 @@ async fn run(
         max_ingest_gap_s: 30.0,
         max_tracking_pipeline_latency_s: 1.0,
     };
+    // GAP-132, D-55: the node holds the queue for the desktops linked to it. One desk, on
+    // the loop, so a decision cannot be taken in a request handler and two decisions
+    // cannot be taken at once.
+    let mut approval_desk = approval::NodeApproval::new(&config);
+    // GAP-132, DN-31 §6.3: the node now issues handoffs of its own, so it needs the
+    // transport that carries one. A node that could not build the client records every
+    // handoff undelivered and owed rather than silently dropping it (DN-07 §5 case 3),
+    // which is what `HandoffTransport::post` returning `None` means.
+    let endpoint_client = match gungnir_remote::endpoint::EndpointClient::new(
+        handle.clone(),
+        &config.security.tls.trust_roots_pem,
+        std::time::Duration::from_secs(5),
+    ) {
+        Ok(client) => Some(client),
+        Err(err) => {
+            tracing::error!(
+                %err,
+                "the endpoint client could not be built; handoffs this node issues will be \
+                 recorded undelivered and retried"
+            );
+            None
+        }
+    };
     let mut ticker = tokio::time::interval(TICK);
     let mut last_plan = PlanView::default();
     let mut last_health: Option<SystemHealth> = None;
@@ -1957,25 +1995,38 @@ async fn run(
         // node is the system of record for every desktop reading it.
         let outcome = intercept.plan(now, tracking.tracks(), &resources);
         let plan = outcome.plan().cloned().unwrap_or_default();
+        // The picture this tick's approval work judges against, read once (GAP-132).
+        let frame = approval::Frame {
+            now,
+            config: &config,
+            tracks: tracking.tracks(),
+            resources: &resources,
+            geofences: &geo,
+            bus: &bus,
+            endpoint_client: endpoint_client.as_ref(),
+        };
         if outcome.is_fresh() && plan != last_plan {
             bus.publish(
                 now,
                 Event::Intercept(InterceptEvent::PlanProposed(plan.clone())),
             )?;
-            // GAP-028: the chain runs here too, and the record says which engines ran.
-            // Authority is not among them -- it is a question about who is asking, and
-            // nobody signs in to a node -- and there is no queue, for the same reason.
-            let verdict = evaluate_on_node(&config, &geo, tracking.tracks(), &plan, &resources);
-            bus.publish(
-                now,
-                Event::Intercept(InterceptEvent::PlanEvaluated {
-                    plan: plan.id,
-                    verdict: verdict.summary(),
-                    engines: NODE_ENGINES.iter().map(|e| (*e).to_string()).collect(),
-                }),
-            )?;
+            // GAP-132, D-55: the node runs the **whole** chain and queues what clears it.
+            // Until now it ran two of the four engines and threw the verdict away, because
+            // authority is a question about who is asking and nobody signs in to a node.
+            // DN-31 §6.1 answers that differently: the chain is run for every role on the
+            // escalation ladder and the item is offered to the lowest one that may take
+            // it. `submit_to_ladder` publishes `PlanEvaluated` with the engines that ran
+            // and `Queued` for what it queued, both in this tick, so the whole path is on
+            // the journal and the stream before MOP-07's window (§6.9).
+            approval::propose(&mut approval_desk, &frame, plan.clone());
             last_plan = plan;
         }
+        // The sweep on the node's clock (DN-31 §6.4), then the decisions the routes
+        // accepted, in arrival order (§6.3). Both before the journal append below, so
+        // everything they publish is on disk in the tick it happened.
+        approval::sweep(&mut approval_desk, &frame);
+        approval::answer_decisions(&mut approval_desk, &frame, &api)?;
+        approval::audit_refused_decisions(&mut approval_desk, &frame, &api);
 
         for envelope in journal_rx.try_iter() {
             journal.append(session, &envelope)?;
@@ -2030,6 +2081,9 @@ async fn run(
             tracking.pipeline_stats(),
             &last_plan,
             health,
+            // GAP-132: the queue goes out with the picture, so `GET /v3/queue` and the
+            // snapshot's `queue` are one publish read through two doors.
+            approval_desk.queue_view(&config, &resources, tracking.tracks()),
         );
         // Computed here rather than in the request handler, so a caller's polling rate
         // cannot decide this node's load.
@@ -2062,34 +2116,6 @@ async fn run(
         "gungnir-node stopped; journal flushed and session closed"
     );
     Ok(())
-}
-
-/// The engines a node runs, in order. Two of the desktop's three: authority needs an
-/// asking role and a node has none.
-const NODE_ENGINES: [&str; 2] = ["readiness and geofence", "control status"];
-
-/// The policy chain as a node can honestly run it (GAP-028).
-fn evaluate_on_node(
-    config: &ConfigBaseline,
-    geo: &gungnir_geo::InMemoryGeoService,
-    tracks: &[gungnir_model::TrackView],
-    plan: &PlanView,
-    resources: &[gungnir_model::ResourceView],
-) -> gungnir_policy::PolicyVerdict {
-    let classification = |id: gungnir_model::TrackId| {
-        tracks
-            .iter()
-            .find(|t| t.id == id)
-            .map_or(gungnir_model::Classification::Unknown, |t| t.classification)
-    };
-    let chain = PolicyChain::new(vec![
-        Box::new(GeofencePolicy { geo }) as Box<dyn PolicyEngine>,
-        Box::new(ControlStatusPolicy {
-            settings: &config.policy.control_status,
-            track_classification: &classification,
-        }),
-    ]);
-    chain.evaluate(plan, resources)
 }
 
 /// The geo service from the baseline's fences (GAP-088). The same conversion as the

@@ -108,6 +108,7 @@ fn at(state: &mut AppState, t: f64) {
 fn accepted(decision: u128, tracks: &[u64]) -> DecisionRecord {
     DecisionRecord {
         id: DecisionId(decision),
+        item: None,
         plan: PlanView {
             id: PlanId(decision),
             mission_time: MissionTime(0.0),
@@ -128,6 +129,8 @@ fn accepted(decision: u128, tracks: &[u64]) -> DecisionRecord {
         decision: OperatorDecision::Accepted,
         operator_id: None,
         role: None,
+        request: None,
+        origin: None,
         mission_time: MissionTime(0.0),
     }
 }

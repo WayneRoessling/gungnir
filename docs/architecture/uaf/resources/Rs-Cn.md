@@ -56,7 +56,7 @@ Diagrams (rendered under `rendered/resources/` by the render scripts in the UAF 
 | RS-ml `gungnir-ml` | `gungnir-model`, `gungnir-interop` |  |
 | RS-model `gungnir-model` | `gungnir-core`, `gungnir-coord` |  |
 | RS-modelops `gungnir-modelops` | `gungnir-config`, `gungnir-model` |  |
-| RS-node `gungnir-node` | `gungnir-model`, `gungnir-config`, `gungnir-mission`, `gungnir-eventing`, `gungnir-store`, `gungnir-time`, `gungnir-ingest`, `gungnir-sensor-management`, `gungnir-tracking-service`, `gungnir-intercept-service`, `gungnir-api`, `gungnir-remote`, `gungnir-security`, `gungnir-modelops`, `gungnir-identity`, `gungnir-policy`, `gungnir-geo`, `gungnir-analytics`, `gungnir-observability` | `gungnir-scenario` |
+| RS-node `gungnir-node` | `gungnir-model`, `gungnir-config`, `gungnir-mission`, `gungnir-eventing`, `gungnir-store`, `gungnir-time`, `gungnir-ingest`, `gungnir-sensor-management`, `gungnir-tracking-service`, `gungnir-intercept-service`, `gungnir-api`, `gungnir-remote`, `gungnir-security`, `gungnir-modelops`, `gungnir-identity`, `gungnir-policy`, `gungnir-geo`, `gungnir-approval`, `gungnir-command`, `gungnir-analytics`, `gungnir-observability` | `gungnir-scenario` |
 | RS-observability `gungnir-observability` | `gungnir-model` |  |
 | RS-oracle `gungnir-oracle` | `gungnir-filters`, `gungnir-association`, `gungnir-rfs`, `gungnir-scenario` | `gungnir-testkit` |
 | RS-policy `gungnir-policy` | `gungnir-model`, `gungnir-geo` |  |

@@ -102,7 +102,7 @@ one crate can talk to a sensor.
 | `gungnir-remote` to `gungnir-security` | GAP-060, D-29 | 2026-09-06, with the `identity.rs` move out of `gungnir-node` | Yes, as (t) -- **the entry is dated 2026-09-07; the manifest line is older, see §14** |
 | `gungnir-approval` to command, policy, intercept-service, security, config, eventing, model | DN-31, D-57, GAP-131 | 2026-09-17 | Yes, as (w) (§17) |
 | `gungnir-app` to `gungnir-approval` | DN-31, D-57, GAP-131 | 2026-09-17 | Yes, as (x) (§17) |
-| `gungnir-node` to `gungnir-approval` and to `gungnir-command` | DN-31, D-57 | **No: GAP-132's, no code yet** | Not yet; §7.1 gains (y) in the change that gives the node the queue |
+| `gungnir-node` to `gungnir-approval` and to `gungnir-command` | DN-31, D-57, GAP-132 | 2026-09-17 | Yes, as (y) (§18) |
 
 **All five are in manifests and drawn.** The acyclicity check was re-run with the full set
 on 2026-09-05: 154 crate-to-crate edges, no cycle.
@@ -367,10 +367,10 @@ them.
 | (w) approval → command, policy, intercept-service, security, config, eventing, model | A productization crate reaching six productization crates and the model: the queue and the append-only decision record (`gungnir-command`), the four engines (`gungnir-policy`), the engagement state machine (`gungnir-intercept-service`), role permissions and the audit entry's shape (`gungnir-security`), the baseline the deadlines and the effect windows come from (`gungnir-config`), and the bus every outcome is published on (`gungnir-eventing`). Downward and acyclic: none of the seven depends on a binary or on this crate -- `gungnir-intercept-service` is a facade over core, coord, allocation and model; `gungnir-command` depends on model and policy; `gungnir-policy` on model and geo; `gungnir-security` on no workspace crate at all | `dependency_graph.rs`: `Productization → Productization`, `Productization → Facade` and `Productization → Model` are all downward, acyclic, and the crate is placed in the layer table |
 | (x) `gungnir-app` → `gungnir-approval` | The binary reaching the crate its own decision path moved into. `ARCHITECTURE.md` §7.1 already draws `gungnir-app ──► everything above it`; what is new is that the desktop now *calls* the path rather than *holding* it, and supplies the two things only it can -- the picture (`ApprovalContext`) and where an effect goes (`ApprovalHost`) | `dependency_graph.rs`: `Binary → Productization`, listed as (x); `gungnir-app/tests/no_execution_without_decision.rs`, whose static half now finds the one handoff builder in `gungnir-approval/src/handoffs.rs` |
 
-**The node edge (y) is not here.** D-57 names `gungnir-node` → `gungnir-approval` and
-`gungnir-node` → `gungnir-command` as well, and GAP-132 adds them with the code that needs
-them. An edge drawn before a manifest carries it would be the graph claiming something
-untrue (§5, and §16's own note about exactly that).
+**The node edge (y) is in §18**, added by GAP-132 with the code that needs it. It was not
+drawn here on 2026-09-17 because no manifest carried it yet, and an edge drawn before a
+manifest carries it would be the graph claiming something untrue (§5, and §16's own note
+about exactly that).
 
 **Two edges were refused with this one**, both in DN-31 §4. `gungnir-approval` →
 `gungnir-remote` would put a productization crate on the client transport; delivery goes
@@ -384,6 +384,39 @@ its baseline and passes it in, and `gungnir-policy` -- which already depends on
 `gungnir-geo` and whose `GeofencePolicy` names the trait in its own public field -- now
 re-exports it so the type can be named without the edge. That is the "pass the data in"
 answer this register's §1 prefers, and it keeps the graph one crate narrower.
+
+## 18. Edge (y) -- the node's queue (2026-09-17, GAP-132, D-55, D-57)
+
+D-57 named this edge with (w) and (x); §17 held it back because no manifest carried it.
+GAP-132 puts the approval queue on the node (D-55), so `gungnir-node/Cargo.toml` now
+carries both halves and `ARCHITECTURE.md` §7's table and §7.1's graph draw them in this
+same change, per §5's rule.
+
+| Edge | What it is | Evidence |
+|---|---|---|
+| (y) `gungnir-node` → `gungnir-approval` | The headless binary reaching the decision path, rather than holding a second copy of the safety rules -- which is the duplication D-55 refused and the reason the crate exists. The node supplies the same two things the desktop does: the picture (`ApprovalContext`) and where an effect goes (`ApprovalHost`), in `gungnir-node/src/approval.rs`. Downward, Binary → Productization, exactly as (x) is | `dependency_graph.rs` lists it among the recorded edges; `gungnir-node/tests/approval_queue.rs` drives it |
+| (y) `gungnir-node` → `gungnir-command` | The queue itself, its deadlines and the append-only record, whose types the node names: `PendingApprovalId` on the wire, `OperatorDecision` from a person's choice, and the history that says what became of an item. `gungnir-approval` re-exports none of it, and a node that reached the queue only through the desk could not answer `409 AlreadyDecided` from the record (DN-31 §6.3) | `dependency_graph.rs`; `ARCHITECTURE.md` §7's `gungnir-node` row |
+
+**What (k) and (l) deliberately did not bring, and why it arrives now.** Those two edges
+brought the policy chain to the node in GAP-028 and left out "a queue (a decision is a
+person's act, nobody signs in to a node ...) and the authority engine (it asks who is
+asking)". Both objections have answers rather than exceptions. GAP-057 closed the first:
+every node route verifies an operator token carrying a role, so a person does sign in to
+decide, and the queue lives on the node *loop* rather than in a request handler, which is
+the sensor-tasking route's own precedent. DN-31 §6.1 answers the second without inventing a
+role for the node: the authority engine is run for **every** role on the escalation ladder
+and the item is offered to the lowest one that holds authority, which is also GAP-113's
+"somewhere to go" for a plan the asking role may not accept.
+
+**No further edge.** The node already reaches `gungnir-policy` (k), `gungnir-geo` (l),
+`gungnir-security`, `gungnir-config`, `gungnir-eventing`, `gungnir-model` and
+`gungnir-remote` (p), so nothing new is needed for the chain, the roles, the baseline, the
+bus or the handoff transport. `gungnir-approval` still reaches no transport: the node
+implements `HandoffTransport` with `gungnir-remote`'s endpoint client, through its own
+edge (p), which is the arrangement §17 records for the desktop.
+
+**Depth after the change**: `gungnir-node` is a binary and depends on everything above it,
+so the graph gains no depth. It gains two edges and no crate.
 
 ## Traceability
 

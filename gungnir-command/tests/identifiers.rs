@@ -17,7 +17,8 @@
 //! millisecond are distinct and not ordered, which is what DN-31 §5.1 claims and no more.
 
 use gungnir_command::{
-    ApprovalWorkflow, InMemoryApprovalWorkflow, OperatorDecision, PendingApprovalId, Submission,
+    ApprovalWorkflow, DecidedBy, InMemoryApprovalWorkflow, OperatorDecision, PendingApprovalId,
+    Submission,
 };
 use gungnir_model::{DecisionId, DecisionSettings, EffectorLayer, MissionTime, PlanId, PlanView};
 use gungnir_policy::PolicyVerdict;
@@ -76,8 +77,7 @@ fn separate_workflows_standing_in_for_machines_and_a_restart_never_mint_the_same
                     .decide(
                         item,
                         OperatorDecision::Accepted,
-                        Some("7".into()),
-                        Some("Operator".into()),
+                        DecidedBy::session(Some("7".into()), Some("Operator".into())),
                         MissionTime(at),
                     )
                     .expect("decided");

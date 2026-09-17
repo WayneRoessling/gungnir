@@ -213,6 +213,8 @@ mod tests {
             role: role.map(str::to_string),
             verdict: gungnir_model::events::VerdictSummary::RequiresHumanApproval,
             rationale: None,
+            request: None,
+            origin: None,
         })
     }
 

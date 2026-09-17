@@ -108,6 +108,7 @@ class "SystemHealth" as SystemHealth <<InformationElement>> {
 }
 enum "ModelError" as ModelError <<InformationElement>> {
   SchemaVersion { expected: u32, found: u32 }
+  Invalid(String)
 }
 enum "AssetExtent\n(see If-Sr-assets-exchange-releasability)" as AssetExtent <<External>> #line.dashed {
 }

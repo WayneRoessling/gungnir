@@ -50,6 +50,9 @@ enum "HandoffError" as HandoffError <<InformationElement>> {
 class "DecisionId" as DecisionId <<InformationElement>> {
   pub u128
 }
+class "PendingApprovalId" as PendingApprovalId <<InformationElement>> {
+  pub u128
+}
 enum "PlanKind" as PlanKind <<InformationElement>> {
   Intercept { solutions: Vec<InterceptSolutionView>, }
   Fires(Box<FiresPlan>)

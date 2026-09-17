@@ -133,7 +133,7 @@ The paths are `/v3` since 2026-09-17 (the "Version 3" section above); they were 
 |---|---|---|---|---|
 | `POST /v3/session` | `SessionRequest { operator, passphrase }` | `SessionResponse { token, expires_s }` | none: this is what establishes identity | Yes (GAP-057) |
 | `GET /v3/session` | none | `SessionStatus { operator, role, expires_s }` | a valid token | Yes (GAP-057) |
-| `GET /v3/snapshot` | none | `SnapshotResponse { schema_version, tracks, plan, health, requirements, bearing_rays, pipeline_stats }` | `picture.view` | Yes (GAP-041); `bearing_rays`/`pipeline_stats` GAP-096 |
+| `GET /v3/snapshot` | none | `SnapshotResponse { schema_version, tracks, plan, health, requirements, bearing_rays, pipeline_stats, queue }` | `picture.view` | Yes (GAP-041); `bearing_rays`/`pipeline_stats` GAP-096; `queue` GAP-132 |
 | `GET /v3/events` (WebSocket) | `SubscribeRequest { from_seq }` as the first frame | A stream of `EventFrame` (`gungnir_eventing::Envelope`) with `seq >= from_seq`, in order | `picture.view` | Yes (GAP-041) |
 | `GET /v3/history?since_seq=N` | none | `HistoryResponse`: the retained envelopes from `N`, or `410` when the window has moved past `N` | `picture.view` | Yes (GAP-050) |
 | `GET /v3/health` | none | `SystemHealth` | `picture.view` | Yes (GAP-041) |
@@ -144,7 +144,9 @@ The paths are `/v3` since 2026-09-17 (the "Version 3" section above); they were 
 | `POST /v3/warnings/{asset_id}/{track_id}/acknowledge` | `WarningAcknowledgementRequest { at }` | `202`: queued, and `WarningEvent::Acknowledged` appears on the stream | a warned party's certificate, or `warning.acknowledge` | Yes (GAP-042) |
 | `GET /v3/exchange/{warnings,reports,handoffs}` | none | `ExchangeResponse`: `Held` with the products both of DN-18 §5's gates release and the count withheld, or `NotHeld` with a reason | a party's agreement, or `picture.view` | Yes (GAP-065) |
 | `POST /v3/exchange/{warnings,reports,handoffs}` | `PublishExchangeRequest { products }` | `202`: the node's held set for that item is replaced | `exchange.publish` | Yes (GAP-065) |
-| `POST /v3/plans/{plan_id}/decision` | `ApprovalRequest { plan, accepted, operator }` | `204`; a `CommandEvent::Decided` appears on the stream | `plan.decide` (or `plan.override`) | **No: `501`, because a node runs no approval queue** (GAP-132 replaces it with DN-31 §7's queue routes) |
+| `GET /v3/queue` | none | `Vec<QueueItemView>`: what this node is waiting for a person to decide, ordered by time remaining then priority (DN-10 §5) | `picture.view` | Yes (GAP-132) |
+| `POST /v3/queue/{item}/decision` | `DecisionRequest { request, item, choice }`; the item as the hyphenated UUID or a decimal number | `201 DecisionRecorded { decision }`, and `CommandEvent::Decided` appears on the stream; `400` for an undecodable body, a mismatched item or a rejection with no reason; `401`; `403` naming the role and the action, or the roles the item is offered to; `409 DecisionRefused` naming the decision that stands or the expiry; `504` if the node loop does not answer, **which does not mean nothing was recorded** | `plan.decide`, or `plan.override` for an override | Yes (GAP-132) |
+| `POST /v3/plans/{plan_id}/decision` | -- | **Not served.** A decision is taken on a queue item, not on a plan | -- | Not part of `/v3` (GAP-132) |
 | Every `/v2` path above | anything | `410 Gone` naming its `/v3` successor, after authenticating the caller as the successor does | the successor's authentication, nothing more | Yes (GAP-130) |
 
 **Authentication landed the same day (GAP-057, DN-23 §6).** Every route but
@@ -155,11 +157,25 @@ believed**: the caller is whoever the token says. A node with no account store c
 answers `503` on every route, saying it authenticates nobody -- which is the default
 deployment, and better than serving the picture to anyone who asks.
 
-**Why one write path still refuses.** `POST /v3/plans/{plan_id}/decision` returns `501`
-because **a node runs no approval queue**: plans are routed through the policy chain and
-the queue on a desktop, and a node publishes `PlanProposed` and stops. Serving it would
-mean inventing a queue in a request handler. That is a different reason from the one below,
-which applied before there was any authentication at all.
+**Why the decision route moved from the plan to the queue item (2026-09-17, GAP-132).**
+`POST /v3/plans/{plan_id}/decision` returned `501` because a node ran no approval queue:
+plans were routed through the policy chain and the queue on a desktop, and a node published
+`PlanProposed` and stopped. D-55 gave the node the queue, so that reason stopped being
+true, and DN-31 §7 keys the decision on the queue item -- which is what carries the
+deadline, the roles it is offered to and the escalation, none of which a plan identifier
+names. **`/v3` serves no plan-keyed decision route at all**: a second door would put
+§6.3's four pre-decision checks in two places. The retired `/v2` route therefore names
+`/v3/queue/{item}/decision` as its successor rather than its own path under `/v3`, which is
+the one place in the retired table where the successor is not the caller's own path -- a
+plan identifier cannot be rewritten into a queue item's.
+
+**The queue routes do not decide anything themselves.** The queue lives on the node loop,
+and the decision route hands its request over and waits for the loop's answer, exactly as
+`POST /v3/sensors/{sensor_id}/task` hands a command over. One loop taking requests in
+arrival order is what makes "the first valid decision wins" a property of the design
+rather than the outcome of a race. A `504` means the loop did not answer in the window,
+**not that nothing was recorded**: the client retries with the same `request` key and is
+told which decision its request produced.
 
 **Why the write paths refused before 2026-09-05.** The authentication section above says every
 request carries a credential that `gungnir_security::Authenticator` resolves to an
@@ -168,9 +184,12 @@ implementation** -- nothing in the workspace turns a credential into an identity
 authorization half is real (`Authorizer`, `role_permits`, the action names); the
 authenticating half is a trait and a comment saying the mechanism is not yet chosen, which
 D-02 has since chosen: operator tokens are GAP-057 and machine identity is GAP-060. Since
-`ApprovalRequest` names its own operator in the body, serving it would let any caller
-accept a plan as anybody. Both routes exist and return `501` with that reason, rather than
-`404`, which would wrongly say they are not part of v2.
+`ApprovalRequest` named its own operator in the body, serving it would have let any caller
+accept a plan as anybody. Both routes existed and returned `501` with that reason, rather
+than `404`, which would have wrongly said they were not part of v2. **The decision route's
+successor names no operator in its body at all** (`DecisionRequest`, GAP-132): the caller
+is whoever the token says. `ApprovalRequest` itself is now reachable from no route and is
+named only by the unimplemented `ApiHandler` trait (GAP-138).
 
 **Why only loopback is served.** There is no TLS (GAP-060, which waits on GAP-084's key
 custody), so `gungnir_api::transport::serve` refuses any bind address that is not

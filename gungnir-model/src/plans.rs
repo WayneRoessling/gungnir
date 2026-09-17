@@ -72,6 +72,130 @@ impl std::str::FromStr for DecisionId {
     }
 }
 
+/// Identifies one item in an approval queue.
+///
+/// `gungnir-command` mints it in `submit_for_approval`, and re-exports this type rather
+/// than declaring its own. **It moved here from `gungnir-command` in GAP-132**, for the
+/// reason [`DecisionId`] is here rather than there: `CommandEvent::Queued` names the item
+/// a node queued, and the model may not depend on the crate that holds the queue
+/// (`docs/design/DN-31-node-approval-queue.md` §5.3). Nothing about the type changed --
+/// the same `u128`, the same written form, the same tag -- so no journal, payload or
+/// fixture reads differently.
+///
+/// **A UUID v7 since GAP-130** (D-56): it was a counter restarting at 1 in every
+/// workflow, and DN-31 puts queue items from a node and from a cut-off desktop on the
+/// same record. Written as the hyphenated UUID and read from that or a pre-change number
+/// (D-60); shown by [`PendingApprovalId::short`] on screen and in full everywhere else
+/// (D-61).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PendingApprovalId(pub u128);
+
+impl serde::Serialize for PendingApprovalId {
+    /// The hyphenated UUID string (D-60).
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::identifier::wire::serialize(&self.0, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PendingApprovalId {
+    /// That string, or the number a pre-change journal holds (D-60).
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        crate::identifier::wire::deserialize(deserializer).map(Self)
+    }
+}
+
+impl PendingApprovalId {
+    /// The on-screen tag, `…9f3a61c2` (D-61): for a panel or an alert, never a record.
+    #[must_use]
+    pub fn short(self) -> String {
+        crate::identifier::short(self.0)
+    }
+}
+
+impl std::fmt::Display for PendingApprovalId {
+    /// The whole identifier, for an audit entry and a log field (D-61).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        crate::identifier::fmt_full(self.0, f)
+    }
+}
+
+impl std::str::FromStr for PendingApprovalId {
+    type Err = crate::identifier::IdentifierError;
+
+    /// The hyphenated UUID, or a pre-change decimal number (D-60).
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        crate::identifier::parse(text).map(Self)
+    }
+}
+
+/// A client's idempotency key for one decision (DN-31 §5.2).
+///
+/// **Chosen by the client, not minted here**, which is why it is not a UUID under D-60:
+/// its whole purpose is that a client which did not hear the answer can ask the same
+/// question again and be told the first outcome rather than take a second decision. A
+/// node compares it for equality and journals it beside the decision; it never orders by
+/// it, parses meaning out of it, or shows it to anybody.
+///
+/// Bounded and non-empty, because it is untrusted text that reaches an append-only
+/// record: an empty key would make two unrelated requests the same request, and an
+/// unbounded one would let a caller decide how much of the node's record it writes.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize)]
+pub struct RequestId(String);
+
+/// The longest request key a node accepts. A UUID is 36 characters; this leaves room for
+/// a client that names its own console and sequence as well.
+pub const REQUEST_ID_MAX_LEN: usize = 128;
+
+impl RequestId {
+    /// Read a client's key.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::ModelError`] when the key is empty, longer than
+    /// [`REQUEST_ID_MAX_LEN`], or holds a control character -- text that would reach a
+    /// log line or an audit entry and not read back as what was sent.
+    pub fn new(text: impl Into<String>) -> Result<Self, crate::ModelError> {
+        let text = text.into();
+        if text.is_empty() {
+            return Err(crate::ModelError::Invalid(
+                "a decision's request key is empty; two requests with no key would be one \
+                 request"
+                    .into(),
+            ));
+        }
+        if text.chars().count() > REQUEST_ID_MAX_LEN {
+            return Err(crate::ModelError::Invalid(format!(
+                "a decision's request key is longer than {REQUEST_ID_MAX_LEN} characters"
+            )));
+        }
+        if text.chars().any(char::is_control) {
+            return Err(crate::ModelError::Invalid(
+                "a decision's request key holds a control character".into(),
+            ));
+        }
+        Ok(Self(text))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for RequestId {
+    /// Validated on the way in, so nothing downstream holds a key this node would refuse.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        Self::new(text).map_err(serde::de::Error::custom)
+    }
+}
+
+impl std::fmt::Display for RequestId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// What a plan proposes. `Intercept` is the behaviour that existed before fires.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]

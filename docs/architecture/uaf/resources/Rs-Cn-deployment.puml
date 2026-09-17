@@ -10,6 +10,8 @@ package "Deployment" {
 }
 component "analytics\n(see Rs-Cn-understand-maintain-the-picture)" as RS_analytics <<External>> #line.dashed
 component "api\n(see Rs-Cn-secure-operate-sustain)" as RS_api <<External>> #line.dashed
+component "approval\n(see Rs-Cn-assess-decide-govern-action)" as RS_approval <<External>> #line.dashed
+component "command\n(see Rs-Cn-assess-decide-govern-action)" as RS_command <<External>> #line.dashed
 component "config\n(see Rs-Cn-foundational)" as RS_config <<External>> #line.dashed
 component "eventing\n(see Rs-Cn-foundational)" as RS_eventing <<External>> #line.dashed
 component "geo\n(see Rs-Cn-understand-maintain-the-picture)" as RS_geo <<External>> #line.dashed
@@ -43,6 +45,8 @@ RS_node --> RS_modelops
 RS_node --> RS_identity
 RS_node --> RS_policy
 RS_node --> RS_geo
+RS_node --> RS_approval
+RS_node --> RS_command
 RS_node --> RS_analytics
 RS_node --> RS_observability
 RS_remote --> RS_security

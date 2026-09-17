@@ -63,8 +63,9 @@ enum "RequirementEvent" as RequirementEvent <<InformationElement>> {
   Lapsed { requirement: RequirementId, at: MissionTime, }
 }
 enum "CommandEvent" as CommandEvent <<InformationElement>> {
-  Decided { plan: PlanId, decision: DecisionId, accepted: bool, operator: Option<String>, role: Option<String>, verdict: VerdictSummary, rationale: Option<String>, }
+  Decided { plan: PlanId, decision: DecisionId, accepted: bool, operator: Option<String>, role: Option<String>, verdict: VerdictSummary, rationale: Option<String>, request: Option<RequestId>, origin: Option<String>, }
   Expired { plan: PlanId, at: MissionTime }
+  Queued { item: PendingApprovalId, plan: PlanId, layer: EffectorLayer, offered_to: Vec<String>, expires_at: Option<MissionTime>, escalate_at: Option<MissionTime>, }
   Escalated { plan: PlanId, to_role: String, at: MissionTime, }
 }
 enum "EngagementEvent" as EngagementEvent <<InformationElement>> {
@@ -139,6 +140,8 @@ class "DecisionId\n(see If-Sr-plans-effectors-handoff)" as DecisionId <<External
 }
 class "DetectionView\n(see If-Sr-picture-tracking-vocabulary)" as DetectionView <<External>> #line.dashed {
 }
+enum "EffectorLayer\n(see If-Sr-plans-effectors-handoff)" as EffectorLayer <<External>> #line.dashed {
+}
 enum "EffectorReport\n(see If-Sr-plans-effectors-handoff)" as EffectorReport <<External>> #line.dashed {
 }
 class "GlobalEntityId\n(see If-Sr-core-identifiers-frames-quality)" as GlobalEntityId <<External>> #line.dashed {
@@ -150,6 +153,8 @@ class "MissionProfile\n(see If-Sr-core-identifiers-frames-quality)" as MissionPr
 class "MissionTime\n(see If-Sr-core-identifiers-frames-quality)" as MissionTime <<External>> #line.dashed {
 }
 class "PeerLaunchWarning\n(see If-Sr-assets-exchange-releasability)" as PeerLaunchWarning <<External>> #line.dashed {
+}
+class "PendingApprovalId\n(see If-Sr-plans-effectors-handoff)" as PendingApprovalId <<External>> #line.dashed {
 }
 class "PlanId\n(see If-Sr-picture-tracking-vocabulary)" as PlanId <<External>> #line.dashed {
 }
@@ -197,8 +202,10 @@ RequirementEvent --> MissionTime : Stated, Tasked, Declined, Satisfied, Lapsed
 RequirementEvent --> RequirementId : Tasked, Declined, Satisfied, Lapsed
 RequirementEvent --> SensorTaskId : Tasked
 CommandEvent --> DecisionId : Decided
-CommandEvent --> MissionTime : Expired, Escalated
-CommandEvent --> PlanId : Decided, Expired, Escalated
+CommandEvent --> EffectorLayer : Queued
+CommandEvent --> MissionTime : Expired, Queued, Escalated
+CommandEvent --> PendingApprovalId : Queued
+CommandEvent --> PlanId : Decided, Expired, Queued, Escalated
 CommandEvent --> VerdictSummary : Decided
 EngagementEvent --> DecisionId : Opened, Executing, Closed
 EngagementEvent --> MissionTime : Executing, Closed

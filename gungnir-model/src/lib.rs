@@ -113,7 +113,8 @@ pub use handoff::{
 };
 pub use laydown::{Laydown, LaydownId, ResourcePlacement, SensorPlacement, TestTrackNumber};
 pub use plans::{
-    DecisionId, DeconflictionCheck, DeconflictionKind, DeconflictionResult, FiresPlan, PlanKind,
+    DecisionId, DeconflictionCheck, DeconflictionKind, DeconflictionResult, FiresPlan,
+    PendingApprovalId, PlanKind, RequestId, REQUEST_ID_MAX_LEN,
 };
 pub use policy_settings::{
     AuthorityRule, AuthoritySettings, ControlStatusSettings, DecisionSettings, FiresSettings,
@@ -748,6 +749,11 @@ impl SystemHealth {
 pub enum ModelError {
     #[error("schema version mismatch: expected {expected}, found {found}")]
     SchemaVersion { expected: u32, found: u32 },
+    /// A value the caller supplied is not one this model will hold, and why
+    /// ([`RequestId::new`], GAP-132). Refused at the boundary rather than stored and
+    /// found later, because these values reach an append-only record.
+    #[error("{0}")]
+    Invalid(String),
 }
 
 /// Reject data written by a different schema version.

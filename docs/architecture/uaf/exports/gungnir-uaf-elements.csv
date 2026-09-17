@@ -342,6 +342,7 @@ IE-model-error,Information Elements,InformationElement,ModelError,Why data offer
 IE-operational-risk,Information Elements,InformationElement,OperationalRisk,"I129/120 Operational Risk Levels (edition 1.2 \u00a75.2.12), decoded from the one octet the specification describes -- see gungnir_interop::asterix::cat129's module documentation for the document's own contradiction over the item's length and why one octet is the reading this build follows (the owner's review, 2026-09-09).",Class
 IE-peer-launch-warning,Information Elements,InformationElement,PeerLaunchWarning,"A launch warning as this deployment received it from a peer (DN-16 \u00a75, GAP-009).",Class
 IE-peer-origin,Information Elements,InformationElement,PeerOrigin,Where a peer-sourced track came from and how far behind it is.,Class
+IE-pending-approval-id,Information Elements,InformationElement,PendingApprovalId,Identifies one item in an approval queue.,Class
 IE-pipeline-stats-view,Information Elements,InformationElement,PipelineStatsView,"The pipeline's own counters, for a caller across a process boundary (GAP-096's wire contract): how many bearings were offered, updated a track, were retained, expired, or were refused, alongside the wider counters they sit next to on gungnir_fusion_async::PipelineStats.",Class
 IE-plan-id,Information Elements,InformationElement,PlanId,Identifier of one plan produced by the intercept service.,Class
 IE-plan-kind,Information Elements,InformationElement,PlanKind,What a plan proposes. Intercept is the behaviour that existed before fires.,Class
