@@ -115,7 +115,7 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-intercept-service` | `core`, `coord`, `allocation`, `model` |
 | `gungnir-data-fusion` | `data` |
 | `gungnir-remote` | `model`, `eventing`, `api`, `tracking-service`, `intercept-service`, `security` (t) |
-| `gungnir-node` | `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `sensor-management`, `tracking-service`, `intercept-service`, `api`, `analytics` (g), `security`, `observability`, `modelops` (h), `policy` (k), `geo` (l), `remote` (p), `identity` (s) |
+| `gungnir-node` | `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `sensor-management`, `tracking-service`, `intercept-service`, `api`, `analytics` (g), `security`, `observability`, `modelops` (h), `policy` (k), `geo` (l), `remote` (p), `identity` (s), `approval` (y), `command` (y) |
 | `gungnir-ui` | `model` |
 | `gungnir-viewport3d` | `data`, `data-fusion`, `model`, `ui` (theme only) |
 | `gungnir-app` | Both facades, `remote`, `data`, `data-fusion`, `render`, `viewport3d`, `ui`, `workflow`, `security`, `policy`, `command`, `geo`, `replay`, `reporting`, `analytics`, `sensor-management`, `assessment`, `modelops` (h), `decision` (i), `resilience` (m), `identification` (n), `identity` (o), `coord` (u), `approval` (x), `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `observability` |
@@ -435,7 +435,20 @@ edge in the graph are checked by `gungnir-app/tests/dependency_graph.rs` on ever
   act, nobody signs in to a node, and DN-23 §4 left the question open) and the authority
   engine (it asks who is asking). Downward from the binary; both crates are
   productization; acyclic. Review: accepted by the owner 2026-09-06
-  (`dependency-edges.md` §7a).
+  (`dependency-edges.md` §7a). **Both of those two now arrive**, with edge (y) below.
+- **(y) `gungnir-node` ──► `gungnir-approval` and `gungnir-node` ──► `gungnir-command`**
+  (2026-09-17, GAP-132, D-55 and D-57). The node holds the approval queue for the desktops
+  linked to it: it proposes a plan, runs the whole chain for every role on the escalation
+  ladder, offers the item to the lowest role that may take it, sweeps expiry and escalation
+  on its own clock, and serves `GET /v3/queue` and `POST /v3/queue/{item}/decision` through
+  its loop (`docs/design/DN-31-node-approval-queue.md` §6). It runs the decision path
+  rather than holding a second copy of the safety rules, which is what D-55 refused, so
+  (y) is the binary reaching the crate (x) already reaches; `gungnir-command` is the queue,
+  its deadlines and the append-only record, whose types the node names. Downward from the
+  binary into productization and acyclic, as (k) and (l) are. This is what those two
+  "deliberately did not bring": the queue, and the authority engine's asking role --
+  answered not by inventing a role for the node but by asking about every role on the
+  ladder. Recorded in `docs/design/dependency-edges.md` §17.
 - **(r) `gungnir-fusion-async` ──► `gungnir-core`, `gungnir-filters` and
   `gungnir-association`** (2026-09-06, GAP-011). The out-of-sequence pipeline predicts
   a track to a measurement's time, gates the measurement, assigns, and updates. Those
@@ -478,8 +491,8 @@ edge in the graph are checked by `gungnir-app/tests/dependency_graph.rs` on ever
   would put a productization crate on the client transport -- delivery goes through a trait
   each binary implements -- and growing `gungnir-command` instead, which would take the
   human-owned queue crate into engagement, configuration and security code. **The node's
-  edge (y) is GAP-132's** and is not drawn until a manifest carries it
-  (`docs/design/dependency-edges.md` §17).
+  edge (y) landed with GAP-132**, in the change that put it in a manifest; it is drawn
+  above (`docs/design/dependency-edges.md` §17).
 - **(q) `gungnir-ml` ──► `gungnir-model` and `gungnir-interop`** (2026-09-06, GAP-077,
   GAP-079). The crate `docs/ml/architecture.md` §1 drew as `gungnir-model ──► gungnir-ml`
   exists: the `Model` and `FeatureExtractor` traits, a fake for the consumers' tests,

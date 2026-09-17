@@ -76,7 +76,12 @@ pub fn escalation_ladder() -> Vec<String> {
 pub fn ladder_roles() -> Vec<Role> {
     escalation_ladder()
         .iter()
-        .filter_map(|name| Role::ALL.iter().copied().find(|r| &format!("{r:?}") == name))
+        .filter_map(|name| {
+            Role::ALL
+                .iter()
+                .copied()
+                .find(|r| &format!("{r:?}") == name)
+        })
         .collect()
 }
 

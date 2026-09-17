@@ -3631,6 +3631,8 @@ dependencies = [
  "criterion",
  "gungnir-analytics",
  "gungnir-api",
+ "gungnir-approval",
+ "gungnir-command",
  "gungnir-config",
  "gungnir-eventing",
  "gungnir-geo",

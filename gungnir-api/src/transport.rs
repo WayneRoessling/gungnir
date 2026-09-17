@@ -23,17 +23,35 @@
 //! and says so. That is a deployment with no account store, which is the default: it
 //! runs its pipeline, journals it, and serves nobody.
 //!
-//! **`POST /v3/detections` is served; `POST /v3/plans/{plan_id}/decision` is not**, and
-//! for a different reason than before. A submitted detection is queued for the ingest
-//! gateway, which authenticates and validates it exactly as it does a sensor's -- see
-//! [`NodeApi::submit_detection`]. A plan decision has nothing to decide against: **this
-//! node runs no approval queue.** The desktop routes plans through the policy chain and
-//! the queue (GAP-038); a node publishes `PlanProposed` and stops. Serving the route
-//! would mean inventing a queue here, so it returns `501` naming that, which is now the
-//! true reason rather than the authentication one.
+//! **`POST /v3/detections` is served, and so is the decision route** -- which until
+//! GAP-132 was the one write path that refused. A submitted detection is queued for the
+//! ingest gateway, which authenticates and validates it exactly as it does a sensor's --
+//! see [`NodeApi::submit_detection`].
 //!
-//! Routing a refused endpoint rather than leaving it absent is deliberate: a `404` would
-//! tell a client the endpoint is not part of the contract, which is false.
+//! # The queue, and why its routes wait for the loop
+//!
+//! D-55 gave the node the approval queue for the desktops linked to it, so
+//! `GET /v3/queue` serves what is waiting and `POST /v3/queue/{item}/decision` takes a
+//! person's decision on one item. **Neither decides anything here.** The queue lives on
+//! the node loop, and the decision route hands its request over through
+//! [`PendingDecision`] and waits for the loop's answer, exactly as the sensor-tasking
+//! route hands a command over: one loop taking requests in arrival order is what makes
+//! "the first valid decision wins" a property of the design rather than the outcome of a
+//! race (`docs/design/DN-31-node-approval-queue.md` §3). A queue invented in a request
+//! handler would put the recommend-versus-act boundary in the transport, which is the
+//! sentence this module carried while the route refused.
+//!
+//! The route does answer four questions of its own before the loop sees anything, because
+//! each is about the caller rather than about the queue: the token, the permission, whether
+//! the item is offered to that role, and whether a rejection says why (§6.3). Each refusal
+//! is recorded for the loop to audit, so the node's record holds one entry per decision and
+//! per refusal alike.
+//!
+//! **There is no `/v3/plans/{plan_id}/decision`**: a decision is taken on the queue item,
+//! which is what carries the deadline and the roles it is offered to, and a plan-keyed door
+//! beside it would be a second place those four checks could differ. The retired `/v2` one
+//! names the queue route as its successor rather than its own path, which is the one place
+//! a retired route's successor is not simply the same path under `/v3`.
 //!
 //! # What the outside world may say back, and what it may be sent
 //!
@@ -575,12 +593,13 @@ impl NodeApi {
     /// request: the caller has already been refused correctly, and turning a refusal into
     /// a `500` would tell them the opposite of what happened.
     pub fn refuse_decision(&self, refusal: RefusedDecision) {
-        match self.refusals.lock() {
-            Ok(mut queue) => queue.push(refusal),
-            Err(_) => tracing::error!(
+        if let Ok(mut queue) = self.refusals.lock() {
+            queue.push(refusal);
+        } else {
+            tracing::error!(
                 ?refusal,
                 "the refusal queue lock was poisoned; this refusal reaches no audit entry"
-            ),
+            );
         }
     }
 
@@ -2011,6 +2030,108 @@ fn serve_exchange(
     }
 }
 
+/// Why a decision request was refused before the loop saw it: the status, the item it
+/// named if it named a readable one, and the sentence the caller and the audit entry both
+/// get.
+type DecisionRefusal = (StatusCode, Option<gungnir_model::PendingApprovalId>, String);
+
+/// Checks 2 to 4 of DN-31 §6.3's table, and the decoding either side of them.
+///
+/// Separated from [`decide_queued`] so the list reads as a list. Every arm returns the
+/// same three things, because every refusal here owes the caller an answer *and* the
+/// node's record an entry saying the same words (§9 row 4).
+///
+/// # Errors
+///
+/// The refusal, which the caller turns into both.
+fn vet_decision(
+    api: &NodeApi,
+    session: &OperatorSession,
+    item: &Result<
+        axum::extract::Path<gungnir_model::PendingApprovalId>,
+        axum::extract::rejection::PathRejection,
+    >,
+    body: Result<Json<v3::DecisionRequest>, axum::extract::rejection::JsonRejection>,
+) -> Result<(gungnir_model::PendingApprovalId, v3::DecisionRequest), DecisionRefusal> {
+    let Ok(axum::extract::Path(item)) = *item else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            None,
+            "the queue item in the path is neither a hyphenated identifier nor a decimal \
+             number (D-60)"
+                .into(),
+        ));
+    };
+    let Ok(Json(request)) = body else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Some(item),
+            "the decision could not be decoded".into(),
+        ));
+    };
+    if request.item != item {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Some(item),
+            format!(
+                "the decision names item {} and the path names {item}; a body meant for one \
+                 item is not applied to another",
+                request.item
+            ),
+        ));
+    }
+    // 2. The permission, and the stricter one for an override.
+    let action = match request.choice {
+        v3::DecisionChoice::Override => gungnir_security::actions::OVERRIDE_PLAN,
+        v3::DecisionChoice::Accept | v3::DecisionChoice::Reject { .. } => {
+            gungnir_security::actions::DECIDE_PLAN
+        }
+    };
+    if !gungnir_security::authz::role_permits(session.role, action) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Some(item),
+            format!(
+                "role {:?} may not take this decision ({action})",
+                session.role
+            ),
+        ));
+    }
+    // 3. Whether this item is offered to that role. Answered from the queue the loop last
+    // published: a role the item was never offered to is refused at the door rather than
+    // occupying the loop, and an item the published queue does not hold goes to the loop,
+    // which is the only place that can say whether it was decided, expired or never
+    // issued.
+    let role_name = format!("{:?}", session.role);
+    if let Some(row) = api.queue().into_iter().find(|row| row.item == item) {
+        if !row.offered_to.contains(&role_name) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Some(item),
+                format!(
+                    "item {item} is offered to {:?} and not to {role_name}",
+                    row.offered_to
+                ),
+            ));
+        }
+    }
+    // 4. A rejection says why (DN-10 §3): MOE-01 tells a considered rejection from an
+    // abandoned decision by the reason alone, so an empty one is refused rather than
+    // recorded as a blank.
+    if let v3::DecisionChoice::Reject { reason } = &request.choice {
+        if reason.trim().is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Some(item),
+                "a rejection carries a reason; an empty one is refused rather than recorded \
+                 as a blank (DN-10 §3)"
+                    .into(),
+            ));
+        }
+    }
+    Ok((item, request))
+}
+
 /// How long the decision route waits for the node loop to take a decision.
 ///
 /// The same bound the sensor-task route uses and for the same reason: the loop ticks far
@@ -2068,6 +2189,10 @@ async fn queue(
 ///
 /// Every refusal above is queued for the loop to audit, because the audit log is the
 /// loop's and DN-31 §9 row 4 wants exactly one entry per decision *and per refusal*.
+///
+/// Checks 2 to 4 and the decoding are [`vet_decision`], so that what this function shows
+/// is the shape of the route -- authenticate, vet, hand over, wait -- and the checks are
+/// read as one list in the order DN-31 §6.3's table gives them.
 async fn decide_queued(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
@@ -2093,90 +2218,17 @@ async fn decide_queued(
         }
     };
     let operator = session.operator.0.to_string();
-    let refuse = |status: StatusCode, item: Option<gungnir_model::PendingApprovalId>, why: String| {
-        api.refuse_decision(RefusedDecision {
-            item,
-            operator: operator.clone(),
-            reason: why.clone(),
-        });
-        problem(status, &why)
-    };
-    let Ok(axum::extract::Path(item)) = item else {
-        return refuse(
-            StatusCode::BAD_REQUEST,
-            None,
-            "the queue item in the path is neither a hyphenated identifier nor a decimal \
-             number (D-60)"
-                .into(),
-        );
-    };
-    let Ok(Json(request)) = body else {
-        return refuse(
-            StatusCode::BAD_REQUEST,
-            Some(item),
-            "the decision could not be decoded".into(),
-        );
-    };
-    if request.item != item {
-        return refuse(
-            StatusCode::BAD_REQUEST,
-            Some(item),
-            format!(
-                "the decision names item {} and the path names {item}; a body meant for one \
-                 item is not applied to another",
-                request.item
-            ),
-        );
-    }
-    // 2. The permission, and the stricter one for an override.
-    let action = match request.choice {
-        v3::DecisionChoice::Override => gungnir_security::actions::OVERRIDE_PLAN,
-        v3::DecisionChoice::Accept | v3::DecisionChoice::Reject { .. } => {
-            gungnir_security::actions::DECIDE_PLAN
+    let (item, request) = match vet_decision(&api, &session, &item, body) {
+        Ok(vetted) => vetted,
+        Err((status, item, why)) => {
+            api.refuse_decision(RefusedDecision {
+                item,
+                operator,
+                reason: why.clone(),
+            });
+            return problem(status, &why);
         }
     };
-    if !gungnir_security::authz::role_permits(session.role, action) {
-        return refuse(
-            StatusCode::FORBIDDEN,
-            Some(item),
-            format!(
-                "role {:?} may not take this decision ({action})",
-                session.role
-            ),
-        );
-    }
-    // 3. Whether this item is offered to that role. Answered from the queue the loop last
-    // published: a role the item was never offered to is refused at the door rather than
-    // occupying the loop, and an item the published queue does not hold goes to the loop,
-    // which is the only place that can say whether it was decided, expired or never
-    // issued.
-    let role_name = format!("{:?}", session.role);
-    if let Some(row) = api.queue().into_iter().find(|row| row.item == item) {
-        if !row.offered_to.iter().any(|r| *r == role_name) {
-            return refuse(
-                StatusCode::FORBIDDEN,
-                Some(item),
-                format!(
-                    "item {item} is offered to {:?} and not to {role_name}",
-                    row.offered_to
-                ),
-            );
-        }
-    }
-    // 4. A rejection says why (DN-10 §3): MOE-01 tells a considered rejection from an
-    // abandoned decision by the reason alone, so an empty one is refused rather than
-    // recorded as a blank.
-    if let v3::DecisionChoice::Reject { reason } = &request.choice {
-        if reason.trim().is_empty() {
-            return refuse(
-                StatusCode::BAD_REQUEST,
-                Some(item),
-                "a rejection carries a reason; an empty one is refused rather than recorded \
-                 as a blank (DN-10 §3)"
-                    .into(),
-            );
-        }
-    }
     let (reply, answer) = tokio::sync::oneshot::channel();
     {
         let Ok(mut queue) = api.decisions.lock() else {
@@ -2195,11 +2247,9 @@ async fn decide_queued(
         });
     }
     match tokio::time::timeout(DECISION_REPLY_TIMEOUT, answer).await {
-        Ok(Ok(DecisionAnswer::Recorded(decision))) => (
-            StatusCode::CREATED,
-            Json(v3::DecisionRecorded { decision }),
-            )
-            .into_response(),
+        Ok(Ok(DecisionAnswer::Recorded(decision))) => {
+            (StatusCode::CREATED, Json(v3::DecisionRecorded { decision })).into_response()
+        }
         Ok(Ok(DecisionAnswer::Refused(refused))) => {
             (StatusCode::CONFLICT, Json(refused)).into_response()
         }
