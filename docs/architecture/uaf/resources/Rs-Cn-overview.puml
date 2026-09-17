@@ -32,6 +32,9 @@ user_interface --> foundation_model
 user_interface --> foundational
 user_interface --> sense_ingest_normalize
 user_interface --> assess_decide_govern_action
+assess_decide_govern_action --> service_facades
+assess_decide_govern_action --> secure_operate_sustain
+assess_decide_govern_action --> foundational
 assess_decide_govern_action --> foundation_model
 secure_operate_sustain --> assess_decide_govern_action
 foundational --> foundation_model
@@ -42,7 +45,6 @@ service_facades --> tracking_core
 service_facades --> foundation_model
 assess_decide_govern_action --> sense_ingest_normalize
 foundation_model --> tracking_core
-assess_decide_govern_action --> foundational
 deployment --> foundation_model
 deployment --> foundational
 deployment --> sense_ingest_normalize

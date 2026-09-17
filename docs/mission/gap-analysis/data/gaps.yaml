@@ -8749,6 +8749,20 @@
     note: >-
       Filed with DN-31: the move is verified with the desktop unchanged before anything
       new rides on it.
+  - date: 2026-09-17
+    status: Closed
+    note: >-
+      Built. `gungnir-approval` holds the policy chain, the queue's feeding and sweep,
+      deciding with engagement opening, the one handoff builder and the delivery
+      schedule; edges (w) and (x) are drawn and recorded
+      (`../../design/dependency-edges.md` §17). The desktop supplies a context and takes
+      the effects through a host trait, and delivery goes over a `HandoffTransport` it
+      implements, so the library never reaches `gungnir-remote`. Behaviour is unchanged:
+      every workspace test passes with its assertions untouched, and
+      `no_execution_without_decision.rs` pins the one builder in its new crate. The
+      escalation ladder's ordering is `gungnir-command`'s. DN-31 §9 rows 2 and 10 are
+      written; what the move found is in
+      `../../record/2026-09-17/decision-path-moved-to-gungnir-approval.md`.
 
 - id: GAP-132
   name: A node runs no approval queue

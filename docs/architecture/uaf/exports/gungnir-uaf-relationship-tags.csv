@@ -544,6 +544,7 @@ REL:uses:RS-app->RS-security,uafRelationship,uses
 REL:uses:RS-app->RS-policy,uafRelationship,uses
 REL:uses:RS-app->RS-command,uafRelationship,uses
 REL:uses:RS-app->RS-geo,uafRelationship,uses
+REL:uses:RS-app->RS-approval,uafRelationship,uses
 REL:uses:RS-app->RS-sensor-management,uafRelationship,uses
 REL:uses:RS-app->RS-analytics,uafRelationship,uses
 REL:uses:RS-app->RS-assessment,uafRelationship,uses
@@ -555,6 +556,13 @@ REL:uses:RS-app->RS-scenario,uafRelationship,uses
 REL:uses:RS-app->RS-scenario,registry.kind,dev
 REL:uses:RS-app->RS-api,uafRelationship,uses
 REL:uses:RS-app->RS-api,registry.kind,dev
+REL:uses:RS-approval->RS-command,uafRelationship,uses
+REL:uses:RS-approval->RS-policy,uafRelationship,uses
+REL:uses:RS-approval->RS-intercept-service,uafRelationship,uses
+REL:uses:RS-approval->RS-security,uafRelationship,uses
+REL:uses:RS-approval->RS-config,uafRelationship,uses
+REL:uses:RS-approval->RS-eventing,uafRelationship,uses
+REL:uses:RS-approval->RS-model,uafRelationship,uses
 REL:uses:RS-assessment->RS-model,uafRelationship,uses
 REL:uses:RS-association->RS-filters,uafRelationship,uses
 REL:uses:RS-association->RS-testkit,uafRelationship,uses

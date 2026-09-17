@@ -100,6 +100,9 @@ one crate can talk to a sensor.
 | `gungnir-app` to `gungnir-identity` | GAP-019, GAP-025 | 2026-09-06 | Yes, as (o) |
 | `gungnir-remote` to `gungnir-interop` | DN-25, GAP-091 | **No: no code yet** | Not yet; §7.1 gains (v) in the change that adds the sink (§16, correcting a collision with the real (s) below -- see §16's own note) |
 | `gungnir-remote` to `gungnir-security` | GAP-060, D-29 | 2026-09-06, with the `identity.rs` move out of `gungnir-node` | Yes, as (t) -- **the entry is dated 2026-09-07; the manifest line is older, see §14** |
+| `gungnir-approval` to command, policy, intercept-service, security, config, eventing, model | DN-31, D-57, GAP-131 | 2026-09-17 | Yes, as (w) (§17) |
+| `gungnir-app` to `gungnir-approval` | DN-31, D-57, GAP-131 | 2026-09-17 | Yes, as (x) (§17) |
+| `gungnir-node` to `gungnir-approval` and to `gungnir-command` | DN-31, D-57 | **No: GAP-132's, no code yet** | Not yet; §7.1 gains (y) in the change that gives the node the queue |
 
 **All five are in manifests and drawn.** The acyclicity check was re-run with the full set
 on 2026-09-05: 154 crate-to-crate edges, no cycle.
@@ -349,6 +352,38 @@ marked `gungnir-collab`'s and `gungnir-mission`'s.
 
 It is recorded here in the same change that adds it to the
 manifest, per §5's rule that the two land together.
+
+## 17. Edges (w) and (x) -- `gungnir-approval` (2026-09-17, GAP-131, D-57)
+
+`gungnir-approval` is a new productization crate holding the decision path both binaries
+run: the policy chain over a plan, the queue's feeding and sweep, deciding with engagement
+opening and **the one handoff builder**, and handoff delivery bookkeeping
+(`DN-31-node-approval-queue.md` §3 and §4). Recorded here in the change that adds both
+edges to a manifest, per §5's rule, with `gungnir-app/tests/dependency_graph.rs` naming
+them.
+
+| Edge | What it is | Evidence |
+|---|---|---|
+| (w) approval → command, policy, intercept-service, security, config, eventing, model | A productization crate reaching six productization crates and the model: the queue and the append-only decision record (`gungnir-command`), the four engines (`gungnir-policy`), the engagement state machine (`gungnir-intercept-service`), role permissions and the audit entry's shape (`gungnir-security`), the baseline the deadlines and the effect windows come from (`gungnir-config`), and the bus every outcome is published on (`gungnir-eventing`). Downward and acyclic: none of the seven depends on a binary or on this crate -- `gungnir-intercept-service` is a facade over core, coord, allocation and model; `gungnir-command` depends on model and policy; `gungnir-policy` on model and geo; `gungnir-security` on no workspace crate at all | `dependency_graph.rs`: `Productization → Productization`, `Productization → Facade` and `Productization → Model` are all downward, acyclic, and the crate is placed in the layer table |
+| (x) `gungnir-app` → `gungnir-approval` | The binary reaching the crate its own decision path moved into. `ARCHITECTURE.md` §7.1 already draws `gungnir-app ──► everything above it`; what is new is that the desktop now *calls* the path rather than *holding* it, and supplies the two things only it can -- the picture (`ApprovalContext`) and where an effect goes (`ApprovalHost`) | `dependency_graph.rs`: `Binary → Productization`, listed as (x); `gungnir-app/tests/no_execution_without_decision.rs`, whose static half now finds the one handoff builder in `gungnir-approval/src/handoffs.rs` |
+
+**The node edge (y) is not here.** D-57 names `gungnir-node` → `gungnir-approval` and
+`gungnir-node` → `gungnir-command` as well, and GAP-132 adds them with the code that needs
+them. An edge drawn before a manifest carries it would be the graph claiming something
+untrue (§5, and §16's own note about exactly that).
+
+**Two edges were refused with this one**, both in DN-31 §4. `gungnir-approval` →
+`gungnir-remote` would put a productization crate on the client transport; delivery goes
+through a `HandoffTransport` trait each binary implements instead, and both binaries
+already reach `gungnir-remote` themselves. Growing `gungnir-command` to hold the whole path
+would take the human-owned queue crate into engagement, configuration and security code.
+
+**And one edge was not needed.** The policy chain reads a `GeoService`, which
+`gungnir-geo` owns and D-57 gives this crate no edge to. The host builds the service from
+its baseline and passes it in, and `gungnir-policy` -- which already depends on
+`gungnir-geo` and whose `GeofencePolicy` names the trait in its own public field -- now
+re-exports it so the type can be named without the edge. That is the "pass the data in"
+answer this register's §1 prefers, and it keeps the graph one crate narrower.
 
 ## Traceability
 

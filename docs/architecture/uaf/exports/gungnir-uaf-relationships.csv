@@ -477,6 +477,7 @@ REL:uses:RS-app->RS-security,uses,,RS-app,RS-security,uses: RS-app -> RS-securit
 REL:uses:RS-app->RS-policy,uses,,RS-app,RS-policy,uses: RS-app -> RS-policy,Dependency
 REL:uses:RS-app->RS-command,uses,,RS-app,RS-command,uses: RS-app -> RS-command,Dependency
 REL:uses:RS-app->RS-geo,uses,,RS-app,RS-geo,uses: RS-app -> RS-geo,Dependency
+REL:uses:RS-app->RS-approval,uses,,RS-app,RS-approval,uses: RS-app -> RS-approval,Dependency
 REL:uses:RS-app->RS-sensor-management,uses,,RS-app,RS-sensor-management,uses: RS-app -> RS-sensor-management,Dependency
 REL:uses:RS-app->RS-analytics,uses,,RS-app,RS-analytics,uses: RS-app -> RS-analytics,Dependency
 REL:uses:RS-app->RS-assessment,uses,,RS-app,RS-assessment,uses: RS-app -> RS-assessment,Dependency
@@ -486,6 +487,13 @@ REL:uses:RS-app->RS-replay,uses,,RS-app,RS-replay,uses: RS-app -> RS-replay,Depe
 REL:uses:RS-app->RS-reporting,uses,,RS-app,RS-reporting,uses: RS-app -> RS-reporting,Dependency
 REL:uses:RS-app->RS-scenario,uses,,RS-app,RS-scenario,uses: RS-app -> RS-scenario,Dependency
 REL:uses:RS-app->RS-api,uses,,RS-app,RS-api,uses: RS-app -> RS-api,Dependency
+REL:uses:RS-approval->RS-command,uses,,RS-approval,RS-command,uses: RS-approval -> RS-command,Dependency
+REL:uses:RS-approval->RS-policy,uses,,RS-approval,RS-policy,uses: RS-approval -> RS-policy,Dependency
+REL:uses:RS-approval->RS-intercept-service,uses,,RS-approval,RS-intercept-service,uses: RS-approval -> RS-intercept-service,Dependency
+REL:uses:RS-approval->RS-security,uses,,RS-approval,RS-security,uses: RS-approval -> RS-security,Dependency
+REL:uses:RS-approval->RS-config,uses,,RS-approval,RS-config,uses: RS-approval -> RS-config,Dependency
+REL:uses:RS-approval->RS-eventing,uses,,RS-approval,RS-eventing,uses: RS-approval -> RS-eventing,Dependency
+REL:uses:RS-approval->RS-model,uses,,RS-approval,RS-model,uses: RS-approval -> RS-model,Dependency
 REL:uses:RS-assessment->RS-model,uses,,RS-assessment,RS-model,uses: RS-assessment -> RS-model,Dependency
 REL:uses:RS-association->RS-filters,uses,,RS-association,RS-filters,uses: RS-association -> RS-filters,Dependency
 REL:uses:RS-association->RS-testkit,uses,,RS-association,RS-testkit,uses: RS-association -> RS-testkit,Dependency

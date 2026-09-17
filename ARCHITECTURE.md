@@ -110,6 +110,7 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-scenario` | `core`, `coord`, `fusion-async` |
 | `gungnir-oracle` | `filters`, `association`, `rfs`, `scenario` (dev: `testkit`) |
 | `gungnir-fuzz` (excluded from the default build) | `association`, `ingest`, `model` |
+| `gungnir-approval` | `command`, `policy`, `intercept-service`, `security`, `config`, `eventing`, `model` (w) |
 | `gungnir-tracking-service` | `core`, `coord`, `filters`, `association`, `track`, `rfs`, `track-fusion`, `fusion-async`, `model` |
 | `gungnir-intercept-service` | `core`, `coord`, `allocation`, `model` |
 | `gungnir-data-fusion` | `data` |
@@ -117,7 +118,7 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-node` | `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `sensor-management`, `tracking-service`, `intercept-service`, `api`, `analytics` (g), `security`, `observability`, `modelops` (h), `policy` (k), `geo` (l), `remote` (p), `identity` (s) |
 | `gungnir-ui` | `model` |
 | `gungnir-viewport3d` | `data`, `data-fusion`, `model`, `ui` (theme only) |
-| `gungnir-app` | Both facades, `remote`, `data`, `data-fusion`, `render`, `viewport3d`, `ui`, `workflow`, `security`, `policy`, `command`, `geo`, `replay`, `reporting`, `analytics`, `sensor-management`, `assessment`, `modelops` (h), `decision` (i), `resilience` (m), `identification` (n), `identity` (o), `coord` (u), `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `observability` |
+| `gungnir-app` | Both facades, `remote`, `data`, `data-fusion`, `render`, `viewport3d`, `ui`, `workflow`, `security`, `policy`, `command`, `geo`, `replay`, `reporting`, `analytics`, `sensor-management`, `assessment`, `modelops` (h), `decision` (i), `resilience` (m), `identification` (n), `identity` (o), `coord` (u), `approval` (x), `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `observability` |
 
 The productization-layer edges are listed in §7.1.
 
@@ -365,6 +366,8 @@ gungnir-model ──► core, coord            (Foundational; every crate below 
     ├── gungnir-assessment ──► model
     ├── gungnir-policy ──► model, geo
     │       ├── gungnir-command ──► model, policy
+    │       │       └── gungnir-approval ──► command, policy, intercept-service,
+    │       │                                security, config, eventing, model  (w)
     │       └── gungnir-decision ──► model, assessment, policy, analytics   (a)
     │
     ├── gungnir-observability ──► model
@@ -459,6 +462,24 @@ edge in the graph are checked by `gungnir-app/tests/dependency_graph.rs` on ever
   `gungnir-security` has no `gungnir-*` dependency, so no cycle is reachable. **Recorded
   late**: in a manifest from 2026-09-06, in this table from 2026-09-07
   (`docs/design/dependency-edges.md` §14).
+- **(w) `gungnir-approval` ──► `gungnir-command`, `gungnir-policy`,
+  `gungnir-intercept-service`, `gungnir-security`, `gungnir-config`, `gungnir-eventing`
+  and `gungnir-model`, and (x) `gungnir-app` ──► `gungnir-approval`** (2026-09-17,
+  GAP-131, D-57). The decision path both binaries run -- the policy chain over a plan, the
+  queue's feeding and sweep, deciding with engagement opening and **the one handoff
+  builder**, and handoff delivery bookkeeping -- lives in a crate one level under the
+  binaries rather than inside the desktop, because a binary cannot depend on a binary and a
+  node could otherwise only run the same rules from a second copy of them (D-55,
+  `docs/design/DN-31-node-approval-queue.md` §3). (w) is downward from productization into
+  productization, the two facades and the model, and acyclic: none of the seven targets
+  depends on a binary or on `gungnir-approval`. (x) is the binary reaching the crate its
+  own path moved into; the desktop now supplies the picture and carries the effects and
+  decides none of them. Refused with them: `gungnir-approval` ──► `gungnir-remote`, which
+  would put a productization crate on the client transport -- delivery goes through a trait
+  each binary implements -- and growing `gungnir-command` instead, which would take the
+  human-owned queue crate into engagement, configuration and security code. **The node's
+  edge (y) is GAP-132's** and is not drawn until a manifest carries it
+  (`docs/design/dependency-edges.md` §17).
 - **(q) `gungnir-ml` ──► `gungnir-model` and `gungnir-interop`** (2026-09-06, GAP-077,
   GAP-079). The crate `docs/ml/architecture.md` §1 drew as `gungnir-model ──► gungnir-ml`
   exists: the `Model` and `FeatureExtractor` traits, a fake for the consumers' tests,

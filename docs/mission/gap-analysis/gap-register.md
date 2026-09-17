@@ -143,7 +143,7 @@ history, and an entry is never edited once it has merged.
 | GAP-128 | PN-14 cannot apply an edited baseline on its first apply | Technical | CAP-5.6 | 3 | 2 | S | 6 | I3 | Services engineer | Open |
 | GAP-129 | No decision reaches a node's record, so reconciliation never meets a conflict | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Owner | In progress |
 | GAP-130 | Decision, plan and queue-item identifiers collide across machines and restarts | Technical | CAP-7.2, CAP-4.2 | 4 | 6 | M | 24 | I3 | Services engineer | Closed |
-| GAP-131 | The decision path lives only in gungnir-app | Technical | CAP-4.2, CAP-3.6 | 3 | 7 | L | 21 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-131 | The decision path lives only in gungnir-app | Technical | CAP-4.2, CAP-3.6 | 3 | 7 | L | 21 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-132 | A node runs no approval queue | Technical | CAP-4.2, CAP-4.3, CAP-3.7, CAP-6.2 | 4 | 9 | L | 36 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-133 | A linked desktop decides the node's plans itself | Technical | CAP-5.9, CAP-4.3 | 4 | 10 | M | 40 | I3 | UI engineer | Open |
 | GAP-134 | A desktop's offline decisions never reach its node | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
@@ -1948,11 +1948,12 @@ Counts: 135 gaps, 3 mission, 132 technical; 1 already covered by a plan in `../.
 - Capability: CAP-4.2 Record every decision; CAP-3.6 Rules of engagement.
 - History:
   - 2026-09-17, Open: Filed with DN-31: the move is verified with the desktop unchanged before anything new rides on it.
+  - 2026-09-17, Closed: Built. `gungnir-approval` holds the policy chain, the queue's feeding and sweep, deciding with engagement opening, the one handoff builder and the delivery schedule; edges (w) and (x) are drawn and recorded (`../../design/dependency-edges.md` §17). The desktop supplies a context and takes the effects through a host trait, and delivery goes over a `HandoffTransport` it implements, so the library never reaches `gungnir-remote`. Behaviour is unchanged: every workspace test passes with its assertions untouched, and `no_execution_without_decision.rs` pins the one builder in its new crate. The escalation ladder's ordering is `gungnir-command`'s. DN-31 §9 rows 2 and 10 are written; what the move found is in `../../record/2026-09-17/decision-path-moved-to-gungnir-approval.md`.
 - Evidence: `gungnir-app/src/decisions.rs`, `engagements.rs`, `handoffs.rs`, `deliveries.rs`; the node's own `evaluate_on_node`; DN-31 §3.
 - Severity: 3. Reach: 7 threads. Effort: L. Priority: 21.
 - Impact: The policy chain over a plan, the queue's submission and sweep, deciding with engagement opening and the one handoff builder, and handoff delivery all live in `gungnir-app`, and a binary cannot share code, so a node cannot run the decision path D-55 gives it without a second copy of the safety rules.
 - Closing action: Create `gungnir-approval` with edges (w) and (x) (D-57), move the decision path into it with the desktop's behaviour unchanged, keep exactly one handoff builder, and write DN-31 §9 rows 2 and 10.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`).
 - Depends on: D-57, GAP-130.
 
