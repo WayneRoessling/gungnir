@@ -250,7 +250,7 @@ fn pn20_draws_the_handoff_and_every_report_that_came_back() {
 
 /// GAP-065, DN-18 §5 amendment 2: issuing a handoff republishes this desktop's whole
 /// current handoff set to a linked node, so a coalition partner's
-/// `GET /v2/exchange/handoffs` eventually serves it; with no link there is nothing to
+/// `GET /v3/exchange/handoffs` eventually serves it; with no link there is nothing to
 /// queue to and issuing still works.
 #[test]
 fn issuing_a_handoff_queues_the_whole_set_for_exchange_when_a_node_is_linked() {
@@ -265,8 +265,10 @@ fn issuing_a_handoff_queues_the_whole_set_for_exchange_when_a_node_is_linked() {
     let link = NodeLink::scripted();
     state.link = Some(link.clone());
     let mut second = accepted();
-    second.id = DecisionId(2);
-    second.plan.id = PlanId(2);
+    // A decision as a workflow mints one since GAP-130: a UUID v7, whose 128 bits a JSON
+    // number could not carry through the `serde_json::Value` this body is (D-60).
+    second.id = DecisionId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_61c2);
+    second.plan.id = PlanId(0x0199_5a3b_7c2c_7a00_9b00_0000_1111_2222);
     issue_for(&mut state, &second);
     assert_eq!(state.handoffs.len(), 2);
 
@@ -281,8 +283,19 @@ fn issuing_a_handoff_queues_the_whole_set_for_exchange_when_a_node_is_linked() {
     let ids: Vec<&str> = batch.products.iter().map(|p| p.id.as_str()).collect();
     assert_eq!(
         ids,
-        vec!["1", "2"],
+        vec!["1", "01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2"],
         "the whole current set is republished, not only the newest handoff"
+    );
+    // The body is the handoff itself, not the `null` a numeric v7 identifier made of it.
+    let body = &batch.products[1].body;
+    assert_eq!(
+        body["decision"].as_str(),
+        Some("01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2"),
+        "the exchanged handoff lost its decision: {body}"
+    );
+    assert_eq!(
+        body["plan"].as_str(),
+        Some("01995a3b-7c2c-7a00-9b00-000011112222")
     );
     let _ = std::fs::remove_dir_all(dir);
 }

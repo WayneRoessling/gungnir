@@ -48,7 +48,7 @@ enum "HandoffError" as HandoffError <<InformationElement>> {
   UnknownDecision(DecisionId)
 }
 class "DecisionId" as DecisionId <<InformationElement>> {
-  pub u64
+  pub u128
 }
 enum "PlanKind" as PlanKind <<InformationElement>> {
   Intercept { solutions: Vec<InterceptSolutionView>, }

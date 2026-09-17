@@ -4,14 +4,14 @@
 
 //! Remote backends for the connected deployment profiles (ARCHITECTURE.md §8.2).
 //! [`RemoteTrackingService`] and [`RemoteInterceptService`] implement the same two
-//! traits the embedded services do, over the `gungnir-api` v2 contract: subscribe
+//! traits the embedded services do, over the `gungnir-api` v3 contract: subscribe
 //! to the node's event stream to keep a local track/plan projection, forward
 //! detections to the node, and queue outbound detections while the link is down
 //! (store-and-forward, §8.4).
 //!
 //! **Status.** [`connect`] starts a link that fetches a snapshot and follows the node's
 //! event stream, and the two services project it (GAP-041). A detection submitted while
-//! linked is forwarded to `POST /v2/detections` under the signed-in operator's token, and
+//! linked is forwarded to `POST /v3/detections` under the signed-in operator's token, and
 //! held in the outbox, oldest dropped and counted, while the node does not answer
 //! (GAP-050). **Decisions are not forwarded**: a node runs no approval queue and refuses
 //! the decision route, so the desktop decides the node's plan in its own queue (GAP-129).

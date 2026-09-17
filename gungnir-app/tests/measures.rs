@@ -65,7 +65,7 @@ fn track(id: u64, classification: Classification) -> TrackView {
     }
 }
 
-fn accepted(decision: u64, track: u64) -> DecisionRecord {
+fn accepted(decision: u128, track: u64) -> DecisionRecord {
     DecisionRecord {
         id: DecisionId(decision),
         plan: PlanView {

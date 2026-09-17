@@ -25,13 +25,13 @@ use gungnir_time::ReplayClockAuthority;
 
 /// A decision by operator 7 whose role was never recorded, as every decision journaled
 /// before 2026-09-16 reads.
-fn decided(plan: u64, accepted: bool) -> Event {
+fn decided(plan: u128, accepted: bool) -> Event {
     decided_as(plan, accepted, Some("7"), None)
 }
 
 /// A decision as a journal holds it, naming the operator and the role the deciding
 /// session carried when there was one.
-fn decided_as(plan: u64, accepted: bool, operator: Option<&str>, role: Option<&str>) -> Event {
+fn decided_as(plan: u128, accepted: bool, operator: Option<&str>, role: Option<&str>) -> Event {
     Event::Command(CommandEvent::Decided {
         plan: PlanId(plan),
         decision: DecisionId(plan),
@@ -43,7 +43,7 @@ fn decided_as(plan: u64, accepted: bool, operator: Option<&str>, role: Option<&s
     })
 }
 
-fn expired(plan: u64, at: f64) -> Event {
+fn expired(plan: u128, at: f64) -> Event {
     Event::Command(CommandEvent::Expired {
         plan: PlanId(plan),
         at: MissionTime(at),
@@ -878,5 +878,155 @@ fn pn_18_shows_the_rules_verdicts_and_offers_keep_buttons_only_for_a_persons_con
     let buttons = |label: &str| frame.texts.iter().filter(|t| t.as_str() == label).count();
     assert_eq!(buttons("keep this desktop's"), 1, "{drawn}");
     assert_eq!(buttons("keep the node's"), 1, "{drawn}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A picture the test sets, standing in for the embedded tracker after a fall back.
+struct Picture(Vec<gungnir_model::TrackView>);
+
+impl gungnir_tracking_service::TrackingService for Picture {
+    fn submit_detection(
+        &mut self,
+        _: gungnir_model::DetectionView,
+    ) -> Result<(), gungnir_tracking_service::SubmitError> {
+        Ok(())
+    }
+    fn poll(&mut self, _: MissionTime) {}
+    fn tracks(&self) -> &[gungnir_model::TrackView] {
+        &self.0
+    }
+    fn is_healthy(&self) -> bool {
+        true
+    }
+}
+
+/// The plans the bus announced since the last call, oldest first.
+fn proposed(events: &gungnir_eventing::Receiver<Envelope>) -> Vec<PlanId> {
+    events
+        .try_iter()
+        .filter_map(|env| match env.event {
+            Event::Intercept(gungnir_model::events::InterceptEvent::PlanProposed(plan)) => {
+                Some(plan.id)
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// **A plan is announced by its identifier, so two planners that number alike hide one
+/// plan behind another** (GAP-130, D-56). The tick proposes a plan only when its id differs
+/// from the last one it announced (`last_live_plan_id`, GAP-097). Before GAP-130 the node's
+/// planner and the desktop's embedded planner both numbered their first plan 1: the node's
+/// plan 1 was announced while linked, the desktop's own plan 1 after it fell back, and on
+/// switching back the node's plan 1 was taken for the plan already announced and never
+/// proposed, so the plan in force stayed the embedded one the desktop no longer ran.
+///
+/// The fall back itself was not where this bit: its first tick has no tracks yet and
+/// announces the empty plan, whose identifier is zero, which resets the comparison. The
+/// test walks the whole outage so both directions are held, and every identifier here is
+/// minted by a real planner.
+#[test]
+fn a_plan_from_either_planner_is_proposed_across_a_fall_back_and_a_switch_back() {
+    use gungnir_intercept_service::{DpInterceptService, InterceptService, PlanOutcome};
+    use gungnir_model::{
+        Classification, Provenance, Quality, Releasability, TrackId, TrackStatus, TrackView,
+    };
+
+    let (mut state, dir) = desktop("plans-across-outage");
+    state.config.resources = vec![gungnir_config::ResourceConfig {
+        id: 1,
+        position: [0.0, 0.0, 0.0],
+        capacity: 4,
+        layer: "point".into(),
+        cost: None,
+        rounds_available: None,
+        reserve: None,
+        handoff_endpoint: None,
+        intercept_speed_mps: None,
+    }];
+    state.resources = state.config.resource_views();
+    let track = TrackView {
+        id: TrackId(7),
+        status: TrackStatus::Confirmed,
+        state: nalgebra::SVector::<f64, 6>::new(9_000.0, 2_000.0, 150.0, -40.0, 0.0, 0.0),
+        covariance: nalgebra::SMatrix::identity(),
+        classification: Classification::Hostile,
+        provenance: Provenance::default(),
+        quality: Quality::default(),
+        mission_time: MissionTime(0.0),
+        releasability: Releasability::default(),
+    };
+
+    // The node's plan, from the node's own planner.
+    let mut node_planner = DpInterceptService::new(state.config.allocation_horizon);
+    let node_plan = match node_planner.plan(
+        MissionTime(100.0),
+        std::slice::from_ref(&track),
+        &state.resources,
+    ) {
+        PlanOutcome::Fresh(plan) => plan,
+        other => panic!("the node proposed nothing: {other:?}"),
+    };
+
+    // Linked: the desktop reads the node's plan and announces it.
+    let link = NodeLink::scripted();
+    link.script_session(Some("token".into()), 1);
+    if let Some(mut projection) = link.read() {
+        projection.plan = node_plan.clone();
+    }
+    link.script_liveness(true, Some(std::time::Instant::now()));
+    state.link = Some(link.clone());
+    state.backend = BackendConfig::Remote {
+        endpoint: "http://node.local:7410".into(),
+    };
+    state.intercept = Box::new(gungnir_remote::RemoteInterceptService::linked(
+        gungnir_remote::RemoteEndpoint::plain("http://node.local:7410"),
+        link.clone(),
+    ));
+    let events = state.events.subscribe();
+    at(&mut state, 101.0);
+    assert_eq!(proposed(&events), vec![node_plan.id], "the node's plan");
+
+    // Silent: fall back, and the embedded planner's own plan once it has a picture.
+    let long_ago = std::time::Instant::now()
+        .checked_sub(HEARTBEAT_TIMEOUT + std::time::Duration::from_secs(3))
+        .expect("up long enough");
+    link.script_liveness(false, Some(long_ago));
+    at(&mut state, 102.0);
+    assert!(state.fallback.is_some(), "fell back");
+    assert_eq!(
+        proposed(&events),
+        vec![PlanId(0)],
+        "the fall back announces the empty plan first"
+    );
+    state.tracking = Box::new(Picture(vec![track]));
+    at(&mut state, 103.0);
+    let embedded = proposed(&events);
+    assert_eq!(
+        embedded.len(),
+        1,
+        "the embedded planner's plan was not proposed"
+    );
+    assert_ne!(
+        embedded[0], node_plan.id,
+        "the embedded planner minted the node's plan identifier"
+    );
+
+    // The node answers; nothing to reconcile; switch back, and the node's plan is proposed
+    // again rather than taken for the embedded plan just announced.
+    link.script_liveness(true, Some(std::time::Instant::now()));
+    at(&mut state, 150.0);
+    failover::supply_history(&mut state, HistoryOutcome::Complete(Vec::new()));
+    failover::switch_back(&mut state).expect("switches back");
+    at(&mut state, 151.0);
+    assert_eq!(
+        proposed(&events),
+        vec![node_plan.id],
+        "after the switch back the node's plan was not proposed"
+    );
+    assert_eq!(
+        state.last_plan.id, node_plan.id,
+        "the plan in force is not the node's"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }

@@ -14,7 +14,7 @@
 //! engagement opens, and the decision is on the record **before** the engagement is.
 //!
 //! The API's decide route is covered where the transport is tested:
-//! `gungnir-remote/tests/transport.rs` posts to `/v2/plans/{id}/decision` and is refused
+//! `gungnir-remote/tests/transport.rs` posts to `/v3/plans/{id}/decision` and is refused
 //! (`refuse_decision`), so no decision enters a node through the wire either.
 
 use gungnir_app::decisions;

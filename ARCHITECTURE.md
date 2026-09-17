@@ -394,7 +394,7 @@ edge in the graph are checked by `gungnir-app/tests/dependency_graph.rs` on ever
   state of the tasks serving a requirement. Narrow by construction: it reads task state
   and never issues a command, so exactly one crate can talk to a sensor
   (`docs/design/DN-11-sensor-control-and-tasking.md`).
-- **(f) `gungnir-api` ──► `gungnir-analytics`.** `GET /v2/coverage` publishes a
+- **(f) `gungnir-api` ──► `gungnir-analytics`.** `GET /v3/coverage` publishes a
   `CoverageReport`, so the crate that defines the contract has to name the type. The same
   shape as its existing edges to the two service facades: the contract publishes
   productization types rather than defining a second set of its own, which is what stops
@@ -719,7 +719,7 @@ from it, and `rust-toolchain.toml` pins the Rust 1.98 toolchain. The set as pinn
 | Dependency | Pin | Role | Notes |
 |---|---|---|---|
 | `nalgebra` | 0.33 (`serde-serialize`) | All linear algebra; model views serialize their state vectors | |
-| `tokio` | 1 (`rt-multi-thread`, `sync`, `macros`, `time`, `signal`, `net`) | Async runtime for `gungnir-fusion-async`; created by the host binary | `net` added 2026-09-05 for the v2 transport's listener (GAP-041) |
+| `tokio` | 1 (`rt-multi-thread`, `sync`, `macros`, `time`, `signal`, `net`) | Async runtime for `gungnir-fusion-async`; created by the host binary | `net` added 2026-09-05 for the transport's listener (GAP-041) |
 | `serde`, `serde_json` | 1 | Serialization; JSON config baselines and the JSON-lines journal | |
 | `rand`, `rand_distr` | 0.8, 0.4 | Deterministic sampling | |
 | `proptest`, `criterion` | 1, 0.5 | Property tests, benchmarks | |

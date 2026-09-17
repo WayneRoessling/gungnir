@@ -63,9 +63,8 @@ enum "RequirementEvent" as RequirementEvent <<InformationElement>> {
   Lapsed { requirement: RequirementId, at: MissionTime, }
 }
 enum "CommandEvent" as CommandEvent <<InformationElement>> {
-  ApprovalRequested(PlanId)
   Decided { plan: PlanId, decision: DecisionId, accepted: bool, operator: Option<String>, role: Option<String>, verdict: VerdictSummary, rationale: Option<String>, }
-  Expired { plan: PlanId, at: MissionTime, }
+  Expired { plan: PlanId, at: MissionTime }
   Escalated { plan: PlanId, to_role: String, at: MissionTime, }
 }
 enum "EngagementEvent" as EngagementEvent <<InformationElement>> {
@@ -199,7 +198,7 @@ RequirementEvent --> RequirementId : Tasked, Declined, Satisfied, Lapsed
 RequirementEvent --> SensorTaskId : Tasked
 CommandEvent --> DecisionId : Decided
 CommandEvent --> MissionTime : Expired, Escalated
-CommandEvent --> PlanId : ApprovalRequested, Decided, Expired, Escalated
+CommandEvent --> PlanId : Decided, Expired, Escalated
 CommandEvent --> VerdictSummary : Decided
 EngagementEvent --> DecisionId : Opened, Executing, Closed
 EngagementEvent --> MissionTime : Executing, Closed

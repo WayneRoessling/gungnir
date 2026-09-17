@@ -136,7 +136,6 @@ pub struct DpInterceptService {
     allocator: BellmanDpAllocator,
     horizon: usize,
     last_plan: PlanView,
-    next_plan_id: u64,
     solver_ok: bool,
     warned: bool,
     /// When `last_plan` was computed, and why it is being kept if a solve has failed
@@ -158,7 +157,6 @@ impl DpInterceptService {
             allocator: BellmanDpAllocator,
             horizon: horizon.max(1),
             last_plan: PlanView::default(),
-            next_plan_id: 1,
             solver_ok: true,
             warned: false,
             last_solved: None,
@@ -300,7 +298,7 @@ impl DpInterceptService {
         let ready: Vec<&ResourceView> = resources.iter().filter(|r| r.is_adequate()).collect();
         if tracks.is_empty() || ready.is_empty() {
             if !self.last_plan.is_empty() {
-                self.last_plan = self.fresh_plan(now, Vec::new(), 0.0);
+                self.last_plan = Self::fresh_plan(now, Vec::new(), 0.0);
             }
             // **Nothing to solve is a fresh answer, not an absent one** (GAP-066): with no
             // tracks or no ready resource the empty plan is correct for this snapshot, and
@@ -332,7 +330,7 @@ impl DpInterceptService {
                 // assignment gets a new id and timestamp; an unchanged one keeps the
                 // plan -- geometry included -- exactly as it was.
                 if Self::assignment_changed(&self.last_plan, &solutions) {
-                    self.last_plan = self.fresh_plan(now, solutions, policy.value);
+                    self.last_plan = Self::fresh_plan(now, solutions, policy.value);
                 }
             }
             Err(AllocationError::NotImplemented) => {
@@ -354,14 +352,17 @@ impl DpInterceptService {
         self.last_plan.clone()
     }
 
-    fn fresh_plan(
-        &mut self,
-        now: MissionTime,
-        solutions: Vec<InterceptSolutionView>,
-        value: f64,
-    ) -> PlanView {
-        let id = PlanId(self.next_plan_id);
-        self.next_plan_id += 1;
+    /// A new plan, with a new identifier.
+    ///
+    /// **A UUID v7, not the next number** (D-56, GAP-130). The counter this replaced
+    /// started at 1 in every planner, so the planner a desktop builds when it falls back
+    /// numbered its plans as its node's planner did. The tick announces a plan only when
+    /// its id is new (`gungnir-app`'s `last_live_plan_id`), so on switching back the
+    /// node's plan was taken for the embedded plan of the same number and never proposed.
+    /// The alternatives `gungnir-decision` solves on a planner built per call were all
+    /// plan 1 as well.
+    fn fresh_plan(now: MissionTime, solutions: Vec<InterceptSolutionView>, value: f64) -> PlanView {
+        let id = PlanId(uuid::Uuid::now_v7().as_u128());
         PlanView {
             id,
             mission_time: now,

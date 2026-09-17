@@ -200,11 +200,11 @@ mod tests {
         Event::Tracking(TrackingEvent::TrackDeleted(TrackId(id)))
     }
 
-    fn decided(plan: u64, accepted: bool) -> Event {
+    fn decided(plan: u128, accepted: bool) -> Event {
         decided_by(plan, accepted, None, None)
     }
 
-    fn decided_by(plan: u64, accepted: bool, operator: Option<&str>, role: Option<&str>) -> Event {
+    fn decided_by(plan: u128, accepted: bool, operator: Option<&str>, role: Option<&str>) -> Event {
         Event::Command(CommandEvent::Decided {
             plan: PlanId(plan),
             decision: gungnir_model::DecisionId(plan),
@@ -216,7 +216,7 @@ mod tests {
         })
     }
 
-    fn expired(plan: u64, at: f64) -> Event {
+    fn expired(plan: u128, at: f64) -> Event {
         Event::Command(CommandEvent::Expired {
             plan: PlanId(plan),
             at: MissionTime(at),

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! The client half of the v2 transport (GAP-041).
+//! The client half of the v3 transport (GAP-041).
 //!
 //! `reqwest` for the snapshot and health requests, `tokio-tungstenite` for the event
 //! stream, per D-18 and `agentic-coding-standards.md` §2.9.
@@ -33,7 +33,9 @@
 //! pinned roots is refused rather than trusted blindly, and one written as `http` is
 //! never upgraded: what the operator wrote is what is spoken.
 
-use gungnir_api::v2::{
+use gungnir_api::path;
+use gungnir_api::routes;
+use gungnir_api::v3::{
     ExchangeProduct, HistoryResponse, PublishExchangeRequest, SensorTaskRequest,
     SensorTaskResponse, SessionRequest, SessionResponse, SnapshotResponse, SubmitDetectionRequest,
     SubscribeRequest,
@@ -167,7 +169,7 @@ pub struct OutboundExchange {
 
 /// One product within an [`OutboundExchange`] (GAP-065).
 ///
-/// Mirrors `gungnir_api::v2::ExchangeProduct` field for field rather than reusing it --
+/// Mirrors `gungnir_api::v3::ExchangeProduct` field for field rather than reusing it --
 /// the same choice [`OutboundTask`] makes against `SensorTaskRequest`. `gungnir-app` has
 /// no production edge to `gungnir-api` (`gungnir-app/Cargo.toml`: the dependency is
 /// dev-only, for an end-to-end test), so the type a desktop producer builds has to come
@@ -426,7 +428,11 @@ struct Urls {
     port: u16,
 }
 
-/// Turn the configured base URL into the endpoints of the v2 contract.
+/// Turn the configured base URL into the endpoints of the contract.
+///
+/// Every path comes from `gungnir_api::path` and `gungnir_api::routes`, the pair the
+/// node's router is built from, so the desktop cannot ask for a route where the node does
+/// not serve it (GAP-130).
 ///
 /// `https` needs pinned trust roots and is refused without them; `http` is never
 /// upgraded. See the module documentation.
@@ -468,15 +474,15 @@ fn urls(endpoint: &RemoteEndpoint) -> Result<Urls, RemoteError> {
         .ok_or_else(|| RemoteError::InvalidEndpoint(format!("{base}: no port")))?;
     let scheme = if tls { "wss" } else { "ws" };
     Ok(Urls {
-        history: format!("{base}/v2/history"),
-        detections: format!("{base}/v2/detections"),
-        session: format!("{base}/v2/session"),
-        snapshot: format!("{base}/v2/snapshot"),
-        tasks: format!("{base}/v2/sensors"),
-        exchange_warnings: format!("{base}/v2/exchange/warnings"),
-        exchange_reports: format!("{base}/v2/exchange/reports"),
-        exchange_handoffs: format!("{base}/v2/exchange/handoffs"),
-        events: format!("{scheme}://{rest}/v2/events"),
+        history: format!("{base}{}", path(routes::HISTORY)),
+        detections: format!("{base}{}", path(routes::DETECTIONS)),
+        session: format!("{base}{}", path(routes::SESSION)),
+        snapshot: format!("{base}{}", path(routes::SNAPSHOT)),
+        tasks: format!("{base}{}", path(routes::SENSORS)),
+        exchange_warnings: format!("{base}{}", path(routes::EXCHANGE_WARNINGS)),
+        exchange_reports: format!("{base}{}", path(routes::EXCHANGE_REPORTS)),
+        exchange_handoffs: format!("{base}{}", path(routes::EXCHANGE_HANDOFFS)),
+        events: format!("{scheme}://{rest}{}", path(routes::EVENTS)),
         tls,
         host,
         port,
@@ -745,7 +751,7 @@ async fn run_link(
     // connection open.
     //
     // Between frames the outbox is forwarded (§8.4): whatever the desktop queued while
-    // the node was away, or since the last flush, goes to `POST /v2/detections` under the
+    // the node was away, or since the last flush, goes to `POST /v3/detections` under the
     // same token, and stays queued until the node has said `202`.
     let mut forward = tokio::time::interval(FORWARD_INTERVAL);
     loop {
@@ -858,7 +864,7 @@ async fn flush_tasks(
 }
 
 /// `Warnings`, `Reports` and `Handoffs` are the three items DN-18 §5 amendment 2 gave a
-/// write door; `Tracks` and `Health` keep `/v2/snapshot` and `/v2/health` and are never
+/// write door; `Tracks` and `Health` keep `/v3/snapshot` and `/v3/health` and are never
 /// queued by anything this crate builds. `None` rather than a fourth URL nothing would
 /// ever use, so a caller error shows up as a dropped batch and a warning instead of a
 /// silently wrong URL.
@@ -1136,18 +1142,18 @@ mod tests {
     #[test]
     fn a_base_url_becomes_the_two_contract_endpoints() {
         let urls = urls(&endpoint("http://127.0.0.1:7410")).expect("valid");
-        assert_eq!(urls.snapshot, "http://127.0.0.1:7410/v2/snapshot");
-        assert_eq!(urls.events, "ws://127.0.0.1:7410/v2/events");
+        assert_eq!(urls.snapshot, "http://127.0.0.1:7410/v3/snapshot");
+        assert_eq!(urls.events, "ws://127.0.0.1:7410/v3/events");
     }
 
     /// GAP-065, DN-18 §5 amendment 2: the three write doors, one URL apiece; `Tracks` and
-    /// `Health` have none, since they keep `/v2/snapshot` and `/v2/health`.
+    /// `Health` have none, since they keep `/v3/snapshot` and `/v3/health`.
     #[test]
     fn the_three_exchange_items_with_a_write_door_each_resolve_and_the_other_two_do_not() {
         let urls = urls(&endpoint("http://127.0.0.1:7410")).expect("valid");
         assert_eq!(
             urls.exchange_warnings,
-            "http://127.0.0.1:7410/v2/exchange/warnings"
+            "http://127.0.0.1:7410/v3/exchange/warnings"
         );
         assert_eq!(
             exchange_url(&urls, gungnir_model::ExchangeItem::Warnings),
@@ -1197,7 +1203,7 @@ mod tests {
     #[test]
     fn a_trailing_slash_does_not_double_up() {
         let urls = urls(&endpoint("http://127.0.0.1:7410/")).expect("valid");
-        assert_eq!(urls.snapshot, "http://127.0.0.1:7410/v2/snapshot");
+        assert_eq!(urls.snapshot, "http://127.0.0.1:7410/v3/snapshot");
     }
 
     /// An https endpoint with no pinned roots is refused rather than trusted blindly or
@@ -1213,7 +1219,7 @@ mod tests {
             .push("-----BEGIN CERTIFICATE-----".into());
         let urls = urls(&with_roots).expect("spoken");
         assert!(urls.tls);
-        assert_eq!(urls.events, "wss://node.local:7410/v2/events");
+        assert_eq!(urls.events, "wss://node.local:7410/v3/events");
         assert_eq!(urls.host, "node.local");
         assert_eq!(urls.port, 7410);
     }

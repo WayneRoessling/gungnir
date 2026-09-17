@@ -105,7 +105,7 @@ fn at(state: &mut AppState, t: f64) {
     });
 }
 
-fn accepted(decision: u64, tracks: &[u64]) -> DecisionRecord {
+fn accepted(decision: u128, tracks: &[u64]) -> DecisionRecord {
     DecisionRecord {
         id: DecisionId(decision),
         plan: PlanView {

@@ -149,14 +149,56 @@ impl DecisionRecord {
     }
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
-pub struct PendingApprovalId(pub u64);
+/// Identifies one item in the approval queue.
+///
+/// **A UUID v7 since GAP-130** (D-56), minted by [`ApprovalWorkflow::submit_for_approval`]:
+/// it was a counter restarting at 1 in every workflow, and DN-31 puts queue items from a
+/// node and from a cut-off desktop on the same record. Written, read and shown through
+/// `gungnir_model::identifier`, the helper `DecisionId` and `PlanId` use (D-60, D-61).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PendingApprovalId(pub u128);
+
+impl serde::Serialize for PendingApprovalId {
+    /// The hyphenated UUID string (D-60).
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        gungnir_model::identifier::wire::serialize(&self.0, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PendingApprovalId {
+    /// That string, or the number a pre-change journal holds (D-60).
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        gungnir_model::identifier::wire::deserialize(deserializer).map(Self)
+    }
+}
+
+impl PendingApprovalId {
+    /// The on-screen tag, `…9f3a61c2` (D-61): for a panel or an alert, never a record.
+    #[must_use]
+    pub fn short(self) -> String {
+        gungnir_model::identifier::short(self.0)
+    }
+}
+
+impl std::fmt::Display for PendingApprovalId {
+    /// The whole identifier, for an audit entry and a log field (D-61).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        gungnir_model::identifier::fmt_full(self.0, f)
+    }
+}
+
+impl std::str::FromStr for PendingApprovalId {
+    type Err = gungnir_model::identifier::IdentifierError;
+
+    /// The hyphenated UUID, or a pre-change decimal number (D-60).
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        gungnir_model::identifier::parse(text).map(Self)
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum CommandError {
-    #[error("no pending approval with id {0:?}")]
+    #[error("no pending approval with id {0}")]
     NotFound(PendingApprovalId),
     #[error("plan was denied by policy ({0:?}) and cannot be submitted for approval")]
     DeniedByPolicy(DenialReason),
@@ -238,10 +280,14 @@ pub trait ApprovalWorkflow: Send + Sync {
     }
 }
 
+/// The queue and the record, in one process.
+///
+/// **No identifier counter** since GAP-130: every queue item and every decision is minted
+/// as a UUID v7 at the moment it is created ([`mint`]), so two workflows -- a node's and a
+/// desktop's, or one desktop's before and after a restart -- can never hand out the same
+/// identifier, and identifiers from one process still sort in the order they were minted.
 #[derive(Debug, Default)]
 pub struct InMemoryApprovalWorkflow {
-    next_id: u64,
-    next_decision: u64,
     queue: Vec<PendingApproval>,
     records: Vec<DecisionRecord>,
     /// The deadlines of the baseline in force. Held rather than passed per call so a
@@ -266,11 +312,16 @@ impl InMemoryApprovalWorkflow {
             ..Self::default()
         }
     }
+}
 
-    fn mint_decision_id(&mut self) -> DecisionId {
-        self.next_decision += 1;
-        DecisionId(self.next_decision)
-    }
+/// A new identifier: a UUID v7, held as its 128 bits (D-56, GAP-130).
+///
+/// v7 because its first 48 bits are a millisecond timestamp, so identifiers need no
+/// coordination between machines and still sort by creation; `uuid` orders every v7 one
+/// process mints, including two in the same millisecond. Minted here rather than in
+/// `gungnir-model`, which takes `uuid` without a generator (D-11).
+fn mint() -> u128 {
+    uuid::Uuid::now_v7().as_u128()
 }
 
 impl ApprovalWorkflow for InMemoryApprovalWorkflow {
@@ -281,8 +332,7 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
         if let PolicyVerdict::Denied { reason_code } = submission.verdict {
             return Err(CommandError::DeniedByPolicy(reason_code));
         }
-        self.next_id += 1;
-        let id = PendingApprovalId(self.next_id);
+        let id = PendingApprovalId(mint());
         let (expires_at, escalate_at) =
             queue::deadlines(&self.settings, submission.layer, submission.submitted);
         self.queue.push(PendingApproval {
@@ -317,7 +367,7 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
             let Some(index) = self.queue.iter().position(|p| p.id == id) else {
                 continue;
             };
-            let decision_id = self.mint_decision_id();
+            let decision_id = DecisionId(mint());
             let item = self.queue.remove(index);
             let record = queue::expiry_record(&item, decision_id, now);
             debug_assert!(
@@ -383,7 +433,7 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
             .iter()
             .position(|p| p.id == id)
             .ok_or(CommandError::NotFound(id))?;
-        let decision_id = self.mint_decision_id();
+        let decision_id = DecisionId(mint());
         let item = self.queue.remove(index);
         let record = DecisionRecord {
             id: decision_id,
@@ -408,7 +458,7 @@ mod tests {
     use super::*;
     use gungnir_model::PlanId;
 
-    fn plan(id: u64) -> PlanView {
+    fn plan(id: u128) -> PlanView {
         PlanView {
             id: PlanId(id),
             ..PlanView::default()
@@ -416,7 +466,7 @@ mod tests {
     }
 
     /// A submission at t=0 on the Point layer, offered to the operator.
-    fn submission(id: u64, verdict: PolicyVerdict) -> Submission {
+    fn submission(id: u128, verdict: PolicyVerdict) -> Submission {
         Submission {
             plan: plan(id),
             verdict,
@@ -486,9 +536,9 @@ mod tests {
             } if decision == record.id && op == "op-1"
         ));
         assert_eq!(
-            record.id,
-            DecisionId(1),
-            "the workflow mints the identifier"
+            uuid::Uuid::from_u128(record.id.0).get_version(),
+            Some(uuid::Version::SortRand),
+            "the workflow mints the identifier, as a UUID v7 (D-56)"
         );
     }
 

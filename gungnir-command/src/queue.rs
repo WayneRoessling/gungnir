@@ -263,7 +263,7 @@ mod tests {
     use gungnir_model::PlanId;
 
     fn item(
-        id: u64,
+        id: u128,
         layer: EffectorLayer,
         expiry_s: Option<f64>,
         priority: f32,

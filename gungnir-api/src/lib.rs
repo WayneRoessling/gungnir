@@ -16,18 +16,57 @@
 //! certificate speaks for the right role or an operator holding the right action. This
 //! sentence previously read "the write paths refuse, because nothing can authenticate a
 //! caller yet", which stopped being true when GAP-057 landed the operator session and
-//! GAP-041 the machine identity, and was still being said. `POST /v2/plans/{id}/decision`
+//! GAP-041 the machine identity, and was still being said. `POST /v3/plans/{id}/decision`
 //! is the one write path that refuses, and it refuses **architecturally** rather than for
 //! want of authentication: a node runs no approval queue. [`UnimplementedServer`] remains
 //! for a node that serves nothing at all.
 
 pub mod tls;
 pub mod transport;
-pub mod v2;
+pub mod v3;
 
 use gungnir_security::OperatorId;
 
-pub const API_VERSION: &str = "v2";
+/// The interface version every route is served under.
+///
+/// **The one constant the node's routes and the desktop's URLs are both built from**
+/// ([`path`]), so the two cannot come to disagree about where a route is (GAP-130). It was
+/// `v2` until 2026-09-17, when decision, plan and queue-item identifiers became UUID v7
+/// written as strings (D-56, D-60) and every payload carrying one changed with them.
+pub const API_VERSION: &str = "v3";
+
+/// The version retired on 2026-09-17. Its routes stay routed: each authenticates its
+/// caller as its successor does and answers `410 Gone` naming the successor
+/// (`transport::router`; `docs/design/DN-31-node-approval-queue.md` §5.1).
+pub const RETIRED_API_VERSION: &str = "v2";
+
+/// A route's path under [`API_VERSION`]: `path(routes::SNAPSHOT)` is `/v3/snapshot`.
+#[must_use]
+pub fn path(route: &str) -> String {
+    format!("/{API_VERSION}{route}")
+}
+
+/// Every route's path below the version, shared by `transport::router` and the desktop's
+/// client in `gungnir-remote`. A path parameter is written as axum writes it; a client
+/// that fills one in builds from the prefix before it (`SENSORS`).
+pub mod routes {
+    pub const SESSION: &str = "/session";
+    pub const SNAPSHOT: &str = "/snapshot";
+    pub const HEALTH: &str = "/health";
+    pub const COVERAGE: &str = "/coverage";
+    pub const EVENTS: &str = "/events";
+    pub const HISTORY: &str = "/history";
+    pub const DETECTIONS: &str = "/detections";
+    /// The prefix of [`SENSOR_TASK`], for a client that fills in the sensor.
+    pub const SENSORS: &str = "/sensors";
+    pub const SENSOR_TASK: &str = "/sensors/{sensor_id}/task";
+    pub const HANDOFF_REPORT: &str = "/handoffs/{decision_id}/report";
+    pub const WARNING_ACKNOWLEDGE: &str = "/warnings/{asset_id}/{track_id}/acknowledge";
+    pub const EXCHANGE_WARNINGS: &str = "/exchange/warnings";
+    pub const EXCHANGE_REPORTS: &str = "/exchange/reports";
+    pub const EXCHANGE_HANDOFFS: &str = "/exchange/handoffs";
+    pub const PLAN_DECISION: &str = "/plans/{plan_id}/decision";
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -63,18 +102,18 @@ pub enum ApiError {
 /// The transport-neutral request handlers a node implements. Every call names the
 /// authenticated caller so authorization is enforced per request.
 pub trait ApiHandler: Send + Sync {
-    fn snapshot(&self, caller: OperatorId) -> Result<v2::SnapshotResponse, ApiError>;
+    fn snapshot(&self, caller: OperatorId) -> Result<v3::SnapshotResponse, ApiError>;
     fn submit_detection(
         &mut self,
         caller: OperatorId,
-        request: v2::SubmitDetectionRequest,
+        request: v3::SubmitDetectionRequest,
     ) -> Result<(), ApiError>;
-    fn decide(&mut self, caller: OperatorId, request: v2::ApprovalRequest) -> Result<(), ApiError>;
+    fn decide(&mut self, caller: OperatorId, request: v3::ApprovalRequest) -> Result<(), ApiError>;
 }
 
-/// A version boundary exists specifically so `v2` can be added later without
-/// breaking `v2` clients -- contract-compatibility governance per the capability
-/// description, not just an implementation convenience.
+/// A version boundary exists specifically so a later version can be added without
+/// breaking the clients of this one -- contract-compatibility governance per the
+/// capability description, not just an implementation convenience.
 pub trait ApiServer: Send + Sync {
     fn serve(&mut self) -> Result<(), ApiError>;
 }

@@ -185,7 +185,7 @@ pub mod actions {
     /// Raising or lowering a releasability marking (docs/design/DN-17-releasability.md).
     pub const RELEASE_PRODUCT: &str = "product.release";
     /// Posting a marked warning, report or handoff to this deployment's node so a
-    /// coalition partner's `GET /v2/exchange/{warnings,reports,handoffs}` can serve it
+    /// coalition partner's `GET /v3/exchange/{warnings,reports,handoffs}` can serve it
     /// (docs/design/DN-18-coalition-exchange.md amendment 2, GAP-065).
     ///
     /// **Deliberately not [`RELEASE_PRODUCT`].** That action is raising or lowering the

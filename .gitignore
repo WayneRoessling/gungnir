@@ -12,6 +12,10 @@ gungnir-journal/
 # The constructed SAPIENT session (testdata/sapient/SOURCE.md). Three tests in
 # gungnir-ingest/tests/sapient_spotter.rs read it, so it is fixture, not journal output.
 !testdata/sapient/*.jsonl
+# The journal written before GAP-130 changed the identifiers
+# (testdata/journals/pre-uuid-v7/SOURCE.md). DN-31 §9 row 1 replays it, so it is a
+# fixture, not journal output.
+!testdata/journals/**/*.jsonl
 /testdata/tracks/full/
 /deploy/**/*.local.*
 .DS_Store

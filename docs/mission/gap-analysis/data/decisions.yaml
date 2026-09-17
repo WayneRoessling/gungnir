@@ -1465,3 +1465,48 @@
     still expires and escalates**, so a supervisor sees a delegated item nobody took.
     The code already does this; GAP-035's closing note was wrong and carries a
     correction.
+
+- id: D-60
+  decision: How identifiers are written on the wire and in journals
+  question: >-
+    `DecisionId`, `PlanId` and `PendingApprovalId` hold a UUID v7 as a `u128` (D-56), and
+    DN-31 §5.1 kept their JSON form a number, so that a pre-change journal reads because a
+    u64 number is a valid u128. A 128-bit JSON number fails `serde_json::to_value`, is
+    rounded to a float when parsed into a `serde_json::Value`, and cannot be read inside a
+    field-tagged enum; the handoff posted to an effector and the handoff body published
+    for exchange both pass through a `Value`, and with a numeric v7 identifier both became
+    `null`. A number read through `serde_json`'s `arbitrary_precision`, raw JSON bodies on
+    the two handoff paths, or a string?
+  raised_in: "GAP-130; `../../design/DN-31-node-approval-queue.md` §5.1"
+  decider: Owner
+  unblocks: GAP-130
+  resolved: 2026-09-17
+  outcome: >-
+    **The standard hyphenated RFC 9562 string, still reading numbers.** The identifiers
+    stay `u128` in memory, minted with `Uuid::now_v7()`; they serialize as the hyphenated
+    form and deserialize from that form or a JSON integer, so every pre-change journal,
+    fixture and test literal still reads, and a path parameter takes the hyphenated form
+    or a decimal number. Implemented once, in `gungnir-model`. Chosen over
+    `arbitrary_precision`, which changes how every number inside a field-tagged enum is
+    buffered and breaks those enums, and over raw JSON bodies, which would change DN-18's
+    exchange types and still hand a 128-bit number to readers outside Rust that round it.
+
+- id: D-61
+  decision: How identifiers are shown
+  question: >-
+    A UUID v7 is 36 characters, and its leading digits are a millisecond timestamp, so the
+    identifiers one session mints look alike at the start. Until GAP-130 panels, alerts,
+    audit entries, journals and reports named decisions and plans by a small counter. Show
+    the full UUID everywhere, a short tag, or a label each desktop assigns?
+  raised_in: "GAP-130; `../../design/DN-31-node-approval-queue.md` §5.1"
+  decider: Owner
+  unblocks: GAP-130
+  resolved: 2026-09-17
+  outcome: >-
+    **A short tag on screen, the full identifier in the record.** Panels and alerts show
+    the last eight hex digits as `…9f3a61c2`, the random end; PN-07 and the handoff
+    panel's detail show the full identifier with a copy control; audit entries, journals,
+    reports and log fields carry the full form. A rehearsal seed's plan (`P-1183`) keeps
+    the number the seed gives and is shown as given. Chosen over full UUIDs everywhere,
+    which crowd a queue row and are told apart only at the end, and over per-desktop
+    labels, which would give one decision different names on different desktops.

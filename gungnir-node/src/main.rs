@@ -9,17 +9,17 @@
 //! Usage: `gungnir-node [config.json]`. Without a config path the default baseline
 //! is used (no sensors, no resources), which is enough to prove the loop runs.
 //!
-//! **Status, 2026-09-06:** the tracking pipeline, the allocator and the v2 transport are
-//! all real. This node tracks, plans, and serves the v2 read paths plus four write paths
+//! **Status, 2026-09-06:** the tracking pipeline, the allocator and the transport are
+//! all real. This node tracks, plans, and serves the read paths plus four write paths
 //! -- submitting a detection, tasking a sensor, reporting on a handoff, acknowledging a
 //! warning -- each authorising its caller. This paragraph said the opposite until today,
 //! and understating what a deployment does is read as carelessly as overstating it.
 //!
 //! What it still does not do: run an approval queue, which is a desktop's job and which
-//! `POST /v2/plans/{id}/decision` refuses architecturally rather than for want of a
+//! `POST /v3/plans/{id}/decision` refuses architecturally rather than for want of a
 //! feature; fuse cooperative evidence or correlate identity across sessions, for which it
 //! has no dependency edge (GAP-010, GAP-019); and produce any exchange product, so the
-//! three `/v2/exchange` routes answer `NotHeld` with a reason (GAP-065).
+//! three `/v3/exchange` routes answer `NotHeld` with a reason (GAP-065).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -29,7 +29,7 @@ mod auth;
 mod entities;
 
 use gungnir_api::transport::NodeApi;
-use gungnir_api::v2::{CoverageResponse, SnapshotResponse};
+use gungnir_api::v3::{CoverageResponse, SnapshotResponse};
 use gungnir_api::API_VERSION;
 use gungnir_config::{validate, ConfigBaseline, ConfigStore, FileConfigStore, NodeConfig};
 use gungnir_eventing::{Event, EventBus, InProcessBus};
@@ -1025,7 +1025,7 @@ impl gungnir_ingest::ProtocolAdapter for ApiSubmissionAdapter {
     // not match its signature. The adapters in `gungnir-ingest` are written the same way.
     #[allow(clippy::unnecessary_literal_bound)]
     fn name(&self) -> &str {
-        "api-v2-submission"
+        "api-v3-submission"
     }
 
     fn poll(
@@ -1046,7 +1046,7 @@ struct MachineSubmissionAdapter {
 impl gungnir_ingest::ProtocolAdapter for MachineSubmissionAdapter {
     #[allow(clippy::unnecessary_literal_bound)]
     fn name(&self) -> &str {
-        "api-v2-machine-submission"
+        "api-v3-machine-submission"
     }
 
     fn poll(
@@ -1221,7 +1221,7 @@ fn record_effector_reports(
     now: gungnir_model::MissionTime,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for record in api.take_effector_reports() {
-        tracing::info!(decision = record.decision.0, endpoint = %record.endpoint, "effector report on the record");
+        tracing::info!(decision = %record.decision, endpoint = %record.endpoint, "effector report on the record");
         bus.publish(
             now,
             Event::Handoff(gungnir_model::events::HandoffEvent::Reported {
@@ -1367,7 +1367,7 @@ fn publish_picture(
     }
 }
 
-/// Start the v2 transport, or say why it is not started.
+/// Start the transport, or say why it is not started.
 ///
 /// Mutual TLS when the deployment configures it, and plaintext on loopback when it does
 /// not. **The address restriction is on plaintext, not on the address**: a node with TLS
@@ -1425,16 +1425,16 @@ async fn spawn_transport(
                 // deployment has a caller authority at all. A log that overstates what a
                 // deployment cannot do is read as carelessly as one that overstates what
                 // it can.
-                "serving the v2 transport; a write path is served where its caller can be authenticated and refuses otherwise"
+                "serving the v3 transport; a write path is served where its caller can be authenticated and refuses otherwise"
             );
             let serving = Arc::clone(api);
             handle.spawn(async move {
                 if let Err(err) = gungnir_api::transport::serve_on(listener, serving).await {
-                    tracing::error!(%err, "the v2 transport stopped");
+                    tracing::error!(%err, "the v3 transport stopped");
                 }
             });
         }
-        Err(err) => tracing::error!(%err, "not serving the v2 transport"),
+        Err(err) => tracing::error!(%err, "not serving the v3 transport"),
     }
 }
 
@@ -1512,13 +1512,13 @@ async fn serve_acceptor(
         .map_or_else(|_| addr.to_string(), |a| a.to_string());
     tracing::info!(
         bind = %served,
-        "serving the v2 contract over mutual TLS; a client certificate is required"
+        "serving the v3 contract over mutual TLS; a client certificate is required"
     );
     let listener = gungnir_api::tls::TlsListener::new(tcp, acceptor);
     let serving = Arc::clone(api);
     handle.spawn(async move {
         if let Err(err) = gungnir_api::transport::serve_on_listener(listener, serving).await {
-            tracing::error!(%err, "the v2 transport stopped");
+            tracing::error!(%err, "the v3 transport stopped");
         }
     });
 }
@@ -1745,7 +1745,7 @@ async fn run(
         tracing::info!(sensors = count, "SAPIENT task adapters attached");
     }
 
-    // GAP-041: the v2 read paths are served. The write paths are routed and refuse,
+    // GAP-041: the read paths are served. The write paths are routed and refuse,
     // because nothing can authenticate a caller (GAP-057, GAP-060), and only loopback is
     // bound because there is no TLS (GAP-060). A node asked to bind anything else fails
     // to start rather than listening in plaintext.
@@ -1814,7 +1814,7 @@ async fn run(
         base.with_callers(Arc::new(callers))
     } else {
         tracing::warn!(
-            "no caller authority configured: the v2 transport will refuse every route but the session one (GAP-057)"
+            "no caller authority configured: the v3 transport will refuse every route but the session one (GAP-057)"
         );
         base
     });

@@ -55,9 +55,14 @@ pub fn apply_report(
 ) {
     use gungnir_model::handoff::{accept_report, EffectorReport};
     let handoffs: Vec<Handoff> = state.handoffs.iter().map(|r| r.handoff.clone()).collect();
-    if let Err(err) = accept_report(&handoffs, decision, report) {
+    if accept_report(&handoffs, decision, report).is_err() {
+        // By its tag, as every alert names a decision (D-61). The report named a decision
+        // this desktop never handed off; since GAP-130 that is a decision some other
+        // desktop took, not a second desktop's decision under the same number.
         state.alerts.push(format!(
-            "effector report from {endpoint} rejected: {err}; this desktop issued no such handoff"
+            "effector report from {endpoint} rejected: it names decision {}, and this desktop \
+             issued no such handoff",
+            decision.short()
         ));
         return;
     }
@@ -70,12 +75,11 @@ pub fn apply_report(
     {
         record.reports.push(report.clone());
     }
+    // What happened, without the decision: the alert names it by its tag and the audit
+    // entry names it whole, because an audit entry is searched for (D-61).
     let outcome = match report {
         EffectorReport::Acknowledged { .. } => {
-            format!(
-                "decision {}: {endpoint} acknowledged the handoff",
-                decision.0
-            )
+            format!("{endpoint} acknowledged the handoff")
         }
         EffectorReport::Executing { at } => {
             match state
@@ -84,16 +88,12 @@ pub fn apply_report(
                 .find(|e| e.decision == decision)
                 .map(|e| e.executing(*at))
             {
-                Some(Ok(())) => format!("decision {}: {endpoint} is executing", decision.0),
+                Some(Ok(())) => format!("{endpoint} is executing"),
                 Some(Err(err)) => format!(
-                    "decision {}: {endpoint} reports executing, and the engagement could not \
-                     take it: {err}",
-                    decision.0
+                    "{endpoint} reports executing, and the engagement could not take it: {}",
+                    refusal(&err)
                 ),
-                None => format!(
-                    "decision {}: {endpoint} reports executing; no open engagement",
-                    decision.0
-                ),
+                None => format!("{endpoint} reports executing; no open engagement"),
             }
         }
         EffectorReport::Completed {
@@ -112,22 +112,22 @@ pub fn apply_report(
                     at: *at,
                 };
             }
-            format!(
-                "decision {}: {endpoint} refused the handoff: {reason}",
-                decision.0
-            )
+            format!("{endpoint} refused the handoff: {reason}")
         }
     };
     let _ = at;
     crate::audit::record(
         state,
         gungnir_security::actions::EFFECTOR_REPORT,
-        outcome.clone(),
+        format!("decision {decision}: {outcome}"),
     );
-    state.alerts.push(outcome);
+    state
+        .alerts
+        .push(format!("decision {}: {outcome}", decision.short()));
 }
 
-/// Close the engagement a `Completed` report names, and say what happened (DN-06).
+/// Close the engagement a `Completed` report names, and say what happened (DN-06), in
+/// words that leave the decision for the caller to name.
 ///
 /// The evidence is stamped `EffectSource::EffectorReport` so the effect measures can
 /// count what the effector said apart from what the track's lifecycle suggested; the two
@@ -161,8 +161,7 @@ fn close_engagement(
         });
     match closed {
         Some(Ok(())) => format!(
-            "decision {}: {endpoint} reports {}",
-            decision.0,
+            "{endpoint} reports {}",
             if effective {
                 "effective"
             } else {
@@ -170,13 +169,22 @@ fn close_engagement(
             }
         ),
         Some(Err(err)) => format!(
-            "decision {}: {endpoint} reports completion the engagement could not take: {err}",
-            decision.0
+            "{endpoint} reports completion the engagement could not take: {}",
+            refusal(&err)
         ),
-        None => format!(
-            "decision {}: {endpoint} reports completion; no open engagement",
-            decision.0
-        ),
+        None => format!("{endpoint} reports completion; no open engagement"),
+    }
+}
+
+/// Why an engagement could not take a report, in an alert's words.
+///
+/// The sentence it ends has already named the decision, by its tag on an alert and whole
+/// in the audit entry, and the error's own text names it whole, which is right for a log
+/// and wrong on a panel (D-61).
+fn refusal(err: &gungnir_intercept_service::engagement::EngagementError) -> &'static str {
+    use gungnir_intercept_service::engagement::EngagementError;
+    match err {
+        EngagementError::AlreadyClosed(_) => "it is already closed",
     }
 }
 
@@ -288,7 +296,8 @@ fn publish_to_exchange(state: &AppState) {
         .handoffs
         .iter()
         .map(|record| ExchangeProductRecord {
-            id: record.handoff.decision.0.to_string(),
+            // The whole identifier: a partner asks about a product by it (D-61).
+            id: record.handoff.decision.to_string(),
             at: record.handoff.issued,
             releasability: record.handoff.releasability.clone(),
             body: serde_json::to_value(&record.handoff).unwrap_or(serde_json::Value::Null),
@@ -308,8 +317,8 @@ pub fn rows(state: &AppState) -> Vec<gungnir_ui::panels::handoff::HandoffRow<'_>
         .handoffs
         .iter()
         .map(|record| gungnir_ui::panels::handoff::HandoffRow {
-            decision: record.handoff.decision.0,
-            plan: record.handoff.plan.0,
+            decision: record.handoff.decision,
+            plan: record.handoff.plan,
             endpoint: record.endpoint.as_deref(),
             operator: &record.handoff.decided_by.operator,
             role: &record.handoff.decided_by.role,
@@ -338,7 +347,7 @@ fn record_delivery(
             state.alerts.push(format!(
                 "decision {}: no handoff endpoint is configured for the tasked resource; \
                  the handoff is manual and must be made by voice",
-                decision.0
+                decision.short()
             ));
             DeliveryState::Manual
         }
@@ -356,7 +365,7 @@ fn record_delivery(
                     );
                     state.alerts.push(format!(
                         "decision {}: handoff posted to {name}; awaiting the endpoint",
-                        decision.0
+                        decision.short()
                     ));
                     return DeliveryState::Undelivered { since: now };
                 }
@@ -374,7 +383,7 @@ fn record_delivery(
             );
             state.alerts.push(format!(
                 "decision {}: handoff to {name} undelivered: {reason}",
-                decision.0
+                decision.short()
             ));
             DeliveryState::Undelivered { since: now }
         }

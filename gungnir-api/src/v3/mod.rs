@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! v2 external contract. Read paths: a snapshot and an event stream. Write paths:
+//! v3 external contract. Read paths: a snapshot and an event stream. Write paths:
 //! detection submission and plan decisions, both authorized per caller through
 //! `gungnir-security`. Every payload carries `gungnir_model::SCHEMA_VERSION` so a
 //! client can refuse data from an incompatible node.
@@ -14,6 +14,12 @@
 //! meets the rule's condition rather than excepting it, because the transport is not
 //! in the workspace and no client is deployed against it (docs/gungnir-api-v1.md,
 //! "Version 2, decided 2026-09-05").
+//!
+//! Version 3, 2026-09-17: decision, plan and queue-item identifiers became UUID v7 written
+//! as hyphenated strings (D-56, D-60; GAP-130), so every payload carrying a plan or a
+//! decision changed type and the path moved whole. `/v2` is not removed: each of its
+//! routes answers `410 Gone` naming its successor, after authenticating the caller as the
+//! successor does (`crate::transport::router`; docs/gungnir-api-v1.md, "Version 3").
 
 use gungnir_model::{
     BearingRayView, CollectionRequirement, DetectionView, ExchangeItem, MissionTime,
@@ -102,7 +108,7 @@ impl SnapshotResponse {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SubscribeRequest {
     pub from_seq: u64,
-    /// The session token, which every route but `POST /v2/session` requires (DN-23 §6).
+    /// The session token, which every route but `POST /v3/session` requires (DN-23 §6).
     ///
     /// Carried in the frame rather than an `Authorization` header because a WebSocket
     /// client cannot always set headers on the upgrade. Defaulted so a payload written
@@ -112,7 +118,7 @@ pub struct SubscribeRequest {
     pub token: String,
 }
 
-/// `GET /v2/history?since_seq=N` (GAP-050): the envelopes the node retains from `N`
+/// `GET /v3/history?since_seq=N` (GAP-050): the envelopes the node retains from `N`
 /// onward, for a desktop reconciling an outage. The same window `SubscribeRequest`
 /// resumes from, by another door: a `since_seq` older than the window is `410 Gone`,
 /// never a shorter list, so a client cannot mistake truncation for completeness.
@@ -125,13 +131,13 @@ pub struct HistoryResponse {
     pub withheld: usize,
 }
 
-/// The query half of `GET /v2/history`.
+/// The query half of `GET /v3/history`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HistoryQuery {
     pub since_seq: u64,
 }
 
-/// Sign in and receive a session token (`POST /v2/session`, DN-23 §6).
+/// Sign in and receive a session token (`POST /v3/session`, DN-23 §6).
 ///
 /// **The one route reachable without a token**, because it is what establishes identity.
 ///
@@ -143,7 +149,7 @@ pub struct SessionRequest {
     pub passphrase: String,
 }
 
-/// What `POST /v2/session` returns.
+/// What `POST /v3/session` returns.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SessionResponse {
     pub token: String,
@@ -152,7 +158,7 @@ pub struct SessionResponse {
     pub expires_s: f64,
 }
 
-/// What `GET /v2/coverage` returns (DN-12 §6, GAP-006).
+/// What `GET /v3/coverage` returns (DN-12 §6, GAP-006).
 ///
 /// **Not a bare `Vec<CoverageGap>`, which is what §6 wrote.** DN-12 §5 puts the sampling
 /// spacing and whether terrain masking was applied *on the result*, so a coarse run
@@ -174,7 +180,7 @@ pub enum CoverageResponse {
     },
 }
 
-/// Who the caller is, for `GET /v2/session`.
+/// Who the caller is, for `GET /v3/session`.
 ///
 /// Lets a desktop tell an expired session from an unreachable node, which look the same
 /// from the outside and mean different things.
@@ -227,7 +233,7 @@ pub fn refuse_other_schema(found: u32) -> Result<(), gungnir_model::ModelError> 
     gungnir_model::check_schema_version(found)
 }
 
-/// `POST /v2/sensors/{sensor_id}/task` (GAP-004): a command for the node's registry to
+/// `POST /v3/sensors/{sensor_id}/task` (GAP-004): a command for the node's registry to
 /// issue to its sensor. The node answers with its own task id; acknowledgement,
 /// refusal or silence arrive on the event stream as `SensorTaskEvent`s naming that id.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -243,7 +249,7 @@ pub struct SensorTaskResponse {
     pub task: gungnir_model::SensorTaskId,
 }
 
-/// `POST /v2/handoffs/{decision_id}/report` (GAP-040): what the effector says about a
+/// `POST /v3/handoffs/{decision_id}/report` (GAP-040): what the effector says about a
 /// handoff. The node puts it on the record as `HandoffEvent::Reported`; the desktop that
 /// issued the handoff applies it, and rejects a report on a decision it does not know.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -251,7 +257,7 @@ pub struct EffectorReportRequest {
     pub report: gungnir_model::handoff::EffectorReport,
 }
 
-/// `POST /v2/warnings/{asset_id}/{track_id}/acknowledge` (GAP-042, DN-03 §5 rule 2): the
+/// `POST /v3/warnings/{asset_id}/{track_id}/acknowledge` (GAP-042, DN-03 §5 rule 2): the
 /// warned party says it was told.
 ///
 /// The pair the warning is keyed by is in the path, because that is what identifies it in
@@ -293,7 +299,7 @@ pub struct ExchangeProduct {
     pub body: serde_json::Value,
 }
 
-/// What `GET /v2/exchange/{warnings,reports,handoffs}` returns (DN-18 §5, GAP-065).
+/// What `GET /v3/exchange/{warnings,reports,handoffs}` returns (DN-18 §5, GAP-065).
 ///
 /// Two states rather than one list, for the reason [`CoverageResponse`] has two: "we hold
 /// none of these" and "we hold some and released none of them to you" are opposite claims
@@ -315,7 +321,7 @@ pub enum ExchangeResponse {
     NotHeld { item: ExchangeItem, reason: String },
 }
 
-/// `POST /v2/exchange/{warnings,reports,handoffs}` (DN-18 §5 amendment 2, GAP-065): the
+/// `POST /v3/exchange/{warnings,reports,handoffs}` (DN-18 §5 amendment 2, GAP-065): the
 /// desktop that holds an item posts what it currently holds, and the node replaces its
 /// held set for that item with this list.
 ///

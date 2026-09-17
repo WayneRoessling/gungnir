@@ -171,7 +171,7 @@ fn without_a_link_the_command_fails_at_the_door() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-fn handoff(decision: u64) -> Handoff {
+fn handoff(decision: u128) -> Handoff {
     Handoff::from_decision(
         DecisionId(decision),
         PlanId(decision),

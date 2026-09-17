@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! The v2 transport: JSON over HTTP and a WebSocket event stream (GAP-041).
+//! The v3 transport: JSON over HTTP and a WebSocket event stream (GAP-041).
 //!
 //! Decided in `docs/gungnir-api-v1.md` and D-18; the crates are `axum` with its `ws`
 //! feature, recorded in `agentic-coding-standards.md` §2.9.
@@ -13,7 +13,7 @@
 //! honours `SubscribeRequest::from_seq`. A desktop can connect to a node and follow the
 //! live picture, which is the half of MT-10 that was impossible before.
 //!
-//! **Every route but `POST /v2/session` requires a session token** (DN-23 §6, GAP-057).
+//! **Every route but `POST /v3/session` requires a session token** (DN-23 §6, GAP-057).
 //! The token is minted by the node against its own account store and verified per
 //! request; a caller who presents none, or a bad one, gets `401`. `ApprovalRequest`
 //! carries an operator in its body and that field is **not** believed: the caller is
@@ -23,7 +23,7 @@
 //! and says so. That is a deployment with no account store, which is the default: it
 //! runs its pipeline, journals it, and serves nobody.
 //!
-//! **`POST /v2/detections` is served; `POST /v2/plans/{plan_id}/decision` is not**, and
+//! **`POST /v3/detections` is served; `POST /v3/plans/{plan_id}/decision` is not**, and
 //! for a different reason than before. A submitted detection is queued for the ingest
 //! gateway, which authenticates and validates it exactly as it does a sensor's -- see
 //! [`NodeApi::submit_detection`]. A plan decision has nothing to decide against: **this
@@ -33,22 +33,22 @@
 //! true reason rather than the authentication one.
 //!
 //! Routing a refused endpoint rather than leaving it absent is deliberate: a `404` would
-//! tell a client the endpoint is not part of v2, which is false.
+//! tell a client the endpoint is not part of the contract, which is false.
 //!
 //! # What the outside world may say back, and what it may be sent
 //!
 //! Two routes exist so an outside party can answer something this deployment sent it:
-//! `POST /v2/handoffs/{decision_id}/report` (GAP-040) and
-//! `POST /v2/warnings/{asset_id}/{track_id}/acknowledge` (GAP-042). Both take a machine
+//! `POST /v3/handoffs/{decision_id}/report` (GAP-040) and
+//! `POST /v3/warnings/{asset_id}/{track_id}/acknowledge` (GAP-042). Both take a machine
 //! whose certificate speaks for the right thing or an operator holding the matching
 //! action, and both **queue rather than apply**: the node holds neither a handoff nor a
 //! warning ledger, so it puts the fact on the record and the desktop that issued the one
 //! or raised the other applies it.
 //!
-//! `GET /v2/exchange/{warnings,reports,handoffs}` (GAP-065) are DN-18's three remaining
+//! `GET /v3/exchange/{warnings,reports,handoffs}` (GAP-065) are DN-18's three remaining
 //! items, gated by the agreement and the marking together with the restrictive one
 //! deciding, and reporting what they withheld. Tracks and health keep their existing
-//! doors, `/v2/snapshot` and `/v2/health`.
+//! doors, `/v3/snapshot` and `/v3/health`.
 //!
 //! **`POST` on those same three paths (GAP-065, DN-18 §5 amendment 2, human-owned;
 //! signatures: docs/signatures.md) is the write path DN-18's own amendment 1 said
@@ -75,9 +75,21 @@
 //! **A node serving mutual TLS is not bound by that** (GAP-060): see [`crate::tls`],
 //! which builds the acceptor, and `serve_on_listener`, which serves any listener. The
 //! restriction is on plaintext, not on the address.
+//!
+//! # `/v3`, and the retired `/v2`
+//!
+//! Every route is served under `crate::API_VERSION`, and its path is built by `crate::path`
+//! from `crate::routes`, which the desktop's client builds its URLs from too (GAP-130).
+//! `/v2` was retired on 2026-09-17, when decision, plan and queue-item identifiers became
+//! UUID v7 written as strings (D-56, D-60) and every payload carrying one changed. **Its
+//! routes are still routed** ([`RETIRED`]): each authenticates its caller exactly as its
+//! `/v3` successor does -- so a caller the successor would refuse is refused in the same
+//! words, and a node tells nobody unauthenticated where a route went -- and then answers
+//! `410 Gone` naming the successor. The event stream answers before upgrading, because its
+//! token travels in the first frame, which a retired route never reads.
 
 use crate::tls::{Peer, PlainListener, TlsListener};
-use crate::{v2, ApiError};
+use crate::{routes, v3, ApiError};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, State};
 use axum::http::StatusCode;
@@ -274,13 +286,13 @@ impl CallerAuthority for AccountTokenAuthority {
 /// only this. That keeps a single owner for mutable state and means a slow client cannot
 /// stall the loop.
 pub struct NodeApi {
-    snapshot: RwLock<v2::SnapshotResponse>,
+    snapshot: RwLock<v3::SnapshotResponse>,
     /// The coverage answer this node last computed (GAP-006).
     ///
     /// Published by the tick like the snapshot, because computing it in a request handler
     /// would put a sampling loop on the request path and let a caller's polling rate
     /// decide the node's load.
-    coverage: RwLock<v2::CoverageResponse>,
+    coverage: RwLock<v3::CoverageResponse>,
     events: broadcast::Sender<Envelope>,
     backlog: Mutex<VecDeque<Envelope>>,
     /// Mission time as of the last published snapshot, which is what token expiry is
@@ -318,8 +330,8 @@ pub struct NodeApi {
     acknowledgements: Mutex<Vec<WarningAcknowledgement>>,
     /// What this deployment holds for exchange, per item (DN-18 §5, GAP-065). Absent
     /// means nothing has been published for that item, which is answered as
-    /// [`v2::ExchangeResponse::NotHeld`] and never as an empty list.
-    exchange_products: RwLock<BTreeMap<ExchangeItem, v2::ExchangeResponse>>,
+    /// [`v3::ExchangeResponse::NotHeld`] and never as an empty list.
+    exchange_products: RwLock<BTreeMap<ExchangeItem, v3::ExchangeResponse>>,
 }
 
 /// What a client certificate speaks for (D-02). The node builds this from the
@@ -402,11 +414,11 @@ impl std::fmt::Debug for NodeApi {
 
 impl NodeApi {
     #[must_use]
-    pub fn new(snapshot: v2::SnapshotResponse) -> Self {
+    pub fn new(snapshot: v3::SnapshotResponse) -> Self {
         let (events, _) = broadcast::channel(BACKLOG_CAPACITY);
         Self {
             snapshot: RwLock::new(snapshot),
-            coverage: RwLock::new(v2::CoverageResponse::NotComputed {
+            coverage: RwLock::new(v3::CoverageResponse::NotComputed {
                 reason: "this node has not computed a coverage answer yet".into(),
             }),
             events,
@@ -491,7 +503,7 @@ impl NodeApi {
     pub fn publish_exchange(
         &self,
         item: ExchangeItem,
-        products: Vec<v2::ExchangeProduct>,
+        products: Vec<v3::ExchangeProduct>,
     ) -> Result<(), ApiError> {
         let mut slot = self
             .exchange_products
@@ -499,7 +511,7 @@ impl NodeApi {
             .map_err(|_| ApiError::Transport("the exchange lock was poisoned".into()))?;
         slot.insert(
             item,
-            v2::ExchangeResponse::Held {
+            v3::ExchangeResponse::Held {
                 item,
                 products,
                 withheld: 0,
@@ -525,7 +537,7 @@ impl NodeApi {
             .map_err(|_| ApiError::Transport("the exchange lock was poisoned".into()))?;
         slot.insert(
             item,
-            v2::ExchangeResponse::NotHeld {
+            v3::ExchangeResponse::NotHeld {
                 item,
                 reason: reason.into(),
             },
@@ -536,12 +548,12 @@ impl NodeApi {
     /// Everything held for `item`, unfiltered: what an operator inside the deployment
     /// sees. `None` when the lock is unreadable.
     #[must_use]
-    pub fn exchange_all(&self, item: ExchangeItem) -> Option<v2::ExchangeResponse> {
+    pub fn exchange_all(&self, item: ExchangeItem) -> Option<v3::ExchangeResponse> {
         let held = self.exchange_products.read().ok()?;
         Some(
             held.get(&item)
                 .cloned()
-                .unwrap_or_else(|| v2::ExchangeResponse::NotHeld {
+                .unwrap_or_else(|| v3::ExchangeResponse::NotHeld {
                     item,
                     reason: "this deployment has published nothing for exchange under this item"
                         .into(),
@@ -557,20 +569,20 @@ impl NodeApi {
     /// exists: a partner told its list is partial can ask; one that is not told believes
     /// it has everything.
     #[must_use]
-    pub fn exchange_for(&self, party: &str, item: ExchangeItem) -> Option<v2::ExchangeResponse> {
+    pub fn exchange_for(&self, party: &str, item: ExchangeItem) -> Option<v3::ExchangeResponse> {
         match self.exchange_all(item)? {
-            held @ v2::ExchangeResponse::NotHeld { .. } => Some(held),
-            v2::ExchangeResponse::Held {
+            held @ v3::ExchangeResponse::NotHeld { .. } => Some(held),
+            v3::ExchangeResponse::Held {
                 item,
                 products,
                 withheld,
             } => {
                 let total = products.len();
-                let products: Vec<v2::ExchangeProduct> = products
+                let products: Vec<v3::ExchangeProduct> = products
                     .into_iter()
                     .filter(|p| self.exchange.may_send(party, item, &p.releasability))
                     .collect();
-                Some(v2::ExchangeResponse::Held {
+                Some(v3::ExchangeResponse::Held {
                     item,
                     withheld: withheld + (total - products.len()),
                     products,
@@ -596,7 +608,7 @@ impl NodeApi {
     /// by the agreement and the marking, the restrictive one deciding, and the count of
     /// what was withheld on the response.
     #[must_use]
-    pub fn snapshot_for(&self, party: &str) -> Option<v2::SnapshotResponse> {
+    pub fn snapshot_for(&self, party: &str) -> Option<v3::SnapshotResponse> {
         let full = self.snapshot()?;
         let total_tracks = full.tracks.len();
         let tracks: Vec<_> = full
@@ -629,7 +641,7 @@ impl NodeApi {
             withheld += 1;
             SystemHealth::default()
         };
-        Some(v2::SnapshotResponse {
+        Some(v3::SnapshotResponse {
             schema_version: full.schema_version,
             tracks,
             plan: None,
@@ -691,7 +703,7 @@ impl NodeApi {
     }
 
     /// Replace the published coverage answer. Called by the tick.
-    pub fn publish_coverage(&self, coverage: v2::CoverageResponse) -> Result<(), ApiError> {
+    pub fn publish_coverage(&self, coverage: v3::CoverageResponse) -> Result<(), ApiError> {
         let mut slot = self
             .coverage
             .write()
@@ -701,7 +713,7 @@ impl NodeApi {
     }
 
     #[must_use]
-    pub fn coverage(&self) -> Option<v2::CoverageResponse> {
+    pub fn coverage(&self) -> Option<v3::CoverageResponse> {
         self.coverage.read().ok().map(|c| c.clone())
     }
 
@@ -744,7 +756,7 @@ impl NodeApi {
     /// A poisoned lock is reported rather than unwrapped: the node logs it and keeps
     /// running on the previous snapshot, which is stale but true of some moment, whereas
     /// a panicking node serves nothing at all.
-    pub fn publish_snapshot(&self, snapshot: v2::SnapshotResponse) -> Result<(), ApiError> {
+    pub fn publish_snapshot(&self, snapshot: v3::SnapshotResponse) -> Result<(), ApiError> {
         let mut slot = self
             .snapshot
             .write()
@@ -782,7 +794,7 @@ impl NodeApi {
     /// answered over HTTP and may not have opened its socket yet.
     ///
     /// A test that publishes into that window loses the envelope silently and for good:
-    /// a `from_seq` 0 subscription means "everything from now" by the v2 contract, so
+    /// a `from_seq` 0 subscription means "everything from now" by the contract, so
     /// [`NodeApi::backlog_since`] will not replay it either. `gungnir-app`'s failover
     /// end-to-end test waits on this before publishing for exactly that reason.
     #[must_use]
@@ -791,7 +803,7 @@ impl NodeApi {
     }
 
     #[must_use]
-    pub fn snapshot(&self) -> Option<v2::SnapshotResponse> {
+    pub fn snapshot(&self) -> Option<v3::SnapshotResponse> {
         self.snapshot.read().ok().map(|s| s.clone())
     }
 
@@ -828,44 +840,249 @@ impl NodeApi {
     }
 }
 
-/// The v2 routes.
+/// The routes: every one under `/v3`, and the retired `/v2` ones answering `410 Gone`.
+///
+/// Each path is `crate::path` of a `crate::routes` constant, the pair the desktop's client
+/// builds its URLs from, so the node and the desktop cannot disagree about where a route
+/// is (GAP-130).
 pub fn router(api: Arc<NodeApi>) -> Router {
-    Router::new()
-        // One `route` call for the two methods: axum panics on a second registration of
-        // the same path, and a panic at start-up is not how a node should learn this.
-        .route("/v2/session", post(sign_in).get(session_status))
-        .route("/v2/snapshot", get(snapshot))
-        .route("/v2/health", get(health))
-        .route("/v2/coverage", get(coverage))
-        .route("/v2/events", get(events))
-        .route("/v2/history", get(history))
-        .route("/v2/detections", post(submit_detection))
-        .route("/v2/sensors/{sensor_id}/task", post(task_sensor))
-        .route("/v2/handoffs/{decision_id}/report", post(effector_report))
+    let served = Router::new()
+        // One `route` call for the two methods on a path, as everywhere below: the pair
+        // reads as one door with two directions.
         .route(
-            "/v2/warnings/{asset_id}/{track_id}/acknowledge",
+            &crate::path(routes::SESSION),
+            post(sign_in).get(session_status),
+        )
+        .route(&crate::path(routes::SNAPSHOT), get(snapshot))
+        .route(&crate::path(routes::HEALTH), get(health))
+        .route(&crate::path(routes::COVERAGE), get(coverage))
+        .route(&crate::path(routes::EVENTS), get(events))
+        .route(&crate::path(routes::HISTORY), get(history))
+        .route(&crate::path(routes::DETECTIONS), post(submit_detection))
+        .route(&crate::path(routes::SENSOR_TASK), post(task_sensor))
+        .route(&crate::path(routes::HANDOFF_REPORT), post(effector_report))
+        .route(
+            &crate::path(routes::WARNING_ACKNOWLEDGE),
             post(acknowledge_warning),
         )
         // DN-18's three items that had no door (GAP-065). Tracks and health keep theirs:
-        // `/v2/snapshot` and `/v2/health` are already the two-gate paths for those, and a
+        // `/v3/snapshot` and `/v3/health` are already the two-gate paths for those, and a
         // second door to the same picture is a second place the gates could differ. Each
         // now carries both doors on the same path (GAP-065, DN-18 §5 amendment 2): `GET`
         // for a partner reading what this deployment holds, `POST` for the desktop that
         // holds it telling this node what that now is.
         .route(
-            "/v2/exchange/warnings",
+            &crate::path(routes::EXCHANGE_WARNINGS),
             get(exchange_warnings).post(publish_warnings),
         )
         .route(
-            "/v2/exchange/reports",
+            &crate::path(routes::EXCHANGE_REPORTS),
             get(exchange_reports).post(publish_reports),
         )
         .route(
-            "/v2/exchange/handoffs",
+            &crate::path(routes::EXCHANGE_HANDOFFS),
             get(exchange_handoffs).post(publish_handoffs),
         )
-        .route("/v2/plans/{plan_id}/decision", post(refuse_decision))
+        .route(&crate::path(routes::PLAN_DECISION), post(refuse_decision));
+    RETIRED
+        .iter()
+        .fold(served, |router, retired| {
+            let path = format!("/{}{}", crate::RETIRED_API_VERSION, retired.route);
+            let authentication = retired.authentication;
+            let answer = move |State(api): State<Arc<NodeApi>>,
+                               ConnectInfo(peer): ConnectInfo<Peer>,
+                               headers: axum::http::HeaderMap,
+                               uri: axum::http::Uri| async move {
+                gone(&api, &headers, &peer, uri.path(), authentication)
+            };
+            match retired.method {
+                RetiredMethod::Get => router.route(&path, get(answer)),
+                RetiredMethod::Post => router.route(&path, post(answer)),
+            }
+        })
         .with_state(api)
+}
+
+/// How a route establishes who is calling, before it does anything else.
+///
+/// Named so a retired `/v2` route can do exactly what its `/v3` successor does (GAP-130).
+/// Each variant is the check the successor's handler opens with; what a handler checks
+/// after that -- a role's permission, an agreement's items, a certificate's role -- is
+/// authorization, and a retired route authorizes nothing, because it does nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Authentication {
+    /// `POST /session`: nothing, because signing in is what establishes identity.
+    SignIn,
+    /// An operator's token, or a machine party with an exchange agreement ([`caller`]).
+    Caller,
+    /// An operator's token alone ([`operator_caller`]), naming the route as the
+    /// successor's refusal does.
+    Operator(&'static str),
+    /// A machine whose certificate speaks for something in this deployment, or else an
+    /// operator's token ([`machine_identity`], then [`operator_caller`]).
+    MachineOrOperator(&'static str),
+    /// The event stream, whose token travels in the first frame after the upgrade: a
+    /// retired stream never upgrades, so it never reads one.
+    Stream,
+}
+
+/// A method a retired route answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RetiredMethod {
+    Get,
+    Post,
+}
+
+/// One `/v2` route: its path below the version, its method, and how its successor
+/// authenticates.
+#[derive(Debug, Clone, Copy)]
+struct RetiredRoute {
+    route: &'static str,
+    method: RetiredMethod,
+    authentication: Authentication,
+}
+
+/// Every `/v2` route as it stood when `/v3` replaced it on 2026-09-17 (GAP-130).
+///
+/// **Frozen.** A route added under `/v3` later never existed under `/v2`, and a request
+/// for it there is not found rather than gone; only what a `/v2` client could have called
+/// is answered with its successor.
+const RETIRED: &[RetiredRoute] = &[
+    RetiredRoute {
+        route: routes::SESSION,
+        method: RetiredMethod::Post,
+        authentication: Authentication::SignIn,
+    },
+    RetiredRoute {
+        route: routes::SESSION,
+        method: RetiredMethod::Get,
+        authentication: Authentication::Operator("the session route"),
+    },
+    RetiredRoute {
+        route: routes::SNAPSHOT,
+        method: RetiredMethod::Get,
+        authentication: Authentication::Caller,
+    },
+    RetiredRoute {
+        route: routes::HEALTH,
+        method: RetiredMethod::Get,
+        authentication: Authentication::Caller,
+    },
+    RetiredRoute {
+        route: routes::COVERAGE,
+        method: RetiredMethod::Get,
+        authentication: Authentication::Operator("coverage"),
+    },
+    RetiredRoute {
+        route: routes::EVENTS,
+        method: RetiredMethod::Get,
+        authentication: Authentication::Stream,
+    },
+    RetiredRoute {
+        route: routes::HISTORY,
+        method: RetiredMethod::Get,
+        authentication: Authentication::Caller,
+    },
+    RetiredRoute {
+        route: routes::DETECTIONS,
+        method: RetiredMethod::Post,
+        authentication: Authentication::MachineOrOperator("detection submission"),
+    },
+    RetiredRoute {
+        route: routes::SENSOR_TASK,
+        method: RetiredMethod::Post,
+        authentication: Authentication::Operator("sensor tasking"),
+    },
+    RetiredRoute {
+        route: routes::HANDOFF_REPORT,
+        method: RetiredMethod::Post,
+        authentication: Authentication::MachineOrOperator("effector reporting"),
+    },
+    RetiredRoute {
+        route: routes::WARNING_ACKNOWLEDGE,
+        method: RetiredMethod::Post,
+        authentication: Authentication::MachineOrOperator("warning acknowledgement"),
+    },
+    RetiredRoute {
+        route: routes::EXCHANGE_WARNINGS,
+        method: RetiredMethod::Get,
+        authentication: Authentication::Caller,
+    },
+    RetiredRoute {
+        route: routes::EXCHANGE_WARNINGS,
+        method: RetiredMethod::Post,
+        authentication: Authentication::Operator("publishing to exchange"),
+    },
+    RetiredRoute {
+        route: routes::EXCHANGE_REPORTS,
+        method: RetiredMethod::Get,
+        authentication: Authentication::Caller,
+    },
+    RetiredRoute {
+        route: routes::EXCHANGE_REPORTS,
+        method: RetiredMethod::Post,
+        authentication: Authentication::Operator("publishing to exchange"),
+    },
+    RetiredRoute {
+        route: routes::EXCHANGE_HANDOFFS,
+        method: RetiredMethod::Get,
+        authentication: Authentication::Caller,
+    },
+    RetiredRoute {
+        route: routes::EXCHANGE_HANDOFFS,
+        method: RetiredMethod::Post,
+        authentication: Authentication::Operator("publishing to exchange"),
+    },
+    RetiredRoute {
+        route: routes::PLAN_DECISION,
+        method: RetiredMethod::Post,
+        authentication: Authentication::Operator("the decision route"),
+    },
+];
+
+/// A retired route's answer: the successor's authentication, then `410 Gone` naming the
+/// successor (GAP-130, DN-31 §5.1).
+///
+/// The successor is the request's own path under `/v3`, parameters included, so a client
+/// is told exactly where to send what it sent. It is in the message for a person and in
+/// `successor` for a program.
+fn gone(
+    api: &NodeApi,
+    headers: &axum::http::HeaderMap,
+    peer: &Peer,
+    path: &str,
+    authentication: Authentication,
+) -> Response {
+    let authenticated = match authentication {
+        Authentication::SignIn | Authentication::Stream => Ok(()),
+        Authentication::Caller => caller(api, headers, peer).map(|_| ()),
+        Authentication::Operator(what) => operator_caller(api, headers, peer, what).map(|_| ()),
+        Authentication::MachineOrOperator(what) => match machine_identity(api, headers, peer) {
+            Some(_) => Ok(()),
+            None => operator_caller(api, headers, peer, what).map(|_| ()),
+        },
+    };
+    if let Err(refused) = authenticated {
+        return refused;
+    }
+    let below = path
+        .strip_prefix(&format!("/{}", crate::RETIRED_API_VERSION))
+        .unwrap_or(path);
+    let successor = crate::path(below);
+    (
+        StatusCode::GONE,
+        Json(serde_json::json!({
+            "error": StatusCode::GONE.as_u16(),
+            "message": format!(
+                "/{} was retired on 2026-09-17: decision, plan and queue-item identifiers \
+                 became UUID v7 written as strings (D-56, D-60), so every payload carrying \
+                 one changed. This route is now {successor}.",
+                crate::RETIRED_API_VERSION
+            ),
+            "successor": successor,
+        })),
+    )
+        .into_response()
 }
 
 /// Who is asking (GAP-062, D-02): an operator with a session token, or a machine whose
@@ -878,7 +1095,7 @@ pub enum Caller {
 
 /// Resolve the caller, or say why not.
 ///
-/// Every route but `POST /v2/session` goes through this. A bearer token is tried first,
+/// Every route but `POST /v3/session` goes through this. A bearer token is tried first,
 /// because a desktop on a mutual-TLS link still speaks for an operator; a connection
 /// with a party and no token is a machine, and a machine with no agreement is refused
 /// here (DN-18 §5: no agreement, no exchange). A node with no authority configured
@@ -946,10 +1163,10 @@ fn operator(api: &NodeApi, headers: &axum::http::HeaderMap) -> Result<OperatorSe
     })
 }
 
-/// `POST /v2/session`: the one route reachable without a token.
+/// `POST /v3/session`: the one route reachable without a token.
 async fn sign_in(
     State(api): State<Arc<NodeApi>>,
-    Json(request): Json<v2::SessionRequest>,
+    Json(request): Json<v3::SessionRequest>,
 ) -> Response {
     let Some(callers) = api.callers.as_ref() else {
         return problem(
@@ -958,7 +1175,7 @@ async fn sign_in(
         );
     };
     match callers.sign_in(request.operator, &request.passphrase, api.now()) {
-        Ok(issued) => Json(v2::SessionResponse {
+        Ok(issued) => Json(v3::SessionResponse {
             token: issued.token,
             expires_s: issued.expires_s,
         })
@@ -995,7 +1212,7 @@ fn operator_caller(
     }
 }
 
-/// `GET /v2/session`: who the caller is, so a desktop can tell an expired session from
+/// `GET /v3/session`: who the caller is, so a desktop can tell an expired session from
 /// an unreachable node.
 async fn session_status(
     State(api): State<Arc<NodeApi>>,
@@ -1004,7 +1221,7 @@ async fn session_status(
 ) -> Response {
     match operator_caller(&api, &headers, &peer, "the session route") {
         Err(response) => response,
-        Ok(session) => Json(v2::SessionStatus {
+        Ok(session) => Json(v3::SessionStatus {
             operator: session.operator.0,
             role: format!("{:?}", session.role),
             expires_s: session.expires.unwrap_or_default(),
@@ -1013,7 +1230,7 @@ async fn session_status(
     }
 }
 
-/// Serve the v2 contract in the clear, until the future is dropped.
+/// Serve the contract in the clear, until the future is dropped.
 ///
 /// Refuses any address that is not loopback: see the module documentation. The refusal is
 /// an error rather than a warning because a node that logged and carried on would still
@@ -1094,7 +1311,7 @@ async fn snapshot(
     }
 }
 
-/// `GET /v2/history?since_seq=N`: the retained envelopes from `N` (GAP-050).
+/// `GET /v3/history?since_seq=N`: the retained envelopes from `N` (GAP-050).
 ///
 /// `410 Gone` when the window has moved past `N`: the client's outage is longer than the
 /// node retains, and saying so is the contract's rule for the stream as well.
@@ -1102,7 +1319,7 @@ async fn history(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
     headers: axum::http::HeaderMap,
-    axum::extract::Query(query): axum::extract::Query<v2::HistoryQuery>,
+    axum::extract::Query(query): axum::extract::Query<v3::HistoryQuery>,
 ) -> Response {
     let party = match caller(&api, &headers, &peer) {
         Err(response) => return response,
@@ -1119,7 +1336,7 @@ async fn history(
                     .filter(|e| api.releases(party, e))
                     .collect(),
             };
-            Json(v2::HistoryResponse {
+            Json(v3::HistoryResponse {
                 since_seq: query.since_seq,
                 withheld: total - envelopes.len(),
                 envelopes,
@@ -1137,7 +1354,7 @@ async fn history(
     }
 }
 
-/// `GET /v2/coverage`: the gaps along the configured approaches, with the parameters
+/// `GET /v3/coverage`: the gaps along the configured approaches, with the parameters
 /// that found them.
 async fn coverage(
     State(api): State<Arc<NodeApi>>,
@@ -1184,7 +1401,7 @@ async fn health(
     }
 }
 
-/// `POST /v2/detections`: queue a detection for the ingest gateway.
+/// `POST /v3/detections`: queue a detection for the ingest gateway.
 ///
 /// **Queued, not accepted.** The gateway authenticates the sensor and validates the
 /// detection on its next tick exactly as it does a sensor feed, and quarantines it with a
@@ -1194,7 +1411,7 @@ async fn submit_detection(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
     headers: axum::http::HeaderMap,
-    body: Result<Json<v2::SubmitDetectionRequest>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<v3::SubmitDetectionRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
     // A peer's tracks enter through the peer adapter under DN-16, never this route.
     // A sensor with a certificate submits for its own id (GAP-002); everyone else is an
@@ -1231,7 +1448,7 @@ async fn submit_detection(
     // there was none on any inbound path: a caller posting a previous shape was refused
     // only where serde happened to be unable to read it, which answers "the body did not
     // decode" and says nothing about versions.
-    if let Err(err) = v2::refuse_other_schema(request.schema_version) {
+    if let Err(err) = v3::refuse_other_schema(request.schema_version) {
         return problem(StatusCode::CONFLICT, &err.to_string());
     }
     match vouched {
@@ -1263,7 +1480,7 @@ async fn submit_detection(
 /// far faster than this; the bound exists so a stalled loop answers rather than hangs.
 const TASK_REPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// `POST /v2/sensors/{sensor_id}/task` (GAP-004): an operator with the `sensor.task`
+/// `POST /v3/sensors/{sensor_id}/task` (GAP-004): an operator with the `sensor.task`
 /// action asks the node's registry to command a sensor.
 ///
 /// Answered with the node's task id once the loop has issued it, so the caller can
@@ -1275,7 +1492,7 @@ async fn task_sensor(
     ConnectInfo(peer): ConnectInfo<Peer>,
     axum::extract::Path(sensor_id): axum::extract::Path<u32>,
     headers: axum::http::HeaderMap,
-    body: Result<Json<v2::SensorTaskRequest>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<v3::SensorTaskRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
     let session = match operator_caller(&api, &headers, &peer, "sensor tasking") {
         Ok(session) => session,
@@ -1312,7 +1529,7 @@ async fn task_sensor(
     }
     match tokio::time::timeout(TASK_REPLY_TIMEOUT, answer).await {
         Ok(Ok(Ok(task))) => {
-            (StatusCode::ACCEPTED, Json(v2::SensorTaskResponse { task })).into_response()
+            (StatusCode::ACCEPTED, Json(v3::SensorTaskResponse { task })).into_response()
         }
         Ok(Ok(Err(reason))) => problem(StatusCode::CONFLICT, &reason),
         Ok(Err(_)) => problem(
@@ -1326,7 +1543,7 @@ async fn task_sensor(
     }
 }
 
-/// `POST /v2/handoffs/{decision_id}/report` (GAP-040): what the effector says.
+/// `POST /v3/handoffs/{decision_id}/report` (GAP-040): what the effector says.
 ///
 /// A machine whose certificate speaks for a handoff endpoint, or an operator with the
 /// `effector.report` action keying in what came over the radio. The node knows no
@@ -1335,9 +1552,9 @@ async fn task_sensor(
 async fn effector_report(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
-    axum::extract::Path(decision_id): axum::extract::Path<u64>,
+    decision: Result<axum::extract::Path<DecisionId>, axum::extract::rejection::PathRejection>,
     headers: axum::http::HeaderMap,
-    body: Result<Json<v2::EffectorReportRequest>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<v3::EffectorReportRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
     let endpoint = match machine_identity(&api, &headers, &peer) {
         Some((_, MachineRole::Effector { endpoint })) => endpoint,
@@ -1363,13 +1580,24 @@ async fn effector_report(
             Err(response) => return response,
         },
     };
+    // Either written form of the identifier (D-60): the hyphenated UUID a desktop issues
+    // since GAP-130, or the decimal number an effector written before it sends. Anything
+    // else is refused in the problem shape every other refusal here takes, naming both
+    // forms, rather than with axum's plain-text rejection a client cannot read.
+    let Ok(axum::extract::Path(decision)) = decision else {
+        return problem(
+            StatusCode::BAD_REQUEST,
+            "the decision in the path is not an identifier: expected the hyphenated UUID \
+             form (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) or a decimal number",
+        );
+    };
     let Ok(Json(request)) = body else {
         return problem(StatusCode::BAD_REQUEST, "the report could not be decoded");
     };
     match api.reports.lock() {
         Ok(mut queue) => {
             queue.push(EffectorReportRecord {
-                decision: DecisionId(decision_id),
+                decision,
                 endpoint,
                 report: request.report,
             });
@@ -1382,7 +1610,7 @@ async fn effector_report(
     }
 }
 
-/// `POST /v2/warnings/{asset_id}/{track_id}/acknowledge` (GAP-042, DN-03 §5 rule 2): the
+/// `POST /v3/warnings/{asset_id}/{track_id}/acknowledge` (GAP-042, DN-03 §5 rule 2): the
 /// warned party says it was told.
 ///
 /// A machine whose certificate speaks for a warning channel, or an operator with the
@@ -1400,7 +1628,7 @@ async fn acknowledge_warning(
     ConnectInfo(peer): ConnectInfo<Peer>,
     axum::extract::Path((asset_id, track_id)): axum::extract::Path<(u32, u64)>,
     headers: axum::http::HeaderMap,
-    body: Result<Json<v2::WarningAcknowledgementRequest>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<v3::WarningAcknowledgementRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
     let party = match machine_identity(&api, &headers, &peer) {
         Some((_, MachineRole::WarnedParty { channel })) => channel,
@@ -1452,7 +1680,7 @@ async fn acknowledge_warning(
     }
 }
 
-/// `GET /v2/exchange/warnings` (DN-18 §5, GAP-065).
+/// `GET /v3/exchange/warnings` (DN-18 §5, GAP-065).
 async fn exchange_warnings(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
@@ -1461,7 +1689,7 @@ async fn exchange_warnings(
     serve_exchange(&api, &headers, &peer, ExchangeItem::Warnings)
 }
 
-/// `GET /v2/exchange/reports` (DN-18 §5, GAP-065).
+/// `GET /v3/exchange/reports` (DN-18 §5, GAP-065).
 async fn exchange_reports(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
@@ -1470,7 +1698,7 @@ async fn exchange_reports(
     serve_exchange(&api, &headers, &peer, ExchangeItem::Reports)
 }
 
-/// `GET /v2/exchange/handoffs` (DN-18 §5, GAP-065).
+/// `GET /v3/exchange/handoffs` (DN-18 §5, GAP-065).
 async fn exchange_handoffs(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
@@ -1479,32 +1707,32 @@ async fn exchange_handoffs(
     serve_exchange(&api, &headers, &peer, ExchangeItem::Handoffs)
 }
 
-/// `POST /v2/exchange/warnings` (GAP-065, DN-18 §5 amendment 2).
+/// `POST /v3/exchange/warnings` (GAP-065, DN-18 §5 amendment 2).
 async fn publish_warnings(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
     headers: axum::http::HeaderMap,
-    body: Result<Json<v2::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<v3::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
     publish_exchange_item(&api, &headers, &peer, body, ExchangeItem::Warnings)
 }
 
-/// `POST /v2/exchange/reports` (GAP-065, DN-18 §5 amendment 2).
+/// `POST /v3/exchange/reports` (GAP-065, DN-18 §5 amendment 2).
 async fn publish_reports(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
     headers: axum::http::HeaderMap,
-    body: Result<Json<v2::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<v3::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
     publish_exchange_item(&api, &headers, &peer, body, ExchangeItem::Reports)
 }
 
-/// `POST /v2/exchange/handoffs` (GAP-065, DN-18 §5 amendment 2).
+/// `POST /v3/exchange/handoffs` (GAP-065, DN-18 §5 amendment 2).
 async fn publish_handoffs(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
     headers: axum::http::HeaderMap,
-    body: Result<Json<v2::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<v3::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
     publish_exchange_item(&api, &headers, &peer, body, ExchangeItem::Handoffs)
 }
@@ -1528,7 +1756,7 @@ fn publish_exchange_item(
     api: &NodeApi,
     headers: &axum::http::HeaderMap,
     peer: &Peer,
-    body: Result<Json<v2::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
+    body: Result<Json<v3::PublishExchangeRequest>, axum::extract::rejection::JsonRejection>,
     item: ExchangeItem,
 ) -> Response {
     let session = match operator_caller(api, headers, peer, "publishing to exchange") {
@@ -1560,13 +1788,13 @@ fn publish_exchange_item(
 /// The three exchange read routes, which differ only in the item (GAP-065).
 ///
 /// **The agreement gate is answered before the products are read**, with a `403` naming
-/// the item, exactly as `/v2/health` answers a party whose agreement does not send health.
+/// the item, exactly as `/v3/health` answers a party whose agreement does not send health.
 /// It is the coarse half of DN-18 §5's two gates and it is about the caller rather than
 /// about any one product, so a party with no agreement for an item learns that and not how
 /// many of them there were. The marking gate is then applied per product by
 /// [`NodeApi::exchange_for`], and what it removes is counted on the response.
 ///
-/// An operator inside the deployment sees everything, as on `/v2/snapshot`: the two gates
+/// An operator inside the deployment sees everything, as on `/v3/snapshot`: the two gates
 /// govern what leaves the deployment, not what its own watch may read.
 fn serve_exchange(
     api: &NodeApi,
@@ -1600,7 +1828,7 @@ fn serve_exchange(
     }
 }
 
-/// `POST /v2/plans/{plan_id}/decision`: refused, and no longer for want of a caller.
+/// `POST /v3/plans/{plan_id}/decision`: refused, and no longer for want of a caller.
 ///
 /// **This node runs no approval queue.** The desktop routes plans through the policy
 /// chain and the queue (GAP-038); a node publishes `PlanProposed` and stops. There is
@@ -1765,7 +1993,7 @@ async fn stream_events(mut socket: WebSocket, api: Arc<NodeApi>, peer: Peer) {
     }
 }
 
-async fn read_subscribe(socket: &mut WebSocket) -> Option<v2::SubscribeRequest> {
+async fn read_subscribe(socket: &mut WebSocket) -> Option<v3::SubscribeRequest> {
     loop {
         match socket.recv().await? {
             Ok(Message::Text(text)) => return serde_json::from_str(&text).ok(),
@@ -1809,7 +2037,7 @@ mod tests {
     }
 
     fn api() -> NodeApi {
-        NodeApi::new(v2::SnapshotResponse::new(
+        NodeApi::new(v3::SnapshotResponse::new(
             Vec::new(),
             None,
             SystemHealth::default(),
@@ -1888,8 +2116,8 @@ mod tests {
         assert_eq!(HEARTBEAT_TIMEOUT.as_secs(), 7);
     }
 
-    fn product(id: &str, releasability: gungnir_model::Releasability) -> v2::ExchangeProduct {
-        v2::ExchangeProduct {
+    fn product(id: &str, releasability: gungnir_model::Releasability) -> v3::ExchangeProduct {
+        v3::ExchangeProduct {
             id: id.into(),
             at: MissionTime(1.0),
             releasability,
@@ -1905,12 +2133,12 @@ mod tests {
         let api = api();
         assert!(matches!(
             api.exchange_all(ExchangeItem::Reports),
-            Some(v2::ExchangeResponse::NotHeld { .. })
+            Some(v3::ExchangeResponse::NotHeld { .. })
         ));
         api.withhold_exchange(ExchangeItem::Reports, "this node produces no reports")
             .expect("withheld");
         match api.exchange_all(ExchangeItem::Reports) {
-            Some(v2::ExchangeResponse::NotHeld { item, reason }) => {
+            Some(v3::ExchangeResponse::NotHeld { item, reason }) => {
                 assert_eq!(item, ExchangeItem::Reports);
                 assert_eq!(reason, "this node produces no reports");
             }
@@ -1920,7 +2148,7 @@ mod tests {
             .expect("published");
         assert!(matches!(
             api.exchange_all(ExchangeItem::Reports),
-            Some(v2::ExchangeResponse::Held { withheld: 0, .. })
+            Some(v3::ExchangeResponse::Held { withheld: 0, .. })
         ));
     }
 
@@ -1951,7 +2179,7 @@ mod tests {
         .expect("published");
 
         match api.exchange_for("sector-north", ExchangeItem::Warnings) {
-            Some(v2::ExchangeResponse::Held {
+            Some(v3::ExchangeResponse::Held {
                 products, withheld, ..
             }) => {
                 let ids: Vec<String> = products.into_iter().map(|p| p.id).collect();
@@ -1964,7 +2192,7 @@ mod tests {
         // The agreement gate alone: a party it does not name receives nothing, however
         // permissive the markings are, and the count is every product there was.
         match api.exchange_for("sector-south", ExchangeItem::Warnings) {
-            Some(v2::ExchangeResponse::Held {
+            Some(v3::ExchangeResponse::Held {
                 products, withheld, ..
             }) => {
                 assert!(products.is_empty(), "{products:?}");
@@ -1975,7 +2203,7 @@ mod tests {
 
         // An operator inside the deployment sees all four: the gates govern what leaves.
         match api.exchange_all(ExchangeItem::Warnings) {
-            Some(v2::ExchangeResponse::Held {
+            Some(v3::ExchangeResponse::Held {
                 products, withheld, ..
             }) => {
                 assert_eq!(products.len(), 4);

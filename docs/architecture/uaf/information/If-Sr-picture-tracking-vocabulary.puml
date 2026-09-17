@@ -86,7 +86,7 @@ class "ResourceView" as ResourceView <<InformationElement>> {
   intercept_speed_mps: Option<f64>
 }
 class "PlanId" as PlanId <<InformationElement>> {
-  pub u64
+  pub u128
 }
 class "InterceptSolutionView" as InterceptSolutionView <<InformationElement>> {
   resource: ResourceId

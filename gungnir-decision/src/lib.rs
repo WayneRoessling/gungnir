@@ -46,6 +46,14 @@ pub trait DecisionSupport: Send + Sync {
 
 /// Human-readable explanation of a plan in terms of the risk scores that produced
 /// its reward matrix: one line per assignment, highest risk first.
+///
+/// **It names no plan identifier** (GAP-130). The plans explained here are solved by a
+/// planner built for the one question, and since D-56 such a planner mints a new UUID v7
+/// on every solve, which no queue row, record or journal carries
+/// ([`alternatives::PlanAlternatives`]'s own note). Until then the counter it replaced
+/// started at 1 in every planner, so this read "Plan #1" for every course of action -- an
+/// identifier that matched nothing either, and hid that because it never changed. The
+/// plan under decision is named by the panels that draw it.
 pub fn rationale_for(plan: &PlanView, scores: &[RiskScore]) -> String {
     if plan.is_empty() {
         return "No assignment: no tracks, no ready resources, or the allocator declined."
@@ -73,8 +81,7 @@ pub fn rationale_for(plan: &PlanView, scores: &[RiskScore]) -> String {
     lines.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
     let body: Vec<String> = lines.into_iter().map(|(_, l)| l).collect();
     format!(
-        "Plan #{} (policy value {:.2}):\n{}",
-        plan.id.0,
+        "Policy value {:.2}:\n{}",
         plan.policy_value,
         body.join("\n")
     )

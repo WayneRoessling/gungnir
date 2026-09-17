@@ -642,8 +642,8 @@ impl AppState {
             pointcloud_loader: None,
             resources: config.resource_views(),
             last_plan: PlanView::default(),
-            // `PlanId::default()` is `PlanId(0)`, which `DpInterceptService::next_plan_id`
-            // (starting at 1) never mints -- it is the id of `PlanView::default()` alone,
+            // `PlanId::default()` is `PlanId(0)`, which no planner mints -- plans are UUID
+            // v7 since GAP-130 (D-56) -- so it is the id of `PlanView::default()` alone,
             // the same starting plan `last_plan` above is seeded with. Seeding this field
             // to match rather than to `None` keeps the very first empty solve from
             // comparing as "new": both fields start at the same point the empty solve

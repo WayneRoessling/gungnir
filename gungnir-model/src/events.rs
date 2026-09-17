@@ -458,9 +458,12 @@ impl RequirementEvent {
 /// Operator decisions on plans, for the audit trail. Mirrors
 /// `gungnir_command::DecisionRecord` in a form the model can carry without depending
 /// on that crate.
+///
+/// `ApprovalRequested(PlanId)` was removed at schema version 4 (GAP-130,
+/// `docs/design/DN-31-node-approval-queue.md` §5.3): it carried too little to build a
+/// queue from and nothing ever published it, so no journal holds one.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum CommandEvent {
-    ApprovalRequested(PlanId),
     Decided {
         plan: PlanId,
         /// The decision this event records, so engagement state can key on it
@@ -494,10 +497,7 @@ pub enum CommandEvent {
     /// The window closed with nobody deciding. **Not a rejection**: nobody chose,
     /// and an after-action review must be able to tell the two apart
     /// (docs/design/DN-10-queue-expiry-and-escalation.md).
-    Expired {
-        plan: PlanId,
-        at: MissionTime,
-    },
+    Expired { plan: PlanId, at: MissionTime },
     /// Offered to a role with the authority or the attention to take it. The item
     /// does not leave the original role's view.
     Escalated {
@@ -581,7 +581,7 @@ pub enum HandoffEvent {
         reason: String,
         at: MissionTime,
     },
-    /// The effector reported back, through the node's `POST /v2/handoffs/{decision}/report`
+    /// The effector reported back, through the node's `POST /v3/handoffs/{decision}/report`
     /// (GAP-040). On every desktop's stream; applied by the one that issued the handoff,
     /// which is the only one that can say whether the decision is known.
     Reported {
@@ -695,7 +695,7 @@ pub enum WarningEvent {
     ///
     /// §6 named this variant when the note was written and the code never gained it, so
     /// `Warning::acknowledged` had no way to be reached from outside the desktop that
-    /// raised the warning. It is the acknowledgement arriving over the v2 transport:
+    /// raised the warning. It is the acknowledgement arriving over the v3 transport:
     /// `party` is the warning channel the acknowledging certificate speaks for, or
     /// `operator:<id>` when a person keyed in what came over the radio, and `at` is the
     /// time **that party gave**. The envelope's own mission time is when this deployment

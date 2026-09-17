@@ -22,13 +22,13 @@
 //! | Criterion | Over the wire here |
 //! |---|---|
 //! | Zero-loss round-trip of a catalogued schema | **Yes, for `gungnir.TrackView` and `gungnir.Envelope`**, both doors: the snapshot and the event stream, against the committed test-track corpus, compared as canonical JSON bytes and not only as values |
-//! | Zero-loss round-trip of the health payload | **Yes**, `GET /v2/health` as a machine caller under an agreement listing `Health` |
+//! | Zero-loss round-trip of the health payload | **Yes**, `GET /v3/health` as a machine caller under an agreement listing `Health` |
 //! | An unsupported version is refused with the catalogue's error | **Yes**: a node declaring a schema version this build does not speak is refused whole, and the link says which two versions disagreed |
 //! | Public-specification samples decode partially, and nothing panics on the fuzz corpus | **No, and not applicable**: ASTERIX, AIS and STANAG are read from feeds and files, not from this transport, and stay covered in memory |
 //!
 //! # Which are still not covered, and why
 //!
-//! * **`gungnir.DetectionView`** has a wire door (`POST /v2/detections`) and no check
+//! * **`gungnir.DetectionView`** has a wire door (`POST /v3/detections`) and no check
 //!   here. It is a write path and an operator's, not a peer's; it is exercised for
 //!   delivery by `transport.rs` and not for byte parity.
 //! * **`gungnir.PlanView`** crosses no wire to a peer at all: a plan is a recommendation
@@ -49,7 +49,7 @@ mod common;
 
 use common::{until, until_following, Pki};
 use gungnir_api::transport::NodeApi;
-use gungnir_api::v2::SnapshotResponse;
+use gungnir_api::v3::SnapshotResponse;
 use gungnir_eventing::{Envelope, Event};
 use gungnir_model::events::TrackingEvent;
 use gungnir_model::{
@@ -272,7 +272,7 @@ async fn the_track_corpus_crosses_the_event_stream_with_zero_loss() {
     }
 }
 
-/// Criterion 1, health: the payload `GET /v2/health` serves is the one the node
+/// Criterion 1, health: the payload `GET /v3/health` serves is the one the node
 /// published, byte for byte, to a machine caller whose agreement lists `Health`.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_health_payload_crosses_the_wire_with_zero_loss() {
@@ -290,7 +290,7 @@ async fn the_health_payload_crosses_the_wire_with_zero_loss() {
     let tls = pki.client("partner");
 
     let response = http_client(&tls)
-        .get(format!("{url}/v2/health"))
+        .get(format!("{url}/v3/health"))
         .send()
         .await
         .expect("the health route answers");

@@ -117,7 +117,7 @@ pub struct Engagement {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum EngagementError {
-    #[error("engagement for decision {0:?} is already closed")]
+    #[error("engagement for decision {0} is already closed")]
     AlreadyClosed(DecisionId),
 }
 

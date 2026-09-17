@@ -154,7 +154,9 @@ fn sweep_handoffs(state: &mut AppState, now: MissionTime) {
                 );
                 state.alerts.push(format!(
                     "decision {}: handoff delivered to {} (attempt {})",
-                    p.decision.0, p.endpoint, p.attempts
+                    p.decision.short(),
+                    p.endpoint,
+                    p.attempts
                 ));
             }
             Some(DeliveryOutcome::Refused { status, body }) => {
@@ -180,7 +182,8 @@ fn sweep_handoffs(state: &mut AppState, now: MissionTime) {
                 state.alerts.push(format!(
                     "decision {}: handoff to {} refused: {reason}; the decision stands and \
                      the effector must be reached another way",
-                    p.decision.0, p.endpoint
+                    p.decision.short(),
+                    p.endpoint
                 ));
             }
             Some(DeliveryOutcome::Unreachable { reason }) => {
@@ -196,7 +199,9 @@ fn sweep_handoffs(state: &mut AppState, now: MissionTime) {
                 );
                 state.alerts.push(format!(
                     "decision {}: handoff to {} undelivered (attempt {}): {reason}; retrying in {RETRY_AFTER_S:.0} s",
-                    p.decision.0, p.endpoint, p.attempts
+                    p.decision.short(),
+                    p.endpoint,
+                    p.attempts
                 ));
                 p.in_flight = None;
                 p.next_attempt = MissionTime(now.0 + RETRY_AFTER_S);

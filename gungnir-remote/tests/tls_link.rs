@@ -12,7 +12,7 @@
 
 use gungnir_api::tls::{self, TlsListener, TlsPaths};
 use gungnir_api::transport::{serve_on_listener, AccountTokenAuthority, NodeApi};
-use gungnir_api::v2::SnapshotResponse;
+use gungnir_api::v3::SnapshotResponse;
 use gungnir_model::{
     Classification, ExchangeAgreement, ExchangeFormat, ExchangeItem, ExchangeSet, MissionTime,
     Provenance, Quality, Releasability, SystemHealth, TrackId, TrackStatus, TrackView,

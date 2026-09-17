@@ -493,7 +493,7 @@ fn an_expired_session_returns_the_desktop_to_the_selected_role() {
 }
 
 /// Queue a plan directly: the desktop has no tracks, so it cannot produce one.
-fn queue(state: &mut AppState, plan: u64) -> gungnir_command::PendingApprovalId {
+fn queue(state: &mut AppState, plan: u128) -> gungnir_command::PendingApprovalId {
     use gungnir_command::{ApprovalWorkflow, Submission};
     state
         .approvals

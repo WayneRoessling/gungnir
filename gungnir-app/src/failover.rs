@@ -7,7 +7,7 @@
 //! A desktop linked to a node judges the link's silence against the node's own
 //! heartbeat. Past the timeout it **falls back to embedded services, says so on the strip
 //! and the record, and keeps the link task retrying**; when the node answers again it
-//! says that too, fetches the node's journal for the outage over `GET /v2/history`, and
+//! says that too, fetches the node's journal for the outage over `GET /v3/history`, and
 //! runs `gungnir_resilience::reconcile` over the two journals. It does not switch back
 //! on its own: PN-18 holds the merge and its conflicts until a person has seen them and
 //! asks for the switch (D-15), and the switch is refused while the node is silent again.
@@ -513,11 +513,14 @@ pub fn resolve_conflict(
         {
             return Err(format!(
                 "plan {} was resolved by the arbitration rule ({}); it is not left to a person",
-                plan.0,
+                plan.short(),
                 ground_reason(a.ground)
             ));
         }
-        return Err(format!("plan {} is not a conflict of this outage", plan.0));
+        return Err(format!(
+            "plan {} is not a conflict of this outage",
+            plan.short()
+        ));
     };
     reconciliation.conflicts.remove(at);
     reconciliation.resolved.push((plan, keep_local));
@@ -528,7 +531,7 @@ pub fn resolve_conflict(
         actions::DECIDE_PLAN,
         format!(
             "reconciliation: plan {} kept {}",
-            plan.0,
+            plan,
             if keep_local {
                 "this desktop's decision"
             } else {

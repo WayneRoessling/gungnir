@@ -63,7 +63,7 @@ pub fn open_for(state: &mut AppState, record: &DecisionRecord) -> usize {
         state.alerts.push(format!(
             "decision {} accepted a fires task; effect assessment for fires is not built \
              (DN-05), so no engagement was opened",
-            record.id.0
+            record.id.short()
         ));
         return 0;
     }
@@ -80,7 +80,8 @@ pub fn open_for(state: &mut AppState, record: &DecisionRecord) -> usize {
             state.alerts.push(format!(
                 "decision {} tasks resource {}, which the baseline does not list; no \
                  engagement opened",
-                record.id.0, solution.resource.0
+                record.id.short(),
+                solution.resource.0
             ));
             continue;
         };
@@ -89,7 +90,8 @@ pub fn open_for(state: &mut AppState, record: &DecisionRecord) -> usize {
                 "decision {} against track {}: no assessment.effect_window_s is configured \
                  for the {layer:?} layer, so there is no moment an effect is expected by; \
                  no engagement opened",
-                record.id.0, solution.track.0
+                record.id.short(),
+                solution.track.0
             ));
             continue;
         };
@@ -191,7 +193,8 @@ pub fn sweep(state: &mut AppState) {
                     Some(format!(
                         "engagement of track {} (decision {}) ineffective: the track is still \
                          in the picture after the effect window",
-                        e.track.0, e.decision.0
+                        e.track.0,
+                        e.decision.short()
                     )),
                 ));
             }
@@ -207,7 +210,8 @@ pub fn sweep(state: &mut AppState) {
                     outcome::INDETERMINATE,
                     Some(format!(
                         "engagement of track {} (decision {}) indeterminate: {reason}",
-                        e.track.0, e.decision.0
+                        e.track.0,
+                        e.decision.short()
                     )),
                 ));
             }

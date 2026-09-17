@@ -31,7 +31,7 @@
 //! # What is not here
 //!
 //! An effector that reports back is owner decision D-08 and real hardware. The inbound
-//! route exists (`POST /v2/handoffs/{decision_id}/report`, applied by
+//! route exists (`POST /v3/handoffs/{decision_id}/report`, applied by
 //! `gungnir-app`'s `handoffs::apply_report`), so an empty "reported back" column is not
 //! a missing feature in this desktop; it is the absence of an effector that speaks it.
 //! [`NO_REPORTS_YET`] is the sentence that keeps those two apart on screen.
@@ -39,7 +39,7 @@
 use crate::theme;
 use egui::Color32;
 use gungnir_model::handoff::{DeliveryState, EffectorReport};
-use gungnir_model::MissionTime;
+use gungnir_model::{DecisionId, MissionTime, PlanId};
 
 /// Why the "reported back" column can be empty for every row (GAP-040, D-08).
 ///
@@ -58,8 +58,10 @@ pub const NO_REPORTS_YET: &str = "No effector has reported on this desktop. The 
 /// (`rust-ui-architecture-coding-standards.md` §2).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HandoffRow<'a> {
-    pub decision: u64,
-    pub plan: u64,
+    /// PN-06 shows it by its short tag; PN-20's record shows all of it with a copy
+    /// control, because that is the one a person quotes (D-61).
+    pub decision: DecisionId,
+    pub plan: PlanId,
     /// `None` is the honest default rather than a missing value: no endpoint is
     /// configured for the tasked resource, so delivery is a radio call.
     pub endpoint: Option<&'a str>,
@@ -204,8 +206,8 @@ mod tests {
 
     fn row<'a>(endpoint: Option<&'a str>, delivery: &'a DeliveryState) -> HandoffRow<'a> {
         HandoffRow {
-            decision: 4,
-            plan: 9,
+            decision: DecisionId(4),
+            plan: PlanId(9),
             endpoint,
             operator: "nobody signed in",
             role: "Operator",

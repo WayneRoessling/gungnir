@@ -144,7 +144,7 @@ pub async fn until(mut check: impl FnMut() -> bool, what: &str) {
 /// A link reports `connected` once the snapshot has been answered, and that is *before*
 /// its WebSocket has subscribed -- the snapshot is an HTTP request and the stream is a
 /// second connection opened after it. A subscription with `from_seq` 0 means "everything
-/// from now" by the v2 contract, so an envelope published in the window between the two
+/// from now" by the contract, so an envelope published in the window between the two
 /// reaches nobody, correctly and silently. A test that published once and then waited
 /// would be racing that window and would fail perhaps one run in three.
 ///

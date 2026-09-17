@@ -11,7 +11,7 @@
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use gungnir_app::state::AppState;
 use gungnir_app::{decisions, update, warnings};
@@ -28,8 +28,13 @@ use gungnir_tracking_service::{SubmitError, TrackingService};
 use gungnir_ui::panels::approval_queue::PendingId;
 
 /// A one-thread HTTP server that answers every request with `status` and records how
-/// many it saw.
-fn stub(status: Arc<AtomicU16>, hits: Arc<AtomicU16>) -> String {
+/// many it saw, and the body of each.
+///
+/// **The bodies are kept since GAP-130.** Until then the stub read each request and
+/// threw the body away, so a handoff posted as `null` -- which is what a UUID v7 decision
+/// written as a JSON number would have made of it, through `serde_json::to_value` -- was
+/// delivered as far as this test could tell (DN-31 §12, D-60).
+fn stub(status: Arc<AtomicU16>, hits: Arc<AtomicU16>, bodies: Arc<Mutex<Vec<String>>>) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let addr = listener.local_addr().expect("addr");
     std::thread::spawn(move || {
@@ -59,6 +64,10 @@ fn stub(status: Arc<AtomicU16>, hits: Arc<AtomicU16>) -> String {
                 }
             }
             hits.fetch_add(1, Ordering::SeqCst);
+            let text = String::from_utf8_lossy(&buf[..read]).into_owned();
+            if let (Some((_, body)), Ok(mut kept)) = (text.split_once("\r\n\r\n"), bodies.lock()) {
+                kept.push(body.to_owned());
+            }
             let code = status.load(Ordering::SeqCst);
             let body = if code >= 400 { "no such effector" } else { "" };
             let _ = write!(
@@ -210,7 +219,8 @@ fn decide(state: &mut AppState) -> gungnir_model::DecisionId {
 fn a_handoff_to_an_accepting_endpoint_is_delivered_and_a_refusal_is_recorded() {
     let status = Arc::new(AtomicU16::new(200));
     let hits = Arc::new(AtomicU16::new(0));
-    let url = stub(status.clone(), hits.clone());
+    let bodies = Arc::new(Mutex::new(Vec::new()));
+    let url = stub(status.clone(), hits.clone(), bodies.clone());
     let (mut state, dir) = desktop("handoff", &url);
     state.tracking = Box::new(Picture(vec![track(1, 3000.0, 0.0)]));
     let decision = decide(&mut state);
@@ -235,6 +245,26 @@ fn a_handoff_to_an_accepting_endpoint_is_delivered_and_a_refusal_is_recorded() {
             .any(|a| a.contains("delivered to battery")),
         "{:?}",
         state.alerts
+    );
+    // What the effector received is the handoff, naming the minted decision whole (D-60):
+    // not `null`, and not a number a JSON reader outside Rust would round.
+    let posted = bodies
+        .lock()
+        .expect("bodies")
+        .first()
+        .cloned()
+        .expect("a body");
+    let handoff: serde_json::Value = serde_json::from_str(&posted).expect("the body is JSON");
+    assert_eq!(
+        handoff["decision"].as_str(),
+        Some(decision.to_string().as_str()),
+        "the effector was not handed the decision it will report against: {posted}"
+    );
+    // The plan this test queued is numbered 7, as a seed numbers one; on the wire every
+    // identifier takes the hyphenated form whatever it holds (D-60).
+    assert_eq!(
+        handoff["plan"].as_str(),
+        Some("00000000-0000-0000-0000-000000000007")
     );
 
     // A second decision against a refusing endpoint.
@@ -329,7 +359,11 @@ fn an_unreachable_endpoint_is_retried_and_never_dropped() {
 fn a_warning_is_sent_through_the_endpoint_and_fails_loudly_when_it_refuses() {
     let status = Arc::new(AtomicU16::new(200));
     let hits = Arc::new(AtomicU16::new(0));
-    let url = stub(status.clone(), hits.clone());
+    let url = stub(
+        status.clone(),
+        hits.clone(),
+        Arc::new(Mutex::new(Vec::new())),
+    );
     let (mut state, dir) = desktop("warning", &url);
     // 5 km out at 50 m/s: inside the 120 s lead time.
     state.tracking = Box::new(Picture(vec![track(1, 5_000.0, -50.0)]));

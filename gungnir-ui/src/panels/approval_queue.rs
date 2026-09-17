@@ -59,12 +59,13 @@ use crate::panels::handoff::{self, HandoffRow};
 use crate::panels::unavailable::{draw_unavailable, Unavailable};
 use crate::theme;
 use egui::{RichText, Ui};
-use gungnir_model::MissionTime;
+use gungnir_model::{MissionTime, PlanId};
 
 /// The queue's identifier for one pending item, mirroring
-/// `gungnir_command::PendingApprovalId` without depending on that crate.
+/// `gungnir_command::PendingApprovalId` without depending on that crate: the same 128
+/// bits, a UUID v7 since GAP-130 (D-56).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PendingId(pub u64);
+pub struct PendingId(pub u128);
 
 /// The policy verdict a queued plan carries.
 ///
@@ -128,7 +129,8 @@ pub struct QueueRow<'a> {
     /// seeing it (DN-10 §5), so this is a mark rather than a reassignment.
     pub escalated_from: Option<&'a str>,
     pub id: PendingId,
-    pub plan_id: u64,
+    /// Shown by its short tag, as every row on this panel shows an identifier (D-61).
+    pub plan_id: PlanId,
     /// How many (resource, track) pairs the plan tasks.
     pub assignments: usize,
     pub verdict: Verdict<'a>,
@@ -332,10 +334,14 @@ fn draw_undelivered_row(
     let destination = row
         .endpoint
         .map_or_else(|| "by radio call".to_owned(), |e| format!("to {e}"));
+    // Short tags (D-61): enough to tell this screen's rows apart. The whole identifier,
+    // for quoting, is on PN-20's record of the same handoff.
     ui.label(
         RichText::new(format!(
             "Decision {} (plan #{}) {destination}, issued T+{:.0} s",
-            row.decision, row.plan, row.issued.0
+            row.decision.short(),
+            row.plan.short(),
+            row.issued.0
         ))
         .strong(),
     );
@@ -374,7 +380,7 @@ fn draw_header(ui: &mut Ui) {
 
 fn draw_row(ui: &mut Ui, palette: &theme::Palette, row: &QueueRow<'_>, selected: bool) -> bool {
     let clicked = ui
-        .selectable_label(selected, format!("#{}", row.plan_id))
+        .selectable_label(selected, format!("#{}", row.plan_id.short()))
         .clicked();
     ui.label(row.assignments.to_string());
     ui.label(RichText::new(row.verdict.label()).color(row.verdict.color(palette)));
@@ -496,7 +502,7 @@ mod tests {
     fn a_queued_row_is_never_a_denied_one() {
         let row = QueueRow {
             id: PendingId(1),
-            plan_id: 4,
+            plan_id: PlanId(4),
             assignments: 2,
             verdict: Verdict::RequiresHumanApproval,
             time_remaining: TimeRemaining::Seconds(12.0),
