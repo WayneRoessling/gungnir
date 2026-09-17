@@ -622,11 +622,14 @@ and reports at startup that the API transport is not implemented yet.
 The profile is selected by `BackendConfig` in the desktop's config baseline. In the
 connected profiles the desktop runs `gungnir-remote`'s `RemoteTrackingService` and
 `RemoteInterceptService`, which subscribe to the node's event stream, keep a local
-projection, and forward detections and decisions through `gungnir-api`. The v1 contract
+projection, and forward detections through `gungnir-api`. The v1 contract
 (`docs/gungnir-api-v1.md`) defines the snapshot, event stream, detection submission, and
-plan-decision endpoints; the transport (JSON over HTTP plus a WebSocket event stream) is
-decided but not yet in the workspace, so `gungnir_remote::connect` reports
-`TransportNotImplemented` and the desktop falls back to embedded with an alert.
+plan-decision endpoints; the transport (JSON over HTTP plus a WebSocket event stream,
+D-18) serves all of them but the last, which refuses with 501 because a node runs no
+approval queue. **Decisions therefore do not reach the node**: a linked desktop queues and
+decides the node's plan itself, and two desktops on one node each do so without knowing of
+the other (GAP-129). D-55 decided that the node will hold the queue for the desktops linked to
+it; `docs/design/DN-31-node-approval-queue.md` plans the change and GAP-130 to GAP-134 build it.
 
 ### §8.3 — Where each crate group runs
 

@@ -2638,7 +2638,12 @@
       what it skips is escalation, not the person. The priority tie-break is inactive
       because nothing computes a threat score (GAP-028), and PN-06 states the ordering
       it is actually showing rather than implying a severity order it does not have.
-
+  - date: 2026-09-17
+    status: Closed
+    note: >-
+      **Correction 2026-09-17 (D-59).** The closing note's "what it skips is escalation"
+      was wrong: DN-10 §5 has a pre-delegated item expire and escalate, and the code
+      does both. Only the sentence was wrong; nothing in the build changes.
 - id: GAP-036
   name: Fires plan type and deconfliction
   type: Technical
@@ -8649,11 +8654,9 @@
     queue"); `gungnir-app/tests/failover_e2e.rs` publishes the node's decision onto its
     record directly; the cross-layer Disconnected reconciliation row, gated 2026-09-16
   action: >-
-    Decide whether a desktop's decisions reach its node's record -- forwarded like its
-    detections, or through an approval queue on the node -- which would give
-    reconciliation a conflict to find and several desktops one record; or record that
-    decisions stay on the desktop and re-scope the reconciliation row to what can
-    conflict.
+    Decided by D-55: the node holds the queue for the desktops linked to it. Built by
+    GAP-130 to GAP-134 as `../../design/DN-31-node-approval-queue.md` plans it, each
+    increment writing its verification rows from DN-31 §9.
   ref: >-
     The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
   history:
@@ -8662,3 +8665,165 @@
     note: >-
       Filed by the GAP-067 walk, whose arbiter build found that no node records a
       decision, so the conflicts it resolves arise only in tests.
+  - date: 2026-09-17
+    status: In progress
+    note: >-
+      **Decided 2026-09-17 (D-55 to D-59).** Decisions reach the node: it holds the
+      queue for the desktops linked to it, the first valid decision on an item wins, a
+      cut-off desktop decides what its role may and forwards on reconnect, and
+      identifiers become UUID v7. Planned in `../../design/DN-31-node-approval-queue.md`
+      with ten verification rows, and built by GAP-130 to GAP-134.
+
+- id: GAP-130
+  name: >-
+    Decision, plan and queue-item identifiers collide across machines and restarts
+  type: Technical
+  caps: [CAP-7.2, CAP-4.2]
+  layer: "Productization: decision and policy"
+  sev: 4
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: [D-56]
+  impact: >-
+    `DecisionId`, `PlanId` and `PendingApprovalId` restart at 1 in every process. Two
+    desktops on one node, or one desktop across a restart, mint the same identifiers: an
+    effector report finds its handoff by `DecisionId` alone and so reaches every handoff
+    with that number, MOE-05's join of decisions to engagements mixes machines, and
+    reconciliation pairs journals by `PlanId`.
+  evidence: >-
+    `gungnir-command/src/lib.rs` (`mint_decision_id`);
+    `gungnir-intercept-service/src/lib.rs` (plan identifiers);
+    `gungnir_model::handoff::accept_report`; DN-31 §1
+  action: >-
+    Make the three identifiers UUID v7, minted where each thing is created (D-56); move
+    `SCHEMA_VERSION` to 4 and the routes to `/v3`, with every `/v2` route answering `410
+    Gone`; and write DN-31 §9 row 1.
+  ref: >-
+    DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: >-
+      Filed with DN-31: colliding identifiers are a hazard today, and every later
+      increment needs unique ones.
+
+- id: GAP-131
+  name: The decision path lives only in gungnir-app
+  type: Technical
+  caps: [CAP-4.2, CAP-3.6]
+  layer: "Productization: decision and policy"
+  sev: 3
+  effort: L
+  target: I3
+  owner: Security engineer (human-owned crate)
+  deps: [D-57, GAP-130]
+  impact: >-
+    The policy chain over a plan, the queue's submission and sweep, deciding with
+    engagement opening and the one handoff builder, and handoff delivery all live in
+    `gungnir-app`, and a binary cannot share code, so a node cannot run the decision
+    path D-55 gives it without a second copy of the safety rules.
+  evidence: >-
+    `gungnir-app/src/decisions.rs`, `engagements.rs`, `handoffs.rs`, `deliveries.rs`;
+    the node's own `evaluate_on_node`; DN-31 §3
+  action: >-
+    Create `gungnir-approval` with edges (w) and (x) (D-57), move the decision path into
+    it with the desktop's behaviour unchanged, keep exactly one handoff builder, and
+    write DN-31 §9 rows 2 and 10.
+  ref: >-
+    DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: >-
+      Filed with DN-31: the move is verified with the desktop unchanged before anything
+      new rides on it.
+
+- id: GAP-132
+  name: A node runs no approval queue
+  type: Technical
+  caps: [CAP-4.2, CAP-4.3, CAP-3.7, CAP-6.2]
+  layer: Deployment and API
+  sev: 4
+  effort: L
+  target: I3
+  owner: Security engineer (human-owned crate)
+  deps: [D-55, D-59, GAP-130, GAP-131]
+  impact: >-
+    A node proposes plans and decides none: `POST /v2/plans/{plan_id}/decision` refuses
+    with 501, so several desktops on one node each decide the same plan, escalation
+    reaches no one, and no decision reaches the node's record.
+  evidence: >-
+    `gungnir-api/src/transport.rs` (`refuse_decision`); `gungnir-node/src/main.rs`;
+    DN-31 §1 and §6
+  action: >-
+    Give the node loop the queue (edge (y)): offer each item to the lowest role holding
+    authority, sweep expiry and escalation on the node's clock, and serve `GET
+    /v3/queue` and `POST /v3/queue/{item}/decision` through the loop, the first valid
+    decision winning, with the engagement, handoff and audit entry issued once; write
+    DN-31 §9 rows 3 to 6.
+  ref: >-
+    DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: Filed with DN-31 (D-55).
+
+- id: GAP-133
+  name: A linked desktop decides the node's plans itself
+  type: Technical
+  caps: [CAP-5.9, CAP-4.3]
+  layer: UI and data ecosystem
+  sev: 4
+  effort: M
+  target: I3
+  owner: UI engineer
+  deps: [GAP-132]
+  impact: >-
+    While linked, a desktop re-proposes, queues, decides, engages and hands off the
+    node's plans on its own, so its operator's decision is invisible to every other
+    desktop and the node's queue has no screen.
+  evidence: >-
+    `gungnir-app/src/update.rs` (a node plan submitted to the desktop's own queue);
+    `gungnir-remote` (`RemoteInterceptService::plan`); DN-31 §6.5 and §6.6
+  action: >-
+    Project the node's queue into PN-06, decide through PN-07 over the `/v3` route, show
+    who decided on a conflict, and stop the desktop queueing, engaging or issuing
+    handoffs for a node plan; write DN-31 §9 rows 7 and 9.
+  ref: >-
+    DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: Filed with DN-31 (D-55).
+
+- id: GAP-134
+  name: A desktop's offline decisions never reach its node
+  type: Technical
+  caps: [CAP-5.4]
+  layer: Deployment and API
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: [D-58, GAP-133]
+  impact: >-
+    A desktop cut off from its node decides from its own queue and keeps those decisions
+    in its own journal: none is forwarded, D-15's delegations never lapse, MOE-11 cannot
+    be computed, and two engagements of one track on the two sides of an outage go
+    unnoticed.
+  evidence: >-
+    `gungnir-app/src/failover.rs`; `gungnir-remote` (an outbox for detections only);
+    `docs/mission/measures.md` (MOE-11); DN-31 §6.7 and §6.8
+  action: >-
+    Forward offline decisions on reconnect through `POST /v3/decisions/forwarded`,
+    journaled once with their origin; lapse D-15's delegations after
+    `policy.delegation.disconnected_lapse_s`; compare engagements by track and publish
+    `BothActed` for a person (D-58); forward the reconciliation's verdicts; and write
+    DN-31 §9 row 8.
+  ref: >-
+    DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: Filed with DN-31 (D-55, D-58).
