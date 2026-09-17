@@ -1,0 +1,16 @@
+{"seq":0,"mission_time":0.0,"event":{"Intercept":{"PlanProposed":{"id":1,"mission_time":0.0,"kind":{"kind":"intercept","solutions":[{"resource":1,"track":7,"intercept_point":null,"time_to_intercept_s":null}]},"policy_value":1.0,"releasability":{"kind":"internal"}}}}}
+{"seq":1,"mission_time":0.0,"event":{"Intercept":{"PlanEvaluated":{"plan":1,"verdict":"RequiresHumanApproval","engines":["readiness and geofence","control status","authority","fires deconfliction"]}}}}
+{"seq":2,"mission_time":0.0,"event":{"Governance":{"NoneInForce":{"profile":null,"at":0.0}}}}
+{"seq":3,"mission_time":0.0,"event":{"Health":{"Changed":{"tracking_healthy":true,"intercept_healthy":true,"ingest_healthy":false,"at":0.0}}}}
+{"seq":4,"mission_time":1.0,"event":{"Command":{"Decided":{"plan":1,"decision":1,"accepted":true,"operator":null,"role":null,"verdict":"RequiresHumanApproval","rationale":null}}}}
+{"seq":5,"mission_time":1.0,"event":{"Handoff":{"Issued":{"decision":1,"endpoint":"battery-2","at":1.0}}}}
+{"seq":6,"mission_time":1.0,"event":{"Handoff":{"Undelivered":{"decision":1,"endpoint":"battery-2","reason":"endpoint \"battery-2\" is kind \"handoff\", which no transport carries","at":1.0}}}}
+{"seq":7,"mission_time":1.0,"event":{"Engagement":{"Opened":{"decision":1,"plan":1,"track":7}}}}
+{"seq":8,"mission_time":3.0,"event":{"Handoff":{"Reported":{"decision":1,"endpoint":"battery-2","report":{"report":"acknowledged","at":3.0},"at":3.0}}}}
+{"seq":9,"mission_time":5.0,"event":{"Intercept":{"PlanProposed":{"id":2,"mission_time":5.0,"kind":{"kind":"intercept","solutions":[]},"policy_value":0.0,"releasability":{"kind":"internal"}}}}}
+{"seq":10,"mission_time":5.0,"event":{"Intercept":{"PlanEvaluated":{"plan":2,"verdict":{"Denied":{"reason":"EmptyPlan"}},"engines":["readiness and geofence","control status","authority","fires deconfliction"]}}}}
+{"seq":11,"mission_time":5.0,"event":{"Engagement":{"Closed":{"decision":1,"outcome":"effective (track-lifecycle evidence)","at":5.0}}}}
+{"seq":12,"mission_time":10.0,"event":{"Intercept":{"PlanProposed":{"id":3,"mission_time":10.0,"kind":{"kind":"intercept","solutions":[{"resource":1,"track":8,"intercept_point":null,"time_to_intercept_s":null}]},"policy_value":1.0,"releasability":{"kind":"internal"}}}}}
+{"seq":13,"mission_time":10.0,"event":{"Intercept":{"PlanEvaluated":{"plan":3,"verdict":"RequiresHumanApproval","engines":["readiness and geofence","control status","authority","fires deconfliction"]}}}}
+{"seq":14,"mission_time":56.0,"event":{"Command":{"Escalated":{"plan":3,"to_role":"Supervisor","at":56.0}}}}
+{"seq":15,"mission_time":101.0,"event":{"Command":{"Expired":{"plan":3,"at":101.0}}}}

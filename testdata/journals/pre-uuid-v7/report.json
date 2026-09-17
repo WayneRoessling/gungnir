@@ -1,0 +1,197 @@
+{
+  "session": 1,
+  "summary": "Session 1: 16 events over 101.0 s; 0 tracks initiated, 0 deleted; 3 plans proposed, 0 approved; 0 detections accepted, 0 quarantined; 1 operator decisions.",
+  "counts": {
+    "tracks_initiated": 0,
+    "tracks_deleted": 0,
+    "plans_proposed": 3,
+    "plans_approved": 0,
+    "detections_accepted": 0,
+    "detections_quarantined": 0,
+    "decisions": 1,
+    "decisions_expired": 1,
+    "decisions_escalated": 1,
+    "sensor_mode_changes": 0,
+    "sensor_tasks_issued": 0,
+    "sensor_tasks_acknowledged": 0,
+    "sensor_tasks_failed": 0,
+    "sensor_tasks_unacknowledged": 0,
+    "requirements_stated": 0,
+    "requirements_tasked": 0,
+    "requirements_satisfied": 0,
+    "requirements_declined": 0,
+    "requirements_lapsed": 0,
+    "handovers_acknowledged": 0,
+    "handover_products_due": 0,
+    "products_undelivered": 0,
+    "detections_not_accepted": 0,
+    "governance_changes": 0,
+    "promotions_refused": 0,
+    "engagements_opened": 1,
+    "engagements_effective_corroborated": 0,
+    "engagements_effective_track_inferred": 1,
+    "engagements_ineffective_corroborated": 0,
+    "engagements_ineffective_track_inferred": 0,
+    "engagements_indeterminate": 0,
+    "engagements_aborted": 0,
+    "reviews_opened": 0,
+    "findings_recorded": 0,
+    "findings_promoted": 0,
+    "maintenance_overruns": 0,
+    "total": 16
+  },
+  "measures": [
+    {
+      "id": "MOE-01",
+      "name": "Defended-asset protection",
+      "target": "0.95 for priority-1 and priority-2 assets",
+      "value": {
+        "NotComputable": {
+          "reason": "needs the scenario's ground truth beside the journal (GAP-045); a live session has only the analyst's reconstruction"
+        }
+      },
+      "note": null
+    },
+    {
+      "id": "MOE-02",
+      "name": "No fratricide, no civil engagement",
+      "target": "0",
+      "value": {
+        "Count": 0
+      },
+      "note": null
+    },
+    {
+      "id": "MOE-03",
+      "name": "Cost discipline",
+      "target": "at least 0.9",
+      "value": {
+        "NotComputable": {
+          "reason": "a track carries no threat class finer than Hostile, so a propeller-drone engagement cannot be told from any other (GAP-018)"
+        }
+      },
+      "note": null
+    },
+    {
+      "id": "MOE-04",
+      "name": "Decision timeliness",
+      "target": "p95 under 0.3",
+      "value": {
+        "NotComputable": {
+          "reason": "needs each engaged track's remaining time to impact, which is prediction (GAP-020); the decision latency alone is not the measure"
+        }
+      },
+      "note": null
+    },
+    {
+      "id": "MOE-05",
+      "name": "Decision completeness",
+      "target": "1.0",
+      "value": {
+        "Fraction": {
+          "value": 0.0,
+          "numerator": 0,
+          "denominator": 1
+        }
+      },
+      "note": "1 of 1 engagements lack a rationale on the record: an acceptance records none until the course of action reaches the record (GAP-032); 0 had no decision record at all"
+    },
+    {
+      "id": "MOE-06",
+      "name": "Picture honesty",
+      "target": "0",
+      "value": {
+        "Count": 0
+      },
+      "note": "1 decisions; 1 taken under a journaled degradation, with the state on the record (and on PN-01) before the decision; 0 taken before any health was on the record"
+    },
+    {
+      "id": "MOE-07",
+      "name": "Surface picture completeness",
+      "target": "0.98",
+      "value": {
+        "NotComputable": {
+          "reason": "needs the scenario's ground truth beside the journal (GAP-045); a live session has only the analyst's reconstruction"
+        }
+      },
+      "note": null
+    },
+    {
+      "id": "MOE-08",
+      "name": "Fires timeliness",
+      "target": "0.9",
+      "value": {
+        "NotComputable": {
+          "reason": "a fires task carries no decision window on the bus, so 'within the target's window' has nothing to be measured against (DN-05)"
+        }
+      },
+      "note": null
+    },
+    {
+      "id": "MOE-09",
+      "name": "Identity continuity",
+      "target": "0.9",
+      "value": {
+        "NotComputable": {
+          "reason": "needs the scenario's ground truth beside the journal (GAP-045); a live session has only the analyst's reconstruction"
+        }
+      },
+      "note": null
+    },
+    {
+      "id": "MOE-10",
+      "name": "Degradation recovery",
+      "target": "30 s to show; battle rhythm to accept",
+      "value": {
+        "NotComputable": {
+          "reason": "nothing publishes when coverage was recomputed and shown, so the time from sensor loss to the map changing is not in the record"
+        }
+      },
+      "note": null
+    },
+    {
+      "id": "MOE-11",
+      "name": "Continuity under disconnection",
+      "target": "1.0 reached; 1.0 resolved",
+      "value": {
+        "NotComputable": {
+          "reason": "no reconciliation events exist: the failover and reconciliation gate is GAP-050"
+        }
+      },
+      "note": null
+    },
+    {
+      "id": "MOE-12",
+      "name": "Rehearsal effect",
+      "target": "rehearse every plan change; ratio observed without a target",
+      "value": {
+        "NoInstances": {
+          "of": "shifts (no handover acknowledged)"
+        }
+      },
+      "note": "0 rehearsals; findings: 0 recorded under replay, 0 in action"
+    },
+    {
+      "id": "MOE-13",
+      "name": "Intelligence product timeliness",
+      "target": "0.95 of scheduled",
+      "value": {
+        "NoInstances": {
+          "of": "scheduled products"
+        }
+      },
+      "note": null
+    }
+  ],
+  "releasability": {
+    "kind": "internal"
+  },
+  "marking_inputs": {
+    "internal": 3,
+    "parties": 0,
+    "all_peers": 0
+  },
+  "first_event": 0.0,
+  "last_event": 101.0,
+  "metrics": null
+}
