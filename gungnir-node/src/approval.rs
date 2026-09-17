@@ -96,12 +96,19 @@ impl NodeApproval {
                 expires_at: item.expires_at,
                 escalate_at: item.escalate_at,
                 offered_to: item.offered_to.clone(),
-                // D-15's delegation is a property of the role the item sits with and the
-                // plan it carries, so it is asked of the matrix rather than remembered on
-                // the item: a baseline applied after submission must not leave a row
-                // claiming a delegation the matrix no longer grants. It still expires and
-                // escalates either way (D-59).
-                pre_delegated: item.current_role().is_some_and(|role| {
+                // **The role it was submitted to, not the role it has escalated to.**
+                // D-15 delegates a case to a role, and DN-31 §5.2 reads the flag as "a
+                // pre-delegated item is actionable for the Operator from submission".
+                // Escalation adds a role without removing the first (DN-10 §5), so the
+                // Operator's delegation still stands on an escalated item and asking about
+                // the *last* role offered would say it had lapsed -- which it has not, and
+                // which would make the row say a supervisor took it away.
+                //
+                // Asked of the matrix rather than remembered on the item, so that a
+                // baseline applied after submission cannot leave a row claiming a
+                // delegation the matrix no longer grants. It still expires and escalates
+                // either way (D-59).
+                pre_delegated: item.offered_to.first().is_some_and(|role| {
                     gungnir_policy::is_pre_delegated(
                         &config.policy.authority,
                         actions::DECIDE_PLAN,

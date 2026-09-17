@@ -103,6 +103,12 @@ keyring.workspace = true
 nalgebra.workspace = true
 criterion.workspace = true
 rand.workspace = true
+# GAP-132: DN-31 §9 row 3 races two operator clients against one queue item over the real
+# transport, so the test needs an HTTP client that can hold a session token and post two
+# requests at once. Dev-only, and no new crate in this binary's graph: `reqwest` is already
+# compiled into `gungnir-node` through `gungnir-remote` (edge (p)). The alternative was a
+# third hand-written HTTP/1.1 client beside the two in `gungnir-api/tests`.
+reqwest.workspace = true
 # Dev-only: the load harness is fed from generated scenario output at realistic rates,
 # as benches/README.md requires. No runtime edge (GAP-056).
 gungnir-scenario = { path = "../gungnir-scenario", version = "0.1.0" }

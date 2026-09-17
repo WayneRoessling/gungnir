@@ -15,9 +15,11 @@
 //!
 //! **Every route but `POST /v3/session` requires a session token** (DN-23 §6, GAP-057).
 //! The token is minted by the node against its own account store and verified per
-//! request; a caller who presents none, or a bad one, gets `401`. `ApprovalRequest`
-//! carries an operator in its body and that field is **not** believed: the caller is
-//! whoever the token says, and nobody else.
+//! request; a caller who presents none, or a bad one, gets `401`. **No route believes a
+//! body that names its own operator**: the caller is whoever the token says, and nobody
+//! else. [`v3::DecisionRequest`] names no operator at all, for that reason -- the
+//! unreachable [`crate::v3::ApprovalRequest`] still carries one, and is why the rule had
+//! to be written down (GAP-138).
 //!
 //! A node with no caller authority configured refuses every route but the session one,
 //! and says so. That is a deployment with no account store, which is the default: it
