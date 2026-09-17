@@ -3269,6 +3269,7 @@ dependencies = [
  "gungnir-mission",
  "gungnir-model",
  "gungnir-modelops",
+ "gungnir-node",
  "gungnir-observability",
  "gungnir-policy",
  "gungnir-remote",

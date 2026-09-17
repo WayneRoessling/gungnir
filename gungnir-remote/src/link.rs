@@ -838,6 +838,12 @@ async fn run_link(
                 flush_tasks(&client, urls, &token, projection).await;
                 flush_exchange(&client, urls, &token, projection).await;
                 flush_decisions(&client, urls, &token, projection).await;
+                // A picture the stream asked for and a failed fetch left owing. The
+                // stream's own branch below takes it as soon as the event arrives; this
+                // is what bounds the retry at one forward interval rather than at the
+                // next frame, which on a quiet node is one heartbeat away. A no-op unless
+                // a fetch is actually owed.
+                refresh_queue(&client, urls, &token, projection, false).await;
             }
             next = tokio::time::timeout(gungnir_api::transport::HEARTBEAT_TIMEOUT, socket.next()) => {
                 handle_frame(next, projection)?;
@@ -1127,6 +1133,17 @@ async fn flush_decisions(
         let answer = answer_of(status, &body);
         if let Ok(mut p) = projection.lock() {
             p.decision_outbox.pop_front();
+            // A `201` or a `409` both mean the item is no longer waiting on a person, and
+            // this desktop has that first-hand. The item leaves PN-06 now rather than
+            // when the stream catches up, so a second click cannot earn a refusal naming
+            // a decision that has already been made (DN-31 §6.3, §6.6).
+            if matches!(
+                answer,
+                crate::queue::DecisionAnswer::Recorded { .. }
+                    | crate::queue::DecisionAnswer::Refused(_)
+            ) {
+                p.queue.recorded_here(decision.item);
+            }
             p.decision_outcomes.push(crate::queue::DecisionOutcome {
                 request: decision.request,
                 item: decision.item,

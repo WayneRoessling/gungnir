@@ -129,6 +129,20 @@ pub struct NodeQueue {
     /// What has ended since this link came up, oldest first, bounded by
     /// [`ENDED_CAPACITY`].
     ended: std::collections::VecDeque<EndedItem>,
+    /// Items the node has answered `201` for on **this** desktop's own request, before
+    /// the stream has said who decided them and when (DN-31 §6.3).
+    ///
+    /// A `201` is first-hand knowledge that an item is decided -- the node names the
+    /// decision it recorded -- so the item stops being something waiting on a person the
+    /// moment it arrives. It is *not* knowledge of the record: who decided, as which role
+    /// and at what mission time are the node's to say and reach this desktop on the
+    /// stream a moment later, so nothing here is written into [`NodeQueue::ended`] until
+    /// they do. Bounded by [`ENDED_CAPACITY`] like the endings themselves.
+    ///
+    /// Without this the deciding console kept showing its own accepted item as waiting
+    /// until the stream caught up -- one or two ticks in which a second click would earn
+    /// a `409` naming the operator's own decision.
+    settled: std::collections::VecDeque<PendingApprovalId>,
     /// The stream has said the node's queue moved and no picture has been taken since.
     stale: bool,
 }
@@ -144,8 +158,30 @@ impl NodeQueue {
         self.stale = false;
         let ended: Vec<PlanId> = self.ended.iter().map(|e| e.plan).collect();
         if let Some(waiting) = self.waiting.as_mut() {
-            waiting.retain(|item| !ended.contains(&item.plan.id));
+            waiting.retain(|item| {
+                !ended.contains(&item.plan.id) && !self.settled.contains(&item.item)
+            });
         }
+    }
+
+    /// The node answered `201` for a decision this desktop posted (DN-31 §6.3).
+    ///
+    /// The item leaves PN-06 at once. What became of it -- who decided, as which role,
+    /// at what mission time -- is not written here: only the node's record says that, and
+    /// it arrives on the stream as `Decided`. Filling those in from this desktop's own
+    /// session would be recording a claim about the node's record that this desktop had
+    /// not read.
+    pub fn recorded_here(&mut self, item: PendingApprovalId) {
+        if let Some(waiting) = self.waiting.as_mut() {
+            waiting.retain(|i| i.item != item);
+        }
+        if self.settled.contains(&item) {
+            return;
+        }
+        if self.settled.len() >= ENDED_CAPACITY {
+            self.settled.pop_front();
+        }
+        self.settled.push_back(item);
     }
 
     /// Fold one of the node's command events into the projection.
@@ -384,6 +420,33 @@ mod tests {
             q.snapshot().items().is_empty(),
             "an ending is monotone: a picture can lag behind one, never contradict it"
         );
+        assert_eq!(q.snapshot().ended.len(), 1);
+    }
+
+    /// The console that decided an item must not go on showing it as waiting until the
+    /// stream catches up: it has the node's `201` in hand, and a second click in that
+    /// window would earn a `409` naming the operator's own decision.
+    #[test]
+    fn an_item_this_desktop_has_a_receipt_for_leaves_the_queue_at_once() {
+        let mut q = NodeQueue::default();
+        q.take_picture(vec![item(1, 100), item(2, 200)]);
+        q.recorded_here(PendingApprovalId(100));
+        assert_eq!(
+            q.snapshot().items().len(),
+            1,
+            "the decided item is no longer waiting on a person"
+        );
+        assert!(
+            q.snapshot().ended.is_empty(),
+            "a 201 says an item was decided and not who decided it or when; only the \
+             node's record says that, and it arrives on the stream"
+        );
+        // And a picture taken before the node's queue had caught up cannot bring it back.
+        q.take_picture(vec![item(1, 100), item(2, 200)]);
+        assert_eq!(q.snapshot().items().len(), 1);
+
+        // The stream then supplies the record.
+        q.note(&decided(1), MissionTime(9.0));
         assert_eq!(q.snapshot().ended.len(), 1);
     }
 
