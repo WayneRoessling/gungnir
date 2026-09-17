@@ -21,7 +21,7 @@ the owner reviewed. A signature from before the repository existed on 2026-09-07
 the first commit and is marked as such. An entry is never edited; a withdrawn signature
 gets a new entry.
 
-206 signatures.
+208 signatures.
 
 | Date | Signer | What was signed | Kind | Paths | Commit | Record |
 |---|---|---|---|---|---|---|
@@ -231,3 +231,5 @@ gets a new entry.
 | 2026-09-16 | Owner | GAP-067 walk: PN-16 laydown options table gated once the alternative's difference and every painted number are asserted; data source named. | criterion | `docs/verification-capability-table.md`<br>`gungnir-app/tests/planning_panel.rs` | `5ea5e0964f` | docs/record/2026-09-16/gap-067-walk.md |
 | 2026-09-16 | Owner | GAP-067 walk: sensor-position resolution gated once an off-axis polar case and the vertical axis to 0.5 m are asserted; data source named. | criterion | `docs/verification-capability-table.md`<br>`gungnir-tracking-service/tests/sensor_position_resolver.rs` | `5ea5e0964f` | docs/record/2026-09-16/gap-067-walk.md |
 | 2026-09-16 | Owner | GAP-067 walk: collection requirements and tasking concurrence gated once a concurrence without a signed-in operator is refused and the MT-08 replay over TT-08 exists (D-54). | criterion | `docs/verification-capability-table.md` | `5ea5e0964f` | docs/record/2026-09-16/gap-067-walk.md |
+| 2026-09-17 | Owner | DN-31, a node approval queue: the design built on D-55 to D-59, its edges (w) to (y) and the gungnir-approval crate, and its five build increments, GAP-130 to GAP-134. | design-note | `docs/design/DN-31-node-approval-queue.md` | `7d6f2019fe` | PR #127; D-55 to D-59 in docs/mission/gap-analysis/data/decisions.yaml |
+| 2026-09-17 | Owner | DN-31 §9's ten verification rows agreed as pass criteria, entering verification-capability-table.md §2 as Draft rows; each gates when its test exists and the owner confirms it checks the criterion. | criterion | `docs/design/DN-31-node-approval-queue.md` | `7d6f2019fe` | PR #127; DN-31 §9 |
