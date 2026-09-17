@@ -54,7 +54,7 @@ use gungnir_resilience::DecisionConflict;
 use gungnir_security::authz::role_permits;
 use gungnir_security::{actions, AuditLog};
 use gungnir_store::EventJournal;
-use gungnir_tracking_service::{SubmitError, TrackingService};
+use gungnir_tracking_service::{PipelineStats, SubmitError, TrackingService};
 
 use crate::state::AppState;
 use crate::update::publish;
@@ -144,8 +144,26 @@ impl TrackingService for TeeTracking {
         self.inner.tracks()
     }
 
+    // The three below are defaulted on the trait for a backend that has no pipeline
+    // behind it, and this one has: `inner`'s. Taking the defaults instead -- which this
+    // wrapper did until the rehearsal work of 2026-09-17 -- emptied PN-02's bearing rays
+    // and zeroed PN-09's counters for the length of every outage, while the embedded
+    // pipeline behind them went on producing both. A wrapper reporting less than what it
+    // wraps is the health-flag rule read backwards, and just as wrong.
+    fn bearing_rays(&self) -> &[gungnir_model::BearingRayView] {
+        self.inner.bearing_rays()
+    }
+
+    fn pipeline_stats(&self) -> PipelineStats {
+        self.inner.pipeline_stats()
+    }
+
     fn is_healthy(&self) -> bool {
         self.inner.is_healthy()
+    }
+
+    fn finish(&mut self) {
+        self.inner.finish();
     }
 }
 
@@ -699,5 +717,84 @@ pub fn unranked_reason(conflict: &DecisionConflict) -> String {
         "the rule could not order the two decisions in time".to_string()
     } else {
         reasons.join(", and ")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gungnir_model::{BearingRayView, SensorId};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    /// A tracker with a pipeline behind it, reduced to the three things a wrapper has to
+    /// carry and nothing else.
+    struct Inner {
+        rays: Vec<BearingRayView>,
+        stats: PipelineStats,
+        finished: Arc<AtomicBool>,
+    }
+
+    impl TrackingService for Inner {
+        fn submit_detection(&mut self, _detection: DetectionView) -> Result<(), SubmitError> {
+            Ok(())
+        }
+        fn poll(&mut self, _now: MissionTime) {}
+        fn tracks(&self) -> &[TrackView] {
+            &[]
+        }
+        fn bearing_rays(&self) -> &[BearingRayView] {
+            &self.rays
+        }
+        fn pipeline_stats(&self) -> PipelineStats {
+            self.stats
+        }
+        fn is_healthy(&self) -> bool {
+            true
+        }
+        fn finish(&mut self) {
+            self.finished.store(true, Ordering::SeqCst);
+        }
+    }
+
+    /// The outage tee reports what the tracker under it reports.
+    ///
+    /// Three of these methods are defaulted on the trait, for a backend with no pipeline
+    /// behind it, and this wrapper took the defaults until 2026-09-17: for the length of
+    /// every outage PN-02 drew no bearing ray and PN-09 counted zero, while the embedded
+    /// pipeline behind the wrapper was producing both.
+    #[test]
+    fn the_outage_tee_reports_what_the_tracker_under_it_reports() {
+        let finished = Arc::new(AtomicBool::new(false));
+        let ray = BearingRayView {
+            sensor: SensorId(4),
+            origin_enu: [0.0, 0.0, 0.0],
+            azimuth_rad: 0.5,
+            elevation_rad: None,
+            azimuth_one_sigma_rad: 0.01,
+            valid_until: MissionTime(60.0),
+        };
+        let stats = PipelineStats {
+            accepted: 9,
+            epochs: 3,
+            bearings_retained: 1,
+            ..PipelineStats::default()
+        };
+        let mut tee = TeeTracking {
+            inner: Box::new(Inner {
+                rays: vec![ray],
+                stats,
+                finished: Arc::clone(&finished),
+            }),
+            link: NodeLink::scripted(),
+        };
+
+        assert_eq!(tee.bearing_rays(), [ray], "the retained bearing is dropped");
+        assert_eq!(tee.pipeline_stats(), stats, "the counters read as zero");
+        tee.finish();
+        assert!(
+            finished.load(Ordering::SeqCst),
+            "the stream is never ended under the wrapper, so the last reorder horizon is lost"
+        );
     }
 }

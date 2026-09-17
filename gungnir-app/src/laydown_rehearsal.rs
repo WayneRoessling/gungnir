@@ -42,6 +42,17 @@
 //! applies to this exact panel. What this module reports instead is only what a real
 //! tick loop actually measured: tracks the pipeline formed, and how the approval queue
 //! it drove behaved.
+//!
+//! **A measurement of the scenario, not of the machine.** The fusion pipeline runs on
+//! its own task, and a replay's frames cost so little wall clock that the task is
+//! routinely still behind when the last frame ends -- on a loaded machine, arbitrarily
+//! far behind. A run therefore ends its detection stream and waits for the pipeline's
+//! own end-of-stream flush before it reads anything off, which is both how the last
+//! reorder horizon gets processed at all and the only signal that says the rest already
+//! was; if it never arrives the run reports nothing (`RehearsalError::DidNotSettle`)
+//! rather than a number an operator would read as a property of the laydown. What is
+//! left is the pipeline's own run-to-run variance under scheduling, which
+//! `tests/laydown_rehearsal.rs` documents and neither file asserts past.
 
 use gungnir_command::ApprovalWorkflow;
 use gungnir_config::{ConfigBaseline, ResourceConfig, SensorConfig};
@@ -118,6 +129,12 @@ pub enum RehearsalError {
         #[source]
         source: serde_json::Error,
     },
+    #[error(
+        "the pipeline never reported the end of the run: it had taken {taken} of the \
+         {submitted} detection(s) fed to it, and what it formed is not this scenario's \
+         answer"
+    )]
+    DidNotSettle { submitted: u64, taken: u64 },
     #[error("the fixture's own feed could not be read back: {0}")]
     Feed(#[from] gungnir_ingest::IngestError),
     #[error("a rehearsal's own throwaway desktop would not start: {0}")]
@@ -201,6 +218,19 @@ fn config_for(
 
 const FRAME_S: f64 = 1.0 / 30.0;
 
+/// How many times a run polls for the pipeline's end-of-stream flush before it gives
+/// up, and how long it pauses between polls.
+///
+/// **A deadlock guard, not a performance assertion** -- the reasoning
+/// `gungnir-tracking-service/tests/sample_set_replay.rs` gives for its own bound. The
+/// loop leaves the moment the flush arrives, so a healthy run pays a poll or two; a
+/// pipeline that has genuinely stopped ends the run with
+/// [`RehearsalError::DidNotSettle`] after about ten seconds, against a replay that
+/// already costs seconds. Ten seconds is not an opinion about how fast the flush should
+/// be: it is long enough that a machine cannot fail this by being slow.
+const SETTLE_POLLS: usize = 5_000;
+const SETTLE_PAUSE: std::time::Duration = std::time::Duration::from_millis(2);
+
 /// A counter, not just the process id: two rehearsals of the same laydown against the
 /// same scenario -- exactly what comparing two candidate resource placements does --
 /// would otherwise share one scratch path, and concurrent runs (this crate's own test
@@ -218,8 +248,10 @@ static NEXT_RUN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::ne
 ///
 /// # Errors
 ///
-/// If the named fixture's files cannot be read or do not parse, or the throwaway
-/// desktop they would drive cannot start.
+/// If the named fixture's files cannot be read or do not parse, the throwaway desktop
+/// they would drive cannot start, or the pipeline behind it never caught up with the
+/// detections the run fed it ([`RehearsalError::DidNotSettle`]) -- in which case there
+/// is no honest number to report and the run says so rather than reporting a low one.
 pub fn run(
     testdata_root: &Path,
     scenario: TestTrackNumber,
@@ -265,6 +297,41 @@ pub fn run(
         clock.advance(FRAME_S);
         state.clock = Box::new(clock);
         update::tick(&mut state);
+    }
+
+    // The pipeline runs on a task of its own, so the picture at the last frame is only
+    // as much of the run as it had reported by then. A replay's frames cost almost no
+    // wall clock, and on a loaded machine the task can be most of a scenario behind when
+    // the last one ends -- or, as CI showed on 2026-09-17 against a commit that changed
+    // only documents, have reported nothing at all. A rehearsal answering "no tracks"
+    // there would be reporting how busy the runner was, in a number an operator reads as
+    // a property of the laydown.
+    //
+    // So end the run's detection stream and wait for the task's own end-of-stream flush,
+    // which is both the point at which the last reorder horizon is finally processed and
+    // the one unambiguous signal that everything before it has been: a pause says
+    // nothing, and until GAP-045 this code read one as if it did.
+    state.tracking.finish();
+    let mut flushed = false;
+    for _ in 0..SETTLE_POLLS {
+        state.tracking.poll(clock.current);
+        if !state.tracking.is_healthy() {
+            flushed = true;
+            break;
+        }
+        std::thread::sleep(SETTLE_PAUSE);
+    }
+    if !flushed {
+        // Every submission the gateway made is counted in exactly one of these three: a
+        // position enters the reorder buffer or is refused as too late, and a bearing is
+        // offered (`bearings_refused` counts a subset of the offered). The pair says how
+        // far the run got before it stopped being one.
+        let counters = state.tracking.pipeline_stats();
+        let taken = counters.accepted + counters.too_late + counters.bearings_offered;
+        let submitted = state.ingest.stats().accepted;
+        drop(state);
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err(RehearsalError::DidNotSettle { submitted, taken });
     }
 
     let records = state.desk.approvals.records();

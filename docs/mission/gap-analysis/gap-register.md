@@ -148,8 +148,9 @@ history, and an entry is never edited once it has merged.
 | GAP-133 | A linked desktop decides the node's plans itself | Technical | CAP-5.9, CAP-4.3 | 4 | 10 | M | 40 | I3 | UI engineer | Open |
 | GAP-134 | A desktop's offline decisions never reach its node | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
 | GAP-135 | An effector's report moves an engagement without putting the move on the record | Technical | CAP-4.6 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
+| GAP-136 | A rehearsal read its picture before the pipeline had reported the run | Technical | CAP-5.2 | 3 | 1 | S | 3 | I3 | Services engineer | Closed |
 
-Counts: 135 gaps, 3 mission, 132 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 136 gaps, 3 mission, 133 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2011,4 +2012,18 @@ Counts: 135 gaps, 3 mission, 132 technical; 1 already covered by a plan in `../.
 - Closing action: Publish `EngagementEvent::Executing` and `EngagementEvent::Closed`, with the effector-reported outcome, when a report moves an engagement, through the one place closes are published; and test that a journal holding an effector's completion reports a corroborated outcome.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found building GAP-130 (`../../record/2026-09-17/identifiers-uuid-v7-and-v3-routes.md`).
+
+**GAP-136 A rehearsal read its picture before the pipeline had reported the run**
+
+- Type: Technical.
+- Capability: CAP-5.2 Replay and rehearse.
+- History:
+  - 2026-09-17, Open: Found by CI: the rehearsal test failed on a documents-only commit, having formed no tracks at all, and passed on the same content elsewhere.
+  - 2026-09-17, Closed: Fixed. `TrackingService` gained a defaulted `finish`, so a host holding a boxed service can end its stream; the rehearsal calls it and waits for the flush, bounded, and returns `DidNotSettle` instead of a number if it does not come. Nine runs against a saturated machine and three against an idle one all report five tracks, and a new test pins two runs to one record. The outage tee's dropped `bearing_rays` and `pipeline_stats` were found next to it and forwarded.
+- Evidence: `gungnir-app/src/laydown_rehearsal.rs` (`run` read `state.tracking.tracks()` straight after the frame loop); `gungnir-app/tests/laydown_rehearsal.rs` (its own documentation recorded `[4, 5, 4, 4, 4]` tracks for one input and put it down to the pipeline); `gungnir_fusion_async::ingest_with` ("the stream's end is a flush, not a truncation"); CI run on 87244bc's branch.
+- Severity: 3. Reach: 1 threads. Effort: S. Priority: 3.
+- Impact: A laydown rehearsal replayed its fixture and read `tracks()` at the last frame, but the fusion pipeline runs on its own task and a replay's frames cost almost no wall clock, so the number reported was partly a measurement of how busy the machine was. On CI it came back as zero and failed the suite on a commit that changed only documents. The last reorder horizon was never processed at all, because a pipeline only flushes it when the stream ends.
+- Closing action: End the run's detection stream and wait for the pipeline's own end-of-stream flush before reading anything off; report nothing rather than a low number if it never arrives; and test that two runs of one fixture under one laydown report the same record.
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: Found by CI while building GAP-131 (`../../record/2026-09-17/a-rehearsal-that-measured-the-machine.md`).
 
