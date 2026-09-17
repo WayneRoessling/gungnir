@@ -98,7 +98,10 @@ pub fn short(value: u128) -> String {
     }
 }
 
-/// `#[serde(with = "gungnir_model::identifier::wire")]` on an identifier's `u128` (D-60).
+/// The written form of an identifier's `u128` (D-60): what each identifier's `Serialize`
+/// and `Deserialize` call, written out on the type rather than attached as
+/// `#[serde(with)]`, so the declaration stays `pub struct DecisionId(pub u128);` -- the
+/// shape DN-31 §5.1 shows and `docs/architecture/uaf/tools/build_uaf.py` reads.
 pub mod wire {
     use serde::de::{Error, Unexpected, Visitor};
     use serde::{Deserializer, Serializer};
@@ -109,7 +112,7 @@ pub mod wire {
     /// # Errors
     ///
     /// Only the serializer's own.
-    #[allow(clippy::trivially_copy_pass_by_ref)] // serde's `with` passes a reference
+    #[allow(clippy::trivially_copy_pass_by_ref)] // serde's `serialize_with` shape, by reference
     pub fn serialize<S: Serializer>(value: &u128, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buffer = uuid::Uuid::encode_buffer();
         serializer.serialize_str(

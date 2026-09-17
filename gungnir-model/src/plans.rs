@@ -31,20 +31,22 @@ use crate::{Geodetic, InterceptSolutionView, MissionTime, ResourceId, TrackId};
 /// UUID and read from that or a pre-change number (D-60); shown by
 /// [`DecisionId::short`] on screen and in full everywhere else (D-61). How is
 /// [`crate::identifier`]'s.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    serde::Serialize,
-    serde::Deserialize,
-)]
-pub struct DecisionId(#[serde(with = "crate::identifier::wire")] pub u128);
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct DecisionId(pub u128);
+
+impl serde::Serialize for DecisionId {
+    /// The hyphenated UUID string (D-60).
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::identifier::wire::serialize(&self.0, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for DecisionId {
+    /// That string, or the number a pre-change journal holds (D-60).
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        crate::identifier::wire::deserialize(deserializer).map(Self)
+    }
+}
 
 impl DecisionId {
     /// The on-screen tag, `…9f3a61c2` (D-61): for a panel or an alert, never a record.

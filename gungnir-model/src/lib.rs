@@ -615,20 +615,22 @@ impl ResourceView {
 /// journals by this. `PlanId::default()`, zero, is the id of `PlanView::default()` alone
 /// and no planner mints it. Written, read and shown as [`crate::identifier`] says (D-60,
 /// D-61); a rehearsal seed's plan keeps the number the seed gives.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    serde::Serialize,
-    serde::Deserialize,
-)]
-pub struct PlanId(#[serde(with = "crate::identifier::wire")] pub u128);
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PlanId(pub u128);
+
+impl serde::Serialize for PlanId {
+    /// The hyphenated UUID string (D-60).
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::identifier::wire::serialize(&self.0, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PlanId {
+    /// That string, or the number a pre-change journal holds (D-60).
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        crate::identifier::wire::deserialize(deserializer).map(Self)
+    }
+}
 
 impl PlanId {
     /// The on-screen tag, `…9f3a61c2` (D-61): for a panel or an alert, never a record.

@@ -155,10 +155,22 @@ impl DecisionRecord {
 /// it was a counter restarting at 1 in every workflow, and DN-31 puts queue items from a
 /// node and from a cut-off desktop on the same record. Written, read and shown through
 /// `gungnir_model::identifier`, the helper `DecisionId` and `PlanId` use (D-60, D-61).
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
-pub struct PendingApprovalId(#[serde(with = "gungnir_model::identifier::wire")] pub u128);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PendingApprovalId(pub u128);
+
+impl serde::Serialize for PendingApprovalId {
+    /// The hyphenated UUID string (D-60).
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        gungnir_model::identifier::wire::serialize(&self.0, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PendingApprovalId {
+    /// That string, or the number a pre-change journal holds (D-60).
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        gungnir_model::identifier::wire::deserialize(deserializer).map(Self)
+    }
+}
 
 impl PendingApprovalId {
     /// The on-screen tag, `…9f3a61c2` (D-61): for a panel or an alert, never a record.
