@@ -218,6 +218,11 @@ fn decide(state: &mut AppState) -> gungnir_model::DecisionId {
 }
 
 #[test]
+// One round trip each way against a real socket -- accepted, then refused -- and the
+// second half only means anything after the first. Reading the desk's queue and handoffs
+// through `state.desk` (GAP-131) put it one line over the pedantic limit; splitting it
+// would split the round trip.
+#[allow(clippy::too_many_lines)]
 fn a_handoff_to_an_accepting_endpoint_is_delivered_and_a_refusal_is_recorded() {
     let status = Arc::new(AtomicU16::new(200));
     let hits = Arc::new(AtomicU16::new(0));
