@@ -1300,6 +1300,10 @@ IE-peer-origin,uafId,IE-peer-origin
 IE-peer-origin,uafKind,InformationElement
 IE-peer-origin,registry.code,gungnir_model::PeerOrigin
 IE-peer-origin,registry.domain,"Assets, exchange & releasability"
+IE-pending-approval-id,uafId,IE-pending-approval-id
+IE-pending-approval-id,uafKind,InformationElement
+IE-pending-approval-id,registry.code,gungnir_model::PendingApprovalId
+IE-pending-approval-id,registry.domain,"Plans, effectors & handoff"
 IE-pipeline-stats-view,uafId,IE-pipeline-stats-view
 IE-pipeline-stats-view,uafKind,InformationElement
 IE-pipeline-stats-view,registry.code,gungnir_model::PipelineStatsView

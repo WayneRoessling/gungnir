@@ -48,6 +48,13 @@ is how a canonical model stops being canonical.
 | **`PlanView.solutions`** | **Replaced by `PlanView.kind: PlanKind`** | **No** | DN-05 |
 | **`DecisionId`, `PlanId`** | **A `u64` counter becomes a UUID v7 held as `u128`**, written as the hyphenated RFC 9562 string and read from that string or a number | **No**; a journal holding the old numbers still reads | D-56, D-60; GAP-130, `DN-31-node-approval-queue.md` §5.1 and amendment 1 |
 | **`gungnir_command::PendingApprovalId`** | **The same change**, through the same helper, `gungnir_model::identifier` | **No** | D-56, D-60; GAP-130 |
+| `PendingApprovalId` | **Moves to `gungnir-model`**; `gungnir-command` re-exports it and still mints it | Yes -- the same type, the same written form, the same tag | GAP-132: `CommandEvent::Queued` names the item a node queued, and the model may not depend on the crate holding the queue (DN-31 §5.3) |
+| `RequestId` | New: a client's idempotency key for one decision, a validated non-empty bounded string. **Not a UUID under D-60**, because the client chooses it rather than this deployment minting it | Yes, new | DN-31 §5.2; GAP-132 |
+| `CommandEvent::Decided` | Gains `request: Option<RequestId>` and `origin: Option<String>` | Yes, both defaulted, so an older journal reads | DN-31 §5.3; GAP-132. `origin` is filled by GAP-134 and is `None` for every decision taken here |
+| `CommandEvent` | Gains `Queued { item, plan, layer, offered_to, expires_at, escalate_at }` | Yes -- a new variant, and a client must ignore an unknown one (`gungnir-api-v1.md`, "Compatibility rules") | DN-31 §5.3; GAP-132: a desktop builds the node's queue from the stream without polling |
+| `gungnir_command::DecisionRecord` | Gains `item: Option<PendingApprovalId>`, `request: Option<RequestId>` and `origin: Option<String>` | Yes, all defaulted | GAP-132: what became of an item, and what a request key already produced, are answered from the append-only history rather than an index beside it (DN-31 §6.3) |
+| `SnapshotResponse` | Gains `queue: Vec<QueueItemView>` | Yes, defaulted | DN-31 §5.3; GAP-132 |
+| `gungnir-api` v3 | New: `QueueItemView`, `DecisionRequest`, `DecisionChoice`, `DecisionRecorded`, `DecisionRefused` | Yes, new | DN-31 §5.2; GAP-132 |
 | `CommandEvent` | Loses `ApprovalRequested(PlanId)`, which nothing published | **No**, and no journal holds one | DN-31 §5.3 and amendment 1 |
 | **`SCHEMA_VERSION`** | **3 becomes 4**, and the interface path `/v2` becomes `/v3` | **No** | D-56; every `/v2` route answers `410 Gone` naming its successor |
 
@@ -234,6 +241,19 @@ all through `gungnir_model::identifier` (D-56, D-60, D-61). `SCHEMA_VERSION` is 
 served under `/v3`, with its `/v2` form answering `410 Gone` after authenticating the caller
 as the successor does. `testdata/journals/pre-uuid-v7/` holds a journal written at version
 3, and it replays and reports unchanged.
+
+**Landed 2026-09-17, GAP-132**: the node runs the approval queue (D-55), so the queue is on
+the wire. `PendingApprovalId` moved to `gungnir-model` -- unchanged in shape, written form
+and tag, and still minted by `gungnir-command`, which re-exports it -- because
+`CommandEvent::Queued` names the item and the model may not depend on the crate holding the
+queue. `CommandEvent` gained that variant and `Decided` gained `request` and `origin`;
+`DecisionRecord` gained `item`, `request` and `origin`; `SnapshotResponse` gained `queue`;
+and `gungnir-api` v3 gained `QueueItemView`, `DecisionRequest`, `DecisionChoice`,
+`DecisionRecorded` and `DecisionRefused`. **`SCHEMA_VERSION` stays 4**: every addition is a
+defaulted field or a new enum variant, which the interface's own compatibility rules call
+compatible, and every payload that already read still reads. `ApprovalWorkflow::decide`
+takes a `DecidedBy` in place of two `Option<String>`s, so the operator, the role and the
+request key of one act cannot be passed separately and disagree.
 
 `SnapshotResponse` gains `assets`, `predictions`, `engagements`, `requirements`,
 `hazards`, and `control_status`, and is filtered per caller by DN-17. The filtering is a

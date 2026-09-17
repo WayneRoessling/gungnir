@@ -651,6 +651,8 @@ REL:uses:RS-node->RS-modelops,uafRelationship,uses
 REL:uses:RS-node->RS-identity,uafRelationship,uses
 REL:uses:RS-node->RS-policy,uafRelationship,uses
 REL:uses:RS-node->RS-geo,uafRelationship,uses
+REL:uses:RS-node->RS-approval,uafRelationship,uses
+REL:uses:RS-node->RS-command,uafRelationship,uses
 REL:uses:RS-node->RS-analytics,uafRelationship,uses
 REL:uses:RS-node->RS-observability,uafRelationship,uses
 REL:uses:RS-node->RS-scenario,uafRelationship,uses
