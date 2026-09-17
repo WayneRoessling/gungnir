@@ -39,7 +39,9 @@ pub use queue::{
 };
 
 use gungnir_model::events::CommandEvent;
-use gungnir_model::{DecisionId, DecisionSettings, EffectorLayer, MissionTime, PlanId, PlanView};
+use gungnir_model::{
+    DecisionId, DecisionSettings, EffectorLayer, MissionTime, PlanId, PlanView, RequestId,
+};
 use gungnir_policy::{DenialReason, PolicyVerdict};
 
 /// What ended a pending approval.
@@ -78,12 +80,57 @@ pub enum OperatorDecision {
     },
 }
 
+/// Who took a decision, under what request, and where (DN-23 §5 rule 1; DN-31 §5.2).
+///
+/// One argument rather than four, because all four are read from one caller's one act and
+/// passing them separately is how a record comes to name an operator with no role. It has
+/// a `Default` -- every field `None` -- which is the honest shape of a decision nobody
+/// signed in for and no route carried, and the only shape an expiry can have.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DecidedBy {
+    pub operator: Option<String>,
+    /// The role the operator's authenticated session carried, never a selection.
+    pub role: Option<String>,
+    /// The client's idempotency key, when a route carried one (DN-31 §5.2).
+    pub request: Option<RequestId>,
+    /// The machine a forwarded decision was taken on. Filled by GAP-134; `None` here
+    /// means "taken on this machine", which every decision in this build is.
+    pub origin: Option<String>,
+}
+
+impl DecidedBy {
+    /// A decision attributed to a verified session, with no request key.
+    #[must_use]
+    pub fn session(operator: Option<String>, role: Option<String>) -> Self {
+        Self {
+            operator,
+            role,
+            ..Self::default()
+        }
+    }
+
+    /// The same, under a client's request key (DN-31 §6.3).
+    #[must_use]
+    pub fn with_request(mut self, request: Option<RequestId>) -> Self {
+        self.request = request;
+        self
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct DecisionRecord {
     /// Minted here, and the key everything else refers to. A service facade may
     /// not depend on this crate, so engagement state keys on this identifier
     /// rather than on the record (docs/design/DN-06-engagement-and-effect.md §2).
     pub id: DecisionId,
+    /// The queue item this ended, so "what became of item X" is answerable from the
+    /// append-only history rather than from an index beside it (GAP-132; DN-31 §6.3's
+    /// `409 AlreadyDecided`, which names the decision that stands for an item).
+    ///
+    /// `None` for a record written before GAP-132, and defaulted for that reason: the
+    /// change is additive and `SCHEMA_VERSION` stands.
+    #[serde(default)]
+    pub item: Option<PendingApprovalId>,
     pub plan: PlanView,
     pub verdict: PolicyVerdict,
     pub decision: OperatorDecision,
@@ -96,6 +143,18 @@ pub struct DecisionRecord {
     /// `gungnir_security::Role`, the same reason `Concurrence::Operator` carries one.
     #[serde(default)]
     pub role: Option<String>,
+    /// The client's idempotency key, when a route carried one (DN-31 §5.2, GAP-132).
+    ///
+    /// What makes a retry the same request rather than a second decision: a key already
+    /// in this history is answered with the outcome it produced, and nothing is recorded.
+    /// `None` for a decision no route carried a key for -- a desktop's own queue, an
+    /// expiry, and every record written before GAP-132. Defaulted for that reason.
+    #[serde(default)]
+    pub request: Option<RequestId>,
+    /// The machine a forwarded decision was taken on (DN-31 §5.3, §6.8). Filled by
+    /// GAP-134; `None` means "taken here", which every decision in this build is.
+    #[serde(default)]
+    pub origin: Option<String>,
     pub mission_time: MissionTime,
 }
 
@@ -144,6 +203,10 @@ impl DecisionRecord {
                     OperatorDecision::Rejected { reason } => Some(reason.clone()),
                     _ => None,
                 },
+                // Both from the record, for the reason the whole event is: there is no
+                // path that writes one thing to the history and another to the bus.
+                request: self.request.clone(),
+                origin: self.origin.clone(),
             },
         }
     }
@@ -151,50 +214,12 @@ impl DecisionRecord {
 
 /// Identifies one item in the approval queue.
 ///
-/// **A UUID v7 since GAP-130** (D-56), minted by [`ApprovalWorkflow::submit_for_approval`]:
-/// it was a counter restarting at 1 in every workflow, and DN-31 puts queue items from a
-/// node and from a cut-off desktop on the same record. Written, read and shown through
-/// `gungnir_model::identifier`, the helper `DecisionId` and `PlanId` use (D-60, D-61).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct PendingApprovalId(pub u128);
-
-impl serde::Serialize for PendingApprovalId {
-    /// The hyphenated UUID string (D-60).
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        gungnir_model::identifier::wire::serialize(&self.0, serializer)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for PendingApprovalId {
-    /// That string, or the number a pre-change journal holds (D-60).
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        gungnir_model::identifier::wire::deserialize(deserializer).map(Self)
-    }
-}
-
-impl PendingApprovalId {
-    /// The on-screen tag, `…9f3a61c2` (D-61): for a panel or an alert, never a record.
-    #[must_use]
-    pub fn short(self) -> String {
-        gungnir_model::identifier::short(self.0)
-    }
-}
-
-impl std::fmt::Display for PendingApprovalId {
-    /// The whole identifier, for an audit entry and a log field (D-61).
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        gungnir_model::identifier::fmt_full(self.0, f)
-    }
-}
-
-impl std::str::FromStr for PendingApprovalId {
-    type Err = gungnir_model::identifier::IdentifierError;
-
-    /// The hyphenated UUID, or a pre-change decimal number (D-60).
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        gungnir_model::identifier::parse(text).map(Self)
-    }
-}
+/// **Re-exported, not declared here, since GAP-132.** The type moved to `gungnir-model`
+/// so `CommandEvent::Queued` can name the item a node queued, and the model may not
+/// depend on this crate (`docs/design/DN-31-node-approval-queue.md` §5.3). This crate
+/// still mints it, in [`ApprovalWorkflow::submit_for_approval`], and everything that
+/// named `gungnir_command::PendingApprovalId` still does. Nothing about the type changed.
+pub use gungnir_model::PendingApprovalId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CommandError {
@@ -258,21 +283,44 @@ pub trait ApprovalWorkflow: Send + Sync {
 
     /// Record the operator's decision; the plan leaves the queue.
     ///
-    /// `operator_id` and `role` come from one authenticated session and are both `None`
-    /// when there is none: a role is never recorded without the operator it was verified
-    /// for (DN-23 §5 rule 1), because a role nobody verified would be ranked by D-03's rule
-    /// as though somebody had.
+    /// The operator and the role in `who` come from one authenticated session and are both
+    /// `None` when there is none: a role is never recorded without the operator it was
+    /// verified for (DN-23 §5 rule 1), because a role nobody verified would be ranked by
+    /// D-03's rule as though somebody had.
+    ///
+    /// **This does not check `who.request` against the history.** Answering a repeated
+    /// request with its first outcome is the caller's, because the caller is the one that
+    /// must then answer rather than record (DN-31 §6.3); [`ApprovalWorkflow::for_request`]
+    /// is the question to ask first.
     fn decide(
         &mut self,
         id: PendingApprovalId,
         decision: OperatorDecision,
-        operator_id: Option<String>,
-        role: Option<String>,
+        who: DecidedBy,
         now: MissionTime,
     ) -> Result<DecisionRecord, CommandError>;
 
     /// Append-only history, oldest first.
     fn records(&self) -> &[DecisionRecord];
+
+    /// What became of one queue item, from the history rather than from an index beside
+    /// it (DN-31 §6.3): the decision that stands, or the expiry that ended it.
+    ///
+    /// `None` means the item is still queued, or was never issued by this workflow.
+    fn outcome_for(&self, item: PendingApprovalId) -> Option<&DecisionRecord> {
+        self.records().iter().find(|r| r.item == Some(item))
+    }
+
+    /// The decision a client's request key already produced (DN-31 §6.3).
+    ///
+    /// A repeated key is answered with this and records nothing, which is what makes a
+    /// retry after a `504` safe: the client learns which of the two things happened rather
+    /// than taking a second decision to find out.
+    fn for_request(&self, request: &RequestId) -> Option<&DecisionRecord> {
+        self.records()
+            .iter()
+            .find(|r| r.request.as_ref() == Some(request))
+    }
 
     /// The plans waiting, for callers that want only those.
     fn pending(&self) -> Vec<(PendingApprovalId, &PlanView)> {
@@ -420,12 +468,11 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
         &mut self,
         id: PendingApprovalId,
         decision: OperatorDecision,
-        operator_id: Option<String>,
-        role: Option<String>,
+        who: DecidedBy,
         now: MissionTime,
     ) -> Result<DecisionRecord, CommandError> {
         debug_assert!(
-            role.is_none() || operator_id.is_some(),
+            who.role.is_none() || who.operator.is_some(),
             "a role was recorded with no operator: DN-23 §5 rule 1"
         );
         let index = self
@@ -437,11 +484,14 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
         let item = self.queue.remove(index);
         let record = DecisionRecord {
             id: decision_id,
+            item: Some(id),
             plan: item.plan,
             verdict: item.verdict,
             decision,
-            operator_id,
-            role,
+            operator_id: who.operator,
+            role: who.role,
+            request: who.request,
+            origin: who.origin,
             mission_time: now,
         };
         self.records.push(record.clone());
@@ -516,8 +566,7 @@ mod tests {
             .decide(
                 id,
                 OperatorDecision::Accepted,
-                Some("op-1".into()),
-                None,
+                DecidedBy::session(Some("op-1".into()), None),
                 MissionTime(5.0),
             )
             .expect("decide");
@@ -555,8 +604,7 @@ mod tests {
                 .decide(
                     id,
                     OperatorDecision::Accepted,
-                    Some("op".into()),
-                    None,
+                    DecidedBy::session(Some("op".into()), None),
                     MissionTime(0.0),
                 )
                 .expect("decide");
@@ -577,8 +625,7 @@ mod tests {
                 OperatorDecision::Rejected {
                     reason: "test".into()
                 },
-                None,
-                None,
+                DecidedBy::session(None, None),
                 MissionTime(0.0)
             ),
             Err(CommandError::NotFound(_))
@@ -634,8 +681,7 @@ mod tests {
                 .decide(
                     id,
                     decision.clone(),
-                    Some("op-1".into()),
-                    Some("Operator".into()),
+                    DecidedBy::session(Some("op-1".into()), Some("Operator".into())),
                     MissionTime(at),
                 )
                 .expect("decide");
@@ -666,8 +712,7 @@ mod tests {
                 wf.decide(
                     id,
                     OperatorDecision::Accepted,
-                    Some("op-1".into()),
-                    Some("Operator".into()),
+                    DecidedBy::session(Some("op-1".into()), Some("Operator".into())),
                     MissionTime(4.0)
                 ),
                 Err(CommandError::NotFound(missing)) if missing == id
@@ -831,8 +876,7 @@ mod tests {
                 OperatorDecision::Rejected {
                     reason: "friendly airliner".into(),
                 },
-                None,
-                None,
+                DecidedBy::session(None, None),
                 MissionTime(5.0),
             )
             .expect("decide");
@@ -875,8 +919,7 @@ mod tests {
                 OperatorDecision::Rejected {
                     reason: "track is a friendly airliner".into(),
                 },
-                None,
-                None,
+                DecidedBy::session(None, None),
                 MissionTime(5.0),
             )
             .expect("decide");
@@ -913,8 +956,7 @@ mod tests {
                 OperatorDecision::Rejected {
                     reason: "no".into(),
                 },
-                None,
-                None,
+                DecidedBy::session(None, None),
                 MissionTime(1.0),
             )
             .expect("decide");
@@ -939,8 +981,7 @@ mod tests {
                 OperatorDecision::Rejected {
                     reason: "friendly airliner".into(),
                 },
-                None,
-                None,
+                DecidedBy::session(None, None),
                 MissionTime(1.0),
             )
             .expect("decide");
@@ -960,8 +1001,7 @@ mod tests {
             .decide(
                 signed_in,
                 OperatorDecision::Accepted,
-                Some("7".into()),
-                Some("Supervisor".into()),
+                DecidedBy::session(Some("7".into()), Some("Supervisor".into())),
                 MissionTime(5.0),
             )
             .expect("decide");
@@ -981,8 +1021,7 @@ mod tests {
                 OperatorDecision::Rejected {
                     reason: "friendly airliner".into(),
                 },
-                None,
-                None,
+                DecidedBy::session(None, None),
                 MissionTime(6.0),
             )
             .expect("decide");

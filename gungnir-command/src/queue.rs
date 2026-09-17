@@ -238,12 +238,18 @@ pub fn expiry_record(
 ) -> DecisionRecord {
     DecisionRecord {
         id,
+        // The item the window closed on, so "what became of item X" reads `Expired` from
+        // the history rather than "never heard of" (GAP-132, DN-31 §6.3).
+        item: Some(item.id),
         plan: item.plan.clone(),
         verdict: item.verdict,
         decision: crate::OperatorDecision::Expired { at },
         operator_id: None,
-        // Nobody decided, so no session carried a role either.
+        // Nobody decided, so no session carried a role either, no client asked, and
+        // nowhere else took it.
         role: None,
+        request: None,
+        origin: None,
         mission_time: at,
     }
 }

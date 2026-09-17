@@ -56,6 +56,7 @@ fn desktop(name: &str, endpoint: Option<&str>) -> (AppState, std::path::PathBuf)
 fn accepted() -> DecisionRecord {
     DecisionRecord {
         id: DecisionId(1),
+        item: None,
         plan: PlanView {
             id: PlanId(1),
             kind: PlanKind::Intercept {
@@ -72,6 +73,8 @@ fn accepted() -> DecisionRecord {
         decision: OperatorDecision::Accepted,
         operator_id: None,
         role: None,
+        request: None,
+        origin: None,
         mission_time: MissionTime(0.0),
     }
 }

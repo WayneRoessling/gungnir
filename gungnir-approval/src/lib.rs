@@ -44,10 +44,12 @@ pub mod queue;
 
 pub use chain::{
     chain_report, chain_report_for, escalation_ladder, evaluate, fires_checks, friendly_positions,
-    may_override, with_chain, PolicyChainReport, DECISION_ACTION, DESKTOP_ENGINES,
+    ladder_roles, may_override, offer_to, with_chain, Offering, PolicyChainReport, CHAIN_ENGINES,
+    DECISION_ACTION,
 };
 pub use deliveries::{
-    DeliveryAnswer, HandoffInFlight, HandoffTransport, PendingHandoff, RETRY_AFTER_S,
+    http_address_in, DeliveryAnswer, HandoffInFlight, HandoffTransport, PendingHandoff, HTTP_KIND,
+    RETRY_AFTER_S,
 };
 pub use handoffs::HandoffRecord;
 pub use queue::{DenialHistory, QueueOutcomeCounts, Submitted};
@@ -104,11 +106,34 @@ pub struct ApprovalContext<'a> {
     pub baseline_supersedes_plans: bool,
 }
 
-impl ApprovalContext<'_> {
+impl<'a> ApprovalContext<'a> {
     /// The role as the record and the authority rules spell it.
     #[must_use]
     pub fn role_name(&self) -> String {
         format!("{:?}", self.role)
+    }
+
+    /// The same picture, asked about a different role (DN-31 §6.1).
+    ///
+    /// What lets [`chain::offer_to`] ask the authority engine about every role on the
+    /// ladder rather than about the one at a console. The borrows are re-borrowed, not
+    /// copied, so the answer is about the same clock and the same tracks the caller read
+    /// -- asking two roles about two pictures would be a race with itself.
+    ///
+    /// **`signed_in` travels unchanged**, because who is asking and who is deciding are
+    /// different questions: a node walks the ladder with nobody signed in, and a decision
+    /// still records only the session that took it (DN-23 §5 rule 1).
+    #[must_use]
+    pub fn as_role(&'a self, role: Role) -> ApprovalContext<'a> {
+        ApprovalContext {
+            now: self.now,
+            role,
+            signed_in: self.signed_in.clone(),
+            tracks: self.tracks,
+            resources: self.resources,
+            config: self.config,
+            baseline_supersedes_plans: self.baseline_supersedes_plans,
+        }
     }
 }
 

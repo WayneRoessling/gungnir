@@ -487,6 +487,8 @@ mod tests {
                 role: None,
                 verdict: VerdictSummary::RequiresHumanApproval,
                 rationale: rationale.map(str::to_string),
+                request: None,
+                origin: None,
             }),
         )
     }

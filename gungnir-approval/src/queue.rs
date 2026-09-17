@@ -13,8 +13,8 @@
 
 use crate::{ApprovalContext, ApprovalDesk, ApprovalHost, PolicyInputs};
 use gungnir_command::{
-    governing_layer, ApprovalWorkflow, CommandError, OperatorDecision, PendingApprovalId,
-    QueueOutcome, Submission,
+    governing_layer, ApprovalWorkflow, CommandError, DecidedBy, OperatorDecision,
+    PendingApprovalId, QueueOutcome, Submission,
 };
 use gungnir_eventing::Event;
 use gungnir_model::events::{CommandEvent, InterceptEvent};
@@ -70,27 +70,93 @@ impl ApprovalDesk {
         host: &mut dyn ApprovalHost,
         plan: PlanView,
     ) -> Submitted {
-        // **Before policy, not after.** A plan produced under a baseline that is outside
-        // its window is superseded whatever policy would have said about it (DN-08 §5),
-        // and running the chain first would put a verdict in the record for a plan that
-        // was never going to be applied.
-        if cx.baseline_supersedes_plans {
-            let now = cx.now;
-            let plan_id = plan.id;
-            host.publish(now, Event::Intercept(InterceptEvent::PlanSuperseded(plan)));
-            self.observe_superseded(host, plan_id, now);
-            // Said once per plan, not once per frame: `submit` runs only when the plan
-            // changes, which is why this is here rather than in the tick.
-            // An alert names the plan by its tag and a log field in full (D-61).
-            host.alert(format!(
-                "Plan {} superseded: the baseline in force is outside its validity \
-                 window, so nothing produced now will be applied",
-                plan_id.short()
-            ));
-            tracing::warn!(plan = %plan_id, "plan superseded: baseline not in force");
-            return Submitted::Superseded;
+        if let Some(superseded) = self.refuse_superseded(cx, host, &plan) {
+            return superseded;
         }
         let verdict = crate::chain::evaluate(cx, policy, &plan);
+        self.queue_evaluated(cx, policy, host, plan, verdict, cx.role_name(), false)
+    }
+
+    /// Evaluate a plan for every role on the ladder and queue it for the lowest role that
+    /// may take it (DN-31 §6.1, GAP-132; GAP-113).
+    ///
+    /// **The node's submission**, and the difference from [`ApprovalDesk::submit`] is the
+    /// asking role: a node has nobody at a console, so there is no one role to run the
+    /// authority engine for, and the plan an Operator may not accept is the plan a
+    /// Supervisor should be offered. A plan no role on the ladder may accept is denied and
+    /// never queued, which is what makes the denial reviewable rather than counted.
+    ///
+    /// Publishes `Queued` for what it queues, so a desktop following the stream builds the
+    /// queue without polling (DN-31 §5.3) and MOP-07 is measured over the whole path
+    /// (§6.9). [`ApprovalDesk::submit`] does not: a desktop's own queue is not something a
+    /// second machine follows, and a plan queued twice on one stream would be two items.
+    pub fn submit_to_ladder(
+        &mut self,
+        cx: &ApprovalContext<'_>,
+        policy: &PolicyInputs<'_>,
+        host: &mut dyn ApprovalHost,
+        plan: PlanView,
+    ) -> Submitted {
+        if let Some(superseded) = self.refuse_superseded(cx, host, &plan) {
+            return superseded;
+        }
+        let offering = crate::chain::offer_to(cx, policy, &plan);
+        let role = offering
+            .offered_to
+            .map_or_else(|| cx.role_name(), |r| format!("{r:?}"));
+        self.queue_evaluated(cx, policy, host, plan, offering.verdict, role, true)
+    }
+
+    /// The supersession check both submission paths open with (DN-08 §5).
+    ///
+    /// **Before policy, not after.** A plan produced under a baseline that is outside its
+    /// window is superseded whatever policy would have said about it, and running the
+    /// chain first would put a verdict in the record for a plan that was never going to be
+    /// applied.
+    fn refuse_superseded(
+        &mut self,
+        cx: &ApprovalContext<'_>,
+        host: &mut dyn ApprovalHost,
+        plan: &PlanView,
+    ) -> Option<Submitted> {
+        if !cx.baseline_supersedes_plans {
+            return None;
+        }
+        let now = cx.now;
+        let plan_id = plan.id;
+        host.publish(
+            now,
+            Event::Intercept(InterceptEvent::PlanSuperseded(plan.clone())),
+        );
+        self.observe_superseded(host, plan_id, now);
+        // Said once per plan, not once per frame: `submit` runs only when the plan
+        // changes, which is why this is here rather than in the tick.
+        // An alert names the plan by its tag and a log field in full (D-61).
+        host.alert(format!(
+            "Plan {} superseded: the baseline in force is outside its validity \
+             window, so nothing produced now will be applied",
+            plan_id.short()
+        ));
+        tracing::warn!(plan = %plan_id, "plan superseded: baseline not in force");
+        Some(Submitted::Superseded)
+    }
+
+    /// Publish the verdict and queue the plan if it cleared policy.
+    ///
+    /// One body for both submission paths, so the rule that a denied plan is never queued,
+    /// the denial counters and the governing layer cannot come to differ between a node
+    /// and a desktop.
+    #[allow(clippy::too_many_arguments)]
+    fn queue_evaluated(
+        &mut self,
+        cx: &ApprovalContext<'_>,
+        policy: &PolicyInputs<'_>,
+        host: &mut dyn ApprovalHost,
+        plan: PlanView,
+        verdict: PolicyVerdict,
+        role: String,
+        announce: bool,
+    ) -> Submitted {
         // GAP-036: PN-05 lists every fires check with its result, passes included.
         self.fires_checks = crate::chain::fires_checks(cx, policy, &plan);
         // GAP-028: the verdict is on the record with the engines that produced it,
@@ -101,7 +167,7 @@ impl ApprovalDesk {
             Event::Intercept(InterceptEvent::PlanEvaluated {
                 plan: plan.id,
                 verdict: verdict.summary(),
-                engines: crate::chain::DESKTOP_ENGINES
+                engines: crate::chain::CHAIN_ENGINES
                     .iter()
                     .map(|e| (*e).to_string())
                     .collect(),
@@ -121,6 +187,7 @@ impl ApprovalDesk {
             );
             return Submitted::Evaluated(verdict);
         };
+        let plan_id = plan.id;
         let submission = Submission {
             plan,
             verdict,
@@ -129,15 +196,48 @@ impl ApprovalDesk {
             // No assessment runs, so every item scores the same and the ordering falls
             // back to time remaining. Reported by `QueueOrder`, not hidden behind a zero.
             priority: 0.0,
-            role: cx.role_name(),
+            role,
         };
         match self.approvals.submit_for_approval(submission) {
-            Ok(_) => {}
+            Ok(id) => {
+                if announce {
+                    self.announce_queued(host, cx.now, id, plan_id);
+                }
+            }
             // Unreachable given the branch above, but a silent `let _ =` here would be the
             // place a real refusal went missing.
             Err(err) => tracing::error!(%err, "plan was refused by the approval workflow"),
         }
         Submitted::Evaluated(verdict)
+    }
+
+    /// Publish `Queued` for an item just submitted (DN-31 §5.3, §6.2).
+    ///
+    /// Read back off the queue rather than assembled from the submission, so the deadlines
+    /// and the roles on the stream are the ones the queue actually holds: `deadlines` is
+    /// the workflow's to compute from the baseline it was built with, and an event carrying
+    /// a second computation of them is the one that goes stale.
+    fn announce_queued(
+        &mut self,
+        host: &mut dyn ApprovalHost,
+        now: gungnir_model::MissionTime,
+        id: PendingApprovalId,
+        plan: gungnir_model::PlanId,
+    ) {
+        let Some(item) = self.approvals.queue().iter().find(|p| p.id == id) else {
+            tracing::error!(%id, %plan, "an item was submitted and is not in the queue");
+            return;
+        };
+        let event = CommandEvent::Queued {
+            item: id,
+            plan,
+            layer: item.layer,
+            offered_to: item.offered_to.clone(),
+            expires_at: item.expires_at,
+            escalate_at: item.escalate_at,
+        };
+        tracing::info!(%id, %plan, offered_to = ?item.offered_to, "plan queued for a decision");
+        host.publish(now, Event::Command(event));
     }
 
     /// Apply expiry and escalation, publishing what happened.
@@ -198,10 +298,35 @@ impl ApprovalDesk {
         id: PendingApprovalId,
         decision: OperatorDecision,
     ) -> Result<(), CommandError> {
+        self.decide_for(cx, host, id, decision, None).map(|_| ())
+    }
+
+    /// The same, under a client's request key, returning the decision it recorded
+    /// (DN-31 §6.3, GAP-132).
+    ///
+    /// The identifier is returned because the route has to answer with it: `201
+    /// DecisionRecorded { decision }`, and the same decision again if the client repeats
+    /// the key. **The key is not checked here** -- see
+    /// [`gungnir_command::ApprovalWorkflow::for_request`]: a caller that found a key
+    /// already recorded must answer with its outcome rather than call this at all, and
+    /// checking it in both places would put the rule where it could disagree with itself.
+    ///
+    /// # Errors
+    ///
+    /// `CommandError::NotFound`, exactly as [`ApprovalDesk::decide`].
+    pub fn decide_for(
+        &mut self,
+        cx: &ApprovalContext<'_>,
+        host: &mut dyn ApprovalHost,
+        id: PendingApprovalId,
+        decision: OperatorDecision,
+        request: Option<gungnir_model::RequestId>,
+    ) -> Result<gungnir_model::DecisionId, CommandError> {
         let now = cx.now;
         let operator = cx.signed_in.as_ref().map(|s| s.operator.clone());
         let role = cx.signed_in.as_ref().map(|s| s.role.clone());
-        let record = self.approvals.decide(id, decision, operator, role, now)?;
+        let who = DecidedBy::session(operator, role).with_request(request);
+        let record = self.approvals.decide(id, decision, who, now)?;
         tracing::info!(
             plan = %record.plan.id,
             decision_id = %record.id,
@@ -220,7 +345,7 @@ impl ApprovalDesk {
         // GAP-043: an actionable decision is the moment an engagement opens (DN-06 §5).
         let opened = self.open_for(cx, host, &record);
         tracing::debug!(decision = %record.id, opened, "engagements opened");
-        Ok(())
+        Ok(record.id)
     }
 
     /// Windows that closed with nobody deciding, from the append-only history.

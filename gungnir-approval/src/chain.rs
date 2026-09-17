@@ -32,7 +32,11 @@ use gungnir_security::{actions, Role};
 pub const DECISION_ACTION: &str = actions::DECIDE_PLAN;
 
 /// The engines the chain runs, in order, as PN-07 and the record name them.
-pub const DESKTOP_ENGINES: [&str; 4] = [
+///
+/// Named `DESKTOP_ENGINES` until GAP-132, when the node began running the same four
+/// (DN-31 §6.1) and the old name would have had a node publishing a desktop's engine
+/// list. The values are unchanged, so no record reads differently.
+pub const CHAIN_ENGINES: [&str; 4] = [
     "readiness and geofence",
     "control status",
     "authority",
@@ -61,10 +65,82 @@ pub fn escalation_ladder() -> Vec<String> {
     )
 }
 
+/// The roles of [`escalation_ladder`], in the same order, as roles rather than names.
+///
+/// Derived from the names rather than sorted here, so the *ordering* stays the one rule
+/// `gungnir_command::escalation_ladder` holds beside the queue that walks it (DN-31 §3,
+/// GAP-131): a second sort here is how a node and a desktop come to escalate in two
+/// different orders. The round trip through the debug spelling is the same one
+/// `DecisionRecord::role` and `PendingApproval::offered_to` already make.
+#[must_use]
+pub fn ladder_roles() -> Vec<Role> {
+    escalation_ladder()
+        .iter()
+        .filter_map(|name| Role::ALL.iter().copied().find(|r| &format!("{r:?}") == name))
+        .collect()
+}
+
 /// Whether this role may override rather than only accept.
 #[must_use]
 pub fn may_override(role: Role) -> bool {
     role_permits(role, actions::OVERRIDE_PLAN)
+}
+
+/// What the chain said about a plan, and who may take it (DN-31 §6.1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Offering {
+    /// The chain's verdict.
+    ///
+    /// For the role in `offered_to` when there is one. When there is none it is the
+    /// **highest** role on the ladder's verdict, which is the one that is not an artefact
+    /// of who was asked: if the top of the ladder is denied for a reason other than
+    /// authority, so is everybody, because the three other engines do not read the asking
+    /// role at all.
+    pub verdict: PolicyVerdict,
+    /// The lowest role on the ladder holding authority for every solution's layer and
+    /// class, which is the role the item is offered to first.
+    ///
+    /// `None` means the plan was denied: either nobody on the ladder may accept it --
+    /// DN-09 §7's "what must go up" with nowhere left to go, which is
+    /// `Denied { Authority }` -- or an engine before authority denied it for everyone.
+    pub offered_to: Option<Role>,
+}
+
+/// Run the chain for every role on the escalation ladder, lowest authority first
+/// (DN-31 §6.1).
+///
+/// **Not for one asking role.** A node has nobody signed in, so there is no asking role
+/// to run the chain for, and the desktop's habit of asking about the role at the console
+/// is what left an under-authority plan counted and never queued (GAP-113): the plan an
+/// Operator may not accept is exactly the plan a Supervisor should be offered.
+///
+/// The first role whose whole chain returns `RequiresHumanApproval` is the offer. That is
+/// the same question as "holds authority for every solution's layer and class", because
+/// the authority engine walks every assignment and denies on the first it has no rule
+/// for; asking it through the chain rather than through the matrix directly is what keeps
+/// the offer and the verdict from being decided by two different pieces of code.
+#[must_use]
+pub fn offer_to(cx: &ApprovalContext<'_>, policy: &PolicyInputs<'_>, plan: &PlanView) -> Offering {
+    let mut last = None;
+    for role in ladder_roles() {
+        let verdict = evaluate(&cx.as_role(role), policy, plan);
+        if matches!(verdict, PolicyVerdict::RequiresHumanApproval) {
+            return Offering {
+                verdict,
+                offered_to: Some(role),
+            };
+        }
+        last = Some(verdict);
+    }
+    Offering {
+        // A ladder with nobody on it is a deployment in which no role may decide at all.
+        // Saying so as an authority denial is the truth, and it carries no layer because
+        // no layer is what failed: the ladder is empty before any plan is looked at.
+        verdict: last.unwrap_or(PolicyVerdict::Denied {
+            reason_code: gungnir_policy::DenialReason::InsufficientAuthority,
+        }),
+        offered_to: None,
+    }
 }
 
 /// What the policy chain was, and which of its checks could not have failed.
@@ -147,7 +223,7 @@ impl PolicyChainReport {
 #[must_use]
 pub fn chain_report_for(config: &gungnir_config::ConfigBaseline) -> PolicyChainReport {
     PolicyChainReport {
-        engines: DESKTOP_ENGINES.to_vec(),
+        engines: CHAIN_ENGINES.to_vec(),
         // GAP-088: the real count, not a hard-coded caveat.
         no_geofences_configured: config.geofences.is_empty(),
         no_intercept_geometry: true,
