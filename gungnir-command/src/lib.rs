@@ -34,8 +34,8 @@
 pub mod queue;
 
 pub use queue::{
-    deadlines, due, expiry_record, governing_layer, next_role, order_queue, PendingApproval,
-    QueueOutcome,
+    deadlines, due, escalation_ladder, expiry_record, governing_layer, next_role, order_queue,
+    LadderRung, PendingApproval, QueueOutcome,
 };
 
 use gungnir_model::events::CommandEvent;

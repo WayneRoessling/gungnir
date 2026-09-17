@@ -104,6 +104,7 @@ gungnir-workspace/
 ├── gungnir-analytics/              # line-of-sight, viewshed, coverage volumes, route deconfliction
 ├── gungnir-policy/
 ├── gungnir-command/
+├── gungnir-approval/               # the decision path both binaries run: chain, queue feeding, the one handoff builder (D-57)
 ├── gungnir-assessment/
 ├── gungnir-decision/
 ├── gungnir-modelops/

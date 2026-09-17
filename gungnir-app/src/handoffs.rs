@@ -2,50 +2,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! The handoff record (GAP-040, DN-07 §5): what a decided assignment carries to an
-//! effector, built only from a recorded decision.
+//! The desktop's calls into the handoff half of the approval desk (GAP-040, DN-07 §5), and
+//! the rows PN-06 and PN-20 draw (GAP-131, D-57,
+//! `docs/design/DN-31-node-approval-queue.md` §3).
 //!
-//! `Handoff::from_decision` existed with no caller. It is called here, once per actionable
-//! decision, at the moment the engagements open. **Delivery is claimed only when the
-//! endpoint said so**: a resource with no `handoff_endpoint` is manual -- a radio call the
-//! operator is told to make; one with an `http` endpoint is posted through the transport
-//! (GAP-040, 2026-09-06) and stays undelivered until the endpoint accepts, refused if it
-//! refuses, retried and never dropped if it is silent; one with an endpoint of any other
-//! kind is undelivered with the reason. DN-07 §5 case 3's rule throughout.
+//! **The one handoff builder is `gungnir_approval::handoffs`'.** It is the thing DN-31 §3
+//! names outright: `Handoff::from_decision` is constructed in exactly one place in the
+//! workspace, that place is behind `DecisionRecord::is_actionable`, and
+//! `tests/no_execution_without_decision.rs` fails if a second appears anywhere. Moving it
+//! rather than copying it for the node is the whole reason the crate exists.
 
 use crate::state::AppState;
-use crate::update::publish;
 use gungnir_command::DecisionRecord;
-use gungnir_eventing::Event;
-use gungnir_model::events::HandoffEvent;
-use gungnir_model::handoff::{DecisionAttribution, DeliveryState, Handoff};
-use gungnir_model::{ExchangeItem, Releasability};
-use gungnir_remote::link::ExchangeProductRecord;
 
-/// One issued handoff and where its delivery stands.
-#[derive(Debug, Clone, PartialEq)]
-pub struct HandoffRecord {
-    pub handoff: Handoff,
-    pub endpoint: Option<String>,
-    pub delivery: DeliveryState,
-    /// Every report the effector sent about this handoff, oldest first (GAP-040).
-    ///
-    /// Kept rather than folded away because the delivery state cannot carry the
-    /// sequence: `Acknowledged` then `Completed` leaves `delivery` on `Delivered`, and
-    /// `Executing` leaves no trace on it at all. PN-20's after-action account asks what
-    /// came back, and a review that could see only the final state could not tell an
-    /// engagement that was acknowledged and then went quiet from one that was never
-    /// acknowledged.
-    pub reports: Vec<gungnir_model::handoff::EffectorReport>,
-}
+/// One issued handoff and where its delivery stands, as the desk holds it.
+pub use gungnir_approval::HandoffRecord;
 
 /// Apply what the effector reported through the node (GAP-040, DN-06).
-///
-/// A report naming a decision this desktop did not hand off is rejected and said, as an
-/// untrusted external input is; the node could not know, because it holds no handoffs.
-/// `Executing` moves the engagement; `Completed` closes it with effector-reported
-/// evidence, which the effect measures count apart from what the track's lifecycle
-/// suggested; `Refused` sets the delivery state so PN-06 says the effector will not.
 pub fn apply_report(
     state: &mut AppState,
     decision: gungnir_model::DecisionId,
@@ -53,257 +26,15 @@ pub fn apply_report(
     report: &gungnir_model::handoff::EffectorReport,
     at: gungnir_model::MissionTime,
 ) {
-    use gungnir_model::handoff::{accept_report, EffectorReport};
-    let handoffs: Vec<Handoff> = state.handoffs.iter().map(|r| r.handoff.clone()).collect();
-    if accept_report(&handoffs, decision, report).is_err() {
-        // By its tag, as every alert names a decision (D-61). The report named a decision
-        // this desktop never handed off; since GAP-130 that is a decision some other
-        // desktop took, not a second desktop's decision under the same number.
-        state.alerts.push(format!(
-            "effector report from {endpoint} rejected: it names decision {}, and this desktop \
-             issued no such handoff",
-            decision.short()
-        ));
-        return;
-    }
-    // Kept before it is acted on, so PN-20 shows what came back even when the engagement
-    // could not take it: a report the desktop rejected downstream still happened.
-    if let Some(record) = state
-        .handoffs
-        .iter_mut()
-        .find(|h| h.handoff.decision == decision)
-    {
-        record.reports.push(report.clone());
-    }
-    // What happened, without the decision: the alert names it by its tag and the audit
-    // entry names it whole, because an audit entry is searched for (D-61).
-    let outcome = match report {
-        EffectorReport::Acknowledged { .. } => {
-            format!("{endpoint} acknowledged the handoff")
-        }
-        EffectorReport::Executing { at } => {
-            match state
-                .engagements
-                .iter_mut()
-                .find(|e| e.decision == decision)
-                .map(|e| e.executing(*at))
-            {
-                Some(Ok(())) => format!("{endpoint} is executing"),
-                Some(Err(err)) => format!(
-                    "{endpoint} reports executing, and the engagement could not take it: {}",
-                    refusal(&err)
-                ),
-                None => format!("{endpoint} reports executing; no open engagement"),
-            }
-        }
-        EffectorReport::Completed {
-            at,
-            effective,
-            detail,
-        } => close_engagement(state, decision, endpoint, (*at, *effective, detail)),
-        EffectorReport::Refused { at, reason } => {
-            if let Some(record) = state
-                .handoffs
-                .iter_mut()
-                .find(|h| h.handoff.decision == decision)
-            {
-                record.delivery = DeliveryState::Refused {
-                    reason: reason.clone(),
-                    at: *at,
-                };
-            }
-            format!("{endpoint} refused the handoff: {reason}")
-        }
-    };
-    let _ = at;
-    crate::audit::record(
-        state,
-        gungnir_security::actions::EFFECTOR_REPORT,
-        format!("decision {decision}: {outcome}"),
-    );
-    state
-        .alerts
-        .push(format!("decision {}: {outcome}", decision.short()));
-}
-
-/// Close the engagement a `Completed` report names, and say what happened (DN-06), in
-/// words that leave the decision for the caller to name.
-///
-/// The evidence is stamped `EffectSource::EffectorReport` so the effect measures can
-/// count what the effector said apart from what the track's lifecycle suggested; the two
-/// are different grades of evidence and averaging them would flatter the second.
-///
-/// A report the engagement cannot take -- because it is already closed, or because none
-/// was ever opened -- is said rather than swallowed. It is still on the handoff record for
-/// PN-20, because a report the desktop could not act on still arrived.
-fn close_engagement(
-    state: &mut AppState,
-    decision: gungnir_model::DecisionId,
-    endpoint: &str,
-    (at, effective, detail): (gungnir_model::MissionTime, bool, &str),
-) -> String {
-    use gungnir_intercept_service::engagement::{EffectEvidence, EffectSource};
-    let evidence = EffectEvidence {
-        source: EffectSource::EffectorReport,
-        observed_at: at,
-        detail: format!("{endpoint}: {detail}"),
-    };
-    let closed = state
-        .engagements
-        .iter_mut()
-        .find(|e| e.decision == decision)
-        .map(|e| {
-            if effective {
-                e.close_effective(evidence)
-            } else {
-                e.close_ineffective(evidence)
-            }
-        });
-    match closed {
-        Some(Ok(())) => format!(
-            "{endpoint} reports {}",
-            if effective {
-                "effective"
-            } else {
-                "ineffective"
-            }
-        ),
-        Some(Err(err)) => format!(
-            "{endpoint} reports completion the engagement could not take: {}",
-            refusal(&err)
-        ),
-        None => format!("{endpoint} reports completion; no open engagement"),
-    }
-}
-
-/// Why an engagement could not take a report, in an alert's words.
-///
-/// The sentence it ends has already named the decision, by its tag on an alert and whole
-/// in the audit entry, and the error's own text names it whole, which is right for a log
-/// and wrong on a panel (D-61).
-fn refusal(err: &gungnir_intercept_service::engagement::EngagementError) -> &'static str {
-    use gungnir_intercept_service::engagement::EngagementError;
-    match err {
-        EngagementError::AlreadyClosed(_) => "it is already closed",
-    }
+    crate::desk::with_desk(state, |desk, _cx, host| {
+        desk.apply_report(host, decision, endpoint, report, at);
+    });
 }
 
 /// Issue the handoff for an actionable decision. Called from the engagement path, which
 /// has already refused a record that is not actionable.
 pub fn issue_for(state: &mut AppState, record: &DecisionRecord) {
-    if !record.is_actionable() {
-        return;
-    }
-    let now = record.mission_time;
-    let tracks = state.tracking.tracks();
-    let track_provenance: Vec<_> = record
-        .plan
-        .solutions()
-        .iter()
-        .filter_map(|s| {
-            tracks
-                .iter()
-                .find(|t| t.id == s.track)
-                .map(|t| (t.id, t.provenance.clone(), t.quality))
-        })
-        .collect();
-    let releasability = Releasability::combine(
-        record
-            .plan
-            .solutions()
-            .iter()
-            .filter_map(|s| tracks.iter().find(|t| t.id == s.track))
-            .map(|t| t.releasability.clone()),
-    );
-    // DN-23 §5 rule 1: attribution is never invented. With nobody signed in the record
-    // says so in words, and the role is the one that was selected.
-    let decided_by = DecisionAttribution {
-        operator: record
-            .operator_id
-            .clone()
-            .unwrap_or_else(|| "nobody signed in".to_string()),
-        role: format!("{:?}", state.role()),
-        at: record.mission_time,
-        authority_rule: None,
-    };
-    let handoff = Handoff::from_decision(
-        record.id,
-        record.plan.id,
-        record.plan.kind.clone(),
-        decided_by,
-        track_provenance,
-        releasability,
-        now,
-    );
-    // The endpoint is the first tasked resource's; a plan tasking resources with
-    // different endpoints is two handoffs in DN-07's shape and one here, said in the
-    // record rather than silently split.
-    let endpoint = record.plan.solutions().iter().find_map(|s| {
-        state
-            .config
-            .resources
-            .iter()
-            .find(|r| r.id == s.resource.0)
-            .and_then(|r| r.handoff_endpoint.clone())
-    });
-    publish(
-        state,
-        now,
-        Event::Handoff(HandoffEvent::Issued {
-            decision: record.id,
-            endpoint: endpoint.clone(),
-            at: now,
-        }),
-    );
-    let delivery = record_delivery(state, record.id, now, endpoint.as_deref(), &handoff);
-    state.handoffs.push(HandoffRecord {
-        handoff,
-        endpoint,
-        delivery,
-        reports: Vec::new(),
-    });
-    publish_to_exchange(state);
-}
-
-/// Republish this desktop's whole current handoff set to its node for coalition exchange
-/// (GAP-065, DN-18 §5 amendment 2), if a node is linked. A no-op otherwise: with no link
-/// there is nowhere to queue to, the same reason `LinkControlAdapter::issue` refuses a
-/// sensor task at the door rather than holding it for a link that may never come.
-///
-/// **Every handoff, not only ones marked releasable.**
-/// `gungnir_api::transport::NodeApi::publish_exchange` holds what it is given and lets the
-/// node's own two gates -- the agreement and the marking, DN-18 §5 -- decide at serve time
-/// what a given party may see. Filtering by marking here as well would duplicate that
-/// decision on the desktop, which is the shortcut DN-18 §8's own verification criterion
-/// exists to catch: the criterion is that the marking gate is independent of the
-/// agreement gate, and it stops meaning that the moment a caller checks only one of them.
-///
-/// **Handoffs only, for `Warning`.** `gungnir_workflow::warning::Warning` carries no
-/// releasability field -- DN-17 §3's marked-types list does not name it, unlike
-/// `Handoff` -- so wiring it is its own change, not a silent gap folded into this one:
-/// republishing a set that does not exist yet would be the "producer... faked to make
-/// the path look busier than it is" `gungnir-model/src/exchange.rs` already refuses to
-/// be. **`gungnir_reporting::MissionReport` is no longer in that position**: it gained
-/// its own producer 2026-09-08 (`sustainment.rs::publish_to_exchange`, GAP-065) with no
-/// `state.handoffs`-shaped `Vec` added to republish -- `ReportState` already holds at
-/// most the one report PN-13 last generated, and that single value already is this
-/// desktop's whole current set for `ExchangeItem::Reports`.
-fn publish_to_exchange(state: &AppState) {
-    let Some(link) = state.link.clone() else {
-        return;
-    };
-    let products = state
-        .handoffs
-        .iter()
-        .map(|record| ExchangeProductRecord {
-            // The whole identifier: a partner asks about a product by it (D-61).
-            id: record.handoff.decision.to_string(),
-            at: record.handoff.issued,
-            releasability: record.handoff.releasability.clone(),
-            body: serde_json::to_value(&record.handoff).unwrap_or(serde_json::Value::Null),
-        })
-        .collect();
-    link.queue_exchange(ExchangeItem::Handoffs, products);
+    crate::desk::with_desk(state, |desk, cx, host| desk.issue_for(cx, host, record));
 }
 
 /// The handoff rows PN-06 and PN-20 draw (GAP-040).
@@ -314,6 +45,7 @@ fn publish_to_exchange(state: &AppState) {
 #[must_use]
 pub fn rows(state: &AppState) -> Vec<gungnir_ui::panels::handoff::HandoffRow<'_>> {
     state
+        .desk
         .handoffs
         .iter()
         .map(|record| gungnir_ui::panels::handoff::HandoffRow {
@@ -327,65 +59,4 @@ pub fn rows(state: &AppState) -> Vec<gungnir_ui::panels::handoff::HandoffRow<'_>
             reports: &record.reports,
         })
         .collect()
-}
-
-/// Where delivery stands the moment the handoff is issued, on the record and on PN-08.
-fn record_delivery(
-    state: &mut AppState,
-    decision: gungnir_model::DecisionId,
-    now: gungnir_model::MissionTime,
-    endpoint: Option<&str>,
-    handoff: &Handoff,
-) -> DeliveryState {
-    match endpoint {
-        None => {
-            publish(
-                state,
-                now,
-                Event::Handoff(HandoffEvent::Manual { decision, at: now }),
-            );
-            state.alerts.push(format!(
-                "decision {}: no handoff endpoint is configured for the tasked resource; \
-                 the handoff is manual and must be made by voice",
-                decision.short()
-            ));
-            DeliveryState::Manual
-        }
-        Some(name) => {
-            let reason = match crate::deliveries::http_address(state, name) {
-                Ok(address) => {
-                    let payload = serde_json::to_value(handoff).unwrap_or(serde_json::Value::Null);
-                    crate::deliveries::post_handoff(
-                        state,
-                        decision,
-                        name.to_string(),
-                        address,
-                        payload,
-                        now,
-                    );
-                    state.alerts.push(format!(
-                        "decision {}: handoff posted to {name}; awaiting the endpoint",
-                        decision.short()
-                    ));
-                    return DeliveryState::Undelivered { since: now };
-                }
-                Err(reason) => reason,
-            };
-            publish(
-                state,
-                now,
-                Event::Handoff(HandoffEvent::Undelivered {
-                    decision,
-                    endpoint: name.to_string(),
-                    reason: reason.clone(),
-                    at: now,
-                }),
-            );
-            state.alerts.push(format!(
-                "decision {}: handoff to {name} undelivered: {reason}",
-                decision.short()
-            ));
-            DeliveryState::Undelivered { since: now }
-        }
-    }
 }

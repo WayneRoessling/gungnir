@@ -203,7 +203,7 @@ pub fn assemble_handover(state: &AppState, at: MissionTime) -> HandoverSummary {
         open_engagements: Vec::new(),
         pending_approvals: {
             use gungnir_command::ApprovalWorkflow;
-            state.approvals.pending().len()
+            state.desk.approvals.pending().len()
         },
         expired_approvals: crate::decisions::expired_count(state),
         sensors_degraded: degraded,

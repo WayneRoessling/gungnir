@@ -5,6 +5,7 @@ skinparam componentStyle rectangle
 skinparam linetype ortho
 left to right direction
 package "Assess, Decide & Govern Action" {
+  component "gungnir-approval" as RS_approval <<Resource>>
   component "gungnir-assessment" as RS_assessment <<Resource>>
   component "gungnir-command" as RS_command <<Resource>>
   component "gungnir-decision" as RS_decision <<Resource>>
@@ -14,9 +15,19 @@ package "Assess, Decide & Govern Action" {
 }
 component "analytics\n(see Rs-Cn-understand-maintain-the-picture)" as RS_analytics <<External>> #line.dashed
 component "config\n(see Rs-Cn-foundational)" as RS_config <<External>> #line.dashed
+component "eventing\n(see Rs-Cn-foundational)" as RS_eventing <<External>> #line.dashed
 component "geo\n(see Rs-Cn-understand-maintain-the-picture)" as RS_geo <<External>> #line.dashed
+component "intercept_service\n(see Rs-Cn-service-facades)" as RS_intercept_service <<External>> #line.dashed
 component "interop\n(see Rs-Cn-sense-ingest-normalize)" as RS_interop <<External>> #line.dashed
 component "model\n(see Rs-Cn-foundation-model)" as RS_model <<External>> #line.dashed
+component "security\n(see Rs-Cn-secure-operate-sustain)" as RS_security <<External>> #line.dashed
+RS_approval --> RS_command
+RS_approval --> RS_policy
+RS_approval --> RS_intercept_service
+RS_approval --> RS_security
+RS_approval --> RS_config
+RS_approval --> RS_eventing
+RS_approval --> RS_model
 RS_assessment --> RS_model
 RS_command --> RS_model
 RS_command --> RS_policy

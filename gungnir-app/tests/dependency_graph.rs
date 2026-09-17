@@ -73,6 +73,7 @@ const LAYERS: &[(&str, Layer)] = &[
     ("gungnir-analytics", Layer::Productization),
     ("gungnir-policy", Layer::Productization),
     ("gungnir-command", Layer::Productization),
+    ("gungnir-approval", Layer::Productization),
     ("gungnir-assessment", Layer::Productization),
     ("gungnir-decision", Layer::Productization),
     ("gungnir-modelops", Layer::Productization),
@@ -332,6 +333,14 @@ fn the_recorded_edges_are_in_the_manifests() {
         ("gungnir-node", "gungnir-analytics", "(g)"),
         ("gungnir-node", "gungnir-identity", "(s)"),
         ("gungnir-analytics", "gungnir-sensor-management", "(c)"),
+        ("gungnir-approval", "gungnir-command", "(w)"),
+        ("gungnir-approval", "gungnir-policy", "(w)"),
+        ("gungnir-approval", "gungnir-intercept-service", "(w)"),
+        ("gungnir-approval", "gungnir-security", "(w)"),
+        ("gungnir-approval", "gungnir-config", "(w)"),
+        ("gungnir-approval", "gungnir-eventing", "(w)"),
+        ("gungnir-approval", "gungnir-model", "(w)"),
+        ("gungnir-app", "gungnir-approval", "(x)"),
     ] {
         assert!(
             has(from, to),

@@ -10,6 +10,7 @@ package "User interface" {
   component "gungnir-viewport3d" as RS_viewport3d <<Resource>>
 }
 component "analytics\n(see Rs-Cn-understand-maintain-the-picture)" as RS_analytics <<External>> #line.dashed
+component "approval\n(see Rs-Cn-assess-decide-govern-action)" as RS_approval <<External>> #line.dashed
 component "assessment\n(see Rs-Cn-assess-decide-govern-action)" as RS_assessment <<External>> #line.dashed
 component "command\n(see Rs-Cn-assess-decide-govern-action)" as RS_command <<External>> #line.dashed
 component "config\n(see Rs-Cn-foundational)" as RS_config <<External>> #line.dashed
@@ -64,6 +65,7 @@ RS_app --> RS_security
 RS_app --> RS_policy
 RS_app --> RS_command
 RS_app --> RS_geo
+RS_app --> RS_approval
 RS_app --> RS_sensor_management
 RS_app --> RS_analytics
 RS_app --> RS_assessment

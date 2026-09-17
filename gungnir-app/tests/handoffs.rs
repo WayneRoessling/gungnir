@@ -83,8 +83,8 @@ fn a_resource_with_no_endpoint_is_a_manual_handoff() {
     let (mut state, dir) = desktop("manual", None);
     let events = state.events.subscribe();
     engagements::open_for(&mut state, &accepted());
-    assert_eq!(state.handoffs.len(), 1);
-    let h = &state.handoffs[0];
+    assert_eq!(state.desk.handoffs.len(), 1);
+    let h = &state.desk.handoffs[0];
     assert_eq!(h.delivery, DeliveryState::Manual);
     assert_eq!(h.handoff.decided_by.operator, "nobody signed in");
     assert!(!h.delivery.is_delivered());
@@ -111,7 +111,7 @@ fn a_resource_with_no_endpoint_is_a_manual_handoff() {
 fn an_endpoint_without_a_transport_is_undelivered_not_delivered() {
     let (mut state, dir) = desktop("undelivered", Some("battery-2"));
     engagements::open_for(&mut state, &accepted());
-    let h = &state.handoffs[0];
+    let h = &state.desk.handoffs[0];
     assert_eq!(h.endpoint.as_deref(), Some("battery-2"));
     assert!(matches!(h.delivery, DeliveryState::Undelivered { .. }));
     assert!(h.delivery.needs_attention());
@@ -128,7 +128,7 @@ fn a_rejected_decision_issues_no_handoff() {
         reason: "not this one".into(),
     };
     engagements::open_for(&mut state, &record);
-    assert!(state.handoffs.is_empty());
+    assert!(state.desk.handoffs.is_empty());
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -148,9 +148,9 @@ fn a_decided_handoff_stays_on_pn06_until_it_is_delivered() {
 
     let (mut state, dir) = desktop("visible", None);
     engagements::open_for(&mut state, &accepted());
-    assert_eq!(state.handoffs[0].delivery, DeliveryState::Manual);
+    assert_eq!(state.desk.handoffs[0].delivery, DeliveryState::Manual);
     assert!(
-        !state.handoffs[0].delivery.needs_attention(),
+        !state.desk.handoffs[0].delivery.needs_attention(),
         "a radio call is the arrangement, not an incident"
     );
 
@@ -217,7 +217,7 @@ fn pn20_draws_the_handoff_and_every_report_that_came_back() {
         MissionTime(160.0),
     );
     assert_eq!(
-        state.handoffs[0].reports.len(),
+        state.desk.handoffs[0].reports.len(),
         2,
         "the reports were folded away and the sequence lost"
     );
@@ -260,7 +260,7 @@ fn issuing_a_handoff_queues_the_whole_set_for_exchange_when_a_node_is_linked() {
     let (mut state, dir) = desktop("exchange", None);
     // No link yet: issuing still works, and there is nothing to queue to.
     issue_for(&mut state, &accepted());
-    assert_eq!(state.handoffs.len(), 1);
+    assert_eq!(state.desk.handoffs.len(), 1);
 
     let link = NodeLink::scripted();
     state.link = Some(link.clone());
@@ -270,7 +270,7 @@ fn issuing_a_handoff_queues_the_whole_set_for_exchange_when_a_node_is_linked() {
     second.id = DecisionId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_61c2);
     second.plan.id = PlanId(0x0199_5a3b_7c2c_7a00_9b00_0000_1111_2222);
     issue_for(&mut state, &second);
-    assert_eq!(state.handoffs.len(), 2);
+    assert_eq!(state.desk.handoffs.len(), 2);
 
     let p = link.read().expect("projection");
     assert_eq!(
@@ -320,7 +320,7 @@ fn a_rejected_report_is_not_kept_on_any_record() {
         MissionTime(112.0),
     );
     assert!(
-        state.handoffs.iter().all(|h| h.reports.is_empty()),
+        state.desk.handoffs.iter().all(|h| h.reports.is_empty()),
         "a report for an unknown decision was kept"
     );
     assert!(

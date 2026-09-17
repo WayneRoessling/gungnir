@@ -233,10 +233,22 @@ pub fn tick(state: &mut AppState) {
 
 /// Publish one event, logging a failure rather than losing it silently.
 ///
-/// `pub(crate)` because `decisions::submit` publishes `PlanSuperseded` from outside this
-/// module, and a second copy of the failure handling would be a second place it drifts.
+/// Public because several modules publish from outside this one, and a second copy of the
+/// failure handling would be a second place it drifts.
 pub fn publish(state: &mut AppState, now: gungnir_model::MissionTime, event: Event) {
-    if let Err(err) = state.events.publish(now, event) {
+    publish_on(state.events.as_mut(), now, event);
+}
+
+/// The same over the bus alone, for a caller that has taken it out of the state.
+///
+/// `gungnir-approval`'s host publishes this way (GAP-131): the decision path holds the
+/// desk mutably while it publishes, so it cannot also hold the whole state.
+pub(crate) fn publish_on(
+    events: &mut dyn gungnir_eventing::EventBus,
+    now: gungnir_model::MissionTime,
+    event: Event,
+) {
+    if let Err(err) = events.publish(now, event) {
         tracing::error!(%err, "event publish failed");
     }
 }

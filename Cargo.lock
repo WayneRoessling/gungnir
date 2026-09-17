@@ -3252,6 +3252,7 @@ dependencies = [
  "egui_tiles",
  "gungnir-analytics",
  "gungnir-api",
+ "gungnir-approval",
  "gungnir-assessment",
  "gungnir-command",
  "gungnir-config",
@@ -3295,6 +3296,21 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wgpu",
+]
+
+[[package]]
+name = "gungnir-approval"
+version = "0.1.0"
+dependencies = [
+ "gungnir-command",
+ "gungnir-config",
+ "gungnir-eventing",
+ "gungnir-intercept-service",
+ "gungnir-model",
+ "gungnir-policy",
+ "gungnir-security",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

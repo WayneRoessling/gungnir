@@ -496,6 +496,7 @@ fn an_expired_session_returns_the_desktop_to_the_selected_role() {
 fn queue(state: &mut AppState, plan: u128) -> gungnir_command::PendingApprovalId {
     use gungnir_command::{ApprovalWorkflow, Submission};
     state
+        .desk
         .approvals
         .submit_for_approval(Submission {
             plan: gungnir_model::PlanView {
@@ -540,7 +541,7 @@ fn a_decision_records_the_signed_in_role_and_none_when_nobody_is_signed_in() {
         },
     )
     .expect("decided");
-    let record = state.approvals.records().last().expect("recorded");
+    let record = state.desk.approvals.records().last().expect("recorded");
     assert_eq!(
         (record.operator_id.as_deref(), record.role.as_deref()),
         (None, None),
@@ -562,7 +563,7 @@ fn a_decision_records_the_signed_in_role_and_none_when_nobody_is_signed_in() {
         },
     )
     .expect("decided");
-    let record = state.approvals.records().last().expect("recorded");
+    let record = state.desk.approvals.records().last().expect("recorded");
     assert_eq!(
         (record.operator_id.as_deref(), record.role.as_deref()),
         (Some("8"), Some("Supervisor"))

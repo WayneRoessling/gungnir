@@ -234,6 +234,7 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
     // carries, which is what lets the rule rank it below.
     let submitted = state.clock.now();
     let pending = state
+        .desk
         .approvals
         .submit_for_approval(Submission {
             plan: PlanView {
@@ -255,7 +256,13 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
         },
     )
     .expect("decided");
-    let local = state.approvals.records().last().expect("recorded").clone();
+    let local = state
+        .desk
+        .approvals
+        .records()
+        .last()
+        .expect("recorded")
+        .clone();
     assert_eq!(
         (local.operator_id.as_deref(), local.role.as_deref()),
         (Some("7"), Some("Supervisor"))

@@ -46,6 +46,7 @@ members = [
 
     "gungnir-policy",             # Assess/Decide / Critical
     "gungnir-command",            # Assess/Decide / Critical
+    "gungnir-approval",           # Assess/Decide / Critical  (the decision path both binaries run; D-57, GAP-131)
     "gungnir-assessment",         # Assess/Decide / Medium
     "gungnir-decision",           # Assess/Decide / Medium
     "gungnir-modelops",           # Assess/Decide / Medium

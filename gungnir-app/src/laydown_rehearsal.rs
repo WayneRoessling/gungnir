@@ -334,9 +334,9 @@ pub fn run(
         return Err(RehearsalError::DidNotSettle { submitted, taken });
     }
 
-    let records = state.approvals.records();
+    let records = state.desk.approvals.records();
     let decisions_expired = records.iter().filter(|r| r.is_expiry()).count();
-    let decisions_raised = records.len() + state.approvals.queue().len();
+    let decisions_raised = records.len() + state.desk.approvals.queue().len();
     let record = RehearsalRecord {
         scenario,
         laydown: laydown.id.clone(),

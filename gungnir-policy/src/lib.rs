@@ -19,7 +19,11 @@ pub mod fires;
 pub use authority::{is_pre_delegated, roles_permitting, AuthorityPolicy, ControlStatusPolicy};
 pub use fires::{FiresContext, FiresDeconflictionPolicy, ReportedPositionSource};
 
-use gungnir_geo::GeoService;
+/// Re-exported so a caller can name the service [`GeofencePolicy`] reads without an edge
+/// to `gungnir-geo` of its own: `gungnir-approval` builds the chain and holds the service
+/// the host loaded (D-57 gives it no geo edge, `docs/design/dependency-edges.md` §17).
+pub use gungnir_geo::GeoService;
+
 use gungnir_model::events::VerdictSummary;
 use gungnir_model::{PlanView, ResourceView};
 

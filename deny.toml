@@ -155,6 +155,10 @@ crate = "gungnir-app"
 allow = ["AGPL-3.0-or-later"]
 
 [[licenses.exceptions]]
+crate = "gungnir-approval"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
 crate = "gungnir-assessment"
 allow = ["AGPL-3.0-or-later"]
 

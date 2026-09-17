@@ -433,7 +433,7 @@ impl ReportState {
 /// `launch_warning.rs::publish_to_exchange` already have when unlinked.
 ///
 /// **One report, not a republished collection.** `Handoffs` and `Warnings` each hold
-/// every issued item in a growing `Vec` on `AppState` (`state.handoffs`,
+/// every issued item in a growing `Vec` on `AppState` (`state.desk.handoffs`,
 /// `state.issued_launch_warnings`) and republish that whole current set on every new
 /// one; a `MissionReport` is generated on demand, and `ReportState.report` already holds
 /// exactly this desktop's current one -- `None` until PN-13's first Generate, replaced

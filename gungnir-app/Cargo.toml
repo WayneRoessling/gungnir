@@ -124,6 +124,13 @@ gungnir-policy = { path = "../gungnir-policy", version = "0.1.0" }
 gungnir-command = { path = "../gungnir-command", version = "0.1.0" }
 gungnir-geo = { path = "../gungnir-geo", version = "0.1.0" }
 
+# GAP-131 / D-57, edge (x): the decision path itself -- the policy chain, the queue's
+# feeding and sweep, deciding with engagement opening, the one handoff builder and the
+# delivery schedule -- lives in `gungnir-approval` so the node can run the same rules
+# rather than a second copy of them (`docs/design/DN-31-node-approval-queue.md` §3, §4).
+# This binary supplies the picture and carries the effects; it decides none of them.
+gungnir-approval = { path = "../gungnir-approval", version = "0.1.0" }
+
 # GAP-071: PN-12 replays the journal, PN-13 folds it into a report. Both read the
 # journal this desktop already owns, so neither adds a new source of truth; they add a
 # second and third reader of the existing one. `ARCHITECTURE.md` §7.3 listed both as

@@ -195,7 +195,7 @@ fn handoff(decision: u128) -> Handoff {
 #[test]
 fn an_effector_report_is_applied_to_a_known_handoff_and_rejected_otherwise() {
     let (mut state, dir) = desktop("report");
-    state.handoffs.push(handoffs::HandoffRecord {
+    state.desk.handoffs.push(handoffs::HandoffRecord {
         handoff: handoff(9),
         endpoint: Some("battery".into()),
         delivery: DeliveryState::Delivered {
@@ -214,7 +214,7 @@ fn an_effector_report_is_applied_to_a_known_handoff_and_rejected_otherwise() {
         MissionTime(95.0),
     );
     assert!(matches!(
-        state.handoffs[0].delivery,
+        state.desk.handoffs[0].delivery,
         DeliveryState::Refused { .. }
     ));
     assert!(state

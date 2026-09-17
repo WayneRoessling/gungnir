@@ -553,6 +553,11 @@ RS-app,uafKind,ResourceArtifact
 RS-app,registry.kind,binary
 RS-app,registry.layer,User interface
 RS-app,registry.code,gungnir-app/Cargo.toml
+RS-approval,uafId,RS-approval
+RS-approval,uafKind,ResourceArtifact
+RS-approval,registry.kind,library
+RS-approval,registry.layer,Productization
+RS-approval,registry.code,gungnir-approval/Cargo.toml
 RS-assessment,uafId,RS-assessment
 RS-assessment,uafKind,ResourceArtifact
 RS-assessment,registry.kind,library

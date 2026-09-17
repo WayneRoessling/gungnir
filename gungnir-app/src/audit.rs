@@ -11,15 +11,35 @@
 //! there is not (DN-23 §5 rule 1: attribution is never invented).
 
 use crate::state::AppState;
-use gungnir_security::{AuditEntry, AuditLog};
+use gungnir_model::MissionTime;
+use gungnir_security::{AuditEntry, AuditLog, OperatorId};
 
 /// Record an action the operator just took, at this frame's mission time.
 pub fn record(state: &mut AppState, action: &str, detail: impl Into<String>) {
-    let entry = AuditEntry {
-        operator: state.attributed_operator(),
-        action: action.to_owned(),
-        mission_time: state.clock.now().0,
-        detail: detail.into(),
-    };
+    let entry = entry(
+        state.attributed_operator(),
+        state.clock.now(),
+        action,
+        detail,
+    );
     state.audit.record(entry);
+}
+
+/// One entry, built from the attribution and the time the caller has already read.
+///
+/// Split out for `gungnir-approval`'s host (GAP-131): the decision path writes its audit
+/// entries through a trait rather than through [`AppState`], and two constructions of an
+/// entry would be two places the attribution rule could drift.
+pub(crate) fn entry(
+    operator: Option<OperatorId>,
+    now: MissionTime,
+    action: &str,
+    detail: impl Into<String>,
+) -> AuditEntry {
+    AuditEntry {
+        operator,
+        action: action.to_owned(),
+        mission_time: now.0,
+        detail: detail.into(),
+    }
 }

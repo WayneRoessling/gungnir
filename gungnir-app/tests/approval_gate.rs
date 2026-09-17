@@ -48,11 +48,12 @@ fn ticking_the_desktop_never_produces_an_actionable_plan() {
         update::tick(&mut state);
     }
     assert!(
-        state.approvals.records().is_empty(),
+        state.desk.approvals.records().is_empty(),
         "a decision was recorded with nobody deciding"
     );
     assert!(
         !state
+            .desk
             .approvals
             .records()
             .iter()
@@ -74,7 +75,7 @@ fn the_empty_queue_says_the_allocator_is_the_reason() {
     for _ in 0..5 {
         update::tick(&mut state);
     }
-    assert!(state.approvals.pending().is_empty());
+    assert!(state.desk.approvals.pending().is_empty());
 
     let reason = decisions::queue_empty_reason(&state);
     assert!(
@@ -110,10 +111,10 @@ fn a_denied_plan_never_reaches_the_queue() {
         matches!(outcome, Submitted::Evaluated(PolicyVerdict::Denied { .. })),
         "an empty plan cleared the chain: {outcome:?}"
     );
-    assert!(state.approvals.pending().is_empty());
-    assert_eq!(state.denials.count, 1);
+    assert!(state.desk.approvals.pending().is_empty());
+    assert_eq!(state.desk.denials.count, 1);
     assert!(
-        state.denials.last_reason.is_some(),
+        state.desk.denials.last_reason.is_some(),
         "a denial with no recorded reason cannot be explained on the queue"
     );
 }
@@ -188,12 +189,13 @@ fn an_undecided_item_expires_through_the_desktop_tick() {
     let mut state = desktop("expiry");
     // The desktop cannot produce a queued item -- no tracks, so no plan -- so the item
     // is submitted directly. Everything after this line is the desktop's own path.
-    state.approvals = gungnir_command::InMemoryApprovalWorkflow::with_settings({
+    state.desk.approvals = gungnir_command::InMemoryApprovalWorkflow::with_settings({
         let mut settings = gungnir_model::DecisionSettings::default();
         settings.expiry_s.insert(EffectorLayer::Point, 30.0);
         settings
     });
     state
+        .desk
         .approvals
         .submit_for_approval(Submission {
             plan: PlanView {
@@ -207,18 +209,18 @@ fn an_undecided_item_expires_through_the_desktop_tick() {
             role: "Operator".to_owned(),
         })
         .expect("submit");
-    assert_eq!(state.approvals.queue().len(), 1);
+    assert_eq!(state.desk.approvals.queue().len(), 1);
 
     // The clock is a wall clock, so it is already far past the deadline; one sweep is
     // enough. This is the same call `update::tick` makes.
     decisions::sweep(&mut state);
 
     assert!(
-        state.approvals.queue().is_empty(),
+        state.desk.approvals.queue().is_empty(),
         "the item did not expire"
     );
     assert_eq!(decisions::expired_count(&state), 1);
-    let record = state.approvals.records().last().expect("a record");
+    let record = state.desk.approvals.records().last().expect("a record");
     assert!(!record.is_actionable(), "an expiry became actionable");
     assert!(record.operator_id.is_none());
     assert!(
@@ -239,6 +241,7 @@ fn an_item_with_no_configured_expiry_is_preserved() {
 
     let mut state = desktop("preserved");
     state
+        .desk
         .approvals
         .submit_for_approval(Submission {
             plan: PlanView {
@@ -257,10 +260,10 @@ fn an_item_with_no_configured_expiry_is_preserved() {
         update::tick(&mut state);
     }
     assert_eq!(
-        state.approvals.queue().len(),
+        state.desk.approvals.queue().len(),
         1,
         "an item nobody configured an expiry for was discarded"
     );
     assert_eq!(decisions::expired_count(&state), 0);
-    assert!(state.approvals.queue()[0].no_expiry_reason().is_some());
+    assert!(state.desk.approvals.queue()[0].no_expiry_reason().is_some());
 }
