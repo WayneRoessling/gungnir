@@ -145,8 +145,16 @@ impl PolicyEngine for AuthorityPolicy<'_> {
 
 /// True when a plan is pre-delegated for this role at every layer it names.
 ///
-/// Decision D-15 pre-delegated one specific case. A pre-delegated plan still needs
-/// a recorded decision; what it skips is escalation, not the person.
+/// Decision D-15 pre-delegated one specific case. A pre-delegated plan still needs a
+/// recorded decision, and **it skips nothing**: it is actionable for the role it is
+/// delegated to from the moment it is submitted, and it still expires and escalates like
+/// any other item (DN-10 §5, settled as D-59 on 2026-09-17).
+///
+/// This comment read "what it skips is escalation, not the person" until GAP-132, which is
+/// the reading GAP-035's closing note took and which D-59 decided against -- the code has
+/// always escalated a delegated item, so the sentence described nothing the workspace did.
+/// A caller reaching this from `gungnir-node`'s queue view would have found it saying the
+/// opposite of what the queue does.
 pub fn is_pre_delegated(
     settings: &AuthoritySettings,
     action: &str,
