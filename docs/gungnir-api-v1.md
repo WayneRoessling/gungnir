@@ -3,7 +3,7 @@
 The external contract of a Gungnir service node (`ARCHITECTURE.md` §8). Desktops
 in the connected profiles, peer command-and-control systems, analytics tools, and
 enterprise services integrate through this interface and nothing else. The types
-are defined in `gungnir-api/src/v1/mod.rs` and reuse `gungnir-model` views and
+are defined in `gungnir-api/src/v3/mod.rs` and reuse `gungnir-model` views and
 `gungnir-eventing` envelopes, so the API can never disagree with the desktop about
 what a track or a plan is.
 
@@ -33,10 +33,15 @@ which pins keep a single copy of each in the binary.
 
 - Every payload carries `schema_version` = `gungnir_model::SCHEMA_VERSION`; a client
   refuses data from a node whose version it does not know.
-- The URL path is versioned (`/v1/...`). `v2` is added alongside, never in place
-  of, `v1`; `v1` is removed only after every known client has moved.
+- The URL path is versioned, and the version in force is `/v3`. Server routes and the
+  desktop's client URLs are both built from one constant, `gungnir_api::API_VERSION`, so
+  the two cannot drift apart. A retired version is not removed: each of its routes
+  authenticates its caller as its successor does and answers `410 Gone` naming the
+  successor (see "Version 3" below).
 - Schema names and versions for interop formats are governed by
   `gungnir_interop::SchemaCatalog`.
+- **Design notes written before 2026-09-17 name `/v2` paths.** Each one's successor is the
+  same path under `/v3` (D-56); the notes are signed designs and keep their wording.
 
 ## Version 2, decided 2026-09-05
 
@@ -85,6 +90,32 @@ that publish carry tracks, plans, assets and health. All three moved in the same
 it did not have. This document keeps its filename so the doc-comment citations that point
 at it stay correct; its content describes v2.
 
+## Version 3, decided 2026-09-17
+
+`DecisionId`, `PlanId` and `PendingApprovalId` were counters restarting at 1 in every
+process, so two desktops on one node, or one desktop across a restart, minted the same
+identifiers (GAP-130). The owner decided they become UUID v7, minted where each thing is
+created (D-56), written as the hyphenated RFC 9562 string and read from that string or a
+number (D-60), and shown on screen by a short tag (D-61);
+`design/DN-31-node-approval-queue.md` §5.1 and its amendment 1 (§12) say why.
+
+- `gungnir_model::SCHEMA_VERSION` goes from 3 to 4, and `CommandEvent::ApprovalRequested`,
+  which nothing published, is removed.
+- The path goes from `/v2` to `/v3`, **whole**: every payload that carries a plan or a
+  decision changed type, so a route-by-route migration would leave no route unchanged.
+- Every `/v2` route stays routed. It authenticates its caller exactly as its `/v3`
+  successor does, answering `401`, `403` or `503` where the successor would, and then
+  answers `410 Gone` with a problem naming the successor path in `successor`. The `/v2`
+  event stream answers `410` before upgrading, because its token travels in the first
+  frame, which a retired route never reads.
+- An identifier in a path, `{decision_id}` today, takes the hyphenated form or a decimal
+  number, so a client that still sends a number is answered about its identifier; any
+  other text is a `400` problem naming both forms.
+
+A journal written before the change still reads: its identifiers are numbers, and a number
+reads as the same identifier. `testdata/journals/pre-uuid-v7/` is such a journal, and
+`gungnir-app/tests/pre_uuid_v7_journal.rs` replays it and regenerates its report.
+
 ## Authentication and authorization
 
 Every request carries a credential that `gungnir_security::Authenticator` resolves
@@ -95,29 +126,36 @@ tokens) is an open decision in `ARCHITECTURE.md` §8.5.
 
 ## Endpoints
 
-The paths are `/v2`; the table said `/v1` until 2026-09-05, which the "Version 2"
-section above had already superseded.
+The paths are `/v3` since 2026-09-17 (the "Version 3" section above); they were `/v2` from
+2026-09-05 and `/v1` before that.
 
 | Method and path | Request | Response | Authorization action | Built? |
 |---|---|---|---|---|
-| `POST /v2/session` | `SessionRequest { operator, passphrase }` | `SessionResponse { token, expires_s }` | none: this is what establishes identity | Yes (GAP-057) |
-| `GET /v2/session` | none | `SessionStatus { operator, role, expires_s }` | a valid token | Yes (GAP-057) |
-| `GET /v2/snapshot` | none | `SnapshotResponse { schema_version, tracks, plan, health, requirements, bearing_rays, pipeline_stats }` | `picture.view` | Yes (GAP-041); `bearing_rays`/`pipeline_stats` GAP-096 |
-| `GET /v2/events` (WebSocket) | `SubscribeRequest { from_seq }` as the first frame | A stream of `EventFrame` (`gungnir_eventing::Envelope`) with `seq >= from_seq`, in order | `picture.view` | Yes (GAP-041) |
-| `GET /v2/health` | none | `SystemHealth` | `picture.view` | Yes (GAP-041) |
-| `GET /v2/coverage` | none | `CoverageResponse`: the whole `CoverageReport` when one was computed, or `NotComputed` with a reason. **Not a bare `Vec<CoverageGap>`**, which would discard the sample spacing and terrain-masking flag DN-12 §5 puts on the result | `picture.view` | Yes (GAP-006) |
-| `POST /v2/detections` | `SubmitDetectionRequest { detection: DetectionView }` | **`202`**: queued for the ingest gateway, which validates it on its next tick; `IngestEvent::Quarantined` appears on the stream if it is rejected | `detection.submit` | Yes (GAP-057) |
-| `POST /v2/plans/{plan_id}/decision` | `ApprovalRequest { plan, accepted, operator }` | `204`; a `CommandEvent::Decided` appears on the stream | `plan.decide` (or `plan.override`) | **No: `501`, because a node runs no approval queue** |
+| `POST /v3/session` | `SessionRequest { operator, passphrase }` | `SessionResponse { token, expires_s }` | none: this is what establishes identity | Yes (GAP-057) |
+| `GET /v3/session` | none | `SessionStatus { operator, role, expires_s }` | a valid token | Yes (GAP-057) |
+| `GET /v3/snapshot` | none | `SnapshotResponse { schema_version, tracks, plan, health, requirements, bearing_rays, pipeline_stats }` | `picture.view` | Yes (GAP-041); `bearing_rays`/`pipeline_stats` GAP-096 |
+| `GET /v3/events` (WebSocket) | `SubscribeRequest { from_seq }` as the first frame | A stream of `EventFrame` (`gungnir_eventing::Envelope`) with `seq >= from_seq`, in order | `picture.view` | Yes (GAP-041) |
+| `GET /v3/history?since_seq=N` | none | `HistoryResponse`: the retained envelopes from `N`, or `410` when the window has moved past `N` | `picture.view` | Yes (GAP-050) |
+| `GET /v3/health` | none | `SystemHealth` | `picture.view` | Yes (GAP-041) |
+| `GET /v3/coverage` | none | `CoverageResponse`: the whole `CoverageReport` when one was computed, or `NotComputed` with a reason. **Not a bare `Vec<CoverageGap>`**, which would discard the sample spacing and terrain-masking flag DN-12 §5 puts on the result | `picture.view` | Yes (GAP-006) |
+| `POST /v3/detections` | `SubmitDetectionRequest { detection: DetectionView }` | **`202`**: queued for the ingest gateway, which validates it on its next tick; `IngestEvent::Quarantined` appears on the stream if it is rejected | `detection.submit` | Yes (GAP-057) |
+| `POST /v3/sensors/{sensor_id}/task` | `SensorTaskRequest { command, requirement }` | `202 SensorTaskResponse { task }` once the node loop issued it; `409` naming the registry's refusal | `sensor.task` | Yes (GAP-004) |
+| `POST /v3/handoffs/{decision_id}/report` | `EffectorReportRequest { report }`; the decision as the hyphenated UUID or a decimal number | `202`: queued, and `HandoffEvent::Reported` appears on the stream; `400` naming both forms for any other text | an effector's certificate, or `effector.report` | Yes (GAP-040) |
+| `POST /v3/warnings/{asset_id}/{track_id}/acknowledge` | `WarningAcknowledgementRequest { at }` | `202`: queued, and `WarningEvent::Acknowledged` appears on the stream | a warned party's certificate, or `warning.acknowledge` | Yes (GAP-042) |
+| `GET /v3/exchange/{warnings,reports,handoffs}` | none | `ExchangeResponse`: `Held` with the products both of DN-18 §5's gates release and the count withheld, or `NotHeld` with a reason | a party's agreement, or `picture.view` | Yes (GAP-065) |
+| `POST /v3/exchange/{warnings,reports,handoffs}` | `PublishExchangeRequest { products }` | `202`: the node's held set for that item is replaced | `exchange.publish` | Yes (GAP-065) |
+| `POST /v3/plans/{plan_id}/decision` | `ApprovalRequest { plan, accepted, operator }` | `204`; a `CommandEvent::Decided` appears on the stream | `plan.decide` (or `plan.override`) | **No: `501`, because a node runs no approval queue** (GAP-132 replaces it with DN-31 §7's queue routes) |
+| Every `/v2` path above | anything | `410 Gone` naming its `/v3` successor, after authenticating the caller as the successor does | the successor's authentication, nothing more | Yes (GAP-130) |
 
 **Authentication landed the same day (GAP-057, DN-23 §6).** Every route but
-`POST /v2/session` requires a bearer token the node minted; the event stream carries its
+`POST /v3/session` requires a bearer token the node minted; the event stream carries its
 token in the subscribe frame, because a WebSocket client cannot always set a header on the
 upgrade. `ApprovalRequest` names an operator in its body and **that field is not
 believed**: the caller is whoever the token says. A node with no account store configured
 answers `503` on every route, saying it authenticates nobody -- which is the default
 deployment, and better than serving the picture to anyone who asks.
 
-**Why one write path still refuses.** `POST /v2/plans/{plan_id}/decision` returns `501`
+**Why one write path still refuses.** `POST /v3/plans/{plan_id}/decision` returns `501`
 because **a node runs no approval queue**: plans are routed through the policy chain and
 the queue on a desktop, and a node publishes `PlanProposed` and stops. Serving it would
 mean inventing a queue in a request handler. That is a different reason from the one below,

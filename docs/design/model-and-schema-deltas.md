@@ -46,6 +46,10 @@ is how a canonical model stops being canonical.
 | `CollectionRequirement` | Gains `priority: AssetPriority` | Yes, defaulted | DN-11 §3 shows it; the first implementation omitted it (added 2026-09-05) |
 | `SnapshotResponse` | Gains `requirements` | Yes, defaulted | DN-11 §6 (added 2026-09-05) |
 | **`PlanView.solutions`** | **Replaced by `PlanView.kind: PlanKind`** | **No** | DN-05 |
+| **`DecisionId`, `PlanId`** | **A `u64` counter becomes a UUID v7 held as `u128`**, written as the hyphenated RFC 9562 string and read from that string or a number | **No**; a journal holding the old numbers still reads | D-56, D-60; GAP-130, `DN-31-node-approval-queue.md` §5.1 and amendment 1 |
+| **`gungnir_command::PendingApprovalId`** | **The same change**, through the same helper, `gungnir_model::identifier` | **No** | D-56, D-60; GAP-130 |
+| `CommandEvent` | Loses `ApprovalRequested(PlanId)`, which nothing published | **No**, and no journal holds one | DN-31 §5.3 and amendment 1 |
+| **`SCHEMA_VERSION`** | **3 becomes 4**, and the interface path `/v2` becomes `/v3` | **No** | D-56; every `/v2` route answers `410 Gone` naming its successor |
 
 ## 3. The one breaking change
 
@@ -220,6 +224,16 @@ rule (D-53). `DecisionRecord` in `gungnir-command` gained `role`, and
 `ApprovalWorkflow::decide` takes it; `gungnir_resilience::DecisionConflict` carries both
 sides as `ConflictSide` in place of two booleans. `SCHEMA_VERSION` is unchanged: every
 addition reads an older journal.
+
+**Landed 2026-09-17, GAP-130**: `DecisionId`, `PlanId` and `PendingApprovalId` are UUID v7
+held as `u128`, minted where each thing is created -- `gungnir-command`'s workflow for
+decisions and queue items, the intercept service's planner for plans -- and written as the
+hyphenated string, read from that string or a number, and shown by a short tag on screen,
+all through `gungnir_model::identifier` (D-56, D-60, D-61). `SCHEMA_VERSION` is 4,
+`CommandEvent::ApprovalRequested` is gone, and every interface path in this document is
+served under `/v3`, with its `/v2` form answering `410 Gone` after authenticating the caller
+as the successor does. `testdata/journals/pre-uuid-v7/` holds a journal written at version
+3, and it replays and reports unchanged.
 
 `SnapshotResponse` gains `assets`, `predictions`, `engagements`, `requirements`,
 `hazards`, and `control_status`, and is filtered per caller by DN-17. The filtering is a

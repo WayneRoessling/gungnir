@@ -1215,6 +1215,10 @@ IE-identification-settings,uafId,IE-identification-settings
 IE-identification-settings,uafKind,InformationElement
 IE-identification-settings,registry.code,gungnir_model::IdentificationSettings
 IE-identification-settings,registry.domain,"Policy, authority & settings"
+IE-identifier-error,uafId,IE-identifier-error
+IE-identifier-error,uafKind,InformationElement
+IE-identifier-error,registry.code,gungnir_model::IdentifierError
+IE-identifier-error,registry.domain,"Core identifiers, frames & quality"
 IE-identity-event,uafId,IE-identity-event
 IE-identity-event,uafKind,InformationElement
 IE-identity-event,registry.code,gungnir_model::IdentityEvent

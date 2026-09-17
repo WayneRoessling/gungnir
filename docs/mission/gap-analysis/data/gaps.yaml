@@ -8707,6 +8707,17 @@
     note: >-
       Filed with DN-31: colliding identifiers are a hazard today, and every later
       increment needs unique ones.
+  - date: 2026-09-17
+    status: Closed
+    note: >-
+      Built. The three identifiers are UUID v7 minted where each thing is created,
+      written as hyphenated strings and read from strings or pre-change numbers (D-60),
+      and shown by a short tag on screen (D-61). `SCHEMA_VERSION` is 4, the interface is
+      `/v3`, and every `/v2` route authenticates as its successor and answers `410 Gone`.
+      DN-31 §9 row 1's tests exist, and the committed pre-change journal replays and
+      reports unchanged. DN-31 amendment 1 records what the build found; the minting
+      sites, the order assumptions and GAP-135 are in
+      `../../record/2026-09-17/identifiers-uuid-v7-and-v3-routes.md`.
 
 - id: GAP-131
   name: The decision path lives only in gungnir-app
@@ -8827,3 +8838,44 @@
   - date: 2026-09-17
     status: Open
     note: Filed with DN-31 (D-55, D-58).
+
+- id: GAP-135
+  name: >-
+    An effector's report moves an engagement without putting the move on the record
+  type: Technical
+  caps: [CAP-4.6]
+  layer: "Productization: decision and policy"
+  sev: 3
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    An effector's report of executing or of completion changes the engagement in the
+    desktop's memory and publishes no `EngagementEvent`, so no journal of a real session
+    can hold `Executing` or a corroborated close. The report's
+    `engagements_effective_corroborated` and `engagements_ineffective_corroborated`
+    counts can never be non-zero, a replay shows the engagement open until its window
+    closes, and the after-action account reads track-lifecycle evidence where an effector
+    reported.
+  evidence: >-
+    `gungnir-app/src/handoffs.rs` (`apply_report` calls `Engagement::executing`, and
+    `close_engagement` calls `close_effective` or `close_ineffective`; neither publishes);
+    `gungnir-app/src/engagements.rs` (`publish_closed` is called only from `sweep` and
+    `observe_superseded`); `gungnir-reporting/src/lib.rs` (`count_engagement`); DN-06 §5
+    and §8
+  action: >-
+    Publish `EngagementEvent::Executing` and `EngagementEvent::Closed`, with the
+    effector-reported outcome, when a report moves an engagement, through the one place
+    closes are published; and test that a journal holding an effector's completion reports
+    a corroborated outcome.
+  ref: >-
+    Found building GAP-130
+    (`../../record/2026-09-17/identifiers-uuid-v7-and-v3-routes.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: >-
+      Filed while building GAP-130: the pre-change journal fixture had to close its
+      engagement on track-lifecycle evidence, because a close an effector reports never
+      reaches the journal.

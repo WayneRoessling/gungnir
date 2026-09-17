@@ -7,6 +7,9 @@ skinparam classAttributeIconSize 0
 class "LocalFrame" as LocalFrame <<InformationElement>> {
   origin: Geodetic
 }
+class "IdentifierError" as IdentifierError <<InformationElement>> {
+  text: String
+}
 class "GlobalEntityId" as GlobalEntityId <<InformationElement>> {
   pub u128
 }

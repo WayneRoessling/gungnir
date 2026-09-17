@@ -132,6 +132,13 @@ A copy on the node, which D-55 refused.
 
 ### 5.1 Identifiers (D-56)
 
+> **Amended 2026-09-17 (amendment 1, §12).** Identifiers go on the wire and into journals
+> as hyphenated RFC 9562 strings, and a number written before the change still reads
+> (D-60). A 128-bit JSON number breaks `serde_json::to_value`, `Value` parsing and
+> field-tagged enums, and the handoff delivery and exchange bodies would silently become
+> `null`. On screen an identifier is a short tag and in the record it is whole (D-61, §8).
+> The citation of §9 below named row 5 and is corrected to row 1.
+
 ```rust
 // gungnir-model: minted with uuid's v7 feature where the thing is created, as
 // GlobalEntityId already is (D-11 admits `v7` "only where identities are minted").
@@ -148,7 +155,7 @@ successor. Every payload that carries a plan or a decision changes, so `/v2` is 
 whole rather than route by route, and peer nodes and partner machines move to `/v3` in the
 same release (D-01's one release). A journal written before the change still reads, because
 a u64 number is a valid u128; the replay and reporting paths are tested against one (§9, row
-5).
+1).
 
 ### 5.2 The queue on the wire
 
@@ -207,6 +214,10 @@ pub struct ForwardedDecision {
 ```
 
 ### 5.3 Events and the snapshot
+
+> **Amended 2026-09-17 (amendment 1, §12).** `CommandEvent::ApprovalRequested` is removed
+> in GAP-130, which creates schema version 4, rather than with the queue's events in
+> GAP-132.
 
 - `CommandEvent::Queued { item, plan, layer, offered_to, expires_at, escalate_at }`: a new,
   additive variant, so a desktop following the stream builds the queue without polling.
@@ -309,6 +320,13 @@ links desktops to a node states how long an offline delegation lasts rather than
 
 ## 8. User-interface delta
 
+> **Amended 2026-09-17 (amendment 1, §12).** Every panel and alert below names a decision, a
+> plan or a queue item by its short tag, the last eight hex digits of the UUID
+> (`…9f3a61c2`), because a v7 identifier's leading digits are its timestamp and look alike.
+> PN-07 and the handoff panel's detail show the whole identifier with a copy control, and
+> audit entries, journals, reports and log fields carry it whole. A rehearsal seed's plan
+> keeps the number the seed gives and is shown as given (D-61).
+
 | Panel | Change |
 |---|---|
 | PN-01 Status strip | Whose queue is in force: the node's, or this desktop's while cut off |
@@ -354,9 +372,51 @@ criterion.
 - **Several nodes.** One node is the record for the desktops linked to it. Queues shared across
   peer nodes (DN-16's peers) are out of scope.
 
+## 12. Amendment 1 (2026-09-17, D-60 and D-61)
+
+Raised by GAP-130's build, before any identifier type changed. Nothing here changes the
+note's intent: the identifiers are still UUID v7 held as a `u128` and minted where each
+thing is created (D-56). What changed is how they are written and how they are shown.
+
+**What the build found.** §5.1 kept the JSON form a number, so that a pre-change journal
+reads because a u64 number is a valid u128. A probe of `serde_json` with a v7-shaped value
+showed that form holds on one path and breaks on three:
+
+- `serde_json::to_string` and `from_str` round-trip the 128-bit number exactly.
+- `serde_json::to_value` refuses it with "number out of range".
+- Text parsed into a `serde_json::Value` turns the identifier into a float,
+  `2.125479544897801e+36`, and loses its low digits.
+- A field-tagged enum refuses it with "u128 is not supported": serde buffers such an
+  enum's fields, and the buffer holds no integer wider than 64 bits.
+
+Two live paths pass through a `Value`. `gungnir-app`'s `handoffs.rs` built the handoff
+posted to an effector and the handoff body published for exchange with
+`serde_json::to_value(..).unwrap_or(Value::Null)`, so with a numeric v7 identifier both
+bodies would silently have become `null`; and the node holds a published body as a
+`Value` (DN-18 §5 amendment 2), where the identifier would have become the float above. The
+delivery test could not have caught it: its stub endpoint read each request and never
+looked at the body.
+
+**The two decisions.** D-60: identifiers are written as the hyphenated RFC 9562 string and
+read from that string or a JSON integer, so a pre-change journal, fixture or test literal
+still reads, and a path parameter takes the hyphenated form or a decimal number. D-61:
+panels and alerts show the short tag, `…9f3a61c2`; PN-07 and the handoff panel's detail
+show the whole identifier with a copy control; audit entries, journals, reports and log
+fields carry it whole; a rehearsal seed's plan is shown as the seed numbers it.
+
+**Errata.**
+
+- §5.1 cited §9 row 5 for the pre-change journal; the row is row 1, corrected in place.
+- §5.3's removal of `CommandEvent::ApprovalRequested` lands with GAP-130, which creates
+  schema version 4.
+- §5.1 and §7 retire `/v2` whole; as built, every `/v2` route, not only the decision route
+  §7's table lists, authenticates its caller as its `/v3` successor does and then answers
+  `410 Gone` naming that successor. Until GAP-132 builds §7's queue routes, the decision
+  route's successor is `/v3/plans/{plan_id}/decision`, which still refuses with `501`.
+
 ## Traceability
 
-GAP-129, GAP-130 to GAP-134, GAP-113, GAP-127; D-03, D-15, D-53, D-55 to D-59; DN-06, DN-07,
+GAP-129, GAP-130 to GAP-134, GAP-113, GAP-127; D-03, D-15, D-53, D-55 to D-61; DN-06, DN-07,
 DN-09 §5 and §7, DN-10 §3, §5 and §6, DN-23 §5, DN-25; MT-01, MT-10; MOP-07, MOE-01, MOE-05,
 MOE-11; CAP-3.6, CAP-3.7, CAP-4.2, CAP-4.3, CAP-5.4, CAP-5.9, CAP-6.2, CAP-7.2; contracts C-01,
 C-04; `ARCHITECTURE.md` §8.2 to §8.4; `docs/gungnir-api-v1.md`.

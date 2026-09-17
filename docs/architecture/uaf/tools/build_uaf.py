@@ -135,8 +135,8 @@ def slugify(name: str) -> str:
 # `if_sr_domain`), so a new gungnir-model source file cannot silently land in no
 # diagram or the wrong one.
 INFORMATION_DOMAINS = [
-    ("Core identifiers, frames & quality", ["identity.rs", "frame.rs", "time.rs", "quality.rs",
-                                             "profiles.rs", "provenance.rs"]),
+    ("Core identifiers, frames & quality", ["identity.rs", "identifier.rs", "frame.rs", "time.rs",
+                                             "quality.rs", "profiles.rs", "provenance.rs"]),
     ("Picture & tracking vocabulary", ["lib.rs"]),
     ("Events & the record", ["events.rs"]),
     ("Plans, effectors & handoff", ["plans.rs", "effectors.rs", "handoff.rs"]),
@@ -934,8 +934,8 @@ def gen_service_interfaces(facts: list[dict]) -> None:
             L.append(f"- `{s}`")
         L.append("")
     # The heading said "API v1" while every path in the table it introduces is
-    # /v2 -- the document kept its filename when the paths moved, and this
-    # heading followed the filename rather than the contract.
+    # under a later version (/v3 since GAP-130) -- the document kept its filename when
+    # the paths moved, and this heading followed the filename rather than the contract.
     L.append("## SV-23 API endpoints (`../../../gungnir-api-v1.md`)\n")
     L.extend(api_endpoints())
     L.append("")

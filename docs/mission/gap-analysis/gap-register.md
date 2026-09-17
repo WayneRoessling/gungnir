@@ -142,13 +142,14 @@ history, and an entry is never edited once it has merged.
 | GAP-127 | The desktop's decide and task functions check no permission | Technical | CAP-6.2 | 3 | 9 | S | 27 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-128 | PN-14 cannot apply an edited baseline on its first apply | Technical | CAP-5.6 | 3 | 2 | S | 6 | I3 | Services engineer | Open |
 | GAP-129 | No decision reaches a node's record, so reconciliation never meets a conflict | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Owner | In progress |
-| GAP-130 | Decision, plan and queue-item identifiers collide across machines and restarts | Technical | CAP-7.2, CAP-4.2 | 4 | 6 | M | 24 | I3 | Services engineer | Open |
+| GAP-130 | Decision, plan and queue-item identifiers collide across machines and restarts | Technical | CAP-7.2, CAP-4.2 | 4 | 6 | M | 24 | I3 | Services engineer | Closed |
 | GAP-131 | The decision path lives only in gungnir-app | Technical | CAP-4.2, CAP-3.6 | 3 | 7 | L | 21 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-132 | A node runs no approval queue | Technical | CAP-4.2, CAP-4.3, CAP-3.7, CAP-6.2 | 4 | 9 | L | 36 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-133 | A linked desktop decides the node's plans itself | Technical | CAP-5.9, CAP-4.3 | 4 | 10 | M | 40 | I3 | UI engineer | Open |
 | GAP-134 | A desktop's offline decisions never reach its node | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
+| GAP-135 | An effector's report moves an engagement without putting the move on the record | Technical | CAP-4.6 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
 
-Counts: 134 gaps, 3 mission, 131 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 135 gaps, 3 mission, 132 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1932,11 +1933,12 @@ Counts: 134 gaps, 3 mission, 131 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.2 Interop standards; CAP-4.2 Record every decision.
 - History:
   - 2026-09-17, Open: Filed with DN-31: colliding identifiers are a hazard today, and every later increment needs unique ones.
+  - 2026-09-17, Closed: Built. The three identifiers are UUID v7 minted where each thing is created, written as hyphenated strings and read from strings or pre-change numbers (D-60), and shown by a short tag on screen (D-61). `SCHEMA_VERSION` is 4, the interface is `/v3`, and every `/v2` route authenticates as its successor and answers `410 Gone`. DN-31 §9 row 1's tests exist, and the committed pre-change journal replays and reports unchanged. DN-31 amendment 1 records what the build found; the minting sites, the order assumptions and GAP-135 are in `../../record/2026-09-17/identifiers-uuid-v7-and-v3-routes.md`.
 - Evidence: `gungnir-command/src/lib.rs` (`mint_decision_id`); `gungnir-intercept-service/src/lib.rs` (plan identifiers); `gungnir_model::handoff::accept_report`; DN-31 §1.
 - Severity: 4. Reach: 6 threads. Effort: M. Priority: 24.
 - Impact: `DecisionId`, `PlanId` and `PendingApprovalId` restart at 1 in every process. Two desktops on one node, or one desktop across a restart, mint the same identifiers: an effector report finds its handoff by `DecisionId` alone and so reaches every handoff with that number, MOE-05's join of decisions to engagements mixes machines, and reconciliation pairs journals by `PlanId`.
 - Closing action: Make the three identifiers UUID v7, minted where each thing is created (D-56); move `SCHEMA_VERSION` to 4 and the routes to `/v3`, with every `/v2` route answering `410 Gone`; and write DN-31 §9 row 1.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`).
 - Depends on: D-56.
 
@@ -1995,4 +1997,17 @@ Counts: 134 gaps, 3 mission, 131 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`).
 - Depends on: D-58, GAP-133.
+
+**GAP-135 An effector's report moves an engagement without putting the move on the record**
+
+- Type: Technical.
+- Capability: CAP-4.6 Track engagements and effects.
+- History:
+  - 2026-09-17, Open: Filed while building GAP-130: the pre-change journal fixture had to close its engagement on track-lifecycle evidence, because a close an effector reports never reaches the journal.
+- Evidence: `gungnir-app/src/handoffs.rs` (`apply_report` calls `Engagement::executing`, and `close_engagement` calls `close_effective` or `close_ineffective`; neither publishes); `gungnir-app/src/engagements.rs` (`publish_closed` is called only from `sweep` and `observe_superseded`); `gungnir-reporting/src/lib.rs` (`count_engagement`); DN-06 §5 and §8.
+- Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
+- Impact: An effector's report of executing or of completion changes the engagement in the desktop's memory and publishes no `EngagementEvent`, so no journal of a real session can hold `Executing` or a corroborated close. The report's `engagements_effective_corroborated` and `engagements_ineffective_corroborated` counts can never be non-zero, a replay shows the engagement open until its window closes, and the after-action account reads track-lifecycle evidence where an effector reported.
+- Closing action: Publish `EngagementEvent::Executing` and `EngagementEvent::Closed`, with the effector-reported outcome, when a report moves an engagement, through the one place closes are published; and test that a journal holding an effector's completion reports a corroborated outcome.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-130 (`../../record/2026-09-17/identifiers-uuid-v7-and-v3-routes.md`).
 
