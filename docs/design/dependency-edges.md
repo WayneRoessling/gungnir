@@ -102,7 +102,7 @@ one crate can talk to a sensor.
 | `gungnir-remote` to `gungnir-security` | GAP-060, D-29 | 2026-09-06, with the `identity.rs` move out of `gungnir-node` | Yes, as (t) -- **the entry is dated 2026-09-07; the manifest line is older, see §14** |
 | `gungnir-approval` to command, policy, intercept-service, security, config, eventing, model | DN-31, D-57, GAP-131 | 2026-09-17 | Yes, as (w) (§17) |
 | `gungnir-app` to `gungnir-approval` | DN-31, D-57, GAP-131 | 2026-09-17 | Yes, as (x) (§17) |
-| `gungnir-node` to `gungnir-approval` and to `gungnir-command` | DN-31, D-57 | **No: GAP-132's, no code yet** | Not yet; §7.1 gains (y) in the change that gives the node the queue |
+| `gungnir-node` to `gungnir-approval` and to `gungnir-command` | DN-31, D-57, GAP-132 | 2026-09-17 | Yes, as (y) (§18) |
 
 **All five are in manifests and drawn.** The acyclicity check was re-run with the full set
 on 2026-09-05: 154 crate-to-crate edges, no cycle.

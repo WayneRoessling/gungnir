@@ -448,7 +448,7 @@ edge in the graph are checked by `gungnir-app/tests/dependency_graph.rs` on ever
   binary into productization and acyclic, as (k) and (l) are. This is what those two
   "deliberately did not bring": the queue, and the authority engine's asking role --
   answered not by inventing a role for the node but by asking about every role on the
-  ladder. Recorded in `docs/design/dependency-edges.md` §17.
+  ladder. Recorded in `docs/design/dependency-edges.md` §18.
 - **(r) `gungnir-fusion-async` ──► `gungnir-core`, `gungnir-filters` and
   `gungnir-association`** (2026-09-06, GAP-011). The out-of-sequence pipeline predicts
   a track to a measurement's time, gates the measurement, assigns, and updates. Those
@@ -492,7 +492,7 @@ edge in the graph are checked by `gungnir-app/tests/dependency_graph.rs` on ever
   each binary implements -- and growing `gungnir-command` instead, which would take the
   human-owned queue crate into engagement, configuration and security code. **The node's
   edge (y) landed with GAP-132**, in the change that put it in a manifest; it is drawn
-  above (`docs/design/dependency-edges.md` §17).
+  above (`docs/design/dependency-edges.md` §18).
 - **(q) `gungnir-ml` ──► `gungnir-model` and `gungnir-interop`** (2026-09-06, GAP-077,
   GAP-079). The crate `docs/ml/architecture.md` §1 drew as `gungnir-model ──► gungnir-ml`
   exists: the `Model` and `FeatureExtractor` traits, a fake for the consumers' tests,

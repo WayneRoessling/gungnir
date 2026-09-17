@@ -372,8 +372,9 @@ fn answer_one(
             reason: reason.clone(),
         },
     };
-    let operator = OperatorId(pending.operator.parse().unwrap_or_default());
-    let signed_in = Some((operator, pending.role));
+    // The identifier the route verified, carried whole: nothing is parsed here, so there
+    // is no failing branch to answer by attributing the decision to somebody else.
+    let signed_in = Some((pending.operator, pending.role));
     let taken = with_desk(
         approval,
         frame,
@@ -395,7 +396,7 @@ fn answer_one(
         // was never issued here. The append-only history tells the three apart.
         Err(CommandError::NotFound(item)) => {
             let (answer, detail) = already_ended(approval, item);
-            audit_refusal(approval, frame, Some(operator), &detail);
+            audit_refusal(approval, frame, Some(pending.operator), &detail);
             answer
         }
         Err(err) => {
@@ -403,7 +404,7 @@ fn answer_one(
             audit_refusal(
                 approval,
                 frame,
-                Some(operator),
+                Some(pending.operator),
                 &format!("item {}: {err}", pending.item),
             );
             DecisionAnswer::Unknown

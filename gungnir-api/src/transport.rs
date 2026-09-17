@@ -421,7 +421,14 @@ pub struct PendingDecision {
     pub request: gungnir_model::RequestId,
     /// The verified session the decision is attributed to. Both halves or neither, read
     /// from one token (DN-23 §5 rule 1).
-    pub operator: String,
+    ///
+    /// **The identifier, not its text.** A decision's attribution is what D-53's
+    /// arbitration ranks and what an audit entry is searched by. Carrying it as a string
+    /// puts a parse between the token and the record, and a parse has a failing branch
+    /// that has to answer to somebody: the loop's answered `unwrap_or_default()`, which
+    /// would have attributed the decision to operator 0. There is nothing to parse if
+    /// nothing is written down.
+    pub operator: gungnir_security::OperatorId,
     pub role: gungnir_security::Role,
     /// What the loop decided, or why it would not.
     pub reply: tokio::sync::oneshot::Sender<DecisionAnswer>,
@@ -2219,13 +2226,16 @@ async fn decide_queued(
             return response;
         }
     };
-    let operator = session.operator.0.to_string();
+    // The refusal path records who was refused as text, because "unauthenticated" above is
+    // one of its values and no identifier stands for it. The decision path below carries
+    // the identifier itself; see `PendingDecision::operator`.
+    let refused_as = session.operator.0.to_string();
     let (item, request) = match vet_decision(&api, &session, &item, body) {
         Ok(vetted) => vetted,
         Err((status, item, why)) => {
             api.refuse_decision(RefusedDecision {
                 item,
-                operator,
+                operator: refused_as,
                 reason: why.clone(),
             });
             return problem(status, &why);
@@ -2243,7 +2253,7 @@ async fn decide_queued(
             item,
             choice: request.choice,
             request: request.request,
-            operator,
+            operator: session.operator,
             role: session.role,
             reply,
         });
