@@ -7869,6 +7869,9 @@
       such. What is needed is a placement override `gungnir-scenario` accepts at
       generation time, threaded from the selected laydown through the rehearsal, so the
       detections a rehearsal produces come from the sensors that laydown actually sites.
+  - date: 2026-09-17
+    status: Open
+    note: "A design for this gap was drafted 2026-09-16 and never merged; it is on the branch `claude/gap105-laydown-placement`. Do not merge it as it stands: its `DN-31` number and its `D-53` were both taken by other work since, and its register edits predate the move to this file. The design text is still what this gap needs. See `../../record/2026-09-17/gap-105-laydown-draft-and-dn-31-reuse.md`."
 
 - id: GAP-106
   name: An operator cannot accept a coverage gap
