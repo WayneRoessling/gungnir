@@ -65,6 +65,9 @@ impl SensorMode {
     ];
 }
 pub mod handoff;
+/// How `DecisionId`, `PlanId` and `gungnir_command::PendingApprovalId` are written, read
+/// and shown (GAP-130; D-56, D-60, D-61).
+pub mod identifier;
 pub mod identity;
 // DN-26 (laydown options), GAP-087: the placements a deployment could adopt.
 pub mod laydown;
@@ -152,7 +155,14 @@ use nalgebra::{SMatrix, SVector};
 /// `gungnir-remote/tests/wire_conformance.rs` will refuse a peer one version out. That
 /// refusal **is** the correct outcome and is the reason the rule exists -- a peer that
 /// silently read a bearing as a position would draw a symbol where nothing is.
-pub const SCHEMA_VERSION: u32 = 3;
+///
+/// Version 4, 2026-09-17: `DecisionId`, `PlanId` and `gungnir_command::PendingApprovalId`
+/// became UUID v7, held as 128 bits and written as hyphenated strings (D-56, D-60; GAP-130,
+/// `docs/design/DN-31-node-approval-queue.md` §5.1), and `CommandEvent::ApprovalRequested`,
+/// which nothing published, was removed (DN-31 §5.3). Every payload carrying a plan or a
+/// decision changed, so the interface path moved from `/v2` to `/v3` whole. A journal
+/// written at version 3 still reads: its identifiers are numbers, and a number reads.
+pub const SCHEMA_VERSION: u32 = 4;
 
 /// Identifier of one recorded mission session.
 ///
@@ -598,6 +608,13 @@ impl ResourceView {
 }
 
 /// Identifier of one plan produced by the intercept service.
+///
+/// **A UUID v7 since GAP-130** (D-56), minted by the planner that proposes the plan. It
+/// was a counter restarting at 1 in every planner, so a desktop that fell back from its
+/// node could mint the very id the node had last proposed, and reconciliation pairs two
+/// journals by this. `PlanId::default()`, zero, is the id of `PlanView::default()` alone
+/// and no planner mints it. Written, read and shown as [`crate::identifier`] says (D-60,
+/// D-61); a rehearsal seed's plan keeps the number the seed gives.
 #[derive(
     Debug,
     Clone,
@@ -611,7 +628,31 @@ impl ResourceView {
     serde::Serialize,
     serde::Deserialize,
 )]
-pub struct PlanId(pub u64);
+pub struct PlanId(#[serde(with = "crate::identifier::wire")] pub u128);
+
+impl PlanId {
+    /// The on-screen tag, `…9f3a61c2` (D-61): for a panel or an alert, never a record.
+    #[must_use]
+    pub fn short(self) -> String {
+        crate::identifier::short(self.0)
+    }
+}
+
+impl std::fmt::Display for PlanId {
+    /// The whole identifier, for an audit entry, a log field and PN-07 (D-61).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        crate::identifier::fmt_full(self.0, f)
+    }
+}
+
+impl std::str::FromStr for PlanId {
+    type Err = crate::identifier::IdentifierError;
+
+    /// The hyphenated UUID, or a pre-change decimal number (D-60).
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        crate::identifier::parse(text).map(Self)
+    }
+}
 
 /// One resource-to-track pairing within a plan, with the geometry the UI draws once
 /// the intercept-geometry solver exists (`None` until then).

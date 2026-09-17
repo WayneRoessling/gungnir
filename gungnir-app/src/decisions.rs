@@ -213,7 +213,7 @@ pub fn submit(state: &mut AppState, plan: PlanView) -> Submitted {
     let validity = crate::status::baseline_validity(state);
     if validity.supersedes_plans() {
         let now = state.clock.now();
-        let plan_id = plan.id.0;
+        let plan_id = plan.id;
         crate::update::publish(
             state,
             now,
@@ -222,12 +222,14 @@ pub fn submit(state: &mut AppState, plan: PlanView) -> Submitted {
         crate::engagements::observe_superseded(state, plan.id, now);
         // Said once per plan, not once per frame: `submit` runs only when the plan
         // changes, which is why this is here rather than in the tick.
+        // An alert names the plan by its tag and a log field in full (D-61).
         state.alerts.push(format!(
-            "Plan {plan_id} superseded: the baseline in force is outside its validity \
-             window, so nothing produced now will be applied"
+            "Plan {} superseded: the baseline in force is outside its validity \
+             window, so nothing produced now will be applied",
+            plan_id.short()
         ));
         tracing::warn!(
-            plan = plan_id,
+            plan = %plan_id,
             ?validity,
             "plan superseded: baseline not in force"
         );
@@ -259,7 +261,7 @@ pub fn submit(state: &mut AppState, plan: PlanView) -> Submitted {
     let Some(layer) = governing_layer(&plan, &state.resources, &state.config.policy.decisions)
     else {
         tracing::error!(
-            plan = plan.id.0,
+            plan = %plan.id,
             "a plan that tasks no known resource cleared policy; not queuing it"
         );
         return Submitted::Evaluated(verdict);
@@ -297,19 +299,19 @@ pub fn sweep(state: &mut AppState) {
         let event = match &outcome {
             QueueOutcome::Expired { at } => {
                 tracing::warn!(
-                    plan = plan.0,
-                    id = id.0,
+                    plan = %plan,
+                    id = %id,
                     "approval expired with nobody deciding"
                 );
                 state.alerts.push(format!(
                     "Plan {} expired with nobody deciding; this is not a rejection",
-                    plan.0
+                    plan.short()
                 ));
                 CommandEvent::Expired { plan, at: *at }
             }
             QueueOutcome::Escalated { to_role, at } => {
                 state.queue_outcomes.escalated += 1;
-                tracing::info!(plan = plan.0, to_role, "approval escalated");
+                tracing::info!(plan = %plan, to_role, "approval escalated");
                 CommandEvent::Escalated {
                     plan,
                     to_role: to_role.clone(),
@@ -728,7 +730,7 @@ pub fn queue_rows(state: &AppState) -> Vec<QueueRow<'_>> {
         .iter()
         .map(|item| QueueRow {
             id: PendingId(item.id.0),
-            plan_id: item.plan.id.0,
+            plan_id: item.plan.id,
             assignments: item.plan.assignments().len(),
             verdict: Verdict::RequiresHumanApproval,
             time_remaining: match item.time_remaining_s(now) {
@@ -807,7 +809,8 @@ pub fn decide(
         .approvals
         .decide(PendingApprovalId(id.0), decision, operator, role, now)?;
     tracing::info!(
-        plan = record.plan.id.0,
+        plan = %record.plan.id,
+        decision_id = %record.id,
         decision = ?record.decision,
         actionable = record.is_actionable(),
         "decision recorded"
@@ -820,11 +823,12 @@ pub fn decide(
     crate::audit::record(
         state,
         DECISION_ACTION,
-        format!("plan {} {:?}", record.plan.id.0, record.decision),
+        // The whole identifier: an audit entry is searched for, never glanced at (D-61).
+        format!("plan {} {:?}", record.plan.id, record.decision),
     );
     // GAP-043: an actionable decision is the moment an engagement opens (DN-06 §5).
     let opened = crate::engagements::open_for(state, &record);
-    tracing::debug!(decision = record.id.0, opened, "engagements opened");
+    tracing::debug!(decision = %record.id, opened, "engagements opened");
     state.clear_selected_approval();
     Ok(())
 }

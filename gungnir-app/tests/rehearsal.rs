@@ -130,14 +130,14 @@ fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_jou
     // with the two oldest (1201 at 0 s, 1202 at 5 s) closest to the 90 s point-layer
     // expiry and clearly ahead of the rest.
     at(&mut state, 75.0);
-    let raw_point_plans: Vec<u64> = state
+    let raw_point_plans: Vec<u128> = state
         .approvals
         .queue()
         .iter()
         .filter(|p| p.layer == gungnir_model::EffectorLayer::Point)
         .map(|p| p.plan.id.0)
         .collect();
-    let point_ids: std::collections::HashSet<u64> = raw_point_plans.iter().copied().collect();
+    let point_ids: std::collections::HashSet<u128> = raw_point_plans.iter().copied().collect();
     // A distinct-id count alone would not catch GAP-097's other half: the raw queue
     // must not hold the same id more than once either, which `update::tick` on its
     // own could still get wrong (by re-submitting an id it had already announced)
@@ -175,7 +175,7 @@ fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_jou
         "the seven scripted point-layer plans plus the live allocator's own stable \
          resource-1/track-39 proposal should be queued by 75 s"
     );
-    let remaining = |id: u64| {
+    let remaining = |id: u128| {
         state
             .approvals
             .queue()
@@ -184,9 +184,10 @@ fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_jou
             .and_then(|p| p.time_remaining_s(state.clock.now()))
             .expect("a point-layer plan has an expiry")
     };
-    let (oldest_two, rest): (Vec<u64>, Vec<u64>) = [1183_u64, 1201, 1202, 1203, 1204, 1205, 1206]
-        .into_iter()
-        .partition(|&id| id == 1201 || id == 1202);
+    let (oldest_two, rest): (Vec<u128>, Vec<u128>) =
+        [1183_u128, 1201, 1202, 1203, 1204, 1205, 1206]
+            .into_iter()
+            .partition(|&id| id == 1201 || id == 1202);
     let oldest_max = oldest_two
         .iter()
         .map(|&id| remaining(id))

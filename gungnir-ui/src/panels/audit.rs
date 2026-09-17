@@ -213,13 +213,18 @@ fn draw_handoff_row(ui: &mut Ui, palette: &theme::Palette, row: &HandoffRow<'_>,
     ui.label(
         RichText::new(format!(
             "Decision {} (plan #{}) {destination}, issued T+{:.0} s -- {}",
-            row.decision,
-            row.plan,
+            row.decision.short(),
+            row.plan.short(),
             row.issued.0,
             handoff::delivery_label(row.delivery)
         ))
         .strong(),
     );
+    // The record's detail carries the whole identifiers with copy controls (D-61): this is
+    // the after-action account, and the decision is what an effector's report and the
+    // journal name.
+    crate::panels::identifier::draw_full(ui, palette, "Decision", &row.decision.to_string());
+    crate::panels::identifier::draw_full(ui, palette, "Plan", &row.plan.to_string());
     // The attribution as the record holds it, which is "nobody signed in" when that is
     // what happened. An audit surface that tidied that into a role would be inventing an
     // operator (DN-23 §5 rule 1).

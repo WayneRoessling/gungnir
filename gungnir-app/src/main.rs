@@ -808,9 +808,16 @@ impl App {
             // The item is gone and the decision was not recorded. Say so rather than
             // closing the dialog as though it had been.
             tracing::error!(%err, "decision could not be recorded");
+            // The log carries the whole identifier and the alert its tag (D-61).
+            let why = match &err {
+                gungnir_command::CommandError::NotFound(item) => {
+                    format!("queue item {} is no longer waiting", item.short())
+                }
+                refused @ gungnir_command::CommandError::DeniedByPolicy(_) => refused.to_string(),
+            };
             self.state
                 .alerts
-                .push(format!("Decision not recorded: {err}"));
+                .push(format!("Decision not recorded: {why}"));
         }
     }
 

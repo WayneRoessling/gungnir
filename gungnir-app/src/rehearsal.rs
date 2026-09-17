@@ -301,8 +301,10 @@ pub fn tick(state: &mut AppState) {
         crate::update::publish(state, now, Event::Rehearsal(event));
     }
     for p in plans {
+        // The seed's own number (`P-1183`), not a minted identifier: a task card names
+        // it, so it is shown as the seed gives it (D-61).
         let plan = PlanView::intercept(
-            PlanId(p.id),
+            PlanId(u128::from(p.id)),
             now,
             vec![InterceptSolutionView {
                 resource: ResourceId(p.resource),

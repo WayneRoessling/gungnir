@@ -57,7 +57,8 @@ pub enum OperatorIdentity<'a> {
 /// One alternative course of action, already policy-checked.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Alternative<'a> {
-    pub plan_id: u64,
+    /// An option beside the plan under decision, shown by its short tag (D-61).
+    pub plan_id: gungnir_model::PlanId,
     pub verdict: Verdict<'a>,
     pub summary: &'a str,
 }
@@ -169,7 +170,16 @@ pub fn render_decision_dialog(
 ) -> Option<DecisionChoice> {
     state.reconcile(view.degraded);
 
-    ui.heading(format!("Decide plan #{}", view.row.plan_id));
+    ui.heading(format!("Decide plan #{}", view.row.plan_id.short()));
+    // The whole identifier, with a copy control (D-61): this is the plan a person quotes
+    // when they ask somebody else about the decision, and the tag above is only enough to
+    // match it to its row on PN-06.
+    crate::panels::identifier::draw_full(
+        ui,
+        palette,
+        "Plan identifier",
+        &view.row.plan_id.to_string(),
+    );
     draw_plan(ui, palette, view);
     ui.separator();
     draw_rationale(ui, palette, view);
@@ -258,7 +268,7 @@ fn draw_alternatives(ui: &mut Ui, palette: &theme::Palette, view: &DecisionDialo
             for a in alts {
                 ui.label(format!(
                     "#{}: {} ({})",
-                    a.plan_id,
+                    a.plan_id.short(),
                     a.summary,
                     verdict_sentence(a.verdict)
                 ));
@@ -380,7 +390,7 @@ mod tests {
     fn row() -> QueueRow<'static> {
         QueueRow {
             id: PendingId(1),
-            plan_id: 9,
+            plan_id: gungnir_model::PlanId(9),
             assignments: 2,
             verdict: Verdict::RequiresHumanApproval,
             time_remaining: TimeRemaining::Seconds(18.0),

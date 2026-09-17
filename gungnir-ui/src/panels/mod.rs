@@ -11,6 +11,7 @@ pub mod config_editor;
 pub mod coverage_layers;
 pub mod decision_dialog;
 pub mod handoff;
+pub mod identifier;
 pub mod intercept_panel;
 pub mod not_implemented;
 pub mod planning;

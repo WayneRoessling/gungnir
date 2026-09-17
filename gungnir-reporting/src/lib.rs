@@ -358,7 +358,6 @@ fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
             | Event::Intercept(
                 InterceptEvent::PlanSuperseded(_) | InterceptEvent::PlanEvaluated { .. },
             )
-            | Event::Command(CommandEvent::ApprovalRequested(_))
             | Event::Rhythm(_)
             | Event::Governance(_)
             | Event::Review(_)
@@ -790,7 +789,7 @@ mod marking_tests {
             seq: id,
             mission_time: MissionTime(0.0),
             event: Event::Intercept(InterceptEvent::PlanProposed(PlanView {
-                id: PlanId(id),
+                id: PlanId(u128::from(id)),
                 releasability: marking,
                 ..PlanView::default()
             })),

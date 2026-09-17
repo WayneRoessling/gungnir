@@ -474,7 +474,7 @@ mod tests {
         );
     }
 
-    fn decided(seq: u32, decision: u64, rationale: Option<&str>) -> Envelope {
+    fn decided(seq: u32, decision: u128, rationale: Option<&str>) -> Envelope {
         use gungnir_model::events::VerdictSummary;
         use gungnir_model::PlanId;
         env(
@@ -491,14 +491,14 @@ mod tests {
         )
     }
 
-    fn opened(seq: u32, decision: u64) -> Envelope {
+    fn opened(seq: u32, decision: u128, track: u64) -> Envelope {
         use gungnir_model::PlanId;
         env(
             seq,
             Event::Engagement(EngagementEvent::Opened {
                 decision: DecisionId(decision),
                 plan: PlanId(decision),
-                track: TrackId(decision),
+                track: TrackId(track),
             }),
         )
     }
@@ -509,9 +509,9 @@ mod tests {
     fn moe_05_counts_the_missing_rationale() {
         let journal = vec![
             decided(1, 1, None),
-            opened(2, 1),
+            opened(2, 1, 7),
             decided(3, 2, Some("second engagement of the same track")),
-            opened(4, 2),
+            opened(4, 2, 7),
         ];
         let (value, note) = moe_05(&journal);
         assert_eq!(

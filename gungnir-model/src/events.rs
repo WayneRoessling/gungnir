@@ -458,9 +458,12 @@ impl RequirementEvent {
 /// Operator decisions on plans, for the audit trail. Mirrors
 /// `gungnir_command::DecisionRecord` in a form the model can carry without depending
 /// on that crate.
+///
+/// `ApprovalRequested(PlanId)` was removed at schema version 4 (GAP-130,
+/// `docs/design/DN-31-node-approval-queue.md` §5.3): it carried too little to build a
+/// queue from and nothing ever published it, so no journal holds one.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum CommandEvent {
-    ApprovalRequested(PlanId),
     Decided {
         plan: PlanId,
         /// The decision this event records, so engagement state can key on it
@@ -494,10 +497,7 @@ pub enum CommandEvent {
     /// The window closed with nobody deciding. **Not a rejection**: nobody chose,
     /// and an after-action review must be able to tell the two apart
     /// (docs/design/DN-10-queue-expiry-and-escalation.md).
-    Expired {
-        plan: PlanId,
-        at: MissionTime,
-    },
+    Expired { plan: PlanId, at: MissionTime },
     /// Offered to a role with the authority or the attention to take it. The item
     /// does not leave the original role's view.
     Escalated {

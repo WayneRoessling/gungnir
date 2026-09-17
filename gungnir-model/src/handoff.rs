@@ -147,7 +147,7 @@ pub enum HandoffError {
     ///
     /// Rejected and logged rather than applied: an effector report is an untrusted
     /// external input like any other.
-    #[error("report names unknown decision {0:?}")]
+    #[error("report names unknown decision {0}")]
     UnknownDecision(DecisionId),
 }
 
@@ -178,7 +178,7 @@ mod tests {
         }
     }
 
-    fn handoff(decision: u64) -> Handoff {
+    fn handoff(decision: u128) -> Handoff {
         Handoff::from_decision(
             DecisionId(decision),
             PlanId(1),

@@ -112,9 +112,9 @@ fn the_approval_queue_keeps_a_handoff_visible_until_it_is_delivered() {
     let done = DeliveryState::Delivered {
         at: MissionTime(110.0),
     };
-    let row = |decision: u64, endpoint, delivery| HandoffRow {
-        decision,
-        plan: decision + 500,
+    let row = |decision: u128, endpoint, delivery| HandoffRow {
+        decision: gungnir_model::DecisionId(decision),
+        plan: gungnir_model::PlanId(decision + 500),
         endpoint,
         operator: "nobody signed in",
         role: "Operator",
@@ -182,8 +182,8 @@ fn the_approval_queue_is_silent_when_every_handoff_is_delivered() {
         at: MissionTime(110.0),
     };
     let handoffs = [HandoffRow {
-        decision: 11,
-        plan: 511,
+        decision: gungnir_model::DecisionId(11),
+        plan: gungnir_model::PlanId(511),
         endpoint: Some("battery-2"),
         operator: "operator 7",
         role: "Operator",
@@ -210,6 +210,170 @@ fn the_approval_queue_is_silent_when_every_handoff_is_delivered() {
     );
 }
 
+/// **D-61, on screen**: PN-06 names a minted plan by its short tag, the random end of the
+/// UUID, and never draws the whole identifier; PN-07 draws the whole identifier with a
+/// control that copies it, because the decision dialog is where a person quotes the plan
+/// to somebody else (GAP-130). A seed's plan number is drawn as the seed gives it.
+#[test]
+fn the_queue_draws_a_plans_tag_and_the_dialog_its_whole_identifier() {
+    use crate::panels::approval_queue::{
+        render_approval_queue, ApprovalQueueView, EmptyBecause, PendingId, QueueOrder, QueueRow,
+        TimeRemaining, Verdict,
+    };
+    use crate::panels::decision_dialog::{
+        render_decision_dialog, DecisionDialogState, DecisionDialogView, OperatorIdentity,
+    };
+    use crate::panels::identifier::COPY_LABEL;
+    use gungnir_model::PlanId;
+
+    // Two v7-shaped identifiers minted in the same millisecond: the leading digits agree
+    // and only the end tells them apart, which is why the tag is the end.
+    let minted = PlanId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_61c2);
+    let sibling = PlanId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_0b77_4e10);
+    let full = "01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2";
+    let row = |id: u128, plan_id: PlanId| QueueRow {
+        id: PendingId(id),
+        plan_id,
+        assignments: 1,
+        verdict: Verdict::RequiresHumanApproval,
+        time_remaining: TimeRemaining::Seconds(40.0),
+        pre_delegated: false,
+        may_decide: true,
+        escalated_from: None,
+    };
+    let rows = [
+        row(1, minted),
+        row(2, sibling),
+        row(3, PlanId(1183)), // a rehearsal seed's plan
+    ];
+    let queue = ApprovalQueueView {
+        rows: &rows,
+        order: QueueOrder::TimeThenPriority,
+        empty_because: EmptyBecause::NothingPending,
+        selected: None,
+        may_decide: true,
+        role: "Operator",
+        handoffs: &[],
+        now: gungnir_model::MissionTime(0.0),
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &queue));
+    assert!(
+        frame.says("#\u{2026}9f3a61c2") && frame.says("#\u{2026}0b774e10"),
+        "PN-06 did not tag its rows by the end of each identifier: {}",
+        frame.joined()
+    );
+    assert!(
+        !frame.says(full) && !frame.says("01995a3b"),
+        "PN-06 drew a whole identifier, or its timestamp end: {}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("#1183"),
+        "a seed's plan was not drawn as the seed gives it: {}",
+        frame.joined()
+    );
+
+    let under_decision = row(1, minted);
+    let dialog = DecisionDialogView {
+        row: &under_decision,
+        rationale: Err(Unavailable {
+            owner: "gungnir-assessment",
+            gap: "GAP-028",
+        }),
+        alternatives: Section::Unavailable(Unavailable {
+            owner: "gungnir-decision",
+            gap: "GAP-032",
+        }),
+        cost: Err(Unavailable {
+            owner: "gungnir-assessment",
+            gap: "GAP-028",
+        }),
+        degraded: &[],
+        engines: &["control status", "authority"],
+        caveats: &[],
+        operator: OperatorIdentity::Unattributed {
+            role: "Operator",
+            gap: "GAP-057",
+        },
+        may_accept: true,
+        may_override: true,
+    };
+    let mut state = DecisionDialogState::default();
+    let (_, frame) =
+        probe.draw(|ui| render_decision_dialog(ui, &theme::Palette::day(), &dialog, &mut state));
+    let at_id = frame.position_of(full).unwrap_or_else(|| {
+        panic!(
+            "PN-07 did not draw the whole identifier: {}",
+            frame.joined()
+        )
+    });
+    let at_copy = frame
+        .position_of(COPY_LABEL)
+        .unwrap_or_else(|| panic!("PN-07 drew no copy control: {}", frame.joined()));
+    assert_eq!(
+        at_copy,
+        at_id + 1,
+        "the copy control is not beside the identifier it copies: {}",
+        frame.joined()
+    );
+}
+
+/// D-61 on PN-20: the handoff record carries the whole decision and plan identifiers, each
+/// with a copy control, because it is the after-action account a person quotes from.
+#[test]
+fn the_handoff_record_draws_whole_identifiers_with_copy_controls() {
+    use crate::panels::audit::{render_audit, AuditView, SessionLine, SignInDraft};
+    use crate::panels::handoff::HandoffRow;
+    use gungnir_model::handoff::DeliveryState;
+    use gungnir_model::{DecisionId, MissionTime, PlanId};
+
+    let manual = DeliveryState::Manual;
+    let handoffs = [HandoffRow {
+        decision: DecisionId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_61c2),
+        plan: PlanId(0x0199_5a3b_7c2c_7a00_9b00_0000_1111_2222),
+        endpoint: None,
+        operator: "operator 7",
+        role: "Operator",
+        issued: MissionTime(100.0),
+        delivery: &manual,
+        reports: &[],
+    }];
+    let view = AuditView {
+        session: SessionLine::NobodySignedIn,
+        accounts: Ok(&[]),
+        audit: &[],
+        handoffs: &handoffs,
+        now: MissionTime(200.0),
+        can_sign_in: true,
+        can_assign_roles: true,
+    };
+    let probe = RenderProbe::new();
+    let mut draft = SignInDraft::default();
+    let (_, frame) = probe.draw(|ui| render_audit(ui, &theme::Palette::day(), &view, &mut draft));
+    assert!(
+        frame.says("Decision \u{2026}9f3a61c2"),
+        "the record's headline did not tag the decision: {}",
+        frame.joined()
+    );
+    for full in [
+        "01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2",
+        "01995a3b-7c2c-7a00-9b00-000011112222",
+    ] {
+        let at = frame
+            .position_of(full)
+            .unwrap_or_else(|| panic!("PN-20 did not draw {full}: {}", frame.joined()));
+        assert!(
+            frame
+                .texts
+                .get(at + 1)
+                .is_some_and(|t| t == crate::panels::identifier::COPY_LABEL),
+            "no copy control beside {full}: {}",
+            frame.joined()
+        );
+    }
+}
+
 /// The safety property from PN-07's module documentation, checked against draw order
 /// rather than asserted in a comment: accept comes after reject and override, so
 /// neither the reflexive click nor the reflexive keyboard traversal lands on it.
@@ -222,7 +386,7 @@ fn the_decision_dialog_draws_accept_last() {
 
     let row = QueueRow {
         id: PendingId(1),
-        plan_id: 9,
+        plan_id: gungnir_model::PlanId(9),
         assignments: 2,
         verdict: Verdict::RequiresHumanApproval,
         time_remaining: TimeRemaining::Seconds(18.0),
@@ -300,7 +464,7 @@ fn a_degraded_decision_draws_why_accept_is_shut() {
 
     let row = QueueRow {
         id: PendingId(1),
-        plan_id: 9,
+        plan_id: gungnir_model::PlanId(9),
         assignments: 1,
         verdict: Verdict::RequiresHumanApproval,
         time_remaining: TimeRemaining::NoExpiryConfigured,
@@ -793,8 +957,8 @@ fn the_panels_survive_a_narrow_slot() {
     let probe = RenderProbe::with_size(220.0, 400.0);
     let manual = DeliveryState::Manual;
     let handoffs = [HandoffRow {
-        decision: 11,
-        plan: 511,
+        decision: gungnir_model::DecisionId(11),
+        plan: gungnir_model::PlanId(511),
         endpoint: None,
         operator: "nobody signed in",
         role: "Analyst",
@@ -2478,8 +2642,8 @@ fn the_audit_panel_draws_what_was_handed_off_and_what_came_back() {
     ];
     let handoffs = [
         HandoffRow {
-            decision: 11,
-            plan: 511,
+            decision: gungnir_model::DecisionId(11),
+            plan: gungnir_model::PlanId(511),
             endpoint: Some("battery-2"),
             operator: "operator 7",
             role: "Supervisor",
@@ -2488,8 +2652,8 @@ fn the_audit_panel_draws_what_was_handed_off_and_what_came_back() {
             reports: &reports,
         },
         HandoffRow {
-            decision: 12,
-            plan: 512,
+            decision: gungnir_model::DecisionId(12),
+            plan: gungnir_model::PlanId(512),
             endpoint: None,
             operator: "nobody signed in",
             role: "Operator",
@@ -2555,8 +2719,8 @@ fn the_audit_panel_says_why_nothing_has_reported_back() {
         since: MissionTime(100.0),
     };
     let handoffs = [HandoffRow {
-        decision: 11,
-        plan: 511,
+        decision: gungnir_model::DecisionId(11),
+        plan: gungnir_model::PlanId(511),
         endpoint: Some("battery-2"),
         operator: "operator 7",
         role: "Supervisor",

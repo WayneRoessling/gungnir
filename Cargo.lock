@@ -3343,6 +3343,7 @@ dependencies = [
  "gungnir-policy",
  "serde",
  "thiserror 1.0.69",
+ "uuid",
 ]
 
 [[package]]
@@ -3522,6 +3523,7 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

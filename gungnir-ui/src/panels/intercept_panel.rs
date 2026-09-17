@@ -9,7 +9,7 @@
 
 use crate::theme;
 use egui::RichText;
-use gungnir_model::PlanView;
+use gungnir_model::{DecisionId, PlanView};
 
 /// A resource the planner declined to propose, as PN-05 lists it (DN-04 §5, GAP-030).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +107,8 @@ fn render_course(ui: &mut egui::Ui, palette: &theme::Palette, course: &Alternati
 /// One issued handoff and where its delivery stands (DN-07 §7, GAP-040).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HandoffLine<'a> {
-    pub decision: u64,
+    /// Shown by its short tag, as PN-05 shows every identifier (D-61).
+    pub decision: DecisionId,
     /// `None` is manual delivery: a radio call the operator must make.
     pub endpoint: Option<&'a str>,
     pub delivered: bool,
@@ -123,14 +124,15 @@ fn render_handoffs(ui: &mut egui::Ui, palette: &theme::Palette, handoffs: &[Hand
     ui.separator();
     ui.label(RichText::new("Handoffs").strong());
     for h in handoffs {
+        let decision = h.decision.short();
         let line = match (h.endpoint, h.delivered) {
             (None, _) => format!(
-                "decision {}: MANUAL delivery, no endpoint configured; make the call. {}",
-                h.decision, h.detail
+                "decision {decision}: MANUAL delivery, no endpoint configured; make the call. {}",
+                h.detail
             ),
-            (Some(e), true) => format!("decision {}: delivered to {e}. {}", h.decision, h.detail),
+            (Some(e), true) => format!("decision {decision}: delivered to {e}. {}", h.detail),
             (Some(e), false) => {
-                format!("decision {}: UNDELIVERED to {e}. {}", h.decision, h.detail)
+                format!("decision {decision}: UNDELIVERED to {e}. {}", h.detail)
             }
         };
         let text = RichText::new(line);
@@ -204,7 +206,9 @@ fn render_summary(ui: &mut egui::Ui, palette: &theme::Palette, plan: &PlanView) 
     ui.label(
         RichText::new(format!(
             "Plan #{} at t = {:.1} s, policy value {:.2}",
-            plan.id.0, plan.mission_time.0, plan.policy_value
+            plan.id.short(),
+            plan.mission_time.0,
+            plan.policy_value
         ))
         .color(palette.muted_text_color()),
     );

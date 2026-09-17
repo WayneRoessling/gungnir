@@ -513,11 +513,14 @@ pub fn resolve_conflict(
         {
             return Err(format!(
                 "plan {} was resolved by the arbitration rule ({}); it is not left to a person",
-                plan.0,
+                plan.short(),
                 ground_reason(a.ground)
             ));
         }
-        return Err(format!("plan {} is not a conflict of this outage", plan.0));
+        return Err(format!(
+            "plan {} is not a conflict of this outage",
+            plan.short()
+        ));
     };
     reconciliation.conflicts.remove(at);
     reconciliation.resolved.push((plan, keep_local));
@@ -528,7 +531,7 @@ pub fn resolve_conflict(
         actions::DECIDE_PLAN,
         format!(
             "reconciliation: plan {} kept {}",
-            plan.0,
+            plan,
             if keep_local {
                 "this desktop's decision"
             } else {

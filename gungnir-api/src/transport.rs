@@ -1335,7 +1335,7 @@ async fn task_sensor(
 async fn effector_report(
     State(api): State<Arc<NodeApi>>,
     ConnectInfo(peer): ConnectInfo<Peer>,
-    axum::extract::Path(decision_id): axum::extract::Path<u64>,
+    decision: Result<axum::extract::Path<DecisionId>, axum::extract::rejection::PathRejection>,
     headers: axum::http::HeaderMap,
     body: Result<Json<v2::EffectorReportRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
@@ -1363,13 +1363,24 @@ async fn effector_report(
             Err(response) => return response,
         },
     };
+    // Either written form of the identifier (D-60): the hyphenated UUID a desktop issues
+    // since GAP-130, or the decimal number an effector written before it sends. Anything
+    // else is refused in the problem shape every other refusal here takes, naming both
+    // forms, rather than with axum's plain-text rejection a client cannot read.
+    let Ok(axum::extract::Path(decision)) = decision else {
+        return problem(
+            StatusCode::BAD_REQUEST,
+            "the decision in the path is not an identifier: expected the hyphenated UUID \
+             form (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) or a decimal number",
+        );
+    };
     let Ok(Json(request)) = body else {
         return problem(StatusCode::BAD_REQUEST, "the report could not be decoded");
     };
     match api.reports.lock() {
         Ok(mut queue) => {
             queue.push(EffectorReportRecord {
-                decision: DecisionId(decision_id),
+                decision,
                 endpoint,
                 report: request.report,
             });

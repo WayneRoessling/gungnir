@@ -24,6 +24,9 @@ nalgebra.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
+# D-56 / GAP-130: the planner mints plan identifiers, so it takes the generator (D-11
+# admits `v7` only where identities are minted).
+uuid = { workspace = true, features = ["v7"] }
 gungnir-core = { path = "../gungnir-core", version = "0.1.0" }
 gungnir-coord = { path = "../gungnir-coord", version = "0.1.0" }
 gungnir-allocation = { path = "../gungnir-allocation", version = "0.1.0" }

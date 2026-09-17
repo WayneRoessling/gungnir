@@ -37,7 +37,7 @@ const PASSPHRASE: &str = "correct horse battery staple";
 
 /// A decision as a record holds it, with the operator and the role the deciding session
 /// carried.
-fn decided(plan: u64, accepted: bool, operator: &str, role: &str) -> Event {
+fn decided(plan: u128, accepted: bool, operator: &str, role: &str) -> Event {
     Event::Command(CommandEvent::Decided {
         plan: PlanId(plan),
         decision: DecisionId(plan),

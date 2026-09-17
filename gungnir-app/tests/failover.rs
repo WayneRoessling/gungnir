@@ -25,13 +25,13 @@ use gungnir_time::ReplayClockAuthority;
 
 /// A decision by operator 7 whose role was never recorded, as every decision journaled
 /// before 2026-09-16 reads.
-fn decided(plan: u64, accepted: bool) -> Event {
+fn decided(plan: u128, accepted: bool) -> Event {
     decided_as(plan, accepted, Some("7"), None)
 }
 
 /// A decision as a journal holds it, naming the operator and the role the deciding
 /// session carried when there was one.
-fn decided_as(plan: u64, accepted: bool, operator: Option<&str>, role: Option<&str>) -> Event {
+fn decided_as(plan: u128, accepted: bool, operator: Option<&str>, role: Option<&str>) -> Event {
     Event::Command(CommandEvent::Decided {
         plan: PlanId(plan),
         decision: DecisionId(plan),
@@ -43,7 +43,7 @@ fn decided_as(plan: u64, accepted: bool, operator: Option<&str>, role: Option<&s
     })
 }
 
-fn expired(plan: u64, at: f64) -> Event {
+fn expired(plan: u128, at: f64) -> Event {
     Event::Command(CommandEvent::Expired {
         plan: PlanId(plan),
         at: MissionTime(at),

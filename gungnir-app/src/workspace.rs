@@ -227,7 +227,7 @@ fn render_merge(
             ui.label(
                 egui::RichText::new(format!(
                     "  plan {}: kept {} ({}) over {} ({}): {}.",
-                    a.conflict.plan.0,
+                    a.conflict.plan.short(),
                     kept.0,
                     crate::failover::side_sentence(kept.1),
                     overruled.0,
@@ -254,7 +254,7 @@ fn render_merge(
             ui.horizontal(|ui| {
                 ui.label(format!(
                     "  plan {}: this desktop {}; the node {} ({}).",
-                    c.plan.0,
+                    c.plan.short(),
                     crate::failover::side_sentence(&c.local),
                     crate::failover::side_sentence(&c.remote),
                     crate::failover::unranked_reason(c)
@@ -272,7 +272,7 @@ fn render_merge(
         ui.label(
             egui::RichText::new(format!(
                 "  plan {}: resolved by a person, {} kept (on the record)",
-                plan.0,
+                plan.short(),
                 if *kept_local {
                     "this desktop's"
                 } else {
@@ -544,7 +544,7 @@ fn handoff_lines(state: &AppState) -> Vec<gungnir_ui::panels::intercept_panel::H
         .handoffs
         .iter()
         .map(|h| gungnir_ui::panels::intercept_panel::HandoffLine {
-            decision: h.handoff.decision.0,
+            decision: h.handoff.decision,
             endpoint: h.endpoint.as_deref(),
             delivered: h.delivery.is_delivered(),
             detail: match &h.delivery {
@@ -903,7 +903,7 @@ pub fn render_decision_dialog(
     let stale_reason;
     let denials;
     let rows_for_dialog;
-    let alternatives = if row.plan_id == state.last_plan.id.0 {
+    let alternatives = if row.plan_id == state.last_plan.id {
         denials = alternative_denials(state);
         rows_for_dialog = alternative_rows(state, &denials);
         if rows_for_dialog.is_empty() {
@@ -923,7 +923,8 @@ pub fn render_decision_dialog(
         stale_reason = format!(
             "this item was raised for plan #{}, and the options held are for plan #{}, \
              which superseded it",
-            row.plan_id, state.last_plan.id.0
+            row.plan_id.short(),
+            state.last_plan.id.short()
         );
         Section::Empty {
             reason: &stale_reason,
@@ -994,7 +995,7 @@ fn alternative_rows<'a>(
         .skip(1)
         .zip(denials)
         .map(|(course, denial)| Alternative {
-            plan_id: course.plan.id.0,
+            plan_id: course.plan.id,
             verdict: match denial {
                 Some(reason) => Verdict::Denied { reason },
                 None => Verdict::RequiresHumanApproval,

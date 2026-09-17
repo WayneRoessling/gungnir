@@ -1221,7 +1221,7 @@ fn record_effector_reports(
     now: gungnir_model::MissionTime,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for record in api.take_effector_reports() {
-        tracing::info!(decision = record.decision.0, endpoint = %record.endpoint, "effector report on the record");
+        tracing::info!(decision = %record.decision, endpoint = %record.endpoint, "effector report on the record");
         bus.publish(
             now,
             Event::Handoff(gungnir_model::events::HandoffEvent::Reported {
