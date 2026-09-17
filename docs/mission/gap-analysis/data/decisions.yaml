@@ -1578,3 +1578,26 @@
     recorded here 2026-09-17: the design it belongs to sat unmerged on a branch, and the id
     it first claimed (D-53) was taken by the GAP-067 walk in the meantime. No code exists;
     `../../signatures.md` is where the design's signature status is stated.
+
+- id: D-65
+  decision: Whether the decision path is human-owned wherever it runs
+  question: >-
+    `docs/agentic-workflow.md`'s recommend-versus-act boundary names `gungnir-policy`'s
+    verdict logic and `gungnir-command`'s approval workflow. DN-31 moved the rest of that
+    path -- the policy chain over a plan, the queue's feeding and sweep, deciding with
+    engagement opening and the one handoff builder -- out of `gungnir-app`, which the list
+    never named, into `gungnir-approval` (GAP-131), and then on to a node, which the list
+    never contemplated (GAP-132). Does the list follow the code?
+  raised_in: "GAP-131; GAP-132"
+  decider: Owner
+  unblocks: GAP-133
+  resolved: 2026-09-17
+  outcome: >-
+    **It follows the code.** `gungnir-approval` and the node loop that runs it
+    (`gungnir-node/src/approval.rs`) are human-owned, added to the list in
+    `../../../agentic-workflow.md`. The rule is about a boundary -- nothing executes an
+    intercept without a recorded human decision -- rather than about the three crates that
+    happened to hold it, so a change that moves the boundary's code moves the ownership
+    with it. Raised rather than folded into the change that moved it, on the precedent the
+    same list records for `gungnir-remote`'s identity path (GAP-060, answered 2026-09-06),
+    and answered the same way.

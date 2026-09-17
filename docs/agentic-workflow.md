@@ -72,9 +72,18 @@ record where each rule's edge turned out to be.
     the drafting agent's job is to measure what distinguishes them and frame the
     choice, not to pick.
 - The recommend-versus-act boundary: `gungnir-policy` verdict logic, geofence and
-  authority enforcement, and the `gungnir-command` approval workflow. The system must
+  authority enforcement, the `gungnir-command` approval workflow, and **the decision path
+  itself, wherever it runs**: `gungnir-approval` -- the policy chain over a plan, the
+  queue's feeding and sweep, deciding with engagement opening, the one handoff builder --
+  and the node loop that runs it (`gungnir-node/src/approval.rs`). The system must
   never execute an intercept without a recorded human decision, and no agent-written
   change may weaken that.
+  - **Answered by the owner 2026-09-17: `gungnir-approval` and the node's queue are on
+    this list** (D-65). DN-31 moved that code out of `gungnir-app`, which this list never
+    named, and on to a node, which it never contemplated; the rule is about a boundary
+    rather than about the three crates that used to hold it. Raised rather than folded
+    into the change that moved it, on the precedent the `gungnir-remote` entry below
+    records (GAP-060), and answered the same way.
   - Precedent (GAP-038): the `PolicyChain` lifetime parameter, a type-level change that
     let the chain hold the borrowing engines the crate already shipped. The rule names
     *verdict logic*, the change touched none, and it was still brought to the

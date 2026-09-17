@@ -2582,3 +2582,125 @@
   commit: 85e66e89968dfeab76cf6a758fab1b1f69e7c603
   pre_repository: false
   record: "PR #130; D-60 and D-61; docs/record/2026-09-17/identifiers-uuid-v7-and-v3-routes.md"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    DN-31 §9 row 1 confirmed as a gate: the identifier tests check the criterion. No two
+    identifiers equal across machines and restarts, an effector report reaches exactly one
+    handoff, MOE-05's join is exact across machines, and a pre-change journal replays and
+    reports unchanged.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-command/tests/identifiers.rs
+  - gungnir-intercept-service/tests/identifiers.rs
+  - gungnir-app/tests/report_reaches_one_handoff.rs
+  - gungnir-app/tests/pre_uuid_v7_journal.rs
+  - gungnir-app/tests/measures.rs
+  commit: 1e588a2526b76711e4a4700595f12edccc2db942
+  pre_repository: false
+  record: "GAP-130; DN-31 §9 row 1; docs/record/2026-09-17/identifiers-uuid-v7-and-v3-routes.md"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    DN-31 §9 row 2 confirmed as a gate: the decision path in one place. Every existing test
+    passes unchanged in what it asserts, exactly one handoff builder exists in the
+    workspace, and no configuration makes an expiry accept.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-approval
+  - gungnir-app/tests/no_execution_without_decision.rs
+  - gungnir-command/src/queue.rs
+  commit: 1e588a2526b76711e4a4700595f12edccc2db942
+  pre_repository: false
+  record: "GAP-131; DN-31 §9 row 2; docs/record/2026-09-17/decision-path-moved-to-gungnir-approval.md"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    DN-31 §9 row 10 confirmed as a gate: the desktop alone. A desktop with no node still
+    queues, decides, engages and hands off locally, and the disconnected-profile tests pass
+    with their assertions unchanged.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-app/tests/approval_gate.rs
+  - gungnir-app/tests/engagements.rs
+  - gungnir-app/tests/endpoint_delivery.rs
+  commit: 1e588a2526b76711e4a4700595f12edccc2db942
+  pre_repository: false
+  record: "GAP-131; DN-31 §9 row 10; docs/record/2026-09-17/decision-path-moved-to-gungnir-approval.md"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    The decision path is human-owned wherever it runs (D-64): `gungnir-approval` and the
+    node loop that runs it join agentic-workflow.md's recommend-versus-act boundary, on the
+    precedent that list records for gungnir-remote's identity path.
+  kind: other
+  paths:
+  - docs/agentic-workflow.md
+  - gungnir-approval
+  - gungnir-node/src/approval.rs
+  commit: 1e588a2526b76711e4a4700595f12edccc2db942
+  pre_repository: false
+  record: "D-64; GAP-131 and GAP-132 moved the path; PR #135 and PR #137 raised it"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    GAP-130's human-owned code: decision, plan and queue-item identifiers minted as UUID v7
+    in the approval queue and the decision record, written as hyphenated strings and read
+    from either form, and the interface's move to /v3 with every retired /v2 route
+    authenticating as its successor before answering 410 Gone.
+  kind: code
+  paths:
+  - gungnir-command/src/lib.rs
+  - gungnir-command/src/queue.rs
+  - gungnir-api/src/lib.rs
+  - gungnir-api/src/transport.rs
+  - gungnir-api/src/v3/mod.rs
+  commit: 85e66e89968dfeab76cf6a758fab1b1f69e7c603
+  pre_repository: false
+  record: "PR #130; D-56, D-60, D-61; docs/record/2026-09-17/identifiers-uuid-v7-and-v3-routes.md"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    GAP-131's human-owned code: the decision path moved whole into gungnir-approval -- the
+    policy chain, the queue's feeding and sweep, deciding with engagement opening, the one
+    handoff builder and the delivery schedule -- with the escalation ladder's ordering in
+    gungnir-command and the GeoService re-export in gungnir-policy.
+  kind: code
+  paths:
+  - gungnir-approval
+  - gungnir-command/src/lib.rs
+  - gungnir-command/src/queue.rs
+  - gungnir-policy/src/lib.rs
+  commit: 20cd51290347d726743d0c1ec19a9d2565fb3779
+  pre_repository: false
+  record: "PR #135; D-55, D-57, D-64; docs/record/2026-09-17/decision-path-moved-to-gungnir-approval.md"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    GAP-132's human-owned code: the node loop runs the approval queue and serves GET /v3/queue
+    and POST /v3/queue/{item}/decision, with the four pre-loop checks in the route, the
+    offering run through the whole chain for every role on the ladder, and no plan-keyed
+    decision route on /v3.
+  kind: code
+  paths:
+  - gungnir-node/src/approval.rs
+  - gungnir-api/src/lib.rs
+  - gungnir-api/src/transport.rs
+  - gungnir-api/src/v3/mod.rs
+  - gungnir-approval
+  - gungnir-command/src/lib.rs
+  - gungnir-command/src/queue.rs
+  - gungnir-policy/src/authority.rs
+  commit: 1e588a2526b76711e4a4700595f12edccc2db942
+  pre_repository: false
+  record: "PR #137; D-55, D-59, D-64; docs/record/2026-09-17/the-node-runs-the-approval-queue.md"
