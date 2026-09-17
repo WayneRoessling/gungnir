@@ -8879,3 +8879,40 @@
       Filed while building GAP-130: the pre-change journal fixture had to close its
       engagement on track-lifecycle evidence, because a close an effector reports never
       reaches the journal.
+- id: GAP-136
+  name: A rehearsal read its picture before the pipeline had reported the run
+  type: Technical
+  caps:
+  - CAP-5.2
+  layer: Service facades and wiring
+  sev: 3
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: A laydown rehearsal replayed its fixture and read `tracks()` at the last frame, but the
+    fusion pipeline runs on its own task and a replay's frames cost almost no wall clock, so the
+    number reported was partly a measurement of how busy the machine was. On CI it came back as
+    zero and failed the suite on a commit that changed only documents. The last reorder horizon was
+    never processed at all, because a pipeline only flushes it when the stream ends.
+  evidence: "`gungnir-app/src/laydown_rehearsal.rs` (`run` read `state.tracking.tracks()` straight
+    after the frame loop); `gungnir-app/tests/laydown_rehearsal.rs` (its own documentation recorded
+    `[4, 5, 4, 4, 4]` tracks for one input and put it down to the pipeline); `gungnir_fusion_async::ingest_with`
+    (\"the stream's end is a flush, not a truncation\"); CI run on 87244bc's branch"
+  action: End the run's detection stream and wait for the pipeline's own end-of-stream flush before
+    reading anything off; report nothing rather than a low number if it never arrives; and test that
+    two runs of one fixture under one laydown report the same record.
+  ref: Found by CI while building GAP-131 (`../../record/2026-09-17/a-rehearsal-that-measured-the-machine.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: 'Found by CI: the rehearsal test failed on a documents-only commit, having formed no tracks
+      at all, and passed on the same content elsewhere.'
+  - date: 2026-09-17
+    status: Closed
+    note: "Fixed. `TrackingService` gained a defaulted `finish`, so a host holding a boxed service
+      can end its stream; the rehearsal calls it and waits for the flush, bounded, and returns
+      `DidNotSettle` instead of a number if it does not come. Nine runs against a saturated machine
+      and three against an idle one all report five tracks, and a new test pins two runs to one
+      record. The outage tee's dropped `bearing_rays` and `pipeline_stats` were found next to it and
+      forwarded."
