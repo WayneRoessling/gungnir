@@ -25,38 +25,38 @@
 #
 # So the job still runs, still compares, and still prints every ratio and every
 # threshold breach. It does not fail the pull request on a number it cannot attribute.
-# **The exit is a runner, not a threshold**: set BENCH_REGRESSION_ENFORCE to 1 once this
-# runs on the self-hosted machine GAP-061 needs for gpu-fusion.yml, where the baseline
-# and the comparison come from the same hardware. Until then, a real regression is found
-# by a person reading these ratios, and this comment exists so that nobody reads the
-# green tick as evidence that performance was checked.
+# **This is advisory for good, by the owner's decision D-62 (2026-09-17), and not because
+# the work was not done.** Baseline and comparison come from one machine, the four
+# sub-nanosecond benchmarks were replaced with real work, and the noise floor was measured
+# three times: unchanged code still moved ratios by up to 1.04, and every benchmark crossed
+# 10 percent at least once. The host is the owner's workstation, so the noise is the owner
+# using it. A regression is found by a person reading these ratios, by the budget
+# assertions in gungnir-app/tests/frame_budgets.rs, and by the figures in
+# docs/performance-budgets.md -- and this comment exists so that nobody reads the green
+# tick as evidence that performance was checked.
 #
-# **The runner arrived on 2026-09-15 and enforcement did not come with it** (GAP-093).
-# This job now runs on `gungnir-rtx-5060ti`, so baseline and comparison come from one
-# machine, which is the condition the paragraph above names. Two things still stand
-# between that and `BENCH_REGRESSION_ENFORCE: "1"`, and neither is a formality:
+# **How that was settled** (GAP-093, closed 2026-09-17). The runner arrived 2026-09-15 and
+# enforcement did not come with it, for two reasons: no baseline had been written on this
+# machine, and this machine's own noise floor had never been measured, with a specific
+# reason to expect it to be wide -- an 8 P-core / 12 E-core hybrid, where a benchmark
+# scheduled onto an efficiency core runs about twice as slow, against a 10 percent
+# threshold. Both were then done, and what they returned is why D-62 reads as it does:
 #
-# 1. **No baseline exists on this machine.** Every saved baseline was written by a
-#    GitHub-hosted runner, and comparing against one of those would be the cross-machine
-#    comparison this move exists to end. The first push to main after this change writes
-#    a fresh one; until it lands the job compares nothing and says so.
+# 1. **Pinning to the performance cores did not help.** The cores were read from Windows
+#    rather than assumed, and the pinning was verified, and 8 of 12 benchmarks varied
+#    *more* pinned than unpinned. Whole runs moved together instead, which is other load
+#    on the machine and not the core class. Not adopted; the branch
+#    `claude/gate6-pcore-pinning` holds the measurement.
+# 2. **Four benchmarks were measuring the timer**, at a nanosecond or less: two
+#    placeholders left after their filters were built, and two field reads, one of an
+#    empty snapshot. Replaced with real work (a 100-cycle EKF run, a 200-target GM-PHD
+#    scan, a walk of a settled track snapshot), and the spread did not narrow.
 #
-# 2. **This machine's own noise floor has never been measured, and it has a specific
-#    reason to be wide.** The host is an 8 P-core / 12 E-core hybrid, and a benchmark
-#    scheduled onto an efficiency core runs on the order of twice as slow as the same
-#    benchmark on a performance core -- a 2x swing with no code change, against a
-#    threshold of 10 percent. Same-machine is necessary and is not by itself sufficient:
-#    a single machine that schedules a run onto a different class of core reproduces the
-#    same unattributable difference that took enforcement off the hosted runners, in a
-#    smaller package. **The measurement that settles it is cheap**: once a baseline
-#    exists, dispatch this workflow twice with no code change and read the ratios. If
-#    they sit inside a few percent, the 10 percent threshold is enforceable; if a whole
-#    set moves together, that is the core class and enforcement needs affinity pinning
-#    (Windows `start /affinity`, or criterion's own statistical comparison in place of a
-#    raw mean ratio) before it means anything.
-#
-# So this change moves the machine and leaves the exit status alone, which is the half
-# that can be done without inventing a number.
+# Three runs of identical code then gave ranges up to 1.04 in ratio, with 25 of 33 ratios
+# above 1 -- a single-sample baseline as well as a noisy host. A regression smaller than
+# about 2x cannot be told from that, so the threshold stays unenforced here and
+# `pull_request` does not come back. The measurements are recorded in
+# docs/record/2026-09-17/gate-6-noise-floor-and-core-pinning.md.
 #
 # **Not on pull requests since 2026-09-09.** While the comparison is advisory and
 # cross-machine, a per-PR run is four to five minutes of benchmarks whose ratios the
@@ -64,9 +64,9 @@
 # unread. The baseline still needs writing, so the job runs on every push to main,
 # and `workflow_dispatch` from a branch runs the lenient comparison against main's
 # baseline on demand -- which is how a person who suspects a regression gets the
-# ratios without every pull request paying for them. The `pull_request` trigger
-# comes back with BENCH_REGRESSION_ENFORCE, on the same-machine runner, when the
-# number means something. ci.yml's `benches compile` step is what proves, per pull
+# ratios without every pull request paying for them. **The `pull_request` trigger does
+# not come back** (D-62): the number does not mean enough on this host, and a different
+# machine is out of scope for this release. ci.yml's `benches compile` step is what proves, per pull
 # request, that the benchmarks still build.
 name: bench-regression
 
@@ -101,9 +101,10 @@ env:
   # Report a regression when any benchmark's p99 is slower than baseline by more than
   # this fraction. Unchanged; see the header for why the job no longer fails on it.
   BENCH_REGRESSION_THRESHOLD: "0.10"
-  # 1 makes a reported regression fail the job. The comparison is same-machine as of
-  # 2026-09-15; what it still waits on is a baseline written on that machine and a
-  # measurement of the machine's own run-to-run spread, both described in the header.
+  # 1 makes a reported regression fail the job. **It stays 0 on this runner** (D-62,
+  # 2026-09-17): the baseline and the spread were both measured, and the spread is too
+  # wide for a 10 percent threshold to mean anything here. Setting it to 1 on this host
+  # would fail pull requests on the owner's own desktop activity.
   BENCH_REGRESSION_ENFORCE: "0"
 
 jobs:

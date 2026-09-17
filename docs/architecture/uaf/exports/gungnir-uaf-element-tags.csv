@@ -176,7 +176,7 @@ CAP-5.9,registry.parent,CAP-5
 CAP-5.10,uafId,CAP-5.10
 CAP-5.10,uafKind,Capability
 CAP-5.10,registry.parent,CAP-5
-CAP-5.10,registry.coverage,GAP-093
+CAP-5.10,registry.coverage,verification-table
 CAP-6,uafId,CAP-6
 CAP-6,uafKind,Capability
 CAP-6,registry.kind,area
