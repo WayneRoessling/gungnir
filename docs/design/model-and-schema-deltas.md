@@ -37,6 +37,8 @@ is how a canonical model stops being canonical.
 | `Provenance` | Gains `peer: Option<PeerOrigin>` | Yes | DN-16 |
 | `TrackView`, `PlanView`, `MissionReport`, `Handoff`, `Anomaly` | Gain `releasability` | Yes, defaulting to `Internal` | DN-17 |
 | `CommandEvent::Decided` | Gains `decision: DecisionId` | Yes | DN-06 |
+| `CommandEvent::Decided` | Gains `role: Option<String>`, the signed-in account's role, `None` with nobody signed in | Yes, defaulted, so an older journal reads | D-53 (2026-09-16): the arbitration rule needs a role to rank |
+| `LinkEvent` | Gains `ConflictArbitrated { plan, kept_local, ground, local, remote, at }` | Yes | D-53: the rule's verdict on a reconciliation conflict, distinct from a person's `ConflictResolved` |
 | `CommandEvent` | Gains `Expired` and `Escalated` variants | Yes | DN-10 |
 | `Event` | Gains `Warning`, `Engagement`, `SensorTask`, `Handoff`, `Review`, `Handover` variants | Yes | DN-03, DN-06, DN-07, DN-11, DN-20, DN-21 |
 | `Event` | Gains a `Requirement` variant | Yes | **Not in DN-11 §6.** Added 2026-09-05 with GAP-005 because CAP-2.12's method is an MT-08 replay and a lifecycle that never reaches the journal cannot be replayed. DN-11 amendment 1 (a) |
@@ -209,6 +211,15 @@ endpoint, report, at }` and the contract `POST /v2/handoffs/{decision_id}/report
 `AssetExposure` gained `time_to_closest_approach_s`; the catalogue gained
 `gungnir.ml.classification-rows` version 1 (`gungnir_interop::dataset`);
 `RemoteEndpoint` gained `tls: LinkTls`.
+
+**Landed 2026-09-16, the GAP-067 walk**: `gungnir_model::arbitration` holds D-03's rule
+over the facts it reads (`ArbitrationFacts`, `Verdict`, `ArbitrationGround`, `ConflictSide`,
+`SideOutcome`), and `Resolution` moved there from `gungnir-collab`, which re-exports both,
+because no binary depends on `gungnir-collab` and the desktop's reconciliation applies the
+rule (D-53). `DecisionRecord` in `gungnir-command` gained `role`, and
+`ApprovalWorkflow::decide` takes it; `gungnir_resilience::DecisionConflict` carries both
+sides as `ConflictSide` in place of two booleans. `SCHEMA_VERSION` is unchanged: every
+addition reads an older journal.
 
 `SnapshotResponse` gains `assets`, `predictions`, `engagements`, `requirements`,
 `hazards`, and `control_status`, and is filtered per caller by DN-17. The filtering is a

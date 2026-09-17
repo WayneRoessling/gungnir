@@ -5814,37 +5814,12 @@
     testing are not gates.
   evidence: "`verification-capability-table.md` §2; `docs/architecture.md`"
   action: >-
-    Walk §2 row by row with the owner: for each row whose test exists, confirm the
-    criterion is the one the test checks (D-16), mark it a gate, and move the status;
-    interface conformance waits on GAP-063, security testing on GAP-057's node half.
-    **The sheet for that walk is prepared 2026-09-15**
-    (`../../verification-capability-table.md`, "The walk sheet"): all 44 §2 rows grouped
-    by what the walk owes each one -- 34 candidates to gate by reading their assertions,
-    **6 where the test demonstrably does not check the criterion**, 3 with nothing to
-    gate (one of them unbuilt rather than untested: `gungnir-viewport3d`'s SSE and
-    tileset traversal both return `NotImplemented`), and 1 that gates on the GPU
-    dispatch this register already owes as GAP-024 item (3). Both blockers this action
-    names have since closed -- interface conformance with GAP-063 under D-44, and
-    GAP-057's node half on 2026-09-10 -- so the walk is unblocked in full rather than in
-    part. The six mismatches are the substance: the snapshot p99 is measured and
-    deliberately not asserted, **nothing anywhere measures an egui pass** though this
-    table names a file for it, the CPU ICP asserts a stronger property in different
-    terms, `gungnir-sensor-management`'s coverage *accuracy* is untested while its modes
-    are covered, `gungnir-mission` is tested on synthetic envelopes against a row that
-    names a recording that does not exist, and the cross-layer interop row's STANAG
-    assertion changed meaning the day 4676 was descoped. **Group B is walked and settled
-    2026-09-15** (`../../../ARCHITECTURE.md` §10 item 132): four rows gated (the
-    snapshot p99 and the per-frame budget beside it, the CPU ICP on its own two
-    quantities, `gungnir-mission` on synthetic envelopes, and the cross-layer interop
-    row on an amended criterion), one row split (`gungnir-sensor-management`'s
-    coverage-accuracy criterion was filed against a crate whose coverage type is a
-    circle and moved to `gungnir-analytics`), and the `gungnir-ui` egui-pass budget
-    **measured for the first time since D-16 agreed it** -- nothing anywhere had ever
-    timed an egui pass, and the table named a file that times something else. It stays
-    ungated pending the owner's reading of the figure (p99 386 microseconds release
-    against 8 ms). What is left of this gap is Group A's 34 rows, which are reading
-    rather than decisions, and Group C's three, which need only a confirmation that they
-    stay Draft.
+    Walked. Group B's six rows were settled on 2026-09-15
+    (`../../record/2026-09-15/132.md`) and every other row with a test on 2026-09-16
+    (`../../record/2026-09-16/gap-067-walk.md`): which rows are gates is in
+    `../../verification-capability-table.md` §2 and the owner's confirmations in
+    `../../signatures.md`. What operational-readiness verification still lacks is owned
+    by the gaps the walk filed, GAP-109 to GAP-129.
   ref: "`docs/architecture.md`"
   history:
   - date: 2026-09-15
@@ -5867,7 +5842,16 @@
       is a judgement per row, not a script. The crate statuses in `docs/architecture.md`
       were refreshed for the crates this day touched; the row-by-row promotion is the
       remaining work.
-
+  - date: 2026-09-16
+    status: Closed
+    note: >-
+      **Closed 2026-09-16: the walk is done.** Every §2 row with a test was put to the
+      owner, one question a row (`../../record/2026-09-16/gap-067-walk.md`). Thirty-two
+      rows are gated, three of them the checked halves of split rows, and eleven are
+      held, each on a gap of its own among GAP-109 to GAP-129; the SSE and tileset row
+      is unbuilt and stays engineering. The owner's confirmations are entries in
+      `../../signatures.md`, and D-53 and D-54 record the two rulings the walk needed.
+      The table of tests and the walk sheet moved into the record verbatim.
 - id: GAP-090
   name: The friendly set is only the friendlies a sensor detected
   type: Technical
@@ -8608,3 +8592,73 @@
     note: >-
       Filed by the GAP-067 walk: enforcing the operator on a tasking concurrence found
       that neither desktop function checks the permission its audit entry names.
+
+- id: GAP-128
+  name: PN-14 cannot apply an edited baseline on its first apply
+  type: Technical
+  caps: [CAP-5.6]
+  layer: "Productization: sustainment"
+  sev: 3
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    PN-14 reloads its candidate from the baseline file and applies it through the same
+    store. A store that has applied nothing takes the revision in force from that file,
+    which is the candidate itself, so the first apply of an edited baseline is refused
+    as `RevisionNotAdvanced` whatever revision the edit carries.
+  evidence: >-
+    `gungnir-config/src/lib.rs` (`FileConfigStore::apply`: the revision in force is what
+    the store applied, or else what is on disk); `gungnir-app/src/sustainment.rs`
+    (`ConfigEditorState::reload` and `apply`); found with a probe during the GAP-067
+    walk's arbiter build
+  action: >-
+    Compare the candidate with the revision the desktop is running rather than with the
+    file the candidate was read from, and test that an edited baseline with an advanced
+    revision applies from PN-14 on its first apply while an unadvanced one is refused.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, whose arbiter build found that PN-14 refuses the first
+      apply of any edited baseline.
+
+- id: GAP-129
+  name: >-
+    No decision reaches a node's record, so reconciliation never meets a conflict
+  type: Technical
+  caps: [CAP-5.4]
+  layer: Deployment and API
+  sev: 3
+  effort: M
+  target: I3
+  owner: Owner
+  deps: []
+  impact: >-
+    A node runs no approval queue and its decision route refuses with 501, so every
+    decision stays on the desktop that took it and a node's history never holds one.
+    Reconciliation after an outage therefore finds no conflicting decision outside the
+    tests that place one on a node's record, D-03's rule and PN-18's person resolution
+    have nothing to resolve in a deployment, and two desktops sharing a node share no
+    decision record.
+  evidence: >-
+    `gungnir-api/src/transport.rs` (`refuse_decision`: 501, "this node runs no approval
+    queue"); `gungnir-app/tests/failover_e2e.rs` publishes the node's decision onto its
+    record directly; the cross-layer Disconnected reconciliation row, gated 2026-09-16
+  action: >-
+    Decide whether a desktop's decisions reach its node's record -- forwarded like its
+    detections, or through an approval queue on the node -- which would give
+    reconciliation a conflict to find and several desktops one record; or record that
+    decisions stay on the desktop and re-scope the reconciliation row to what can
+    conflict.
+  ref: >-
+    The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`)
+  history:
+  - date: 2026-09-16
+    status: Open
+    note: >-
+      Filed by the GAP-067 walk, whose arbiter build found that no node records a
+      decision, so the conflicts it resolves arise only in tests.

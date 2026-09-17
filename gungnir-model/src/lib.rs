@@ -15,6 +15,9 @@
 //! contract (ARCHITECTURE.md §7.2).
 
 pub mod anomaly_settings;
+/// D-03's authority arbitration rule and the conflict vocabulary it reads, here rather than
+/// in `gungnir-collab` so both of its callers reach it without a new edge (GAP-050).
+pub mod arbitration;
 pub mod assets;
 pub mod effectors;
 pub mod events;

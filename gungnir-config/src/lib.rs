@@ -3690,8 +3690,6 @@ impl FileConfigStore {
 
 impl ConfigStore for FileConfigStore {
     fn load(&self) -> Result<ConfigBaseline, ConfigError> {
-        let text =
-            std::fs::read_to_string(&self.path).map_err(|e| ConfigError::Io(e.to_string()))?;
         // The schema version is read before anything else in the file. A baseline from a
         // newer build is written in a schema this build does not know, and a field whose
         // shape changed would fail to parse -- reported as `Encoding`, when the true
@@ -3703,6 +3701,8 @@ impl ConfigStore for FileConfigStore {
         struct SchemaVersionOnly {
             version: u32,
         }
+        let text =
+            std::fs::read_to_string(&self.path).map_err(|e| ConfigError::Io(e.to_string()))?;
         if let Ok(SchemaVersionOnly { version }) = serde_json::from_str(&text) {
             if version > SUPPORTED_CONFIG_VERSION {
                 return Err(ConfigError::VersionTooNew {

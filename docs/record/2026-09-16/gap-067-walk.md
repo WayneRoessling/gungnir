@@ -5,7 +5,11 @@ test, one row at a time, and GAP-067 closes with it.** Group B's six rows were s
 2026-09-15 (item 132). This sitting took the rest of the walk sheet: Group A's thirty-four
 rows, Group C's three, Group D's one, the four Group E rows that name a test, the Group E
 concurrence row whose blocker had expired, and the egui budget Group B left for the owner
-to read. **Thirty-two rows gated** -- three of them the checked halves of rows split so that the unchecked half could wait -- and **eleven held**, each on a gap filed today. Group C's SSE and tileset row is unbuilt rather than untested, and stays engineering. Nineteen gaps were filed, GAP-109 to GAP-127, and two decisions, D-53 and D-54. GAP-067 closes.
+to read. **Thirty-two rows gated** -- three of them the checked halves of rows split so
+that the unchecked half could wait -- and **eleven held**, each on a gap filed today.
+Group C's SSE and tileset row is unbuilt rather than untested, and stays engineering.
+Twenty-one gaps were filed, GAP-109 to GAP-129, and two decisions, D-53 and D-54. GAP-067
+closes.
 
 ## How the walk ran
 
@@ -28,13 +32,15 @@ hold the row on a gap.
 
 **"Write the test, then gate" meant exactly that.** A row the owner gated on a test that
 did not yet exist was gated only when the test was written in this change and passed.
-Every one of those tests passed in the end, and none by weakening: three passed only after the defect it found was fixed (below), and one criterion was checked more strictly than the first draft of its test did.
+Every one of those tests passed in the end, and none by weakening: three passed only after
+the defect it found was fixed (below), and one criterion was checked more strictly than
+the first draft of its test did.
 
-**The owner's signatures are in the ledger, not here.** Every row the owner gated or
-whose criterion the owner amended is an entry in [`../../signatures.md`](../../signatures.md) dated
-2026-09-16, naming `5ea5e09` -- the `main` the evidence was read against -- and this item.
-A row held is not a signature and has no entry; the gap it waits on says what it waits
-for.
+**The owner's signatures are in the ledger, not here.** Every row the owner gated or whose
+criterion the owner amended is an entry in [`../../signatures.md`](../../signatures.md)
+dated 2026-09-16, naming `5ea5e09` -- the `main` the evidence was read against -- and this
+item. A row held is not a signature and has no entry; the gap it waits on says what it
+waits for.
 
 ## What each row came to
 
@@ -53,7 +59,7 @@ row stays Draft on the gap named.
 | `gungnir-command` Decision recording | No test counted records per decision or checked a failed decide | Write the test, then gate | `every_decide_appends_exactly_one_record_carrying_that_decision`. **Gated** |
 | `gungnir-decision` Alternatives and what-if | The table of tests named `lib.rs`, whose tests touch neither `recommend` nor `what_if`; the evidence is in `alternatives.rs` | Fix the pointer and gate | **Gated** on `alternatives.rs` and `gungnir-app/tests/alternatives.rs` |
 | `gungnir-collab` Authority arbitration; stale envelopes | The expiry rule (DN-10 §9) is built and tested but missing from the criterion | Amend and gate | Criterion and method amended to put the expiry rule first. **Gated** |
-| The desktop's authority role | `AppState.role` is fixed at `Operator`; signing in never changes it, and a test pinned that | File a gap -- superseded in batch 11 by building it here | The role follows the signed-in account (below) |
+| The desktop's authority role | `AppState.role` is fixed at `Operator`; signing in never changes it, and a test pinned that | File a gap; then, once the arbiter needed it, build it here instead | The role follows the signed-in account (below) |
 | `gungnir-config` Validation and version gating | "Nothing applied" was never asserted | Write the test, then gate | Three tests; and two defects the tests' author found and this change fixed: `load` parsed the whole file before reading its version, so a newer schema that reshaped a known field read as `Encoding`, and `validate` judged security before the version. **Gated** |
 | `gungnir-modelops` Promotion gating and rollback | The promoted default's configuration was never compared with the one the baseline carried | Write the assertion, then gate | Asserted in `gungnir-app/tests/governance.rs` and in `gungnir-modelops`. **Gated** |
 | `gungnir-workflow` Role layouts; alert lifecycle | Only `Analyst`'s docked panels and the history's length were asserted | Write the assertions, then gate | Both analyst roles may not open the approval queue; the history is compared entry by entry. **Gated** on the crate's own types |
@@ -82,13 +88,13 @@ row stays Draft on the gap named.
 | `gungnir-assessment` Risk scoring | The score reads range and whether a track is closing, never time to impact | Hold, file a gap | Held on GAP-124 |
 | `gungnir-observability` Health and alert correlation | Health is set once, never toggled; neither binary uses `SnapshotHealthMonitor` | Hold, file a gap | Held on GAP-125 |
 | `gungnir-replay` Deterministic playback | Only sequence numbers compared; no Scenario 1 recording exists | Amend the data source, compare envelopes, gate | Data source corrected. Two replays of a journal of non-dyadic track envelopes equal each other and the journal, whole. **Gated** |
-| Cross-layer Disconnected reconciliation | Conflicts reported, never resolved by the rule D-03 locked; a person resolves every one; "every envelope once" unasserted | Build D-03's rule into reconciliation (against the recommendation); a person resolves what the rule cannot rank; build the role on decisions and the desktop's role here | @@RECONCILE@@ |
+| Cross-layer Disconnected reconciliation | Conflicts reported, never resolved by the rule D-03 locked; a person resolves every one; "every envelope once" unasserted | Build D-03's rule into reconciliation (against the recommendation); a person resolves what the rule cannot rank; build the role on decisions and the desktop's role here | Built. `gungnir_model::arbitration` holds D-03's rule over the facts it reads, `RoleRankArbiter` delegates to it unchanged, and `reconcile` finds an expiry against a decision as well as two decisions that disagree. The desktop resolves every conflict the rule can rank as soon as the reconciliation is computed, journaling `LinkEvent::ConflictArbitrated` and auditing nobody's `plan.decide`; PN-18 offers a person only what the rule cannot rank, and the switch back waits for that person. Criterion, method and data source amended. **Gated**, with a limit the row states: no node records a decision, so outside tests there is no conflict to resolve (GAP-129) |
 | `gungnir-config` Laydown validation | Refusal 4's resource half untested; refusal 1b's naming check vacuous; refusals 1a and 5 named less than the criterion asks | Fix the messages, write the tests, gate | Refusal 1a lists the laydowns; refusal 5 names each placement with a non-finite coordinate; the tests assert them. **Gated** |
 | `gungnir-ui`, `gungnir-app` PN-16 laydown options table | The alternative's difference checked only by sign; 2 of 5 painted numbers checked; the "current" check vacuous | Write the assertions, then gate | The alternative's difference equals its figure less the current row's, exactly; the three painted strings are asserted, and the vacuous check replaced. **Gated** |
 | `gungnir-tracking-service` Sensor-position resolution | Polar placement only on axis-aligned inputs; the vertical axis held to 1.0 m in one test and not at all in the binaries | Write the tests, then gate | An off-axis polar report against the closed form; `up` within 0.5 m of the WGS84 reference, -0.225 m by two independent derivations, in the service and both binaries; and a polar report through the live service placed where `place_polar` puts it. **Gated.** At this geometry 0.5 m cannot tell -0.225 m from zero, so the row does not test the earth's curvature; the §1 `coord` row does |
 | `gungnir-workflow` Collection requirements and tasking concurrence | The operator-session reason expired; tasking still succeeded with nobody signed in; no MT-08 replay | Enforce the operator, build the replay, gate (against the recommendation) | `TaskingCase::concur` refuses a concurrence naming nobody, and the desktop checks for an operator before it issues a command (D-54, DN-11 amendment 3). TT-08's sample events script MT-08's first three steps, and `requirements_replay.rs` replays them and reads the requirements back from the journal. **Gated** |
 | The walk's two sheets | Their counts go stale as rows move | Move both here | Below |
-| New gaps | About eighteen findings | One gap per finding | GAP-109 to GAP-125 |
+| New gaps | About eighteen findings at the time of the question | One gap per finding | Twenty-one, GAP-109 to GAP-129, with the ones this change's own builds turned up |
 
 ## What the walk found that no criterion asked about
 
@@ -111,13 +117,22 @@ counter. It now asserts what is true.
 **The desktop's authority role never followed sign-in.** `AppState.role` was fixed at
 `Operator`, and a test pinned that signing in left it so, while the node authorized every
 call on the caller's token. The owner first had it filed as a gap, then had it built here,
-because D-03's rule cannot rank a decision whose role was never recorded (D-53).
-@@ROLE_BUILD@@
+because D-03's rule cannot rank a decision whose role was never recorded (D-53). Built
+here: `AppState::role` is the signed-in account's role while one is signed in and the
+selected one otherwise; a decision records the session's role, and none with nobody signed
+in; the baseline-apply audit entry names the operator; and PN-07, which said nobody was
+signed in while an operator was being recorded, now says who is.
 
 **D-03's rule was locked and never applied.** `RoleRankArbiter` was gated today on its own
-tests, and nothing called it: reconciliation reported conflicts and a person resolved every
-one. The owner chose to build the rule into reconciliation rather than record the practice
-(D-53). @@ARBITER_BUILD@@
+tests, and nothing called it: reconciliation reported conflicts and a person resolved
+every one. The owner chose to build the rule into reconciliation rather than record the
+practice (D-53). The rule lives in `gungnir_model::arbitration` rather than in
+`gungnir-collab`, because no binary depends on `gungnir-collab` and adding that edge would
+have been a decision of its own; `gungnir-collab` re-exports it, and a test checks that
+`RoleRankArbiter` decides every role pair as it did before. The build also found that a
+node runs no approval queue, so no decision reaches a node's record and reconciliation
+meets no conflict outside tests (GAP-129), and that PN-14 refuses the first apply of an
+edited baseline (GAP-128).
 
 **The concurrence row's reason had expired.** DN-11 amendment 1 b allowed a concurrence
 naming nobody because no build had an operator session; sign-in shipped, and tasking went on
@@ -142,7 +157,8 @@ carried envelopes (GAP-121). The retention purge is unbuilt, and `unbuilt.md` ca
 because nothing refuses (GAP-122). The risk score reads range and whether a track closes,
 never time to impact (GAP-124). The desktop's `decide` and `task` name their permission on
 the audit entry and check it nowhere (GAP-127). The rest are the held rows' own gaps:
-GAP-109, GAP-110, GAP-112 to GAP-114, GAP-116 to GAP-120 and GAP-125.
+GAP-109, GAP-110, GAP-112 to GAP-114, GAP-116 to GAP-120 and GAP-125; GAP-128 and
+GAP-129 came out of the arbiter build, above.
 
 **Stale text corrected on the way.** `conformance.rs` still called STANAG 4676 blocked on an
 owner decision a day after D-44 descoped it; `tasking.rs` and `sensor_control.rs` said no
@@ -152,6 +168,8 @@ function; `gungnir-data`'s module doc listed three formats as `NotImplemented` t
 two layout citations named the wrong section of `information-architecture.md`; two doc
 comments sat on the wrong item; and `testdata/asterix/SOURCE.md`, `testdata/misb/SOURCE.md`
 and `design/external-standards.md` each misstated a count or a precision.
+`ARCHITECTURE.md` §8.3 had the node arbitrating decisions it never records, and §8.4 had
+`StoreAndForwardQueue` carrying envelopes and the rule already resolving conflicts.
 
 **What this change leaves for the owner to decide.** `scenarios.yaml` gained TT-08's script
 without a new `version`: bumping it re-stamps all ten sample sets and changes the content
@@ -159,6 +177,9 @@ hash of any dataset built from them, which is a choice rather than a correction.
 forward of a store-and-forward outbox is an ignored test at six and a half minutes.
 `gungnir-fuzz/Cargo.lock` predates the fuzz crate's `rand` dependencies, which the nightly
 does not notice because it does not build `--locked`.
+GAP-129 is a question only the owner can answer: whether a desktop's decisions should
+reach its node's record at all, which is what would give reconciliation, and D-03's rule,
+a conflict outside a test. DN-23 §8's attribution row, a pass criterion, predates D-54.
 
 ## Where the walk's own sheets went
 

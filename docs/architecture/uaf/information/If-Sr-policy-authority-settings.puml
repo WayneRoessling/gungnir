@@ -27,6 +27,36 @@ class "CooperativeSettings" as CooperativeSettings <<InformationElement>> {
   lost_after_s: f64
   max_separation_m: f64
 }
+enum "Resolution" as Resolution <<InformationElement>> {
+  KeepFirst
+  KeepSecond
+}
+class "ArbitrationFacts" as ArbitrationFacts <<InformationElement>> {
+  expiry: bool
+  rank: Option<u8>
+  mission_time: MissionTime
+}
+enum "ArbitrationGround" as ArbitrationGround <<InformationElement>> {
+  DecisionOverExpiry
+  HigherRole
+  EarlierOnEqualRank
+  SameTimeOnEqualRank
+}
+class "Verdict" as Verdict <<InformationElement>> {
+  keep: Resolution
+  ground: ArbitrationGround
+}
+enum "SideOutcome" as SideOutcome <<InformationElement>> {
+  Accepted
+  Rejected
+  Expired
+}
+class "ConflictSide" as ConflictSide <<InformationElement>> {
+  outcome: SideOutcome
+  operator: Option<String>
+  role: Option<String>
+  at: MissionTime
+}
 enum "WeaponsControlStatus" as WeaponsControlStatus <<InformationElement>> {
   Free
   Tight
@@ -101,6 +131,11 @@ AnomalySettings --> CooperativeSettings : cooperative
 AnomalySettings --> FeedSettings : feed
 AnomalySettings --> KinematicEnvelope : kinematics
 AnomalySettings --> LoiteringSettings : loitering
+ArbitrationFacts --> MissionTime : mission_time
+Verdict --> ArbitrationGround : ground
+Verdict --> Resolution : keep
+ConflictSide --> MissionTime : at
+ConflictSide --> SideOutcome : outcome
 ControlStatusSettings --> EffectorLayer : by_layer
 ControlStatusSettings --> WeaponsControlStatus : by_layer
 AuthorityRule --> EffectorLayer : layer

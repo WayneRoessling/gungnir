@@ -30,13 +30,14 @@
 //! [`tests::no_state_of_this_dialog_enables_accept_without_a_deliberate_act`] searches
 //! the state space for a combination that enables accept without an acknowledgement.
 //!
-//! # The operator is not identified
+//! # Who the decision is recorded against
 //!
-//! There is no authenticated operator session (GAP-057), so the `DecisionRecord` this
-//! dialog produces carries `operator_id: None`. That is correct rather than a gap to
-//! paper over -- `gungnir_command::queue::expiry_record` takes the same position, that
-//! a false operator is worse than a null -- but a decision surface must say it out
-//! loud, so [`OperatorIdentity`] is a required field and is drawn every time.
+//! A signed-in operator's identity and role go into the `DecisionRecord` this dialog
+//! produces; with nobody signed in the record carries neither, which is correct rather
+//! than a gap to paper over -- `gungnir_command::queue::expiry_record` takes the same
+//! position, that a false operator is worse than a null (DN-23 §5 rule 1). Either way a
+//! decision surface must say it out loud, so [`OperatorIdentity`] is a required field
+//! and is drawn every time.
 
 use crate::panels::approval_queue::{QueueRow, TimeRemaining, Verdict};
 use crate::panels::unavailable::{draw_unavailable, Section, Unavailable};

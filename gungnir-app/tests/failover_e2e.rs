@@ -6,8 +6,9 @@
 //! cross-layer row of `docs/verification-capability-table.md` §2): a desktop signed in
 //! to a real node over the real client, the node goes down, the desktop falls back and
 //! decides on its own, the node comes back on the same address, and the reconciliation
-//! runs over the node's real `GET /v2/history`, is resolved by a person, and the switch
-//! back is theirs.
+//! runs over the node's real `GET /v2/history`, drops the duplicate the two records share,
+//! and settles the conflicting decision by D-03's arbitration rule with no person asked
+//! (the GAP-067 walk, 2026-09-16), after which the switch back needs nobody's resolution.
 //!
 //! Wall-clock by necessity: the link judges silence by when it last heard the node, so
 //! the outage is a real `HEARTBEAT_TIMEOUT` of silence. One test, a dozen seconds.
@@ -16,28 +17,33 @@ use gungnir_api::transport::{AccountTokenAuthority, NodeApi};
 use gungnir_api::v2::SnapshotResponse;
 use gungnir_app::failover::{self, ReconciliationView};
 use gungnir_app::state::AppState;
-use gungnir_app::{session, update};
+use gungnir_app::{decisions, session, update};
+use gungnir_command::{ApprovalWorkflow, OperatorDecision, Submission};
 use gungnir_config::{
     AuthenticationConfig, AuthenticationProvider, BackendConfig, ConfigBaseline, SecurityConfig,
 };
 use gungnir_eventing::{Envelope, Event};
-use gungnir_model::events::{CommandEvent, VerdictSummary};
-use gungnir_model::{DecisionId, MissionTime, PlanId, SystemHealth};
+use gungnir_model::arbitration::ArbitrationGround;
+use gungnir_model::events::{CommandEvent, LinkEvent, VerdictSummary};
+use gungnir_model::{DecisionId, EffectorLayer, MissionTime, PlanId, PlanView, SystemHealth};
 use gungnir_remote::link::HEARTBEAT_TIMEOUT;
 use gungnir_security::{
-    hash_passphrase, Account, InMemoryAccountStore, OperatorId, Role, TokenIssuer,
+    hash_passphrase, Account, AuditLog, InMemoryAccountStore, OperatorId, Role, TokenIssuer,
 };
 use gungnir_ui::panels::audit::{SessionAction, SignInDraft};
 use std::sync::Arc;
 
 const PASSPHRASE: &str = "correct horse battery staple";
 
-fn decided(plan: u64, accepted: bool) -> Event {
+/// A decision as a record holds it, with the operator and the role the deciding session
+/// carried.
+fn decided(plan: u64, accepted: bool, operator: &str, role: &str) -> Event {
     Event::Command(CommandEvent::Decided {
         plan: PlanId(plan),
         decision: DecisionId(plan),
         accepted,
-        operator: Some("7".into()),
+        operator: Some(operator.into()),
+        role: Some(role.into()),
         verdict: VerdictSummary::RequiresHumanApproval,
         rationale: (!accepted).then(|| "no".to_string()),
     })
@@ -134,6 +140,9 @@ fn until(state: &mut AppState, what: &str, seconds: f64, mut check: impl FnMut(&
 }
 
 #[test]
+// One outage told start to finish against a real node: splitting it would hide the order
+// the record is built in, which is what the test is about.
+#[allow(clippy::too_many_lines)]
 fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
     // A fixed loopback port, so the node can come back on the address the desktop has.
     let addr: std::net::SocketAddr = {
@@ -143,7 +152,7 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
     let api = node_api();
     let node = serve(addr, Arc::clone(&api));
     let (mut state, dir) = desktop(&format!("http://{addr}"));
-    state.set_role(Role::Supervisor);
+    let events = state.events.subscribe();
 
     // Sign in: DN-23 §5, the connected profile's link is established by the sign-in.
     let mut draft = SignInDraft {
@@ -157,6 +166,8 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
         "{:?}",
         state.alerts
     );
+    // The desktop acts in the account's role; nothing had to select it.
+    assert_eq!(state.role(), Role::Supervisor);
     until(&mut state, "the link to come up", 10.0, |s| {
         s.link
             .as_ref()
@@ -201,7 +212,7 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
     api.publish_event(Envelope {
         seq: 1,
         mission_time: MissionTime(50.0),
-        event: decided(5, true),
+        event: decided(5, true, "7", "Supervisor"),
     })
     .expect("published");
     until(&mut state, "the node's envelope to arrive", 5.0, |s| {
@@ -218,16 +229,58 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
     );
     assert!(state.link.is_some(), "the link keeps retrying");
 
-    // A decision taken here during the outage, the other way.
-    let now = state.clock.now();
-    update::publish(&mut state, now, decided(1, false));
+    // A decision taken here during the outage, the other way, through the desktop's own
+    // workflow: the record names the signed-in operator and the role their session
+    // carries, which is what lets the rule rank it below.
+    let submitted = state.clock.now();
+    let pending = state
+        .approvals
+        .submit_for_approval(Submission {
+            plan: PlanView {
+                id: PlanId(1),
+                ..PlanView::default()
+            },
+            verdict: gungnir_policy::PolicyVerdict::RequiresHumanApproval,
+            submitted,
+            layer: EffectorLayer::Point,
+            priority: 0.0,
+            role: "Supervisor".into(),
+        })
+        .expect("queued");
+    decisions::decide(
+        &mut state,
+        gungnir_ui::panels::approval_queue::PendingId(pending.0),
+        OperatorDecision::Rejected {
+            reason: "friendly airliner".into(),
+        },
+    )
+    .expect("decided");
+    let local = state.approvals.records().last().expect("recorded").clone();
+    assert_eq!(
+        (local.operator_id.as_deref(), local.role.as_deref()),
+        (Some("7"), Some("Supervisor"))
+    );
     // Meanwhile the node's record moved on without this desktop: another desktop's
-    // decision on the same plan reached it. The api outlives its transport, which is
-    // what the system of record does.
+    // operator decided the same plan and it reached the node. **A node runs no approval
+    // queue** (`POST /v2/plans/{plan_id}/decision` refuses, `gungnir-api`'s transport), so
+    // a decision reaches a node's record only as another desktop recorded it -- with the
+    // role that desktop's signed-in session carried, here an Operator's. The api outlives
+    // its transport, which is what the system of record does.
     api.publish_event(Envelope {
         seq: 2,
-        mission_time: MissionTime(now.0),
-        event: decided(1, true),
+        mission_time: local.mission_time,
+        event: decided(1, true, "9", "Operator"),
+    })
+    .expect("published");
+    // And one envelope both records hold at the same moment, as the same decision does
+    // when it reached both: the merge keeps it once.
+    let shared_at = state.clock.now();
+    let shared = decided(3, true, "7", "Supervisor");
+    update::publish(&mut state, shared_at, shared.clone());
+    api.publish_event(Envelope {
+        seq: 3,
+        mission_time: shared_at,
+        event: shared,
     })
     .expect("published");
 
@@ -248,17 +301,58 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
             can_switch_back,
             ..
         } => {
-            assert!(
-                r.conflicts.iter().any(|c| c.plan == PlanId(1)),
-                "the two decisions on plan 1 conflict: {r:?}"
+            assert_eq!(r.remote, 2, "the node's two envelopes of the outage: {r:?}");
+            assert_eq!(r.duplicates_dropped, 1, "{r:?}");
+            assert_eq!(r.merged, r.local + r.remote - 1, "{r:?}");
+            assert!(r.conflicts.is_empty(), "left to a person: {r:?}");
+            let settled: Vec<(PlanId, bool, ArbitrationGround)> = r
+                .arbitrated
+                .iter()
+                .map(|a| (a.conflict.plan, a.kept_local, a.ground))
+                .collect();
+            assert_eq!(
+                settled,
+                vec![(PlanId(1), true, ArbitrationGround::HigherRole)],
+                "this desktop's Supervisor outranks the node's Operator: {r:?}"
             );
-            assert!(!can_switch_back, "not until every conflict is resolved");
+            assert!(can_switch_back, "the rule left nothing for a person");
         }
         other => panic!("{other:?}"),
     }
-    failover::resolve_conflict(&mut state, PlanId(1), true).expect("resolved by a person");
-    failover::switch_back(&mut state).expect("switched back");
+    assert!(
+        !state
+            .audit
+            .entries()
+            .iter()
+            .any(|e| e.detail.contains("reconciliation")),
+        "the rule's verdict was audited as somebody's decision"
+    );
+    failover::switch_back(&mut state).expect("switched back with no person resolving");
     assert!(matches!(state.backend, BackendConfig::Remote { .. }));
+    let bus: Vec<Envelope> = events.try_iter().collect();
+    let verdicts: Vec<(PlanId, bool)> = bus
+        .iter()
+        .filter_map(|env| match &env.event {
+            Event::Link(LinkEvent::ConflictArbitrated {
+                plan, kept_local, ..
+            }) => Some((*plan, *kept_local)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        verdicts,
+        vec![(PlanId(1), true)],
+        "the verdict is on the record"
+    );
+    assert!(
+        !bus.iter()
+            .any(|env| matches!(env.event, Event::Link(LinkEvent::ConflictResolved { .. }))),
+        "the rule's verdict was recorded as a person's"
+    );
+    assert!(bus.iter().any(|env| matches!(
+        env.event,
+        Event::Link(LinkEvent::SwitchedBack { conflicts: 1, .. })
+    )));
     drop(node);
     let _ = std::fs::remove_dir_all(dir);
 }

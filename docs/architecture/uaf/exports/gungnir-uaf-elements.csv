@@ -281,6 +281,8 @@ IE-32,Information Elements,InformationElement,WorkspaceLayout,"The panels a role
 IE-33,Information Elements,InformationElement,Mission and SessionId,A session with its state and configuration.,Class
 IE-algorithm-baseline-id,Information Elements,InformationElement,AlgorithmBaselineId,"Which candidate, in which profile.",Class
 IE-anomaly-settings,Information Elements,InformationElement,AnomalySettings,"Which anomaly detectors a baseline turns on, and how each is tuned.",Class
+IE-arbitration-facts,Information Elements,InformationElement,ArbitrationFacts,"What the rule reads from one side of a conflict, and nothing else.",Class
+IE-arbitration-ground,Information Elements,InformationElement,ArbitrationGround,Why the rule kept the side it kept.,Class
 IE-asset-extent,Information Elements,InformationElement,AssetExtent,The shape an asset occupies.,Class
 IE-asset-id,Information Elements,InformationElement,AssetId,"Identifier of a defended asset, stable across baseline versions.",Class
 IE-asset-list-view,Information Elements,InformationElement,AssetListView,"The asset list as the picture sees it, carrying the baseline revision it came from so a score can be traced to the list that produced it.",Class
@@ -291,6 +293,7 @@ IE-bearing-ray-view,Information Elements,InformationElement,BearingRayView,"A be
 IE-calibration-event,Information Elements,InformationElement,CalibrationEvent,A sensor's report of an object whose true position is already known (../../docs/mission/gap-analysis/gap-register.md GAP-014).,Class
 IE-collection-requirement,Information Elements,InformationElement,CollectionRequirement,"A collection requirement, owned by the intelligence analyst (MT-08).",Class
 IE-concurrence,Information Elements,InformationElement,Concurrence,"Who concurred with tasking a requirement, or declined it.",Class
+IE-conflict-side,Information Elements,InformationElement,ConflictSide,"One side of a conflicting decision, as its journal recorded it (GAP-050).",Class
 IE-control-status-settings,Information Elements,InformationElement,ControlStatusSettings,Weapons control status per effector layer.,Class
 IE-cooperative-settings,Information Elements,InformationElement,CooperativeSettings,"Tuning for the cooperative detector: when a cooperative report counts as lost, and how far it may sit from the track it claims to be before the two disagree.",Class
 IE-decision-attribution,Information Elements,InformationElement,DecisionAttribution,"Who decided, when, and on what basis.",Class
@@ -350,6 +353,7 @@ IE-reported-position,Information Elements,InformationElement,ReportedPosition,"A
 IE-requirement-event,Information Elements,InformationElement,RequirementEvent,"The life of one collection requirement (docs/design/DN-11-sensor-control-and-tasking.md, GAP-005).",Class
 IE-requirement-id,Information Elements,InformationElement,RequirementId,Identifier of a collection requirement.,Class
 IE-requirement-state,Information Elements,InformationElement,RequirementState,"Where a CollectionRequirement has got to, from stated to answered.",Class
+IE-resolution,Information Elements,InformationElement,Resolution,Which of two conflicting sides stands.,Class
 IE-resource-placement,Information Elements,InformationElement,ResourcePlacement,Where one effector sits in a laydown.,Class
 IE-review-event,Information Elements,InformationElement,ReviewEvent,"After-action review lifecycle (docs/design/DN-20-after-action-review.md, GAP-049).",Class
 IE-rhythm-event,Information Elements,InformationElement,RhythmEvent,"The watch's rhythm: what came due, what was handed over, what went down on purpose (docs/design/DN-21-battle-rhythm.md \u00a76, GAP-054).",Class
@@ -364,6 +368,7 @@ IE-sensor-placement,Information Elements,InformationElement,SensorPlacement,"Whe
 IE-sensor-task-event,Information Elements,InformationElement,SensorTaskEvent,"The life of one command to a sensor (docs/design/DN-11-sensor-control-and-tasking.md \u00a76, GAP-004).",Class
 IE-sensor-task-id,Information Elements,InformationElement,SensorTaskId,Identifier of one command issued to a sensor.,Class
 IE-session-id,Information Elements,InformationElement,SessionId,Identifier of one recorded mission session.,Class
+IE-side-outcome,Information Elements,InformationElement,SideOutcome,"How one side of a conflict ended a plan's approval, as far as a journal can tell.",Class
 IE-source-authentication,Information Elements,InformationElement,SourceAuthentication,"The strength of a source's authentication at admission (GAP-002, D-02).",Class
 IE-staleness-settings,Information Elements,InformationElement,StalenessSettings,"How long a track may go unobserved before it is drawn and treated as stale. Per class, because a loitering surface craft and a cruise missile do not age at the same rate. GAP-012 implements against this.",Class
 IE-term,Information Elements,InformationElement,Term,A domain value the interface has to put a word to.,Class
@@ -374,6 +379,7 @@ IE-uas-identification-report,Information Elements,InformationElement,UasIdentifi
 IE-uas-platform-report,Information Elements,InformationElement,UasPlatformReport,"What a UAS's KLV metadata stream (MISB ST 0601's UAS Datalink Local Set) says about the platform and its sensor, decoded by gungnir_interop::misb0601 and carried by gungnir_ingest::adapters::misb::UasMetadataAdapter.",Class
 IE-ui-settings,Information Elements,InformationElement,UiSettings,"Per-role arrangements, keyed by the role's canonical name.",Class
 IE-validity-window,Information Elements,InformationElement,ValidityWindow,When a baseline is valid.,Class
+IE-verdict,Information Elements,InformationElement,Verdict,"The rule's answer: the side kept, and why.",Class
 IE-verdict-summary,Information Elements,InformationElement,VerdictSummary,"The policy verdict as the decision record carries it (MOE-05, GAP-047).",Class
 IE-vocabulary,Information Elements,InformationElement,Vocabulary,"The display vocabulary in force: the defaults, with a deployment's overrides.",Class
 IE-warning-event,Information Elements,InformationElement,WarningEvent,"A rehearsal: a session replayed on this desktop (MOE-12, GAP-047). Published on the **live** session's bus, so the record says which watch rehearsed what. A warning owed to an asset (docs/design/DN-03-warning.md, GAP-042). Every state change carries a mission time; a waiver names the person.",Class
