@@ -2569,3 +2569,16 @@
   commit: 7d6f2019fe635987dff7920865e7169bb2a145b0
   pre_repository: false
   record: "PR #127; DN-31 §9"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    DN-31 amendment 1 (§12): identifiers written as hyphenated UUID strings and read from
+    strings or pre-change numbers (D-60), shown as a short tag on screen and whole in the
+    record (D-61), and the errata GAP-130's build found.
+  kind: design-note
+  paths:
+  - docs/design/DN-31-node-approval-queue.md
+  commit: 85e66e89968dfeab76cf6a758fab1b1f69e7c603
+  pre_repository: false
+  record: "PR #130; D-60 and D-61; docs/record/2026-09-17/identifiers-uuid-v7-and-v3-routes.md"
