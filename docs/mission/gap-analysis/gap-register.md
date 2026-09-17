@@ -141,9 +141,14 @@ history, and an entry is never edited once it has merged.
 | GAP-126 | A non-finite float in an envelope cannot be journaled faithfully | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Open |
 | GAP-127 | The desktop's decide and task functions check no permission | Technical | CAP-6.2 | 3 | 9 | S | 27 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-128 | PN-14 cannot apply an edited baseline on its first apply | Technical | CAP-5.6 | 3 | 2 | S | 6 | I3 | Services engineer | Open |
-| GAP-129 | No decision reaches a node's record, so reconciliation never meets a conflict | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Owner | Open |
+| GAP-129 | No decision reaches a node's record, so reconciliation never meets a conflict | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Owner | In progress |
+| GAP-130 | Decision, plan and queue-item identifiers collide across machines and restarts | Technical | CAP-7.2, CAP-4.2 | 4 | 6 | M | 24 | I3 | Services engineer | Open |
+| GAP-131 | The decision path lives only in gungnir-app | Technical | CAP-4.2, CAP-3.6 | 3 | 7 | L | 21 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-132 | A node runs no approval queue | Technical | CAP-4.2, CAP-4.3, CAP-3.7, CAP-6.2 | 4 | 9 | L | 36 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-133 | A linked desktop decides the node's plans itself | Technical | CAP-5.9, CAP-4.3 | 4 | 10 | M | 40 | I3 | UI engineer | Open |
+| GAP-134 | A desktop's offline decisions never reach its node | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
 
-Counts: 129 gaps, 3 mission, 126 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 134 gaps, 3 mission, 131 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -614,6 +619,7 @@ Counts: 129 gaps, 3 mission, 126 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.7 Queue under saturation.
 - History:
   - 2026-09-05, Closed: **Closed 2026-09-05.** The queue is ordered on every mutation by time remaining ascending, then priority descending, which is exact rather than approximate: time remaining is `expires_at - now` and subtracting the same `now` from every item preserves their order, so the sequence changes only when an item is added or removed. Pre-delegation is checked at submission through `is_pre_delegated` and marked on the row; a pre-delegated case still produces a recorded decision, and what it skips is escalation, not the person. The priority tie-break is inactive because nothing computes a threat score (GAP-028), and PN-06 states the ordering it is actually showing rather than implying a severity order it does not have.
+  - 2026-09-17, Closed: **Correction 2026-09-17 (D-59).** The closing note's "what it skips is escalation" was wrong: DN-10 §5 has a pre-delegated item expire and escalate, and the code does both. Only the sentence was wrong; nothing in the build changes.
 - Evidence: `../capabilities/capability-statements.md` CAP-3.7.
 - Severity: 4. Reach: 2 threads. Effort: M. Priority: 8.
 - Impact: MOE-04 decision timeliness fails under MT-01 saturation.
@@ -1912,10 +1918,81 @@ Counts: 129 gaps, 3 mission, 126 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.4 Disconnected and reconcile.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, whose arbiter build found that no node records a decision, so the conflicts it resolves arise only in tests.
+  - 2026-09-17, In progress: **Decided 2026-09-17 (D-55 to D-59).** Decisions reach the node: it holds the queue for the desktops linked to it, the first valid decision on an item wins, a cut-off desktop decides what its role may and forwards on reconnect, and identifiers become UUID v7. Planned in `../../design/DN-31-node-approval-queue.md` with ten verification rows, and built by GAP-130 to GAP-134.
 - Evidence: `gungnir-api/src/transport.rs` (`refuse_decision`: 501, "this node runs no approval queue"); `gungnir-app/tests/failover_e2e.rs` publishes the node's decision onto its record directly; the cross-layer Disconnected reconciliation row, gated 2026-09-16.
 - Severity: 3. Reach: 1 threads. Effort: M. Priority: 3.
 - Impact: A node runs no approval queue and its decision route refuses with 501, so every decision stays on the desktop that took it and a node's history never holds one. Reconciliation after an outage therefore finds no conflicting decision outside the tests that place one on a node's record, D-03's rule and PN-18's person resolution have nothing to resolve in a deployment, and two desktops sharing a node share no decision record.
-- Closing action: Decide whether a desktop's decisions reach its node's record -- forwarded like its detections, or through an approval queue on the node -- which would give reconciliation a conflict to find and several desktops one record; or record that decisions stay on the desktop and re-scope the reconciliation row to what can conflict.
-- Target: I3. Owner: Owner. Status: Open.
+- Closing action: Decided by D-55: the node holds the queue for the desktops linked to it. Built by GAP-130 to GAP-134 as `../../design/DN-31-node-approval-queue.md` plans it, each increment writing its verification rows from DN-31 §9.
+- Target: I3. Owner: Owner. Status: In progress.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
+
+**GAP-130 Decision, plan and queue-item identifiers collide across machines and restarts**
+
+- Type: Technical.
+- Capability: CAP-7.2 Interop standards; CAP-4.2 Record every decision.
+- History:
+  - 2026-09-17, Open: Filed with DN-31: colliding identifiers are a hazard today, and every later increment needs unique ones.
+- Evidence: `gungnir-command/src/lib.rs` (`mint_decision_id`); `gungnir-intercept-service/src/lib.rs` (plan identifiers); `gungnir_model::handoff::accept_report`; DN-31 §1.
+- Severity: 4. Reach: 6 threads. Effort: M. Priority: 24.
+- Impact: `DecisionId`, `PlanId` and `PendingApprovalId` restart at 1 in every process. Two desktops on one node, or one desktop across a restart, mint the same identifiers: an effector report finds its handoff by `DecisionId` alone and so reaches every handoff with that number, MOE-05's join of decisions to engagements mixes machines, and reconciliation pairs journals by `PlanId`.
+- Closing action: Make the three identifiers UUID v7, minted where each thing is created (D-56); move `SCHEMA_VERSION` to 4 and the routes to `/v3`, with every `/v2` route answering `410 Gone`; and write DN-31 §9 row 1.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`).
+- Depends on: D-56.
+
+**GAP-131 The decision path lives only in gungnir-app**
+
+- Type: Technical.
+- Capability: CAP-4.2 Record every decision; CAP-3.6 Rules of engagement.
+- History:
+  - 2026-09-17, Open: Filed with DN-31: the move is verified with the desktop unchanged before anything new rides on it.
+- Evidence: `gungnir-app/src/decisions.rs`, `engagements.rs`, `handoffs.rs`, `deliveries.rs`; the node's own `evaluate_on_node`; DN-31 §3.
+- Severity: 3. Reach: 7 threads. Effort: L. Priority: 21.
+- Impact: The policy chain over a plan, the queue's submission and sweep, deciding with engagement opening and the one handoff builder, and handoff delivery all live in `gungnir-app`, and a binary cannot share code, so a node cannot run the decision path D-55 gives it without a second copy of the safety rules.
+- Closing action: Create `gungnir-approval` with edges (w) and (x) (D-57), move the decision path into it with the desktop's behaviour unchanged, keep exactly one handoff builder, and write DN-31 §9 rows 2 and 10.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`).
+- Depends on: D-57, GAP-130.
+
+**GAP-132 A node runs no approval queue**
+
+- Type: Technical.
+- Capability: CAP-4.2 Record every decision; CAP-4.3 Never execute without a decision; CAP-3.7 Queue under saturation; CAP-6.2 Authorize by role, class, layer.
+- History:
+  - 2026-09-17, Open: Filed with DN-31 (D-55).
+- Evidence: `gungnir-api/src/transport.rs` (`refuse_decision`); `gungnir-node/src/main.rs`; DN-31 §1 and §6.
+- Severity: 4. Reach: 9 threads. Effort: L. Priority: 36.
+- Impact: A node proposes plans and decides none: `POST /v2/plans/{plan_id}/decision` refuses with 501, so several desktops on one node each decide the same plan, escalation reaches no one, and no decision reaches the node's record.
+- Closing action: Give the node loop the queue (edge (y)): offer each item to the lowest role holding authority, sweep expiry and escalation on the node's clock, and serve `GET /v3/queue` and `POST /v3/queue/{item}/decision` through the loop, the first valid decision winning, with the engagement, handoff and audit entry issued once; write DN-31 §9 rows 3 to 6.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`).
+- Depends on: D-55, D-59, GAP-130, GAP-131.
+
+**GAP-133 A linked desktop decides the node's plans itself**
+
+- Type: Technical.
+- Capability: CAP-5.9 Role workspaces and workflow; CAP-4.3 Never execute without a decision.
+- History:
+  - 2026-09-17, Open: Filed with DN-31 (D-55).
+- Evidence: `gungnir-app/src/update.rs` (a node plan submitted to the desktop's own queue); `gungnir-remote` (`RemoteInterceptService::plan`); DN-31 §6.5 and §6.6.
+- Severity: 4. Reach: 10 threads. Effort: M. Priority: 40.
+- Impact: While linked, a desktop re-proposes, queues, decides, engages and hands off the node's plans on its own, so its operator's decision is invisible to every other desktop and the node's queue has no screen.
+- Closing action: Project the node's queue into PN-06, decide through PN-07 over the `/v3` route, show who decided on a conflict, and stop the desktop queueing, engaging or issuing handoffs for a node plan; write DN-31 §9 rows 7 and 9.
+- Target: I3. Owner: UI engineer. Status: Open.
+- Reference: DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`).
+- Depends on: GAP-132.
+
+**GAP-134 A desktop's offline decisions never reach its node**
+
+- Type: Technical.
+- Capability: CAP-5.4 Disconnected and reconcile.
+- History:
+  - 2026-09-17, Open: Filed with DN-31 (D-55, D-58).
+- Evidence: `gungnir-app/src/failover.rs`; `gungnir-remote` (an outbox for detections only); `docs/mission/measures.md` (MOE-11); DN-31 §6.7 and §6.8.
+- Severity: 3. Reach: 1 threads. Effort: M. Priority: 3.
+- Impact: A desktop cut off from its node decides from its own queue and keeps those decisions in its own journal: none is forwarded, D-15's delegations never lapse, MOE-11 cannot be computed, and two engagements of one track on the two sides of an outage go unnoticed.
+- Closing action: Forward offline decisions on reconnect through `POST /v3/decisions/forwarded`, journaled once with their origin; lapse D-15's delegations after `policy.delegation.disconnected_lapse_s`; compare engagements by track and publish `BothActed` for a person (D-58); forward the reconciliation's verdicts; and write DN-31 §9 row 8.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`).
+- Depends on: D-58, GAP-133.
 

@@ -6,15 +6,15 @@
 //! [`RemoteTrackingService`] and [`RemoteInterceptService`] implement the same two
 //! traits the embedded services do, over the `gungnir-api` v2 contract: subscribe
 //! to the node's event stream to keep a local track/plan projection, forward
-//! detections and decisions to the node, and queue outbound detections while the
-//! link is down (store-and-forward, §8.4).
+//! detections to the node, and queue outbound detections while the link is down
+//! (store-and-forward, §8.4).
 //!
-//! **Status (GAP-041):** the read half is real. [`connect`] starts a link that fetches a
-//! snapshot and follows the node's event stream, and the two services project it. The
-//! write half is not: the node refuses every write path because nothing can authenticate
-//! a caller (GAP-057, GAP-060), so a submitted detection stays in the outbox and
-//! [`RemoteTrackingService::outbox_len`] keeps counting. That is store-and-forward doing
-//! exactly what §8.4 says, against a link that will not take a write yet.
+//! **Status.** [`connect`] starts a link that fetches a snapshot and follows the node's
+//! event stream, and the two services project it (GAP-041). A detection submitted while
+//! linked is forwarded to `POST /v2/detections` under the signed-in operator's token, and
+//! held in the outbox, oldest dropped and counted, while the node does not answer
+//! (GAP-050). **Decisions are not forwarded**: a node runs no approval queue and refuses
+//! the decision route, so the desktop decides the node's plan in its own queue (GAP-129).
 //!
 //! **Corrected 2026-09-07: TLS exists.** An `https` endpoint speaks mutual TLS --
 //! `link`'s own module comment describes it in full -- and only an `https` endpoint

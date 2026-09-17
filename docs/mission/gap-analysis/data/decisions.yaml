@@ -1370,3 +1370,98 @@
     and still records either concurrence. The MT-08 replay the row's method names is
     built over TT-08, whose sample events now script MT-08's first three steps (DN-11
     amendment 3).
+
+- id: D-55
+  decision: Where plan decisions live when desktops are linked to a node
+  question: >-
+    A node proposes plans and decides none, so every linked desktop queues, decides,
+    engages and hands off the node's plans itself: two desktops on one node each decide
+    the same plan without knowing, escalation reaches nobody, and no decision reaches
+    the node's record (GAP-129). Should the node hold the queue, should desktops forward
+    their decisions to it, or should decisions stay on desktops?
+  raised_in: "GAP-129; `../../design/DN-31-node-approval-queue.md`"
+  decider: Owner
+  unblocks: GAP-129, GAP-132, GAP-133, GAP-134
+  resolved: 2026-09-17
+  outcome: >-
+    **The node holds the queue for the desktops linked to it.** It authorizes each
+    decision against the caller's role, takes one decision per item, opens the
+    engagement, issues the handoff and journals all of it. While connected, the first
+    valid decision on an item wins and a later one is refused naming the decision that
+    stands (DN-10 §5's "whoever decides first ends it"). A desktop cut off from its node
+    decides what its signed-in role may, with D-15's delegations lapsing after a
+    configured interval, and forwards its decisions when the node answers, for D-53 to
+    reconcile. The code both binaries need lives in one shared library rather than a
+    copy on the node. Chosen over forwarding decisions without a shared queue, which
+    would find a double decision only after both engagements had opened.
+
+- id: D-56
+  decision: How decision, plan and queue-item identifiers become unique
+  question: >-
+    `DecisionId`, `PlanId` and `PendingApprovalId` restart at 1 in every process, so
+    they collide across desktops, nodes and restarts, and an effector report matches its
+    handoff by `DecisionId` alone. UUID v7, a machine-prefixed u64, or node-minted
+    identifiers?
+  raised_in: "GAP-129; `../../design/DN-31-node-approval-queue.md` §5.1"
+  decider: Owner
+  unblocks: GAP-130
+  resolved: 2026-09-17
+  outcome: >-
+    **UUID v7, minted where each thing is created**, as `GlobalEntityId` already is. The
+    field type changes, so by the interface's own rule `SCHEMA_VERSION` goes from 3 to 4
+    and the routes move to `/v3`. A journal written before the change still reads.
+    Chosen over a machine-prefixed u64, whose uniqueness would rest on configuring every
+    machine with a different prefix, and over provisional identifiers replaced on
+    forwarding, which would rewrite journaled records.
+
+- id: D-57
+  decision: Where the shared decision path lives, and its edges
+  question: >-
+    The policy chain, submission and sweep, deciding with engagement opening and the one
+    handoff builder, and handoff delivery bookkeeping live only in `gungnir-app`. D-55
+    puts them in a library both binaries use: a new crate, `gungnir-command`, or
+    `gungnir-workflow`?
+  raised_in: "`../../design/DN-31-node-approval-queue.md` §3 and §4"
+  decider: Owner
+  unblocks: GAP-131
+  resolved: 2026-09-17
+  outcome: >-
+    **A new productization crate, `gungnir-approval`**, depending on command, policy,
+    intercept-service, security, config, eventing and model (edge (w)); `gungnir-app`
+    depends on it (x), and `gungnir-node` on it and on `gungnir-command` (y). Handoff
+    delivery goes through a trait each binary implements with `gungnir-remote`'s
+    endpoint client, so the library never reaches the transport. Each edge is drawn and
+    recorded in the change that adds it to a manifest.
+
+- id: D-58
+  decision: Whether reconciliation compares engagements as well as plans
+  question: >-
+    A desktop cut off from its node plans from its own picture, so its plans never share
+    identifiers with the node's, and reconciliation, which pairs decisions by plan,
+    calls two engagements of the same track on the two sides of an outage no conflict.
+  raised_in: "D-53; `../../design/DN-31-node-approval-queue.md` §6.8"
+  decider: Owner
+  unblocks: GAP-134
+  resolved: 2026-09-17
+  outcome: >-
+    **Reconciliation also compares engagements by track.** Two engagements of one track
+    opened on the two sides of an outage are a both-may-have-acted incident for a
+    person, published and alerted whatever their plans and whatever D-53's rule decided
+    about any plan conflict, because choosing which record stands does not undo an
+    effect in the world.
+
+- id: D-59
+  decision: Whether a pre-delegated item escalates
+  question: >-
+    DN-10 §5 says a pre-delegated item still expires and escalates; GAP-035's closing
+    note says escalation is what it skips; the code escalates it and uses the flag only
+    for display. Which rule does the node's queue follow?
+  raised_in: "DN-10 §5; GAP-035; `../../design/DN-31-node-approval-queue.md` §6.2"
+  decider: Owner
+  unblocks: GAP-132
+  resolved: 2026-09-17
+  outcome: >-
+    **DN-10 §5: a pre-delegated item is actionable for the Operator from submission and
+    still expires and escalates**, so a supervisor sees a delegated item nobody took.
+    The code already does this; GAP-035's closing note was wrong and carries a
+    correction.
