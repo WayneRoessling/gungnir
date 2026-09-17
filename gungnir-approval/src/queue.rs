@@ -1,0 +1,240 @@
+// Copyright (C) 2026 Roessling Digital Solutions LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
+//! Feeding the queue, sweeping it, and taking a decision
+//! (`docs/design/DN-31-node-approval-queue.md` §3 points 2 to 4; GAP-131, D-57).
+//!
+//! The approval gate between a proposed plan and anything acting on it (GAP-038), moved
+//! here from `gungnir-app` so both binaries run the one implementation. Nothing here
+//! executes anything -- that boundary is `gungnir-policy`'s whole purpose, and contract
+//! C-01 depends on it: a plan becomes actionable only through a recorded human decision,
+//! and the engagement and the handoff hang off that record rather than off the plan.
+
+use crate::{ApprovalContext, ApprovalDesk, ApprovalHost, PolicyInputs};
+use gungnir_command::{
+    governing_layer, ApprovalWorkflow, CommandError, OperatorDecision, PendingApprovalId,
+    QueueOutcome, Submission,
+};
+use gungnir_eventing::Event;
+use gungnir_model::events::{CommandEvent, InterceptEvent};
+use gungnir_model::PlanView;
+use gungnir_policy::PolicyVerdict;
+
+/// The last denial the chain returned, kept so an empty queue can say why.
+#[derive(Debug, Clone, Default)]
+pub struct DenialHistory {
+    pub count: usize,
+    pub last_reason: Option<String>,
+}
+
+/// What the queue sweep has done this session.
+///
+/// Only escalations are counted here. Expiries are **not**, and that is the point of
+/// the DN-10 §3 conformance: an expiry is `OperatorDecision::Expired` in the record, so
+/// [`ApprovalDesk::expired_count`] reads the history rather than a parallel counter that
+/// could drift from it. An escalation has no record by design -- an escalated item has not
+/// ended -- so a counter is the only place it can live.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct QueueOutcomeCounts {
+    /// Offers made to a higher role. Not decisions, and not failures.
+    pub escalated: usize,
+}
+
+/// What became of a plan handed to [`ApprovalDesk::submit`].
+///
+/// A policy verdict alone could not say this: **a superseded plan was never evaluated**,
+/// and reporting it as `Denied` would put a refusal nobody made into the record while
+/// reporting it as `RequiresHumanApproval` would leave an item waiting that will never be
+/// applied. Both are worse than a third case.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Submitted {
+    /// The policy chain ran, and this is what it returned.
+    Evaluated(PolicyVerdict),
+    /// **Not evaluated.** The baseline in force is outside its validity window, so this
+    /// plan is superseded rather than applied (DN-08 §5). `PlanSuperseded` is published,
+    /// so the journal records what happened rather than a gap where a plan should be.
+    Superseded,
+}
+
+impl ApprovalDesk {
+    /// Evaluate a plan and queue it if it clears policy.
+    ///
+    /// Returns what became of it so the caller can record the denial. A denied plan is
+    /// never queued: that is `ApprovalWorkflow::submit_for_approval`'s invariant and this
+    /// function does not work around it.
+    pub fn submit(
+        &mut self,
+        cx: &ApprovalContext<'_>,
+        policy: &PolicyInputs<'_>,
+        host: &mut dyn ApprovalHost,
+        plan: PlanView,
+    ) -> Submitted {
+        // **Before policy, not after.** A plan produced under a baseline that is outside
+        // its window is superseded whatever policy would have said about it (DN-08 §5),
+        // and running the chain first would put a verdict in the record for a plan that
+        // was never going to be applied.
+        if cx.baseline_supersedes_plans {
+            let now = cx.now;
+            let plan_id = plan.id;
+            host.publish(now, Event::Intercept(InterceptEvent::PlanSuperseded(plan)));
+            self.observe_superseded(host, plan_id, now);
+            // Said once per plan, not once per frame: `submit` runs only when the plan
+            // changes, which is why this is here rather than in the tick.
+            // An alert names the plan by its tag and a log field in full (D-61).
+            host.alert(format!(
+                "Plan {} superseded: the baseline in force is outside its validity \
+                 window, so nothing produced now will be applied",
+                plan_id.short()
+            ));
+            tracing::warn!(plan = %plan_id, "plan superseded: baseline not in force");
+            return Submitted::Superseded;
+        }
+        let verdict = crate::chain::evaluate(cx, policy, &plan);
+        // GAP-036: PN-05 lists every fires check with its result, passes included.
+        self.fires_checks = crate::chain::fires_checks(cx, policy, &plan);
+        // GAP-028: the verdict is on the record with the engines that produced it,
+        // whatever it was; a denial that reached only the counter would be a decision
+        // nobody could review.
+        host.publish(
+            cx.now,
+            Event::Intercept(InterceptEvent::PlanEvaluated {
+                plan: plan.id,
+                verdict: verdict.summary(),
+                engines: crate::chain::DESKTOP_ENGINES
+                    .iter()
+                    .map(|e| (*e).to_string())
+                    .collect(),
+            }),
+        );
+        if let PolicyVerdict::Denied { reason_code } = verdict {
+            self.denials.count += 1;
+            self.denials.last_reason = Some(format!("{reason_code:?}"));
+            return Submitted::Evaluated(verdict);
+        }
+        // The layer whose window closes first governs the deadline; a plan tasking nothing
+        // this deployment knows about has no layer, and policy has already denied it.
+        let Some(layer) = governing_layer(&plan, cx.resources, &cx.config.policy.decisions) else {
+            tracing::error!(
+                plan = %plan.id,
+                "a plan that tasks no known resource cleared policy; not queuing it"
+            );
+            return Submitted::Evaluated(verdict);
+        };
+        let submission = Submission {
+            plan,
+            verdict,
+            submitted: cx.now,
+            layer,
+            // No assessment runs, so every item scores the same and the ordering falls
+            // back to time remaining. Reported by `QueueOrder`, not hidden behind a zero.
+            priority: 0.0,
+            role: cx.role_name(),
+        };
+        match self.approvals.submit_for_approval(submission) {
+            Ok(_) => {}
+            // Unreachable given the branch above, but a silent `let _ =` here would be the
+            // place a real refusal went missing.
+            Err(err) => tracing::error!(%err, "plan was refused by the approval workflow"),
+        }
+        Submitted::Evaluated(verdict)
+    }
+
+    /// Apply expiry and escalation, publishing what happened.
+    ///
+    /// Called every tick. Nothing ends silently: an expiry leaves a `DecisionRecord` that
+    /// is not actionable and names no operator, and both outcomes reach the bus, so the
+    /// journal records a decision nobody took as exactly that rather than as a rejection.
+    pub fn sweep(&mut self, cx: &ApprovalContext<'_>, host: &mut dyn ApprovalHost) {
+        let now = cx.now;
+        let ladder = crate::chain::escalation_ladder();
+        let refs: Vec<&str> = ladder.iter().map(String::as_str).collect();
+        let outcomes = self.approvals.sweep(now, &refs);
+        for (plan, id, outcome) in outcomes {
+            let event = match &outcome {
+                QueueOutcome::Expired { at } => {
+                    tracing::warn!(
+                        plan = %plan,
+                        id = %id,
+                        "approval expired with nobody deciding"
+                    );
+                    host.alert(format!(
+                        "Plan {} expired with nobody deciding; this is not a rejection",
+                        plan.short()
+                    ));
+                    CommandEvent::Expired { plan, at: *at }
+                }
+                QueueOutcome::Escalated { to_role, at } => {
+                    self.queue_outcomes.escalated += 1;
+                    tracing::info!(plan = %plan, to_role, "approval escalated");
+                    CommandEvent::Escalated {
+                        plan,
+                        to_role: to_role.clone(),
+                        at: *at,
+                    }
+                }
+            };
+            host.publish(now, Event::Command(event));
+        }
+    }
+
+    /// Record a decision and publish it.
+    ///
+    /// The operator and the role come from `cx.signed_in`: whoever the host has verified,
+    /// and neither when it has verified nobody (GAP-057, DN-23 §5 rule 1). Naming a role
+    /// as though it were a person would put a false attribution into an append-only
+    /// record, and a role nobody verified would be ranked by D-03's rule as though
+    /// somebody had. **Not the role the host is acting in**, which may be a selection
+    /// (the GAP-067 walk, 2026-09-16).
+    ///
+    /// # Errors
+    ///
+    /// `CommandError::NotFound` when nothing in the queue answers to `id` -- an identifier
+    /// never issued, or an item already decided or expired.
+    pub fn decide(
+        &mut self,
+        cx: &ApprovalContext<'_>,
+        host: &mut dyn ApprovalHost,
+        id: PendingApprovalId,
+        decision: OperatorDecision,
+    ) -> Result<(), CommandError> {
+        let now = cx.now;
+        let operator = cx.signed_in.as_ref().map(|s| s.operator.clone());
+        let role = cx.signed_in.as_ref().map(|s| s.role.clone());
+        let record = self.approvals.decide(id, decision, operator, role, now)?;
+        tracing::info!(
+            plan = %record.plan.id,
+            decision_id = %record.id,
+            decision = ?record.decision,
+            actionable = record.is_actionable(),
+            "decision recorded"
+        );
+        host.publish(now, Event::Command(record.to_event()));
+        // GAP-059: the decision is on the audit trail with the verified operator, or none.
+        host.audit(
+            crate::chain::DECISION_ACTION,
+            // The whole identifier: an audit entry is searched for, never glanced at
+            // (D-61).
+            format!("plan {} {:?}", record.plan.id, record.decision),
+        );
+        // GAP-043: an actionable decision is the moment an engagement opens (DN-06 §5).
+        let opened = self.open_for(cx, host, &record);
+        tracing::debug!(decision = %record.id, opened, "engagements opened");
+        Ok(())
+    }
+
+    /// Windows that closed with nobody deciding, from the append-only history.
+    ///
+    /// **Not rejections**: nobody chose. Answerable from the record since the DN-10 §3
+    /// conformance; before it, this could only have been derived from a rejection
+    /// happening to name no operator, which every rejection does while there is no
+    /// operator session.
+    #[must_use]
+    pub fn expired_count(&self) -> usize {
+        self.approvals
+            .records()
+            .iter()
+            .filter(|r| r.is_expiry())
+            .count()
+    }
+}

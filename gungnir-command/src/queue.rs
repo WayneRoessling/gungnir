@@ -257,6 +257,34 @@ pub fn next_role<'a>(ladder: &[&'a str], current: &str) -> Option<&'a str> {
     ladder.get(at + 1).copied()
 }
 
+/// One rung of the escalation ladder: a role that may take the decision, and its
+/// authority rank.
+///
+/// A name and a number rather than a role type, for the same reason
+/// [`crate::DecisionRecord::role`] carries a string: this crate cannot see
+/// `gungnir_security::Role` and D-57 gives it no edge to that crate. The caller that can
+/// see both hands the rungs over (`gungnir_approval::escalation_ladder`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LadderRung {
+    pub role: String,
+    /// Higher is more authority, as `gungnir_security::Role::rank` orders them.
+    pub rank: u8,
+}
+
+/// The escalation ladder [`crate::ApprovalWorkflow::sweep`] walks: the roles that may take
+/// the decision, lowest authority first.
+///
+/// Here rather than in a binary (`docs/design/DN-31-node-approval-queue.md` §3): the queue
+/// that escalates an item and the order it escalates in are one rule, and a second
+/// ordering beside a second queue is how a node and a desktop come to offer one item to
+/// two different roles. **The caller decides who is on it**; this decides the order, and a
+/// stable sort keeps two roles of equal rank in the order the caller gave.
+pub fn escalation_ladder(rungs: impl IntoIterator<Item = LadderRung>) -> Vec<String> {
+    let mut rungs: Vec<LadderRung> = rungs.into_iter().collect();
+    rungs.sort_by_key(|r| r.rank);
+    rungs.into_iter().map(|r| r.role).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
