@@ -610,9 +610,10 @@ impl ResourceView {
 /// Identifier of one plan produced by the intercept service.
 ///
 /// **A UUID v7 since GAP-130** (D-56), minted by the planner that proposes the plan. It
-/// was a counter restarting at 1 in every planner, so a desktop that fell back from its
-/// node could mint the very id the node had last proposed, and reconciliation pairs two
-/// journals by this. `PlanId::default()`, zero, is the id of `PlanView::default()` alone
+/// was a counter restarting at 1 in every planner, so a node's planner and a fallen-back
+/// desktop's numbered their plans alike, a node plan was taken for the desktop's plan of
+/// the same number when the desktop switched back, and reconciliation pairs two journals
+/// by this. `PlanId::default()`, zero, is the id of `PlanView::default()` alone
 /// and no planner mints it. Written, read and shown as [`crate::identifier`] says (D-60,
 /// D-61); a rehearsal seed's plan keeps the number the seed gives.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]

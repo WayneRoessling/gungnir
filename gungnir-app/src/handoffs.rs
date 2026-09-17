@@ -75,12 +75,11 @@ pub fn apply_report(
     {
         record.reports.push(report.clone());
     }
-    // The alert names the decision by its tag; the audit entry below takes the same
-    // sentence, and the whole identifier is on the handoff record PN-20 draws (D-61).
-    let tag = decision.short();
+    // What happened, without the decision: the alert names it by its tag and the audit
+    // entry names it whole, because an audit entry is searched for (D-61).
     let outcome = match report {
         EffectorReport::Acknowledged { .. } => {
-            format!("decision {tag}: {endpoint} acknowledged the handoff")
+            format!("{endpoint} acknowledged the handoff")
         }
         EffectorReport::Executing { at } => {
             match state
@@ -89,13 +88,12 @@ pub fn apply_report(
                 .find(|e| e.decision == decision)
                 .map(|e| e.executing(*at))
             {
-                Some(Ok(())) => format!("decision {tag}: {endpoint} is executing"),
+                Some(Ok(())) => format!("{endpoint} is executing"),
                 Some(Err(err)) => format!(
-                    "decision {tag}: {endpoint} reports executing, and the engagement could not \
-                     take it: {}",
+                    "{endpoint} reports executing, and the engagement could not take it: {}",
                     refusal(&err)
                 ),
-                None => format!("decision {tag}: {endpoint} reports executing; no open engagement"),
+                None => format!("{endpoint} reports executing; no open engagement"),
             }
         }
         EffectorReport::Completed {
@@ -114,19 +112,22 @@ pub fn apply_report(
                     at: *at,
                 };
             }
-            format!("decision {tag}: {endpoint} refused the handoff: {reason}")
+            format!("{endpoint} refused the handoff: {reason}")
         }
     };
     let _ = at;
     crate::audit::record(
         state,
         gungnir_security::actions::EFFECTOR_REPORT,
-        outcome.clone(),
+        format!("decision {decision}: {outcome}"),
     );
-    state.alerts.push(outcome);
+    state
+        .alerts
+        .push(format!("decision {}: {outcome}", decision.short()));
 }
 
-/// Close the engagement a `Completed` report names, and say what happened (DN-06).
+/// Close the engagement a `Completed` report names, and say what happened (DN-06), in
+/// words that leave the decision for the caller to name.
 ///
 /// The evidence is stamped `EffectSource::EffectorReport` so the effect measures can
 /// count what the effector said apart from what the track's lifecycle suggested; the two
@@ -158,10 +159,9 @@ fn close_engagement(
                 e.close_ineffective(evidence)
             }
         });
-    let tag = decision.short();
     match closed {
         Some(Ok(())) => format!(
-            "decision {tag}: {endpoint} reports {}",
+            "{endpoint} reports {}",
             if effective {
                 "effective"
             } else {
@@ -169,17 +169,18 @@ fn close_engagement(
             }
         ),
         Some(Err(err)) => format!(
-            "decision {tag}: {endpoint} reports completion the engagement could not take: {}",
+            "{endpoint} reports completion the engagement could not take: {}",
             refusal(&err)
         ),
-        None => format!("decision {tag}: {endpoint} reports completion; no open engagement"),
+        None => format!("{endpoint} reports completion; no open engagement"),
     }
 }
 
 /// Why an engagement could not take a report, in an alert's words.
 ///
-/// The alert has already named the decision by its tag, and the error's own text names it
-/// in full, which is right for a log and wrong on a panel (D-61).
+/// The sentence it ends has already named the decision, by its tag on an alert and whole
+/// in the audit entry, and the error's own text names it whole, which is right for a log
+/// and wrong on a panel (D-61).
 fn refusal(err: &gungnir_intercept_service::engagement::EngagementError) -> &'static str {
     use gungnir_intercept_service::engagement::EngagementError;
     match err {

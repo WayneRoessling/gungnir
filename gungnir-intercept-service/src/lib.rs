@@ -355,11 +355,12 @@ impl DpInterceptService {
     /// A new plan, with a new identifier.
     ///
     /// **A UUID v7, not the next number** (D-56, GAP-130). The counter this replaced
-    /// started at 1 in every planner, so a desktop that fell back from its node built a
-    /// planner whose first plan could carry the very id the node's last plan had, and the
-    /// tick's "have I announced this one" check (`gungnir-app`'s `last_live_plan_id`)
-    /// took the new plan for the old one and never proposed it. The alternatives
-    /// `gungnir-decision` solves on a planner built per call were all plan 1 as well.
+    /// started at 1 in every planner, so the planner a desktop builds when it falls back
+    /// numbered its plans as its node's planner did. The tick announces a plan only when
+    /// its id is new (`gungnir-app`'s `last_live_plan_id`), so on switching back the
+    /// node's plan was taken for the embedded plan of the same number and never proposed.
+    /// The alternatives `gungnir-decision` solves on a planner built per call were all
+    /// plan 1 as well.
     fn fresh_plan(now: MissionTime, solutions: Vec<InterceptSolutionView>, value: f64) -> PlanView {
         let id = PlanId(uuid::Uuid::now_v7().as_u128());
         PlanView {
