@@ -525,6 +525,45 @@ mod tests {
         assert!(note.is_some_and(|n| n.contains("GAP-032")));
     }
 
+    /// DN-31 §9 row 1, MOE-05's half (GAP-130; D-56): "MOE-05's join is exact across
+    /// machines". Two desktops each take a decision and open its engagement, and their
+    /// journals are merged in mission-time order, as a node's record would hold them. The
+    /// two decisions are UUID v7 minted in the same millisecond on different machines, so
+    /// they share their leading 64 bits and differ only in the random end -- the nearest
+    /// two machines' identifiers come. Only desktop A's decision carries a rationale.
+    ///
+    /// The join keys on the decision identifier alone, so it is exact exactly when no two
+    /// machines' identifiers are equal: each engagement pairs with its own decision, and the
+    /// figure is 1 of 2 with no engagement unmatched. The counters this replaced numbered
+    /// both decisions 1, and the later `Decided` then stood for both engagements.
+    #[test]
+    fn moe_05_pairs_each_machines_engagement_with_its_own_decision() {
+        const DESKTOP_A: u128 = 0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_61c2;
+        const DESKTOP_B: u128 = 0x0199_5a3b_7c2d_7e4f_b3c4_d5e6_0b77_4e10;
+        assert_eq!(DESKTOP_A >> 64, DESKTOP_B >> 64, "the same millisecond");
+        let merged = vec![
+            decided(1, DESKTOP_A, Some("the only track inbound on the harbour")),
+            decided(2, DESKTOP_B, None),
+            opened(3, DESKTOP_A, 7),
+            opened(4, DESKTOP_B, 8),
+        ];
+        let (value, note) = moe_05(&merged);
+        assert_eq!(
+            value,
+            MeasureValue::Fraction {
+                value: 0.5,
+                numerator: 1,
+                denominator: 2
+            },
+            "an engagement was paired with the other machine's decision"
+        );
+        let note = note.expect("a rationale is missing, so the note says so");
+        assert!(
+            note.contains("1 of 2") && note.contains("0 had no decision record"),
+            "{note}"
+        );
+    }
+
     /// MOE-06: a decision with no health on the record counts; one under a journaled
     /// degradation is in the note, because the strip had it shown.
     #[test]
