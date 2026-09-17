@@ -105,7 +105,7 @@ capabilities:
   - {id: CAP-5.7, parent: CAP-5, name: Govern algorithm and model baselines, coverage: "verification-table"}
   - {id: CAP-5.8, parent: CAP-5, name: Support the battle rhythm, coverage: "verification-table"}
   - {id: CAP-5.9, parent: CAP-5, name: Provide role-based workspaces and workflow}
-  - {id: CAP-5.10, parent: CAP-5, name: Meet performance budgets per profile, coverage: "GAP-093"}
+  - {id: CAP-5.10, parent: CAP-5, name: Meet performance budgets per profile, coverage: "verification-table"}
   - id: CAP-6
     name: Secure
     kind: area

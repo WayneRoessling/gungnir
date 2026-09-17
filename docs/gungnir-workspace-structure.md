@@ -157,7 +157,7 @@ Its runner has existed since 2026-09-08.
 | 3 | `cargo miri` on `unsafe` | `miri.yml` | Any PR whose diff adds `unsafe` |
 | 4 | `loom` exhaustive interleaving | `loom.yml` | PR touching `gungnir-fusion-async` or `gungnir-tracking-service` |
 | 5 | Fuzzing (`cargo-fuzz`) | `fuzz-nightly.yml` | Scheduled nightly, not per-PR |
-| 6 | Benchmark regression gate | `bench-regression.yml` | Every PR |
+| 6 | Benchmark regression gate | `bench-regression.yml` | Pushes to `main` and manual dispatch (since 2026-09-09); advisory, and never enforcing on its runner (D-62) |
 
 `gungnir-fusion-async` (concurrency) and any `unsafe` block are two of the items
 `agentic-workflow.md` marks human-owned. Both get their own always-required workflow

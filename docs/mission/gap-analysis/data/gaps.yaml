@@ -6278,6 +6278,9 @@
       GAP-061 needs for `gpu-fusion.yml`, where baseline and comparison come from the
       same hardware. The workflow header says in as many words that a green tick here is
       not evidence performance was checked.
+  - date: 2026-09-17
+    status: Closed
+    note: "Closed 2026-09-17. The defect this gap names is fixed: gate 6 saves a baseline on the runner and compares every benchmark against it (11 of 11, run 35262615761). What it does not do is fail, and by D-62 it never will on this host, where unchanged code moved ratios by up to 1.04. D-63 leaves the runner interactive. Enforcement would need a different machine and is out of scope for this release. See `../../record/2026-09-17/gate-6-stays-advisory-on-this-runner.md`."
 
 - id: GAP-095
   name: Night theme variant

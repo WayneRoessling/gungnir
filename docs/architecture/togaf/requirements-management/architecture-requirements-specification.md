@@ -179,7 +179,7 @@ already finished.
 | CAP-5.6 Manage configuration baselines and mission plans | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-5.7 Govern algorithm and model baselines | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-5.8 Support the battle rhythm | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
-| CAP-5.10 Meet performance budgets per profile | GAP-093 | open in the gap register; the criterion arrives with the closure |
+| CAP-5.10 Meet performance budgets per profile | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-6.1 Authenticate operators and callers | Verification table | a row in `../../../verification-capability-table.md` states the criterion |
 | CAP-6.7 Treat external input as untrusted | GAP-044 | open in the gap register; the criterion arrives with the closure |
 | CAP-7.3 Run as desktop, on-prem node, or cloud node | REQ-C-06, REQ-C-07 | stated by requirements that were derived from elsewhere, so the generated trace does not reach it |
