@@ -12,14 +12,22 @@
 //! **What this file does not test.** Whether a laydown's resource placement actually
 //! reaches the configuration a run builds is checked in `laydown_rehearsal.rs`'s own
 //! unit tests, fast and exactly reproducible, rather than here by comparing two heavy
-//! end-to-end runs' track counts: track formation is independent of resource geometry
-//! by construction, and separately is not exactly reproducible under heavy concurrent
-//! system load on this project's own development hardware (confirmed directly -- five
-//! runs of the identical input produced `[4, 5, 4, 4, 4]` tracks under `cargo test
-//! --workspace`'s full parallelism and agreed perfectly under `--test-threads=1`).
-//! That is a real property of `gungnir-fusion-async`'s pipeline under scheduling
-//! variance, not a fault in this harness, and not something this file's own tests
-//! should assert past or paper over.
+//! end-to-end runs: track formation is independent of resource geometry by
+//! construction, which those unit tests say directly and two end-to-end counts could
+//! only suggest.
+//!
+//! **A count that used to wander, and why it no longer does.** This file once recorded
+//! that the same input gave `[4, 5, 4, 4, 4]` tracks under `cargo test --workspace`'s
+//! full parallelism and agreed perfectly under `--test-threads=1`, and put that down to
+//! scheduling variance inside `gungnir-fusion-async`. The measurement was real; the
+//! diagnosis was wrong. A run read its picture at whatever point the pipeline's own task
+//! had reached, so the number was partly a measurement of the machine -- and on CI, on
+//! 2026-09-17, it came back as zero and failed the assertion below on a commit that
+//! changed nothing but documents. A run now ends its detection stream and waits for the
+//! pipeline's end-of-stream flush before reading anything, which is deterministic by
+//! construction: the fixture's detections arrive in one order and epoch boundaries
+//! follow from their source times, not from when the task got to them. Nine runs against
+//! a fully loaded machine and three against an idle one all reported five tracks.
 
 use gungnir_app::laydown_rehearsal::run;
 use gungnir_config::ResourceConfig;
@@ -71,6 +79,38 @@ fn a_rehearsal_against_a_real_fixture_forms_tracks_and_reports_the_queue_honestl
     // Never a claim beyond what the run actually measured: an expired decision is a
     // subset of raised ones, never more.
     assert!(record.decisions_expired <= record.decisions_raised);
+}
+
+/// The regression test for the defect the module documentation describes: a rehearsal's
+/// numbers have to be the scenario's, not the runner's.
+///
+/// Two runs of one fixture under one laydown, back to back in one process, and the
+/// records must be equal. That is a real guard rather than a coincidence restated:
+/// before the end-of-stream flush this test would have compared two arbitrary points of
+/// the pipeline's catch-up, and it fails again the day anything reads the picture before
+/// the pipeline has reported the run.
+#[test]
+fn two_runs_of_one_fixture_report_the_same_thing() {
+    let laydown = laydown([1000.0, 500.0, 0.0]);
+    let first = run(
+        &testdata_root(),
+        TestTrackNumber(1),
+        &laydown,
+        &base_resources(),
+    )
+    .expect("TT-01's fixture runs");
+    let second = run(
+        &testdata_root(),
+        TestTrackNumber(1),
+        &laydown,
+        &base_resources(),
+    )
+    .expect("TT-01's fixture runs a second time");
+
+    assert_eq!(
+        first, second,
+        "the same fixture under the same laydown measured differently twice"
+    );
 }
 
 #[test]

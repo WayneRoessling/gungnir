@@ -133,6 +133,27 @@ pub trait TrackingService: Send + Sync {
     /// buffer, no fusion divergence beyond budget). False while the pipeline is
     /// unimplemented, so the health panel never claims a working tracker.
     fn is_healthy(&self) -> bool;
+
+    /// The host has no more detections to submit: flush whatever is still held and
+    /// stop.
+    ///
+    /// **Why a host that holds a `Box<dyn TrackingService>` needs this.** A pipeline's
+    /// last reorder horizon is only processed when the stream ends
+    /// (`gungnir_fusion_async::ingest_with`: "the stream's end is a flush, not a
+    /// truncation"), so a finite run that never ends its stream reads a picture short
+    /// of the run it just made -- and cannot tell that from a picture the pipeline has
+    /// simply not caught up to yet. `gungnir-app`'s laydown rehearsal is that run.
+    /// [`LiveTrackingService::finish`] is the one implementation with something to do
+    /// here; after it, `poll` sees the final snapshot and then
+    /// [`is_healthy`](Self::is_healthy) reports false, which is how a caller knows the
+    /// flush arrived rather than guessing from a pause.
+    ///
+    /// **A one-way door, and not a pause**: a submission afterwards is refused with
+    /// [`SubmitError::PipelineGone`]. Only a host that is done with the service calls
+    /// it. Defaulted to nothing for the same reason
+    /// [`bearing_rays`](Self::bearing_rays) is: a backend with no pipeline behind it
+    /// has nothing to flush, and doing nothing says exactly that.
+    fn finish(&mut self) {}
 }
 
 /// Where each sensor measures from, in the local ENU frame.
@@ -526,17 +547,6 @@ impl LiveTrackingService {
         self
     }
 
-    /// End the detection stream, so the pipeline flushes its reorder buffer and emits a
-    /// final snapshot.
-    ///
-    /// **A session that never ends its stream loses its last reorder horizon**: the
-    /// buffer holds those detections waiting for a later one that never comes, and a
-    /// replay would finish short of the recording it replayed. Ending the stream is a
-    /// deliberate act rather than something a `Drop` does, because the desktop keeps
-    /// this service for the life of a session and dropping it is not the same event as
-    /// the sensors stopping.
-    ///
-    /// Submitting afterwards returns [`SubmitError::PipelineGone`], which is what it is.
     /// Turn a canonical detection into what the pipeline accepts, or say why it cannot.
     ///
     /// Three measurement kinds and three answers, and the differences are the point.
@@ -623,6 +633,17 @@ impl LiveTrackingService {
             .ok_or(SubmitError::UnknownSensorPosition(sensor))
     }
 
+    /// End the detection stream, so the pipeline flushes its reorder buffer and emits a
+    /// final snapshot.
+    ///
+    /// **A session that never ends its stream loses its last reorder horizon**: the
+    /// buffer holds those detections waiting for a later one that never comes, and a
+    /// replay would finish short of the recording it replayed. Ending the stream is a
+    /// deliberate act rather than something a `Drop` does, because the desktop keeps
+    /// this service for the life of a session and dropping it is not the same event as
+    /// the sensors stopping.
+    ///
+    /// Submitting afterwards returns [`SubmitError::PipelineGone`], which is what it is.
     pub fn finish(&mut self) {
         self.detection_tx = None;
     }
@@ -746,6 +767,13 @@ impl TrackingService for LiveTrackingService {
 
     fn is_healthy(&self) -> bool {
         self.pipeline_alive && gungnir_fusion_async::PIPELINE_IMPLEMENTED
+    }
+
+    /// The inherent [`LiveTrackingService::finish`], reachable through the trait: the
+    /// desktop holds this service as a `Box<dyn TrackingService>` and cannot name the
+    /// type to call it.
+    fn finish(&mut self) {
+        LiveTrackingService::finish(self);
     }
 }
 
