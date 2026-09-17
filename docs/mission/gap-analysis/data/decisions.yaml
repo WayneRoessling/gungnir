@@ -1510,3 +1510,48 @@
     the number the seed gives and is shown as given. Chosen over full UUIDs everywhere,
     which crowd a queue row and are told apart only at the end, and over per-desktop
     labels, which would give one decision different names on different desktops.
+
+- id: D-62
+  decision: Whether gate 6 ever enforces its threshold on this runner
+  question: >-
+    Gate 6 compares criterion results against a baseline saved from `main` on
+    `gungnir-rtx-5060ti`, the owner's own workstation. Three measurements of unchanged
+    code moved ratios by up to 1.04, and every benchmark crossed the 10 percent
+    threshold at least once, so `BENCH_REGRESSION_ENFORCE` stayed `"0"`. Enforce it on
+    this host after further work (a multi-run baseline, criterion's own statistical
+    comparison, a wider threshold), or accept that it never enforces here?
+  raised_in: "GAP-093; `../../record/2026-09-17/gate-6-noise-floor-and-core-pinning.md`"
+  decider: Owner
+  unblocks: GAP-093
+  resolved: 2026-09-17
+  outcome: >-
+    **It never enforces on this machine.** Gate 6 stays advisory on
+    `gungnir-rtx-5060ti`: it runs, compares, and prints every ratio and every threshold
+    breach for a person to read, and it does not fail a pull request. A regression is
+    found by reading those ratios, by the budget assertions in
+    `gungnir-app/tests/frame_budgets.rs`, which are pass criteria and unaffected, and by
+    the absolute figures in `../../performance-budgets.md`. Chosen over widening the
+    threshold, which would make a gate criterion say less than it does now, and over a
+    multi-run baseline or a statistical comparison, which is engineering spent on a host
+    whose noise is the owner using it. The `pull_request` trigger does not come back.
+    Enforcement would need a different machine, which is not in scope for this release.
+    See `../../record/2026-09-17/gate-6-stays-advisory-on-this-runner.md`.
+
+- id: D-63
+  decision: Whether the self-hosted runner is installed as a service
+  question: >-
+    `gungnir-rtx-5060ti` is an interactive `run.cmd` listener, so it goes offline
+    whenever its window closes or the workstation sleeps; that interrupted four of the
+    2026-09-16 and 2026-09-17 measurement runs. Install it as a Windows service under an
+    account of its own, or leave it interactive?
+  raised_in: "GAP-093; GAP-061"
+  decider: Owner
+  unblocks: GAP-093
+  resolved: 2026-09-17
+  outcome: >-
+    **It stays interactive.** No service install, and no separate account for it. The
+    runner is started by hand when it is needed. Nothing shipped depends on it: no
+    release artifact is built there (`release.yml` builds on hosted runners), and the two
+    workflows that use it are gate 6, now advisory by D-62, and `gpu-fusion.yml`, which
+    is manual dispatch only. So an offline runner delays re-evidencing the GPU path row
+    and a benchmark comparison, and blocks nothing else. See `../../record/2026-09-17/gate-6-stays-advisory-on-this-runner.md`.

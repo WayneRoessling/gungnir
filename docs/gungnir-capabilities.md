@@ -668,8 +668,11 @@ too slow to keep up with sensor rate isn't deployable.
 
 *How it's verified:* `criterion` runs vs. reference implementations for context.
 
-*Definition of done:* Not pass/fail at the table level — regression is separately
-gated via `bench-regression.yml`'s hard-fail p99 check.
+*Definition of done:* Not pass/fail at the table level. `bench-regression.yml` compares
+p99 against the baseline from `main` and prints every breach, but it does not fail: it is
+advisory on its self-hosted runner for good (decision D-62, 2026-09-17, after that
+machine's noise floor was measured three times). What does assert is the frame budgets in
+`gungnir-app/tests/frame_budgets.rs`.
 
 *Data used:* Scenario-crate or public benchmark data, for realistic-scale timing.
 
