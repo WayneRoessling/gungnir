@@ -239,9 +239,21 @@ async fn a_party_with_no_agreement_is_refused_and_a_health_agreement_sends_healt
     let snapshot: SnapshotResponse = serde_json::from_str(&body).expect("snapshot");
     assert!(snapshot.tracks.is_empty());
     assert_eq!(snapshot.withheld, 4, "three tracks and a plan");
-    // The write paths stay an operator's.
-    let (status, _) = get(&pki, addr, "sector-east", "/v3/plans/1/decision").await;
+    // The write paths stay an operator's. The decision route is keyed on the queue item
+    // since GAP-132 (DN-31 §6.3); `/v3` serves no plan-keyed decision route at all, so
+    // this names the one that exists rather than one that would answer `404` for having
+    // moved rather than for being closed to a party.
+    let (status, _) = get(
+        &pki,
+        addr,
+        "sector-east",
+        "/v3/queue/01995a3b-7c2d-7e4f-8a1b-2c3d9f3a61c2/decision",
+    )
+    .await;
     assert!(status == 403 || status == 405, "{status}");
+    // And the queue itself is this deployment's own business, not an exchange item.
+    let (status, body) = get(&pki, addr, "sector-east", "/v3/queue").await;
+    assert_eq!(status, 403, "{body}");
     let _ = std::fs::remove_dir_all(&pki.dir);
 }
 
