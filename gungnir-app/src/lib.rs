@@ -24,6 +24,7 @@ pub mod bearings;
 pub mod cooperative;
 pub mod decisions;
 pub mod deliveries;
+pub mod desk;
 pub mod dock;
 pub mod engagements;
 pub mod failover;

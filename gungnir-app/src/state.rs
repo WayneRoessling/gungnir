@@ -14,8 +14,7 @@
 //! a remote endpoint cannot be reached the desktop falls back to embedded and raises
 //! an alert, which is the required degraded-connectivity behaviour (§8.4).
 
-use crate::decisions::{DenialHistory, QueueOutcomeCounts};
-use gungnir_command::InMemoryApprovalWorkflow;
+use gungnir_approval::ApprovalDesk;
 use gungnir_config::{
     BackendConfig, ConfigBaseline, ConfigError, ConfigStore, FileConfigStore, KnownVocabulary,
 };
@@ -151,8 +150,6 @@ pub struct AppState {
     pub pending_history: Option<gungnir_remote::link::PendingHistory>,
     /// The endpoint transport (GAP-040), or `None` with the reason in the alerts.
     pub endpoint_client: Option<gungnir_remote::endpoint::EndpointClient>,
-    /// Handoffs posted and not yet answered, or waiting to be posted again.
-    pub pending_handoffs: Vec<crate::deliveries::PendingHandoff>,
     /// Warnings posted and not yet answered.
     pub pending_warnings: Vec<crate::deliveries::PendingWarning>,
     /// The loader thread, while a load is in flight.
@@ -324,27 +321,24 @@ pub struct AppState {
     pub audit: InMemoryAuditLog,
 
     /// The approval gate between a proposed plan and anything acting on it
-    /// (GAP-038). Every plan the intercept service proposes goes through
-    /// `decisions::submit`, which evaluates it against the policy chain and queues it
-    /// for a human only if it clears. Nothing acts on a plan without a
-    /// `DecisionRecord`, which is contract C-01.
+    /// (GAP-038), and everything the decision path holds between calls: the queue and
+    /// its record, the engagements opened on actionable decisions, the handoffs issued
+    /// from them and what is still owed to an endpoint.
     ///
-    /// `denials` is kept so an empty queue can say *why* it is empty. That matters
+    /// **The path itself is `gungnir-approval`'s** (GAP-131, D-57,
+    /// `docs/design/DN-31-node-approval-queue.md` §3): every plan the intercept service
+    /// proposes goes through `decisions::submit`, which hands it to this desk with the
+    /// picture and the baseline, and nothing acts on a plan without a `DecisionRecord`,
+    /// which is contract C-01. Held here rather than in loose fields so this desktop
+    /// cannot end up holding a handoff for a decision it opened no engagement for, and so
+    /// a node can hold the same thing (D-55).
+    ///
+    /// `desk.denials` is kept so an empty queue can say *why* it is empty. That matters
     /// more here than anywhere else in the desktop: this build's queue is still always
     /// empty -- the pipeline produces tracks as of 2026-09-06, and the allocator that
     /// would turn them into a plan returns `NotImplemented` (GAP-029) -- and a
     /// permanently calm approval queue reads as "nothing needs deciding".
-    pub approvals: InMemoryApprovalWorkflow,
-    /// Engagements opened on actionable decisions (GAP-043, DN-06). Session state:
-    /// the journal carries the events, and a replay rebuilds the outcomes from them.
-    pub engagements: Vec<gungnir_intercept_service::engagement::Engagement>,
-    /// Handoffs issued from actionable decisions and where their delivery stands
-    /// (GAP-040, DN-07). Never delivered from this side until a transport exists.
-    pub handoffs: Vec<crate::handoffs::HandoffRecord>,
-    /// Decisions whose engaged track has been in the picture since they opened, so a
-    /// track's absence can be read as "left" rather than "never arrived".
-    pub engaged_seen: std::collections::HashSet<gungnir_model::DecisionId>,
-    pub denials: DenialHistory,
+    pub desk: ApprovalDesk,
     /// The watch's rhythm: how far the scheduler has run and the handover in progress
     /// (GAP-054, DN-21). Small on purpose -- the schedules are in the baseline and the
     /// maintenance windows are on the sensor records.
@@ -371,9 +365,6 @@ pub struct AppState {
     /// PN-05 cannot reach the concrete service. Empty for a remote backend: the node
     /// decided, and this desktop does not know what it held back.
     pub withheld: Vec<gungnir_intercept_service::WithheldResource>,
-    /// The fires checks for the last submitted plan, every one with its result (GAP-036,
-    /// DN-05 §7). Empty when the last plan was not a fires task.
-    pub fires_checks: Vec<gungnir_model::DeconflictionCheck>,
     /// Which algorithm configuration this deployment governs (GAP-086, DN-24).
     ///
     /// The first thing in this workspace to construct a `gungnir-modelops` registry. It
@@ -386,9 +377,6 @@ pub struct AppState {
     /// a fact about the session, and repeating it every tick would bury the promotions that
     /// are facts about moments in it.
     pub governance_recorded: bool,
-    /// Expiries and escalations this session (GAP-034), which PN-17 reports as the
-    /// honest measure of whether the queue is keeping up.
-    pub queue_outcomes: QueueOutcomeCounts,
 
     /// The queued item PN-07 is deciding, and the text the operator has entered in it.
     /// Immediate mode has nowhere else to keep the reject reason across frames.
@@ -636,7 +624,6 @@ impl AppState {
             fallback: None,
             pending_history: None,
             endpoint_client,
-            pending_handoffs: Vec::new(),
             pending_warnings: Vec::new(),
             loader: None,
             pointcloud_loader: None,
@@ -667,10 +654,6 @@ impl AppState {
             governance,
             governance_recorded: false,
             withheld: Vec::new(),
-            fires_checks: Vec::new(),
-            engagements: Vec::new(),
-            handoffs: Vec::new(),
-            engaged_seen: HashSet::new(),
             clock_skew: gungnir_time::ClockSkewEstimator::new(),
             skew_alerted: HashSet::new(),
             health_journaled: None,
@@ -694,9 +677,7 @@ impl AppState {
             next_launch_warning,
             config_store,
             audit: InMemoryAuditLog::new(),
-            approvals: InMemoryApprovalWorkflow::with_settings(decision_settings),
-            denials: DenialHistory::default(),
-            queue_outcomes: QueueOutcomeCounts::default(),
+            desk: ApprovalDesk::new(decision_settings),
             selected_approval: None,
             dialog: gungnir_ui::panels::decision_dialog::DecisionDialogState::default(),
             selected_track: None,

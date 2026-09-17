@@ -2,55 +2,49 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! The approval gate between a proposed plan and anything acting on it (GAP-038).
+//! The desktop's calls into the approval desk, and what PN-05, PN-06 and PN-07 draw from
+//! it (GAP-038; GAP-131, D-57, `docs/design/DN-31-node-approval-queue.md` §3).
 //!
-//! `ARCHITECTURE.md` §7.3 listed `gungnir-policy` and `gungnir-command` as "not yet
-//! called from the tick". This module calls them: every plan the intercept service
-//! proposes is evaluated by a policy chain, and a plan that clears it is queued for a
-//! human decision rather than becoming actionable. Nothing here executes anything --
-//! that boundary is `gungnir-policy`'s whole purpose, and contract C-01 depends on it.
+//! **The decision path itself is `gungnir-approval`'s.** The policy chain, submission, the
+//! sweep, deciding with engagement opening and the handoff builder moved there whole so a
+//! node runs the same rules rather than a second copy of them (D-55, D-57); what is left
+//! here is this binary's half of each call -- the context `desk.rs` builds, and the panel
+//! state a decision touches -- and the presentation the library has no business holding.
 //!
-//! # What the chain is, and what it is not
+//! # What stays, and why
 //!
-//! The chain this build constructs is the readiness-and-geofence engine, the control
-//! status engine, and the authority engine. It is complete in the sense that every
-//! engine `gungnir-policy` implements is in it, and incomplete in a way the operator
-//! has to know about: the geofence engine consults a `GeoService` that this build has
-//! nothing to populate from, because `ConfigBaseline` carries no geofences. So it
-//! checks resource readiness for real and the no-go check passes vacuously.
-//! [`PolicyChainReport`] carries the engine names and that caveat to PN-07, because a
-//! verdict from a chain missing an engine is not the same verdict.
+//! A row, a sentence and a reason-the-queue-is-empty are all answers to "what does this
+//! operator see", and they name `gungnir-ui` types, which a productization crate may not
+//! reach. The alternatives and the what-if (GAP-032) stay for a different reason: they
+//! judge plans nobody submitted, through the same chain the recommendation was held to
+//! ([`gungnir_approval::with_chain`]), and commit to nothing.
 //!
 //! # The queue is empty, and why that is the interesting part
 //!
-//! No plan ever reaches the queue in this build. The tracking pipeline is not
-//! implemented, so `tracks()` is empty; with no tracks the allocator returns an empty
-//! plan; an empty plan is denied by the first engine that sees it. Every step of that
-//! is correct, and the result -- a permanently calm approval queue -- is the most
-//! misleading screen in the product. [`queue_empty_reason`] derives which of the three
-//! [`EmptyBecause`] situations is in force from the health flags and the denial
-//! history, so PN-06 says *why* it is empty rather than only that it is.
+//! No plan ever reaches the queue in this build. The tracking pipeline produces tracks,
+//! but the allocator returns an empty plan, and an empty plan is denied by the first
+//! engine that sees it. Every step of that is correct, and the result -- a permanently calm
+//! approval queue -- is the most misleading screen in the product. [`queue_empty_reason`]
+//! derives which of the three [`EmptyBecause`] situations is in force from the health flags
+//! and the denial history, so PN-06 says *why* it is empty rather than only that it is.
 
 use crate::state::AppState;
-use gungnir_command::{
-    governing_layer, ApprovalWorkflow, CommandError, OperatorDecision, PendingApprovalId,
-    QueueOutcome, Submission,
-};
+use gungnir_command::{CommandError, OperatorDecision, PendingApprovalId};
 use gungnir_decision::CourseOfAction;
-use gungnir_eventing::Event;
-use gungnir_model::events::{CommandEvent, InterceptEvent};
-use gungnir_model::{Classification, PlanView, TrackId};
-use gungnir_policy::{
-    is_pre_delegated, AuthorityPolicy, ControlStatusPolicy, DenialReason, FiresContext,
-    FiresDeconflictionPolicy, GeofencePolicy, PolicyChain, PolicyEngine, PolicyVerdict,
-    ReportedPositionSource,
-};
+use gungnir_model::PlanView;
+use gungnir_policy::{is_pre_delegated, DenialReason, PolicyVerdict};
 use gungnir_security::authz::role_permits;
-use gungnir_security::{actions, Role};
 use gungnir_ui::panels::approval_queue::{
     ApprovalQueueView, EmptyBecause, PendingId, QueueOrder, QueueRow, TimeRemaining, Verdict,
 };
 use gungnir_ui::panels::unavailable::Unavailable;
+
+/// The library's surface, re-exported so a caller of this module reaches one decision path
+/// rather than choosing between two names for it (`agentic-coding-standards.md` §1.2).
+pub use gungnir_approval::{
+    chain_report, chain_report_for, escalation_ladder, may_override, PolicyChainReport, Submitted,
+    DECISION_ACTION, DESKTOP_ENGINES,
+};
 
 /// The priority tie-break in the queue ordering needs a threat score, and nothing
 /// computes one (GAP-028). The queue is therefore ordered by time remaining alone, and
@@ -60,382 +54,44 @@ const PRIORITY: Unavailable<'static> = Unavailable {
     gap: "GAP-028",
 };
 
-/// The escalation ladder: the roles that may take a plan decision, lowest authority
-/// first.
-///
-/// Derived from `gungnir-security` rather than configured here, so it cannot drift from
-/// the authorization it is supposed to follow: a role that cannot decide must never be
-/// offered an item, and a role that can must not be skipped.
-#[must_use]
-pub fn escalation_ladder() -> Vec<String> {
-    let mut roles: Vec<Role> = Role::ALL
-        .iter()
-        .copied()
-        .filter(|r| role_permits(*r, DECISION_ACTION))
-        .collect();
-    roles.sort_by_key(|r| r.rank());
-    roles.iter().map(|r| format!("{r:?}")).collect()
-}
-
-/// The authorization action a plan decision falls under.
-pub const DECISION_ACTION: &str = actions::DECIDE_PLAN;
-
-/// What the policy chain was, and which of its checks could not have failed.
-///
-/// The second half is the part that is easy to under-report, and I did under-report it
-/// first time: the no-go check is vacuous for **two independent reasons**, and fixing
-/// either one alone would leave it vacuous. Both have to be named, because an operator
-/// told only about the missing fences would reasonably conclude that configuring some
-/// fences makes the check real.
-#[derive(Debug, Clone, PartialEq, Eq)]
-// Four independent, orthogonal caveats about separately missing data sources, not a
-// state machine: each names a different reason a different check cannot pass, and
-// they combine freely (GAP-088, GAP-031, GAP-090 each own one).
-#[allow(clippy::struct_excessive_bools)]
-pub struct PolicyChainReport {
-    /// Engine names in the order they were consulted.
-    pub engines: Vec<&'static str>,
-    /// `ConfigBaseline` has no geofence section, so the `GeoService` holds no fences and
-    /// `is_within_no_go` is a search of an empty list.
-    pub no_geofences_configured: bool,
-    /// The planner sets `intercept_point: None` on every solution (GAP-031), so the
-    /// no-go test is never reached even with fences configured.
-    pub no_intercept_geometry: bool,
-    /// Three of the fires checks have no data source -- no-fire areas (GAP-088), airspace
-    /// measures, interceptor points (GAP-031) -- and a check without data fails (DN-05
-    /// §5), so a fires task is denied until the sources exist.
-    pub fires_sources_missing: bool,
-    /// The friendly-position check's reported half has no source configured
-    /// (DN-25 §5 rule 5; GAP-090): GAP-091's feed does not exist, so this build
-    /// always passes `ReportedPositionSource::NotConfigured`, and the check
-    /// fails with that reason rather than passing on an empty detected set
-    /// alone.
-    pub no_reported_position_source_configured: bool,
-}
-
-impl PolicyChainReport {
-    /// The checks that ran and could not have failed, as PN-07 shows them.
-    #[must_use]
-    pub fn caveats(&self) -> Vec<&'static str> {
-        let mut out = Vec::new();
-        if self.fires_sources_missing {
-            out.push(
-                "the fires no-fire-area, airspace-measure and interceptor-trajectory checks, \
-                 which have no data source (GAP-088, GAP-031) and therefore fail: a fires \
-                 task is denied until the sources exist, and PN-05 lists each check",
-            );
-        }
-        if self.no_reported_position_source_configured {
-            out.push(
-                "the fires friendly-position check's reported half, because no \
-                 reported-position source is configured (GAP-090, GAP-091): the check \
-                 fails with that reason rather than passing on an empty detected set, \
-                 and PN-05 names it",
-            );
-        }
-        if self.no_intercept_geometry {
-            out.push(
-                "the no-go geofence check, because the planner computes no intercept \
-                 point to test (GAP-031)",
-            );
-        }
-        if self.no_geofences_configured {
-            out.push(
-                "the no-go geofence check, because the configuration baseline has no \
-                 geofence section to load fences from",
-            );
-        }
-        out
-    }
-}
-
-/// The last denial the chain returned, kept so an empty queue can say why.
-#[derive(Debug, Clone, Default)]
-pub struct DenialHistory {
-    pub count: usize,
-    pub last_reason: Option<String>,
-}
-
-/// What the queue sweep has done this session.
-///
-/// Only escalations are counted here. Expiries are **not**, and that is the point of
-/// the DN-10 §3 conformance: an expiry is `OperatorDecision::Expired` in the record, so
-/// [`expired_count`] reads the history rather than a parallel counter that could drift
-/// from it. An escalation has no record by design -- an escalated item has not ended --
-/// so a counter is the only place it can live.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct QueueOutcomeCounts {
-    /// Offers made to a higher role. Not decisions, and not failures.
-    pub escalated: usize,
-}
-
 /// Windows that closed with nobody deciding, from the append-only history.
 ///
-/// **Not rejections**: nobody chose. Answerable from the record since the DN-10 §3
-/// conformance; before it, this could only have been derived from a rejection happening
-/// to name no operator, which every rejection does while there is no operator session.
+/// **Not rejections**: nobody chose.
 #[must_use]
 pub fn expired_count(state: &AppState) -> usize {
-    state
-        .approvals
-        .records()
-        .iter()
-        .filter(|r| r.is_expiry())
-        .count()
-}
-
-/// What became of a plan handed to [`submit`].
-///
-/// A policy verdict alone could not say this: **a superseded plan was never evaluated**,
-/// and reporting it as `Denied` would put a refusal nobody made into the record while
-/// reporting it as `RequiresHumanApproval` would leave an item waiting that will never be
-/// applied. Both are worse than a third case.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Submitted {
-    /// The policy chain ran, and this is what it returned.
-    Evaluated(PolicyVerdict),
-    /// **Not evaluated.** The baseline in force is outside its validity window, so this
-    /// plan is superseded rather than applied (DN-08 §5). `PlanSuperseded` is published,
-    /// so the journal records what happened rather than a gap where a plan should be.
-    Superseded,
+    state.desk.expired_count()
 }
 
 /// Evaluate a plan and queue it if it clears policy.
-///
-/// Returns what became of it so the caller can record the denial. A denied plan is never
-/// queued: that is `ApprovalWorkflow::submit_for_approval`'s invariant and this
-/// function does not work around it.
 pub fn submit(state: &mut AppState, plan: PlanView) -> Submitted {
-    // **Before policy, not after.** A plan produced under a baseline that is outside its
-    // window is superseded whatever policy would have said about it (DN-08 §5), and
-    // running the chain first would put a verdict in the record for a plan that was never
-    // going to be applied.
-    let validity = crate::status::baseline_validity(state);
-    if validity.supersedes_plans() {
-        let now = state.clock.now();
-        let plan_id = plan.id;
-        crate::update::publish(
-            state,
-            now,
-            Event::Intercept(InterceptEvent::PlanSuperseded(plan.clone())),
-        );
-        crate::engagements::observe_superseded(state, plan.id, now);
-        // Said once per plan, not once per frame: `submit` runs only when the plan
-        // changes, which is why this is here rather than in the tick.
-        // An alert names the plan by its tag and a log field in full (D-61).
-        state.alerts.push(format!(
-            "Plan {} superseded: the baseline in force is outside its validity \
-             window, so nothing produced now will be applied",
-            plan_id.short()
-        ));
-        tracing::warn!(
-            plan = %plan_id,
-            ?validity,
-            "plan superseded: baseline not in force"
-        );
-        return Submitted::Superseded;
-    }
-    let verdict = evaluate(state, &plan);
-    // GAP-036: PN-05 lists every fires check with its result, passes included.
-    state.fires_checks = fires_checks(state, &plan);
-    // GAP-028: the verdict is on the record with the engines that produced it, whatever
-    // it was; a denial that reached only the counter would be a decision nobody could
-    // review.
-    crate::update::publish(
-        state,
-        state.clock.now(),
-        Event::Intercept(InterceptEvent::PlanEvaluated {
-            plan: plan.id,
-            verdict: verdict.summary(),
-            engines: DESKTOP_ENGINES.iter().map(|e| (*e).to_string()).collect(),
-        }),
-    );
-    if let PolicyVerdict::Denied { reason_code } = verdict {
-        state.denials.count += 1;
-        state.denials.last_reason = Some(format!("{reason_code:?}"));
-        return Submitted::Evaluated(verdict);
-    }
-    // The layer whose window closes first governs the deadline; a plan tasking nothing
-    // this deployment knows about has no layer, and policy has already denied it.
-    let now = state.clock.now();
-    let Some(layer) = governing_layer(&plan, &state.resources, &state.config.policy.decisions)
-    else {
-        tracing::error!(
-            plan = %plan.id,
-            "a plan that tasks no known resource cleared policy; not queuing it"
-        );
-        return Submitted::Evaluated(verdict);
-    };
-    let submission = Submission {
-        plan,
-        verdict,
-        submitted: now,
-        layer,
-        // No assessment runs, so every item scores the same and the ordering falls back
-        // to time remaining. Reported by `QueueOrder`, not hidden behind a zero.
-        priority: 0.0,
-        role: format!("{:?}", state.role()),
-    };
-    match state.approvals.submit_for_approval(submission) {
-        Ok(_) => {}
-        // Unreachable given the branch above, but a silent `let _ =` here would be the
-        // place a real refusal went missing.
-        Err(err) => tracing::error!(%err, "plan was refused by the approval workflow"),
-    }
-    Submitted::Evaluated(verdict)
+    crate::desk::with_policy(state, |desk, cx, policy, host| {
+        desk.submit(cx, policy, host, plan)
+    })
 }
 
-/// Apply expiry and escalation, publishing what happened.
-///
-/// Called every tick. Nothing ends silently: an expiry leaves a `DecisionRecord` that
-/// is not actionable and names no operator, and both outcomes reach the bus, so the
-/// journal records a decision nobody took as exactly that rather than as a rejection.
+/// Apply expiry and escalation, publishing what happened. Called every tick.
 pub fn sweep(state: &mut AppState) {
-    let now = state.clock.now();
-    let ladder = escalation_ladder();
-    let refs: Vec<&str> = ladder.iter().map(String::as_str).collect();
-    let outcomes = state.approvals.sweep(now, &refs);
-    for (plan, id, outcome) in outcomes {
-        let event = match &outcome {
-            QueueOutcome::Expired { at } => {
-                tracing::warn!(
-                    plan = %plan,
-                    id = %id,
-                    "approval expired with nobody deciding"
-                );
-                state.alerts.push(format!(
-                    "Plan {} expired with nobody deciding; this is not a rejection",
-                    plan.short()
-                ));
-                CommandEvent::Expired { plan, at: *at }
-            }
-            QueueOutcome::Escalated { to_role, at } => {
-                state.queue_outcomes.escalated += 1;
-                tracing::info!(plan = %plan, to_role, "approval escalated");
-                CommandEvent::Escalated {
-                    plan,
-                    to_role: to_role.clone(),
-                    at: *at,
-                }
-            }
-        };
-        if let Err(err) = state
-            .events
-            .publish(now, gungnir_eventing::Event::Command(event))
-        {
-            tracing::error!(%err, "queue outcome publish failed");
-        }
-    }
+    crate::desk::with_desk(state, |desk, cx, host| desk.sweep(cx, host));
 }
 
-/// Run the policy chain over a plan.
+/// Record a decision and publish it, and close PN-07 on the item it decided.
 ///
-/// The chain is constructed per call because two of the three engines borrow the
-/// baseline and a closure over the current track snapshot; it is three small structs
-/// and no allocation beyond the boxes, which is within the tick's budget.
-/// The engines the desktop's chain runs, in order, as PN-07 and the record name them.
-pub const DESKTOP_ENGINES: [&str; 4] = [
-    "readiness and geofence",
-    "control status",
-    "authority",
-    "fires deconfliction",
-];
-
-/// What the picture can supply to the fires checks (DN-05 §5), and nothing it cannot.
+/// # Errors
 ///
-/// Friendly positions are the tracks carried as friendly, placed through the local frame;
-/// without an origin they cannot be placed and the check is told so. No-fire areas
-/// (GAP-088), airspace measures (no source) and interceptor points (GAP-031) are `None`,
-/// which DN-05 §5 rule 2 turns into a failed check with the reason -- never a pass.
-///
-/// The reported-position half of rule 1 (DN-25 §5 rule 5; GAP-090) has no function
-/// here to call: there is nothing to build. `reported_positions` is constructed
-/// inline at both call sites below as `ReportedPositionSource::NotConfigured`,
-/// because that is the honest state of this build -- GAP-091's feed does not exist
-/// -- rather than a value a helper computes and could be mistaken for one.
-fn friendly_positions(state: &AppState) -> Option<Vec<gungnir_model::Geodetic>> {
-    let frame = crate::sustainment::local_frame(state)?;
-    Some(
-        state
-            .tracking
-            .tracks()
-            .iter()
-            .filter(|t| t.classification == Classification::Friendly)
-            .map(|t| frame.to_geodetic([t.state[0], t.state[1], t.state[2]]))
-            .collect(),
-    )
-}
-
-/// The fires checks for a plan, every one with its result (DN-05 §7 for PN-05). Empty for
-/// a plan that is not a fires task.
-#[must_use]
-pub fn fires_checks(state: &AppState, plan: &PlanView) -> Vec<gungnir_model::DeconflictionCheck> {
-    let Some(fires) = plan.fires() else {
-        return Vec::new();
-    };
-    let friendly = friendly_positions(state);
-    let policy = FiresDeconflictionPolicy {
-        settings: &state.config.policy.fires,
-        context: FiresContext {
-            friendly_positions: friendly.as_deref(),
-            // GAP-090/GAP-091: no reported-position feed exists in this build, so
-            // this is the honest state rather than a silent stand-in for one.
-            reported_positions: ReportedPositionSource::NotConfigured,
-            no_fire_areas: None,
-            airspace_measures: None,
-            interceptor_points: None,
-        },
-    };
-    policy.deconflict(fires).checks
-}
-
-fn evaluate(state: &AppState, plan: &PlanView) -> PolicyVerdict {
-    with_chain(state, |chain| chain.evaluate(plan, &state.resources))
-}
-
-/// Build the desktop's policy chain and hand it to `f`.
-///
-/// Continuation-passing rather than a function returning the chain, because three of the
-/// four engines borrow values that have to be built first -- the geofence service, the
-/// role name, the friendly positions and the classifier over the current snapshot -- and
-/// a chain returned by value would outlive them.
-///
-/// **One construction site, deliberately.** [`evaluate`] and [`alternatives`] must judge
-/// a plan by the same four engines, or an alternative could be offered under a chain the
-/// plan in force was never held to; building the chain twice is exactly how that drifts.
-fn with_chain<T>(state: &AppState, f: impl FnOnce(&PolicyChain<'_>) -> T) -> T {
-    let classification = classifier(state);
-    // GAP-088: the fences the baseline declares, not an empty service.
-    let geo = crate::geofences::service_from_config(&state.config);
-    let role_name = format!("{:?}", state.role());
-    let friendly = friendly_positions(state);
-    let chain = PolicyChain::new(vec![
-        Box::new(GeofencePolicy { geo: &geo }),
-        Box::new(ControlStatusPolicy {
-            settings: &state.config.policy.control_status,
-            track_classification: &classification,
-        }),
-        Box::new(AuthorityPolicy {
-            settings: &state.config.policy.authority,
-            asking_role: &role_name,
-            action: DECISION_ACTION,
-            track_classification: &classification,
-        }),
-        // GAP-036: fourth, with what the picture can supply (see `friendly_positions`).
-        Box::new(FiresDeconflictionPolicy {
-            settings: &state.config.policy.fires,
-            context: FiresContext {
-                friendly_positions: friendly.as_deref(),
-                // GAP-090/GAP-091: see the comment on the identical field in
-                // `fires_checks` above -- no feed exists, so this is the truth.
-                reported_positions: ReportedPositionSource::NotConfigured,
-                no_fire_areas: None,
-                airspace_measures: None,
-                interceptor_points: None,
-            },
-        }),
-    ]);
-    f(&chain)
+/// `CommandError::NotFound` when the item has left the queue -- decided by somebody else,
+/// or expired -- which PN-07 reports rather than retrying.
+pub fn decide(
+    state: &mut AppState,
+    id: PendingId,
+    decision: OperatorDecision,
+) -> Result<(), CommandError> {
+    crate::desk::with_desk(state, |desk, cx, host| {
+        desk.decide(cx, host, PendingApprovalId(id.0), decision)
+    })?;
+    // The panel state is this binary's, not the desk's: the dialog is open on an item that
+    // has just left the queue.
+    state.clear_selected_approval();
+    Ok(())
 }
 
 /// How many alternatives the desktop asks for alongside a recommendation (GAP-032).
@@ -515,12 +171,12 @@ pub fn alternatives(state: &AppState, max_alternatives: usize) -> Vec<CourseOfAc
 
 /// Build the decision-support implementor over the live picture and hand it to `f`.
 ///
-/// Continuation-passing for the same reason as [`with_chain`], which it wraps: every field
-/// of `PlanAlternatives` is a shared borrow of something built here -- the policy chain,
-/// the fresh planner, the ranking and the assessor -- so a value returned from this
-/// function would outlive them. It is also what keeps [`alternatives`] and [`what_if`]
-/// looking at the same picture through the same chain, which is the property that makes an
-/// alternative comparable with the recommendation.
+/// Continuation-passing for the same reason as [`gungnir_approval::with_chain`], which it
+/// wraps: every field of `PlanAlternatives` is a shared borrow of something built here --
+/// the policy chain, the fresh planner, the ranking and the assessor -- so a value returned
+/// from this function would outlive them. Going through the library's chain builder rather
+/// than assembling four engines here is what keeps an alternative comparable with the
+/// recommendation: it is judged by the chain the plan in force was judged by.
 fn with_support<T>(
     state: &AppState,
     f: impl FnOnce(&mut gungnir_decision::PlanAlternatives<'_>) -> T,
@@ -528,21 +184,23 @@ fn with_support<T>(
     let planner = snapshot_planner(state);
     let ranking = crate::sustainment::asset_exposure(state);
     let assessor = crate::sustainment::asset_assessor(state);
-    with_chain(state, |chain| {
-        let mut support = gungnir_decision::PlanAlternatives {
-            now: state.clock.now(),
-            tracks: state.tracking.tracks(),
-            resources: &state.resources,
-            scores: ranking.scores(),
-            source: &planner,
-            policy: chain,
-            // `None` where this deployment declares no origin or no assets, which
-            // `asset_exposure` reports as `NotScored` rather than as a zero ranking.
-            assessor: assessor
-                .as_ref()
-                .map(|a| a as &dyn gungnir_assessment::ThreatAssessor),
-        };
-        f(&mut support)
+    crate::desk::with_context(state, |cx, policy| {
+        gungnir_approval::with_chain(cx, policy, |chain| {
+            let mut support = gungnir_decision::PlanAlternatives {
+                now: cx.now,
+                tracks: cx.tracks,
+                resources: cx.resources,
+                scores: ranking.scores(),
+                source: &planner,
+                policy: chain,
+                // `None` where this deployment declares no origin or no assets, which
+                // `asset_exposure` reports as `NotScored` rather than as a zero ranking.
+                assessor: assessor
+                    .as_ref()
+                    .map(|a| a as &dyn gungnir_assessment::ThreatAssessor),
+            };
+            f(&mut support)
+        })
     })
 }
 
@@ -638,51 +296,6 @@ pub fn verdict_sentence(verdict: PolicyVerdict) -> String {
     }
 }
 
-/// What the chain consulted, for PN-07.
-///
-/// The engine is named "readiness and geofence" rather than "geofence" because that is
-/// what it is: `GeofencePolicy::evaluate` denies an empty plan, an unknown resource and
-/// an unready resource before it looks at geometry at all. Those three checks are real
-/// and run against the configured resources. Only the geometry half is vacuous, and
-/// calling the whole engine vacuous would understate the chain as badly as calling it
-/// sound would overstate it.
-#[must_use]
-pub fn chain_report_for(config: &gungnir_config::ConfigBaseline) -> PolicyChainReport {
-    PolicyChainReport {
-        engines: DESKTOP_ENGINES.to_vec(),
-        // GAP-088: the real count, not a hard-coded caveat.
-        no_geofences_configured: config.geofences.is_empty(),
-        no_intercept_geometry: true,
-        fires_sources_missing: true,
-        // GAP-090/GAP-091: unconditional like `no_intercept_geometry` above --
-        // there is no configuration surface for a reported-position source at
-        // all yet, so there is nothing on `config` to read this from.
-        no_reported_position_source_configured: true,
-    }
-}
-
-/// The report for a baseline that declares nothing, which every test fixture is.
-#[must_use]
-pub fn chain_report() -> PolicyChainReport {
-    chain_report_for(&gungnir_config::ConfigBaseline::default())
-}
-
-/// Classification of a track, for the two engines that judge by class.
-///
-/// A track the snapshot no longer holds is `Unknown` rather than absent, and that is
-/// the strict reading: `ControlStatusPolicy` permits `Unknown` only at Free, and
-/// `AuthorityPolicy` needs a rule naming the unknown class. Defaulting to `Friendly`
-/// or `Hostile` would each be a guess that changes a verdict.
-fn classifier(state: &AppState) -> impl Fn(TrackId) -> Classification + Send + Sync + '_ {
-    let tracks = state.tracking.tracks();
-    move |id| {
-        tracks
-            .iter()
-            .find(|t| t.id == id)
-            .map_or(Classification::Unknown, |t| t.classification)
-    }
-}
-
 /// Why the queue is empty, derived rather than assumed.
 ///
 /// The order of the checks is the order of the causes: if no plan is being produced,
@@ -708,7 +321,7 @@ pub fn queue_empty_reason(state: &AppState) -> EmptyBecause<'_> {
                       and ready resources",
         };
     }
-    match (&state.denials.last_reason, state.denials.count) {
+    match (&state.desk.denials.last_reason, state.desk.denials.count) {
         (Some(reason), count) if count > 0 => EmptyBecause::AllDenied { reason, count },
         _ => EmptyBecause::NothingPending,
     }
@@ -720,11 +333,19 @@ pub fn queue_empty_reason(state: &AppState) -> EmptyBecause<'_> {
 /// owned pairs; the caller owns the vector for the frame.
 #[must_use]
 pub fn queue_rows(state: &AppState) -> Vec<QueueRow<'_>> {
+    use gungnir_command::ApprovalWorkflow;
     let role_name = format!("{:?}", state.role());
-    let classification = classifier(state);
+    let tracks = state.tracking.tracks();
+    let classification = |id| {
+        tracks
+            .iter()
+            .find(|t| t.id == id)
+            .map_or(gungnir_model::Classification::Unknown, |t| t.classification)
+    };
     let may_decide = role_permits(state.role(), DECISION_ACTION);
     let now = state.clock.now();
     state
+        .desk
         .approvals
         .queue()
         .iter()
@@ -781,66 +402,9 @@ pub fn queue_view<'a>(
     }
 }
 
-/// Record a decision and publish it.
-///
-/// `operator_id` is whoever is signed in, and `None` when nobody is (GAP-057, DN-23).
-/// It stayed `None` unconditionally until the session authority existed, because naming
-/// a role as though it were a person would put a false attribution into an append-only
-/// record. That reasoning is unchanged -- what changed is that an operator who has
-/// actually been verified can now be named. An expired session and an unreachable
-/// account store both still yield `None`, and PN-07 says which.
-///
-/// The role is recorded by the same rule and from the same session read (the GAP-067
-/// walk, 2026-09-16): the signed-in account's role, so D-03's arbitration rule can rank
-/// this decision if an outage leaves it in conflict, and `None` with nobody signed in.
-/// **Not the selected role**, although the desktop has one then: a selection is nobody's
-/// verified authority, and recording it would let the rule rank it as though it were
-/// (DN-23 §5 rule 1).
-pub fn decide(
-    state: &mut AppState,
-    id: PendingId,
-    decision: OperatorDecision,
-) -> Result<(), CommandError> {
-    let now = state.clock.now();
-    let signed_in = state.signed_in();
-    let operator = signed_in.as_ref().map(|s| s.operator.0.to_string());
-    let role = signed_in.as_ref().map(|s| format!("{:?}", s.role));
-    let record = state
-        .approvals
-        .decide(PendingApprovalId(id.0), decision, operator, role, now)?;
-    tracing::info!(
-        plan = %record.plan.id,
-        decision_id = %record.id,
-        decision = ?record.decision,
-        actionable = record.is_actionable(),
-        "decision recorded"
-    );
-    let event = gungnir_eventing::Event::Command(record.to_event());
-    if let Err(err) = state.events.publish(now, event) {
-        tracing::error!(%err, "decision event publish failed");
-    }
-    // GAP-059: the decision is on the audit trail with the verified operator, or none.
-    crate::audit::record(
-        state,
-        DECISION_ACTION,
-        // The whole identifier: an audit entry is searched for, never glanced at (D-61).
-        format!("plan {} {:?}", record.plan.id, record.decision),
-    );
-    // GAP-043: an actionable decision is the moment an engagement opens (DN-06 §5).
-    let opened = crate::engagements::open_for(state, &record);
-    tracing::debug!(decision = %record.id, opened, "engagements opened");
-    state.clear_selected_approval();
-    Ok(())
-}
-
-/// Whether this role may override rather than only accept.
-#[must_use]
-pub fn may_override(role: Role) -> bool {
-    role_permits(role, actions::OVERRIDE_PLAN)
-}
-
-/// The denial reason as PN-06 shows it. Kept next to the chain so a new
-/// [`DenialReason`] cannot reach the screen as a debug-formatted enum by default.
+/// The denial reason as PN-06 shows it. Kept next to the panels rather than beside the
+/// chain so a new [`DenialReason`] cannot reach the screen as a debug-formatted enum by
+/// default.
 #[must_use]
 pub fn denial_sentence(reason: DenialReason) -> String {
     match reason {
@@ -904,87 +468,5 @@ mod tests {
                 "{reason:?} reached the screen as a debug format: {s}"
             );
         }
-    }
-
-    /// The chain says what it checked and admits what it could not.
-    ///
-    /// Both reasons the no-go check is vacuous have to be reported. Naming only the
-    /// missing fences would tell an operator that configuring fences makes the check
-    /// real, and it would not: the planner computes no intercept point to test.
-    #[test]
-    fn the_chain_names_its_engines_and_every_vacuous_check() {
-        let report = chain_report();
-        assert_eq!(report.engines.len(), 4, "{:?}", report.engines);
-        assert!(report.no_geofences_configured);
-        assert!(report.no_intercept_geometry);
-        assert!(report.fires_sources_missing);
-        assert!(report.no_reported_position_source_configured);
-
-        let caveats = report.caveats();
-        assert_eq!(
-            caveats.len(),
-            4,
-            "every independent reason must be named, or fixing one would look like \
-             fixing the check"
-        );
-        assert!(caveats.iter().any(|c| c.contains("GAP-031")));
-        assert!(caveats.iter().any(|c| c.contains("geofence section")));
-        assert!(caveats.iter().any(|c| c.contains("fires")));
-        assert!(caveats.iter().any(|c| c.contains("GAP-090")));
-    }
-
-    /// Fixing either reason alone leaves the check vacuous, which is the whole point of
-    /// reporting them separately.
-    #[test]
-    fn one_caveat_remains_when_only_one_cause_is_fixed() {
-        let fences_configured = PolicyChainReport {
-            engines: chain_report().engines,
-            no_geofences_configured: false,
-            no_intercept_geometry: true,
-            fires_sources_missing: false,
-            no_reported_position_source_configured: false,
-        };
-        assert_eq!(fences_configured.caveats().len(), 1);
-
-        let sound = PolicyChainReport {
-            engines: chain_report().engines,
-            no_geofences_configured: false,
-            no_intercept_geometry: false,
-            fires_sources_missing: false,
-            no_reported_position_source_configured: false,
-        };
-        assert!(
-            sound.caveats().is_empty(),
-            "with both causes fixed the check is real and must claim nothing"
-        );
-    }
-
-    /// GAP-090's caveat is independent of the other three: it names the
-    /// friendly-position check's reported half specifically, and stands alone
-    /// when the other three causes are fixed.
-    #[test]
-    fn the_reported_position_caveat_stands_alone() {
-        let only_this = PolicyChainReport {
-            engines: chain_report().engines,
-            no_geofences_configured: false,
-            no_intercept_geometry: false,
-            fires_sources_missing: false,
-            no_reported_position_source_configured: true,
-        };
-        let caveats = only_this.caveats();
-        assert_eq!(caveats.len(), 1);
-        assert!(caveats[0].contains("GAP-090"));
-        assert!(caveats[0].contains("GAP-091"));
-    }
-
-    /// Accepting and overriding are different authorities. An operator holds the first
-    /// and not the second, and a supervisor holds both.
-    #[test]
-    fn overriding_is_a_higher_authority_than_accepting() {
-        assert!(role_permits(Role::Operator, DECISION_ACTION));
-        assert!(!may_override(Role::Operator));
-        assert!(role_permits(Role::Supervisor, DECISION_ACTION));
-        assert!(may_override(Role::Supervisor));
-        assert!(!role_permits(Role::Analyst, DECISION_ACTION));
     }
 }

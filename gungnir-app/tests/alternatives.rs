@@ -244,9 +244,9 @@ fn what_if_leaves_the_live_desktop_exactly_as_it_was() {
     let resources_before = state.resources.clone();
     let plan_before = state.last_plan.clone();
     let alternatives_before = state.alternatives.clone();
-    let queued_before = state.approvals.queue().len();
-    let records_before = state.approvals.records().len();
-    let denials_before = state.denials.count;
+    let queued_before = state.desk.approvals.queue().len();
+    let records_before = state.desk.approvals.records().len();
+    let denials_before = state.desk.denials.count;
     let alerts_before = state.alerts.clone();
     let recomputed_before = summarise(&decisions::alternatives(
         &state,
@@ -283,16 +283,16 @@ fn what_if_leaves_the_live_desktop_exactly_as_it_was() {
         "what_if changed the held alternatives"
     );
     assert_eq!(
-        state.approvals.queue().len(),
+        state.desk.approvals.queue().len(),
         queued_before,
         "what_if queued something for a person to decide"
     );
     assert_eq!(
-        state.approvals.records().len(),
+        state.desk.approvals.records().len(),
         records_before,
         "what_if left a decision in the record"
     );
-    assert_eq!(state.denials.count, denials_before);
+    assert_eq!(state.desk.denials.count, denials_before);
     assert_eq!(state.alerts, alerts_before, "what_if raised an alert");
     assert_eq!(
         summarise(&decisions::alternatives(
@@ -359,7 +359,7 @@ fn a_rehearsal_appears_only_once_a_track_is_selected() {
     );
     // Still committed to nothing.
     assert!(
-        state.approvals.queue().is_empty() || state.approvals.records().is_empty(),
+        state.desk.approvals.queue().is_empty() || state.desk.approvals.records().is_empty(),
         "the rehearsal reached the queue"
     );
     let _ = std::fs::remove_dir_all(dir);

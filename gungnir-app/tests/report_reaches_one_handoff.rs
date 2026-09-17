@@ -109,11 +109,17 @@ fn a_desktop_that_decides(name: &str) -> (AppState, std::path::PathBuf, Decision
     });
     state.tracking = Box::new(Picture(vec![hostile(7)]));
     update::tick(&mut state);
-    let Some(item) = state.approvals.queue().first().map(|p| p.id) else {
+    let Some(item) = state.desk.approvals.queue().first().map(|p| p.id) else {
         panic!("{name} queued nothing: {:?}", state.alerts);
     };
     decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted).expect("decided");
-    let decision = state.handoffs.first().expect("a handoff").handoff.decision;
+    let decision = state
+        .desk
+        .handoffs
+        .first()
+        .expect("a handoff")
+        .handoff
+        .decision;
     (state, dir, decision)
 }
 
@@ -203,9 +209,10 @@ fn an_effector_report_reaches_the_one_handoff_it_names_across_two_desktops() {
         "two desktops minted one decision identifier"
     );
     let every_handoff: Vec<_> = desktop_a
+        .desk
         .handoffs
         .iter()
-        .chain(&desktop_b.handoffs)
+        .chain(&desktop_b.desk.handoffs)
         .map(|record| record.handoff.clone())
         .collect();
     assert_eq!(every_handoff.len(), 2, "both handoffs exist at once");
@@ -281,12 +288,12 @@ fn an_effector_report_reaches_the_one_handoff_it_names_across_two_desktops() {
     }
 
     assert_eq!(
-        desktop_a.handoffs[0].reports,
+        desktop_a.desk.handoffs[0].reports,
         vec![report],
         "the desktop that issued the handoff did not apply the report to it"
     );
     assert!(
-        desktop_b.handoffs[0].reports.is_empty(),
+        desktop_b.desk.handoffs[0].reports.is_empty(),
         "the report reached the other desktop's handoff"
     );
     assert!(
