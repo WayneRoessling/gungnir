@@ -207,8 +207,8 @@ fn bench_tick(c: &mut Criterion) {
 /// `tracks().len()` and `is_healthy()` alone. Both are a field read -- `tracks()` hands
 /// back a slice of an already-projected snapshot -- so each measured about a nanosecond,
 /// where the timer and the processor's state are most of the number. Six runs of
-/// unchanged benchmark code on 2026-09-16 moved them between 0.75 and 1.59 in ratio, which a 10
-/// percent regression gate cannot read. A panel does not stop at the length; it walks
+/// unchanged benchmark code on 2026-09-16 moved them between 0.75 and 1.59 in ratio,
+/// which a 10 percent regression gate cannot read. A panel does not stop at the length; it walks
 /// the tracks, so that walk over Scenario 4's populated snapshot is what is timed. A
 /// change that made either call do work, such as cloning the snapshot, still shows here
 /// as a multiple rather than a percentage.
@@ -226,26 +226,51 @@ fn bench_snapshot_calls(c: &mut Criterion) {
         step(&mut state, &mut clock);
     }
     // The pipeline is asynchronous and has not drained those frames' detections when
-    // the loop ends. **Before 2026-09-16 this benchmark did not wait**, and it timed an
-    // empty snapshot: the assertion below failed the first time it was written. The
-    // wait is `snapshot_calls_meet_their_budget`'s, bounded the same way. Nothing polls
-    // inside the measured closure, so the snapshot it reads is fixed from here on.
+    // the loop ends, so this waits for it -- and **waits for it to finish, not to start**.
+    //
+    // Before 2026-09-16 this benchmark did not wait at all and timed an empty snapshot.
+    // The first fix (2026-09-16) waited for the first non-empty snapshot, the way
+    // `snapshot_calls_meet_their_budget` does, and that made the workload itself vary:
+    // six Gate 6 runs on 2026-09-17 read 17, 36, 36, 36, 36 and 22 tracks, depending on
+    // how far the pipeline task had got when the first snapshot arrived. A benchmark whose
+    // input changes between runs cannot be compared between runs. (The budget test is
+    // right to take the first snapshot: it asserts a ceiling, not a comparison.)
+    //
+    // So this polls until the snapshot has stopped changing: the same track count and
+    // the same pipeline counters for a full second. The clock is **not** advanced while
+    // waiting, because nothing here should age a track; only the pipeline's own
+    // progress may change what is read. Bounded at a minute, as the budget test is, so a
+    // pipeline that never settles fails the assertion rather than hanging.
+    let settled_polls = 200_u32;
+    let mut last = (usize::MAX, state.tracking.pipeline_stats());
+    let mut unchanged = 0_u32;
     for _ in 0..12_000 {
-        if !state.tracking.tracks().is_empty() {
-            break;
-        }
         std::thread::sleep(std::time::Duration::from_millis(5));
-        clock.advance(FRAME_S);
-        state.clock = Box::new(clock);
         state.tracking.poll(clock.current);
+        let now = (
+            state.tracking.tracks().len(),
+            state.tracking.pipeline_stats(),
+        );
+        if now == last && now.0 > 0 {
+            unchanged += 1;
+            if unchanged >= settled_polls {
+                break;
+            }
+        } else {
+            unchanged = 0;
+            last = now;
+        }
     }
     assert!(
-        !state.tracking.tracks().is_empty(),
-        "the pipeline produced no tracks from a dense-swarm replay, so this would time          an empty slice"
-    );
-    eprintln!(
-        "snapshot_calls: reading {} tracks",
+        unchanged >= settled_polls,
+        "the pipeline did not settle on a non-empty snapshot within a minute (last read          {} tracks), so this would time a snapshot that differs between runs",
         state.tracking.tracks().len()
+    );
+    // Printed so a Gate 6 log shows the workload each run measured.
+    eprintln!(
+        "snapshot_calls: reading {} tracks after {} epochs",
+        state.tracking.tracks().len(),
+        state.tracking.pipeline_stats().epochs
     );
 
     let mut group = c.benchmark_group("snapshot_calls");

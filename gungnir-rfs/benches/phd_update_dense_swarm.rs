@@ -7,8 +7,9 @@
 //! **Real as of 2026-09-16.** Until then this built a 200-element `Vec<f64>` and
 //! returned its length: a placeholder from before the GM-PHD filter existed, left in
 //! place after it was implemented. It measured about 0.75 ns -- a length the optimiser
-//! could see through -- and Gate 6 compared that between runs as if it were a filter; six runs of unchanged benchmark code on 2026-09-16 put its ratio
-//! anywhere from 1.07 to 3.00.
+//! could see through -- and Gate 6 compared that between runs as if it were a filter;
+//! six runs of unchanged benchmark code on 2026-09-16 put its ratio anywhere from 1.07
+//! to 3.00.
 //!
 //! What it measures now is one scan of a Scenario 4-shaped swarm: `PhdFilter::predict`
 //! then `update`, including its prune and merge, against 200 targets on a 20 x 10 grid

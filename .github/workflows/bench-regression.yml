@@ -210,13 +210,25 @@ jobs:
       # Bash, via the job's `defaults` above rather than `shell: bash` here, and it is
       # required rather than stylistic: a Windows runner defaults to PowerShell, where
       # `if [ "$GITHUB_REF" = ... ]` is a syntax error.
+      #
+      # The marker is touched first so the step after this one can tell which results
+      # this run wrote and which the cache restored; see that step.
       - name: Run benchmarks against the baseline
         run: |
+          touch "$RUNNER_TEMP/bench-run-start"
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
             cargo bench --workspace -- --save-baseline main --noplot
           else
             cargo bench --workspace -- --baseline-lenient main --noplot
           fi
+      # **Before the comparison and before the save** (2026-09-17). The baseline is
+      # restored into `target/criterion` and saved back out of it, so a removed
+      # benchmark's directory was carried into every baseline for ever and compared at
+      # exactly 1.000x against itself. `snapshot_calls/tracks` and `/is_healthy` did that
+      # after #125 replaced them. The script drops every benchmark this run did not
+      # write, judged against the marker above; `bench_prune_stale.py` has the detail.
+      - name: Drop results this run did not produce
+        run: python3 .github/scripts/bench_prune_stale.py "$RUNNER_TEMP/bench-run-start"
       # The comparison moved to `.github/scripts/bench_compare.py` on 2026-09-16. It was a
       # forty-line Python program inside a YAML block scalar behind a bash heredoc, which
       # meant it could only ever be exercised by pushing to main and reading a log -- and
