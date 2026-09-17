@@ -793,12 +793,22 @@ impl App {
     /// PN-07's three outcomes. The reject reason is read before `decide` clears the
     /// dialog: it is part of the record (DN-10 §3), and PN-07 will not enable the
     /// reject control without one.
+    ///
+    /// **Where it goes depends on who holds the queue** (GAP-133, DN-31 §6.5, §6.6).
+    /// While this desktop is linked the decision is posted to the node, which authorizes
+    /// it, records it, opens the engagement and issues the handoff; nothing is recorded
+    /// here, and the dialog stays open until the node answers. Cut off, the line below is
+    /// exactly what it always was.
     fn apply_decision(
         &mut self,
         id: gungnir_ui::panels::approval_queue::PendingId,
         choice: DecisionChoice,
     ) {
         let reason = self.state.dialog.reject_reason.trim().to_owned();
+        if gungnir_app::projection::node_holds_the_queue(&self.state) {
+            self.decide_through_the_node(id, choice, reason);
+            return;
+        }
         let decision = match choice {
             DecisionChoice::Accept => OperatorDecision::Accepted,
             DecisionChoice::Override => OperatorDecision::Overridden,
@@ -818,6 +828,33 @@ impl App {
             self.state
                 .alerts
                 .push(format!("Decision not recorded: {why}"));
+        }
+    }
+
+    /// Post PN-07's choice to the node (GAP-133, DN-31 §6.3).
+    ///
+    /// **The dialog is not closed here.** The decision is the node's to take, and until
+    /// it answers nobody knows whether it stands: closing now would tell the operator it
+    /// was recorded before anything had recorded it. `projection::tick` takes the answer
+    /// and PN-07 draws it in place of the controls.
+    fn decide_through_the_node(
+        &mut self,
+        id: gungnir_ui::panels::approval_queue::PendingId,
+        choice: DecisionChoice,
+        reason: String,
+    ) {
+        use gungnir_remote::queue::DecisionChoice as Wire;
+        let wire = match choice {
+            DecisionChoice::Accept => Wire::Accept,
+            DecisionChoice::Override => Wire::Override,
+            DecisionChoice::Reject => Wire::Reject { reason },
+        };
+        let item = gungnir_model::PendingApprovalId(id.0);
+        if let Err(why) = gungnir_app::projection::decide(&mut self.state, item, wire) {
+            tracing::error!(%why, item = %item, "the decision could not be sent to the node");
+            self.state
+                .alerts
+                .push(format!("Decision not sent: {why}. Nothing was recorded."));
         }
     }
 

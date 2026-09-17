@@ -257,6 +257,36 @@ pub struct StatusStripView<'a> {
     pub rehearsal: Option<&'a str>,
     /// Who is signed in (GAP-057, DN-23 §7).
     pub operator: OperatorLine<'a>,
+    /// **Whose approval queue is in force** (GAP-133, DN-31 §8): the node's, or this
+    /// desktop's while cut off.
+    ///
+    /// Beside the backend element and not folded into it, because they answer different
+    /// questions that can differ for a moment: the backend is where the *picture* comes
+    /// from, and this is where a *decision* goes. A desktop that has fallen back shows
+    /// an embedded backend and its own queue together; one that has been restored but
+    /// has not switched back yet shows both as this desktop's, which is exactly what is
+    /// true until PN-18's reconciliation is seen (D-15).
+    pub queue: crate::panels::approval_queue::QueueAuthority<'a>,
+}
+
+/// Whose approval queue is in force (GAP-133, DN-31 §8).
+///
+/// Beside the operator line, because together they are the two halves of what happens
+/// when somebody decides at this console: who it is attributed to, and whose record it
+/// lands in. **Neither is coloured as a problem.** A desktop deployed on its own holding
+/// its own queue is the disconnected profile working exactly as designed, and a desktop
+/// that has fallen back is already saying so through the backend element beside this
+/// one; colouring this as well would be the same fact shouted twice.
+fn draw_queue_authority(ui: &mut Ui, queue: crate::panels::approval_queue::QueueAuthority<'_>) {
+    use crate::panels::approval_queue::QueueAuthority;
+    match queue {
+        QueueAuthority::Node { endpoint } => {
+            ui.label(format!("Queue: node {endpoint}"));
+        }
+        QueueAuthority::ThisDesktop => {
+            ui.label("Queue: this desktop");
+        }
+    }
 }
 
 /// The operator line. Nobody signed in is drawn in the warning colour because every
@@ -711,6 +741,9 @@ pub fn render_status_strip(ui: &mut Ui, palette: &theme::Palette, view: &StatusS
         ui.separator();
 
         draw_operator(ui, palette, view.operator);
+        ui.separator();
+
+        draw_queue_authority(ui, view.queue);
         ui.separator();
 
         ui.label(format!(

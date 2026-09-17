@@ -65,6 +65,9 @@ fn the_empty_approval_queue_draws_its_reason() {
         role: "Operator",
         handoffs: &[],
         now: gungnir_model::MissionTime(0.0),
+        authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+        decided: &[],
+        cannot_decide: None,
     };
     let probe = RenderProbe::new();
     let (clicked, frame) =
@@ -136,6 +139,9 @@ fn the_approval_queue_keeps_a_handoff_visible_until_it_is_delivered() {
         role: "Operator",
         handoffs: &handoffs,
         now: MissionTime(142.0),
+        authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+        decided: &[],
+        cannot_decide: None,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &view));
@@ -200,6 +206,9 @@ fn the_approval_queue_is_silent_when_every_handoff_is_delivered() {
         role: "Operator",
         handoffs: &handoffs,
         now: MissionTime(142.0),
+        authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+        decided: &[],
+        cannot_decide: None,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &view));
@@ -215,13 +224,19 @@ fn the_approval_queue_is_silent_when_every_handoff_is_delivered() {
 /// control that copies it, because the decision dialog is where a person quotes the plan
 /// to somebody else (GAP-130). A seed's plan number is drawn as the seed gives it.
 #[test]
+// One test end to end, because what it asserts is that the *same* identifier is drawn
+// two different ways on two panels: splitting it would leave each half unable to say
+// what the other drew. It crossed the pedantic line limit when GAP-133 gave both views
+// their new fields.
+#[allow(clippy::too_many_lines)]
 fn the_queue_draws_a_plans_tag_and_the_dialog_its_whole_identifier() {
     use crate::panels::approval_queue::{
         render_approval_queue, ApprovalQueueView, EmptyBecause, PendingId, QueueOrder, QueueRow,
         TimeRemaining, Verdict,
     };
     use crate::panels::decision_dialog::{
-        render_decision_dialog, DecisionDialogState, DecisionDialogView, OperatorIdentity,
+        render_decision_dialog, DecisionDialogState, DecisionDialogView, DecisionRoute,
+        OperatorIdentity,
     };
     use crate::panels::identifier::COPY_LABEL;
     use gungnir_model::PlanId;
@@ -239,6 +254,7 @@ fn the_queue_draws_a_plans_tag_and_the_dialog_its_whole_identifier() {
         time_remaining: TimeRemaining::Seconds(40.0),
         pre_delegated: false,
         may_decide: true,
+        offered_to: &[],
         escalated_from: None,
     };
     let rows = [
@@ -255,6 +271,9 @@ fn the_queue_draws_a_plans_tag_and_the_dialog_its_whole_identifier() {
         role: "Operator",
         handoffs: &[],
         now: gungnir_model::MissionTime(0.0),
+        authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+        decided: &[],
+        cannot_decide: None,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &queue));
@@ -298,6 +317,8 @@ fn the_queue_draws_a_plans_tag_and_the_dialog_its_whole_identifier() {
         },
         may_accept: true,
         may_override: true,
+        route: DecisionRoute::ThisDesktop,
+        answer: None,
     };
     let mut state = DecisionDialogState::default();
     let (_, frame) =
@@ -381,7 +402,8 @@ fn the_handoff_record_draws_whole_identifiers_with_copy_controls() {
 fn the_decision_dialog_draws_accept_last() {
     use crate::panels::approval_queue::{PendingId, QueueRow, TimeRemaining, Verdict};
     use crate::panels::decision_dialog::{
-        render_decision_dialog, DecisionDialogState, DecisionDialogView, OperatorIdentity,
+        render_decision_dialog, DecisionDialogState, DecisionDialogView, DecisionRoute,
+        OperatorIdentity,
     };
 
     let row = QueueRow {
@@ -392,6 +414,7 @@ fn the_decision_dialog_draws_accept_last() {
         time_remaining: TimeRemaining::Seconds(18.0),
         pre_delegated: false,
         may_decide: true,
+        offered_to: &[],
         escalated_from: None,
     };
     let view = DecisionDialogView {
@@ -417,6 +440,8 @@ fn the_decision_dialog_draws_accept_last() {
         },
         may_accept: true,
         may_override: true,
+        route: DecisionRoute::ThisDesktop,
+        answer: None,
     };
 
     let probe = RenderProbe::new();
@@ -459,7 +484,8 @@ fn the_decision_dialog_draws_accept_last() {
 fn a_degraded_decision_draws_why_accept_is_shut() {
     use crate::panels::approval_queue::{PendingId, QueueRow, TimeRemaining, Verdict};
     use crate::panels::decision_dialog::{
-        render_decision_dialog, DecisionDialogState, DecisionDialogView, Degraded, OperatorIdentity,
+        render_decision_dialog, DecisionDialogState, DecisionDialogView, DecisionRoute, Degraded,
+        OperatorIdentity,
     };
 
     let row = QueueRow {
@@ -470,6 +496,7 @@ fn a_degraded_decision_draws_why_accept_is_shut() {
         time_remaining: TimeRemaining::NoExpiryConfigured,
         pre_delegated: false,
         may_decide: true,
+        offered_to: &[],
         escalated_from: None,
     };
     let degraded = [Degraded {
@@ -494,6 +521,8 @@ fn a_degraded_decision_draws_why_accept_is_shut() {
         },
         may_accept: true,
         may_override: false,
+        route: DecisionRoute::ThisDesktop,
+        answer: None,
     };
 
     let probe = RenderProbe::new();
@@ -856,6 +885,7 @@ fn the_status_strip_draws_an_unclassified_alert_total() {
         coverage: crate::panels::status_strip::CoverageStatus::NoApproaches,
         rehearsal: None,
         operator: OperatorLine::NobodySignedIn,
+        queue: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &view));
@@ -980,6 +1010,9 @@ fn the_panels_survive_a_narrow_slot() {
         role: "Analyst",
         handoffs: &handoffs,
         now: MissionTime(142.0),
+        authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+        decided: &[],
+        cannot_decide: None,
     };
     let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &queue));
     assert!(!frame.texts.is_empty(), "the queue drew nothing at 220 px");
@@ -1127,6 +1160,7 @@ fn the_status_strip_draws_the_joint_control_status_terms() {
         coverage: crate::panels::status_strip::CoverageStatus::NoApproaches,
         rehearsal: None,
         operator: OperatorLine::NobodySignedIn,
+        queue: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &view));
@@ -1584,6 +1618,7 @@ fn the_status_strip_says_when_the_journal_is_not_encrypted() {
         profile: None,
         rehearsal: None,
         operator: OperatorLine::NobodySignedIn,
+        queue: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
     };
 
     let probe = RenderProbe::new();
@@ -1641,6 +1676,7 @@ fn the_strip_says_who_is_signed_in_and_when_nobody_is() {
         profile: None,
         rehearsal: None,
         operator,
+        queue: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
     };
     let probe = RenderProbe::new();
     let draw = |line| {
@@ -2047,6 +2083,7 @@ fn the_handover_says_when_nobody_has_taken_the_watch() {
             pending: 1,
             decided_this_session: 0,
             expired: 0,
+            escalated: 0,
         }),
         delegations: &[],
         accepted_gaps: Err(Unavailable {
@@ -2062,6 +2099,8 @@ fn the_handover_says_when_nobody_has_taken_the_watch() {
         vocabulary: &vocabulary,
         exposure: Err("not evaluated in this test"),
         warnings: crate::panels::commander_summary::WarningCounts::default(),
+        queue_authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+        decisions_by_role: &[],
     };
 
     let probe = RenderProbe::new();
@@ -2125,6 +2164,7 @@ fn the_status_strip_says_how_long_since_the_node_was_heard() {
         profile: None,
         rehearsal: None,
         operator: OperatorLine::NobodySignedIn,
+        queue: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
     };
     let node = |connected, freshness| BackendStatus::Node {
         endpoint: "node.local:7410",
@@ -2242,6 +2282,7 @@ fn outcomes_keep_track_inferred_and_corroborated_apart() {
             pending: 0,
             decided_this_session: 2,
             expired: 0,
+            escalated: 0,
         }),
         delegations: &[],
         accepted_gaps: Err(Unavailable {
@@ -2262,6 +2303,8 @@ fn outcomes_keep_track_inferred_and_corroborated_apart() {
         vocabulary: &vocabulary,
         exposure: Err("not evaluated in this test"),
         warnings: crate::panels::commander_summary::WarningCounts::default(),
+        queue_authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+        decisions_by_role: &[],
     };
     let probe = RenderProbe::new();
     let mut notes = String::new();
@@ -2404,6 +2447,7 @@ fn the_commander_summary_lists_the_most_exposed_assets() {
             pending: 0,
             decided_this_session: 0,
             expired: 0,
+            escalated: 0,
         }),
         delegations: &[],
         accepted_gaps: Err(Unavailable {
@@ -2416,6 +2460,8 @@ fn the_commander_summary_lists_the_most_exposed_assets() {
         controls_available: false,
         vocabulary: &vocabulary,
         warnings: crate::panels::commander_summary::WarningCounts::default(),
+        queue_authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+        decisions_by_role: &[],
     };
     let probe = RenderProbe::new();
     let mut notes = String::new();
@@ -2782,6 +2828,7 @@ fn the_status_strip_says_when_the_baseline_is_not_in_force() {
         profile: None,
         rehearsal: None,
         operator: OperatorLine::NobodySignedIn,
+        queue: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
     };
     let probe = RenderProbe::new();
 

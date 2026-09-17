@@ -243,31 +243,62 @@ pub fn what_if_selected_track_lost(state: &AppState) -> Option<CourseOfAction> {
     Some(what_if(state, &remaining))
 }
 
+/// What became of the plan on this tick, as the decision support reads it (GAP-133).
+///
+/// Separate from [`Submitted`] because the support is refreshed on **both** paths and
+/// only one of them submits anything: while a desktop is linked the node holds the queue
+/// and this desktop submits nothing (DN-31 §6.5), and a trigger keyed on a submission
+/// would have left PN-05's options blank on every linked desktop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlanMoved {
+    /// A fresh plan was proposed, wherever it was queued.
+    Proposed,
+    /// A fresh plan was proposed and this desktop's own queue refused it as superseded
+    /// (DN-08 §5). Only the cut-off path can say this; the node applies no baseline
+    /// while it runs, so nothing it proposes is superseded.
+    Superseded,
+    /// The plan did not change.
+    Unchanged,
+}
+
+impl PlanMoved {
+    /// What the tick saw: whether the plan changed, and what this desktop's own queue
+    /// made of it where it was the one that took it.
+    #[must_use]
+    pub fn of(plan_changed: bool, submitted: Option<&Submitted>) -> Self {
+        match (plan_changed, submitted) {
+            (_, Some(Submitted::Superseded)) => PlanMoved::Superseded,
+            (true, _) => PlanMoved::Proposed,
+            (false, _) => PlanMoved::Unchanged,
+        }
+    }
+}
+
 /// Refresh the decision support PN-05 draws (GAP-032).
 ///
-/// `submitted` is what became of the plan proposed this frame, or `None` on a frame where
-/// the plan did not change. The two halves are refreshed on different triggers because
-/// they go stale for different reasons, and each one costs an allocator solve:
+/// `moved` is what became of the plan this frame. The two halves are refreshed on
+/// different triggers because they go stale for different reasons, and each one costs an
+/// allocator solve:
 ///
 /// - the **alternatives** are alternatives to a particular plan, so they are regenerated
 ///   when a plan is proposed and cleared when one is superseded -- a superseded plan was
 ///   never evaluated, and options nobody could act on are worse than none;
 /// - the **rehearsal** answers a question the operator posed by selecting a track, so it
 ///   is recomputed when the selection moves and when the plan under it has been replaced.
-pub fn refresh_support(state: &mut AppState, submitted: Option<&Submitted>) {
-    match submitted {
-        Some(Submitted::Evaluated(_)) => {
+pub fn refresh_support(state: &mut AppState, moved: PlanMoved) {
+    match moved {
+        PlanMoved::Proposed => {
             let courses = alternatives(state, MAX_ALTERNATIVES);
             state.alternatives = courses;
             // The held rehearsal was computed against the plan just replaced, so it is
             // stale whatever the selection is.
             state.what_if_for = None;
         }
-        Some(Submitted::Superseded) => {
+        PlanMoved::Superseded => {
             state.alternatives = Vec::new();
             state.what_if_for = None;
         }
-        None => {}
+        PlanMoved::Unchanged => {}
     }
     if state.what_if_for != state.selected_track() {
         let course = what_if_selected_track_lost(state);
@@ -373,6 +404,9 @@ pub fn queue_rows(state: &AppState) -> Vec<QueueRow<'_>> {
             // `DECIDE_PLAN` that this item was never offered to may not take it, and
             // escalation adds roles without removing the original (DN-10 §5).
             may_decide: may_decide && item.may_be_decided_by(&role_name),
+            // Named so a row this role may not decide says who may (DN-31 §8). The
+            // queue's own list, in escalation order, not a second derivation of it.
+            offered_to: &item.offered_to,
             escalated_from: item.escalated_from.as_deref(),
         })
         .collect()
@@ -383,22 +417,64 @@ pub fn queue_rows(state: &AppState) -> Vec<QueueRow<'_>> {
 /// `handoffs` is every handoff the desktop has issued (`handoffs::rows`), not the subset
 /// still owed: PN-06's *stays visible until delivered* rule is the panel's, so a filter
 /// here could only ever weaken it (GAP-040).
+///
+/// `rows` and `decided` are the caller's because they come from two different places
+/// depending on who holds the queue (GAP-133, DN-31 §6.6); everything else about the view
+/// is the same question either way.
 #[must_use]
 pub fn queue_view<'a>(
     state: &'a AppState,
     rows: &'a [QueueRow<'a>],
     handoffs: &'a [gungnir_ui::panels::handoff::HandoffRow<'a>],
     role_name: &'a str,
+    decided: &'a [gungnir_ui::panels::approval_queue::DecidedRow<'a>],
 ) -> ApprovalQueueView<'a> {
+    let node = crate::projection::node_holds_the_queue(state);
     ApprovalQueueView {
         rows,
         order: QueueOrder::TimeOnly { priority: PRIORITY },
-        empty_because: queue_empty_reason(state),
+        empty_because: if node {
+            node_queue_empty_reason(state)
+        } else {
+            queue_empty_reason(state)
+        },
         selected: state.selected_approval(),
-        may_decide: role_permits(state.role(), DECISION_ACTION),
+        // Whether this console may decide at all. While the node holds the queue the
+        // route needs a token, so nobody signed in means nothing is actionable however
+        // the desktop's selected role is set (DN-31 §6.6, DN-23 §5 rule 5).
+        may_decide: if node {
+            state
+                .signed_in()
+                .is_some_and(|s| role_permits(s.role, DECISION_ACTION))
+        } else {
+            role_permits(state.role(), DECISION_ACTION)
+        },
         role: role_name,
         handoffs,
         now: state.clock.now(),
+        authority: crate::projection::authority(state),
+        decided,
+        cannot_decide: (node && state.signed_in().is_none()).then_some(
+            "Nobody is signed in. The node authorizes every decision against the \
+             caller's role, so no decision can be taken from this console until \
+             somebody signs in -- this queue is read-only until then.",
+        ),
+    }
+}
+
+/// Why the node's queue is showing nothing (GAP-133, DN-31 §6.6).
+///
+/// The desktop's own reasons do not apply: its planner, its allocator and its denial
+/// history say nothing about what a node is waiting for. The two answers this desktop can
+/// honestly give are "the node has not told me" and "the node is waiting on nothing", and
+/// they are drawn differently.
+#[must_use]
+fn node_queue_empty_reason(state: &AppState) -> EmptyBecause<'_> {
+    match (&state.backend, state.projection.queue.waiting.is_some()) {
+        (gungnir_config::BackendConfig::Remote { endpoint }, false) => {
+            EmptyBecause::NotReceived { from: endpoint }
+        }
+        _ => EmptyBecause::NothingPending,
     }
 }
 

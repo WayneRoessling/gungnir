@@ -22,7 +22,8 @@
 //! both halves. A node queues what it proposes and serves `POST /v3/queue/{item}/
 //! decision`, and [`queue`] is this crate's side of it: a linked desktop **projects** the
 //! node's queue and decides through that route, and never queues, engages or hands off a
-//! plan the node proposed (`docs/design/DN-31-node-approval-queue.md` §6.5, §6.6).
+//! plan the node proposed (`docs/design/DN-31-node-approval-queue.md` §6, clauses DN-31
+//! §6.5 and §6.6).
 //! Forwarding decisions taken while cut off is GAP-134's and is not built here.
 //!
 //! **Corrected 2026-09-07: TLS exists.** An `https` endpoint speaks mutual TLS --

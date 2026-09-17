@@ -122,12 +122,57 @@ pub enum TimeRemaining<'a> {
     },
 }
 
+/// Whose approval queue this panel is drawing (DN-31 §6.5, §8; GAP-133).
+///
+/// **Not decoration.** A decision taken here goes to two different places depending on
+/// which of these is in force -- the node's record, or this desktop's own -- and an
+/// operator who cannot tell which they are looking at cannot tell whether the console
+/// beside them sees the same queue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueAuthority<'a> {
+    /// The node's queue, which every desktop linked to it shows and decides in. This
+    /// desktop queues nothing, opens no engagement and issues no handoff for it.
+    Node { endpoint: &'a str },
+    /// This desktop's own, because it is cut off from its node or was deployed with
+    /// none.
+    ThisDesktop,
+}
+
+impl QueueAuthority<'_> {
+    /// The sentence under the heading.
+    #[must_use]
+    pub fn sentence(&self) -> String {
+        match self {
+            QueueAuthority::Node { endpoint } => format!(
+                "This is node {endpoint}'s queue. Every desktop linked to it sees the same \
+                 items in the same order, and the first valid decision on an item ends it."
+            ),
+            QueueAuthority::ThisDesktop => "This is this desktop's own queue: decisions \
+                 taken here are recorded here."
+                .to_owned(),
+        }
+    }
+
+    /// Whether the node holds this queue.
+    #[must_use]
+    pub fn is_the_node(&self) -> bool {
+        matches!(self, QueueAuthority::Node { .. })
+    }
+}
+
 /// One row of the queue.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct QueueRow<'a> {
     /// The role this item was escalated from, when it has been. The original role keeps
     /// seeing it (DN-10 §5), so this is a mark rather than a reassignment.
     pub escalated_from: Option<&'a str>,
+    /// Every role the item is offered to, in escalation order (DN-10 amendment 1 c,
+    /// DN-31 §8).
+    ///
+    /// Drawn where `may_decide` is false, so a row that says the decision must go up says
+    /// **who it must go up to**. A row an operator cannot act on and cannot see the owner
+    /// of is a row they can only take to a radio.
+    pub offered_to: &'a [String],
     pub id: PendingId,
     /// Shown by its short tag, as every row on this panel shows an identifier (D-61).
     pub plan_id: PlanId,
@@ -153,6 +198,13 @@ pub enum EmptyBecause<'a> {
     /// Plans were produced and policy denied every one. Nothing is waiting on a human
     /// because nothing was allowed to reach one.
     AllDenied { reason: &'a str, count: usize },
+    /// The node holds the queue and has not yet told this desktop what is in it
+    /// (GAP-133, DN-31 §6.6).
+    ///
+    /// **Not an empty queue.** Nothing has been received, which is the one situation
+    /// where this panel knows it does not know; drawing it as "nothing is waiting" would
+    /// be the same lie as a calm queue on a desktop whose planner has stopped.
+    NotReceived { from: &'a str },
 }
 
 impl EmptyBecause<'_> {
@@ -168,6 +220,10 @@ impl EmptyBecause<'_> {
             EmptyBecause::AllDenied { reason, count } => format!(
                 "Empty because policy denied every plan ({count} so far); the most \
                  recent reason was {reason}. Nothing reached a human."
+            ),
+            EmptyBecause::NotReceived { from } => format!(
+                "Node {from} holds the queue and has not yet said what is in it. This is \
+                 not an empty queue: nothing has been received."
             ),
         }
     }
@@ -196,6 +252,33 @@ pub enum QueueOrder<'a> {
     TimeOnly { priority: Unavailable<'a> },
 }
 
+/// How an item left the node's queue (GAP-133, DN-31 §9 row 7).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DecidedBy<'a> {
+    /// A person decided it, at another console or this one.
+    Person {
+        accepted: bool,
+        /// `None` where the decision the node holds names nobody, which only a
+        /// forwarded one can (DN-23 §5 rule 1). Never invented.
+        operator: Option<&'a str>,
+        role: Option<&'a str>,
+        at: MissionTime,
+    },
+    /// The window closed with nobody deciding. **Not a rejection**: nobody chose.
+    Expiry { at: MissionTime },
+}
+
+/// One item that has left the node's queue while this desktop was watching.
+///
+/// PN-06 draws these so that an operator at one console sees a decision taken at
+/// another -- the property DN-31 §9 row 7 asks for by name. It is a recent-activity
+/// list and not a record: the record is the node's journal.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DecidedRow<'a> {
+    pub plan: PlanId,
+    pub by: DecidedBy<'a>,
+}
+
 /// Everything PN-06 draws.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ApprovalQueueView<'a> {
@@ -217,6 +300,19 @@ pub struct ApprovalQueueView<'a> {
     pub handoffs: &'a [HandoffRow<'a>],
     /// The mission clock, for the age of anything still waiting on an endpoint.
     pub now: MissionTime,
+    /// Whose queue this is (GAP-133, DN-31 §8).
+    pub authority: QueueAuthority<'a>,
+    /// What has left the node's queue while this desktop was watching, newest first
+    /// (GAP-133). Empty on a desktop holding its own queue: an item it decided leaves
+    /// through `handoffs` below, which is the same item's next step.
+    pub decided: &'a [DecidedRow<'a>],
+    /// Why no control is enabled, where the reason is about the console rather than
+    /// about a row.
+    ///
+    /// `None` where decisions can be taken. `Some` is drawn once, above the rows, so
+    /// that a queue full of greyed-out controls says why once instead of a person
+    /// guessing from each row.
+    pub cannot_decide: Option<&'a str>,
 }
 
 /// Render the queue. Returns the item the operator clicked this frame, if any.
@@ -227,6 +323,15 @@ pub fn render_approval_queue(
 ) -> Option<PendingId> {
     ui.heading("Approval queue");
 
+    // Whose queue this is, before anything in it (GAP-133, DN-31 §8). A decision taken
+    // here reaches a different record depending on the answer, so it is drawn first and
+    // every time rather than only when it changes.
+    ui.label(
+        RichText::new(view.authority.sentence())
+            .color(palette.muted_text_color())
+            .size(palette.small_font_size),
+    );
+
     if !view.may_decide {
         ui.label(
             RichText::new(format!(
@@ -235,6 +340,11 @@ pub fn render_approval_queue(
             ))
             .color(palette.muted_text_color()),
         );
+    }
+    if let Some(reason) = view.cannot_decide {
+        // Warning-coloured: this is a console that can see the queue and cannot act on
+        // it, which an operator has to know before they reach for a control.
+        ui.label(RichText::new(reason).color(palette.warning_color));
     }
 
     let mut clicked = None;
@@ -256,9 +366,75 @@ pub fn render_approval_queue(
                 }
             });
     }
-    // Drawn after both branches on purpose: see `draw_undelivered`.
+    // Drawn after both branches on purpose: see `draw_undelivered` and `draw_decided`.
+    draw_decided(ui, palette, view);
     draw_undelivered(ui, palette, view);
     clicked
+}
+
+/// What has left the node's queue, and who ended it (GAP-133, DN-31 §9 row 7).
+///
+/// Outside the empty/non-empty branch, for the same reason `draw_undelivered` is: a
+/// shift that has just decided everything in front of it sees an empty queue, and the
+/// decision another console took is exactly what it most needs to see at that moment.
+///
+/// Silent when nothing has ended, and silent on a desktop holding its own queue -- there
+/// the decision and the handoff below it are the same item's next step, and a second list
+/// saying "you decided this" would be the panel telling an operator what they just did.
+fn draw_decided(ui: &mut Ui, palette: &theme::Palette, view: &ApprovalQueueView<'_>) {
+    if view.decided.is_empty() {
+        return;
+    }
+    ui.separator();
+    ui.strong("Ended on the node");
+    ui.label(
+        RichText::new(
+            "Decided at a console linked to this node, or expired on the node's clock. \
+             The node's record is the record.",
+        )
+        .color(palette.muted_text_color())
+        .size(palette.small_font_size),
+    );
+    for row in view.decided {
+        let (text, color) = match row.by {
+            DecidedBy::Person {
+                accepted,
+                operator,
+                role,
+                at,
+            } => {
+                let who = match (operator, role) {
+                    (Some(operator), Some(role)) => format!("operator {operator} as {role}"),
+                    (Some(operator), None) => {
+                        format!("operator {operator}, whose role was not recorded")
+                    }
+                    // Only a forwarded decision can name nobody (DN-23 §5 rule 1): the
+                    // node's own route needs a token. Said rather than left blank.
+                    (None, _) => "somebody this node cannot name".to_owned(),
+                };
+                (
+                    format!(
+                        "Plan #{} {} by {who} at T+{:.0} s",
+                        row.plan.short(),
+                        if accepted { "accepted" } else { "rejected" },
+                        at.0
+                    ),
+                    palette.muted_text_color(),
+                )
+            }
+            // Warning-coloured, and worded so it cannot be read as a rejection: nobody
+            // chose, which is the distinction DN-10 §6 and MOE-01 turn on.
+            DecidedBy::Expiry { at } => (
+                format!(
+                    "Plan #{} expired at T+{:.0} s with nobody deciding; not a rejection",
+                    row.plan.short(),
+                    at.0
+                ),
+                palette.warning_color,
+            ),
+        };
+        ui.label(RichText::new(text).color(color));
+    }
 }
 
 /// What the order an operator is scanning actually is.
@@ -431,7 +607,16 @@ fn draw_time_remaining(ui: &mut Ui, palette: &theme::Palette, remaining: TimeRem
 
 fn draw_authority(ui: &mut Ui, palette: &theme::Palette, row: &QueueRow<'_>) {
     if !row.may_decide {
-        ui.label(RichText::new("must go up").color(palette.warning_color));
+        // **Named, not just refused** (DN-31 §8): an item this console may not decide
+        // says who may, so an operator takes it to the right person instead of to the
+        // radio. An empty list means the node offered it to nobody this desktop can
+        // read, which is said rather than drawn as a blank.
+        let to = if row.offered_to.is_empty() {
+            "must go up (the roles it is offered to were not received)".to_owned()
+        } else {
+            format!("offered to {}", row.offered_to.join(", "))
+        };
+        ui.label(RichText::new(to).color(palette.warning_color));
     } else if row.pre_delegated {
         // Named rather than hidden: a pre-delegated case still produces a record, and
         // an operator should know which of their decisions were pre-authorized.
@@ -508,6 +693,7 @@ mod tests {
             time_remaining: TimeRemaining::Seconds(12.0),
             pre_delegated: false,
             may_decide: true,
+            offered_to: &[],
             escalated_from: None,
         };
         assert!(

@@ -42,6 +42,7 @@ pub mod node_tasks;
 pub mod peers;
 pub mod pointcloud;
 pub mod prediction;
+pub mod projection;
 pub mod radar;
 pub mod rehearsal;
 pub mod requirements;

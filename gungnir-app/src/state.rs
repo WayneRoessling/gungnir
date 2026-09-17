@@ -144,6 +144,13 @@ pub struct AppState {
         std::collections::HashMap<gungnir_model::SensorTaskId, gungnir_model::SensorTaskId>,
     /// The peer links bound from the baseline (GAP-009), for PN-09.
     pub peer_links: Vec<crate::peers::BoundPeer>,
+    /// The node's approval queue while this desktop is linked, and what it has asked of
+    /// it (GAP-133, DN-31 §6.6).
+    ///
+    /// **Not a second queue.** While the node holds the queue this desktop holds a
+    /// picture of it and `desk` below queues nothing; while it is cut off this is stale
+    /// and `crate::projection::in_force` is what stops a panel reading it.
+    pub projection: crate::projection::ProjectionState,
     /// The fallback in force after a node went silent, if any (GAP-050).
     pub fallback: Option<crate::failover::Fallback>,
     /// The node's history being fetched for the reconciliation (GAP-050).
@@ -621,6 +628,7 @@ impl AppState {
             link_control: std::sync::Arc::new(std::sync::Mutex::new(None)),
             node_task_map: std::collections::HashMap::new(),
             peer_links: peers,
+            projection: crate::projection::ProjectionState::default(),
             fallback: None,
             pending_history: None,
             endpoint_client,

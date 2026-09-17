@@ -61,9 +61,21 @@
 //! deadlines) and *still* inventing `pre_delegated` and `priority` locally, which are
 //! answers only the node's authority matrix and assessment can give.
 
-use gungnir_api::v3::{DecisionChoice, DecisionRefused, QueueItemView};
 use gungnir_model::events::CommandEvent;
 use gungnir_model::{DecisionId, MissionTime, PendingApprovalId, PlanId, RequestId};
+
+/// The three wire types a desktop reads and builds, re-exported rather than mirrored.
+///
+/// [`OutboundTask`](crate::link::OutboundTask) mirrors `SensorTaskRequest` field for
+/// field because `gungnir-app` has no production edge to `gungnir-api` and a desktop
+/// *producer* should name no type from it. These three are the other case: a
+/// `QueueItemView` and a `DecisionRefused` are the **node's** answers, read back whole,
+/// and a mirror of either would be a second description of what a route already defines
+/// -- the `409` most of all, which is the sentence PN-07 shows a person. A re-export adds
+/// no manifest edge and keeps one definition
+/// (`docs/agentic-coding-standards.md` §1.2; the workspace rule against redefining a type
+/// another crate owns).
+pub use gungnir_api::v3::{DecisionChoice, DecisionRefused, QueueItemView};
 
 /// How many ended items a link remembers, oldest dropped.
 ///
