@@ -1,0 +1,36 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
+[package]
+name = "gungnir-approval"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The decision path both binaries run: the policy chain over a plan, the queue's feeding and sweep, deciding with engagement opening and the one handoff builder, and handoff delivery bookkeeping. A productization crate so each safety rule has one implementation rather than a copy per binary (D-57, docs/design/DN-31-node-approval-queue.md §3). Human-owned changes. Pairs with gungnir-command and gungnir-policy."
+
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because this crate has no `[[bench]]` target.
+bench = false
+
+[lints]
+workspace = true
+
+[dependencies]
+tracing.workspace = true
+# The handoff posted to an effector and the body published for exchange are JSON
+# (DN-07 §5, DN-18 §5): built here, carried by the host's transport.
+serde_json.workspace = true
+
+# Edge (w), D-57 (`docs/design/dependency-edges.md` §17): the queue and the decision
+# record, the engines, the engagement types, role permissions, the settings and the bus.
+gungnir-command = { path = "../gungnir-command", version = "0.1.0" }
+gungnir-policy = { path = "../gungnir-policy", version = "0.1.0" }
+gungnir-intercept-service = { path = "../gungnir-intercept-service", version = "0.1.0" }
+gungnir-security = { path = "../gungnir-security", version = "0.1.0" }
+gungnir-config = { path = "../gungnir-config", version = "0.1.0" }
+gungnir-eventing = { path = "../gungnir-eventing", version = "0.1.0" }
+gungnir-model = { path = "../gungnir-model", version = "0.1.0" }

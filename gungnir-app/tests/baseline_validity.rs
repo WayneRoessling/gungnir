@@ -67,7 +67,7 @@ fn a_plan_under_an_expired_baseline_is_superseded_and_never_queued() {
 
     assert_eq!(outcome, Submitted::Superseded);
     assert!(
-        state.approvals.pending().is_empty(),
+        state.desk.approvals.pending().is_empty(),
         "a superseded plan reached the approval queue"
     );
 
@@ -102,14 +102,17 @@ fn a_superseded_plan_is_not_evaluated_and_records_no_denial() {
         ),
         "the control plan was not evaluated, so this test proves nothing"
     );
-    assert_eq!(ordinary.denials.count, 1, "the control plan was not denied");
+    assert_eq!(
+        ordinary.desk.denials.count, 1,
+        "the control plan was not denied"
+    );
 
     assert_eq!(
         decisions::submit(&mut state, a_plan()),
         Submitted::Superseded
     );
     assert_eq!(
-        state.denials.count, 0,
+        state.desk.denials.count, 0,
         "a superseded plan was recorded as denied by a policy that never ran"
     );
     let _ = std::fs::remove_dir_all(dir);

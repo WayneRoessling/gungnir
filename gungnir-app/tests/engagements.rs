@@ -149,7 +149,7 @@ fn an_actionable_decision_opens_one_engagement_per_solution() {
     let (mut state, dir) = desktop("opens", Some(30.0));
     let events = state.events.subscribe();
     assert_eq!(engagements::open_for(&mut state, &accepted(1, &[7, 8])), 2);
-    assert_eq!(state.engagements.len(), 2);
+    assert_eq!(state.desk.engagements.len(), 2);
     let opened = events
         .try_iter()
         .filter(|e| matches!(e.event, Event::Engagement(EngagementEvent::Opened { .. })))
@@ -161,7 +161,7 @@ fn an_actionable_decision_opens_one_engagement_per_solution() {
         reason: "not this one".into(),
     };
     assert_eq!(engagements::open_for(&mut state, &rejected), 0);
-    assert_eq!(state.engagements.len(), 2);
+    assert_eq!(state.desk.engagements.len(), 2);
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -171,7 +171,7 @@ fn an_actionable_decision_opens_one_engagement_per_solution() {
 fn a_layer_without_an_effect_window_opens_nothing_and_says_so() {
     let (mut state, dir) = desktop("no-window", None);
     assert_eq!(engagements::open_for(&mut state, &accepted(1, &[7])), 0);
-    assert!(state.engagements.is_empty());
+    assert!(state.desk.engagements.is_empty());
     assert!(
         state
             .alerts
@@ -200,7 +200,7 @@ fn a_track_that_leaves_the_picture_inside_the_window_is_effective_on_weak_eviden
     at(&mut state, 10.0);
     update::tick(&mut state); // gone, inside the window
 
-    let e = &state.engagements[0];
+    let e = &state.desk.engagements[0];
     match &e.state {
         EngagementState::Effective { evidence } => {
             assert_eq!(evidence.source, EffectSource::TrackLifecycle);
@@ -241,7 +241,7 @@ fn a_track_that_persists_past_the_window_is_ineffective_and_alerted() {
     at(&mut state, 31.0);
     update::tick(&mut state);
     assert!(matches!(
-        state.engagements[0].state,
+        state.desk.engagements[0].state,
         EngagementState::Ineffective { .. }
     ));
     assert_eq!(
@@ -268,13 +268,13 @@ fn an_unobserved_window_closes_indeterminate() {
     at(&mut state, 10.0);
     update::tick(&mut state);
     assert!(
-        state.engagements[0].state.is_open(),
+        state.desk.engagements[0].state.is_open(),
         "closed with nothing observed"
     );
     at(&mut state, 31.0);
     update::tick(&mut state);
     assert!(matches!(
-        state.engagements[0].state,
+        state.desk.engagements[0].state,
         EngagementState::Indeterminate { .. }
     ));
     assert_eq!(closed_outcomes(&events), vec![outcome::INDETERMINATE]);
@@ -299,10 +299,10 @@ fn supersession_aborts_only_that_plans_engagements() {
     engagements::open_for(&mut state, &accepted(2, &[8]));
     engagements::observe_superseded(&mut state, PlanId(1), MissionTime(3.0));
     assert!(matches!(
-        state.engagements[0].state,
+        state.desk.engagements[0].state,
         EngagementState::Aborted { .. }
     ));
-    assert!(state.engagements[1].state.is_open());
+    assert!(state.desk.engagements[1].state.is_open());
     let _ = std::fs::remove_dir_all(dir);
 }
 

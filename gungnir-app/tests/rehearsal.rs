@@ -101,7 +101,12 @@ fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_jou
     // P-1181 names resource 2, which the seed marked not ready: the readiness engine
     // refuses it and it never reaches the queue (US-02's refusal).
     assert!(
-        !state.approvals.queue().iter().any(|p| p.plan.id.0 == 1181),
+        !state
+            .desk
+            .approvals
+            .queue()
+            .iter()
+            .any(|p| p.plan.id.0 == 1181),
         "P-1181 is refused on readiness, not queued"
     );
     // **The seed no longer owns the plan slot.** The allocator solves as of 2026-09-06
@@ -110,13 +115,18 @@ fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_jou
     // guarantees is that its scripted plan went through the real submit path and was
     // refused there, which is the assertion above and the one US-02 rests on.
     assert!(
-        state.denials.count > 0,
+        state.desk.denials.count > 0,
         "the seeded plan went through the real submit path and was denied there"
     );
 
     at(&mut state, 46.0);
     assert!(
-        state.approvals.queue().iter().any(|p| p.plan.id.0 == 1183),
+        state
+            .desk
+            .approvals
+            .queue()
+            .iter()
+            .any(|p| p.plan.id.0 == 1183),
         "P-1183 waits for a person"
     );
 
@@ -131,6 +141,7 @@ fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_jou
     // expiry and clearly ahead of the rest.
     at(&mut state, 75.0);
     let raw_point_plans: Vec<u128> = state
+        .desk
         .approvals
         .queue()
         .iter()
@@ -177,6 +188,7 @@ fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_jou
     );
     let remaining = |id: u128| {
         state
+            .desk
             .approvals
             .queue()
             .iter()

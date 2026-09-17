@@ -13,6 +13,13 @@
 //! approval and ticked for a minute opens nothing; the moment a person decides it, an
 //! engagement opens, and the decision is on the record **before** the engagement is.
 //!
+//! **The pin moved with the code** (GAP-131, D-57,
+//! `../../docs/design/DN-31-node-approval-queue.md` §3): the two constructions are in
+//! `gungnir-approval` since the decision path left this binary, and the static half still
+//! reads every `gungnir-*/src` in the workspace, so a second one appearing anywhere --
+//! in a node, in a panel, in a copy taken for a test harness -- fails this test exactly as
+//! before.
+//!
 //! The API's decide route is covered where the transport is tested:
 //! `gungnir-remote/tests/transport.rs` posts to `/v3/plans/{id}/decision` and is refused
 //! (`refuse_decision`), so no decision enters a node through the wire either.
@@ -113,13 +120,12 @@ fn execution_is_constructed_only_behind_a_decision_record() {
         "an engagement is opened in exactly one place: {engagement_sites:?}"
     );
     assert!(
-        engagement_sites[0].ends_with("gungnir-app/src/engagements.rs:90")
-            || engagement_sites[0].contains("gungnir-app/src/engagements.rs"),
+        engagement_sites[0].contains("gungnir-approval/src/engagements.rs"),
         "{engagement_sites:?}"
     );
     let engagements = files
         .iter()
-        .find(|(p, _)| p.ends_with("gungnir-app/src/engagements.rs"))
+        .find(|(p, _)| p.ends_with("gungnir-approval/src/engagements.rs"))
         .map(|(_, t)| t.as_str())
         .expect("engagements.rs");
     let open_fn = engagements
@@ -140,12 +146,12 @@ fn execution_is_constructed_only_behind_a_decision_record() {
         "a handoff is built in exactly one place: {handoff_sites:?}"
     );
     assert!(
-        handoff_sites[0].contains("gungnir-app/src/handoffs.rs"),
+        handoff_sites[0].contains("gungnir-approval/src/handoffs.rs"),
         "{handoff_sites:?}"
     );
     let handoffs = files
         .iter()
-        .find(|(p, _)| p.ends_with("gungnir-app/src/handoffs.rs"))
+        .find(|(p, _)| p.ends_with("gungnir-approval/src/handoffs.rs"))
         .map(|(_, t)| t.as_str())
         .expect("handoffs.rs");
     assert!(
@@ -192,6 +198,7 @@ fn a_queued_plan_executes_nothing_until_a_person_decides() {
     // The queue is fed directly: no planner proposes anything in this build (GAP-011),
     // and everything after this line is the desktop's own path.
     let pending = state
+        .desk
         .approvals
         .submit_for_approval(Submission {
             plan: PlanView {
@@ -221,11 +228,11 @@ fn a_queued_plan_executes_nothing_until_a_person_decides() {
         update::tick(&mut state);
     }
     assert!(
-        state.engagements.is_empty(),
+        state.desk.engagements.is_empty(),
         "an engagement opened with nobody deciding"
     );
     assert_eq!(
-        state.approvals.pending().len(),
+        state.desk.approvals.pending().len(),
         1,
         "the item was swept or lost"
     );
@@ -247,7 +254,7 @@ fn a_queued_plan_executes_nothing_until_a_person_decides() {
         .expect("decided");
     update::tick(&mut state);
     assert_eq!(
-        state.engagements.len(),
+        state.desk.engagements.len(),
         1,
         "the decision opened no engagement"
     );

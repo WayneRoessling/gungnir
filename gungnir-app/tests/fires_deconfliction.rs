@@ -135,11 +135,11 @@ fn a_fires_task_is_denied_while_four_checks_have_no_source() {
         })
     );
     assert!(
-        state.approvals.pending().is_empty(),
+        state.desk.approvals.pending().is_empty(),
         "a denied fires task was queued"
     );
 
-    let checks = &state.fires_checks;
+    let checks = &state.desk.fires_checks;
     assert_eq!(checks.len(), 5, "{checks:?}");
     let by = |k: DeconflictionKind| checks.iter().find(|c| c.kind == k).expect("check");
     assert!(by(DeconflictionKind::LocationAccuracy).passed);
@@ -175,6 +175,7 @@ fn a_friendly_track_inside_the_keep_out_fails_the_friendly_check() {
     state.tracking = Box::new(Picture(vec![friendly_at_enu(1_850.0, 0.0)]));
     let _ = decisions::submit(&mut state, fires_task(40.0));
     let friendly = state
+        .desk
         .fires_checks
         .iter()
         .find(|c| c.kind == DeconflictionKind::FriendlyPosition)
@@ -199,6 +200,6 @@ fn an_intercept_plan_has_no_fires_checks() {
             ..PlanView::default()
         },
     );
-    assert!(state.fires_checks.is_empty());
+    assert!(state.desk.fires_checks.is_empty());
     let _ = std::fs::remove_dir_all(dir);
 }

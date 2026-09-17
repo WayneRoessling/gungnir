@@ -53,9 +53,11 @@ gungnir-analytics                                                      understan
                                                                         classification, maps,
                                                                         line-of-sight
 
-gungnir-policy, gungnir-command, gungnir-assessment,                   Productization, assess
-gungnir-decision, gungnir-modelops                                     and decide: approval
-                                                                        gate, threat scoring,
+gungnir-policy, gungnir-command, gungnir-approval,                     Productization, assess
+gungnir-assessment, gungnir-decision, gungnir-modelops                 and decide: approval
+                                                                        gate and the decision
+                                                                        path both binaries
+                                                                        run, threat scoring,
                                                                         courses of action
 
 gungnir-security, gungnir-api, gungnir-observability,                  Productization, secure

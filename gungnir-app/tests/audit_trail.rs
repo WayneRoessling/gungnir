@@ -79,6 +79,7 @@ fn a_decision_a_sensor_command_a_requirement_and_a_review_each_leave_a_row() {
 
     // A decision.
     let pending = state
+        .desk
         .approvals
         .submit_for_approval(Submission {
             plan: PlanView {

@@ -186,6 +186,7 @@ fn settle(state: &mut AppState, t: f64, done: impl Fn(&AppState) -> bool) {
 
 fn decide(state: &mut AppState) -> gungnir_model::DecisionId {
     let pending = state
+        .desk
         .approvals
         .submit_for_approval(Submission {
             plan: PlanView::intercept(
@@ -208,6 +209,7 @@ fn decide(state: &mut AppState) -> gungnir_model::DecisionId {
         .expect("queued");
     decisions::decide(state, PendingId(pending.0), OperatorDecision::Accepted).expect("decided");
     state
+        .desk
         .handoffs
         .last()
         .expect("an accepted decision issues a handoff")
@@ -216,6 +218,11 @@ fn decide(state: &mut AppState) -> gungnir_model::DecisionId {
 }
 
 #[test]
+// One round trip each way against a real socket -- accepted, then refused -- and the
+// second half only means anything after the first. Reading the desk's queue and handoffs
+// through `state.desk` (GAP-131) put it one line over the pedantic limit; splitting it
+// would split the round trip.
+#[allow(clippy::too_many_lines)]
 fn a_handoff_to_an_accepting_endpoint_is_delivered_and_a_refusal_is_recorded() {
     let status = Arc::new(AtomicU16::new(200));
     let hits = Arc::new(AtomicU16::new(0));
@@ -225,7 +232,8 @@ fn a_handoff_to_an_accepting_endpoint_is_delivered_and_a_refusal_is_recorded() {
     state.tracking = Box::new(Picture(vec![track(1, 3000.0, 0.0)]));
     let decision = decide(&mut state);
     let record = |s: &AppState| {
-        s.handoffs
+        s.desk
+            .handoffs
             .iter()
             .find(|h| h.handoff.decision == decision)
             .map(|h| h.delivery.clone())
@@ -270,6 +278,7 @@ fn a_handoff_to_an_accepting_endpoint_is_delivered_and_a_refusal_is_recorded() {
     // A second decision against a refusing endpoint.
     status.store(503, Ordering::SeqCst);
     let pending = state
+        .desk
         .approvals
         .submit_for_approval(Submission {
             plan: PlanView::intercept(
@@ -293,17 +302,19 @@ fn a_handoff_to_an_accepting_endpoint_is_delivered_and_a_refusal_is_recorded() {
     decisions::decide(&mut state, PendingId(pending.0), OperatorDecision::Accepted)
         .expect("decided");
     let second = state
+        .desk
         .handoffs
         .last()
         .expect("an accepted decision issues a handoff")
         .handoff
         .decision;
     settle(&mut state, 3.0, |s| {
-        s.handoffs.iter().any(|h| {
+        s.desk.handoffs.iter().any(|h| {
             h.handoff.decision == second && matches!(h.delivery, DeliveryState::Refused { .. })
         })
     });
     let refused = state
+        .desk
         .handoffs
         .iter()
         .find(|h| h.handoff.decision == second)
@@ -316,7 +327,7 @@ fn a_handoff_to_an_accepting_endpoint_is_delivered_and_a_refusal_is_recorded() {
         other => panic!("{other:?}"),
     }
     assert!(
-        state.pending_handoffs.is_empty(),
+        state.desk.pending_handoffs.is_empty(),
         "a refusal is not retried"
     );
     let _ = std::fs::remove_dir_all(dir);
@@ -335,23 +346,28 @@ fn an_unreachable_endpoint_is_retried_and_never_dropped() {
     });
     assert!(matches!(
         state
+            .desk
             .handoffs
             .iter()
             .find(|h| h.handoff.decision == decision)
             .map(|h| &h.delivery),
         Some(DeliveryState::Undelivered { .. })
     ));
-    assert_eq!(state.pending_handoffs.len(), 1, "kept for the next attempt");
-    assert_eq!(state.pending_handoffs[0].attempts, 1);
+    assert_eq!(
+        state.desk.pending_handoffs.len(),
+        1,
+        "kept for the next attempt"
+    );
+    assert_eq!(state.desk.pending_handoffs[0].attempts, 1);
     // Before the retry interval nothing is posted; after it, the second attempt goes out.
     at(&mut state, 10.0);
-    assert_eq!(state.pending_handoffs[0].attempts, 1);
+    assert_eq!(state.desk.pending_handoffs[0].attempts, 1);
     settle(&mut state, 40.0, |s| {
         s.alerts
             .iter()
             .any(|a| a.contains("undelivered (attempt 2)"))
     });
-    assert_eq!(state.pending_handoffs.len(), 1, "still never dropped");
+    assert_eq!(state.desk.pending_handoffs.len(), 1, "still never dropped");
     let _ = std::fs::remove_dir_all(dir);
 }
 

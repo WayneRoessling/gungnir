@@ -1429,7 +1429,7 @@ recoverability, and a desktop survives losing its node.
 
 ## 8. Full Crate Map
 
-All 50 crates in `gungnir-workspace`, one row each (49 workspace members plus
+All 51 crates in `gungnir-workspace`, one row each (50 workspace members plus
 `gungnir-fuzz`, which is excluded from the default build). "Trait surface" means the
 public API exists with `todo!()` or `NotImplemented` bodies; "Implemented" means the
 in-memory or file-backed implementation exists with unit tests; "Wired" means a binary
@@ -1468,6 +1468,7 @@ calls it in its tick loop.
 | `gungnir-analytics` | Productization / Understand | Line-of-sight, viewshed, coverage, route deconfliction | Medium | Implemented and tested |
 | `gungnir-policy` | Productization / Assess-Decide | Geofence and readiness policy, chain | Critical | Implemented and tested; wired into the desktop tick (GAP-038), not the node |
 | `gungnir-command` | Productization / Assess-Decide | Human approval workflow with a timed queue | Critical | Implemented and tested; wired into the desktop tick (GAP-038, GAP-034, GAP-035), not the node. An expiry is `OperatorDecision::Expired` and a rejection carries its reason, per DN-10 §3 |
+| `gungnir-approval` | Productization / Assess-Decide | The decision path both binaries run: the policy chain over a plan, the queue's feeding and sweep, deciding with engagement opening and the one handoff builder, and handoff delivery bookkeeping | Critical | New 2026-09-17 (GAP-131, D-57, `design/DN-31-node-approval-queue.md` §3). The desktop's decision path moved here whole with its behaviour unchanged and is wired into the desktop tick through it; the node's own use of it is GAP-132. Human-owned changes |
 | `gungnir-assessment` | Productization / Assess-Decide | Threat/risk scoring, reward matrix | Medium | Implemented and tested; not yet wired |
 | `gungnir-decision` | Productization / Assess-Decide | COA rationale; alternatives and what-if | Medium | Rationale implemented and tested; rest trait surface |
 | `gungnir-modelops` | Productization / Assess-Decide | Algorithm config governance | Medium | Implemented and tested |

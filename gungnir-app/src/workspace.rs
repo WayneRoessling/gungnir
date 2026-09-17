@@ -427,6 +427,7 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
             // which is honest -- the node decided, not this desktop.
             let handoffs = handoff_lines(state);
             let fires: Vec<gungnir_ui::panels::intercept_panel::FiresCheckLine> = state
+                .desk
                 .fires_checks
                 .iter()
                 .map(|c| gungnir_ui::panels::intercept_panel::FiresCheckLine {
@@ -541,6 +542,7 @@ fn alternative_line<'a>(
 fn handoff_lines(state: &AppState) -> Vec<gungnir_ui::panels::intercept_panel::HandoffLine<'_>> {
     use gungnir_model::handoff::DeliveryState;
     state
+        .desk
         .handoffs
         .iter()
         .map(|h| gungnir_ui::panels::intercept_panel::HandoffLine {
@@ -1285,8 +1287,8 @@ pub fn render_commander_summary(
     // timing out.
     let expired = crate::decisions::expired_count(state);
     let queue = Ok(gungnir_ui::panels::commander_summary::QueueStats {
-        pending: state.approvals.queue().len(),
-        decided_this_session: state.approvals.records().len().saturating_sub(expired),
+        pending: state.desk.approvals.queue().len(),
+        decided_this_session: state.desk.approvals.records().len().saturating_sub(expired),
         expired,
     });
     let handover = state.rhythm.handover().map(|h| HandoverView {
