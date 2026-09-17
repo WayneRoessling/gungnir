@@ -248,8 +248,8 @@ pub struct SensorTaskId(pub u64);
 
 /// A command to a sensor (DN-11 §4).
 ///
-/// Owned here for the same reason as [`SensorTaskId`]: the v2 contract carries it
-/// (`POST /v2/sensors/{sensor_id}/task`, GAP-004) and the transport cannot depend on the
+/// Owned here for the same reason as [`SensorTaskId`]: the contract carries it
+/// (`POST /v3/sensors/{sensor_id}/task`, GAP-004) and the transport cannot depend on the
 /// crate that issues it. `gungnir_sensor_management::tasking` re-exports it, so every
 /// existing path still resolves.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -526,7 +526,7 @@ pub struct BearingRayView {
 /// layered above `gungnir-fusion-async` (`ARCHITECTURE.md` §7.1), not a reason to extend
 /// that crate's own surface, so this is a second, wire-facing type instead -- the same
 /// choice `gungnir_remote::link::ExchangeProductRecord` already makes against
-/// `gungnir_api::v2::ExchangeProduct` and for the same reason: a crate that cannot depend
+/// `gungnir_api::v3::ExchangeProduct` and for the same reason: a crate that cannot depend
 /// on the type's owner mirrors its fields rather than reaching for them.
 /// `gungnir_tracking_service::project_pipeline_stats` and `pipeline_stats_from_view`
 /// convert one into the other, the same shape `gungnir_tracking_service::project_bearing_ray`

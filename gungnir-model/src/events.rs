@@ -581,7 +581,7 @@ pub enum HandoffEvent {
         reason: String,
         at: MissionTime,
     },
-    /// The effector reported back, through the node's `POST /v2/handoffs/{decision}/report`
+    /// The effector reported back, through the node's `POST /v3/handoffs/{decision}/report`
     /// (GAP-040). On every desktop's stream; applied by the one that issued the handoff,
     /// which is the only one that can say whether the decision is known.
     Reported {
@@ -695,7 +695,7 @@ pub enum WarningEvent {
     ///
     /// §6 named this variant when the note was written and the code never gained it, so
     /// `Warning::acknowledged` had no way to be reached from outside the desktop that
-    /// raised the warning. It is the acknowledgement arriving over the v2 transport:
+    /// raised the warning. It is the acknowledgement arriving over the v3 transport:
     /// `party` is the warning channel the acknowledging certificate speaks for, or
     /// `operator:<id>` when a person keyed in what came over the radio, and `at` is the
     /// time **that party gave**. The envelope's own mission time is when this deployment

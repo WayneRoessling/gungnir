@@ -31,7 +31,7 @@
 //! # What is not here
 //!
 //! An effector that reports back is owner decision D-08 and real hardware. The inbound
-//! route exists (`POST /v2/handoffs/{decision_id}/report`, applied by
+//! route exists (`POST /v3/handoffs/{decision_id}/report`, applied by
 //! `gungnir-app`'s `handoffs::apply_report`), so an empty "reported back" column is not
 //! a missing feature in this desktop; it is the absence of an effector that speaks it.
 //! [`NO_REPORTS_YET`] is the sentence that keeps those two apart on screen.

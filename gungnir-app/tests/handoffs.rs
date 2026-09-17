@@ -250,7 +250,7 @@ fn pn20_draws_the_handoff_and_every_report_that_came_back() {
 
 /// GAP-065, DN-18 §5 amendment 2: issuing a handoff republishes this desktop's whole
 /// current handoff set to a linked node, so a coalition partner's
-/// `GET /v2/exchange/handoffs` eventually serves it; with no link there is nothing to
+/// `GET /v3/exchange/handoffs` eventually serves it; with no link there is nothing to
 /// queue to and issuing still works.
 #[test]
 fn issuing_a_handoff_queues_the_whole_set_for_exchange_when_a_node_is_linked() {

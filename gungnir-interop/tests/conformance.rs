@@ -451,14 +451,14 @@ fn wire_coverage(name: &str) -> Option<WireCoverage> {
             "the_track_corpus_crosses_the_event_stream_with_zero_loss",
         ),
         "gungnir.DetectionView" => WireCoverage::NotCovered(
-            "it crosses `POST /v2/detections`, which is an operator's write path rather than a peer's; `gungnir-remote/tests/transport.rs` checks that a submitted detection reaches the node, and nothing checks byte parity",
+            "it crosses `POST /v3/detections`, which is an operator's write path rather than a peer's; `gungnir-remote/tests/transport.rs` checks that a submitted detection reaches the node, and nothing checks byte parity",
         ),
         "gungnir.PlanView" => WireCoverage::NotCovered(
             "a plan is a recommendation for this deployment's own effectors and no exchange item covers it, so `NodeApi::snapshot_for` withholds it from every party (DN-18 §5); it crosses no wire to a peer to be checked on",
         ),
         "gungnir.detections.arrow" | gungnir_interop::dataset::CLASSIFICATION_ROWS => {
             WireCoverage::NotCovered(
-                "an Arrow dataset is written to a file for training, not served on the v2 transport; it has no producer on a wire",
+                "an Arrow dataset is written to a file for training, not served on the v3 transport; it has no producer on a wire",
             )
         }
         "gungnir.GlobalEntityId" => WireCoverage::NotCovered(

@@ -32,7 +32,7 @@
 //! two of the link's batches at least fifteen times.
 
 use gungnir_api::transport::{AccountTokenAuthority, NodeApi};
-use gungnir_api::v2::SnapshotResponse;
+use gungnir_api::v3::SnapshotResponse;
 use gungnir_model::{DetectionView, Measurement, MissionTime, Provenance, SensorId, SystemHealth};
 use gungnir_remote::link::{Credential, NodeLink};
 use gungnir_remote::{connect_with_link, RemoteEndpoint, RemoteTrackingService, OUTBOX_CAPACITY};

@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use gungnir_api::tls::{self, TlsListener, TlsPaths};
 use gungnir_api::transport::{serve_on_listener, NodeApi};
-use gungnir_api::v2::SnapshotResponse;
+use gungnir_api::v3::SnapshotResponse;
 use gungnir_model::{
     Classification, ExchangeAgreement, ExchangeFormat, ExchangeItem, ExchangeSet, MissionTime,
     Provenance, Quality, Releasability, SystemHealth, TrackId, TrackStatus, TrackView,
@@ -194,7 +194,7 @@ async fn a_party_receives_what_its_agreement_and_the_markings_release() {
         format: ExchangeFormat::Canonical,
     }]);
     let addr = serve(&pki, api).await;
-    let (status, body) = get(&pki, addr, "sector-north", "/v2/snapshot").await;
+    let (status, body) = get(&pki, addr, "sector-north", "/v3/snapshot").await;
     assert_eq!(status, 200, "{body}");
     let snapshot: SnapshotResponse = serde_json::from_str(&body).expect("snapshot");
     let ids: Vec<u64> = snapshot.tracks.iter().map(|t| t.id.0).collect();
@@ -209,9 +209,9 @@ async fn a_party_receives_what_its_agreement_and_the_markings_release() {
     );
 
     // Health is its own item; coverage is internal to the deployment.
-    let (status, _) = get(&pki, addr, "sector-north", "/v2/health").await;
+    let (status, _) = get(&pki, addr, "sector-north", "/v3/health").await;
     assert_eq!(status, 403);
-    let (status, _) = get(&pki, addr, "sector-north", "/v2/coverage").await;
+    let (status, _) = get(&pki, addr, "sector-north", "/v3/coverage").await;
     assert_eq!(status, 403);
     let _ = std::fs::remove_dir_all(&pki.dir);
 }
@@ -227,20 +227,20 @@ async fn a_party_with_no_agreement_is_refused_and_a_health_agreement_sends_healt
     }]);
     let addr = serve(&pki, api).await;
     // Authenticated, no agreement: nothing (DN-18 §5).
-    let (status, body) = get(&pki, addr, "nobody", "/v2/snapshot").await;
+    let (status, body) = get(&pki, addr, "nobody", "/v3/snapshot").await;
     assert_eq!(status, 403, "{body}");
     assert!(body.contains("no exchange agreement"), "{body}");
     // An agreement that sends health and no tracks.
-    let (status, body) = get(&pki, addr, "sector-east", "/v2/health").await;
+    let (status, body) = get(&pki, addr, "sector-east", "/v3/health").await;
     assert_eq!(status, 200, "{body}");
     assert!(body.contains("tracking_healthy\":true"), "{body}");
-    let (status, body) = get(&pki, addr, "sector-east", "/v2/snapshot").await;
+    let (status, body) = get(&pki, addr, "sector-east", "/v3/snapshot").await;
     assert_eq!(status, 200);
     let snapshot: SnapshotResponse = serde_json::from_str(&body).expect("snapshot");
     assert!(snapshot.tracks.is_empty());
     assert_eq!(snapshot.withheld, 4, "three tracks and a plan");
     // The write paths stay an operator's.
-    let (status, _) = get(&pki, addr, "sector-east", "/v2/plans/1/decision").await;
+    let (status, _) = get(&pki, addr, "sector-east", "/v3/plans/1/decision").await;
     assert!(status == 403 || status == 405, "{status}");
     let _ = std::fs::remove_dir_all(&pki.dir);
 }

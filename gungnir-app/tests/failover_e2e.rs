@@ -6,7 +6,7 @@
 //! cross-layer row of `docs/verification-capability-table.md` §2): a desktop signed in
 //! to a real node over the real client, the node goes down, the desktop falls back and
 //! decides on its own, the node comes back on the same address, and the reconciliation
-//! runs over the node's real `GET /v2/history`, drops the duplicate the two records share,
+//! runs over the node's real `GET /v3/history`, drops the duplicate the two records share,
 //! and settles the conflicting decision by D-03's arbitration rule with no person asked
 //! (the GAP-067 walk, 2026-09-16), after which the switch back needs nobody's resolution.
 //!
@@ -14,7 +14,7 @@
 //! the outage is a real `HEARTBEAT_TIMEOUT` of silence. One test, a dozen seconds.
 
 use gungnir_api::transport::{AccountTokenAuthority, NodeApi};
-use gungnir_api::v2::SnapshotResponse;
+use gungnir_api::v3::SnapshotResponse;
 use gungnir_app::failover::{self, ReconciliationView};
 use gungnir_app::state::AppState;
 use gungnir_app::{decisions, session, update};
@@ -180,7 +180,7 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
     // (`gungnir-remote/src/link.rs`: `p.connected = true` precedes `open_stream`). An
     // envelope published into that window reaches no live receiver, and it is not
     // recovered afterwards either: the subscription carries `from_seq` 0, which means
-    // "everything from now" by the v2 contract, so `backlog_since` returns an empty
+    // "everything from now" by the contract, so `backlog_since` returns an empty
     // backlog rather than replaying it. The envelope is simply gone, and the test then
     // waits out its whole deadline with the link showing connected.
     //
@@ -262,7 +262,7 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
     );
     // Meanwhile the node's record moved on without this desktop: another desktop's
     // operator decided the same plan and it reached the node. **A node runs no approval
-    // queue** (`POST /v2/plans/{plan_id}/decision` refuses, `gungnir-api`'s transport), so
+    // queue** (`POST /v3/plans/{plan_id}/decision` refuses, `gungnir-api`'s transport), so
     // a decision reaches a node's record only as another desktop recorded it -- with the
     // role that desktop's signed-in session carried, here an Operator's. The api outlives
     // its transport, which is what the system of record does.

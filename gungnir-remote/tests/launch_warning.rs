@@ -11,7 +11,7 @@
 //! criterion for CAP-1.6 asks that "a launch warning creates an alert and no track", to be
 //! shown with "two nodes in one test process, one feeding the other".
 //!
-//! That is what this file is. One node publishes a launch warning on its v2 event stream;
+//! That is what this file is. One node publishes a launch warning on its v3 event stream;
 //! a second host takes it over mutual TLS through the machine link every peer uses, and
 //! what it receives is a launch warning and not a track. The alert half is not here: it
 //! belongs to the hosts, which have no `NodeApi`, and is checked where the stamping
@@ -26,7 +26,7 @@ mod common;
 
 use common::{until, until_following, Pki};
 use gungnir_api::transport::NodeApi;
-use gungnir_api::v2::SnapshotResponse;
+use gungnir_api::v3::SnapshotResponse;
 use gungnir_eventing::{Envelope, Event};
 use gungnir_model::events::{LaunchWarningEvent, TrackingEvent};
 use gungnir_model::{

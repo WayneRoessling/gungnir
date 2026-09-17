@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use gungnir_api::tls::{self, TlsListener, TlsPaths};
 use gungnir_api::transport::{serve_on_listener, AccountTokenAuthority, NodeApi};
-use gungnir_api::v2::{
+use gungnir_api::v3::{
     ExchangeProduct, ExchangeResponse, PublishExchangeRequest, SnapshotResponse,
 };
 use gungnir_model::{
@@ -214,7 +214,7 @@ async fn token(pki: &Pki, addr: std::net::SocketAddr, operator: u64) -> String {
         addr,
         "desk-1",
         "POST",
-        "/v2/session",
+        "/v3/session",
         None,
         Some(format!(
             "{{\"operator\":{operator},\"passphrase\":\"{PASSPHRASE}\"}}"
@@ -333,7 +333,7 @@ fn held(body: &str) -> (Vec<String>, usize) {
 async fn the_marking_decides_which_warnings_a_covered_party_receives_and_the_rest_are_counted() {
     let pki = Pki::new("warnings");
     let addr = serve(&pki, api()).await;
-    let (status, body) = get(&pki, addr, "sector-north", "/v2/exchange/warnings").await;
+    let (status, body) = get(&pki, addr, "sector-north", "/v3/exchange/warnings").await;
     assert_eq!(status, 200, "{body}");
     let (ids, withheld) = held(&body);
     assert_eq!(
@@ -352,7 +352,7 @@ async fn the_marking_decides_which_warnings_a_covered_party_receives_and_the_res
 async fn an_agreement_that_covers_an_item_does_not_override_the_marking() {
     let pki = Pki::new("marking");
     let addr = serve(&pki, api()).await;
-    let (status, body) = get(&pki, addr, "sector-north", "/v2/exchange/handoffs").await;
+    let (status, body) = get(&pki, addr, "sector-north", "/v3/exchange/handoffs").await;
     assert_eq!(status, 200, "{body}");
     let (ids, withheld) = held(&body);
     assert!(ids.is_empty(), "{ids:?}");
@@ -367,9 +367,9 @@ async fn an_item_the_agreement_does_not_cover_is_refused() {
     let pki = Pki::new("agreement");
     let addr = serve(&pki, api()).await;
     for path in [
-        "/v2/exchange/warnings",
-        "/v2/exchange/reports",
-        "/v2/exchange/handoffs",
+        "/v3/exchange/warnings",
+        "/v3/exchange/reports",
+        "/v3/exchange/handoffs",
     ] {
         let (status, body) = get(&pki, addr, "sector-east", path).await;
         assert_eq!(status, 403, "{path}: {body}");
@@ -380,7 +380,7 @@ async fn an_item_the_agreement_does_not_cover_is_refused() {
         );
     }
     // No agreement at all: nothing, on every route (DN-18 §5).
-    let (status, body) = get(&pki, addr, "nobody", "/v2/exchange/warnings").await;
+    let (status, body) = get(&pki, addr, "nobody", "/v3/exchange/warnings").await;
     assert_eq!(status, 403, "{body}");
     assert!(body.contains("no exchange agreement"), "{body}");
     let _ = std::fs::remove_dir_all(&pki.dir);
@@ -393,7 +393,7 @@ async fn an_item_the_agreement_does_not_cover_is_refused() {
 async fn an_item_this_deployment_publishes_nothing_for_says_so() {
     let pki = Pki::new("notheld");
     let addr = serve(&pki, api()).await;
-    let (status, body) = get(&pki, addr, "sector-north", "/v2/exchange/reports").await;
+    let (status, body) = get(&pki, addr, "sector-north", "/v3/exchange/reports").await;
     assert_eq!(status, 200, "{body}");
     match serde_json::from_str::<ExchangeResponse>(&body).expect("exchange response") {
         ExchangeResponse::NotHeld { item, reason } => {
@@ -431,7 +431,7 @@ async fn an_operator_holding_the_action_replaces_what_the_node_holds() {
         addr,
         "desk-1",
         "POST",
-        "/v2/exchange/warnings",
+        "/v3/exchange/warnings",
         Some(&commander),
         Some(publish(vec![product(
             "asset-9/track-1",
@@ -442,7 +442,7 @@ async fn an_operator_holding_the_action_replaces_what_the_node_holds() {
     .await;
     assert_eq!(status, 202, "{body}");
 
-    let (status, body) = get(&pki, addr, "sector-north", "/v2/exchange/warnings").await;
+    let (status, body) = get(&pki, addr, "sector-north", "/v3/exchange/warnings").await;
     assert_eq!(status, 200, "{body}");
     let (ids, withheld) = held(&body);
     assert_eq!(
@@ -467,7 +467,7 @@ async fn an_operator_without_the_action_may_not_publish() {
         addr,
         "desk-1",
         "POST",
-        "/v2/exchange/warnings",
+        "/v3/exchange/warnings",
         Some(&operator),
         Some(publish(vec![product(
             "asset-9/track-1",
@@ -479,7 +479,7 @@ async fn an_operator_without_the_action_may_not_publish() {
     assert_eq!(status, 403, "{body}");
     assert!(body.contains("may not publish to exchange"), "{body}");
 
-    let (status, body) = get(&pki, addr, "sector-north", "/v2/exchange/warnings").await;
+    let (status, body) = get(&pki, addr, "sector-north", "/v3/exchange/warnings").await;
     assert_eq!(status, 200, "{body}");
     let (ids, _) = held(&body);
     assert_eq!(
@@ -505,13 +505,13 @@ async fn a_malformed_publish_changes_nothing_and_an_unauthenticated_one_is_refus
         addr,
         "desk-1",
         "POST",
-        "/v2/exchange/handoffs",
+        "/v3/exchange/handoffs",
         Some(&commander),
         Some("{\"products\":\"not a list\"}".to_string()),
     )
     .await;
     assert_eq!(status, 400, "{body}");
-    let (status, body) = get(&pki, addr, "sector-north", "/v2/exchange/handoffs").await;
+    let (status, body) = get(&pki, addr, "sector-north", "/v3/exchange/handoffs").await;
     assert_eq!(status, 200, "{body}");
     let (ids, withheld) = held(&body);
     assert!(
@@ -528,7 +528,7 @@ async fn a_malformed_publish_changes_nothing_and_an_unauthenticated_one_is_refus
         addr,
         "desk-1",
         "POST",
-        "/v2/exchange/handoffs",
+        "/v3/exchange/handoffs",
         None,
         Some(publish(vec![product(
             "decision-9",

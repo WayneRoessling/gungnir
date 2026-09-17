@@ -12,7 +12,7 @@ use gungnir_api::tls::{self, TlsListener, TlsPaths};
 use gungnir_api::transport::{
     serve_on_listener, AccountTokenAuthority, MachineRole, NodeApi, PendingSensorTask,
 };
-use gungnir_api::v2::{
+use gungnir_api::v3::{
     EffectorReportRequest, SensorTaskRequest, SnapshotResponse, SubmitDetectionRequest,
 };
 use gungnir_model::handoff::EffectorReport;
@@ -233,7 +233,7 @@ async fn a_sensor_certificate_submits_for_its_own_id_only() {
         addr,
         "radar-4",
         "POST",
-        "/v2/detections",
+        "/v3/detections",
         None,
         Some(own),
     )
@@ -257,7 +257,7 @@ async fn a_sensor_certificate_submits_for_its_own_id_only() {
         addr,
         "radar-4",
         "POST",
-        "/v2/detections",
+        "/v3/detections",
         None,
         Some(other),
     )
@@ -272,7 +272,7 @@ async fn a_sensor_certificate_submits_for_its_own_id_only() {
         addr,
         "battery-1",
         "POST",
-        "/v2/detections",
+        "/v3/detections",
         None,
         Some(
             serde_json::to_string(&SubmitDetectionRequest {
@@ -305,7 +305,7 @@ async fn an_effector_certificate_reports_and_a_sensor_may_not() {
         addr,
         "battery-1",
         "POST",
-        "/v2/handoffs/9/report",
+        "/v3/handoffs/9/report",
         None,
         Some(report.clone()),
     )
@@ -327,7 +327,7 @@ async fn an_effector_certificate_reports_and_a_sensor_may_not() {
         addr,
         "radar-4",
         "POST",
-        "/v2/handoffs/9/report",
+        "/v3/handoffs/9/report",
         None,
         Some(report),
     )
@@ -350,7 +350,7 @@ async fn an_operator_tasks_a_sensor_through_the_node_loop() {
         addr,
         "desk-1",
         "POST",
-        "/v2/session",
+        "/v3/session",
         None,
         Some(format!(
             "{{\"operator\":7,\"passphrase\":\"{PASSPHRASE}\"}}"
@@ -400,7 +400,7 @@ async fn an_operator_tasks_a_sensor_through_the_node_loop() {
         addr,
         "desk-1",
         "POST",
-        "/v2/sensors/4/task",
+        "/v3/sensors/4/task",
         Some(&token),
         Some(body.clone()),
     )
@@ -415,7 +415,7 @@ async fn an_operator_tasks_a_sensor_through_the_node_loop() {
         addr,
         "radar-4",
         "POST",
-        "/v2/sensors/4/task",
+        "/v3/sensors/4/task",
         None,
         Some(body),
     )
@@ -450,7 +450,7 @@ async fn a_caller_speaking_another_schema_version_is_refused_by_name() {
         addr,
         "radar-4",
         "POST",
-        "/v2/detections",
+        "/v3/detections",
         None,
         Some(ahead),
     )
@@ -473,7 +473,7 @@ async fn a_caller_speaking_another_schema_version_is_refused_by_name() {
         addr,
         "radar-4",
         "POST",
-        "/v2/detections",
+        "/v3/detections",
         None,
         Some(behind),
     )
@@ -490,7 +490,7 @@ async fn a_caller_speaking_another_schema_version_is_refused_by_name() {
         addr,
         "radar-4",
         "POST",
-        "/v2/detections",
+        "/v3/detections",
         None,
         Some(silent),
     )

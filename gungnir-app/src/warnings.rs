@@ -16,7 +16,7 @@
 //! **The answer comes back through the node** (GAP-042, 2026-09-06). DN-03 §5 rule 2's
 //! third state had no way in: `Warning::acknowledged` had no caller anywhere in the
 //! workspace, so a delivered warning sat in `Sent` and went `Late` for ever. The warned
-//! party now posts to the node's `POST /v2/warnings/{asset}/{track}/acknowledge`, the node
+//! party now posts to the node's `POST /v3/warnings/{asset}/{track}/acknowledge`, the node
 //! puts it on the record because it holds no ledger of its own, and
 //! [`apply_acknowledgement`] discharges the warning here.
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! Mutual TLS for the v2 transport (GAP-060, D-02).
+//! Mutual TLS for the v3 transport (GAP-060, D-02).
 //!
 //! Crates: `rustls` and `tokio-rustls`, admitted by D-18 on 2026-09-05 and unused
 //! until now. PEM is read with `rustls::pki_types::pem`, rustls's own type crate; it

@@ -7,7 +7,7 @@
 //! A desktop linked to a node judges the link's silence against the node's own
 //! heartbeat. Past the timeout it **falls back to embedded services, says so on the strip
 //! and the record, and keeps the link task retrying**; when the node answers again it
-//! says that too, fetches the node's journal for the outage over `GET /v2/history`, and
+//! says that too, fetches the node's journal for the outage over `GET /v3/history`, and
 //! runs `gungnir_resilience::reconcile` over the two journals. It does not switch back
 //! on its own: PN-18 holds the merge and its conflicts until a person has seen them and
 //! asks for the switch (D-15), and the switch is refused while the node is silent again.

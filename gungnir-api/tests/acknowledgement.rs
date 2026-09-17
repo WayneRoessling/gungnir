@@ -3,10 +3,10 @@
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
 //! The warned party's answer (GAP-042, DN-03 §5 rule 2): who may acknowledge a warning
-//! over the v2 transport, and what the node does with it.
+//! over the v3 transport, and what the node does with it.
 //!
 //! The rule this file exists to hold: a certificate acknowledges only what it speaks for.
-//! An effector's certificate is admitted to `POST /v2/handoffs/{id}/report` and refused
+//! An effector's certificate is admitted to `POST /v3/handoffs/{id}/report` and refused
 //! here, because an effector acts on decisions and a warned party is told about threats;
 //! one certificate serving both would be able to discharge warnings nobody sent it.
 //!
@@ -15,7 +15,7 @@
 
 use gungnir_api::tls::{self, TlsListener, TlsPaths};
 use gungnir_api::transport::{serve_on_listener, AccountTokenAuthority, MachineRole, NodeApi};
-use gungnir_api::v2::{SnapshotResponse, WarningAcknowledgementRequest};
+use gungnir_api::v3::{SnapshotResponse, WarningAcknowledgementRequest};
 use gungnir_model::{AssetId, MissionTime, SensorId, SystemHealth, TrackId};
 use gungnir_security::{hash_passphrase, Account, InMemoryAccountStore, OperatorId, TokenIssuer};
 use rcgen::{BasicConstraints, CertificateParams, DnType, IsCa, Issuer, KeyPair};
@@ -231,7 +231,7 @@ async fn token(pki: &Pki, addr: std::net::SocketAddr, operator: u64) -> String {
         addr,
         "desk-1",
         "POST",
-        "/v2/session",
+        "/v3/session",
         None,
         Some(format!(
             "{{\"operator\":{operator},\"passphrase\":\"{PASSPHRASE}\"}}"
@@ -258,7 +258,7 @@ async fn a_warning_channel_certificate_acknowledges_and_no_other_machine_may() {
         addr,
         "harbour-master-1",
         "POST",
-        "/v2/warnings/1/7/acknowledge",
+        "/v3/warnings/1/7/acknowledge",
         None,
         Some(acknowledgement(12.0)),
     )
@@ -285,7 +285,7 @@ async fn a_warning_channel_certificate_acknowledges_and_no_other_machine_may() {
         addr,
         "battery-1",
         "POST",
-        "/v2/warnings/1/7/acknowledge",
+        "/v3/warnings/1/7/acknowledge",
         None,
         Some(acknowledgement(12.0)),
     )
@@ -299,7 +299,7 @@ async fn a_warning_channel_certificate_acknowledges_and_no_other_machine_may() {
         addr,
         "radar-4",
         "POST",
-        "/v2/warnings/1/7/acknowledge",
+        "/v3/warnings/1/7/acknowledge",
         None,
         Some(acknowledgement(12.0)),
     )
@@ -316,10 +316,10 @@ async fn a_warning_channel_certificate_acknowledges_and_no_other_machine_may() {
         addr,
         "harbour-master-1",
         "POST",
-        "/v2/handoffs/9/report",
+        "/v3/handoffs/9/report",
         None,
         Some(
-            serde_json::to_string(&gungnir_api::v2::EffectorReportRequest {
+            serde_json::to_string(&gungnir_api::v3::EffectorReportRequest {
                 report: gungnir_model::handoff::EffectorReport::Executing {
                     at: MissionTime(12.0),
                 },
@@ -347,7 +347,7 @@ async fn an_operator_needs_the_action_and_is_recorded_as_an_operator() {
         addr,
         "desk-1",
         "POST",
-        "/v2/warnings/1/7/acknowledge",
+        "/v3/warnings/1/7/acknowledge",
         Some(&supervisor),
         Some(acknowledgement(3.0)),
     )
@@ -362,7 +362,7 @@ async fn an_operator_needs_the_action_and_is_recorded_as_an_operator() {
         addr,
         "desk-1",
         "POST",
-        "/v2/warnings/1/7/acknowledge",
+        "/v3/warnings/1/7/acknowledge",
         Some(&administrator),
         Some(acknowledgement(3.0)),
     )
@@ -382,7 +382,7 @@ async fn an_operator_needs_the_action_and_is_recorded_as_an_operator() {
         addr,
         "desk-1",
         "POST",
-        "/v2/warnings/1/7/acknowledge",
+        "/v3/warnings/1/7/acknowledge",
         Some(&administrator),
         Some("{\"at\":\"noon\"}".to_string()),
     )
@@ -398,7 +398,7 @@ async fn an_operator_needs_the_action_and_is_recorded_as_an_operator() {
         addr,
         "desk-1",
         "POST",
-        "/v2/warnings/1/7/acknowledge",
+        "/v3/warnings/1/7/acknowledge",
         None,
         Some(acknowledgement(3.0)),
     )

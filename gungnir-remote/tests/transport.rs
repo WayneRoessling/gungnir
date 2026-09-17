@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! The v2 transport end to end (GAP-041).
+//! The v3 transport end to end (GAP-041).
 //!
 //! A real `axum` server on a real loopback socket, driven by the real `reqwest` and
 //! `tokio-tungstenite` client. Nothing here is a stub: the point of this file is that
@@ -13,7 +13,7 @@
 //! Before GAP-041 that claim rested on nothing, because `connect` returned an error.
 
 use gungnir_api::transport::{AccountTokenAuthority, NodeApi};
-use gungnir_api::v2::{ExchangeResponse, SnapshotResponse};
+use gungnir_api::v3::{ExchangeResponse, SnapshotResponse};
 use gungnir_eventing::{Envelope, Event};
 use gungnir_intercept_service::InterceptService;
 use gungnir_model::events::{InterceptEvent, TrackingEvent};
@@ -59,7 +59,7 @@ fn credential() -> Credential {
 
 /// A node that can authenticate one operator (GAP-057, DN-23 §6).
 ///
-/// Every route but `POST /v2/session` needs a token, so a test that did not sign in
+/// Every route but `POST /v3/session` needs a token, so a test that did not sign in
 /// would be testing the refusal rather than the contract.
 fn authenticating(snapshot: SnapshotResponse) -> Arc<NodeApi> {
     authenticating_as(snapshot, gungnir_security::Role::Supervisor)
@@ -279,7 +279,7 @@ fn pipeline_stats() -> PipelineStatsView {
 }
 
 /// GAP-096's wire contract: a node holding a retained bearing publishes it, and a
-/// desktop connected over the real v2 transport reads it back through
+/// desktop connected over the real v3 transport reads it back through
 /// `TrackingService::bearing_rays`/`pipeline_stats` -- the same two methods every other
 /// backend in this workspace still answers with the trait's defaulted empty set --
 /// rather than the node-only `LiveTrackingService` GAP-096 built these on.
@@ -349,7 +349,7 @@ async fn events_published_after_connecting_reach_the_desktop() {
     // **Connected is not subscribed, and this test used to assume it was.** The link
     // reports itself healthy once the snapshot is answered, which happens before the
     // event stream has subscribed; a subscription from sequence zero means "everything
-    // from now" by the v2 contract, so an envelope published in that window reaches
+    // from now" by the contract, so an envelope published in that window reaches
     // nobody -- correctly, and silently. The test then failed under load and passed
     // alone, which is the shape of a race and not of a transport fault.
     //
@@ -547,7 +547,7 @@ async fn a_link_to_nothing_never_reports_healthy() {
 /// Sign in over HTTP and return the token, as any client must before anything else.
 async fn token(url: &str) -> String {
     let response = reqwest::Client::new()
-        .post(format!("{url}/v2/session"))
+        .post(format!("{url}/v3/session"))
         .json(&serde_json::json!({ "operator": 7, "passphrase": PASSPHRASE }))
         .send()
         .await
@@ -575,7 +575,7 @@ async fn every_other_route_refuses_without_a_token() {
     let url = serve(authenticating(snapshot(Vec::new()))).await;
     let client = reqwest::Client::new();
 
-    for path in ["/v2/snapshot", "/v2/health", "/v2/session"] {
+    for path in ["/v3/snapshot", "/v3/health", "/v3/session"] {
         let status = client
             .get(format!("{url}{path}"))
             .send()
@@ -588,7 +588,7 @@ async fn every_other_route_refuses_without_a_token() {
             "{path} served an unauthenticated caller"
         );
     }
-    for path in ["/v2/detections", "/v2/plans/1/decision"] {
+    for path in ["/v3/detections", "/v3/plans/1/decision"] {
         let status = client
             .post(format!("{url}{path}"))
             .json(&serde_json::json!({}))
@@ -605,7 +605,7 @@ async fn every_other_route_refuses_without_a_token() {
 
     // A forged token is refused with the same status and message as a missing one.
     let forged = client
-        .get(format!("{url}/v2/snapshot"))
+        .get(format!("{url}/v3/snapshot"))
         .bearer_auth("deadbeef.deadbeef")
         .send()
         .await
@@ -633,7 +633,7 @@ async fn an_authenticated_caller_may_submit_a_detection() {
         provenance: gungnir_model::Provenance::default(),
     };
     let status = reqwest::Client::new()
-        .post(format!("{url}/v2/detections"))
+        .post(format!("{url}/v3/detections"))
         .bearer_auth(&token)
         .json(&serde_json::json!({
             // Stated, because the node refuses a caller that does not say what
@@ -672,7 +672,7 @@ async fn the_decision_route_refuses_because_a_node_runs_no_queue() {
     let token = token(&url).await;
 
     let response = reqwest::Client::new()
-        .post(format!("{url}/v2/plans/1/decision"))
+        .post(format!("{url}/v3/plans/1/decision"))
         .bearer_auth(&token)
         .json(&serde_json::json!({}))
         .send()
@@ -692,7 +692,7 @@ async fn the_decision_route_refuses_because_a_node_runs_no_queue() {
 async fn a_node_with_no_account_store_serves_nobody() {
     let url = serve(Arc::new(NodeApi::new(snapshot(vec![track(1)])))).await;
 
-    let response = reqwest::get(format!("{url}/v2/snapshot"))
+    let response = reqwest::get(format!("{url}/v3/snapshot"))
         .await
         .expect("the route exists");
     assert_eq!(response.status().as_u16(), 503);
@@ -743,7 +743,7 @@ async fn the_health_route_answers() {
 
     let token = token(&url).await;
     let health: SystemHealth = reqwest::Client::new()
-        .get(format!("{url}/v2/health"))
+        .get(format!("{url}/v3/health"))
         .bearer_auth(&token)
         .send()
         .await
@@ -755,7 +755,7 @@ async fn the_health_route_answers() {
     assert!(!health.tracking_healthy);
 }
 
-/// `GET /v2/coverage` carries the parameters that found the gaps, not only the gaps.
+/// `GET /v3/coverage` carries the parameters that found the gaps, not only the gaps.
 ///
 /// DN-12 §6 wrote the response as a bare `Vec<CoverageGap>`; §5 puts the sampling spacing
 /// and whether terrain masking was applied **on the result**, so a coarse run cannot be
@@ -764,7 +764,7 @@ async fn the_health_route_answers() {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_coverage_route_carries_the_parameters_that_found_the_gaps() {
     let api = authenticating(snapshot(Vec::new()));
-    api.publish_coverage(gungnir_api::v2::CoverageResponse::Computed(
+    api.publish_coverage(gungnir_api::v3::CoverageResponse::Computed(
         gungnir_analytics::CoverageReport {
             parameters: gungnir_analytics::CoverageParameters {
                 sample_spacing_m: 250.0,
@@ -778,7 +778,7 @@ async fn the_coverage_route_carries_the_parameters_that_found_the_gaps() {
     let token = token(&url).await;
 
     let body: serde_json::Value = reqwest::Client::new()
-        .get(format!("{url}/v2/coverage"))
+        .get(format!("{url}/v3/coverage"))
         .bearer_auth(&token)
         .send()
         .await
@@ -803,7 +803,7 @@ async fn an_uncomputed_coverage_answer_is_not_an_empty_one() {
     let token = token(&url).await;
 
     let body: serde_json::Value = reqwest::Client::new()
-        .get(format!("{url}/v2/coverage"))
+        .get(format!("{url}/v3/coverage"))
         .bearer_auth(&token)
         .send()
         .await
@@ -827,7 +827,7 @@ async fn an_uncomputed_coverage_answer_is_not_an_empty_one() {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_coverage_route_refuses_an_unauthenticated_caller() {
     let url = serve(authenticating(snapshot(Vec::new()))).await;
-    let status = reqwest::get(format!("{url}/v2/coverage"))
+    let status = reqwest::get(format!("{url}/v3/coverage"))
         .await
         .expect("the route exists")
         .status();
@@ -975,7 +975,7 @@ fn the_heartbeat_meets_the_amended_connectivity_budget() {
     assert!(HEARTBEAT_TIMEOUT > HEARTBEAT_INTERVAL);
 }
 
-/// `GET /v2/history` (GAP-050): the retained envelopes from a sequence, under the link's
+/// `GET /v3/history` (GAP-050): the retained envelopes from a sequence, under the link's
 /// token, and `410 Gone` past the window rather than a shorter list.
 #[tokio::test(flavor = "multi_thread")]
 #[allow(clippy::cast_precision_loss)]

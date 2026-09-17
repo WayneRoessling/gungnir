@@ -14,7 +14,7 @@
 
 use gungnir_api::tls::{acceptor, TlsListener, TlsPaths};
 use gungnir_api::transport::{serve_on_listener, NodeApi};
-use gungnir_api::v2::SnapshotResponse;
+use gungnir_api::v3::SnapshotResponse;
 use gungnir_model::SystemHealth;
 use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
@@ -144,7 +144,7 @@ async fn answers(addr: std::net::SocketAddr, config: ClientConfig) -> bool {
         let mut tls = connector.connect(name, stream).await.ok()?;
         // Built from bytes so the literal carries no escapes: CRLF is 13, 10.
         let request = [
-            b"GET /v2/health HTTP/1.1".as_slice(),
+            b"GET /v3/health HTTP/1.1".as_slice(),
             &[13, 10],
             b"Host: localhost".as_slice(),
             &[13, 10, 13, 10],

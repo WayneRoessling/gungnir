@@ -7,7 +7,7 @@
 //!
 //! On a linked desktop the registry's control adapter is this link: a command an
 //! operator issues here is recorded `Issued` locally, handed to the link, and posted to
-//! `POST /v2/sensors/{sensor_id}/task`. The node issues it through its own registry and
+//! `POST /v3/sensors/{sensor_id}/task`. The node issues it through its own registry and
 //! answers with its own task id, which is mapped to ours; the sensor's acknowledgement,
 //! refusal or silence then arrives on the event stream naming the node's id and is
 //! applied to our task. **The local mode never changes until the sensor's
