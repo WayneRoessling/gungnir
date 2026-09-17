@@ -7875,6 +7875,9 @@
   - date: 2026-09-17
     status: Open
     note: "A design for this gap was drafted 2026-09-16 and never merged; it is on the branch `claude/gap105-laydown-placement`. Do not merge it as it stands: its `DN-31` number and its `D-53` were both taken by other work since, and its register edits predate the move to this file. The design text is still what this gap needs. See `../../record/2026-09-17/gap-105-laydown-draft-and-dn-31-reuse.md`."
+  - date: 2026-09-17
+    status: Open
+    note: "The drafted design is on `main` as of 2026-09-17, as `../../design/DN-32-re-observation-for-a-laydown.md`, with the choice it implements filed as D-64; the branch that held it is deleted. Renumbered on the way: its `DN-31`, its `D-53` and its edge letters had all been taken while it sat unmerged. Unsigned, and no code exists. See `../../record/2026-09-17/gap-105-laydown-draft-and-dn-31-reuse.md`."
 
 - id: GAP-106
   name: An operator cannot accept a coverage gap

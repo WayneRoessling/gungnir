@@ -1555,3 +1555,26 @@
     workflows that use it are gate 6, now advisory by D-62, and `gpu-fusion.yml`, which
     is manual dispatch only. So an offline runner delays re-evidencing the GPU path row
     and a benchmark comparison, and blocks nothing else. See `../../record/2026-09-17/gate-6-stays-advisory-on-this-runner.md`.
+
+- id: D-64
+  decision: How a rehearsal observes a laydown's sensors
+  question: >-
+    A rehearsal replays a fixture's recorded detections, captured once from the sensor
+    positions in the fixture's own `sensors.json`, so selecting a different laydown changes
+    nothing a rehearsal can show about sensors (GAP-105). Commit one pre-generated fixture
+    per laydown, or generate the detections a laydown's sensors would have produced at
+    rehearsal time, inside the production binary?
+  raised_in: "GAP-105; `../../design/DN-32-re-observation-for-a-laydown.md`"
+  decider: Owner
+  unblocks: GAP-105
+  resolved: 2026-09-16
+  outcome: >-
+    **Generated at rehearsal time, in the production binary.** Chosen over committing a
+    fixture per laydown, which keeps the dependency rule intact but only ever covers the
+    laydowns somebody generated fixtures for. The cost is accepted deliberately: the
+    operational binary gains an observation model it does not need for live operation, so
+    the design carries the containment that keeps a synthetic detection out of every live
+    path, and the `gungnir-ingest` gateway's refusal is human-owned. Decided 2026-09-16 and
+    recorded here 2026-09-17: the design it belongs to sat unmerged on a branch, and the id
+    it first claimed (D-53) was taken by the GAP-067 walk in the meantime. No code exists;
+    `../../signatures.md` is where the design's signature status is stated.
