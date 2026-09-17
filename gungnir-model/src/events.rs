@@ -469,6 +469,20 @@ pub enum CommandEvent {
         decision: DecisionId,
         accepted: bool,
         operator: Option<String>,
+        /// The role the deciding operator's session carried, in `gungnir_security::Role`'s
+        /// debug spelling (the spelling `Concurrence::Operator` carries), so the
+        /// arbitration rule can rank this decision against a conflicting one
+        /// (`crate::arbitration`, D-03; the GAP-067 walk, 2026-09-16).
+        ///
+        /// **Recorded only from an authenticated session** (DN-23 §5 rule 1): `None` when
+        /// nobody was signed in, even though a desktop always has a selected role, because
+        /// a selection is an authority nobody verified and ranking it would let an
+        /// unauthenticated choice outrank a signed-in person. `None` is also what a journal
+        /// written before this field existed reads as, which is why it defaults: the change
+        /// is additive and `SCHEMA_VERSION` stands. A conflict with a side whose role is
+        /// `None` is left to a person.
+        #[serde(default)]
+        role: Option<String>,
         /// What the policy chain said, in the model's words (MOE-05 needs it on the
         /// record; the policy crate's own enum may not be depended on from here).
         verdict: VerdictSummary,
@@ -783,10 +797,36 @@ pub enum LinkEvent {
     },
     /// A person resolved one conflicting decision from an outage (GAP-050, D-03):
     /// which side's decision stands on the record, and who said so.
+    ///
+    /// Since the GAP-067 walk (2026-09-16) only a conflict the arbitration rule could not
+    /// rank reaches a person; the rest are [`LinkEvent::ConflictArbitrated`].
     ConflictResolved {
         plan: crate::PlanId,
         kept_local: bool,
         operator: Option<String>,
+        at: MissionTime,
+    },
+    /// The arbitration rule resolved one conflicting decision from an outage, and no
+    /// person did (D-03, DN-10 §9; the GAP-067 walk, 2026-09-16).
+    ///
+    /// **Not [`LinkEvent::ConflictResolved`], on purpose.** That one records a person's
+    /// choice, audited under `plan.decide` and naming who made it; this one records a
+    /// rule's, audited as nobody's decision and naming nobody, because nobody chose. An
+    /// after-action review that could not tell the two apart could not say whether a
+    /// person ever looked at the conflict.
+    ///
+    /// **Both sides travel with the verdict**, as the rule read them. The node's half of
+    /// an outage lives in the node's journal, and a ground that could only be checked
+    /// against another deployment's record is a ground nobody reviewing this one can check.
+    ConflictArbitrated {
+        plan: crate::PlanId,
+        /// Whether this desktop's side was kept; `false` means the node's.
+        kept_local: bool,
+        ground: crate::arbitration::ArbitrationGround,
+        /// This desktop's side, which the rule reads first.
+        local: crate::arbitration::ConflictSide,
+        /// The node's side.
+        remote: crate::arbitration::ConflictSide,
         at: MissionTime,
     },
 }
@@ -818,4 +858,83 @@ pub enum ReplayEvent {
         stepped: usize,
         at: MissionTime,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::arbitration::{ArbitrationGround, ConflictSide, SideOutcome};
+
+    /// The deciding role is additive: a `Decided` journaled before the field existed still
+    /// reads, as a decision whose role was never recorded. The older shape is made by
+    /// taking the field out of today's encoding rather than typed by hand, so the test
+    /// cannot pass against a shape no journal ever held.
+    #[test]
+    fn a_decision_journaled_before_roles_were_recorded_still_reads_with_no_role() {
+        let decided = CommandEvent::Decided {
+            plan: PlanId(7),
+            decision: DecisionId(3),
+            accepted: false,
+            operator: Some("7".into()),
+            role: None,
+            verdict: VerdictSummary::RequiresHumanApproval,
+            rationale: Some("friendly airliner".into()),
+        };
+        let mut before = serde_json::to_value(&decided).expect("encode");
+        let removed = before
+            .get_mut("Decided")
+            .and_then(serde_json::Value::as_object_mut)
+            .and_then(|fields| fields.remove("role"));
+        assert_eq!(
+            removed,
+            Some(serde_json::Value::Null),
+            "the field is written"
+        );
+        let read: CommandEvent = serde_json::from_value(before).expect("an older line reads");
+        assert_eq!(read, decided);
+
+        let now = CommandEvent::Decided {
+            plan: PlanId(7),
+            decision: DecisionId(4),
+            accepted: true,
+            operator: Some("7".into()),
+            role: Some("Supervisor".into()),
+            verdict: VerdictSummary::RequiresHumanApproval,
+            rationale: None,
+        };
+        let json = serde_json::to_string(&now).expect("encode");
+        assert_eq!(
+            serde_json::from_str::<CommandEvent>(&json).expect("decode"),
+            now
+        );
+    }
+
+    /// The rule's verdict round-trips with both sides and its ground, which is what makes
+    /// it reviewable from the record alone.
+    #[test]
+    fn a_rule_verdict_round_trips_with_both_sides() {
+        let event = LinkEvent::ConflictArbitrated {
+            plan: PlanId(7),
+            kept_local: false,
+            ground: ArbitrationGround::DecisionOverExpiry,
+            local: ConflictSide {
+                outcome: SideOutcome::Expired,
+                operator: None,
+                role: None,
+                at: MissionTime(110.0),
+            },
+            remote: ConflictSide {
+                outcome: SideOutcome::Accepted,
+                operator: Some("9".into()),
+                role: None,
+                at: MissionTime(111.5),
+            },
+            at: MissionTime(150.0),
+        };
+        let json = serde_json::to_string(&event).expect("encode");
+        assert_eq!(
+            serde_json::from_str::<LinkEvent>(&json).expect("decode"),
+            event
+        );
+    }
 }

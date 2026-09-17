@@ -1,0 +1,5 @@
+{"t":60,"kind":"requirement_stated","requirement":"R1","by":"intelligence-analyst","question":"identify the aircraft loitering at altitude sixty kilometres east","area":"EAST_ORBIT","radius_m":20000,"priority":"high","needed_by":720}
+{"t":90,"kind":"requirement_stated","requirement":"R2","by":"intelligence-analyst","question":"identify any aircraft returning to HAF from the north-west without a filed plan change","area":"HAF","radius_m":70000,"priority":"medium","needed_by":870}
+{"t":120,"kind":"requirement_tasked","requirement":"R1","by":"sensor-manager","sensor":13}
+{"t":150,"kind":"requirement_tasked","requirement":"R2","by":"sensor-manager","sensor":13}
+{"t":840,"kind":"requirement_satisfied","requirement":"R2","by":"intelligence-analyst","evidence":"C13 HAF camera imagery shows the lead contact is an F-16, and the HAF IFF interrogator has both contacts answering friendly","sensors":[13,15]}

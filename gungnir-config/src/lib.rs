@@ -1500,8 +1500,6 @@ fn has_duplicate_ids(mut ids: Vec<u32>) -> bool {
     ids.windows(2).any(|w| w[0] == w[1])
 }
 
-/// Resource rules, including the effector model MOE-03 depends on
-/// (docs/design/DN-04-effector-model.md).
 /// DN-26 §4: the five refusals a laydown table is validated against.
 ///
 /// Every one of these is a refusal rather than a default, because each of the quiet
@@ -1536,10 +1534,14 @@ fn validate_laydowns(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
         .collect();
     match current.len() {
         1 => {}
+        // Every declared laydown is named, because each is a candidate for the one that
+        // should have been marked. `seen` holds them all by now, in declaration order: the
+        // duplicate check above only finishes its loop when every identifier was pushed.
         0 => {
             return Err(ConfigError::Invalid(format!(
-                "{} laydowns are declared and none is marked current; the current laydown is what the deployment is actually running and is the baseline every option is compared against, so it is refused rather than guessed",
-                baseline.laydowns.len()
+                "{} laydowns are declared ({}) and none is marked current; the current laydown is what the deployment is actually running and is the baseline every option is compared against, so it is refused rather than guessed",
+                baseline.laydowns.len(),
+                seen.join(", ")
             )))
         }
         _ => {
@@ -1554,11 +1556,21 @@ fn validate_laydowns(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     let declared_resources: Vec<u32> = baseline.resources.iter().map(|r| r.id).collect();
 
     for l in &baseline.laydowns {
-        // 5. A non-finite coordinate, which would propagate into a coverage answer.
+        // 5. A non-finite coordinate, which would propagate into a coverage answer. The
+        //    laydown alone does not say where to look, since it positions every sensor and
+        //    resource, so each placement holding one is named too.
         if l.has_non_finite_coordinate() {
+            let not_finite = |p: &[f64; 3]| p.iter().any(|v| !v.is_finite());
+            let sensors = l.sensors.iter().filter(|s| not_finite(&s.position_enu));
+            let resources = l.resources.iter().filter(|r| not_finite(&r.position_enu));
+            let placements: Vec<String> = sensors
+                .map(|s| format!("sensor {}", s.sensor.0))
+                .chain(resources.map(|r| format!("resource {}", r.resource.0)))
+                .collect();
             return Err(ConfigError::Invalid(format!(
-                "laydown {} has a non-finite coordinate",
-                l.id
+                "laydown {} has a non-finite coordinate in its placement of {}",
+                l.id,
+                placements.join(", ")
             )));
         }
         // 2. An identifier no registry declares.
@@ -1611,6 +1623,8 @@ fn validate_laydowns(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     Ok(())
 }
 
+/// Resource rules, including the effector model MOE-03 depends on
+/// (docs/design/DN-04-effector-model.md).
 fn validate_resources(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     for r in &baseline.resources {
         if r.position.iter().any(|v| !v.is_finite()) {
@@ -3455,13 +3469,16 @@ fn validate_security(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
 
 #[allow(clippy::too_many_lines)]
 pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
-    validate_security(baseline)?;
+    // The version first: a newer schema cannot be judged by this build's rules, so a
+    // baseline that is too new is refused as too new, whatever else this build would say
+    // about its content.
     if baseline.version > SUPPORTED_CONFIG_VERSION {
         return Err(ConfigError::VersionTooNew {
             found: baseline.version,
             supported: SUPPORTED_CONFIG_VERSION,
         });
     }
+    validate_security(baseline)?;
     if has_duplicate_ids(baseline.sensors.iter().map(|s| s.id).collect()) {
         return Err(ConfigError::Invalid("duplicate sensor id".into()));
     }
@@ -3673,8 +3690,27 @@ impl FileConfigStore {
 
 impl ConfigStore for FileConfigStore {
     fn load(&self) -> Result<ConfigBaseline, ConfigError> {
+        // The schema version is read before anything else in the file. A baseline from a
+        // newer build is written in a schema this build does not know, and a field whose
+        // shape changed would fail to parse -- reported as `Encoding`, when the true
+        // reason is that the file is too new (the `gungnir-config` Validation and version
+        // gating row of `docs/verification-capability-table.md` §2; found by the GAP-067
+        // walk, 2026-09-16). A file with no readable version falls through to the full
+        // parse, which says what is wrong with it.
+        #[derive(serde::Deserialize)]
+        struct SchemaVersionOnly {
+            version: u32,
+        }
         let text =
             std::fs::read_to_string(&self.path).map_err(|e| ConfigError::Io(e.to_string()))?;
+        if let Ok(SchemaVersionOnly { version }) = serde_json::from_str(&text) {
+            if version > SUPPORTED_CONFIG_VERSION {
+                return Err(ConfigError::VersionTooNew {
+                    found: version,
+                    supported: SUPPORTED_CONFIG_VERSION,
+                });
+            }
+        }
         let baseline: ConfigBaseline =
             serde_json::from_str(&text).map_err(|e| ConfigError::Encoding(e.to_string()))?;
         if baseline.version > SUPPORTED_CONFIG_VERSION {
@@ -5368,6 +5404,192 @@ MFkw
             Err(ConfigError::RevisionNotAdvanced { in_force: 4, .. })
         ));
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// One radar, so that the baselines below are not the default one and reading a
+    /// baseline back says which of them was written.
+    fn one_radar() -> SensorConfig {
+        SensorConfig {
+            id: 1,
+            modality: "radar".into(),
+            position: [0.0, 0.0, 10.0],
+            max_range_m: 20_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+        }
+    }
+
+    /// The `gungnir-config` Validation and version gating row of
+    /// `docs/verification-capability-table.md` §2: "`Invalid` and `VersionTooNew`
+    /// respectively; nothing applied". Both candidates advance the revision, so neither
+    /// refusal is the revision rule's, and after each the baseline in force is still the
+    /// one on disk and the one the store holds.
+    #[test]
+    fn an_invalid_or_too_new_candidate_leaves_the_baseline_in_force() {
+        let path = std::env::temp_dir().join(format!("gungnir-gating-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let mut store = FileConfigStore::new(&path, test_vocabulary());
+        let in_force = ConfigBaseline {
+            revision: 1,
+            sensors: vec![one_radar()],
+            ..ConfigBaseline::default()
+        };
+        store
+            .apply(in_force.clone(), MissionTime(0.0))
+            .expect("a valid baseline is applied");
+
+        // (a) Two sensors sharing one identifier.
+        let duplicate = ConfigBaseline {
+            revision: 2,
+            sensors: vec![one_radar(), one_radar()],
+            ..ConfigBaseline::default()
+        };
+        match store.apply(duplicate, MissionTime(1.0)) {
+            Err(ConfigError::Invalid(why)) => {
+                assert!(why.contains("duplicate sensor id"), "refused for {why}");
+            }
+            other => panic!("a duplicate sensor id was not refused as invalid: {other:?}"),
+        }
+        assert_eq!(store.load().expect("the file in force reads"), in_force);
+        assert_eq!(store.applied(), Some(&in_force));
+
+        // (b) A schema version this build does not have. The expected values are the
+        // version this test wrote into the candidate and the one this build declares.
+        let too_new = SUPPORTED_CONFIG_VERSION + 1;
+        let newer = ConfigBaseline {
+            version: too_new,
+            revision: 2,
+            sensors: vec![one_radar()],
+            ..ConfigBaseline::default()
+        };
+        match store.apply(newer, MissionTime(2.0)) {
+            Err(ConfigError::VersionTooNew { found, supported }) => {
+                assert_eq!(found, too_new, "the version the candidate carries");
+                assert_eq!(supported, SUPPORTED_CONFIG_VERSION, "this build's version");
+            }
+            other => panic!("a baseline from a newer build was not refused as one: {other:?}"),
+        }
+        assert_eq!(store.load().expect("the file in force reads"), in_force);
+        assert_eq!(store.applied(), Some(&in_force));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The same row's "nothing applied" where nothing was in force before: a refused
+    /// apply writes no file and records nothing as applied.
+    #[test]
+    fn a_refused_apply_into_an_empty_store_writes_no_file() {
+        let path =
+            std::env::temp_dir().join(format!("gungnir-refused-fresh-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let mut store = FileConfigStore::new(&path, test_vocabulary());
+
+        let duplicate = ConfigBaseline {
+            revision: 1,
+            sensors: vec![one_radar(), one_radar()],
+            ..ConfigBaseline::default()
+        };
+        assert!(matches!(
+            store.apply(duplicate, MissionTime(0.0)),
+            Err(ConfigError::Invalid(_))
+        ));
+        assert!(!path.exists(), "an invalid baseline was written to disk");
+        assert!(store.applied().is_none());
+
+        let newer = ConfigBaseline {
+            version: SUPPORTED_CONFIG_VERSION + 1,
+            revision: 1,
+            ..ConfigBaseline::default()
+        };
+        assert!(matches!(
+            store.apply(newer, MissionTime(0.0)),
+            Err(ConfigError::VersionTooNew { .. })
+        ));
+        assert!(
+            !path.exists(),
+            "a baseline from a newer build was written to disk"
+        );
+        assert!(store.applied().is_none());
+    }
+
+    /// The same row at start-up. A baseline from a newer build reaches a deployment as a
+    /// file, and both binaries read it with `FileConfigStore::load` before validating
+    /// anything (`load_config` in `gungnir-app/src/state.rs` and in
+    /// `gungnir-node/src/main.rs`), so `load` is where it has to be refused.
+    #[test]
+    fn a_file_from_a_newer_build_is_refused_when_loaded() {
+        let path = std::env::temp_dir().join(format!(
+            "gungnir-too-new-on-disk-{}.json",
+            std::process::id()
+        ));
+        let too_new = SUPPORTED_CONFIG_VERSION + 1;
+        // Written by hand, since `apply` would refuse it, and carrying a section this build
+        // has never heard of, as a file a newer build wrote would.
+        let text = serde_json::json!({
+            "version": too_new,
+            "revision": 1,
+            "a_section_this_build_has_never_heard_of": { "enabled": true }
+        })
+        .to_string();
+        std::fs::write(&path, text).expect("the fixture file is written");
+
+        match FileConfigStore::new(&path, test_vocabulary()).load() {
+            Err(ConfigError::VersionTooNew { found, supported }) => {
+                assert_eq!(found, too_new, "the version the file carries");
+                assert_eq!(supported, SUPPORTED_CONFIG_VERSION, "this build's version");
+            }
+            other => panic!("a file from a newer build was loaded: {other:?}"),
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The same, when the newer schema changed the shape of a field this build knows.
+    /// Parsing the whole file first reported this as `Encoding`, which hides the one fact
+    /// that matters: the file is from a newer build.
+    #[test]
+    fn a_newer_file_that_reshaped_a_known_field_is_still_too_new() {
+        let path = std::env::temp_dir().join(format!(
+            "gungnir-too-new-reshaped-{}.json",
+            std::process::id()
+        ));
+        let too_new = SUPPORTED_CONFIG_VERSION + 1;
+        let text = serde_json::json!({
+            "version": too_new,
+            "revision": 1,
+            "sensors": "a newer schema made this an object reference"
+        })
+        .to_string();
+        std::fs::write(&path, text).expect("the fixture file is written");
+
+        let loaded = FileConfigStore::new(&path, test_vocabulary()).load();
+        let _ = std::fs::remove_file(&path);
+        match loaded {
+            Err(ConfigError::VersionTooNew { found, supported }) => {
+                assert_eq!(found, too_new);
+                assert_eq!(supported, SUPPORTED_CONFIG_VERSION);
+            }
+            other => {
+                panic!("a reshaped file from a newer build was not refused as too new: {other:?}")
+            }
+        }
+    }
+
+    /// A too-new baseline is refused as too new even when this build's own rules would
+    /// also refuse its content, because those rules are not the ones it was written to.
+    #[test]
+    fn validation_reports_a_newer_schema_before_judging_its_content() {
+        let mut baseline = ConfigBaseline {
+            version: SUPPORTED_CONFIG_VERSION + 1,
+            ..ConfigBaseline::default()
+        };
+        baseline.security.authentication.provider = AuthenticationProvider::LocalAccounts {
+            accounts_path: "   ".into(),
+        };
+        assert!(matches!(
+            validate(&baseline),
+            Err(ConfigError::VersionTooNew { .. })
+        ));
+        baseline.version = SUPPORTED_CONFIG_VERSION;
+        assert!(matches!(validate(&baseline), Err(ConfigError::Invalid(_))));
     }
 
     /// The asset list is stamped with the revision, not the schema version.

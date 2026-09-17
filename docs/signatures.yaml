@@ -1,8 +1,10 @@
 # The signature ledger: every change the owner has signed, oldest first. Rendered into
 # signatures.md by tools/signatures.py; `python docs/tools/signatures.py check` validates it.
 #
-# One entry per thing signed. `commit` is the first commit on main whose tree carried the
-# written record of the signature; `paths` are what it covered, as they were at that commit.
+# One entry per thing signed. `commit` is a commit on main whose tree holds what was signed:
+# the first commit that carried the written record, for the entries built from the record on
+# 2026-09-16, and the main commit the owner reviewed, for a signature given since. `paths` are
+# what it covered, as they were at that commit.
 # A signature made before the repository existed (2026-09-07) names the first commit and
 # sets `pre_repository`. Append new entries at the end; never edit or remove a merged one.
 #
@@ -2060,3 +2062,485 @@
   record: >-
     docs/design/README.md, DN-22 row as of 2026-09-06;
     docs/record/2026-09-16/six-left-out-signatures-signed.md
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: tracking-service whole-pipeline replay gated on bit-identical agreement
+    with the offline batch and the pipeline's own counters; method amended to the final
+    picture against run_batch.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-tracking-service/tests/whole_pipeline_replay.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-data loader correctness gated once LAZ, exact bounds for every
+    format, and truncated COPC and LAZ files are tested.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-data/tests
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-data loading off the UI thread amended from "Structural" to the
+    dispatch, the non-blocking tick and the review, and gated.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-data/tests
+  - gungnir-app/tests/pointcloud.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: data-fusion GPU path row gated on the recorded gpu-fusion.yml dispatch
+    (run 35113741715, gungnir-rtx-5060ti).
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-data-fusion/tests/gpu_vs_cpu.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: viewport3d glyph rebuild gated once a change to any drawn field rebuilds,
+    after the comparator fix.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-viewport3d/src/tracks.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-ui egui pass budget (p99 under 8 ms at Scenario 4 counts) gated in
+    release, after the owner read the 2026-09-15 figure.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-app/tests/frame_budgets.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-eventing broadcast delivery and ordering gated.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-eventing/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-remote store-and-forward gated once the outbox's order and
+    capacity are asserted.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-remote/tests
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-analytics row split; line of sight gated, coverage accuracy held
+    on GAP-118.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-analytics/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-resilience bounded queue and reconciliation gated.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-resilience/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-collab arbitration criterion amended to put DN-10 §9's expiry rule
+    first, and gated.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-collab/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-workflow role layouts and alert lifecycle gated once both analyst
+    roles and every history entry are asserted.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-workflow/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-store row split; journal round-trip gated once non-dyadic floats
+    read back bit for bit, retention held on GAP-122.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-store
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: serde_json's float_roundtrip feature turned on workspace-wide, so a
+    journaled double reads back exactly.
+  kind: stack
+  paths:
+  - Cargo.toml
+  - docs/agentic-coding-standards.md
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-config validation and version gating gated once "nothing applied"
+    is asserted.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-config/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-time row split; replay determinism gated, the late-data policy
+    held on GAP-114.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-time/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: the ingest ASTERIX, direction-finder and UAS-identification row amended to
+    "zero malformed or unauthenticated payloads" and gated once every refusal rule and the
+    205/129 fuzz bindings are tested.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-ingest/tests
+  - gungnir-fuzz/fuzz_targets/asterix_feed.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: the SAPIENT adapter row amended (a bearing is offered without a position
+    and a tracking-service refusal is a named NotAccepted; live acceptance is the
+    sensor-position row's) and gated.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-ingest/tests/sapient_spotter.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: the MISB KLV adapter row amended to every checksum-valid frame's full
+    report, and gated once every report field is asserted.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-ingest/tests/misb_feed.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-identification evidence fusion gated.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-identification/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-geo geofence containment gated once the near-pole fence and points
+    a metre either side of each edge are tested.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-geo/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-policy criterion amended to Denied { NoGoGeofence }, Denied {
+    Authority { layer } } for a role with no rule, and RequiresHumanApproval (never
+    Approved) for one; gated.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-policy/src
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-command decision recording gated once each decision adds exactly
+    one record.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-command/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-decision alternatives and what-if gated on alternatives.rs and the
+    desktop's alternatives tests.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-decision/src/alternatives.rs
+  - gungnir-app/tests/alternatives.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-modelops promotion gating and rollback gated once the promoted
+    default's configuration is asserted.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-modelops/src/lib.rs
+  - gungnir-app/tests/governance.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-security first clause amended to AuthFailure::Rejected, identical
+    for an unknown operator and a wrong passphrase; row held on GAP-111.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-api method and criterion amended to the v2 interface (401, 403, or
+    503 with no caller authority; nothing queued or changed); row held on GAP-112.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: "all tested" struck from the gungnir-interop criterion; row held on
+    GAP-116.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: "(planned)" dropped from the backend-switching method; row held on
+    GAP-120.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-replay data source corrected to a synthetic journal, and
+    deterministic playback gated once whole envelopes are compared.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-replay/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-reporting data source corrected to synthetic journals, and
+    traceability gated once a report regenerated from disk equals the exported one.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-reporting/src/lib.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: cross-layer disconnected reconciliation amended -- D-03's rule resolves
+    every conflict it can rank, an expiry against a decision included, and a person
+    permitted plan.decide resolves the rest -- and gated; data source corrected (D-53).
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-app/tests/failover_e2e.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: sensor-management outbound control amended to refuse an endpoint-less
+    sensor with NotControllable, and gated; the node's sweep is GAP-115.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-app/tests/sensor_control.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: gungnir-config laydown validation gated once refusals 1a and 5 name what
+    the criterion asks and refusal 4's resource half is tested.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-config/tests/laydowns.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: PN-16 laydown options table gated once the alternative's difference and
+    every painted number are asserted; data source named.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-app/tests/planning_panel.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: sensor-position resolution gated once an off-axis polar case and the
+    vertical axis to 0.5 m are asserted; data source named.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-tracking-service/tests/sensor_position_resolver.rs
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"
+
+- date: 2026-09-16
+  signer: Owner
+  subject: >-
+    GAP-067 walk: collection requirements and tasking concurrence gated once a concurrence
+    without a signed-in operator is refused and the MT-08 replay over TT-08 exists (D-54).
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: 5ea5e0964f554a747bba89729463ce02d74e6b26
+  pre_repository: false
+  record: "docs/record/2026-09-16/gap-067-walk.md"

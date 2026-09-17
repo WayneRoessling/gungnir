@@ -352,6 +352,30 @@ the new variant to keep compiling; both report "this provider is for gungnir-nod
 fall back to `SessionState::StoreUnavailable`; the desktop's own row is unchanged, since
 nothing asked it to gain a second account-storage mechanism alongside `LocalAccounts`.
 
+## 12. Amendment 3 (2026-09-16, D-53 and D-54): what a session now decides
+
+Three things this note left to a later build were settled at the GAP-067 walk, and each
+changes what rules 1 and 5 of §5 say a session is for.
+
+**The desktop's authority role follows the signed-in account (D-53).** Until 2026-09-16
+`AppState`'s role was fixed at `Operator`, so every `role_permits` check on the desktop
+asked what an Operator may do, whoever had signed in; only the node authorized on the
+caller's role. `AppState::role` is now the session's role while one is signed in, and the
+role-selected one otherwise -- which is rule 5's unauthenticated desktop, unchanged.
+
+**A decision records the role that made it (D-53).** `CommandEvent::Decided` gained `role`,
+set from the signed-in session and `None` with nobody signed in, so rule 1 holds for the
+role exactly as for the operator: a role nobody verified is never recorded, because D-03's
+arbitration rule would rank it as though somebody had.
+
+**A tasking concurrence names its operator (D-54, DN-11 amendment 3).** Rule 1 said that
+until a session exists a concurrence carries `Concurrence::UnattributedRole`. For a
+tasking that is no longer so: `TaskingCase::concur` refuses a concurrence naming nobody, and
+a desktop with nobody signed in, or with no account store (rule 5), cannot task through a
+requirement and says why. A decline still records either kind. §8's second row is not
+amended here; under D-54 its "without one" half is met by a decline, and a tasking
+concurrence with nobody signed in is refused rather than recorded.
+
 ## Traceability
 
 GAP-057; CAP-6.1, and CAP-6.2/CAP-6.3 through PN-20; D-02 for the mechanism, D-20 for the

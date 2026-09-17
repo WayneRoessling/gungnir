@@ -1055,6 +1055,14 @@ IE-anomaly-settings,uafId,IE-anomaly-settings
 IE-anomaly-settings,uafKind,InformationElement
 IE-anomaly-settings,registry.code,gungnir_model::AnomalySettings
 IE-anomaly-settings,registry.domain,"Policy, authority & settings"
+IE-arbitration-facts,uafId,IE-arbitration-facts
+IE-arbitration-facts,uafKind,InformationElement
+IE-arbitration-facts,registry.code,gungnir_model::ArbitrationFacts
+IE-arbitration-facts,registry.domain,"Policy, authority & settings"
+IE-arbitration-ground,uafId,IE-arbitration-ground
+IE-arbitration-ground,uafKind,InformationElement
+IE-arbitration-ground,registry.code,gungnir_model::ArbitrationGround
+IE-arbitration-ground,registry.domain,"Policy, authority & settings"
 IE-asset-extent,uafId,IE-asset-extent
 IE-asset-extent,uafKind,InformationElement
 IE-asset-extent,registry.code,gungnir_model::AssetExtent
@@ -1095,6 +1103,10 @@ IE-concurrence,uafId,IE-concurrence
 IE-concurrence,uafKind,InformationElement
 IE-concurrence,registry.code,gungnir_model::Concurrence
 IE-concurrence,registry.domain,Battle rhythm & mission records
+IE-conflict-side,uafId,IE-conflict-side
+IE-conflict-side,uafKind,InformationElement
+IE-conflict-side,registry.code,gungnir_model::ConflictSide
+IE-conflict-side,registry.domain,"Policy, authority & settings"
 IE-control-status-settings,uafId,IE-control-status-settings
 IE-control-status-settings,uafKind,InformationElement
 IE-control-status-settings,registry.code,gungnir_model::ControlStatusSettings
@@ -1331,6 +1343,10 @@ IE-requirement-state,uafId,IE-requirement-state
 IE-requirement-state,uafKind,InformationElement
 IE-requirement-state,registry.code,gungnir_model::RequirementState
 IE-requirement-state,registry.domain,Battle rhythm & mission records
+IE-resolution,uafId,IE-resolution
+IE-resolution,uafKind,InformationElement
+IE-resolution,registry.code,gungnir_model::Resolution
+IE-resolution,registry.domain,"Policy, authority & settings"
 IE-resource-placement,uafId,IE-resource-placement
 IE-resource-placement,uafKind,InformationElement
 IE-resource-placement,registry.code,gungnir_model::ResourcePlacement
@@ -1387,6 +1403,10 @@ IE-session-id,uafId,IE-session-id
 IE-session-id,uafKind,InformationElement
 IE-session-id,registry.code,gungnir_model::SessionId
 IE-session-id,registry.domain,Picture & tracking vocabulary
+IE-side-outcome,uafId,IE-side-outcome
+IE-side-outcome,uafKind,InformationElement
+IE-side-outcome,registry.code,gungnir_model::SideOutcome
+IE-side-outcome,registry.domain,"Policy, authority & settings"
 IE-source-authentication,uafId,IE-source-authentication
 IE-source-authentication,uafKind,InformationElement
 IE-source-authentication,registry.code,gungnir_model::SourceAuthentication
@@ -1427,6 +1447,10 @@ IE-validity-window,uafId,IE-validity-window
 IE-validity-window,uafKind,InformationElement
 IE-validity-window,registry.code,gungnir_model::ValidityWindow
 IE-validity-window,registry.domain,"Policy, authority & settings"
+IE-verdict,uafId,IE-verdict
+IE-verdict,uafKind,InformationElement
+IE-verdict,registry.code,gungnir_model::Verdict
+IE-verdict,registry.domain,"Policy, authority & settings"
 IE-verdict-summary,uafId,IE-verdict-summary
 IE-verdict-summary,uafKind,InformationElement
 IE-verdict-summary,registry.code,gungnir_model::VerdictSummary

@@ -12,6 +12,11 @@
 //! **The property most worth protecting is that a sensor acknowledging a task is not an
 //! answer.** Nothing in this file, and nothing in the desktop, may move a requirement to
 //! answered without a person naming the evidence.
+//!
+//! Every test here that tasks a sensor signs a sensor manager in first. Since the GAP-067
+//! walk (2026-09-16) a tasking with nobody signed in is refused, because the CAP-2.12
+//! criterion asks for a concurrence carrying an operator; `tests/authentication.rs` holds
+//! the refusals, and `tests/requirements_replay.rs` the MT-08 replay.
 
 use gungnir_app::requirements;
 use gungnir_app::state::AppState;
@@ -20,9 +25,14 @@ use gungnir_config::{AssetConfig, ConfigBaseline, EndpointConfig, SensorConfig};
 use gungnir_eventing::Event;
 use gungnir_model::events::RequirementEvent;
 use gungnir_model::{AssetPriority, MissionTime, RequirementId, RequirementState};
-use gungnir_security::Role;
+use gungnir_security::{
+    hash_passphrase, Account, InMemoryAccountStore, LocalAccountAuthority, OperatorId, Role,
+};
 use gungnir_sensor_management::SensorControl;
 use gungnir_time::ReplayClockAuthority;
+use gungnir_workflow::TaskingError;
+
+const PASSPHRASE: &str = "correct horse battery staple";
 
 /// A desktop with one defended asset, one commandable sensor, and one that is not.
 fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
@@ -66,6 +76,25 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
         current: MissionTime(0.0),
     });
     (state, dir)
+}
+
+/// Sign operator 7 in as the sensor manager, the account and sign-in
+/// `tests/authentication.rs` uses. Tasking needs it: a concurrence has to name the
+/// operator who concurred (GAP-067 walk, 2026-09-16).
+fn sign_in_sensor_manager(state: &mut AppState) {
+    let store = InMemoryAccountStore::new(vec![Account {
+        operator: OperatorId(7),
+        role: Role::SensorManager,
+        phc: hash_passphrase(PASSPHRASE).expect("hashed"),
+    }]);
+    state.set_session_authority(Box::new(LocalAccountAuthority::new(Box::new(store))));
+    state.set_role(Role::SensorManager);
+    state
+        .sign_in(&LocalAccountAuthority::credential(
+            OperatorId(7),
+            PASSPHRASE,
+        ))
+        .expect("signed in");
 }
 
 fn state_one(state: &mut AppState, minutes: Option<f64>) -> RequirementId {
@@ -136,16 +165,15 @@ fn a_requirement_with_no_deadline_never_lapses() {
 #[test]
 fn tasking_issues_a_command_and_records_the_concurrence_together() {
     let (mut state, dir) = desktop("tasking");
-    state.set_role(Role::SensorManager);
+    sign_in_sensor_manager(&mut state);
     let id = state_one(&mut state, Some(10.0));
 
     requirements::task(&mut state, id, 1, MissionTime(5.0)).expect("sensor 1 is commandable");
 
     match standing(&state, id) {
         RequirementState::Tasked { by } => {
-            // No operator session exists, so the concurrence carries the role and says
-            // nobody was signed in rather than naming a person who did not act.
-            assert_eq!(by.operator(), None);
+            // The operator who signed in is the one named, in the role they acted in.
+            assert_eq!(by.operator(), Some("7"));
             assert_eq!(by.role(), "SensorManager");
         }
         other => panic!("expected tasked, got {other:?}"),
@@ -168,7 +196,8 @@ fn tasking_issues_a_command_and_records_the_concurrence_together() {
 #[test]
 fn tasking_an_uncontrollable_sensor_leaves_the_requirement_stated() {
     let (mut state, dir) = desktop("uncontrollable");
-    state.set_role(Role::SensorManager);
+    // Signed in, so the refusal is the sensor's and not the missing operator's.
+    sign_in_sensor_manager(&mut state);
     let id = state_one(&mut state, Some(10.0));
 
     let err = requirements::task(&mut state, id, 2, MissionTime(5.0))
@@ -195,7 +224,7 @@ fn tasking_an_uncontrollable_sensor_leaves_the_requirement_stated() {
 #[test]
 fn an_acknowledged_task_never_answers_the_requirement() {
     let (mut state, dir) = desktop("acknowledged");
-    state.set_role(Role::SensorManager);
+    sign_in_sensor_manager(&mut state);
     let id = state_one(&mut state, None);
     requirements::task(&mut state, id, 1, MissionTime(5.0)).expect("commandable");
 
@@ -258,8 +287,16 @@ fn closing_a_requirement_always_says_how() {
         }
         other => panic!("expected declined, got {other:?}"),
     }
-    // And a closed one is not silently reopened by tasking against it.
-    assert!(requirements::task(&mut state, id, 1, MissionTime(9.0)).is_err());
+    // And a closed one is not silently reopened by tasking against it. Refused *because*
+    // it is closed: nobody is signed in here either, and since the GAP-067 walk
+    // (2026-09-16) that alone would refuse it, so a bare `is_err` would pass for the
+    // wrong reason.
+    match requirements::task(&mut state, id, 1, MissionTime(9.0)) {
+        Err(requirements::RequirementError::Tasking(TaskingError::NotOpen(closed))) => {
+            assert_eq!(closed, id);
+        }
+        other => panic!("a closed requirement was not refused as closed: {other:?}"),
+    }
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -307,7 +344,7 @@ fn an_overdue_requirement_lapses_on_the_tick_and_alerts() {
 #[test]
 fn the_requirement_lifecycle_is_published() {
     let (mut state, dir) = desktop("events");
-    state.set_role(Role::SensorManager);
+    sign_in_sensor_manager(&mut state);
     let seen = state.events.subscribe();
 
     let id = state_one(&mut state, Some(10.0));
@@ -332,7 +369,11 @@ fn the_requirement_lifecycle_is_published() {
     match requirement_events[1] {
         RequirementEvent::Tasked { task, by, .. } => {
             assert_eq!(*task, state.sensors.tasks()[0].id);
-            assert_eq!(by.operator(), None);
+            assert_eq!(
+                by.operator(),
+                Some("7"),
+                "the record does not name who concurred"
+            );
         }
         other => panic!("expected tasked, got {other:?}"),
     }
@@ -370,7 +411,7 @@ fn the_analyst_may_state_but_not_concur() {
 #[test]
 fn a_requirement_survives_a_restart() {
     let (mut state, dir) = desktop("restart");
-    state.set_role(Role::SensorManager);
+    sign_in_sensor_manager(&mut state);
     let id = state_one(&mut state, Some(10.0));
     requirements::task(&mut state, id, 1, MissionTime(5.0)).expect("tasked");
     state.save_session().expect("saved");
@@ -389,12 +430,12 @@ fn a_requirement_survives_a_restart() {
     assert_eq!(recovered.priority, AssetPriority::High);
     assert!(recovered.area.radius_m() > 0.0, "the area was lost");
     assert_eq!(recovered.needed_by, Some(MissionTime(600.0)));
-    // And the state it had reached, not the state it started in.
-    assert!(
-        matches!(recovered.state, RequirementState::Tasked { .. }),
-        "the requirement came back as {:?} rather than tasked",
-        recovered.state
-    );
+    // And the state it had reached, not the state it started in -- with the operator who
+    // concurred, which is the part of the record the CAP-2.12 criterion is about.
+    match &recovered.state {
+        RequirementState::Tasked { by } => assert_eq!(by.operator(), Some("7")),
+        other => panic!("the requirement came back as {other:?} rather than tasked"),
+    }
     let _ = std::fs::remove_dir_all(dir);
 }
 

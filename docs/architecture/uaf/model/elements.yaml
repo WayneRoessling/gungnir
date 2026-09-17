@@ -382,6 +382,8 @@ information_elements:
 # BEGIN generated model types
   - {id: IE-algorithm-baseline-id, name: AlgorithmBaselineId, code: gungnir_model::AlgorithmBaselineId, domain: 'Core identifiers, frames & quality', description: 'Which candidate, in which profile.'}
   - {id: IE-anomaly-settings, name: AnomalySettings, code: gungnir_model::AnomalySettings, domain: 'Policy, authority & settings', description: 'Which anomaly detectors a baseline turns on, and how each is tuned.'}
+  - {id: IE-arbitration-facts, name: ArbitrationFacts, code: gungnir_model::ArbitrationFacts, domain: 'Policy, authority & settings', description: 'What the rule reads from one side of a conflict, and nothing else.'}
+  - {id: IE-arbitration-ground, name: ArbitrationGround, code: gungnir_model::ArbitrationGround, domain: 'Policy, authority & settings', description: 'Why the rule kept the side it kept.'}
   - {id: IE-asset-extent, name: AssetExtent, code: gungnir_model::AssetExtent, domain: 'Assets, exchange & releasability', description: 'The shape an asset occupies.'}
   - {id: IE-asset-id, name: AssetId, code: gungnir_model::AssetId, domain: 'Assets, exchange & releasability', description: 'Identifier of a defended asset, stable across baseline versions.'}
   - {id: IE-asset-list-view, name: AssetListView, code: gungnir_model::AssetListView, domain: 'Assets, exchange & releasability', description: 'The asset list as the picture sees it, carrying the baseline revision it came from so a score can be traced to the list that produced it.'}
@@ -392,6 +394,7 @@ information_elements:
   - {id: IE-calibration-event, name: CalibrationEvent, code: gungnir_model::CalibrationEvent, domain: 'Events & the record', description: 'A sensor''s report of an object whose true position is already known (../../docs/mission/gap-analysis/gap-register.md GAP-014).'}
   - {id: IE-collection-requirement, name: CollectionRequirement, code: gungnir_model::CollectionRequirement, domain: 'Battle rhythm & mission records', description: 'A collection requirement, owned by the intelligence analyst (MT-08).'}
   - {id: IE-concurrence, name: Concurrence, code: gungnir_model::Concurrence, domain: 'Battle rhythm & mission records', description: 'Who concurred with tasking a requirement, or declined it.'}
+  - {id: IE-conflict-side, name: ConflictSide, code: gungnir_model::ConflictSide, domain: 'Policy, authority & settings', description: 'One side of a conflicting decision, as its journal recorded it (GAP-050).'}
   - {id: IE-control-status-settings, name: ControlStatusSettings, code: gungnir_model::ControlStatusSettings, domain: 'Policy, authority & settings', description: 'Weapons control status per effector layer.'}
   - {id: IE-cooperative-settings, name: CooperativeSettings, code: gungnir_model::CooperativeSettings, domain: 'Policy, authority & settings', description: 'Tuning for the cooperative detector: when a cooperative report counts as lost, and how far it may sit from the track it claims to be before the two disagree.'}
   - {id: IE-decision-attribution, name: DecisionAttribution, code: gungnir_model::DecisionAttribution, domain: 'Plans, effectors & handoff', description: 'Who decided, when, and on what basis.'}
@@ -451,6 +454,7 @@ information_elements:
   - {id: IE-requirement-event, name: RequirementEvent, code: gungnir_model::RequirementEvent, domain: 'Events & the record', description: 'The life of one collection requirement (docs/design/DN-11-sensor-control-and-tasking.md, GAP-005).'}
   - {id: IE-requirement-id, name: RequirementId, code: gungnir_model::RequirementId, domain: 'Battle rhythm & mission records', description: 'Identifier of a collection requirement.'}
   - {id: IE-requirement-state, name: RequirementState, code: gungnir_model::RequirementState, domain: 'Battle rhythm & mission records', description: 'Where a CollectionRequirement has got to, from stated to answered.'}
+  - {id: IE-resolution, name: Resolution, code: gungnir_model::Resolution, domain: 'Policy, authority & settings', description: 'Which of two conflicting sides stands.'}
   - {id: IE-resource-placement, name: ResourcePlacement, code: gungnir_model::ResourcePlacement, domain: 'Battle rhythm & mission records', description: 'Where one effector sits in a laydown.'}
   - {id: IE-review-event, name: ReviewEvent, code: gungnir_model::ReviewEvent, domain: 'Events & the record', description: 'After-action review lifecycle (docs/design/DN-20-after-action-review.md, GAP-049).'}
   - {id: IE-rhythm-event, name: RhythmEvent, code: gungnir_model::RhythmEvent, domain: 'Events & the record', description: 'The watch''s rhythm: what came due, what was handed over, what went down on purpose (docs/design/DN-21-battle-rhythm.md §6, GAP-054).'}
@@ -465,6 +469,7 @@ information_elements:
   - {id: IE-sensor-task-event, name: SensorTaskEvent, code: gungnir_model::SensorTaskEvent, domain: 'Events & the record', description: 'The life of one command to a sensor (docs/design/DN-11-sensor-control-and-tasking.md §6, GAP-004).'}
   - {id: IE-sensor-task-id, name: SensorTaskId, code: gungnir_model::SensorTaskId, domain: 'Picture & tracking vocabulary', description: 'Identifier of one command issued to a sensor.'}
   - {id: IE-session-id, name: SessionId, code: gungnir_model::SessionId, domain: 'Picture & tracking vocabulary', description: 'Identifier of one recorded mission session.'}
+  - {id: IE-side-outcome, name: SideOutcome, code: gungnir_model::SideOutcome, domain: 'Policy, authority & settings', description: 'How one side of a conflict ended a plan''s approval, as far as a journal can tell.'}
   - {id: IE-source-authentication, name: SourceAuthentication, code: gungnir_model::SourceAuthentication, domain: 'Core identifiers, frames & quality', description: 'The strength of a source''s authentication at admission (GAP-002, D-02).'}
   - {id: IE-staleness-settings, name: StalenessSettings, code: gungnir_model::StalenessSettings, domain: 'Policy, authority & settings', description: 'How long a track may go unobserved before it is drawn and treated as stale. Per class, because a loitering surface craft and a cruise missile do not age at the same rate. GAP-012 implements against this.'}
   - {id: IE-term, name: Term, code: gungnir_model::Term, domain: 'Battle rhythm & mission records', description: 'A domain value the interface has to put a word to.'}
@@ -475,6 +480,7 @@ information_elements:
   - {id: IE-uas-platform-report, name: UasPlatformReport, code: gungnir_model::UasPlatformReport, domain: 'UAS identification & platform reports', description: 'What a UAS''s KLV metadata stream (MISB ST 0601''s UAS Datalink Local Set) says about the platform and its sensor, decoded by gungnir_interop::misb0601 and carried by gungnir_ingest::adapters::misb::UasMetadataAdapter.'}
   - {id: IE-ui-settings, name: UiSettings, code: gungnir_model::UiSettings, domain: 'Policy, authority & settings', description: 'Per-role arrangements, keyed by the role''s canonical name.'}
   - {id: IE-validity-window, name: ValidityWindow, code: gungnir_model::ValidityWindow, domain: 'Policy, authority & settings', description: 'When a baseline is valid.'}
+  - {id: IE-verdict, name: Verdict, code: gungnir_model::Verdict, domain: 'Policy, authority & settings', description: 'The rule''s answer: the side kept, and why.'}
   - {id: IE-verdict-summary, name: VerdictSummary, code: gungnir_model::VerdictSummary, domain: 'Events & the record', description: 'The policy verdict as the decision record carries it (MOE-05, GAP-047).'}
   - {id: IE-vocabulary, name: Vocabulary, code: gungnir_model::Vocabulary, domain: 'Battle rhythm & mission records', description: 'The display vocabulary in force: the defaults, with a deployment''s overrides.'}
   - {id: IE-warning-event, name: WarningEvent, code: gungnir_model::WarningEvent, domain: 'Events & the record', description: 'A rehearsal: a session replayed on this desktop (MOE-12, GAP-047). Published on the **live** session''s bus, so the record says which watch rehearsed what. A warning owed to an asset (docs/design/DN-03-warning.md, GAP-042). Every state change carries a mission time; a waiver names the person.'}

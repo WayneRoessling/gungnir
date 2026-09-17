@@ -5,7 +5,8 @@
 //! The tasking case: a collection requirement and the sensor tasks serving it.
 //!
 //! Design: docs/design/DN-11-sensor-control-and-tasking.md. Capability CAP-2.12;
-//! mission thread MT-08 steps 2 and 3, which happen outside the system today.
+//! mission thread MT-08 steps 2 and 3, which the desktop brings inside the system
+//! (`gungnir-app/src/requirements.rs`, GAP-005).
 //!
 //! This crate gained an edge to `gungnir-sensor-management` for it, accepted by the
 //! engineering reviewer on 2026-09-05 and drawn in ARCHITECTURE.md §7.1. It is
@@ -15,6 +16,18 @@
 //! Concurrence is an authorized action, `sensor.task`, which already exists in
 //! `gungnir_security::actions`, so the authority matrix governs it without a new
 //! action name.
+//!
+//! # A tasking concurrence names an operator
+//!
+//! The CAP-2.12 criterion moves a requirement from stated to tasked "only with a
+//! concurrence carrying an operator". DN-11 amendment 1 b kept that criterion unchanged
+//! while no build had an operator session to name one, and `concur` accepted
+//! `Concurrence::UnattributedRole` in the meantime. Desktop sign-in exists now (GAP-057),
+//! and the GAP-067 walk (2026-09-16) made the criterion the rule here: [`TaskingCase::concur`]
+//! refuses a concurrence that names nobody. **Declining is not covered by the criterion**
+//! and still accepts either, because a decline recorded as "the role on watch, nobody
+//! signed in" is a true record of a refusal, where a tasking recorded that way is work
+//! nobody can be asked about.
 
 use gungnir_model::{
     CollectionRequirement, Concurrence, MissionTime, RequirementId, RequirementState,
@@ -88,10 +101,40 @@ impl TaskingCase {
             .collect()
     }
 
+    /// Whether `by` could move this requirement to tasked, asked before any command is
+    /// issued for it.
+    ///
+    /// The half of [`TaskingCase::concur`]'s checks that does not depend on a task
+    /// existing: the requirement is open, and the concurrence names an operator. A caller
+    /// that issues the command first and concurs only if a task came out of it (PN-15's
+    /// control, DN-11 amendment 1 c) asks this **before** issuing, because a sensor task
+    /// cannot be withdrawn once issued, and a refused concurrence must not leave one behind
+    /// serving a requirement nobody tasked.
+    ///
+    /// # Errors
+    ///
+    /// [`TaskingError::NotOpen`] for a closed requirement, and
+    /// [`TaskingError::Unattributed`] for a concurrence that names no operator.
+    pub fn may_concur(&self, by: &Concurrence) -> Result<(), TaskingError> {
+        if !self.requirement.is_open() {
+            return Err(TaskingError::NotOpen(self.requirement.id));
+        }
+        if by.operator().is_none() {
+            return Err(TaskingError::Unattributed(self.requirement.id));
+        }
+        Ok(())
+    }
+
     /// Records the sensor manager's concurrence, moving the requirement to tasked.
     ///
     /// Refused when the requirement is closed: a lapsed or declined requirement is
     /// not silently reopened by somebody tasking against it.
+    ///
+    /// **Refused when the concurrence names no operator** (GAP-067 walk, 2026-09-16). The
+    /// CAP-2.12 criterion asks for "a concurrence carrying an operator", and until the
+    /// walk this accepted `Concurrence::UnattributedRole` because no build could produce
+    /// anything else (DN-11 amendment 1 b). Sign-in exists now, so the criterion is
+    /// enforced here rather than only described.
     ///
     /// **Also refused when no task serves it.** `RequirementState::Tasked` is defined as
     /// a task existing *and* the sensor manager concurring, and until 2026-09-05 this
@@ -99,10 +142,12 @@ impl TaskingCase {
     /// serving it, which the analyst who stated it would read as work in hand. Nothing
     /// could hit that before, because no caller could link a task to a requirement at
     /// all; GAP-005 made the link possible and the check necessary in the same change.
+    ///
+    /// # Errors
+    ///
+    /// What [`TaskingCase::may_concur`] refuses, then [`TaskingError::NoTask`].
     pub fn concur(&mut self, by: Concurrence) -> Result<(), TaskingError> {
-        if !self.requirement.is_open() {
-            return Err(TaskingError::NotOpen(self.requirement.id));
-        }
+        self.may_concur(&by)?;
         if self.tasks.is_empty() {
             return Err(TaskingError::NoTask(self.requirement.id));
         }
@@ -115,6 +160,12 @@ impl TaskingCase {
     /// A reason is required for the same reason PN-07 requires one to reject a plan: the
     /// analyst who stated the requirement has to know whether to restate it differently
     /// or give up on it, and "declined" alone answers neither question.
+    ///
+    /// **Either concurrence is accepted.** The CAP-2.12 criterion governs moving a
+    /// requirement to tasked and says nothing of declining, so the GAP-067 walk
+    /// (2026-09-16) left this as it was: a decline with nobody signed in records the role
+    /// and says nobody was, which is true, and refusing it would leave the analyst waiting
+    /// on a requirement the sensor manager has already turned down.
     pub fn decline(
         &mut self,
         by: Concurrence,
@@ -167,6 +218,14 @@ pub enum TaskingError {
     NoTask(RequirementId),
     #[error("requirement {0:?} cannot be declined without a reason")]
     ReasonRequired(RequirementId),
+    /// A tasking concurrence that names no operator (`Concurrence::UnattributedRole`),
+    /// which the CAP-2.12 criterion does not accept (GAP-067 walk, 2026-09-16).
+    ///
+    /// This crate cannot say *why* nobody was named -- nobody signed in, a session that
+    /// expired, or no account store to sign in against -- because it holds no session.
+    /// The caller that does says which.
+    #[error("requirement {0:?} cannot be tasked on a concurrence that names no operator")]
+    Unattributed(RequirementId),
 }
 
 #[cfg(test)]
@@ -219,6 +278,12 @@ mod tests {
         }
     }
 
+    fn nobody_signed_in() -> Concurrence {
+        Concurrence::UnattributedRole {
+            role: "SensorManager".into(),
+        }
+    }
+
     #[test]
     fn a_requirement_moves_to_tasked_only_with_a_concurrence_naming_someone() {
         let mut case = TaskingCase::new(requirement());
@@ -227,6 +292,54 @@ mod tests {
         match &case.requirement.state {
             RequirementState::Tasked { by } => assert_eq!(by.operator(), Some("j.okonkwo")),
             other => panic!("expected tasked, got {other:?}"),
+        }
+    }
+
+    /// The `gungnir-workflow` Collection requirements and tasking concurrence (CAP-2.12)
+    /// row of `docs/verification-capability-table.md` §2: "a requirement moves from stated
+    /// to tasked only with a concurrence carrying an operator" (GAP-067 walk, 2026-09-16).
+    /// Refused **with a task serving it**, so the refusal is for the missing operator and
+    /// not for the missing task, and the requirement is left stated.
+    #[test]
+    fn a_concurrence_naming_nobody_cannot_task() {
+        let mut case = TaskingCase::new(requirement());
+        case.tasks.push(task(1, TaskState::Issued));
+        assert_eq!(
+            case.concur(nobody_signed_in()),
+            Err(TaskingError::Unattributed(RequirementId(1)))
+        );
+        assert_eq!(case.requirement.state, RequirementState::Stated);
+    }
+
+    /// The same row, asked before any task exists. A caller that issues the command and
+    /// then concurs has to know first whether the concurrence could stand, because a task
+    /// once issued cannot be withdrawn: an operator passes with nothing issued yet, and a
+    /// concurrence naming nobody does not.
+    #[test]
+    fn whether_a_concurrence_could_task_is_known_before_any_command_is_issued() {
+        let case = TaskingCase::new(requirement());
+        assert!(case.tasks.is_empty());
+        assert_eq!(case.may_concur(&signed_in()), Ok(()));
+        assert_eq!(
+            case.may_concur(&nobody_signed_in()),
+            Err(TaskingError::Unattributed(RequirementId(1)))
+        );
+        assert_eq!(case.requirement.state, RequirementState::Stated);
+    }
+
+    /// Declining is outside the criterion, and the walk left it accepting either
+    /// concurrence: a decline made with nobody signed in is recorded as one, and says so.
+    #[test]
+    fn a_decline_with_nobody_signed_in_is_still_recorded() {
+        let mut case = TaskingCase::new(requirement());
+        case.decline(nobody_signed_in(), "no sensor can reach that area")
+            .expect("declines");
+        match &case.requirement.state {
+            RequirementState::Declined { by, reason } => {
+                assert_eq!(by.operator(), None);
+                assert_eq!(reason, "no sensor can reach that area");
+            }
+            other => panic!("expected declined, got {other:?}"),
         }
     }
 

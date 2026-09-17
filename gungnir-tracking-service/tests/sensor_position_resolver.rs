@@ -86,6 +86,37 @@ fn a_range_azimuth_elevation_report_is_placed_from_the_sensor_that_made_it() {
     );
 }
 
+/// The `gungnir-tracking-service` Sensor-position resolution for angular measurements row
+/// of `docs/verification-capability-table.md` §2: "a polar report places to within 1e-9
+/// of the closed form", with no angle on an axis.
+///
+/// **The three cases above cannot catch every wrong term.** Every angle in them is zero or
+/// a right angle, so wherever elevation matters to east, `sin(azimuth)` is zero, and a
+/// placement that dropped `cos(elevation)` from the east term passes all three. Here range
+/// 500 m, azimuth 0.6 rad and elevation 0.3 rad give every term weight, and the closed
+/// form is sensor + (r cos(el) sin(az), r cos(el) cos(az), r sin(el)).
+///
+/// The expected figures are that closed form evaluated to 50 significant digits with
+/// mpmath (2026-09-16), outside the arithmetic under test, and written at the shortest
+/// length that reads back as the same `f64`. Dropping `cos(el)` from the east term would
+/// put east at 1282.32 m, twelve metres from where it belongs.
+#[test]
+fn an_off_axis_polar_report_is_placed_at_the_closed_form() {
+    let enu = place_polar([1000.0, 0.0, 20.0], 500.0, 0.6, 0.3);
+    assert!(
+        (enu[0] - 1_269.711_779_072_205_7).abs() < 1e-9,
+        "east is 1000 + r cos(el) sin(az): {enu:?}"
+    );
+    assert!(
+        (enu[1] - 394.236_614_349_067_6).abs() < 1e-9,
+        "north is r cos(el) cos(az): {enu:?}"
+    );
+    assert!(
+        (enu[2] - 167.760_103_330_669_78).abs() < 1e-9,
+        "up is 20 + r sin(el): {enu:?}"
+    );
+}
+
 #[test]
 fn a_polar_report_reaches_the_pipeline_where_it_used_to_be_refused() {
     let runtime = tokio::runtime::Runtime::new().expect("runtime");
@@ -102,6 +133,79 @@ fn a_polar_report_reaches_the_pipeline_where_it_used_to_be_refused() {
     assert!(
         svc.submit_detection(d).is_ok(),
         "a range from a known point is a position; refusing it was the missing resolver"
+    );
+}
+
+/// The `gungnir-tracking-service` Sensor-position resolution for angular measurements row
+/// of `docs/verification-capability-table.md` §2, through the service rather than beside
+/// it: a polar report handed to `LiveTrackingService::submit_detection` is placed exactly
+/// where [`place_polar`] puts it.
+///
+/// The test above shows such a report is accepted and says nothing about where it went.
+/// **The observable is the track it starts.** A position detection that matches nothing
+/// initiates a tentative track whose state is that position with zero velocity
+/// (`FusionPipeline::initiate` copies the measurement in, and it runs after everything
+/// else in its epoch has touched the tracks), and ending the stream flushes the reorder
+/// buffer, so a single detection is processed rather than held waiting for a later one.
+/// The track the service reports afterwards therefore carries, in its first three state
+/// components, the position the service handed the pipeline, and that is compared with
+/// `place_polar`'s answer bit for bit. No production code is opened up for it.
+///
+/// Off-axis angles on purpose, the same as
+/// `an_off_axis_polar_report_is_placed_at_the_closed_form`, so that an azimuth and an
+/// elevation handed over in each other's places land somewhere else. At zero azimuth and
+/// zero elevation, which is what the acceptance test above submits, that swap is
+/// invisible.
+#[test]
+fn a_polar_report_submitted_through_the_service_is_placed_where_place_polar_puts_it() {
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let mut svc = service(&runtime, positions());
+    svc.submit_detection(view(
+        4,
+        Measurement::RangeAzimuthElevation {
+            range_m: 500.0,
+            azimuth_rad: 0.6,
+            elevation_rad: 0.3,
+            variance: [25.0, 25.0, 100.0],
+        },
+    ))
+    .expect("a polar report from a declared sensor is accepted");
+    svc.finish();
+
+    // A deadlock guard, not a performance assertion, on the same reasoning as the drain
+    // in `whole_pipeline_replay.rs`: health turns false when the pipeline task has flushed
+    // and stopped, and a task that never stops fails here instead of hanging.
+    let mut ended = false;
+    for _ in 0..30_000 {
+        svc.poll(MissionTime(10.0));
+        if !svc.is_healthy() {
+            ended = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    assert!(ended, "the pipeline task did not finish");
+
+    let tracks = svc.tracks();
+    assert_eq!(
+        tracks.len(),
+        1,
+        "one report, one tentative track: {tracks:?}"
+    );
+    let state = tracks[0].state;
+    let expected = place_polar([1000.0, 0.0, 20.0], 500.0, 0.6, 0.3);
+    for (axis, want) in expected.iter().enumerate() {
+        assert_eq!(
+            state[axis].to_bits(),
+            want.to_bits(),
+            "state[{axis}] is {}, and place_polar puts it at {want}: {state:?}",
+            state[axis]
+        );
+    }
+    assert!(
+        (3..6).all(|axis| state[axis] == 0.0),
+        "a track started from one position knows no velocity, so this is not the \
+         initiation the comparison relies on: {state:?}"
     );
 }
 
@@ -244,6 +348,16 @@ fn a_geodetic_sensor_position_becomes_enu_metres_not_radians() {
         )],
     );
     let enu = p.get(4).expect("the sensor is stored");
+    // The WGS84 reference, derived outside `gungnir-coord` two ways (2026-09-16). First,
+    // each position to earth-centred coordinates by the closed form -- N = a / sqrt(1 -
+    // e^2 sin^2(lat)), x = (N + h) cos(lat) cos(lon), y = (N + h) cos(lat) sin(lon),
+    // z = (N (1 - e^2) + h) sin(lat), with a = 6378137 m, f = 1/298.257223563 and
+    // e^2 = f (2 - f) -- then the difference rotated onto the origin's east, north and up,
+    // all evaluated to 50 significant digits with mpmath. Second, PROJ 9.8.1's own `cart`
+    // and `topocentric` conversions, through pyproj. Both give (1279.564224, 1113.419155,
+    // -0.225243) m, so the east and north figures below, written to the millimetre, sit
+    // within a quarter of a millimetre of it, and up is about 0.225 m below the origin's
+    // tangent plane: the earth curving away over 1.7 km.
     assert!(
         (enu[0] - 1279.564).abs() < 0.5,
         "east is the converted metres: {enu:?}"
@@ -252,9 +366,15 @@ fn a_geodetic_sensor_position_becomes_enu_metres_not_radians() {
         (enu[1] - 1113.419).abs() < 0.5,
         "north is the converted metres: {enu:?}"
     );
+    // Within 0.5 m, which is the row's figure. At this geometry that bound does not tell
+    // the reference from the tangent plane's zero, or from its own sign flipped, so it
+    // holds `up` to the reference without testing the curvature itself: the §1 `coord`
+    // Coordinate frame transforms row holds the conversion to 1e-6 m against pymap3d.
+    let up_reference_m = -0.225;
     assert!(
-        enu[2].abs() < 1.0,
-        "at the origin's altitude, and a shade below it over 1.7 km of curvature: {enu:?}"
+        (enu[2] - up_reference_m).abs() < 0.5,
+        "up is the WGS84 reference, {up_reference_m} m, below the origin's tangent plane: \
+         {enu:?}"
     );
     // The claim that fails loudly under the defect, stated on its own so a future reader
     // sees what was actually wrong: the sensor is a kilometre and a half away, not one

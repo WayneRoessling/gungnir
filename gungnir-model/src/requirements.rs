@@ -33,24 +33,29 @@ pub struct RequirementId(pub u64);
 /// Who concurred with tasking a requirement, or declined it.
 ///
 /// Not a bare `Option<String>`. DN-11 §5 and the CAP-2.12 verification row both require
-/// a concurrence to carry an operator, and this deployment has no operator session --
-/// D-02's signed tokens are GAP-057. An absent name would then be ambiguous between
+/// a concurrence to carry an operator, and when this type was written no build had an
+/// operator session to name one (GAP-057). An absent name would be ambiguous between
 /// "nobody is signed in" and "we failed to record who", which are different facts about
 /// the same record, and only one of them is a defect.
 ///
 /// So the two are separate variants. [`Concurrence::Operator`] is the one the
-/// verification criterion asks for; [`Concurrence::UnattributedRole`] is what this build
-/// can actually produce, and it says so rather than putting a role name in a field an
-/// auditor would read as a person.
+/// verification criterion asks for, and since the GAP-067 walk (2026-09-16) it is the
+/// only one `gungnir_workflow::TaskingCase::concur` accepts: desktop sign-in exists, so
+/// a requirement moves to tasked on a signed-in operator's concurrence or not at all.
+/// [`Concurrence::UnattributedRole`] is still what a *decline* records when nobody is
+/// signed in, which the criterion does not cover, and what a journal written before the
+/// enforcement holds. It says so rather than putting a role name in a field an auditor
+/// would read as a person.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "attribution", rename_all = "kebab-case")]
 pub enum Concurrence {
     /// A signed-in operator concurred, in a role that permitted it.
     Operator { id: String, role: String },
-    /// A role acted with no operator session to attribute it to (GAP-057).
+    /// A role acted with nobody signed in to attribute it to (GAP-057, DN-23 §5 rule 1).
     ///
     /// **Not an anonymous operator.** It records that this deployment could not say who
-    /// acted, which is a statement about the deployment rather than about the person.
+    /// acted, which is a statement about the deployment rather than about the person. A
+    /// decline may carry it; a tasking may not, since the GAP-067 walk (2026-09-16).
     UnattributedRole { role: String },
 }
 
@@ -59,7 +64,7 @@ impl Concurrence {
     ///
     /// The predicate the CAP-2.12 criterion is written against: a requirement may move
     /// to tasked only with a concurrence carrying an operator, and this is what carrying
-    /// one means.
+    /// one means. `gungnir_workflow::TaskingCase::concur` refuses on it.
     #[must_use]
     pub fn operator(&self) -> Option<&str> {
         match self {
@@ -109,7 +114,9 @@ pub enum RequirementState {
     ///
     /// **Both halves are required**, and `gungnir_workflow::TaskingCase::concur` refuses
     /// without a task: a requirement marked tasked with nothing serving it would read,
-    /// to the analyst who stated it, as work in hand.
+    /// to the analyst who stated it, as work in hand. It also refuses a concurrence that
+    /// names no operator (GAP-067 walk, 2026-09-16). A journal written before then can
+    /// still hold a `Tasked` with [`Concurrence::UnattributedRole`], and reads back as one.
     Tasked { by: Concurrence },
     /// Answered, with the evidence referenced.
     ///
@@ -228,7 +235,8 @@ mod tests {
             "a role with no operator session was counted as an operator"
         );
         // The role is known either way, which is what makes the second variant worth
-        // recording at all rather than refusing the act.
+        // recording on a decline rather than refusing the act. A tasking is refused on
+        // it since the GAP-067 walk (2026-09-16); `gungnir_workflow` tests that half.
         assert_eq!(signed_in.role(), nobody.role());
     }
 

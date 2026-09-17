@@ -484,6 +484,7 @@ mod tests {
                 decision: DecisionId(decision),
                 accepted: true,
                 operator: None,
+                role: None,
                 verdict: VerdictSummary::RequiresHumanApproval,
                 rationale: rationale.map(str::to_string),
             }),

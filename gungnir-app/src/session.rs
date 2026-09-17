@@ -57,9 +57,14 @@ pub fn audit_view<'a>(
     }
 }
 
-/// The role a PN-20 name means, or none: the panel offers names because it depends on
-/// the model alone.
-fn role_named(name: &str) -> Option<gungnir_security::Role> {
+/// The role a name means, in `Role`'s debug spelling, or none: PN-20 offers names because
+/// it depends on the model alone.
+///
+/// A decision records its role in the same spelling (`CommandEvent::Decided::role`), and
+/// the reconciliation reads it back through here (`crate::failover`). A name that is not a
+/// role -- a misspelling, or a role a later build added -- is no role at all, never the
+/// nearest one, which leaves a conflict it appears in to a person.
+pub(crate) fn role_named(name: &str) -> Option<gungnir_security::Role> {
     use gungnir_security::Role;
     Some(match name {
         "Operator" => Role::Operator,

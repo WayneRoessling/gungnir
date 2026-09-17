@@ -109,9 +109,46 @@ Parameters are the resolved values from `sensors.yaml` after scenario overrides;
 ```
 
 Kinds: `sensor_lost`, `sensor_restored`, `ea_skew` (clock skew applied to the named
-sensors' source times), `ea_dropout` (dropout multiplier), `link_lost`,
-`link_restored`, `launch_warning` (a peer report at `t`), `decoy_reveal` (truth
-annotation only).
+sensors' source times), `ea_dropout` (dropout multiplier), `sea_state` (the sea state
+from `t`, which raises a coastal radar's dropout), `sensor_retasked` (an operator
+retasking a sensor; annotation only), `link_lost`, `link_restored`, `launch_warning` (a
+peer report at `t`), `fires` (a fire mission: written by the generator with the firing
+`entity` when a shoot-and-move entity fires, or scripted with a `note`), `decoy_reveal`
+(truth annotation only), and the three collection-requirement kinds below.
+
+Only `sensor_lost`, `sensor_restored`, `ea_skew`, `ea_dropout` and `sea_state` change
+what the generators produce. Every other kind, including one neither generator knows,
+is copied to `events.jsonl` as the YAML wrote it, keys in the YAML's order:
+`tools/gen_tracks.py` appends `dict(ev)`, and `gungnir-scenario` keeps an `EventSpec`'s
+mapping in file order and writes it back unchanged. So a scenario can script operator
+actions without a generator change, and the Rust generator still reproduces the set byte
+for byte.
+
+**Collection requirements (added 2026-09-16).** Three kinds script MT-08 steps 1 to 3
+(`../mission/mission-threads.md`) as the actions of two roles. TT-08's sample carries them,
+in its `sample` block because they are timed to the sample's own composition, and
+`gungnir-app/tests/requirements_replay.rs` performs each one at its `t` while the set
+replays through the desktop:
+
+```json
+{"t":60,"kind":"requirement_stated","requirement":"R1","by":"intelligence-analyst","question":"...","area":"EAST_ORBIT","radius_m":20000,"priority":"high","needed_by":720}
+{"t":120,"kind":"requirement_tasked","requirement":"R1","by":"sensor-manager","sensor":13}
+{"t":840,"kind":"requirement_satisfied","requirement":"R2","by":"intelligence-analyst","evidence":"...","sensors":[13,15]}
+```
+
+| Field | Kinds | Meaning |
+|---|---|---|
+| `requirement` | all three | the script's label for one requirement, tying its events together; a desktop assigns its own identifier |
+| `by` | all three | the role acting: `intelligence-analyst` states and answers, `sensor-manager` tasks. A replay acts as an operator signed in with that role, because a tasking concurrence has to name the operator who concurred |
+| `question` | `requirement_stated` | what somebody needs to know, which is the requirement's title |
+| `area`, `radius_m` | `requirement_stated` | a named point from `scenarios.yaml`'s `points` and a radius in metres about it: the ground the requirement is over |
+| `priority` | `requirement_stated` | `low`, `medium`, `high` or `critical` |
+| `needed_by` | `requirement_stated` | mission seconds by which the answer is needed; a requirement still open after it lapses |
+| `sensor` | `requirement_tasked` | the `SensorId` tasked to serve it, which a replay's baseline declares commandable |
+| `evidence`, `sensors` | `requirement_satisfied` | the evidence that answered it, and the sensors whose detections in this set the evidence rests on |
+
+A lapse is not scripted. It follows from `needed_by` on the clock, and an event saying so
+would state the same time twice.
 
 ## 7. Metadata: `metadata.json`
 

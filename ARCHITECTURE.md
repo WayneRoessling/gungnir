@@ -637,9 +637,9 @@ decided but not yet in the workspace, so `gungnir_remote::connect` reports
 | `gungnir-store` | Local journal | Authoritative journal |
 | `gungnir-time`, `gungnir-ingest`, `gungnir-sensor-management`, `gungnir-interop` | Yes, for locally attached sensors | Yes, for sensors feeding the node |
 | `gungnir-identity`, `gungnir-identification`, `gungnir-assessment`, `gungnir-decision`, `gungnir-modelops` | Yes | Yes |
-| `gungnir-policy`, `gungnir-command` | Yes, local operator approval | Yes; the node is the arbiter when several operators share a mission |
-| `gungnir-collab` | Projection side: applies the node's envelopes | Authoritative side: arbitrates conflicting decisions |
-| `gungnir-resilience` | Store-and-forward while disconnected; reconciliation on reconnect | Accepts forwarded envelopes; reconciles |
+| `gungnir-policy`, `gungnir-command` | Yes, local operator approval | `gungnir-policy` only, on every fresh plan. A node runs no approval queue: plans are decided on a desktop, and its decision route refuses with 501, so no decision reaches a node's record (GAP-129) |
+| `gungnir-collab` | Linked by no binary. The arbitration rule it re-exports lives in `gungnir_model::arbitration`, which the desktop's reconciliation applies (D-53) | Linked by no binary |
+| `gungnir-resilience` | Reconciliation on reconnect. Its `StoreAndForwardQueue` has no caller: the desktop's outbox is `gungnir-remote`'s (GAP-121) | Not linked: the node accepts forwarded detections through `gungnir-api` and serves the history a desktop reconciles against |
 | `gungnir-security` | Operator login and local audit log | Authentication and authorization for every API caller; central audit log |
 | `gungnir-api` | Optional loopback | Yes, the node's only external surface |
 | `gungnir-observability` | Local health panel | Node health endpoint, watchdogs |
@@ -656,15 +656,22 @@ A connected desktop that loses its node must keep operating
 - The desktop falls back to the embedded backends and continues journaling locally.
   Today this happens at startup when the remote endpoint is unreachable; mid-session
   failover needs the transport's heartbeat.
-- Detections, operator decisions, and audit entries recorded while disconnected are
-  store-and-forward: `RemoteTrackingService` queues detections (bounded by
-  `OUTBOX_CAPACITY`, oldest dropped and counted), and `gungnir_resilience::StoreAndForwardQueue`
-  does the same for envelopes.
+- Detections recorded while disconnected are store-and-forward: `RemoteTrackingService`
+  queues them (bounded by `OUTBOX_CAPACITY`, oldest dropped and counted) and the link
+  forwards them once the node answers. Operator decisions and audit entries stay on the
+  desktop's own journal. `gungnir_resilience::StoreAndForwardQueue` has no caller
+  (GAP-121).
 - Reconciliation: `gungnir_resilience::reconcile` merges the local and node journals by
-  mission time, drops exact duplicates, and *reports* conflicting decisions on the same
-  plan. The rule that resolves them is `gungnir_collab::RoleRankArbiter` (higher role
-  wins, earlier decision wins on a tie), locked as the default by D-03
-  (`docs/record/2026-09-04/018.md`).
+  mission time, drops exact duplicates, and reports conflicting decisions on the same
+  plan, an expiry against a decision included. D-03's rule, `gungnir_model::arbitration`
+  (a real decision beats an expiry; otherwise the higher recorded role wins, and the
+  earlier decision on equal rank), resolves every conflict it can rank as soon as the
+  reconciliation is computed, and journals its verdict as `LinkEvent::ConflictArbitrated`.
+  A conflict it cannot rank, because a side's role was never recorded, waits on PN-18 for
+  a person permitted `plan.decide`, and the switch back waits with it (D-53,
+  `docs/record/2026-09-04/018.md`). No build puts a decision on a node's record yet,
+  since a node runs no approval queue, so outside the tests that place one there,
+  reconciliation meets no conflicting decision (GAP-129).
 
 ### §8.5 — Security posture by profile
 

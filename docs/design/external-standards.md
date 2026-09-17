@@ -193,7 +193,9 @@ time.
 | `gungnir_ingest::adapters::asterix::AsterixFeedAdapter` (GAP-001, radar half, 2026-09-06) | Receive datagrams from a non-blocking UDP socket (unicast or multicast) or a replayed capture, split each into data blocks, route 048 blocks to detections for the gateway and 034 blocks to a service-report queue the host drains, bind SAC/SIC to sensors and put their antennas in the local frame, and count every datagram, block, or record that did not become output under the reason it did not | Hide anything: a malformed datagram, a block that does not decode, an unbound radar, and an unsupported category are each counted and logged, never accepted; a transport failure is an adapter failure and the gateway goes unhealthy. Forward service reports anywhere: the `ProtocolAdapter` boundary carries detections only, and adding a service path to the gateway is a gateway change, which is human-owned |
 
 The adapter's parser is gated on the `asterix_feed` fuzz target in `gungnir-fuzz`, seeded
-with the capture's 100 datagrams, and `gungnir-ingest/tests/asterix_seeds.rs` fails if a
+with the capture's 100 datagrams and two standalone blocks and, since 2026-09-16, the
+hand-built Category 205 and 129 datagrams, with a direction finder and a UAS gateway bound
+so that both categories are fuzzed past the site lookup; and `gungnir-ingest/tests/asterix_seeds.rs` fails if a
 seed stops being accepted. `gungnir-ingest/tests/asterix_feed.rs` runs the capture through
 the real gateway: 126 accepted, none quarantined, 34 service reports kept apart.
 

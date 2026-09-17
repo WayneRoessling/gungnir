@@ -35,7 +35,7 @@ use gungnir_remote::link::ExchangeProductRecord;
 use gungnir_replay::ReplaySession;
 use gungnir_reporting::{JournalReportGenerator, MissionReport, ReportGenerator};
 use gungnir_security::authz::role_permits;
-use gungnir_security::{actions, AuditEntry, AuditLog};
+use gungnir_security::{actions, AuditLog};
 use gungnir_store::{EventJournal, SessionId};
 use gungnir_ui::panels::config_editor::{
     ApplyState, AuditLine, Candidate, ConfigEditorView, ConfigSection, GovernedProfiles,
@@ -787,14 +787,17 @@ impl ConfigEditorState {
             return Err("no baseline file is configured for this desktop".to_owned());
         };
         store.apply(candidate, now).map_err(|e| e.to_string())?;
-        state.audit.record(AuditEntry {
-            // No operator session (GAP-057). A fabricated actor in an audit trail is
-            // worse than an absent one.
-            operator: None,
-            action: actions::APPLY_CONFIG.to_owned(),
-            mission_time: state.clock.now().0,
-            detail: format!("baseline version {version} written; in force on restart"),
-        });
+        // Through `crate::audit::record`, the path every gated act takes onto the audit
+        // trail (GAP-059): the verified operator, or nobody when nobody is signed in (DN-23
+        // §5 rule 1), never a fabricated actor. This entry was
+        // written by hand with `operator: None` until 2026-09-16, still citing GAP-057's
+        // missing session after GAP-057 had built one, so an applied baseline never said
+        // who applied it even when the desktop knew.
+        crate::audit::record(
+            state,
+            actions::APPLY_CONFIG,
+            format!("baseline version {version} written; in force on restart"),
+        );
         self.discard();
         Ok(())
     }

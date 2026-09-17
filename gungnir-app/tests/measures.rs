@@ -83,6 +83,7 @@ fn accepted(decision: u64, track: u64) -> DecisionRecord {
         verdict: PolicyVerdict::RequiresHumanApproval,
         decision: OperatorDecision::Accepted,
         operator_id: None,
+        role: None,
         mission_time: MissionTime(0.0),
     }
 }

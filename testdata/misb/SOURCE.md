@@ -30,7 +30,7 @@ no per-file header.
 
 **What is in it.** One complete MISB ST 0601 UAS Datalink Local Set KLV frame, 228 bytes:
 a 16-byte Universal Label key, a 2-byte BER long-form length (`0x81 0xD2` = 210), and a
-210-byte value holding 24 local-set items. klvdata's own test suite
+210-byte value holding 24 local-set items and the checksum item, 25 in all. klvdata's own test suite
 (`test/test_misb.py::ParserSingleShort::test_st0601_1`) names its origin as "MISB
 ST0902.5 Annex C ... 'Dynamic and Constant' MISMMS Packet Data", with the comment "Some
 errors may have been hand corrected" -- i.e. this is MISB's own published worked

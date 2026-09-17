@@ -160,65 +160,7 @@ fn render_reconciliation_due(
         None => {
             ui.label("Fetching the node's journal for the outage.");
         }
-        Some(Ok(r)) => {
-            ui.label(format!(
-                "Merged: {} envelope(s) from this desktop and {} from the node into {}, \
-                     {} duplicate(s) dropped.",
-                r.local, r.remote, r.merged, r.duplicates_dropped
-            ));
-            if r.conflicts.is_empty() {
-                ui.label(
-                    egui::RichText::new("No conflicting decision.").color(palette.healthy_color()),
-                );
-            } else {
-                ui.label(
-                    egui::RichText::new(format!(
-                        "{} conflicting decision(s); each is on the record and is resolved \
-                             through the workflow, not here:",
-                        r.conflicts.len()
-                    ))
-                    .color(palette.alert_color),
-                );
-                for c in &r.conflicts {
-                    ui.horizontal(|ui| {
-                        ui.label(format!(
-                            "  plan {}: this desktop {}, the node {}",
-                            c.plan.0,
-                            if c.local_accepted {
-                                "accepted"
-                            } else {
-                                "rejected"
-                            },
-                            if c.remote_accepted {
-                                "accepted"
-                            } else {
-                                "rejected"
-                            }
-                        ));
-                        if ui.button("keep this desktop's").clicked() {
-                            resolution = Some(PanelAction::ResolveConflict(c.plan, true));
-                        }
-                        if ui.button("keep the node's").clicked() {
-                            resolution = Some(PanelAction::ResolveConflict(c.plan, false));
-                        }
-                    });
-                }
-            }
-            for (plan, kept_local) in &r.resolved {
-                ui.label(
-                    egui::RichText::new(format!(
-                        "  plan {}: resolved, {} kept (on the record)",
-                        plan.0,
-                        if *kept_local {
-                            "this desktop's"
-                        } else {
-                            "the node's"
-                        }
-                    ))
-                    .color(palette.muted_text_color()),
-                );
-            }
-        }
+        Some(Ok(r)) => resolution = render_merge(ui, palette, r),
         Some(Err(reason)) => {
             ui.label(
                 egui::RichText::new(format!("The node's half is unavailable: {reason}"))
@@ -241,6 +183,104 @@ fn render_reconciliation_due(
         .clicked()
     {
         return Some(PanelAction::SwitchBack);
+    }
+    resolution
+}
+
+/// The merge PN-18 reports and its conflicts, by who resolved them (GAP-050; the GAP-067
+/// walk): the arbitration rule's verdicts, the conflicts left to a person with the only keep
+/// buttons on the panel, and what people have already resolved.
+fn render_merge(
+    ui: &mut egui::Ui,
+    palette: &gungnir_ui::theme::Palette,
+    r: &crate::failover::Reconciliation,
+) -> Option<PanelAction> {
+    let mut resolution = None;
+    ui.label(format!(
+        "Merged: {} envelope(s) from this desktop and {} from the node into {}, \
+             {} duplicate(s) dropped.",
+        r.local, r.remote, r.merged, r.duplicates_dropped
+    ));
+    if r.conflicts.is_empty() && r.arbitrated.is_empty() && r.resolved.is_empty() {
+        ui.label(egui::RichText::new("No conflicting decision.").color(palette.healthy_color()));
+    }
+    // The rule's verdicts are shown as the rule's, each with the side it kept and why, and
+    // offer no button: a person is not asked to repeat a choice the record already
+    // attributes to the rule.
+    if !r.arbitrated.is_empty() {
+        ui.label(format!(
+            "{} conflicting decision(s) resolved by the arbitration rule; no person was asked:",
+            r.arbitrated.len()
+        ));
+        for a in &r.arbitrated {
+            let (kept, overruled) = if a.kept_local {
+                (
+                    ("this desktop's", &a.conflict.local),
+                    ("the node's", &a.conflict.remote),
+                )
+            } else {
+                (
+                    ("the node's", &a.conflict.remote),
+                    ("this desktop's", &a.conflict.local),
+                )
+            };
+            ui.label(
+                egui::RichText::new(format!(
+                    "  plan {}: kept {} ({}) over {} ({}): {}.",
+                    a.conflict.plan.0,
+                    kept.0,
+                    crate::failover::side_sentence(kept.1),
+                    overruled.0,
+                    crate::failover::side_sentence(overruled.1),
+                    crate::failover::ground_reason(a.ground)
+                ))
+                .color(palette.muted_text_color()),
+            );
+        }
+    }
+    // Only the conflicts the rule could not rank carry the keep buttons, and the switch
+    // back stays disabled until a person has used them.
+    if !r.conflicts.is_empty() {
+        ui.label(
+            egui::RichText::new(format!(
+                "{} conflicting decision(s) the arbitration rule cannot rank; a person \
+                 permitted to decide plans keeps one side of each, and the switch back waits \
+                 for them:",
+                r.conflicts.len()
+            ))
+            .color(palette.alert_color),
+        );
+        for c in &r.conflicts {
+            ui.horizontal(|ui| {
+                ui.label(format!(
+                    "  plan {}: this desktop {}; the node {} ({}).",
+                    c.plan.0,
+                    crate::failover::side_sentence(&c.local),
+                    crate::failover::side_sentence(&c.remote),
+                    crate::failover::unranked_reason(c)
+                ));
+                if ui.button("keep this desktop's").clicked() {
+                    resolution = Some(PanelAction::ResolveConflict(c.plan, true));
+                }
+                if ui.button("keep the node's").clicked() {
+                    resolution = Some(PanelAction::ResolveConflict(c.plan, false));
+                }
+            });
+        }
+    }
+    for (plan, kept_local) in &r.resolved {
+        ui.label(
+            egui::RichText::new(format!(
+                "  plan {}: resolved by a person, {} kept (on the record)",
+                plan.0,
+                if *kept_local {
+                    "this desktop's"
+                } else {
+                    "the node's"
+                }
+            ))
+            .color(palette.muted_text_color()),
+        );
     }
     resolution
 }
@@ -853,6 +893,10 @@ pub fn render_decision_dialog(
     let degraded = degraded_conditions(state);
     let report = crate::decisions::chain_report_for(&state.config);
     let caveats = report.caveats();
+    let attributed = state
+        .signed_in()
+        .map(|s| format!("operator {} as {:?}", s.operator.0, s.role));
+    let selected_role = format!("{:?}", state.role());
     // GAP-032: the options considered beside this one. The held list belongs to the plan
     // in force; a queued item from an earlier plan gets the reason rather than that list,
     // because alternatives to a different plan are not alternatives to this one.
@@ -894,11 +938,18 @@ pub fn render_decision_dialog(
         degraded: &degraded,
         engines: &report.engines,
         caveats: &caveats,
-        // No operator session exists (GAP-057), so the record will name nobody. A
-        // decision surface has to say that rather than implying attribution.
-        operator: OperatorIdentity::Unattributed {
-            role: &format!("{:?}", state.role()),
-            gap: "GAP-057",
+        // Who the record will name, from the same session `decisions::decide` reads: the
+        // signed-in operator and the role their session carries, which a decision records
+        // since the GAP-067 walk. With nobody signed in the record names nobody and no
+        // role, and a decision surface has to say that rather than implying attribution.
+        // This said "nobody" unconditionally until 2026-09-16, including while an operator
+        // was signed in and being recorded.
+        operator: match &attributed {
+            Some(who) => OperatorIdentity::Authenticated(who),
+            None => OperatorIdentity::Unattributed {
+                role: &selected_role,
+                gap: "GAP-057",
+            },
         },
         may_accept: row.may_decide,
         may_override: crate::decisions::may_override(state.role()),

@@ -194,13 +194,14 @@ fn the_vendored_upstream_samples_are_refused_for_stated_reasons() {
 /// The whole path: the adapter inside the **real gateway**, authenticated, validated
 /// and stamped as every other source is.
 ///
-/// A bearing passes validation and is offered to the tracking service, which refuses it
-/// with `SubmitError::NotAPosition` -- and **that refusal is the honest current state,
-/// not a defect this test papers over**. The gateway's job is to decide whether an
-/// observation is well formed, and a bearing now is; wiring one through to
-/// `gungnir_fusion_async::FusionPipeline::offer_bearing` needs the reporting sensor's
-/// position, which `DetectionView` does not carry and nothing resolves for the service
-/// yet. The test pins both halves so the day the wiring lands, the change shows here.
+/// A bearing passes validation, is never quarantined, and is offered to the tracking
+/// service with no position on it. **The tracking service in this test is a double that
+/// refuses anything that is not a position**, with `SubmitError::NotAPosition`, and that is
+/// on purpose: what this test pins is the gateway's half, that a refusal by the tracking
+/// service is recorded as a named `NotAccepted` rather than dropped or counted as accepted.
+/// It is not a claim about the live service. Since GAP-001 the live `LiveTrackingService`
+/// accepts a bearing from a sensor whose position the deployment declares, and that live
+/// acceptance is tested in `gungnir-tracking-service/tests/sensor_position_resolver.rs`.
 #[test]
 fn a_bearing_passes_the_real_gateway_and_the_tracker_names_what_it_cannot_take() {
     struct AllowSpotter;
@@ -218,10 +219,16 @@ fn a_bearing_passes_the_real_gateway_and_the_tracker_names_what_it_cannot_take()
         }
     }
 
-    /// A sink that takes positions and names what it cannot take, which is exactly what
-    /// `LiveTrackingService` does without needing a tokio runtime in this test.
+    /// This test's tracking-service double: it takes positions and refuses every other
+    /// measurement with `NotAPosition`. That is no longer what `LiveTrackingService` does:
+    /// since GAP-001 the live service accepts a bearing from a sensor whose position the
+    /// deployment declares (`gungnir-tracking-service/tests/sensor_position_resolver.rs`).
     #[derive(Default)]
     struct RecordingSink {
+        /// Everything the gateway offered, in order, whether taken or refused: the
+        /// criterion is about what the tracking service is *offered*, so the double keeps
+        /// that rather than only its own answer.
+        offered: Vec<gungnir_model::DetectionView>,
         taken: Vec<gungnir_model::DetectionView>,
         refused: Vec<SubmitError>,
     }
@@ -230,6 +237,7 @@ fn a_bearing_passes_the_real_gateway_and_the_tracker_names_what_it_cannot_take()
             &mut self,
             detection: gungnir_model::DetectionView,
         ) -> Result<(), SubmitError> {
+            self.offered.push(detection.clone());
             if detection.measurement.position_enu().is_some() {
                 self.taken.push(detection);
                 Ok(())
@@ -292,6 +300,29 @@ fn a_bearing_passes_the_real_gateway_and_the_tracker_names_what_it_cannot_take()
         .iter()
         .all(|d| d.measurement.position_enu().is_some()));
     assert_eq!(sink.refused.len(), 2);
+
+    // What the tracking service was offered: all three reports, the bearing among them as
+    // a `Measurement::Bearing` with no position on it -- the gateway neither converted it
+    // nor withheld it (the `gungnir-ingest` SAPIENT adapter row of
+    // `docs/verification-capability-table.md` §2, as amended by the GAP-067 walk).
+    assert_eq!(sink.offered.len(), 3, "{:#?}", sink.offered);
+    let bearings: Vec<&gungnir_model::DetectionView> = sink
+        .offered
+        .iter()
+        .filter(|d| matches!(d.measurement, Measurement::Bearing { .. }))
+        .collect();
+    assert_eq!(
+        bearings.len(),
+        1,
+        "exactly one bearing was offered: {:#?}",
+        sink.offered
+    );
+    assert!(
+        bearings[0].measurement.position_enu().is_none(),
+        "the bearing was offered with a position on it: {:#?}",
+        bearings[0]
+    );
+    assert_eq!(bearings[0].sensor, SPOTTER);
 }
 
 /// A node that is not a person is not a spotter, whatever else it is. Named by the type

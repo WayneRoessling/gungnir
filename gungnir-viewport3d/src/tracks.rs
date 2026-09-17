@@ -37,35 +37,46 @@ pub struct TrackGlyph {
     pub sigma: [f64; 3],
 }
 
+/// The glyph one track draws as. The only place a glyph's fields are read off a track,
+/// so building glyphs and deciding whether they are stale cannot disagree about which
+/// fields a glyph has.
+fn glyph_for(t: &TrackView) -> TrackGlyph {
+    TrackGlyph {
+        track_id: t.id,
+        status: t.status,
+        stale: t.quality.is_stale,
+        classification: t.classification,
+        association_confidence: t.quality.association_confidence,
+        position: t.position_enu(),
+        velocity: [t.state[3], t.state[4], t.state[5]],
+        sigma: t.position_sigma(),
+    }
+}
+
 /// Rebuild glyphs from the current snapshot.
 pub fn update_track_symbols(tracks: &[TrackView]) -> Vec<TrackGlyph> {
-    tracks
-        .iter()
-        .map(|t| TrackGlyph {
-            track_id: t.id,
-            status: t.status,
-            stale: t.quality.is_stale,
-            classification: t.classification,
-            association_confidence: t.quality.association_confidence,
-            position: t.position_enu(),
-            velocity: [t.state[3], t.state[4], t.state[5]],
-            sigma: t.position_sigma(),
-        })
-        .collect()
+    tracks.iter().map(glyph_for).collect()
 }
 
 /// True when the glyph set no longer matches the snapshot, so the caller rebuilds.
-/// Exact float comparison is intended: any change at all means a rebuild.
-#[allow(clippy::float_cmp)]
+///
+/// Compares each held glyph with the whole glyph its track would draw as now, rather
+/// than with a chosen list of fields. The list this replaced named identity, status,
+/// staleness, position and sigma, and left out classification, association confidence
+/// and velocity, all three of which the glyph holds: a track declared hostile kept its
+/// old frame, and a track turning in place its old heading vector, until some other
+/// field changed (the `gungnir-viewport3d` Glyph rebuild only on change row of
+/// `docs/verification-capability-table.md` §2). Comparing whole glyphs means a field
+/// added to [`TrackGlyph`] is compared without anyone remembering to add it here. The
+/// candidate glyph is a stack value, so the check allocates nothing.
+///
+/// Exact float comparison is intended: any change at all means a rebuild. A NaN never
+/// equals itself, so a track carrying one (the sigma of a covariance whose diagonal went
+/// negative, say) rebuilds on every call, identical input or not; the comparison it
+/// replaced did the same for sigma, and it errs towards drawing rather than towards a
+/// stale glyph.
 pub fn glyphs_need_rebuild(glyphs: &[TrackGlyph], tracks: &[TrackView]) -> bool {
-    glyphs.len() != tracks.len()
-        || glyphs.iter().zip(tracks).any(|(g, t)| {
-            g.track_id != t.id
-                || g.status != t.status
-                || g.stale != t.quality.is_stale
-                || g.position != t.position_enu()
-                || g.sigma != t.position_sigma()
-        })
+    glyphs.len() != tracks.len() || glyphs.iter().zip(tracks).any(|(g, t)| *g != glyph_for(t))
 }
 
 /// Seconds of velocity drawn as the heading vector.
@@ -353,6 +364,71 @@ mod tests {
         let moved = vec![track(1, 11.0)];
         assert!(glyphs_need_rebuild(&glyphs, &moved));
         assert!(glyphs_need_rebuild(&glyphs, &[]));
+    }
+
+    /// Builds glyphs from `before`, feeds the identical snapshot a second time (which must
+    /// not rebuild), then reports whether `after` -- the same track with one field
+    /// changed -- does. The four tests below are the `gungnir-viewport3d` Glyph rebuild
+    /// only on change row of `docs/verification-capability-table.md` §2: the row's own
+    /// covariance change, then one each for classification, velocity and association
+    /// confidence, the fields the comparator once ignored. Each changes its field alone, so
+    /// a rebuild can only have come from it.
+    fn rebuilds_after(before: &TrackView, after: &TrackView) -> bool {
+        let snapshot = vec![before.clone()];
+        let glyphs = update_track_symbols(&snapshot);
+        assert!(
+            !glyphs_need_rebuild(&glyphs, &snapshot),
+            "the identical snapshot fed a second time must not rebuild"
+        );
+        glyphs_need_rebuild(&glyphs, std::slice::from_ref(after))
+    }
+
+    /// Glyph rebuild only on change (§2), the row's own named change: four times the
+    /// covariance is twice the one-sigma extent the uncertainty ellipse is drawn at.
+    #[test]
+    fn a_covariance_scaled_by_four_rebuilds_the_glyph() {
+        let before = track(1, 10.0);
+        let mut after = before.clone();
+        after.covariance *= 4.0;
+        assert_eq!(after.position_sigma(), [2.0, 2.0, 2.0]);
+        assert!(rebuilds_after(&before, &after));
+    }
+
+    /// Glyph rebuild only on change (§2): the affiliation decides the frame's shape and
+    /// colour (DS-03), so a track declared hostile must stop being drawn as an unknown.
+    #[test]
+    fn a_classification_change_rebuilds_the_glyph() {
+        let before = track(1, 10.0);
+        let mut after = before.clone();
+        after.classification = Classification::Hostile;
+        assert_eq!(before.classification, Classification::Unknown);
+        assert!(rebuilds_after(&before, &after));
+    }
+
+    /// Glyph rebuild only on change (§2): the heading vector is drawn from the velocity,
+    /// so a track that turns without moving still has to redraw it.
+    #[test]
+    fn a_velocity_change_at_the_same_position_rebuilds_the_glyph() {
+        let before = track(1, 10.0);
+        let mut after = before.clone();
+        // East at 1 m/s becomes north at 1 m/s: same speed, same position, new heading.
+        after.state[3] = 0.0;
+        after.state[4] = 1.0;
+        assert_eq!(after.position_enu(), before.position_enu());
+        assert!(rebuilds_after(&before, &after));
+    }
+
+    /// Glyph rebuild only on change (§2): the glyph holds association confidence for the
+    /// dashed frame DS-03 draws below the policy margin. That margin is not wired yet and
+    /// every frame is solid today, but a glyph still holding the old value would draw the
+    /// wrong frame the day it is.
+    #[test]
+    fn an_association_confidence_change_rebuilds_the_glyph() {
+        let mut before = track(1, 10.0);
+        before.quality.association_confidence = 0.8;
+        let mut after = before.clone();
+        after.quality.association_confidence = 0.3;
+        assert!(rebuilds_after(&before, &after));
     }
 
     fn bearing_ray(sensor: u32, azimuth_rad: f64, one_sigma_rad: f64) -> BearingRayView {

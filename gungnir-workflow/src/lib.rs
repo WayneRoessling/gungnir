@@ -171,7 +171,7 @@ impl PanelId {
 /// The panels a role sees, in layout order.
 ///
 /// Two things are separated here that the scaffold ran together, because
-/// `docs/ux/information-architecture.md` §1 separates them: the panels that are
+/// `docs/ux/information-architecture.md` §4 separates them: the panels that are
 /// **docked** for a role, and the ones it **may open** on selection or from the strip.
 /// A layout that listed both as one set would put the decision dialog permanently on an
 /// operator's screen.
@@ -190,7 +190,7 @@ pub struct WorkspaceLayout {
 impl WorkspaceLayout {
     /// In every layout, whatever the role: the strip that says which backend, session
     /// and health are in force, and the viewport at the centre of the screen
-    /// (`docs/ux/information-architecture.md` §1).
+    /// (`docs/ux/information-architecture.md` §5).
     pub const ALWAYS: &'static [PanelId] = &[PanelId::StatusStrip, PanelId::Viewport3d];
 
     /// Openable in every layout, whatever the role, but docked in none of them.
@@ -212,7 +212,7 @@ impl WorkspaceLayout {
     pub const ALWAYS_AVAILABLE: &'static [PanelId] = &[PanelId::About];
 
     /// The workspace for a role, transcribed from the layout table in
-    /// `docs/ux/information-architecture.md` §1.
+    /// `docs/ux/information-architecture.md` §4.
     #[must_use]
     pub fn for_role(role: Role) -> Self {
         use PanelId::{
@@ -436,13 +436,28 @@ mod tests {
     use super::*;
     use gungnir_observability::AlertSeverity;
 
+    /// The `gungnir-workflow` Role layouts; alert lifecycle row of
+    /// `docs/verification-capability-table.md` §2: "Analysts lack the approval queue".
+    /// Not docked is not enough, because a panel can also be opened on demand; neither
+    /// analyst role may open it at all. Expected from `docs/ux/information-architecture.md`
+    /// §3, whose PN-06 row names the operator, the supervisor and the commander and no
+    /// analyst, and §4, where neither analyst row lists PN-06 as fixed or on demand.
     #[test]
     fn analysts_do_not_get_the_approval_queue() {
         assert!(!WorkspaceLayout::for_role(Role::Analyst).shows(PanelId::ApprovalQueue));
+        assert!(!WorkspaceLayout::for_role(Role::Analyst).may_open(PanelId::ApprovalQueue));
+        assert!(
+            !WorkspaceLayout::for_role(Role::IntelligenceAnalyst).may_open(PanelId::ApprovalQueue)
+        );
         assert!(WorkspaceLayout::for_role(Role::Operator).shows(PanelId::ApprovalQueue));
         assert!(WorkspaceLayout::for_role(Role::Administrator).shows(PanelId::ConfigEditor));
     }
 
+    /// The same row's "invalid transition refused; history recorded". The history is
+    /// checked entry by entry rather than counted: four entries with the wrong state,
+    /// time or operator in them would pass a count. The expected entries are the calls
+    /// this test makes, in order, headed by the alert being raised at t = 0, which no
+    /// operator did; the two refused transitions leave nothing behind.
     #[test]
     fn alert_lifecycle_enforces_transitions_and_records_history() {
         let alert = Alert {
@@ -466,11 +481,35 @@ mod tests {
         life.transition(AlertState::Closed, MissionTime(3.0), Some("sup-1".into()))
             .expect("close");
         assert_eq!(life.state, AlertState::Closed);
-        assert_eq!(life.history.len(), 4);
+        let expected = vec![
+            AlertTransition {
+                to: AlertState::New,
+                mission_time: MissionTime(0.0),
+                operator: None,
+            },
+            AlertTransition {
+                to: AlertState::Acknowledged,
+                mission_time: MissionTime(1.0),
+                operator: Some("op-1".into()),
+            },
+            AlertTransition {
+                to: AlertState::Escalated,
+                mission_time: MissionTime(2.0),
+                operator: Some("op-1".into()),
+            },
+            AlertTransition {
+                to: AlertState::Closed,
+                mission_time: MissionTime(3.0),
+                operator: Some("sup-1".into()),
+            },
+        ];
+        assert_eq!(life.history, expected);
         assert!(matches!(
             life.transition(AlertState::Acknowledged, MissionTime(4.0), None),
             Err(WorkflowError::InvalidAlertTransition { .. })
         ));
+        assert_eq!(life.state, AlertState::Closed);
+        assert_eq!(life.history, expected, "a refused transition was recorded");
     }
 }
 

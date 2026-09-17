@@ -78,7 +78,8 @@ Through the ingest adapter (`gungnir-ingest/src/adapters/asterix.rs`, 2026-09-06
 126 detections pass the gateway's validation with every radar bound: the radar clocks run
 between 0.5 s and 20 s behind the capture clock and never ahead of it. 48 of the 126
 carry a 3D height (I048/110) and map with no recorded loss; the other 78 record theirs.
-The 100 datagrams and the two standalone blocks are the `asterix_feed` fuzz corpus in
+The 100 datagrams, the two standalone blocks and, since 2026-09-16, the two hand-built
+datagrams below (as `cat205-raw` and `cat129-raw`) are the `asterix_feed` fuzz corpus in
 `gungnir-fuzz/corpus/asterix_feed/`.
 
 ## How to use them
@@ -195,7 +196,7 @@ FSPEC flagging FRN 1, 6, 7, 8, 9 and 11:
 | I129/010 | Data Source Identification | `0x00 0x00` | SAC 0, SIC 0 -- edition 1.2 §5.2.1's own recommended placeholder for an airborne-to-ground broadcast |
 | I129/050 | UAS Office Registration Country | `"US"` | `"US"` (two ASCII octets, ISO 3166-1 alpha-2) |
 | I129/070 | Time of Day | `0x54 0x60 0x00` | 43 200.0 s (12:00:00 UTC) -- the same count `cat048.raw`'s and `cat205.raw`'s own hand-built fixtures use for the same time, by construction |
-| I129/080 | Position in WGS-84 Coordinates | `0x03 0x8E 0x38 0xE3` `0xF8 0xE3 0x8E 0x39` | 9.999999907 deg N, 19.999999981 deg W (chosen two's complement counts landing within 4e-8 deg of 10 deg N, 20 deg W -- the LSB, 180/2^30 deg, does not divide either round value evenly) |
+| I129/080 | Position in WGS-84 Coordinates | `0x03 0x8E 0x38 0xE3` `0xF8 0xE3 0x8E 0x39` | 9.999999907 deg N, 19.999999981 deg W (the two's complement counts nearest 10 deg N and 20 deg W, landing within 1e-7 deg of each -- the LSB, 180/2^30 deg, does not divide either round value evenly) |
 | I129/090 | Altitude above Mean Sea Level | `0x00 0x13 0x88` (5000) | 500.0 m, LSB 0.1 m |
 | I129/110 | GNSS Signal Accuracy | `0x00 0x0C` (12) | 12 m, LSB 1 m |
 

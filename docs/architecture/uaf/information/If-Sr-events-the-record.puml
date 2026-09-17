@@ -64,7 +64,7 @@ enum "RequirementEvent" as RequirementEvent <<InformationElement>> {
 }
 enum "CommandEvent" as CommandEvent <<InformationElement>> {
   ApprovalRequested(PlanId)
-  Decided { plan: PlanId, decision: DecisionId, accepted: bool, operator: Option<String>, verdict: VerdictSummary, rationale: Option<String>, }
+  Decided { plan: PlanId, decision: DecisionId, accepted: bool, operator: Option<String>, role: Option<String>, verdict: VerdictSummary, rationale: Option<String>, }
   Expired { plan: PlanId, at: MissionTime, }
   Escalated { plan: PlanId, to_role: String, at: MissionTime, }
 }
@@ -115,6 +115,7 @@ enum "LinkEvent" as LinkEvent <<InformationElement>> {
   Restored { endpoint: String, fallback_since: MissionTime, at: MissionTime, }
   SwitchedBack { endpoint: String, at: MissionTime, merged: usize, conflicts: usize, node_history: bool, }
   ConflictResolved { plan: crate::PlanId, kept_local: bool, operator: Option<String>, at: MissionTime, }
+  ConflictArbitrated { plan: crate::PlanId, kept_local: bool, ground: crate::arbitration::ArbitrationGround, local: crate::arbitration::ConflictSide, remote: crate::arbitration::ConflictSide, at: MissionTime, }
 }
 enum "RehearsalEvent" as RehearsalEvent <<InformationElement>> {
   Started { seed: String, seed_sha256: String, at: MissionTime, }
@@ -125,11 +126,15 @@ enum "ReplayEvent" as ReplayEvent <<InformationElement>> {
 }
 class "AlgorithmBaselineId\n(see If-Sr-core-identifiers-frames-quality)" as AlgorithmBaselineId <<External>> #line.dashed {
 }
+enum "ArbitrationGround\n(see If-Sr-policy-authority-settings)" as ArbitrationGround <<External>> #line.dashed {
+}
 class "AssetId\n(see If-Sr-assets-exchange-releasability)" as AssetId <<External>> #line.dashed {
 }
 class "CollectionRequirement\n(see If-Sr-battle-rhythm-mission-records)" as CollectionRequirement <<External>> #line.dashed {
 }
 enum "Concurrence\n(see If-Sr-battle-rhythm-mission-records)" as Concurrence <<External>> #line.dashed {
+}
+class "ConflictSide\n(see If-Sr-policy-authority-settings)" as ConflictSide <<External>> #line.dashed {
 }
 class "DecisionId\n(see If-Sr-plans-effectors-handoff)" as DecisionId <<External>> #line.dashed {
 }
@@ -210,8 +215,10 @@ WarningEvent --> MissionTime : Raised, Sent, Acknowledged, Failed, Late, Waived,
 LaunchWarningEvent --> LaunchWarningReport : Issued
 LaunchWarningEvent --> MissionTime : Refused
 LaunchWarningEvent --> PeerLaunchWarning : Received
-LinkEvent --> MissionTime : FellBack, Restored, SwitchedBack, ConflictResolved
-LinkEvent --> PlanId : ConflictResolved
+LinkEvent --> ArbitrationGround : ConflictArbitrated
+LinkEvent --> ConflictSide : ConflictArbitrated
+LinkEvent --> MissionTime : FellBack, Restored, SwitchedBack, ConflictResolved, ConflictArbitrated
+LinkEvent --> PlanId : ConflictResolved, ConflictArbitrated
 RehearsalEvent --> MissionTime : Started
 ReplayEvent --> MissionTime : Opened, Closed
 ReplayEvent --> SessionId : Opened, Closed

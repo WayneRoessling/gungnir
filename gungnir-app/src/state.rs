@@ -222,16 +222,17 @@ pub struct AppState {
     pub backend: BackendConfig,
     pub ingest: IngestGateway,
 
-    /// The role this desktop is signed in as, and the workspace that follows from it
-    /// (GAP-055). Held together so they cannot disagree: [`AppState::set_role`] is the
-    /// only way to change either.
+    /// The role selected for this desktop, which is the desktop's role **only while nobody
+    /// is signed in** (DN-23 §5 rule 5: role-selected, unauthenticated, nothing
+    /// attributed). [`AppState::set_role`] is the only way to change it.
     ///
-    /// Defaults to [`Role::Operator`]. There is no operator session yet -- D-02's
-    /// short-lived signed tokens are GAP-057 -- so the role is not yet *authenticated*,
-    /// only selected. It decides the layout, never an authorisation: every action still
-    /// goes through `gungnir_security::role_permits`.
-    role: Role,
-    layout: WorkspaceLayout,
+    /// Defaults to [`Role::Operator`]. While an operator is signed in, [`AppState::role`]
+    /// is that account's role and this selection waits underneath, back in force the
+    /// moment the session ends by sign-out or expiry (the GAP-067 walk, 2026-09-16). The
+    /// workspace is not stored beside it any more: [`AppState::layout`] is built from
+    /// [`AppState::role`], so the two cannot disagree through a sign-in, a sign-out, or an
+    /// expiry that happens on the clock with nothing calling in.
+    selected_role: Role,
 
     /// The sensors this deployment has, and what each is doing (GAP-003).
     ///
@@ -268,8 +269,10 @@ pub struct AppState {
     /// rather than refusing to run. A deployment installs a real store with
     /// [`AppState::set_session_authority`].
     ///
-    /// The role remains separate and still decides only the layout. Signing in does not
-    /// change the role, and a role selection has never been an authorisation.
+    /// **Signing in decides the desktop's role as well as attribution** since the GAP-067
+    /// walk (2026-09-16): [`AppState::role`] is the signed-in account's role, and it is
+    /// what every `role_permits` check on this desktop asks about. Before, the role stayed
+    /// whatever had been selected, so every check asked about `Operator` whoever signed in.
     pub session: Box<dyn gungnir_security::SessionAuthority>,
     /// The accounts the store lists, for PN-20 (operator and role, never a hash), or the
     /// reason there is no list.
@@ -673,8 +676,7 @@ impl AppState {
             health_journaled: None,
             anomaly: crate::anomaly::AnomalyState::default(),
             identity,
-            role: Role::Operator,
-            layout: WorkspaceLayout::for_role(Role::Operator),
+            selected_role: Role::Operator,
             // Timed by the baseline in force: a layer with no configured expiry never
             // expires, which is DN-08's default read the way DN-10 requires.
             sensors,
@@ -732,13 +734,28 @@ impl AppState {
 
     /// The operator to attribute an act to, or `None`.
     ///
-    /// **The only place attribution is obtained.** Everything that records who did
-    /// something reads this, so there is one answer rather than several: an expired
-    /// session and a missing store both yield `None`, and neither is mistaken for a
-    /// person.
+    /// **The only place attribution is obtained**, with [`AppState::signed_in`] beside it
+    /// for a record that names the role as well. Everything that records who did
+    /// something reads one of the two, so there is one answer rather than several: an
+    /// expired session and a missing store both yield `None`, and neither is mistaken for
+    /// a person.
     #[must_use]
     pub fn attributed_operator(&self) -> Option<gungnir_security::OperatorId> {
         self.session_state().operator()
+    }
+
+    /// The verified session, when there is one: the operator **and** the role an act is
+    /// attributed to, read from one session state.
+    ///
+    /// For a record that carries both, as a decision does since the GAP-067 walk. Reading
+    /// them through two calls would read the clock twice, and a session that expired
+    /// between the reads would record an operator with no role or a role with no operator.
+    #[must_use]
+    pub fn signed_in(&self) -> Option<gungnir_security::OperatorSession> {
+        match self.session_state() {
+            gungnir_security::SessionState::SignedIn(session) => Some(session),
+            _ => None,
+        }
     }
 
     /// Sign in, recording the attempt in the audit log whether it worked or not.
@@ -786,16 +803,33 @@ impl AppState {
         format!("launch-warning-{}", self.next_launch_warning)
     }
 
-    /// The role this desktop is signed in as.
+    /// The role this desktop acts in: the signed-in account's, or the selected one when
+    /// nobody is signed in.
+    ///
+    /// **Every `role_permits` check on the desktop asks about this**, so it is the
+    /// authenticated role whenever a session makes one available (the GAP-067 walk,
+    /// 2026-09-16). An expired session and an unavailable account store both fall back to
+    /// the selection, which is DN-23 §5 rule 5's disconnected fallback: the desktop keeps
+    /// working role-selected and attributes nothing. Read from the session on every call
+    /// rather than cached, because an expiry happens on the clock and nothing calls in when
+    /// it does.
     #[must_use]
     pub fn role(&self) -> Role {
-        self.role
+        match self.session_state() {
+            gungnir_security::SessionState::SignedIn(session) => session.role,
+            _ => self.selected_role,
+        }
     }
 
-    /// The workspace for the current role.
+    /// The workspace for the current role, built from [`AppState::role`] so it follows a
+    /// sign-in, a sign-out and an expiry without anything having to rebuild it.
+    ///
+    /// Owned rather than borrowed for that reason: there is no stored layout to lend. A
+    /// layout is two short lists, and `main.rs` rebuilds its dock tree only when the role
+    /// it was built for changes.
     #[must_use]
-    pub fn layout(&self) -> &WorkspaceLayout {
-        &self.layout
+    pub fn layout(&self) -> WorkspaceLayout {
+        WorkspaceLayout::for_role(self.role())
     }
 
     /// Force every accepted envelope onto the disk.
@@ -983,14 +1017,16 @@ impl AppState {
         }
     }
 
-    /// Switch role, rebuilding the workspace with it.
+    /// Select the role this desktop acts in while nobody is signed in.
     ///
-    /// This is a *display* change and nothing more. It grants no authority: a role
-    /// selected here still has exactly the permissions `role_permits` gives it, and
-    /// GAP-057 will make the role authenticated rather than chosen.
+    /// The selection is DN-23 §5 rule 5's fallback, not an authentication: it is in force
+    /// when there is no session -- nobody signed in, an expired session, or no reachable
+    /// account store -- and it is never recorded as anybody's authority (a decision taken
+    /// under it records no role). While an operator is signed in, [`AppState::role`] is the
+    /// account's role and this selection waits underneath; changing it then takes effect
+    /// when the session ends. The layout follows whichever is in force.
     pub fn set_role(&mut self, role: Role) {
-        self.role = role;
-        self.layout = WorkspaceLayout::for_role(role);
+        self.selected_role = role;
     }
 }
 
@@ -1655,9 +1691,19 @@ mod tests {
         let enu = sensor_positions(&config)
             .get(4)
             .expect("the sensor is stored");
+        // The WGS84 reference is (1279.564224, 1113.419155, -0.225243) m, derived outside
+        // the code under test: the closed-form geodetic-to-earth-centred-to-ENU conversion
+        // evaluated to 50 digits with mpmath, agreeing with PROJ's `topocentric`
+        // conversion. The derivation is written out beside the same assertion in
+        // `gungnir-tracking-service/tests/sensor_position_resolver.rs`.
         assert!(
             (enu[0] - 1279.564).abs() < 0.5 && (enu[1] - 1113.419).abs() < 0.5,
             "east and north are the declared offset in metres: {enu:?}"
+        );
+        let up_reference_m = -0.225;
+        assert!(
+            (enu[2] - up_reference_m).abs() < 0.5,
+            "up is the WGS84 reference, {up_reference_m} m, to the row's 0.5 m: {enu:?}"
         );
         assert!(
             enu[0].hypot(enu[1]) > 1_000.0,

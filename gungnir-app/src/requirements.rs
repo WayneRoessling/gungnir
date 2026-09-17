@@ -24,6 +24,15 @@
 //! came out of it. With no adapter configured (GAP-001) the issue is refused, no task is
 //! recorded, and the requirement stays stated -- which is the truth, and is what PN-15
 //! shows.
+//!
+//! **Before either, it asks whether the concurrence could stand at all**: the requirement
+//! is open, and a signed-in operator is there to name on it. The CAP-2.12 criterion asks
+//! for "a concurrence carrying an operator", and the GAP-067 walk (2026-09-16) enforced it
+//! once desktop sign-in existed. The check runs ahead of the command because nothing
+//! withdraws a task once issued: checked afterwards, a refusal would leave a sensor
+//! searching for a requirement nobody tasked. So a desktop with nobody signed in, or with
+//! no account store to sign in against, is refused with that reason, issues no command,
+//! and publishes nothing.
 
 use crate::state::AppState;
 use gungnir_model::events::RequirementEvent;
@@ -31,6 +40,7 @@ use gungnir_model::{
     AssetPriority, CollectionRequirement, Concurrence, MissionTime, RequirementId,
     RequirementState, SensorId,
 };
+use gungnir_security::SessionState;
 use gungnir_sensor_management::{SensorControl, SensorManagementError};
 use gungnir_ui::panels::requirements::{Progress, RequirementRow, Standing};
 use gungnir_workflow::{CollectionProgress, TaskingCase, TaskingError};
@@ -196,6 +206,22 @@ pub enum RequirementError {
     /// The command could not be issued, so there is no task to concur with.
     #[error(transparent)]
     Sensor(#[from] SensorManagementError),
+    /// Nobody is signed in to name on a tasking concurrence (the CAP-2.12 criterion,
+    /// enforced since the GAP-067 walk, 2026-09-16), and **no command was issued**: the
+    /// check runs before the command, not after it.
+    ///
+    /// `TaskingError::Unattributed` is as far as `gungnir-workflow` can go, because it
+    /// holds no session. This desktop does, and "sign in" and "nobody can sign in here"
+    /// ask different things of the person reading the refusal, so `why` says which.
+    #[error(
+        "requirement {} was not tasked and no command was issued: tasking records a \
+         concurrence naming the operator who concurred, and {why}",
+        .requirement.0
+    )]
+    Unattributed {
+        requirement: RequirementId,
+        why: String,
+    },
 }
 
 /// The requirement and the tasks serving it, assembled from the registry.
@@ -220,11 +246,13 @@ fn assemble(state: &AppState, requirement: &CollectionRequirement) -> TaskingCas
 /// How this deployment attributes an act.
 ///
 /// A verified operator when one is signed in, and the role with an explicit statement
-/// that nobody was, when not (GAP-057, DN-23). `Concurrence::UnattributedRole` is not
-/// dead code now that authentication exists: a deployment with no account store, or one
-/// whose operator's session has expired, still acts and still has to record that it
-/// could not say who -- which is a different fact from an operator who declined to give
-/// a name, and the reason the two are separate variants.
+/// that nobody was, when not (GAP-057, DN-23 §5 rule 1). `Concurrence::UnattributedRole`
+/// is not dead code now that authentication exists: a deployment with no account store,
+/// or one whose operator's session has expired, can still decline a requirement and has
+/// to record that it could not say who -- which is a different fact from an operator who
+/// declined to give a name, and the reason the two are separate variants. It can no
+/// longer *task* one: [`task`] refuses a concurrence naming nobody (GAP-067 walk,
+/// 2026-09-16).
 fn attribution(state: &AppState) -> Concurrence {
     let role = format!("{:?}", state.role());
     match state.attributed_operator() {
@@ -233,6 +261,46 @@ fn attribution(state: &AppState) -> Concurrence {
             role,
         },
         None => Concurrence::UnattributedRole { role },
+    }
+}
+
+/// A tasking refusal, worded from the session this desktop actually has.
+///
+/// Only `TaskingError::Unattributed` is reworded; every other refusal already says all
+/// there is to say.
+fn refusal(session: &SessionState, err: TaskingError) -> RequirementError {
+    match err {
+        TaskingError::Unattributed(requirement) => RequirementError::Unattributed {
+            requirement,
+            why: why_nobody_is_named(session),
+        },
+        other => RequirementError::Tasking(other),
+    }
+}
+
+/// Why no operator could be named, as the end of the refusal's sentence.
+///
+/// Three different facts ask three different things of the person reading them, the same
+/// distinction DN-23 §3 draws for `SessionState`: somebody can sign in, somebody has to
+/// sign in again, or nobody can sign in here at all. Only the last is a deployment's
+/// fault, and a desktop with no account store **cannot task through a requirement** until
+/// it has one, which it has to be told rather than left to infer.
+fn why_nobody_is_named(session: &SessionState) -> String {
+    match session {
+        SessionState::NobodySignedIn => "nobody is signed in. Sign in to task it.".to_owned(),
+        SessionState::Expired { operator, at } => format!(
+            "operator {}'s session expired at T+{at:.0} s. Sign in again to task it.",
+            operator.0
+        ),
+        SessionState::StoreUnavailable { reason } => format!(
+            "nobody can sign in to this desktop, because its account store is unavailable \
+             ({reason}). No requirement can be tasked from here until somebody can sign in."
+        ),
+        // Read a moment after attribution found nobody, so a session that began in
+        // between is not the one the concurrence would have named.
+        SessionState::SignedIn(_) => {
+            "nobody was signed in when it was attempted. Try again.".to_owned()
+        }
     }
 }
 
@@ -285,31 +353,42 @@ pub fn state_requirement(
 
 /// Task a sensor against a requirement, and record the concurrence.
 ///
-/// **The order matters.** The command is issued first; only if a task came out of it is
-/// the concurrence recorded. Concurring first and then discovering the sensor cannot be
-/// commanded would leave a requirement reading as tasked with nothing serving it, which
-/// is exactly what `TaskingCase::concur` now refuses.
+/// **The order matters, and there are three steps.** First, whether the concurrence could
+/// stand: the requirement is open and it names a signed-in operator
+/// (`TaskingCase::may_concur`). Then the command is issued. Only if a task came out of it
+/// is the concurrence recorded.
+///
+/// The first step comes before the command because a task cannot be withdrawn once
+/// issued. Before the GAP-067 walk (2026-09-16) nothing refused a concurrence for want of
+/// an operator, so the order never mattered for it; now that `concur` does, checking there
+/// alone would refuse the concurrence and leave a sensor searching for a requirement that
+/// stayed stated. The last step comes after the command because concurring first and then
+/// discovering the sensor cannot be commanded would leave a requirement reading as tasked
+/// with nothing serving it, which `TaskingCase::concur` also refuses (DN-11 amendment 1 c).
 ///
 /// The command is a `Search` over the requirement's own area: that is what a collection
 /// requirement asks a sensor to do, and taking the area from the requirement is what
 /// keeps the task and the question about the same piece of ground.
+///
+/// # Errors
+///
+/// [`RequirementError::Unattributed`] when nobody is signed in to name, saying why;
+/// `TaskingError::NotOpen` for a closed requirement; the registry's refusal when the
+/// sensor cannot be commanded. None of them issues a command or publishes an event.
 pub fn task(
     state: &mut AppState,
     id: RequirementId,
     sensor: u32,
     now: MissionTime,
 ) -> Result<(), RequirementError> {
-    let requirement = state
-        .requirements
-        .iter()
-        .find(|r| r.id == id)
-        .ok_or(RequirementError::Unknown(id))?;
-    // Refuse early on a closed requirement, before issuing a command against one that
-    // nobody is waiting on any more.
-    if !requirement.is_open() {
-        return Err(TaskingError::NotOpen(id).into());
-    }
-    let area = requirement.area;
+    let by = attribution(state);
+    let before = case(state, id).ok_or(RequirementError::Unknown(id))?;
+    // Refused before any command exists: against a closed requirement nobody is waiting
+    // on any more, or on a concurrence that names nobody.
+    before
+        .may_concur(&by)
+        .map_err(|err| refusal(&state.session_state(), err))?;
+    let area = before.requirement.area;
 
     let task = state.sensors.issue(
         SensorId(sensor),
@@ -318,9 +397,9 @@ pub fn task(
         now,
     )?;
 
-    let by = attribution(state);
     let mut case = case(state, id).ok_or(RequirementError::Unknown(id))?;
-    case.concur(by.clone())?;
+    case.concur(by.clone())
+        .map_err(|err| refusal(&state.session_state(), err))?;
     store(state, case.requirement);
 
     publish(
@@ -342,6 +421,11 @@ pub fn task(
 }
 
 /// Record the sensor manager declining, with a reason.
+///
+/// Attributed like a tasking, and **not refused when nobody is signed in**: the CAP-2.12
+/// criterion governs moving a requirement to tasked, and the GAP-067 walk (2026-09-16)
+/// left declining accepting either concurrence. A decline with nobody signed in records
+/// the role and says so.
 pub fn decline(
     state: &mut AppState,
     id: RequirementId,
@@ -516,8 +600,9 @@ fn standing(state: &RequirementState) -> Standing<'_> {
 fn who(by: &Concurrence) -> &str {
     match by {
         Concurrence::Operator { id, .. } => id,
-        // The role alone would read as a name. It is not one, and this build has no
-        // operator session to produce one (GAP-057).
+        // The role alone would read as a name. It is not one: this is a decline made with
+        // nobody signed in, or a tasking journaled before the GAP-067 walk (2026-09-16)
+        // made tasking require an operator.
         Concurrence::UnattributedRole { .. } => "the role on watch; nobody was signed in",
     }
 }

@@ -97,15 +97,19 @@ fn a_baseline_that_mentions_no_laydowns_is_valid_and_means_none_offered() {
 
 #[test]
 fn refusal_1a_no_laydown_is_marked_current() {
+    // `north` and `south` are words no laydown refusal's own text contains, so finding one
+    // in a refusal means the refusal named that laydown; a single-letter identifier would
+    // be found in almost any sentence. Refusal 1b and refusal 4's resource half use them
+    // for the same reason.
     let mut b = baseline_with_registries();
     b.laydowns = vec![
         laydown(
-            "a",
+            "north",
             false,
             vec![placed(1, [0.0, 0.0, 10.0]), placed(2, [500.0, 0.0, 10.0])],
         ),
         laydown(
-            "b",
+            "south",
             false,
             vec![placed(1, [0.0, 0.0, 10.0]), placed(2, [500.0, 0.0, 10.0])],
         ),
@@ -114,6 +118,10 @@ fn refusal_1a_no_laydown_is_marked_current() {
     assert!(
         why.contains("none is marked current"),
         "the refusal must say what is missing: {why}"
+    );
+    assert!(
+        why.contains("north") && why.contains("south"),
+        "and name the laydowns, one of which should have been marked: {why}"
     );
     assert!(
         why.contains("compared against"),
@@ -126,18 +134,21 @@ fn refusal_1b_more_than_one_laydown_is_marked_current() {
     let mut b = baseline_with_registries();
     b.laydowns = vec![
         laydown(
-            "a",
+            "north",
             true,
             vec![placed(1, [0.0, 0.0, 10.0]), placed(2, [500.0, 0.0, 10.0])],
         ),
         laydown(
-            "b",
+            "south",
             true,
             vec![placed(1, [0.0, 0.0, 10.0]), placed(2, [500.0, 0.0, 10.0])],
         ),
     ];
     let why = refusal(&b);
-    assert!(why.contains('a') && why.contains('b'), "name them: {why}");
+    assert!(
+        why.contains("north") && why.contains("south"),
+        "name them: {why}"
+    );
     assert!(why.contains("exactly one"), "{why}");
 }
 
@@ -215,6 +226,7 @@ fn refusal_4_one_laydown_places_a_sensor_another_omits() {
         laydown("partial", false, vec![placed(1, [-800.0, 0.0, 12.0])]),
     ];
     let why = refusal(&b);
+    assert!(why.contains("place different sensors"), "{why}");
     assert!(
         why.contains("current") && why.contains("partial"),
         "the refusal must name both laydowns: {why}"
@@ -222,21 +234,87 @@ fn refusal_4_one_laydown_places_a_sensor_another_omits() {
     assert!(why.contains("complete placement"), "{why}");
 }
 
+/// Refusal 4's other half, for the `gungnir-config` Laydown validation row of
+/// `docs/verification-capability-table.md` §2. An option that leaves out an effector
+/// another option places is as incomplete as one that leaves out a sensor, and would be
+/// compared as though that effector were not there.
+#[test]
+fn refusal_4_one_laydown_places_a_resource_another_omits() {
+    let mut b = baseline_with_registries();
+    let mut unarmed = laydown(
+        "south",
+        false,
+        vec![
+            placed(1, [-800.0, 0.0, 12.0]),
+            placed(2, [0.0, 400.0, 10.0]),
+        ],
+    );
+    // Resource 1 is simply not mentioned. Both options place the same two sensors, so the
+    // sensor half of the rule passes and it is the resources that are compared.
+    unarmed.resources.clear();
+    b.laydowns = vec![
+        laydown(
+            "north",
+            true,
+            vec![placed(1, [0.0, 0.0, 10.0]), placed(2, [500.0, 0.0, 10.0])],
+        ),
+        unarmed,
+    ];
+    let why = refusal(&b);
+    assert!(why.contains("place different resources"), "{why}");
+    assert!(
+        why.contains("north") && why.contains("south"),
+        "the refusal must name both laydowns: {why}"
+    );
+}
+
 #[test]
 fn refusal_5_a_coordinate_is_not_a_finite_number() {
     let mut b = baseline_with_registries();
+    // On the second sensor, so that a refusal naming whichever placement came first
+    // would name the wrong one.
     b.laydowns = vec![laydown(
         "current",
         true,
         vec![
-            placed(1, [0.0, f64::NAN, 10.0]),
-            placed(2, [500.0, 0.0, 10.0]),
+            placed(1, [0.0, 0.0, 10.0]),
+            placed(2, [500.0, f64::NAN, 10.0]),
         ],
     )];
     let why = refusal(&b);
     assert!(
         why.contains("laydown current has a non-finite coordinate"),
         "the refusal must name the laydown: {why}"
+    );
+    assert!(
+        why.contains("sensor 2"),
+        "and the placement whose coordinate it is: {why}"
+    );
+    assert!(
+        !why.contains("sensor 1") && !why.contains("resource 1"),
+        "and no placement whose coordinates are finite: {why}"
+    );
+
+    // A resource's position is a placement too.
+    let mut l = laydown(
+        "current",
+        true,
+        vec![placed(1, [0.0, 0.0, 10.0]), placed(2, [500.0, 0.0, 10.0])],
+    );
+    l.resources[0].position_enu[2] = f64::INFINITY;
+    b.laydowns = vec![l];
+    let why = refusal(&b);
+    assert!(
+        why.contains("laydown current has a non-finite coordinate"),
+        "the refusal must name the laydown: {why}"
+    );
+    assert!(
+        why.contains("resource 1"),
+        "and the placement whose coordinate it is: {why}"
+    );
+    assert!(
+        !why.contains("sensor 1") && !why.contains("sensor 2"),
+        "and no placement whose coordinates are finite: {why}"
     );
 }
 

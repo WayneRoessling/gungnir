@@ -7,13 +7,17 @@
 //! on the embedded services and keeps journaling locally; when the link returns,
 //! what it recorded is forwarded and the two journals are reconciled.
 //!
-//! The reconciliation *rule* (who wins on conflicting operator decisions) has a
-//! working default in `gungnir-collab` (`RoleRankArbiter`) that is not yet locked
-//! (ARCHITECTURE.md §10). [`reconcile`] therefore merges by mission time, drops
-//! exact duplicates, and *reports* conflicts rather than resolving them; the
-//! arbiter is where the rule plugs in.
+//! [`reconcile`] merges by mission time, drops exact duplicates, and **reports** the
+//! conflicting decisions it finds; it resolves none of them. D-03 locked the rule that
+//! does (higher role wins, earlier decision wins a tie), DN-10 §9 put "a decision beats an
+//! expiry" ahead of it, and the rule is `gungnir_model::arbitration::arbitrate`. Since the
+//! owner's GAP-067 walk (2026-09-16) the desktop applies it to every conflict reported
+//! here and leaves to a person only those it cannot rank (`gungnir-app`'s `failover`).
+//! Resolving stays out of this crate on purpose: ranking a side means reading a role, and
+//! this crate depends on the model, eventing and the store alone.
 
 use gungnir_eventing::{Envelope, Event};
+use gungnir_model::arbitration::{ConflictSide, SideOutcome};
 use gungnir_model::events::CommandEvent;
 use gungnir_model::{MissionTime, PlanId};
 use gungnir_store::SessionId;
@@ -70,12 +74,18 @@ pub struct Checkpoint {
     pub mission_time: MissionTime,
 }
 
-/// Two decisions on the same plan that disagree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Two records of the same plan that disagree about how its approval ended.
+///
+/// Each side carries what the arbitration rule reads -- outcome, operator, role, mission
+/// time -- so the rule can be applied to the conflict as reported, without going back to
+/// either journal for more.
+#[derive(Debug, Clone, PartialEq)]
 pub struct DecisionConflict {
     pub plan: PlanId,
-    pub local_accepted: bool,
-    pub remote_accepted: bool,
+    /// What this desktop's journal recorded.
+    pub local: ConflictSide,
+    /// What the node's journal recorded.
+    pub remote: ConflictSide,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,23 +96,62 @@ pub struct ReconcileReport {
     pub conflicts: Vec<DecisionConflict>,
 }
 
-fn decision(env: &Envelope) -> Option<(PlanId, bool)> {
+/// How an envelope ended a plan's approval, if it did.
+///
+/// A decision's time is its envelope's, which is when the workflow recorded it; an
+/// expiry's is its own `at`, which is when the window closed.
+fn ending(env: &Envelope) -> Option<(PlanId, ConflictSide)> {
     match &env.event {
-        Event::Command(CommandEvent::Decided { plan, accepted, .. }) => Some((*plan, *accepted)),
+        Event::Command(CommandEvent::Decided {
+            plan,
+            accepted,
+            operator,
+            role,
+            ..
+        }) => Some((
+            *plan,
+            ConflictSide {
+                outcome: if *accepted {
+                    SideOutcome::Accepted
+                } else {
+                    SideOutcome::Rejected
+                },
+                operator: operator.clone(),
+                role: role.clone(),
+                at: env.mission_time,
+            },
+        )),
+        Event::Command(CommandEvent::Expired { plan, at }) => Some((
+            *plan,
+            ConflictSide {
+                outcome: SideOutcome::Expired,
+                operator: None,
+                role: None,
+                at: *at,
+            },
+        )),
         _ => None,
     }
 }
 
 /// Merge a desktop's offline journal with the node's journal for the same period.
+///
+/// **A conflict is two different outcomes for one plan**, one from each journal: an
+/// acceptance against a rejection, as before, and since the GAP-067 walk an expiry against
+/// either. An expiry facing a decision is a conflict even though neither acted on the
+/// plan when the decision was a rejection, because an expiry is not a rejection (DN-10)
+/// and the record has to say which of the two stands. Two acceptances, two rejections, and
+/// two expiries agree, and are not conflicts.
 pub fn reconcile(local: &[Envelope], remote: &[Envelope]) -> ReconcileReport {
     let mut conflicts = Vec::new();
-    for l in local.iter().filter_map(decision) {
-        for r in remote.iter().filter_map(decision) {
-            if l.0 == r.0 && l.1 != r.1 {
+    let remote_endings: Vec<(PlanId, ConflictSide)> = remote.iter().filter_map(ending).collect();
+    for (plan, l) in local.iter().filter_map(ending) {
+        for (other, r) in &remote_endings {
+            if plan == *other && l.outcome != r.outcome {
                 conflicts.push(DecisionConflict {
-                    plan: l.0,
-                    local_accepted: l.1,
-                    remote_accepted: r.1,
+                    plan,
+                    local: l.clone(),
+                    remote: r.clone(),
                 });
             }
         }
@@ -152,14 +201,35 @@ mod tests {
     }
 
     fn decided(plan: u64, accepted: bool) -> Event {
+        decided_by(plan, accepted, None, None)
+    }
+
+    fn decided_by(plan: u64, accepted: bool, operator: Option<&str>, role: Option<&str>) -> Event {
         Event::Command(CommandEvent::Decided {
             plan: PlanId(plan),
             decision: gungnir_model::DecisionId(plan),
             accepted,
-            operator: None,
+            operator: operator.map(str::to_string),
+            role: role.map(str::to_string),
             verdict: gungnir_model::events::VerdictSummary::RequiresHumanApproval,
             rationale: None,
         })
+    }
+
+    fn expired(plan: u64, at: f64) -> Event {
+        Event::Command(CommandEvent::Expired {
+            plan: PlanId(plan),
+            at: MissionTime(at),
+        })
+    }
+
+    fn side(outcome: SideOutcome, t: f64) -> ConflictSide {
+        ConflictSide {
+            outcome,
+            operator: None,
+            role: None,
+            at: MissionTime(t),
+        }
     }
 
     #[test]
@@ -195,9 +265,165 @@ mod tests {
             report.conflicts,
             vec![DecisionConflict {
                 plan: PlanId(7),
-                local_accepted: true,
-                remote_accepted: false
+                local: side(SideOutcome::Accepted, 3.0),
+                remote: side(SideOutcome::Rejected, 3.5),
             }]
+        );
+    }
+
+    /// An expiry on one side against a decision on the other is a conflict, whichever
+    /// journal holds which, and whether the decision accepted or rejected: an expiry is
+    /// not a rejection (DN-10), so an expiry against a rejection still disagrees about
+    /// what ended the approval.
+    #[test]
+    fn an_expiry_against_a_decision_is_a_conflict_in_either_order() {
+        let local_expired = reconcile(
+            &[env(1, 5.0, expired(7, 5.0))],
+            &[env(10, 6.0, decided(7, true))],
+        );
+        assert_eq!(
+            local_expired.conflicts,
+            vec![DecisionConflict {
+                plan: PlanId(7),
+                local: side(SideOutcome::Expired, 5.0),
+                remote: side(SideOutcome::Accepted, 6.0),
+            }]
+        );
+
+        let remote_expired = reconcile(
+            &[env(1, 6.0, decided(7, false))],
+            &[env(10, 5.0, expired(7, 5.0))],
+        );
+        assert_eq!(
+            remote_expired.conflicts,
+            vec![DecisionConflict {
+                plan: PlanId(7),
+                local: side(SideOutcome::Rejected, 6.0),
+                remote: side(SideOutcome::Expired, 5.0),
+            }]
+        );
+    }
+
+    /// Two decisions that disagree conflict as they always have; records that agree --
+    /// two acceptances, two rejections, two expiries -- do not, and neither do endings of
+    /// two different plans.
+    #[test]
+    fn only_different_endings_of_the_same_plan_conflict() {
+        let disagree = reconcile(
+            &[env(1, 5.0, decided(7, false))],
+            &[env(10, 6.0, decided(7, true))],
+        );
+        assert_eq!(disagree.conflicts.len(), 1);
+
+        for (l, r) in [
+            (decided(7, true), decided(7, true)),
+            (decided(7, false), decided(7, false)),
+            (expired(7, 5.0), expired(7, 6.0)),
+            (decided(7, true), decided(8, false)),
+            (expired(7, 5.0), decided(8, true)),
+        ] {
+            let report = reconcile(&[env(1, 5.0, l.clone())], &[env(10, 6.0, r.clone())]);
+            assert!(
+                report.conflicts.is_empty(),
+                "{l:?} against {r:?} was reported as a conflict"
+            );
+        }
+    }
+
+    /// Each side carries exactly what the arbitration rule reads, as its journal recorded
+    /// it: an operator and a role where one was recorded, none where none was, and the
+    /// decision's envelope time or the expiry's own `at`.
+    #[test]
+    fn each_side_carries_what_the_rule_reads() {
+        let report = reconcile(
+            &[
+                env(
+                    1,
+                    110.0,
+                    decided_by(1, false, Some("7"), Some("Supervisor")),
+                ),
+                env(2, 111.0, expired(2, 110.5)),
+            ],
+            &[
+                env(10, 112.0, decided_by(1, true, Some("9"), None)),
+                env(11, 113.0, decided_by(2, true, None, None)),
+            ],
+        );
+        assert_eq!(
+            report.conflicts,
+            vec![
+                DecisionConflict {
+                    plan: PlanId(1),
+                    local: ConflictSide {
+                        outcome: SideOutcome::Rejected,
+                        operator: Some("7".into()),
+                        role: Some("Supervisor".into()),
+                        at: MissionTime(110.0),
+                    },
+                    remote: ConflictSide {
+                        outcome: SideOutcome::Accepted,
+                        operator: Some("9".into()),
+                        role: None,
+                        at: MissionTime(112.0),
+                    },
+                },
+                DecisionConflict {
+                    plan: PlanId(2),
+                    local: ConflictSide {
+                        outcome: SideOutcome::Expired,
+                        operator: None,
+                        role: None,
+                        at: MissionTime(110.5),
+                    },
+                    remote: ConflictSide {
+                        outcome: SideOutcome::Accepted,
+                        operator: None,
+                        role: None,
+                        at: MissionTime(113.0),
+                    },
+                },
+            ]
+        );
+    }
+
+    /// "Merged journal contains every envelope once" (the cross-layer row): the exact
+    /// number of duplicates is dropped, the merge is the two journals less exactly those,
+    /// and every distinct envelope -- the same event at another time, another event at the
+    /// same time -- is in it exactly once.
+    #[test]
+    fn the_merge_keeps_every_distinct_envelope_exactly_once() {
+        let local = vec![
+            env(1, 1.0, deleted(1)),
+            env(2, 2.0, decided(5, true)),
+            env(3, 3.0, deleted(3)),
+            env(4, 4.0, expired(6, 4.0)),
+        ];
+        let remote = vec![
+            // Duplicates of local envelopes: same time, same event, another sequence.
+            env(10, 1.0, deleted(1)),
+            env(11, 2.0, decided(5, true)),
+            // Not duplicates: the same event at another time, another event at a time
+            // already taken.
+            env(12, 5.0, deleted(3)),
+            env(13, 3.0, deleted(9)),
+        ];
+        let report = reconcile(&local, &remote);
+        assert_eq!(report.duplicates_dropped, 2);
+        assert_eq!(report.merged.len(), local.len() + remote.len() - 2);
+        for envelope in local.iter().chain(remote.iter()) {
+            let copies = report
+                .merged
+                .iter()
+                .filter(|m| m.mission_time == envelope.mission_time && m.event == envelope.event)
+                .count();
+            assert_eq!(copies, 1, "{envelope:?} is in the merge {copies} times");
+        }
+        assert!(
+            report
+                .merged
+                .windows(2)
+                .all(|w| w[0].mission_time <= w[1].mission_time),
+            "the merge is not in mission-time order"
         );
     }
 }

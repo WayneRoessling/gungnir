@@ -13,10 +13,13 @@
 //! displayed as requested-not-confirmed, not as the current mode. A registry that
 //! reports the mode it asked for is a health flag that lies.
 //!
-//! No adapter exists yet: GAP-001 brings them. Until then [`issue`] returns
+//! A sensor with no control adapter behind it is refused: [`issue`] returns
 //! [`SensorManagementError::NotControllable`] and the panel says the sensor is not
-//! controllable from here. It does not appear to succeed, which is what lets this
-//! design land before the adapters without pretending.
+//! controllable from here, rather than appearing to succeed. That is how this design
+//! landed before any adapter existed; since GAP-001 and GAP-004 two do -- the desktop's
+//! `LinkControlAdapter` (`gungnir-app/src/node_tasks.rs`), which hands a task to its node,
+//! and the node's `SapientTaskRouter`, which sends it to a SAPIENT sensor -- and the rule
+//! is unchanged for every sensor neither reaches.
 
 use crate::{SensorManagementError, SensorMode};
 use gungnir_model::{MissionTime, RequirementId, SensorId};

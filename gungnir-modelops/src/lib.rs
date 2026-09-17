@@ -507,15 +507,16 @@ mod tests {
     /// registry it produces is real, and it is honest that there is nothing to choose.
     #[test]
     fn a_baseline_with_only_tracking_yields_one_promoted_default() {
+        let tracking = TrackingConfig {
+            filter_selection: "imm-cv-ct".into(),
+            gate_threshold: 9.21,
+            imm_turn_rate_rad_s: 0.0,
+            imm_mode_transition: [[0.0; 2]; 2],
+            imm_initial_mode_probabilities: [0.0; 2],
+            measurement_noise_var: [0.0; 3],
+        };
         let config = ConfigBaseline {
-            tracking: Some(TrackingConfig {
-                filter_selection: "imm-cv-ct".into(),
-                gate_threshold: 9.21,
-                imm_turn_rate_rad_s: 0.0,
-                imm_mode_transition: [[0.0; 2]; 2],
-                imm_initial_mode_probabilities: [0.0; 2],
-                measurement_noise_var: [0.0; 3],
-            }),
+            tracking: Some(tracking.clone()),
             ..ConfigBaseline::default()
         };
         let r = InMemoryModelRegistry::from_baseline(&config).expect("registry");
@@ -524,6 +525,17 @@ mod tests {
         assert_eq!(
             r.promoted(&default).expect("in force").id.name,
             "configured"
+        );
+        // "With that configuration promoted" (the `gungnir-modelops` Promotion gating and
+        // rollback row of `docs/verification-capability-table.md` §2). Weak here: this
+        // fixture's IMM fields are zeros, which is what serde reads for an absent field, so
+        // a registry that lost them on the way would still pass. The same comparison in
+        // `gungnir-app/tests/governance.rs`, whose fixture sets those fields, is the one
+        // that means it (`a_baseline_with_only_tracking_governs_its_one_configuration`).
+        assert_eq!(
+            r.promoted(&default).expect("in force").config,
+            tracking,
+            "the configuration promoted is not the one the baseline carried"
         );
         // And a rollback has nothing to restore, which is the truth about such a
         // deployment rather than a failure of this crate.
