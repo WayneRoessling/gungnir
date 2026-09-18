@@ -405,7 +405,7 @@ information_elements:
   - {id: IE-deconfliction-kind, name: DeconflictionKind, code: gungnir_model::DeconflictionKind, domain: 'Plans, effectors & handoff', description: 'What a deconfliction check examined before a fires task is offered.'}
   - {id: IE-deconfliction-result, name: DeconflictionResult, code: gungnir_model::DeconflictionResult, domain: 'Plans, effectors & handoff', description: 'Every deconfliction check, whether it passed or failed.'}
   - {id: IE-defended-asset, name: DefendedAsset, code: gungnir_model::DefendedAsset, domain: 'Assets, exchange & releasability', description: 'One asset the sector defends.'}
-  - {id: IE-delegation-settings, name: DelegationSettings, code: gungnir_model::DelegationSettings, domain: 'Policy, authority & settings', description: 'How long D-15''s delegations survive a desktop losing its node (docs/design/DN-31-node-approval-queue.md §6.7 and §7).'}
+  - {id: IE-delegation-settings, name: DelegationSettings, code: gungnir_model::DelegationSettings, domain: 'Policy, authority & settings', description: 'How long D-15''s delegations survive a desktop losing its node (docs/design/DN-31-node-approval-queue.md §6, clause 6.7, and §7).'}
   - {id: IE-delivery-state, name: DeliveryState, code: gungnir_model::DeliveryState, domain: 'Plans, effectors & handoff', description: 'How the handoff reached, or failed to reach, the effector.'}
   - {id: IE-effector-layer, name: EffectorLayer, code: gungnir_model::EffectorLayer, domain: 'Plans, effectors & handoff', description: 'Defence layer, ordered outermost first.'}
   - {id: IE-effector-report, name: EffectorReport, code: gungnir_model::EffectorReport, domain: 'Plans, effectors & handoff', description: 'What the receiving system reports back.'}

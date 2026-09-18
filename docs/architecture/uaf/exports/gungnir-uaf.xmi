@@ -8498,7 +8498,7 @@
       </element>
       <element xmi:idref="EAID_EC341A1B_FD95_0E3F_C129_1AD3311C2611" xmi:type="uml:Class" name="DelegationSettings" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="How long D-15's delegations survive a desktop losing its node (docs/design/DN-31-node-approval-queue.md §6.7 and §7)."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="How long D-15's delegations survive a desktop losing its node (docs/design/DN-31-node-approval-queue.md §6, clause 6.7, and §7)."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-delegation-settings"/>

@@ -304,7 +304,7 @@ IE-deconfliction-check,Information Elements,InformationElement,DeconflictionChec
 IE-deconfliction-kind,Information Elements,InformationElement,DeconflictionKind,What a deconfliction check examined before a fires task is offered.,Class
 IE-deconfliction-result,Information Elements,InformationElement,DeconflictionResult,"Every deconfliction check, whether it passed or failed.",Class
 IE-defended-asset,Information Elements,InformationElement,DefendedAsset,One asset the sector defends.,Class
-IE-delegation-settings,Information Elements,InformationElement,DelegationSettings,How long D-15's delegations survive a desktop losing its node (docs/design/DN-31-node-approval-queue.md \u00a76.7 and \u00a77).,Class
+IE-delegation-settings,Information Elements,InformationElement,DelegationSettings,"How long D-15's delegations survive a desktop losing its node (docs/design/DN-31-node-approval-queue.md \u00a76, clause 6.7, and \u00a77).",Class
 IE-delivery-state,Information Elements,InformationElement,DeliveryState,"How the handoff reached, or failed to reach, the effector.",Class
 IE-effector-layer,Information Elements,InformationElement,EffectorLayer,"Defence layer, ordered outermost first.",Class
 IE-effector-report,Information Elements,InformationElement,EffectorReport,What the receiving system reports back.,Class
