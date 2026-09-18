@@ -143,6 +143,59 @@ impl PolicyEngine for AuthorityPolicy<'_> {
     }
 }
 
+/// Whether D-15's delegations are in force for the machine asking
+/// (`docs/design/DN-31-node-approval-queue.md` §6.7; GAP-134).
+///
+/// A pre-delegated rule is a **granting** rule: it is what gives an Operator authority
+/// over the cases D-15 delegates. So a delegation that has lapsed is not a flag a panel
+/// draws differently -- it is a rule that has stopped granting, and every question the
+/// authority matrix answers has to be asked of the matrix without it. That is why this is
+/// applied through [`authority_in_force`] rather than checked at each call site: the
+/// engine, the offering and the queue's `offered_to` all read one matrix, and a lapse
+/// that reached only one of them would leave an item still actionable by a role that no
+/// longer holds the authority.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Delegations {
+    /// In force as the baseline configures them: a node, a desktop linked to its node,
+    /// and a desktop deployed on its own, which never loses a node it does not have.
+    #[default]
+    AsConfigured,
+    /// Lapsed. This desktop has been cut off from its node for longer than
+    /// `policy.delegation.disconnected_lapse_s`, or the baseline stated no interval at
+    /// all, which is silence about authority and therefore denies (DN-08 §5).
+    Lapsed,
+}
+
+/// The authority matrix in force, with D-15's delegations applied (DN-31 §6.7).
+///
+/// [`Delegations::AsConfigured`] borrows the baseline's own matrix and allocates nothing,
+/// which is every tick on a node and on a linked desktop. [`Delegations::Lapsed`] returns
+/// the matrix **without its pre-delegated rules**, so a role whose only grant was a
+/// delegation is denied by `rule_for` exactly as it would be under a baseline that never
+/// delegated anything. Nothing else is touched: a role that holds a case on its own
+/// account still holds it, and a lapse can therefore never widen what anybody may do.
+///
+/// The removed rule is not replaced by a denial, it is removed: `rule_for` then falls
+/// back to whatever less specific rule the same role holds, which is the authority that
+/// role had before the delegation and the authority it has after it lapses.
+#[must_use]
+pub fn authority_in_force(
+    settings: &AuthoritySettings,
+    delegations: Delegations,
+) -> std::borrow::Cow<'_, AuthoritySettings> {
+    match delegations {
+        Delegations::AsConfigured => std::borrow::Cow::Borrowed(settings),
+        Delegations::Lapsed => std::borrow::Cow::Owned(AuthoritySettings {
+            rules: settings
+                .rules
+                .iter()
+                .filter(|r| !r.pre_delegated)
+                .cloned()
+                .collect(),
+        }),
+    }
+}
+
 /// True when a plan is pre-delegated for this role at every layer it names.
 ///
 /// Decision D-15 pre-delegated one specific case. A pre-delegated plan still needs a
@@ -532,6 +585,88 @@ mod tests {
             &[resource(1, EffectorLayer::Area)],
             &class_of
         ));
+    }
+
+    /// A lapsed delegation stops **granting** (D-15, DN-31 §6.7), which is a different
+    /// and stronger thing than a flag reading `false`: the operator's authority over the
+    /// delegated case goes with it, and the engine denies the plan.
+    ///
+    /// The zero beside the non-zero: the same matrix, the same plan and the same role,
+    /// asked once with the delegations in force and once lapsed. Without the first
+    /// assertion the second would pass against a matrix that never granted anything.
+    #[test]
+    fn a_lapsed_delegation_withdraws_the_authority_it_granted() {
+        let mut delegated = rule("plan.decide", "operator", EffectorLayer::Point, "hostile");
+        delegated.pre_delegated = true;
+        let settings = AuthoritySettings {
+            rules: vec![delegated],
+        };
+        let class_of = |_: TrackId| Classification::Hostile;
+        let resources = [resource(1, EffectorLayer::Point)];
+        let verdict = |s: &AuthoritySettings| {
+            AuthorityPolicy {
+                settings: s,
+                asking_role: "operator",
+                action: "plan.decide",
+                track_classification: &class_of,
+            }
+            .evaluate(&plan(1, 10), &resources)
+        };
+
+        let in_force = authority_in_force(&settings, Delegations::AsConfigured);
+        assert_eq!(
+            verdict(&in_force),
+            PolicyVerdict::RequiresHumanApproval,
+            "the delegation is what grants this case; if it grants nothing here the \
+             lapse below proves nothing"
+        );
+        assert!(is_pre_delegated(
+            &in_force,
+            "plan.decide",
+            "operator",
+            &plan(1, 10),
+            &resources,
+            &class_of
+        ));
+
+        let lapsed = authority_in_force(&settings, Delegations::Lapsed);
+        assert_eq!(
+            verdict(&lapsed),
+            PolicyVerdict::Denied {
+                reason_code: DenialReason::Authority {
+                    layer: EffectorLayer::Point
+                }
+            },
+            "a lapsed delegation must take the authority with it, not only the flag"
+        );
+        assert!(!is_pre_delegated(
+            &lapsed,
+            "plan.decide",
+            "operator",
+            &plan(1, 10),
+            &resources,
+            &class_of
+        ));
+    }
+
+    /// A lapse removes delegated rules and touches nothing else, so it can only ever
+    /// narrow what a role may do. The undelegated rule beside the delegated one is what
+    /// makes that checkable rather than asserted.
+    #[test]
+    fn a_lapse_removes_only_the_delegated_rules() {
+        let mut delegated = rule("plan.decide", "operator", EffectorLayer::Point, "hostile");
+        delegated.pre_delegated = true;
+        let own = rule("plan.decide", "supervisor", EffectorLayer::Point, "hostile");
+        let settings = AuthoritySettings {
+            rules: vec![delegated, own.clone()],
+        };
+        let lapsed = authority_in_force(&settings, Delegations::Lapsed);
+        assert_eq!(lapsed.rules, vec![own], "an undelegated rule was withdrawn");
+        assert_eq!(
+            authority_in_force(&settings, Delegations::AsConfigured).rules,
+            settings.rules,
+            "the configured matrix is borrowed unchanged"
+        );
     }
 
     #[test]

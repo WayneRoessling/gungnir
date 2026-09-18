@@ -229,6 +229,30 @@ pub enum CommandError {
     DeniedByPolicy(DenialReason),
 }
 
+/// What became of a decision another machine took and forwarded
+/// (`docs/design/DN-31-node-approval-queue.md` §6.8; GAP-134).
+///
+/// **The record is appended and nothing else happens.** A forwarded decision was taken on
+/// the forwarding machine's own queue, on a plan its own planner proposed; the engagement
+/// it opened and the handoff it issued happened there, while it was cut off. Admitting it
+/// here says what that machine did, so the node's record holds the outage. Opening a
+/// second engagement on the strength of it would be this deployment acting twice on one
+/// decision, which is the double engagement D-58 exists to *report* and this crate must
+/// not *cause*.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ForwardOutcome {
+    /// Appended to the history, once.
+    Recorded,
+    /// The same identifier is already held and says the same thing. Acknowledged, and
+    /// nothing recorded: this is what makes a whole batch safe to send again after a
+    /// connection failed part-way through it.
+    AlreadyHeld,
+    /// The same identifier is already held and says something **different**. Refused,
+    /// naming the record that stands, because an append-only record cannot hold two
+    /// accounts of one decision and picking one here would be this crate choosing.
+    Contradicts(Box<DecisionRecord>),
+}
+
 /// Everything a plan needs to become a *timed* decision.
 ///
 /// The plan and the verdict were enough while the queue was untimed. They are not
@@ -249,6 +273,18 @@ pub struct Submission {
     pub priority: f32,
     /// The role this item is offered to first.
     pub role: String,
+}
+
+/// One queue item whose offers changed when a delegation lapsed (D-15, DN-31 §6.7).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Reoffered {
+    pub plan: PlanId,
+    pub item: PendingApprovalId,
+    /// The roles that may no longer take it. Never empty: an item that changed changed
+    /// because at least one role lost the authority for it.
+    pub withdrawn: Vec<String>,
+    /// Who may take it now, which is empty where no role on the ladder holds it.
+    pub offered_to: Vec<String>,
 }
 
 pub trait ApprovalWorkflow: Send + Sync {
@@ -299,6 +335,43 @@ pub trait ApprovalWorkflow: Send + Sync {
         who: DecidedBy,
         now: MissionTime,
     ) -> Result<DecisionRecord, CommandError>;
+
+    /// Admit a decision another machine took while it was cut off, forwarded on
+    /// reconnect (DN-31 §6.8; GAP-134).
+    ///
+    /// **Keyed on the decision's own identifier, and idempotent on it.** The record is
+    /// appended once; the same identifier again is acknowledged and records nothing, and
+    /// the same identifier saying something else is refused naming what stands. Nothing
+    /// is queued, decided, engaged or handed off -- see [`ForwardOutcome`] for why that
+    /// is the whole of it.
+    ///
+    /// The record keeps the mission time the forwarding machine recorded, because that is
+    /// when the decision was taken; when *this* deployment learned of it is the mission
+    /// time of the envelope its caller publishes. Both are on the record and neither is
+    /// invented, which is the treatment an effector's own `at` already gets beside
+    /// `HandoffEvent::Reported`.
+    fn admit_forwarded(&mut self, record: DecisionRecord) -> ForwardOutcome;
+
+    /// Withdraw the offers a role no longer holds the authority for, and re-offer the
+    /// item to the lowest role on the ladder that does (D-15, DN-31 §6.7; GAP-134).
+    ///
+    /// `holds` answers one question and one only: may this role take this item *now*,
+    /// under the authority matrix in force. It is the caller's because the matrix and the
+    /// engine are `gungnir-policy`'s and this crate has no view on who may be asked.
+    ///
+    /// **An item is never left offered to nobody while somebody could take it.** A lapse
+    /// is not an escalation -- it removes a role rather than adding one, because the
+    /// authority itself went away -- so the item goes to the lowest rung that still holds
+    /// it rather than climbing one step. Where no rung holds it, the item is offered to
+    /// nobody and stops escalating, because there is nowhere for it to go; it still
+    /// expires, and nothing accepts it (DN-10 §5, contract C-01).
+    ///
+    /// Returns only the items that changed.
+    fn reoffer(
+        &mut self,
+        ladder: &[&str],
+        holds: &dyn Fn(&PendingApproval, &str) -> bool,
+    ) -> Vec<Reoffered>;
 
     /// Append-only history, oldest first.
     fn records(&self) -> &[DecisionRecord];
@@ -496,6 +569,74 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
         };
         self.records.push(record.clone());
         Ok(record)
+    }
+
+    fn admit_forwarded(&mut self, record: DecisionRecord) -> ForwardOutcome {
+        // The identifier, not the request key and not the queue item. A forwarded
+        // decision's item belongs to the forwarding machine's queue, which this workflow
+        // never issued, and its request key is `None` for a decision taken at a console
+        // rather than over a route. The `DecisionId` is the one thing that is the same
+        // fact on both machines (D-56: minted where the thing is created, unique across
+        // machines and restarts), which is why DN-31 §6.8 keys the exactly-once on it.
+        if let Some(held) = self.records.iter().find(|r| r.id == record.id) {
+            return if *held == record {
+                ForwardOutcome::AlreadyHeld
+            } else {
+                ForwardOutcome::Contradicts(Box::new(held.clone()))
+            };
+        }
+        self.records.push(record);
+        ForwardOutcome::Recorded
+    }
+
+    fn reoffer(
+        &mut self,
+        ladder: &[&str],
+        holds: &dyn Fn(&PendingApproval, &str) -> bool,
+    ) -> Vec<Reoffered> {
+        let mut changed = Vec::new();
+        for item in &mut self.queue {
+            let kept: Vec<String> = item
+                .offered_to
+                .iter()
+                .filter(|role| holds(item, role))
+                .cloned()
+                .collect();
+            if kept.len() == item.offered_to.len() {
+                continue;
+            }
+            let withdrawn: Vec<String> = item
+                .offered_to
+                .iter()
+                .filter(|role| !kept.contains(role))
+                .cloned()
+                .collect();
+            let offered_to = if kept.is_empty() {
+                // Down the ladder from the bottom, so the item goes to the lowest role
+                // that still holds it rather than to the highest that happens to.
+                ladder
+                    .iter()
+                    .find(|role| holds(item, role))
+                    .map(|role| vec![(*role).to_owned()])
+                    .unwrap_or_default()
+            } else {
+                kept
+            };
+            if offered_to.is_empty() {
+                // Nowhere to escalate to: every rung has been asked. Stop the clock
+                // rather than report an escalation every frame for an item that cannot
+                // move. The expiry stands, and no path accepts on expiry (C-01).
+                item.escalate_at = None;
+            }
+            item.offered_to = offered_to.clone();
+            changed.push(Reoffered {
+                plan: item.plan.id,
+                item: item.id,
+                withdrawn,
+                offered_to,
+            });
+        }
+        changed
     }
 
     fn records(&self) -> &[DecisionRecord] {
@@ -1040,5 +1181,191 @@ mod tests {
         let expiry = wf.records().last().expect("the expiry left a record");
         assert!(expiry.is_expiry());
         assert_eq!(expiry.role, None, "nobody decided, so no role did");
+    }
+
+    /// A record as another machine forwards it: identifiers minted there, the time it
+    /// was taken there, and the machine it came from.
+    fn forwarded(id: u128, plan_id: u128, origin: &str, at: f64) -> DecisionRecord {
+        DecisionRecord {
+            id: DecisionId(id),
+            item: None,
+            plan: plan(plan_id),
+            verdict: PolicyVerdict::RequiresHumanApproval,
+            decision: OperatorDecision::Accepted,
+            operator_id: Some("7".into()),
+            role: Some("Supervisor".into()),
+            request: None,
+            origin: Some(origin.to_owned()),
+            mission_time: MissionTime(at),
+        }
+    }
+
+    /// DN-31 §6.8: the record is appended once, keyed on the decision's own identifier,
+    /// and forwarding the same one again records nothing.
+    ///
+    /// The zero beside the non-zero: the first call has to record something, or the
+    /// second call recording nothing would prove nothing at all.
+    #[test]
+    fn a_forwarded_decision_is_recorded_once_and_the_same_one_again_records_nothing() {
+        let mut wf = InMemoryApprovalWorkflow::new();
+        let record = forwarded(9001, 5, "desk-a", 110.0);
+
+        assert_eq!(wf.records().len(), 0);
+        assert_eq!(
+            wf.admit_forwarded(record.clone()),
+            ForwardOutcome::Recorded,
+            "the first forwarding has to record it"
+        );
+        assert_eq!(wf.records().len(), 1);
+        assert_eq!(wf.records()[0].origin.as_deref(), Some("desk-a"));
+        assert_eq!(
+            wf.records()[0].mission_time,
+            MissionTime(110.0),
+            "the record keeps the time the decision was taken, not the time it arrived"
+        );
+
+        assert_eq!(
+            wf.admit_forwarded(record.clone()),
+            ForwardOutcome::AlreadyHeld
+        );
+        assert_eq!(wf.admit_forwarded(record), ForwardOutcome::AlreadyHeld);
+        assert_eq!(
+            wf.records().len(),
+            1,
+            "forwarding the same decision again appended a second account of it"
+        );
+    }
+
+    /// One identifier, two different accounts of what happened: refused naming the one
+    /// that stands, rather than appended beside it or silently preferred.
+    #[test]
+    fn a_forwarded_decision_that_contradicts_one_already_held_is_refused() {
+        let mut wf = InMemoryApprovalWorkflow::new();
+        let held = forwarded(9001, 5, "desk-a", 110.0);
+        assert_eq!(wf.admit_forwarded(held.clone()), ForwardOutcome::Recorded);
+
+        let mut other = held.clone();
+        other.decision = OperatorDecision::Rejected {
+            reason: "friendly airliner".into(),
+        };
+        assert_eq!(
+            wf.admit_forwarded(other),
+            ForwardOutcome::Contradicts(Box::new(held)),
+            "the refusal names the record that stands"
+        );
+        assert_eq!(wf.records().len(), 1, "a refused forwarding recorded one");
+    }
+
+    /// A forwarded decision is a fact about another machine's queue, so it never ends an
+    /// item on this one, however the two identifiers happen to line up.
+    #[test]
+    fn a_forwarded_decision_ends_nothing_in_this_queue() {
+        let mut wf = timed();
+        let item = wf
+            .submit_for_approval(submission(5, PolicyVerdict::RequiresHumanApproval))
+            .expect("submit");
+        assert_eq!(wf.queue().len(), 1);
+
+        assert_eq!(
+            wf.admit_forwarded(forwarded(9001, 5, "desk-a", 110.0)),
+            ForwardOutcome::Recorded
+        );
+        assert_eq!(
+            wf.queue().len(),
+            1,
+            "the plan is still waiting for a person here; the other machine decided its own"
+        );
+        assert_eq!(
+            wf.outcome_for(item),
+            None,
+            "a forwarded decision was read as ending an item this workflow issued"
+        );
+    }
+
+    /// D-15 lapsing: the role that held an item only by delegation loses it, and the item
+    /// goes to the lowest rung that still holds the authority rather than to nobody.
+    #[test]
+    fn a_lapse_withdraws_the_offer_and_re_offers_the_item_to_a_role_that_holds_it() {
+        let mut wf = timed();
+        let item = wf
+            .submit_for_approval(submission(5, PolicyVerdict::RequiresHumanApproval))
+            .expect("submit");
+
+        // Nothing has changed: the operator still holds it, and nothing is reported.
+        assert!(
+            wf.reoffer(&LADDER, &|_, _| true).is_empty(),
+            "an unchanged queue reported a change"
+        );
+        assert_eq!(wf.queue()[0].offered_to, ["operator"]);
+
+        // The delegation lapses: the operator no longer holds it, the supervisor does.
+        let changed = wf.reoffer(&LADDER, &|_, role| role != "operator");
+        assert_eq!(
+            changed,
+            vec![Reoffered {
+                plan: PlanId(5),
+                item,
+                withdrawn: vec!["operator".into()],
+                offered_to: vec!["supervisor".into()],
+            }]
+        );
+        assert_eq!(wf.queue()[0].offered_to, ["supervisor"]);
+        assert!(
+            !wf.queue()[0].may_be_decided_by("operator"),
+            "the item is still actionable by the role whose delegation lapsed"
+        );
+        assert!(wf.queue()[0].may_be_decided_by("supervisor"));
+        assert!(
+            wf.queue()[0].escalate_at.is_some(),
+            "an item somebody may still take goes on escalating (D-59)"
+        );
+    }
+
+    /// An escalated item keeps the rungs that hold the authority on their own account:
+    /// a lapse withdraws a delegation, not an escalation.
+    #[test]
+    fn a_lapse_keeps_every_role_that_still_holds_the_item() {
+        let mut wf = timed();
+        wf.submit_for_approval(submission(5, PolicyVerdict::RequiresHumanApproval))
+            .expect("submit");
+        wf.sweep(MissionTime(21.0), &LADDER);
+        assert_eq!(
+            wf.queue()[0].offered_to,
+            ["operator", "supervisor"],
+            "escalation adds a role without removing the first (DN-10 §5)"
+        );
+
+        let changed = wf.reoffer(&LADDER, &|_, role| role != "operator");
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].withdrawn, ["operator"]);
+        assert_eq!(wf.queue()[0].offered_to, ["supervisor"]);
+    }
+
+    /// No rung holds it: offered to nobody, the escalation clock stopped because there is
+    /// nowhere to go, and still expiring rather than quietly accepted (C-01).
+    #[test]
+    fn an_item_no_role_holds_is_offered_to_nobody_and_still_expires() {
+        let mut wf = timed();
+        wf.submit_for_approval(submission(5, PolicyVerdict::RequiresHumanApproval))
+            .expect("submit");
+
+        let changed = wf.reoffer(&LADDER, &|_, _| false);
+        assert_eq!(changed.len(), 1);
+        assert!(changed[0].offered_to.is_empty());
+        assert!(wf.queue()[0].offered_to.is_empty());
+        assert_eq!(
+            wf.queue()[0].escalate_at,
+            None,
+            "an item with nowhere to go kept an escalation clock running"
+        );
+
+        wf.sweep(MissionTime(31.0), &LADDER);
+        assert!(wf.queue().is_empty());
+        let record = wf.records().last().expect("the expiry left a record");
+        assert!(record.is_expiry(), "an item nobody held was not expired");
+        assert!(
+            !record.is_actionable(),
+            "an item nobody could take became actionable"
+        );
     }
 }

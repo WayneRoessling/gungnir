@@ -2925,6 +2925,22 @@ fn validate_decision_rules(p: &gungnir_model::PolicySettings) -> Result<(), Conf
             }
         }
     }
+    // D-15's delegations on a desktop cut off from its node (DN-31 §7, GAP-134).
+    // **Validated positive where it is stated, and never defaulted.** Silence is not
+    // refused here because silence has a meaning of its own -- no delegation survives a
+    // disconnection at all -- which is the strictest reading and the opposite of
+    // inheriting an interval from this build. A stated value that is zero or negative has
+    // no such reading: it is a number somebody meant, and the only honest answers to it
+    // are "immediately" (which silence already says) and a refusal.
+    if let Some(lapse) = p.delegation.disconnected_lapse_s {
+        if !(lapse.is_finite() && lapse > 0.0) {
+            return Err(ConfigError::Invalid(format!(
+                "policy.delegation.disconnected_lapse_s is {lapse}; it must be finite and \
+                 positive. Leave it out to say that no delegation survives a disconnection \
+                 at all (D-15)"
+            )));
+        }
+    }
     Ok(())
 }
 
