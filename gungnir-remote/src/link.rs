@@ -277,13 +277,13 @@ impl NodeLink {
     pub fn replace_credential(&self, credential: Credential) -> Result<(), RemoteError> {
         if self.machine {
             return Err(RemoteError::InvalidEndpoint(
-                "a machine link signs in with its certificate, not an operator's credential"
-                    .into(),
+                "a machine link signs in with its certificate, not an operator's credential".into(),
             ));
         }
-        let mut held = self.credential.lock().map_err(|_| {
-            RemoteError::Client("the link's credential lock was poisoned".into())
-        })?;
+        let mut held = self
+            .credential
+            .lock()
+            .map_err(|_| RemoteError::Client("the link's credential lock was poisoned".into()))?;
         *held = Some(credential);
         Ok(())
     }
@@ -1651,7 +1651,10 @@ mod tests {
             operator: 7,
             passphrase: secret.into(),
         });
-        assert!(refused.is_err(), "a machine link took an operator's credential");
+        assert!(
+            refused.is_err(),
+            "a machine link took an operator's credential"
+        );
         assert_eq!(machine.signs_in_as(), None);
 
         let operator = NodeLink::scripted();

@@ -419,7 +419,11 @@ fn a_sign_in_during_an_outage_leaves_it_for_a_person_to_end() {
     );
 
     // The operator signs out and in again while the node is down.
-    session::apply(&mut state, &mut SignInDraft::default(), SessionAction::SignOut);
+    session::apply(
+        &mut state,
+        &mut SignInDraft::default(),
+        SessionAction::SignOut,
+    );
     assert!(state.fallback.is_some(), "a sign-out ended the outage");
     let mut again = SignInDraft {
         operator: "7".into(),

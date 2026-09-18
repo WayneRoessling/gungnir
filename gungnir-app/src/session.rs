@@ -224,7 +224,9 @@ fn connect_if_remote(state: &mut AppState, operator: u64, passphrase: &str) {
     // operator when the node answers, and everything else stays where it is.
     if state.fallback.is_some() {
         let outcome = match state.link.as_ref() {
-            Some(link) => link.replace_credential(credential).map_err(|e| e.to_string()),
+            Some(link) => link
+                .replace_credential(credential)
+                .map_err(|e| e.to_string()),
             // Not reachable through `failover::fall_back`, which falls back only on a
             // link; said rather than papered over, and still not a reason to end the
             // outage without a person.
