@@ -349,6 +349,10 @@ pub struct NodeApi {
     /// (GAP-132, DN-31 §9 row 4). The caller has already been answered; what is owed is
     /// the entry in the record.
     refusals: Mutex<Vec<RefusedDecision>>,
+    /// Outages' decisions waiting for the node loop to put them on its record (GAP-134,
+    /// DN-31 §6.8). A queue of its own for the reason `decisions` has one: a different
+    /// fact, and one the loop answers differently -- a batch is taken whole or not at all.
+    forwarded: Mutex<Vec<PendingForward>>,
     /// Effector reports waiting for the node loop to put on the record (GAP-040).
     reports: Mutex<Vec<EffectorReportRecord>>,
     /// Warning acknowledgements waiting for the node loop to put on the record
@@ -461,6 +465,43 @@ impl std::fmt::Debug for PendingDecision {
     }
 }
 
+/// An outage's decisions the route accepted and the node loop has not yet put on its
+/// record (GAP-134, DN-31 §6.8).
+///
+/// The third of these carriers and for the same reason as the other two: the node's
+/// record is the loop's. **One batch is one outage**, taken by the loop whole or not at
+/// all, which is what stops a desktop that fails part-way through from leaving the node
+/// holding the first half of what it decided.
+pub struct PendingForward {
+    pub decisions: Vec<v3::ForwardedDecision>,
+    /// Who forwarded it, verified from the token. **Not who decided**: that is each
+    /// record's own account, taken at a console this node could not see, and the audit
+    /// entry the loop writes names both.
+    pub operator: gungnir_security::OperatorId,
+    pub role: gungnir_security::Role,
+    pub reply: tokio::sync::oneshot::Sender<ForwardAnswer>,
+}
+
+impl std::fmt::Debug for PendingForward {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PendingForward")
+            .field("decisions", &self.decisions.len())
+            .field("role", &self.role)
+            .finish_non_exhaustive()
+    }
+}
+
+/// What the node loop says about one forwarded batch (DN-31 §7).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ForwardAnswer {
+    /// `202`: the whole batch is on the record, counted.
+    Accepted(v3::ForwardAccepted),
+    /// `409`: a record contradicts one already held, and nothing was applied. Boxed
+    /// because it can carry a whole record, plan included, and the answer is otherwise
+    /// three counters.
+    Refused(Box<v3::ForwardRefused>),
+}
+
 /// A decision request the route refused, for the node loop to audit (GAP-132).
 ///
 /// DN-31 §9 row 4: **every decision and every refusal writes exactly one audit entry on
@@ -535,6 +576,7 @@ impl NodeApi {
             tasks: Mutex::new(Vec::new()),
             decisions: Mutex::new(Vec::new()),
             refusals: Mutex::new(Vec::new()),
+            forwarded: Mutex::new(Vec::new()),
             reports: Mutex::new(Vec::new()),
             acknowledgements: Mutex::new(Vec::new()),
             exchange_products: RwLock::new(BTreeMap::new()),
@@ -610,6 +652,16 @@ impl NodeApi {
                 "the refusal queue lock was poisoned; this refusal reaches no audit entry"
             );
         }
+    }
+
+    /// Take the forwarded batches the route accepted since the last call, in arrival
+    /// order (GAP-134, DN-31 §6.8). The loop answers each through its `reply`.
+    #[must_use]
+    pub fn take_forwarded(&self) -> Vec<PendingForward> {
+        self.forwarded
+            .lock()
+            .map(|mut queue| std::mem::take(&mut *queue))
+            .unwrap_or_default()
     }
 
     /// Take the decision requests the routes refused since the last call, for the loop to
@@ -1055,7 +1107,13 @@ pub fn router(api: Arc<NodeApi>) -> Router {
         // carries the deadline and the roles it is offered to, and a second door keyed by
         // plan would be a second place the four checks could differ.
         .route(&crate::path(routes::QUEUE), get(queue))
-        .route(&crate::path(routes::QUEUE_DECISION), post(decide_queued));
+        .route(&crate::path(routes::QUEUE_DECISION), post(decide_queued))
+        // GAP-134: what a desktop decided while it was cut off. Not in `RETIRED`: it is
+        // new in `/v3`, and a `/v2` client never had it to call.
+        .route(
+            &crate::path(routes::DECISIONS_FORWARDED),
+            post(forward_decisions),
+        );
     RETIRED
         .iter()
         .fold(served, |router, retired| {
@@ -2281,6 +2339,146 @@ async fn decide_queued(
              request key to learn whether it was recorded",
         ),
     }
+}
+
+/// `POST /v3/decisions/forwarded` (DN-31 §6.8 and §7, GAP-134): what a desktop decided
+/// while it was cut off from this node, put on the node's record once.
+///
+/// **The same shape as the decision route -- authenticate, vet, hand over, wait -- and
+/// the same reason**: the node's record belongs to the loop. The checks here are about the
+/// caller and about whether a record could be a record at all:
+///
+/// 1. a valid, unexpired operator token -- `401`;
+/// 2. `plan.decide` -- `403`: forwarding a decision is putting one on this node's record;
+/// 3. the body decodes, names an origin, and every record is one a queue could have
+///    produced -- queued under `RequiresHumanApproval`, and a rejection with its reason
+///    -- or `400`. A record no queue could have produced is not refused *as a
+///    contradiction*: it is not a decision.
+///
+/// Then the loop takes the batch whole: `202 ForwardAccepted` counting what was new and
+/// what was already held, or `409 ForwardRefused` naming the record that stands, with
+/// nothing applied. A `504` means the loop did not answer in time **and does not mean
+/// nothing was recorded**, exactly as on the decision route: the client sends the same
+/// batch again and learns which, and a batch already on the record answers with everything
+/// `already_held`.
+///
+/// Every refusal here is queued for the loop to audit, as the decision route's are.
+async fn forward_decisions(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+    body: Result<Json<Vec<v3::ForwardedDecision>>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let session = match operator_caller(&api, &headers, &peer, "forwarding decisions") {
+        Ok(session) => session,
+        Err(response) => {
+            api.refuse_decision(RefusedDecision {
+                item: None,
+                operator: "unauthenticated".into(),
+                reason: "forwarding decisions: no valid operator session".into(),
+            });
+            return response;
+        }
+    };
+    let refused_as = session.operator.0.to_string();
+    let refuse = |status: StatusCode, why: String| {
+        api.refuse_decision(RefusedDecision {
+            item: None,
+            operator: refused_as.clone(),
+            reason: format!("forwarding decisions: {why}"),
+        });
+        problem(status, &why)
+    };
+    if !gungnir_security::authz::role_permits(session.role, gungnir_security::actions::DECIDE_PLAN)
+    {
+        return refuse(
+            StatusCode::FORBIDDEN,
+            format!(
+                "role {:?} may not put decisions on this node's record ({})",
+                session.role,
+                gungnir_security::actions::DECIDE_PLAN
+            ),
+        );
+    }
+    let decisions = match body {
+        Ok(Json(decisions)) => decisions,
+        Err(err) => {
+            return refuse(
+                StatusCode::BAD_REQUEST,
+                format!("the forwarded decisions could not be decoded: {err}"),
+            )
+        }
+    };
+    if let Err(why) = vet_forwarded(&decisions) {
+        return refuse(StatusCode::BAD_REQUEST, why);
+    }
+    let (reply, answer) = tokio::sync::oneshot::channel();
+    {
+        let Ok(mut queue) = api.forwarded.lock() else {
+            return problem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "the forwarding queue lock was poisoned",
+            );
+        };
+        queue.push(PendingForward {
+            decisions,
+            operator: session.operator,
+            role: session.role,
+            reply,
+        });
+    }
+    match tokio::time::timeout(DECISION_REPLY_TIMEOUT, answer).await {
+        Ok(Ok(ForwardAnswer::Accepted(accepted))) => {
+            (StatusCode::ACCEPTED, Json(accepted)).into_response()
+        }
+        Ok(Ok(ForwardAnswer::Refused(refused))) => {
+            (StatusCode::CONFLICT, Json(refused)).into_response()
+        }
+        Ok(Err(_)) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the node loop dropped the forwarded decisions without answering",
+        ),
+        Err(_) => problem(
+            StatusCode::GATEWAY_TIMEOUT,
+            "the node loop did not answer within the reply window; send the same batch \
+             again to learn whether it was recorded",
+        ),
+    }
+}
+
+/// Check 3 of [`forward_decisions`]: every element is a record a queue could have
+/// produced.
+///
+/// # Errors
+///
+/// The sentence the caller and the audit entry both get.
+fn vet_forwarded(decisions: &[v3::ForwardedDecision]) -> Result<(), String> {
+    for forwarded in decisions {
+        let record = &forwarded.record;
+        if forwarded.origin.trim().is_empty() {
+            return Err(format!(
+                "decision {} names no origin; a forwarded decision says which machine took \
+                 it (DN-31 §5.2)",
+                record.decision
+            ));
+        }
+        if record.verdict != gungnir_model::events::VerdictSummary::RequiresHumanApproval {
+            return Err(format!(
+                "decision {} was taken on a plan whose verdict was {:?}; only a plan that \
+                 requires a person's approval is ever queued, so this is not a decision",
+                record.decision, record.verdict
+            ));
+        }
+        if let v3::DecisionChoice::Reject { reason } = &record.choice {
+            if reason.trim().is_empty() {
+                return Err(format!(
+                    "decision {} is a rejection with no reason (DN-10 §3)",
+                    record.decision
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn problem(status: StatusCode, message: &str) -> Response {

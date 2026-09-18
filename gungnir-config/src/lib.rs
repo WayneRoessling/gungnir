@@ -2925,6 +2925,22 @@ fn validate_decision_rules(p: &gungnir_model::PolicySettings) -> Result<(), Conf
             }
         }
     }
+    // D-15's delegations on a desktop cut off from its node (DN-31 §7, GAP-134).
+    // **Validated positive where it is stated, and never defaulted.** Silence is not
+    // refused here because silence has a meaning of its own -- no delegation survives a
+    // disconnection at all -- which is the strictest reading and the opposite of
+    // inheriting an interval from this build. A stated value that is zero or negative has
+    // no such reading: it is a number somebody meant, and the only honest answers to it
+    // are "immediately" (which silence already says) and a refusal.
+    if let Some(lapse) = p.delegation.disconnected_lapse_s {
+        if !(lapse.is_finite() && lapse > 0.0) {
+            return Err(ConfigError::Invalid(format!(
+                "policy.delegation.disconnected_lapse_s is {lapse}; it must be finite and \
+                 positive. Leave it out to say that no delegation survives a disconnection \
+                 at all (D-15)"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -6334,6 +6350,44 @@ MFkw
     }
 
     // --- DN-08 policy configuration -------------------------------------------
+
+    /// `policy.delegation.disconnected_lapse_s` (DN-31 §7, GAP-134): stated or silent,
+    /// never defaulted, and a stated value is finite and positive.
+    ///
+    /// Read from the text `deploy/README.md` shows a deployment, so the example there is a
+    /// baseline this build loads rather than one it only resembles.
+    #[test]
+    fn the_delegation_lapse_is_stated_or_silent_and_a_stated_one_is_positive() {
+        let silent = ConfigBaseline::default();
+        assert_eq!(
+            silent.policy.delegation.disconnected_lapse_s, None,
+            "no interval is inherited from this build"
+        );
+        assert!(
+            validate(&silent).is_ok(),
+            "silence has a meaning -- nothing survives the disconnection -- and is not refused"
+        );
+
+        let stated: ConfigBaseline = serde_json::from_str(
+            r#"{
+              "version": 1,
+              "backend": { "kind": "remote", "endpoint": "http://node.local:7410" },
+              "policy": { "delegation": { "disconnected_lapse_s": 300 } }
+            }"#,
+        )
+        .expect("the deploy README's example reads");
+        assert_eq!(stated.policy.delegation.disconnected_lapse_s, Some(300.0));
+        assert!(validate(&stated).is_ok());
+
+        for bad in [0.0, -5.0, f64::INFINITY, f64::NAN] {
+            let mut b = stated.clone();
+            b.policy.delegation.disconnected_lapse_s = Some(bad);
+            assert!(
+                matches!(validate(&b), Err(ConfigError::Invalid(ref m)) if m.contains("disconnected_lapse_s")),
+                "{bad} was accepted as an interval"
+            );
+        }
+    }
 
     #[test]
     fn an_absent_policy_section_resolves_to_the_strictest_reading() {

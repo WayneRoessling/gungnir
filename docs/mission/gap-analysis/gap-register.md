@@ -146,15 +146,18 @@ history, and an entry is never edited once it has merged.
 | GAP-131 | The decision path lives only in gungnir-app | Technical | CAP-4.2, CAP-3.6 | 3 | 7 | L | 21 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-132 | A node runs no approval queue | Technical | CAP-4.2, CAP-4.3, CAP-3.7, CAP-6.2 | 4 | 9 | L | 36 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-133 | A linked desktop decides the node's plans itself | Technical | CAP-5.9, CAP-4.3 | 4 | 10 | M | 40 | I3 | UI engineer | Closed |
-| GAP-134 | A desktop's offline decisions never reach its node | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
+| GAP-134 | A desktop's offline decisions never reach its node | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Closed |
 | GAP-135 | An effector's report moves an engagement without putting the move on the record | Technical | CAP-4.6 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
 | GAP-136 | A rehearsal read its picture before the pipeline had reported the run | Technical | CAP-5.2 | 3 | 1 | S | 3 | I3 | Services engineer | Closed |
 | GAP-137 | A handoff the node issues reaches no exchange partner | Technical | CAP-5.7 | 2 | 1 | S | 2 | I3 | Services engineer | Open |
 | GAP-138 | An unreachable decision type still describes the interface | Technical | CAP-5.7 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
 | GAP-139 | An If-Sr diagram no longer renders under the layout its generator pins | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
 | GAP-140 | A node's deadline is drawn against the desktop's own clock | Technical | CAP-5.9, CAP-3.7 | 2 | 10 | S | 20 | I3 | UI engineer | Open |
+| GAP-141 | A desktop has no identity of its own | Technical | CAP-6.1, CAP-5.4 | 2 | 10 | M | 20 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-142 | A desktop that restarts during an outage forgets it | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
+| GAP-143 | A sign-in during an outage ends it without a person switching back | Technical | CAP-5.4, CAP-6.1 | 3 | 10 | S | 30 | I3 | Services engineer | Open |
 
-Counts: 140 gaps, 3 mission, 137 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 143 gaps, 3 mission, 140 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2002,11 +2005,12 @@ Counts: 140 gaps, 3 mission, 137 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.4 Disconnected and reconcile.
 - History:
   - 2026-09-17, Open: Filed with DN-31 (D-55, D-58).
+  - 2026-09-17, Closed: Built. A cut-off desktop lapses D-15's delegations once `policy.delegation.disconnected_lapse_s` has run -- no default; silence lapses them at once -- re-offering queued items and recording `DelegationsLapsed`. On reconnect the merge compares engagements by track and publishes `BothActed` first; the outage then goes through `POST /v3/decisions/forwarded` in one batch, each decision with its settlement, and the node takes it whole or not at all, recording each decision once. Forwarding follows the merge, reversing DN-31 §6.8's order, which the owner took as D-66 and DN-31 amendment 2. Row 8 is `gungnir-app/tests/cut_off_and_reconnected.rs`. Filed: GAP-141, GAP-142, GAP-143. See `../../record/2026-09-17/an-outage-reaches-the-node-once.md`.
 - Evidence: `gungnir-app/src/failover.rs`; `gungnir-remote` (an outbox for detections only); `docs/mission/measures.md` (MOE-11); DN-31 §6.7 and §6.8.
 - Severity: 3. Reach: 1 threads. Effort: M. Priority: 3.
 - Impact: A desktop cut off from its node decides from its own queue and keeps those decisions in its own journal: none is forwarded, D-15's delegations never lapse, MOE-11 cannot be computed, and two engagements of one track on the two sides of an outage go unnoticed.
 - Closing action: Forward offline decisions on reconnect through `POST /v3/decisions/forwarded`, journaled once with their origin; lapse D-15's delegations after `policy.delegation.disconnected_lapse_s`; compare engagements by track and publish `BothActed` for a person (D-58); forward the reconciliation's verdicts; and write DN-31 §9 row 8.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`).
 - Depends on: D-58, GAP-133.
 
@@ -2044,13 +2048,14 @@ Counts: 140 gaps, 3 mission, 137 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-09-17, Open: Filed by GAP-132 rather than half-wired there: while a linked desktop still issues handoffs for a node's plans, two writers to one register would each overwrite the other, and which one a partner saw would depend on tick order.
   - 2026-09-17, Open: GAP-133 removed the writer this entry was waiting on, and found another. `ApprovalDesk::issue_for` -- the only caller of `republish_handoffs` -- is reached from `decide_for` alone, so a linked desktop, which queues no node plan, never writes the register. **The fall-back path is what stands in the way now.** `fall_back` leaves `state.link` in place, so a cut-off desktop issues handoffs and queues its whole set on the link's exchange outbox; `flush_exchange` delivers it on reconnect and `publish_exchange` replaces what the node holds. Wiring the node in now would make its set the one that disappears after any outage. A producer per writer is a `gungnir-api` write path and a DN-18 amendment. See `../../record/2026-09-17/a-linked-desktop-shows-the-node-s-queue.md`.
+  - 2026-09-17, Open: GAP-134 did not remove that writer and could not: a cut-off desktop must still issue handoffs (DN-31 §6.7), and row 8 runs the path that queues its whole set on the link for `flush_exchange` to replace the node's on reconnect. Wiring the node's own set needs a register with a producer per writer, and nothing identifies a desktop as one: every desktop's certificate names `gungnir-app` (GAP-141), and keying on the operator would collide for one person on two consoles and duplicate for an operator change on one. Waits on GAP-141 and the DN-18 amendment. See `../../record/2026-09-17/an-outage-reaches-the-node-once.md`.
 - Evidence: `gungnir-node/src/approval.rs` (`republish_handoffs`, a documented no-op); `gungnir-api/src/transport.rs` (`publish_exchange` replaces a set rather than adding to it); DN-18 §5 amendment 2; DN-31 §6.5.
 - Severity: 2. Reach: 1 threads. Effort: S. Priority: 2.
 - Impact: The node issues handoffs of its own since GAP-132, and its `ApprovalHost::republish_handoffs` is a no-op, so a partner reading `GET /v3/exchange/handoffs` sees only what a desktop published. A coalition partner is told about an engagement a desktop decided and not about one the node decided, with nothing saying the list is partial -- which is the silence DN-17 §5 rule 3 exists to prevent.
 - Closing action: Decide how the node's own handoff set and a desktop's published set share one register -- a second writer would silently overwrite the first -- and wire the node's set in once GAP-133 has stopped a linked desktop issuing handoffs for a node plan. Then assert a partner with an agreement receives a handoff the node issued.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found building GAP-132 (`../../record/2026-09-17/the-node-runs-the-approval-queue.md`).
-- Depends on: GAP-133.
+- Depends on: GAP-133, GAP-141.
 
 **GAP-138 An unreachable decision type still describes the interface**
 
@@ -2091,4 +2096,45 @@ Counts: 140 gaps, 3 mission, 137 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: UI engineer. Status: Open.
 - Reference: Found building GAP-133 (`../../record/2026-09-17/a-linked-desktop-shows-the-node-s-queue.md`).
 - Depends on: GAP-133.
+
+**GAP-141 A desktop has no identity of its own**
+
+- Type: Technical.
+- Capability: CAP-6.1 Authenticate; CAP-5.4 Disconnected and reconcile.
+- History:
+  - 2026-09-17, Open: Found filling a forwarded decision's `origin`, which DN-31 §5.2 calls the desktop's machine identity: the build has none distinct from the product's name. The name is now one constant, so `origin` follows the certificate when this is built, and GAP-137 names this entry as what it waits on.
+- Evidence: `gungnir-app/src/session.rs` (`DESKTOP_COMMON_NAME`, `link_tls_for`); `gungnir-remote/src/identity.rs` (`issue_for_client`, `issue_desktop_outbound_identity`), the human-owned TLS identity path; `gungnir_model::events::CommandEvent::Decided::origin`.
+- Severity: 2. Reach: 10 threads. Effort: M. Priority: 20.
+- Impact: Every desktop's link identity carries the common name `gungnir-app`, so nothing a node holds tells two desktops apart as machines. A decision forwarded after an outage says, in its `origin`, that it was taken on a desktop rather than on the node, and cannot say which desktop; and a register that has to keep one producer's set apart from another's -- the exchange register GAP-137 is waiting on -- has nothing to key a desktop on.
+- Closing action: Give each desktop a stable identity of its own -- a name the deployment states, or one derived from its persisted key -- carried in its certificate and in a forwarded decision's `origin`, and have the node check that a forwarded batch's origin is the machine the handshake verified, where there was one.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: Found building GAP-134 (`../../record/2026-09-17/an-outage-reaches-the-node-once.md`).
+
+**GAP-142 A desktop that restarts during an outage forgets it**
+
+- Type: Technical.
+- Capability: CAP-5.4 Disconnected and reconcile.
+- History:
+  - 2026-09-17, Open: Found settling what a desktop that dies mid-reconnect can leave behind. The node takes an outage whole or not at all, so a death cannot leave it holding half of one; a restart can still leave it holding none, because nothing on the desktop remembers there was an outage to forward.
+- Evidence: `gungnir-app/src/failover.rs` (`Fallback` held in `AppState`; `tick` falls back only on `last_heard_age`); `gungnir-remote/src/link.rs` (`last_heard` is `None` until a snapshot lands).
+- Severity: 3. Reach: 1 threads. Effort: M. Priority: 3.
+- Impact: The fallback -- the outage's bounds, its reconciliation and its forwarding -- lives in memory. A desktop that restarts while cut off, or after its node answers and before a person switches back, starts with no outage: what it decided offline stays in its own journal, never reaches the node's record, is never compared with the node's engagements by track, and MOE-11 falls below 1.0 with nothing saying so. A desktop that starts with its node unreachable never falls back at all, because a link that has never been heard is not judged silent.
+- Closing action: Recover an unfinished outage from the journal at start-up -- a `LinkEvent::FellBack` with no `SwitchedBack` after it -- and resume its reconciliation and forwarding, which are keyed on identifiers and safe to repeat; and decide what a desktop that has never reached its node does, rather than leaving it neither linked nor fallen back.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-134 (`../../record/2026-09-17/an-outage-reaches-the-node-once.md`).
+- Depends on: GAP-134.
+
+**GAP-143 A sign-in during an outage ends it without a person switching back**
+
+- Type: Technical.
+- Capability: CAP-5.4 Disconnected and reconcile; CAP-6.1 Authenticate.
+- History:
+  - 2026-09-17, Open: Found writing DN-31 §9 row 8, which needed a decision with no recorded role on the cut-off desktop and could not get one by signing out and back in. Not fixed in GAP-134: the fix moves a link's credential under a running task, which is a change to how a desktop signs in rather than to how it forwards.
+- Evidence: `gungnir-app/src/session.rs` (`connect_if_remote` sets `state.fallback = None`); `gungnir-app/src/failover.rs` (`switch_back`, the path D-15 allows back); `gungnir-app/tests/cut_off_and_reconnected.rs`, whose cut-off desktop decides with nobody signed in rather than sign in again.
+- Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
+- Impact: A sign-in runs `connect_if_remote`, which builds a new link, puts the remote services back and clears the fallback. Signing in while a desktop is cut off -- or after its node answers and before anybody switches back, which a session that expired mid-outage invites -- ends the outage without the person D-15 requires: PN-18's reconciliation is discarded, and the decisions taken offline are never compared with the node's by track or forwarded to it, with nothing saying so.
+- Closing action: Keep an outage across a sign-in: attribute the new session, give the link the new operator's credential without replacing the embedded services or clearing the fallback, and leave the switch back to PN-18. Then show that a sign-in mid-outage leaves the reconciliation, the comparison and the forwarding as they were.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-134 (`../../record/2026-09-17/an-outage-reaches-the-node-once.md`).
+- Depends on: GAP-134.
 

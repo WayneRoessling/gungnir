@@ -87,7 +87,11 @@ fn render_reconciliation(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAct
                     .color(state.palette.muted_text_color()),
             );
         }
-        ReconciliationView::OutageOngoing { endpoint, since } => {
+        ReconciliationView::OutageOngoing {
+            endpoint,
+            since,
+            delegations,
+        } => {
             ui.label(
                 egui::RichText::new(format!(
                     "Running embedded since T+{:.0} s: node {endpoint} is silent. Decisions \
@@ -96,6 +100,7 @@ fn render_reconciliation(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAct
                 ))
                 .color(state.palette.alert_color),
             );
+            render_delegations(ui, &state.palette, delegations);
         }
         ReconciliationView::Due {
             endpoint,
@@ -104,20 +109,123 @@ fn render_reconciliation(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAct
             local_decisions,
             reconciliation,
             can_switch_back,
+            forwarding,
+            delegations,
         } => {
             return render_reconciliation_due(
                 ui,
                 &state.palette,
-                &endpoint,
-                (from, to),
-                local_decisions,
-                reconciliation.as_ref(),
-                can_switch_back,
-                crate::failover::outbox_view(state),
+                &Due {
+                    endpoint: &endpoint,
+                    window: (from, to),
+                    local_decisions,
+                    reconciliation: reconciliation.as_ref(),
+                    can_switch_back,
+                    forwarding: &forwarding,
+                    delegations,
+                    outbox: crate::failover::outbox_view(state),
+                },
             );
         }
     }
     None
+}
+
+/// Everything PN-18 draws once the node answers again (GAP-050, GAP-134).
+///
+/// A struct since GAP-134 took it to ten pieces: the lint allowance that stood here said a
+/// wrapper for eight would be one nobody else needed, and ten read better named than
+/// counted.
+struct Due<'a> {
+    endpoint: &'a str,
+    window: (gungnir_model::MissionTime, gungnir_model::MissionTime),
+    local_decisions: usize,
+    reconciliation: Option<&'a Result<crate::failover::Reconciliation, String>>,
+    can_switch_back: bool,
+    forwarding: &'a crate::failover::Forwarding,
+    delegations: crate::failover::DelegationState,
+    outbox: Option<crate::failover::OutboxView>,
+}
+
+/// Where D-15's delegations stand, in PN-18's words (GAP-134).
+fn render_delegations(
+    ui: &mut egui::Ui,
+    palette: &gungnir_ui::theme::Palette,
+    delegations: crate::failover::DelegationState,
+) {
+    use crate::failover::DelegationState;
+    let (text, color) = match delegations {
+        DelegationState::NoneConfigured => (
+            "This deployment delegates nothing, so no delegation lapses (D-15).".to_string(),
+            palette.muted_text_color(),
+        ),
+        DelegationState::InForceUntil(at) => (
+            format!(
+                "Delegations in force when the node went silent stay in force until T+{:.0} s, \
+                 then lapse; none is made while cut off (D-15).",
+                at.0
+            ),
+            palette.warning_color,
+        ),
+        DelegationState::Lapsed(at) => (
+            format!(
+                "Delegations lapsed at T+{:.0} s (D-15): a delegated item is offered to a role \
+                 that holds it on its own account, and a plan only a delegation could take is \
+                 not queued.",
+                at.0
+            ),
+            palette.alert_color,
+        ),
+    };
+    ui.label(egui::RichText::new(text).color(color));
+}
+
+/// Where the outage's decisions stand on their way to the node, in PN-18's words
+/// (GAP-134, DN-31 §6.8).
+fn render_forwarding(
+    ui: &mut egui::Ui,
+    palette: &gungnir_ui::theme::Palette,
+    forwarding: &crate::failover::Forwarding,
+) {
+    use crate::failover::Forwarding;
+    let (text, color) = match forwarding {
+        Forwarding::Waiting => (
+            "Forwarding to the node: waits until every conflict below is settled, so each \
+             decision reaches the node with what stands."
+                .to_string(),
+            palette.muted_text_color(),
+        ),
+        Forwarding::NothingDecided => (
+            "Forwarding to the node: nothing was decided here while cut off.".to_string(),
+            palette.muted_text_color(),
+        ),
+        Forwarding::Sent { decisions } => (
+            format!(
+                "Forwarding to the node: {decisions} decision(s) sent, not yet answered; the \
+                 same batch goes again until the node says it holds them."
+            ),
+            palette.warning_color,
+        ),
+        Forwarding::Accepted {
+            recorded,
+            already_held,
+            settled,
+        } => (
+            format!(
+                "Forwarded: the node holds this outage -- {recorded} decision(s) recorded, \
+                 {already_held} it already held, {settled} settlement(s) on its record."
+            ),
+            palette.healthy_color(),
+        ),
+        Forwarding::Refused(why) => (
+            format!(
+                "The node refused this outage and applied none of it: {why}. The switch back \
+                 waits for a person to see why."
+            ),
+            palette.alert_color,
+        ),
+    };
+    ui.label(egui::RichText::new(text).color(color));
 }
 
 /// What the desktop queued for the node during the outage (§8.4).
@@ -131,32 +239,30 @@ fn render_outbox(ui: &mut egui::Ui, outbox: Option<crate::failover::OutboxView>)
 }
 
 /// The outage has ended: the merge, its conflicts, and the switch (GAP-050, D-15).
-// GAP-095 added `palette`, the eighth genuinely distinct piece this draws from; each
-// of the eight is used once and grouping them into a struct purely to satisfy the
-// lint would be a wrapper nobody else needs (agentic-coding-standards.md: no
-// speculative abstractions).
-#[allow(clippy::too_many_arguments)]
+///
+/// **Both-acted incidents first, above everything else on the panel** (DN-31 §8, D-58): two
+/// engagements of one track are the one thing here no rule and no person can settle, and a
+/// person has to find them without reading past the merge's counts to get there.
 fn render_reconciliation_due(
     ui: &mut egui::Ui,
     palette: &gungnir_ui::theme::Palette,
-    endpoint: &str,
-    (from, to): (gungnir_model::MissionTime, gungnir_model::MissionTime),
-    local_decisions: usize,
-    reconciliation: Option<&Result<crate::failover::Reconciliation, String>>,
-    can_switch_back: bool,
-    outbox: Option<crate::failover::OutboxView>,
+    due: &Due<'_>,
 ) -> Option<PanelAction> {
     let mut resolution = None;
-    render_outbox(ui, outbox);
+    if let Some(Ok(r)) = due.reconciliation {
+        render_both_acted(ui, palette, &r.both_acted);
+    }
+    render_outbox(ui, due.outbox);
     ui.label(
         egui::RichText::new(format!(
-            "Node {endpoint} answers again. Outage T+{:.0} s to T+{:.0} s; {local_decisions} \
-                 decision(s) recorded here meanwhile.",
-            from.0, to.0
+            "Node {} answers again. Outage T+{:.0} s to T+{:.0} s; {} decision(s) recorded \
+             here meanwhile.",
+            due.endpoint, due.window.0 .0, due.window.1 .0, due.local_decisions
         ))
         .color(palette.warning_color),
     );
-    match reconciliation {
+    render_delegations(ui, palette, due.delegations);
+    match due.reconciliation {
         None => {
             ui.label("Fetching the node's journal for the outage.");
         }
@@ -168,6 +274,8 @@ fn render_reconciliation_due(
             );
         }
     }
+    render_forwarding(ui, palette, due.forwarding);
+    let can_switch_back = due.can_switch_back;
     ui.label(
         egui::RichText::new(
             "The desktop stays embedded until somebody has seen this and asks for the \
@@ -185,6 +293,37 @@ fn render_reconciliation_due(
         return Some(PanelAction::SwitchBack);
     }
     resolution
+}
+
+/// Two engagements of one track across the outage (D-58, GAP-134), each in the alert's own
+/// words and with **no button**: nothing here is resolved by choosing a record, and a keep
+/// button would say otherwise.
+fn render_both_acted(
+    ui: &mut egui::Ui,
+    palette: &gungnir_ui::theme::Palette,
+    incidents: &[gungnir_resilience::BothActed],
+) {
+    if incidents.is_empty() {
+        return;
+    }
+    ui.label(
+        egui::RichText::new(format!(
+            "{} track(s) engaged on both sides of the outage, whatever the plans and whatever \
+             the rule decided (D-58):",
+            incidents.len()
+        ))
+        .strong()
+        .color(palette.alert_color),
+    );
+    for incident in incidents {
+        ui.label(
+            egui::RichText::new(format!(
+                "  {}",
+                crate::failover::both_acted_sentence(incident)
+            ))
+            .color(palette.alert_color),
+        );
+    }
 }
 
 /// The merge PN-18 reports and its conflicts, by who resolved them (GAP-050; the GAP-067

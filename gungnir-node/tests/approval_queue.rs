@@ -16,8 +16,9 @@
 //! The transport is the real one: `gungnir_api::transport::bind` and `serve_on` over
 //! loopback TCP, with real clients holding real session tokens the node minted. The loop
 //! is [`Node::spawn`]'s ticker, which calls the **same** `gungnir_node::approval`
-//! functions `main.rs` calls -- `propose`, `sweep`, `answer_decisions`,
-//! `audit_refused_decisions` -- in the same order, against one `NodeApproval`. That is why
+//! functions `main.rs` calls -- `propose`, `sweep`, `answer_decisions`, `answer_forwarded`
+//! (since GAP-134), `audit_refused_decisions` -- in the same order, against one
+//! `NodeApproval`. That is why
 //! those functions are a library module (`gungnir-node/src/lib.rs`): a test that drove a
 //! copy of the loop would prove the copy.
 //!
@@ -307,10 +308,11 @@ impl Node {
                             endpoint_client: None,
                         };
                         // The order `main.rs` runs them in: the sweep on the node's clock,
-                        // then the decisions the routes accepted, then the audit entries
-                        // the refusals owe.
+                        // then the decisions the routes accepted, then the outages desktops
+                        // forwarded (GAP-134), then the audit entries the refusals owe.
                         approval::sweep(&mut state.approval, &frame);
                         let _ = approval::answer_decisions(&mut state.approval, &frame, &api);
+                        approval::answer_forwarded(&mut state.approval, &frame, &api);
                         approval::audit_refused_decisions(&mut state.approval, &frame, &api);
                         let queue = state.approval.queue_view(&config, &resources, &tracks);
                         state.tracks = tracks;

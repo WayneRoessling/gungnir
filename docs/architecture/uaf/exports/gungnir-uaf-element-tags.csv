@@ -1148,6 +1148,10 @@ IE-defended-asset,uafId,IE-defended-asset
 IE-defended-asset,uafKind,InformationElement
 IE-defended-asset,registry.code,gungnir_model::DefendedAsset
 IE-defended-asset,registry.domain,"Assets, exchange & releasability"
+IE-delegation-settings,uafId,IE-delegation-settings
+IE-delegation-settings,uafKind,InformationElement
+IE-delegation-settings,registry.code,gungnir_model::DelegationSettings
+IE-delegation-settings,registry.domain,"Policy, authority & settings"
 IE-delivery-state,uafId,IE-delivery-state
 IE-delivery-state,uafKind,InformationElement
 IE-delivery-state,registry.code,gungnir_model::DeliveryState
@@ -1164,6 +1168,10 @@ IE-engagement-event,uafId,IE-engagement-event
 IE-engagement-event,uafKind,InformationElement
 IE-engagement-event,registry.code,gungnir_model::EngagementEvent
 IE-engagement-event,registry.domain,Events & the record
+IE-engagement-side,uafId,IE-engagement-side
+IE-engagement-side,uafKind,InformationElement
+IE-engagement-side,registry.code,gungnir_model::EngagementSide
+IE-engagement-side,registry.domain,Events & the record
 IE-enu-point,uafId,IE-enu-point
 IE-enu-point,uafKind,InformationElement
 IE-enu-point,registry.code,gungnir_model::EnuPoint

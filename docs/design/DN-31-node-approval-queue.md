@@ -1,7 +1,8 @@
 # DN-31 A node approval queue
 
-Closes GAP-129 through its five build gaps, GAP-130 to GAP-134. Status: **design only; no
-code exists**, written 2026-09-17 on the owner's decisions D-55 to D-59. **Human-owned**:
+Closes GAP-129 through its five build gaps, GAP-130 to GAP-134. Status: **built**, by those
+five gaps on 2026-09-17; written the same day on the owner's decisions D-55 to D-59, and
+amended twice as the build found things (§12, §13). **Human-owned**:
 this note moves the approval workflow (`gungnir-command`), authority enforcement
 (`gungnir-policy`) and a `gungnir-api` write path onto the node, and every row in §9 is a
 pass criterion. What the owner has signed of this note is in
@@ -159,6 +160,9 @@ a u64 number is a valid u128; the replay and reporting paths are tested against 
 
 ### 5.2 The queue on the wire
 
+> **Amended 2026-09-17 (amendment 2, §13).** `ForwardedDecision` gains a third, defaulted
+> field, `settled`, carrying the settlement of a decision whose plan was in conflict.
+
 ```rust
 // gungnir-api v3.
 
@@ -218,6 +222,9 @@ pub struct ForwardedDecision {
 > **Amended 2026-09-17 (amendment 1, §12).** `CommandEvent::ApprovalRequested` is removed
 > in GAP-130, which creates schema version 4, rather than with the queue's events in
 > GAP-132.
+
+> **Amended 2026-09-17 (amendment 2, §13).** `LinkEvent::DelegationsLapsed` names the
+> items a lapse re-offered, once, at the tick the lapse falls due.
 
 - `CommandEvent::Queued { item, plan, layer, offered_to, expires_at, escalate_at }`: a new,
   additive variant, so a desktop following the stream builds the queue without polling.
@@ -286,6 +293,11 @@ role may (D-55). Delegations in force at the moment of disconnection stay in for
 `policy.delegation.disconnected_lapse_s`, then lapse, and no new delegation is made while
 cut off (D-15). Items that were in the node's queue stay there: other desktops may still
 decide them.
+
+> **Amended 2026-09-17 (amendment 2, §13).** The desktop settles before it forwards: the
+> merge and the comparison by track come first, then the whole outage goes as one batch
+> carrying each settlement, then a person switches back (D-66). The order below is the
+> one the note was written with.
 
 **6.8 On reconnect** the desktop forwards every decision it took while cut off, in order,
 through `POST /v3/decisions/forwarded`. The node journals each as `Decided` with its
@@ -413,6 +425,58 @@ fields carry it whole; a rehearsal seed's plan is shown as the seed numbers it.
   §7's table lists, authenticates its caller as its `/v3` successor does and then answers
   `410 Gone` naming that successor. Until GAP-132 builds §7's queue routes, the decision
   route's successor is `/v3/plans/{plan_id}/decision`, which still refuses with `501`.
+
+## 13. Amendment 2 (2026-09-17, D-66)
+
+Raised by GAP-134's build. Nothing here changes what the node must hold once an outage is
+over -- every offline decision exactly once, with what stands beside it. What changed is the
+order a reconnecting desktop does things in to get there, and the note gains two additions
+and one finding.
+
+**The order on reconnect.** §6.8 had the desktop forward its offline decisions first and
+reconcile over the node's history afterwards. Built that way, two things go wrong:
+
+- A decision forwarded before its conflict is settled puts two contradictory decisions on
+  the node's record with nothing beside them saying which one stands (MT-10 step 5), and a
+  desktop that died before the settlement followed would leave the record that way.
+- The merge reads the node's history. Once the desktop has forwarded, that history holds
+  the desktop's own decisions, and the merge would count them a second time as the node's.
+
+D-66 reverses it, into three steps:
+
+1. **The merge**, when the node's history for the outage arrives: the plan conflicts and,
+   in the same pass over the same two journals, the engagements by track (D-58). `BothActed`
+   is published and alerted for a person before the rule settles anything, because choosing
+   which record stands does not undo an effect in the world. The rule then settles every
+   conflict it can rank, and a person the rest.
+2. **The forwarding**, as soon as nothing waits for a person: the whole outage as one batch,
+   in the order the decisions were taken, each carrying its settlement if its plan was in
+   conflict. The node checks every record before it writes any, so it holds all of an outage
+   or none of it, and a batch sent twice records nothing the second time.
+3. **The switch back**, still a person's act (D-15), refused while a person's conflict is
+   open or after the node has refused the batch.
+
+**Two additions.**
+
+- `ForwardedDecision` (§5.2) gains a third field, `settled`, defaulted, carrying the
+  settlement of a decision whose plan was in conflict. §6.8 asks for the rule's verdicts and
+  the person's resolutions to be forwarded, and §7 gives the one route; this is how they
+  travel on it.
+- `LinkEvent::DelegationsLapsed` (§5.3) names the items a lapse re-offered. §6.7's lapse is
+  applied once, at the tick it falls due, and the record says so once.
+
+**The finding.** As built, pairing decisions by plan cannot find a real conflict across an
+outage. Since GAP-130 a plan's identifier is minted where the plan is proposed, and since
+GAP-133 a linked desktop queues no node plan, so a cut-off desktop's plans and the node's
+never share an identifier. D-53's arbitration of plan conflicts is reached across an outage
+only through journals written before GAP-130, whose counters could collide. **D-58's
+comparison by track is what catches two actions on one track**, which is why it raises
+`BothActed` whatever the arbitration decides. §9 row 8's harness hands the cut-off desktop
+two of the node's plans so that the rule and a person can still be shown to settle a
+conflict, and says why in its own documentation.
+
+**The header.** It said "design only; no code exists" after GAP-130 to GAP-134 had built
+the note; it now says the note is built.
 
 ## Traceability
 

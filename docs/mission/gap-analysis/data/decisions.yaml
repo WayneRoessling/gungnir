@@ -1601,3 +1601,25 @@
     with it. Raised rather than folded into the change that moved it, on the precedent the
     same list records for `gungnir-remote`'s identity path (GAP-060, answered 2026-09-06),
     and answered the same way.
+
+- id: D-66
+  decision: The order a reconnecting desktop settles, forwards and switches back
+  question: >-
+    DN-31 §6.8 has a desktop forward the decisions it took while cut off and then reconcile
+    over the node's history. GAP-134's build found that order puts contradictory decisions
+    on the node's record with nothing beside them saying which stands, and makes the merge
+    read the desktop's own forwarded decisions back as the node's. Keep §6.8's order, or
+    settle before forwarding?
+  raised_in: "GAP-134"
+  decider: Owner
+  unblocks: GAP-134
+  resolved: 2026-09-17
+  outcome: >-
+    **Settle first.** The merge comes first -- the plan conflicts and, in the same pass, the
+    engagements by track, with `BothActed` published before the rule settles anything
+    (D-58) -- then the whole outage is forwarded as one batch carrying each settlement, which
+    the node applies whole or not at all, then a person switches back (D-15). Recorded as
+    DN-31 amendment 2 (§13), with `ForwardedDecision`'s `settled` field,
+    `LinkEvent::DelegationsLapsed`, and the build's finding that plan conflicts cannot arise
+    across an outage as built, so D-58's comparison by track is what catches two actions on
+    one track. See `../../record/2026-09-17/an-outage-reaches-the-node-once.md`.
