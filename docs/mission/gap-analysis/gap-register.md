@@ -156,8 +156,9 @@ history, and an entry is never edited once it has merged.
 | GAP-141 | A desktop has no identity of its own | Technical | CAP-6.1, CAP-5.4 | 2 | 10 | M | 20 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-142 | A desktop that restarts during an outage forgets it | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
 | GAP-143 | A sign-in during an outage ends it without a person switching back | Technical | CAP-5.4, CAP-6.1 | 3 | 10 | S | 30 | I3 | Services engineer | Open |
+| GAP-144 | The release passes only by accepting two quick-xml advisories | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | UI engineer | Closed |
 
-Counts: 143 gaps, 3 mission, 140 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 144 gaps, 3 mission, 141 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2139,4 +2140,18 @@ Counts: 143 gaps, 3 mission, 140 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found building GAP-134 (`../../record/2026-09-17/an-outage-reaches-the-node-once.md`).
 - Depends on: GAP-134.
+
+**GAP-144 The release passes only by accepting two quick-xml advisories**
+
+- Type: Technical.
+- Capability: CAP-6.5 Supply chain.
+- History:
+  - 2026-09-17, Open: Filed with its fix. On `main` the release's advisory gate passed only because `deny.toml` accepted RUSTSEC-2026-0194 and -0195 on 2026-09-07 and #142 handed that acceptance to `cargo audit`; release run 35296523137 had failed on them. Offered keeping the acceptance, the upgrade, or turning off eframe's `accesskit` on Linux, the owner chose the upgrade.
+  - 2026-09-17, Closed: Closed by moving eframe and egui to 0.34, three-d to 0.19 and egui_tiles to 0.15. The only quick-xml left is 0.41.0, under `wayland-scanner` at build time, and `Cargo.lock` matched against the RustSec database finds no vulnerability, so `cargo audit` needs no `--ignore`. The two acceptances, and ttf-parser's, now match nothing; they stay until the owner removes them. `cargo deny` and `cargo audit` were not run where this was done. See `../../record/2026-09-17/egui-0-34-and-three-d-0-19.md`.
+- Evidence: `deny.toml` `[advisories] ignore` (RUSTSEC-2026-0194 and -0195, accepted 2026-09-07); release run 35296523137, where `cargo audit` failed on both; `cargo tree -i quick-xml --target all -e normal,build` at `1af6543`: 0.30.0 through `accesskit_unix`, `atspi`, `zbus-lockstep` and `zbus_xml` 4.0.0, which pins it.
+- Severity: 3. Reach: 1 threads. Effort: M. Priority: 3.
+- Impact: On `main` the release gate held only because `deny.toml` accepts RUSTSEC-2026-0194 and -0195, denial-of-service advisories in quick-xml 0.30.0, and since #142 `cargo audit` honours that acceptance too; without it both scanners fail. The crate came in only through eframe 0.29's Linux accessibility bridge, and an acceptance by advisory id would also cover a vulnerable quick-xml that reached a shipped build by some other path.
+- Closing action: Move eframe and egui to 0.34, three-d to 0.19 and egui_tiles to 0.15, the newest set that keeps one `glow` for the shared OpenGL context, with eframe's `accesskit` kept and no behaviour or test assertion changed.
+- Target: I2. Owner: UI engineer. Status: Closed.
+- Reference: `../../record/2026-09-17/egui-0-34-and-three-d-0-19.md`; the first release runs in `../../record/2026-09-17/release-workflow-first-runs.md`.
 
