@@ -145,15 +145,16 @@ history, and an entry is never edited once it has merged.
 | GAP-130 | Decision, plan and queue-item identifiers collide across machines and restarts | Technical | CAP-7.2, CAP-4.2 | 4 | 6 | M | 24 | I3 | Services engineer | Closed |
 | GAP-131 | The decision path lives only in gungnir-app | Technical | CAP-4.2, CAP-3.6 | 3 | 7 | L | 21 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-132 | A node runs no approval queue | Technical | CAP-4.2, CAP-4.3, CAP-3.7, CAP-6.2 | 4 | 9 | L | 36 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-133 | A linked desktop decides the node's plans itself | Technical | CAP-5.9, CAP-4.3 | 4 | 10 | M | 40 | I3 | UI engineer | Open |
+| GAP-133 | A linked desktop decides the node's plans itself | Technical | CAP-5.9, CAP-4.3 | 4 | 10 | M | 40 | I3 | UI engineer | Closed |
 | GAP-134 | A desktop's offline decisions never reach its node | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
 | GAP-135 | An effector's report moves an engagement without putting the move on the record | Technical | CAP-4.6 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
 | GAP-136 | A rehearsal read its picture before the pipeline had reported the run | Technical | CAP-5.2 | 3 | 1 | S | 3 | I3 | Services engineer | Closed |
 | GAP-137 | A handoff the node issues reaches no exchange partner | Technical | CAP-5.7 | 2 | 1 | S | 2 | I3 | Services engineer | Open |
 | GAP-138 | An unreachable decision type still describes the interface | Technical | CAP-5.7 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
 | GAP-139 | An If-Sr diagram no longer renders under the layout its generator pins | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
+| GAP-140 | A node's deadline is drawn against the desktop's own clock | Technical | CAP-5.9, CAP-3.7 | 2 | 10 | S | 20 | I3 | UI engineer | Open |
 
-Counts: 139 gaps, 3 mission, 136 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 140 gaps, 3 mission, 137 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1986,11 +1987,12 @@ Counts: 139 gaps, 3 mission, 136 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.9 Role workspaces and workflow; CAP-4.3 Never execute without a decision.
 - History:
   - 2026-09-17, Open: Filed with DN-31 (D-55).
+  - 2026-09-17, Closed: Built. The two paths part at one place, the tick's submission step: while the node holds the queue a desktop submits nothing, and because an engagement opens only from a `DecisionRecord` (C-01), one queue gives one issuer with no second rule. `gungnir-remote` gains the projection -- the picture from `GET /v3/queue`, taken after the subscribe frame, maintained by the four command events `apply` had been dropping -- and the decision client, which retries a `504` under the same request key. PN-06 draws the node's queue, PN-07 decides through the route, PN-01 and PN-17 say whose queue is in force. Rows 7 and 9 are written; MOP-07 measured 3.4 to 5.1 ms against 500 ms. The findings are in `../../record/2026-09-17/a-linked-desktop-shows-the-node-s-queue.md`.
 - Evidence: `gungnir-app/src/update.rs` (a node plan submitted to the desktop's own queue); `gungnir-remote` (`RemoteInterceptService::plan`); DN-31 §6.5 and §6.6.
 - Severity: 4. Reach: 10 threads. Effort: M. Priority: 40.
 - Impact: While linked, a desktop re-proposes, queues, decides, engages and hands off the node's plans on its own, so its operator's decision is invisible to every other desktop and the node's queue has no screen.
 - Closing action: Project the node's queue into PN-06, decide through PN-07 over the `/v3` route, show who decided on a conflict, and stop the desktop queueing, engaging or issuing handoffs for a node plan; write DN-31 §9 rows 7 and 9.
-- Target: I3. Owner: UI engineer. Status: Open.
+- Target: I3. Owner: UI engineer. Status: Closed.
 - Reference: DN-31, the node approval queue (`../../design/DN-31-node-approval-queue.md`).
 - Depends on: GAP-132.
 
@@ -2041,6 +2043,7 @@ Counts: 139 gaps, 3 mission, 136 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.7 Model governance.
 - History:
   - 2026-09-17, Open: Filed by GAP-132 rather than half-wired there: while a linked desktop still issues handoffs for a node's plans, two writers to one register would each overwrite the other, and which one a partner saw would depend on tick order.
+  - 2026-09-17, Open: GAP-133 removed the writer this entry was waiting on, and found another. `ApprovalDesk::issue_for` -- the only caller of `republish_handoffs` -- is reached from `decide_for` alone, so a linked desktop, which queues no node plan, never writes the register. **The fall-back path is what stands in the way now.** `fall_back` leaves `state.link` in place, so a cut-off desktop issues handoffs and queues its whole set on the link's exchange outbox; `flush_exchange` delivers it on reconnect and `publish_exchange` replaces what the node holds. Wiring the node in now would make its set the one that disappears after any outage. A producer per writer is a `gungnir-api` write path and a DN-18 amendment. See `../../record/2026-09-17/a-linked-desktop-shows-the-node-s-queue.md`.
 - Evidence: `gungnir-node/src/approval.rs` (`republish_handoffs`, a documented no-op); `gungnir-api/src/transport.rs` (`publish_exchange` replaces a set rather than adding to it); DN-18 §5 amendment 2; DN-31 §6.5.
 - Severity: 2. Reach: 1 threads. Effort: S. Priority: 2.
 - Impact: The node issues handoffs of its own since GAP-132, and its `ApprovalHost::republish_handoffs` is a no-op, so a partner reading `GET /v3/exchange/handoffs` sees only what a desktop published. A coalition partner is told about an engagement a desktop decided and not about one the node decided, with nothing saying the list is partial -- which is the silence DN-17 §5 rule 3 exists to prevent.
@@ -2074,4 +2077,18 @@ Counts: 139 gaps, 3 mission, 136 technical; 1 already covered by a plan in `../.
 - Closing action: Decide whether this diagram keeps the pinned layout. Either pin the engine per diagram and give this one Graphviz, raise the PlantUML defect and pin a version that has it fixed, or drop the pragma for If-Sr and accept the wider layout its comment measured. Then re-render every If-Sr diagram from one engine, so a reader is not comparing two.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found building GAP-132 (`../../record/2026-09-17/the-node-runs-the-approval-queue.md`).
+
+**GAP-140 A node's deadline is drawn against the desktop's own clock**
+
+- Type: Technical.
+- Capability: CAP-5.9 Role workspaces and workflow; CAP-3.7 Queue under saturation.
+- History:
+  - 2026-09-17, Open: Found writing DN-31 §9 row 9, whose harness has to drive the node's mission time from the wall clock for the consoles' countdowns to mean anything -- which is the defect stated as a test constraint. Not fixed in GAP-133: the fix puts a time on the wire and decides what a desktop does when the two disagree, which is a contract change rather than a panel one.
+- Evidence: `gungnir-app/src/projection.rs` (`queue_rows`, `seconds_remaining`) against `gungnir_api::v3::QueueItemView::expires_at`; `gungnir-time` (`WallClockAuthority`); `SnapshotResponse` and `SessionResponse` carry no node time (`gungnir-api/src/v3/mod.rs`), so there is nothing to compare against. GAP-008's `ClockSkewEstimator` measures **sensor** sources from ingest events and never sees a node..
+- Severity: 2. Reach: 10 threads. Effort: S. Priority: 20.
+- Impact: PN-06 draws the time remaining on a node's queue item as the node's `expires_at` minus **this desktop's** clock. Both are `WallClockAuthority`, so both are seconds since the Unix epoch and they agree only as far as the two machines' clocks do. Nothing measures the difference: a console whose clock is a minute fast shows every item on the node's queue as a minute closer to expiry than it is, a console a minute slow shows a window still open after it has closed, and neither says so. The node refuses the late decision `409 Expired` (DN-31 §6.3), so nothing is decided that should not be -- what is wrong is what the operator was told, on the one countdown they are working to under saturation.
+- Closing action: Carry the node's own mission time with the picture and judge the two clocks against it, the way D-23 judges a link's silence: draw the countdown against the node's time where it is known, and say the skew on PN-01 where it exceeds what a deadline can absorb, rather than leaving a number that is silently wrong by the difference.
+- Target: I3. Owner: UI engineer. Status: Open.
+- Reference: Found building GAP-133 (`../../record/2026-09-17/a-linked-desktop-shows-the-node-s-queue.md`).
+- Depends on: GAP-133.
 
