@@ -229,6 +229,12 @@ pub struct NodeLink {
     revision: watch::Receiver<u64>,
     /// Dropped when the last service is dropped, which is what stops the task.
     _shutdown: Arc<mpsc::Sender<()>>,
+    /// Who the link signs in as at its next connection, shared with the task so that a
+    /// sign-in on the desktop can change it without replacing the link (GAP-143). `None`
+    /// for a machine link, whose identity is its certificate.
+    credential: Arc<Mutex<Option<Credential>>>,
+    /// Started as a machine (D-02). A sign-in never turns one into an operator's link.
+    machine: bool,
 }
 
 impl NodeLink {
@@ -246,7 +252,50 @@ impl NodeLink {
             projection: Arc::new(Mutex::new(Projection::default())),
             revision: revision_rx,
             _shutdown: Arc::new(shutdown_tx),
+            credential: Arc::new(Mutex::new(None)),
+            machine: false,
         }
+    }
+
+    /// Sign in as `credential` from the link's next connection on, keeping everything the
+    /// link holds (GAP-143).
+    ///
+    /// **Why this and not a new link.** A sign-in during an outage used to build a new
+    /// link and put the remote services back, which ended the outage with no person
+    /// switching back (D-15) and threw away what the old link was carrying for the node:
+    /// the observations queued while cut off, the exchange outbox and the forwarding
+    /// (DN-31 §6.8, §13). Replacing only the credential leaves all of that where it is.
+    /// A connection already open keeps the token it signed in with; the change takes
+    /// effect when the link next signs in, which during an outage is when the node
+    /// answers again.
+    ///
+    /// # Errors
+    ///
+    /// `RemoteError::InvalidEndpoint` on a machine link: its identity is its certificate
+    /// (D-02), and a person's sign-in on the desktop is not a reason to change what a
+    /// machine presents.
+    pub fn replace_credential(&self, credential: Credential) -> Result<(), RemoteError> {
+        if self.machine {
+            return Err(RemoteError::InvalidEndpoint(
+                "a machine link signs in with its certificate, not an operator's credential"
+                    .into(),
+            ));
+        }
+        let mut held = self.credential.lock().map_err(|_| {
+            RemoteError::Client("the link's credential lock was poisoned".into())
+        })?;
+        *held = Some(credential);
+        Ok(())
+    }
+
+    /// The operator the link will sign in as at its next connection, if it signs in at
+    /// all. Never the passphrase.
+    #[must_use]
+    pub fn signs_in_as(&self) -> Option<u64> {
+        self.credential
+            .lock()
+            .ok()
+            .and_then(|held| held.as_ref().map(|c| c.operator))
     }
 
     /// Set what the projection says about liveness. Meant for tests and for nothing on
@@ -665,10 +714,24 @@ async fn open_stream(urls: &Urls, tls: &LinkTls) -> Result<Socket, String> {
 ///
 /// Held for the life of the link because a reconnection has to sign in again: a token is
 /// short-lived by design (DN-23 §5 rule 2) and is never renewed on use.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// **`Debug` never prints the passphrase.** Since GAP-143 the link holds its credential
+/// where the desktop can replace it, inside a `NodeLink`, which derives `Debug` and sits
+/// inside the application state; a derived `Debug` here would put the passphrase into any
+/// log line or panic message that formatted one of them.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Credential {
     pub operator: u64,
     pub passphrase: String,
+}
+
+impl std::fmt::Debug for Credential {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credential")
+            .field("operator", &self.operator)
+            .field("passphrase", &"<redacted>")
+            .finish()
+    }
 }
 
 /// Start the link task as an operator. Returns immediately; nothing is connected yet.
@@ -715,14 +778,20 @@ fn start_with(
     let projection = Arc::new(Mutex::new(Projection::default()));
     let (revision_tx, revision_rx) = watch::channel(0u64);
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
+    let machine = credential.is_none();
+    let credential = Arc::new(Mutex::new(credential));
 
     let task_projection = Arc::clone(&projection);
+    let task_credential = Arc::clone(&credential);
     handle.spawn(async move {
         loop {
+            // Read afresh for every connection, so a credential replaced while the node
+            // was silent is the one the next sign-in uses (GAP-143).
+            let current = task_credential.lock().ok().and_then(|held| held.clone());
             if let Err(err) = run_link(
                 &urls,
                 &tls,
-                credential.as_ref(),
+                current.as_ref(),
                 &task_projection,
                 &revision_tx,
             )
@@ -748,6 +817,8 @@ fn start_with(
         projection,
         revision: revision_rx,
         _shutdown: Arc::new(shutdown_tx),
+        credential,
+        machine,
     })
 }
 
@@ -1562,6 +1633,47 @@ mod tests {
         let urls = urls(&endpoint("http://127.0.0.1:7410")).expect("valid");
         assert_eq!(urls.snapshot, "http://127.0.0.1:7410/v3/snapshot");
         assert_eq!(urls.events, "ws://127.0.0.1:7410/v3/events");
+    }
+
+    /// GAP-143: a machine link keeps presenting its certificate whoever signs in on the
+    /// desktop, and since a link now holds its operator's credential where `Debug` can
+    /// reach it, no formatting of either prints the passphrase.
+    #[tokio::test]
+    async fn a_machine_link_takes_no_credential_and_no_link_prints_a_passphrase() {
+        let secret = "correct horse battery staple";
+        let machine = start_with(
+            &endpoint("http://127.0.0.1:9"),
+            None,
+            &tokio::runtime::Handle::current(),
+        )
+        .expect("started");
+        let refused = machine.replace_credential(Credential {
+            operator: 7,
+            passphrase: secret.into(),
+        });
+        assert!(refused.is_err(), "a machine link took an operator's credential");
+        assert_eq!(machine.signs_in_as(), None);
+
+        let operator = NodeLink::scripted();
+        operator
+            .replace_credential(Credential {
+                operator: 7,
+                passphrase: secret.into(),
+            })
+            .expect("an operator's link takes one");
+        assert_eq!(operator.signs_in_as(), Some(7));
+        let shown = format!(
+            "{operator:?} {machine:?} {:?}",
+            Credential {
+                operator: 7,
+                passphrase: secret.into(),
+            }
+        );
+        assert!(
+            !shown.contains(secret),
+            "a passphrase reached a Debug string: {shown}"
+        );
+        assert!(shown.contains("<redacted>"), "{shown}");
     }
 
     /// GAP-065, DN-18 §5 amendment 2: the three write doors, one URL apiece; `Tracks` and

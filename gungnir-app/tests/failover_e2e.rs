@@ -10,8 +10,11 @@
 //! and settles the conflicting decision by D-03's arbitration rule with no person asked
 //! (the GAP-067 walk, 2026-09-16), after which the switch back needs nobody's resolution.
 //!
+//! A second test (GAP-143) signs in again during the outage and shows the outage survives
+//! it: only a person switching back ends one (D-15).
+//!
 //! Wall-clock by necessity: the link judges silence by when it last heard the node, so
-//! the outage is a real `HEARTBEAT_TIMEOUT` of silence. One test, a dozen seconds.
+//! each outage is a real `HEARTBEAT_TIMEOUT` of silence. Two tests, a dozen seconds each.
 
 use gungnir_api::transport::{AccountTokenAuthority, NodeApi};
 use gungnir_api::v3::SnapshotResponse;
@@ -90,8 +93,14 @@ fn serve(addr: std::net::SocketAddr, api: Arc<NodeApi>) -> tokio::runtime::Runti
     node
 }
 
-fn desktop(endpoint: &str) -> (AppState, std::path::PathBuf) {
-    let dir = std::env::temp_dir().join(format!("gungnir-failover-e2e-{}", std::process::id()));
+/// A desktop configured for the node at `endpoint`, in a data directory of its own:
+/// `name` keeps two tests in this binary, which run as threads of one process, from
+/// sharing a journal.
+fn desktop(endpoint: &str, name: &str) -> (AppState, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!(
+        "gungnir-failover-e2e-{name}-{}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("data dir");
     let accounts = vec![Account {
@@ -153,7 +162,7 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
     };
     let api = node_api();
     let node = serve(addr, Arc::clone(&api));
-    let (mut state, dir) = desktop(&format!("http://{addr}"));
+    let (mut state, dir) = desktop(&format!("http://{addr}"), "reconciled");
     let events = state.events.subscribe();
 
     // Sign in: DN-23 §5, the connected profile's link is established by the sign-in.
@@ -362,6 +371,110 @@ fn an_outage_against_a_real_node_is_reconciled_over_the_real_history_route() {
         env.event,
         Event::Link(LinkEvent::SwitchedBack { conflicts: 1, .. })
     )));
+    drop(node);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// **A sign-in during an outage leaves the outage for a person to end** (GAP-143, D-15).
+///
+/// A sign-in on a desktop configured for a node used to build a new link, put the remote
+/// services back and clear the fallback: the outage ended with nobody switching back, its
+/// reconciliation was discarded, and what the old link held for the node went with it. The
+/// operator here signs out and in again while the node is down -- what a session that
+/// expired mid-outage invites -- and everything the old path threw away has to still be
+/// there: the fallback, the embedded services, the link, and, once the node answers, a
+/// reconciliation computed over the node's history, which only that link could have
+/// fetched. Then the outage ends when a person switches back, and not before.
+///
+/// Each check after the sign-in is one the old path fails: it left no fallback, a remote
+/// backend, and a reconciliation that was never computed.
+#[test]
+fn a_sign_in_during_an_outage_leaves_it_for_a_person_to_end() {
+    let addr: std::net::SocketAddr = {
+        let probe = std::net::TcpListener::bind("127.0.0.1:0").expect("probe");
+        probe.local_addr().expect("addr")
+    };
+    let api = node_api();
+    let node = serve(addr, Arc::clone(&api));
+    let (mut state, dir) = desktop(&format!("http://{addr}"), "sign-in-mid-outage");
+    let mut draft = SignInDraft {
+        operator: "7".into(),
+        passphrase: PASSPHRASE.into(),
+        ..SignInDraft::default()
+    };
+    session::apply(&mut state, &mut draft, SessionAction::SignIn);
+    until(&mut state, "the link to come up", 10.0, |s| {
+        s.link
+            .as_ref()
+            .is_some_and(gungnir_remote::link::NodeLink::connected)
+    });
+
+    // The node goes down, and the desktop falls back.
+    node.shutdown_background();
+    until(
+        &mut state,
+        "the desktop to fall back",
+        HEARTBEAT_TIMEOUT.as_secs_f64() + 10.0,
+        |s| matches!(s.backend, BackendConfig::Embedded) && s.fallback.is_some(),
+    );
+
+    // The operator signs out and in again while the node is down.
+    session::apply(&mut state, &mut SignInDraft::default(), SessionAction::SignOut);
+    assert!(state.fallback.is_some(), "a sign-out ended the outage");
+    let mut again = SignInDraft {
+        operator: "7".into(),
+        passphrase: PASSPHRASE.into(),
+        ..SignInDraft::default()
+    };
+    session::apply(&mut state, &mut again, SessionAction::SignIn);
+    assert!(
+        state.fallback.is_some(),
+        "a sign-in ended the outage with nobody switching back: {:?}",
+        state.alerts
+    );
+    assert!(
+        matches!(state.backend, BackendConfig::Embedded),
+        "a sign-in put the remote services back mid-outage: {:?}",
+        state.alerts
+    );
+    assert_eq!(
+        state
+            .link
+            .as_ref()
+            .and_then(gungnir_remote::link::NodeLink::signs_in_as),
+        Some(7),
+        "the outage's link was not kept, or does not sign in as the operator who did"
+    );
+    assert!(
+        state
+            .alerts
+            .iter()
+            .any(|a| a.contains("signed in during an outage")),
+        "the operator was not told the outage continues: {:?}",
+        state.alerts
+    );
+
+    // The node comes back on the same address: the kept link reaches it, and the
+    // reconciliation is computed over the node's history.
+    let node = serve(addr, Arc::clone(&api));
+    until(&mut state, "the reconciliation report", 15.0, |s| {
+        matches!(
+            failover::reconciliation_view(s),
+            ReconciliationView::Due {
+                reconciliation: Some(Ok(_)),
+                ..
+            }
+        )
+    });
+    assert!(
+        matches!(state.backend, BackendConfig::Embedded),
+        "the outage ended before a person switched back"
+    );
+
+    // A person switches back, and that is what ends it.
+    failover::switch_back(&mut state).expect("a person switches back");
+    assert!(matches!(state.backend, BackendConfig::Remote { .. }));
+    assert!(state.fallback.is_none());
     drop(node);
     let _ = std::fs::remove_dir_all(dir);
 }
