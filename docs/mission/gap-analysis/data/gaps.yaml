@@ -9295,3 +9295,6 @@
       cut-off desktop and could not get one by signing out and back in. Not fixed in
       GAP-134: the fix moves a link's credential under a running task, which is a change
       to how a desktop signs in rather than to how it forwards.
+  - date: 2026-09-17
+    status: Closed
+    note: "Fixed. A sign-in while a fallback is in force changes only who the outage's link signs in as, through `NodeLink::replace_credential`, and leaves the fallback, the embedded services and the link where they are; only a person switching back ends an outage (D-15). A new link would have started empty and lost what the outage had queued for the node. The link now holds its credential where `Debug` can reach it, so `Credential`'s `Debug` redacts the passphrase. `failover_e2e.rs`'s new test fails against the old sign-in path at its first check. See `../../record/2026-09-17/a-sign-in-during-an-outage-no-longer-ends-it.md`."
