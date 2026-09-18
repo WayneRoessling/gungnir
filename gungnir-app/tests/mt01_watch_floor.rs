@@ -252,7 +252,7 @@ impl Drop for Node {
 }
 
 impl Node {
-    fn spawn(api: Arc<NodeApi>) -> Self {
+    fn spawn(api: &Arc<NodeApi>) -> Self {
         let dir = std::env::temp_dir().join(format!("gungnir-mt01-node-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let config = Arc::new(baseline(&dir));
@@ -500,7 +500,7 @@ fn a_saturated_node_queue_worked_by_three_consoles_ends_every_item_once() {
     };
     let api = api_knowing_the_watch();
     let _runtime = serve(addr, Arc::clone(&api));
-    let node = Node::spawn(Arc::clone(&api));
+    let node = Node::spawn(&api);
     let endpoint = format!("http://{addr}");
 
     let (mut a, dir_a) = desktop("a", &endpoint);
