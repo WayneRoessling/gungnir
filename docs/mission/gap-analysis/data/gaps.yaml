@@ -8906,7 +8906,7 @@
       the merge compares engagements by track and publishes `BothActed` first; the outage
       then goes through `POST /v3/decisions/forwarded` in one batch, each decision with its
       settlement, and the node takes it whole or not at all, recording each decision once.
-      Forwarding follows the merge, a departure from DN-31 §6.8's order. Row 8 is
+      Forwarding follows the merge, reversing DN-31 §6.8's order, which the owner took as D-66 and DN-31 amendment 2. Row 8 is
       `gungnir-app/tests/cut_off_and_reconnected.rs`. Filed: GAP-141, GAP-142, GAP-143. See
       `../../record/2026-09-17/an-outage-reaches-the-node-once.md`.
 
