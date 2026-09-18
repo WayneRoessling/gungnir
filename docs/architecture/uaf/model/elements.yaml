@@ -316,7 +316,7 @@ standards:
   - {id: SD-10, name: ADS-B 1090 ES (RTCA DO-260B), source: gungnir_ingest::adapters::adsb, status: real, description: Cooperative air identity (GAP-010 closed).}
   - {id: SD-11, name: UUID version 7 (RFC 9562), source: gungnir_identity, status: real, description: Textual and time-ordered form of GlobalEntityId (GAP-069 closed).}
   - {id: SD-12, name: OCI container image, source: deploy/node/Dockerfile, status: real, description: Packaging of the service node for Linux x86_64.}
-  - {id: SD-13, name: Software bill of materials (CycloneDX JSON) and signed releases, source: docs/release-governance.md, status: planned, description: Release evidence per docs/release-governance.md; exercised under GAP-061.}
+  - {id: SD-13, name: Software bill of materials (CycloneDX JSON) and signed releases, source: docs/release-governance.md, status: planned, description: "Release evidence per docs/release-governance.md. The SBOM and the advisory and licence audit run green in release.yml since 2026-09-17 (GAP-061); signing runs only at the first tagged release."}
   - {id: SD-14, name: UAF 1.2 (OMG), source: docs/architecture/uaf/, status: real, description: The framework these views follow.}
   - {id: SD-15, name: TOGAF 10 ADM, source: docs/plans/10-togaf-adm-documentation.md, status: planned, description: The method plan 10 follows; references these views.}
   - {id: SD-16, name: Cursor-on-Target (CoT), source: docs/design/DN-25-cursor-on-target.md, status: planned, description: "Exchange with a participant that holds no machine identity here; no codec and no sink exist (GAP-090, GAP-091)."}
