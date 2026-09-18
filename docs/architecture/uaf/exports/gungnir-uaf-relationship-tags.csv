@@ -422,10 +422,10 @@ REL:conforms_to:RS-ingest->SD-10,uafRelationship,conforms_to
 REL:conforms_to:RS-identity->SD-11,uafRelationship,conforms_to
 REL:conforms_to:RS-app->SD-13,uafRelationship,conforms_to
 REL:conforms_to:RS-app->SD-13,registry.status,planned
-REL:conforms_to:RS-app->SD-13,registry.plan,GAP-061
+REL:conforms_to:RS-app->SD-13,registry.plan,"blocked -- signed releases run only at the first tagged release, the owner's to push; the SBOM half runs green in release.yml (run 35301215267, GAP-061 closed)"
 REL:conforms_to:RS-node->SD-13,uafRelationship,conforms_to
 REL:conforms_to:RS-node->SD-13,registry.status,planned
-REL:conforms_to:RS-node->SD-13,registry.plan,GAP-061
+REL:conforms_to:RS-node->SD-13,registry.plan,"blocked -- signed releases run only at the first tagged release, the owner's to push; the SBOM half runs green in release.yml (run 35301215267, GAP-061 closed)"
 REL:exchanges:OP-33->OP-30:NL-01,uafRelationship,exchanges
 REL:exchanges:OP-33->OP-30:NL-01,registry.needline,NL-01
 REL:exchanges:OP-33->OP-30:NL-01,registry.name,"observations, health"
