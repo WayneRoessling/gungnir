@@ -7195,7 +7195,7 @@
       </element>
       <element xmi:idref="EAID_B9D03BF9_A6DD_AD46_3685_D14676EFBA9D" xmi:type="uml:Class" name="Software bill of materials (CycloneDX JSON) and signed releases" scope="public">
         <model package="EAPK_08EF4345_F5D2_F467_CBA0_59D4F0A6EB11" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Standard" documentation="Release evidence per docs/release-governance.md; exercised under GAP-061."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="Standard" documentation="Release evidence per docs/release-governance.md. The SBOM and the advisory and licence audit run green in release.yml since 2026-09-17 (GAP-061); signing runs only at the first tagged release."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="SD-13"/>
@@ -20021,7 +20021,7 @@
         <tags>
           <tag xmi:id="EAID_CD1D8F98_CEB8_58C4_00DD_46E1F7C0BC0E" name="uafRelationship" value="conforms_to" modelElement="EAID_DFC75341_1B49_2A15_8CE3_CB352F0BCAEC"/>
           <tag xmi:id="EAID_1ABE9B8E_DC76_EB16_E02A_EF65618062B0" name="registry.status" value="planned" modelElement="EAID_DFC75341_1B49_2A15_8CE3_CB352F0BCAEC"/>
-          <tag xmi:id="EAID_416AAD2E_857B_0E11_8755_F9409E5BCF63" name="registry.plan" value="GAP-061" modelElement="EAID_DFC75341_1B49_2A15_8CE3_CB352F0BCAEC"/>
+          <tag xmi:id="EAID_416AAD2E_857B_0E11_8755_F9409E5BCF63" name="registry.plan" value="blocked -- signed releases run only at the first tagged release, the owner's to push; the SBOM half runs green in release.yml (run 35301215267, GAP-061 closed)" modelElement="EAID_DFC75341_1B49_2A15_8CE3_CB352F0BCAEC"/>
         </tags>
         <xrefs/>
       </connector>
@@ -20043,7 +20043,7 @@
         <tags>
           <tag xmi:id="EAID_43995489_78DD_A8D7_376D_F8326CC9CFB4" name="uafRelationship" value="conforms_to" modelElement="EAID_E78C8F07_6D25_683B_4A7D_341584C61439"/>
           <tag xmi:id="EAID_F2CFFF63_1ED8_1C22_9C80_6E37C3CC2D85" name="registry.status" value="planned" modelElement="EAID_E78C8F07_6D25_683B_4A7D_341584C61439"/>
-          <tag xmi:id="EAID_FA3ABE52_2531_5647_DE26_D45D88B2B87A" name="registry.plan" value="GAP-061" modelElement="EAID_E78C8F07_6D25_683B_4A7D_341584C61439"/>
+          <tag xmi:id="EAID_FA3ABE52_2531_5647_DE26_D45D88B2B87A" name="registry.plan" value="blocked -- signed releases run only at the first tagged release, the owner's to push; the SBOM half runs green in release.yml (run 35301215267, GAP-061 closed)" modelElement="EAID_E78C8F07_6D25_683B_4A7D_341584C61439"/>
         </tags>
         <xrefs/>
       </connector>

@@ -205,8 +205,8 @@ conforms_to:
   - {from: RS-remote, to: [SD-16], status: planned, plan: GAP-090 GAP-091}
   - {from: RS-ingest, to: [SD-09, SD-10]}
   - {from: RS-identity, to: [SD-11]}
-  - {from: RS-app, to: [SD-13], status: planned, plan: GAP-061}
-  - {from: RS-node, to: [SD-13], status: planned, plan: GAP-061}
+  - {from: RS-app, to: [SD-13], status: planned, plan: "blocked -- signed releases run only at the first tagged release, the owner's to push; the SBOM half runs green in release.yml (run 35301215267, GAP-061 closed)"}
+  - {from: RS-node, to: [SD-13], status: planned, plan: "blocked -- signed releases run only at the first tagged release, the owner's to push; the SBOM half runs green in release.yml (run 35301215267, GAP-061 closed)"}
 
 exchanges:
   # Needlines between operational performers, as the Op-Cn view draws them

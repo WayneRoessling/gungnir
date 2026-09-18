@@ -4,10 +4,19 @@ Closes GAP-105, filed by D-50: a rehearsal cannot move the sensors a laydown dec
 Decided by D-64 (2026-09-16): **the detections a laydown's sensors would have produced are
 generated at rehearsal time, inside the production binary** -- chosen by the owner over
 committing one pre-generated fixture per laydown, which keeps the dependency rule intact
-but covers only laydowns somebody generated fixtures for. Status: **proposed; not
-signed; no code exists.** That choice changes what the operational binary contains and
-adds a dependency edge `ARCHITECTURE.md` does not show, and this workspace's rule is that
-neither happens before a signed design.
+but covers only laydowns somebody generated fixtures for. Status: **design only; no code
+exists.** That choice changes what the operational binary contains and adds two dependency
+edges `ARCHITECTURE.md` does not show, and this workspace's rule is that neither happens
+before a signed design. What the owner has signed of this note is in
+[`../signatures.md`](../signatures.md).
+
+**The owner's answers, 2026-09-17.** Every sub-decision in §5 as recommended: truth at scan
+cadence with no interpolation (§5.1), an `entities.json` sidecar (§5.2), an
+`environment.json` sidecar (§5.3), and the deployment's own named detection model with a
+refusal by name (§5.4); §5.5's frame kept as GAP-045 signed it; and all five containment
+mechanisms in §6, the ingest gateway's half coming back to the owner as a code review when
+it is built. §10's verification rows were not part of that walk and are not yet agreed as
+pass criteria.
 
 **Drafted 2026-09-16, landed here 2026-09-17, and renumbered on the way.** It sat on the
 branch `claude/gap105-laydown-placement` while the numbers it had claimed were taken by
