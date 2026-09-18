@@ -235,7 +235,9 @@ pub enum CommandError {
     NotPermitted { role: String, action: &'static str },
     /// The role holds the permission, but this item was never offered to it, nor
     /// escalated to it (GAP-127, DN-10 §5). Nothing was recorded.
-    #[error("queue item {item} is offered to {offered_to:?} and not to {role}; nothing was recorded")]
+    #[error(
+        "queue item {item} is offered to {offered_to:?} and not to {role}; nothing was recorded"
+    )]
     NotOffered {
         item: PendingApprovalId,
         role: String,
