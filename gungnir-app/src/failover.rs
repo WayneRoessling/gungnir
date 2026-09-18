@@ -1027,6 +1027,11 @@ pub fn outbox_view(state: &AppState) -> Option<OutboxView> {
 }
 
 /// What PN-18 shows.
+// `Due` outgrew the other two variants when GAP-134 added the forwarding and delegation
+// states and the merge gained its both-acted list. The value is built once per call for
+// one panel and dropped, so the size costs a copy per frame at most; boxing the variant
+// would change the shape every caller and every failover test destructures.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum ReconciliationView {
     /// No outage has happened this session.

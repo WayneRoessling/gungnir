@@ -1282,7 +1282,7 @@ fn forward_reply_of(status: u16, body: &str) -> crate::queue::ForwardReply {
     }
     if status == 409 {
         return match serde_json::from_str::<gungnir_api::v3::ForwardRefused>(body) {
-            Ok(refused) => ForwardReply::Refused(refused),
+            Ok(refused) => ForwardReply::Refused(Box::new(refused)),
             Err(err) => ForwardReply::Rejected {
                 status,
                 reason: format!("the node refused the outage's decisions for a reason this desktop could not read: {err}"),

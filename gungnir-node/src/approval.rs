@@ -523,7 +523,7 @@ fn take_forwarded(
             Some(pending.operator),
             &format!("forwarded decisions: {refused:?}"),
         );
-        return ForwardAnswer::Refused(refused);
+        return ForwardAnswer::Refused(Box::new(refused));
     }
     let mut accepted = v3::ForwardAccepted {
         recorded: 0,
@@ -537,7 +537,7 @@ fn take_forwarded(
             frame,
             Some((pending.operator, pending.role)),
             pending.role,
-            |desk, cx, _policy, host| desk.admit_forwarded(cx, host, record),
+            |desk, cx, _policy, host| desk.admit_forwarded(cx, host, &record),
         );
         match outcome {
             ForwardOutcome::Recorded => accepted.recorded += 1,

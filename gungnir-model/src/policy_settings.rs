@@ -215,7 +215,7 @@ impl AuthoritySettings {
 }
 
 /// How long D-15's delegations survive a desktop losing its node
-/// (`docs/design/DN-31-node-approval-queue.md` §6.7 and §7).
+/// (`docs/design/DN-31-node-approval-queue.md` §6, clause 6.7, and §7).
 ///
 /// **No default, deliberately.** A deployment that links desktops to a node states how
 /// long an offline delegation lasts rather than inheriting a number from this build.

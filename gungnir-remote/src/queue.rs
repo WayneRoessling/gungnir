@@ -371,8 +371,9 @@ pub struct OutboundForward {
 pub enum ForwardReply {
     /// `202`: the whole batch is on the node's record.
     Accepted(ForwardAccepted),
-    /// `409`: it contradicts what the node holds, and **none of it was applied**.
-    Refused(ForwardRefused),
+    /// `409`: it contradicts what the node holds, and **none of it was applied**. Boxed
+    /// because it can carry a whole record, plan included.
+    Refused(Box<ForwardRefused>),
     /// `400`, `401` or `403`: the node would not take it, and nothing was recorded.
     Rejected { status: u16, reason: String },
 }

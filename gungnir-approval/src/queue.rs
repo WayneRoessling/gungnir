@@ -420,7 +420,7 @@ impl ApprovalDesk {
         &mut self,
         cx: &ApprovalContext<'_>,
         host: &mut dyn ApprovalHost,
-        record: gungnir_command::DecisionRecord,
+        record: &gungnir_command::DecisionRecord,
     ) -> gungnir_command::ForwardOutcome {
         let outcome = self.approvals.admit_forwarded(record.clone());
         if outcome == gungnir_command::ForwardOutcome::Recorded {

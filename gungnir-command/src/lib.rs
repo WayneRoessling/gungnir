@@ -230,7 +230,7 @@ pub enum CommandError {
 }
 
 /// What became of a decision another machine took and forwarded
-/// (`docs/design/DN-31-node-approval-queue.md` §6.8; GAP-134).
+/// (`docs/design/DN-31-node-approval-queue.md` §6, clause 6.8; GAP-134).
 ///
 /// **The record is appended and nothing else happens.** A forwarded decision was taken on
 /// the forwarding machine's own queue, on a plan its own planner proposed; the engagement
@@ -628,7 +628,7 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
                 // move. The expiry stands, and no path accepts on expiry (C-01).
                 item.escalate_at = None;
             }
-            item.offered_to = offered_to.clone();
+            item.offered_to.clone_from(&offered_to);
             changed.push(Reoffered {
                 plan: item.plan.id,
                 item: item.id,

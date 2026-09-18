@@ -144,7 +144,7 @@ impl PolicyEngine for AuthorityPolicy<'_> {
 }
 
 /// Whether D-15's delegations are in force for the machine asking
-/// (`docs/design/DN-31-node-approval-queue.md` §6.7; GAP-134).
+/// (`docs/design/DN-31-node-approval-queue.md` §6, clause 6.7; GAP-134).
 ///
 /// A pre-delegated rule is a **granting** rule: it is what gives an Operator authority
 /// over the cases D-15 delegates. So a delegation that has lapsed is not a flag a panel

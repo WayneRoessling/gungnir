@@ -496,8 +496,10 @@ impl std::fmt::Debug for PendingForward {
 pub enum ForwardAnswer {
     /// `202`: the whole batch is on the record, counted.
     Accepted(v3::ForwardAccepted),
-    /// `409`: a record contradicts one already held, and nothing was applied.
-    Refused(v3::ForwardRefused),
+    /// `409`: a record contradicts one already held, and nothing was applied. Boxed
+    /// because it can carry a whole record, plan included, and the answer is otherwise
+    /// three counters.
+    Refused(Box<v3::ForwardRefused>),
 }
 
 /// A decision request the route refused, for the node loop to audit (GAP-132).
