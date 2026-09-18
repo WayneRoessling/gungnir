@@ -21,7 +21,10 @@
 //! `POST /v3/queue/{item}/decision` takes a person's decision, each handed to the node
 //! loop and answered from it rather than acted on in a request handler. `/v3` serves no
 //! plan-keyed decision route; the retired `/v2` one names the queue route as its
-//! successor. [`UnimplementedServer`] remains for a node that serves nothing at all.
+//! successor. **Since GAP-134 it takes an outage's decisions too**:
+//! `POST /v3/decisions/forwarded` carries what a desktop decided while it was cut off,
+//! handed to the node loop like the decision route and put on the node's record once.
+//! [`UnimplementedServer`] remains for a node that serves nothing at all.
 
 pub mod tls;
 pub mod transport;
@@ -73,6 +76,10 @@ pub mod routes {
     /// taken on a queue item rather than on a plan, because the item is what carries the
     /// deadline and the roles it is offered to.
     pub const QUEUE_DECISION: &str = "/queue/{item}/decision";
+    /// The decisions a desktop took while it was cut off from this node, forwarded when
+    /// the node answers again (DN-31 §6.8 and §7, GAP-134). New in `/v3`, so it has no
+    /// retired `/v2` form.
+    pub const DECISIONS_FORWARDED: &str = "/decisions/forwarded";
     /// Retired. Served under `/v2` alone, answering `410 Gone` and naming
     /// [`QUEUE_DECISION`] as its successor; `/v3` never served it (GAP-132).
     pub const PLAN_DECISION: &str = "/plans/{plan_id}/decision";

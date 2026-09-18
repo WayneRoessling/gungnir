@@ -15,11 +15,15 @@
 //! here and leaves to a person only those it cannot rank (`gungnir-app`'s `failover`).
 //! Resolving stays out of this crate on purpose: ranking a side means reading a role, and
 //! this crate depends on the model, eventing and the store alone.
+//!
+//! Since D-58 it also compares the two journals' **engagements by track** and reports two
+//! engagements of one track as [`BothActed`] (GAP-134). That comparison has no resolution
+//! anywhere, in this crate or out of it: both engagements happened.
 
 use gungnir_eventing::{Envelope, Event};
 use gungnir_model::arbitration::{ConflictSide, SideOutcome};
-use gungnir_model::events::CommandEvent;
-use gungnir_model::{MissionTime, PlanId};
+use gungnir_model::events::{CommandEvent, EngagementEvent, EngagementSide};
+use gungnir_model::{MissionTime, PlanId, TrackId};
 use gungnir_store::SessionId;
 use std::collections::VecDeque;
 
@@ -88,12 +92,35 @@ pub struct DecisionConflict {
     pub remote: ConflictSide,
 }
 
+/// Two engagements of one track, opened on the two sides of an outage (D-58).
+///
+/// **Not a [`DecisionConflict`], and never resolved into one.** A conflict is two records
+/// that disagree about one plan, and one of them stands. This is two records that agree
+/// about nothing in particular and are both true: a cut-off desktop plans from its own
+/// picture, so the two sides name different plans and different decisions, and both
+/// engagements happened. Choosing which record stands does not undo an effect in the
+/// world, so this is reported for a person whatever D-03's rule decided about any plan.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BothActed {
+    /// The track both sides engaged, which is the only thing they have in common and
+    /// therefore the only thing this can be keyed on.
+    pub track: TrackId,
+    /// The engagement the desktop opened while it was cut off.
+    pub local: EngagementSide,
+    /// The engagement the node opened meanwhile.
+    pub remote: EngagementSide,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReconcileReport {
     /// Both journals merged in mission-time order, exact duplicates removed.
     pub merged: Vec<Envelope>,
     pub duplicates_dropped: usize,
     pub conflicts: Vec<DecisionConflict>,
+    /// Tracks engaged on both sides of the outage (D-58, GAP-134). Independent of
+    /// `conflicts`: the two lists answer different questions and neither bounds the
+    /// other.
+    pub both_acted: Vec<BothActed>,
 }
 
 /// How an envelope ended a plan's approval, if it did.
@@ -134,6 +161,28 @@ fn ending(env: &Envelope) -> Option<(PlanId, ConflictSide)> {
     }
 }
 
+/// An engagement this envelope opened, if it opened one.
+///
+/// Only `Opened` is read. `Executing` and `Closed` say what became of an engagement that
+/// this already found, and reading them as well would report one engagement three times.
+fn opened(env: &Envelope) -> Option<(TrackId, EngagementSide)> {
+    match &env.event {
+        Event::Engagement(EngagementEvent::Opened {
+            decision,
+            plan,
+            track,
+        }) => Some((
+            *track,
+            EngagementSide {
+                decision: *decision,
+                plan: *plan,
+                at: env.mission_time,
+            },
+        )),
+        _ => None,
+    }
+}
+
 /// Merge a desktop's offline journal with the node's journal for the same period.
 ///
 /// **A conflict is two different outcomes for one plan**, one from each journal: an
@@ -142,6 +191,13 @@ fn ending(env: &Envelope) -> Option<(PlanId, ConflictSide)> {
 /// plan when the decision was a rejection, because an expiry is not a rejection (DN-10)
 /// and the record has to say which of the two stands. Two acceptances, two rejections, and
 /// two expiries agree, and are not conflicts.
+///
+/// **And since D-58 the engagements are compared by track** (GAP-134). The two questions
+/// are independent and asked independently: pairing decisions by plan can never find two
+/// engagements of one track across an outage, because a cut-off desktop plans from its own
+/// picture and its plans share no identifiers with the node's. The plans agree by having
+/// nothing to disagree about, and both sides engaged the same track anyway. Reported here,
+/// resolved nowhere: see [`BothActed`].
 pub fn reconcile(local: &[Envelope], remote: &[Envelope]) -> ReconcileReport {
     let mut conflicts = Vec::new();
     let remote_endings: Vec<(PlanId, ConflictSide)> = remote.iter().filter_map(ending).collect();
@@ -152,6 +208,24 @@ pub fn reconcile(local: &[Envelope], remote: &[Envelope]) -> ReconcileReport {
                     plan,
                     local: l.clone(),
                     remote: r.clone(),
+                });
+            }
+        }
+    }
+
+    // D-58, and deliberately a second pass over the same two journals rather than a
+    // branch inside the one above: a track engaged on both sides is a fact about
+    // engagements and the loop above is about plans, and folding them together would be
+    // the place a later change to one silently answered the other.
+    let mut both_acted = Vec::new();
+    let remote_opened: Vec<(TrackId, EngagementSide)> = remote.iter().filter_map(opened).collect();
+    for (track, l) in local.iter().filter_map(opened) {
+        for (other, r) in &remote_opened {
+            if track == *other {
+                both_acted.push(BothActed {
+                    track,
+                    local: l,
+                    remote: *r,
                 });
             }
         }
@@ -179,6 +253,7 @@ pub fn reconcile(local: &[Envelope], remote: &[Envelope]) -> ReconcileReport {
         merged,
         duplicates_dropped,
         conflicts,
+        both_acted,
     }
 }
 
@@ -427,5 +502,90 @@ mod tests {
                 .all(|w| w[0].mission_time <= w[1].mission_time),
             "the merge is not in mission-time order"
         );
+    }
+
+    fn opened_on(decision: u128, plan: u128, track: u64) -> Event {
+        Event::Engagement(EngagementEvent::Opened {
+            decision: gungnir_model::DecisionId(decision),
+            plan: PlanId(plan),
+            track: TrackId(track),
+        })
+    }
+
+    /// D-58: two engagements of one track across an outage are reported, however the
+    /// plans compare. Here the two sides decided **different plans the same way** -- no
+    /// plan conflict at all, which is exactly the case pairing by plan can never find.
+    ///
+    /// The zero beside the non-zero: a track engaged on one side only, in the same
+    /// journals, is not reported. Without it an implementation that reported every
+    /// engagement would pass.
+    #[test]
+    fn two_engagements_of_one_track_across_an_outage_are_reported_whatever_the_plans() {
+        let local = vec![
+            env(1, 10.0, decided(100, true)),
+            env(2, 10.0, opened_on(100, 100, 42)),
+            env(3, 11.0, decided(101, true)),
+            env(4, 11.0, opened_on(101, 101, 43)),
+        ];
+        let remote = vec![
+            env(20, 12.0, decided(200, true)),
+            env(21, 12.0, opened_on(200, 200, 42)),
+        ];
+        let report = reconcile(&local, &remote);
+        assert!(
+            report.conflicts.is_empty(),
+            "no plan is held on both sides, so no plan conflicts: {report:?}"
+        );
+        assert_eq!(
+            report.both_acted,
+            vec![BothActed {
+                track: TrackId(42),
+                local: EngagementSide {
+                    decision: gungnir_model::DecisionId(100),
+                    plan: PlanId(100),
+                    at: MissionTime(10.0),
+                },
+                remote: EngagementSide {
+                    decision: gungnir_model::DecisionId(200),
+                    plan: PlanId(200),
+                    at: MissionTime(12.0),
+                },
+            }],
+            "track 43 was engaged on one side only and must not be reported"
+        );
+    }
+
+    /// The comparison is independent of the plan conflicts in both directions: a plan
+    /// conflict with no shared track reports no incident, and a shared track is reported
+    /// beside a plan conflict rather than instead of it.
+    #[test]
+    fn the_engagement_comparison_and_the_plan_conflicts_answer_different_questions() {
+        let conflict_only = reconcile(
+            &[
+                env(1, 5.0, decided(7, true)),
+                env(2, 5.0, opened_on(7, 7, 1)),
+            ],
+            &[env(10, 6.0, decided(7, false))],
+        );
+        assert_eq!(conflict_only.conflicts.len(), 1);
+        assert!(
+            conflict_only.both_acted.is_empty(),
+            "a rejection opens no engagement, so only one side acted"
+        );
+
+        let both = reconcile(
+            &[
+                env(1, 5.0, decided(7, true)),
+                env(2, 5.0, opened_on(7, 7, 1)),
+            ],
+            &[
+                env(10, 6.0, decided(7, false)),
+                env(11, 6.5, decided(8, true)),
+                env(12, 6.5, opened_on(8, 8, 1)),
+            ],
+        );
+        assert_eq!(both.conflicts.len(), 1, "{both:?}");
+        assert_eq!(both.both_acted.len(), 1, "{both:?}");
+        assert_eq!(both.both_acted[0].track, TrackId(1));
     }
 }

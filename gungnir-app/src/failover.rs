@@ -41,6 +41,58 @@
 //! tie-break to find, the rule keeps its first side, and so **an exact tie keeps this
 //! desktop's decision**, journaled under its own ground (`SameTimeOnEqualRank`) rather than
 //! as the earlier of the two.
+//!
+//! # While cut off: D-15's delegations lapse (GAP-134)
+//!
+//! Delegations in force when the node went silent stay in force for
+//! `policy.delegation.disconnected_lapse_s`, then lapse ([`delegations`]; DN-31 §6.7). A
+//! lapse is applied to the queue once, at the tick it falls due: every item the delegation
+//! was the only grant for is re-offered to the lowest role that still holds it, and the
+//! record gets one `LinkEvent::DelegationsLapsed` naming them. From then on the chain asks
+//! every authority question of the matrix without the delegated rules, so a plan only a
+//! delegation could take is denied and never queued. **No new delegation is made while cut
+//! off** by construction: a baseline applied while the desktop runs is in force on restart
+//! (`sustainment.rs`), and the fallback does not survive a restart.
+//!
+//! # On reconnect: the merge, then the forwarding, then the switch (GAP-134)
+//!
+//! Four things happen around the moment the node answers again, and in this order:
+//!
+//! 1. **The merge**, when the node's history for the outage arrives: the plan conflicts and,
+//!    in the same pass over the same two journals, **the engagements by track** (D-58). Two
+//!    engagements of one track across the outage are published as `LinkEvent::BothActed`
+//!    and alerted for a person at once, before and whatever D-03's rule then decides about
+//!    any plan, because choosing which record stands does not undo an effect in the world.
+//!    The rule then settles every conflict it can rank.
+//! 2. **The forwarding**, as soon as every conflict is settled -- by the rule when the merge
+//!    is computed, or by the last person to resolve one: every decision this desktop took
+//!    while cut off, in the order it took them, **in one batch**, each carrying its
+//!    settlement if its plan was in conflict (`POST /v3/decisions/forwarded`). Where the
+//!    node's half could not be fetched there is nothing to settle and the batch goes at
+//!    once. The node takes a batch whole or not at all.
+//! 3. **The switch back**, when a person asks for it, as before (D-15), and refused while a
+//!    person's conflict is open or the node has refused the batch.
+//!
+//! **Why the forwarding waits for the merge rather than going first.** The node's record
+//! has to say what stands (MT-10 step 5). A decision forwarded before its conflict is
+//! settled would put two contradictory decisions on the node's record with nothing beside
+//! them saying which one stands, and a desktop that died before the settlement followed
+//! would leave it that way. Sent after the merge, each decision travels with what stands.
+//! Nothing is lost by waiting, and something is kept: the merge is computed from a history
+//! fetched before the batch is sent, so it can never count this desktop's own decisions a
+//! second time as the node's; and the two queues hold different items -- a cut-off desktop
+//! decides only plans its own planner proposed, and the node's items stay on the node for
+//! other desktops (DN-31 §6.7) -- so no other desktop is waiting on this batch to learn
+//! that an item it could decide is already decided.
+//!
+//! **Why a desktop that dies mid-reconnect cannot leave the node holding half an outage.**
+//! The outage is one batch and the node applies a batch whole or not at all, checking every
+//! record against what it holds before writing any. So the node holds all of what this
+//! desktop decided while cut off, or none of it. A batch sent twice -- after a `504`, or a
+//! connection that failed with the answer in flight -- is keyed on each decision's own
+//! identifier and records nothing the second time. What a process death *can* still do is
+//! leave the outage unforwarded, on this desktop's disk and not the node's, because the
+//! fallback lives in memory: GAP-142.
 
 use gungnir_config::BackendConfig;
 use gungnir_eventing::{Envelope, Event};
@@ -49,8 +101,10 @@ use gungnir_model::arbitration::{
 };
 use gungnir_model::events::LinkEvent;
 use gungnir_model::{DetectionView, MissionTime, PlanId, TrackView};
+use gungnir_policy::Delegations;
 use gungnir_remote::link::{HistoryOutcome, NodeLink, HEARTBEAT_TIMEOUT};
-use gungnir_resilience::DecisionConflict;
+use gungnir_remote::queue::{ForwardReply, ForwardedDecision, Settlement};
+use gungnir_resilience::{BothActed, DecisionConflict};
 use gungnir_security::authz::role_permits;
 use gungnir_security::{actions, AuditLog};
 use gungnir_store::EventJournal;
@@ -74,6 +128,35 @@ pub struct Fallback {
     /// The merge, once the node's history arrived; the reason it could not, if it
     /// could not. `None` while the fetch is in flight.
     pub reconciliation: Option<Result<Reconciliation, String>>,
+    /// When D-15's delegations lapsed on this desktop, once they have (GAP-134). Set once
+    /// per outage, by the tick that applied the lapse to the queue.
+    pub lapsed_at: Option<MissionTime>,
+    /// Where this outage's decisions are on their way to the node (GAP-134).
+    pub forwarding: Forwarding,
+}
+
+/// Where an outage's decisions stand on their way to the node's record (GAP-134,
+/// DN-31 §6.8), for PN-18.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Forwarding {
+    /// Not sent yet: the merge has not been computed, or a conflict in it waits for a
+    /// person. The batch goes the moment every conflict is settled.
+    Waiting,
+    /// This desktop decided nothing while it was cut off. Said, rather than shown as a
+    /// batch of none, because "nothing to forward" and "forwarded" are different claims.
+    NothingDecided,
+    /// Handed to the link, `decisions` of them, and not yet answered. The link retries it
+    /// under the same identifiers until the node answers.
+    Sent { decisions: usize },
+    /// The node answered `202`: the whole outage is on its record.
+    Accepted {
+        recorded: usize,
+        already_held: usize,
+        settled: usize,
+    },
+    /// The node refused the batch, and **none of it was applied**. A person has to see
+    /// why before this desktop switches back.
+    Refused(String),
 }
 
 /// What `gungnir_resilience::reconcile` found for the outage.
@@ -92,6 +175,14 @@ pub struct Reconciliation {
     pub arbitrated: Vec<Arbitrated>,
     /// Conflicts a person resolved, with which side was kept.
     pub resolved: Vec<(PlanId, bool)>,
+    /// Who resolved each conflict in `resolved`, as the record names them: the verified
+    /// operator, or `None` with nobody signed in. Kept for the settlement the node is sent
+    /// (MT-10 step 5), which says who chose as the desktop's own record does.
+    pub resolved_by: std::collections::BTreeMap<PlanId, Option<String>>,
+    /// Tracks engaged on both sides of the outage (D-58, GAP-134). Each is published as
+    /// `LinkEvent::BothActed` and alerted when the merge is computed, and PN-18 shows them
+    /// above everything else. **Never resolved by anyone**: both engagements happened.
+    pub both_acted: Vec<BothActed>,
 }
 
 /// A conflict the arbitration rule resolved, and how.
@@ -120,6 +211,89 @@ fn verdict_on(conflict: &DecisionConflict) -> Option<Verdict> {
         conflict.local.facts(rank_of(&conflict.local)),
         conflict.remote.facts(rank_of(&conflict.remote)),
     )
+}
+
+/// D-15's delegations as they stand on this desktop now (DN-31 §6.7; GAP-134).
+///
+/// In force as configured until this desktop has been cut off from its node for
+/// `policy.delegation.disconnected_lapse_s`, lapsed from then until it switches back. A
+/// baseline that states no interval is silence about how long an offline delegation lasts,
+/// and silence about authority denies (DN-08 §5): nothing survives the disconnection.
+///
+/// **The interval runs from the moment the node went silent, and a node that answers again
+/// does not stop it.** Until a person switches back this desktop still decides on its own
+/// queue, and a reconnection is not a Supervisor delegating anything afresh.
+///
+/// A desktop deployed on its own, and a linked one that has not lost its node, never has a
+/// fallback, so for both this is the baseline's own matrix and nothing about them changes
+/// (DN-31 §9 row 10).
+#[must_use]
+pub fn delegations(state: &AppState) -> Delegations {
+    let Some(fallback) = &state.fallback else {
+        return Delegations::AsConfigured;
+    };
+    match state.config.policy.delegation.disconnected_lapse_s {
+        Some(lapse_s) if state.clock.now().seconds_since(fallback.since) < lapse_s => {
+            Delegations::AsConfigured
+        }
+        _ => Delegations::Lapsed,
+    }
+}
+
+/// Apply the lapse to the queue at the tick it falls due, once per outage (GAP-134).
+///
+/// Nothing happens for a baseline that delegates nothing: with no delegated rule the
+/// lapsed matrix is the configured one, and an event saying delegations lapsed would be a
+/// record of something that never stood.
+fn lapse_if_due(state: &mut AppState, now: MissionTime) {
+    let Some(fallback) = state.fallback.as_ref() else {
+        return;
+    };
+    if fallback.lapsed_at.is_some() || delegations(state) != Delegations::Lapsed {
+        return;
+    }
+    let endpoint = fallback.endpoint.clone();
+    let cut_off_since = fallback.since;
+    if let Some(f) = state.fallback.as_mut() {
+        f.lapsed_at = Some(now);
+    }
+    if !state
+        .config
+        .policy
+        .authority
+        .rules
+        .iter()
+        .any(|r| r.pre_delegated)
+    {
+        return;
+    }
+    let moved = crate::desk::with_desk(state, |desk, cx, host| desk.lapse_delegations(cx, host));
+    let lapse_s = state.config.policy.delegation.disconnected_lapse_s;
+    publish(
+        state,
+        now,
+        Event::Link(LinkEvent::DelegationsLapsed {
+            endpoint: endpoint.clone(),
+            cut_off_since,
+            lapse_s,
+            withdrawn: moved.iter().map(|m| m.plan).collect(),
+            at: now,
+        }),
+    );
+    state.alerts.push(match lapse_s {
+        Some(s) => format!(
+            "node {endpoint} has been silent for {s:.0} s: the delegations in force when it \
+             went silent have lapsed (D-15); {} queued item(s) are no longer the delegated \
+             role's to decide",
+            moved.len()
+        ),
+        None => format!(
+            "node {endpoint} is silent and this deployment states no interval for an \
+             offline delegation, so none survives the disconnection (D-15); {} queued \
+             item(s) are no longer the delegated role's to decide",
+            moved.len()
+        ),
+    });
 }
 
 /// The embedded tracker during an outage, with every accepted detection also queued on
@@ -175,16 +349,16 @@ pub fn tick(state: &mut AppState) {
     };
     match (&state.backend, state.fallback.as_mut()) {
         (BackendConfig::Remote { endpoint }, None) => {
-            let Some(age) = link.last_heard_age() else {
-                return;
-            };
-            if age <= HEARTBEAT_TIMEOUT {
-                return;
+            // Silent past the timeout, judged against the node's own heartbeat (D-23). A
+            // link that has never been heard is not silent: it has not started. Neither
+            // case returns early, because the tail below -- the lapse, the history and the
+            // node's answers to a forwarded outage -- is owed on every tick (GAP-134).
+            if let Some(age) = link.last_heard_age().filter(|age| *age > HEARTBEAT_TIMEOUT) {
+                let endpoint = endpoint.clone();
+                let silent_s = age.as_secs_f64();
+                let last_seq = link.last_seq();
+                fall_back(state, &endpoint, silent_s, last_seq, now);
             }
-            let endpoint = endpoint.clone();
-            let silent_s = age.as_secs_f64();
-            let last_seq = link.last_seq();
-            fall_back(state, &endpoint, silent_s, last_seq, now);
         }
         (BackendConfig::Embedded, Some(fallback))
             if fallback.restored_at.is_none() && link.connected() =>
@@ -210,7 +384,62 @@ pub fn tick(state: &mut AppState) {
         }
         _ => {}
     }
+    // D-15's lapse, applied in the tick it falls due; a baseline that states no interval
+    // falls due in the tick this desktop fell back (GAP-134).
+    lapse_if_due(state, now);
     poll_history(state);
+    take_forward_replies(state, &link);
+}
+
+/// The node's answers to this desktop's forwarded outages (GAP-134).
+///
+/// Read on every tick, fallback or not: the switch back does not wait for the answer --
+/// the link retries a batch under the same identifiers until the node gives one, so a
+/// transient must not strand a desktop on its embedded services -- and so an answer can
+/// arrive after the switch. It is said either way; while the fallback still stands it is
+/// also PN-18's, and a refusal blocks the switch.
+fn take_forward_replies(state: &mut AppState, link: &NodeLink) {
+    for reply in link.take_forward_replies() {
+        let (forwarding, alert) = match reply {
+            ForwardReply::Accepted(a) => (
+                Forwarding::Accepted {
+                    recorded: a.recorded,
+                    already_held: a.already_held,
+                    settled: a.settled,
+                },
+                format!(
+                    "the node holds this desktop's outage: {} decision(s) recorded, {} it \
+                     already held, {} settlement(s) put on its record",
+                    a.recorded, a.already_held, a.settled
+                ),
+            ),
+            ForwardReply::Refused(refused) => {
+                let why = format!("{refused:?}");
+                (
+                    Forwarding::Refused(why.clone()),
+                    format!(
+                        "the node refused this desktop's outage and applied none of it: \
+                         {why}. The two records disagree about a decision and a person \
+                         has to see why"
+                    ),
+                )
+            }
+            ForwardReply::Rejected { status, reason } => {
+                let why = format!("{status}: {reason}");
+                (
+                    Forwarding::Refused(why.clone()),
+                    format!(
+                        "the node would not take this desktop's outage ({why}); nothing of \
+                         it is on the node's record"
+                    ),
+                )
+            }
+        };
+        state.alerts.push(alert);
+        if let Some(fallback) = state.fallback.as_mut() {
+            fallback.forwarding = forwarding;
+        }
+    }
 }
 
 fn fall_back(state: &mut AppState, endpoint: &str, silent_s: f64, last_seq: u64, now: MissionTime) {
@@ -237,6 +466,8 @@ fn fall_back(state: &mut AppState, endpoint: &str, silent_s: f64, last_seq: u64,
         last_seq,
         restored_at: None,
         reconciliation: None,
+        lapsed_at: None,
+        forwarding: Forwarding::Waiting,
     });
     state.pending_history = None;
     publish(
@@ -327,6 +558,10 @@ pub fn supply_history(state: &mut AppState, outcome: HistoryOutcome) {
                 None => Vec::new(),
             };
             let report = gungnir_resilience::reconcile(&local, &remote);
+            // D-58, first and whatever follows: both sides engaged one track, and no
+            // verdict below changes that. On the record and in front of a person before
+            // the rule is consulted about any plan (GAP-134).
+            journal_both_acted(state, &report.both_acted);
             // The GAP-067 walk: the rule resolves every conflict it can rank, now, and
             // leaves the rest for a person.
             let mut arbitrated = Vec::new();
@@ -350,6 +585,8 @@ pub fn supply_history(state: &mut AppState, outcome: HistoryOutcome) {
                 conflicts,
                 arbitrated,
                 resolved: Vec::new(),
+                resolved_by: std::collections::BTreeMap::new(),
+                both_acted: report.both_acted,
             })
         }
         HistoryOutcome::Gone { reason } => Err(format!(
@@ -361,6 +598,191 @@ pub fn supply_history(state: &mut AppState, outcome: HistoryOutcome) {
         }
     };
     set_reconciliation(state, result);
+    // The batch goes as soon as nothing in the merge waits for a person, which may be
+    // now: the rule settled every conflict, there were none, or the node's half could not
+    // be fetched and there is nothing to settle (GAP-134).
+    forward_if_settled(state);
+}
+
+/// Put each both-acted incident on the record and in front of a person (D-58, GAP-134).
+///
+/// **An alert per incident, never folded into the merge's summary line**: an effect in the
+/// world on a track somebody else also engaged is the one thing on PN-18 a person must not
+/// have to count their way to.
+fn journal_both_acted(state: &mut AppState, incidents: &[BothActed]) {
+    let now = state.clock.now();
+    for incident in incidents {
+        publish(
+            state,
+            now,
+            Event::Link(LinkEvent::BothActed {
+                track: incident.track,
+                local: incident.local,
+                remote: incident.remote,
+                at: now,
+            }),
+        );
+        state.alerts.push(both_acted_sentence(incident));
+    }
+}
+
+/// One both-acted incident in PN-18's words and the alert's (D-58).
+#[must_use]
+pub fn both_acted_sentence(incident: &BothActed) -> String {
+    format!(
+        "BOTH MAY HAVE ACTED on track {}: this desktop engaged it at T+{:.0} s (plan {}) \
+         while it was cut off, and the node engaged it at T+{:.0} s (plan {}). Choosing \
+         which record stands does not undo either; a person has to establish what happened \
+         to the track",
+        incident.track.0,
+        incident.local.at.0,
+        incident.local.plan.short(),
+        incident.remote.at.0,
+        incident.remote.plan.short(),
+    )
+}
+
+/// Send the outage's decisions to the node once nothing in the merge waits for a person
+/// (GAP-134, DN-31 §6.8).
+///
+/// Once per outage: a batch already sent, answered or refused is not sent again from
+/// here, and the link retries one that is unanswered under the same identifiers.
+fn forward_if_settled(state: &mut AppState) {
+    let Some(fallback) = state.fallback.as_ref() else {
+        return;
+    };
+    if fallback.forwarding != Forwarding::Waiting {
+        return;
+    }
+    let reconciliation = match &fallback.reconciliation {
+        None => return,
+        Some(Ok(r)) if !r.conflicts.is_empty() => return,
+        Some(Ok(r)) => Some(r),
+        Some(Err(_)) => None,
+    };
+    let batch = outage_batch(state, fallback, reconciliation);
+    let forwarding = if batch.is_empty() {
+        Forwarding::NothingDecided
+    } else {
+        let decisions = batch.len();
+        let settled = batch.iter().filter(|f| f.settled.is_some()).count();
+        match state.link.as_ref() {
+            Some(link) => {
+                link.queue_forward(batch);
+                state.alerts.push(format!(
+                    "forwarding this desktop's outage to the node: {decisions} decision(s), \
+                     {settled} with the settlement of a conflict"
+                ));
+                Forwarding::Sent { decisions }
+            }
+            // The link is what carries it; without one there is nowhere to send and no
+            // switch back to wait for either. Said rather than dropped.
+            None => Forwarding::Refused(
+                "the link to the node is gone, so the outage could not be forwarded; sign \
+                 in again"
+                    .to_string(),
+            ),
+        }
+    };
+    if let Some(f) = state.fallback.as_mut() {
+        f.forwarding = forwarding;
+    }
+}
+
+/// Every decision this desktop took while it was cut off, in the order it took them, as
+/// the node's route takes them (DN-31 §5.2, §6.8).
+///
+/// **Read from the desk's own record**, which holds each decision whole -- the plan with
+/// its assignments, the verdict, the choice and its reason, who and as which role, and
+/// when. The journal's `Decided` carries no plan body and could only have been joined back
+/// to one.
+///
+/// A decision, not an expiry: an expiry is a window that closed with nobody deciding, and
+/// MOE-11 counts the decisions people took. The expiries of this desktop's own queue stay
+/// on its own record, which the merge already reads.
+fn outage_batch(
+    state: &AppState,
+    fallback: &Fallback,
+    reconciliation: Option<&Reconciliation>,
+) -> Vec<ForwardedDecision> {
+    use gungnir_command::ApprovalWorkflow;
+    let Some(restored) = fallback.restored_at else {
+        return Vec::new();
+    };
+    state
+        .desk
+        .approvals
+        .records()
+        .iter()
+        .filter(|r| {
+            // `origin` is set only on a record another machine forwarded, which a desktop
+            // never admits; the filter says what "taken here" means rather than trusting it.
+            r.origin.is_none()
+                && !r.is_expiry()
+                && r.mission_time >= fallback.since
+                && r.mission_time <= restored
+        })
+        .map(|r| ForwardedDecision {
+            record: record_view(r),
+            origin: crate::session::DESKTOP_COMMON_NAME.to_string(),
+            settled: reconciliation.and_then(|rec| settlement_for(rec, r.plan.id)),
+        })
+        .collect()
+}
+
+/// A decision record as the route carries it: this desktop's record, field for field.
+fn record_view(
+    record: &gungnir_command::DecisionRecord,
+) -> gungnir_remote::queue::DecisionRecordView {
+    use gungnir_command::OperatorDecision;
+    use gungnir_remote::queue::DecisionChoice;
+    gungnir_remote::queue::DecisionRecordView {
+        decision: record.id,
+        item: record.item,
+        plan: record.plan.clone(),
+        verdict: record.verdict.summary(),
+        choice: match &record.decision {
+            OperatorDecision::Accepted => DecisionChoice::Accept,
+            OperatorDecision::Overridden => DecisionChoice::Override,
+            OperatorDecision::Rejected { reason } => DecisionChoice::Reject {
+                reason: reason.clone(),
+            },
+            // Filtered out by the caller; named so a change that let one through reaches
+            // the node's `400` rather than a rejection nobody made.
+            OperatorDecision::Expired { .. } => DecisionChoice::Reject {
+                reason: String::new(),
+            },
+        },
+        operator: record.operator_id.clone(),
+        role: record.role.clone(),
+        request: record.request.clone(),
+        at: record.mission_time,
+    }
+}
+
+/// What the merge settled about a plan, as the node is told it (MT-10 step 5): the rule's
+/// verdict with both sides as it read them, or a person's resolution and who made it.
+fn settlement_for(reconciliation: &Reconciliation, plan: PlanId) -> Option<Settlement> {
+    if let Some(a) = reconciliation
+        .arbitrated
+        .iter()
+        .find(|a| a.conflict.plan == plan)
+    {
+        return Some(Settlement::Rule {
+            kept_local: a.kept_local,
+            ground: a.ground,
+            local: a.conflict.local.clone(),
+            remote: a.conflict.remote.clone(),
+        });
+    }
+    reconciliation
+        .resolved
+        .iter()
+        .find(|(p, _)| *p == plan)
+        .map(|(_, kept_local)| Settlement::Person {
+            kept_local: *kept_local,
+            operator: reconciliation.resolved_by.get(&plan).cloned().flatten(),
+        })
 }
 
 /// Put each of the rule's verdicts on the record, as the rule's.
@@ -438,6 +860,17 @@ pub fn switch_back(state: &mut AppState) -> Result<(), String> {
                 r.conflicts.len()
             ));
         }
+    }
+    // GAP-134: a node that refused this outage holds none of it, and the two records
+    // disagree about a decision. Taking the node's picture back now would leave that for
+    // nobody. A batch still in flight does not hold the switch: the link sends it again
+    // under the same identifiers until the node answers, and blocking on a transient would
+    // strand this desktop on its embedded services for as long as the network hesitated.
+    if let Forwarding::Refused(why) = &fallback.forwarding {
+        return Err(format!(
+            "the node refused this desktop's outage and holds none of it ({why}); a person \
+             has to see why before switching back"
+        ));
     }
     let link = state
         .link
@@ -544,6 +977,9 @@ pub fn resolve_conflict(
     reconciliation.resolved.push((plan, keep_local));
     let now = state.clock.now();
     let operator = state.attributed_operator().map(|o| o.0.to_string());
+    if let Some(Some(Ok(r))) = state.fallback.as_mut().map(|f| f.reconciliation.as_mut()) {
+        r.resolved_by.insert(plan, operator.clone());
+    }
     crate::audit::record(
         state,
         actions::DECIDE_PLAN,
@@ -567,6 +1003,8 @@ pub fn resolve_conflict(
             at: now,
         }),
     );
+    // The last person's resolution is what lets the outage go (GAP-134).
+    forward_if_settled(state);
     Ok(())
 }
 
@@ -597,6 +1035,8 @@ pub enum ReconciliationView {
     OutageOngoing {
         endpoint: String,
         since: MissionTime,
+        /// Where D-15's delegations stand (GAP-134).
+        delegations: DelegationState,
     },
     /// The node is back; the outage's journals are reconciled, or the reason they could
     /// not be is here, or the fetch is still in flight.
@@ -609,7 +1049,46 @@ pub enum ReconciliationView {
         reconciliation: Option<Result<Reconciliation, String>>,
         /// Whether the switch back can be asked for now.
         can_switch_back: bool,
+        /// Where the outage's decisions stand on their way to the node (GAP-134).
+        forwarding: Forwarding,
+        /// Where D-15's delegations stand (GAP-134).
+        delegations: DelegationState,
     },
+}
+
+/// Where D-15's delegations stand on a cut-off desktop, as PN-18 says it (GAP-134).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DelegationState {
+    /// The baseline delegates nothing, so there is nothing to lapse.
+    NoneConfigured,
+    /// In force until this mission time.
+    InForceUntil(MissionTime),
+    /// Lapsed at this mission time.
+    Lapsed(MissionTime),
+}
+
+/// The delegation state for PN-18.
+fn delegation_state(state: &AppState, fallback: &Fallback) -> DelegationState {
+    if !state
+        .config
+        .policy
+        .authority
+        .rules
+        .iter()
+        .any(|r| r.pre_delegated)
+    {
+        return DelegationState::NoneConfigured;
+    }
+    match (
+        fallback.lapsed_at,
+        state.config.policy.delegation.disconnected_lapse_s,
+    ) {
+        (Some(at), _) => DelegationState::Lapsed(at),
+        (None, Some(s)) => DelegationState::InForceUntil(MissionTime(fallback.since.0 + s)),
+        // No interval stated: it lapses the tick it falls back, and this is read before
+        // that tick has run.
+        (None, None) => DelegationState::Lapsed(fallback.since),
+    }
 }
 
 #[must_use]
@@ -620,6 +1099,7 @@ pub fn reconciliation_view(state: &AppState) -> ReconciliationView {
             None => ReconciliationView::OutageOngoing {
                 endpoint: f.endpoint.clone(),
                 since: f.since,
+                delegations: delegation_state(state, f),
             },
             Some(to) => ReconciliationView::Due {
                 endpoint: f.endpoint.clone(),
@@ -637,16 +1117,19 @@ pub fn reconciliation_view(state: &AppState) -> ReconciliationView {
                     .count(),
                 reconciliation: f.reconciliation.clone(),
                 // Every conflict the rule could not rank resolved by a person (D-15), or
-                // the node's half was unavailable and the report says so; and the node
-                // answers.
+                // the node's half was unavailable and the report says so; the node has
+                // not refused the outage (GAP-134); and the node answers.
                 can_switch_back: f
                     .reconciliation
                     .as_ref()
                     .is_some_and(|r| r.as_ref().map_or(true, |r| r.conflicts.is_empty()))
+                    && !matches!(f.forwarding, Forwarding::Refused(_))
                     && state
                         .link
                         .as_ref()
                         .is_some_and(gungnir_remote::link::NodeLink::connected),
+                forwarding: f.forwarding.clone(),
+                delegations: delegation_state(state, f),
             },
         },
     }

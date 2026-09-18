@@ -141,6 +141,7 @@ pub(crate) fn with_desk<T>(
     let signed_in = signed_in(state);
     let operator = state.attributed_operator();
     let supersedes = crate::status::baseline_validity(state).supersedes_plans();
+    let delegations = crate::failover::delegations(state);
     let AppState {
         desk,
         tracking,
@@ -162,6 +163,7 @@ pub(crate) fn with_desk<T>(
         resources,
         config,
         baseline_supersedes_plans: supersedes,
+        delegations,
     };
     let mut host = DesktopHost {
         events,
@@ -229,6 +231,9 @@ pub(crate) fn with_context<T>(
         resources: &state.resources,
         config: &state.config,
         baseline_supersedes_plans: crate::status::baseline_validity(state).supersedes_plans(),
+        // The alternatives and the what-if are judged by the chain the plan in force was
+        // held to, and that chain reads the delegations as they stand now (GAP-134).
+        delegations: crate::failover::delegations(state),
     };
     let policy = PolicyInputs {
         geofences: &geo,

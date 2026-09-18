@@ -375,6 +375,12 @@ pub fn queue_rows(state: &AppState) -> Vec<QueueRow<'_>> {
     };
     let may_decide = role_permits(state.role(), DECISION_ACTION);
     let now = state.clock.now();
+    // The matrix the queue was offered under, with D-15's delegations as they stand now
+    // (GAP-134): a delegation that has lapsed is not drawn as though it still stood.
+    let authority = gungnir_policy::authority_in_force(
+        &state.config.policy.authority,
+        crate::failover::delegations(state),
+    );
     state
         .desk
         .approvals
@@ -393,7 +399,7 @@ pub fn queue_rows(state: &AppState) -> Vec<QueueRow<'_>> {
                 None => TimeRemaining::NoExpiryConfigured,
             },
             pre_delegated: is_pre_delegated(
-                &state.config.policy.authority,
+                &authority,
                 DECISION_ACTION,
                 &role_name,
                 &item.plan,
