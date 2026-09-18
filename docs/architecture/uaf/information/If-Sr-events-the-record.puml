@@ -116,6 +116,13 @@ enum "LinkEvent" as LinkEvent <<InformationElement>> {
   SwitchedBack { endpoint: String, at: MissionTime, merged: usize, conflicts: usize, node_history: bool, }
   ConflictResolved { plan: crate::PlanId, kept_local: bool, operator: Option<String>, at: MissionTime, }
   ConflictArbitrated { plan: crate::PlanId, kept_local: bool, ground: crate::arbitration::ArbitrationGround, local: crate::arbitration::ConflictSide, remote: crate::arbitration::ConflictSide, at: MissionTime, }
+  BothActed { track: crate::TrackId, local: EngagementSide, remote: EngagementSide, at: MissionTime, }
+  DelegationsLapsed { endpoint: String, cut_off_since: MissionTime, lapse_s: Option<f64>, withdrawn: Vec<crate::PlanId>, at: MissionTime, }
+}
+class "EngagementSide" as EngagementSide <<InformationElement>> {
+  decision: DecisionId
+  plan: PlanId
+  at: MissionTime
 }
 enum "RehearsalEvent" as RehearsalEvent <<InformationElement>> {
   Started { seed: String, seed_sha256: String, at: MissionTime, }
@@ -223,8 +230,12 @@ LaunchWarningEvent --> MissionTime : Refused
 LaunchWarningEvent --> PeerLaunchWarning : Received
 LinkEvent --> ArbitrationGround : ConflictArbitrated
 LinkEvent --> ConflictSide : ConflictArbitrated
-LinkEvent --> MissionTime : FellBack, Restored, SwitchedBack, ConflictResolved, ConflictArbitrated
-LinkEvent --> PlanId : ConflictResolved, ConflictArbitrated
+LinkEvent --> EngagementSide : BothActed
+LinkEvent --> MissionTime : FellBack, Restored, SwitchedBack, ConflictResolved, ConflictArbitrated, BothActed, DelegationsLapsed
+LinkEvent --> PlanId : ConflictResolved, ConflictArbitrated, DelegationsLapsed
+EngagementSide --> DecisionId : decision
+EngagementSide --> MissionTime : at
+EngagementSide --> PlanId : plan
 RehearsalEvent --> MissionTime : Started
 ReplayEvent --> MissionTime : Opened, Closed
 ReplayEvent --> SessionId : Opened, Closed
