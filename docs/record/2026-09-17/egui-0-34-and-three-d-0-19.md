@@ -269,10 +269,12 @@ either, so both hand-kept sections stay.
 ## Tests
 
 Every test passes with its assertions unchanged. Before merging main: 1,989 tests, the same
-list with the same outcomes as `main` at `1af6543` (1,985 pass, four ignored). After merging
-main at `7a766b4`: 2,001, all passing, twelve of them new from main. No rendered-panel
-assertion needed changing: the render probe reads what egui drew and in what order, and
-egui 0.34's new text path moved nothing any assertion reads.
+list with the same outcomes as `main` at `1af6543` (1,985 pass, four ignored). Main moved
+four times while this was done and was merged three times, last at `8ecc672`, and the whole
+suite ran again after each merge: at the last, 2,004 tests, 2,000 passing and the same four
+ignored, fifteen of them new from main. No rendered-panel assertion needed changing: the
+render probe reads what egui drew and in what order, and egui 0.34's new text path moved
+nothing any assertion reads.
 
 Two test functions in `gungnir-ui/src/theme.rs` had to change, and only to follow renames.
 `the_installer_lands_on_the_context` read `ctx.style()` and asserted
