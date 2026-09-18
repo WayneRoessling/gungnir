@@ -169,14 +169,27 @@ impl ApprovalHost for NodeHost<'_> {
         });
     }
 
-    /// **A no-op on a node, deliberately, until GAP-133** (DN-31 §6.5).
+    /// **A no-op on a node, deliberately** (DN-31 §6.5, GAP-137).
     ///
     /// The node's exchange register for handoffs is written by the desktops that hold
     /// them (DN-18 §5 amendment 2, GAP-065), and `publish_exchange` replaces a set rather
-    /// than adding to it. While a linked desktop still issues handoffs for a node's plans
-    /// -- which it does until GAP-133 stops it -- a node writing its own set there would
-    /// be two writers to one register, each silently overwriting the other. Filed as
-    /// GAP-137 rather than half-wired here.
+    /// than adding to it, so two writers would each silently overwrite the other.
+    ///
+    /// **Corrected 2026-09-17 (GAP-133).** This said the second writer was a linked
+    /// desktop issuing handoffs for a node's plan, and that GAP-133 would remove it.
+    /// GAP-133 has: a linked desktop queues no node plan, so it records no decision on
+    /// one, and `ApprovalDesk::issue_for` -- the only caller of this trait method -- is
+    /// reached from `decide_for` alone. A desktop that is linked and has taken no local
+    /// decision never writes the register at all.
+    ///
+    /// **What still stands in the way is a different writer.** A desktop that falls back
+    /// keeps its `NodeLink` (`gungnir-app/src/failover.rs`, `fall_back`), decides on its
+    /// own queue while cut off, and queues its whole handoff set on the link's exchange
+    /// outbox; the batch is delivered on reconnect and replaces whatever the node holds.
+    /// Wiring the node's set in now would make it the set that disappears the first time
+    /// any desktop recovers from an outage -- the same failure, found one layer along.
+    /// Giving the register a producer per writer is a `gungnir-api` write path and a
+    /// DN-18 amendment, so GAP-137 stays open rather than being half-wired here.
     fn republish_handoffs(&mut self, _handoffs: &[HandoffRecord]) {}
 }
 
