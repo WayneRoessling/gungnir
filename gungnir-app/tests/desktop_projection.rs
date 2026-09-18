@@ -15,7 +15,7 @@
 //! # What is real here and what is not
 //!
 //! The node is the real one: `gungnir_node::approval`'s `propose`, `sweep`,
-//! `answer_decisions` and `audit_refused_decisions`, called in the order
+//! `answer_decisions`, `answer_forwarded` and `audit_refused_decisions`, called in the order
 //! `gungnir-node/src/main.rs` calls them, against one `NodeApproval`, with the real
 //! `gungnir-api` transport bound to loopback and the bus drained into
 //! `NodeApi::publish_event` exactly as the binary drains it. The desktops are real
@@ -279,6 +279,7 @@ impl Node {
                         // `main.rs`'s order.
                         approval::sweep(&mut state.approval, &frame);
                         let _ = approval::answer_decisions(&mut state.approval, &frame, &api);
+                        approval::answer_forwarded(&mut state.approval, &frame, &api);
                         approval::audit_refused_decisions(&mut state.approval, &frame, &api);
                         let queue = state.approval.queue_view(&config, &resources, &tracks);
                         state.tracks = tracks;
