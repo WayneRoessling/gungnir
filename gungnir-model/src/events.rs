@@ -868,6 +868,64 @@ pub enum LinkEvent {
         remote: crate::arbitration::ConflictSide,
         at: MissionTime,
     },
+    /// Two engagements of one track were opened on the two sides of an outage (D-58,
+    /// DN-31 §5.3 and §6.8; GAP-134).
+    ///
+    /// **Raised whatever the plans were and whatever the arbitration rule decided about
+    /// any of them**, because choosing which record stands does not undo an effect in the
+    /// world. A cut-off desktop plans from its own picture, so its plans never share
+    /// identifiers with the node's and [`LinkEvent::ConflictArbitrated`] can never find
+    /// this: the two sides agree about every plan they hold and still both engaged the
+    /// same track. That is the gap D-58 exists to close, and it is an incident for a
+    /// person rather than something the rule resolves -- nothing here says which
+    /// engagement stands, because both happened.
+    BothActed {
+        track: crate::TrackId,
+        /// The engagement this desktop opened while it was cut off.
+        local: EngagementSide,
+        /// The engagement the node opened meanwhile.
+        remote: EngagementSide,
+        at: MissionTime,
+    },
+    /// D-15's delegations lapsed on a desktop that has been cut off from its node for
+    /// longer than `policy.delegation.disconnected_lapse_s` (DN-31 §6.7; GAP-134).
+    ///
+    /// **Not a panel's note.** A lapse withdraws the delegated role's offer from every
+    /// queue item the delegation was the only grant for, so this records a change in what
+    /// those items are actionable by, and `withdrawn` names each one. An empty
+    /// `withdrawn` is a real answer: the delegations lapsed and nothing was waiting on
+    /// one.
+    DelegationsLapsed {
+        endpoint: String,
+        /// When this desktop lost the node, which is when the interval started running.
+        cut_off_since: MissionTime,
+        /// The interval that has now elapsed, or `None` where the baseline stated none
+        /// and no delegation survived the disconnection at all.
+        lapse_s: Option<f64>,
+        /// The plans whose queue items stopped being actionable by the role they had
+        /// been delegated to.
+        withdrawn: Vec<crate::PlanId>,
+        at: MissionTime,
+    },
+}
+
+/// One side of a both-acted incident: the engagement one side of an outage opened
+/// (D-58, GAP-134).
+///
+/// **Beside [`LinkEvent`] rather than in `crate::arbitration`**, where
+/// [`crate::arbitration::ConflictSide`] lives, because nothing ranks these two against
+/// each other. A `ConflictSide` carries what D-03's rule reads -- an outcome, a role, a
+/// time -- so that one side can be kept over the other. Both sides of this happened, and
+/// putting the type where the rule's inputs live would invite a later reader to rank them.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EngagementSide {
+    /// The decision the engagement was opened on.
+    pub decision: DecisionId,
+    /// The plan that decision decided. The two sides name different plans in the case
+    /// this event exists for, which is why the incident is keyed on the track.
+    pub plan: PlanId,
+    /// When the engagement was opened, as that side's journal timed it.
+    pub at: MissionTime,
 }
 
 /// A seeded session for a usability round (GAP-089). **The first record of a seeded

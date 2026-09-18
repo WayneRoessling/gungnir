@@ -77,6 +77,15 @@ use gungnir_model::{DecisionId, MissionTime, PendingApprovalId, PlanId, RequestI
 /// another crate owns).
 pub use gungnir_api::v3::{DecisionChoice, DecisionRefused, QueueItemView};
 
+/// The forwarded-decision wire types (GAP-134, DN-31 §5.2), re-exported for the same
+/// reason as the three above: an outage's decisions are the **forwarding machine's own
+/// record**, and the node's `202` and `409` are its answers, read back whole. A mirror of
+/// any of them would be a second description of what the route defines, and the `409` is
+/// the sentence PN-18 shows a person.
+pub use gungnir_api::v3::{
+    DecisionRecordView, ForwardAccepted, ForwardRefused, ForwardedDecision, Settlement,
+};
+
 /// How many ended items a link remembers, oldest dropped.
 ///
 /// PN-06 shows what has lately been decided so that an operator at one console sees a
@@ -341,6 +350,32 @@ pub struct DecisionOutcome {
     pub request: RequestId,
     pub item: PendingApprovalId,
     pub answer: DecisionAnswer,
+}
+
+/// An outage's decisions on their way to `POST /v3/decisions/forwarded` (GAP-134,
+/// DN-31 §6.8).
+///
+/// **One outage, one batch, sent whole.** The node takes a batch whole or not at all, so
+/// holding the outage as one value here is what keeps the two ends agreeing about what
+/// "sent" means: there is no half-sent outage on either side.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutboundForward {
+    pub decisions: Vec<ForwardedDecision>,
+    /// How many times the batch has been posted. A batch that keeps meeting a `504` is
+    /// shown as still in flight rather than as one that quietly never landed.
+    pub attempts: u32,
+}
+
+/// What the node answered an outage's batch with (DN-31 §7).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ForwardReply {
+    /// `202`: the whole batch is on the node's record.
+    Accepted(ForwardAccepted),
+    /// `409`: it contradicts what the node holds, and **none of it was applied**. Boxed
+    /// because it can carry a whole record, plan included.
+    Refused(Box<ForwardRefused>),
+    /// `400`, `401` or `403`: the node would not take it, and nothing was recorded.
+    Rejected { status: u16, reason: String },
 }
 
 /// Whether a status means the decision should be posted again under the same key.

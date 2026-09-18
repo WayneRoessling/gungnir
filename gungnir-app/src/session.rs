@@ -253,6 +253,15 @@ pub fn link_tls(state: &AppState) -> gungnir_remote::LinkTls {
     link_tls_for(&state.config)
 }
 
+/// The common name this desktop's link identity carries (D-02), and therefore the machine
+/// identity it gives a decision it forwards after an outage (DN-31 §5.2, GAP-134).
+///
+/// **One constant for both**, so the name a node verifies at the handshake and the name a
+/// forwarded decision's `origin` gives cannot come to differ. It is the same for every
+/// desktop today, which is GAP-141: an origin can say a decision was taken on a desktop
+/// rather than on the node, and cannot yet say which desktop.
+pub const DESKTOP_COMMON_NAME: &str = "gungnir-app";
+
 /// As [`link_tls`], from the baseline alone, for the peer links bound before the state
 /// exists.
 pub fn link_tls_for(config: &gungnir_config::ConfigBaseline) -> gungnir_remote::LinkTls {
@@ -299,10 +308,10 @@ pub fn link_tls_for(config: &gungnir_config::ConfigBaseline) -> gungnir_remote::
         gungnir_config::KeyProviderConfig::OperatingSystemKeystore { .. } => {
             gungnir_remote::identity::issue_desktop_outbound_identity(
                 std::path::Path::new(&config.data_dir),
-                "gungnir-app",
+                DESKTOP_COMMON_NAME,
             )
         }
-        _ => gungnir_remote::identity::issue_for_client("gungnir-app"),
+        _ => gungnir_remote::identity::issue_for_client(DESKTOP_COMMON_NAME),
     }
     .map_err(|err| tracing::warn!(%err, "this desktop could not issue its own identity"))
     .ok();

@@ -57,6 +57,26 @@ file:
 If the node cannot be reached the desktop falls back to the embedded services and
 shows an alert (`ARCHITECTURE.md` §8.4).
 
+**State how long a delegation survives a lost node.** A desktop cut off from its node
+keeps the delegations in force when the node went silent for
+`policy.delegation.disconnected_lapse_s` seconds and then lets them lapse, and makes no new
+one while cut off (D-15; `docs/design/DN-31-node-approval-queue.md` §6.7 and §7). The
+setting has **no default**: leave it out and no delegation survives the disconnection at
+all, which is the strictest reading rather than an interval this build chose for you. A
+stated value must be finite and positive, or the baseline is refused.
+
+```json
+{
+  "version": 1,
+  "backend": { "kind": "remote", "endpoint": "http://node.local:7410" },
+  "policy": { "delegation": { "disconnected_lapse_s": 300 } }
+}
+```
+
+When the node answers again the desktop reconciles the outage on PN-18 -- two engagements
+of one track on the two sides are shown first, for a person -- and forwards every decision
+it took while cut off to the node, which puts each on its record once.
+
 ## Cloud
 
 The same image runs unchanged in a cloud container platform. Differences from

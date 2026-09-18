@@ -117,8 +117,8 @@ pub use plans::{
     PendingApprovalId, PlanKind, RequestId, REQUEST_ID_MAX_LEN,
 };
 pub use policy_settings::{
-    AuthorityRule, AuthoritySettings, ControlStatusSettings, DecisionSettings, FiresSettings,
-    IdentificationSettings, PolicySettings, StalenessSettings, ValidityWindow,
+    AuthorityRule, AuthoritySettings, ControlStatusSettings, DecisionSettings, DelegationSettings,
+    FiresSettings, IdentificationSettings, PolicySettings, StalenessSettings, ValidityWindow,
     WeaponsControlStatus,
 };
 pub use profiles::{AlgorithmBaselineId, MissionProfile};

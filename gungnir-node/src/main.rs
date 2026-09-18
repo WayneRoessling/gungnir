@@ -2026,6 +2026,10 @@ async fn run(
         // everything they publish is on disk in the tick it happened.
         approval::sweep(&mut approval_desk, &frame);
         approval::answer_decisions(&mut approval_desk, &frame, &api)?;
+        // GAP-134: what a desktop decided while it was cut off from this node, each batch
+        // put on the record whole or not at all (DN-31 §6.8). Beside the decisions and
+        // before the journal append, for the same reason.
+        approval::answer_forwarded(&mut approval_desk, &frame, &api);
         approval::audit_refused_decisions(&mut approval_desk, &frame, &api);
 
         for envelope in journal_rx.try_iter() {

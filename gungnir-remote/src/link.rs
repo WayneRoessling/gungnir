@@ -155,6 +155,15 @@ pub struct Projection {
     /// key is what makes the retry the same request instead of a second decision.
     pub decision_outbox: std::collections::VecDeque<crate::queue::OutboundDecision>,
     pub decision_outcomes: Vec<crate::queue::DecisionOutcome>,
+    /// Outages' decisions on their way to `POST /v3/decisions/forwarded`, oldest first,
+    /// and the node's answer to each (GAP-134, DN-31 §6.8).
+    ///
+    /// Retried under the same identifiers until the node answers, as the decision outbox
+    /// is and for the same reason: a `504` does not mean nothing was recorded. It is safe
+    /// to send a batch again because the node keys it on each decision's own identifier
+    /// and answers a repeat `already_held`.
+    pub forward_outbox: std::collections::VecDeque<crate::queue::OutboundForward>,
+    pub forward_replies: Vec<crate::queue::ForwardReply>,
 }
 
 /// A sensor task on its way to the node (GAP-004).
@@ -399,6 +408,43 @@ impl NodeLink {
             .unwrap_or_default()
     }
 
+    /// Hand an outage's decisions to the link, for `POST /v3/decisions/forwarded`
+    /// (GAP-134, DN-31 §6.8).
+    ///
+    /// **Nothing is recorded anywhere by calling this.** The batch is posted whole when
+    /// the node answers, and the node's answer comes back through
+    /// [`NodeLink::take_forward_replies`]. An empty batch is not queued: there is nothing
+    /// for the node to take, and an empty post would be a `202` that claimed an outage
+    /// had been forwarded when nothing was decided in it.
+    pub fn queue_forward(&self, decisions: Vec<crate::queue::ForwardedDecision>) {
+        if decisions.is_empty() {
+            return;
+        }
+        if let Ok(mut p) = self.projection.lock() {
+            p.forward_outbox.push_back(crate::queue::OutboundForward {
+                decisions,
+                attempts: 0,
+            });
+        }
+    }
+
+    /// The node's answers to the batches posted since the last call.
+    #[must_use]
+    pub fn take_forward_replies(&self) -> Vec<crate::queue::ForwardReply> {
+        self.projection
+            .lock()
+            .map(|mut p| std::mem::take(&mut p.forward_replies))
+            .unwrap_or_default()
+    }
+
+    /// Batches posted and not yet answered, oldest first (GAP-134), for PN-18.
+    #[must_use]
+    pub fn forwards_in_flight(&self) -> Vec<crate::queue::OutboundForward> {
+        self.read()
+            .map(|p| p.forward_outbox.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
     /// Hand this desktop's current held set for `item` to the link, to replace what the
     /// node holds (GAP-065, DN-18 §5 amendment 2).
     ///
@@ -484,6 +530,8 @@ struct Urls {
     /// DN-31 §7). One URL and one prefix rather than two paths, exactly as `tasks` is the
     /// prefix `SENSOR_TASK` is filled in from.
     queue: String,
+    /// Where an outage's decisions go when the node answers again (GAP-134, DN-31 §7).
+    forwarded: String,
     /// True for an `https` endpoint: the stream is `wss` over our own TLS stream.
     tls: bool,
     host: String,
@@ -545,6 +593,7 @@ fn urls(endpoint: &RemoteEndpoint) -> Result<Urls, RemoteError> {
         exchange_reports: format!("{base}{}", path(routes::EXCHANGE_REPORTS)),
         exchange_handoffs: format!("{base}{}", path(routes::EXCHANGE_HANDOFFS)),
         queue: format!("{base}{}", path(routes::QUEUE)),
+        forwarded: format!("{base}{}", path(routes::DECISIONS_FORWARDED)),
         events: format!("{scheme}://{rest}{}", path(routes::EVENTS)),
         tls,
         host,
@@ -838,6 +887,7 @@ async fn run_link(
                 flush_tasks(&client, urls, &token, projection).await;
                 flush_exchange(&client, urls, &token, projection).await;
                 flush_decisions(&client, urls, &token, projection).await;
+                flush_forwarded(&client, urls, &token, projection).await;
                 // A picture the stream asked for and a failed fetch left owing. The
                 // stream's own branch below takes it as soon as the event arrives; this
                 // is what bounds the retry at one forward interval rather than at the
@@ -1150,6 +1200,98 @@ async fn flush_decisions(
                 answer,
             });
         }
+    }
+}
+
+/// Post the outages' batches, oldest first (GAP-134, DN-31 §6.8).
+///
+/// **The same rule as [`flush_decisions`]**: a `202`, a `409` and a `400`/`401`/`403` are
+/// answers and are delivered; a `504` or `503`, or no connection at all, is not, and the
+/// same batch goes again. That is safe because the node keys the batch on each decision's
+/// own identifier, answering a repeat `already_held` and recording nothing -- which is
+/// "forwarding twice records nothing new" seen from this side.
+async fn flush_forwarded(
+    client: &reqwest::Client,
+    urls: &Urls,
+    token: &str,
+    projection: &Arc<Mutex<Projection>>,
+) {
+    for _ in 0..4 {
+        let Some(batch) = projection
+            .lock()
+            .ok()
+            .and_then(|p| p.forward_outbox.front().cloned())
+        else {
+            return;
+        };
+        let response = match with_token(client.post(&urls.forwarded), token)
+            .json(&batch.decisions)
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                tracing::warn!(%err, decisions = batch.decisions.len(), "the node could not be reached with an outage's decisions");
+                count_forward_attempt(projection);
+                return;
+            }
+        };
+        let status = response.status().as_u16();
+        if crate::queue::retry_under_same_key(status) {
+            tracing::info!(
+                status,
+                decisions = batch.decisions.len(),
+                "the node has not answered an outage's decisions yet; sending the same batch again"
+            );
+            count_forward_attempt(projection);
+            return;
+        }
+        let body = response.text().await.unwrap_or_default();
+        let reply = forward_reply_of(status, &body);
+        if let Ok(mut p) = projection.lock() {
+            p.forward_outbox.pop_front();
+            p.forward_replies.push(reply);
+        }
+    }
+}
+
+/// One more attempt against the batch at the head of the forward outbox.
+fn count_forward_attempt(projection: &Arc<Mutex<Projection>>) {
+    if let Ok(mut p) = projection.lock() {
+        if let Some(head) = p.forward_outbox.front_mut() {
+            head.attempts = head.attempts.saturating_add(1);
+        }
+    }
+}
+
+/// What the node's answer to a batch means (DN-31 §7). A body that does not decode is
+/// reported as the status and the text, never guessed at, for the reason [`answer_of`]
+/// gives.
+fn forward_reply_of(status: u16, body: &str) -> crate::queue::ForwardReply {
+    use crate::queue::ForwardReply;
+    if status == 202 {
+        return match serde_json::from_str::<gungnir_api::v3::ForwardAccepted>(body) {
+            Ok(accepted) => ForwardReply::Accepted(accepted),
+            Err(err) => ForwardReply::Rejected {
+                status,
+                reason: format!(
+                    "the node took the outage's decisions and its answer could not be read: {err}"
+                ),
+            },
+        };
+    }
+    if status == 409 {
+        return match serde_json::from_str::<gungnir_api::v3::ForwardRefused>(body) {
+            Ok(refused) => ForwardReply::Refused(Box::new(refused)),
+            Err(err) => ForwardReply::Rejected {
+                status,
+                reason: format!("the node refused the outage's decisions for a reason this desktop could not read: {err}"),
+            },
+        };
+    }
+    ForwardReply::Rejected {
+        status,
+        reason: body.trim().to_owned(),
     }
 }
 

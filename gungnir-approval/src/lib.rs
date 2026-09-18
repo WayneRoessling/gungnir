@@ -104,6 +104,15 @@ pub struct ApprovalContext<'a> {
     /// lives in the user-interface layer, which a productization crate may not reach. One
     /// rule, in the host, read by both.
     pub baseline_supersedes_plans: bool,
+    /// Whether D-15's delegations are in force for this host (DN-31 §6.7; GAP-134).
+    ///
+    /// Passed in for the same reason as the field above: whether this host has lost its
+    /// node, and for how long, is the host's to know. A node and a linked desktop pass
+    /// [`gungnir_policy::Delegations::AsConfigured`]; a desktop cut off for longer than
+    /// the configured interval passes `Lapsed`, and every authority question the desk
+    /// asks -- the chain's verdict, the offering, the delegation flag -- is then asked of
+    /// the matrix without the delegated rules ([`ApprovalContext::authority`]).
+    pub delegations: gungnir_policy::Delegations,
 }
 
 impl<'a> ApprovalContext<'a> {
@@ -133,7 +142,20 @@ impl<'a> ApprovalContext<'a> {
             resources: self.resources,
             config: self.config,
             baseline_supersedes_plans: self.baseline_supersedes_plans,
+            delegations: self.delegations,
         }
+    }
+
+    /// The authority matrix in force for this host, with D-15's delegations applied
+    /// (DN-31 §6.7; GAP-134).
+    ///
+    /// **The one place the desk reads the matrix from.** Reading
+    /// `config.policy.authority` directly would ask a lapsed desktop's questions of a
+    /// matrix that still holds the delegation, and the item would stay actionable by the
+    /// role that lost it -- which is the lapse reaching a panel and not the queue.
+    #[must_use]
+    pub fn authority(&self) -> std::borrow::Cow<'a, gungnir_model::AuthoritySettings> {
+        gungnir_policy::authority_in_force(&self.config.policy.authority, self.delegations)
     }
 }
 

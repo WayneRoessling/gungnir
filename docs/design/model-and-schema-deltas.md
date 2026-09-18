@@ -57,6 +57,11 @@ is how a canonical model stops being canonical.
 | `gungnir-api` v3 | New: `QueueItemView`, `DecisionRequest`, `DecisionChoice`, `DecisionRecorded`, `DecisionRefused` | Yes, new | DN-31 §5.2; GAP-132 |
 | `CommandEvent` | Loses `ApprovalRequested(PlanId)`, which nothing published | **No**, and no journal holds one | DN-31 §5.3 and amendment 1 |
 | **`SCHEMA_VERSION`** | **3 becomes 4**, and the interface path `/v2` becomes `/v3` | **No** | D-56; every `/v2` route answers `410 Gone` naming its successor |
+| `LinkEvent` | Gains `BothActed { track, local, remote, at }`, each side an `EngagementSide { decision, plan, at }` beside `LinkEvent` rather than in `arbitration`, because nothing ranks the two | Yes -- a new variant | D-58, DN-31 §5.3; GAP-134: two engagements of one track across an outage, for a person, whatever any verdict said |
+| `LinkEvent` | Gains `DelegationsLapsed { endpoint, cut_off_since, lapse_s, withdrawn, at }` | Yes -- a new variant | D-15, DN-31 §6.7; GAP-134. **Not in DN-31 §5.3's list**: a lapse changes what queued items are actionable by, and the record names the ones it withdrew |
+| `PolicySettings` | Gains `delegation: DelegationSettings { disconnected_lapse_s: Option<f64> }` | Yes, defaulted -- to silence, which is no interval rather than a default one | D-15, DN-31 §7; GAP-134 |
+| `gungnir-api` v3 | New: `DecisionRecordView`, `ForwardedDecision { record, origin, settled }`, `Settlement`, `ForwardAccepted`, `ForwardRefused` | Yes, new. **`settled` is beyond §5.2's two fields**, defaulted, and carries §6.8's forwarded verdicts on the one route §7 gives | DN-31 §5.2, §6.8, §7; GAP-134 |
+| `gungnir_command::ApprovalWorkflow` | Gains `admit_forwarded`, keyed on the `DecisionId` and idempotent on it, and `reoffer` for a lapse | Not a wire change | DN-31 §6.7, §6.8; GAP-134 |
 
 ## 3. The one breaking change
 
@@ -128,6 +133,7 @@ one exception.
 | `misb_feeds: Vec<MisbFeedConfig>` (GAP-099, 2026-09-08) | external standards §8 | Empty, no ISR platform telemetry; a feed name or a receiver claimed twice, a sensor that is not in the sensor list, an unparseable `ip:port`, an empty recording path |
 | `radar_feeds[].df_sites: Vec<DfSiteConfig>` (GAP-100, 2026-09-08) | external standards §9.1 | Empty, every Category 205 report counted `unknown_radar`; SAC/SIC and the sensor named for position, so an unknown sensor, a SAC/SIC or a sensor bound twice, and an `azimuth_sigma_rad` that is not finite and positive are all rejected -- never defaulted, since edition 1.0 carries no usable angular error on the wire |
 | `radar_feeds[].uas_sites: Vec<UasSiteConfig>` (GAP-101, 2026-09-08) | external standards §9.3 | Empty, every Category 129 report counted `unknown_radar`; SAC/SIC and the sensor it takes its identity from, no position, so an unknown sensor or a SAC/SIC or a sensor bound twice is rejected. **`00`/`00` is accepted**, being the specification's own recommended pair for an airborne-to-ground broadcast; it is the duplicate that is refused, not the placeholder. **A feed binds a radar, a direction finder or a UAS gateway**; one that binds none of the three is rejected |
+| `policy.delegation.disconnected_lapse_s` (GAP-134, 2026-09-17) | DN-31 §7, D-15 | **None, and absent is not a default interval**: a desktop cut off under a baseline that states none holds no delegation from the moment it falls back. Stated, it must be finite and positive, or the baseline is refused |
 
 **`resources[].layer` is the only mandatory addition.** It is mandatory because MOE-03 is
 defined by it, and defaulting it would silently corrupt the product's headline measure.
@@ -185,6 +191,7 @@ path version with the model change and the two arrive together.
 | `POST /v2/reviews`, `/findings`, `/state`, `GET /v2/reviews` | DN-20 | `review.conduct`, `picture.view` |
 | `GET /v2/handover`, `POST /v2/handover/acknowledge` | DN-21 | `picture.view`, `handover.acknowledge` |
 | `GET /v2/history?since_seq=N` | GAP-050 (2026-09-06) | `picture.view` | Built: the retained window from `N`, `410 Gone` past it |
+| `POST /v3/decisions/forwarded` | DN-31 §7, GAP-134 (2026-09-17) | `plan.decide` | Built: a batch taken whole or not at all; `202` counted, `409` naming what stands. New in `/v3`, so it has no `/v2` form |
 
 **Landed 2026-09-06**: `Event` gained `Engagement(EngagementEvent)` and
 `Review(ReviewEvent)`, with the engagement outcome vocabulary in
@@ -254,6 +261,15 @@ defaulted field or a new enum variant, which the interface's own compatibility r
 compatible, and every payload that already read still reads. `ApprovalWorkflow::decide`
 takes a `DecidedBy` in place of two `Option<String>`s, so the operator, the role and the
 request key of one act cannot be passed separately and disagree.
+
+**Landed 2026-09-17, GAP-134**: an outage's decisions reach the node. `LinkEvent` gained
+`BothActed` (D-58), with its sides as `gungnir_model::events::EngagementSide`, and
+`DelegationsLapsed` (D-15); `PolicySettings` gained `delegation`, whose one field
+`disconnected_lapse_s` has no default; `gungnir-api` v3 gained the forwarded route's types,
+`ForwardedDecision` carrying a defaulted `settled` beside DN-31 §5.2's `record` and
+`origin`; and `gungnir_resilience::ReconcileReport` gained `both_acted`. `CommandEvent::Decided`
+already carried `origin` and now a forwarded decision fills it. **`SCHEMA_VERSION` stays 4**
+for the reason GAP-132's additions left it there.
 
 `SnapshotResponse` gains `assets`, `predictions`, `engagements`, `requirements`,
 `hazards`, and `control_status`, and is filtered per caller by DN-17. The filtering is a

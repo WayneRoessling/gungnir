@@ -27,15 +27,20 @@
 //! calls them, and `gungnir-node/tests/approval_queue.rs` drives the same source rather
 //! than a copy of it kept in step by hand.
 
-use gungnir_api::transport::{DecisionAnswer, NodeApi, PendingDecision, RefusedDecision};
+use gungnir_api::transport::{
+    DecisionAnswer, ForwardAnswer, NodeApi, PendingDecision, PendingForward, RefusedDecision,
+};
 use gungnir_api::v3;
 use gungnir_approval::{
     ApprovalContext, ApprovalDesk, ApprovalHost, DeliveryAnswer, HandoffInFlight, HandoffRecord,
     HandoffTransport, PolicyInputs, SignedIn, Submitted,
 };
-use gungnir_command::{ApprovalWorkflow, CommandError, OperatorDecision};
+use gungnir_command::{
+    ApprovalWorkflow, CommandError, DecisionRecord, ForwardOutcome, OperatorDecision,
+};
 use gungnir_config::ConfigBaseline;
 use gungnir_eventing::{Event, EventBus, InProcessBus};
+use gungnir_model::events::LinkEvent;
 use gungnir_model::{MissionTime, PlanView, ResourceView, TrackView};
 use gungnir_remote::endpoint::{DeliveryOutcome, EndpointClient, PendingDelivery};
 use gungnir_security::{actions, AuditEntry, AuditLog, InMemoryAuditLog, OperatorId, Role};
@@ -54,6 +59,14 @@ pub struct NodeApproval {
     /// The node's own log, because the node is now where the decision happens: a desktop's
     /// log holds what that console did, and neither is the other's record.
     pub audit: InMemoryAuditLog,
+    /// What each outage's reconciliation settled, per plan, as forwarded (GAP-134,
+    /// DN-31 §6.8; MT-10 step 5).
+    ///
+    /// Kept so a settlement is put on the journal once however many times its batch is
+    /// sent, and so a second, different settlement of one plan is refused rather than
+    /// journaled beside the first. The journal is where a reviewer reads them; this is
+    /// only what makes the exactly-once checkable without re-reading it.
+    pub settlements: std::collections::BTreeMap<gungnir_model::PlanId, v3::Settlement>,
 }
 
 impl NodeApproval {
@@ -63,6 +76,7 @@ impl NodeApproval {
         Self {
             desk: ApprovalDesk::new(config.policy.decisions.clone()),
             audit: InMemoryAuditLog::new(),
+            settlements: std::collections::BTreeMap::new(),
         }
     }
 
@@ -277,12 +291,16 @@ fn with_desk<T>(
         // rule that decides this on a desktop stays the desktop's, in `status.rs`, which
         // is the one place it lives.
         baseline_supersedes_plans: false,
+        // **A node never loses its node**, so D-15's lapse never applies here: the
+        // delegations the baseline configures are the delegations in force. The lapse is
+        // a cut-off desktop's (DN-31 §6.7).
+        delegations: gungnir_policy::Delegations::AsConfigured,
     };
     let policy = PolicyInputs {
         geofences: frame.geofences,
         friendly_positions: friendly.as_deref(),
     };
-    let NodeApproval { desk, audit } = approval;
+    let NodeApproval { desk, audit, .. } = approval;
     let mut host = NodeHost {
         bus: frame.bus,
         audit,
@@ -457,6 +475,235 @@ fn already_ended(
     };
     let detail = format!("item {item}: {refused:?}");
     (DecisionAnswer::Refused(refused), detail)
+}
+
+/// Put each forwarded outage on the node's record, whole or not at all (DN-31 §6.8;
+/// GAP-134).
+///
+/// **Checked first, applied second.** Every record in the batch is compared with what the
+/// node already holds under its identifier, and every settlement with what the node holds
+/// for its plan, before anything is written. A contradiction anywhere refuses the whole
+/// batch `409` naming what stands, and nothing is applied: a desktop that sees a refusal
+/// has left the node holding none of its outage, never the part that came before the
+/// record that disagreed.
+///
+/// Then each record goes through [`ApprovalDesk::admit_forwarded`] -- recorded once,
+/// `Decided` published with its `origin`, one audit entry -- and each settlement not yet
+/// on the journal is published under the event the forwarding desktop journaled it as.
+/// **Nothing is queued, engaged or handed off**: the desktop did those while it was cut
+/// off, and doing them again here would be the double engagement D-58 reports.
+pub fn answer_forwarded(approval: &mut NodeApproval, frame: &Frame<'_>, api: &NodeApi) {
+    for pending in api.take_forwarded() {
+        let answer = take_forwarded(approval, frame, &pending);
+        // A dropped receiver is a route whose window closed. What was applied stays
+        // applied, and the client sends the batch again to learn that it was.
+        let _ = pending.reply.send(answer);
+    }
+}
+
+/// One forwarded batch, answered.
+fn take_forwarded(
+    approval: &mut NodeApproval,
+    frame: &Frame<'_>,
+    pending: &PendingForward,
+) -> ForwardAnswer {
+    let records: Vec<(DecisionRecord, Option<v3::Settlement>)> = pending
+        .decisions
+        .iter()
+        .map(|f| (record_of(f), f.settled.clone()))
+        .collect();
+    if let Some(refused) = contradiction(approval, &records) {
+        tracing::warn!(
+            ?refused,
+            "a forwarded outage contradicts the node's record; nothing applied"
+        );
+        audit_refusal(
+            approval,
+            frame,
+            Some(pending.operator),
+            &format!("forwarded decisions: {refused:?}"),
+        );
+        return ForwardAnswer::Refused(Box::new(refused));
+    }
+    let mut accepted = v3::ForwardAccepted {
+        recorded: 0,
+        already_held: 0,
+        settled: 0,
+    };
+    for (record, settled) in records {
+        let plan = record.plan.id;
+        let outcome = with_desk(
+            approval,
+            frame,
+            Some((pending.operator, pending.role)),
+            pending.role,
+            |desk, cx, _policy, host| desk.admit_forwarded(cx, host, &record),
+        );
+        match outcome {
+            ForwardOutcome::Recorded => accepted.recorded += 1,
+            ForwardOutcome::AlreadyHeld => accepted.already_held += 1,
+            // Checked above against the same history, in the same tick, by the one loop
+            // that writes it; reaching this would mean the check and the write disagree.
+            ForwardOutcome::Contradicts(held) => {
+                tracing::error!(decision = %held.id, "a forwarded decision contradicted the record after the check passed");
+            }
+        }
+        if let Some(settlement) = settled {
+            if approval.settlements.contains_key(&plan) {
+                continue;
+            }
+            publish_settlement(frame, plan, &settlement);
+            approval.settlements.insert(plan, settlement);
+            accepted.settled += 1;
+        }
+    }
+    tracing::info!(
+        recorded = accepted.recorded,
+        already_held = accepted.already_held,
+        settled = accepted.settled,
+        "a forwarded outage is on the record"
+    );
+    ForwardAnswer::Accepted(accepted)
+}
+
+/// The node's record of a forwarded decision: the forwarding machine's own, field for
+/// field, with the machine it came from.
+///
+/// The route has already refused a verdict no queue could have produced, so the verdict
+/// here is the one every queued item carries.
+fn record_of(forwarded: &v3::ForwardedDecision) -> DecisionRecord {
+    let r = &forwarded.record;
+    DecisionRecord {
+        id: r.decision,
+        item: r.item,
+        plan: r.plan.clone(),
+        verdict: gungnir_policy::PolicyVerdict::RequiresHumanApproval,
+        decision: match &r.choice {
+            v3::DecisionChoice::Accept => OperatorDecision::Accepted,
+            v3::DecisionChoice::Override => OperatorDecision::Overridden,
+            v3::DecisionChoice::Reject { reason } => OperatorDecision::Rejected {
+                reason: reason.clone(),
+            },
+        },
+        operator_id: r.operator.clone(),
+        role: r.role.clone(),
+        request: r.request.clone(),
+        origin: Some(forwarded.origin.clone()),
+        mission_time: r.at,
+    }
+}
+
+/// The first thing in a batch that contradicts the node's record, or an earlier element of
+/// the same batch, if anything does.
+fn contradiction(
+    approval: &NodeApproval,
+    records: &[(DecisionRecord, Option<v3::Settlement>)],
+) -> Option<v3::ForwardRefused> {
+    let mut seen: Vec<&DecisionRecord> = Vec::new();
+    let mut settled: std::collections::BTreeMap<gungnir_model::PlanId, &v3::Settlement> =
+        std::collections::BTreeMap::new();
+    for (record, settlement) in records {
+        let held = approval
+            .desk
+            .approvals
+            .records()
+            .iter()
+            .find(|r| r.id == record.id)
+            .or_else(|| seen.iter().copied().find(|r| r.id == record.id));
+        if let Some(held) = held {
+            if held != record {
+                return Some(match view_of(held) {
+                    Some(view) => v3::ForwardRefused::Contradicts {
+                        decision: held.id,
+                        held: view,
+                    },
+                    None => v3::ForwardRefused::ContradictsAnExpiry {
+                        decision: held.id,
+                        plan: held.plan.id,
+                        at: held.mission_time,
+                    },
+                });
+            }
+        }
+        seen.push(record);
+        if let Some(settlement) = settlement {
+            let plan = record.plan.id;
+            let held = approval
+                .settlements
+                .get(&plan)
+                .or(settled.get(&plan).copied());
+            if let Some(held) = held {
+                if held != settlement {
+                    return Some(v3::ForwardRefused::SettledOtherwise {
+                        plan,
+                        held: held.clone(),
+                    });
+                }
+            }
+            settled.insert(plan, settlement);
+        }
+    }
+    None
+}
+
+/// A record as the wire carries it, for a `409` that names what stands, and `None` for an
+/// expiry: a record view carries a person's choice and an expiry is not one (DN-10 §3).
+fn view_of(record: &DecisionRecord) -> Option<v3::DecisionRecordView> {
+    let choice = match &record.decision {
+        OperatorDecision::Accepted => v3::DecisionChoice::Accept,
+        OperatorDecision::Overridden => v3::DecisionChoice::Override,
+        OperatorDecision::Rejected { reason } => v3::DecisionChoice::Reject {
+            reason: reason.clone(),
+        },
+        OperatorDecision::Expired { .. } => return None,
+    };
+    Some(v3::DecisionRecordView {
+        decision: record.id,
+        item: record.item,
+        plan: record.plan.clone(),
+        verdict: record.verdict.summary(),
+        choice,
+        operator: record.operator_id.clone(),
+        role: record.role.clone(),
+        request: record.request.clone(),
+        at: record.mission_time,
+    })
+}
+
+/// Put a forwarded settlement on the node's journal under the event its desktop journaled
+/// it as, so the two records say one sentence (MT-10 step 5).
+///
+/// **Not audited here.** A rule's verdict is nobody's act (`gungnir-app`'s failover says why
+/// it is journaled and not audited), and a person's resolution was audited where the person
+/// made it; the node's audit entry for the batch is the forwarding, one per decision.
+fn publish_settlement(frame: &Frame<'_>, plan: gungnir_model::PlanId, settlement: &v3::Settlement) {
+    let event = match settlement.clone() {
+        v3::Settlement::Rule {
+            kept_local,
+            ground,
+            local,
+            remote,
+        } => LinkEvent::ConflictArbitrated {
+            plan,
+            kept_local,
+            ground,
+            local,
+            remote,
+            at: frame.now,
+        },
+        v3::Settlement::Person {
+            kept_local,
+            operator,
+        } => LinkEvent::ConflictResolved {
+            plan,
+            kept_local,
+            operator,
+            at: frame.now,
+        },
+    };
+    if let Err(err) = frame.bus.publish(frame.now, Event::Link(event)) {
+        tracing::error!(%err, %plan, "a forwarded settlement could not be published");
+    }
 }
 
 /// Write the audit entries the routes owe for the requests they refused

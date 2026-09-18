@@ -84,6 +84,9 @@ class "AuthorityRule" as AuthorityRule <<InformationElement>> {
 class "AuthoritySettings" as AuthoritySettings <<InformationElement>> {
   rules: Vec<AuthorityRule>
 }
+class "DelegationSettings" as DelegationSettings <<InformationElement>> {
+  disconnected_lapse_s: Option<f64>
+}
 class "DecisionSettings" as DecisionSettings <<InformationElement>> {
   expiry_s: BTreeMap<EffectorLayer, f64>
   escalate_after_s: BTreeMap<EffectorLayer, f64>
@@ -102,6 +105,7 @@ class "PolicySettings" as PolicySettings <<InformationElement>> {
   control_status: ControlStatusSettings
   authority: AuthoritySettings
   decisions: DecisionSettings
+  delegation: DelegationSettings
   fires: FiresSettings
 }
 enum "LayoutNode" as LayoutNode <<InformationElement>> {
@@ -145,6 +149,7 @@ ValidityWindow --> MissionTime : valid_from, valid_until
 PolicySettings --> AuthoritySettings : authority
 PolicySettings --> ControlStatusSettings : control_status
 PolicySettings --> DecisionSettings : decisions
+PolicySettings --> DelegationSettings : delegation
 PolicySettings --> FiresSettings : fires
 PolicySettings --> IdentificationSettings : identification
 PolicySettings --> StalenessSettings : staleness

@@ -331,6 +331,10 @@ pub fn with_chain<T>(
 ) -> T {
     let classification = classifier(cx.tracks);
     let role_name = cx.role_name();
+    // D-15's delegations as they stand for this host (GAP-134): the baseline's own matrix
+    // on a node and a linked desktop, and the matrix without its delegated rules on a
+    // desktop cut off past the configured interval.
+    let authority = cx.authority();
     let chain = PolicyChain::new(vec![
         // GAP-088: the fences the baseline declares, not an empty service.
         Box::new(GeofencePolicy {
@@ -340,12 +344,7 @@ pub fn with_chain<T>(
             settings: &cx.config.policy.control_status,
             track_classification: &classification,
         }),
-        Box::new(AuthorityPolicy {
-            settings: &cx.config.policy.authority,
-            asking_role: &role_name,
-            action: DECISION_ACTION,
-            track_classification: &classification,
-        }),
+        Box::new(authority_engine(&authority, &role_name, &classification)),
         // GAP-036: fourth, with what the picture can supply (see `friendly_positions`).
         Box::new(FiresDeconflictionPolicy {
             settings: &cx.config.policy.fires,
@@ -361,6 +360,45 @@ pub fn with_chain<T>(
         }),
     ]);
     f(&chain)
+}
+
+/// The authority engine exactly as the chain builds it: the matrix in force, the asking
+/// role, the decision action and the classifier over the current picture.
+///
+/// One constructor for [`with_chain`] and [`holds_authority`], so the question a lapse asks
+/// of a queued item and the question the chain asked when it was submitted cannot be two
+/// different questions.
+fn authority_engine<'a>(
+    settings: &'a gungnir_model::AuthoritySettings,
+    role_name: &'a str,
+    classification: &'a (dyn Fn(TrackId) -> Classification + Send + Sync),
+) -> AuthorityPolicy<'a> {
+    AuthorityPolicy {
+        settings,
+        asking_role: role_name,
+        action: DECISION_ACTION,
+        track_classification: classification,
+    }
+}
+
+/// Whether `role` holds the authority for every solution of `plan` under the matrix in
+/// force for this host (D-15, DN-31 §6.7; GAP-134).
+///
+/// **The authority engine alone, and deliberately not the whole chain.** This is the
+/// question a lapse asks of an item already in the queue, and the lapse changed exactly one
+/// thing: which rules grant. The three other engines were asked when the item was
+/// submitted and nothing re-asks them of a queued item on any tick; asking them here, and
+/// only here, would let a lapse withdraw an item for a reason that has nothing to do with
+/// the lapse -- a resource that went unready, a track reclassified -- and report it as the
+/// delegation's doing.
+#[must_use]
+pub fn holds_authority(cx: &ApprovalContext<'_>, role: &str, plan: &PlanView) -> bool {
+    let classification = classifier(cx.tracks);
+    let authority = cx.authority();
+    matches!(
+        authority_engine(&authority, role, &classification).evaluate(plan, cx.resources),
+        PolicyVerdict::RequiresHumanApproval
+    )
 }
 
 /// Classification of a track, for the two engines that judge by class.
