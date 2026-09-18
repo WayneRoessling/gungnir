@@ -10,12 +10,14 @@
 //!
 //! # Why the attachment is possible on the pinned set, and why that is not incidental
 //!
-//! `eframe` 0.29, `egui_glow` 0.29 and `three-d` 0.18 all depend on `glow` 0.14, so the
+//! `eframe` 0.34, `egui_glow` 0.34 and `three-d` 0.19 all depend on `glow` 0.17, so the
 //! `Arc<glow::Context>` eframe hands out is the same type `three_d::Context` accepts.
-//! Had they differed there would be two `glow`s in the binary and no way to pass the
-//! context across. `cargo tree -d` reports one `glow 0.14.2` shared by all three, and
+//! Had they differed there would be two `glow`s between them and no way to pass the
+//! context across. `cargo tree -i glow@0.17.0` shows the one `glow` all three share, and
 //! the version set in §9 is what keeps it that way -- moving any one of them is a
-//! decision about this attachment, not only about that crate.
+//! decision about this attachment, not only about that crate. (`cargo tree -d` also
+//! lists `glow` 0.13: that is `wgpu-hal` 22's, under the compute device, and never meets
+//! this context.)
 //!
 //! # What is testable here and what is not
 //!

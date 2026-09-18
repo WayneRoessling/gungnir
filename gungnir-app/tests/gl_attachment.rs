@@ -20,8 +20,10 @@ use gungnir_config::ConfigBaseline;
 /// is the point. This function exists to make that failure appear here, at the one line
 /// that states the assumption, rather than fifty lines into `main.rs`.
 ///
-/// `cargo tree -d` is the other half of the check and reports one `glow 0.14.2` shared
-/// by `eframe`, `egui_glow` and `three-d`. This is the half that runs in CI.
+/// `cargo tree -i glow@0.17.0` is the other half of the check and shows the one `glow`
+/// shared by `eframe`, `egui_glow` and `three-d` (the `glow` 0.13 that `cargo tree -d`
+/// also lists is `wgpu-hal` 22's, under the compute device, and never meets this
+/// context). This is the half that runs in CI.
 #[allow(dead_code)]
 fn eframe_and_three_d_share_one_glow(
     gl: std::sync::Arc<eframe::glow::Context>,

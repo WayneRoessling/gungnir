@@ -31,7 +31,7 @@ accepted = [
     "BSL-1.0",
     # Font data in epaint_default_fonts only; see deny.toml [[licenses.exceptions]].
     "OFL-1.1",
-    "LicenseRef-UFL-1.0",
+    "Ubuntu-font-1.0",
     # The workspace's own crates. cargo-about lists every crate in the graph, members
     # included, and has no way to leave publishable members out, so they appear in the
     # notices under their own license with the AGPL text. deny.toml keeps AGPL *off* its
@@ -55,12 +55,13 @@ ignore-build-dependencies = false
 # declares and says so with a warning. Either way the artifact is a function of
 # Cargo.lock and the crate sources, so two runs on the same lock agree.
 
-# epaint_default_fonts declares `(MIT OR Apache-2.0) AND OFL-1.1 AND LicenseRef-UFL-1.0`
-# and ships four license texts beside its fonts: OFL.txt, UFL.txt, Hack-Regular.txt (MIT
-# plus the Bitstream Vera notice) and emoji-icon-font-mit-license.txt. Left to itself,
-# cargo-about 0.9.2 recognises OFL.txt and the emoji MIT text, cannot classify the
-# combined Hack text, and warns that `LicenseRef-UFL-1.0` has no license file, because a
-# LicenseRef has no canonical text to fall back on.
+# epaint_default_fonts 0.29.1 declared `(MIT OR Apache-2.0) AND OFL-1.1 AND
+# LicenseRef-UFL-1.0` and ships four license texts beside its fonts: OFL.txt, UFL.txt,
+# Hack-Regular.txt (MIT plus the Bitstream Vera notice) and
+# emoji-icon-font-mit-license.txt. Left to itself, cargo-about 0.9.2 recognises OFL.txt
+# and the emoji MIT text, cannot classify the combined Hack text, and warns that
+# `LicenseRef-UFL-1.0` has no license file, because a LicenseRef has no canonical text to
+# fall back on.
 #
 # A `[epaint_default_fonts.clarify]` block naming those files is the documented answer
 # and was tried on 2026-09-07; it does not work in 0.9.2. The generator's LicenseRef
@@ -72,7 +73,14 @@ ignore-build-dependencies = false
 # notice as two fixed sections after the generated ones, copied verbatim from the crate
 # (SHA-256 2f0015108d68627bd788d313f529c21ff4da2c2c42a5e1f3883acc83480f9002 and
 # 47c0cccbeec7e8614548cc485588b28149e7874188df5f41b36efebcee285c87). They are pinned to
-# epaint_default_fonts 0.29.1: an egui upgrade that changes the bundled fonts changes
-# those two sections in the same commit, and a cargo-about release that fixes the
-# branch should replace them with the clarify block. release.yml pins cargo-about to
-# 0.9.2 so the output stays the one this was verified against.
+# the epaint_default_fonts version the binaries embed: an egui upgrade that changes the
+# bundled fonts changes those two sections in the same commit, and a cargo-about release
+# that fixes the branch should replace them with the clarify block. release.yml pins
+# cargo-about to 0.9.2 so the output stays the one this was verified against.
+#
+# epaint_default_fonts 0.34.3 (2026-09-17) ships both files with the same SHA-256 and
+# declares the Ubuntu licence by its SPDX identifier, `Ubuntu-font-1.0`, so the LicenseRef
+# branch no longer touches it and cargo-about may now print that licence itself. Whether
+# it does was not seen: cargo-about is not installed where the move was made. Both fixed
+# sections stay until a run shows the Ubuntu one duplicated, because a notice printed
+# twice is harmless and one printed nowhere is not.

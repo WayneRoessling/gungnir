@@ -99,9 +99,9 @@ pub fn draw_glyphs_2d(
             egui::vec2(2.0 * view.px(g.sigma[0]), 2.0 * view.px(g.sigma[1])),
         );
         if ellipse.width().is_finite() && ellipse.height().is_finite() {
-            painter.rect_stroke(
+            stroke_sigma_outline(
+                painter,
                 ellipse,
-                ellipse.width().min(ellipse.height()) / 2.0,
                 egui::Stroke::new(palette.stroke_hairline, color.gamma_multiply(0.5)),
             );
         }
@@ -126,6 +126,36 @@ pub fn draw_glyphs_2d(
             color,
         );
     }
+}
+
+/// The one-sigma outline: a rectangle whose corner radius is half its shorter side, so
+/// its short ends are semicircles, stroked outside the rectangle as egui 0.29 stroked
+/// every rectangle.
+///
+/// egui 0.31 made a rectangle's corner radius a whole number of points in a `u8`, so a
+/// radius above 255 would become 255 and an outline more than about 510 points across
+/// would be drawn as a rounded square: the uncertainty would change shape at high zoom
+/// for no reason but the library's storage. Above that radius the same outline is built
+/// as a path with the radius it asks for. Below it, which is every outline at ordinary
+/// zoom, the rectangle is drawn directly and nothing is allocated per frame.
+fn stroke_sigma_outline(painter: &egui::Painter, outline: egui::Rect, stroke: egui::Stroke) {
+    let radius = outline.width().min(outline.height()) / 2.0;
+    if radius < f32::from(u8::MAX) {
+        painter.rect_stroke(outline, radius, stroke, egui::StrokeKind::Outside);
+        return;
+    }
+    let mut points = Vec::new();
+    egui::epaint::tessellator::path::rounded_rectangle(
+        &mut points,
+        outline,
+        egui::epaint::CornerRadiusF32::same(radius),
+    );
+    painter.add(egui::epaint::PathShape {
+        points,
+        closed: true,
+        fill: egui::Color32::TRANSPARENT,
+        stroke: egui::epaint::PathStroke::from(stroke).outside(),
+    });
 }
 
 /// The frame around a glyph: shape and colour from the affiliation, dashed when the
@@ -161,11 +191,15 @@ fn draw_classification_frame(
             ];
             painter.add(egui::Shape::closed_line(points, stroke));
         }
+        // `Outside` is where egui 0.29 put every rectangle's stroke; 0.31 made the
+        // placement an argument. The corner radius is whole points since 0.31, so the
+        // rounded frame's 2.5 is drawn at 3.
         ClassificationFrame::RoundedRect => {
             painter.rect_stroke(
                 egui::Rect::from_center_size(center, egui::vec2(2.0 * r, 2.0 * r)),
                 r * 0.5,
                 stroke,
+                egui::StrokeKind::Outside,
             );
         }
         ClassificationFrame::Square => {
@@ -173,6 +207,7 @@ fn draw_classification_frame(
                 egui::Rect::from_center_size(center, egui::vec2(2.0 * r, 2.0 * r)),
                 0.0,
                 stroke,
+                egui::StrokeKind::Outside,
             );
         }
         ClassificationFrame::Quatrefoil => {

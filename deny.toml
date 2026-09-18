@@ -108,10 +108,12 @@ confidence-threshold = 0.9
 # review, when this gate was run for the first time and failed on it.
 #
 # `epaint_default_fonts` is egui's bundled font set, embedded into `gungnir-app` by
-# `include_bytes!` through egui 0.29's default `default_fonts` feature. Its code is
+# `include_bytes!` through egui's default `default_fonts` feature. Its code is
 # `MIT OR Apache-2.0`; the font files are not. Ubuntu-Light.ttf is under the Ubuntu Font
-# Licence 1.0 (no SPDX identifier, hence `LicenseRef-UFL-1.0`) and NotoEmoji-Regular.ttf
-# under the SIL Open Font License 1.1; Hack-Regular.ttf and emoji-icon-font.ttf are MIT.
+# Licence 1.0 and NotoEmoji-Regular.ttf under the SIL Open Font License 1.1;
+# Hack-Regular.ttf and emoji-icon-font.ttf are MIT. The crate declared the Ubuntu licence
+# as `LicenseRef-UFL-1.0` up to 0.29 and by its SPDX identifier, `Ubuntu-font-1.0`, from
+# 0.34 (2026-09-17); the font and its licence text are the same bytes in both.
 #
 # Neither font license is on the list above and neither should be: the FSF classes the
 # OFL as GPL-incompatible *for software*, and a Rust crate under it could not be linked
@@ -128,7 +130,7 @@ confidence-threshold = 0.9
 # under OFL-1.1 must still fail this check.
 [[licenses.exceptions]]
 crate = "epaint_default_fonts"
-allow = ["OFL-1.1", "LicenseRef-UFL-1.0"]
+allow = ["OFL-1.1", "Ubuntu-font-1.0"]
 
 # The workspace's own crates are AGPL-3.0-or-later, which is deliberately *not* on the
 # allow-list: an AGPL or GPL crate from outside cannot be taken, because CLA.md section 4

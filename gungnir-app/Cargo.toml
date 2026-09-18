@@ -145,9 +145,9 @@ gungnir-approval = { path = "../gungnir-approval", version = "0.1.0" }
 # second and third reader of the existing one. `ARCHITECTURE.md` §7.3 listed both as
 # "not yet called from the tick", and its edge table carries them from this change.
 # GAP-075 / D-19: the in-window dock tree. Admitted in `agentic-coding-standards.md`
-# §2.9 and pinned at 0.10, which is the line depending on egui 0.29, the workspace pin.
-# The detached-window half of D-17 needs no crate: egui 0.29's native viewports provide
-# it. `gungnir-ui` does not depend on this -- the `Behavior` implementation has to render
+# §2.9 and pinned at 0.15, which is the line depending on egui 0.34, the workspace pin.
+# The detached-window half of D-17 needs no crate: egui's native viewports provide it.
+# `gungnir-ui` does not depend on this -- the `Behavior` implementation has to render
 # panes, which means reaching the app's own state, so the tree lives in the binary.
 egui_tiles.workspace = true
 

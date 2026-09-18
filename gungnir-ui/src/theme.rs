@@ -46,7 +46,7 @@
 
 use egui::epaint::Shadow;
 use egui::{
-    Color32, Context, FontFamily, FontId, Margin, RichText, Rounding, Stroke, Style, TextStyle,
+    Color32, Context, CornerRadius, FontFamily, FontId, Margin, RichText, Stroke, Style, TextStyle,
     Vec2, Visuals,
 };
 use gungnir_model::TrackStatus;
@@ -455,8 +455,8 @@ pub fn operations_visuals(palette: &Palette) -> Visuals {
     visuals.faint_bg_color = palette.app_background;
     visuals.code_bg_color = palette.app_background;
     visuals.window_stroke = Stroke::new(palette.stroke_hairline, palette.border_subtle);
-    visuals.window_rounding = Rounding::ZERO;
-    visuals.menu_rounding = Rounding::ZERO;
+    visuals.window_corner_radius = CornerRadius::ZERO;
+    visuals.menu_corner_radius = CornerRadius::ZERO;
     visuals.window_shadow = Shadow::NONE;
     visuals.popup_shadow = Shadow::NONE;
     visuals.striped = true;
@@ -499,7 +499,7 @@ pub fn operations_visuals(palette: &Palette) -> Visuals {
         &mut w.active,
         &mut w.open,
     ] {
-        state.rounding = Rounding::ZERO;
+        state.corner_radius = CornerRadius::ZERO;
         state.expansion = 0.0;
     }
     visuals
@@ -517,12 +517,13 @@ pub fn operations_visuals(palette: &Palette) -> Visuals {
 /// but the strip's counts and the queue's reorder, and egui's default eases collapsing
 /// headers and toggles over a tenth of a second.
 pub fn install_egui_theme(ctx: &Context, palette: &Palette) {
-    let mut style: Style = (*ctx.style()).clone();
+    let mut style: Style = (*ctx.global_style()).clone();
     style.visuals = operations_visuals(palette);
     style.animation_time = 0.0;
     style.spacing.item_spacing = Vec2::new(palette.panel_spacing, palette.row_spacing);
     style.spacing.button_padding = Vec2::new(palette.panel_spacing, palette.row_spacing);
-    style.spacing.window_margin = Margin::same(palette.panel_spacing);
+    // egui 0.31 made a margin whole points (`i8`); `From<f32>` rounds, and the token is 8.
+    style.spacing.window_margin = Margin::from(palette.panel_spacing);
     style.text_styles = [
         (
             TextStyle::Heading,
@@ -546,7 +547,7 @@ pub fn install_egui_theme(ctx: &Context, palette: &Palette) {
         ),
     ]
     .into();
-    ctx.set_style(style);
+    ctx.set_global_style(style);
 }
 
 // ---------------------------------------------------------------------------
@@ -859,17 +860,17 @@ mod surface_tests {
 
     /// Installing the theme changes the context's style: the surfaces, the text
     /// styles and the animation time. Read back rather than assumed, because
-    /// `set_style` on a cloned `Style` is the kind of call that silently does nothing
-    /// if the clone is the one that gets edited.
+    /// `set_global_style` on a cloned `Style` is the kind of call that silently does
+    /// nothing if the clone is the one that gets edited.
     #[test]
     fn the_installer_lands_on_the_context() {
         let palette = Palette::day();
         let ctx = Context::default();
         install_egui_theme(&ctx, &palette);
-        let style = ctx.style();
+        let style = ctx.global_style();
         assert_eq!(style.visuals.panel_fill, palette.panel_background);
         assert_eq!(style.visuals.extreme_bg_color, palette.app_background);
-        assert_eq!(style.visuals.window_rounding, Rounding::ZERO);
+        assert_eq!(style.visuals.window_corner_radius, CornerRadius::ZERO);
         assert_eq!(style.visuals.window_shadow, Shadow::NONE);
         assert!(
             style.animation_time.abs() < f32::EPSILON,
@@ -893,7 +894,7 @@ mod surface_tests {
         let night = Palette::night();
         let ctx = Context::default();
         install_egui_theme(&ctx, &night);
-        let style = ctx.style();
+        let style = ctx.global_style();
         assert_eq!(style.visuals.panel_fill, night.panel_background);
         assert_eq!(style.visuals.extreme_bg_color, night.app_background);
         assert_eq!(style.visuals.error_fg_color, night.alert_color);
