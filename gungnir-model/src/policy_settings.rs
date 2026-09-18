@@ -214,6 +214,24 @@ impl AuthoritySettings {
     }
 }
 
+/// How long D-15's delegations survive a desktop losing its node
+/// (`docs/design/DN-31-node-approval-queue.md` §6, clause 6.7, and §7).
+///
+/// **No default, deliberately.** A deployment that links desktops to a node states how
+/// long an offline delegation lasts rather than inheriting a number from this build.
+/// `None` is therefore not "the usual interval": it is silence, and silence about
+/// authority denies (DN-08 §5), so a desktop cut off under a baseline that states nothing
+/// holds no delegation from the moment it falls back. Nothing else about the authority
+/// matrix changes, and a desktop deployed on its own never falls back at all, so it never
+/// reaches this question (DN-31 §9 row 10).
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+pub struct DelegationSettings {
+    /// Seconds a delegation in force at the moment of disconnection stays in force
+    /// (D-15). Validated positive where it is stated; see `gungnir_config::validate`.
+    #[serde(default)]
+    pub disconnected_lapse_s: Option<f64>,
+}
+
 /// Timeouts and escalation for pending decisions. DN-10 implements against this.
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct DecisionSettings {
@@ -294,6 +312,13 @@ pub struct PolicySettings {
     pub authority: AuthoritySettings,
     #[serde(default)]
     pub decisions: DecisionSettings,
+    /// How long D-15's delegations survive a disconnection (DN-31 §7, GAP-134).
+    ///
+    /// Defaulted so a baseline written before this section existed still loads; the
+    /// default is `None`, which is silence rather than an interval. See
+    /// [`DelegationSettings`].
+    #[serde(default)]
+    pub delegation: DelegationSettings,
     #[serde(default)]
     pub fires: FiresSettings,
 }

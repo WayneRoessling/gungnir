@@ -16,7 +16,10 @@
 pub mod authority;
 pub mod fires;
 
-pub use authority::{is_pre_delegated, roles_permitting, AuthorityPolicy, ControlStatusPolicy};
+pub use authority::{
+    authority_in_force, is_pre_delegated, roles_permitting, AuthorityPolicy, ControlStatusPolicy,
+    Delegations,
+};
 pub use fires::{FiresContext, FiresDeconflictionPolicy, ReportedPositionSource};
 
 /// Re-exported so a caller can name the service [`GeofencePolicy`] reads without an edge

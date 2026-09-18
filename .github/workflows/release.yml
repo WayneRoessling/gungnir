@@ -48,8 +48,19 @@ jobs:
           tool: cargo-deny@0.20.2,cargo-audit@0.22.2,cargo-cyclonedx@0.5.9,cargo-about@0.9.2
       - name: License and advisory policy (deny.toml)
         run: cargo deny check
-      - name: Advisory database
-        run: cargo audit
+      # **With deny.toml's accepted advisories, and no others** (2026-09-17, GAP-061). The
+      # first run of this workflow found the two scanners disagreeing: `cargo deny` reads
+      # deny.toml's ignores and passed, `cargo audit` cannot see them and failed on the two
+      # quick-xml advisories the owner accepted on 2026-09-07. The owner chose one list over
+      # a second one in .cargo/audit.toml; the script refuses an ignore with no reason. The
+      # assignment is its own line so that a refusal fails this step instead of running the
+      # audit with nothing ignored.
+      - name: Advisory database (deny.toml's accepted advisories, and no others)
+        run: |
+          args=$(python3 .github/scripts/deny_advisory_ignores.py)
+          ignores=()
+          if [ -n "$args" ]; then mapfile -t ignores <<< "$args"; fi
+          cargo audit "${ignores[@]}"
       - name: CycloneDX SBOM for both binaries
         run: cargo cyclonedx --format json --describe binaries
       - uses: actions/upload-artifact@v4

@@ -2704,3 +2704,60 @@
   commit: 1e588a2526b76711e4a4700595f12edccc2db942
   pre_repository: false
   record: "PR #137; D-55, D-59, D-64; docs/record/2026-09-17/the-node-runs-the-approval-queue.md"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    DN-32, re-observation for a laydown: every §5 sub-decision as recommended (truth at
+    scan cadence with no interpolation, an entities.json and an environment.json sidecar,
+    the deployment's own named detection model refused by name when absent), §5.5's
+    frame kept as GAP-045 signed it, and all five §6 containment mechanisms, the ingest
+    gateway's refusal to come back as a code review when built. §10's verification rows
+    are not part of this signature.
+  kind: design-note
+  paths:
+  - docs/design/DN-32-re-observation-for-a-laydown.md
+  commit: a2e0e866a51ceac5433b333dba8cc2f0021ad5ad
+  pre_repository: false
+  record: "D-64; DN-32 §5 and §6; walked with the owner 2026-09-17"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    rustls 0.23.43 to 0.23.45 for RUSTSEC-2026-0285, on gungnir-remote's human-owned TLS
+    identity path: a Cargo.lock patch bump inside the declared "0.23" range, adding no crate.
+  kind: code
+  paths:
+  - Cargo.lock
+  commit: 1af6543ab3257aa625bc2e0f0e216b4987b59c35
+  pre_repository: false
+  record: "PR #141; GAP-061"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    Three entries of 2026-09-17 cite D-64 for the decision that the decision path is
+    human-owned wherever it runs: the human-owned-path entry and the PR #135 and PR #137
+    code entries. That decision is D-65. D-64 is the laydown re-observation decision, which
+    took the number while D-65 was pending. What those entries signed is unchanged.
+  kind: record-correction
+  paths:
+  - docs/signatures.yaml
+  commit: a2e0e866a51ceac5433b333dba8cc2f0021ad5ad
+  pre_repository: false
+  record: "D-64 and D-65 in docs/mission/gap-analysis/data/decisions.yaml"
+
+- date: 2026-09-17
+  signer: Owner
+  subject: >-
+    DN-31 amendment 2 (§13): a reconnecting desktop settles before it forwards -- the merge and
+    the comparison of engagements by track first, then the outage forwarded as one batch
+    carrying each settlement, then a person's switch back (D-66) -- with ForwardedDecision's
+    `settled` field, LinkEvent::DelegationsLapsed, and the build's finding that plan conflicts
+    cannot arise across an outage as built.
+  kind: design-note
+  paths:
+  - docs/design/DN-31-node-approval-queue.md
+  commit: 87aa97fc5bfbffce98913a86f7fc73c10eed297a
+  pre_repository: false
+  record: "PR #143; D-66; docs/record/2026-09-17/an-outage-reaches-the-node-once.md"

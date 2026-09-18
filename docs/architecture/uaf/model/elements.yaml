@@ -316,7 +316,7 @@ standards:
   - {id: SD-10, name: ADS-B 1090 ES (RTCA DO-260B), source: gungnir_ingest::adapters::adsb, status: real, description: Cooperative air identity (GAP-010 closed).}
   - {id: SD-11, name: UUID version 7 (RFC 9562), source: gungnir_identity, status: real, description: Textual and time-ordered form of GlobalEntityId (GAP-069 closed).}
   - {id: SD-12, name: OCI container image, source: deploy/node/Dockerfile, status: real, description: Packaging of the service node for Linux x86_64.}
-  - {id: SD-13, name: Software bill of materials (CycloneDX JSON) and signed releases, source: docs/release-governance.md, status: planned, description: Release evidence per docs/release-governance.md; exercised under GAP-061.}
+  - {id: SD-13, name: Software bill of materials (CycloneDX JSON) and signed releases, source: docs/release-governance.md, status: planned, description: "Release evidence per docs/release-governance.md. The SBOM and the advisory and licence audit run green in release.yml since 2026-09-17 (GAP-061); signing runs only at the first tagged release."}
   - {id: SD-14, name: UAF 1.2 (OMG), source: docs/architecture/uaf/, status: real, description: The framework these views follow.}
   - {id: SD-15, name: TOGAF 10 ADM, source: docs/plans/10-togaf-adm-documentation.md, status: planned, description: The method plan 10 follows; references these views.}
   - {id: SD-16, name: Cursor-on-Target (CoT), source: docs/design/DN-25-cursor-on-target.md, status: planned, description: "Exchange with a participant that holds no machine identity here; no codec and no sink exist (GAP-090, GAP-091)."}
@@ -405,10 +405,12 @@ information_elements:
   - {id: IE-deconfliction-kind, name: DeconflictionKind, code: gungnir_model::DeconflictionKind, domain: 'Plans, effectors & handoff', description: 'What a deconfliction check examined before a fires task is offered.'}
   - {id: IE-deconfliction-result, name: DeconflictionResult, code: gungnir_model::DeconflictionResult, domain: 'Plans, effectors & handoff', description: 'Every deconfliction check, whether it passed or failed.'}
   - {id: IE-defended-asset, name: DefendedAsset, code: gungnir_model::DefendedAsset, domain: 'Assets, exchange & releasability', description: 'One asset the sector defends.'}
+  - {id: IE-delegation-settings, name: DelegationSettings, code: gungnir_model::DelegationSettings, domain: 'Policy, authority & settings', description: 'How long D-15''s delegations survive a desktop losing its node (docs/design/DN-31-node-approval-queue.md §6, clause 6.7, and §7).'}
   - {id: IE-delivery-state, name: DeliveryState, code: gungnir_model::DeliveryState, domain: 'Plans, effectors & handoff', description: 'How the handoff reached, or failed to reach, the effector.'}
   - {id: IE-effector-layer, name: EffectorLayer, code: gungnir_model::EffectorLayer, domain: 'Plans, effectors & handoff', description: 'Defence layer, ordered outermost first.'}
   - {id: IE-effector-report, name: EffectorReport, code: gungnir_model::EffectorReport, domain: 'Plans, effectors & handoff', description: 'What the receiving system reports back.'}
   - {id: IE-engagement-event, name: EngagementEvent, code: gungnir_model::EngagementEvent, domain: 'Events & the record', description: 'Engagement lifecycle, for the journal and the after-action measures (docs/design/DN-06-engagement-and-effect.md).'}
+  - {id: IE-engagement-side, name: EngagementSide, code: gungnir_model::EngagementSide, domain: 'Events & the record', description: 'One side of a both-acted incident: the engagement one side of an outage opened (D-58, GAP-134).'}
   - {id: IE-enu-point, name: EnuPoint, code: gungnir_model::EnuPoint, domain: 'UAS identification & platform reports', description: 'A platform position or ground point, in the local ENU frame, metres.'}
   - {id: IE-exchange-agreement, name: ExchangeAgreement, code: gungnir_model::ExchangeAgreement, domain: 'Assets, exchange & releasability', description: 'A configured exchange relationship.'}
   - {id: IE-exchange-format, name: ExchangeFormat, code: gungnir_model::ExchangeFormat, domain: 'Assets, exchange & releasability', description: 'Wire format for one partner.'}

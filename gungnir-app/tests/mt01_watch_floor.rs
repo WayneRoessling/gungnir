@@ -295,6 +295,7 @@ impl Node {
                         };
                         approval::sweep(&mut state.approval, &frame);
                         let _ = approval::answer_decisions(&mut state.approval, &frame, &api);
+                        approval::answer_forwarded(&mut state.approval, &frame, &api);
                         approval::audit_refused_decisions(&mut state.approval, &frame, &api);
                         let queue = state.approval.queue_view(&config, &resources, &tracks);
                         state.tracks = tracks;

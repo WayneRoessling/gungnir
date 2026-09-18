@@ -228,7 +228,7 @@ SD-09,Standards,Standard,AIS (ITU-R M.1371),Cooperative maritime identity (GAP-0
 SD-10,Standards,Standard,ADS-B 1090 ES (RTCA DO-260B),Cooperative air identity (GAP-010 closed).,Class
 SD-11,Standards,Standard,UUID version 7 (RFC 9562),Textual and time-ordered form of GlobalEntityId (GAP-069 closed).,Class
 SD-12,Standards,Standard,OCI container image,Packaging of the service node for Linux x86_64.,Class
-SD-13,Standards,Standard,Software bill of materials (CycloneDX JSON) and signed releases,Release evidence per docs/release-governance.md; exercised under GAP-061.,Class
+SD-13,Standards,Standard,Software bill of materials (CycloneDX JSON) and signed releases,Release evidence per docs/release-governance.md. The SBOM and the advisory and licence audit run green in release.yml since 2026-09-17 (GAP-061); signing runs only at the first tagged release.,Class
 SD-14,Standards,Standard,UAF 1.2 (OMG),The framework these views follow.,Class
 SD-15,Standards,Standard,TOGAF 10 ADM,The method plan 10 follows; references these views.,Class
 SD-16,Standards,Standard,Cursor-on-Target (CoT),"Exchange with a participant that holds no machine identity here; no codec and no sink exist (GAP-090, GAP-091).",Class
@@ -304,10 +304,12 @@ IE-deconfliction-check,Information Elements,InformationElement,DeconflictionChec
 IE-deconfliction-kind,Information Elements,InformationElement,DeconflictionKind,What a deconfliction check examined before a fires task is offered.,Class
 IE-deconfliction-result,Information Elements,InformationElement,DeconflictionResult,"Every deconfliction check, whether it passed or failed.",Class
 IE-defended-asset,Information Elements,InformationElement,DefendedAsset,One asset the sector defends.,Class
+IE-delegation-settings,Information Elements,InformationElement,DelegationSettings,"How long D-15's delegations survive a desktop losing its node (docs/design/DN-31-node-approval-queue.md \u00a76, clause 6.7, and \u00a77).",Class
 IE-delivery-state,Information Elements,InformationElement,DeliveryState,"How the handoff reached, or failed to reach, the effector.",Class
 IE-effector-layer,Information Elements,InformationElement,EffectorLayer,"Defence layer, ordered outermost first.",Class
 IE-effector-report,Information Elements,InformationElement,EffectorReport,What the receiving system reports back.,Class
 IE-engagement-event,Information Elements,InformationElement,EngagementEvent,"Engagement lifecycle, for the journal and the after-action measures (docs/design/DN-06-engagement-and-effect.md).",Class
+IE-engagement-side,Information Elements,InformationElement,EngagementSide,"One side of a both-acted incident: the engagement one side of an outage opened (D-58, GAP-134).",Class
 IE-enu-point,Information Elements,InformationElement,EnuPoint,"A platform position or ground point, in the local ENU frame, metres.",Class
 IE-exchange-agreement,Information Elements,InformationElement,ExchangeAgreement,A configured exchange relationship.,Class
 IE-exchange-format,Information Elements,InformationElement,ExchangeFormat,Wire format for one partner.,Class

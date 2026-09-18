@@ -199,9 +199,9 @@ the third to sixth, GAP-133 the seventh and ninth, and GAP-134 the eighth -- and
 gate when the owner confirms that its test checks its criterion (D-16).
 
 **Rows 1, 2 and 10 are gates**, confirmed by the owner on 2026-09-17 against the tests named
-in their own cells, which pass on `main`. **Rows 3 to 9 are not gates yet**: rows 3 to 6 have
-tests since GAP-132 and wait on the same confirmation, and rows 7 to 9 wait on the gaps that
-build them. A row's cell says which it is.
+in their own cells, which pass on `main`. **Rows 3 to 9 are not gates yet**: every one has
+its tests -- rows 3 to 6 since GAP-132, rows 7 and 9 since GAP-133, row 8 since GAP-134 -- and
+each waits on the same confirmation. A row's cell says which it is.
 
 | Crate | Capability | Verification method | Pass criterion | Data source |
 |---|---|---|---|---|

@@ -939,6 +939,17 @@ pub fn config_sections(state: &AppState) -> Vec<ConfigSection<'static>> {
             summary: "expiry per layer; silence preserves (DN-10)",
         },
         ConfigSection {
+            name: "Delegation lapse",
+            // A count of one or none rather than a number of seconds, because this row
+            // says whether the deployment has stated the interval; the strip and PN-18
+            // are where the interval itself is read (DN-31 §6.7).
+            count: Some(usize::from(
+                c.policy.delegation.disconnected_lapse_s.is_some(),
+            )),
+            summary: "how long a delegation survives a lost node; silence means none does \
+                      (D-15)",
+        },
+        ConfigSection {
             name: "Display vocabulary",
             count: Some(c.vocabulary.override_count()),
             summary: "terms this deployment has renamed; the rest are the glossary's (D-12)",

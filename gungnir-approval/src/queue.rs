@@ -348,6 +348,108 @@ impl ApprovalDesk {
         Ok(record.id)
     }
 
+    /// Withdraw the offers D-15's lapsed delegations granted, and re-offer each item to
+    /// the lowest role that still holds it (DN-31 §6.7; GAP-134).
+    ///
+    /// Called by a host once, at the moment its delegations lapse -- `cx.delegations` is
+    /// then `Lapsed`, so [`crate::chain::holds_authority`] asks every question of the
+    /// matrix without the delegated rules. **This is what makes the lapse change what an
+    /// item is actionable by** and not only what a panel draws: `offered_to` is the
+    /// queue's own state, read by [`gungnir_command::PendingApproval::may_be_decided_by`]
+    /// and by every row that says who may decide. Plans submitted after the lapse need no
+    /// call: the chain already reads the lapsed matrix, so a plan only a delegation could
+    /// take is denied by authority and never queued.
+    ///
+    /// Each item that moved is alerted by plan, and returned so the host can put the
+    /// lapse on its record as one event; nothing here publishes on its own, because the
+    /// lapse is a fact about the link and the host is what knows the link.
+    pub fn lapse_delegations(
+        &mut self,
+        cx: &ApprovalContext<'_>,
+        host: &mut dyn ApprovalHost,
+    ) -> Vec<gungnir_command::Reoffered> {
+        debug_assert!(
+            cx.delegations == gungnir_policy::Delegations::Lapsed,
+            "a lapse was applied with the delegations still in force"
+        );
+        let ladder = crate::chain::escalation_ladder();
+        let refs: Vec<&str> = ladder.iter().map(String::as_str).collect();
+        let changed = self.approvals.reoffer(&refs, &|item, role| {
+            crate::chain::holds_authority(cx, role, &item.plan)
+        });
+        for moved in &changed {
+            let to = if moved.offered_to.is_empty() {
+                "nobody -- no role holds it without the delegation, and it will expire".to_owned()
+            } else {
+                moved.offered_to.join(", ")
+            };
+            host.alert(format!(
+                "Plan {}: the delegation it was offered under has lapsed (D-15); {} may no \
+                 longer decide it, and it is now offered to {to}",
+                moved.plan.short(),
+                moved.withdrawn.join(", "),
+            ));
+            tracing::warn!(
+                plan = %moved.plan,
+                item = %moved.item,
+                withdrawn = ?moved.withdrawn,
+                offered_to = ?moved.offered_to,
+                "a lapsed delegation withdrew an offer"
+            );
+        }
+        changed
+    }
+
+    /// Put a decision another machine took on this desk's record, once (DN-31 §6.8;
+    /// GAP-134).
+    ///
+    /// **Recorded, published, audited -- and nothing else.** The engagement that decision
+    /// opened and the handoff it issued happened on the machine that took it, while it was
+    /// cut off; this is the record catching up with them. Opening an engagement here would
+    /// be this deployment acting a second time on one decision, which is the double
+    /// engagement D-58 exists to report. So there is no `open_for` below, and
+    /// `gungnir-app/tests/no_execution_without_decision.rs` still finds exactly one place
+    /// each of the two is constructed.
+    ///
+    /// `Decided` is published only when the record is new, from the record itself
+    /// (`to_event`), so the event carries the `origin` and the forwarding machine's own
+    /// identifiers and the journal gains one account of the decision however many times it
+    /// is forwarded. The envelope is timed by this host's clock, which is when the record
+    /// learned of it; the record keeps the time it was taken.
+    pub fn admit_forwarded(
+        &mut self,
+        cx: &ApprovalContext<'_>,
+        host: &mut dyn ApprovalHost,
+        record: &gungnir_command::DecisionRecord,
+    ) -> gungnir_command::ForwardOutcome {
+        let outcome = self.approvals.admit_forwarded(record.clone());
+        if outcome == gungnir_command::ForwardOutcome::Recorded {
+            tracing::info!(
+                plan = %record.plan.id,
+                decision_id = %record.id,
+                origin = ?record.origin,
+                "a forwarded decision reached the record"
+            );
+            host.publish(cx.now, Event::Command(record.to_event()));
+            // One entry per gated act on this host's trail (C-04), naming the machine and
+            // the operator the forwarding machine recorded rather than whoever forwarded it:
+            // the entry is about the decision, and the decision was theirs.
+            host.audit(
+                crate::chain::DECISION_ACTION,
+                format!(
+                    "forwarded from {}: plan {} {:?} by operator {} as {} at T+{:.0} s",
+                    record.origin.as_deref().unwrap_or("an unnamed machine"),
+                    record.plan.id,
+                    record.decision,
+                    record.operator_id.as_deref().unwrap_or("nobody signed in"),
+                    record.role.as_deref().unwrap_or("no recorded role"),
+                    record.mission_time.0,
+                ),
+            );
+        }
+        outcome
+    }
+
     /// Windows that closed with nobody deciding, from the append-only history.
     ///
     /// **Not rejections**: nobody chose. Answerable from the record since the DN-10 §3

@@ -462,6 +462,131 @@ pub enum DecisionRefused {
     Expired { at: MissionTime },
 }
 
+/// A decision as the machine that took it recorded it (DN-31 §5.2: "identifiers, plan,
+/// choice, operator, role, time"; GAP-134).
+///
+/// **The forwarding machine's record, whole, and nothing this node derived.** Every field
+/// is what that machine's `DecisionRecord` holds, so the node's record of the outage is the
+/// desktop's record rather than a reconstruction of it: the plan with its assignments, the
+/// verdict it was queued under, what the person chose and why, who decided as which role,
+/// and when. A field this node could fill in for itself would be a field the two records
+/// could come to disagree about.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DecisionRecordView {
+    /// The forwarding machine's identifier for the decision, minted there (D-56). The key
+    /// the node's exactly-once is taken on: unique across machines and restarts.
+    pub decision: DecisionId,
+    /// The item it ended on the forwarding machine's own queue, which this node never
+    /// issued. Carried so the record is whole and never looked up here; `None` for a
+    /// decision no queue item named.
+    #[serde(default)]
+    pub item: Option<PendingApprovalId>,
+    pub plan: PlanView,
+    /// What policy said when the plan was queued. Only `RequiresHumanApproval` is ever
+    /// queued, so only it is ever decided, and the route refuses anything else.
+    pub verdict: VerdictSummary,
+    pub choice: DecisionChoice,
+    /// `None` where nobody was signed in at that console (DN-23 §5 rule 1). Never
+    /// invented, here or on the node.
+    pub operator: Option<String>,
+    pub role: Option<String>,
+    /// The client key, where a route carried one; a decision taken at a cut-off
+    /// desktop's own console carries none.
+    #[serde(default)]
+    pub request: Option<gungnir_model::RequestId>,
+    /// When it was decided, on the forwarding machine's clock. When this node learned of
+    /// it is its envelope's time, and both are kept.
+    pub at: MissionTime,
+}
+
+/// A decision a desktop took while it was cut off from this node, forwarded on
+/// reconnect (DN-31 §5.2, §6.8; GAP-134).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ForwardedDecision {
+    pub record: DecisionRecordView,
+    /// The desktop's machine identity: the common name of the identity it presents on its
+    /// link (D-02). See GAP-141 for what that name can and cannot tell apart today.
+    pub origin: String,
+    /// What the outage's reconciliation settled about this decision's plan, where the
+    /// plan was in conflict (D-53; MT-10 step 5). `None` where it was not.
+    ///
+    /// **Additive, defaulted, and beyond §5.2's two fields**: §6.8 asks for the rule's
+    /// verdicts and a person's resolutions to be forwarded "so the node's record says what
+    /// stands", and §7 gives exactly one route to forward on. A decision in conflict
+    /// travels with its settlement in the same element, so the node never holds a
+    /// conflicting decision without what stands beside it.
+    #[serde(default)]
+    pub settled: Option<Settlement>,
+}
+
+/// What an outage's reconciliation settled about one plan (D-53, DN-31 §6.8).
+///
+/// Named from the **forwarding desktop's** seat, exactly as that desktop journaled it:
+/// `kept_local` is whether its decision stands, and `false` means the node's. The node
+/// puts the same fact on its own record under the same event, so a reviewer reading
+/// either journal reads one sentence.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "by", rename_all = "kebab-case")]
+pub enum Settlement {
+    /// D-03's rule ranked the two sides and kept one. Nobody was asked; the fields are
+    /// `LinkEvent::ConflictArbitrated`'s.
+    Rule {
+        kept_local: bool,
+        ground: gungnir_model::arbitration::ArbitrationGround,
+        local: gungnir_model::arbitration::ConflictSide,
+        remote: gungnir_model::arbitration::ConflictSide,
+    },
+    /// A person permitted `plan.decide` kept one side; `LinkEvent::ConflictResolved`'s
+    /// fields.
+    Person {
+        kept_local: bool,
+        operator: Option<String>,
+    },
+}
+
+/// `202` from `POST /v3/decisions/forwarded`: the batch is on the node's record
+/// (DN-31 §7).
+///
+/// **Counted, so a retry can be seen to have recorded nothing.** A batch sent again after
+/// a connection failed answers with every decision `already_held` and none `recorded`,
+/// which is what "forwarding twice records nothing new" looks like from the client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ForwardAccepted {
+    /// Decisions new to the node's record.
+    pub recorded: usize,
+    /// Decisions it already held, identical, acknowledged and not recorded again.
+    pub already_held: usize,
+    /// Settlements put on the node's record by this batch.
+    pub settled: usize,
+}
+
+/// `409` from `POST /v3/decisions/forwarded`: a record in the batch contradicts one the
+/// node already holds under the same identifier (DN-31 §7).
+///
+/// **Nothing in the batch was applied.** The node takes an outage whole or not at all, so
+/// a desktop that sees this has left the node holding none of the batch rather than the
+/// part before the contradiction.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "refused", rename_all = "kebab-case")]
+pub enum ForwardRefused {
+    /// The same decision identifier, a different record. What the node holds stands.
+    Contradicts {
+        decision: DecisionId,
+        held: DecisionRecordView,
+    },
+    /// The identifier names a window that closed on this node with nobody deciding.
+    /// **Its own variant rather than a record**, because a record view carries a person's
+    /// choice and an expiry is not one (DN-10 §3): naming it as a rejection would put a
+    /// refusal nobody made into the answer.
+    ContradictsAnExpiry {
+        decision: DecisionId,
+        plan: PlanId,
+        at: MissionTime,
+    },
+    /// The same plan settled two different ways.
+    SettledOtherwise { plan: PlanId, held: Settlement },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

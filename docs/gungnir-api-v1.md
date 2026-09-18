@@ -147,6 +147,7 @@ The paths are `/v3` since 2026-09-17 (the "Version 3" section above); they were 
 | `GET /v3/queue` | none | `Vec<QueueItemView>`: what this node is waiting for a person to decide, ordered by time remaining then priority (DN-10 §5) | `picture.view` | Yes (GAP-132) |
 | `POST /v3/queue/{item}/decision` | `DecisionRequest { request, item, choice }`; the item as the hyphenated UUID or a decimal number | `201 DecisionRecorded { decision }`, and `CommandEvent::Decided` appears on the stream; `400` for an undecodable body, a mismatched item or a rejection with no reason; `401`; `403` naming the role and the action, or the roles the item is offered to; `409 DecisionRefused` naming the decision that stands or the expiry; `504` if the node loop does not answer, **which does not mean nothing was recorded** | `plan.decide`, or `plan.override` for an override | Yes (GAP-132) |
 | `POST /v3/plans/{plan_id}/decision` | -- | **Not served.** A decision is taken on a queue item, not on a plan | -- | Not part of `/v3` (GAP-132) |
+| `POST /v3/decisions/forwarded` | `Vec<ForwardedDecision { record, origin, settled }>`: every decision a desktop took while cut off, in the order it took them, each with its settlement where its plan was in conflict | `202 ForwardAccepted { recorded, already_held, settled }`, and one `CommandEvent::Decided` carrying `origin` per decision new to the node; `400` for an undecodable body, a record naming no origin, a verdict no queue could have produced or a rejection with no reason; `401`; `403` naming the role; `409 ForwardRefused` naming the record or settlement that stands, **with nothing in the batch applied**; `504` if the node loop does not answer, **which does not mean nothing was recorded** | `plan.decide` | Yes (GAP-134) |
 | Every `/v2` path above | anything | `410 Gone` naming its `/v3` successor, after authenticating the caller as the successor does | the successor's authentication, nothing more | Yes (GAP-130) |
 
 **Authentication landed the same day (GAP-057, DN-23 §6).** Every route but
@@ -176,6 +177,21 @@ arrival order is what makes "the first valid decision wins" a property of the de
 rather than the outcome of a race. A `504` means the loop did not answer in the window,
 **not that nothing was recorded**: the client retries with the same `request` key and is
 told which decision its request produced.
+
+**An outage's decisions reach the node through one door, once (2026-09-17, GAP-134).**
+`POST /v3/decisions/forwarded` is handed to the node loop like the decision route, and the
+loop takes a batch **whole or not at all**: every record is checked against what the node
+already holds under its decision identifier, and every settlement against what it holds for
+its plan, before anything is written. A record new to the node is appended with its `origin`
+and its own mission time, published as `Decided`, and audited once; one the node already
+holds identically is counted `already_held` and records nothing, which is what makes a batch
+safe to send again after a `504`; one that says something different under the same
+identifier refuses the batch `409`, and nothing in it is applied. **Nothing is queued,
+engaged or handed off** for a forwarded decision: the desktop that took it did those while
+it was cut off. `settled` is additive and defaulted -- DN-31 §5.2 names `record` and
+`origin`, and §6.8 asks for the reconciliation's verdicts and resolutions to be forwarded
+too, which this is how the one route carries -- and a settlement is put on the node's
+journal under the event the desktop journaled it as, once per plan.
 
 **Why the write paths refused before 2026-09-05.** The authentication section above says every
 request carries a credential that `gungnir_security::Authenticator` resolves to an
