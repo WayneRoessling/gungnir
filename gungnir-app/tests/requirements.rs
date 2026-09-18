@@ -493,3 +493,42 @@ fn a_fresh_deployment_reports_nothing_stated() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// GAP-127: `task` asks for `sensor.task` before anything else. An Operator holds no
+/// such permission, so the refusal names it, and **no command is issued**, the
+/// requirement stays stated, and no audit row says a sensor was tasked.
+#[test]
+fn a_role_without_sensor_task_is_refused_before_any_command() {
+    use gungnir_security::AuditLog;
+    let (mut state, dir) = desktop("gap127-task");
+    let id = state_one(&mut state, Some(10.0));
+    state.set_role(Role::Operator);
+    let tasks_before = state.sensors.tasks().len();
+
+    let err = requirements::task(&mut state, id, 1, MissionTime(5.0))
+        .expect_err("an Operator may not task a sensor");
+    assert!(
+        matches!(&err, requirements::RequirementError::NotPermitted { action, .. } if *action == "sensor.task"),
+        "refused for some other reason: {err}"
+    );
+    assert!(err.to_string().contains("no command was issued"), "{err}");
+    assert_eq!(
+        state.sensors.tasks().len(),
+        tasks_before,
+        "a refused tasking issued a command"
+    );
+    assert_eq!(
+        standing(&state, id),
+        RequirementState::Stated,
+        "a refused tasking moved the requirement"
+    );
+    assert!(
+        !state
+            .audit
+            .entries()
+            .iter()
+            .any(|e| e.action == "sensor.task"),
+        "a refused tasking left a sensor.task audit row"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
