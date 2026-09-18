@@ -8655,6 +8655,9 @@
     note: >-
       Filed by the GAP-067 walk, whose arbiter build found that PN-14 refuses the first
       apply of any edited baseline.
+  - date: 2026-09-17
+    status: Closed
+    note: "Closed 2026-09-17. The store is told the revision the desktop started with and compares a candidate with that, so PN-14's first apply of an edited baseline applies when its revision advances and is refused when it does not; the file stays the fallback for a caller that says nothing. Tested on the store and through PN-14. See `../../record/2026-09-17/pn-14-first-apply-compares-with-the-running.md`."
 
 - id: GAP-129
   name: >-

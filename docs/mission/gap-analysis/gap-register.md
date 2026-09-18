@@ -140,7 +140,7 @@ history, and an entry is never edited once it has merged.
 | GAP-125 | Neither binary's health path is tested against a changing flag | Technical | CAP-5.5 | 2 | 8 | S | 16 | I3 | Services engineer | Open |
 | GAP-126 | A non-finite float in an envelope cannot be journaled faithfully | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Open |
 | GAP-127 | The desktop's decide and task functions check no permission | Technical | CAP-6.2 | 3 | 9 | S | 27 | I3 | Security engineer (human-owned crate) | Open |
-| GAP-128 | PN-14 cannot apply an edited baseline on its first apply | Technical | CAP-5.6 | 3 | 2 | S | 6 | I3 | Services engineer | Open |
+| GAP-128 | PN-14 cannot apply an edited baseline on its first apply | Technical | CAP-5.6 | 3 | 2 | S | 6 | I3 | Services engineer | Closed |
 | GAP-129 | No decision reaches a node's record, so reconciliation never meets a conflict | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Owner | In progress |
 | GAP-130 | Decision, plan and queue-item identifiers collide across machines and restarts | Technical | CAP-7.2, CAP-4.2 | 4 | 6 | M | 24 | I3 | Services engineer | Closed |
 | GAP-131 | The decision path lives only in gungnir-app | Technical | CAP-4.2, CAP-3.6 | 3 | 7 | L | 21 | I3 | Security engineer (human-owned crate) | Closed |
@@ -1920,11 +1920,12 @@ Counts: 143 gaps, 3 mission, 140 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.6 Baselines and plans.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, whose arbiter build found that PN-14 refuses the first apply of any edited baseline.
+  - 2026-09-17, Closed: Closed 2026-09-17. The store is told the revision the desktop started with and compares a candidate with that, so PN-14's first apply of an edited baseline applies when its revision advances and is refused when it does not; the file stays the fallback for a caller that says nothing. Tested on the store and through PN-14. See `../../record/2026-09-17/pn-14-first-apply-compares-with-the-running.md`.
 - Evidence: `gungnir-config/src/lib.rs` (`FileConfigStore::apply`: the revision in force is what the store applied, or else what is on disk); `gungnir-app/src/sustainment.rs` (`ConfigEditorState::reload` and `apply`); found with a probe during the GAP-067 walk's arbiter build.
 - Severity: 3. Reach: 2 threads. Effort: S. Priority: 6.
 - Impact: PN-14 reloads its candidate from the baseline file and applies it through the same store. A store that has applied nothing takes the revision in force from that file, which is the candidate itself, so the first apply of an edited baseline is refused as `RevisionNotAdvanced` whatever revision the edit carries.
 - Closing action: Compare the candidate with the revision the desktop is running rather than with the file the candidate was read from, and test that an edited baseline with an advanced revision applies from PN-14 on its first apply while an unadvanced one is refused.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-129 No decision reaches a node's record, so reconciliation never meets a conflict**

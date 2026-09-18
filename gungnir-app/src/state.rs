@@ -479,8 +479,13 @@ impl AppState {
     #[allow(clippy::too_many_lines)]
     pub fn with_config_and_store(
         config: ConfigBaseline,
-        config_store: Option<FileConfigStore>,
+        mut config_store: Option<FileConfigStore>,
     ) -> Result<Self, AppError> {
+        // GAP-128: PN-14 applies a candidate read from this store's own file, so the
+        // store has to compare it with what this desktop is running, not with that file.
+        if let Some(store) = config_store.as_mut() {
+            store.set_running_revision(config.revision);
+        }
         let runtime = desktop_runtime()?;
         let mut alerts = Vec::new();
         // GAP-024: deliberately not constructed here. `crate::fusion::FusionBackend`
