@@ -171,7 +171,7 @@ pub fn render_status_panel(ui: &mut egui::Ui, state: &DashboardState) {
 
 ## 9. Dependency & Version Discipline
 
-- Pin `wgpu`, `egui`, `eframe`, and `three-d` to compatible versions explicitly in the workspace `Cargo.toml` (these crates move fast and can break API compatibility between minor versions). The tested version set and its caveats are documented in `ARCHITECTURE.md` §9: `wgpu` 22 matches the line eframe 0.29's optional wgpu feature uses, and eframe runs on `glow` with that feature off.
+- Pin `wgpu`, `egui`, `eframe`, and `three-d` to compatible versions explicitly in the workspace `Cargo.toml` (these crates move fast and can break API compatibility between minor versions). The tested version set and its caveats are documented in `ARCHITECTURE.md` §9: eframe runs on `glow` with its optional wgpu feature off, and three-d must share eframe's `glow` (0.17, at eframe 0.34 and three-d 0.19). `wgpu` 22 no longer matches the line eframe's wgpu feature would use (29), so enabling that feature would be a decision about the compute device too.
 - New dependencies require justification in the PR description: what problem it solves, why the standard library or an existing dependency can't. For these crates that is the same sign-off `agentic-coding-standards.md` §6 rule 4 requires; the young 3D-data crates named in `rust-3d-data-ecosystem-build-vs-adopt.md` §1.2 (`copc-rs`, `pasture-*`, `oxigdal-3d`) are pinned in the PR that first uses them.
 
 ---

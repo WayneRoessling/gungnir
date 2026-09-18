@@ -40,7 +40,7 @@ DecisionDialog, CoverageLayers, Requirements, Planning, CommanderSummary,
 Reconciliation, Assistant, Audit) and the three new roles' lists once GAP-068 adds
 the `Role` variants. `gungnir-app/src/main.rs` replaces the fixed side panel with a
 dock tree over the layout's panels (GAP-055, GAP-075); detached panels are egui
-native viewports (`egui 0.29` supports them without a new crate); docking itself
+native viewports (egui supports them without a new crate); docking itself
 needs a docking crate, a §2.9 sign-off recorded when GAP-075 lands.
 
 ## 3. Flows to crates

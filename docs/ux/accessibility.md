@@ -1,7 +1,7 @@
 # Accessibility
 
-Status: first draft, 2026-09-04. What the designs commit to within what egui 0.29
-offers, and what is out of reach without a change of toolkit.
+Status: first draft, 2026-09-04. What the designs commit to within what egui offers
+(0.34 since 2026-09-17), and what is out of reach without a change of toolkit.
 
 ## Contrast
 
@@ -40,7 +40,7 @@ offers, and what is out of reach without a change of toolkit.
 
 ## Screen readers
 
-- egui 0.29 exposes an accessibility tree through AccessKit on Windows when
+- egui exposes an accessibility tree through AccessKit on Windows when
   enabled; the designs label every widget (`ui.label` text is the accessible name;
   buttons carry their verb and object, "Reject plan 42"). Live regions for the
   queue and alerts are not available; the strip's counts are read on focus.

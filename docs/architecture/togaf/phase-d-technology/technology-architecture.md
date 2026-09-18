@@ -48,8 +48,8 @@ found no unrecorded crate.
 | Numerical and runtime | `nalgebra` 0.33, `tokio` 1, `serde` and `serde_json` 1, `rand` 0.8, `rand_distr` 0.4, `thiserror` 1, `crossbeam-channel` 0.5 |
 | Verification | `proptest` 1, `criterion` 0.5 |
 | Interoperability and diagnostics | `arrow` 53, `tracing` 0.1, `tracing-subscriber` 0.3 |
-| Interface and rendering | `eframe` and `egui` 0.29, `three-d` 0.18, `wgpu` 22 |
-| 3D input and output | `gltf` 1, `vtkio` 0.6, `las` 0.9 |
+| Interface and rendering | `eframe` and `egui` 0.34, `three-d` 0.19, `wgpu` 22 |
+| 3D input and output | `gltf` 1, `vtkio` 0.6, `las` 0.11 |
 
 Two known issues carried openly: `vtkio` pulls transitive crates the compiler flags as
 future-incompatible, and it is upgraded when a release drops them; the young point-cloud
