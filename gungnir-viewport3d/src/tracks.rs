@@ -537,4 +537,63 @@ mod tests {
             "a larger angular one-sigma must widen the drawn wedge"
         );
     }
+
+    /// Every shape `draw` put on the painter, from one headless egui pass.
+    fn painted(mut draw: impl FnMut(&egui::Painter)) -> Vec<egui::Shape> {
+        let ctx = egui::Context::default();
+        let output = ctx.run_ui(egui::RawInput::default(), |ui| draw(ui.painter()));
+        output
+            .shapes
+            .into_iter()
+            .map(|clipped| clipped.shape)
+            .collect()
+    }
+
+    /// An outline whose corner radius fits egui's whole-point `u8` is drawn as the
+    /// rectangle it always was, stroked outside its edge as egui 0.29 stroked every one.
+    #[test]
+    fn an_ordinary_sigma_outline_is_a_rectangle_stroked_outside() {
+        let outline =
+            egui::Rect::from_center_size(egui::pos2(500.0, 500.0), egui::vec2(80.0, 40.0));
+        let stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
+        let shapes = painted(|p| stroke_sigma_outline(p, outline, stroke));
+        match shapes.as_slice() {
+            [egui::Shape::Rect(rect)] => {
+                assert_eq!(rect.rect, outline);
+                assert_eq!(rect.corner_radius, egui::CornerRadius::same(20));
+                assert_eq!(rect.stroke_kind, egui::StrokeKind::Outside);
+            }
+            other => panic!("expected one rectangle, drew {other:?}"),
+        }
+    }
+
+    /// Past a radius of 255 egui would have clamped the corner and drawn a capsule as a
+    /// rounded square. The outline is a path instead, and every point of its left end
+    /// lies on the circle of its own radius, which a clamped corner's would not.
+    #[test]
+    fn a_sigma_outline_too_wide_for_a_corner_radius_keeps_its_round_ends() {
+        let outline = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(900.0, 600.0));
+        let radius = 300.0;
+        let stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
+        let shapes = painted(|p| stroke_sigma_outline(p, outline, stroke));
+        let [egui::Shape::Path(path)] = shapes.as_slice() else {
+            panic!("expected one path, drew {shapes:?}");
+        };
+        assert!(path.closed);
+        assert_eq!(path.stroke.kind, egui::StrokeKind::Outside);
+        let centre = egui::pos2(outline.left() + radius, outline.center().y);
+        let left_end: Vec<_> = path
+            .points
+            .iter()
+            .filter(|p| p.x < centre.x - 1.0)
+            .collect();
+        assert!(!left_end.is_empty(), "the path has no left end");
+        for point in left_end {
+            assert!(
+                (point.distance(centre) - radius).abs() < 0.01,
+                "{point:?} is {} from the end's centre, not {radius}",
+                point.distance(centre)
+            );
+        }
+    }
 }
