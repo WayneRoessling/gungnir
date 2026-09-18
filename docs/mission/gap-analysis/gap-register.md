@@ -155,7 +155,7 @@ history, and an entry is never edited once it has merged.
 | GAP-140 | A node's deadline is drawn against the desktop's own clock | Technical | CAP-5.9, CAP-3.7 | 2 | 10 | S | 20 | I3 | UI engineer | Open |
 | GAP-141 | A desktop has no identity of its own | Technical | CAP-6.1, CAP-5.4 | 2 | 10 | M | 20 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-142 | A desktop that restarts during an outage forgets it | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
-| GAP-143 | A sign-in during an outage ends it without a person switching back | Technical | CAP-5.4, CAP-6.1 | 3 | 10 | S | 30 | I3 | Services engineer | Open |
+| GAP-143 | A sign-in during an outage ends it without a person switching back | Technical | CAP-5.4, CAP-6.1 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 | GAP-144 | The release passes only by accepting two quick-xml advisories | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | UI engineer | Closed |
 
 Counts: 144 gaps, 3 mission, 141 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
@@ -2133,11 +2133,12 @@ Counts: 144 gaps, 3 mission, 141 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.4 Disconnected and reconcile; CAP-6.1 Authenticate.
 - History:
   - 2026-09-17, Open: Found writing DN-31 §9 row 8, which needed a decision with no recorded role on the cut-off desktop and could not get one by signing out and back in. Not fixed in GAP-134: the fix moves a link's credential under a running task, which is a change to how a desktop signs in rather than to how it forwards.
+  - 2026-09-17, Closed: Fixed. A sign-in while a fallback is in force changes only who the outage's link signs in as, through `NodeLink::replace_credential`, and leaves the fallback, the embedded services and the link where they are; only a person switching back ends an outage (D-15). A new link would have started empty and lost what the outage had queued for the node. The link now holds its credential where `Debug` can reach it, so `Credential`'s `Debug` redacts the passphrase. `failover_e2e.rs`'s new test fails against the old sign-in path at its first check. See `../../record/2026-09-17/a-sign-in-during-an-outage-no-longer-ends-it.md`.
 - Evidence: `gungnir-app/src/session.rs` (`connect_if_remote` sets `state.fallback = None`); `gungnir-app/src/failover.rs` (`switch_back`, the path D-15 allows back); `gungnir-app/tests/cut_off_and_reconnected.rs`, whose cut-off desktop decides with nobody signed in rather than sign in again.
 - Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
 - Impact: A sign-in runs `connect_if_remote`, which builds a new link, puts the remote services back and clears the fallback. Signing in while a desktop is cut off -- or after its node answers and before anybody switches back, which a session that expired mid-outage invites -- ends the outage without the person D-15 requires: PN-18's reconciliation is discarded, and the decisions taken offline are never compared with the node's by track or forwarded to it, with nothing saying so.
 - Closing action: Keep an outage across a sign-in: attribute the new session, give the link the new operator's credential without replacing the embedded services or clearing the fallback, and leave the switch back to PN-18. Then show that a sign-in mid-outage leaves the reconciliation, the comparison and the forwarding as they were.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-134 (`../../record/2026-09-17/an-outage-reaches-the-node-once.md`).
 - Depends on: GAP-134.
 
