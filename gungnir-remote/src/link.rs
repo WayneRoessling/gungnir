@@ -140,6 +140,21 @@ pub struct Projection {
     /// session has no socket. `None` until the first snapshot lands, which is a different
     /// claim from "heard a long time ago" and the strip keeps them apart.
     pub last_heard: Option<std::time::Instant>,
+    /// The node's approval queue, as this desktop sees it (GAP-133, DN-31 §6.6).
+    ///
+    /// Not a queue of this desktop's own: while a desktop is linked the node holds the
+    /// queue (D-55), and this is a projection of it. See [`crate::queue`] for which of
+    /// the picture and the stream is authoritative for what.
+    pub queue: crate::queue::NodeQueue,
+    /// Decisions this desktop has taken on the node's queue, on their way to
+    /// `POST /v3/queue/{item}/decision`, and the node's answer to each (GAP-133).
+    ///
+    /// Store-and-forward like `task_outbox`, with one difference that matters: a post
+    /// that went unanswered is **retried under the same request key** rather than
+    /// abandoned, because a `504` does not mean nothing was recorded (DN-31 §6.3). The
+    /// key is what makes the retry the same request instead of a second decision.
+    pub decision_outbox: std::collections::VecDeque<crate::queue::OutboundDecision>,
+    pub decision_outcomes: Vec<crate::queue::DecisionOutcome>,
 }
 
 /// A sensor task on its way to the node (GAP-004).
@@ -341,6 +356,49 @@ impl NodeLink {
             .unwrap_or_default()
     }
 
+    /// The node's approval queue as of now (GAP-133, DN-31 §6.6).
+    ///
+    /// An owned copy taken once per tick. `waiting` is `None` where this desktop has not
+    /// been told what is waiting -- before the first picture, and after the link goes
+    /// down -- which PN-06 draws differently from a queue that is empty.
+    #[must_use]
+    pub fn queue(&self) -> crate::queue::QueueSnapshot {
+        self.read().map(|p| p.queue.snapshot()).unwrap_or_default()
+    }
+
+    /// Take a decision on one of the node's queue items (DN-31 §6.3, §6.6).
+    ///
+    /// **Nothing is recorded on this desktop by calling this.** The decision is the
+    /// node's to take, journal and act on; what happens here is a post, and the answer
+    /// comes back through [`NodeLink::take_decision_outcomes`]. `request` is minted by
+    /// the caller once per decision a person takes, and every retry of that decision
+    /// carries it unchanged.
+    pub fn queue_decision(&self, decision: crate::queue::OutboundDecision) {
+        if let Ok(mut p) = self.projection.lock() {
+            p.decision_outbox.push_back(decision);
+        }
+    }
+
+    /// The node's answers to the decisions posted since the last call.
+    #[must_use]
+    pub fn take_decision_outcomes(&self) -> Vec<crate::queue::DecisionOutcome> {
+        self.projection
+            .lock()
+            .map(|mut p| std::mem::take(&mut p.decision_outcomes))
+            .unwrap_or_default()
+    }
+
+    /// Decisions posted and not yet answered, oldest first (GAP-133).
+    ///
+    /// Read by PN-07 so a decision that keeps meeting a `504` is on screen as one still
+    /// in flight rather than one that quietly never landed.
+    #[must_use]
+    pub fn decisions_in_flight(&self) -> Vec<crate::queue::OutboundDecision> {
+        self.read()
+            .map(|p| p.decision_outbox.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
     /// Hand this desktop's current held set for `item` to the link, to replace what the
     /// node holds (GAP-065, DN-18 §5 amendment 2).
     ///
@@ -422,6 +480,10 @@ struct Urls {
     exchange_warnings: String,
     exchange_reports: String,
     exchange_handoffs: String,
+    /// The node's approval queue, and the prefix a decision's URL is built on (GAP-133,
+    /// DN-31 §7). One URL and one prefix rather than two paths, exactly as `tasks` is the
+    /// prefix `SENSOR_TASK` is filled in from.
+    queue: String,
     /// True for an `https` endpoint: the stream is `wss` over our own TLS stream.
     tls: bool,
     host: String,
@@ -482,6 +544,7 @@ fn urls(endpoint: &RemoteEndpoint) -> Result<Urls, RemoteError> {
         exchange_warnings: format!("{base}{}", path(routes::EXCHANGE_WARNINGS)),
         exchange_reports: format!("{base}{}", path(routes::EXCHANGE_REPORTS)),
         exchange_handoffs: format!("{base}{}", path(routes::EXCHANGE_HANDOFFS)),
+        queue: format!("{base}{}", path(routes::QUEUE)),
         events: format!("{scheme}://{rest}{}", path(routes::EVENTS)),
         tls,
         host,
@@ -643,6 +706,13 @@ fn set_disconnected(projection: &Arc<Mutex<Projection>>, reason: &str) {
     if let Ok(mut p) = projection.lock() {
         p.connected = false;
         p.last_error = Some(reason.to_owned());
+        // What the node was waiting on a moment ago is no longer something this desktop
+        // can claim to know, so PN-06 says it has not been told rather than drawing a
+        // list nothing is maintaining (GAP-133). What ended stays ended, and the decision
+        // outbox stays too: a decision posted and never answered is retried under the
+        // same key when the node comes back, which is how the client learns whether it
+        // was recorded (DN-31 §6.3).
+        p.queue.disconnected();
     }
 }
 
@@ -744,6 +814,13 @@ async fn run_link(
         .await
         .map_err(|e| format!("could not subscribe: {e}"))?;
 
+    // The starting picture of the node's approval queue (GAP-133, DN-31 §6.6), taken
+    // **after** the subscribe frame has gone. `SnapshotResponse` carries the same `queue`
+    // field and was fetched above, before the stream existed; reading it there would
+    // leave an item queued in between in neither place until the next reconnection. See
+    // `crate::queue`'s module documentation for the whole rule.
+    refresh_queue(&client, urls, &token, projection, true).await;
+
     // Anything at all resets the clock: an envelope, or the server's heartbeat ping,
     // which `tokio-tungstenite` answers for us. Silence past the timeout means the link
     // is gone even though the socket has not said so, which is the case a "connected"
@@ -760,9 +837,23 @@ async fn run_link(
                 flush_outbox(&client, urls, &token, projection).await;
                 flush_tasks(&client, urls, &token, projection).await;
                 flush_exchange(&client, urls, &token, projection).await;
+                flush_decisions(&client, urls, &token, projection).await;
+                // A picture the stream asked for and a failed fetch left owing. The
+                // stream's own branch below takes it as soon as the event arrives; this
+                // is what bounds the retry at one forward interval rather than at the
+                // next frame, which on a quiet node is one heartbeat away. A no-op unless
+                // a fetch is actually owed.
+                refresh_queue(&client, urls, &token, projection, false).await;
             }
             next = tokio::time::timeout(gungnir_api::transport::HEARTBEAT_TIMEOUT, socket.next()) => {
                 handle_frame(next, projection)?;
+                // A `Queued` or `Escalated` this frame means the node's queue has moved,
+                // so the picture is taken again at once rather than on the forward
+                // interval: MOP-07 measures the whole path from a plan being proposed to
+                // an approval control being available on a desktop, and 250 ms of
+                // deliberate wait inside a 500 ms budget would be spent for nothing
+                // (GAP-133, DN-31 §6.9). A no-op unless the stream asked for it.
+                refresh_queue(&client, urls, &token, projection, false).await;
             }
         }
         // Unconditional rather than only after a confirmed mutation: a spurious wake
@@ -933,6 +1024,181 @@ async fn flush_exchange(
     }
 }
 
+/// Take a picture of the node's approval queue, and replace the projection's waiting
+/// list with it (GAP-133, DN-31 §6.6).
+///
+/// `force` is the starting picture, taken once per connection right after the
+/// subscription; otherwise this returns without asking unless the stream has said the
+/// queue moved. **Nothing is asked for while the node's queue is still**, which is what
+/// keeps this event-driven rather than a poll.
+///
+/// A failed fetch leaves the projection as it was and says so: the stale mark stays set,
+/// so the next frame asks again. It does not clear the queue, because an unanswered
+/// request is not evidence that nothing is waiting.
+async fn refresh_queue(
+    client: &reqwest::Client,
+    urls: &Urls,
+    token: &str,
+    projection: &Arc<Mutex<Projection>>,
+    force: bool,
+) {
+    if !force {
+        let wanted = projection.lock().is_ok_and(|p| p.queue.is_stale());
+        if !wanted {
+            return;
+        }
+    }
+    let response = match with_token(client.get(&urls.queue), token).send().await {
+        Ok(response) if response.status().is_success() => response,
+        Ok(response) => {
+            tracing::warn!(
+                status = %response.status(),
+                "the node refused the approval queue; keeping the last picture"
+            );
+            return;
+        }
+        Err(err) => {
+            tracing::warn!(%err, "could not read the node's approval queue");
+            return;
+        }
+    };
+    match response.json::<Vec<gungnir_api::v3::QueueItemView>>().await {
+        Ok(items) => {
+            if let Ok(mut p) = projection.lock() {
+                p.queue.take_picture(items);
+            }
+        }
+        Err(err) => tracing::warn!(%err, "the node's approval queue could not be decoded"),
+    }
+}
+
+/// Post the decisions this desktop has taken on the node's queue, oldest first
+/// (GAP-133, DN-31 §6.3).
+///
+/// **The one flusher here that retries rather than gives up.** `flush_outbox`,
+/// `flush_tasks` and `flush_exchange` all stop at the first refusal and try the same item
+/// again next tick; this one distinguishes an *answer* from *no answer*. A `201`, a `409`
+/// and a `400`/`401`/`403` are answers and are delivered to the caller, which then knows
+/// what stands. A `504` -- the node's loop did not reply inside the route's window -- is
+/// not an answer and **does not mean nothing was recorded**, so the same request key goes
+/// back to the same route until the node says which. That is the whole reason the key
+/// exists (DN-31 §5.2).
+async fn flush_decisions(
+    client: &reqwest::Client,
+    urls: &Urls,
+    token: &str,
+    projection: &Arc<Mutex<Projection>>,
+) {
+    for _ in 0..16 {
+        let Some(decision) = projection
+            .lock()
+            .ok()
+            .and_then(|p| p.decision_outbox.front().cloned())
+        else {
+            return;
+        };
+        let url = format!("{}/{}/decision", urls.queue, decision.item);
+        let request = gungnir_api::v3::DecisionRequest {
+            request: decision.request.clone(),
+            item: decision.item,
+            choice: decision.choice.clone(),
+        };
+        let response = match with_token(client.post(&url), token)
+            .json(&request)
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            // Unreachable. Keep it queued under the same key and try again: the node may
+            // have recorded it before the connection failed, and the key is what lets the
+            // retry find out instead of deciding twice.
+            Err(err) => {
+                tracing::warn!(%err, item = %decision.item, "the node could not be reached with a decision");
+                count_attempt(projection);
+                return;
+            }
+        };
+        let status = response.status().as_u16();
+        if crate::queue::retry_under_same_key(status) {
+            tracing::info!(
+                item = %decision.item,
+                status,
+                request = %decision.request,
+                "the node has not answered this decision yet; retrying under the same key"
+            );
+            count_attempt(projection);
+            return;
+        }
+        let body = response.text().await.unwrap_or_default();
+        let answer = answer_of(status, &body);
+        if let Ok(mut p) = projection.lock() {
+            p.decision_outbox.pop_front();
+            // A `201` or a `409` both mean the item is no longer waiting on a person, and
+            // this desktop has that first-hand. The item leaves PN-06 now rather than
+            // when the stream catches up, so a second click cannot earn a refusal naming
+            // a decision that has already been made (DN-31 §6.3, §6.6).
+            if matches!(
+                answer,
+                crate::queue::DecisionAnswer::Recorded { .. }
+                    | crate::queue::DecisionAnswer::Refused(_)
+            ) {
+                p.queue.recorded_here(decision.item);
+            }
+            p.decision_outcomes.push(crate::queue::DecisionOutcome {
+                request: decision.request,
+                item: decision.item,
+                answer,
+            });
+        }
+    }
+}
+
+/// One more attempt against the decision at the head of the outbox.
+///
+/// Counted rather than only logged, so PN-07 can say a decision is still in flight after
+/// several tries instead of showing a dialog that looks as though nothing happened.
+fn count_attempt(projection: &Arc<Mutex<Projection>>) {
+    if let Ok(mut p) = projection.lock() {
+        if let Some(head) = p.decision_outbox.front_mut() {
+            head.attempts = head.attempts.saturating_add(1);
+        }
+    }
+}
+
+/// What the node's answer to a decision means (DN-31 §6.3).
+///
+/// A body that does not decode is reported as the status and the text rather than
+/// guessed at: this is the answer a person is shown on PN-07, and inventing a refusal
+/// reason would be worse than saying the node answered something this desktop could not
+/// read.
+fn answer_of(status: u16, body: &str) -> crate::queue::DecisionAnswer {
+    use crate::queue::DecisionAnswer;
+    if status == 201 {
+        return match serde_json::from_str::<gungnir_api::v3::DecisionRecorded>(body) {
+            Ok(recorded) => DecisionAnswer::Recorded {
+                decision: recorded.decision,
+            },
+            Err(err) => DecisionAnswer::Rejected {
+                status,
+                reason: format!("the node recorded a decision this desktop could not read: {err}"),
+            },
+        };
+    }
+    if status == 409 {
+        return match serde_json::from_str::<gungnir_api::v3::DecisionRefused>(body) {
+            Ok(refused) => DecisionAnswer::Refused(refused),
+            Err(err) => DecisionAnswer::Rejected {
+                status,
+                reason: format!("the node refused this decision for a reason this desktop could not read: {err}"),
+            },
+        };
+    }
+    DecisionAnswer::Rejected {
+        status,
+        reason: body.trim().to_owned(),
+    }
+}
+
 type Frame = Result<
     Option<Result<tokio_tungstenite::tungstenite::Message, tokio_tungstenite::tungstenite::Error>>,
     tokio::time::error::Elapsed,
@@ -1076,9 +1342,11 @@ fn with_token(request: reqwest::RequestBuilder, token: &str) -> reqwest::Request
 
 /// Fold one envelope into the projection.
 ///
-/// Only the tracking and intercept events change it. The rest are carried on the same
-/// stream for the journal and other subscribers, and a client that tried to interpret
-/// them would be building a second, divergent picture.
+/// The tracking, intercept and command events change it, and the rest are carried on the
+/// same stream for the journal and other subscribers: a client that tried to interpret
+/// those would be building a second, divergent picture. The command events are here
+/// because since D-55 the node's queue is the queue, so reading it is projecting what the
+/// node holds rather than deciding anything a second time.
 fn apply(projection: &Arc<Mutex<Projection>>, envelope: &Envelope) -> Result<(), String> {
     let mut p = projection
         .lock()
@@ -1126,6 +1394,14 @@ fn apply(projection: &Arc<Mutex<Projection>>, envelope: &Envelope) -> Result<(),
         ) => {
             p.plan = plan.clone();
         }
+        // The node's approval queue (GAP-133, DN-31 §6.6). Taken as itself rather than
+        // put on the inbox, because unlike a sensor task or an effector report this is a
+        // *picture* the desktop projects and not an act the host performs: PN-06 draws it
+        // and nothing in `gungnir-app` records anything from it.
+        //
+        // These four variants were dropped by this function's `_ => {}` until GAP-133, so
+        // a node decided in its own queue and every linked desktop saw nothing of it.
+        Event::Command(command) => p.queue.note(command, envelope.mission_time),
         _ => {}
     }
     Ok(())

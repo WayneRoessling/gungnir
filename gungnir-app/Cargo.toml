@@ -36,6 +36,15 @@ gungnir-scenario = { path = "../gungnir-scenario", version = "0.1.0" }
 # runs a real node transport in the test process. The runtime edge stays through
 # gungnir-remote, which is the only crate the desktop speaks to a node through.
 gungnir-api = { path = "../gungnir-api", version = "0.1.0" }
+# Dev-only: DN-31 §9 rows 7 and 9 (GAP-133) are about two and three desktops against **one
+# node**, so the test needs the node's own approval loop -- `propose`, `sweep`,
+# `answer_decisions` -- running in the test process. It calls `gungnir-node`'s library
+# target, the same source `gungnir-node/src/main.rs` calls, for the reason that library
+# exists: a test that drove a copy of the loop would prove the copy, not the node.
+# No runtime edge, and none is possible -- a binary cannot depend on a binary. The
+# dependency graph compares production `[dependencies]` only
+# (`gungnir-app/tests/dependency_graph.rs`), as it does for the gungnir-api line above.
+gungnir-node = { path = "../gungnir-node", version = "0.1.0" }
 # The headless render probe, so the dock tree and the panels in it can be tested for
 # what they actually draw rather than for the views they were handed. Test-only: the
 # feature is off in an ordinary build.

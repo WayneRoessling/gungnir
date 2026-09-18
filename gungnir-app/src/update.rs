@@ -55,6 +55,10 @@ pub fn tick(state: &mut AppState) {
     crate::session::sweep_expiry(state);
     crate::failover::tick(state);
     crate::node_tasks::sweep(state);
+    // 1d. The node's approval queue, and its answers to the decisions this desktop has
+    //     taken on it (GAP-133, DN-31 §6.6). After the failover switch, so a tick that
+    //     fell back reads the projection the link has already been told to forget.
+    crate::projection::tick(state);
 
     // 2. Tracking: pull pipeline output into the snapshot.
     state.tracking.poll(now);
@@ -110,54 +114,19 @@ pub fn tick(state: &mut AppState) {
     //     due again.
     crate::deliveries::sweep(state);
 
-    // 3. Planning against the snapshot; publish only when the plan changes.
-    //
-    //    **A stale plan is not proposed** (GAP-066). `PlanOutcome` separates a plan
-    //    computed for this snapshot from the last one that succeeded and from never
-    //    having had one; publishing `PlanProposed` for a stale plan would put a
-    //    recommendation in the journal that nothing recommended now.
-    let outcome = state
-        .intercept
-        .plan(now, state.tracking.tracks(), &state.resources);
-    // GAP-030: what the planner would not propose this tick, for PN-05.
-    state.withheld = state.intercept.withheld();
-    let plan = match &outcome {
-        gungnir_intercept_service::PlanOutcome::Fresh(plan) => plan.clone(),
-        not_fresh => {
-            tracing::debug!(?not_fresh, "no fresh plan this tick");
-            state.last_plan.clone()
-        }
-    };
-    let mut submitted = None;
-    // **Compared by id against `last_live_plan_id`, not by value against
-    // `state.last_plan` (GAP-097).** `state.last_plan` is what PN-04/PN-05 draw, and
-    // `rehearsal.rs`'s scripted plans write it too; comparing the live planner's own
-    // output against a field something else also writes means an unrelated scripted
-    // submission makes the very next unchanged live plan look new again.
-    // `DpInterceptService::fresh_plan` never reuses a `PlanId` for a different
-    // assignment, so the id alone -- tracked here and touched only by this step --
-    // answers "have I already announced this one" without that interference.
-    if outcome.is_fresh() && state.last_live_plan_id != Some(plan.id) {
-        publish(
-            state,
-            now,
-            Event::Intercept(InterceptEvent::PlanProposed(plan.clone())),
-        );
-        state.last_plan = plan.clone();
-        state.last_live_plan_id = Some(plan.id);
-
-        // 3b. Policy, then the approval queue. A denied plan is recorded as denied and
-        //     never queued; a plan that clears waits for a person. Neither path makes
-        //     anything actionable, which is the property C-01 turns on.
-        let outcome = crate::decisions::submit(state, plan);
-        tracing::debug!(?outcome, "plan submitted");
-        submitted = Some(outcome);
-    }
+    // 3, 3b. Plan against the snapshot, and give the plan to whichever queue holds it.
+    let moved = plan_and_queue(state, now);
 
     // 3b'. The options beside the plan, and the rehearsal for the selected track
     //      (GAP-032). Called every frame so that pointing at a different track re-asks
     //      the question, and it costs a solve only when the plan or the selection moved.
-    crate::decisions::refresh_support(state, submitted.as_ref());
+    //
+    //      Keyed on the plan changing rather than on a submission since GAP-133: the
+    //      alternatives and the what-if judge plans nobody submitted and commit to
+    //      nothing, so they are as much use beside a node's recommendation as beside this
+    //      desktop's own. Keying them on `submitted` would have left PN-05's options
+    //      permanently blank on every linked desktop.
+    crate::decisions::refresh_support(state, moved);
 
     // 3c. Expiry and escalation, every frame rather than only when the plan changes:
     //     a window closes on the clock, not on new input. Nothing ends silently --
@@ -229,6 +198,81 @@ pub fn tick(state: &mut AppState) {
             state.alerts.push(format!("Journal fsync failed: {err}"));
         }
     }
+}
+
+/// Steps 3 and 3b of the tick: plan against the snapshot, and give a fresh plan to
+/// whichever queue holds it.
+///
+/// **A stale plan is not proposed** (GAP-066). `PlanOutcome` separates a plan computed
+/// for this snapshot from the last one that succeeded and from never having had one;
+/// publishing `PlanProposed` for a stale plan would put a recommendation in the journal
+/// that nothing recommended now.
+///
+/// **This is the one place the linked and the cut-off paths part** (GAP-133, DN-31 §6,
+/// clause §6.5; D-55), and they part here rather than three steps later on purpose.
+/// While a desktop is linked the node holds the queue: it proposed this plan, it ran the
+/// chain, it queued the item and it will take the decision, open the engagement and issue
+/// the handoff. `state.intercept` is `RemoteInterceptService` then, so the plan below
+/// **is the node's own plan handed back** -- submitting it here would re-propose it into
+/// this desktop's queue, where whoever is at this console would decide it invisibly to
+/// the node and to every other desktop. That was the defect GAP-133 closes.
+///
+/// Nothing else has to be stopped. An engagement opens only from a `DecisionRecord` and a
+/// handoff is issued only beside one (`gungnir_approval::ApprovalDesk::decide_for`,
+/// contract C-01), so a desktop that queues no node plan records no decision on one and
+/// therefore issues nothing for one: DN-31 §6.5's one issuer follows from one queue.
+///
+/// Cut off, or deployed with no node, every line here runs exactly as it always has --
+/// which is what DN-31 §9 row 10 pins.
+fn plan_and_queue(
+    state: &mut AppState,
+    now: gungnir_model::MissionTime,
+) -> crate::decisions::PlanMoved {
+    let outcome = state
+        .intercept
+        .plan(now, state.tracking.tracks(), &state.resources);
+    // GAP-030: what the planner would not propose this tick, for PN-05.
+    state.withheld = state.intercept.withheld();
+    let plan = match &outcome {
+        gungnir_intercept_service::PlanOutcome::Fresh(plan) => plan.clone(),
+        not_fresh => {
+            tracing::debug!(?not_fresh, "no fresh plan this tick");
+            state.last_plan.clone()
+        }
+    };
+    // **Compared by id against `last_live_plan_id`, not by value against
+    // `state.last_plan` (GAP-097).** `state.last_plan` is what PN-04/PN-05 draw, and
+    // `rehearsal.rs`'s scripted plans write it too; comparing the live planner's own
+    // output against a field something else also writes means an unrelated scripted
+    // submission makes the very next unchanged live plan look new again.
+    // `DpInterceptService::fresh_plan` never reuses a `PlanId` for a different
+    // assignment, so the id alone -- tracked here and touched only by this step --
+    // answers "have I already announced this one" without that interference.
+    let plan_changed = outcome.is_fresh() && state.last_live_plan_id != Some(plan.id);
+    if !plan_changed {
+        return crate::decisions::PlanMoved::Unchanged;
+    }
+    publish(
+        state,
+        now,
+        Event::Intercept(InterceptEvent::PlanProposed(plan.clone())),
+    );
+    state.last_plan = plan.clone();
+    state.last_live_plan_id = Some(plan.id);
+
+    if crate::projection::node_holds_the_queue(state) {
+        tracing::debug!(
+            plan = %plan.id,
+            "the node holds the queue; this desktop projects it and submits nothing"
+        );
+        return crate::decisions::PlanMoved::Proposed;
+    }
+    // Policy, then the approval queue. A denied plan is recorded as denied and never
+    // queued; a plan that clears waits for a person. Neither path makes anything
+    // actionable, which is the property C-01 turns on.
+    let submitted = crate::decisions::submit(state, plan);
+    tracing::debug!(?submitted, "plan submitted");
+    crate::decisions::PlanMoved::of(true, Some(&submitted))
 }
 
 /// Publish one event, logging a failure rather than losing it silently.

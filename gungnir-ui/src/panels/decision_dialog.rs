@@ -44,6 +44,36 @@ use crate::panels::unavailable::{draw_unavailable, Section, Unavailable};
 use crate::theme;
 use egui::{RichText, Ui};
 
+/// Where a decision taken in this dialog goes (GAP-133, DN-31 §6.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecisionRoute<'a> {
+    /// **Through the node**, which authorizes it against the caller's role, takes one
+    /// decision per item, opens the engagement, issues the handoff and journals all of
+    /// it (D-55). Nothing is recorded on this desktop, so an item can be decided out
+    /// from under this dialog by another console and the answer says so.
+    Node { endpoint: &'a str },
+    /// Into this desktop's own record, because it is cut off from its node or was
+    /// deployed with none.
+    ThisDesktop,
+}
+
+/// What the node said about the decision this dialog posted (GAP-133, DN-31 §6.3, §6.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeAnswer<'a> {
+    /// Posted and not yet answered. **Not a failure**: a `504` means the node's loop did
+    /// not reply inside the route's window and does *not* mean nothing was recorded, so
+    /// the same request key goes back until the node says which. The count is drawn
+    /// because a decision that has been tried five times is a different situation from
+    /// one posted a moment ago.
+    Waiting { attempts: u32 },
+    /// `409`: somebody decided first, or the window closed. The sentence names who
+    /// decided, as which role and when (DN-31 §6.6).
+    Refused { sentence: &'a str },
+    /// `400`, `401` or `403`: the node would not take it, and **nothing was recorded** --
+    /// not there and not here.
+    Rejected { status: u16, reason: &'a str },
+}
+
 /// Who the decision will be recorded against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OperatorIdentity<'a> {
@@ -138,6 +168,13 @@ pub struct DecisionDialogView<'a> {
     pub may_accept: bool,
     /// `OVERRIDE_PLAN`, which is a strictly higher authority than accepting.
     pub may_override: bool,
+    /// Where this decision goes (GAP-133).
+    pub route: DecisionRoute<'a>,
+    /// The node's answer to a decision already posted from this dialog, if there is one
+    /// (GAP-133). `Some` draws the answer and **draws no controls**: the question has
+    /// been asked, and offering it again would either be a second decision or a second
+    /// refusal.
+    pub answer: Option<NodeAnswer<'a>>,
 }
 
 /// Whether the accept control may be enabled.
@@ -189,8 +226,82 @@ pub fn render_decision_dialog(
     draw_degraded(ui, palette, view, state);
     ui.separator();
     draw_attribution(ui, palette, view.operator);
+    draw_route(ui, palette, view.route);
     ui.separator();
+    // **An answered dialog offers no control** (GAP-133, DN-31 §6.6). The question has
+    // been put to the node; drawing accept again would let a person ask twice, and
+    // drawing it beside a `409` would offer them a decision the node has already told
+    // them somebody else took.
+    if let Some(answer) = view.answer {
+        draw_answer(ui, palette, answer);
+        return None;
+    }
     draw_controls(ui, palette, view, state)
+}
+
+/// Where this decision goes (GAP-133, DN-31 §6.6).
+///
+/// Drawn under the attribution, because the two together are the whole of "what happens
+/// when I click": who it is recorded against, and whose record it lands in.
+fn draw_route(ui: &mut Ui, palette: &theme::Palette, route: DecisionRoute<'_>) {
+    match route {
+        DecisionRoute::Node { endpoint } => {
+            ui.label(
+                RichText::new(format!(
+                    "This decision is taken by node {endpoint}, which authorizes it, \
+                     records it and opens the engagement. Nothing is recorded on this \
+                     desktop, and another console may decide this item first."
+                ))
+                .color(palette.muted_text_color())
+                .size(palette.small_font_size),
+            );
+        }
+        DecisionRoute::ThisDesktop => {
+            ui.label(
+                RichText::new(
+                    "This desktop holds the queue: the decision is recorded here and the \
+                     handoff is issued from here.",
+                )
+                .color(palette.muted_text_color())
+                .size(palette.small_font_size),
+            );
+        }
+    }
+}
+
+/// What the node said, in place of the controls (GAP-133, DN-31 §6.6).
+fn draw_answer(ui: &mut Ui, palette: &theme::Palette, answer: NodeAnswer<'_>) {
+    match answer {
+        NodeAnswer::Waiting { attempts } => {
+            ui.label(
+                RichText::new(match attempts {
+                    0 | 1 => "Sent to the node; waiting for it to answer.".to_owned(),
+                    n => format!(
+                        "Sent to the node {n} times and not yet answered. The same request \
+                         key is used each time, so this asks again rather than deciding \
+                         again -- whatever the node recorded the first time still stands."
+                    ),
+                })
+                .color(palette.warning_color),
+            );
+        }
+        // The conflict DN-31 §6.6 words: who decided, as which role, and when.
+        NodeAnswer::Refused { sentence } => {
+            ui.label(RichText::new(sentence).color(palette.warning_color));
+        }
+        NodeAnswer::Rejected { status, reason } => {
+            ui.label(
+                RichText::new(format!(
+                    "The node refused this decision ({status}): {reason}"
+                ))
+                .color(palette.class_hostile_color),
+            );
+            ui.label(
+                RichText::new("Nothing was recorded, on the node or on this desktop.")
+                    .color(palette.muted_text_color()),
+            );
+        }
+    }
 }
 
 fn draw_plan(ui: &mut Ui, palette: &theme::Palette, view: &DecisionDialogView<'_>) {
@@ -396,6 +507,7 @@ mod tests {
             time_remaining: TimeRemaining::Seconds(18.0),
             pre_delegated: false,
             may_decide: true,
+            offered_to: &[],
             escalated_from: None,
         }
     }
@@ -424,6 +536,8 @@ mod tests {
             },
             may_accept: true,
             may_override: false,
+            route: DecisionRoute::ThisDesktop,
+            answer: None,
         }
     }
 

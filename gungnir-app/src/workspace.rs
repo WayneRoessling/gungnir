@@ -867,11 +867,25 @@ pub fn render_requirements(
 ///
 /// The handoffs go in beside it (GAP-040): an item leaves the queue when the decision is
 /// recorded, and the panel keeps it in sight until an effector has it.
+/// **Whose queue it draws depends on who holds it** (GAP-133, DN-31 §6.6): the node's
+/// while linked, this desktop's own while cut off. The rows come from two different
+/// places and the panel is told which, so an operator is never left guessing whether the
+/// console beside them is looking at the same list.
 fn render_approval_queue(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
-    let rows = crate::decisions::queue_rows(state);
+    let node = crate::projection::node_holds_the_queue(state);
+    let rows = if node {
+        crate::projection::queue_rows(state)
+    } else {
+        crate::decisions::queue_rows(state)
+    };
     let handoffs = crate::handoffs::rows(state);
     let role_name = format!("{:?}", state.role());
-    let view = crate::decisions::queue_view(state, &rows, &handoffs, &role_name);
+    let decided = if node {
+        crate::projection::decided_rows(state)
+    } else {
+        Vec::new()
+    };
+    let view = crate::decisions::queue_view(state, &rows, &handoffs, &role_name, &decided);
     gungnir_ui::panels::approval_queue::render_approval_queue(ui, &state.palette, &view)
         .map(PanelAction::SelectApproval)
 }
@@ -886,12 +900,25 @@ pub fn render_decision_dialog(
     dialog: &mut gungnir_ui::panels::decision_dialog::DecisionDialogState,
 ) -> Option<PanelAction> {
     let id = state.selected_approval()?;
-    let rows = crate::decisions::queue_rows(state);
+    let node = crate::projection::node_holds_the_queue(state);
+    let rows = if node {
+        crate::projection::queue_rows(state)
+    } else {
+        crate::decisions::queue_rows(state)
+    };
     let Some(row) = rows.iter().find(|r| r.id == id) else {
-        ui.label("That item has left the queue.");
+        // On the node's queue this is the ordinary end of a race: another console
+        // decided it, or the window closed, and the answer says which where this desktop
+        // was the one that asked (DN-31 §6.6).
+        ui.label(match crate::projection::ended_sentence(state, id) {
+            Some(sentence) => sentence,
+            None => "That item has left the queue.".to_owned(),
+        });
         return None;
     };
 
+    // Owned for the frame: `NodeAnswer` borrows its sentence (GAP-133).
+    let answer_line = crate::projection::answer_line(state, gungnir_model::PendingApprovalId(id.0));
     let degraded = degraded_conditions(state);
     let report = crate::decisions::chain_report_for(&state.config);
     let caveats = report.caveats();
@@ -955,7 +982,30 @@ pub fn render_decision_dialog(
             },
         },
         may_accept: row.may_decide,
-        may_override: crate::decisions::may_override(state.role()),
+        // While the node holds the queue the override permission is the node's to check
+        // against the token's role, not this desktop's selected one (DN-31 §6.3); the
+        // control is offered from the session so the panel and the route agree, and the
+        // node refuses `403` if they ever do not.
+        may_override: match state.signed_in() {
+            Some(session) if node => crate::decisions::may_override(session.role),
+            _ if node => false,
+            _ => crate::decisions::may_override(state.role()),
+        },
+        route: crate::projection::route(state),
+        answer: answer_line.as_ref().map(|line| {
+            use crate::projection::AnswerLine;
+            use gungnir_ui::panels::decision_dialog::NodeAnswer;
+            match line {
+                AnswerLine::Waiting { attempts } => NodeAnswer::Waiting {
+                    attempts: *attempts,
+                },
+                AnswerLine::Refused { sentence } => NodeAnswer::Refused { sentence },
+                AnswerLine::Rejected { status, reason } => NodeAnswer::Rejected {
+                    status: *status,
+                    reason,
+                },
+            }
+        }),
     };
     gungnir_ui::panels::decision_dialog::render_decision_dialog(ui, &state.palette, &view, dialog)
         .map(|choice| PanelAction::Decide(id, choice))
@@ -1285,11 +1335,36 @@ pub fn render_commander_summary(
     // subtracts the expiries, because an expiry leaves a record and is not a decision:
     // counting it as one would tell a commander their queue is being worked when it is
     // timing out.
+    //
+    // **Whose queue, since GAP-133** (DN-31 §8): while the node holds it these figures
+    // are the node's queue -- every console's decisions, which is what a commander is
+    // asking about -- and while this desktop is cut off they are its own, exactly as
+    // before. The panel is told which.
+    let node_stats = crate::projection::node_queue_stats(state);
+    let by_role = crate::projection::decisions_by_role(&node_stats);
     let expired = crate::decisions::expired_count(state);
-    let queue = Ok(gungnir_ui::panels::commander_summary::QueueStats {
-        pending: state.desk.approvals.queue().len(),
-        decided_this_session: state.desk.approvals.records().len().saturating_sub(expired),
-        expired,
+    let node = crate::projection::node_holds_the_queue(state);
+    let queue = Ok(if node {
+        gungnir_ui::panels::commander_summary::QueueStats {
+            pending: node_stats.pending,
+            decided_this_session: node_stats.decided,
+            expired: node_stats.expired,
+            escalated: node_stats.escalated,
+        }
+    } else {
+        gungnir_ui::panels::commander_summary::QueueStats {
+            pending: state.desk.approvals.queue().len(),
+            decided_this_session: state.desk.approvals.records().len().saturating_sub(expired),
+            expired,
+            // Items this desktop's own queue has offered above the role first asked.
+            escalated: state
+                .desk
+                .approvals
+                .queue()
+                .iter()
+                .filter(|item| item.offered_to.len() > 1)
+                .count(),
+        }
     });
     let handover = state.rhythm.handover().map(|h| HandoverView {
         period: h.period,
@@ -1318,6 +1393,11 @@ pub fn render_commander_summary(
         },
         controls_available: false,
         vocabulary: &state.config.vocabulary,
+        queue_authority: crate::projection::authority(state),
+        // Only for the node's queue: this desktop's own records carry a role too, but a
+        // single console's own decisions are not the watch's, and PN-17 is the
+        // commander's question about the watch (DN-31 §8).
+        decisions_by_role: if node { &by_role } else { &[] },
         warnings: gungnir_ui::panels::commander_summary::WarningCounts {
             open: state.warnings.open().len(),
             late: state.warnings.late_count(),

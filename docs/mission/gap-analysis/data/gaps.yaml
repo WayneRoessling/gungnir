@@ -8853,6 +8853,19 @@
   - date: 2026-09-17
     status: Open
     note: Filed with DN-31 (D-55).
+  - date: 2026-09-17
+    status: Closed
+    note: >-
+      Built. The two paths part at one place, the tick's submission step: while the node
+      holds the queue a desktop submits nothing, and because an engagement opens only from
+      a `DecisionRecord` (C-01), one queue gives one issuer with no second rule.
+      `gungnir-remote` gains the projection -- the picture from `GET /v3/queue`, taken
+      after the subscribe frame, maintained by the four command events `apply` had been
+      dropping -- and the decision client, which retries a `504` under the same request
+      key. PN-06 draws the node's queue, PN-07 decides through the route, PN-01 and PN-17
+      say whose queue is in force. Rows 7 and 9 are written; MOP-07 measured 3.4 to
+      5.1 ms against 500 ms. The findings are in
+      `../../record/2026-09-17/a-linked-desktop-shows-the-node-s-queue.md`.
 
 - id: GAP-134
   name: A desktop's offline decisions never reach its node
@@ -8998,6 +9011,19 @@
       Filed by GAP-132 rather than half-wired there: while a linked desktop still issues
       handoffs for a node's plans, two writers to one register would each overwrite the
       other, and which one a partner saw would depend on tick order.
+  - date: 2026-09-17
+    status: Open
+    note: >-
+      GAP-133 removed the writer this entry was waiting on, and found another.
+      `ApprovalDesk::issue_for` -- the only caller of `republish_handoffs` -- is reached
+      from `decide_for` alone, so a linked desktop, which queues no node plan, never
+      writes the register. **The fall-back path is what stands in the way now.**
+      `fall_back` leaves `state.link` in place, so a cut-off desktop issues handoffs and
+      queues its whole set on the link's exchange outbox; `flush_exchange` delivers it on
+      reconnect and `publish_exchange` replaces what the node holds. Wiring the node in
+      now would make its set the one that disappears after any outage. A producer per
+      writer is a `gungnir-api` write path and a DN-18 amendment. See
+      `../../record/2026-09-17/a-linked-desktop-shows-the-node-s-queue.md`.
 
 - id: GAP-138
   name: An unreachable decision type still describes the interface
@@ -9079,3 +9105,48 @@
       SVG is a smetana render, so the two are laid out differently until this is settled.
       The code was not moved to another module to dodge the crash: the type belongs beside
       `DecisionId`.
+
+- id: GAP-140
+  name: A node's deadline is drawn against the desktop's own clock
+  type: Technical
+  caps: [CAP-5.9, CAP-3.7]
+  layer: UI and data ecosystem
+  sev: 2
+  effort: S
+  target: I3
+  owner: UI engineer
+  deps: [GAP-133]
+  impact: >-
+    PN-06 draws the time remaining on a node's queue item as the node's `expires_at`
+    minus **this desktop's** clock. Both are `WallClockAuthority`, so both are seconds
+    since the Unix epoch and they agree only as far as the two machines' clocks do.
+    Nothing measures the difference: a console whose clock is a minute fast shows every
+    item on the node's queue as a minute closer to expiry than it is, a console a minute
+    slow shows a window still open after it has closed, and neither says so. The node
+    refuses the late decision `409 Expired` (DN-31 §6.3), so nothing is decided that
+    should not be -- what is wrong is what the operator was told, on the one countdown
+    they are working to under saturation.
+  evidence: >-
+    `gungnir-app/src/projection.rs` (`queue_rows`, `seconds_remaining`) against
+    `gungnir_api::v3::QueueItemView::expires_at`; `gungnir-time` (`WallClockAuthority`);
+    `SnapshotResponse` and `SessionResponse` carry no node time
+    (`gungnir-api/src/v3/mod.rs`), so there is nothing to compare against. GAP-008's
+    `ClockSkewEstimator` measures **sensor** sources from ingest events and never sees a
+    node.
+  action: >-
+    Carry the node's own mission time with the picture and judge the two clocks against
+    it, the way D-23 judges a link's silence: draw the countdown against the node's time
+    where it is known, and say the skew on PN-01 where it exceeds what a deadline can
+    absorb, rather than leaving a number that is silently wrong by the difference.
+  ref: >-
+    Found building GAP-133
+    (`../../record/2026-09-17/a-linked-desktop-shows-the-node-s-queue.md`)
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: >-
+      Found writing DN-31 §9 row 9, whose harness has to drive the node's mission time
+      from the wall clock for the consoles' countdowns to mean anything -- which is the
+      defect stated as a test constraint. Not fixed in GAP-133: the fix puts a time on
+      the wire and decides what a desktop does when the two disagree, which is a contract
+      change rather than a panel one.

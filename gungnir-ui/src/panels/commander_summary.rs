@@ -29,6 +29,25 @@ pub struct QueueStats {
     pub decided_this_session: usize,
     /// Windows that closed with nobody deciding. **Not rejections**: nobody chose.
     pub expired: usize,
+    /// Items offered above the role first asked, so escalation has moved them
+    /// (DN-31 §8, GAP-133). Escalation adds a role without removing the first (DN-10 §5),
+    /// so this counts items a supervisor is now being asked about and **not** items taken
+    /// away from an operator.
+    pub escalated: usize,
+}
+
+/// Decisions in the period by the role that took them (DN-31 §8, GAP-133).
+///
+/// A commander asking "who is deciding what" is asking about the watch, not about one
+/// console, so on a linked desktop this is counted over the node's queue -- every
+/// console's decisions -- and on a cut-off one over this desktop's own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecisionsByRole<'a> {
+    /// The role as the record spells it, or a sentence saying the record named none:
+    /// only a decision taken with nobody signed in has no role (D-53), and a count that
+    /// hid those under a plausible role would be a claim nobody made.
+    pub role: &'a str,
+    pub count: usize,
 }
 
 /// A coverage gap the commander has accepted.
@@ -198,6 +217,12 @@ pub struct CommanderSummaryView<'a> {
     /// The open handover, when one has come due (GAP-054). `None` outside a shift change.
     pub handover: Option<HandoverView<'a>>,
     pub queue: Result<QueueStats, Unavailable<'a>>,
+    /// Whose queue the figures above are about (GAP-133, DN-31 §8). A commander reading
+    /// "3 decided" has to know whether that is the watch or one console.
+    pub queue_authority: crate::panels::approval_queue::QueueAuthority<'a>,
+    /// Decisions in the period by role (DN-31 §8, GAP-133). Empty means none was taken,
+    /// which the panel says rather than drawing nothing.
+    pub decisions_by_role: &'a [DecisionsByRole<'a>],
     /// The pre-delegated authorities in force (D-15). The same lines PN-01 shows,
     /// from the same rules: a commander and an operator must not be able to read two
     /// different answers to "what is delegated right now".
@@ -224,6 +249,74 @@ pub struct CommanderSummaryView<'a> {
 /// Returns what the watch did, if anything. `notes` is the scratch buffer the outgoing
 /// watch types into; it outlives a frame and is not mission state, which is why it is
 /// passed in rather than held here.
+/// The queue section: whose queue, the counts, and who has been deciding (DN-31 §8).
+///
+/// Whose queue comes first and always, because every figure under it means something
+/// different depending on the answer -- the watch's, or this console's alone.
+fn draw_queue(ui: &mut Ui, palette: &theme::Palette, view: &CommanderSummaryView<'_>) {
+    ui.strong("Approval queue");
+    ui.label(
+        RichText::new(view.queue_authority.sentence())
+            .color(palette.muted_text_color())
+            .size(palette.small_font_size),
+    );
+    let Ok(q) = view.queue else {
+        if let Err(u) = view.queue {
+            draw_unavailable(ui, palette, u);
+        }
+        return;
+    };
+    ui.label(format!(
+        "{} pending, {} decided this session, {} expired, {} escalated",
+        q.pending, q.decided_this_session, q.expired, q.escalated
+    ));
+    if q.expired > 0 {
+        ui.label(
+            RichText::new("Expired windows are not rejections: nobody decided.")
+                .color(palette.warning_color),
+        );
+    }
+    if q.escalated > 0 {
+        // Escalation adds a role without removing the first (DN-10 §5), so a commander
+        // must not read this as work taken off an operator.
+        ui.label(
+            RichText::new(
+                "An escalated item is offered to a higher role as well as the first; \
+                 the original role still sees it.",
+            )
+            .color(palette.muted_text_color())
+            .size(palette.small_font_size),
+        );
+    }
+    draw_decisions_by_role(ui, palette, view.decisions_by_role);
+}
+
+/// Who has been deciding, in the period (DN-31 §8, GAP-133).
+///
+/// Silent-with-a-sentence rather than silent: "nobody has decided anything" is a real
+/// finding at a shift change and drawing nothing would leave a commander unable to tell
+/// it from a panel that had not been wired.
+fn draw_decisions_by_role(ui: &mut Ui, palette: &theme::Palette, by_role: &[DecisionsByRole<'_>]) {
+    if by_role.is_empty() {
+        ui.label(
+            RichText::new("No decision has been taken in this period.")
+                .color(palette.muted_text_color())
+                .size(palette.small_font_size),
+        );
+        return;
+    }
+    let line = by_role
+        .iter()
+        .map(|d| format!("{} by {}", d.count, d.role))
+        .collect::<Vec<_>>()
+        .join(", ");
+    ui.label(
+        RichText::new(format!("Decided: {line}"))
+            .color(palette.muted_text_color())
+            .size(palette.small_font_size),
+    );
+}
+
 /// GAP-042: warnings owed in the period; late and failed are the two a commander has to
 /// act on.
 fn draw_warnings(ui: &mut Ui, palette: &theme::Palette, warnings: WarningCounts) {
@@ -261,22 +354,7 @@ pub fn render_commander_summary(
         .handover
         .and_then(|h| draw_handover(ui, palette, &h, notes));
 
-    ui.strong("Approval queue");
-    match view.queue {
-        Ok(q) => {
-            ui.label(format!(
-                "{} pending, {} decided this session, {} expired",
-                q.pending, q.decided_this_session, q.expired
-            ));
-            if q.expired > 0 {
-                ui.label(
-                    RichText::new("Expired windows are not rejections: nobody decided.")
-                        .color(palette.warning_color),
-                );
-            }
-        }
-        Err(u) => draw_unavailable(ui, palette, u),
-    }
+    draw_queue(ui, palette, view);
     ui.separator();
 
     ui.strong("Plan in force");
@@ -449,6 +527,7 @@ mod tests {
             pending: 0,
             decided_this_session: 0,
             expired: 0,
+            escalated: 0,
         });
         let unavailable: Result<QueueStats, Unavailable<'_>> = Err(Unavailable {
             owner: "gungnir-command",

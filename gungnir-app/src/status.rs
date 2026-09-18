@@ -263,6 +263,11 @@ pub fn status_strip_view<'a>(
     });
 
     StatusStripView {
+        // Whose approval queue is in force (GAP-133, DN-31 §8). Beside the backend
+        // element rather than folded into it: one says where the picture comes from, the
+        // other where a decision goes, and after a fallback they say different things
+        // until PN-18's reconciliation has been seen.
+        queue: crate::projection::authority(state),
         validity: baseline_validity(state),
         // Only when the deployment had a choice to make: one profile, or none, gains
         // nothing from an element that is always the same (DN-24 §9).

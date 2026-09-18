@@ -487,6 +487,7 @@ REL:uses:RS-app->RS-replay,uses,,RS-app,RS-replay,uses: RS-app -> RS-replay,Depe
 REL:uses:RS-app->RS-reporting,uses,,RS-app,RS-reporting,uses: RS-app -> RS-reporting,Dependency
 REL:uses:RS-app->RS-scenario,uses,,RS-app,RS-scenario,uses: RS-app -> RS-scenario,Dependency
 REL:uses:RS-app->RS-api,uses,,RS-app,RS-api,uses: RS-app -> RS-api,Dependency
+REL:uses:RS-app->RS-node,uses,,RS-app,RS-node,uses: RS-app -> RS-node,Dependency
 REL:uses:RS-approval->RS-command,uses,,RS-approval,RS-command,uses: RS-approval -> RS-command,Dependency
 REL:uses:RS-approval->RS-policy,uses,,RS-approval,RS-policy,uses: RS-approval -> RS-policy,Dependency
 REL:uses:RS-approval->RS-intercept-service,uses,,RS-approval,RS-intercept-service,uses: RS-approval -> RS-intercept-service,Dependency

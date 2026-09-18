@@ -556,6 +556,8 @@ REL:uses:RS-app->RS-scenario,uafRelationship,uses
 REL:uses:RS-app->RS-scenario,registry.kind,dev
 REL:uses:RS-app->RS-api,uafRelationship,uses
 REL:uses:RS-app->RS-api,registry.kind,dev
+REL:uses:RS-app->RS-node,uafRelationship,uses
+REL:uses:RS-app->RS-node,registry.kind,dev
 REL:uses:RS-approval->RS-command,uafRelationship,uses
 REL:uses:RS-approval->RS-policy,uafRelationship,uses
 REL:uses:RS-approval->RS-intercept-service,uafRelationship,uses

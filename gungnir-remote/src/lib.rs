@@ -13,8 +13,18 @@
 //! event stream, and the two services project it (GAP-041). A detection submitted while
 //! linked is forwarded to `POST /v3/detections` under the signed-in operator's token, and
 //! held in the outbox, oldest dropped and counted, while the node does not answer
-//! (GAP-050). **Decisions are not forwarded**: a node runs no approval queue and refuses
-//! the decision route, so the desktop decides the node's plan in its own queue (GAP-129).
+//! (GAP-050).
+//!
+//! **Corrected 2026-09-17: the node holds the queue (D-55, GAP-132, GAP-133.)** This
+//! module said until then that "decisions are not forwarded: a node runs no approval
+//! queue and refuses the decision route, so the desktop decides the node's plan in its
+//! own queue (GAP-129)". That was true of the build it described and is now false of
+//! both halves. A node queues what it proposes and serves `POST /v3/queue/{item}/
+//! decision`, and [`queue`] is this crate's side of it: a linked desktop **projects** the
+//! node's queue and decides through that route, and never queues, engages or hands off a
+//! plan the node proposed (`docs/design/DN-31-node-approval-queue.md` §6, clauses DN-31
+//! §6.5 and §6.6).
+//! Forwarding decisions taken while cut off is GAP-134's and is not built here.
 //!
 //! **Corrected 2026-09-07: TLS exists.** An `https` endpoint speaks mutual TLS --
 //! `link`'s own module comment describes it in full -- and only an `https` endpoint
@@ -27,6 +37,7 @@ pub mod endpoint;
 pub mod identity;
 pub mod link;
 pub mod peer;
+pub mod queue;
 
 use gungnir_intercept_service::{InterceptService, PlanOutcome, PlanView, ResourceView};
 use gungnir_model::{BearingRayView, PipelineStatsView};
