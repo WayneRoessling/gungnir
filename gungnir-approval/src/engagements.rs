@@ -219,7 +219,15 @@ impl ApprovalDesk {
     }
 }
 
-fn publish_closed(host: &mut dyn ApprovalHost, decision: DecisionId, label: &str, at: MissionTime) {
+/// The one place an engagement's close goes on the record: the sweep's inferred closes,
+/// the abort, and since GAP-135 the close an effector reports
+/// (`handoffs::ApprovalDesk::apply_report`).
+pub(crate) fn publish_closed(
+    host: &mut dyn ApprovalHost,
+    decision: DecisionId,
+    label: &str,
+    at: MissionTime,
+) {
     host.publish(
         at,
         Event::Engagement(EngagementEvent::Closed {
