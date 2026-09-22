@@ -147,7 +147,7 @@ history, and an entry is never edited once it has merged.
 | GAP-132 | A node runs no approval queue | Technical | CAP-4.2, CAP-4.3, CAP-3.7, CAP-6.2 | 4 | 9 | L | 36 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-133 | A linked desktop decides the node's plans itself | Technical | CAP-5.9, CAP-4.3 | 4 | 10 | M | 40 | I3 | UI engineer | Closed |
 | GAP-134 | A desktop's offline decisions never reach its node | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Closed |
-| GAP-135 | An effector's report moves an engagement without putting the move on the record | Technical | CAP-4.6 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
+| GAP-135 | An effector's report moves an engagement without putting the move on the record | Technical | CAP-4.6 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
 | GAP-136 | A rehearsal read its picture before the pipeline had reported the run | Technical | CAP-5.2 | 3 | 1 | S | 3 | I3 | Services engineer | Closed |
 | GAP-137 | A handoff the node issues reaches no exchange partner | Technical | CAP-5.7 | 2 | 1 | S | 2 | I3 | Services engineer | Open |
 | GAP-138 | An unreachable decision type still describes the interface | Technical | CAP-5.7 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
@@ -2021,12 +2021,12 @@ Counts: 143 gaps, 3 mission, 140 technical; 1 already covered by a plan in `../.
 - Type: Technical.
 - Capability: CAP-4.6 Track engagements and effects.
 - History:
-  - 2026-09-17, Open: Filed while building GAP-130: the pre-change journal fixture had to close its engagement on track-lifecycle evidence, because a close an effector reports never reaches the journal.
+  - 2026-09-17, Closed: Closed 2026-09-17. An effector's Executing report now publishes `EngagementEvent::Executing`, and a completion publishes `EngagementEvent::Closed` with the corroborated outcome through `engagements::publish_closed`; a report the engagement refuses publishes nothing. The report PN-13 generates from the journal now counts corroborated outcomes. See `../../record/2026-09-17/effector-reports-reach-the-record.md`.
 - Evidence: `gungnir-app/src/handoffs.rs` (`apply_report` calls `Engagement::executing`, and `close_engagement` calls `close_effective` or `close_ineffective`; neither publishes); `gungnir-app/src/engagements.rs` (`publish_closed` is called only from `sweep` and `observe_superseded`); `gungnir-reporting/src/lib.rs` (`count_engagement`); DN-06 §5 and §8.
 - Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
 - Impact: An effector's report of executing or of completion changes the engagement in the desktop's memory and publishes no `EngagementEvent`, so no journal of a real session can hold `Executing` or a corroborated close. The report's `engagements_effective_corroborated` and `engagements_ineffective_corroborated` counts can never be non-zero, a replay shows the engagement open until its window closes, and the after-action account reads track-lifecycle evidence where an effector reported.
 - Closing action: Publish `EngagementEvent::Executing` and `EngagementEvent::Closed`, with the effector-reported outcome, when a report moves an engagement, through the one place closes are published; and test that a journal holding an effector's completion reports a corroborated outcome.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-130 (`../../record/2026-09-17/identifiers-uuid-v7-and-v3-routes.md`).
 
 **GAP-136 A rehearsal read its picture before the pipeline had reported the run**
