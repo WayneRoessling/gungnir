@@ -8958,7 +8958,10 @@
     note: >-
       Filed while building GAP-130: the pre-change journal fixture had to close its
       engagement on track-lifecycle evidence, because a close an effector reports never
-      reaches the journal.
+      reaches the journal.  - date: 2026-09-17
+    status: Closed
+    note: "Closed 2026-09-17. An effector's Executing report now publishes `EngagementEvent::Executing`, and a completion publishes `EngagementEvent::Closed` with the corroborated outcome through `engagements::publish_closed`; a report the engagement refuses publishes nothing. The report PN-13 generates from the journal now counts corroborated outcomes. See `../../record/2026-09-17/effector-reports-reach-the-record.md`."
+
 - id: GAP-136
   name: A rehearsal read its picture before the pipeline had reported the run
   type: Technical
