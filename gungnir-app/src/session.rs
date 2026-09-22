@@ -215,6 +215,36 @@ fn connect_if_remote(state: &mut AppState, operator: u64, passphrase: &str) {
         operator,
         passphrase: passphrase.to_string(),
     };
+    // **A sign-in during an outage does not end it** (GAP-143). Only a person switching
+    // back on PN-18 does (D-15, `failover::switch_back`). This used to build a new link,
+    // put the remote services back and clear the fallback, which ended the outage with
+    // nobody switching back, discarded its reconciliation, and dropped what the old link
+    // held for the node: the observations queued while cut off and the decisions waiting
+    // to be forwarded (DN-31 §13). Now the link the outage already has signs in as this
+    // operator when the node answers, and everything else stays where it is.
+    if state.fallback.is_some() {
+        let outcome = match state.link.as_ref() {
+            Some(link) => link
+                .replace_credential(credential)
+                .map_err(|e| e.to_string()),
+            // Not reachable through `failover::fall_back`, which falls back only on a
+            // link; said rather than papered over, and still not a reason to end the
+            // outage without a person.
+            None => Err("the outage has no link to the node".into()),
+        };
+        state.alerts.push(match outcome {
+            Ok(()) => format!(
+                "operator {operator} signed in during an outage: this desktop stays on its \
+                 embedded services until a person switches back on PN-18, and the link to \
+                 {endpoint} signs in as operator {operator} when the node answers"
+            ),
+            Err(err) => format!(
+                "operator {operator} signed in during an outage; the link could not take the \
+                 new credential ({err}), and the outage stays until a person switches back"
+            ),
+        });
+        return;
+    }
     let remote = gungnir_remote::RemoteEndpoint {
         url: endpoint.clone(),
         tls: link_tls(state),
