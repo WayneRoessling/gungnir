@@ -438,6 +438,11 @@ impl Desktop {
         now: MissionTime,
     ) {
         self.state.sign_out();
+        // A sensor manager's console with nobody signed in: the role that may task,
+        // selected, so the refusal under test is the missing operator's. Since GAP-127
+        // (2026-09-17) `task` asks the permission first, and whichever role the previous
+        // step left selected would otherwise be refused for want of `sensor.task`.
+        self.state.set_role(gungnir_security::Role::SensorManager);
         assert_eq!(self.state.attributed_operator(), None);
         let tasks_before = self.state.sensors.tasks().len();
         let seen = self.state.events.subscribe();
