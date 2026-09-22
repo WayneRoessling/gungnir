@@ -333,3 +333,99 @@ fn a_rejected_report_is_not_kept_on_any_record() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// GAP-135: an effector's report that moves the engagement goes on the record. Executing
+/// and an effective completion are published, the journal holds them, and the report
+/// generated from that journal counts one effective **corroborated** engagement -- the
+/// count that could never be non-zero while the move stayed in memory. A second
+/// completion the closed engagement refuses publishes nothing.
+#[test]
+fn an_effector_completion_reaches_the_journal_as_a_corroborated_outcome() {
+    use gungnir_app::handoffs::apply_report;
+    use gungnir_model::events::{engagement_outcome, EngagementEvent};
+    use gungnir_model::handoff::EffectorReport;
+
+    let (mut state, dir) = desktop("corroborated", Some("battery-2"));
+    engagements::open_for(&mut state, &accepted());
+    let seen = state.events.subscribe();
+
+    apply_report(
+        &mut state,
+        DecisionId(1),
+        "battery-2",
+        &EffectorReport::Executing {
+            at: MissionTime(110.0),
+        },
+        MissionTime(112.0),
+    );
+    apply_report(
+        &mut state,
+        DecisionId(1),
+        "battery-2",
+        &EffectorReport::Completed {
+            at: MissionTime(150.0),
+            effective: true,
+            detail: "target destroyed".into(),
+        },
+        MissionTime(160.0),
+    );
+    // The closed engagement refuses a second completion, and nothing is published for it.
+    apply_report(
+        &mut state,
+        DecisionId(1),
+        "battery-2",
+        &EffectorReport::Completed {
+            at: MissionTime(170.0),
+            effective: false,
+            detail: "a late, contradictory report".into(),
+        },
+        MissionTime(171.0),
+    );
+
+    let engagement_events: Vec<(MissionTime, EngagementEvent)> =
+        std::iter::from_fn(|| seen.try_recv().ok())
+            .filter_map(|env| match env.event {
+                Event::Engagement(e) => Some((env.mission_time, e)),
+                _ => None,
+            })
+            .collect();
+    assert_eq!(
+        engagement_events,
+        vec![
+            (
+                MissionTime(112.0),
+                EngagementEvent::Executing {
+                    decision: DecisionId(1),
+                    at: MissionTime(112.0),
+                }
+            ),
+            (
+                MissionTime(160.0),
+                EngagementEvent::Closed {
+                    decision: DecisionId(1),
+                    outcome: engagement_outcome::EFFECTIVE_CORROBORATED.to_string(),
+                    at: MissionTime(160.0),
+                }
+            ),
+        ],
+        "the effector's moves were not put on the record exactly once each"
+    );
+
+    // Through the journal and the report PN-13 generates from it.
+    gungnir_app::update::tick(&mut state);
+    let mut reports = gungnir_app::sustainment::ReportState::default();
+    reports.generate(&state).expect("the journal folds");
+    let view = gungnir_app::sustainment::reports_view(&state, &reports);
+    let counts = view.counts.expect("counts after generating");
+    let value = |label: &str| {
+        counts
+            .iter()
+            .find(|c| c.label == label)
+            .unwrap_or_else(|| panic!("no count line {label:?}: {counts:?}"))
+            .value
+    };
+    assert_eq!(value("Effective (corroborated)"), 1);
+    assert_eq!(value("Effective (track-inferred)"), 0);
+    assert_eq!(value("Ineffective (corroborated)"), 0);
+    let _ = std::fs::remove_dir_all(dir);
+}

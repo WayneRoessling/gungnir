@@ -131,6 +131,17 @@ impl ApprovalDesk {
     /// `Executing` moves the engagement; `Completed` closes it with effector-reported
     /// evidence, which the effect measures count apart from what the track's lifecycle
     /// suggested; `Refused` sets the delivery state so PN-06 says the effector will not.
+    ///
+    /// **A move the engagement takes goes on the record** (GAP-135). Until 2026-09-17 an
+    /// `Executing` or `Completed` report changed the engagement in memory and published
+    /// nothing, so no journal of a real session could hold `Executing` or a corroborated
+    /// close: the report's corroborated counts could never be non-zero, and a replay showed
+    /// the engagement open until its window closed. Now `EngagementEvent::Executing`, and
+    /// `EngagementEvent::Closed` with the effector-reported outcome through
+    /// `engagements::publish_closed`, are published whenever the engagement took the
+    /// report, and never when it refused it. Both carry `at`, when this host received the
+    /// report; the effector's own times stay on the handoff's report record and in the
+    /// close's evidence.
     pub fn apply_report(
         &mut self,
         host: &mut dyn ApprovalHost,
@@ -168,14 +179,23 @@ impl ApprovalDesk {
             EffectorReport::Acknowledged { .. } => {
                 format!("{endpoint} acknowledged the handoff")
             }
-            EffectorReport::Executing { at } => {
+            EffectorReport::Executing { at: began } => {
                 match self
                     .engagements
                     .iter_mut()
                     .find(|e| e.decision == decision)
-                    .map(|e| e.executing(*at))
+                    .map(|e| e.executing(*began))
                 {
-                    Some(Ok(())) => format!("{endpoint} is executing"),
+                    Some(Ok(())) => {
+                        host.publish(
+                            at,
+                            Event::Engagement(gungnir_model::events::EngagementEvent::Executing {
+                                decision,
+                                at,
+                            }),
+                        );
+                        format!("{endpoint} is executing")
+                    }
                     Some(Err(err)) => format!(
                         "{endpoint} reports executing, and the engagement could not take it: {}",
                         refusal(&err)
@@ -184,10 +204,17 @@ impl ApprovalDesk {
                 }
             }
             EffectorReport::Completed {
-                at,
+                at: completed,
                 effective,
                 detail,
-            } => self.close_engagement(decision, endpoint, (*at, *effective, detail)),
+            } => {
+                let (said, closed_as) =
+                    self.close_engagement(decision, endpoint, (*completed, *effective, detail));
+                if let Some(label) = closed_as {
+                    crate::engagements::publish_closed(host, decision, label, at);
+                }
+                said
+            }
             EffectorReport::Refused { at, reason } => {
                 if let Some(record) = self
                     .handoffs
@@ -202,7 +229,6 @@ impl ApprovalDesk {
                 format!("{endpoint} refused the handoff: {reason}")
             }
         };
-        let _ = at;
         host.audit(
             gungnir_security::actions::EFFECTOR_REPORT,
             format!("decision {decision}: {outcome}"),
@@ -220,13 +246,19 @@ impl ApprovalDesk {
     /// A report the engagement cannot take -- because it is already closed, or because none
     /// was ever opened -- is said rather than swallowed. It is still on the handoff record
     /// for PN-20, because a report the host could not act on still arrived.
+    ///
+    /// Returns what to say, and the outcome to publish when the engagement took the close
+    /// (GAP-135): the corroborated label, because an effector's report is effector
+    /// evidence, not track-lifecycle evidence. `None` when it did not, so a refused close
+    /// never reaches the record as though it had happened.
     fn close_engagement(
         &mut self,
         decision: DecisionId,
         endpoint: &str,
         (at, effective, detail): (MissionTime, bool, &str),
-    ) -> String {
+    ) -> (String, Option<&'static str>) {
         use gungnir_intercept_service::engagement::{EffectEvidence, EffectSource};
+        use gungnir_model::events::engagement_outcome as outcome;
         let evidence = EffectEvidence {
             source: EffectSource::EffectorReport,
             observed_at: at,
@@ -244,19 +276,32 @@ impl ApprovalDesk {
                 }
             });
         match closed {
-            Some(Ok(())) => format!(
-                "{endpoint} reports {}",
-                if effective {
-                    "effective"
+            Some(Ok(())) => (
+                format!(
+                    "{endpoint} reports {}",
+                    if effective {
+                        "effective"
+                    } else {
+                        "ineffective"
+                    }
+                ),
+                Some(if effective {
+                    outcome::EFFECTIVE_CORROBORATED
                 } else {
-                    "ineffective"
-                }
+                    outcome::INEFFECTIVE_CORROBORATED
+                }),
             ),
-            Some(Err(err)) => format!(
-                "{endpoint} reports completion the engagement could not take: {}",
-                refusal(&err)
+            Some(Err(err)) => (
+                format!(
+                    "{endpoint} reports completion the engagement could not take: {}",
+                    refusal(&err)
+                ),
+                None,
             ),
-            None => format!("{endpoint} reports completion; no open engagement"),
+            None => (
+                format!("{endpoint} reports completion; no open engagement"),
+                None,
+            ),
         }
     }
 
