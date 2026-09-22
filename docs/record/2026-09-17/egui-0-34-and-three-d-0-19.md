@@ -237,7 +237,9 @@ allocating a path per glyph per frame (`rust-ui-architecture-coding-standards.md
 one-sigma outline's radius is half its shorter side, and above 255 it would have become 255,
 turning a capsule wider than about 510 points into a rounded square. Above that radius the
 outline is now built as a path with the radius it asks for, and below it, which is every
-outline at ordinary zoom, it is drawn as before.
+outline at ordinary zoom, it is drawn as before. Two new tests in
+`gungnir-viewport3d/src/tracks.rs` hold both sides; against a helper that always drew the
+rectangle, the wide one fails with its corner clamped to 255.
 
 **Mechanical renames**, each checked for the same meaning: `Rounding` to `CornerRadius`;
 `window_rounding`, `menu_rounding` and a widget state's `rounding` to `*_corner_radius`;
@@ -271,8 +273,9 @@ either, so both hand-kept sections stay.
 Every test passes with its assertions unchanged. Before merging main: 1,989 tests, the same
 list with the same outcomes as `main` at `1af6543` (1,985 pass, four ignored). Main moved
 four times while this was done and was merged three times, last at `8ecc672`, and the whole
-suite ran again after each merge: at the last, 2,004 tests, 2,000 passing and the same four
-ignored, fifteen of them new from main. No rendered-panel assertion needed changing: the
+suite ran again after each merge. At the end it is 2,006 tests, 2,002 passing and the same
+four ignored: fifteen new from main and the two outline tests above. No rendered-panel
+assertion needed changing: the
 render probe reads what egui drew and in what order, and egui 0.34's new text path moved
 nothing any assertion reads.
 
