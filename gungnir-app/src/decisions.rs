@@ -76,15 +76,60 @@ pub fn sweep(state: &mut AppState) {
 
 /// Record a decision and publish it, and close PN-07 on the item it decided.
 ///
+/// **Authorized here, not only drawn** (GAP-127). Until 2026-09-17 this named
+/// `plan.decide` on the audit record and checked nothing: PN-06 hid the controls a role
+/// may not use, so the rule held for a person at the screen and for nothing else that
+/// calls this. It now asks the two questions the node's route asks, against
+/// [`AppState::role`] -- the signed-in account's role whenever there is one:
+///
+/// 1. whether the role holds the permission the decision needs -- `plan.override` for an
+///    override, which Operator does not hold, and `plan.decide` otherwise;
+/// 2. whether the item was offered to that role, or escalated to it (DN-10 §5).
+///
+/// A refusal records nothing and publishes nothing.
+///
 /// # Errors
 ///
-/// `CommandError::NotFound` when the item has left the queue -- decided by somebody else,
-/// or expired -- which PN-07 reports rather than retrying.
+/// `CommandError::NotPermitted` or `CommandError::NotOffered` when the role may not take
+/// this decision; `CommandError::NotFound` when the item has left the queue -- decided by
+/// somebody else, or expired -- which PN-07 reports rather than retrying.
 pub fn decide(
     state: &mut AppState,
     id: PendingId,
     decision: OperatorDecision,
 ) -> Result<(), CommandError> {
+    use gungnir_command::ApprovalWorkflow;
+    use gungnir_security::actions::{DECIDE_PLAN, OVERRIDE_PLAN};
+    let role = state.role();
+    let action = match decision {
+        OperatorDecision::Overridden => OVERRIDE_PLAN,
+        _ => DECIDE_PLAN,
+    };
+    if !role_permits(role, action) {
+        return Err(CommandError::NotPermitted {
+            role: format!("{role:?}"),
+            action,
+        });
+    }
+    let role_name = format!("{role:?}");
+    // An item the queue does not hold goes on to the desk, which is the one place that
+    // can say it was decided or expired; there is no offer to check on an item that is
+    // not there.
+    if let Some(item) = state
+        .desk
+        .approvals
+        .queue()
+        .iter()
+        .find(|item| item.id == PendingApprovalId(id.0))
+    {
+        if !item.may_be_decided_by(&role_name) {
+            return Err(CommandError::NotOffered {
+                item: item.id,
+                role: role_name,
+                offered_to: item.offered_to.clone(),
+            });
+        }
+    }
     crate::desk::with_desk(state, |desk, cx, host| {
         desk.decide(cx, host, PendingApprovalId(id.0), decision)
     })?;

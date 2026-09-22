@@ -201,6 +201,10 @@ pub enum RequirementError {
     /// baseline changed under the panel rather than a bad click.
     #[error("no defended asset at index {0}")]
     UnknownArea(usize),
+    /// The role acting may not task a sensor (GAP-127). **No command was issued** and
+    /// nothing was recorded: the check is the first thing `task` does.
+    #[error("{role} may not task a sensor ({action}); no command was issued")]
+    NotPermitted { role: String, action: &'static str },
     #[error(transparent)]
     Tasking(#[from] TaskingError),
     /// The command could not be issued, so there is no task to concur with.
@@ -372,7 +376,9 @@ pub fn state_requirement(
 ///
 /// # Errors
 ///
-/// [`RequirementError::Unattributed`] when nobody is signed in to name, saying why;
+/// [`RequirementError::NotPermitted`] when the role acting may not task a sensor, checked
+/// first (GAP-127); [`RequirementError::Unattributed`] when nobody is signed in to name,
+/// saying why;
 /// `TaskingError::NotOpen` for a closed requirement; the registry's refusal when the
 /// sensor cannot be commanded. None of them issues a command or publishes an event.
 pub fn task(
@@ -381,6 +387,16 @@ pub fn task(
     sensor: u32,
     now: MissionTime,
 ) -> Result<(), RequirementError> {
+    // GAP-127: this named `sensor.task` on its audit entry and checked nothing, so the
+    // rule held only where a panel hid the control. Asked first, before the requirement
+    // is even looked up, so a refused role learns nothing about it either.
+    let role = state.role();
+    if !gungnir_security::authz::role_permits(role, gungnir_security::actions::TASK_SENSOR) {
+        return Err(RequirementError::NotPermitted {
+            role: format!("{role:?}"),
+            action: gungnir_security::actions::TASK_SENSOR,
+        });
+    }
     let by = attribution(state);
     let before = case(state, id).ok_or(RequirementError::Unknown(id))?;
     // Refused before any command exists: against a closed requirement nobody is waiting
