@@ -127,7 +127,7 @@ history, and an entry is never edited once it has merged.
 | GAP-112 | No test round-trips a fully populated v2 snapshot | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
 | GAP-113 | An under-authority plan is counted, never escalated | Technical | CAP-3.6, CAP-4.3 | 3 | 7 | M | 21 | I3 | Services engineer | In progress |
 | GAP-114 | Nothing consumes LateDataPolicy | Technical | CAP-1.5 | 2 | 7 | M | 14 | I3 | Services engineer | Open |
-| GAP-115 | The node never times out an unacknowledged sensor task | Technical | CAP-1.3 | 3 | 9 | S | 27 | I3 | Services engineer | Open |
+| GAP-115 | The node never times out an unacknowledged sensor task | Technical | CAP-1.3 | 3 | 9 | S | 27 | I3 | Services engineer | Closed |
 | GAP-116 | Seven interop clauses are unasserted or only partly asserted | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
 | GAP-117 | Most event and view types are never round-tripped through serde | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
 | GAP-118 | Coverage accuracy is untested, and a coverage volume has no bearing | Technical | CAP-2.11 | 3 | 3 | M | 9 | I3 | Services engineer | Open |
@@ -1751,11 +1751,12 @@ Counts: 143 gaps, 3 mission, 140 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.3 Sensor modes and tasking.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which gated the outbound control row and found the node has no sweep.
+  - 2026-09-17, Closed: Closed 2026-09-17. The node sweeps its sensor tasks every tick against the baseline's acknowledgement window: each timeout is marked unacknowledged with its mode request withdrawn, logged as the node's alert, and published as `SensorTaskEvent::Unacknowledged` for connected desktops; it never retries. Tested with the node's SAPIENT router over a sensor that never answers. See `../../record/2026-09-17/node-times-out-unacknowledged-sensor-tasks.md`.
 - Evidence: `gungnir-node/src/main.rs` (`issue_api_tasks`, `apply_sapient_task_acks`; no sweep); `gungnir-app/src/node_tasks.rs`; the `gungnir-sensor-management` outbound control row, gated 2026-09-16 on the crate and the desktop.
 - Severity: 3. Reach: 9 threads. Effort: S. Priority: 27.
 - Impact: A task the node issues through its SAPIENT router and the sensor ignores stays Sent on the node indefinitely, its mode request pending, and nothing alerts. The desktop's handler for a node-published `SensorTaskEvent::Unacknowledged` has no publisher.
 - Closing action: Sweep the node's sensor tasks against the baseline's acknowledgement window every tick, publish `SensorTaskEvent::Unacknowledged` and raise an alert for each timeout, never retry, and test it with a router that ignores a task.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-116 Seven interop clauses are unasserted or only partly asserted**

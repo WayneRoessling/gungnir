@@ -1125,6 +1125,59 @@ fn issue_api_tasks(
     Ok(())
 }
 
+/// Time out every sensor task past the baseline's acknowledgement window (GAP-115).
+///
+/// Until 2026-09-17 nothing on the node did this: a task it issued through its SAPIENT
+/// router that the sensor ignored stayed `Sent` for ever, its mode request pending, and
+/// the desktop's handler for a node-published `SensorTaskEvent::Unacknowledged` had no
+/// publisher. The desktop has always swept its own tasks
+/// (`sustainment::sweep_sensor_tasks`); this is the same rule on the node, which is the
+/// system of record for every desktop connected to it.
+///
+/// Every tick, because a window closes on the clock and not on new input. For each task
+/// that timed out: the registry marks it unacknowledged and withdraws the pending mode
+/// request (`SensorControl::sweep`), a log line serves as the alert -- a node has no
+/// operator and no alert list, the same way `record_launch_warnings` raises one -- and
+/// `SensorTaskEvent::Unacknowledged` goes on the bus, which a connected desktop reads.
+///
+/// **It never retries.** DN-11 section 5 rule 3: retry is an operator action, and a node
+/// that quietly re-sent would make the record of what was asked untrue.
+fn sweep_sensor_tasks(
+    sensors: &mut InMemorySensorRegistry,
+    bus: &InProcessBus,
+    window_s: f64,
+    now: gungnir_model::MissionTime,
+) -> Result<Vec<gungnir_model::SensorTaskId>, gungnir_eventing::EventingError> {
+    use gungnir_model::events::SensorTaskEvent;
+    use gungnir_sensor_management::SensorControl;
+    let timed_out = sensors.sweep(now, window_s);
+    for task in &timed_out {
+        let Some(sensor) = sensors
+            .tasks()
+            .iter()
+            .find(|t| t.id == *task)
+            .map(|t| t.sensor)
+        else {
+            continue;
+        };
+        tracing::warn!(
+            task = task.0,
+            sensor = sensor.0,
+            window_s,
+            "a sensor did not acknowledge a task within its window; it has not been retried"
+        );
+        bus.publish(
+            now,
+            Event::SensorTask(SensorTaskEvent::Unacknowledged {
+                task: *task,
+                sensor,
+                at: now,
+            }),
+        )?;
+    }
+    Ok(timed_out)
+}
+
 /// Read every bound SAPIENT feed's `TaskAck`s and apply them to the registry
 /// (GAP-004): the node's own reader, the same shape `gungnir-app/src/sapient.rs`'s
 /// `apply_task_ack` applies on the desktop. **Unlike the desktop's reader, this one
@@ -1938,6 +1991,9 @@ async fn run(
         discard_uas_reports(&feed_reports.uas);
         issue_api_tasks(&api, &mut sensors, &bus, now)?;
         apply_sapient_task_acks(&sapient.task_ack_sinks, &mut sensors, &bus, now)?;
+        // GAP-115: after the acknowledgements, so a task answered this tick is not also
+        // timed out on it.
+        sweep_sensor_tasks(&mut sensors, &bus, config.sensor_task_ack_window_s, now)?;
         record_effector_reports(&api, &bus, now)?;
         record_warning_acknowledgements(&api, &bus, now)?;
         // GAP-009, DN-16 §5: what the peers said that was not a track. After the
@@ -2350,6 +2406,131 @@ impl gungnir_store::sealing::JournalSealer for EphemeralSealer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A registry for `config` whose sensor 7 is reached through a SAPIENT router that
+    /// swallows every task: each line is counted, and nothing ever comes back (GAP-115).
+    fn ignoring_sapient_registry(
+        config: &ConfigBaseline,
+    ) -> (InMemorySensorRegistry, Arc<std::sync::atomic::AtomicUsize>) {
+        use gungnir_sensor_management::sapient_task::{SapientDestinations, SapientTaskAdapter};
+        let sent = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = Arc::clone(&sent);
+        let adapter: Arc<dyn gungnir_sensor_management::tasking::SensorControlAdapter> =
+            Arc::new(SapientTaskAdapter::new(
+                "gungnir-node-test",
+                SapientDestinations::from_sensors([(
+                    7,
+                    "3fa85f64-5717-4562-b3fc-2c963f66afa6".to_string(),
+                )]),
+                move |_line: String| {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                },
+            ));
+        let mut sensors = build_registry(config);
+        sensors.attach_adapter(Arc::new(SapientTaskRouter {
+            by_sensor: [(7, adapter)].into_iter().collect(),
+        }));
+        (sensors, sent)
+    }
+
+    /// GAP-115: a task the node issues through its SAPIENT router to a sensor that never
+    /// answers. Inside the window nothing happens; past it the task is unacknowledged,
+    /// its mode request withdrawn, `SensorTaskEvent::Unacknowledged` is published once,
+    /// and the command is never sent again.
+    #[test]
+    fn an_ignored_sapient_task_times_out_once_and_is_never_resent() {
+        use gungnir_model::events::SensorTaskEvent;
+        use gungnir_sensor_management::tasking::TaskState;
+        use gungnir_sensor_management::SensorControl;
+        use std::sync::atomic::Ordering;
+
+        let config = ConfigBaseline {
+            sensors: vec![gungnir_config::SensorConfig {
+                id: 7,
+                modality: "sapient".into(),
+                position: [0.9, 0.2, 2.0],
+                max_range_m: 5_000.0,
+                control_endpoint: Some("sapient".into()),
+                maintenance: Vec::new(),
+            }],
+            ..ConfigBaseline::default()
+        };
+        let window = config.sensor_task_ack_window_s;
+        let (mut sensors, sent) = ignoring_sapient_registry(&config);
+        let issued_at = gungnir_model::MissionTime(1_000.0);
+        let task = sensors
+            .issue(
+                SensorId(7),
+                gungnir_model::SensorCommand::SetMode {
+                    mode: gungnir_model::SensorMode::Search,
+                },
+                None,
+                issued_at,
+            )
+            .expect("issued");
+        assert_eq!(sent.load(Ordering::SeqCst), 1, "the task was sent once");
+        let bus = InProcessBus::new();
+        let events = bus.subscribe();
+
+        // Inside the window: nothing.
+        let inside = gungnir_model::MissionTime(issued_at.0 + window - 1.0);
+        assert!(sweep_sensor_tasks(&mut sensors, &bus, window, inside)
+            .expect("swept")
+            .is_empty());
+        assert!(
+            events.try_recv().is_err(),
+            "an event was published inside the window"
+        );
+
+        // Past it: unacknowledged, published once, mode request withdrawn.
+        let past = gungnir_model::MissionTime(issued_at.0 + window + 1.0);
+        assert_eq!(
+            sweep_sensor_tasks(&mut sensors, &bus, window, past).expect("swept"),
+            vec![task]
+        );
+        match events.try_recv().expect("published").event {
+            Event::SensorTask(SensorTaskEvent::Unacknowledged {
+                task: t,
+                sensor,
+                at,
+            }) => {
+                assert_eq!(t, task);
+                assert_eq!(sensor, SensorId(7));
+                assert_eq!(at, past);
+            }
+            other => panic!("expected Unacknowledged: {other:?}"),
+        }
+        let recorded = &sensors
+            .tasks()
+            .iter()
+            .find(|t| t.id == task)
+            .expect("recorded")
+            .state;
+        assert!(
+            matches!(recorded, TaskState::Unacknowledged),
+            "{recorded:?}"
+        );
+        assert_eq!(
+            sensors.mode_status(SensorId(7)).expect("known").requested,
+            None,
+            "a command nobody answered still reads as outstanding"
+        );
+
+        // A later sweep does not report it again, and nothing is re-sent.
+        let later = gungnir_model::MissionTime(past.0 + 100.0);
+        assert!(sweep_sensor_tasks(&mut sensors, &bus, window, later)
+            .expect("swept")
+            .is_empty());
+        assert!(
+            events.try_recv().is_err(),
+            "the timeout was published twice"
+        );
+        assert_eq!(
+            sent.load(Ordering::SeqCst),
+            1,
+            "the node retried a task on its own"
+        );
+    }
 
     fn df_sensor() -> gungnir_config::SensorConfig {
         gungnir_config::SensorConfig {
