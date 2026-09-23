@@ -114,6 +114,14 @@ pub enum ApiError {
     /// deployment that nobody can sign in to.
     #[error("the caller could not be authenticated: {0}")]
     NotAuthenticated(String),
+    /// A register that admits no more producers (GAP-137).
+    ///
+    /// The exchange register holds one set per writer and bounds how many it keeps. A
+    /// writer already in it always writes; a new one beyond the bound is refused with
+    /// this, because evicting a set a partner is being served from would lose data
+    /// silently and refusing leaves the batch queued where the backlog is visible.
+    #[error("no room: {0}")]
+    NoRoom(String),
 }
 
 /// The transport-neutral request handlers a node implements. Every call names the

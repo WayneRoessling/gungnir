@@ -235,8 +235,69 @@ grants, now three: `Commander`, `IntelligenceAnalyst`, and `Supervisor`) and the
 `gungnir-app`'s producer are ordinary transport and wiring work and carry no signature
 requirement of their own.
 
+## 11. Amendment 3: one register, a producer per writer (2026-09-23)
+
+**Amendment 2 built the write path for one producer, and said so in its own heading.**
+`publish_exchange` replaced the held set for an item, which is the right contract while a
+single desktop writes and the wrong one the moment a second writer exists. Two now do.
+DN-31 gave the node an approval queue (GAP-132), so the node issues handoffs of its own;
+and a desktop that falls back keeps its link, decides on its own queue while cut off, and
+publishes its whole set when it reconnects (GAP-133, GAP-134, DN-31 §6.7). Either writer
+would have erased the other's set, and which one a partner saw would have depended on tick
+order -- with nothing on the response saying the list was partial, which is the silence
+DN-17 §5 rule 3 exists to prevent.
+
+**The decision: one set per producer, merged on read** (D-68). The register is keyed by
+item and then by producer. A publish replaces that producer's set and touches no other; a
+read concatenates every producer's products, this node's own first, and sums what the
+marking gate withheld. An item is `NotHeld` only when no producer holds any, and then it
+carries what each of them said rather than one reason at random.
+
+**The producer is the name the connection was verified under, never a field in the
+request.** Since GAP-141 a desktop's certificate carries `desktop-` and sixteen hex digits
+of its own key (D-67), so the name is a function of what the handshake proved. A request
+field would have let any caller write as any producer, which is the same authority the
+`origin` check on forwarded decisions already refuses. The node's own set is a variant of
+its own rather than a string, so no desktop name can collide with it. A link with no
+client certificate names nobody: every such writer shares one set and they overwrite each
+other exactly as the whole register did before this amendment, which is what mutual TLS
+buys and what its own doc comment says.
+
+**Not the two alternatives.** *The node as the sole writer*, merging what desktops post
+into one set, needs a rule for whose product wins on a collision and would have put that
+rule in the transport. *Append per handoff*, with the product id as the key, cannot
+express a withdrawal: a desktop that no longer holds a handoff has no way to say so, and
+DN-18 §5's "partial delivery is reported" turns on a partner being told what is no longer
+current as well as what is.
+
+**Bounded, and a refusal rather than an eviction.** One item admits sixty-four producers.
+A producer already in the register always writes; a new one beyond the bound is refused
+with `507` and the reason, so the desktop's link keeps the batch queued and the backlog is
+visible on PN-09 (§5, "partial delivery is reported"). Evicting somebody else's set to
+make room would have served a partner a stale list and said nothing.
+
+**What does not change: the wire.** §6's "no new endpoints" still holds, and so does the
+response shape. A partner reads the merged set and learns nothing about how many desktops
+this deployment runs or which one holds what -- our own topology, not a fact about the
+products.
+
+**What it corrects.** The node's opening claim for handoffs read "handoffs are issued on a
+desktop from a recorded decision; this node holds none", which stopped being true the day
+DN-31 moved the queue. It now publishes an empty set under its own producer -- "I keep
+these and have issued none yet" -- and `NodeHost::republish_handoffs`, a documented no-op
+since GAP-132, replaces that set each time the desk issues one.
+
+**What is still open.** The register has no lifecycle (GAP-145): it lives in memory, so a
+node restart loses every producer's set and no desktop republishes until it next issues a
+handoff, and a producer that goes away is never forgotten -- which an ephemeral desktop
+(D-67), being a new name every run, reaches faster than any other deployment.
+
+**Signature scope.** The `gungnir-api` write path and `gungnir-node/src/approval.rs`
+(D-65) are human-owned (`docs/agentic-workflow.md`); the ledger is `docs/signatures.md`.
+`gungnir-remote`'s outbox and the desktop's producer are unchanged by this amendment.
+
 ## Traceability
 
-GAP-065; CAP-7.4; D-06, D-08, D-09; composes DN-07, DN-16, DN-17, DN-19; depends on
-GAP-041 for the transport and GAP-064 for the codecs; `../gungnir-api-v1.md`;
+GAP-065, GAP-137; CAP-7.4; D-06, D-08, D-09, D-68; composes DN-07, DN-16, DN-17, DN-19;
+depends on GAP-041 for the transport and GAP-064 for the codecs; `../gungnir-api-v1.md`;
 `../architecture/uaf/standards/Sd-Tx.md`; principles AP-04, AP-09.

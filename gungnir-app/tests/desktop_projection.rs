@@ -280,12 +280,13 @@ impl Node {
                             geofences: &*geo,
                             bus: &bus,
                             endpoint_client: None,
+                            api: &api,
                         };
                         // `main.rs`'s order.
                         approval::sweep(&mut state.approval, &frame);
-                        let _ = approval::answer_decisions(&mut state.approval, &frame, &api);
-                        approval::answer_forwarded(&mut state.approval, &frame, &api);
-                        approval::audit_refused_decisions(&mut state.approval, &frame, &api);
+                        let _ = approval::answer_decisions(&mut state.approval, &frame);
+                        approval::answer_forwarded(&mut state.approval, &frame);
+                        approval::audit_refused_decisions(&mut state.approval, &frame);
                         let queue = state.approval.queue_view(&config, &resources, &tracks);
                         state.tracks = tracks;
                         api.set_now(now.0);
@@ -343,6 +344,7 @@ impl Node {
             geofences: &*self.geo,
             bus: &self.bus,
             endpoint_client: None,
+            api: &self.api,
         };
         approval::propose(&mut state.approval, &frame, plan);
         state

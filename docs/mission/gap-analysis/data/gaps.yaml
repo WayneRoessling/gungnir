@@ -9068,6 +9068,19 @@
       would collide for one person on two consoles and duplicate for an operator change on
       one. Waits on GAP-141 and the DN-18 amendment. See
       `../../record/2026-09-17/an-outage-reaches-the-node-once.md`.
+  - date: 2026-09-23
+    status: Closed
+    note: >-
+      Closed by giving the register a producer per writer (DN-18 §11, D-68) and wiring
+      the node's own set in. `publish_exchange` and `withhold_exchange` take an
+      `ExchangeProducer`; a publish replaces that producer's set alone and `exchange_all`
+      merges every producer's, the node's first. The producer is the name the connection
+      was verified under (GAP-141), never a request field. `NodeHost::republish_handoffs`,
+      a no-op since GAP-132, publishes this node's whole set, and the node's opening claim
+      for handoffs is an empty set rather than the false "this node holds none". Bounded at
+      64 producers an item, refusing rather than evicting. It left the register with no
+      lifecycle: GAP-145. See
+      `../../record/2026-09-23/a-partner-hears-what-the-node-decided.md`.
 
 - id: GAP-138
   name: An unreachable decision type still describes the interface
@@ -9363,3 +9376,41 @@
       `--ignore`. The two acceptances, and ttf-parser's, now match nothing; they stay until
       the owner removes them. `cargo deny` and `cargo audit` were not run where this was
       done. See `../../record/2026-09-17/egui-0-34-and-three-d-0-19.md`.
+- id: GAP-145
+  name: The exchange register has no lifecycle
+  type: Technical
+  caps: [CAP-7.4]
+  layer: Deployment and API
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: [GAP-137]
+  impact: >-
+    The register lives in memory and nothing ever removes a producer's set. A node restart
+    loses every set, and no desktop republishes until it next issues a handoff, so a
+    partner reads an empty deployment while desktops hold handoffs they believe are
+    published. In the other direction a desktop that goes away is never forgotten, and its
+    last set is served as current for as long as the node runs -- which an ephemeral
+    desktop (D-67), a new producer name every run, reaches fastest.
+  evidence: >-
+    `gungnir-api/src/transport.rs` (`exchange_products`, an in-memory map with no eviction
+    and a bound of `PRODUCERS_PER_ITEM`); `gungnir-remote/src/link.rs` (`flush_exchange`
+    pops a batch once the node accepts it); `gungnir-app/src/desk.rs`
+    (`republish_handoffs`, called from `issue_for` alone); DN-18 §11
+  action: >-
+    Decide what makes a producer's set stale -- a republish interval a desktop keeps to, a
+    node that asks for one on reconnect, or a set that expires with the session that wrote
+    it -- and say on the response what a partner is reading when a producer has gone quiet.
+  ref: >-
+    Found building GAP-137 (`../../record/2026-09-23/a-partner-hears-what-the-node-decided.md`)
+  history:
+  - date: 2026-09-23
+    status: Open
+    note: >-
+      Filed by GAP-137 rather than half-answered there. GAP-137 gave the register a
+      producer per writer, which is what made the question visible: with one set per item a
+      restart lost one set and a stale writer overwrote itself, and with one per producer
+      the deployment's whole published picture is lost on restart and every departed
+      producer is kept. The answer is a policy about what a partner may believe, not a
+      transport change, so it is the owner's.

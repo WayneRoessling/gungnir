@@ -360,11 +360,61 @@ pub struct NodeApi {
     /// separate from `submissions`: the two are different facts, arriving under
     /// different authority, and one queue would make the drain guess which.
     acknowledgements: Mutex<Vec<WarningAcknowledgement>>,
-    /// What this deployment holds for exchange, per item (DN-18 §5, GAP-065). Absent
-    /// means nothing has been published for that item, which is answered as
-    /// [`v3::ExchangeResponse::NotHeld`] and never as an empty list.
-    exchange_products: RwLock<BTreeMap<ExchangeItem, v3::ExchangeResponse>>,
+    /// What this deployment holds for exchange, per item and **per producer** (DN-18 §5
+    /// amendment 3, GAP-065, GAP-137). An item with no producer has had nothing published
+    /// for it, which is answered as [`v3::ExchangeResponse::NotHeld`] and never as an
+    /// empty list.
+    ///
+    /// **One set per writer, merged on read.** This node issues handoffs of its own since
+    /// GAP-132 and every desktop it serves publishes its own set; with one set per item
+    /// the register held whichever writer wrote last, and which one a partner saw
+    /// depended on tick order.
+    exchange_products:
+        RwLock<BTreeMap<ExchangeItem, BTreeMap<ExchangeProducer, v3::ExchangeResponse>>>,
 }
+
+/// Who wrote a set into this deployment's exchange register (GAP-137, DN-18 §5
+/// amendment 3).
+///
+/// **A publish replaces this producer's set and nothing else**, and a read merges every
+/// producer's ([`NodeApi::exchange_all`]). Before GAP-137 the register held one set per
+/// item, so the node's own handoffs and a desktop's published set would each have erased
+/// the other.
+///
+/// **Never on the wire.** A partner reads the merged set and learns nothing about how
+/// many desktops this deployment runs or which one holds what, which is a fact about our
+/// own topology rather than about the products; the response shape is the one DN-18 §6
+/// already fixed.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ExchangeProducer {
+    /// This node itself: what its own approval desk holds (GAP-132, GAP-137). Ordered
+    /// first, so a merged read puts the node's own set before any desktop's.
+    Node,
+    /// A desktop that published over the write path, named by the common name its client
+    /// certificate was verified under -- since GAP-141 the digest of its own key, which
+    /// is the same name across its restarts and different from every other desktop's.
+    Party(String),
+    /// A writer this transport could not name, because the link carries no client
+    /// certificate.
+    ///
+    /// **Every unnamed writer shares this one set**, so two desktops publishing over a
+    /// plaintext link still overwrite each other. That is what the whole register was
+    /// before GAP-137, and telling two desktops apart is what mutual TLS buys: a
+    /// deployment that wants them distinguished configures certificates for them.
+    Unidentified,
+}
+
+/// How many producers one item admits (GAP-137).
+///
+/// A guard against an unbounded register rather than a policy about deployments: a
+/// deployment runs a handful of desktops, and this only bites when names churn -- an
+/// ephemeral desktop (D-67) is a new name every run.
+///
+/// **A producer already in the register is never refused**, and a new one beyond this is,
+/// with the reason said. Refusing is what keeps the failure visible: the desktop's link
+/// keeps the batch queued and reports the backlog (DN-18 §5), where evicting somebody
+/// else's set would have served a partner a stale one and said nothing.
+pub const PRODUCERS_PER_ITEM: usize = 64;
 
 /// What a client certificate speaks for (D-02). The node builds this from the
 /// baseline's `machine_identities`.
@@ -708,70 +758,129 @@ impl NodeApi {
             .unwrap_or_default()
     }
 
-    /// Publish what this deployment holds for `item`, for the exchange routes (DN-18 §5,
-    /// GAP-065). Called by whoever owns the products, once they are marked.
+    /// Publish what `producer` holds for `item`, for the exchange routes (DN-18 §5,
+    /// GAP-065, GAP-137). Called by whoever owns the products, once they are marked.
     ///
     /// Publishing an empty list is a claim -- "we hold none of this right now" -- and is
     /// different from never having published, which is [`NodeApi::withhold_exchange`].
+    ///
+    /// **It replaces this producer's set and no other's** (DN-18 §5 amendment 3). A read
+    /// merges what every producer holds, so a desktop republishing its handoffs leaves
+    /// the node's own set and every other desktop's exactly where they were.
     pub fn publish_exchange(
         &self,
+        producer: ExchangeProducer,
         item: ExchangeItem,
         products: Vec<v3::ExchangeProduct>,
     ) -> Result<(), ApiError> {
-        let mut slot = self
-            .exchange_products
-            .write()
-            .map_err(|_| ApiError::Transport("the exchange lock was poisoned".into()))?;
-        slot.insert(
+        self.write_exchange(
+            producer,
             item,
             v3::ExchangeResponse::Held {
                 item,
                 products,
                 withheld: 0,
             },
-        );
-        Ok(())
+        )
     }
 
-    /// Say that this deployment holds none of `item` and why (DN-18 §5, GAP-065).
+    /// Say that `producer` holds none of `item` and why (DN-18 §5, GAP-065, GAP-137).
     ///
-    /// A node holds no warnings, no reports and no handoffs of its own -- a desktop does
-    /// -- and an empty list would read to a partner as "there are none", which is a
-    /// different claim and a false one. The reason travels so the partner knows to ask
-    /// somebody else rather than concluding the sector is quiet.
+    /// An empty list would read to a partner as "there are none", which is a different
+    /// claim and one a producer that keeps no such ledger cannot make. The reason travels
+    /// so the partner knows to ask somebody else rather than concluding the sector is
+    /// quiet.
+    ///
+    /// **Corrected 2026-09-23 (GAP-137).** This said that a node holds no warnings, no
+    /// reports and no handoffs of its own. Since GAP-132 it holds handoffs: it runs an
+    /// approval queue and issues them, so for that one item it publishes a set -- empty
+    /// until it has issued one -- and withholds the other two.
     pub fn withhold_exchange(
         &self,
+        producer: ExchangeProducer,
         item: ExchangeItem,
         reason: impl Into<String>,
     ) -> Result<(), ApiError> {
-        let mut slot = self
-            .exchange_products
-            .write()
-            .map_err(|_| ApiError::Transport("the exchange lock was poisoned".into()))?;
-        slot.insert(
+        self.write_exchange(
+            producer,
             item,
             v3::ExchangeResponse::NotHeld {
                 item,
                 reason: reason.into(),
             },
-        );
+        )
+    }
+
+    /// Put one producer's answer for `item` into the register (GAP-137).
+    ///
+    /// Bounded by [`PRODUCERS_PER_ITEM`]: a producer already in the register always
+    /// writes, and a new one beyond the bound is refused with [`ApiError::NoRoom`] rather
+    /// than evicting a set somebody else is being served from.
+    fn write_exchange(
+        &self,
+        producer: ExchangeProducer,
+        item: ExchangeItem,
+        answer: v3::ExchangeResponse,
+    ) -> Result<(), ApiError> {
+        let mut slot = self
+            .exchange_products
+            .write()
+            .map_err(|_| ApiError::Transport("the exchange lock was poisoned".into()))?;
+        let sets = slot.entry(item).or_default();
+        if !sets.contains_key(&producer) && sets.len() >= PRODUCERS_PER_ITEM {
+            return Err(ApiError::NoRoom(format!(
+                "{item:?} already holds sets from {PRODUCERS_PER_ITEM} producers; \
+                 {producer:?} was not admitted and published nothing"
+            )));
+        }
+        sets.insert(producer, answer);
         Ok(())
     }
 
-    /// Everything held for `item`, unfiltered: what an operator inside the deployment
-    /// sees. `None` when the lock is unreadable.
+    /// Everything held for `item`, unfiltered and merged across producers: what an
+    /// operator inside the deployment sees. `None` when the lock is unreadable.
+    ///
+    /// **The merge is what the producer key is for** (GAP-137, DN-18 §5 amendment 3).
+    /// Held sets are concatenated in producer order, this node's own first, and their
+    /// withheld counts summed. The answer is [`v3::ExchangeResponse::NotHeld`] only when
+    /// no producer holds any, and then it carries what each of them said rather than one
+    /// of their reasons at random.
     #[must_use]
     pub fn exchange_all(&self, item: ExchangeItem) -> Option<v3::ExchangeResponse> {
         let held = self.exchange_products.read().ok()?;
-        Some(
-            held.get(&item)
-                .cloned()
-                .unwrap_or_else(|| v3::ExchangeResponse::NotHeld {
-                    item,
-                    reason: "this deployment has published nothing for exchange under this item"
-                        .into(),
-                }),
-        )
+        let mut products: Vec<v3::ExchangeProduct> = Vec::new();
+        let mut withheld = 0usize;
+        let mut reasons: Vec<String> = Vec::new();
+        let mut any_held = false;
+        for answer in held.get(&item).into_iter().flat_map(BTreeMap::values) {
+            match answer {
+                v3::ExchangeResponse::Held {
+                    products: one_set,
+                    withheld: one_count,
+                    ..
+                } => {
+                    any_held = true;
+                    products.extend(one_set.iter().cloned());
+                    withheld += one_count;
+                }
+                v3::ExchangeResponse::NotHeld { reason, .. } => reasons.push(reason.clone()),
+            }
+        }
+        if any_held {
+            return Some(v3::ExchangeResponse::Held {
+                item,
+                products,
+                withheld,
+            });
+        }
+        Some(v3::ExchangeResponse::NotHeld {
+            item,
+            reason: if reasons.is_empty() {
+                "this deployment has published nothing for exchange under this item".to_string()
+            } else {
+                reasons.join("; ")
+            },
+        })
     }
 
     /// What `party` may receive of `item` (DN-18 §5, GAP-065): every product put through
@@ -2018,6 +2127,13 @@ async fn publish_handoffs(
 /// machine-identity path here and no queue for the node loop to drain: `publish_exchange`
 /// replaces the held set synchronously, and the handler answers as soon as it has.
 ///
+/// **Which set it replaces is the caller's own** (GAP-137, DN-18 §5 amendment 3). The
+/// producer is the common name this connection was verified under, which since GAP-141 is
+/// a digest of the desktop's own key: one set per desktop, the node's own beside them,
+/// and a read merges them. A link with no client certificate names nobody, so every such
+/// writer shares [`ExchangeProducer::Unidentified`] and they overwrite each other as
+/// before -- said in that variant's own doc comment rather than left to be discovered.
+///
 /// **`PUBLISH_EXCHANGE` is not `RELEASE_PRODUCT`.** The action a caller must hold is the
 /// one for transmitting a product, not the one for marking it releasable in the first
 /// place; see the constant's own doc comment for why the two stay apart.
@@ -2048,8 +2164,16 @@ fn publish_exchange_item(
     let Ok(Json(request)) = body else {
         return problem(StatusCode::BAD_REQUEST, "the products could not be decoded");
     };
-    match api.publish_exchange(item, request.products) {
+    let producer = match &peer.party {
+        Some(party) => ExchangeProducer::Party(party.clone()),
+        None => ExchangeProducer::Unidentified,
+    };
+    match api.publish_exchange(producer, item, request.products) {
         Ok(()) => StatusCode::ACCEPTED.into_response(),
+        // 507, not 500: the register is intact and this deployment is misconfigured. The
+        // desktop's link keeps the batch and retries it, which shows as a backlog
+        // (DN-18 §5) rather than as a set that quietly went missing.
+        Err(e @ ApiError::NoRoom(_)) => problem(StatusCode::INSUFFICIENT_STORAGE, &e.to_string()),
         Err(e) => problem(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
 }
@@ -2785,8 +2909,12 @@ mod tests {
             api.exchange_all(ExchangeItem::Reports),
             Some(v3::ExchangeResponse::NotHeld { .. })
         ));
-        api.withhold_exchange(ExchangeItem::Reports, "this node produces no reports")
-            .expect("withheld");
+        api.withhold_exchange(
+            ExchangeProducer::Node,
+            ExchangeItem::Reports,
+            "this node produces no reports",
+        )
+        .expect("withheld");
         match api.exchange_all(ExchangeItem::Reports) {
             Some(v3::ExchangeResponse::NotHeld { item, reason }) => {
                 assert_eq!(item, ExchangeItem::Reports);
@@ -2794,12 +2922,164 @@ mod tests {
             }
             other => panic!("expected a reason, got {other:?}"),
         }
-        api.publish_exchange(ExchangeItem::Reports, Vec::new())
+        api.publish_exchange(ExchangeProducer::Node, ExchangeItem::Reports, Vec::new())
             .expect("published");
         assert!(matches!(
             api.exchange_all(ExchangeItem::Reports),
             Some(v3::ExchangeResponse::Held { withheld: 0, .. })
         ));
+    }
+
+    /// Every handoff id the register holds for `Handoffs`, merged, in producer order.
+    fn held_ids(api: &NodeApi) -> Vec<String> {
+        match api.exchange_all(ExchangeItem::Handoffs) {
+            Some(v3::ExchangeResponse::Held { products, .. }) => {
+                products.into_iter().map(|p| p.id).collect()
+            }
+            other => panic!("expected a held set, got {other:?}"),
+        }
+    }
+
+    /// GAP-137, DN-18 §5 amendment 3: one item, two producers. A publish replaces the
+    /// set of the producer that wrote it and leaves every other where it was, and a read
+    /// merges them with this node's own set first.
+    ///
+    /// **This is the whole reason the key exists.** Before it, the node's own handoffs and
+    /// a desktop's published set each overwrote the other, and which one a partner saw
+    /// depended on which wrote last.
+    #[test]
+    fn a_publish_replaces_one_producer_s_set_and_leaves_the_others() {
+        use gungnir_model::Releasability;
+        let api = api();
+        let desk = || ExchangeProducer::Party("desktop-aaaa".into());
+        api.publish_exchange(
+            ExchangeProducer::Node,
+            ExchangeItem::Handoffs,
+            vec![product("node-1", Releasability::AllPeers)],
+        )
+        .expect("the node published");
+        api.publish_exchange(
+            desk(),
+            ExchangeItem::Handoffs,
+            vec![product("desk-1", Releasability::AllPeers)],
+        )
+        .expect("the desktop published");
+        assert_eq!(
+            held_ids(&api),
+            vec!["node-1", "desk-1"],
+            "a second writer replaced the first instead of joining it"
+        );
+
+        // The desktop republishes its whole set, as its host does on every issue.
+        api.publish_exchange(
+            desk(),
+            ExchangeItem::Handoffs,
+            vec![
+                product("desk-1", Releasability::AllPeers),
+                product("desk-2", Releasability::AllPeers),
+            ],
+        )
+        .expect("the desktop republished");
+        assert_eq!(
+            held_ids(&api),
+            vec!["node-1", "desk-1", "desk-2"],
+            "the node's own set did not survive a desktop's republish"
+        );
+
+        // And the node's own, which is what `republish_handoffs` does each time the desk
+        // issues one: a replacement, so the desktop's set is untouched.
+        api.publish_exchange(
+            ExchangeProducer::Node,
+            ExchangeItem::Handoffs,
+            vec![product("node-2", Releasability::AllPeers)],
+        )
+        .expect("the node republished");
+        assert_eq!(
+            held_ids(&api),
+            vec!["node-2", "desk-1", "desk-2"],
+            "the node replaced more than its own set"
+        );
+    }
+
+    /// GAP-137: when every producer withholds, the answer is `NotHeld` and carries what
+    /// each of them said. One producer holding anything makes the answer `Held`, because
+    /// the merged set is what the deployment holds.
+    #[test]
+    fn every_producer_s_reason_travels_when_none_holds_any() {
+        use gungnir_model::Releasability;
+        let api = api();
+        api.withhold_exchange(
+            ExchangeProducer::Node,
+            ExchangeItem::Reports,
+            "this node publishes no reports",
+        )
+        .expect("the node withheld");
+        api.withhold_exchange(
+            ExchangeProducer::Party("desktop-aaaa".into()),
+            ExchangeItem::Reports,
+            "this desktop has generated none",
+        )
+        .expect("the desktop withheld");
+        match api.exchange_all(ExchangeItem::Reports) {
+            Some(v3::ExchangeResponse::NotHeld { reason, .. }) => assert_eq!(
+                reason, "this node publishes no reports; this desktop has generated none",
+                "a partner was told one producer's reason and not the other's"
+            ),
+            other => panic!("expected a reason, got {other:?}"),
+        }
+        api.publish_exchange(
+            ExchangeProducer::Party("desktop-bbbb".into()),
+            ExchangeItem::Reports,
+            vec![product("report-1", Releasability::AllPeers)],
+        )
+        .expect("a third producer published");
+        assert!(
+            matches!(
+                api.exchange_all(ExchangeItem::Reports),
+                Some(v3::ExchangeResponse::Held { .. })
+            ),
+            "one producer holding a product must not be hidden by two that hold none"
+        );
+    }
+
+    /// GAP-137: the register is bounded. A producer already in it always writes; a new one
+    /// beyond the bound is refused, and nothing already held changes -- the batch stays on
+    /// the desktop's link as a backlog rather than evicting a set a partner is served from.
+    #[test]
+    fn a_new_producer_beyond_the_bound_is_refused_and_changes_nothing() {
+        use gungnir_model::Releasability;
+        let api = api();
+        for n in 0..PRODUCERS_PER_ITEM {
+            api.publish_exchange(
+                ExchangeProducer::Party(format!("desktop-{n:04}")),
+                ExchangeItem::Handoffs,
+                vec![product(&format!("handoff-{n}"), Releasability::AllPeers)],
+            )
+            .expect("within the bound");
+        }
+        let refused = api
+            .publish_exchange(
+                ExchangeProducer::Party("desktop-one-too-many".into()),
+                ExchangeItem::Handoffs,
+                vec![product("unheard", Releasability::AllPeers)],
+            )
+            .expect_err("the bound admitted one more");
+        assert!(
+            matches!(refused, ApiError::NoRoom(_)),
+            "refused for the wrong reason: {refused}"
+        );
+        let ids = held_ids(&api);
+        assert_eq!(ids.len(), PRODUCERS_PER_ITEM, "a set was evicted");
+        assert!(!ids.iter().any(|id| id == "unheard"));
+
+        // A producer already in the register is not refused, bound or no bound.
+        api.publish_exchange(
+            ExchangeProducer::Party("desktop-0000".into()),
+            ExchangeItem::Handoffs,
+            vec![product("handoff-0-again", Releasability::AllPeers)],
+        )
+        .expect("a known producer is never refused");
+        assert!(held_ids(&api).iter().any(|id| id == "handoff-0-again"));
     }
 
     /// DN-18 §5's two gates, and the count. The marking gate is checked with an agreement
@@ -2818,6 +3098,7 @@ mod tests {
             }],
         };
         api.publish_exchange(
+            ExchangeProducer::Node,
             ExchangeItem::Warnings,
             vec![
                 product("a", Releasability::Internal),

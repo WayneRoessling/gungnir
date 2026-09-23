@@ -224,6 +224,8 @@ struct Shared {
 }
 
 struct Node {
+    /// The transport the loop serves on, which its frame now carries (GAP-137).
+    api: Arc<NodeApi>,
     shared: Arc<Mutex<Shared>>,
     config: Arc<ConfigBaseline>,
     resources: Arc<Vec<ResourceView>>,
@@ -292,11 +294,12 @@ impl Node {
                             geofences: &*geo,
                             bus: &bus,
                             endpoint_client: None,
+                            api: &api,
                         };
                         approval::sweep(&mut state.approval, &frame);
-                        let _ = approval::answer_decisions(&mut state.approval, &frame, &api);
-                        approval::answer_forwarded(&mut state.approval, &frame, &api);
-                        approval::audit_refused_decisions(&mut state.approval, &frame, &api);
+                        let _ = approval::answer_decisions(&mut state.approval, &frame);
+                        approval::answer_forwarded(&mut state.approval, &frame);
+                        approval::audit_refused_decisions(&mut state.approval, &frame);
                         let queue = state.approval.queue_view(&config, &resources, &tracks);
                         state.tracks = tracks;
                         api.set_now(now.0);
@@ -318,6 +321,7 @@ impl Node {
             }
         });
         Self {
+            api: api.clone(),
             shared,
             config,
             resources,
@@ -351,6 +355,7 @@ impl Node {
                 geofences: &*self.geo,
                 bus: &self.bus,
                 endpoint_client: None,
+                api: &self.api,
             };
             approval::propose(&mut state.approval, &frame, plan);
             if let Some(id) = state

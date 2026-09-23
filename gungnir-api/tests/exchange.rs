@@ -18,7 +18,7 @@ use rustls::pki_types::pem::PemObject;
 use std::sync::Arc;
 
 use gungnir_api::tls::{self, TlsListener, TlsPaths};
-use gungnir_api::transport::{serve_on_listener, AccountTokenAuthority, NodeApi};
+use gungnir_api::transport::{serve_on_listener, AccountTokenAuthority, ExchangeProducer, NodeApi};
 use gungnir_api::v3::{
     ExchangeProduct, ExchangeResponse, PublishExchangeRequest, SnapshotResponse,
 };
@@ -245,6 +245,9 @@ const OPERATOR: u64 = 71;
 
 /// A deployment that sends `sector-north` all three items and `sector-east` health alone,
 /// and that holds three warnings, two handoffs, and no reports at all.
+///
+/// **What it publishes is the node's own set** ([`ExchangeProducer::Node`], GAP-137): the
+/// register holds one per writer, and the desktops below post theirs over the wire.
 fn api() -> Arc<NodeApi> {
     let store = InMemoryAccountStore::new(vec![
         Account {
@@ -292,6 +295,7 @@ fn api() -> Arc<NodeApi> {
         ))),
     );
     api.publish_exchange(
+        ExchangeProducer::Node,
         ExchangeItem::Warnings,
         vec![
             product("asset-1/track-7", 10.0, Releasability::Internal),
@@ -306,6 +310,7 @@ fn api() -> Arc<NodeApi> {
     .expect("warnings published");
     // Both marked internal: the agreement covers handoffs and no marking releases one.
     api.publish_exchange(
+        ExchangeProducer::Node,
         ExchangeItem::Handoffs,
         vec![
             product("decision-1", 20.0, Releasability::Internal),
@@ -416,28 +421,23 @@ fn publish(products: Vec<ExchangeProduct>) -> String {
 /// existing `GET` route -- the write path DN-18 amendment 1 said neither existed nor was
 /// decided.
 ///
-/// **Replaces, not appends.** `api()` already publishes three warnings; posting one more
-/// leaves exactly the one just posted, which is [`gungnir_api::transport::NodeApi::publish_exchange`]'s
-/// own contract and not something a caller could tell from the write response alone.
+/// **Replaces its own set, and only its own** (GAP-137, DN-18 §5 amendment 3). The
+/// producer is the common name the connection was verified under, so `desk-1` posting
+/// twice leaves exactly what it posted last, beside what the node itself published --
+/// which is what a caller cannot tell from the write response alone.
 #[tokio::test(flavor = "multi_thread")]
-async fn an_operator_holding_the_action_replaces_what_the_node_holds() {
+async fn an_operator_holding_the_action_replaces_its_own_set_and_no_other() {
     let pki = Pki::new("publish");
     let api = api();
     let addr = serve(&pki, Arc::clone(&api)).await;
     let commander = token(&pki, addr, COMMANDER).await;
 
-    let (status, body) = request(
+    let (status, body) = post_warnings(
         &pki,
         addr,
         "desk-1",
-        "POST",
-        "/v3/exchange/warnings",
-        Some(&commander),
-        Some(publish(vec![product(
-            "asset-9/track-1",
-            30.0,
-            Releasability::AllPeers,
-        )])),
+        &commander,
+        vec![product("asset-9/track-1", 30.0, Releasability::AllPeers)],
     )
     .await;
     assert_eq!(status, 202, "{body}");
@@ -447,11 +447,109 @@ async fn an_operator_holding_the_action_replaces_what_the_node_holds() {
     let (ids, withheld) = held(&body);
     assert_eq!(
         ids,
-        vec!["asset-9/track-1"],
-        "the posted set replaced the three warnings api() had published, not joined them"
+        vec!["asset-2/track-8", "asset-3/track-9", "asset-9/track-1"],
+        "the desk's set replaced the node's own instead of joining it"
     );
-    assert_eq!(withheld, 0);
+    assert_eq!(withheld, 1, "the node's internal warning is still counted");
+
+    // The same desk again: its own set is replaced whole, and the node's stands.
+    let (status, body) = post_warnings(
+        &pki,
+        addr,
+        "desk-1",
+        &commander,
+        vec![product("asset-9/track-2", 31.0, Releasability::AllPeers)],
+    )
+    .await;
+    assert_eq!(status, 202, "{body}");
+    let (_, body) = get(&pki, addr, "sector-north", "/v3/exchange/warnings").await;
+    let (ids, _) = held(&body);
+    assert_eq!(
+        ids,
+        vec!["asset-2/track-8", "asset-3/track-9", "asset-9/track-2"],
+        "a republish joined this desk's own two sets instead of replacing the first"
+    );
     let _ = std::fs::remove_dir_all(&pki.dir);
+}
+
+/// GAP-137, DN-18 §5 amendment 3: two desktops publish under one item and neither
+/// overwrites the other, because the register holds one set per producer and the producer
+/// is the name the certificate was verified under (GAP-141: a digest of the desktop's own
+/// key).
+///
+/// **This is the failure the amendment exists for.** With one set per item, which handoffs
+/// a partner saw depended on which desktop wrote last, and nothing said the list was
+/// partial -- the silence DN-17 §5 rule 3 exists to prevent.
+#[tokio::test(flavor = "multi_thread")]
+async fn two_desktops_publishing_one_item_do_not_overwrite_each_other() {
+    let pki = Pki::new("producers");
+    let api = api();
+    let addr = serve(&pki, Arc::clone(&api)).await;
+    let commander = token(&pki, addr, COMMANDER).await;
+
+    for (desk, id) in [
+        ("desktop-aaaa", "asset-1/track-1"),
+        ("desktop-bbbb", "asset-2/track-2"),
+    ] {
+        let (status, body) = post_warnings(
+            &pki,
+            addr,
+            desk,
+            &commander,
+            vec![product(id, 40.0, Releasability::AllPeers)],
+        )
+        .await;
+        assert_eq!(status, 202, "{desk}: {body}");
+    }
+
+    let (_, body) = get(&pki, addr, "sector-north", "/v3/exchange/warnings").await;
+    let (ids, _) = held(&body);
+    assert!(
+        ids.contains(&"asset-1/track-1".to_string())
+            && ids.contains(&"asset-2/track-2".to_string()),
+        "one desktop's set replaced the other's: {ids:?}"
+    );
+
+    // The first desktop withdraws everything it holds. Its own set empties; the second
+    // desktop's and the node's stand.
+    let (status, body) = post_warnings(&pki, addr, "desktop-aaaa", &commander, Vec::new()).await;
+    assert_eq!(status, 202, "{body}");
+    let (_, body) = get(&pki, addr, "sector-north", "/v3/exchange/warnings").await;
+    let (ids, _) = held(&body);
+    assert!(
+        !ids.contains(&"asset-1/track-1".to_string()),
+        "a withdrawn product was still served: {ids:?}"
+    );
+    assert!(
+        ids.contains(&"asset-2/track-2".to_string()),
+        "one desktop emptying its set emptied another's: {ids:?}"
+    );
+    assert!(
+        ids.contains(&"asset-3/track-9".to_string()),
+        "the node's own set went with it: {ids:?}"
+    );
+    let _ = std::fs::remove_dir_all(&pki.dir);
+}
+
+/// Post a warning set as `desk`, which is the common name its certificate carries and
+/// therefore the producer the register keys on (GAP-137).
+async fn post_warnings(
+    pki: &Pki,
+    addr: std::net::SocketAddr,
+    desk: &str,
+    token: &str,
+    products: Vec<ExchangeProduct>,
+) -> (u16, String) {
+    request(
+        pki,
+        addr,
+        desk,
+        "POST",
+        "/v3/exchange/warnings",
+        Some(token),
+        Some(publish(products)),
+    )
+    .await
 }
 
 /// An operator with no `PUBLISH_EXCHANGE` is refused, and nothing already held changes.

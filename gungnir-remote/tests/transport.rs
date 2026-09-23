@@ -1163,8 +1163,12 @@ async fn a_detection_submitted_while_linked_reaches_the_node() {
 
 /// Store-and-forward end to end for exchange publishing (GAP-065, DN-18 §5 amendment 2):
 /// a batch queued on the link reaches the node under the link's own token and replaces
-/// what it holds, closing the half of DN-18 amendment 1 that said neither a write path
-/// nor its store-and-forward had been built.
+/// what it holds for this desktop, closing the half of DN-18 amendment 1 that said
+/// neither a write path nor its store-and-forward had been built.
+///
+/// **One producer here** (GAP-137): this link is plaintext, so the node can put no name
+/// to the writer and every unnamed writer shares one set. Two desktops kept apart by
+/// their certificates is `gungnir-api/tests/exchange.rs`.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_queued_exchange_batch_reaches_the_node_and_replaces_what_it_holds() {
     let api = authenticating_as(snapshot(Vec::new()), gungnir_security::Role::Commander);

@@ -1647,3 +1647,25 @@
     (DN-31 §9 row 8), and the name says what the origin is worth. A stated, readable label
     was not taken: two desktops could claim one name and nothing would detect it. See
     `../../record/2026-09-22/a-desktop-is-named-by-its-own-key.md`.
+- id: D-68
+  decision: How the node's own exchange set and a desktop's published set share one register
+  question: >-
+    `NodeApi::publish_exchange` replaced the held set for an item, which is the right
+    contract while one desktop writes to it. Two writers now exist: the node issues
+    handoffs of its own since GAP-132, and a desktop that fell back publishes its whole set
+    on reconnect (GAP-133, GAP-134). Each would silently overwrite the other, and which set
+    a partner saw would depend on tick order. One set per producer merged on read, the node
+    as the sole writer merging what desktops post, or append per handoff?
+  raised_in: "GAP-132; GAP-133; GAP-134; GAP-137"
+  decider: Owner
+  unblocks: GAP-137
+  outcome: >-
+    **Proposed: one set per producer, merged on read** (DN-18 §11, built 2026-09-23 and
+    open in this ledger until the owner answers). The register is keyed by item and then by
+    the name the connection was verified under -- since GAP-141 a digest of the desktop's
+    own key (D-67) -- with the node's own set a variant of its own so no desktop name can
+    collide with it. A publish replaces that producer's set alone; a read concatenates every
+    producer's, the node's first. The node as sole writer needs a collision rule in the
+    transport; append per handoff cannot express a withdrawal, which DN-18 §5's "partial
+    delivery is reported" turns on. See
+    `../../record/2026-09-23/a-partner-hears-what-the-node-decided.md`.
