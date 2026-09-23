@@ -233,7 +233,7 @@ pub fn assemble(
             first_seen: location.first_seen,
             last_seen: location.last_seen,
             // One sighting per session track the resolver attributed.
-            sighting_count: u32::try_from(lineage.session_track_ids.len()).unwrap_or(u32::MAX),
+            sighting_count: u32::try_from(lineage.sightings.len()).unwrap_or(u32::MAX),
             sources: sources.clone(),
             assessment: None,
         })
@@ -421,7 +421,9 @@ mod tests {
     fn lineage(id: u128, tracks: usize, alias: Option<&str>) -> EntityLineage {
         EntityLineage {
             global_id: GlobalEntityId(id),
-            session_track_ids: (0..tracks).map(|n| TrackId(n as u64)).collect(),
+            sightings: (0..tracks)
+                .map(|n| gungnir_identity::Sighting::new(SessionId(1), TrackId(n as u64)))
+                .collect(),
             aliases: alias.map(|a| vec![a.to_string()]).unwrap_or_default(),
             merge_history: Vec::new(),
             correlations: Vec::new(),

@@ -135,7 +135,7 @@ history, and an entry is never edited once it has merged.
 | GAP-120 | Nothing compares the embedded and remote backends' projections | Technical | CAP-7.3 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
 | GAP-121 | StoreAndForwardQueue has no production caller | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
 | GAP-122 | Journal retention purge is unbuilt, and nothing says so | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Open |
-| GAP-123 | An entity's GlobalEntityId changes at every restart | Technical | CAP-2.7 | 4 | 3 | M | 12 | I3 | Services engineer | Open |
+| GAP-123 | An entity's GlobalEntityId changes at every restart | Technical | CAP-2.7 | 4 | 3 | M | 12 | I3 | Services engineer | Closed |
 | GAP-124 | The risk score has no time-to-impact term | Technical | CAP-3.2 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
 | GAP-125 | Neither binary's health path is tested against a changing flag | Technical | CAP-5.5 | 2 | 8 | S | 16 | I3 | Services engineer | Open |
 | GAP-126 | A non-finite float in an envelope cannot be journaled faithfully | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Open |
@@ -1857,11 +1857,12 @@ Counts: 144 gaps, 3 mission, 141 technical; 1 already covered by a plan in `../.
 - Capability: CAP-2.7 Global identity.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which held the `gungnir-identity` row.
+  - 2026-09-22, Closed: Closed 2026-09-22. Recovery reads back the identity events a session journaled instead of minting fresh ones, and the desktop journals them as the node does, so an object keeps its identifier across a restart and a replay; D-11's UUID v7 is untouched. Found alongside it: track numbers restart per process, so keying on the number joined unrelated objects silently; every lookup is now keyed by session and track. See `../../record/2026-09-22/identity-survives-a-restart.md`.
 - Evidence: `gungnir-app/src/identity.rs` and `gungnir-node/src/entities.rs` (`recover`); `gungnir-identity/src/lib.rs` (a new id per unseen track); `gungnir-app/tests/order_of_battle.rs` shows shared lineage, not a stable id.
 - Severity: 4. Reach: 3 threads. Effort: M. Priority: 12.
 - Impact: Both binaries rebuild the identity resolver from the journal at start and mint fresh UUID v7 identifiers as they fold it, so the same object carries a different `GlobalEntityId` after every restart and in a replay, which breaks the continuity across sessions that CAP-2.7 exists for.
 - Closing action: Read journaled identities back at start, or derive identifiers deterministically. Then test one object recorded in two sessions with a restart between them, and replayed: the same `GlobalEntityId` in session one, session two and the replay.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-124 The risk score has no time-to-impact term**
