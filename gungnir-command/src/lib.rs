@@ -206,6 +206,11 @@ impl DecisionRecord {
                 // Both from the record, for the reason the whole event is: there is no
                 // path that writes one thing to the history and another to the bus.
                 request: self.request.clone(),
+                // GAP-142: what was decided, so a desktop that restarts during an outage
+                // can read its own decisions back off the journal and forward them. The
+                // item and the override are exactly what `accepted` and `plan` leave out.
+                item: self.item,
+                overridden: matches!(self.decision, OperatorDecision::Overridden),
                 origin: self.origin.clone(),
             },
         }

@@ -133,6 +133,18 @@ pub struct Fallback {
     pub lapsed_at: Option<MissionTime>,
     /// Where this outage's decisions are on their way to the node (GAP-134).
     pub forwarding: Forwarding,
+    /// The journal session this outage's own record is in (GAP-142).
+    ///
+    /// The merge reads this desktop's half of the outage out of the journal, and after a
+    /// restart the session in progress is a **new** one: reading it would report that
+    /// this desktop did nothing while cut off, which is the opposite of what happened.
+    pub session: Option<gungnir_model::SessionId>,
+    /// The decisions this outage took, rebuilt from the journal (GAP-142).
+    ///
+    /// `None` for an outage this process has lived through: its decisions are on the
+    /// desk, which is where [`outage_batch`] reads them. `Some` after a restart, because
+    /// the desk starts empty and the journal is the only place they still exist.
+    pub recovered_decisions: Option<Vec<gungnir_remote::queue::DecisionRecordView>>,
 }
 
 /// Where an outage's decisions stand on their way to the node's record (GAP-134,
@@ -157,6 +169,14 @@ pub enum Forwarding {
     /// The node refused the batch, and **none of it was applied**. A person has to see
     /// why before this desktop switches back.
     Refused(String),
+    /// **This desktop restarted during the outage and its journal does not describe every
+    /// decision it took**, so none of them is forwarded (GAP-142).
+    ///
+    /// A batch is taken whole or not at all (DN-31 §6.8), and a partial one would put
+    /// some of an outage on the node's record and leave the rest nowhere with nothing
+    /// saying which. A person sees the counts on PN-18 and the decisions are still in
+    /// this desktop's own journal, where an after-action review can read them.
+    Incomplete { rebuilt: usize, unreadable: usize },
 }
 
 /// What `gungnir_resilience::reconcile` found for the outage.
@@ -341,6 +361,176 @@ impl TrackingService for TeeTracking {
     }
 }
 
+/// An outage this desktop was in when it last stopped, rebuilt from its own journal
+/// (GAP-142).
+///
+/// **A `FellBack` with no `SwitchedBack` after it.** The fallback lived in memory alone,
+/// so a desktop that restarted while cut off -- or after its node answered and before a
+/// person switched back -- came up with no outage at all: what it had decided offline
+/// stayed in its own journal, never reached the node's record, was never compared with
+/// the node's engagements by track, and MOE-11 fell below 1.0 with nothing saying so.
+///
+/// **What is rebuilt and what is not.** The bounds, the endpoint, the sequence the
+/// history is asked from and the lapse are on the record, so they come back whole. The
+/// decisions come back as the node's route carries them, from the `Decided` events and
+/// the `PlanProposed` view each one names. A decision the journal cannot describe whole
+/// -- no queue item, or a plan this session never proposed -- is counted rather than
+/// guessed at, and [`Forwarding::Incomplete`] stops the batch going at all: an outage
+/// reaches the node whole or not at all (DN-31 §6.8).
+///
+/// `None` when there is no unfinished outage, and when the journal cannot be read -- the
+/// caller says so; a desktop that cannot read its own record must not conclude from that
+/// that nothing happened.
+#[must_use]
+pub fn recover(journal: &dyn gungnir_store::EventJournal) -> Option<Fallback> {
+    let mut sessions = journal.sessions().ok()?;
+    sessions.sort_unstable_by_key(|s| s.0);
+
+    // The last fall-back nothing has switched back from, wherever in the journal it is.
+    let mut open: Option<(gungnir_model::SessionId, Fallback)> = None;
+    for session in sessions {
+        let Ok(envelopes) = journal.read_session(session) else {
+            return None;
+        };
+        for envelope in envelopes {
+            match envelope.event {
+                Event::Link(LinkEvent::FellBack {
+                    endpoint,
+                    silent_s,
+                    at,
+                    last_seq,
+                }) => {
+                    open = Some((
+                        session,
+                        Fallback {
+                            endpoint,
+                            since: at,
+                            silent_s,
+                            last_seq,
+                            // The node has not been heard from in this process, whatever
+                            // it did for the last one: the tick decides that again.
+                            restored_at: None,
+                            reconciliation: None,
+                            lapsed_at: None,
+                            forwarding: Forwarding::Waiting,
+                            session: Some(session),
+                            recovered_decisions: Some(Vec::new()),
+                        },
+                    ));
+                }
+                Event::Link(LinkEvent::SwitchedBack { .. }) => open = None,
+                Event::Link(LinkEvent::DelegationsLapsed { at, .. }) => {
+                    if let Some((_, fallback)) = open.as_mut() {
+                        // Already applied on this outage; re-applying would put a second
+                        // lapse on the record for one outage.
+                        fallback.lapsed_at = Some(at);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let (session, mut fallback) = open?;
+    let (rebuilt, unreadable) = rebuild_decisions(journal, session, fallback.since)?;
+    fallback.forwarding = match (rebuilt.len(), unreadable) {
+        (_, 0) if rebuilt.is_empty() => Forwarding::NothingDecided,
+        (_, 0) => Forwarding::Waiting,
+        (rebuilt, unreadable) => Forwarding::Incomplete {
+            rebuilt,
+            unreadable,
+        },
+    };
+    fallback.recovered_decisions = Some(rebuilt);
+    Some(fallback)
+}
+
+/// The decisions one session's journal holds from `since`, as the node's route carries
+/// them, and how many it could not describe whole (GAP-142).
+///
+/// **The plan views come from the whole session, not from after the fall-back**: a plan
+/// proposed while the node was still answering is decided after the cut, so the view is
+/// usually written before the outage it is read back for.
+///
+/// `None` when the session cannot be read: a desktop that cannot read its own record must
+/// not conclude from that that it decided nothing.
+fn rebuild_decisions(
+    journal: &dyn gungnir_store::EventJournal,
+    session: gungnir_model::SessionId,
+    since: MissionTime,
+) -> Option<(Vec<gungnir_remote::queue::DecisionRecordView>, usize)> {
+    use gungnir_model::events::{CommandEvent, InterceptEvent};
+    let envelopes = journal.read_session(session).ok()?;
+    let mut plans: std::collections::HashMap<PlanId, gungnir_model::PlanView> =
+        std::collections::HashMap::new();
+    let mut rebuilt: Vec<gungnir_remote::queue::DecisionRecordView> = Vec::new();
+    let mut unreadable = 0usize;
+    for envelope in envelopes {
+        let at = envelope.mission_time;
+        match envelope.event {
+            Event::Intercept(InterceptEvent::PlanProposed(plan)) => {
+                plans.insert(plan.id, plan);
+            }
+            Event::Command(CommandEvent::Decided {
+                plan,
+                decision,
+                accepted,
+                operator,
+                role,
+                verdict,
+                rationale,
+                request,
+                item,
+                overridden,
+                origin,
+            }) if at >= since => {
+                // A decision another machine forwarded is not this desktop's to forward
+                // on, which is the filter the live path applies to its own records.
+                if origin.is_some() {
+                    continue;
+                }
+                let (Some(item), Some(plan_view)) = (item, plans.get(&plan).cloned()) else {
+                    unreadable += 1;
+                    continue;
+                };
+                rebuilt.push(gungnir_remote::queue::DecisionRecordView {
+                    decision,
+                    item: Some(item),
+                    plan: plan_view,
+                    verdict,
+                    choice: choice_of(accepted, overridden, rationale),
+                    operator,
+                    role,
+                    request,
+                    at,
+                });
+            }
+            _ => {}
+        }
+    }
+    Some((rebuilt, unreadable))
+}
+
+/// What a journaled decision chose, from the three fields that carry it.
+///
+/// `accepted` is true for an acceptance and an override alike -- both are actionable --
+/// so the override is read from its own field (GAP-142); a rejection carries the reason
+/// the person gave.
+fn choice_of(
+    accepted: bool,
+    overridden: bool,
+    rationale: Option<String>,
+) -> gungnir_remote::queue::DecisionChoice {
+    use gungnir_remote::queue::DecisionChoice;
+    match (accepted, overridden) {
+        (_, true) => DecisionChoice::Override,
+        (true, false) => DecisionChoice::Accept,
+        (false, false) => DecisionChoice::Reject {
+            reason: rationale.unwrap_or_default(),
+        },
+    }
+}
+
 /// The tick step.
 pub fn tick(state: &mut AppState) {
     let now = state.clock.now();
@@ -353,7 +543,11 @@ pub fn tick(state: &mut AppState) {
             // link that has never been heard is not silent: it has not started. Neither
             // case returns early, because the tail below -- the lapse, the history and the
             // node's answers to a forwarded outage -- is owed on every tick (GAP-134).
-            if let Some(age) = link.last_heard_age().filter(|age| *age > HEARTBEAT_TIMEOUT) {
+            // Silence measured from the last thing heard, or from the moment this link
+            // started where nothing has ever been heard (GAP-142): a node that never
+            // answered is a node this desktop cannot reach, and leaving it neither linked
+            // nor fallen back is the one answer that is not true.
+            if let Some(age) = link.silent_for().filter(|age| *age > HEARTBEAT_TIMEOUT) {
                 let endpoint = endpoint.clone();
                 let silent_s = age.as_secs_f64();
                 let last_seq = link.last_seq();
@@ -460,7 +654,13 @@ fn take_forward_replies(state: &mut AppState, link: &NodeLink) {
     }
 }
 
-fn fall_back(state: &mut AppState, endpoint: &str, silent_s: f64, last_seq: u64, now: MissionTime) {
+/// Put this desktop on its own services, tee'd to the node where a link exists
+/// (GAP-050, GAP-142).
+///
+/// One body for the two ways a desktop ends up here -- falling back, and signing in to an
+/// outage recovered from the journal -- so the services a cut-off desktop runs cannot come
+/// to differ between them.
+pub(crate) fn run_embedded(state: &mut AppState) {
     let handle = state.runtime.handle().clone();
     let embedded = Box::new(
         gungnir_tracking_service::LiveTrackingService::new(&handle)
@@ -477,6 +677,16 @@ fn fall_back(state: &mut AppState, endpoint: &str, silent_s: f64, last_seq: u64,
         state.config.allocation_horizon,
     ));
     state.backend = BackendConfig::Embedded;
+}
+
+fn fall_back(state: &mut AppState, endpoint: &str, silent_s: f64, last_seq: u64, now: MissionTime) {
+    // Whether this node was ever heard from, for the sentence below: a link that has
+    // never answered is a different thing to tell an operator than one that went quiet.
+    let ever_heard = state
+        .link
+        .as_ref()
+        .is_some_and(|link| link.last_heard_age().is_some());
+    run_embedded(state);
     state.fallback = Some(Fallback {
         endpoint: endpoint.to_string(),
         since: now,
@@ -486,6 +696,11 @@ fn fall_back(state: &mut AppState, endpoint: &str, silent_s: f64, last_seq: u64,
         reconciliation: None,
         lapsed_at: None,
         forwarding: Forwarding::Waiting,
+        // The session this outage's own record is being written into, so a restart reads
+        // the right half of the journal back (GAP-142).
+        session: state.session(),
+        // Live: the decisions are on the desk as they are taken.
+        recovered_decisions: None,
     });
     state.pending_history = None;
     publish(
@@ -495,13 +710,25 @@ fn fall_back(state: &mut AppState, endpoint: &str, silent_s: f64, last_seq: u64,
             endpoint: endpoint.to_string(),
             silent_s,
             at: now,
+            // GAP-142: where the node's history is asked from, on the record rather than
+            // only in memory, so a restart can ask for the same window.
+            last_seq,
         }),
     );
-    state.alerts.push(format!(
-        "node {endpoint} silent for {silent_s:.0} s (timeout {:.0} s): running embedded; \
-         decisions taken now are this desktop's and will need reconciling",
-        HEARTBEAT_TIMEOUT.as_secs_f64()
-    ));
+    state.alerts.push(if ever_heard {
+        format!(
+            "node {endpoint} silent for {silent_s:.0} s (timeout {:.0} s): running embedded; \
+             decisions taken now are this desktop's and will need reconciling",
+            HEARTBEAT_TIMEOUT.as_secs_f64()
+        )
+    } else {
+        format!(
+            "node {endpoint} has not answered since this desktop signed in {silent_s:.0} s \
+             ago (timeout {:.0} s): running embedded; decisions taken now are this \
+             desktop's and will need reconciling",
+            HEARTBEAT_TIMEOUT.as_secs_f64()
+        )
+    });
 }
 
 /// Ask the node for its journal from `from_seq`, with the token the link signed in with.
@@ -562,7 +789,10 @@ pub fn supply_history(state: &mut AppState, outcome: HistoryOutcome) {
                 |e: &Envelope| e.mission_time >= fallback.since && e.mission_time <= restored_at;
             let remote: Vec<Envelope> = remote.into_iter().filter(|e| window(e)).collect();
             crate::update::journal_pending(state);
-            let local: Vec<Envelope> = match state.session() {
+            // GAP-142: the session this outage's record is in, which after a restart
+            // is not the session in progress.
+            let outage_session = fallback.session.or_else(|| state.session());
+            let local: Vec<Envelope> = match outage_session {
                 Some(session) => match state.journal.read_session(session) {
                     Ok(envelopes) => envelopes.into_iter().filter(|e| window(e)).collect(),
                     Err(err) => {
@@ -728,6 +958,18 @@ fn outage_batch(
         return Vec::new();
     };
     let origin = crate::session::origin_of(state);
+    // GAP-142: an outage recovered from the journal carries its own decisions, because
+    // the desk that took them belonged to a process that is gone.
+    if let Some(recovered) = fallback.recovered_decisions.as_ref() {
+        return recovered
+            .iter()
+            .map(|record| ForwardedDecision {
+                record: record.clone(),
+                origin: origin.clone(),
+                settled: reconciliation.and_then(|rec| settlement_for(rec, record.plan.id)),
+            })
+            .collect();
+    }
     state
         .desk
         .approvals

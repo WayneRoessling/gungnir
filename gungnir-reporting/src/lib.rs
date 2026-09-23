@@ -465,6 +465,8 @@ mod tests {
                 verdict: gungnir_model::events::VerdictSummary::RequiresHumanApproval,
                 rationale: None,
                 request: None,
+                item: None,
+                overridden: false,
                 origin: None,
             }),
         ];
@@ -608,6 +610,8 @@ mod tests {
                 verdict: VerdictSummary::RequiresHumanApproval,
                 rationale: Some("inbound on the northern approach".into()),
                 request: None,
+                item: None,
+                overridden: false,
                 origin: None,
             }),
             Event::Intercept(InterceptEvent::PlanApproved(plan)),

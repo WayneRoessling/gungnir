@@ -63,7 +63,7 @@ enum "RequirementEvent" as RequirementEvent <<InformationElement>> {
   Lapsed { requirement: RequirementId, at: MissionTime, }
 }
 enum "CommandEvent" as CommandEvent <<InformationElement>> {
-  Decided { plan: PlanId, decision: DecisionId, accepted: bool, operator: Option<String>, role: Option<String>, verdict: VerdictSummary, rationale: Option<String>, request: Option<RequestId>, origin: Option<String>, }
+  Decided { plan: PlanId, decision: DecisionId, accepted: bool, operator: Option<String>, role: Option<String>, verdict: VerdictSummary, rationale: Option<String>, request: Option<RequestId>, item: Option<PendingApprovalId>, overridden: bool, origin: Option<String>, }
   Expired { plan: PlanId, at: MissionTime }
   Queued { item: PendingApprovalId, plan: PlanId, layer: EffectorLayer, offered_to: Vec<String>, expires_at: Option<MissionTime>, escalate_at: Option<MissionTime>, }
   Escalated { plan: PlanId, to_role: String, at: MissionTime, }
@@ -111,7 +111,7 @@ enum "LaunchWarningEvent" as LaunchWarningEvent <<InformationElement>> {
   Refused { peer: String, reason: String, at: MissionTime, }
 }
 enum "LinkEvent" as LinkEvent <<InformationElement>> {
-  FellBack { endpoint: String, silent_s: f64, at: MissionTime, }
+  FellBack { endpoint: String, silent_s: f64, at: MissionTime, last_seq: u64, }
   Restored { endpoint: String, fallback_since: MissionTime, at: MissionTime, }
   SwitchedBack { endpoint: String, at: MissionTime, merged: usize, conflicts: usize, node_history: bool, }
   ConflictResolved { plan: crate::PlanId, kept_local: bool, operator: Option<String>, at: MissionTime, }
@@ -211,7 +211,7 @@ RequirementEvent --> SensorTaskId : Tasked
 CommandEvent --> DecisionId : Decided
 CommandEvent --> EffectorLayer : Queued
 CommandEvent --> MissionTime : Expired, Queued, Escalated
-CommandEvent --> PendingApprovalId : Queued
+CommandEvent --> PendingApprovalId : Decided, Queued
 CommandEvent --> PlanId : Decided, Expired, Queued, Escalated
 CommandEvent --> VerdictSummary : Decided
 EngagementEvent --> DecisionId : Opened, Executing, Closed

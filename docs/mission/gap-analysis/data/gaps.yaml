@@ -9355,6 +9355,18 @@
       an outage whole or not at all, so a death cannot leave it holding half of one; a
       restart can still leave it holding none, because nothing on the desktop remembers
       there was an outage to forward.
+  - date: 2026-09-23
+    status: Closed
+    note: >-
+      Closed by recovering the outage from the journal at start-up (DN-31 §15, D-71):
+      the last `FellBack` with no `SwitchedBack` after it, with its bounds, the sequence
+      the history is asked from -- now on the event -- the lapse, and the session it was
+      journaled into, which the merge needs because a restart's session is a new one. Its
+      decisions are rebuilt from their `Decided` events and the `PlanProposed` views they
+      name; one the journal cannot describe whole is counted and the batch does not go at
+      all. A sign-in during a recovered outage builds the link it never had without ending
+      it, and a node that has never answered is silent from the link's own start. See
+      `../../record/2026-09-23/an-outage-outlives-its-process.md`.
 
 - id: GAP-143
   name: A sign-in during an outage ends it without a person switching back

@@ -425,6 +425,8 @@ mod tests {
             verdict: VerdictSummary::RequiresHumanApproval,
             rationale: None,
             request: None,
+            item: None,
+            overridden: false,
             origin: None,
         }
     }

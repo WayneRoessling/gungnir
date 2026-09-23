@@ -678,6 +678,31 @@ fn desktop(name: &str, endpoint: SocketAddr) -> (AppState, std::path::PathBuf) {
     (state, dir)
 }
 
+/// The same desktop again, over the journal it already has (GAP-142).
+///
+/// **Not `desktop`**, which wipes the directory: what is under test is a process that
+/// starts where the last one stopped, so the accounts, the baseline and above all the
+/// journal are the ones the previous process wrote.
+fn desktop_again(dir: &std::path::Path, endpoint: SocketAddr) -> AppState {
+    let mut config = baseline(dir);
+    config.backend = BackendConfig::Remote {
+        endpoint: format!("http://{endpoint}"),
+    };
+    config.security = SecurityConfig {
+        authentication: AuthenticationConfig {
+            provider: AuthenticationProvider::LocalAccounts {
+                accounts_path: "accounts.json".into(),
+            },
+            ..AuthenticationConfig::default()
+        },
+        ..SecurityConfig::default()
+    };
+    gungnir_config::validate(&config).expect("valid");
+    let mut state = AppState::with_config(config).expect("starts");
+    set_clock(&mut state, 100.0);
+    state
+}
+
 fn set_clock(state: &mut AppState, t: f64) {
     state.clock = Box::new(ReplayClockAuthority {
         current: MissionTime(t),
@@ -1522,4 +1547,145 @@ fn handoff_ids(node: &Node) -> Vec<String> {
         }
         _ => Vec::new(),
     }
+}
+// ---------------------------------------------------------------------------------
+// GAP-142: an outage outlives the process that fell into it
+// ---------------------------------------------------------------------------------
+
+/// GAP-142: **a desktop that restarts while cut off comes up cut off**, with the outage's
+/// bounds, the decisions it took and the session its record is in.
+///
+/// The fallback lived in memory alone. A desktop that restarted mid-outage started with
+/// no outage: what it had decided offline stayed in its own journal, never reached the
+/// node's record, was never compared with the node's engagements by track, and MOE-11
+/// fell below 1.0 with nothing saying so.
+///
+/// The restart here is a real one -- a second `AppState` over the same data directory,
+/// reading the journal the first one wrote -- because what is under test is exactly what
+/// a process learns from a record it did not write.
+#[test]
+fn an_outage_outlives_the_desktop_that_fell_into_it() {
+    let node = Node::spawn();
+    let proxy = Proxy::start(node.addr);
+    let (mut a, a_dir) = desktop("restart", proxy.addr);
+    let (mut idle, idle_dir) = desktop("restart-idle", node.addr);
+    sign_in(&mut a, A_OPERATOR);
+    until(&mut a, &mut idle, "the desktop to link", 15.0, |a, _| {
+        a.link
+            .as_ref()
+            .is_some_and(gungnir_remote::link::NodeLink::connected)
+    });
+
+    // Cut off, and deciding on its own queue.
+    set_clock(&mut a, CUT);
+    proxy.cut();
+    until(
+        &mut a,
+        &mut idle,
+        "the desktop to fall back",
+        30.0,
+        |a, _| a.fallback.is_some(),
+    );
+    a.tracking = Box::new(Picture(picture()));
+    a.intercept = Box::new(StatedPlans);
+    set_clock(&mut a, CUT + 1.0);
+    // The plan on the record, as `update::tick` puts it there the moment the planner's
+    // plan changes: a decision names a plan, and the journal has to hold the plan for a
+    // decision to be read back off it whole. This harness states its plans rather than
+    // solving for them (see the module documentation), so the event it would have
+    // published is published here.
+    a.events
+        .publish(
+            MissionTime(CUT + 1.0),
+            Event::Intercept(gungnir_model::events::InterceptEvent::PlanProposed(plan(
+                7001, 42,
+            ))),
+        )
+        .expect("the desktop's own bus");
+    let item = submit(&mut a, plan(7001, 42));
+    let offline = decide(&mut a, item, OperatorDecision::Accepted);
+    update::journal_pending(&mut a);
+    let since = a.fallback.as_ref().map(|f| f.since).expect("in the outage");
+
+    // The process stops here. Everything the next one knows, it reads off the journal.
+    drop(a);
+    let restarted = desktop_again(&a_dir, proxy.addr);
+    let recovered = restarted
+        .fallback
+        .as_ref()
+        .expect("the outage was not recovered from the journal");
+    assert_eq!(
+        recovered.since, since,
+        "the outage's bounds did not survive"
+    );
+    assert!(
+        recovered.endpoint.contains(&proxy.addr.to_string()),
+        "the recovered outage names another node: {}",
+        recovered.endpoint
+    );
+    assert!(
+        recovered.session.is_some(),
+        "the merge would read the session in progress, which is not the one the outage \
+         was journaled into"
+    );
+    let decisions = recovered
+        .recovered_decisions
+        .as_ref()
+        .expect("a recovered outage carries its own decisions");
+    assert_eq!(
+        decisions.iter().map(|d| d.decision).collect::<Vec<_>>(),
+        vec![offline.id],
+        "the decision taken while cut off is not in the batch the node will be sent"
+    );
+    assert_eq!(
+        recovered.forwarding,
+        failover::Forwarding::Waiting,
+        "every decision was rebuilt, so the batch is owed rather than held back"
+    );
+    assert!(
+        restarted
+            .alerts
+            .iter()
+            .any(|a| a.contains("Recovered an unfinished outage")),
+        "the strip says nothing about an outage this desktop is still in: {:?}",
+        restarted.alerts
+    );
+
+    let _ = std::fs::remove_dir_all(&a_dir);
+    let _ = std::fs::remove_dir_all(&idle_dir);
+}
+
+/// GAP-142: **a desktop whose node never answers falls back**, rather than sitting
+/// neither linked nor cut off.
+///
+/// `last_heard` is `None` until a snapshot lands, and a link that has never been heard is
+/// not a link that has gone quiet -- so a desktop that signed in to an unreachable node
+/// stayed on a remote backend for ever, with a queue it could not read and a decision
+/// path it could not use. Silence is measured from the link's own start until there is
+/// something later to measure it from.
+#[test]
+fn a_node_that_never_answers_is_silent_rather_than_pending() {
+    let node = Node::spawn();
+    let proxy = Proxy::start(node.addr);
+    // Cut before anybody signs in: this link will never hear anything at all.
+    proxy.cut();
+    let (mut a, a_dir) = desktop("never", proxy.addr);
+    let (mut idle, idle_dir) = desktop("never-idle", node.addr);
+    sign_in(&mut a, A_OPERATOR);
+    until(
+        &mut a,
+        &mut idle,
+        "a node that never answered to be judged silent",
+        HEARTBEAT_TIMEOUT.as_secs_f64() + 20.0,
+        |a, _| a.fallback.is_some(),
+    );
+    assert!(
+        a.alerts
+            .iter()
+            .any(|m| m.contains("has not answered since this desktop signed in")),
+        "the desktop fell back without saying this node was never reached: {:?}",
+        a.alerts
+    );
+    let _ = std::fs::remove_dir_all(&a_dir);
+    let _ = std::fs::remove_dir_all(&idle_dir);
 }

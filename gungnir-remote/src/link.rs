@@ -86,6 +86,14 @@ pub struct Projection {
     pub pipeline_stats: PipelineStatsView,
     /// True only once a node has answered. Cleared as soon as it stops.
     pub connected: bool,
+    /// When this link's task started asking (GAP-142).
+    ///
+    /// **So a node that has never answered can be judged silent.** `last_heard` is `None`
+    /// until a snapshot lands, and a link that has never been heard is not a link that
+    /// has gone quiet -- which left a desktop whose node was unreachable from the moment
+    /// it signed in neither linked nor fallen back. Silence is measured from here until
+    /// there is something later to measure it from.
+    pub started: Option<std::time::Instant>,
     /// The node's own clock as of the last snapshot (GAP-140), for the offset a desktop
     /// measures between the two machines.
     ///
@@ -325,6 +333,18 @@ impl NodeLink {
     #[must_use]
     pub fn connected(&self) -> bool {
         self.read().is_some_and(|p| p.connected)
+    }
+
+    /// How long this link has been silent: since the last thing heard from the node, or
+    /// since the link started where nothing has ever been heard (GAP-142).
+    ///
+    /// `None` only before the task has started asking at all, which is the one state
+    /// where there is nothing to measure from and nothing to conclude.
+    #[must_use]
+    pub fn silent_for(&self) -> Option<std::time::Duration> {
+        self.read()
+            .and_then(|p| p.last_heard.or(p.started))
+            .map(|from| from.elapsed())
     }
 
     /// The node's own clock as of the last snapshot (GAP-140).
@@ -799,7 +819,12 @@ fn start_with(
 ) -> Result<NodeLink, RemoteError> {
     let urls = urls(endpoint)?;
     let tls = endpoint.tls.clone();
-    let projection = Arc::new(Mutex::new(Projection::default()));
+    // GAP-142: silence is measured from here until there is something heard to measure
+    // it from, so a node that never answers is judged rather than waited on for ever.
+    let projection = Arc::new(Mutex::new(Projection {
+        started: Some(std::time::Instant::now()),
+        ..Projection::default()
+    }));
     let (revision_tx, revision_rx) = watch::channel(0u64);
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
     let machine = credential.is_none();

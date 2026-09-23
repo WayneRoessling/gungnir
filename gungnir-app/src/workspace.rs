@@ -224,6 +224,18 @@ fn render_forwarding(
             ),
             palette.alert_color,
         ),
+        Forwarding::Incomplete {
+            rebuilt,
+            unreadable,
+        } => (
+            format!(
+                "This desktop restarted during the outage and its journal describes \
+                 {rebuilt} of the decisions taken here but not {unreadable} of them, so \
+                 none is forwarded: an outage reaches the node whole or not at all. They \
+                 are still on this desktop's own record."
+            ),
+            palette.alert_color,
+        ),
     };
     ui.label(egui::RichText::new(text).color(color));
 }

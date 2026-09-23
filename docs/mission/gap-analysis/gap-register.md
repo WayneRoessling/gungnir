@@ -154,7 +154,7 @@ history, and an entry is never edited once it has merged.
 | GAP-139 | An If-Sr diagram no longer renders under the layout its generator pins | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
 | GAP-140 | A node's deadline is drawn against the desktop's own clock | Technical | CAP-5.9, CAP-3.7 | 2 | 10 | S | 20 | I3 | UI engineer | Closed |
 | GAP-141 | A desktop has no identity of its own | Technical | CAP-6.1, CAP-5.4 | 2 | 10 | M | 20 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-142 | A desktop that restarts during an outage forgets it | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
+| GAP-142 | A desktop that restarts during an outage forgets it | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Closed |
 | GAP-143 | A sign-in during an outage ends it without a person switching back | Technical | CAP-5.4, CAP-6.1 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 | GAP-144 | The release passes only by accepting two quick-xml advisories | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | UI engineer | Closed |
 | GAP-145 | The exchange register has no lifecycle | Technical | CAP-7.4 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
@@ -2132,11 +2132,12 @@ Counts: 146 gaps, 3 mission, 143 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.4 Disconnected and reconcile.
 - History:
   - 2026-09-17, Open: Found settling what a desktop that dies mid-reconnect can leave behind. The node takes an outage whole or not at all, so a death cannot leave it holding half of one; a restart can still leave it holding none, because nothing on the desktop remembers there was an outage to forward.
+  - 2026-09-23, Closed: Closed by recovering the outage from the journal at start-up (DN-31 §15, D-71): the last `FellBack` with no `SwitchedBack` after it, with its bounds, the sequence the history is asked from -- now on the event -- the lapse, and the session it was journaled into, which the merge needs because a restart's session is a new one. Its decisions are rebuilt from their `Decided` events and the `PlanProposed` views they name; one the journal cannot describe whole is counted and the batch does not go at all. A sign-in during a recovered outage builds the link it never had without ending it, and a node that has never answered is silent from the link's own start. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.
 - Evidence: `gungnir-app/src/failover.rs` (`Fallback` held in `AppState`; `tick` falls back only on `last_heard_age`); `gungnir-remote/src/link.rs` (`last_heard` is `None` until a snapshot lands).
 - Severity: 3. Reach: 1 threads. Effort: M. Priority: 3.
 - Impact: The fallback -- the outage's bounds, its reconciliation and its forwarding -- lives in memory. A desktop that restarts while cut off, or after its node answers and before a person switches back, starts with no outage: what it decided offline stays in its own journal, never reaches the node's record, is never compared with the node's engagements by track, and MOE-11 falls below 1.0 with nothing saying so. A desktop that starts with its node unreachable never falls back at all, because a link that has never been heard is not judged silent.
 - Closing action: Recover an unfinished outage from the journal at start-up -- a `LinkEvent::FellBack` with no `SwitchedBack` after it -- and resume its reconciliation and forwarding, which are keyed on identifiers and safe to repeat; and decide what a desktop that has never reached its node does, rather than leaving it neither linked nor fallen back.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-134 (`../../record/2026-09-17/an-outage-reaches-the-node-once.md`).
 - Depends on: GAP-134.
 

@@ -41,6 +41,8 @@ fn decided_as(plan: u128, accepted: bool, operator: Option<&str>, role: Option<&
         verdict: VerdictSummary::RequiresHumanApproval,
         rationale: (!accepted).then(|| "no".to_string()),
         request: None,
+        item: None,
+        overridden: false,
         origin: None,
     })
 }

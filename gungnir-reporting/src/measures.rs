@@ -488,6 +488,8 @@ mod tests {
                 verdict: VerdictSummary::RequiresHumanApproval,
                 rationale: rationale.map(str::to_string),
                 request: None,
+                item: None,
+                overridden: false,
                 origin: None,
             }),
         )
