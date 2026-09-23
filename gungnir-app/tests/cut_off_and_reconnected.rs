@@ -77,7 +77,7 @@ use gungnir_model::{
     TrackId, TrackStatus, TrackView, WeaponsControlStatus,
 };
 use gungnir_node::approval::{self, Frame, NodeApproval};
-use gungnir_policy::{Delegations, DenialReason, PolicyVerdict};
+use gungnir_policy::{Delegations, PolicyVerdict};
 use gungnir_remote::link::HEARTBEAT_TIMEOUT;
 use gungnir_remote::queue::DecisionChoice;
 use gungnir_security::{
@@ -123,7 +123,7 @@ const A_B: u128 = 3002; // track 43, accepted on A: 43 is engaged on both sides
 const A_E: u128 = 3003; // track 45, accepted on A only: the desktop-side zero
 const A_L: u128 = 3004; // track 47, delegated, left waiting: withdrawn at the lapse
 const A_U: u128 = 3005; // track 50, the Operator's own case, left waiting: kept
-const A_X: u128 = 3006; // track 48, delegated, proposed after the lapse: never queued
+const A_X: u128 = 3006; // track 48, delegated, proposed after the lapse: the Supervisor's
 
 // ---------------------------------------------------------------------------------
 // The baseline every machine reads
@@ -1037,22 +1037,28 @@ fn an_outage_decided_offline_reaches_the_node_once_and_what_both_sides_did_is_fa
     );
     assert_eq!(row(&a, A_U), (true, false));
     // And no new delegation is exercised while cut off: the same case, proposed now, is
-    // denied by authority and never queued.
+    // not this Operator's to take on their own account.
+    //
+    // **What became of it moved on 2026-09-23** (GAP-113, DN-09 §7). It used to be denied
+    // by authority and dropped, which is what the desktop did with every plan the role at
+    // the console could not accept; it is now offered to a role that may, and the queue
+    // says which. The lapse withdraws the delegation, not the plan, and nothing here is
+    // delegated: a Supervisor has to decide it, and until one does it is not actionable
+    // at this console. The clause this row gates -- D-15's delegations lapsing -- is
+    // asserted by the two lines above and by `row(&a, A_X)` below.
     assert_eq!(
         decisions::submit(&mut a, plan(A_X, 48)),
-        decisions::Submitted::Evaluated(PolicyVerdict::Denied {
-            reason_code: DenialReason::Authority {
-                layer: EffectorLayer::Point
-            }
-        })
+        decisions::Submitted::Evaluated(PolicyVerdict::RequiresHumanApproval)
     );
-    assert!(
-        !a.desk
-            .approvals
-            .queue()
-            .iter()
-            .any(|p| p.plan.id == PlanId(A_X)),
-        "a plan only a lapsed delegation could take was queued"
+    assert_eq!(
+        offered_to(&a, A_X),
+        ["Supervisor"],
+        "an Operator whose delegation has lapsed may not take this, and a Supervisor may"
+    );
+    assert_eq!(
+        row(&a, A_X),
+        (false, false),
+        "a plan only a lapsed delegation could take is neither this Operator's to decide          nor delegated to them"
     );
 
     // --- The node answers again ----------------------------------------------------

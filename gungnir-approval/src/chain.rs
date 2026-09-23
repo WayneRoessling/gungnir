@@ -115,9 +115,10 @@ pub struct Offering {
 /// (DN-31 §6.1).
 ///
 /// **Not for one asking role.** A node has nobody signed in, so there is no asking role
-/// to run the chain for, and the desktop's habit of asking about the role at the console
-/// is what left an under-authority plan counted and never queued (GAP-113): the plan an
-/// Operator may not accept is exactly the plan a Supervisor should be offered.
+/// to run the chain for: the plan an Operator may not accept is exactly the plan a
+/// Supervisor should be offered. A desktop asks about the role at the console first and
+/// calls this when that role may not accept (GAP-113, `ApprovalDesk::submit`), which is
+/// what stops an under-authority plan being counted and queued for nobody.
 ///
 /// The first role whose whole chain returns `RequiresHumanApproval` is the offer. That is
 /// the same question as "holds authority for every solution's layer and class", because

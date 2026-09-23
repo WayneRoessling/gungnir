@@ -28,6 +28,24 @@ pub struct DenialHistory {
     pub last_reason: Option<String>,
 }
 
+/// Whether this verdict refuses **the asking role** rather than the plan (GAP-113).
+///
+/// The authority engine is the one engine of the four that reads the role at all
+/// (`chain::offer_to`'s own doc comment), so an insufficient-authority denial is exactly
+/// the refusal a different role might not get. Every other denial is everybody's.
+fn denied_for_authority(verdict: &PolicyVerdict) -> bool {
+    matches!(
+        verdict,
+        PolicyVerdict::Denied {
+            // Both: `Authority` is the asking role holding no rule for this layer and
+            // class, and `InsufficientAuthority` is what an empty ladder answers. Neither
+            // is a statement about the plan.
+            reason_code: gungnir_policy::DenialReason::Authority { .. }
+                | gungnir_policy::DenialReason::InsufficientAuthority
+        }
+    )
+}
+
 /// What the queue sweep has done this session.
 ///
 /// Only escalations are counted here. Expiries are **not**, and that is the point of
@@ -63,6 +81,19 @@ impl ApprovalDesk {
     /// Returns what became of it so the caller can record the denial. A denied plan is
     /// never queued: that is `ApprovalWorkflow::submit_for_approval`'s invariant and this
     /// function does not work around it.
+    ///
+    /// **A plan the asking role may not accept is offered to one that may** (GAP-113,
+    /// DN-09 §7). The authority engine is the only one of the four that reads the asking
+    /// role, so its denial is the only one another role might not get; the other three
+    /// deny for everybody and walking the ladder for them would ask the same question
+    /// four more times. Until 2026-09-23 the desktop counted that denial and queued
+    /// nothing, so an under-authority plan reached nobody with the authority to take it.
+    ///
+    /// **The offer is the ladder's answer, whatever it is**, exactly as
+    /// [`ApprovalDesk::submit_to_ladder`] takes it on a node: authority rules name a role
+    /// with a layer and a class and need not climb, so the role that may accept is
+    /// whoever the walk finds, and `offered_to` on the item says who. A plan no role may
+    /// accept stays denied and unqueued, which is what makes the denial reviewable.
     pub fn submit(
         &mut self,
         cx: &ApprovalContext<'_>,
@@ -74,17 +105,32 @@ impl ApprovalDesk {
             return superseded;
         }
         let verdict = crate::chain::evaluate(cx, policy, &plan);
+        if denied_for_authority(&verdict) {
+            let offering = crate::chain::offer_to(cx, policy, &plan);
+            if let Some(role) = offering.offered_to {
+                return self.queue_evaluated(
+                    cx,
+                    policy,
+                    host,
+                    plan,
+                    offering.verdict,
+                    format!("{role:?}"),
+                    false,
+                );
+            }
+        }
         self.queue_evaluated(cx, policy, host, plan, verdict, cx.role_name(), false)
     }
 
     /// Evaluate a plan for every role on the ladder and queue it for the lowest role that
     /// may take it (DN-31 §6.1, GAP-132; GAP-113).
     ///
-    /// **The node's submission**, and the difference from [`ApprovalDesk::submit`] is the
-    /// asking role: a node has nobody at a console, so there is no one role to run the
-    /// authority engine for, and the plan an Operator may not accept is the plan a
-    /// Supervisor should be offered. A plan no role on the ladder may accept is denied and
-    /// never queued, which is what makes the denial reviewable rather than counted.
+    /// **The node's submission**, and the difference from [`ApprovalDesk::submit`] is
+    /// where the walk starts: a node has nobody at a console, so every plan is offered to
+    /// the lowest role that may take it, while a desktop asks about the role at the
+    /// console first and walks the ladder only when that role may not accept (GAP-113).
+    /// A plan no role on the ladder may accept is denied and never queued either way,
+    /// which is what makes the denial reviewable rather than counted.
     ///
     /// Publishes `Queued` for what it queues, so a desktop following the stream builds the
     /// queue without polling (DN-31 §5.3) and MOP-07 is measured over the whole path
