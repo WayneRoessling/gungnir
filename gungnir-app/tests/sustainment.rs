@@ -390,3 +390,57 @@ fn a_session_that_recorded_nothing_is_not_a_failure() {
         "there is nothing to count, and zeros would be a claim about the session"
     );
 }
+
+/// GAP-128, through PN-14 as an administrator uses it: the desktop runs revision 1 from
+/// its baseline file, the file is edited to revision 2, and the first apply of the
+/// session reloads, validates and applies it. Before the fix the store compared the
+/// candidate with the file it had just been read from, and refused it as not advanced.
+/// An edit that left the revision alone is still refused.
+#[test]
+fn pn14_applies_an_edited_baseline_on_its_first_apply() {
+    use gungnir_config::FileConfigStore;
+
+    let run = |name: &str, edited_revision: u32| {
+        let dir = std::env::temp_dir().join(format!("gungnir-pn14-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("data dir");
+        let path = dir.join("baseline.json");
+        let running = ConfigBaseline {
+            data_dir: dir.to_string_lossy().into_owned(),
+            revision: 1,
+            ..ConfigBaseline::default()
+        };
+        let write = |b: &ConfigBaseline| {
+            std::fs::write(&path, serde_json::to_string_pretty(b).expect("encodes"))
+                .expect("written");
+        };
+        // The desktop starts from the file, as `AppState::new` does.
+        write(&running);
+        let mut state = AppState::with_config_and_store(
+            running.clone(),
+            Some(FileConfigStore::new(
+                &path,
+                gungnir_app::state::known_vocabulary(),
+            )),
+        )
+        .expect("desktop state");
+        // The administrator edits the file.
+        write(&ConfigBaseline {
+            revision: edited_revision,
+            ..running
+        });
+        let mut editor = ConfigEditorState::default();
+        editor.reload(&state);
+        editor.validate(&state);
+        let outcome = editor.apply(&mut state);
+        let _ = std::fs::remove_dir_all(&dir);
+        outcome
+    };
+
+    run("advanced", 2).expect("an edit to revision 2 applies over the running revision 1");
+    let err = run("unadvanced", 1).expect_err("an edit that kept revision 1 is not a promotion");
+    assert!(
+        err.contains("revision"),
+        "the refusal did not say why: {err}"
+    );
+}

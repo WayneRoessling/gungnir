@@ -8625,6 +8625,9 @@
     note: >-
       Filed by the GAP-067 walk: enforcing the operator on a tasking concurrence found
       that neither desktop function checks the permission its audit entry names.
+  - date: 2026-09-17
+    status: Closed
+    note: "Closed 2026-09-17. `decide` now refuses a role without the permission the decision needs (`plan.override` for an override, which Operator does not hold) and a role the item was not offered to, as the node's route does; `task` refuses a role without `sensor.task` before any command. A refusal records nothing. Five tests. See `../../record/2026-09-17/desktop-decide-and-task-authorize-the-call.md`."
 
 - id: GAP-128
   name: PN-14 cannot apply an edited baseline on its first apply
@@ -8658,6 +8661,9 @@
     note: >-
       Filed by the GAP-067 walk, whose arbiter build found that PN-14 refuses the first
       apply of any edited baseline.
+  - date: 2026-09-17
+    status: Closed
+    note: "Closed 2026-09-17. The store is told the revision the desktop started with and compares a candidate with that, so PN-14's first apply of an edited baseline applies when its revision advances and is refused when it does not; the file stays the fallback for a caller that says nothing. Tested on the store and through PN-14. See `../../record/2026-09-17/pn-14-first-apply-compares-with-the-running.md`."
 
 - id: GAP-129
   name: >-
