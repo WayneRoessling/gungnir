@@ -32,7 +32,13 @@ const REPAINT_INTERVAL: Duration = Duration::from_millis(33);
 const ABOUT_WINDOW_WIDTH: f32 = 520.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
+    // **`.with_ansi(false)`, not the bare `fmt::init()`** (GAP-110). Found in
+    // `gungnir-node`'s copy of this same line: with the default writer, every
+    // `tracing::info!`/`warn!`/`error!` call is silently swallowed whenever the process
+    // has no console attached -- which is how this desktop normally starts (launched, not
+    // run from a terminal). Disabling ANSI outright, rather than only when no terminal is
+    // attached, means this binary logs the same way regardless of how it was started.
+    tracing_subscriber::fmt().with_ansi(false).init();
 
     let mut state = AppState::new()?;
     // GAP-089: `--rehearsal <seed.json>` seeds the session and marks the record.

@@ -68,7 +68,20 @@ const TICK: Duration = Duration::from_millis(50);
 const HEALTH_LOG_INTERVAL: Duration = Duration::from_secs(10);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
+    // **`.with_ansi(false)`, not the bare `fmt::init()`** (GAP-110). Found while building
+    // this gap's own headless-loop test: with the default writer, every `tracing::info!`,
+    // `warn!` and even `error!` call in this binary is silently swallowed -- not
+    // filtered, not delayed, gone -- whenever the process has no console attached, which
+    // is exactly how a service manager, a supervisor, or this test spawns it. A raw
+    // `eprintln!` placed beside those calls printed fine the whole time; only tracing's
+    // own writer went dark, and only under redirection (`std::io::IsTerminal` correctly
+    // reports `false` for both streams in that case). Disabling ANSI outright, rather
+    // than only when no terminal is attached, is deliberate: colour escapes have no
+    // place in a log a collector reads, and a headless service binary should log the
+    // same way whether or not somebody happens to be watching a terminal.
+    //
+    // `gungnir-app/src/main.rs` carries the identical fix for the identical reason.
+    tracing_subscriber::fmt().with_ansi(false).init();
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     // `gungnir-node account ...` provisions the accounts this node authenticates
