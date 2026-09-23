@@ -207,6 +207,57 @@ impl<P: KeyProvider> rustls::sign::Signer for ProviderSigner<P> {
     }
 }
 
+/// How many hex digits of a desktop's key fingerprint its name carries.
+///
+/// Sixty-four bits of a SHA-256 over the public half. Two desktops collide by accident
+/// at about one chance in four billion across a hundred thousand of them, which is a
+/// different order of thing from the certainty of collision this replaces: every desktop
+/// called itself `gungnir-app` (GAP-141).
+const DESKTOP_NAME_HEX: usize = 16;
+
+/// What a desktop calls itself: a name derived from the public half of the key its
+/// certificate carries (GAP-141).
+///
+/// **Derived rather than stated**, which is the property the node needs. A desktop's
+/// certificate is self-signed, so a name it simply asserted would be a claim nothing
+/// checked, and two desktops could assert the same one. A fingerprint of the key is a
+/// function of what the handshake actually proved possession of, so a node comparing a
+/// forwarded batch's `origin` with the name on the certificate it verified is comparing
+/// two views of one key.
+///
+/// **`persisted` is part of the name, not a footnote.** A desktop whose key provider is
+/// unreachable gets a fresh key each start, and a name that changes with it; saying so in
+/// the name means a record that carries it says what the origin is worth, rather than
+/// implying a stability the key does not have.
+#[must_use]
+pub fn desktop_name(spki_der: &[u8], persisted: bool) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(spki_der);
+    let mut hex = String::with_capacity(DESKTOP_NAME_HEX);
+    for byte in digest.iter().take(DESKTOP_NAME_HEX / 2) {
+        use std::fmt::Write as _;
+        // Writing to a String cannot fail; the result is discarded rather than unwrapped.
+        let _ = write!(hex, "{byte:02x}");
+    }
+    if persisted {
+        format!("desktop-{hex}")
+    } else {
+        format!("desktop-ephemeral-{hex}")
+    }
+}
+
+/// A desktop's identity: the key it presents, the name that key gives it, and whether
+/// that name survives a restart (GAP-141).
+pub struct DesktopIdentity {
+    /// Ready for [`crate::LinkTls::issued`].
+    pub key: Arc<rustls::sign::CertifiedKey>,
+    /// The certificate's subject common name, which is what a node reads as the party.
+    pub name: String,
+    /// True when the key came from the operating system's keystore, so the name is the
+    /// same after a restart.
+    pub persisted: bool,
+}
+
 /// A self-signed certificate over the provider's transport key, and the rustls key
 /// that presents it. Used by a node to serve and by a desktop to authenticate itself.
 pub struct HostIdentity {
@@ -272,18 +323,59 @@ pub fn issue_for_client(common_name: &str) -> Result<Arc<rustls::sign::Certified
     )?))
 }
 
-/// A fresh identity from a new ephemeral in-process provider, over `names` -- the
-/// logic [`issue_for_client`] always ran, factored out so
-/// [`issue_persistent_or_ephemeral`] can fall back to exactly the same path rather
-/// than a second copy of it.
-fn issue_ephemeral(names: Vec<String>, common_name: &str) -> Result<HostIdentity, String> {
+/// A desktop's ephemeral identity, named after the key it just generated (GAP-141).
+///
+/// Separate from [`issue_for_client`], which a node uses for its peer links under a name
+/// of its own: a node's peer link is one machine talking to another as itself, while a
+/// desktop's name has to tell two desktops apart, and only a fingerprint of the key does
+/// that without trusting a string.
+///
+/// # Errors
+///
+/// As [`issue_for_client`].
+pub fn issue_desktop_identity() -> Result<DesktopIdentity, String> {
+    let identity = issue_ephemeral_named(vec!["localhost".to_owned()], &|spki| {
+        desktop_name(spki, false)
+    })?;
+    Ok(DesktopIdentity {
+        name: identity.common_name.clone(),
+        key: as_certified_key(identity.identity),
+        persisted: false,
+    })
+}
+
+/// A fresh identity from a new ephemeral in-process provider, over `names`, named by
+/// `name_of` from the public half of the key it just generated.
+fn issue_ephemeral_named(
+    names: Vec<String>,
+    name_of: &dyn Fn(&[u8]) -> String,
+) -> Result<NamedIdentity, String> {
     use gungnir_security::{KeyPurpose, P256KeyProvider};
     let mut provider = P256KeyProvider::new();
     let key = provider.generate(KeyPurpose::TransportIdentity);
     let spki = provider
         .public_key_der(&key)
         .map_err(|e| format!("the key provider gave no public half: {e}"))?;
-    issue(Arc::new(provider), key, spki, names, common_name)
+    let common_name = name_of(&spki);
+    let identity = issue(Arc::new(provider), key, spki, names, &common_name)?;
+    Ok(NamedIdentity {
+        identity,
+        common_name,
+    })
+}
+
+/// A fresh identity from a new ephemeral in-process provider, over `names`, under a name
+/// the caller states -- the node's serving identity, whose name is its own and not a
+/// fingerprint.
+fn issue_ephemeral(names: Vec<String>, common_name: &str) -> Result<HostIdentity, String> {
+    Ok(issue_ephemeral_named(names, &|_| common_name.to_owned())?.identity)
+}
+
+/// An issued identity and the name it was issued under, which for a desktop is derived
+/// from its key and so is not known until the key exists.
+struct NamedIdentity {
+    identity: HostIdentity,
+    common_name: String,
 }
 
 /// [`HostIdentity`] wrapped as a `CertifiedKey`, ready for [`crate::LinkTls::issued`].
@@ -437,16 +529,56 @@ pub fn issue_node_serving_identity(
 /// # Errors
 ///
 /// As [`issue_node_serving_identity`].
-pub fn issue_desktop_outbound_identity(
-    data_dir: &Path,
-    common_name: &str,
-) -> Result<Arc<rustls::sign::CertifiedKey>, String> {
-    Ok(as_certified_key(issue_persistent_or_ephemeral(
-        data_dir,
-        DESKTOP_TLS_IDENTITY_SERVICE,
+pub fn issue_desktop_outbound_identity(data_dir: &Path) -> Result<DesktopIdentity, String> {
+    let attempt = persistent_desktop_identity(data_dir);
+    match attempt {
+        Ok(named) => {
+            tracing::info!(
+                service = DESKTOP_TLS_IDENTITY_SERVICE,
+                name = %named.common_name,
+                "this desktop's identity is persisted in the operating-system keystore and \
+                 will survive a restart"
+            );
+            Ok(DesktopIdentity {
+                name: named.common_name.clone(),
+                key: as_certified_key(named.identity),
+                persisted: true,
+            })
+        }
+        Err(err) => {
+            tracing::warn!(
+                service = DESKTOP_TLS_IDENTITY_SERVICE,
+                %err,
+                "could not issue this desktop's identity from the operating-system \
+                 keystore; issuing an ephemeral one instead, whose name changes at every \
+                 start and says so"
+            );
+            issue_desktop_identity()
+        }
+    }
+}
+
+/// The desktop's persisted identity, named from the key the keystore holds.
+fn persistent_desktop_identity(data_dir: &Path) -> Result<NamedIdentity, String> {
+    let provider = persistent_provider(data_dir, DESKTOP_TLS_IDENTITY_SERVICE)?;
+    let key = provider
+        .active_or_generate(KeyPurpose::TransportIdentity)
+        .map_err(|e| format!("no transport key: {e}"))?;
+    let spki = provider
+        .public_key_der(&key)
+        .map_err(|e| format!("no public half: {e}"))?;
+    let common_name = desktop_name(&spki, true);
+    let identity = issue(
+        provider,
+        key,
+        spki,
         vec!["localhost".to_owned()],
+        &common_name,
+    )?;
+    Ok(NamedIdentity {
+        identity,
         common_name,
-    )?))
+    })
 }
 
 #[cfg(test)]
@@ -641,11 +773,59 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         std::fs::write(&path, b"not a directory").expect("file standing in for a directory");
 
-        let certified = issue_desktop_outbound_identity(&path, "gungnir-app")
-            .expect("the ephemeral fallback still issues");
-        assert!(!certified.cert.is_empty());
+        let identity =
+            issue_desktop_outbound_identity(&path).expect("the ephemeral fallback still issues");
+        assert!(!identity.key.cert.is_empty());
+        // GAP-141: the fallback's name says the key behind it does not survive a restart,
+        // so a record carrying it says what the origin is worth.
+        assert!(!identity.persisted);
+        assert!(
+            identity.name.starts_with("desktop-ephemeral-"),
+            "{}",
+            identity.name
+        );
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// GAP-141: two desktops are told apart by their keys, and one desktop keeps its name
+    /// as long as its key.
+    #[test]
+    fn a_desktops_name_is_its_key_so_two_desktops_differ_and_one_is_stable() {
+        let first = issue_desktop_identity().expect("issued");
+        let second = issue_desktop_identity().expect("issued");
+        assert_ne!(
+            first.name, second.name,
+            "two desktops issued the same name: {}",
+            first.name
+        );
+        // The same key gives the same name every time it is asked, which is what makes a
+        // persisted identity stable across restarts.
+        let spki = vec![7u8; 91];
+        assert_eq!(desktop_name(&spki, true), desktop_name(&spki, true));
+        assert_ne!(
+            desktop_name(&spki, true),
+            desktop_name(&[8u8; 91], true),
+            "two keys gave one name"
+        );
+        // Whether it survives a restart is part of the name, not a footnote beside it.
+        assert!(desktop_name(&spki, true).starts_with("desktop-"));
+        assert!(desktop_name(&spki, false).starts_with("desktop-ephemeral-"));
+        assert_ne!(desktop_name(&spki, true), desktop_name(&spki, false));
+        // Sixteen hex digits of fingerprint, and nothing a certificate would refuse.
+        let name = desktop_name(&spki, true);
+        assert_eq!(name.len(), "desktop-".len() + DESKTOP_NAME_HEX);
+        assert!(name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'));
+    }
+
+    /// The name on the certificate is the name the desktop reports: a node reads the
+    /// first and a forwarded batch carries the second, and GAP-141 turns on them agreeing.
+    #[test]
+    fn the_issued_certificate_carries_the_name_the_identity_reports() {
+        let identity = issue_desktop_identity().expect("issued");
+        let der = identity.key.cert.first().expect("a certificate").as_ref();
+        let on_certificate = gungnir_api::tls::subject_common_name(der);
+        assert_eq!(on_certificate.as_deref(), Some(identity.name.as_str()));
     }
 
     /// The two persisted identities never share a service name, so the same account

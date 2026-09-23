@@ -2412,6 +2412,26 @@ async fn forward_decisions(
     if let Err(why) = vet_forwarded(&decisions) {
         return refuse(StatusCode::BAD_REQUEST, why);
     }
+    // **The origin is the machine the handshake verified, where there was one** (GAP-141).
+    // A desktop's name is a fingerprint of the key its certificate carries, so this
+    // compares two views of one key rather than trusting a string in the body. A
+    // plaintext caller has no party and nothing to compare: the node has no claim about
+    // which machine it is talking to either way, and says so by not pretending to check.
+    if let Some(party) = peer.party.as_deref() {
+        if let Some(other) = decisions
+            .iter()
+            .map(|d| d.origin.as_str())
+            .find(|origin| *origin != party)
+        {
+            return refuse(
+                StatusCode::FORBIDDEN,
+                format!(
+                    "a forwarded decision names origin {other:?} and this connection was \
+                     verified as {party:?}; a batch is forwarded by the machine that took it"
+                ),
+            );
+        }
+    }
     let (reply, answer) = tokio::sync::oneshot::channel();
     {
         let Ok(mut queue) = api.forwarded.lock() else {

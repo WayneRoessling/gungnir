@@ -709,6 +709,7 @@ fn outage_batch(
     let Some(restored) = fallback.restored_at else {
         return Vec::new();
     };
+    let origin = crate::session::origin_of(state);
     state
         .desk
         .approvals
@@ -724,7 +725,9 @@ fn outage_batch(
         })
         .map(|r| ForwardedDecision {
             record: record_view(r),
-            origin: crate::session::DESKTOP_COMMON_NAME.to_string(),
+            // GAP-141: this desktop's own name, derived from the key its certificate
+            // carries, so the node can check the batch came from the machine it verified.
+            origin: origin.clone(),
             settled: reconciliation.and_then(|rec| settlement_for(rec, r.plan.id)),
         })
         .collect()

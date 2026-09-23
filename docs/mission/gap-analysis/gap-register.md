@@ -153,7 +153,7 @@ history, and an entry is never edited once it has merged.
 | GAP-138 | An unreachable decision type still describes the interface | Technical | CAP-5.7 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
 | GAP-139 | An If-Sr diagram no longer renders under the layout its generator pins | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
 | GAP-140 | A node's deadline is drawn against the desktop's own clock | Technical | CAP-5.9, CAP-3.7 | 2 | 10 | S | 20 | I3 | UI engineer | Open |
-| GAP-141 | A desktop has no identity of its own | Technical | CAP-6.1, CAP-5.4 | 2 | 10 | M | 20 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-141 | A desktop has no identity of its own | Technical | CAP-6.1, CAP-5.4 | 2 | 10 | M | 20 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-142 | A desktop that restarts during an outage forgets it | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
 | GAP-143 | A sign-in during an outage ends it without a person switching back | Technical | CAP-5.4, CAP-6.1 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 | GAP-144 | The release passes only by accepting two quick-xml advisories | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | UI engineer | Closed |
@@ -2110,11 +2110,12 @@ Counts: 144 gaps, 3 mission, 141 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.1 Authenticate; CAP-5.4 Disconnected and reconcile.
 - History:
   - 2026-09-17, Open: Found filling a forwarded decision's `origin`, which DN-31 §5.2 calls the desktop's machine identity: the build has none distinct from the product's name. The name is now one constant, so `origin` follows the certificate when this is built, and GAP-137 names this entry as what it waits on.
+  - 2026-09-22, Closed: Built on D-67. A desktop is named by a fingerprint of the public half of its own transport key, `desktop-` or `desktop-ephemeral-` and sixteen hex digits, issued once in `AppState` and held as `machine_identity` so the certificate a node verifies and the `origin` a forwarded batch carries name one key. `POST /v3/decisions/forwarded` refuses `403`, with nothing reaching the loop, when a batch names another machine than the handshake verified. Found on the way: `mutual_tls.rs`'s own authority issued every certificate as `rcgen self signed cert`. See `../../record/2026-09-22/a-desktop-is-named-by-its-own-key.md`.
 - Evidence: `gungnir-app/src/session.rs` (`DESKTOP_COMMON_NAME`, `link_tls_for`); `gungnir-remote/src/identity.rs` (`issue_for_client`, `issue_desktop_outbound_identity`), the human-owned TLS identity path; `gungnir_model::events::CommandEvent::Decided::origin`.
 - Severity: 2. Reach: 10 threads. Effort: M. Priority: 20.
 - Impact: Every desktop's link identity carries the common name `gungnir-app`, so nothing a node holds tells two desktops apart as machines. A decision forwarded after an outage says, in its `origin`, that it was taken on a desktop rather than on the node, and cannot say which desktop; and a register that has to keep one producer's set apart from another's -- the exchange register GAP-137 is waiting on -- has nothing to key a desktop on.
 - Closing action: Give each desktop a stable identity of its own -- a name the deployment states, or one derived from its persisted key -- carried in its certificate and in a forwarded decision's `origin`, and have the node check that a forwarded batch's origin is the machine the handshake verified, where there was one.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: Found building GAP-134 (`../../record/2026-09-17/an-outage-reaches-the-node-once.md`).
 
 **GAP-142 A desktop that restarts during an outage forgets it**

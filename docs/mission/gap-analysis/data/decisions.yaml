@@ -1623,3 +1623,27 @@
     `LinkEvent::DelegationsLapsed`, and the build's finding that plan conflicts cannot arise
     across an outage as built, so D-58's comparison by track is what catches two actions on
     one track. See `../../record/2026-09-17/an-outage-reaches-the-node-once.md`.
+
+- id: D-67
+  decision: How a desktop is named, and what it forwards when its key is ephemeral
+  question: >-
+    Every desktop's link identity carried the common name `gungnir-app`, so a node could
+    not tell two apart, and a forwarded decision's `origin` could say a desktop took it but
+    not which (GAP-141). Should a desktop be named by something the deployment states, or
+    by its own key? And what should a desktop whose key provider is unreachable, and whose
+    identity is therefore ephemeral, forward as its origin?
+  raised_in: "GAP-141; GAP-137 waits on it"
+  decider: Owner
+  unblocks: GAP-137
+  resolved: 2026-09-22
+  outcome: >-
+    **By its own key, and an ephemeral desktop still forwards and says so.** A desktop is
+    `desktop-` and sixteen hex digits of a SHA-256 over the public half of the key its
+    certificate carries, so the name is a function of what the handshake proved rather than
+    a string a self-signed certificate asserts, and the node can check a forwarded batch's
+    origin against the party it verified with no configuration. A desktop whose key is
+    ephemeral is named `desktop-ephemeral-` and the same fingerprint: it forwards as
+    before, because refusing would keep every offline decision off the node's record
+    (DN-31 §9 row 8), and the name says what the origin is worth. A stated, readable label
+    was not taken: two desktops could claim one name and nothing would detect it. See
+    `../../record/2026-09-22/a-desktop-is-named-by-its-own-key.md`.
