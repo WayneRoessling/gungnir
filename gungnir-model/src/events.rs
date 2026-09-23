@@ -503,6 +503,24 @@ pub enum CommandEvent {
         /// (`docs/gungnir-api-v1.md`, "Adding a field with a default is compatible").
         #[serde(default)]
         request: Option<RequestId>,
+        /// The queue item this decided, where a queue held it (GAP-142).
+        ///
+        /// **So a decision can be read back off the journal whole.** A desktop that
+        /// restarts during an outage rebuilds what it decided from its own journal, and a
+        /// decision without the item it answered is not a record the node's forwarded
+        /// route can take. `None` for a decision no queue item carried and for every
+        /// journal written before this field existed; defaulted, so the change is
+        /// additive and `SCHEMA_VERSION` stands.
+        #[serde(default)]
+        item: Option<PendingApprovalId>,
+        /// Whether the person substituted their own assignment rather than taking the
+        /// plan as offered (GAP-142).
+        ///
+        /// `accepted` above is true for both, because both are actionable; the record
+        /// keeps them apart (`OperatorDecision::Overridden`) and so must the journal, or
+        /// a decision read back off it would say a person accepted what they replaced.
+        #[serde(default)]
+        overridden: bool,
         /// The machine a forwarded decision was taken on (DN-31 §5.3, §6.8).
         ///
         /// **Always `None` in this build**: forwarding is GAP-134's, and this field is
@@ -818,6 +836,17 @@ pub enum LinkEvent {
         endpoint: String,
         silent_s: f64,
         at: MissionTime,
+        /// The last envelope sequence this desktop's link had applied (GAP-142).
+        ///
+        /// **So an outage can be resumed by a process that did not start it.** A desktop
+        /// that restarts while cut off rebuilds the outage from this record, and the
+        /// node's history is asked for from here; without it a recovered outage would
+        /// have to ask for the whole window and merge what it had already seen. `0` for a
+        /// journal written before this field existed, which asks for everything the
+        /// node still retains; defaulted, so the change is additive and `SCHEMA_VERSION`
+        /// stands.
+        #[serde(default)]
+        last_seq: u64,
     },
     Restored {
         endpoint: String,
@@ -977,6 +1006,8 @@ mod tests {
             verdict: VerdictSummary::RequiresHumanApproval,
             rationale: Some("friendly airliner".into()),
             request: None,
+            item: None,
+            overridden: false,
             origin: None,
         };
         let mut before = serde_json::to_value(&decided).expect("encode");
@@ -1001,6 +1032,8 @@ mod tests {
             verdict: VerdictSummary::RequiresHumanApproval,
             rationale: None,
             request: None,
+            item: None,
+            overridden: false,
             origin: None,
         };
         let json = serde_json::to_string(&now).expect("encode");
@@ -1025,6 +1058,8 @@ mod tests {
             verdict: VerdictSummary::RequiresHumanApproval,
             rationale: None,
             request: None,
+            item: None,
+            overridden: false,
             origin: None,
         };
         let mut before = serde_json::to_value(&decided).expect("encode");
@@ -1068,6 +1103,8 @@ mod tests {
             verdict,
             rationale,
             origin,
+            item: None,
+            overridden: false,
             request: Some(RequestId::new("console-2/17").expect("a key")),
         };
         let json = serde_json::to_string(&with_key).expect("encode");

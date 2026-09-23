@@ -227,10 +227,12 @@ fn connect_if_remote(state: &mut AppState, operator: u64, passphrase: &str) {
             Some(link) => link
                 .replace_credential(credential)
                 .map_err(|e| e.to_string()),
-            // Not reachable through `failover::fall_back`, which falls back only on a
-            // link; said rather than papered over, and still not a reason to end the
-            // outage without a person.
-            None => Err("the outage has no link to the node".into()),
+            // An outage recovered from the journal at start-up (GAP-142): the process
+            // that fell back is gone, so there is no link to take the credential. Build
+            // one, and leave everything else where it is -- the embedded services, the
+            // embedded backend and the outage itself -- because an outage ends when a
+            // person switches back (D-15), not when a link appears.
+            None => connect_link_during_outage(state, &endpoint, credential),
         };
         state.alerts.push(match outcome {
             Ok(()) => format!(
@@ -268,6 +270,30 @@ fn connect_if_remote(state: &mut AppState, operator: u64, passphrase: &str) {
             "could not reach node {endpoint}: {err}; running embedded"
         )),
     }
+}
+
+/// Build the link an outage recovered from the journal has never had (GAP-142).
+///
+/// The remote services `connect_with_link` hands back are dropped on purpose: this
+/// desktop is cut off and runs its own, and `failover::run_embedded` puts the new link
+/// behind them so observations taken for the rest of the outage still reach the node's
+/// outbox, exactly as they do for an outage this process fell into.
+fn connect_link_during_outage(
+    state: &mut AppState,
+    endpoint: &str,
+    credential: gungnir_remote::link::Credential,
+) -> Result<(), String> {
+    let remote = gungnir_remote::RemoteEndpoint {
+        url: endpoint.to_owned(),
+        tls: link_tls(state),
+    };
+    let (_tracking, _intercept, link) =
+        gungnir_remote::connect_with_link(&remote, credential, state.runtime.handle())
+            .map_err(|e| e.to_string())?;
+    state.link = Some(link.clone());
+    crate::node_tasks::attach(state, link);
+    crate::failover::run_embedded(state);
+    Ok(())
 }
 
 /// What the link trusts and who this desktop is (GAP-060).

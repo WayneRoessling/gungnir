@@ -289,6 +289,8 @@ mod tests {
             verdict: gungnir_model::events::VerdictSummary::RequiresHumanApproval,
             rationale: None,
             request: None,
+            item: None,
+            overridden: false,
             origin: None,
         })
     }

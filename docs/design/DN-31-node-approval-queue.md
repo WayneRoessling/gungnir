@@ -478,9 +478,45 @@ conflict, and says why in its own documentation.
 **The header.** It said "design only; no code exists" after GAP-130 to GAP-134 had built
 the note; it now says the note is built.
 
+## 15. Amendment 4 (2026-09-23, D-71): an outage outlives the process that fell into it
+
+**§6.7 and §6.8 describe an outage a process lives through** (GAP-142). The fallback --
+its bounds, its reconciliation, its forwarding -- lived in memory, so a desktop that
+restarted while cut off, or after its node answered and before a person switched back,
+started with no outage at all: what it had decided offline stayed in its own journal,
+never reached the node's record, was never compared with the node's engagements by track,
+and MOE-11 fell below 1.0 with nothing saying so.
+
+**An outage is recovered from the journal at start-up**: the last `FellBack` with no
+`SwitchedBack` after it. The bounds, the endpoint, the sequence the node's history is
+asked from (now on the event) and the lapse are all on the record, so they come back
+whole. The session the outage was journaled into comes back with them, because the merge
+reads this desktop's half out of the journal and the session in progress after a restart
+is a new one -- reading it would report that this desktop did nothing while cut off.
+
+**Its decisions are rebuilt from the record, or none of them is forwarded.** A decision
+comes back from its `Decided` event and the `PlanProposed` view it names; the event now
+carries the queue item it answered and whether it was an override, which are exactly what
+`accepted` and `plan` left out. A decision the journal cannot describe whole is counted,
+not guessed at, and the batch does not go: an outage reaches the node whole or not at all
+(§6.8), and PN-18 says how many of each.
+
+**A sign-in during a recovered outage builds the link the outage never had.** The process
+that fell back is gone, so there is nothing to hand the credential to; the desktop builds
+a link, keeps its own services and its own queue, and waits for a person to switch back
+exactly as §6.7 says. What it does not do is end the outage because a link appeared.
+
+**A node that has never answered is silent, not pending** (D-71). `last_heard` is `None`
+until a snapshot lands, and a link that has never been heard is not a link that has gone
+quiet: a desktop that signed in to an unreachable node stayed on a remote backend for
+ever, with a queue it could not read and a decision path it could not use. Silence is
+measured from the link's own start until there is something later to measure it from, and
+the sentence says which it is -- "has not answered since this desktop signed in" is a
+different thing to tell an operator than "silent for 12 s".
+
 ## Traceability
 
-GAP-129, GAP-130 to GAP-134, GAP-113, GAP-127; D-03, D-15, D-53, D-55 to D-61; DN-06, DN-07,
-DN-09 §5 and §7, DN-10 §3, §5 and §6, DN-23 §5, DN-25; MT-01, MT-10; MOP-07, MOE-01, MOE-05,
+GAP-129, GAP-130 to GAP-134, GAP-113, GAP-127, GAP-142; D-03, D-15, D-53, D-55 to D-61,
+D-71; DN-06, DN-07, DN-09 §5 and §7, DN-10 §3, §5 and §6, DN-23 §5, DN-25; MT-01, MT-10; MOP-07, MOE-01, MOE-05,
 MOE-11; CAP-3.6, CAP-3.7, CAP-4.2, CAP-4.3, CAP-5.4, CAP-5.9, CAP-6.2, CAP-7.2; contracts C-01,
 C-04; `ARCHITECTURE.md` §8.2 to §8.4; `docs/gungnir-api-v1.md`.

@@ -552,6 +552,10 @@ impl AppState {
             recover_requirements_or_alert(&journal, &mut alerts);
         let (issued_launch_warnings, launch_warnings_recovered, next_launch_warning) =
             recover_launch_warnings_or_alert(&journal, &mut alerts);
+        // GAP-142: an outage this desktop was in when it last stopped. Recovered before
+        // anything else reads the fallback, because what it changes is what this desktop
+        // is: a console that is cut off, not one that has simply not linked yet.
+        let fallback = recover_outage_or_alert(&journal, &mut alerts);
 
         // GAP-086: the registry the baseline describes, built through the real promotion
         // state machine. A deployment whose promoted candidate fails the gate does not stop
@@ -654,7 +658,7 @@ impl AppState {
             node_task_map: std::collections::HashMap::new(),
             peer_links: peers,
             projection: crate::projection::ProjectionState::default(),
-            fallback: None,
+            fallback,
             pending_history: None,
             endpoint_client,
             pending_warnings: Vec::new(),
@@ -1372,6 +1376,37 @@ fn recover_requirements(
     let (requirements, recovered) = crate::requirements::recover(journal);
     let next = requirements.iter().map(|r| r.id.0).max().unwrap_or(0);
     (requirements, recovered, next)
+}
+
+/// An outage this desktop was in when it last stopped (GAP-142), and an alert saying so.
+///
+/// **A recovered outage is not a fresh start.** The desktop comes up on its own services
+/// either way (`build_backends`), but a recovered outage means its decisions are owed to a
+/// node and a person has to switch back before it is over -- so it says so on the strip
+/// the moment it starts, not when somebody notices PN-18.
+fn recover_outage_or_alert(
+    journal: &FileEventJournal,
+    alerts: &mut Vec<String>,
+) -> Option<crate::failover::Fallback> {
+    let fallback = crate::failover::recover(journal)?;
+    alerts.push(match &fallback.forwarding {
+        crate::failover::Forwarding::Incomplete {
+            rebuilt,
+            unreadable,
+        } => format!(
+            "Recovered an unfinished outage of node {} from the journal, and it describes \
+             {rebuilt} of the decisions taken here but not {unreadable} of them: none will \
+             be forwarded, because an outage reaches the node whole or not at all. See PN-18",
+            fallback.endpoint
+        ),
+        _ => format!(
+            "Recovered an unfinished outage of node {} from the journal: this desktop is \
+             cut off, not newly started, and stays on its own services until a person \
+             switches back on PN-18",
+            fallback.endpoint
+        ),
+    });
+    Some(fallback)
 }
 
 /// Launch warnings declared in earlier sessions (GAP-009): recovered the same way

@@ -50,6 +50,8 @@ fn decided(plan: u128, accepted: bool, operator: &str, role: &str) -> Event {
         verdict: VerdictSummary::RequiresHumanApproval,
         rationale: (!accepted).then(|| "no".to_string()),
         request: None,
+        item: None,
+        overridden: false,
         origin: None,
     })
 }
