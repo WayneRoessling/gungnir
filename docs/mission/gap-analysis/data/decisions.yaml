@@ -1659,13 +1659,17 @@
   raised_in: "GAP-132; GAP-133; GAP-134; GAP-137"
   decider: Owner
   unblocks: GAP-137
+  resolved: 2026-09-23
   outcome: >-
-    **Proposed: one set per producer, merged on read** (DN-18 §11, built 2026-09-23 and
-    open in this ledger until the owner answers). The register is keyed by item and then by
-    the name the connection was verified under -- since GAP-141 a digest of the desktop's
-    own key (D-67) -- with the node's own set a variant of its own so no desktop name can
-    collide with it. A publish replaces that producer's set alone; a read concatenates every
-    producer's, the node's first. The node as sole writer needs a collision rule in the
-    transport; append per handoff cannot express a withdrawal, which DN-18 §5's "partial
-    delivery is reported" turns on. See
-    `../../record/2026-09-23/a-partner-hears-what-the-node-decided.md`.
+    **One set per producer, merged on read** (DN-18 §11). The register is keyed by item and
+    then by the name the connection was verified under -- since GAP-141 a digest of the
+    desktop's own key (D-67) -- with the node's own set a variant of its own so no desktop
+    name can collide with it. A publish replaces that producer's set alone; a read
+    concatenates every producer's, the node's first, and answers `NotHeld` only when none
+    holds any. The node as sole writer would have needed a collision rule for two desktops
+    claiming one product, and that rule would have lived in the transport; append per
+    handoff cannot express a withdrawal, which DN-18 §5's "partial delivery is reported"
+    turns on. Bounded at 64 producers an item, refused rather than evicted. The owner
+    answered as proposed on 2026-09-23, the day after the build. See
+    `../../record/2026-09-23/a-partner-hears-what-the-node-decided.md` and
+    `../../record/2026-09-23/the-register-s-contract-is-decided.md`.

@@ -2878,3 +2878,44 @@
   commit: 227fdbf8eeca29654e4c7b05dd78566bc40ac8b4
   pre_repository: false
   record: "DN-31 §9 row 9; docs/record/2026-09-22/dn-31-rows-3-to-9-become-gates.md"
+- date: 2026-09-23
+  signer: Owner
+  subject: >-
+    DN-18 amendment 3 (§11): one exchange register with a producer per writer, merged on
+    read, and the node's own handoffs wired in (D-68).
+  kind: design-note
+  paths:
+  - docs/design/DN-18-coalition-exchange.md
+  commit: 261baec1e8ab98f7d85471978034f36230a6fbc1
+  pre_repository: false
+  record: "DN-18 §11; docs/design/README.md DN-18 row; docs/record/2026-09-23/a-partner-hears-what-the-node-decided.md; PR #156"
+
+- date: 2026-09-23
+  signer: Owner
+  subject: >-
+    GAP-137: the exchange register keyed by producer in the gungnir-api write path --
+    `publish_exchange` and `withhold_exchange` taking an `ExchangeProducer`, the merged
+    `exchange_all`, the bound and its `ApiError::NoRoom`, and the publish handler naming
+    the producer from the common name the connection was verified under.
+  kind: code
+  paths:
+  - gungnir-api/src/transport.rs
+  - gungnir-api/src/lib.rs
+  - gungnir-api/src/v3/mod.rs
+  commit: 261baec1e8ab98f7d85471978034f36230a6fbc1
+  pre_repository: false
+  record: "GAP-137; DN-18 §11; docs/record/2026-09-23/a-partner-hears-what-the-node-decided.md; PR #156"
+
+- date: 2026-09-23
+  signer: Owner
+  subject: >-
+    GAP-137: the node's decision path publishing what it issues (D-65) --
+    `NodeHost::republish_handoffs` no longer a no-op, `claim_exchange_items` claiming an
+    empty handoff set rather than withholding, and the loop's frame carrying the transport.
+  kind: code
+  paths:
+  - gungnir-node/src/approval.rs
+  - gungnir-node/src/main.rs
+  commit: 261baec1e8ab98f7d85471978034f36230a6fbc1
+  pre_repository: false
+  record: "GAP-137; D-65; docs/record/2026-09-23/a-partner-hears-what-the-node-decided.md; PR #156"
