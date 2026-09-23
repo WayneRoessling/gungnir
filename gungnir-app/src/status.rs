@@ -278,6 +278,10 @@ pub fn status_strip_view<'a>(
         backend,
         session,
         mission_time: state.clock.now(),
+        // GAP-140: said only when the two clocks differ by more than a countdown's own
+        // digit. The rows are drawn against the node's clock whatever the difference;
+        // this is the element that says the two machines disagree at all.
+        clock_skew_s: crate::projection::clock_skew_s(state),
         clock_source: match state.clock.source() {
             TimeClockSource::Wall => ClockSource::Wall,
             TimeClockSource::Replay => ClockSource::Replay,

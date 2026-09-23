@@ -289,12 +289,23 @@ async fn a_fully_populated_snapshot_survives_an_operators_get() {
     api.publish_snapshot(original.clone())
         .expect("the snapshot publishes");
 
-    let addr = serve(api).await;
+    api.set_now(412.75);
+    let addr = serve(Arc::clone(&api)).await;
     let token = sign_in(addr).await;
-
     let (status, body) = request(addr, "GET", "/v3/snapshot", Some(&token), None).await;
     assert_eq!(status, 200, "the authenticated GET was refused: {body}");
-    let back: SnapshotResponse = serde_json::from_str(&body).expect("a snapshot");
+    let mut back: SnapshotResponse = serde_json::from_str(&body).expect("a snapshot");
+
+    // GAP-140: the one field the route fills in on the way out, and the only one -- this
+    // node's clock as it answered, which is what a desktop draws the queue's deadlines
+    // against. Asserted and then set aside, so everything else is still compared field
+    // for field against what was published.
+    assert_eq!(
+        back.node_time,
+        Some(gungnir_model::MissionTime(412.75)),
+        "the route did not stamp the node's own clock on the snapshot it answered with"
+    );
+    back.node_time = original.node_time;
 
     assert_eq!(
         back, original,

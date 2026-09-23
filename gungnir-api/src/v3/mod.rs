@@ -82,6 +82,22 @@ pub struct SnapshotResponse {
     /// different panels (PN-05 and PN-06).
     #[serde(default)]
     pub queue: Vec<QueueItemView>,
+    /// **The node's own clock when it answered** (GAP-140).
+    ///
+    /// Every deadline on `queue` is this node's mission time, and until now nothing on
+    /// the wire said what that was: a desktop drew the countdown against its own clock,
+    /// so a console a minute fast showed every item a minute closer to expiry than it
+    /// was, and neither side said so. A desktop measures the offset between the two
+    /// machines from this and draws the node's deadlines against the node's time.
+    ///
+    /// **Stamped where the route answers**, not where the loop publishes, so the offset
+    /// a desktop takes from it is as close to the transit as this node can make it.
+    ///
+    /// **Additive and defaulted**, exactly as `queue` above: a node that does not send it
+    /// leaves a desktop where it was, drawing against its own clock and saying nothing it
+    /// cannot support (`docs/gungnir-api-v1.md`).
+    #[serde(default)]
+    pub node_time: Option<MissionTime>,
 }
 
 impl SnapshotResponse {
@@ -101,6 +117,9 @@ impl SnapshotResponse {
             pipeline_stats: PipelineStatsView::default(),
             withheld: 0,
             queue: Vec::new(),
+            // Filled in by the route that answers with it, which is the moment worth
+            // stamping (GAP-140).
+            node_time: None,
         }
     }
 

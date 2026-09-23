@@ -71,6 +71,9 @@ const OPERATOR: u64 = 21;
 const SUPERVISOR: u64 = 22;
 /// Mission time the node proposes at. Every deadline is relative to it.
 const SUBMITTED: f64 = 100.0;
+/// The point layer's decision window on this node, in seconds. Long enough that nothing
+/// here expires on the way, and the number GAP-140's countdown is read against.
+const POINT_EXPIRY_S: f64 = 600.0;
 
 // ---------------------------------------------------------------------------------
 // MOP-07, over the spans the path emits
@@ -172,7 +175,7 @@ fn node_baseline(dir: &std::path::Path) -> ConfigBaseline {
         .policy
         .decisions
         .expiry_s
-        .insert(EffectorLayer::Point, 600.0);
+        .insert(EffectorLayer::Point, POINT_EXPIRY_S);
     gungnir_config::validate(&config).expect("the node's baseline is valid");
     config
 }
@@ -244,8 +247,11 @@ impl Node {
     /// blocking tasks, so a failing assertion would hang the test binary instead of
     /// reporting the failure. `Drop` stops it whether the test passes or panics.
     fn spawn(api: Arc<NodeApi>) -> Self {
-        let dir =
-            std::env::temp_dir().join(format!("gungnir-projection-node-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "gungnir-projection-node-{}-{}",
+            std::process::id(),
+            scratch_id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         let config = Arc::new(node_baseline(&dir));
         let resources = Arc::new(config.resource_views());
@@ -444,10 +450,24 @@ fn serve(addr: std::net::SocketAddr, api: Arc<NodeApi>) -> tokio::runtime::Runti
 // The desktops
 // ---------------------------------------------------------------------------------
 
+/// Makes every scratch directory in this binary its own.
+///
+/// **A process id is not enough**: two tests in this binary share a process and therefore
+/// an id, so the second one's `remove_dir_all` wipes the first one's journal mid-run.
+/// `gungnir-api/tests/exchange.rs` documents the same trap and the same counter.
+static SCRATCH: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+fn scratch_id() -> u32 {
+    SCRATCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 /// A desktop on the connected profile, over a scratch journal directory.
 fn desktop(name: &str, endpoint: &str) -> (AppState, std::path::PathBuf) {
-    let dir =
-        std::env::temp_dir().join(format!("gungnir-projection-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "gungnir-projection-{name}-{}-{}",
+        std::process::id(),
+        scratch_id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("data dir");
     let accounts = vec![
@@ -790,4 +810,85 @@ fn two_desktops_show_one_node_queue_and_neither_decides_it_itself() {
 
     let _ = std::fs::remove_dir_all(dir_a);
     let _ = std::fs::remove_dir_all(dir_b);
+}
+// ---------------------------------------------------------------------------------
+// GAP-140: a node's deadline is in the node's time
+// ---------------------------------------------------------------------------------
+
+/// GAP-140: **PN-06 draws a node's deadline against the node's clock**, not this
+/// console's, and PN-01 says when the two disagree.
+///
+/// `QueueItemView::expires_at` is the node's mission time. Both machines run a wall clock
+/// -- seconds since the epoch on each -- so the two agree only as far as the machines do,
+/// and nothing on the wire said what the node's was. A console a minute fast showed every
+/// item a minute closer to expiry than it was; one a minute slow showed a window still
+/// open after it had closed. The node refuses the late decision either way (`409
+/// Expired`), so what was wrong was what the operator was told.
+///
+/// **The harness is the extreme case, and it is not contrived**: this node keeps a stated
+/// mission clock from `SUBMITTED` while the desktops keep the wall clock, so before this
+/// change every row read as expired by about fifty-five years. The assertion is the
+/// node's own window, which is the only number that means anything on either machine.
+#[test]
+fn a_node_s_deadline_is_drawn_against_the_node_s_clock() {
+    let addr: std::net::SocketAddr = {
+        let probe = std::net::TcpListener::bind("127.0.0.1:0").expect("probe");
+        probe.local_addr().expect("addr")
+    };
+    let api = api_knowing_the_accounts();
+    let _runtime = serve(addr, Arc::clone(&api));
+    let node = Node::spawn(Arc::clone(&api));
+
+    let endpoint = format!("http://{addr}");
+    let (mut console_a, dir_a) = desktop("clock-a", &endpoint);
+    let (mut console_b, dir_b) = desktop("clock-b", &endpoint);
+    sign_in(&mut console_a, OPERATOR);
+    sign_in(&mut console_b, SUPERVISOR);
+    until(
+        &mut console_a,
+        &mut console_b,
+        "both streams to subscribe",
+        20.0,
+        |_, _| api.subscriber_count() >= 2,
+    );
+
+    let tracks = vec![track(0)];
+    let point = node
+        .propose(&tracks, plan(1, 0, 0))
+        .expect("a point plan against a hostile track is the Operator's");
+    until(
+        &mut console_a,
+        &mut console_b,
+        "the node's item to reach the desktop",
+        20.0,
+        |a, _| !shown(a).is_empty(),
+    );
+
+    let row = projection::queue_rows(&console_a)
+        .into_iter()
+        .find(|r| r.id == PendingId(point.0))
+        .expect("the item is on PN-06");
+    match row.time_remaining {
+        gungnir_ui::panels::approval_queue::TimeRemaining::Seconds(left) => assert!(
+            (0.0..=POINT_EXPIRY_S).contains(&left) && left > POINT_EXPIRY_S - 60.0,
+            "the countdown is {left} s, not the node's own window of about \
+             {POINT_EXPIRY_S} s: it is being drawn against this console's clock"
+        ),
+        other => panic!("this layer configures an expiry, so the row has one: {other:?}"),
+    }
+
+    // The other half: the two clocks disagree, and PN-01 is where that is said.
+    let skew = projection::clock_skew_s(&console_a).expect("these two clocks disagree");
+    assert!(
+        skew < -f64::from(1_000_000),
+        "the node keeps a stated mission clock and this console keeps the wall clock, so \
+         the skew is large and negative; it was {skew}"
+    );
+    assert!(
+        gungnir_ui::panels::status_strip::clock_skew_sentence(skew).contains("behind"),
+        "a node whose clock is behind this console is not said to be behind it"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir_a);
+    let _ = std::fs::remove_dir_all(&dir_b);
 }
