@@ -125,7 +125,7 @@ history, and an entry is never edited once it has merged.
 | GAP-110 | The node's headless loop has no automated test | Technical | CAP-7.3 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 | GAP-111 | The security row's role matrix and audit rule are untested, and the node audits nothing | Technical | CAP-6.2, CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-112 | No test round-trips a fully populated v2 snapshot | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Closed |
-| GAP-113 | An under-authority plan is counted, never escalated | Technical | CAP-3.6, CAP-4.3 | 3 | 7 | M | 21 | I3 | Services engineer | In progress |
+| GAP-113 | An under-authority plan is counted, never escalated | Technical | CAP-3.6, CAP-4.3 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
 | GAP-114 | Nothing consumes LateDataPolicy | Technical | CAP-1.5 | 2 | 7 | M | 14 | I3 | Services engineer | Open |
 | GAP-115 | The node never times out an unacknowledged sensor task | Technical | CAP-1.3 | 3 | 9 | S | 27 | I3 | Services engineer | Closed |
 | GAP-116 | Seven interop clauses are unasserted or only partly asserted | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
@@ -1731,11 +1731,12 @@ Counts: 146 gaps, 3 mission, 143 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which gated the `gungnir-policy` row on the denial and left what follows a denial to this gap.
   - 2026-09-17, In progress: Answered on the node, not on a desktop. GAP-132 runs the chain for every role on the escalation ladder and offers the item to the lowest role holding authority for every solution, so an area-layer plan an Operator may not accept is queued for a Supervisor rather than counted; DN-31 §9 row 5's test asserts it. `gungnir-app`'s own submission still runs the chain for the role at the console and counts the denial, which is what a desktop does for its own plans while cut off (DN-31 §6.7), so the desktop half stays open.
+  - 2026-09-23, Closed: Closed on the desktop, which is the half GAP-132 left. `ApprovalDesk::submit` runs the chain for the role at the console as before, and where that is an authority denial -- the one engine of the four that reads the asking role -- it walks the ladder and queues the plan for the role the walk finds, with `offered_to` saying who. A plan no role may accept is still denied and never queued, which is what keeps the denial reviewable. `a_plan_this_console_may_not_accept_is_offered_to_a_role_that_may` (`gungnir-app/tests/approval_gate.rs`) asks an area-layer plan as an Operator and finds it queued for a Supervisor with nothing counted; its sibling holds the unchanged case. See `../../record/2026-09-23/an-under-authority-plan-finds-a-role.md`.
 - Evidence: `gungnir-app/src/decisions.rs` (an authority denial is counted, not queued); `design/DN-09-authority-and-control-status.md` §7; the `gungnir-policy` row, gated 2026-09-16 on the denial itself.
 - Severity: 3. Reach: 7 threads. Effort: M. Priority: 21.
 - Impact: DN-09 §7 has PN-06 mark a plan the asking role may not accept for escalation to a role that may. The desktop counts the authority denial and never queues the plan, so an under-authority plan reaches nobody with the authority to take it.
 - Closing action: Queue a plan the asking role may not accept for a role holding that authority, as DN-09 §7 describes, and test that an area-layer plan asked by an Operator reaches a Supervisor in the queue.
-- Target: I3. Owner: Services engineer. Status: In progress.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-114 Nothing consumes LateDataPolicy**
