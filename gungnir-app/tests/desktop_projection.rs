@@ -12,8 +12,8 @@
 //! 4. a plan proposed on the node is available to decide on a desktop in under 500 ms
 //!    (MOP-07), measured over the loop, the journal append and the stream (DN-31 §6.9).
 //!
-//! Clauses 1 to 3 are asserted. Clause 4 is measured and printed, and becomes an
-//! assertion, in release builds, when the owner confirms the row (D-16) -- see
+//! All four are asserted since the owner confirmed the row on 2026-09-22 (D-16); clause 4,
+//! being a timing figure, is asserted in the release profile, which `ci.yml` runs -- see
 //! [`two_desktops_show_one_node_queue_and_neither_decides_it_itself`] at the measurement.
 //!
 //! # What is real here and what is not
@@ -37,9 +37,8 @@
 //! two ends are marked with tracing spans -- `mop07.plan_proposed` on the node the
 //! instant `propose` is called, `mop07.approval_available` on the desktop the instant
 //! PN-06 first carries a decidable row for that plan -- and [`Mop07`] records when each
-//! opened. The number is printed, and **not yet compared**: row 7 is a Draft criterion, and
-//! a Draft budget is measured until the owner gates it (the convention `frame_budgets.rs`
-//! states, and why this file follows it, is at the measurement).
+//! opened. The number is printed, and compared in the release profile (the convention
+//! `frame_budgets.rs` states, and why this file follows it, is at the measurement).
 
 use gungnir_api::transport::{bind, serve_on, AccountTokenAuthority, NodeApi};
 use gungnir_api::v3::{QueueItemView, SnapshotResponse};
@@ -601,25 +600,41 @@ fn two_desktops_show_one_node_queue_and_neither_decides_it_itself() {
         .at("mop07.approval_available")
         .expect("the desktop marked it");
     let mop07 = available.duration_since(proposed);
-    // **Measured and printed, not asserted, while row 7 is a Draft criterion.** This
-    // compared against 500 ms from GAP-133 until 2026-09-17, and on the run for #146 it
-    // failed at 647.1 ms, having measured 3.4 to 5.1 ms locally and passed on #140's,
-    // #143's and `main`'s own runs. Nothing on the measured path waits deliberately: what
-    // varied was scheduling, with a node thread, the node's server, two desktops' runtimes
-    // and a picture fetch sharing a four-core runner with every other test binary nextest
-    // was running. A bound checked there is a measurement of the runner.
+    // **Gated 2026-09-22** (the owner's D-16 confirmation of row 7), and asserted in the
+    // release profile alone, which is `frame_budgets.rs`'s convention for a timing figure
+    // and the reason this clause stopped being asserted on 2026-09-17. It had compared
+    // against 500 ms in a debug build on shared runners since GAP-133, measuring 3.4 to
+    // 5.1 ms locally and passing on #140's, #143's and `main`'s runs, until #146's run
+    // reported 647.1 ms on a change nowhere near the path: nothing on it waits on purpose,
+    // and what varied was scheduling, with a node thread, the node's server, two desktops'
+    // runtimes and a picture fetch sharing a four-core runner with every other test binary
+    // nextest was running.
     //
-    // `frame_budgets.rs` already holds the workspace's answer to exactly this, and this
-    // file now follows it: promoting a Draft row to a gate is the owner's confirmation
-    // under D-16 and not a test's to take, so a Draft budget is measured and printed until
-    // it is gated, and a timing gate is asserted in release builds only. When the owner
-    // confirms row 7, the gate is the assertion below with `#[cfg(not(debug_assertions))]`
-    // on it; the row's other clauses are asserted in this test now, as they always were.
+    // `.github/workflows/ci.yml` runs this test in release beside the frame budgets, so
+    // the gate is enforced rather than merely written down.
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
     println!(
         "MOP-07: plan proposed on the node to approval control available on a desktop: \
-         {:.1} ms (criterion: under 500 ms; row 7 is Draft, so measured and not yet gated)",
+         {:.1} ms (criterion: under 500 ms, {profile} profile)",
         mop07.as_secs_f64() * 1000.0
     );
+    if cfg!(debug_assertions) {
+        println!(
+            "  not asserted in debug; the criterion is a release figure and ci.yml enforces \
+             it with --release"
+        );
+    } else {
+        assert!(
+            mop07 < std::time::Duration::from_millis(500),
+            "MOP-07: {:.1} ms from the node proposing to the control being available, over \
+             the loop, the journal append and the stream (DN-31 §6.9)",
+            mop07.as_secs_f64() * 1000.0
+        );
+    }
 
     // A second plan, which only the Supervisor may decide, so the two consoles differ in
     // what they may act on while showing the same queue.

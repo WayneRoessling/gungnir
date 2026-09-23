@@ -2783,3 +2783,98 @@
   commit: 87aa97fc5bfbffce98913a86f7fc73c10eed297a
   pre_repository: false
   record: "PR #143; D-15, D-53, D-58, D-66; docs/record/2026-09-17/an-outage-reaches-the-node-once.md"
+
+- date: 2026-09-22
+  signer: Owner
+  subject: >-
+    DN-31 §9 row 3 confirmed as a gate: One decision per queue item (CAP-4.2, CAP-4.3): exactly one `DecisionRecord` per item, the first valid decision standing and every later one refused `409` naming it, a retry answering the first outcome and recording nothing, one engagement per solution and one handoff per actionable decision.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-node/tests/approval_queue.rs
+  - gungnir-node/src/approval.rs
+  - gungnir-api/src/transport.rs
+  commit: 227fdbf8eeca29654e4c7b05dd78566bc40ac8b4
+  pre_repository: false
+  record: "DN-31 §9 row 3; docs/record/2026-09-22/dn-31-rows-3-to-9-become-gates.md"
+
+- date: 2026-09-22
+  signer: Owner
+  subject: >-
+    DN-31 §9 row 4 confirmed as a gate: Authorization of a decision on the node (CAP-6.2): a role without the permission or not offered the item refused `403`, an expired token `401`, a rejection with no reason `400`, nothing recorded, published or engaged in any refusal, and exactly one audit entry per decision and per refusal.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-node/tests/approval_queue.rs
+  - gungnir-api/src/transport.rs
+  - gungnir-node/src/approval.rs
+  commit: 227fdbf8eeca29654e4c7b05dd78566bc40ac8b4
+  pre_repository: false
+  record: "DN-31 §9 row 4; docs/record/2026-09-22/dn-31-rows-3-to-9-become-gates.md"
+
+- date: 2026-09-22
+  signer: Owner
+  subject: >-
+    DN-31 §9 row 5 confirmed as a gate: Authority and offering on the node (CAP-3.6): each item offered to the lowest role holding authority for every solution, a plan no role on the ladder may accept denied by authority and never queued, and an item beyond the Operator's authority actionable by a role that holds it.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-node/tests/approval_queue.rs
+  - gungnir-approval/src/chain.rs
+  commit: 227fdbf8eeca29654e4c7b05dd78566bc40ac8b4
+  pre_repository: false
+  record: "DN-31 §9 row 5; docs/record/2026-09-22/dn-31-rows-3-to-9-become-gates.md"
+
+- date: 2026-09-22
+  signer: Owner
+  subject: >-
+    DN-31 §9 row 6 confirmed as a gate: Expiry and escalation on the node (CAP-3.7): escalation adding the next role without removing the first and at most once per rank step, a decision on an expired item refused and recorded as expired, and a pre-delegated item still expiring and escalating (D-59).
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-node/tests/approval_queue.rs
+  - gungnir-command/src/queue.rs
+  commit: 227fdbf8eeca29654e4c7b05dd78566bc40ac8b4
+  pre_repository: false
+  record: "DN-31 §9 row 6; docs/record/2026-09-22/dn-31-rows-3-to-9-become-gates.md"
+
+- date: 2026-09-22
+  signer: Owner
+  subject: >-
+    DN-31 §9 row 7 confirmed as a gate: Two desktops, one queue (CAP-5.9): both showing the same queue in the same order, a decision on one reaching the other naming who, neither desktop queueing, engaging or issuing for a node plan, and MOP-07 under 500 ms -- the timing clause asserted in the release profile, which `.github/workflows/ci.yml` runs.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-app/tests/desktop_projection.rs
+  - gungnir-app/src/projection.rs
+  - gungnir-remote/src/queue.rs
+  - .github/workflows/ci.yml
+  commit: 227fdbf8eeca29654e4c7b05dd78566bc40ac8b4
+  pre_repository: false
+  record: "DN-31 §9 row 7; docs/record/2026-09-22/dn-31-rows-3-to-9-become-gates.md"
+
+- date: 2026-09-22
+  signer: Owner
+  subject: >-
+    DN-31 §9 row 8 confirmed as a gate: Cut off and reconnected (CAP-5.4): every offline decision reaching the node's record exactly once (MOE-11 = 1.0) with none lost or duplicated, forwarding twice recording nothing new, D-15's delegations lapsing, plan conflicts settled by the rule or a person, and two engagements of one track across the outage raising `BothActed` whatever the verdict (D-58).
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-app/tests/cut_off_and_reconnected.rs
+  - gungnir-app/src/failover.rs
+  - gungnir-policy/src/authority.rs
+  commit: 227fdbf8eeca29654e4c7b05dd78566bc40ac8b4
+  pre_repository: false
+  record: "DN-31 §9 row 8; docs/record/2026-09-22/dn-31-rows-3-to-9-become-gates.md"
+
+- date: 2026-09-22
+  signer: Owner
+  subject: >-
+    DN-31 §9 row 9 confirmed as a gate: MT-01 with a watch floor (CAP-4.3): every queued item ending decided once, expired or escalated; no track engaged twice by the same shift; every escalation visible to the Supervisor; and every decision on the node's record.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-app/tests/mt01_watch_floor.rs
+  commit: 227fdbf8eeca29654e4c7b05dd78566bc40ac8b4
+  pre_repository: false
+  record: "DN-31 §9 row 9; docs/record/2026-09-22/dn-31-rows-3-to-9-become-gates.md"
