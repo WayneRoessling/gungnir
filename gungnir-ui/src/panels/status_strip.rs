@@ -233,6 +233,15 @@ pub struct StatusStripView<'a> {
     pub session: Option<SessionStatus>,
     pub mission_time: MissionTime,
     pub clock_source: ClockSource,
+    /// How far the node's clock is from this desktop's, in seconds, when the two differ
+    /// by more than a countdown's own digit (GAP-140); `None` when they agree or when
+    /// this desktop has never been told the node's.
+    ///
+    /// **Not a fault of either machine, and not coloured as one.** It is the fact that
+    /// makes a deadline drawn here mean something slightly different from the deadline
+    /// the node is keeping, and an operator working to a countdown under saturation is
+    /// owed it.
+    pub clock_skew_s: Option<f64>,
     pub health: SystemHealth,
     pub control_status: &'a [ControlStatusLine],
     pub delegations: &'a [DelegationLine<'a>],
@@ -751,6 +760,11 @@ pub fn render_status_strip(ui: &mut Ui, palette: &theme::Palette, view: &StatusS
             format_clock(view.mission_time),
             view.clock_source.label()
         ));
+        // GAP-140: only when there is something to say. An element that is always there
+        // and usually reads zero trains an operator straight past it.
+        if let Some(skew) = view.clock_skew_s {
+            ui.label(RichText::new(clock_skew_sentence(skew)).color(palette.warning_color));
+        }
         ui.separator();
 
         draw_health(ui, palette, view.health);
@@ -771,8 +785,35 @@ pub fn render_status_strip(ui: &mut Ui, palette: &theme::Palette, view: &StatusS
     });
 }
 
+/// PN-01's words for two clocks that disagree (GAP-140).
+///
+/// **Says which way, and what it means for the rows.** "Node clock 62 s ahead" on its own
+/// leaves the operator to work out whether their countdowns are long or short; the rows
+/// are drawn against the node's clock, so what they need to know is that the two machines
+/// disagree and by how much, not to do the arithmetic themselves.
+#[must_use]
+pub fn clock_skew_sentence(skew_s: f64) -> String {
+    let (direction, seconds) = if skew_s >= 0.0 {
+        ("ahead of", skew_s)
+    } else {
+        ("behind", -skew_s)
+    };
+    format!("Node clock {seconds:.0} s {direction} this console; queue countdowns follow the node")
+}
+
 #[cfg(test)]
 mod tests {
+    /// GAP-140: the strip says which way the two clocks differ, in whole seconds, and
+    /// says what the rows are drawn against so a person is not left doing the arithmetic.
+    #[test]
+    fn the_skew_sentence_says_which_way_and_what_the_rows_follow() {
+        let ahead = super::clock_skew_sentence(62.4);
+        assert!(ahead.contains("62 s ahead of this console"), "{ahead}");
+        assert!(ahead.contains("countdowns follow the node"), "{ahead}");
+        let behind = super::clock_skew_sentence(-62.4);
+        assert!(behind.contains("62 s behind this console"), "{behind}");
+    }
+
     use super::*;
 
     #[test]

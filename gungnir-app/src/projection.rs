@@ -110,7 +110,48 @@ pub struct ProjectionState {
     /// The node's answer to the decision this desktop last posted, until the operator
     /// has closed it (DN-31 §6.6).
     pub answer: Option<DecisionOutcome>,
+    /// The two clocks, taken together the last time the node said what its own was
+    /// (GAP-140). `None` until a snapshot carrying one has been read, which is every
+    /// desktop that has never linked and every node built before the field existed.
+    pub node_clock: Option<NodeClock>,
 }
+
+/// The node's clock and this desktop's, read at one moment (GAP-140).
+///
+/// **A pair, not a difference.** Keeping both is what lets the countdown advance on this
+/// desktop's own clock between snapshots while staying on the node's scale: the offset is
+/// `node - ours` and it holds for as long as the two tick at the same rate, which is what
+/// two clocks do between being set.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NodeClock {
+    /// What the node said its clock was.
+    pub node: MissionTime,
+    /// What this desktop's clock said when that was read.
+    pub ours: MissionTime,
+}
+
+impl NodeClock {
+    /// How far ahead of this desktop the node's clock is, in seconds; negative behind.
+    #[must_use]
+    pub fn skew_s(self) -> f64 {
+        self.node.0 - self.ours.0
+    }
+
+    /// The node's clock now, from this desktop's own clock and the offset.
+    #[must_use]
+    pub fn node_now(self, ours_now: MissionTime) -> MissionTime {
+        MissionTime(ours_now.0 + self.skew_s())
+    }
+}
+
+/// How far two clocks may differ before PN-01 says so, in seconds (GAP-140).
+///
+/// **One second, because that is a digit.** A queue row's countdown is drawn to the
+/// second, so a smaller difference cannot change what a person reads; a larger one means
+/// the row and the node disagree about a deadline by something that is on the screen.
+/// The countdown itself is drawn against the node's clock whatever the difference -- this
+/// is only the threshold for telling somebody about it.
+pub const CLOCK_SKEW_TOLERANCE_S: f64 = 1.0;
 
 /// Copy the node's queue out of the link, and take its answers to what this desktop
 /// posted. Called every tick.
@@ -123,6 +164,18 @@ pub fn tick(state: &mut AppState) {
     };
     state.projection.queue = link.queue();
     state.projection.in_flight = link.decisions_in_flight();
+    // GAP-140: the two clocks, read together the first frame that sees a new reading from
+    // the node. Re-read only when the node's own value changes, which is once per
+    // connection: taking it every frame would re-measure the offset against a snapshot
+    // that has not moved and make it drift by exactly the age of that snapshot.
+    if let Some(node) = link.node_time() {
+        if state.projection.node_clock.is_none_or(|c| c.node != node) {
+            state.projection.node_clock = Some(NodeClock {
+                node,
+                ours: state.clock.now(),
+            });
+        }
+    }
     for outcome in link.take_decision_outcomes() {
         alert_for(state, &outcome);
         // The dialog is open on the item this answers; showing the answer is what closes
@@ -232,7 +285,9 @@ pub fn decide(
 /// desktop's and PN-06 says so rather than enabling a control the node will refuse.
 #[must_use]
 pub fn queue_rows(state: &AppState) -> Vec<QueueRow<'_>> {
-    let now = state.clock.now();
+    // GAP-140: the node's clock, where this desktop knows it. These deadlines are the
+    // node's, and drawing them against this console's clock is wrong by the difference.
+    let now = node_now(state);
     let signed_in = state.signed_in();
     let role_name = signed_in.as_ref().map(|s| format!("{:?}", s.role));
     let may_decide = signed_in.as_ref().is_some_and(|s| {
@@ -486,4 +541,37 @@ pub fn decisions_by_role(
 #[must_use]
 pub fn seconds_remaining(expires_at: Option<MissionTime>, now: MissionTime) -> Option<f64> {
     expires_at.map(|at| at.0 - now.0)
+}
+
+/// **The clock a node's deadline means** (GAP-140): the node's, where this desktop has
+/// been told what it is, and this desktop's own where it has not.
+///
+/// `QueueItemView::expires_at` is the node's mission time. Both machines run a wall
+/// clock, so both are seconds since the epoch and they agree only as far as the two
+/// machines do; a console a minute fast showed every item on the node's queue a minute
+/// closer to expiry than it was, and nothing said so. The node refuses a late decision
+/// either way (`409 Expired`, DN-31 §6.3) -- what was wrong was what the operator was
+/// told, on the one countdown they work to under saturation.
+#[must_use]
+pub fn node_now(state: &AppState) -> MissionTime {
+    let ours = state.clock.now();
+    state
+        .projection
+        .node_clock
+        .map_or(ours, |c| c.node_now(ours))
+}
+
+/// How far the node's clock is from this desktop's, in seconds, **and only when it is far
+/// enough to matter** ([`CLOCK_SKEW_TOLERANCE_S`], GAP-140).
+///
+/// `None` where the two agree to within a second, and where this desktop has never been
+/// told the node's clock at all: PN-01 says nothing rather than drawing a zero that would
+/// claim the two were compared when they were not.
+#[must_use]
+pub fn clock_skew_s(state: &AppState) -> Option<f64> {
+    state
+        .projection
+        .node_clock
+        .map(NodeClock::skew_s)
+        .filter(|skew| skew.abs() > CLOCK_SKEW_TOLERANCE_S)
 }

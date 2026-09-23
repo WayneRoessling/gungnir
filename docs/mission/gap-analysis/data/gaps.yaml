@@ -9248,6 +9248,20 @@
       defect stated as a test constraint. Not fixed in GAP-133: the fix puts a time on
       the wire and decides what a desktop does when the two disagree, which is a contract
       change rather than a panel one.
+  - date: 2026-09-23
+    status: Closed
+    note: >-
+      Closed by putting the node's clock on the wire and drawing against it (DN-31 §14,
+      D-70). `SnapshotResponse::node_time` is stamped where the route answers; a desktop
+      keeps the pair of readings and computes the node's time from its own clock and the
+      offset, so a countdown advances between snapshots without drifting off the node's
+      scale; PN-01 says the difference above one second and nothing when the two agree.
+      `a_node_s_deadline_is_drawn_against_the_node_s_clock`
+      (`gungnir-app/tests/desktop_projection.rs`) reads a row's countdown against the
+      node's own six-hundred-second window on a harness whose node keeps a stated mission
+      clock and whose desktops keep the wall clock -- where the old arithmetic reported
+      every item as expired by about fifty-five years. See
+      `../../record/2026-09-23/a-deadline-in-the-node-s-own-time.md`.
 
 - id: GAP-141
   name: A desktop has no identity of its own

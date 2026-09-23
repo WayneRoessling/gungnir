@@ -478,6 +478,7 @@ conflict, and says why in its own documentation.
 **The header.** It said "design only; no code exists" after GAP-130 to GAP-134 had built
 the note; it now says the note is built.
 
+<<<<<<< HEAD
 ## 15. Amendment 4 (2026-09-23, D-71): an outage outlives the process that fell into it
 
 **§6.7 and §6.8 describe an outage a process lives through** (GAP-142). The fallback --
@@ -520,3 +521,48 @@ GAP-129, GAP-130 to GAP-134, GAP-113, GAP-127, GAP-142; D-03, D-15, D-53, D-55 t
 D-71; DN-06, DN-07, DN-09 §5 and §7, DN-10 §3, §5 and §6, DN-23 §5, DN-25; MT-01, MT-10; MOP-07, MOE-01, MOE-05,
 MOE-11; CAP-3.6, CAP-3.7, CAP-4.2, CAP-4.3, CAP-5.4, CAP-5.9, CAP-6.2, CAP-7.2; contracts C-01,
 C-04; `ARCHITECTURE.md` §8.2 to §8.4; `docs/gungnir-api-v1.md`.
+=======
+## 14. Amendment 3 (2026-09-23, D-70): whose clock a deadline is in
+
+**§5.2 put the node's deadlines on the wire and never said whose time they were in**
+(GAP-140). `QueueItemView::expires_at` is the node's mission time; both machines run a
+wall clock, so both are seconds since the epoch and they agree only as far as the two
+machines' clocks do. PN-06 drew the countdown as `expires_at` minus **this desktop's**
+clock, and nothing measured the difference: a console a minute fast showed every item on
+the node's queue a minute closer to expiry than it was, and one a minute slow showed a
+window still open after it had closed. The node refuses the late decision either way
+(`409 Expired`, §6.3), so nothing was decided that should not have been; what was wrong
+was what the operator was told, on the one countdown they work to under saturation.
+
+**The node's clock travels with its picture.** `SnapshotResponse` carries `node_time`,
+stamped where the route answers rather than where the loop publishes, so the reading a
+desktop takes from it is as close to the transit as the node can make it. Additive and
+defaulted: a node that does not send one leaves a desktop drawing against its own clock,
+which is what it did before and says nothing it cannot support.
+
+**A desktop measures the offset once per connection, and draws against the node.** The
+pair -- what the node said, and what this desktop's clock said when it was read -- is kept
+rather than the difference, so the countdown advances on this desktop's own clock between
+snapshots while staying on the node's scale. Two clocks that tick at the same rate keep
+the offset they had when it was measured; what changes it is a machine's clock being set,
+and a desktop that reconnects measures it again.
+
+**PN-01 says the difference, above a second.** A countdown is drawn to the second, so a
+smaller difference cannot change what a person reads; a larger one means this console and
+the node disagree about a deadline by something that is on the screen. The element is
+absent when the two agree and when this desktop has never been told the node's clock,
+rather than drawing a zero that would claim a comparison nobody made.
+
+**Not a clock discipline.** Nothing here sets a clock, steers one, or refuses to work with
+a machine whose clock is wrong: it measures what the two say and draws the node's
+deadlines in the node's terms. GAP-008's `ClockSkewEstimator` measures sensor sources from
+ingest events and never sees a node, which is why it could not answer this.
+
+## Traceability
+
+GAP-129, GAP-130 to GAP-134, GAP-113, GAP-127, GAP-140; D-03, D-15, D-53, D-55 to D-61,
+D-70; DN-06, DN-07, DN-09 §5 and §7, DN-10 §3, §5 and §6, DN-23 §5, DN-25; MT-01, MT-10;
+MOP-07, MOE-01, MOE-05, MOE-11; CAP-3.6, CAP-3.7, CAP-4.2, CAP-4.3, CAP-5.4, CAP-5.9,
+CAP-6.2, CAP-7.2; contracts C-01, C-04; `ARCHITECTURE.md` §8.2 to §8.4;
+`docs/gungnir-api-v1.md`.
+>>>>>>> origin/main

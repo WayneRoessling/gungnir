@@ -1696,6 +1696,7 @@
     The bound is unchanged: a new producer beyond sixty-four is refused rather than
     evicting a set a partner is served from. See
     `../../record/2026-09-23/a-register-that-says-how-old-it-is.md`.
+<<<<<<< HEAD
 - id: D-71
   decision: What a desktop that has never reached its node does
   question: >-
@@ -1715,3 +1716,26 @@
     falls back and the sentence says which it is: "has not answered since this desktop
     signed in" rather than "silent for 12 s", because an operator reads the two
     differently. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.
+=======
+- id: D-70
+  decision: Whose clock a node's deadline is drawn against, and when a console is told they differ
+  question: >-
+    A node's queue item carries `expires_at` in the node's mission time, and PN-06 drew the
+    countdown against the desktop's own clock. Both are wall clocks, so they agree only as
+    far as the two machines do and nothing measured the difference (GAP-140). Should the
+    node's time travel with the picture and the countdown follow it, and at what difference
+    should a console be told the two clocks disagree at all?
+  raised_in: "GAP-133; GAP-140"
+  decider: Owner
+  unblocks: GAP-140
+  outcome: >-
+    **Proposed: the node stamps its clock on the snapshot as it answers, the desktop
+    measures the offset once per connection and draws the node's deadlines against the
+    node's time, and PN-01 says the difference above one second** (DN-31 §14, built
+    2026-09-23 and open in this ledger until the owner answers). The pair of readings is
+    kept rather than the difference, so a countdown advances on the desktop's own clock
+    between snapshots while staying on the node's scale. One second is the threshold
+    because a countdown is drawn to the second: below it nothing a person reads can change,
+    above it the console and the node disagree by a digit on the screen. Nothing sets or
+    steers a clock. See `../../record/2026-09-23/a-deadline-in-the-node-s-own-time.md`.
+>>>>>>> origin/main
