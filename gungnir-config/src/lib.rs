@@ -3696,6 +3696,10 @@ pub trait ConfigStore {
 pub struct FileConfigStore {
     path: PathBuf,
     applied: Option<ConfigBaseline>,
+    /// The revision this process started with, when its caller said (GAP-128). Not an
+    /// applied baseline: nothing was applied to reach it, so [`Self::applied`] stays
+    /// `None` until something is.
+    running: Option<u32>,
     known: KnownVocabulary,
 }
 
@@ -3708,8 +3712,22 @@ impl FileConfigStore {
         Self {
             path: path.into(),
             applied: None,
+            running: None,
             known,
         }
+    }
+
+    /// Record the revision this process is running, so that `apply` compares a
+    /// candidate with it rather than with the file on disk (GAP-128).
+    ///
+    /// **Why the file is the wrong comparison.** PN-14 reads its candidate from this
+    /// store's own file: the baseline is edited there, reloaded and applied. Until
+    /// 2026-09-17 a store that had applied nothing yet took the revision in force from
+    /// that same file, so it compared the candidate with itself and refused the first
+    /// apply of every edited baseline as `RevisionNotAdvanced`, whatever revision the
+    /// edit carried. The revision a candidate has to advance past is the one running.
+    pub fn set_running_revision(&mut self, revision: u32) {
+        self.running = Some(revision);
     }
 
     pub fn path(&self) -> &Path {
@@ -3781,12 +3799,16 @@ impl ConfigStore for FileConfigStore {
                 });
             }
         }
-        // The revision in force is what this store applied, or failing that what is on
-        // disk; a store with neither (a fresh deployment) has nothing to advance past.
+        // The revision in force is what this store applied; failing that, the revision
+        // the process says it is running (GAP-128); failing both, what is on disk. A
+        // store with none of the three (a fresh deployment) has nothing to advance past.
+        // The file comes last because it is where an edited candidate is read from, so
+        // comparing with it first compares the candidate with itself.
         let in_force = self
             .applied
             .as_ref()
             .map(|b| b.revision)
+            .or(self.running)
             .or_else(|| self.load().ok().map(|b| b.revision));
         if let Some(in_force) = in_force {
             if baseline.revision <= in_force {
@@ -5387,6 +5409,64 @@ MFkw
             .apply(baseline, MissionTime(150.0))
             .expect("inside its window");
         assert!(store.applied().is_some());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// GAP-128: a candidate read from the store's own file is compared with the revision
+    /// the process is running, not with that file. The file holds the edit, so comparing
+    /// with it compared the candidate with itself and refused every first apply.
+    #[test]
+    fn the_first_apply_compares_with_the_running_revision_not_the_file() {
+        let path = std::env::temp_dir().join(format!(
+            "gungnir-running-revision-{}.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let edited = |revision: u32| ConfigBaseline {
+            revision,
+            ..ConfigBaseline::default()
+        };
+        // Somebody edits the file to revision 2 while the process runs revision 1.
+        std::fs::write(&path, serde_json::to_string(&edited(2)).expect("encodes"))
+            .expect("written");
+
+        let mut store = FileConfigStore::new(&path, test_vocabulary());
+        store.set_running_revision(1);
+        let candidate = store.load().expect("the edited file loads");
+        store
+            .apply(candidate, MissionTime(0.0))
+            .expect("revision 2 advances past the running revision 1");
+        assert_eq!(store.applied().map(|b| b.revision), Some(2));
+
+        // An edit that did not advance is still refused, and against what is running.
+        std::fs::write(&path, serde_json::to_string(&edited(1)).expect("encodes"))
+            .expect("written");
+        let mut store = FileConfigStore::new(&path, test_vocabulary());
+        store.set_running_revision(1);
+        let candidate = store.load().expect("loads");
+        assert!(matches!(
+            store.apply(candidate, MissionTime(0.0)),
+            Err(ConfigError::RevisionNotAdvanced {
+                in_force: 1,
+                candidate: 1
+            })
+        ));
+
+        // The defect itself: told nothing, the store compares with the file it read the
+        // candidate from, so even an advanced edit is refused. Kept as the documented
+        // fallback for a caller that says nothing, and pinned so it cannot creep back in
+        // as the desktop's behaviour.
+        std::fs::write(&path, serde_json::to_string(&edited(2)).expect("encodes"))
+            .expect("written");
+        let mut unaware = FileConfigStore::new(&path, test_vocabulary());
+        let candidate = unaware.load().expect("loads");
+        assert!(matches!(
+            unaware.apply(candidate, MissionTime(0.0)),
+            Err(ConfigError::RevisionNotAdvanced {
+                in_force: 2,
+                candidate: 2
+            })
+        ));
         let _ = std::fs::remove_file(&path);
     }
 
