@@ -26,17 +26,20 @@ env:
 jobs:
   # deny.toml is the distributability control for an AGPL workspace (docs/release-
   # governance.md); a dependency under a license outside its allow-list has to fail the
-  # pull request that adds it, not the tag months later. Advisories are left to
-  # release.yml, so a new CVE in an unrelated crate does not block every PR.
+  # pull request that adds it, not the tag months later. Advisories run here too: a new
+  # CVE reaching main between tags is worth knowing about the pull request that
+  # introduced or already carried it, not only at the next release, and deny.toml's own
+  # `ignore` list is what keeps a dev-only or unreachable advisory from blocking one.
+  # release.yml still runs `cargo deny check` on every tag as the release gate proper.
   deny:
-    name: cargo-deny (licenses, bans, sources)
+    name: cargo-deny (licenses, bans, sources, advisories)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check licenses bans sources
+          command: check licenses bans sources advisories
 
   fmt-clippy-test:
     name: fmt, clippy, test
