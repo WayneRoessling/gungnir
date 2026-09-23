@@ -267,3 +267,118 @@ fn an_item_with_no_configured_expiry_is_preserved() {
     assert_eq!(decisions::expired_count(&state), 0);
     assert!(state.desk.approvals.queue()[0].no_expiry_reason().is_some());
 }
+
+/// GAP-127: the desktop's `decide` authorizes the call itself rather than trusting that
+/// PN-06 hid the control. Each refusal names why, and records nothing: no decision in the
+/// history, nothing published, no audit row, and the item still waiting.
+mod decide_is_authorized_where_it_acts {
+    use super::desktop;
+    use gungnir_app::decisions;
+    use gungnir_command::{ApprovalWorkflow, CommandError, OperatorDecision, Submission};
+    use gungnir_model::{EffectorLayer, MissionTime, PendingApprovalId, PlanId, PlanView};
+    use gungnir_policy::PolicyVerdict;
+    use gungnir_security::{AuditLog, Role};
+    use gungnir_ui::panels::approval_queue::PendingId;
+
+    /// A queued item, offered to `role` only.
+    fn queued(state: &mut gungnir_app::state::AppState, role: &str) -> PendingApprovalId {
+        state
+            .desk
+            .approvals
+            .submit_for_approval(Submission {
+                plan: PlanView {
+                    id: PlanId(7),
+                    ..PlanView::default()
+                },
+                verdict: PolicyVerdict::RequiresHumanApproval,
+                submitted: MissionTime(0.0),
+                layer: EffectorLayer::Point,
+                priority: 0.0,
+                role: role.into(),
+            })
+            .expect("queued")
+    }
+
+    /// Nothing happened: the item still waits, and nothing reached the history, the bus
+    /// or the audit trail.
+    fn nothing_recorded(state: &gungnir_app::state::AppState, item: PendingApprovalId) {
+        assert!(
+            state.desk.approvals.records().is_empty(),
+            "a refused decision was recorded"
+        );
+        assert!(
+            state.desk.approvals.queue().iter().any(|i| i.id == item),
+            "a refused decision took the item out of the queue"
+        );
+        assert!(
+            state.audit.entries().is_empty(),
+            "a refused decision left an audit row: {:?}",
+            state.audit.entries()
+        );
+    }
+
+    #[test]
+    fn a_role_without_plan_decide_is_refused_and_nothing_is_recorded() {
+        let mut state = desktop("gap127-analyst");
+        let item = queued(&mut state, "Operator");
+        state.set_role(Role::Analyst);
+        let err = decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted)
+            .expect_err("an Analyst may not decide a plan");
+        assert!(
+            matches!(&err, CommandError::NotPermitted { action, .. } if *action == "plan.decide"),
+            "refused for some other reason: {err}"
+        );
+        assert!(
+            err.to_string().contains("Analyst"),
+            "the refusal did not name the role: {err}"
+        );
+        nothing_recorded(&state, item);
+    }
+
+    /// Operator holds `plan.decide` and not `plan.override`. Before GAP-127 the desktop
+    /// recorded an Operator's override that the node's route refuses with a 403.
+    #[test]
+    fn an_operator_override_needs_plan_override_and_is_refused() {
+        let mut state = desktop("gap127-override");
+        let item = queued(&mut state, "Operator");
+        state.set_role(Role::Operator);
+        let err = decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Overridden)
+            .expect_err("an Operator may not override");
+        assert!(
+            matches!(&err, CommandError::NotPermitted { action, .. } if *action == "plan.override"),
+            "refused for some other reason: {err}"
+        );
+        nothing_recorded(&state, item);
+    }
+
+    /// A Supervisor holds `plan.decide`, but an item offered to the Operator and never
+    /// escalated is not theirs to take (DN-10 §5), as the node's route already says.
+    #[test]
+    fn a_role_the_item_was_not_offered_to_is_refused() {
+        let mut state = desktop("gap127-offer");
+        let item = queued(&mut state, "Operator");
+        state.set_role(Role::Supervisor);
+        let err = decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted)
+            .expect_err("the item was offered to the Operator only");
+        let CommandError::NotOffered {
+            offered_to, role, ..
+        } = &err
+        else {
+            panic!("refused for some other reason: {err}");
+        };
+        assert_eq!(role, "Supervisor");
+        assert_eq!(offered_to, &vec!["Operator".to_string()]);
+        nothing_recorded(&state, item);
+    }
+
+    /// The control: the role the item was offered to, holding the permission, decides.
+    #[test]
+    fn the_offered_role_with_the_permission_decides() {
+        let mut state = desktop("gap127-allowed");
+        let item = queued(&mut state, "Operator");
+        state.set_role(Role::Operator);
+        decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted)
+            .expect("the Operator may accept an item offered to the Operator");
+        assert_eq!(state.desk.approvals.records().len(), 1);
+    }
+}

@@ -854,7 +854,9 @@ impl App {
                 gungnir_command::CommandError::NotFound(item) => {
                     format!("queue item {} is no longer waiting", item.short())
                 }
-                refused @ gungnir_command::CommandError::DeniedByPolicy(_) => refused.to_string(),
+                refused @ (gungnir_command::CommandError::DeniedByPolicy(_)
+                | gungnir_command::CommandError::NotPermitted { .. }
+                | gungnir_command::CommandError::NotOffered { .. }) => refused.to_string(),
             };
             self.state
                 .alerts

@@ -227,6 +227,22 @@ pub enum CommandError {
     NotFound(PendingApprovalId),
     #[error("plan was denied by policy ({0:?}) and cannot be submitted for approval")]
     DeniedByPolicy(DenialReason),
+    /// The role acting may not take this decision (GAP-127). Nothing was recorded.
+    ///
+    /// `action` is the permission the decision needs: `plan.override` for an override,
+    /// which is stricter than `plan.decide`, exactly as the node's route asks.
+    #[error("{role} may not take this decision ({action}); nothing was recorded")]
+    NotPermitted { role: String, action: &'static str },
+    /// The role holds the permission, but this item was never offered to it, nor
+    /// escalated to it (GAP-127, DN-10 §5). Nothing was recorded.
+    #[error(
+        "queue item {item} is offered to {offered_to:?} and not to {role}; nothing was recorded"
+    )]
+    NotOffered {
+        item: PendingApprovalId,
+        role: String,
+        offered_to: Vec<String>,
+    },
 }
 
 /// What became of a decision another machine took and forwarded
