@@ -1685,16 +1685,17 @@
   raised_in: "GAP-137; GAP-145"
   decider: Owner
   unblocks: GAP-145
+  resolved: 2026-09-23
   outcome: >-
-    **Proposed: nothing expires, the answer carries its age, and a desktop refreshes when
-    its link comes back** (DN-18 §12, built 2026-09-23 and open in this ledger until the
-    owner answers). A handoff is a decision that was taken, so expiry would delete a true
-    thing to hide an unknown one; `as_of` on the response is the node time the least
-    recently refreshed producer wrote, which is what a partner can be told without learning
-    how many consoles this deployment runs; and a desktop publishes its whole set on the
-    tick its link returns, which is the only moment it knows the node may have forgotten.
-    The bound is unchanged: a new producer beyond sixty-four is refused rather than
-    evicting a set a partner is served from. See
+    **Nothing expires, the answer carries its age, and a desktop refreshes when its link
+    comes back** (DN-18 §12). A handoff is a decision that was taken, so expiry would
+    delete a true thing to hide an unknown one, and a partner would watch a list shrink for
+    a reason no field explains. `as_of` on both `ExchangeResponse` variants is the node
+    time the least recently refreshed producer wrote, which is what a partner can be told
+    without learning how many consoles this deployment runs. A desktop publishes its whole
+    handoff set the tick its link returns -- the edge, not the state -- and one holding none
+    publishes none. The bound is unchanged: a new producer beyond sixty-four is refused
+    rather than evicting a set a partner is served from. See
     `../../record/2026-09-23/a-register-that-says-how-old-it-is.md`.
 - id: D-70
   decision: Whose clock a node's deadline is drawn against, and when a console is told they differ
@@ -1707,16 +1708,16 @@
   raised_in: "GAP-133; GAP-140"
   decider: Owner
   unblocks: GAP-140
+  resolved: 2026-09-23
   outcome: >-
-    **Proposed: the node stamps its clock on the snapshot as it answers, the desktop
-    measures the offset once per connection and draws the node's deadlines against the
-    node's time, and PN-01 says the difference above one second** (DN-31 §14, built
-    2026-09-23 and open in this ledger until the owner answers). The pair of readings is
-    kept rather than the difference, so a countdown advances on the desktop's own clock
-    between snapshots while staying on the node's scale. One second is the threshold
-    because a countdown is drawn to the second: below it nothing a person reads can change,
-    above it the console and the node disagree by a digit on the screen. Nothing sets or
-    steers a clock. See `../../record/2026-09-23/a-deadline-in-the-node-s-own-time.md`.
+    **The node stamps its clock on the snapshot as it answers, the desktop measures the
+    offset once per connection and draws the node's deadlines against the node's time, and
+    PN-01 says the difference above one second** (DN-31 §14). The pair of readings is kept
+    rather than the difference, so a countdown advances on the desktop's own clock between
+    snapshots while staying on the node's scale. One second is the threshold because a
+    countdown is drawn to the second: below it nothing a person reads can change, above it
+    the console and the node disagree by a digit on the screen. Nothing sets or steers a
+    clock. See `../../record/2026-09-23/a-deadline-in-the-node-s-own-time.md`.
 - id: D-71
   decision: What a desktop that has never reached its node does
   question: >-
@@ -1728,11 +1729,11 @@
   raised_in: "GAP-134; GAP-142"
   decider: Owner
   unblocks: GAP-142
+  resolved: 2026-09-23
   outcome: >-
-    **Proposed: silent, measured from the link's own start** (DN-31 §15, built 2026-09-23
-    and open in this ledger until the owner answers). The link records when its task began
-    asking, and silence runs from the last thing heard or from that start where nothing has
-    ever been heard, against the same heartbeat timeout as any other silence. The desktop
-    falls back and the sentence says which it is: "has not answered since this desktop
-    signed in" rather than "silent for 12 s", because an operator reads the two
+    **Silent, measured from the link's own start** (DN-31 §15). The link records when its
+    task began asking, and silence runs from the last thing heard or from that start where
+    nothing has ever been heard, against the same heartbeat timeout as any other silence.
+    The desktop falls back and the sentence says which it is: "has not answered since this
+    desktop signed in" rather than "silent for 12 s", because an operator reads the two
     differently. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.

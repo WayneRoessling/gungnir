@@ -21,7 +21,7 @@ the owner reviewed. A signature from before the repository existed on 2026-09-07
 the first commit and is marked as such. An entry is never edited; a withdrawn signature
 gets a new entry.
 
-231 signatures.
+235 signatures.
 
 | Date | Signer | What was signed | Kind | Paths | Commit | Record |
 |---|---|---|---|---|---|---|
@@ -256,3 +256,7 @@ gets a new entry.
 | 2026-09-23 | Owner | DN-18 amendment 3 (§11): one exchange register with a producer per writer, merged on read, and the node's own handoffs wired in (D-68). | design-note | `docs/design/DN-18-coalition-exchange.md` | `261baec1e8` | DN-18 §11; docs/design/README.md DN-18 row; docs/record/2026-09-23/a-partner-hears-what-the-node-decided.md; PR #156 |
 | 2026-09-23 | Owner | GAP-137: the exchange register keyed by producer in the gungnir-api write path -- `publish_exchange` and `withhold_exchange` taking an `ExchangeProducer`, the merged `exchange_all`, the bound and its `ApiError::NoRoom`, and the publish handler naming the producer from the common name the connection was verified under. | code | `gungnir-api/src/transport.rs`<br>`gungnir-api/src/lib.rs`<br>`gungnir-api/src/v3/mod.rs` | `261baec1e8` | GAP-137; DN-18 §11; docs/record/2026-09-23/a-partner-hears-what-the-node-decided.md; PR #156 |
 | 2026-09-23 | Owner | GAP-137: the node's decision path publishing what it issues (D-65) -- `NodeHost::republish_handoffs` no longer a no-op, `claim_exchange_items` claiming an empty handoff set rather than withholding, and the loop's frame carrying the transport. | code | `gungnir-node/src/approval.rs`<br>`gungnir-node/src/main.rs` | `261baec1e8` | GAP-137; D-65; docs/record/2026-09-23/a-partner-hears-what-the-node-decided.md; PR #156 |
+| 2026-09-23 | Owner | D-69 and DN-18 §12: the exchange register's lifecycle -- nothing expires, `as_of` carries the age of its least recently refreshed producer, and a desktop republishes its whole handoff set when its link comes back. | design-note | `docs/design/DN-18-coalition-exchange.md` | `f8c0ab381c` | DN-18 §12; D-69; docs/record/2026-09-23/a-register-that-says-how-old-it-is.md; PR #160 |
+| 2026-09-23 | Owner | D-70 and DN-31 §14: a node's deadline is drawn against the node's clock, which travels with its picture, and PN-01 says the difference above one second. | design-note | `docs/design/DN-31-node-approval-queue.md` | `9791344b1e` | DN-31 §14; D-70; docs/record/2026-09-23/a-deadline-in-the-node-s-own-time.md; PR #161 |
+| 2026-09-23 | Owner | D-71 and DN-31 §15: an unfinished outage is recovered from the journal, and a node that has never answered is silent from the link's own start. | design-note | `docs/design/DN-31-node-approval-queue.md` | `41c32adaaf` | DN-31 §15; D-71; docs/record/2026-09-23/an-outage-outlives-its-process.md; PR #163 |
+| 2026-09-23 | Owner | GAP-142: a decision's journal entry carries the queue item it answered and whether it was an override (`DecisionRecord::to_event`), which is what a desktop reads back after a restart and what `accepted` and `plan` left out. | code | `gungnir-command/src/lib.rs`<br>`gungnir-model/src/events.rs` | `41c32adaaf` | GAP-142; DN-31 §15; docs/record/2026-09-23/an-outage-outlives-its-process.md; PR #163 |
