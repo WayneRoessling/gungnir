@@ -369,8 +369,10 @@ pub struct NodeApi {
     /// GAP-132 and every desktop it serves publishes its own set; with one set per item
     /// the register held whichever writer wrote last, and which one a partner saw
     /// depended on tick order.
-    exchange_products:
-        RwLock<BTreeMap<ExchangeItem, BTreeMap<ExchangeProducer, v3::ExchangeResponse>>>,
+    ///
+    /// **Each set carries when it was written** (GAP-145), because a merged answer is
+    /// only as current as its quietest producer and a partner cannot see the producers.
+    exchange_products: RwLock<BTreeMap<ExchangeItem, BTreeMap<ExchangeProducer, ProducerSet>>>,
 }
 
 /// Who wrote a set into this deployment's exchange register (GAP-137, DN-18 §5
@@ -402,6 +404,21 @@ pub enum ExchangeProducer {
     /// before GAP-137, and telling two desktops apart is what mutual TLS buys: a
     /// deployment that wants them distinguished configures certificates for them.
     Unidentified,
+}
+
+/// One producer's answer for an item, and when this node took it (GAP-137, GAP-145).
+///
+/// **Nothing expires it.** A handoff is a decision that was taken, and dropping one
+/// because the console that issued it went quiet would delete a true thing to hide an
+/// unknown one. What the age is for is the answer a partner reads: `as_of` on
+/// [`v3::ExchangeResponse`] carries the oldest of these, so a partner can tell a
+/// deployment that holds nothing new from one whose producer stopped talking. A desktop
+/// refreshes its own set whenever its link comes back (GAP-145), so the age of a live
+/// deployment's answer is bounded by its link rather than by its handoffs.
+#[derive(Debug, Clone)]
+struct ProducerSet {
+    answer: v3::ExchangeResponse,
+    written: MissionTimeSeconds,
 }
 
 /// How many producers one item admits (GAP-137).
@@ -780,6 +797,8 @@ impl NodeApi {
                 item,
                 products,
                 withheld: 0,
+                // Filled in on the way out, from the oldest producer's write.
+                as_of: None,
             },
         )
     }
@@ -807,6 +826,7 @@ impl NodeApi {
             v3::ExchangeResponse::NotHeld {
                 item,
                 reason: reason.into(),
+                as_of: None,
             },
         )
     }
@@ -826,6 +846,7 @@ impl NodeApi {
             .exchange_products
             .write()
             .map_err(|_| ApiError::Transport("the exchange lock was poisoned".into()))?;
+        let written = self.now();
         let sets = slot.entry(item).or_default();
         if !sets.contains_key(&producer) && sets.len() >= PRODUCERS_PER_ITEM {
             return Err(ApiError::NoRoom(format!(
@@ -833,7 +854,7 @@ impl NodeApi {
                  {producer:?} was not admitted and published nothing"
             )));
         }
-        sets.insert(producer, answer);
+        sets.insert(producer, ProducerSet { answer, written });
         Ok(())
     }
 
@@ -852,8 +873,12 @@ impl NodeApi {
         let mut withheld = 0usize;
         let mut reasons: Vec<String> = Vec::new();
         let mut any_held = false;
-        for answer in held.get(&item).into_iter().flat_map(BTreeMap::values) {
-            match answer {
+        let mut as_of: Option<MissionTimeSeconds> = None;
+        for set in held.get(&item).into_iter().flat_map(BTreeMap::values) {
+            // The oldest write across every producer, held or not: an answer is as
+            // current as its quietest contributor (GAP-145).
+            as_of = Some(as_of.map_or(set.written, |oldest: f64| oldest.min(set.written)));
+            match &set.answer {
                 v3::ExchangeResponse::Held {
                     products: one_set,
                     withheld: one_count,
@@ -866,11 +891,13 @@ impl NodeApi {
                 v3::ExchangeResponse::NotHeld { reason, .. } => reasons.push(reason.clone()),
             }
         }
+        let as_of = as_of.map(gungnir_model::MissionTime);
         if any_held {
             return Some(v3::ExchangeResponse::Held {
                 item,
                 products,
                 withheld,
+                as_of,
             });
         }
         Some(v3::ExchangeResponse::NotHeld {
@@ -880,6 +907,7 @@ impl NodeApi {
             } else {
                 reasons.join("; ")
             },
+            as_of,
         })
     }
 
@@ -898,6 +926,7 @@ impl NodeApi {
                 item,
                 products,
                 withheld,
+                as_of,
             } => {
                 let total = products.len();
                 let products: Vec<v3::ExchangeProduct> = products
@@ -908,6 +937,7 @@ impl NodeApi {
                     item,
                     withheld: withheld + (total - products.len()),
                     products,
+                    as_of,
                 })
             }
         }
@@ -2916,7 +2946,7 @@ mod tests {
         )
         .expect("withheld");
         match api.exchange_all(ExchangeItem::Reports) {
-            Some(v3::ExchangeResponse::NotHeld { item, reason }) => {
+            Some(v3::ExchangeResponse::NotHeld { item, reason, .. }) => {
                 assert_eq!(item, ExchangeItem::Reports);
                 assert_eq!(reason, "this node produces no reports");
             }
@@ -2999,6 +3029,88 @@ mod tests {
             vec!["node-2", "desk-1", "desk-2"],
             "the node replaced more than its own set"
         );
+    }
+
+    /// GAP-145: the answer says when its **least recently refreshed** producer wrote,
+    /// because a merged set is only as current as its quietest contributor and a partner
+    /// cannot see the producers.
+    ///
+    /// Nothing expires: a handoff is a decision that was taken, so the age travels and
+    /// the products stay. What moves the age is a producer writing again -- which a
+    /// desktop does whenever its link comes back (GAP-145).
+    #[test]
+    fn the_answer_says_when_its_quietest_producer_last_wrote() {
+        use gungnir_model::Releasability;
+        let api = api();
+        let desk = || ExchangeProducer::Party("desktop-aaaa".into());
+        api.set_now(10.0);
+        api.publish_exchange(
+            ExchangeProducer::Node,
+            ExchangeItem::Handoffs,
+            vec![product("node-1", Releasability::AllPeers)],
+        )
+        .expect("the node published");
+        api.set_now(20.0);
+        api.publish_exchange(
+            desk(),
+            ExchangeItem::Handoffs,
+            vec![product("desk-1", Releasability::AllPeers)],
+        )
+        .expect("the desktop published");
+        assert_eq!(
+            as_of(&api),
+            Some(gungnir_model::MissionTime(10.0)),
+            "the age is the oldest producer's write, not the newest"
+        );
+
+        // The node republishes, so the desktop is now the quietest.
+        api.set_now(30.0);
+        api.publish_exchange(
+            ExchangeProducer::Node,
+            ExchangeItem::Handoffs,
+            vec![product("node-2", Releasability::AllPeers)],
+        )
+        .expect("the node republished");
+        assert_eq!(
+            as_of(&api),
+            Some(gungnir_model::MissionTime(20.0)),
+            "a republish did not move the age off the producer that wrote it"
+        );
+        assert_eq!(
+            held_ids(&api),
+            vec!["node-2", "desk-1"],
+            "the quiet producer's products were dropped for their age"
+        );
+
+        // A producer that holds none is as old as its claim: the age is about the answer,
+        // not about the products in it.
+        api.set_now(40.0);
+        api.withhold_exchange(
+            ExchangeProducer::Node,
+            ExchangeItem::Reports,
+            "this node publishes no reports",
+        )
+        .expect("withheld");
+        match api.exchange_all(ExchangeItem::Reports) {
+            Some(v3::ExchangeResponse::NotHeld { as_of, .. }) => {
+                assert_eq!(as_of, Some(gungnir_model::MissionTime(40.0)));
+            }
+            other => panic!("expected a reason, got {other:?}"),
+        }
+
+        // And an item nothing has ever been published for has no age at all.
+        match api.exchange_all(ExchangeItem::Warnings) {
+            Some(v3::ExchangeResponse::NotHeld { as_of: None, .. }) => {}
+            other => panic!("an unpublished item was given an age: {other:?}"),
+        }
+    }
+
+    /// When the least recently refreshed part of the handoff answer was written.
+    fn as_of(api: &NodeApi) -> Option<gungnir_model::MissionTime> {
+        match api.exchange_all(ExchangeItem::Handoffs) {
+            Some(v3::ExchangeResponse::Held { as_of, .. }) => as_of,
+            other => panic!("expected a held set, got {other:?}"),
+        }
     }
 
     /// GAP-137: when every producer withholds, the answer is `NotHeld` and carries what

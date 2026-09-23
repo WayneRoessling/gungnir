@@ -389,6 +389,24 @@ pub fn tick(state: &mut AppState) {
     lapse_if_due(state, now);
     poll_history(state);
     take_forward_replies(state, &link);
+    republish_exchange_on_reconnect(state, &link);
+}
+
+/// Publish this desktop's whole handoff set to the node again when the link comes back
+/// (GAP-145, DN-18 §12).
+///
+/// **The edge, not the state.** A publish replaces this producer's set, so repeating it
+/// every tick would be a write a second for nothing; what matters is the moment the link
+/// returns, because a node that restarted while it was away holds an empty register and
+/// nothing else would tell it otherwise until this desktop issues its next handoff. An
+/// outage's queued batches flush on the same reconnection and this is a replacement, so
+/// the two agree whichever lands last.
+fn republish_exchange_on_reconnect(state: &mut AppState, link: &NodeLink) {
+    let connected = link.connected();
+    let was = std::mem::replace(&mut state.link_was_connected, connected);
+    if connected && !was {
+        crate::handoffs::republish_to_node(state);
+    }
 }
 
 /// The node's answers to this desktop's forwarded outages (GAP-134).

@@ -37,6 +37,25 @@ pub fn issue_for(state: &mut AppState, record: &DecisionRecord) {
     crate::desk::with_desk(state, |desk, cx, host| desk.issue_for(cx, host, record));
 }
 
+/// Publish this desktop's whole current handoff set to its node again (GAP-145).
+///
+/// The same call `issue_for` makes through the host, without a new handoff to make it:
+/// the set is a replacement, so sending it again costs a partner nothing and repairs a
+/// node that came back without it.
+///
+/// **A desktop holding none publishes nothing.** An empty set is a claim -- "there are
+/// none here" -- and a console that has issued nothing has no claim to make; it also
+/// keeps quiet consoles out of the node's register, which is one producer slot each that
+/// they would otherwise take (`PRODUCERS_PER_ITEM`).
+pub fn republish_to_node(state: &mut AppState) {
+    if state.desk.handoffs.is_empty() {
+        return;
+    }
+    crate::desk::with_desk(state, |desk, _cx, host| {
+        gungnir_approval::ApprovalHost::republish_handoffs(host, &desk.handoffs);
+    });
+}
+
 /// The handoff rows PN-06 and PN-20 draw (GAP-040).
 ///
 /// One builder for both panels, borrowed from the record for the frame. Unfiltered: PN-06

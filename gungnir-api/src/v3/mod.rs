@@ -339,6 +339,17 @@ pub enum ExchangeResponse {
         /// **Never silent**: a partner told its list is partial can ask for the rest;
         /// one that is not told believes it has everything (DN-17 §5 rule 3).
         withheld: usize,
+        /// When the **least recently refreshed** part of this answer was written, on the
+        /// answering node's clock (GAP-145).
+        ///
+        /// The register holds one set per producer and merges them (GAP-137), so an
+        /// answer is only as current as its quietest producer. This is that producer's
+        /// last write: a partner comparing it with the age of the engagement it is asking
+        /// about can tell a deployment that holds nothing new from one whose console
+        /// stopped talking. Absent when nothing has been published for the item, and
+        /// absent from an older node that does not send it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        as_of: Option<MissionTime>,
     },
     /// This deployment publishes none of this item, and why: a producer that keeps no
     /// such ledger saying so, which is different from reporting that there are none.
@@ -347,7 +358,15 @@ pub enum ExchangeResponse {
     /// producer in the register holds any, and it carries what each of them said. A node
     /// keeps no warnings and no reports; since GAP-132 it does keep handoffs, and claims
     /// an empty set for them rather than this.
-    NotHeld { item: ExchangeItem, reason: String },
+    NotHeld {
+        item: ExchangeItem,
+        reason: String,
+        /// When the least recently refreshed of those claims was written (GAP-145), as on
+        /// [`ExchangeResponse::Held`]. Absent when nothing has been published at all,
+        /// which is the one answer that has no age.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        as_of: Option<MissionTime>,
+    },
 }
 
 /// `POST /v3/exchange/{warnings,reports,handoffs}` (DN-18 §5 amendment 2, GAP-065): the
