@@ -825,10 +825,16 @@ fn two_desktops_show_one_node_queue_and_neither_decides_it_itself() {
 /// open after it had closed. The node refuses the late decision either way (`409
 /// Expired`), so what was wrong was what the operator was told.
 ///
-/// **The harness is the extreme case, and it is not contrived**: this node keeps a stated
-/// mission clock from `SUBMITTED` while the desktops keep the wall clock, so before this
-/// change every row read as expired by about fifty-five years. The assertion is the
-/// node's own window, which is the only number that means anything on either machine.
+/// **No node loop, and deliberately so.** What is under test is the desktop's arithmetic
+/// against a stated queue, so this serves one stated snapshot rather than running the
+/// approval loop beside row 7's: a second loop in this binary would compete for the same
+/// cores as the MOP-07 measurement the row above gates on, and `Node::propose` would
+/// reach `mop07.plan_proposed` from a thread this test has no subscriber on -- which
+/// `tracing` caches as "never interested" for the whole process.
+///
+/// The disagreement is the extreme case and it is not contrived: this node keeps a stated
+/// mission clock at `SUBMITTED` while the desktop keeps the wall clock, so before this
+/// change the row read as expired by about fifty-five years.
 #[test]
 fn a_node_s_deadline_is_drawn_against_the_node_s_clock() {
     let addr: std::net::SocketAddr = {
@@ -836,49 +842,43 @@ fn a_node_s_deadline_is_drawn_against_the_node_s_clock() {
         probe.local_addr().expect("addr")
     };
     let api = api_knowing_the_accounts();
+    // The node's clock, and one item on its queue with the window this baseline gives the
+    // point layer. Both stated, because both are the node's to state.
+    api.set_now(SUBMITTED);
+    api.publish_snapshot(
+        SnapshotResponse::new(Vec::new(), None, SystemHealth::default(), Vec::new())
+            .with_queue(vec![waiting_item()]),
+    )
+    .expect("the snapshot publishes");
     let _runtime = serve(addr, Arc::clone(&api));
-    let node = Node::spawn(Arc::clone(&api));
 
     let endpoint = format!("http://{addr}");
-    let (mut console_a, dir_a) = desktop("clock-a", &endpoint);
-    let (mut console_b, dir_b) = desktop("clock-b", &endpoint);
-    sign_in(&mut console_a, OPERATOR);
-    sign_in(&mut console_b, SUPERVISOR);
+    let (mut console, dir) = desktop("clock", &endpoint);
+    let (mut idle, idle_dir) = desktop("clock-idle", &endpoint);
+    sign_in(&mut console, OPERATOR);
     until(
-        &mut console_a,
-        &mut console_b,
-        "both streams to subscribe",
-        20.0,
-        |_, _| api.subscriber_count() >= 2,
-    );
-
-    let tracks = vec![track(0)];
-    let point = node
-        .propose(&tracks, plan(1, 0, 0))
-        .expect("a point plan against a hostile track is the Operator's");
-    until(
-        &mut console_a,
-        &mut console_b,
-        "the node's item to reach the desktop",
+        &mut console,
+        &mut idle,
+        "the node's item to reach PN-06",
         20.0,
         |a, _| !shown(a).is_empty(),
     );
 
-    let row = projection::queue_rows(&console_a)
+    let row = projection::queue_rows(&console)
         .into_iter()
-        .find(|r| r.id == PendingId(point.0))
+        .next()
         .expect("the item is on PN-06");
     match row.time_remaining {
         gungnir_ui::panels::approval_queue::TimeRemaining::Seconds(left) => assert!(
-            (0.0..=POINT_EXPIRY_S).contains(&left) && left > POINT_EXPIRY_S - 60.0,
+            left > POINT_EXPIRY_S - 60.0 && left <= POINT_EXPIRY_S,
             "the countdown is {left} s, not the node's own window of about \
              {POINT_EXPIRY_S} s: it is being drawn against this console's clock"
         ),
-        other => panic!("this layer configures an expiry, so the row has one: {other:?}"),
+        other => panic!("this item carries an expiry, so the row has one: {other:?}"),
     }
 
     // The other half: the two clocks disagree, and PN-01 is where that is said.
-    let skew = projection::clock_skew_s(&console_a).expect("these two clocks disagree");
+    let skew = projection::clock_skew_s(&console).expect("these two clocks disagree");
     assert!(
         skew < -f64::from(1_000_000),
         "the node keeps a stated mission clock and this console keeps the wall clock, so \
@@ -889,6 +889,22 @@ fn a_node_s_deadline_is_drawn_against_the_node_s_clock() {
         "a node whose clock is behind this console is not said to be behind it"
     );
 
-    let _ = std::fs::remove_dir_all(&dir_a);
-    let _ = std::fs::remove_dir_all(&dir_b);
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&idle_dir);
+}
+
+/// One item waiting on the node's queue, with the point layer's window from `SUBMITTED`.
+fn waiting_item() -> gungnir_api::v3::QueueItemView {
+    gungnir_api::v3::QueueItemView {
+        item: PendingApprovalId(1),
+        plan: plan(1, 0, 0),
+        verdict: gungnir_model::events::VerdictSummary::RequiresHumanApproval,
+        layer: EffectorLayer::Point,
+        submitted: MissionTime(SUBMITTED),
+        expires_at: Some(MissionTime(SUBMITTED + POINT_EXPIRY_S)),
+        escalate_at: None,
+        offered_to: vec!["Operator".into()],
+        pre_delegated: false,
+        priority: 0.0,
+    }
 }
