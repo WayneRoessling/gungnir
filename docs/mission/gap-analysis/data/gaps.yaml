@@ -9310,3 +9310,50 @@
   - date: 2026-09-17
     status: Closed
     note: "Fixed. A sign-in while a fallback is in force changes only who the outage's link signs in as, through `NodeLink::replace_credential`, and leaves the fallback, the embedded services and the link where they are; only a person switching back ends an outage (D-15). A new link would have started empty and lost what the outage had queued for the node. The link now holds its credential where `Debug` can reach it, so `Credential`'s `Debug` redacts the passphrase. `failover_e2e.rs`'s new test fails against the old sign-in path at its first check. See `../../record/2026-09-17/a-sign-in-during-an-outage-no-longer-ends-it.md`."
+
+- id: GAP-144
+  name: The release passes only by accepting two quick-xml advisories
+  type: Technical
+  caps: [CAP-6.5]
+  layer: Verification and governance
+  sev: 3
+  effort: M
+  target: I2
+  owner: UI engineer
+  deps: []
+  impact: >-
+    On `main` the release gate held only because `deny.toml` accepts RUSTSEC-2026-0194 and
+    -0195, denial-of-service advisories in quick-xml 0.30.0, and since #142 `cargo audit`
+    honours that acceptance too; without it both scanners fail. The crate came in only
+    through eframe 0.29's Linux accessibility bridge, and an acceptance by advisory id would
+    also cover a vulnerable quick-xml that reached a shipped build by some other path.
+  evidence: >-
+    `deny.toml` `[advisories] ignore` (RUSTSEC-2026-0194 and -0195, accepted 2026-09-07);
+    release run 35296523137, where `cargo audit` failed on both; `cargo tree -i quick-xml
+    --target all -e normal,build` at `1af6543`: 0.30.0 through `accesskit_unix`, `atspi`,
+    `zbus-lockstep` and `zbus_xml` 4.0.0, which pins it
+  action: >-
+    Move eframe and egui to 0.34, three-d to 0.19 and egui_tiles to 0.15, the newest set
+    that keeps one `glow` for the shared OpenGL context, with eframe's `accesskit` kept and
+    no behaviour or test assertion changed.
+  ref: >-
+    `../../record/2026-09-17/egui-0-34-and-three-d-0-19.md`; the first release runs in
+    `../../record/2026-09-17/release-workflow-first-runs.md`
+  history:
+  - date: 2026-09-17
+    status: Open
+    note: >-
+      Filed with its fix. On `main` the release's advisory gate passed only because
+      `deny.toml` accepted RUSTSEC-2026-0194 and -0195 on 2026-09-07 and #142 handed that
+      acceptance to `cargo audit`; release run 35296523137 had failed on them. Offered
+      keeping the acceptance, the upgrade, or turning off eframe's `accesskit` on Linux, the
+      owner chose the upgrade.
+  - date: 2026-09-17
+    status: Closed
+    note: >-
+      Closed by moving eframe and egui to 0.34, three-d to 0.19 and egui_tiles to 0.15. The
+      only quick-xml left is 0.41.0, under `wayland-scanner` at build time, and `Cargo.lock`
+      matched against the RustSec database finds no vulnerability, so `cargo audit` needs no
+      `--ignore`. The two acceptances, and ttf-parser's, now match nothing; they stay until
+      the owner removes them. `cargo deny` and `cargo audit` were not run where this was
+      done. See `../../record/2026-09-17/egui-0-34-and-three-d-0-19.md`.

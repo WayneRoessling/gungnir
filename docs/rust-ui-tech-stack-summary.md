@@ -70,15 +70,17 @@ eframe's `glow` backend. The consequences, now reflected in `ARCHITECTURE.md` §
    replaced by a `wgpu`-native renderer (Bevy, a `wgpu` scene crate, or hand-written
    `wgpu` code), which is also the only route to DirectX 12 *rendering*. That switch is
    not planned.
-5. eframe runs with its default `glow` feature and without its optional `wgpu`
-   feature. The workspace pins `wgpu` 22, the line that feature would use, so
-   enabling it later can never produce two `wgpu` versions in one build.
+5. eframe runs with its `glow` feature and without its optional `wgpu` feature. Since
+   eframe 0.34 `glow` is no longer a default, so the workspace names it. The workspace
+   pins `wgpu` 22 for the compute device; eframe 0.34's `wgpu` feature is on 29, so
+   enabling it later would put two `wgpu` versions in one build unless the compute
+   device moved too.
 
 ## 4. Version set
 
 The pinned versions and their caveats are in `ARCHITECTURE.md` §9. In short: `eframe`
-and `egui` 0.29, `three-d` 0.18, `wgpu` 22 (compute only), `gltf` 1, `vtkio` 0.6,
-`las` 0.9, on the Rust 1.98 toolchain pinned in `rust-toolchain.toml`. Pin `wgpu`,
+and `egui` 0.34, `three-d` 0.19, `wgpu` 22 (compute only), `gltf` 1, `vtkio` 0.6,
+`las` 0.11, on the Rust 1.98 toolchain pinned in `rust-toolchain.toml`. Pin `wgpu`,
 `egui`, `eframe`, and `three-d` explicitly; these crates move fast and break API
 compatibility between minor versions (`rust-ui-architecture-coding-standards.md` §9).
 

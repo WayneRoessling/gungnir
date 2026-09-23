@@ -11,7 +11,7 @@
 //! string -- and nothing checked that the panel drew it. A panel could hold a perfect
 //! `EmptyBecause` and never render it.
 //!
-//! `egui::Context::run` needs no window, no GPU and no display: it lays out a frame and
+//! `egui::Context::run_ui` needs no window, no GPU and no display: it lays out a frame and
 //! returns the shapes it would paint. Walking those shapes for their text gives the
 //! drawn output, which is the thing the claims are about.
 //!
@@ -74,7 +74,7 @@ impl RenderProbe {
     /// second pass -- grid column widths in particular -- and a first-frame reading
     /// would occasionally miss text that is present in every frame a person would see.
     ///
-    /// The value is an `Option` rather than being unwrapped here: `CentralPanel::show`
+    /// The value is an `Option` rather than being unwrapped here: `CentralPanel::show_inside`
     /// always runs its contents, so it is always `Some`, but this module compiles as
     /// ordinary code under the `harness` feature and the workspace does not permit
     /// `expect` outside tests. The caller is a test and may unwrap it.
@@ -89,8 +89,10 @@ impl RenderProbe {
         let mut result = None;
         let mut frame = DrawnFrame::default();
         for _ in 0..2 {
-            let output = self.ctx.run(input.clone(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            // The same central panel the desktop draws its viewport in (egui 0.34 puts it
+            // inside the frame's root `Ui` rather than on the context).
+            let output = self.ctx.run_ui(input.clone(), |ui| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
                     result = Some(contents(ui));
                 });
             });

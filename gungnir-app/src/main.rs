@@ -153,25 +153,58 @@ impl eframe::App for App {
         }
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    /// The start of every frame: the tick, and when this window is minimized, the rest
+    /// of the frame too.
+    ///
+    /// eframe 0.34 split 0.29's `update` in two. `logic` runs on every frame; `ui` runs
+    /// only while this window is visible. 0.29 ran `update` whether or not the window was
+    /// minimized, so the tick -- the journal's fsync, the link to the node, the queue's
+    /// clocks -- is here, where it still runs every frame: a minimized desktop must not
+    /// stop keeping its record.
+    ///
+    /// For the same reason the detached windows are drawn here when `ui` will not run.
+    /// eframe closes a second window its parent's frame did not draw, and 0.29 drew them
+    /// every frame, so a detached queue stayed open and live while the main window was
+    /// minimized. eframe's own documentation asks `logic` not to draw; this is the one
+    /// exception, and only for windows other than this one.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         update::tick(&mut self.state);
+        if !window_is_drawn(ctx) {
+            let action = self.draw_detached(ctx);
+            self.end_frame(ctx, action);
+        }
+    }
 
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Table-of-contents style, per rust-ui-architecture-coding-standards.md §6:
         // one line per area of the window, in the order they are drawn. Panels return
         // what was clicked rather than writing to `AppState`, and the last `Some` wins
         // because at most one panel is clicked per frame.
-        self.draw_status_strip(ctx);
-        self.draw_about(ctx);
-        let mut action = self.draw_workspace(ctx);
+        self.draw_status_strip(ui);
+        self.draw_about(ui.ctx());
+        let mut action = self.draw_workspace(ui);
         if !self.workspace.detached.contains(&PanelId::ApprovalQueue) {
             // With the queue docked, its dialog belongs to this window. When the queue
             // is detached, `draw_detached` draws the dialog there instead.
-            action = self.draw_decision_dialog(ctx).or(action);
+            action = self.draw_decision_dialog(ui.ctx()).or(action);
         }
-        self.draw_evidence_card(ctx);
-        self.draw_viewport(ctx);
-        action = self.draw_detached(ctx).or(action);
+        self.draw_evidence_card(ui.ctx());
+        self.draw_viewport(ui);
+        action = self.draw_detached(ui.ctx()).or(action);
+        self.end_frame(ui.ctx(), action);
+    }
+}
 
+/// Whether eframe will call `ui` for this window this frame: the rule it applies itself
+/// (`epi_integration.rs`), which is that a minimized or occluded window is not drawn.
+fn window_is_drawn(ctx: &egui::Context) -> bool {
+    ctx.input(|i| i.viewport().visible()).unwrap_or(true)
+}
+
+impl App {
+    /// The end of every frame, drawn or not: what 0.29's `update` did after its last
+    /// panel.
+    fn end_frame(&mut self, ctx: &egui::Context, action: Option<PanelAction>) {
         // Applied after every panel has been drawn: a click changes what the *next*
         // frame shows, never what the current one has already half-drawn.
         if let Some(action) = action {
@@ -187,9 +220,7 @@ impl eframe::App for App {
 
         ctx.request_repaint_after(REPAINT_INTERVAL);
     }
-}
 
-impl App {
     /// GAP-072: PN-01 is on every layout, so it is a top panel rather than a slot in
     /// any one workspace. It reads nothing and writes nothing but the About toggle.
     ///
@@ -198,13 +229,13 @@ impl App {
     /// nobody signed in. AGPL section 0 asks for the notices to sit behind a "convenient
     /// and prominently visible feature", and any other host would have made them
     /// reachable for some roles and not others.
-    fn draw_status_strip(&mut self, ctx: &egui::Context) {
+    fn draw_status_strip(&mut self, ui: &mut egui::Ui) {
         // Scoped so the borrows of `self.state` end before the toggle is applied.
         let toggled = {
             let strip_data = gungnir_app::status::StatusStripData::from_state(&self.state);
             let view = gungnir_app::status::status_strip_view(&self.state, &strip_data);
             let mut clicked = false;
-            egui::TopBottomPanel::top("status_strip").show(ctx, |ui| {
+            egui::Panel::top("status_strip").show_inside(ui, |ui| {
                 // Right to left, so the strip keeps the eight elements in the
                 // left-to-right order `information-architecture.md` §2 specifies and the
                 // About control takes the far end rather than a place among them.
@@ -260,13 +291,13 @@ impl App {
     /// dock tree the operator can rearrange. The panels and their order come from
     /// `WorkspaceLayout`, which is tested against the plan 06 layout table, or from the
     /// baseline's arrangement for this role when it has one.
-    fn draw_workspace(&mut self, ctx: &egui::Context) -> Option<PanelAction> {
+    fn draw_workspace(&mut self, ui: &mut egui::Ui) -> Option<PanelAction> {
         self.ensure_tree();
         let mut action = None;
-        egui::SidePanel::left("dashboard")
+        egui::Panel::left("dashboard")
             .resizable(true)
-            .default_width(self.state.palette.dashboard_default_width)
-            .show(ctx, |ui| {
+            .default_size(self.state.palette.dashboard_default_width)
+            .show_inside(ui, |ui| {
                 render_session_header(ui, &self.state);
                 ui.separator();
                 let Some(tree) = self.workspace.tree.as_mut() else {
@@ -317,7 +348,7 @@ impl App {
     }
 
     /// GAP-075: the panels D-17 allows in a second window, each as an egui native
-    /// viewport. No crate is needed for this half; egui 0.29 provides it.
+    /// viewport. No crate is needed for this half; egui provides it.
     ///
     /// The decision dialog follows the approval queue: if the queue is detached, PN-07
     /// is drawn in that window. D-17 says decision dialogs stay with the queue, and a
@@ -331,8 +362,8 @@ impl App {
                 .with_title(format!("Gungnir -- {}", panel.title()))
                 .with_inner_size([900.0, 700.0]);
             let mut inner = None;
-            ctx.show_viewport_immediate(id, builder, |ctx, _class| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            ctx.show_viewport_immediate(id, builder, |ui, _class| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
                     inner = self.draw_detached_panel(ui, panel);
                 });
                 if panel == PanelId::ApprovalQueue {
@@ -340,7 +371,7 @@ impl App {
                     // PN-15's actions began carrying the operator's own words, and this
                     // closure is `FnMut`. The dialog still wins over the panel beneath
                     // it, which is the behaviour that matters here.
-                    inner = self.draw_decision_dialog(ctx).or(inner.take());
+                    inner = self.draw_decision_dialog(ui.ctx()).or(inner.take());
                 }
             });
             action = inner.or(action);
@@ -508,9 +539,9 @@ impl App {
     /// The central area. When the viewport has been detached (GAP-075) it says so
     /// rather than leaving a blank centre, which would read as a viewport showing
     /// nothing.
-    fn draw_viewport(&mut self, ctx: &egui::Context) {
+    fn draw_viewport(&mut self, ui: &mut egui::Ui) {
         let detached = self.workspace.detached.contains(&PanelId::Viewport3d);
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             if detached {
                 ui.label("The viewport is in its own window.");
                 return;

@@ -142,22 +142,46 @@ loom = { version = "0.7", features = ["futures"] }
 # crates only; no production crate reads YAML (docs/agentic-coding-standards.md §2.9).
 yaml_serde = "0.10"
 
-# UI / rendering stack. eframe runs with Renderer::Glow (three-d needs the OpenGL
-# context); wgpu is compute-only and pinned to the line eframe 0.29's optional wgpu
-# feature would use, so enabling that feature never yields two wgpu versions.
+# UI / rendering stack (ARCHITECTURE.md §9). eframe runs with Renderer::Glow and
+# three-d draws into eframe's OpenGL context, so eframe, egui_glow and three-d must share
+# one `glow`: at eframe/egui 0.34 and three-d 0.19 all three take glow 0.17. That is also
+# the ceiling. three-d 0.19 is built on egui 0.34 and glow 0.17, so a later eframe would
+# bring a glow three-d does not take. The move from 0.29 and 0.18 (2026-09-17,
+# docs/record/2026-09-17/egui-0-34-and-three-d-0-19.md) cleared quick-xml 0.30
+# (RUSTSEC-2026-0194/0195), which came in only through egui-winit 0.29's Linux
+# accessibility chain; the one quick-xml left, 0.41, is the patched line.
+#
+# eframe is taken without default features because 0.34's defaults swapped the glow
+# renderer for wgpu. The list is eframe 0.29's default set, less `winit/default`, which a
+# dependent cannot name: on Windows that changes nothing; on Linux, wayland is still
+# dlopened (glutin turns it on in wayland-sys), and winit's Adwaita title bar for GNOME
+# Wayland (`wayland-csd-adwaita`) is off, so winit draws its plain fallback frame there.
+# Linux accessibility (`accesskit`) is kept.
+#
+# wgpu is compute-only (gungnir-render) and stays at 22. It was the line eframe 0.29's
+# optional wgpu feature used, so enabling that feature could never yield two wgpu
+# versions. That no longer holds: eframe 0.34's feature is on wgpu 29, so enabling it
+# would link a second wgpu beside the compute device's 22, or move the compute device
+# with it. Cargo.lock already lists wgpu 29 (unbuilt): eframe names egui-wgpu through a
+# weak `egui-wgpu?/...` feature, and Cargo locks such a dependency without building it.
 #
 # three-d is taken without its default `window` feature (2026-09-07). gungnir-viewport3d
 # draws into eframe's own glow context and never opens a three-d window, so the feature
 # bought nothing and cost a second winit (0.28, beside eframe's 0.30) with glutin, the
 # wayland and Android stacks, and `instant` (RUSTSEC-2024-0384, unmaintained) beneath it.
 # What three-d still pulls that is flagged is `cgmath` (RUSTSEC-2026-0196): it is
-# three-d's own math type, not a feature, and three-d 0.19 depends on it too, so it
-# leaves only when three-d drops it or three-d is replaced. 0.19 is not a candidate
-# either way: it moves to glow 0.17 and egui 0.34, and the shared OpenGL context needs
-# three-d's glow to be eframe 0.29's glow 0.14.
-eframe = "0.29"
-egui = "0.29"
-three-d = { version = "0.18", default-features = false }
+# three-d's own math type, not a feature, and 0.19 depends on it as 0.18 did, so it
+# leaves only when three-d drops it or three-d is replaced.
+eframe = { version = "0.34", default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "glow",
+    "wayland",
+    "web_screen_reader",
+    "x11",
+] }
+egui = "0.34"
+three-d = { version = "0.19", default-features = false }
 wgpu = "22"
 gltf = "1"
 # Legacy `.vtk` only, since 2026-09-07. vtkio's default `xml` feature reads .vtp/.vtu and
@@ -198,12 +222,14 @@ tiff = "0.11"
 proj = { version = "0.31", default-features = false }
 
 # Docking for the role workspaces (D-19;
-# docs/agentic-coding-standards.md §2.9). Pinned to 0.10 because that is the line that
-# depends on egui 0.29, the workspace pin; egui_tiles 0.11 moved to egui 0.30 and would
-# link a second egui. Checked with cargo tree -d against eframe/egui 0.29: no duplicate
-# egui, eframe, emath, or epaint. No member depends on it yet; it enters a member
-# manifest under GAP-075.
-egui_tiles = "0.10"
+# docs/agentic-coding-standards.md §2.9). Pinned to 0.15 because that is the line that
+# depends on egui 0.34, the workspace pin; egui_tiles 0.16 moved to egui 0.35 and would
+# link a second egui. Checked with cargo tree -d on both release targets against
+# eframe/egui 0.34 (2026-09-17): no duplicate egui, eframe, emath, or epaint. Its
+# itertools 0.14 is the only itertools on normal and build edges; criterion (0.10) and
+# the rs1090 oracle's prost (0.13) keep theirs on dev edges. gungnir-app depends on it
+# (GAP-075).
+egui_tiles = "0.15"
 
 # API transport stack (D-18; docs/agentic-coding-standards.md
 # §2.9). JSON over HTTP plus a WebSocket event stream, per docs/gungnir-api-v1.md,
