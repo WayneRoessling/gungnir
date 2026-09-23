@@ -8215,6 +8215,19 @@
       still runs the chain for the role at the console and counts the denial, which is what
       a desktop does for its own plans while cut off (DN-31 §6.7), so the desktop half
       stays open.
+  - date: 2026-09-23
+    status: Closed
+    note: >-
+      Closed on the desktop, which is the half GAP-132 left. `ApprovalDesk::submit` runs
+      the chain for the role at the console as before, and where that is an authority
+      denial -- the one engine of the four that reads the asking role -- it walks the
+      ladder and queues the plan for the role the walk finds, with `offered_to` saying
+      who. A plan no role may accept is still denied and never queued, which is what keeps
+      the denial reviewable. `a_plan_this_console_may_not_accept_is_offered_to_a_role_that_may`
+      (`gungnir-app/tests/approval_gate.rs`) asks an area-layer plan as an Operator and
+      finds it queued for a Supervisor with nothing counted; its sibling holds the
+      unchanged case. See
+      `../../record/2026-09-23/an-under-authority-plan-finds-a-role.md`.
 
 - id: GAP-114
   name: Nothing consumes LateDataPolicy
