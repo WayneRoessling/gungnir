@@ -99,7 +99,9 @@ jobs:
       # enforced. It must stay: a release-only budget that no job runs in release is a
       # gate that cannot fail.
       - name: budget gates, release profile
-        run: cargo test -p gungnir-app --test frame_budgets --release
+        run: cargo test -p gungnir-app --test frame_budgets --test desktop_projection --release
+        # desktop_projection joined it on 2026-09-22: DN-31 §9 row 7's MOP-07 clause is a
+        # timing figure and is asserted in release alone, so this is the job that enforces it.
       # bench-regression.yml runs on main and by dispatch only (since 2026-09-09; see its
       # header), so this is the only place a pull request proves its benchmarks still
       # compile. It shares the release-profile dependencies the budget gate above just
