@@ -77,7 +77,7 @@ use gungnir_model::{
     TrackId, TrackStatus, TrackView, WeaponsControlStatus,
 };
 use gungnir_node::approval::{self, Frame, NodeApproval};
-use gungnir_policy::{Delegations, DenialReason, PolicyVerdict};
+use gungnir_policy::{Delegations, PolicyVerdict};
 use gungnir_remote::link::HEARTBEAT_TIMEOUT;
 use gungnir_remote::queue::DecisionChoice;
 use gungnir_security::{
