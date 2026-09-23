@@ -2919,3 +2919,53 @@
   commit: 261baec1e8ab98f7d85471978034f36230a6fbc1
   pre_repository: false
   record: "GAP-137; D-65; docs/record/2026-09-23/a-partner-hears-what-the-node-decided.md; PR #156"
+- date: 2026-09-23
+  signer: Owner
+  subject: >-
+    D-69 and DN-18 §12: the exchange register's lifecycle -- nothing expires, `as_of`
+    carries the age of its least recently refreshed producer, and a desktop republishes its
+    whole handoff set when its link comes back.
+  kind: design-note
+  paths:
+  - docs/design/DN-18-coalition-exchange.md
+  commit: f8c0ab381c53ae8625f3966c2dee9e9158e38236
+  pre_repository: false
+  record: "DN-18 §12; D-69; docs/record/2026-09-23/a-register-that-says-how-old-it-is.md; PR #160"
+
+- date: 2026-09-23
+  signer: Owner
+  subject: >-
+    D-70 and DN-31 §14: a node's deadline is drawn against the node's clock, which travels
+    with its picture, and PN-01 says the difference above one second.
+  kind: design-note
+  paths:
+  - docs/design/DN-31-node-approval-queue.md
+  commit: 9791344b1e3684942117c6c5e3d015312530b05b
+  pre_repository: false
+  record: "DN-31 §14; D-70; docs/record/2026-09-23/a-deadline-in-the-node-s-own-time.md; PR #161"
+
+- date: 2026-09-23
+  signer: Owner
+  subject: >-
+    D-71 and DN-31 §15: an unfinished outage is recovered from the journal, and a node that
+    has never answered is silent from the link's own start.
+  kind: design-note
+  paths:
+  - docs/design/DN-31-node-approval-queue.md
+  commit: 41c32adaaf9b4a3d7a3d1c73727ebe6c919dbbf6
+  pre_repository: false
+  record: "DN-31 §15; D-71; docs/record/2026-09-23/an-outage-outlives-its-process.md; PR #163"
+
+- date: 2026-09-23
+  signer: Owner
+  subject: >-
+    GAP-142: a decision's journal entry carries the queue item it answered and whether it
+    was an override (`DecisionRecord::to_event`), which is what a desktop reads back after
+    a restart and what `accepted` and `plan` left out.
+  kind: code
+  paths:
+  - gungnir-command/src/lib.rs
+  - gungnir-model/src/events.rs
+  commit: 41c32adaaf9b4a3d7a3d1c73727ebe6c919dbbf6
+  pre_repository: false
+  record: "GAP-142; DN-31 §15; docs/record/2026-09-23/an-outage-outlives-its-process.md; PR #163"
