@@ -86,6 +86,14 @@ pub struct Projection {
     pub pipeline_stats: PipelineStatsView,
     /// True only once a node has answered. Cleared as soon as it stops.
     pub connected: bool,
+    /// The node's own clock as of the last snapshot (GAP-140), for the offset a desktop
+    /// measures between the two machines.
+    ///
+    /// **Per connection, which is enough.** Two clocks that tick at the same rate keep
+    /// the offset they had when it was measured; what changes it is a machine's clock
+    /// being set, and a desktop that reconnects measures it again. `None` from a node
+    /// that does not send one.
+    pub node_time: Option<gungnir_model::MissionTime>,
     /// The most recent transport failure, for the status strip.
     pub last_error: Option<String>,
     /// Sequence number of the last envelope applied, so a reconnection resumes rather
@@ -317,6 +325,16 @@ impl NodeLink {
     #[must_use]
     pub fn connected(&self) -> bool {
         self.read().is_some_and(|p| p.connected)
+    }
+
+    /// The node's own clock as of the last snapshot (GAP-140).
+    ///
+    /// What the caller does with it is measure the offset against its own clock once per
+    /// connection; the link does not, because the clock a desktop draws against is the
+    /// app's authority and this task has none.
+    #[must_use]
+    pub fn node_time(&self) -> Option<gungnir_model::MissionTime> {
+        self.read().and_then(|p| p.node_time)
     }
 
     /// A receiver that changes every time the link task mutates the projection or its
@@ -919,6 +937,7 @@ async fn run_link(
         p.bearing_rays = snapshot.bearing_rays;
         p.pipeline_stats = snapshot.pipeline_stats;
         p.token = Some(token.clone());
+        p.node_time = snapshot.node_time;
         p.connected = true;
         p.last_error = None;
         p.last_heard = Some(std::time::Instant::now());

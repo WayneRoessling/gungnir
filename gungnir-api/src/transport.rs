@@ -1008,6 +1008,11 @@ impl NodeApi {
             pipeline_stats: gungnir_model::PipelineStatsView::default(),
             withheld,
             queue: Vec::new(),
+            // Stamped by the route that answers, as on the operator's own snapshot
+            // (GAP-140). A partner reads its own deadlines from nothing here -- the
+            // queue is withheld from it entirely -- but the field says what this node's
+            // clock was all the same, rather than a `None` that would read as unknown.
+            node_time: None,
         })
     }
 
@@ -1711,7 +1716,13 @@ async fn snapshot(
         Ok(Caller::Machine { party }) => api.snapshot_for(&party),
     };
     match snapshot {
-        Some(snapshot) => Json(snapshot).into_response(),
+        Some(mut snapshot) => {
+            // GAP-140: this node's clock as it answers. The deadlines in `queue` are in
+            // this time, and a desktop that draws them against its own is wrong by the
+            // difference between two machines with nothing saying so.
+            snapshot.node_time = Some(gungnir_model::MissionTime(api.now()));
+            Json(snapshot).into_response()
+        }
         None => problem(
             StatusCode::INTERNAL_SERVER_ERROR,
             "the node's snapshot is unreadable",

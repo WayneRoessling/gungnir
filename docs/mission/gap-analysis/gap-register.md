@@ -152,7 +152,7 @@ history, and an entry is never edited once it has merged.
 | GAP-137 | A handoff the node issues reaches no exchange partner | Technical | CAP-5.7 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 | GAP-138 | An unreachable decision type still describes the interface | Technical | CAP-5.7 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
 | GAP-139 | An If-Sr diagram no longer renders under the layout its generator pins | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
-| GAP-140 | A node's deadline is drawn against the desktop's own clock | Technical | CAP-5.9, CAP-3.7 | 2 | 10 | S | 20 | I3 | UI engineer | Open |
+| GAP-140 | A node's deadline is drawn against the desktop's own clock | Technical | CAP-5.9, CAP-3.7 | 2 | 10 | S | 20 | I3 | UI engineer | Closed |
 | GAP-141 | A desktop has no identity of its own | Technical | CAP-6.1, CAP-5.4 | 2 | 10 | M | 20 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-142 | A desktop that restarts during an outage forgets it | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
 | GAP-143 | A sign-in during an outage ends it without a person switching back | Technical | CAP-5.4, CAP-6.1 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
@@ -2103,11 +2103,12 @@ Counts: 146 gaps, 3 mission, 143 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.9 Role workspaces and workflow; CAP-3.7 Queue under saturation.
 - History:
   - 2026-09-17, Open: Found writing DN-31 §9 row 9, whose harness has to drive the node's mission time from the wall clock for the consoles' countdowns to mean anything -- which is the defect stated as a test constraint. Not fixed in GAP-133: the fix puts a time on the wire and decides what a desktop does when the two disagree, which is a contract change rather than a panel one.
+  - 2026-09-23, Closed: Closed by putting the node's clock on the wire and drawing against it (DN-31 §14, D-70). `SnapshotResponse::node_time` is stamped where the route answers; a desktop keeps the pair of readings and computes the node's time from its own clock and the offset, so a countdown advances between snapshots without drifting off the node's scale; PN-01 says the difference above one second and nothing when the two agree. `a_node_s_deadline_is_drawn_against_the_node_s_clock` (`gungnir-app/tests/desktop_projection.rs`) reads a row's countdown against the node's own six-hundred-second window on a harness whose node keeps a stated mission clock and whose desktops keep the wall clock -- where the old arithmetic reported every item as expired by about fifty-five years. See `../../record/2026-09-23/a-deadline-in-the-node-s-own-time.md`.
 - Evidence: `gungnir-app/src/projection.rs` (`queue_rows`, `seconds_remaining`) against `gungnir_api::v3::QueueItemView::expires_at`; `gungnir-time` (`WallClockAuthority`); `SnapshotResponse` and `SessionResponse` carry no node time (`gungnir-api/src/v3/mod.rs`), so there is nothing to compare against. GAP-008's `ClockSkewEstimator` measures **sensor** sources from ingest events and never sees a node..
 - Severity: 2. Reach: 10 threads. Effort: S. Priority: 20.
 - Impact: PN-06 draws the time remaining on a node's queue item as the node's `expires_at` minus **this desktop's** clock. Both are `WallClockAuthority`, so both are seconds since the Unix epoch and they agree only as far as the two machines' clocks do. Nothing measures the difference: a console whose clock is a minute fast shows every item on the node's queue as a minute closer to expiry than it is, a console a minute slow shows a window still open after it has closed, and neither says so. The node refuses the late decision `409 Expired` (DN-31 §6.3), so nothing is decided that should not be -- what is wrong is what the operator was told, on the one countdown they are working to under saturation.
 - Closing action: Carry the node's own mission time with the picture and judge the two clocks against it, the way D-23 judges a link's silence: draw the countdown against the node's time where it is known, and say the skew on PN-01 where it exceeds what a deadline can absorb, rather than leaving a number that is silently wrong by the difference.
-- Target: I3. Owner: UI engineer. Status: Open.
+- Target: I3. Owner: UI engineer. Status: Closed.
 - Reference: Found building GAP-133 (`../../record/2026-09-17/a-linked-desktop-shows-the-node-s-queue.md`).
 - Depends on: GAP-133.
 
