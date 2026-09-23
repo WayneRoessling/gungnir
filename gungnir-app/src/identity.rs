@@ -16,6 +16,18 @@
 //! session and sequence it was seen in, a correlation carries the confidence it was
 //! made at, and nothing here decides what a thing *is*.
 //!
+//! **A track is named by its session** (GAP-123). `TrackId` is a counter that restarts
+//! at zero in every process, so every map here is keyed by [`Sighting`], the session and
+//! the track together. Keyed by the number alone, a live track after a restart took
+//! whichever entity had held that number, with no correlation and nothing on the record
+//! to say a join had been made.
+//!
+//! **The identities are journaled and read back** (GAP-123). Every track this desktop
+//! resolves is published as an `IdentityEvent`, as the node has always done, and the fold
+//! at start binds each track to the identity its session recorded rather than minting a
+//! fresh one. Without that, the same object carried a different `GlobalEntityId` after
+//! every restart and in every replay, which is the continuity CAP-2.7 exists for.
+//!
 //! **Coverage is measured, not assumed.** Every track the journal names is counted, and
 //! the ones no lineage in the product accounts for are published as
 //! `OrderOfBattle::unattributed_tracks`, which is what keeps `attribution_coverage`
@@ -23,8 +35,8 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use gungnir_identity::{EntityLineage, IdentityResolver, InMemoryIdentityResolver};
-use gungnir_model::events::TrackingEvent;
+use gungnir_identity::{EntityLineage, IdentityResolver, InMemoryIdentityResolver, Sighting};
+use gungnir_model::events::{IdentityEvent, TrackingEvent};
 use gungnir_model::identity::GlobalEntityId;
 use gungnir_model::{MissionTime, TrackId};
 use gungnir_reporting::order_of_battle::{
@@ -116,7 +128,7 @@ pub struct IdentityState {
     pub sessions: Vec<SessionId>,
     /// Why the fold stopped short, if it did: the product then says it is partial.
     pub unreadable: Option<String>,
-    pub records: HashMap<TrackId, TrackRecord>,
+    pub records: HashMap<Sighting, TrackRecord>,
     /// Every track the journal named, whether or not the resolver could attribute it.
     ///
     /// The denominator of `OrderOfBattle::attribution_coverage`. A track the journal
@@ -124,7 +136,7 @@ pub struct IdentityState {
     /// carries nothing to correlate, so it lands here and never in a lineage: that is
     /// what an unattributed track *is*, and counting it is the difference between a
     /// coverage figure and a compliment.
-    pub seen_tracks: BTreeSet<TrackId>,
+    pub seen_tracks: BTreeSet<Sighting>,
     /// How many order-of-battle versions this session has produced.
     pub versions: u32,
 }
@@ -146,13 +158,17 @@ impl IdentityState {
         for session in sessions.into_iter().skip(keep) {
             match journal.read_session(session) {
                 Ok(envelopes) => {
+                    // GAP-123: what this session recorded each track as, read before the
+                    // tracking events because a journal may hold the identity either side
+                    // of the track update it is about.
+                    let recorded = journaled_identities(&envelopes);
                     for e in &envelopes {
                         let gungnir_eventing::Event::Tracking(tracking) = &e.event else {
                             continue;
                         };
                         match tracking {
                             TrackingEvent::TrackInitiated(t) | TrackingEvent::TrackUpdated(t) => {
-                                state.observe(session, e.seq, t);
+                                state.observe(session, e.seq, t, recorded.get(&t.id));
                             }
                             // A track named only by its identifier carries no state to
                             // correlate, so the resolver cannot attribute it. Counted
@@ -160,7 +176,7 @@ impl IdentityState {
                             // is the perfect coverage score this product must never
                             // report.
                             TrackingEvent::TrackCoasting(id) | TrackingEvent::TrackDeleted(id) => {
-                                state.seen_tracks.insert(*id);
+                                state.seen_tracks.insert(Sighting::new(session, *id));
                             }
                         }
                     }
@@ -176,11 +192,31 @@ impl IdentityState {
     }
 
     /// One sighting of a track in `session`.
-    fn observe(&mut self, session: SessionId, seq: u64, track: &gungnir_model::TrackView) {
-        let _ = self.resolver.resolve(track);
-        self.seen_tracks.insert(track.id);
+    ///
+    /// `recorded` is what this session's journal says the track was resolved to, when it
+    /// says anything: the identity is put back rather than minted again (GAP-123). A
+    /// session with no identity event for the track -- one journaled before the desktop
+    /// wrote them -- is resolved, which mints once and is then stable.
+    fn observe(
+        &mut self,
+        session: SessionId,
+        seq: u64,
+        track: &gungnir_model::TrackView,
+        recorded: Option<&(GlobalEntityId, Option<(f64, String)>)>,
+    ) {
+        match recorded {
+            Some((entity, correlation)) => {
+                self.resolver
+                    .restore(session, track, *entity, correlation.clone());
+            }
+            None => {
+                let _ = self.resolver.resolve(session, track);
+            }
+        }
+        let sighting = Sighting::new(session, track.id);
+        self.seen_tracks.insert(sighting);
         let position = track.position_enu();
-        let record = self.records.entry(track.id).or_insert_with(|| TrackRecord {
+        let record = self.records.entry(sighting).or_insert_with(|| TrackRecord {
             session,
             first_seq: seq,
             first_seen: track.mission_time,
@@ -194,18 +230,23 @@ impl IdentityState {
         record.push_waypoint(track.mission_time, position);
     }
 
-    /// The lineage a track belongs to.
+    /// The lineage a sighting belongs to.
     #[must_use]
-    pub fn lineage_of(&self, track: TrackId) -> Option<&EntityLineage> {
-        // `resolve` is the only way to look up by track and it needs a `TrackView`; the
-        // lineages are few, so a scan is what a lookup costs here.
+    pub fn lineage_of(&self, sighting: Sighting) -> Option<&EntityLineage> {
+        // The lineages are few, so a scan is what a lookup costs here.
         self.resolver
             .lineages()
-            .find(|l| l.session_track_ids.contains(&track))
+            .find(|l| l.sightings.contains(&sighting))
     }
 }
 
-/// The tick step: every live track resolved, under the live session.
+/// The tick step: every live track resolved, under the live session, and what it
+/// resolved to put on the record (GAP-123).
+///
+/// **One identity event per track, not per tick**, as the node does: an identity is a
+/// claim about what a track *is*, and repeating it every frame would bury the tracking
+/// events it sits beside. A track already resolved this session is skipped, so the event
+/// is published the first time and never again.
 pub fn tick(state: &mut AppState) {
     let Some(session) = state.session() else {
         return;
@@ -217,11 +258,78 @@ pub fn tick(state: &mut AppState) {
     if !state.identity.sessions.contains(&session) {
         state.identity.sessions.push(session);
     }
+    let now = state.clock.now();
+    let mut events = Vec::new();
     for t in &tracks {
+        let sighting = Sighting::new(session, t.id);
+        let first_time = state.identity.resolver.identity_of(session, t.id).is_none();
         // The live picture has no envelope sequence; the record carries the journal's
         // once the session is folded at the next start.
-        state.identity.observe(session, 0, t);
+        state.identity.observe(session, 0, t, None);
+        if !first_time {
+            continue;
+        }
+        let Some(entity) = state.identity.resolver.identity_of(session, t.id) else {
+            continue;
+        };
+        // The resolver records a correlation on the lineage when it matched one and
+        // records nothing when it minted, which is how this tells the two apart without
+        // the resolver reporting it twice.
+        let matched = state.identity.resolver.lineage(entity).and_then(|lineage| {
+            lineage
+                .correlations
+                .iter()
+                .rev()
+                .find(|c| c.sighting == sighting)
+                .map(|c| (c.confidence, c.basis.clone()))
+        });
+        events.push(match matched {
+            Some((confidence, basis)) => IdentityEvent::Correlated {
+                track: t.id,
+                entity,
+                confidence,
+                basis,
+                at: now,
+            },
+            None => IdentityEvent::Minted {
+                track: t.id,
+                entity,
+                at: now,
+            },
+        });
     }
+    for event in events {
+        crate::update::publish(state, now, gungnir_eventing::Event::Identity(event));
+    }
+}
+
+/// What each track in a session was recorded as, from that session's own identity events
+/// (GAP-123). The last event for a track wins: a track is journaled once per session, so
+/// a second could only be a later correction.
+fn journaled_identities(
+    envelopes: &[gungnir_eventing::Envelope],
+) -> HashMap<TrackId, (GlobalEntityId, Option<(f64, String)>)> {
+    let mut out = HashMap::new();
+    for envelope in envelopes {
+        let gungnir_eventing::Event::Identity(identity) = &envelope.event else {
+            continue;
+        };
+        match identity {
+            IdentityEvent::Minted { track, entity, .. } => {
+                out.insert(*track, (*entity, None));
+            }
+            IdentityEvent::Correlated {
+                track,
+                entity,
+                confidence,
+                basis,
+                ..
+            } => {
+                out.insert(*track, (*entity, Some((*confidence, basis.clone()))));
+            }
+        }
+    }
+    out
 }
 
 /// PN-04's lineage lines for a track, owned so the view can borrow them.
@@ -234,25 +342,27 @@ pub struct OwnedLineage {
 
 #[must_use]
 pub fn lineage_lines(state: &AppState, track: TrackId) -> Vec<OwnedLineage> {
-    let Some(lineage) = state.identity.lineage_of(track) else {
+    let Some(session) = state.session() else {
+        return Vec::new();
+    };
+    let Some(lineage) = state.identity.lineage_of(Sighting::new(session, track)) else {
         return Vec::new();
     };
     lineage
-        .session_track_ids
+        .sightings
         .iter()
-        .map(|id| {
-            let session = state.identity.records.get(id).map_or(0, |r| r.session.0);
+        .map(|sighting| {
             let basis = lineage
                 .correlations
                 .iter()
-                .find(|c| c.track == *id)
+                .find(|c| c.sighting == *sighting)
                 .map_or_else(
                     || "session track id".to_string(),
                     |c| format!("similarity {:.2}: {}", c.confidence, c.basis),
                 );
             OwnedLineage {
-                session,
-                local_track: id.0,
+                session: sighting.session.0,
+                local_track: sighting.track.0,
                 basis,
             }
         })
@@ -284,9 +394,9 @@ pub fn order_of_battle(state: &mut AppState) -> Result<OrderOfBattle, ProductErr
         .into_iter()
         .filter_map(|l| {
             let records: Vec<&TrackRecord> = l
-                .session_track_ids
+                .sightings
                 .iter()
-                .filter_map(|id| identity.records.get(id))
+                .filter_map(|sighting| identity.records.get(sighting))
                 .collect();
             let first_seen =
                 records
@@ -316,9 +426,9 @@ pub fn order_of_battle(state: &mut AppState) -> Result<OrderOfBattle, ProductErr
         .iter()
         .map(|(l, s, loc)| (l, s.clone(), *loc))
         .collect();
-    let attributed: BTreeSet<TrackId> = borrowed
+    let attributed: BTreeSet<Sighting> = borrowed
         .iter()
-        .flat_map(|(l, _, _)| l.session_track_ids.iter().copied())
+        .flat_map(|(l, _, _)| l.sightings.iter().copied())
         .collect();
     let unattributed = u32::try_from(
         identity
@@ -361,8 +471,8 @@ pub fn pattern_of_life(state: &AppState) -> Result<PatternOfLife, ProductError> 
         .lineages()
         .map(|lineage| {
             let mut by_session: BTreeMap<SessionId, Vec<(MissionTime, [f64; 3])>> = BTreeMap::new();
-            for id in &lineage.session_track_ids {
-                let Some(record) = identity.records.get(id) else {
+            for sighting in &lineage.sightings {
+                let Some(record) = identity.records.get(sighting) else {
                     continue;
                 };
                 by_session
@@ -388,8 +498,21 @@ pub fn pattern_of_life(state: &AppState) -> Result<PatternOfLife, ProductError> 
     )
 }
 
-/// The identities of the live tracks, for a caller that wants the global id.
+/// The identity of a live track, for a caller that wants the global id.
+///
+/// The live session names the track (GAP-123): asked about a track number alone, this
+/// could only guess which session's track was meant.
 #[must_use]
 pub fn global_id(state: &AppState, track: TrackId) -> Option<GlobalEntityId> {
-    state.identity.lineage_of(track).map(|l| l.global_id)
+    let session = state.session()?;
+    state
+        .identity
+        .resolver
+        .identity_of(session, track)
+        .or_else(|| {
+            state
+                .identity
+                .lineage_of(Sighting::new(session, track))
+                .map(|l| l.global_id)
+        })
 }

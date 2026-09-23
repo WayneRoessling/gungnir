@@ -2042,7 +2042,7 @@ async fn run(
         // beside. The picture is unchanged: `TrackView` carries no entity identity and
         // none was added, because putting one there changes what every consumer of a
         // track believes it is holding, and the record does not need it.
-        for event in entities.observe(tracking.tracks(), now) {
+        for event in entities.observe(session, tracking.tracks(), now) {
             bus.publish(now, Event::Identity(event))?;
         }
 

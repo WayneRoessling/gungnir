@@ -8498,6 +8498,9 @@
   - date: 2026-09-16
     status: Open
     note: "Filed by the GAP-067 walk, which held the `gungnir-identity` row."
+  - date: 2026-09-22
+    status: Closed
+    note: "Closed 2026-09-22. Recovery reads back the identity events a session journaled instead of minting fresh ones, and the desktop journals them as the node does, so an object keeps its identifier across a restart and a replay; D-11's UUID v7 is untouched. Found alongside it: track numbers restart per process, so keying on the number joined unrelated objects silently; every lookup is now keyed by session and track. See `../../record/2026-09-22/identity-survives-a-restart.md`."
 
 - id: GAP-124
   name: The risk score has no time-to-impact term
