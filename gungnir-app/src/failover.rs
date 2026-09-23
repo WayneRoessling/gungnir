@@ -383,7 +383,6 @@ impl TrackingService for TeeTracking {
 /// that nothing happened.
 #[must_use]
 pub fn recover(journal: &dyn gungnir_store::EventJournal) -> Option<Fallback> {
-    use gungnir_model::events::{CommandEvent, InterceptEvent};
     let mut sessions = journal.sessions().ok()?;
     sessions.sort_unstable_by_key(|s| s.0);
 
