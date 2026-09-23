@@ -21,7 +21,7 @@ the owner reviewed. A signature from before the repository existed on 2026-09-07
 the first commit and is marked as such. An entry is never edited; a withdrawn signature
 gets a new entry.
 
-220 signatures.
+221 signatures.
 
 | Date | Signer | What was signed | Kind | Paths | Commit | Record |
 |---|---|---|---|---|---|---|
@@ -245,3 +245,4 @@ gets a new entry.
 | 2026-09-17 | Owner | rustls 0.23.43 to 0.23.45 for RUSTSEC-2026-0285, on gungnir-remote's human-owned TLS identity path: a Cargo.lock patch bump inside the declared "0.23" range, adding no crate. | code | `Cargo.lock` | `1af6543ab3` | PR #141; GAP-061 |
 | 2026-09-17 | Owner | Three entries of 2026-09-17 cite D-64 for the decision that the decision path is human-owned wherever it runs: the human-owned-path entry and the PR #135 and PR #137 code entries. That decision is D-65. D-64 is the laydown re-observation decision, which took the number while D-65 was pending. What those entries signed is unchanged. | record-correction | `docs/signatures.yaml` | `a2e0e866a5` | D-64 and D-65 in docs/mission/gap-analysis/data/decisions.yaml |
 | 2026-09-17 | Owner | DN-31 amendment 2 (§13): a reconnecting desktop settles before it forwards -- the merge and the comparison of engagements by track first, then the outage forwarded as one batch carrying each settlement, then a person's switch back (D-66) -- with ForwardedDecision's `settled` field, LinkEvent::DelegationsLapsed, and the build's finding that plan conflicts cannot arise across an outage as built. | design-note | `docs/design/DN-31-node-approval-queue.md` | `87aa97fc5b` | PR #143; D-66; docs/record/2026-09-17/an-outage-reaches-the-node-once.md |
+| 2026-09-22 | Owner | GAP-134's human-owned code: an outage's decisions reach the node exactly once through POST /v3/decisions/forwarded, settled before they are forwarded (D-66); D-15's delegations lapse in the authority matrix while a desktop is cut off; and two engagements of one track across an outage are published as BothActed for a person, whatever the rule decided (D-58). | code | `gungnir-api/src/lib.rs`<br>`gungnir-api/src/transport.rs`<br>`gungnir-api/src/v3/mod.rs`<br>`gungnir-approval/src/lib.rs`<br>`gungnir-approval/src/chain.rs`<br>`gungnir-approval/src/queue.rs`<br>`gungnir-command/src/lib.rs`<br>`gungnir-node/src/approval.rs`<br>`gungnir-policy/src/authority.rs` | `87aa97fc5b` | PR #143; D-15, D-53, D-58, D-66; docs/record/2026-09-17/an-outage-reaches-the-node-once.md |

@@ -2761,3 +2761,25 @@
   commit: 87aa97fc5bfbffce98913a86f7fc73c10eed297a
   pre_repository: false
   record: "PR #143; D-66; docs/record/2026-09-17/an-outage-reaches-the-node-once.md"
+
+- date: 2026-09-22
+  signer: Owner
+  subject: >-
+    GAP-134's human-owned code: an outage's decisions reach the node exactly once through
+    POST /v3/decisions/forwarded, settled before they are forwarded (D-66); D-15's delegations
+    lapse in the authority matrix while a desktop is cut off; and two engagements of one track
+    across an outage are published as BothActed for a person, whatever the rule decided (D-58).
+  kind: code
+  paths:
+  - gungnir-api/src/lib.rs
+  - gungnir-api/src/transport.rs
+  - gungnir-api/src/v3/mod.rs
+  - gungnir-approval/src/lib.rs
+  - gungnir-approval/src/chain.rs
+  - gungnir-approval/src/queue.rs
+  - gungnir-command/src/lib.rs
+  - gungnir-node/src/approval.rs
+  - gungnir-policy/src/authority.rs
+  commit: 87aa97fc5bfbffce98913a86f7fc73c10eed297a
+  pre_repository: false
+  record: "PR #143; D-15, D-53, D-58, D-66; docs/record/2026-09-17/an-outage-reaches-the-node-once.md"
