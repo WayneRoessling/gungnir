@@ -1,7 +1,7 @@
 # cargo-deny configuration: the software-assurance half of release governance
-# (docs/release-governance.md). Run `cargo deny check` locally; ci.yml runs the
-# licenses, bans and sources checks on every pull request, and release.yml runs all
-# four, advisories included, on every tag.
+# (docs/release-governance.md). Run `cargo deny check` locally; ci.yml runs all four
+# checks -- licenses, bans, sources, advisories -- on every pull request, and
+# release.yml runs the same `cargo deny check` again on every tag as the release gate.
 
 [graph]
 all-features = false
