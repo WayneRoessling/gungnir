@@ -48,6 +48,24 @@ and finds it queued for the Supervisor with the denial counter still at zero. It
 holds the case that did not change: a point plan stays offered to the console's own role
 and is not handed past it.
 
+## What row 8's test says now, and why that is the owner's to look at
+
+DN-31 §9 row 8 -- cut off and reconnected, gated 2026-09-22 -- asserted that a plan
+proposed after D-15's delegations lapse is "denied by authority and never queued". That is
+the behaviour this change removes, so the test says something different now: the plan is
+offered to the Supervisor, the queue names them, and the row is shown and is **not**
+actionable at the Operator's console.
+
+**The clause the row gates is unchanged**, and it is asserted by the same lines it always
+was: the delegation lapses, the Operator's own item stays offered to the Operator, and the
+plan that only a lapsed delegation could have taken is not actionable here. What moved is
+where such a plan goes instead of nowhere -- the lapse withdraws the delegation, not the
+plan, and nothing in the new path delegates anything: a Supervisor has to decide it.
+
+The pass criterion in `docs/verification-capability-table.md` is not touched. The test
+that gates it is, which is why it is called out here and in the pull request rather than
+left for a reader to find in a diff.
+
 ## What it did not change
 
 The verdict a person sees for their own role, the record the chain publishes, and the rule
