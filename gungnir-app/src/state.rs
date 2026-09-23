@@ -147,6 +147,13 @@ pub struct AppState {
     pub machine_identity: Option<gungnir_remote::identity::DesktopIdentity>,
     /// The node link, while one is up (GAP-050): the tick judges its silence.
     pub link: Option<gungnir_remote::link::NodeLink>,
+    /// Whether that link was connected when the last tick looked (GAP-145).
+    ///
+    /// The edge from disconnected to connected is the only moment a desktop knows its
+    /// node may have forgotten what it holds: the exchange register lives in the node's
+    /// memory, so a node that restarted comes back with none of this desktop's handoffs
+    /// and nothing else would send them until the next one is issued.
+    pub link_was_connected: bool,
     /// The link the registry's control adapter delivers through (GAP-004); `None`
     /// inside means the adapter refuses with the reason.
     pub link_control: std::sync::Arc<std::sync::Mutex<Option<gungnir_remote::link::NodeLink>>>,
@@ -642,6 +649,7 @@ impl AppState {
             pipeline,
             machine_identity,
             link: None,
+            link_was_connected: false,
             link_control: std::sync::Arc::new(std::sync::Mutex::new(None)),
             node_task_map: std::collections::HashMap::new(),
             peer_links: peers,

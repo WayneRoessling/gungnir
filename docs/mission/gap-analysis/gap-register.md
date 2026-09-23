@@ -157,9 +157,10 @@ history, and an entry is never edited once it has merged.
 | GAP-142 | A desktop that restarts during an outage forgets it | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
 | GAP-143 | A sign-in during an outage ends it without a person switching back | Technical | CAP-5.4, CAP-6.1 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 | GAP-144 | The release passes only by accepting two quick-xml advisories | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | UI engineer | Closed |
-| GAP-145 | The exchange register has no lifecycle | Technical | CAP-7.4 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
+| GAP-145 | The exchange register has no lifecycle | Technical | CAP-7.4 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
+| GAP-146 | A console that may not publish queues its handoffs for ever | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
 
-Counts: 145 gaps, 3 mission, 142 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 146 gaps, 3 mission, 143 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2172,11 +2173,26 @@ Counts: 145 gaps, 3 mission, 142 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.4 Peer and coalition exchange.
 - History:
   - 2026-09-23, Open: Filed by GAP-137 rather than half-answered there. GAP-137 gave the register a producer per writer, which is what made the question visible: with one set per item a restart lost one set and a stale writer overwrote itself, and with one per producer the deployment's whole published picture is lost on restart and every departed producer is kept. The answer is a policy about what a partner may believe, not a transport change, so it is the owner's.
+  - 2026-09-23, Closed: Closed by dating the register rather than expiring it (DN-18 §12, D-69). Each producer's set carries the node time it was written, and `as_of` on both `ExchangeResponse` variants is the oldest of those, so a partner reads how current the answer is without learning how many consoles wrote it. A desktop publishes its whole handoff set the tick its link comes back -- the edge, not the state -- which repairs a node that restarted without waiting for the next decision. Nothing evicts: expiry would delete decisions that were taken. `a_desktop_publishes_its_handoffs_again_when_its_link_comes_back` (`gungnir-app/tests/cut_off_and_reconnected.rs`) times out against the old behaviour. Found on the way: GAP-146. See `../../record/2026-09-23/a-register-that-says-how-old-it-is.md`.
 - Evidence: `gungnir-api/src/transport.rs` (`exchange_products`, an in-memory map with no eviction and a bound of `PRODUCERS_PER_ITEM`); `gungnir-remote/src/link.rs` (`flush_exchange` pops a batch once the node accepts it); `gungnir-app/src/desk.rs` (`republish_handoffs`, called from `issue_for` alone); DN-18 §11.
 - Severity: 3. Reach: 5 threads. Effort: M. Priority: 15.
 - Impact: The register lives in memory and nothing ever removes a producer's set. A node restart loses every set, and no desktop republishes until it next issues a handoff, so a partner reads an empty deployment while desktops hold handoffs they believe are published. In the other direction a desktop that goes away is never forgotten, and its last set is served as current for as long as the node runs -- which an ephemeral desktop (D-67), a new producer name every run, reaches fastest.
 - Closing action: Decide what makes a producer's set stale -- a republish interval a desktop keeps to, a node that asks for one on reconnect, or a set that expires with the session that wrote it -- and say on the response what a partner is reading when a producer has gone quiet.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-137 (`../../record/2026-09-23/a-partner-hears-what-the-node-decided.md`).
+- Depends on: GAP-137.
+
+**GAP-146 A console that may not publish queues its handoffs for ever**
+
+- Type: Technical.
+- Capability: CAP-7.4 Peer and coalition exchange.
+- History:
+  - 2026-09-23, Open: Found by a test that expected a handoff to reach the node's register and watched it queue instead: the console was an Operator, which is the ordinary case on a watch floor. Filed rather than fixed inside GAP-145, because what a desktop does with a refusal it cannot retry past is a question about the link's own contract, not about the register.
+- Evidence: `gungnir-remote/src/link.rs` (`queue_exchange` pushes unbounded; `flush_exchange` returns on any non-success and retries the same batch); `gungnir-security/src/authz.rs` (`PUBLISH_EXCHANGE` is not an Operator's); found when GAP-145's test published nothing until it signed in as a Supervisor.
+- Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
+- Impact: `PUBLISH_EXCHANGE` is granted to Commander, IntelligenceAnalyst and Supervisor (DN-18 §5 amendment 2), so a desktop signed in as an Operator is refused `403` every time it publishes its handoff set. `flush_exchange` keeps a refused batch and retries it, and `queue_exchange` bounds nothing, so one batch is added per handoff issued and none ever leaves: the outbox grows for as long as that console runs, nothing is said on PN-09 or anywhere else, and a partner is never told this deployment holds engagements it cannot send.
+- Closing action: Tell a refusal that cannot succeed from one that can -- a `403` is not a node that is unreachable -- and say it once on PN-09 rather than retrying in silence; bound the exchange outbox as the detection outbox is bounded, counting what it drops.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-145 (`../../record/2026-09-23/a-register-that-says-how-old-it-is.md`).
 - Depends on: GAP-137.
 

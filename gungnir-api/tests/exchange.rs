@@ -326,7 +326,7 @@ fn held(body: &str) -> (Vec<String>, usize) {
         ExchangeResponse::Held {
             products, withheld, ..
         } => (products.into_iter().map(|p| p.id).collect(), withheld),
-        ExchangeResponse::NotHeld { item, reason } => {
+        ExchangeResponse::NotHeld { item, reason, .. } => {
             panic!("expected products for {item:?}, got: {reason}")
         }
     }
@@ -401,7 +401,7 @@ async fn an_item_this_deployment_publishes_nothing_for_says_so() {
     let (status, body) = get(&pki, addr, "sector-north", "/v3/exchange/reports").await;
     assert_eq!(status, 200, "{body}");
     match serde_json::from_str::<ExchangeResponse>(&body).expect("exchange response") {
-        ExchangeResponse::NotHeld { item, reason } => {
+        ExchangeResponse::NotHeld { item, reason, .. } => {
             assert_eq!(item, ExchangeItem::Reports);
             assert!(!reason.is_empty(), "a state with no reason is not one");
         }

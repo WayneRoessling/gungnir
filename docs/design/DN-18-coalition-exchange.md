@@ -296,8 +296,49 @@ handoff, and a producer that goes away is never forgotten -- which an ephemeral 
 (D-65) are human-owned (`docs/agentic-workflow.md`); the ledger is `docs/signatures.md`.
 `gungnir-remote`'s outbox and the desktop's producer are unchanged by this amendment.
 
+## 12. Amendment 4: a register with a lifecycle, and an answer that says its age (2026-09-23)
+
+**Amendment 3 gave the register a producer per writer and left it with no lifecycle**
+(GAP-145). It lives in the node's memory and a desktop publishes only when it issues, so a
+node that restarted held an empty register until some console's next decision: a partner
+reading `GET /v3/exchange/handoffs` was served an empty deployment while the consoles held
+engagements they believed were published, with nothing saying the list was short. In the
+other direction nothing forgets a producer that has gone away, and an ephemeral desktop
+(D-67) is a new producer every run.
+
+**The decision: nothing expires, the answer carries its age, and a desktop refreshes when
+its link comes back** (D-69).
+
+**Nothing expires.** A handoff is a decision that was taken. Dropping it because the
+console that issued it went quiet would delete a true thing to hide an unknown one, and
+the partner would watch a list shrink for a reason no field on the response explains. The
+three options the gap named -- a republish interval, a node that asks on reconnect, a set
+that expires with its session -- differ in who notices the silence; only the last destroys
+information, and it is the one not taken.
+
+**The answer carries its age.** `as_of` on both `ExchangeResponse` variants is the node
+time at which the least recently refreshed producer wrote. A merged answer is only as
+current as its quietest contributor, and the producers stay off the wire (§11), so the age
+is the one thing a partner can be told about them without learning how many consoles this
+deployment runs. It is absent where there is nothing to date: an item nothing has been
+published for has no age, only a reason.
+
+**A desktop refreshes on reconnect, on the edge rather than the state.** A desktop
+publishes its whole current handoff set the tick its link comes back, which is the only
+moment it knows the node may have forgotten: a publish is a replacement, so repeating it
+every tick would be a write a second for nothing, and waiting for the next decision is
+what left the gap. A desktop holding none publishes none -- an empty set is the claim
+"there are none here", which a console that has issued nothing has no business making, and
+it keeps quiet consoles out of the register they would each take a producer slot in.
+
+**What this deliberately does not do: evict.** §11's bound still refuses a new producer
+beyond sixty-four rather than dropping a set a partner is being served from. A deployment
+running ephemeral identities reaches that bound after sixty-four restarts, and what it
+gets is a `507` and a backlog on PN-09 -- visible, and pointing at the key custody that is
+the actual fault -- rather than a list that quietly lost a console.
+
 ## Traceability
 
-GAP-065, GAP-137; CAP-7.4; D-06, D-08, D-09, D-68; composes DN-07, DN-16, DN-17, DN-19;
-depends on GAP-041 for the transport and GAP-064 for the codecs; `../gungnir-api-v1.md`;
-`../architecture/uaf/standards/Sd-Tx.md`; principles AP-04, AP-09.
+GAP-065, GAP-137, GAP-145; CAP-7.4; D-06, D-08, D-09, D-68, D-69; composes DN-07, DN-16,
+DN-17, DN-19; depends on GAP-041 for the transport and GAP-064 for the codecs;
+`../gungnir-api-v1.md`; `../architecture/uaf/standards/Sd-Tx.md`; principles AP-04, AP-09.

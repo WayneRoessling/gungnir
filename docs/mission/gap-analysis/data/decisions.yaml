@@ -1673,3 +1673,26 @@
     answered as proposed on 2026-09-23, the day after the build. See
     `../../record/2026-09-23/a-partner-hears-what-the-node-decided.md` and
     `../../record/2026-09-23/the-register-s-contract-is-decided.md`.
+- id: D-69
+  decision: What makes a producer's exchange set stale, and what a partner is told about it
+  question: >-
+    The exchange register holds one set per producer (D-68) and has no lifecycle. It lives
+    in the node's memory, so a node restart loses every set and no desktop republishes
+    until it next issues a handoff; and nothing forgets a producer that has gone away, which
+    an ephemeral desktop (D-67) creates afresh every run. A republish interval a desktop
+    keeps to, a node that asks for one on reconnect, or a set that expires with the session
+    that wrote it?
+  raised_in: "GAP-137; GAP-145"
+  decider: Owner
+  unblocks: GAP-145
+  outcome: >-
+    **Proposed: nothing expires, the answer carries its age, and a desktop refreshes when
+    its link comes back** (DN-18 §12, built 2026-09-23 and open in this ledger until the
+    owner answers). A handoff is a decision that was taken, so expiry would delete a true
+    thing to hide an unknown one; `as_of` on the response is the node time the least
+    recently refreshed producer wrote, which is what a partner can be told without learning
+    how many consoles this deployment runs; and a desktop publishes its whole set on the
+    tick its link returns, which is the only moment it knows the node may have forgotten.
+    The bound is unchanged: a new producer beyond sixty-four is refused rather than
+    evicting a set a partner is served from. See
+    `../../record/2026-09-23/a-register-that-says-how-old-it-is.md`.

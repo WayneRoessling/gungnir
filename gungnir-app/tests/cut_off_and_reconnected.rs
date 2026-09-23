@@ -55,7 +55,7 @@
 //! decision with no recorded role is taken with nobody signed in -- DN-23 §5 rule 5's
 //! role-selected fallback -- and PN-18's person acts in the selected role.
 
-use gungnir_api::transport::{bind, serve_on, AccountTokenAuthority, NodeApi};
+use gungnir_api::transport::{bind, serve_on, AccountTokenAuthority, ExchangeProducer, NodeApi};
 use gungnir_api::v3::{Settlement, SnapshotResponse};
 use gungnir_app::failover::{self, Forwarding, ReconciliationView};
 use gungnir_app::state::AppState;
@@ -101,6 +101,11 @@ const B_OPERATOR: u64 = 62;
 /// Both are Operators, so D-15's delegation is what lets either take a hostile point
 /// engagement, and D-03's rule sees equal ranks and falls to the earlier decision.
 const ROLE: Role = Role::Operator;
+/// An account that may publish to the coalition exchange, which `ROLE` may not
+/// (`PUBLISH_EXCHANGE` is granted to Commander, IntelligenceAnalyst and Supervisor:
+/// DN-18 §5 amendment 2). GAP-145's test signs in as this one, because a handoff only
+/// reaches the node's register when the console that issued it may send it.
+const SUPERVISOR: u64 = 63;
 /// `policy.delegation.disconnected_lapse_s`.
 const LAPSE_S: f64 = 30.0;
 /// The mission time at which A is cut off, which is when its interval starts.
@@ -269,7 +274,11 @@ impl Node {
     /// A node serving on loopback with its approval loop running, on a plain thread for the
     /// reason `gungnir-node/tests/approval_queue.rs` gives.
     fn spawn() -> Self {
-        let dir = std::env::temp_dir().join(format!("gungnir-row8-node-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "gungnir-row8-node-{}-{}",
+            std::process::id(),
+            scratch_id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         let config = Arc::new(baseline(&dir));
         let resources = Arc::new(config.resource_views());
@@ -455,15 +464,23 @@ impl Node {
 }
 
 fn account(operator: u64) -> Account {
+    account_as(operator, ROLE)
+}
+
+fn account_as(operator: u64, role: Role) -> Account {
     Account {
         operator: OperatorId(operator),
-        role: ROLE,
+        role,
         phc: hash_passphrase(PASSPHRASE).expect("hashed"),
     }
 }
 
 fn api_knowing_both_operators() -> Arc<NodeApi> {
-    let store = InMemoryAccountStore::new(vec![account(A_OPERATOR), account(B_OPERATOR)]);
+    let store = InMemoryAccountStore::new(vec![
+        account(A_OPERATOR),
+        account(B_OPERATOR),
+        account_as(SUPERVISOR, Role::Supervisor),
+    ]);
     let issuer = TokenIssuer::new(vec![8u8; 32], 10_000.0).expect("issuer");
     let api = Arc::new(
         NodeApi::new(SnapshotResponse::new(
@@ -613,13 +630,33 @@ impl InterceptService for StatedPlans {
     }
 }
 
+/// Makes every scratch directory in this binary its own.
+///
+/// **A process id is not enough**: two tests in this binary share a process and therefore
+/// an id, so the second one's `remove_dir_all` wipes the first one's journal mid-run.
+/// `gungnir-api/tests/exchange.rs` documents the same trap and the same counter.
+static SCRATCH: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+fn scratch_id() -> u32 {
+    SCRATCH.fetch_add(1, Ordering::Relaxed)
+}
+
 fn desktop(name: &str, endpoint: SocketAddr) -> (AppState, std::path::PathBuf) {
-    let dir = std::env::temp_dir().join(format!("gungnir-row8-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "gungnir-row8-{name}-{}-{}",
+        std::process::id(),
+        scratch_id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("data dir");
     std::fs::write(
         dir.join("accounts.json"),
-        serde_json::to_string(&vec![account(A_OPERATOR), account(B_OPERATOR)]).expect("json"),
+        serde_json::to_string(&vec![
+            account(A_OPERATOR),
+            account(B_OPERATOR),
+            account_as(SUPERVISOR, Role::Supervisor),
+        ])
+        .expect("json"),
     )
     .expect("written");
     let mut config = baseline(&dir);
@@ -1382,4 +1419,101 @@ fn settlements_held(node: &Node) -> bool {
             operator: None
         })
     ) && held.len() == 2
+}
+// ---------------------------------------------------------------------------------
+// GAP-145: the node's exchange register outlives neither a restart nor a silence
+// ---------------------------------------------------------------------------------
+
+/// GAP-145, DN-18 §12: **a desktop publishes its whole handoff set again when its link
+/// comes back**, so a node holding none of it is repaired without waiting for the next
+/// decision.
+///
+/// The register lives in the node's memory and a desktop publishes only when it issues
+/// (GAP-137). Between a node restart and a console's next handoff, a partner reading
+/// `GET /v3/exchange/handoffs` was served an empty deployment while the consoles held
+/// engagements they believed were published -- and nothing said the list was short.
+///
+/// **The node forgetting is stated, not staged**: emptying this desktop's set through
+/// `publish_exchange` leaves the node in the state a restart leaves it in, as far as this
+/// desktop can tell, without a second node on a second port. What the test drives for
+/// real is the half this change owns -- the cut, the reconnection, and what the desktop
+/// does about it with no new handoff to prompt it.
+#[test]
+fn a_desktop_publishes_its_handoffs_again_when_its_link_comes_back() {
+    let node = Node::spawn();
+    let proxy = Proxy::start(node.addr);
+    let (mut a, a_dir) = desktop("e", proxy.addr);
+    // `until` ticks two desktops; this one only keeps it company.
+    let (mut idle, idle_dir) = desktop("f", node.addr);
+
+    sign_in(&mut a, SUPERVISOR);
+    until(&mut a, &mut idle, "the desktop to link", 15.0, |a, _| {
+        a.link
+            .as_ref()
+            .is_some_and(gungnir_remote::link::NodeLink::connected)
+    });
+
+    // A handoff this desktop issued, published to the node as `issue_for` does.
+    a.tracking = Box::new(Picture(picture()));
+    a.intercept = Box::new(StatedPlans);
+    // A hostile track, which is the class this baseline's Supervisor rule names.
+    let item = submit(&mut a, plan(9001, 42));
+    let issued = decide(&mut a, item, OperatorDecision::Accepted)
+        .id
+        .to_string();
+    until(
+        &mut a,
+        &mut idle,
+        "the node to hold the handoff this desktop issued",
+        15.0,
+        |_, _| handoff_ids(&node).contains(&issued),
+    );
+
+    // The node forgets: what it holds for this desktop is gone, as after a restart.
+    node.api
+        .publish_exchange(
+            ExchangeProducer::Unidentified,
+            gungnir_model::ExchangeItem::Handoffs,
+            Vec::new(),
+        )
+        .expect("the node's register was emptied");
+    assert!(
+        handoff_ids(&node).is_empty(),
+        "the register was not emptied, so the rest of this proves nothing"
+    );
+
+    // The link goes and comes back. No decision is taken in between: the only thing that
+    // can put the set back is the reconnection itself.
+    proxy.cut();
+    until(&mut a, &mut idle, "the link to drop", 30.0, |a, _| {
+        !a.link
+            .as_ref()
+            .is_some_and(gungnir_remote::link::NodeLink::connected)
+    });
+    proxy.restore();
+    until(
+        &mut a,
+        &mut idle,
+        "the desktop to publish its whole set again",
+        60.0,
+        |_, _| handoff_ids(&node).contains(&issued),
+    );
+    assert_eq!(
+        a.desk.approvals.records().len(),
+        1,
+        "the set came back because a second decision was taken, not because of the link"
+    );
+
+    let _ = std::fs::remove_dir_all(&a_dir);
+    let _ = std::fs::remove_dir_all(&idle_dir);
+}
+
+/// Every handoff id the node holds for exchange, whatever producer wrote it.
+fn handoff_ids(node: &Node) -> Vec<String> {
+    match node.api.exchange_all(gungnir_model::ExchangeItem::Handoffs) {
+        Some(gungnir_api::v3::ExchangeResponse::Held { products, .. }) => {
+            products.into_iter().map(|p| p.id).collect()
+        }
+        _ => Vec::new(),
+    }
 }
