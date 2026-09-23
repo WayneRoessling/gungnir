@@ -121,10 +121,10 @@ history, and an entry is never edited once it has merged.
 | GAP-106 | An operator cannot accept a coverage gap | Technical | CAP-1.4, CAP-5.9 | 2 | 10 | M | 20 | I3 | UI engineer | Open |
 | GAP-107 | Nothing gates a plan on having been rehearsed | Technical | CAP-5.2, CAP-5.9 | 2 | 10 | M | 20 | I3 | UI engineer | Open |
 | GAP-108 | A converted height carries no vertical datum shift | Technical | CAP-2.10 | 2 | 8 | M | 16 | I4 | UI engineer | Open |
-| GAP-109 | Nothing counts per-frame resource creation in gungnir-render | Technical | CAP-5.10 | 2 | 8 | S | 16 | I3 | UI engineer | Open |
-| GAP-110 | The node's headless loop has no automated test | Technical | CAP-7.3 | 2 | 1 | S | 2 | I3 | Services engineer | Open |
+| GAP-109 | Nothing counts per-frame resource creation in gungnir-render | Technical | CAP-5.10 | 2 | 8 | S | 16 | I3 | UI engineer | Closed |
+| GAP-110 | The node's headless loop has no automated test | Technical | CAP-7.3 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 | GAP-111 | The security row's role matrix and audit rule are untested, and the node audits nothing | Technical | CAP-6.2, CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Open |
-| GAP-112 | No test round-trips a fully populated v2 snapshot | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
+| GAP-112 | No test round-trips a fully populated v2 snapshot | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Closed |
 | GAP-113 | An under-authority plan is counted, never escalated | Technical | CAP-3.6, CAP-4.3 | 3 | 7 | M | 21 | I3 | Services engineer | In progress |
 | GAP-114 | Nothing consumes LateDataPolicy | Technical | CAP-1.5 | 2 | 7 | M | 14 | I3 | Services engineer | Open |
 | GAP-115 | The node never times out an unacknowledged sensor task | Technical | CAP-1.3 | 3 | 9 | S | 27 | I3 | Services engineer | Closed |
@@ -1674,11 +1674,12 @@ Counts: 145 gaps, 3 mission, 142 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.10 Performance budgets.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which kept the `gungnir-render` row Draft because nothing counts per-frame resource creation.
+  - 2026-09-23, Closed: Built: a debug-build `DEVICE_CREATION_ATTEMPTS` counter in `GpuContext::new`, read through `gungnir_render::device_creation_attempts()`, and `device_creation_stays_at_one_across_many_frames` in `gungnir-app/src/fusion.rs` (`#[ignore]`d for a real `wgpu` adapter, per this workspace's GPU-verification gate). Negatively checked: removing `FusionBackend::ensure_resolved`'s memoization guard failed the test as expected before the guard was restored. The verification-table row now names both; left **not gated**, awaiting the owner's confirmation this is the criterion the test checks. See `../../record/2026-09-23/gungnir-render-counts-its-own-device-creation.md`.
 - Evidence: `../../verification-capability-table.md` §2, the `gungnir-render` row (method: a debug counter of device and buffer creations per frame); `gungnir-render` has no test functions.
 - Severity: 2. Reach: 8 threads. Effort: S. Priority: 16.
 - Impact: The gungnir-render verification row cannot be gated: its criterion is zero device and buffer creations per frame, measured by a debug counter nothing implements, so a per-frame resource leak would pass every test in the workspace.
 - Closing action: Add the debug-build counter of device and buffer creations the row's method names, and a test that runs frames and asserts no creation after the first; then walk the row again.
-- Target: I3. Owner: UI engineer. Status: Open.
+- Target: I3. Owner: UI engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16, Group C (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-110 The node's headless loop has no automated test**
@@ -1687,11 +1688,12 @@ Counts: 145 gaps, 3 mission, 142 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.3 Three profiles.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which kept the `gungnir-node` Headless loop row Draft because only a person running the binary checks it.
+  - 2026-09-23, Closed: Built: `gungnir-node/tests/headless_loop.rs` spawns the real binary on the default config, journals through a real interrupt (`kill -INT`), and asserts a clean exit and the journaled envelopes; `#![cfg(unix)]`, since three genuine Windows `CTRL_C_EVENT` mechanisms were tried and none delivered the signal (all three recorded rather than shipped). CI gates the row on `ubuntu-latest`. Building the test surfaced a real, unrelated defect: `tracing_subscriber::fmt::init()`'s default writer silently drops every log line on this platform once the process has no console attached, fixed with `.with_ansi(false)` in both `gungnir-node/src/main.rs` and `gungnir-app/src/main.rs`. Left **not gated**, awaiting the owner's confirmation this is the criterion the row states. See `../../record/2026-09-23/node-headless-loop-has-a-test.md`.
 - Evidence: `../../verification-capability-table.md` §2, the `gungnir-node` Headless loop row; `gungnir-node/tests/` holds account provisioning and encryption at rest only.
 - Severity: 2. Reach: 1 threads. Effort: S. Priority: 2.
 - Impact: The node's own run cycle -- start on the default config, journal every envelope, report health, exit cleanly on interrupt -- is checked only by a person running the binary, so a regression in it reaches a deployment unseen.
 - Closing action: Add a test that starts `gungnir-node` on the default config in a temporary directory, lets it journal and report health, interrupts it, and asserts a clean exit and the journaled envelopes. On Windows the interrupt cannot rely on a signal from Git Bash (`CLAUDE.md`). Then walk the row again.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16, Group C (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-111 The security row's role matrix and audit rule are untested, and the node audits nothing**
@@ -1713,11 +1715,12 @@ Counts: 145 gaps, 3 mission, 142 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.1 Versioned interface.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which held the `gungnir-api` row and amended its method and criterion to the v2 interface.
+  - 2026-09-23, Closed: GAP-130 retired the v2 interface whole in the meantime (`/v2` now answers `410 Gone`), so there is no v2 `SnapshotResponse` left to round-trip; the verification-table row's "v2" wording is corrected to "v3" in the same change, a factual correction rather than a widening. Built: `gungnir-api/tests/full_snapshot_round_trip.rs` round-trips a fully populated `SnapshotResponse` -- non-default track state, covariance, classification and releasability, a plan, health, a requirement, a bearing ray, pipeline stats, a queue item -- through plain serde and through an operator's authenticated `GET /v3/snapshot`, by hand-rolled HTTP over plain `TcpStream` rather than a new client dependency, matching every other file in `gungnir-api/tests/`. Left **not gated**, awaiting the owner's confirmation this is the criterion the row states. See `../../record/2026-09-23/a-fully-populated-v3-snapshot-round-trips.md`.
 - Evidence: `../../verification-capability-table.md` §2, the `gungnir-api` row; the zero-loss evidence that exists is `gungnir-remote/tests/wire_conformance.rs` and `mod tests` in `gungnir-api/src/v2/mod.rs`.
 - Severity: 2. Reach: 6 threads. Effort: S. Priority: 12.
 - Impact: The `gungnir-api` row's zero-loss clause is checked on sparse snapshots only, so a field a serializer drops from a populated snapshot would pass every test.
 - Closing action: Build a fully populated v2 `SnapshotResponse` -- tracks with non-default state, covariance, classification and releasability; a plan; health flags; requirements; bearing rays; pipeline stats -- round-trip it through serde and through an operator's `GET /v2/snapshot` with a bearer token, and assert equality with the original. Then walk the row again.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-113 An under-authority plan is counted, never escalated**

@@ -8034,6 +8034,18 @@
     note: >-
       Filed by the GAP-067 walk, which kept the `gungnir-render` row Draft because
       nothing counts per-frame resource creation.
+  - date: 2026-09-23
+    status: Closed
+    note: >-
+      Built: a debug-build `DEVICE_CREATION_ATTEMPTS` counter in `GpuContext::new`,
+      read through `gungnir_render::device_creation_attempts()`, and
+      `device_creation_stays_at_one_across_many_frames` in `gungnir-app/src/fusion.rs`
+      (`#[ignore]`d for a real `wgpu` adapter, per this workspace's GPU-verification
+      gate). Negatively checked: removing `FusionBackend::ensure_resolved`'s
+      memoization guard failed the test as expected before the guard was restored. The
+      verification-table row now names both; left **not gated**, awaiting the owner's
+      confirmation this is the criterion the test checks. See
+      `../../record/2026-09-23/gungnir-render-counts-its-own-device-creation.md`.
 
 - id: GAP-110
   name: The node's headless loop has no automated test
@@ -8065,6 +8077,20 @@
     note: >-
       Filed by the GAP-067 walk, which kept the `gungnir-node` Headless loop row Draft
       because only a person running the binary checks it.
+  - date: 2026-09-23
+    status: Closed
+    note: >-
+      Built: `gungnir-node/tests/headless_loop.rs` spawns the real binary on the
+      default config, journals through a real interrupt (`kill -INT`), and asserts a
+      clean exit and the journaled envelopes; `#![cfg(unix)]`, since three genuine
+      Windows `CTRL_C_EVENT` mechanisms were tried and none delivered the signal (all
+      three recorded rather than shipped). CI gates the row on `ubuntu-latest`.
+      Building the test surfaced a real, unrelated defect: `tracing_subscriber::fmt::init()`'s
+      default writer silently drops every log line on this platform once the process
+      has no console attached, fixed with `.with_ansi(false)` in both
+      `gungnir-node/src/main.rs` and `gungnir-app/src/main.rs`. Left **not gated**,
+      awaiting the owner's confirmation this is the criterion the row states. See
+      `../../record/2026-09-23/node-headless-loop-has-a-test.md`.
 
 - id: GAP-111
   name: >-
@@ -8133,6 +8159,21 @@
     note: >-
       Filed by the GAP-067 walk, which held the `gungnir-api` row and amended its method
       and criterion to the v2 interface.
+  - date: 2026-09-23
+    status: Closed
+    note: >-
+      GAP-130 retired the v2 interface whole in the meantime (`/v2` now answers `410
+      Gone`), so there is no v2 `SnapshotResponse` left to round-trip; the
+      verification-table row's "v2" wording is corrected to "v3" in the same change,
+      a factual correction rather than a widening. Built:
+      `gungnir-api/tests/full_snapshot_round_trip.rs` round-trips a fully populated
+      `SnapshotResponse` -- non-default track state, covariance, classification and
+      releasability, a plan, health, a requirement, a bearing ray, pipeline stats, a
+      queue item -- through plain serde and through an operator's authenticated
+      `GET /v3/snapshot`, by hand-rolled HTTP over plain `TcpStream` rather than a new
+      client dependency, matching every other file in `gungnir-api/tests/`. Left **not
+      gated**, awaiting the owner's confirmation this is the criterion the row states.
+      See `../../record/2026-09-23/a-fully-populated-v3-snapshot-round-trips.md`.
 
 - id: GAP-113
   name: An under-authority plan is counted, never escalated

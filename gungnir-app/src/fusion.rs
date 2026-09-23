@@ -226,6 +226,41 @@ mod tests {
         assert!(result.converged, "an aligned cloud converges at once");
     }
 
+    /// GAP-109, CAP-5.10's "single device" row: `ensure_resolved` -- and so
+    /// `GpuContext::new` -- runs at most once across many `engine_for` calls, the
+    /// shape of one desktop tick after another (`update::tick` -> `pointcloud::register`
+    /// -> `engine_for`, once per frame).
+    ///
+    /// **`#[ignore]`d, on purpose**, the same rule `gpu_vs_cpu.rs` states for this
+    /// device request (`docs/agentic-workflow.md`): nothing in this crate touches
+    /// `wgpu` in plain `cargo test`, because a request that gracefully returns
+    /// `NoAdapter` on this machine is not a guarantee it does the same on every CI
+    /// image. Run with `cargo test -p gungnir-app -- --ignored device_creation` on a
+    /// host with a real adapter (`gpu-fusion.yml`'s runner).
+    #[test]
+    #[ignore = "needs a real wgpu adapter; run with --ignored on a GPU-enabled host"]
+    fn device_creation_stays_at_one_across_many_frames() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime for this test");
+        let mut backend = FusionBackend::new();
+        let target = tiny_cloud();
+        let before = gungnir_render::device_creation_attempts();
+
+        for _ in 0..5 {
+            // What `update::tick` calls once per frame, through
+            // `crate::pointcloud::register`.
+            let _ = backend.engine_for(&runtime.handle().clone(), &target, 10);
+        }
+
+        assert_eq!(
+            gungnir_render::device_creation_attempts(),
+            before + 1,
+            "GpuContext::new was invoked more than once across five simulated frames"
+        );
+    }
+
     /// `engine_for` refuses an empty target the same way `CpuIcp::new` +
     /// `PointCloudFusion::step` and `GpuFusionEngine::new` each independently do --
     /// checked here on the CPU path, which needs no GPU to exercise.
