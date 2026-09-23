@@ -149,7 +149,7 @@ history, and an entry is never edited once it has merged.
 | GAP-134 | A desktop's offline decisions never reach its node | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Closed |
 | GAP-135 | An effector's report moves an engagement without putting the move on the record | Technical | CAP-4.6 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
 | GAP-136 | A rehearsal read its picture before the pipeline had reported the run | Technical | CAP-5.2 | 3 | 1 | S | 3 | I3 | Services engineer | Closed |
-| GAP-137 | A handoff the node issues reaches no exchange partner | Technical | CAP-5.7 | 2 | 1 | S | 2 | I3 | Services engineer | Open |
+| GAP-137 | A handoff the node issues reaches no exchange partner | Technical | CAP-5.7 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 | GAP-138 | An unreachable decision type still describes the interface | Technical | CAP-5.7 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
 | GAP-139 | An If-Sr diagram no longer renders under the layout its generator pins | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
 | GAP-140 | A node's deadline is drawn against the desktop's own clock | Technical | CAP-5.9, CAP-3.7 | 2 | 10 | S | 20 | I3 | UI engineer | Open |
@@ -157,8 +157,9 @@ history, and an entry is never edited once it has merged.
 | GAP-142 | A desktop that restarts during an outage forgets it | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
 | GAP-143 | A sign-in during an outage ends it without a person switching back | Technical | CAP-5.4, CAP-6.1 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 | GAP-144 | The release passes only by accepting two quick-xml advisories | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | UI engineer | Closed |
+| GAP-145 | The exchange register has no lifecycle | Technical | CAP-7.4 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
 
-Counts: 144 gaps, 3 mission, 141 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 145 gaps, 3 mission, 142 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2056,11 +2057,12 @@ Counts: 144 gaps, 3 mission, 141 technical; 1 already covered by a plan in `../.
   - 2026-09-17, Open: Filed by GAP-132 rather than half-wired there: while a linked desktop still issues handoffs for a node's plans, two writers to one register would each overwrite the other, and which one a partner saw would depend on tick order.
   - 2026-09-17, Open: GAP-133 removed the writer this entry was waiting on, and found another. `ApprovalDesk::issue_for` -- the only caller of `republish_handoffs` -- is reached from `decide_for` alone, so a linked desktop, which queues no node plan, never writes the register. **The fall-back path is what stands in the way now.** `fall_back` leaves `state.link` in place, so a cut-off desktop issues handoffs and queues its whole set on the link's exchange outbox; `flush_exchange` delivers it on reconnect and `publish_exchange` replaces what the node holds. Wiring the node in now would make its set the one that disappears after any outage. A producer per writer is a `gungnir-api` write path and a DN-18 amendment. See `../../record/2026-09-17/a-linked-desktop-shows-the-node-s-queue.md`.
   - 2026-09-17, Open: GAP-134 did not remove that writer and could not: a cut-off desktop must still issue handoffs (DN-31 §6.7), and row 8 runs the path that queues its whole set on the link for `flush_exchange` to replace the node's on reconnect. Wiring the node's own set needs a register with a producer per writer, and nothing identifies a desktop as one: every desktop's certificate names `gungnir-app` (GAP-141), and keying on the operator would collide for one person on two consoles and duplicate for an operator change on one. Waits on GAP-141 and the DN-18 amendment. See `../../record/2026-09-17/an-outage-reaches-the-node-once.md`.
+  - 2026-09-23, Closed: Closed by giving the register a producer per writer (DN-18 §11, D-68) and wiring the node's own set in. `publish_exchange` and `withhold_exchange` take an `ExchangeProducer`; a publish replaces that producer's set alone and `exchange_all` merges every producer's, the node's first. The producer is the name the connection was verified under (GAP-141), never a request field. `NodeHost::republish_handoffs`, a no-op since GAP-132, publishes this node's whole set, and the node's opening claim for handoffs is an empty set rather than the false "this node holds none". Bounded at 64 producers an item, refusing rather than evicting. It left the register with no lifecycle: GAP-145. See `../../record/2026-09-23/a-partner-hears-what-the-node-decided.md`.
 - Evidence: `gungnir-node/src/approval.rs` (`republish_handoffs`, a documented no-op); `gungnir-api/src/transport.rs` (`publish_exchange` replaces a set rather than adding to it); DN-18 §5 amendment 2; DN-31 §6.5.
 - Severity: 2. Reach: 1 threads. Effort: S. Priority: 2.
 - Impact: The node issues handoffs of its own since GAP-132, and its `ApprovalHost::republish_handoffs` is a no-op, so a partner reading `GET /v3/exchange/handoffs` sees only what a desktop published. A coalition partner is told about an engagement a desktop decided and not about one the node decided, with nothing saying the list is partial -- which is the silence DN-17 §5 rule 3 exists to prevent.
 - Closing action: Decide how the node's own handoff set and a desktop's published set share one register -- a second writer would silently overwrite the first -- and wire the node's set in once GAP-133 has stopped a linked desktop issuing handoffs for a node plan. Then assert a partner with an agreement receives a handoff the node issued.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-132 (`../../record/2026-09-17/the-node-runs-the-approval-queue.md`).
 - Depends on: GAP-133, GAP-141.
 
@@ -2160,4 +2162,18 @@ Counts: 144 gaps, 3 mission, 141 technical; 1 already covered by a plan in `../.
 - Closing action: Move eframe and egui to 0.34, three-d to 0.19 and egui_tiles to 0.15, the newest set that keeps one `glow` for the shared OpenGL context, with eframe's `accesskit` kept and no behaviour or test assertion changed.
 - Target: I2. Owner: UI engineer. Status: Closed.
 - Reference: `../../record/2026-09-17/egui-0-34-and-three-d-0-19.md`; the first release runs in `../../record/2026-09-17/release-workflow-first-runs.md`.
+
+**GAP-145 The exchange register has no lifecycle**
+
+- Type: Technical.
+- Capability: CAP-7.4 Peer and coalition exchange.
+- History:
+  - 2026-09-23, Open: Filed by GAP-137 rather than half-answered there. GAP-137 gave the register a producer per writer, which is what made the question visible: with one set per item a restart lost one set and a stale writer overwrote itself, and with one per producer the deployment's whole published picture is lost on restart and every departed producer is kept. The answer is a policy about what a partner may believe, not a transport change, so it is the owner's.
+- Evidence: `gungnir-api/src/transport.rs` (`exchange_products`, an in-memory map with no eviction and a bound of `PRODUCERS_PER_ITEM`); `gungnir-remote/src/link.rs` (`flush_exchange` pops a batch once the node accepts it); `gungnir-app/src/desk.rs` (`republish_handoffs`, called from `issue_for` alone); DN-18 §11.
+- Severity: 3. Reach: 5 threads. Effort: M. Priority: 15.
+- Impact: The register lives in memory and nothing ever removes a producer's set. A node restart loses every set, and no desktop republishes until it next issues a handoff, so a partner reads an empty deployment while desktops hold handoffs they believe are published. In the other direction a desktop that goes away is never forgotten, and its last set is served as current for as long as the node runs -- which an ephemeral desktop (D-67), a new producer name every run, reaches fastest.
+- Closing action: Decide what makes a producer's set stale -- a republish interval a desktop keeps to, a node that asks for one on reconnect, or a set that expires with the session that wrote it -- and say on the response what a partner is reading when a producer has gone quiet.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-137 (`../../record/2026-09-23/a-partner-hears-what-the-node-decided.md`).
+- Depends on: GAP-137.
 

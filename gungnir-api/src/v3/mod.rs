@@ -340,9 +340,13 @@ pub enum ExchangeResponse {
         /// one that is not told believes it has everything (DN-17 §5 rule 3).
         withheld: usize,
     },
-    /// This deployment publishes none of this item, and why. A node holds no warnings, no
-    /// reports and no handoffs of its own -- a desktop does -- and saying so is different
-    /// from reporting that there are none.
+    /// This deployment publishes none of this item, and why: a producer that keeps no
+    /// such ledger saying so, which is different from reporting that there are none.
+    ///
+    /// **The merged answer** (GAP-137): this is what a partner reads only when no
+    /// producer in the register holds any, and it carries what each of them said. A node
+    /// keeps no warnings and no reports; since GAP-132 it does keep handoffs, and claims
+    /// an empty set for them rather than this.
     NotHeld { item: ExchangeItem, reason: String },
 }
 
@@ -350,12 +354,16 @@ pub enum ExchangeResponse {
 /// desktop that holds an item posts what it currently holds, and the node replaces its
 /// held set for that item with this list.
 ///
-/// **A replacement, not an addition.** [`crate::transport::NodeApi::publish_exchange`]
-/// overwrites rather
-/// than appends, so the caller sends its whole current set each time -- the same
-/// contract [`ExchangeResponse::Held`]'s own doc comment describes from the read side.
+/// **A replacement of this caller's own set, not an addition to it** (GAP-137).
+/// [`crate::transport::NodeApi::publish_exchange`] overwrites rather than appends, so the
+/// caller sends its whole current set each time -- the same contract
+/// [`ExchangeResponse::Held`]'s own doc comment describes from the read side. What it
+/// does not touch is any other producer's set: the node's own handoffs and every other
+/// desktop's stay where they are, and a read merges them.
+///
 /// The item is not a field here: it is already in the path, exactly as the three `GET`
-/// routes this shares a path with take no item field either.
+/// routes this shares a path with take no item field either. Neither is the producer,
+/// which is the common name the connection was verified under and so cannot be claimed.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PublishExchangeRequest {
     pub products: Vec<ExchangeProduct>,

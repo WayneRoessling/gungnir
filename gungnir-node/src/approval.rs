@@ -28,7 +28,8 @@
 //! than a copy of it kept in step by hand.
 
 use gungnir_api::transport::{
-    DecisionAnswer, ForwardAnswer, NodeApi, PendingDecision, PendingForward, RefusedDecision,
+    DecisionAnswer, ExchangeProducer, ForwardAnswer, NodeApi, PendingDecision, PendingForward,
+    RefusedDecision,
 };
 use gungnir_api::v3;
 use gungnir_approval::{
@@ -44,6 +45,43 @@ use gungnir_model::events::LinkEvent;
 use gungnir_model::{MissionTime, PlanView, ResourceView, TrackView};
 use gungnir_remote::endpoint::{DeliveryOutcome, EndpointClient, PendingDelivery};
 use gungnir_security::{actions, AuditEntry, AuditLog, InMemoryAuditLog, OperatorId, Role};
+
+/// What this node claims for each exchange item before any partner can ask (DN-18 §5,
+/// GAP-065, GAP-137).
+///
+/// Said once, in words, rather than left to a default: a partner reading an empty list
+/// would take it for "there are none here", and for warnings and reports the truth is
+/// that they live on the desktops this node serves.
+///
+/// **Handoffs are this node's own** (GAP-132). It runs the approval queue and issues
+/// them, so the true claim is an empty set -- "I keep these and have issued none yet" --
+/// where the old reason, "handoffs are issued on a desktop from a recorded decision; this
+/// node holds none", stopped being true the day DN-31 moved the queue here.
+/// [`NodeHost::republish_handoffs`] replaces this set each time the desk issues one.
+///
+/// All three go in under [`ExchangeProducer::Node`]: the register holds one set per
+/// writer, so what is claimed here is this node's own and never a desktop's.
+pub fn claim_exchange_items(api: &NodeApi) -> Result<(), gungnir_api::ApiError> {
+    for (item, reason) in [
+        (
+            gungnir_model::ExchangeItem::Warnings,
+            "warnings are raised on a desktop against its own defended assets; this node \
+             holds no warning ledger",
+        ),
+        (
+            gungnir_model::ExchangeItem::Reports,
+            "reports are produced on a desktop from its journal; this node publishes none \
+             for exchange",
+        ),
+    ] {
+        api.withhold_exchange(ExchangeProducer::Node, item, reason)?;
+    }
+    api.publish_exchange(
+        ExchangeProducer::Node,
+        gungnir_model::ExchangeItem::Handoffs,
+        Vec::new(),
+    )
+}
 
 /// What the node holds between ticks for the approval queue.
 ///
@@ -145,6 +183,8 @@ impl NodeApproval {
 /// log the node keeps.
 pub struct NodeHost<'a> {
     bus: &'a InProcessBus,
+    /// Where this node's own handoff set goes for coalition exchange (GAP-137).
+    api: &'a NodeApi,
     audit: &'a mut InMemoryAuditLog,
     /// Who the audit log attributes an entry to, and `None` for an act nobody took -- a
     /// sweep's expiry, or a plan's submission (DN-23 §5 rule 1).
@@ -183,28 +223,48 @@ impl ApprovalHost for NodeHost<'_> {
         });
     }
 
-    /// **A no-op on a node, deliberately** (DN-31 §6.5, GAP-137).
+    /// **This node's own current handoff set, for a partner to be served from**
+    /// (GAP-137, DN-18 §5 amendment 3, DN-31 §6.5).
     ///
-    /// The node's exchange register for handoffs is written by the desktops that hold
-    /// them (DN-18 §5 amendment 2, GAP-065), and `publish_exchange` replaces a set rather
-    /// than adding to it, so two writers would each silently overwrite the other.
+    /// Published under [`ExchangeProducer::Node`], which replaces what this node last
+    /// published and nothing any desktop published: the register holds one set per writer
+    /// and merges them on read.
     ///
-    /// **Corrected 2026-09-17 (GAP-133).** This said the second writer was a linked
-    /// desktop issuing handoffs for a node's plan, and that GAP-133 would remove it.
-    /// GAP-133 has: a linked desktop queues no node plan, so it records no decision on
-    /// one, and `ApprovalDesk::issue_for` -- the only caller of this trait method -- is
-    /// reached from `decide_for` alone. A desktop that is linked and has taken no local
-    /// decision never writes the register at all.
+    /// **Until 2026-09-22 this was a no-op**, and the reason was the register rather than
+    /// the node: one set per item meant the node's handoffs and a desktop's would each
+    /// have erased the other, and which one a partner saw depended on tick order. GAP-133
+    /// removed one of those writers and found another -- a desktop that falls back keeps
+    /// its link and queues its whole set for `flush_exchange` to deliver on reconnect
+    /// (`gungnir-app/src/failover.rs`) -- which is exactly the writer the producer key
+    /// now keeps apart from this one.
     ///
-    /// **What still stands in the way is a different writer.** A desktop that falls back
-    /// keeps its `NodeLink` (`gungnir-app/src/failover.rs`, `fall_back`), decides on its
-    /// own queue while cut off, and queues its whole handoff set on the link's exchange
-    /// outbox; the batch is delivered on reconnect and replaces whatever the node holds.
-    /// Wiring the node's set in now would make it the set that disappears the first time
-    /// any desktop recovers from an outage -- the same failure, found one layer along.
-    /// Giving the register a producer per writer is a `gungnir-api` write path and a
-    /// DN-18 amendment, so GAP-137 stays open rather than being half-wired here.
-    fn republish_handoffs(&mut self, _handoffs: &[HandoffRecord]) {}
+    /// **The whole set, not the new handoff**, mirroring the desktop's host
+    /// (`gungnir-app/src/desk.rs`) and for the same reason: a publish replaces, so what
+    /// goes over it is everything this node holds right now.
+    ///
+    /// A failed publish is logged rather than returned, as the trait requires. The
+    /// decision and the engagement it opened are already on the record, and a node that
+    /// stopped deciding because a partner's view could not be updated would fail the
+    /// wrong way round.
+    fn republish_handoffs(&mut self, handoffs: &[HandoffRecord]) {
+        let products = handoffs
+            .iter()
+            .map(|record| v3::ExchangeProduct {
+                // The whole identifier: a partner asks about a product by it (D-61).
+                id: record.handoff.decision.to_string(),
+                at: record.handoff.issued,
+                releasability: record.handoff.releasability.clone(),
+                body: serde_json::to_value(&record.handoff).unwrap_or(serde_json::Value::Null),
+            })
+            .collect();
+        if let Err(err) = self.api.publish_exchange(
+            ExchangeProducer::Node,
+            gungnir_model::ExchangeItem::Handoffs,
+            products,
+        ) {
+            tracing::error!(%err, "this node's handoffs could not be published for exchange");
+        }
+    }
 }
 
 impl HandoffTransport for NodeHost<'_> {
@@ -247,6 +307,11 @@ pub struct Frame<'a> {
     pub geofences: &'a dyn gungnir_policy::GeoService,
     pub bus: &'a InProcessBus,
     pub endpoint_client: Option<&'a EndpointClient>,
+    /// The transport the loop serves on: the queues these steps drain, and since GAP-137
+    /// the exchange register this node publishes its own handoffs to. One reference,
+    /// because the decision a step takes and the set a partner is then served from are
+    /// the same tick's work.
+    pub api: &'a NodeApi,
 }
 
 /// **The role a node acts in when nobody is asking.**
@@ -303,6 +368,7 @@ fn with_desk<T>(
     let NodeApproval { desk, audit, .. } = approval;
     let mut host = NodeHost {
         bus: frame.bus,
+        api: frame.api,
         audit,
         operator: signed_in.map(|(operator, _)| operator),
         now: frame.now,
@@ -366,9 +432,8 @@ pub fn sweep(approval: &mut NodeApproval, frame: &Frame<'_>) {
 pub fn answer_decisions(
     approval: &mut NodeApproval,
     frame: &Frame<'_>,
-    api: &NodeApi,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for pending in api.take_decisions() {
+    for pending in frame.api.take_decisions() {
         let answer = answer_one(approval, frame, &pending);
         // A dropped receiver means the route's reply window closed; the decision still
         // happened and is on the record, which is exactly what the `504` tells the client
@@ -492,8 +557,8 @@ fn already_ended(
 /// on the journal is published under the event the forwarding desktop journaled it as.
 /// **Nothing is queued, engaged or handed off**: the desktop did those while it was cut
 /// off, and doing them again here would be the double engagement D-58 reports.
-pub fn answer_forwarded(approval: &mut NodeApproval, frame: &Frame<'_>, api: &NodeApi) {
-    for pending in api.take_forwarded() {
+pub fn answer_forwarded(approval: &mut NodeApproval, frame: &Frame<'_>) {
+    for pending in frame.api.take_forwarded() {
         let answer = take_forwarded(approval, frame, &pending);
         // A dropped receiver is a route whose window closed. What was applied stays
         // applied, and the client sends the batch again to learn that it was.
@@ -712,8 +777,8 @@ fn publish_settlement(frame: &Frame<'_>, plan: gungnir_model::PlanId, settlement
 /// Every decision **and every refusal** writes exactly one entry on the node. The four
 /// pre-loop checks refuse before the loop sees anything, so the route records what it
 /// refused and the loop -- which owns the log -- writes the entry.
-pub fn audit_refused_decisions(approval: &mut NodeApproval, frame: &Frame<'_>, api: &NodeApi) {
-    for refusal in api.take_refused_decisions() {
+pub fn audit_refused_decisions(approval: &mut NodeApproval, frame: &Frame<'_>) {
+    for refusal in frame.api.take_refused_decisions() {
         let RefusedDecision {
             item,
             operator,

@@ -1886,30 +1886,10 @@ async fn run(
         );
         base
     });
-    // DN-18 §5, GAP-065: the three exchange items this node does not hold. Said once, in
-    // words, rather than left to a default -- a partner reading an empty list would take
-    // it for "there are none here", and the truth is that warnings, reports and handoffs
-    // live on the desktops this node serves. `publish_exchange` is the door for a
-    // deployment that does hold them.
-    for (item, reason) in [
-        (
-            gungnir_model::ExchangeItem::Warnings,
-            "warnings are raised on a desktop against its own defended assets; this node \
-             holds no warning ledger",
-        ),
-        (
-            gungnir_model::ExchangeItem::Reports,
-            "reports are produced on a desktop from its journal; this node publishes none \
-             for exchange",
-        ),
-        (
-            gungnir_model::ExchangeItem::Handoffs,
-            "handoffs are issued on a desktop from a recorded decision; this node holds \
-             none",
-        ),
-    ] {
-        api.withhold_exchange(item, reason)?;
-    }
+    // What this node claims for exchange before a partner can ask (DN-18 §5, GAP-065,
+    // GAP-137). A library function, because it is a claim about this node and
+    // `gungnir-node/tests/approval_queue.rs` asserts it rather than a copy of it.
+    approval::claim_exchange_items(&api)?;
     let api_rx = bus.subscribe();
     // Registered after the transport is built, so a submitted detection has somewhere to
     // arrive from. The gateway counts it as an adapter, so a node with the API enabled
@@ -2060,6 +2040,7 @@ async fn run(
             geofences: &geo,
             bus: &bus,
             endpoint_client: endpoint_client.as_ref(),
+            api: &api,
         };
         if outcome.is_fresh() && plan != last_plan {
             bus.publish(
@@ -2081,12 +2062,12 @@ async fn run(
         // accepted, in arrival order (§6.3). Both before the journal append below, so
         // everything they publish is on disk in the tick it happened.
         approval::sweep(&mut approval_desk, &frame);
-        approval::answer_decisions(&mut approval_desk, &frame, &api)?;
+        approval::answer_decisions(&mut approval_desk, &frame)?;
         // GAP-134: what a desktop decided while it was cut off from this node, each batch
         // put on the record whole or not at all (DN-31 §6.8). Beside the decisions and
         // before the journal append, for the same reason.
-        approval::answer_forwarded(&mut approval_desk, &frame, &api);
-        approval::audit_refused_decisions(&mut approval_desk, &frame, &api);
+        approval::answer_forwarded(&mut approval_desk, &frame);
+        approval::audit_refused_decisions(&mut approval_desk, &frame);
 
         for envelope in journal_rx.try_iter() {
             journal.append(session, &envelope)?;

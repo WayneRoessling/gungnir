@@ -495,7 +495,7 @@ impl NodeLink {
     }
 
     /// Hand this desktop's current held set for `item` to the link, to replace what the
-    /// node holds (GAP-065, DN-18 §5 amendment 2).
+    /// node holds **for this desktop** (GAP-065, DN-18 §5 amendment 2, GAP-137).
     ///
     /// **A replacement, not an addition**, mirroring
     /// `gungnir_api::transport::NodeApi::publish_exchange`'s own contract: `products` is
@@ -503,6 +503,12 @@ impl NodeLink {
     /// before. Queuing a fresher batch does not remove an older one already in flight for
     /// the same item; both are sent in order, and since each is a full replacement the
     /// node's held set still converges on the last one applied.
+    ///
+    /// **What it replaces is this desktop's set alone** (DN-18 §5 amendment 3). The node
+    /// keys the register on the name this link's certificate was verified under, so the
+    /// node's own handoffs and every other desktop's survive this batch -- which is what
+    /// lets a desktop that fell back publish its whole set on reconnect without erasing
+    /// what the node decided while it was gone.
     pub fn queue_exchange(
         &self,
         item: gungnir_model::ExchangeItem,

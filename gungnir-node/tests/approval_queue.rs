@@ -11,6 +11,10 @@
 //! | 5 | Authority and offering: plans per layer and class against the authority matrix, and `Denied { Authority }` for a plan nobody may accept |
 //! | 6 | Expiry and escalation on the node's clock, with a second client signed in as the higher role, and a pre-delegated item that still expires and escalates (D-59) |
 //!
+//! **And what leaves this node when a row has run** (GAP-137): a handoff the queue issued
+//! reaches a coalition partner that has an agreement for it, which is the one thing the
+//! rows above never asked -- they end at the record.
+//!
 //! # What "an in-process node on the real transport" is here
 //!
 //! The transport is the real one: `gungnir_api::transport::bind` and `serve_on` over
@@ -28,8 +32,10 @@
 //! are about is what the queue does with a plan; the allocator's own choices are
 //! `gungnir-intercept-service`'s business and are tested there.
 
-use gungnir_api::transport::{bind, serve_on, AccountTokenAuthority, NodeApi};
-use gungnir_api::v3::{DecisionRefused, QueueItemView, SnapshotResponse};
+use gungnir_api::transport::{bind, serve_on, AccountTokenAuthority, ExchangeProducer, NodeApi};
+use gungnir_api::v3::{
+    DecisionRefused, ExchangeProduct, ExchangeResponse, QueueItemView, SnapshotResponse,
+};
 use gungnir_command::{ApprovalWorkflow, DecisionRecord};
 use gungnir_config::{ConfigBaseline, ResourceConfig};
 use gungnir_eventing::{Envelope, Event, EventBus, InProcessBus, Receiver};
@@ -37,9 +43,10 @@ use gungnir_geo::InMemoryGeoService;
 use gungnir_model::events::{CommandEvent, InterceptEvent};
 use gungnir_model::policy_settings::AuthorityRule;
 use gungnir_model::{
-    Classification, EffectorLayer, InterceptSolutionView, MissionTime, PendingApprovalId, PlanId,
-    PlanKind, PlanView, Provenance, Quality, Releasability, ResourceId, ResourceView, SystemHealth,
-    TrackId, TrackStatus, TrackView, WeaponsControlStatus,
+    Classification, EffectorLayer, ExchangeAgreement, ExchangeFormat, ExchangeItem, ExchangeSet,
+    InterceptSolutionView, MissionTime, PendingApprovalId, PlanId, PlanKind, PlanView, Provenance,
+    Quality, Releasability, ResourceId, ResourceView, SystemHealth, TrackId, TrackStatus,
+    TrackView, WeaponsControlStatus,
 };
 use gungnir_node::approval::{self, Frame, NodeApproval};
 use gungnir_security::{
@@ -55,6 +62,9 @@ const SUPERVISOR: u64 = 13;
 /// A role that holds no `plan.decide` at all: it may read the picture and export a report
 /// and decide nothing (`gungnir_security::authz::role_permits`).
 const ANALYST: u64 = 14;
+
+/// The coalition partner these rows' node has an exchange agreement with (GAP-137).
+const PARTNER: &str = "sector-north";
 
 /// Mission time the queue is submitted at. Every deadline below is relative to it.
 const SUBMITTED: f64 = 100.0;
@@ -237,7 +247,18 @@ fn api_knowing_the_accounts() -> Arc<NodeApi> {
         .with_callers(Arc::new(AccountTokenAuthority::new(
             Box::new(store),
             issuer,
-        ))),
+        )))
+        // One partner with an agreement for handoffs (GAP-137). The agreement gate and
+        // the marking gate are `gungnir-api`'s and tested there; what it is here for is
+        // that a partner reading this node has something to read.
+        .with_exchange(ExchangeSet {
+            agreements: vec![ExchangeAgreement {
+                party: PARTNER.into(),
+                inbound: Vec::new(),
+                outbound: vec![ExchangeItem::Handoffs],
+                format: ExchangeFormat::Canonical,
+            }],
+        }),
     );
     api.set_now(SUBMITTED);
     api
@@ -306,14 +327,15 @@ impl Node {
                             geofences: &*geo,
                             bus: &bus,
                             endpoint_client: None,
+                            api: &api,
                         };
                         // The order `main.rs` runs them in: the sweep on the node's clock,
                         // then the decisions the routes accepted, then the outages desktops
                         // forwarded (GAP-134), then the audit entries the refusals owe.
                         approval::sweep(&mut state.approval, &frame);
-                        let _ = approval::answer_decisions(&mut state.approval, &frame, &api);
-                        approval::answer_forwarded(&mut state.approval, &frame, &api);
-                        approval::audit_refused_decisions(&mut state.approval, &frame, &api);
+                        let _ = approval::answer_decisions(&mut state.approval, &frame);
+                        approval::answer_forwarded(&mut state.approval, &frame);
+                        approval::audit_refused_decisions(&mut state.approval, &frame);
                         let queue = state.approval.queue_view(&config, &resources, &tracks);
                         state.tracks = tracks;
                         api.set_now(now.0);
@@ -362,6 +384,7 @@ impl Node {
             geofences: &*self.geo,
             bus: &self.bus,
             endpoint_client: None,
+            api: &self.api,
         };
         approval::propose(&mut state.approval, &frame, plan);
         queued_ids(&state.approval)
@@ -785,6 +808,92 @@ async fn every_refusal_records_nothing_and_writes_one_audit_entry() {
 
     assert_each_entry_is_attributed(&node);
     node.cleanup();
+}
+
+/// GAP-137, DN-18 §5 amendment 3: **a partner with an agreement receives a handoff this
+/// node issued.**
+///
+/// The node's own handoffs reached no partner until now. `republish_handoffs` was a
+/// documented no-op because the register held one set per item, so the node's set and a
+/// desktop's would each have erased the other; a partner was told about an engagement a
+/// desktop decided and not about one the node decided, with nothing saying the list was
+/// partial.
+///
+/// **Three claims, in the order they become true.** Before the queue has issued anything
+/// the node claims an empty set rather than withholding -- it keeps handoffs now, and
+/// says so. After a decision the partner's read holds exactly that decision. And a
+/// desktop publishing its own set beside it leaves the node's where it was, which is the
+/// producer key doing the only job it has.
+///
+/// The read is `exchange_for`, in process, because this harness serves plaintext and a
+/// partner is named by its certificate. Both of §5's gates are in that call, and the
+/// route that answers a partner over TLS is `gungnir-api/tests/exchange.rs`.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_partner_with_an_agreement_receives_a_handoff_this_node_issued() {
+    let node = Node::spawn("exchange").await;
+    approval::claim_exchange_items(&node.api).expect("the node's opening claim");
+    assert_eq!(
+        partner_handoffs(&node),
+        Vec::<String>::new(),
+        "a node that keeps handoffs claims an empty set before it has issued one"
+    );
+
+    let operator = sign_in(node.addr, OPERATOR).await;
+    let item = node
+        .propose(&[releasable_track(0)], plan(1, 0, 0))
+        .expect("a point plan against a hostile track is the Operator's");
+    node.queue().await;
+    let (status, body) = decide(node.addr, &operator, item, "the-decision", accept()).await;
+    assert_eq!(status, 201, "{body}");
+    let decision = recorded(&body);
+    settle().await;
+    assert_eq!(node.handoffs(), 1, "the decision issued one handoff");
+    assert_eq!(
+        partner_handoffs(&node),
+        vec![decision.clone()],
+        "the partner was not served the handoff this node issued"
+    );
+
+    // A desktop publishes its own set under its own producer, as the write path does for
+    // a desktop that holds handoffs of its own.
+    node.api
+        .publish_exchange(
+            ExchangeProducer::Party("desktop-aaaa".into()),
+            ExchangeItem::Handoffs,
+            vec![ExchangeProduct {
+                id: "a-desktop-s-own".into(),
+                at: MissionTime(SUBMITTED),
+                releasability: Releasability::AllPeers,
+                body: serde_json::Value::Null,
+            }],
+        )
+        .expect("the desktop published");
+    assert_eq!(
+        partner_handoffs(&node),
+        vec![decision, "a-desktop-s-own".to_string()],
+        "a desktop's publish erased what this node issued"
+    );
+    node.cleanup();
+}
+
+/// What the partner may read of this node's handoffs, in producer order.
+fn partner_handoffs(node: &Node) -> Vec<String> {
+    match node.api.exchange_for(PARTNER, ExchangeItem::Handoffs) {
+        Some(ExchangeResponse::Held { products, .. }) => {
+            products.into_iter().map(|p| p.id).collect()
+        }
+        other => panic!("expected a held set, got {other:?}"),
+    }
+}
+
+/// A hostile track marked for every peer, so the handoff its decision issues carries a
+/// marking the partner's own agreement lets through: `issue_for` combines the tracks'
+/// markings, and the default one keeps everything home.
+fn releasable_track(id: u64) -> TrackView {
+    TrackView {
+        releasability: Releasability::AllPeers,
+        ..track(id, Classification::Hostile)
+    }
 }
 
 /// Every audit entry is filed under the action a person would search for, and attributed
