@@ -1696,27 +1696,6 @@
     The bound is unchanged: a new producer beyond sixty-four is refused rather than
     evicting a set a partner is served from. See
     `../../record/2026-09-23/a-register-that-says-how-old-it-is.md`.
-<<<<<<< HEAD
-- id: D-71
-  decision: What a desktop that has never reached its node does
-  question: >-
-    A desktop judges its node's silence against the heartbeat, measured from the last thing
-    heard. A link that has never been heard from has no such measure, so a desktop that
-    signed in to an unreachable node was neither linked nor fallen back: it sat on a remote
-    backend with a queue it could not read and a decision path it could not use, for ever
-    (GAP-142). Is a node that has never answered silent, and from when?
-  raised_in: "GAP-134; GAP-142"
-  decider: Owner
-  unblocks: GAP-142
-  outcome: >-
-    **Proposed: silent, measured from the link's own start** (DN-31 §15, built 2026-09-23
-    and open in this ledger until the owner answers). The link records when its task began
-    asking, and silence runs from the last thing heard or from that start where nothing has
-    ever been heard, against the same heartbeat timeout as any other silence. The desktop
-    falls back and the sentence says which it is: "has not answered since this desktop
-    signed in" rather than "silent for 12 s", because an operator reads the two
-    differently. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.
-=======
 - id: D-70
   decision: Whose clock a node's deadline is drawn against, and when a console is told they differ
   question: >-
@@ -1738,4 +1717,22 @@
     because a countdown is drawn to the second: below it nothing a person reads can change,
     above it the console and the node disagree by a digit on the screen. Nothing sets or
     steers a clock. See `../../record/2026-09-23/a-deadline-in-the-node-s-own-time.md`.
->>>>>>> origin/main
+- id: D-71
+  decision: What a desktop that has never reached its node does
+  question: >-
+    A desktop judges its node's silence against the heartbeat, measured from the last thing
+    heard. A link that has never been heard from has no such measure, so a desktop that
+    signed in to an unreachable node was neither linked nor fallen back: it sat on a remote
+    backend with a queue it could not read and a decision path it could not use, for ever
+    (GAP-142). Is a node that has never answered silent, and from when?
+  raised_in: "GAP-134; GAP-142"
+  decider: Owner
+  unblocks: GAP-142
+  outcome: >-
+    **Proposed: silent, measured from the link's own start** (DN-31 §15, built 2026-09-23
+    and open in this ledger until the owner answers). The link records when its task began
+    asking, and silence runs from the last thing heard or from that start where nothing has
+    ever been heard, against the same heartbeat timeout as any other silence. The desktop
+    falls back and the sentence says which it is: "has not answered since this desktop
+    signed in" rather than "silent for 12 s", because an operator reads the two
+    differently. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.
