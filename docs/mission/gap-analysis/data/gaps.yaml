@@ -9229,6 +9229,9 @@
       machine identity: the build has none distinct from the product's name. The name is
       now one constant, so `origin` follows the certificate when this is built, and
       GAP-137 names this entry as what it waits on.
+  - date: 2026-09-22
+    status: Closed
+    note: "Built on D-67. A desktop is named by a fingerprint of the public half of its own transport key, `desktop-` or `desktop-ephemeral-` and sixteen hex digits, issued once in `AppState` and held as `machine_identity` so the certificate a node verifies and the `origin` a forwarded batch carries name one key. `POST /v3/decisions/forwarded` refuses `403`, with nothing reaching the loop, when a batch names another machine than the handshake verified. Found on the way: `mutual_tls.rs`'s own authority issued every certificate as `rcgen self signed cert`. See `../../record/2026-09-22/a-desktop-is-named-by-its-own-key.md`."
 
 - id: GAP-142
   name: A desktop that restarts during an outage forgets it

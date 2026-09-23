@@ -134,6 +134,17 @@ pub struct AppState {
     /// draw an uncertainty the tracker never claimed. On a remote backend the tracks come
     /// from the node, which reads the same baseline, so the model is the same one.
     pub pipeline: gungnir_tracking_service::PipelineSettings,
+    /// What this desktop presents as itself, issued once at start (GAP-141).
+    ///
+    /// Named `machine_identity` because `identity` above is a track's identity
+    /// (GAP-010): this one is the machine's, and the two never mean each other.
+    ///
+    /// Held rather than re-issued per call because on the ephemeral path each issuance is
+    /// a new key: the certificate a node verifies and the `origin` a forwarded batch
+    /// carries have to name the same one. `None` when issuance failed, which
+    /// `session::origin_of` reports as an unidentified desktop rather than inventing a
+    /// name.
+    pub machine_identity: Option<gungnir_remote::identity::DesktopIdentity>,
     /// The node link, while one is up (GAP-050): the tick judges its silence.
     pub link: Option<gungnir_remote::link::NodeLink>,
     /// The link the registry's control adapter delivers through (GAP-004); `None`
@@ -576,7 +587,7 @@ impl AppState {
         }
         tracing::info!(session = mission.session.0, journal = %journal.root().display(), "opened live session");
 
-        let (ingest, feeds, ais, adsb, misb, sapient, endpoint_client, peers) =
+        let (ingest, feeds, ais, adsb, misb, sapient, endpoint_client, peers, machine_identity) =
             build_ingest(&config, runtime.handle(), &mut alerts);
         let identification_settings = config.policy.identification.clone();
 
@@ -629,6 +640,7 @@ impl AppState {
             keystore,
             expiry_announced: None,
             pipeline,
+            machine_identity,
             link: None,
             link_control: std::sync::Arc::new(std::sync::Mutex::new(None)),
             node_task_map: std::collections::HashMap::new(),
@@ -1421,11 +1433,12 @@ fn sensor_positions(config: &ConfigBaseline) -> gungnir_tracking_service::Sensor
     )
 }
 
-fn build_ingest(
-    config: &ConfigBaseline,
-    runtime: &tokio::runtime::Handle,
-    alerts: &mut Vec<String>,
-) -> (
+/// What [`build_ingest`] hands back: the gateway, everything bound onto it, the endpoint
+/// client, the peer links, and the identity this desktop presents (GAP-141).
+///
+/// Named because the tuple grew past what clippy will read in a signature, and a name is
+/// cheaper than a comment saying what the ninth element is.
+type BuiltIngest = (
     IngestGateway,
     crate::radar::BoundFeeds,
     crate::cooperative::BoundAisFeeds,
@@ -1434,7 +1447,14 @@ fn build_ingest(
     crate::sapient::BoundSapientFeeds,
     Option<gungnir_remote::endpoint::EndpointClient>,
     Vec<crate::peers::BoundPeer>,
-) {
+    Option<gungnir_remote::identity::DesktopIdentity>,
+);
+
+fn build_ingest(
+    config: &ConfigBaseline,
+    runtime: &tokio::runtime::Handle,
+    alerts: &mut Vec<String>,
+) -> BuiltIngest {
     let mut ingest = IngestGateway::new(Box::new(AllowListAuthenticator {
         // DN-16 §5: a peer is a source and is admitted like one, under its own id.
         allowed: config
@@ -1446,7 +1466,10 @@ fn build_ingest(
     }));
     // GAP-009: a machine link per peer whose endpoint is a node, under this desktop's
     // certificate (D-02).
-    let tls = crate::session::link_tls_for(config);
+    // GAP-141: issued once here, and carried into `AppState`, so the peer links, the node
+    // link and a forwarded batch's origin all name one key rather than one per issuance.
+    let machine_identity = crate::session::issue_identity(config);
+    let tls = crate::session::tls_for(config, machine_identity.as_ref());
     let peers = crate::peers::bind_peers(config, &mut ingest, &tls, runtime, alerts);
     if config.sensors.is_empty() {
         alerts.push("No sensors configured; ingest gateway is idle".into());
@@ -1490,6 +1513,7 @@ fn build_ingest(
         sapient,
         endpoint_client,
         peers,
+        machine_identity,
     )
 }
 

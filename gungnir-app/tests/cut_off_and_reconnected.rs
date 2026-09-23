@@ -772,6 +772,15 @@ fn an_outage_decided_offline_reaches_the_node_once_and_what_both_sides_did_is_fa
     let (mut a, a_dir) = desktop("a", proxy.addr);
     let (mut b, b_dir) = desktop("b", node.addr);
     let a_bus = a.events.subscribe();
+    // GAP-141: what desktop A calls itself, which is what its forwarded batch must say it
+    // is. Read from A rather than stated here, so the test cannot pass against an origin
+    // no desktop would send. It differs from B's, which is the point of the gap.
+    let a_origin = session::origin_of(&a);
+    assert_ne!(
+        a_origin,
+        session::origin_of(&b),
+        "two desktops named themselves the same thing"
+    );
 
     // Linked: both signed in, both following the stream.
     sign_in(&mut a, A_OPERATOR);
@@ -1177,7 +1186,9 @@ fn an_outage_decided_offline_reaches_the_node_once_and_what_both_sides_did_is_fa
             copies.len()
         );
         let expected = DecisionRecord {
-            origin: Some(session::DESKTOP_COMMON_NAME.to_string()),
+            // GAP-141: desktop A's own name, derived from the key its certificate
+            // carries, rather than the one name every desktop used to share.
+            origin: Some(a_origin.clone()),
             ..record.clone()
         };
         assert_eq!(
@@ -1210,7 +1221,7 @@ fn an_outage_decided_offline_reaches_the_node_once_and_what_both_sides_did_is_fa
             matches!(
                 &env.event,
                 Event::Command(CommandEvent::Decided { origin: Some(o), .. })
-                    if o == session::DESKTOP_COMMON_NAME
+                    if *o == a_origin
             )
         })
         .count();

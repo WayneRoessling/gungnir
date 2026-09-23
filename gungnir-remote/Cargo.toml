@@ -30,6 +30,11 @@ gungnir-security = { path = "../gungnir-security", version = "0.1.0" }
 # on each other and this is the only crate both already depend on at runtime that already
 # carries the rustls stack.
 rcgen.workspace = true
+# GAP-141: a desktop's name is the fingerprint of the public half of the key its
+# certificate carries, so two desktops are told apart by something the handshake proved
+# rather than by a string either of them could claim. Already a workspace dependency
+# (`gungnir-security` hashes with it); no new crate enters the workspace here.
+sha2.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde_json.workspace = true
