@@ -3062,3 +3062,19 @@
   commit: ca0c8285cf17f3e7b2d0013b0256668179419df2
   pre_repository: false
   record: "GAP-124; D-83; DN-01 §10; docs/record/2026-09-25/time-to-impact-and-sensor-sectors.md; PR #168"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-162's `gungnir-security` code: `actions::APPLY_SENSING_CONFIG`
+    (`config.apply_sensing`) for a baseline that changes only its sensing sections, held by
+    the sensor manager in place of `config.apply` and by the supervisor, the commander and
+    the administrator alongside it (D-91), and the role-matrix test's new cells.
+  kind: code
+  paths:
+  - gungnir-security/src/lib.rs
+  - gungnir-security/src/authz.rs
+  - gungnir-security/tests/role_matrix.rs
+  commit: 5b68389df26ecb7e21307369ae3b694c25f82fe3
+  pre_repository: false
+  record: "GAP-162; D-91; DN-08 §10; docs/record/2026-09-26/a-baseline-applied-section-by-section.md; PR #177"

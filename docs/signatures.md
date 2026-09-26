@@ -21,7 +21,7 @@ the owner reviewed. A signature from before the repository existed on 2026-09-07
 the first commit and is marked as such. An entry is never edited; a withdrawn signature
 gets a new entry.
 
-241 signatures.
+242 signatures.
 
 | Date | Signer | What was signed | Kind | Paths | Commit | Record |
 |---|---|---|---|---|---|---|
@@ -266,3 +266,4 @@ gets a new entry.
 | 2026-09-26 | Owner | GAP-138's `gungnir-api` change: the unreachable `ApprovalRequest` and `ApiHandler::decide` removed, a decision being taken on a queue item alone (D-80). | code | `gungnir-api/src/lib.rs`<br>`gungnir-api/src/transport.rs`<br>`gungnir-api/src/v3/mod.rs` | `afc0d98ec8` | GAP-138; D-80; docs/record/2026-09-25/housekeeping-after-dn-31.md; PR #165 |
 | 2026-09-26 | Owner | GAP-119's restructured exact solve under the numerical-stability clause: `ExactSolve` filling the value function a slice at a time with an explicit stack, bit-identical to the one-pass recursion by property test, and the tie rule written down (D-81). | code | `gungnir-allocation/src/bellman.rs`<br>`gungnir-allocation/src/lib.rs` | `f80bbe6468` | GAP-119; D-81; DN-04 §10; docs/record/2026-09-25/a-stale-plan-says-how-old-it-is.md; PR #169 |
 | 2026-09-26 | Owner | GAP-124's risk score under the numerical-stability clause: the time-to-impact term computed without dividing by the closing speed, and a track whose state is not finite left unscored rather than scored NaN (D-83, DN-01 §10). | code | `gungnir-assessment/src/kinematics.rs`<br>`gungnir-assessment/src/lib.rs` | `ca0c8285cf` | GAP-124; D-83; DN-01 §10; docs/record/2026-09-25/time-to-impact-and-sensor-sectors.md; PR #168 |
+| 2026-09-26 | Owner | GAP-162's `gungnir-security` code: `actions::APPLY_SENSING_CONFIG` (`config.apply_sensing`) for a baseline that changes only its sensing sections, held by the sensor manager in place of `config.apply` and by the supervisor, the commander and the administrator alongside it (D-91), and the role-matrix test's new cells. | code | `gungnir-security/src/lib.rs`<br>`gungnir-security/src/authz.rs`<br>`gungnir-security/tests/role_matrix.rs` | `5b68389df2` | GAP-162; D-91; DN-08 §10; docs/record/2026-09-26/a-baseline-applied-section-by-section.md; PR #177 |
