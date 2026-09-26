@@ -28,8 +28,11 @@ the sensor manager together with the supervisor (planning).
 ### Operator
 
 - **Decisions:** confirm or designate identity for classes policy assigns to the
-  operator; accept, override, or reject a recommendation within delegated authority;
-  acknowledge alerts; task a camera under cue.
+  operator; accept or reject a recommendation within delegated authority, and escalate
+  one that needs overriding (an override -- substituting an assignment of one's own -- is
+  the supervisor's and the commander's, §4; corrected 2026-09-25 under GAP-111, since
+  the code, GAP-127 and DN-31 §9 row 4 have all held it so); acknowledge alerts; task a
+  camera under cue.
 - **Information needs:** the picture for the domain with quality and staleness;
   identities with evidence; the recommendation with verdict, rationale,
   alternatives, and time remaining; weapons control status; own effector readiness;
@@ -124,16 +127,45 @@ the sensor manager together with the supervisor (planning).
 | Engagement acceptance, area layer | | pre-delegated cases | yes | | | |
 | Weapons control status | | yes | yes | | | |
 | Hold or cease | | yes | yes | | | |
+| Override a recommendation (GAP-111) | | yes | yes | | | |
 | Sensor tasking | camera cue | concur | | yes | | request |
 | Plan apply | | yes | yes | | | |
+| Apply a sensor or calibration baseline (GAP-111) | | | | yes | | |
 | Model promotion | | concur | | | yes | |
 | Product release | | yes | yes | | | yes |
 | Publish to coalition exchange (GAP-065; amended 2026-09-08 to add Supervisor alongside the Product release row above) | | yes | yes | | | yes |
 | Accept coverage gap | | | yes | | | |
 | Recover an escrowed journal key (D-30) | | | | | | | (the security officer alone; a column of its own would be one cell) |
-| Reconciliation conflict resolution | | yes | yes | | | |
+| Reconciliation conflict resolution (Operator amended 2026-09-25: D-53) | yes | yes | yes | | | |
+| View the picture (GAP-111) | yes | yes | yes | yes | yes | yes |
+| Submit a detection by hand (GAP-111) | yes | yes | | | | |
+| Export a report (GAP-111) | | yes | yes | | yes | yes |
+| State, decline or satisfy a collection requirement (GAP-111; DN-11 §5) | | | | decline | | state, satisfy |
+| Conduct an after-action review (GAP-111; DN-20) | | | | | yes | |
+| Acknowledge a watch handover (GAP-111; DN-21) | yes | yes | yes | yes | | |
+| Key in an effector's report or a warned party's acknowledgement (GAP-040, GAP-042) | | | | | | |
+| Assign a role to an account (GAP-057) | | | | | | |
 
-`gungnir-security::authz::role_permits` encodes a coarser version of this matrix
-today (view, submit, decide, override, task sensors, apply configuration, promote
-models, export reports); the per-class and per-layer refinements are GAP-058 and the adopted roles enter the
-code under GAP-068 (`gap-analysis/gap-register.md`).
+**Roles without a column.** The administrator holds every decision above **except** the
+engagement chain -- both engagement-acceptance rows, weapons control status, hold or
+cease, overriding a recommendation, reconciliation conflict resolution -- and escrow
+recovery; it holds the last two rows alone (D-88, 2026-09-25: §1 and §2 say the
+administrator is not a decision-maker in the engagement chain, and the escrow row says
+the security officer alone). The planner may view the picture and nothing else (the
+owner, 2026-09-05). The security officer may recover an escrowed journal key and nothing
+else (D-30).
+
+**How the code reads this table.** `gungnir-security::authz::role_permits` is a coarser
+matrix: one action per decision, and some decisions share one. A cell grants its action
+when it reads `yes`, `delegated`, `pre-delegated cases`, `decline` or `state, satisfy`
+(the policy authority rules narrow the first two per layer and class, DN-09 §5), or
+`concur` on sensor tasking, because concurring in a tasking is `sensor.task` (DN-11 §5).
+It does not when it reads `concur` on model promotion (concurring is not promoting, and
+nothing promotes, DN-24 §9), `camera cue` or `request` (the coarse action would be wider
+than the cell). The identity-declaration and coverage-gap rows have no coarse action yet;
+the per-class and per-layer refinements are GAP-058. **`gungnir-security/tests/role_matrix.rs`
+holds this table transcribed as data, reads this file to check the transcription, and
+compares every role against every action with `role_permits`** (GAP-111), so a change to
+authority is made here first and the code follows. The rows marked GAP-111 were added
+2026-09-25 for grants the code already held, or held by the roles §1 and the design notes
+name, rather than grants with no row.

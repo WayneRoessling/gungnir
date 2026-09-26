@@ -18,7 +18,7 @@ concern-to-viewpoint mapping, and it is the reason this document exists.
 | Intelligence analyst | Can I fuse evidence into a declaration and release a product with its marking? | `Op-Pr-MT-08.md`; `../../uaf/information/If-Tx.md`; D-06 | Modelled. Releasability enforcement is GAP-062 |
 | Sensor manager | Is coverage what I think it is, and what exactly did I lose? | `Op-Pr-MT-07.md`; `../../uaf/resources/Rs-Cn.md`; CAP-1.3, CAP-1.4 | Registry implemented, not wired: GAP-003, GAP-006 |
 | Planner | Will this laydown cover the assets that matter, and can I rehearse it? | `Op-Pr-MT-09.md`; `Op-Is-VG-09.md`; CAP-3.1 | Defended-asset list is GAP-026 |
-| Administrator | Who holds what authority, and is the record complete and tamper-evident? | `../../uaf/security/Sc-Tx.md`, `Sc-Sr.md`; `../../../release-governance.md` | Traits exist; authentication and audit wiring are GAP-057 and GAP-059 |
+| Administrator | Who holds what authority, and is the record complete and tamper-evident? | `../../uaf/security/Sc-Tx.md`, `Sc-Sr.md`; `../../../release-governance.md` | Authentication (GAP-057) and audit wiring (GAP-059) are built; since GAP-111 the audit log is on disk and hash-chained in both binaries, and the node records its sign-ins, refusals and role-gated acts |
 
 ## 2. External stakeholders
 

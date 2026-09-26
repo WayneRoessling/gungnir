@@ -23,20 +23,45 @@ pub trait Authorizer: Send + Sync {
     }
 }
 
-/// The role-to-action matrix. Administrators may do everything.
+/// The role-to-action matrix, the coarse form of
+/// `docs/mission/roles-and-stakeholders.md` §4.
+///
+/// **Checked against §4 cell by cell** by `gungnir-security/tests/role_matrix.rs`, which
+/// carries the table transcribed as data (GAP-111). A change here that §4 does not show
+/// fails that test, so a change to authority is made in §4 first -- the rule the arms
+/// below had stated in prose since the roles landed, and which nothing enforced.
+///
+/// Four corrections came out of that test (GAP-111, D-88; human-owned, see
+/// `docs/signatures.md`): the supervisor sets weapons control status, as §4, §1 and §2
+/// all say; the administrator no longer holds the engagement chain or escrow recovery;
+/// the requirement, review and handover actions are held by the roles whose work §1,
+/// DN-11 and DN-21 say they are; and `actions::ALL` names every action.
 pub fn role_permits(role: Role, action: &str) -> bool {
     use actions::{
-        APPLY_CONFIG, DECIDE_PLAN, EXPORT_REPORT, KEY_ESCROW_RECOVER, OVERRIDE_PLAN, PROMOTE_MODEL,
-        PUBLISH_EXCHANGE, RELEASE_PRODUCT, SET_CONTROL_STATUS, SUBMIT_DETECTION, TASK_SENSOR,
-        VIEW_PICTURE,
+        ACKNOWLEDGE_HANDOVER, APPLY_CONFIG, CONDUCT_REVIEW, DECIDE_PLAN, EXPORT_REPORT,
+        KEY_ESCROW_RECOVER, OVERRIDE_PLAN, PROMOTE_MODEL, PUBLISH_EXCHANGE, RELEASE_PRODUCT,
+        REQUIREMENT, SET_CONTROL_STATUS, SUBMIT_DETECTION, TASK_SENSOR, VIEW_PICTURE,
     };
     match role {
-        Role::Administrator => true,
+        // Everything but the engagement chain and escrow recovery (GAP-111, D-88). §1 says
+        // the administrator is "not a decision-maker in the engagement chain" and §2 "no
+        // engagement decisions" -- the layout already withheld the decision dialog -- and
+        // §4's escrow row says the security officer alone (D-30). Until 2026-09-25 this
+        // arm was `true`, so the escalation ladder ended on the administrator and an
+        // account created to manage accounts could accept an engagement, set weapons
+        // control status, or recover a sealed journal's key. Anything else, including an
+        // action a later build adds, stays the administrator's: administration is
+        // everything that is not somebody else's authority.
+        Role::Administrator => !matches!(
+            action,
+            DECIDE_PLAN | OVERRIDE_PLAN | SET_CONTROL_STATUS | KEY_ESCROW_RECOVER
+        ),
         // The security officer operates nothing (DN-22 §11, D-30): one action, and not
         // even the picture, because recovery is an offline act on a machine of its own.
         Role::SecurityOfficer => matches!(action, KEY_ESCROW_RECOVER),
         // Commander: the §4 rows are engagement acceptance at both layers, weapons
-        // control status, hold or cease, plan apply, and product release. Identity
+        // control status, hold or cease, overriding a recommendation, plan apply, product
+        // release and publishing it, reports, and a watch's handover. Identity
         // declaration per class and coverage-gap acceptance have no coarse action yet
         // and stay with GAP-058's per-class refinement.
         //
@@ -54,15 +79,17 @@ pub fn role_permits(role: Role, action: &str) -> bool {
                 | RELEASE_PRODUCT
                 | PUBLISH_EXCHANGE
                 | EXPORT_REPORT
+                | ACKNOWLEDGE_HANDOVER
         ),
-        // Intelligence analyst: product release and reporting. Sensor tasking is a
-        // *request* in §4, not authority, so TASK_SENSOR is deliberately absent.
-        // PUBLISH_EXCHANGE joins RELEASE_PRODUCT here for the same reason it joins it
-        // above (GAP-065).
+        // Intelligence analyst: product release and reporting, and the requirements it
+        // owns (§1; DN-11 §5, "the intelligence analyst states a requirement"). Sensor
+        // tasking is a *request* in §4, not authority, so TASK_SENSOR is deliberately
+        // absent. PUBLISH_EXCHANGE joins RELEASE_PRODUCT here for the same reason it
+        // joins it above (GAP-065).
         Role::IntelligenceAnalyst => {
             matches!(
                 action,
-                VIEW_PICTURE | EXPORT_REPORT | RELEASE_PRODUCT | PUBLISH_EXCHANGE
+                VIEW_PICTURE | EXPORT_REPORT | RELEASE_PRODUCT | PUBLISH_EXCHANGE | REQUIREMENT
             )
         }
         // Planner: view only. §4 has no Planner row; rather than infer authority for a
@@ -81,21 +108,40 @@ pub fn role_permits(role: Role, action: &str) -> bool {
         // rule is whoever may release, may publish, so the §4 exchange row is amended
         // to match rather than left as an exception with no stated reason. Human-owned
         // (gungnir-security).
+        //
+        // SET_CONTROL_STATUS (GAP-111): §4's weapons control status row reads yes for the
+        // supervisor, and §1 and §2 both say the supervisor sets it per layer. This arm
+        // left it out from the day the action was added -- the same unrecorded narrowing
+        // the release row was -- and the §4 matrix test found it.
         Role::Supervisor => matches!(
             action,
             VIEW_PICTURE
                 | SUBMIT_DETECTION
                 | DECIDE_PLAN
                 | OVERRIDE_PLAN
+                | SET_CONTROL_STATUS
                 | TASK_SENSOR
                 | EXPORT_REPORT
                 | APPLY_CONFIG
                 | RELEASE_PRODUCT
                 | PUBLISH_EXCHANGE
+                | ACKNOWLEDGE_HANDOVER
         ),
-        Role::Operator => matches!(action, VIEW_PICTURE | SUBMIT_DETECTION | DECIDE_PLAN),
-        Role::SensorManager => matches!(action, VIEW_PICTURE | TASK_SENSOR | APPLY_CONFIG),
-        Role::Analyst => matches!(action, VIEW_PICTURE | EXPORT_REPORT | PROMOTE_MODEL),
+        Role::Operator => matches!(
+            action,
+            VIEW_PICTURE | SUBMIT_DETECTION | DECIDE_PLAN | ACKNOWLEDGE_HANDOVER
+        ),
+        // The sensor manager declines a requirement with a reason (DN-11 §5), which is
+        // `requirement.state`; tasking one is `sensor.task`.
+        Role::SensorManager => matches!(
+            action,
+            VIEW_PICTURE | TASK_SENSOR | APPLY_CONFIG | REQUIREMENT | ACKNOWLEDGE_HANDOVER
+        ),
+        // The analyst works the recorded record, after-action review included (§1, DN-20).
+        Role::Analyst => matches!(
+            action,
+            VIEW_PICTURE | EXPORT_REPORT | PROMOTE_MODEL | CONDUCT_REVIEW
+        ),
     }
 }
 
@@ -149,8 +195,8 @@ mod security_officer_tests {
             "nobody else recovers"
         );
         assert!(
-            role_permits(Role::Administrator, actions::KEY_ESCROW_RECOVER),
-            "administrators may do everything, as before"
+            !role_permits(Role::Administrator, actions::KEY_ESCROW_RECOVER),
+            "§4's escrow row: the security officer alone (GAP-111, D-88)"
         );
     }
 }
@@ -248,10 +294,20 @@ mod tests {
         assert!(!a.can(OperatorId(9), actions::VIEW_PICTURE));
     }
 
+    /// Everything but the engagement chain and escrow recovery (GAP-111, D-88).
     #[test]
-    fn administrators_may_do_everything() {
+    fn administrators_administer_and_take_no_engagement_decision() {
         let a = StaticRoleAuthorizer::new([(OperatorId(2), Role::Administrator)]);
         assert!(a.can(OperatorId(2), actions::PROMOTE_MODEL));
+        assert!(a.can(OperatorId(2), actions::ASSIGN_ROLE));
         assert!(a.can(OperatorId(2), "some.future.action"));
+        for withheld in [
+            actions::DECIDE_PLAN,
+            actions::OVERRIDE_PLAN,
+            actions::SET_CONTROL_STATUS,
+            actions::KEY_ESCROW_RECOVER,
+        ] {
+            assert!(!a.can(OperatorId(2), withheld), "{withheld}");
+        }
     }
 }

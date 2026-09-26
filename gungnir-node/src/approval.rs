@@ -88,15 +88,19 @@ pub fn claim_exchange_items(api: &NodeApi) -> Result<(), gungnir_api::ApiError> 
 /// The desk and the audit log together, because DN-31 §9 row 4 counts entries per decision
 /// **and per refusal** and a node with the one and not the other could record a decision
 /// nobody could review. A node owns exactly one.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct NodeApproval {
     /// The queue, its record, the engagements and the handoffs.
     pub desk: ApprovalDesk,
-    /// One entry per gated action (contract C-04, GAP-059).
+    /// One entry per gated action (contract C-04, GAP-059), and since GAP-111 every
+    /// sign-in, refusal and role-gated act the routes report ([`audit_routes`]).
     ///
     /// The node's own log, because the node is now where the decision happens: a desktop's
-    /// log holds what that console did, and neither is the other's record.
-    pub audit: InMemoryAuditLog,
+    /// log holds what that console did, and neither is the other's record. The binary
+    /// gives it a `gungnir_security::FileAuditLog` beside its journal
+    /// ([`NodeApproval::with_audit`]); [`NodeApproval::new`] keeps it in memory, for a
+    /// harness that has no data directory to put one in.
+    pub audit: Box<dyn AuditLog>,
     /// What each outage's reconciliation settled, per plan, as forwarded (GAP-134,
     /// DN-31 §6.8; MT-10 step 5).
     ///
@@ -108,12 +112,18 @@ pub struct NodeApproval {
 }
 
 impl NodeApproval {
-    /// A desk timed by this deployment's decision settings.
+    /// A desk timed by this deployment's decision settings, auditing into memory.
     #[must_use]
     pub fn new(config: &ConfigBaseline) -> Self {
+        Self::with_audit(config, Box::new(InMemoryAuditLog::new()))
+    }
+
+    /// The same, auditing into `audit` -- the node's durable log (GAP-111, D-87).
+    #[must_use]
+    pub fn with_audit(config: &ConfigBaseline, audit: Box<dyn AuditLog>) -> Self {
         Self {
             desk: ApprovalDesk::new(config.policy.decisions.clone()),
-            audit: InMemoryAuditLog::new(),
+            audit,
             settlements: std::collections::BTreeMap::new(),
         }
     }
@@ -185,10 +195,14 @@ pub struct NodeHost<'a> {
     bus: &'a InProcessBus,
     /// Where this node's own handoff set goes for coalition exchange (GAP-137).
     api: &'a NodeApi,
-    audit: &'a mut InMemoryAuditLog,
+    audit: &'a mut dyn AuditLog,
     /// Who the audit log attributes an entry to, and `None` for an act nobody took -- a
     /// sweep's expiry, or a plan's submission (DN-23 §5 rule 1).
     operator: Option<OperatorId>,
+    /// The machine the request came over, as the handshake verified it (GAP-111; a
+    /// desktop's name is its key's, D-67), and `None` for the loop's own acts and a
+    /// plaintext caller.
+    party: Option<String>,
     now: MissionTime,
     endpoints: &'a [gungnir_config::EndpointConfig],
     endpoint_client: Option<&'a EndpointClient>,
@@ -215,12 +229,9 @@ impl ApprovalHost for NodeHost<'_> {
     }
 
     fn audit(&mut self, action: &str, detail: String) {
-        self.audit.record(AuditEntry {
-            operator: self.operator,
-            action: action.to_owned(),
-            mission_time: self.now.0,
-            detail,
-        });
+        self.audit.record(
+            AuditEntry::new(self.operator, action, self.now.0, detail).by_party(self.party.clone()),
+        );
     }
 
     /// **This node's own current handoff set, for a partner to be served from**
@@ -333,6 +344,7 @@ fn with_desk<T>(
     approval: &mut NodeApproval,
     frame: &Frame<'_>,
     signed_in: Option<(OperatorId, Role)>,
+    party: Option<&str>,
     acting: Role,
     f: impl FnOnce(&mut ApprovalDesk, &ApprovalContext<'_>, &PolicyInputs<'_>, &mut NodeHost<'_>) -> T,
 ) -> T {
@@ -369,8 +381,9 @@ fn with_desk<T>(
     let mut host = NodeHost {
         bus: frame.bus,
         api: frame.api,
-        audit,
+        audit: audit.as_mut(),
         operator: signed_in.map(|(operator, _)| operator),
+        party: party.map(str::to_owned),
         now: frame.now,
         endpoints: &frame.config.endpoints,
         endpoint_client: frame.endpoint_client,
@@ -392,6 +405,7 @@ pub fn propose(approval: &mut NodeApproval, frame: &Frame<'_>, plan: PlanView) -
         approval,
         frame,
         None,
+        None,
         NOBODY_ROLE,
         |desk, cx, policy, host| desk.submit_to_ladder(cx, policy, host, plan),
     )
@@ -407,6 +421,7 @@ pub fn sweep(approval: &mut NodeApproval, frame: &Frame<'_>) {
     with_desk(
         approval,
         frame,
+        None,
         None,
         NOBODY_ROLE,
         |desk, cx, _policy, host| {
@@ -475,6 +490,7 @@ fn answer_one(
         approval,
         frame,
         signed_in,
+        pending.party.as_deref(),
         pending.role,
         |desk, cx, _policy, host| {
             desk.decide_for(
@@ -492,7 +508,13 @@ fn answer_one(
         // was never issued here. The append-only history tells the three apart.
         Err(CommandError::NotFound(item)) => {
             let (answer, detail) = already_ended(approval, item);
-            audit_refusal(approval, frame, Some(pending.operator), &detail);
+            audit_refusal(
+                approval,
+                frame,
+                Some(pending.operator),
+                pending.party.as_deref(),
+                &detail,
+            );
             answer
         }
         Err(err) => {
@@ -501,6 +523,7 @@ fn answer_one(
                 approval,
                 frame,
                 Some(pending.operator),
+                pending.party.as_deref(),
                 &format!("item {}: {err}", pending.item),
             );
             DecisionAnswer::Unknown
@@ -586,6 +609,7 @@ fn take_forwarded(
             approval,
             frame,
             Some(pending.operator),
+            pending.party.as_deref(),
             &format!("forwarded decisions: {refused:?}"),
         );
         return ForwardAnswer::Refused(Box::new(refused));
@@ -601,6 +625,7 @@ fn take_forwarded(
             approval,
             frame,
             Some((pending.operator, pending.role)),
+            pending.party.as_deref(),
             pending.role,
             |desk, cx, _policy, host| desk.admit_forwarded(cx, host, &record),
         );
@@ -782,11 +807,41 @@ pub fn audit_refused_decisions(approval: &mut NodeApproval, frame: &Frame<'_>) {
         let RefusedDecision {
             item,
             operator,
+            party,
             reason,
         } = refusal;
         let who = operator.parse().ok().map(OperatorId);
         let named = item.map_or_else(|| "no item".to_string(), |i| format!("item {i}"));
-        audit_refusal(approval, frame, who, &format!("{named}: {reason}"));
+        audit_refusal(
+            approval,
+            frame,
+            who,
+            party.as_deref(),
+            &format!("{named}: {reason}"),
+        );
+    }
+}
+
+/// Write what the routes owe the node's audit record -- every sign-in attempt, every
+/// refusal, every act a role-gated route performed -- and make the tick's entries durable
+/// (GAP-111, D-87; `docs/design/DN-23-operator-authentication.md` §13).
+///
+/// **Last of the loop's audit steps**, after [`audit_refused_decisions`], so one `flush`
+/// syncs everything the tick recorded: the desk's decisions, the refusals, and these. The
+/// routes never touch the file; they put entries in `gungnir-api`'s outbox, whose rate
+/// limits count what they turn away, and the count is recorded here as an entry of its own.
+///
+/// A sync that fails is logged at error level rather than stopping the node: the entries
+/// are written, only not yet forced to the disk, and a node that stopped deciding because
+/// its audit disk was slow would fail the wrong way round. A write that fails is held and
+/// counted by the log itself (`gungnir_security::AuditStatus`).
+pub fn audit_routes(approval: &mut NodeApproval, frame: &Frame<'_>) {
+    frame
+        .api
+        .take_audit()
+        .record_into(approval.audit.as_mut(), frame.now.0);
+    if let Err(err) = approval.audit.flush() {
+        tracing::error!(%err, "the node's audit log could not be synced this tick");
     }
 }
 
@@ -799,12 +854,16 @@ fn audit_refusal(
     approval: &mut NodeApproval,
     frame: &Frame<'_>,
     operator: Option<OperatorId>,
+    party: Option<&str>,
     detail: &str,
 ) {
-    approval.audit.record(AuditEntry {
-        operator,
-        action: actions::DECIDE_PLAN.to_owned(),
-        mission_time: frame.now.0,
-        detail: format!("refused: {detail}"),
-    });
+    approval.audit.record(
+        AuditEntry::new(
+            operator,
+            actions::DECIDE_PLAN,
+            frame.now.0,
+            format!("refused: {detail}"),
+        )
+        .by_party(party.map(str::to_owned)),
+    );
 }

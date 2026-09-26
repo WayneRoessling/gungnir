@@ -1737,3 +1737,58 @@
     The desktop falls back and the sentence says which it is: "has not answered since this
     desktop signed in" rather than "silent for 12 s", because an operator reads the two
     differently. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.
+- id: D-87
+  decision: What a node audits, where the record lives, and how it stays bounded
+  question: >-
+    The node wrote no audit entry but its queue's, and kept those in memory, so a sign-in,
+    a refused token or a sensor task left no trace; the desktop's log was in memory too and
+    gone at every restart (GAP-111). Which node events are audited, where the record lives,
+    is it tamper-evident, and how is it kept from turning a flood of refused requests into a
+    full disk or a slow route?
+  raised_in: "GAP-111; the GAP-067 walk"
+  decider: Owner
+  unblocks: GAP-111
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** Every sign-in attempt, every
+    refusal on every route, every act a role-gated route performs (with its outcome), every
+    queue decision and refusal as DN-31 already had it, and every account change made by the
+    provisioning command, one entry each, naming the operator the token verified and the
+    machine the handshake verified and never a claimed one. Served reads and accepted
+    detection submissions are not recorded one by one; their refusals are. The record is
+    `gungnir_security::FileAuditLog` under `<data dir>/audit/` in both binaries, one
+    hash-chained JSON-lines segment per run, not sealed, holding no secret. Route handlers
+    write to a rate-limited two-lane outbox the node loop drains and syncs once a tick; what
+    a lane turns away is counted as an entry. Rejected: logging every served read (a desktop
+    polls, and the session was already recorded at sign-in), putting audit entries on the
+    event journal (they would be streamed to every desktop and partner, and lost with the
+    journal key), sealing the file (an investigation needs it most when the key is lost),
+    and an unbounded queue or disk writes in the handler. DN-23 §13; see
+    `../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`.
+- id: D-88
+  decision: Where role_permits and the authority matrix disagreed, which side was right
+  question: >-
+    GAP-111's test compares `role_permits` with `mission/roles-and-stakeholders.md` §4 for
+    every role and every action. It found thirteen disagreements, and §4 had no row at all
+    for several actions the code grants. For each, is the code or the document wrong?
+  raised_in: "GAP-111"
+  decider: Owner
+  unblocks: GAP-111
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** The code was wrong in four ways
+    and is corrected: the supervisor sets weapons control status (§4, §1 and §2 all say so);
+    the administrator holds everything except the engagement chain and escrow recovery, so
+    it no longer accepts engagements, overrides, sets control status, recovers a sealed
+    journal's key or tops the escalation ladder (§1, §2 and the layout say it is not a
+    decision-maker in the engagement chain; the escrow row says the security officer
+    alone); the requirement, review and handover actions are held by the intelligence
+    analyst and sensor manager, the analyst, and the watch-standing roles, as §1, DN-11,
+    DN-20 and DN-21 describe their work; and `actions::ALL` names `requirement.state` and
+    `account.assign_role`. The document was wrong where the code's grants were long-standing
+    and gated elsewhere: §4 gains rows for viewing, submitting, overriding, reporting and
+    applying a calibration baseline, the reconciliation row follows D-53, and §2's operator
+    no longer overrides. Rejected: keeping the administrator's blanket grant (it defeats the
+    separation of duties the security officer role exists for) and inferring new authority
+    for the planner (the owner set it view-only). See
+    `../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`.

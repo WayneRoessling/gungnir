@@ -81,8 +81,7 @@ use gungnir_policy::{Delegations, PolicyVerdict};
 use gungnir_remote::link::HEARTBEAT_TIMEOUT;
 use gungnir_remote::queue::DecisionChoice;
 use gungnir_security::{
-    actions, hash_passphrase, Account, AuditLog, InMemoryAccountStore, OperatorId, Role,
-    TokenIssuer,
+    actions, hash_passphrase, Account, InMemoryAccountStore, OperatorId, Role, TokenIssuer,
 };
 use gungnir_time::ReplayClockAuthority;
 use gungnir_tracking_service::{SubmitError, TrackingService};

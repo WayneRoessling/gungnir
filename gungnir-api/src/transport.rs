@@ -107,6 +107,34 @@
 //! words, and a node tells nobody unauthenticated where a route went -- and then answers
 //! `410 Gone` naming the successor. The event stream answers before upgrading, because its
 //! token travels in the first frame, which a retired route never reads.
+//!
+//! # What the routes leave on the node's audit record (GAP-111, D-87)
+//!
+//! **Every sign-in attempt, every refusal, and every act a role-gated route performs**
+//! leaves exactly one [`AuditEntry`], which the handler puts in [`NodeApi`]'s
+//! [`AuditOutbox`] and the node loop writes to its hash-chained log once a tick
+//! ([`NodeApi::take_audit`]); a handler never touches the disk. The entry names the
+//! verified operator and the verified machine where there is one, and never an operator
+//! that was only claimed (DN-23 §5 rule 1). In particular:
+//!
+//! - `POST /v3/session`: `session.sign_in` naming the operator and the role granted, or
+//!   `session.rejected` naming nobody, with the identifier that was tried in the detail.
+//!   The passphrase is never in either.
+//! - A request refused for who is asking -- no valid token, a machine on a route internal
+//!   to the deployment, a party whose agreement does not cover the item -- is
+//!   `access.refused`. A verified operator refused for want of a permission is recorded
+//!   under the permission, so an auditor asking what was done about an action finds the
+//!   refusals beside the acts.
+//! - An act a role-gated route performs is recorded under its action with its outcome.
+//!   The decision routes are the exception in form only: their refusals and decisions
+//!   were already audited by the loop, one each (DN-31 §9 row 4), and are left there.
+//! - **Reads that are served are not recorded one by one**: a desktop polls, and a
+//!   session that reads was established by a sign-in that was. The picture's routes now
+//!   ask for `picture.view`, which every role holds but the security officer (D-30), and
+//!   a refusal of one is recorded.
+//! - **A detection accepted onto the gateway's queue is not recorded** either: it is a
+//!   desktop forwarding its sensors, a data path the gateway journals, and a person's act
+//!   only in the sense that somebody is signed in. Its refusals are recorded.
 
 use crate::tls::{Peer, PlainListener, TlsListener};
 use crate::{routes, v3, ApiError};
@@ -121,7 +149,11 @@ use gungnir_model::SystemHealth;
 use gungnir_model::{
     AssetId, DecisionId, ExchangeItem, ExchangeSet, MissionTime, SensorId, SensorTaskId, TrackId,
 };
-use gungnir_security::{AuthFailure, MissionTimeSeconds, OperatorSession};
+use gungnir_security::audit::events;
+use gungnir_security::{
+    actions, AuditDrain, AuditEntry, AuditOutbox, AuthFailure, MissionTimeSeconds, OperatorId,
+    OperatorSession,
+};
 use std::collections::{BTreeMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
@@ -373,6 +405,13 @@ pub struct NodeApi {
     /// **Each set carries when it was written** (GAP-145), because a merged answer is
     /// only as current as its quietest producer and a partner cannot see the producers.
     exchange_products: RwLock<BTreeMap<ExchangeItem, BTreeMap<ExchangeProducer, ProducerSet>>>,
+    /// What the routes owe the node's audit record, waiting for the loop (GAP-111, D-87).
+    ///
+    /// An outbox rather than the log itself for the reason `refusals` is one: the log is
+    /// the loop's, and a handler that wrote to a file would put the disk on the request
+    /// path. Rate-limited per lane, so a flood from nobody in particular is bounded in
+    /// memory and on disk and counted rather than recorded one by one.
+    audit: AuditOutbox,
 }
 
 /// Who wrote a set into this deployment's exchange register (GAP-137, DN-18 §5
@@ -501,6 +540,9 @@ pub struct PendingDecision {
     /// nothing is written down.
     pub operator: gungnir_security::OperatorId,
     pub role: gungnir_security::Role,
+    /// The machine the connection was verified as -- a desktop's name since GAP-141 --
+    /// for the audit entry (GAP-111); `None` over plaintext.
+    pub party: Option<String>,
     /// What the loop decided, or why it would not.
     pub reply: tokio::sync::oneshot::Sender<DecisionAnswer>,
 }
@@ -546,6 +588,8 @@ pub struct PendingForward {
     /// entry the loop writes names both.
     pub operator: gungnir_security::OperatorId,
     pub role: gungnir_security::Role,
+    /// The machine the connection was verified as, for the audit entry (GAP-111).
+    pub party: Option<String>,
     pub reply: tokio::sync::oneshot::Sender<ForwardAnswer>,
 }
 
@@ -583,6 +627,9 @@ pub struct RefusedDecision {
     /// Who was refused: the operator's identifier, or `unauthenticated` when no token
     /// resolved. Never invented.
     pub operator: String,
+    /// The machine the connection was verified as, whether or not a token resolved
+    /// (GAP-111): a refused desktop is named by its key even when its session was not.
+    pub party: Option<String>,
     /// Why, in the words the caller was given.
     pub reason: String,
 }
@@ -647,7 +694,37 @@ impl NodeApi {
             reports: Mutex::new(Vec::new()),
             acknowledgements: Mutex::new(Vec::new()),
             exchange_products: RwLock::new(BTreeMap::new()),
+            audit: AuditOutbox::new(),
         }
+    }
+
+    /// Everything the routes owe the node's audit record since the last call, and what
+    /// the rate limits counted instead of recording (GAP-111, D-87).
+    ///
+    /// The node loop calls this once a tick and records it with
+    /// [`AuditDrain::record_into`], the way it takes the decisions and the refusals.
+    pub fn take_audit(&self) -> AuditDrain {
+        self.audit.drain()
+    }
+
+    /// One entry the routes owe, at this node's clock, naming the machine the connection
+    /// was verified as where there was one and the address it came from.
+    fn audit(
+        &self,
+        peer: &Peer,
+        operator: Option<OperatorId>,
+        action: &str,
+        detail: impl std::fmt::Display,
+    ) {
+        self.audit.push(
+            AuditEntry::new(
+                operator,
+                action,
+                self.now(),
+                format!("{detail} (from {})", peer.addr),
+            )
+            .by_party(peer.party.clone()),
+        );
     }
 
     /// Install what each client certificate speaks for (D-02).
@@ -1466,7 +1543,7 @@ fn gone(
 ) -> Response {
     let authenticated = match authentication {
         Authentication::SignIn | Authentication::Stream => Ok(()),
-        Authentication::Caller => caller(api, headers, peer).map(|_| ()),
+        Authentication::Caller => caller(api, headers, peer, path).map(|_| ()),
         Authentication::Operator(what) => operator_caller(api, headers, peer, what).map(|_| ()),
         Authentication::MachineOrOperator(what) => match machine_identity(api, headers, peer) {
             Some(_) => Ok(()),
@@ -1506,6 +1583,10 @@ pub enum Caller {
     Machine { party: String },
 }
 
+/// Why a caller was refused before anything about it was verified: the status and the
+/// sentence the caller and the audit entry both get.
+type Unverified = (StatusCode, String);
+
 /// Resolve the caller, or say why not.
 ///
 /// Every route but `POST /v3/session` goes through this. A bearer token is tried first,
@@ -1514,17 +1595,17 @@ pub enum Caller {
 /// here (DN-18 §5: no agreement, no exchange). A node with no authority configured
 /// refuses operators here rather than at each route, so there is one place the answer
 /// is decided.
-///
-/// The error is a whole `Response` and therefore large. Boxing it would buy nothing: it
-/// is constructed once per refused request and returned immediately.
-#[allow(clippy::result_large_err)]
-fn caller(api: &NodeApi, headers: &axum::http::HeaderMap, peer: &Peer) -> Result<Caller, Response> {
+fn resolve_caller(
+    api: &NodeApi,
+    headers: &axum::http::HeaderMap,
+    peer: &Peer,
+) -> Result<Caller, Unverified> {
     let has_token = headers.get(axum::http::header::AUTHORIZATION).is_some();
     if let (false, Some(party)) = (has_token, &peer.party) {
         if api.exchange.for_party(party).is_none() {
-            return Err(problem(
+            return Err((
                 StatusCode::FORBIDDEN,
-                &format!(
+                format!(
                     "party {party:?} is authenticated and has no exchange agreement with \
                      this deployment; authentication answers who you are, the agreement \
                      answers what you may do (DN-18)"
@@ -1535,7 +1616,33 @@ fn caller(api: &NodeApi, headers: &axum::http::HeaderMap, peer: &Peer) -> Result
             party: party.clone(),
         });
     }
-    operator(api, headers).map(Caller::Operator)
+    resolve_operator(api, headers).map(Caller::Operator)
+}
+
+/// The caller, or a refusal that is on the node's audit record (GAP-111, D-87).
+///
+/// `what` names the route in the entry, so an auditor reading `access.refused` can tell a
+/// desktop whose session lapsed while it polled the snapshot from a probe of the
+/// decision route.
+///
+/// The error is a whole `Response` and therefore large. Boxing it would buy nothing: it
+/// is constructed once per refused request and returned immediately.
+#[allow(clippy::result_large_err)]
+fn caller(
+    api: &NodeApi,
+    headers: &axum::http::HeaderMap,
+    peer: &Peer,
+    what: &str,
+) -> Result<Caller, Response> {
+    resolve_caller(api, headers, peer).map_err(|(status, why)| {
+        api.audit(
+            peer,
+            None,
+            events::ACCESS_REFUSED,
+            format_args!("{what}: {status}: {why}"),
+        );
+        problem(status, &why)
+    })
 }
 
 /// A machine whose certificate speaks for something in this deployment (D-02), when the
@@ -1555,13 +1662,16 @@ fn machine_identity(
 }
 
 /// An operator from the `Authorization` header, or why not.
-#[allow(clippy::result_large_err)]
-fn operator(api: &NodeApi, headers: &axum::http::HeaderMap) -> Result<OperatorSession, Response> {
+fn resolve_operator(
+    api: &NodeApi,
+    headers: &axum::http::HeaderMap,
+) -> Result<OperatorSession, Unverified> {
     let Some(callers) = api.callers.as_ref() else {
-        return Err(problem(
+        return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             "this node authenticates nobody: no account store is configured, so it serves \
-             its pipeline and journals it and answers no caller",
+             its pipeline and journals it and answers no caller"
+                .into(),
         ));
     };
     let token = headers
@@ -1569,49 +1679,84 @@ fn operator(api: &NodeApi, headers: &axum::http::HeaderMap) -> Result<OperatorSe
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .unwrap_or_default();
-    callers.verify(token, api.now()).map_err(|failure| {
-        // One message for a missing, malformed, forged and expired token alike: telling
-        // them apart tells a prober which half to work on.
-        problem(StatusCode::UNAUTHORIZED, &failure.to_string())
-    })
+    // One message for a missing, malformed, forged and expired token alike: telling them
+    // apart tells a prober which half to work on.
+    callers
+        .verify(token, api.now())
+        .map_err(|failure| (StatusCode::UNAUTHORIZED, failure.to_string()))
 }
 
 /// `POST /v3/session`: the one route reachable without a token.
+///
+/// **Every attempt is audited** (DN-23 §5 rule 7, GAP-111): `session.sign_in` naming the
+/// operator the credential verified and the role the session carries, or
+/// `session.rejected` naming nobody -- the identifier in the request was claimed, not
+/// verified (rule 1), so it goes in the detail. The passphrase goes nowhere.
 async fn sign_in(
     State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
     Json(request): Json<v3::SessionRequest>,
 ) -> Response {
     let Some(callers) = api.callers.as_ref() else {
-        return problem(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "this node has no account store configured, so nobody can sign in",
+        let why = "this node has no account store configured, so nobody can sign in";
+        api.audit(
+            &peer,
+            None,
+            events::SIGN_IN_REJECTED,
+            format_args!("operator {} was tried: {why}", request.operator),
         );
+        return problem(StatusCode::SERVICE_UNAVAILABLE, why);
     };
-    match callers.sign_in(request.operator, &request.passphrase, api.now()) {
-        Ok(issued) => Json(v3::SessionResponse {
-            token: issued.token,
-            expires_s: issued.expires_s,
-        })
-        .into_response(),
-        Err(failure) => problem(StatusCode::UNAUTHORIZED, &failure.to_string()),
+    let now = api.now();
+    match callers.sign_in(request.operator, &request.passphrase, now) {
+        Ok(issued) => {
+            // The role is read back off the token just minted, so the entry says what the
+            // session will be believed to be rather than what the store said a moment ago.
+            let role = callers.verify(&issued.token, now).map_or_else(
+                |failure| format!("a token that does not verify here ({failure})"),
+                |session| format!("{:?}", session.role),
+            );
+            api.audit(
+                &peer,
+                Some(OperatorId(request.operator)),
+                events::SIGN_IN,
+                format_args!(
+                    "signed in as {role}; the session expires at mission time {}",
+                    issued.expires_s
+                ),
+            );
+            Json(v3::SessionResponse {
+                token: issued.token,
+                expires_s: issued.expires_s,
+            })
+            .into_response()
+        }
+        Err(failure) => {
+            api.audit(
+                &peer,
+                None,
+                events::SIGN_IN_REJECTED,
+                format_args!("operator {} was tried: {failure}", request.operator),
+            );
+            problem(StatusCode::UNAUTHORIZED, &failure.to_string())
+        }
     }
 }
 
 /// A route an operator alone may use: the write paths, and what is internal to the
 /// deployment. A machine caller is told so rather than served a shape it cannot use.
-#[allow(clippy::result_large_err)]
-fn operator_only(caller: Caller, what: &str) -> Result<OperatorSession, Response> {
+fn resolve_operator_only(caller: Caller, what: &str) -> Result<OperatorSession, Unverified> {
     match caller {
         Caller::Operator(session) => Ok(session),
-        Caller::Machine { party } => Err(problem(
+        Caller::Machine { party } => Err((
             StatusCode::FORBIDDEN,
-            &format!("{what} is internal to this deployment and not an exchange item; party {party:?} may not use it"),
+            format!("{what} is internal to this deployment and not an exchange item; party {party:?} may not use it"),
         )),
     }
 }
 
 /// The caller, refused unless it is an operator: the routes that are internal to the
-/// deployment and never an exchange item.
+/// deployment and never an exchange item. A refusal is on the audit record.
 #[allow(clippy::result_large_err)]
 fn operator_caller(
     api: &NodeApi,
@@ -1619,10 +1764,58 @@ fn operator_caller(
     peer: &Peer,
     what: &str,
 ) -> Result<OperatorSession, Response> {
-    match caller(api, headers, peer) {
-        Ok(c) => operator_only(c, what),
-        Err(response) => Err(response),
+    unaudited_operator_caller(api, headers, peer, what).map_err(|(status, why)| {
+        api.audit(
+            peer,
+            None,
+            events::ACCESS_REFUSED,
+            format_args!("{what}: {status}: {why}"),
+        );
+        problem(status, &why)
+    })
+}
+
+/// [`operator_caller`] without the audit entry, for the two decision routes, whose
+/// refusals the loop records under `plan.decide` (DN-31 §9 row 4): recording one here as
+/// well would put two entries on the record for one refusal.
+fn unaudited_operator_caller(
+    api: &NodeApi,
+    headers: &axum::http::HeaderMap,
+    peer: &Peer,
+    what: &str,
+) -> Result<OperatorSession, Unverified> {
+    resolve_caller(api, headers, peer).and_then(|c| resolve_operator_only(c, what))
+}
+
+/// `picture.view`, asked of an operator on a route that serves the picture (GAP-111).
+///
+/// Every role holds it but the security officer, who "operates nothing -- no decision,
+/// tasking, configuration, or picture" (D-30). Until GAP-111 the snapshot, history,
+/// coverage, stream and exchange routes served any valid token, so a security officer's
+/// session read the picture its role withholds; `GET /v3/queue` alone asked. A refusal is
+/// on the audit record under the action; a read that is served is not (D-87).
+#[allow(clippy::result_large_err)]
+fn may_view_picture(
+    api: &NodeApi,
+    peer: &Peer,
+    session: &OperatorSession,
+    what: &str,
+) -> Result<(), Response> {
+    if gungnir_security::authz::role_permits(session.role, actions::VIEW_PICTURE) {
+        return Ok(());
     }
+    let why = format!(
+        "role {:?} may not read {what} ({})",
+        session.role,
+        actions::VIEW_PICTURE
+    );
+    api.audit(
+        peer,
+        Some(session.operator),
+        actions::VIEW_PICTURE,
+        format_args!("refused: {why}"),
+    );
+    Err(problem(StatusCode::FORBIDDEN, &why))
 }
 
 /// `GET /v3/session`: who the caller is, so a desktop can tell an expired session from
@@ -1708,9 +1901,14 @@ async fn snapshot(
     ConnectInfo(peer): ConnectInfo<Peer>,
     headers: axum::http::HeaderMap,
 ) -> Response {
-    let snapshot = match caller(&api, &headers, &peer) {
+    let snapshot = match caller(&api, &headers, &peer, "the snapshot") {
         Err(response) => return response,
-        Ok(Caller::Operator(_)) => api.snapshot(),
+        Ok(Caller::Operator(session)) => {
+            if let Err(refused) = may_view_picture(&api, &peer, &session, "the snapshot") {
+                return refused;
+            }
+            api.snapshot()
+        }
         // GAP-062: a party sees what its agreement and the markings release, and how
         // much it did not see.
         Ok(Caller::Machine { party }) => api.snapshot_for(&party),
@@ -1740,9 +1938,14 @@ async fn history(
     headers: axum::http::HeaderMap,
     axum::extract::Query(query): axum::extract::Query<v3::HistoryQuery>,
 ) -> Response {
-    let party = match caller(&api, &headers, &peer) {
+    let party = match caller(&api, &headers, &peer, "the history") {
         Err(response) => return response,
-        Ok(Caller::Operator(_)) => None,
+        Ok(Caller::Operator(session)) => {
+            if let Err(refused) = may_view_picture(&api, &peer, &session, "the history") {
+                return refused;
+            }
+            None
+        }
         Ok(Caller::Machine { party }) => Some(party),
     };
     match api.backlog_since(query.since_seq) {
@@ -1780,8 +1983,13 @@ async fn coverage(
     ConnectInfo(peer): ConnectInfo<Peer>,
     headers: axum::http::HeaderMap,
 ) -> Response {
-    if let Err(response) = operator_caller(&api, &headers, &peer, "coverage") {
-        return response;
+    match operator_caller(&api, &headers, &peer, "coverage") {
+        Err(response) => return response,
+        Ok(session) => {
+            if let Err(refused) = may_view_picture(&api, &peer, &session, "coverage") {
+                return refused;
+            }
+        }
     }
     match api.coverage() {
         Some(coverage) => Json(coverage).into_response(),
@@ -1797,8 +2005,10 @@ async fn health(
     ConnectInfo(peer): ConnectInfo<Peer>,
     headers: axum::http::HeaderMap,
 ) -> Response {
-    match caller(&api, &headers, &peer) {
+    match caller(&api, &headers, &peer, "health") {
         Err(response) => return response,
+        // Any operator, the security officer included: its layout is the audit and
+        // health panels (D-30), and health is not the picture.
         Ok(Caller::Operator(_)) => {}
         // DN-18: health is an exchange item of its own.
         Ok(Caller::Machine { party }) => {
@@ -1807,10 +2017,14 @@ async fn health(
                 ExchangeItem::Health,
                 &gungnir_model::Releasability::AllPeers,
             ) {
-                return problem(
-                    StatusCode::FORBIDDEN,
-                    &format!("the agreement with {party:?} does not send health"),
+                let why = format!("the agreement with {party:?} does not send health");
+                api.audit(
+                    &peer,
+                    None,
+                    events::ACCESS_REFUSED,
+                    format_args!("health: {why}"),
                 );
+                return problem(StatusCode::FORBIDDEN, &why);
             }
         }
     }
@@ -1838,13 +2052,17 @@ async fn submit_detection(
     let vouched = match machine_identity(&api, &headers, &peer) {
         Some((_, MachineRole::Sensor(id))) => Some(id),
         Some((party, role)) => {
-            return problem(
-                StatusCode::FORBIDDEN,
-                &format!(
-                    "party {party:?} speaks for {role:?}, not for a sensor; it may not submit \
-                     detections"
-                ),
+            let why = format!(
+                "party {party:?} speaks for {role:?}, not for a sensor; it may not submit \
+                 detections"
             );
+            api.audit(
+                &peer,
+                None,
+                events::ACCESS_REFUSED,
+                format_args!("detection submission: {why}"),
+            );
+            return problem(StatusCode::FORBIDDEN, &why);
         }
         None => {
             if let Err(response) = operator_caller(&api, &headers, &peer, "detection submission") {
@@ -1871,13 +2089,19 @@ async fn submit_detection(
         return problem(StatusCode::CONFLICT, &err.to_string());
     }
     match vouched {
-        Some(id) if request.detection.sensor != id => problem(
-            StatusCode::FORBIDDEN,
-            &format!(
+        Some(id) if request.detection.sensor != id => {
+            let why = format!(
                 "this certificate speaks for sensor {}, and the detection names sensor {}",
                 id.0, request.detection.sensor.0
-            ),
-        ),
+            );
+            api.audit(
+                &peer,
+                None,
+                actions::SUBMIT_DETECTION,
+                format_args!("refused: {why}"),
+            );
+            problem(StatusCode::FORBIDDEN, &why)
+        }
         Some(_) => match api.machine_submissions.lock() {
             Ok(mut queue) => {
                 queue.push(request.detection);
@@ -1917,24 +2141,37 @@ async fn task_sensor(
         Ok(session) => session,
         Err(response) => return response,
     };
-    if !gungnir_security::authz::role_permits(session.role, gungnir_security::actions::TASK_SENSOR)
-    {
-        return problem(
+    // One entry for every request past the door, whatever became of it (GAP-111).
+    let record = |detail: &dyn std::fmt::Display| {
+        api.audit(
+            &peer,
+            Some(session.operator),
+            actions::TASK_SENSOR,
+            format_args!("sensor {sensor_id}: {detail}"),
+        );
+    };
+    let refuse = |status: StatusCode, why: &str| {
+        record(&format_args!("refused: {why}"));
+        problem(status, why)
+    };
+    if !gungnir_security::authz::role_permits(session.role, actions::TASK_SENSOR) {
+        return refuse(
             StatusCode::FORBIDDEN,
             &format!(
                 "role {:?} may not command a sensor ({})",
                 session.role,
-                gungnir_security::actions::TASK_SENSOR
+                actions::TASK_SENSOR
             ),
         );
     }
     let Ok(Json(request)) = body else {
-        return problem(StatusCode::BAD_REQUEST, "the task could not be decoded");
+        return refuse(StatusCode::BAD_REQUEST, "the task could not be decoded");
     };
+    let commanded = format!("{:?}", request.command);
     let (reply, answer) = tokio::sync::oneshot::channel();
     {
         let Ok(mut queue) = api.tasks.lock() else {
-            return problem(
+            return refuse(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "the task queue lock was poisoned",
             );
@@ -1948,17 +2185,28 @@ async fn task_sensor(
     }
     match tokio::time::timeout(TASK_REPLY_TIMEOUT, answer).await {
         Ok(Ok(Ok(task))) => {
+            record(&format_args!("commanded {commanded}: task {}", task.0));
             (StatusCode::ACCEPTED, Json(v3::SensorTaskResponse { task })).into_response()
         }
-        Ok(Ok(Err(reason))) => problem(StatusCode::CONFLICT, &reason),
-        Ok(Err(_)) => problem(
+        Ok(Ok(Err(reason))) => {
+            record(&format_args!(
+                "{commanded} was refused by the registry: {reason}"
+            ));
+            problem(StatusCode::CONFLICT, &reason)
+        }
+        Ok(Err(_)) => refuse(
             StatusCode::SERVICE_UNAVAILABLE,
             "the node loop dropped the task without answering",
         ),
-        Err(_) => problem(
-            StatusCode::GATEWAY_TIMEOUT,
-            "the node loop did not issue the task within the reply window",
-        ),
+        // Not "nothing was done": the loop may issue it after the window. Said as what it
+        // is, since the task event on the journal is what settles it.
+        Err(_) => {
+            let why = "the node loop did not issue the task within the reply window";
+            record(&format_args!(
+                "{commanded}: not answered in time; the journal's task events say whether it was issued"
+            ));
+            problem(StatusCode::GATEWAY_TIMEOUT, why)
+        }
     }
 }
 
@@ -1975,58 +2223,73 @@ async fn effector_report(
     headers: axum::http::HeaderMap,
     body: Result<Json<v3::EffectorReportRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
-    let endpoint = match machine_identity(&api, &headers, &peer) {
-        Some((_, MachineRole::Effector { endpoint })) => endpoint,
+    let (endpoint, operator) = match machine_identity(&api, &headers, &peer) {
+        Some((_, MachineRole::Effector { endpoint })) => (endpoint, None),
         Some((party, role)) => {
-            return problem(
-                StatusCode::FORBIDDEN,
-                &format!("party {party:?} speaks for {role:?}, not for an effector"),
+            let why = format!("party {party:?} speaks for {role:?}, not for an effector");
+            api.audit(
+                &peer,
+                None,
+                events::ACCESS_REFUSED,
+                format_args!("effector reporting: {why}"),
             );
+            return problem(StatusCode::FORBIDDEN, &why);
         }
         None => match operator_caller(&api, &headers, &peer, "effector reporting") {
             Ok(session) => {
-                if !gungnir_security::authz::role_permits(
-                    session.role,
-                    gungnir_security::actions::EFFECTOR_REPORT,
-                ) {
-                    return problem(
-                        StatusCode::FORBIDDEN,
-                        &format!("role {:?} may not record an effector report", session.role),
+                if !gungnir_security::authz::role_permits(session.role, actions::EFFECTOR_REPORT) {
+                    let why = format!("role {:?} may not record an effector report", session.role);
+                    api.audit(
+                        &peer,
+                        Some(session.operator),
+                        actions::EFFECTOR_REPORT,
+                        format_args!("refused: {why}"),
                     );
+                    return problem(StatusCode::FORBIDDEN, &why);
                 }
-                format!("operator:{}", session.operator.0)
+                (
+                    format!("operator:{}", session.operator.0),
+                    Some(session.operator),
+                )
             }
             Err(response) => return response,
         },
+    };
+    // One entry for every report past the door, whatever became of it (GAP-111): the
+    // machine the certificate verified, or the operator keying it in.
+    let record = |detail: &dyn std::fmt::Display| {
+        api.audit(&peer, operator, actions::EFFECTOR_REPORT, detail);
     };
     // Either written form of the identifier (D-60): the hyphenated UUID a desktop issues
     // since GAP-130, or the decimal number an effector written before it sends. Anything
     // else is refused in the problem shape every other refusal here takes, naming both
     // forms, rather than with axum's plain-text rejection a client cannot read.
     let Ok(axum::extract::Path(decision)) = decision else {
-        return problem(
-            StatusCode::BAD_REQUEST,
-            "the decision in the path is not an identifier: expected the hyphenated UUID \
-             form (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) or a decimal number",
-        );
+        let why = "the decision in the path is not an identifier: expected the hyphenated UUID \
+                   form (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) or a decimal number";
+        record(&format_args!("refused: {why}"));
+        return problem(StatusCode::BAD_REQUEST, why);
     };
     let Ok(Json(request)) = body else {
-        return problem(StatusCode::BAD_REQUEST, "the report could not be decoded");
+        let why = "the report could not be decoded";
+        record(&format_args!("refused: decision {decision}: {why}"));
+        return problem(StatusCode::BAD_REQUEST, why);
     };
-    match api.reports.lock() {
-        Ok(mut queue) => {
-            queue.push(EffectorReportRecord {
-                decision,
-                endpoint,
-                report: request.report,
-            });
-            StatusCode::ACCEPTED.into_response()
-        }
-        Err(_) => problem(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "the report queue lock was poisoned",
-        ),
-    }
+    let Ok(mut queue) = api.reports.lock() else {
+        let why = "the report queue lock was poisoned";
+        record(&format_args!("refused: decision {decision}: {why}"));
+        return problem(StatusCode::INTERNAL_SERVER_ERROR, why);
+    };
+    queue.push(EffectorReportRecord {
+        decision,
+        endpoint: endpoint.clone(),
+        report: request.report,
+    });
+    drop(queue);
+    record(&format_args!(
+        "decision {decision}: a report from {endpoint} taken for the record"
+    ));
+    StatusCode::ACCEPTED.into_response()
 }
 
 /// `POST /v3/warnings/{asset_id}/{track_id}/acknowledge` (GAP-042, DN-03 §5 rule 2): the
@@ -2049,54 +2312,73 @@ async fn acknowledge_warning(
     headers: axum::http::HeaderMap,
     body: Result<Json<v3::WarningAcknowledgementRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
-    let party = match machine_identity(&api, &headers, &peer) {
-        Some((_, MachineRole::WarnedParty { channel })) => channel,
+    let (party, operator) = match machine_identity(&api, &headers, &peer) {
+        Some((_, MachineRole::WarnedParty { channel })) => (channel, None),
         Some((party, role)) => {
-            return problem(
-                StatusCode::FORBIDDEN,
-                &format!("party {party:?} speaks for {role:?}, not for a warned party"),
+            let why = format!("party {party:?} speaks for {role:?}, not for a warned party");
+            api.audit(
+                &peer,
+                None,
+                events::ACCESS_REFUSED,
+                format_args!("warning acknowledgement: {why}"),
             );
+            return problem(StatusCode::FORBIDDEN, &why);
         }
         None => match operator_caller(&api, &headers, &peer, "warning acknowledgement") {
             Ok(session) => {
                 if !gungnir_security::authz::role_permits(
                     session.role,
-                    gungnir_security::actions::ACKNOWLEDGE_WARNING,
+                    actions::ACKNOWLEDGE_WARNING,
                 ) {
-                    return problem(
-                        StatusCode::FORBIDDEN,
-                        &format!(
-                            "role {:?} may not acknowledge a warning on a party's behalf",
-                            session.role
-                        ),
+                    let why = format!(
+                        "role {:?} may not acknowledge a warning on a party's behalf",
+                        session.role
                     );
+                    api.audit(
+                        &peer,
+                        Some(session.operator),
+                        actions::ACKNOWLEDGE_WARNING,
+                        format_args!("refused: {why}"),
+                    );
+                    return problem(StatusCode::FORBIDDEN, &why);
                 }
-                format!("operator:{}", session.operator.0)
+                (
+                    format!("operator:{}", session.operator.0),
+                    Some(session.operator),
+                )
             }
             Err(response) => return response,
         },
     };
-    let Ok(Json(request)) = body else {
-        return problem(
-            StatusCode::BAD_REQUEST,
-            "the acknowledgement could not be decoded",
+    let record = |detail: &dyn std::fmt::Display| {
+        api.audit(
+            &peer,
+            operator,
+            actions::ACKNOWLEDGE_WARNING,
+            format_args!("asset {asset_id}, track {track_id}: {detail}"),
         );
     };
-    match api.acknowledgements.lock() {
-        Ok(mut queue) => {
-            queue.push(WarningAcknowledgement {
-                asset: AssetId(asset_id),
-                track: TrackId(track_id),
-                party,
-                at: request.at,
-            });
-            StatusCode::ACCEPTED.into_response()
-        }
-        Err(_) => problem(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "the acknowledgement queue lock was poisoned",
-        ),
-    }
+    let Ok(Json(request)) = body else {
+        let why = "the acknowledgement could not be decoded";
+        record(&format_args!("refused: {why}"));
+        return problem(StatusCode::BAD_REQUEST, why);
+    };
+    let Ok(mut queue) = api.acknowledgements.lock() else {
+        let why = "the acknowledgement queue lock was poisoned";
+        record(&format_args!("refused: {why}"));
+        return problem(StatusCode::INTERNAL_SERVER_ERROR, why);
+    };
+    queue.push(WarningAcknowledgement {
+        asset: AssetId(asset_id),
+        track: TrackId(track_id),
+        party: party.clone(),
+        at: request.at,
+    });
+    drop(queue);
+    record(&format_args!(
+        "acknowledged by {party}, taken for the record"
+    ));
+    StatusCode::ACCEPTED.into_response()
 }
 
 /// `GET /v3/exchange/warnings` (DN-18 §5, GAP-065).
@@ -2189,33 +2471,49 @@ fn publish_exchange_item(
         Ok(session) => session,
         Err(response) => return response,
     };
-    if !gungnir_security::authz::role_permits(
-        session.role,
-        gungnir_security::actions::PUBLISH_EXCHANGE,
-    ) {
-        return problem(
+    // One entry for every request past the door, whatever became of it (GAP-111).
+    let record = |detail: &dyn std::fmt::Display| {
+        api.audit(
+            peer,
+            Some(session.operator),
+            actions::PUBLISH_EXCHANGE,
+            format_args!("{item:?}: {detail}"),
+        );
+    };
+    let refuse = |status: StatusCode, why: &str| {
+        record(&format_args!("refused: {why}"));
+        problem(status, why)
+    };
+    if !gungnir_security::authz::role_permits(session.role, actions::PUBLISH_EXCHANGE) {
+        return refuse(
             StatusCode::FORBIDDEN,
             &format!(
                 "role {:?} may not publish to exchange ({})",
                 session.role,
-                gungnir_security::actions::PUBLISH_EXCHANGE
+                actions::PUBLISH_EXCHANGE
             ),
         );
     }
     let Ok(Json(request)) = body else {
-        return problem(StatusCode::BAD_REQUEST, "the products could not be decoded");
+        return refuse(StatusCode::BAD_REQUEST, "the products could not be decoded");
     };
     let producer = match &peer.party {
         Some(party) => ExchangeProducer::Party(party.clone()),
         None => ExchangeProducer::Unidentified,
     };
+    let count = request.products.len();
     match api.publish_exchange(producer, item, request.products) {
-        Ok(()) => StatusCode::ACCEPTED.into_response(),
+        Ok(()) => {
+            record(&format_args!(
+                "{count} products now held for exchange from this writer"
+            ));
+            StatusCode::ACCEPTED.into_response()
+        }
         // 507, not 500: the register is intact and this deployment is misconfigured. The
         // desktop's link keeps the batch and retries it, which shows as a backlog
         // (DN-18 §5) rather than as a set that quietly went missing.
-        Err(e @ ApiError::NoRoom(_)) => problem(StatusCode::INSUFFICIENT_STORAGE, &e.to_string()),
-        Err(e) => problem(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+        Err(e @ ApiError::NoRoom(_)) => refuse(StatusCode::INSUFFICIENT_STORAGE, &e.to_string()),
+        Err(e) => refuse(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
 }
 
@@ -2228,27 +2526,38 @@ fn publish_exchange_item(
 /// many of them there were. The marking gate is then applied per product by
 /// [`NodeApi::exchange_for`], and what it removes is counted on the response.
 ///
-/// An operator inside the deployment sees everything, as on `/v3/snapshot`: the two gates
-/// govern what leaves the deployment, not what its own watch may read.
+/// An operator inside the deployment sees everything its role may, as on `/v3/snapshot`:
+/// the two gates govern what leaves the deployment, and `picture.view` what its own
+/// watch may read (GAP-111).
 fn serve_exchange(
     api: &NodeApi,
     headers: &axum::http::HeaderMap,
     peer: &Peer,
     item: ExchangeItem,
 ) -> Response {
-    let held = match caller(api, headers, peer) {
+    let what = format!("the exchange's {item:?}");
+    let held = match caller(api, headers, peer, &what) {
         Err(response) => return response,
-        Ok(Caller::Operator(_)) => api.exchange_all(item),
+        Ok(Caller::Operator(session)) => {
+            if let Err(refused) = may_view_picture(api, peer, &session, &what) {
+                return refused;
+            }
+            api.exchange_all(item)
+        }
         Ok(Caller::Machine { party }) => {
             if !api
                 .exchange
                 .for_party(&party)
                 .is_some_and(|a| a.sends(item))
             {
-                return problem(
-                    StatusCode::FORBIDDEN,
-                    &format!("the agreement with {party:?} does not send {item:?}"),
+                let why = format!("the agreement with {party:?} does not send {item:?}");
+                api.audit(
+                    peer,
+                    None,
+                    events::ACCESS_REFUSED,
+                    format_args!("{what}: {why}"),
                 );
+                return problem(StatusCode::FORBIDDEN, &why);
             }
             api.exchange_for(&party, item)
         }
@@ -2387,16 +2696,19 @@ async fn queue(
         Ok(session) => session,
         Err(response) => return response,
     };
-    if !gungnir_security::authz::role_permits(session.role, gungnir_security::actions::VIEW_PICTURE)
-    {
-        return problem(
-            StatusCode::FORBIDDEN,
-            &format!(
-                "role {:?} may not read the queue ({})",
-                session.role,
-                gungnir_security::actions::VIEW_PICTURE
-            ),
+    if !gungnir_security::authz::role_permits(session.role, actions::VIEW_PICTURE) {
+        let why = format!(
+            "role {:?} may not read the queue ({})",
+            session.role,
+            actions::VIEW_PICTURE
         );
+        api.audit(
+            &peer,
+            Some(session.operator),
+            actions::VIEW_PICTURE,
+            format_args!("refused: {why}"),
+        );
+        return problem(StatusCode::FORBIDDEN, &why);
     }
     Json(api.queue()).into_response()
 }
@@ -2438,15 +2750,17 @@ async fn decide_queued(
     // 1. Who is asking. An unauthenticated caller is refused before anything about this
     // node's queue is said, and nothing about the attempt reaches the record under a name
     // nobody verified -- the entry says `unauthenticated`, which is what it was.
-    let session = match operator_caller(&api, &headers, &peer, "the decision route") {
+    // Unaudited here: the refusal below is the loop's to record, under `plan.decide`.
+    let session = match unaudited_operator_caller(&api, &headers, &peer, "the decision route") {
         Ok(session) => session,
-        Err(response) => {
+        Err((status, why)) => {
             api.refuse_decision(RefusedDecision {
                 item: None,
                 operator: "unauthenticated".into(),
+                party: peer.party.clone(),
                 reason: "no valid operator session".into(),
             });
-            return response;
+            return problem(status, &why);
         }
     };
     // The refusal path records who was refused as text, because "unauthenticated" above is
@@ -2459,6 +2773,7 @@ async fn decide_queued(
             api.refuse_decision(RefusedDecision {
                 item,
                 operator: refused_as,
+                party: peer.party.clone(),
                 reason: why.clone(),
             });
             return problem(status, &why);
@@ -2478,6 +2793,7 @@ async fn decide_queued(
             request: request.request,
             operator: session.operator,
             role: session.role,
+            party: peer.party.clone(),
             reply,
         });
     }
@@ -2534,15 +2850,17 @@ async fn forward_decisions(
     headers: axum::http::HeaderMap,
     body: Result<Json<Vec<v3::ForwardedDecision>>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
-    let session = match operator_caller(&api, &headers, &peer, "forwarding decisions") {
+    // Unaudited here, as on the decision route: the loop records the refusal.
+    let session = match unaudited_operator_caller(&api, &headers, &peer, "forwarding decisions") {
         Ok(session) => session,
-        Err(response) => {
+        Err((status, why)) => {
             api.refuse_decision(RefusedDecision {
                 item: None,
                 operator: "unauthenticated".into(),
+                party: peer.party.clone(),
                 reason: "forwarding decisions: no valid operator session".into(),
             });
-            return response;
+            return problem(status, &why);
         }
     };
     let refused_as = session.operator.0.to_string();
@@ -2550,6 +2868,7 @@ async fn forward_decisions(
         api.refuse_decision(RefusedDecision {
             item: None,
             operator: refused_as.clone(),
+            party: peer.party.clone(),
             reason: format!("forwarding decisions: {why}"),
         });
         problem(status, &why)
@@ -2609,6 +2928,7 @@ async fn forward_decisions(
             decisions,
             operator: session.operator,
             role: session.role,
+            party: peer.party.clone(),
             reply,
         });
     }
@@ -2684,6 +3004,55 @@ async fn events(
     ws.on_upgrade(move |socket| stream_events(socket, api, peer))
 }
 
+/// Who the event stream is for: `None` for an operator, the party for a machine with an
+/// agreement, or the sentence the socket is told before it closes.
+///
+/// Every refusal is on the audit record (GAP-111), as on the other routes, and an operator
+/// is asked `picture.view`: the stream is the picture as it changes, so it asks what the
+/// snapshot asks (D-30).
+fn stream_caller(api: &NodeApi, peer: &Peer, token: &str) -> Result<Option<String>, String> {
+    let refused = |why: String| {
+        api.audit(
+            peer,
+            None,
+            events::ACCESS_REFUSED,
+            format_args!("the event stream: {why}"),
+        );
+        why
+    };
+    if token.is_empty() {
+        return match &peer.party {
+            Some(party) if api.exchange.for_party(party).is_some() => Ok(Some(party.clone())),
+            Some(party) => Err(refused(format!(
+                "party {party:?} has no exchange agreement"
+            ))),
+            None => Err(refused("no token and no party".into())),
+        };
+    }
+    let session = match api.callers.as_ref() {
+        None => Err("this node authenticates nobody".to_owned()),
+        Some(callers) => callers
+            .verify(token, api.now())
+            .map_err(|failure| failure.to_string()),
+    }
+    .map_err(refused)?;
+    if gungnir_security::authz::role_permits(session.role, actions::VIEW_PICTURE) {
+        return Ok(None);
+    }
+    let why = format!(
+        "role {:?} may not read the event stream ({})",
+        session.role,
+        actions::VIEW_PICTURE
+    );
+    api.audit(
+        peer,
+        Some(session.operator),
+        actions::VIEW_PICTURE,
+        format_args!("refused: {why}"),
+    );
+    Err(why)
+}
+
 /// The event stream: read the subscribe frame, send what was missed, then follow live.
 ///
 /// Subscribing **before** reading the backlog is deliberate. The other order has a hole:
@@ -2705,37 +3074,12 @@ async fn stream_events(mut socket: WebSocket, api: Arc<NodeApi>, peer: Peer) {
     // The stream is a read path like any other: an operator's token, or a machine's
     // party with an agreement (GAP-062), and a party's stream is filtered like its
     // snapshot.
-    let party: Option<String> = if request.token.is_empty() {
-        match &peer.party {
-            Some(party) if api.exchange.for_party(party).is_some() => Some(party.clone()),
-            Some(party) => {
-                let _ = socket
-                    .send(Message::Text(
-                        format!("party {party:?} has no exchange agreement").into(),
-                    ))
-                    .await;
-                return;
-            }
-            None => {
-                let _ = socket
-                    .send(Message::Text("no token and no party".into()))
-                    .await;
-                return;
-            }
-        }
-    } else {
-        let authenticated = match api.callers.as_ref() {
-            None => Err("this node authenticates nobody".to_owned()),
-            Some(callers) => callers
-                .verify(&request.token, api.now())
-                .map(|_| ())
-                .map_err(|failure| failure.to_string()),
-        };
-        if let Err(reason) = authenticated {
-            let _ = socket.send(Message::Text(reason.into())).await;
+    let party = match stream_caller(&api, &peer, &request.token) {
+        Ok(party) => party,
+        Err(why) => {
+            let _ = socket.send(Message::Text(why.into())).await;
             return;
         }
-        None
     };
     let releases = |envelope: &Envelope| match &party {
         None => true,

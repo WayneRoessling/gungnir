@@ -111,6 +111,54 @@ fn an_account_created_by_the_binary_is_one_the_node_can_authenticate() {
     );
 }
 
+/// GAP-111, D-87: every account change is on the audit record beside the store, one
+/// entry per change, naming the operator and the role, attributed to nobody, and never
+/// holding the passphrase or its hash. A refused change records nothing.
+#[test]
+fn every_account_change_leaves_one_audit_entry_and_a_refusal_leaves_none() {
+    let dir = scratch("audited");
+    let path = dir.join("accounts.json");
+    let file = path.to_string_lossy().into_owned();
+    let audit = dir.join(gungnir_security::AUDIT_DIR);
+
+    let (code, said, err) = run_account(
+        &["add", file.as_str(), "7", "supervisor"],
+        Some("correct horse"),
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(said.contains("recorded in the audit log"), "{said}");
+    let (code, _, _) = run_account(&["add", file.as_str(), "7", "operator"], Some("again"));
+    assert_ne!(code, 0, "a second account without --replace is refused");
+    let (code, _, err) = run_account(
+        &["add", file.as_str(), "7", "operator", "--replace"],
+        Some("battery staple"),
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let verified = gungnir_security::verify_audit_dir(&audit).expect("the audit log reads");
+    assert!(verified.intact(), "{:?}", verified.breaks);
+    assert_eq!(
+        verified.entries, 2,
+        "one entry per change and none for the refusal"
+    );
+    let mut text = String::new();
+    for entry in std::fs::read_dir(&audit).expect("the audit directory") {
+        text.push_str(&std::fs::read_to_string(entry.expect("entry").path()).expect("read"));
+    }
+    for line in text.lines() {
+        assert!(
+            line.contains("\"action\":\"account.assign_role\""),
+            "{line}"
+        );
+        assert!(line.contains("\"operator\":null"), "{line}");
+    }
+    assert!(text.contains("operator 7 added as Supervisor"), "{text}");
+    assert!(text.contains("operator 7 replaced as Operator"), "{text}");
+    for secret in ["correct horse", "battery staple", "$argon2"] {
+        assert!(!text.contains(secret), "{secret:?} reached the audit log");
+    }
+}
+
 #[test]
 fn a_second_account_for_the_same_operator_is_refused_unless_replacement_is_asked_for() {
     let dir = scratch("replace");

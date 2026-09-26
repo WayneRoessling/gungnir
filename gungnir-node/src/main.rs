@@ -1937,7 +1937,20 @@ async fn run(
     // GAP-132, D-55: the node holds the queue for the desktops linked to it. One desk, on
     // the loop, so a decision cannot be taken in a request handler and two decisions
     // cannot be taken at once.
-    let mut approval_desk = approval::NodeApproval::new(&config);
+    //
+    // GAP-111, D-87: its audit log is durable and hash-chained, beside the journal, and
+    // takes every sign-in, refusal and role-gated act the routes report as well as the
+    // queue's own entries. Opened the way the journal is opened: a node that cannot keep
+    // its audit record does not start, because it would be deciding with nothing to show
+    // who decided.
+    let audit_dir = std::path::Path::new(&node_cfg.data_dir).join(gungnir_security::AUDIT_DIR);
+    let audit_log = gungnir_security::FileAuditLog::open(
+        &audit_dir,
+        gungnir_security::AuditSync::OnFlush,
+        clock.now().0,
+    )?;
+    tracing::info!(dir = %audit_dir.display(), "audit log open");
+    let mut approval_desk = approval::NodeApproval::with_audit(&config, Box::new(audit_log));
     // GAP-132, DN-31 §6.3: the node now issues handoffs of its own, so it needs the
     // transport that carries one. A node that could not build the client records every
     // handoff undelivered and owed rather than silently dropping it (DN-07 §5 case 3),
@@ -2081,6 +2094,8 @@ async fn run(
         // before the journal append, for the same reason.
         approval::answer_forwarded(&mut approval_desk, &frame);
         approval::audit_refused_decisions(&mut approval_desk, &frame);
+        // GAP-111: the routes' sign-ins, refusals and acts, then one sync for the tick.
+        approval::audit_routes(&mut approval_desk, &frame);
 
         for envelope in journal_rx.try_iter() {
             journal.append(session, &envelope)?;
@@ -2160,6 +2175,11 @@ async fn run(
     for envelope in journal_rx.try_iter() {
         journal.append(session, &envelope)?;
     }
+    // What the routes reported after the last tick, so a sign-in answered in the moment
+    // before shutdown is still on the record (GAP-111).
+    api.take_audit()
+        .record_into(approval_desk.audit.as_mut(), clock.now().0);
+    approval_desk.audit.flush()?;
     // Drained first, then closed. A record marked closed over a journal still missing its
     // last envelopes would claim a completeness it does not have; the other way round, a
     // failure here leaves the session reported as interrupted, which is true of a node

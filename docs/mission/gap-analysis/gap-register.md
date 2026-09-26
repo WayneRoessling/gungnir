@@ -123,7 +123,7 @@ history, and an entry is never edited once it has merged.
 | GAP-108 | A converted height carries no vertical datum shift | Technical | CAP-2.10 | 2 | 8 | M | 16 | I4 | UI engineer | Open |
 | GAP-109 | Nothing counts per-frame resource creation in gungnir-render | Technical | CAP-5.10 | 2 | 8 | S | 16 | I3 | UI engineer | Closed |
 | GAP-110 | The node's headless loop has no automated test | Technical | CAP-7.3 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
-| GAP-111 | The security row's role matrix and audit rule are untested, and the node audits nothing | Technical | CAP-6.2, CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-111 | The security row's role matrix and audit rule are untested, and the node audits nothing | Technical | CAP-6.2, CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-112 | No test round-trips a fully populated v2 snapshot | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Closed |
 | GAP-113 | An under-authority plan is counted, never escalated | Technical | CAP-3.6, CAP-4.3 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
 | GAP-114 | Nothing consumes LateDataPolicy | Technical | CAP-1.5 | 2 | 7 | M | 14 | I3 | Services engineer | Open |
@@ -159,8 +159,10 @@ history, and an entry is never edited once it has merged.
 | GAP-144 | The release passes only by accepting two quick-xml advisories | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | UI engineer | Closed |
 | GAP-145 | The exchange register has no lifecycle | Technical | CAP-7.4 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
 | GAP-146 | A console that may not publish queues its handoffs for ever | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
+| GAP-162 | A sensor manager may apply a whole baseline, and applying one checks no permission | Technical | CAP-6.2, CAP-5.6 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-163 | The audit log is written and never read back: no retention, no anchor for its head, and PN-20 shows one run | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
 
-Counts: 146 gaps, 3 mission, 143 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 148 gaps, 3 mission, 145 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1703,11 +1705,12 @@ Counts: 146 gaps, 3 mission, 143 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.2 Authorize by role, class, layer; CAP-6.3 Audit.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which held the `gungnir-security` row and amended its first clause to `AuthFailure::Rejected`.
+  - 2026-09-25, Closed: Closed. `gungnir-security/tests/role_matrix.rs` compares `role_permits` with §4, transcribed as data and checked against the document, for every role and action; its thirteen disagreements are settled by D-88. `gungnir-app/tests/audit_one_entry_per_act.rs` performs every audited desktop act and asserts exactly one entry each. The node now audits sign-ins, refusals and role-gated acts into a hash-chained log beside its journal, as the desktop does (D-87, DN-23 §13), held by `gungnir-node/tests/node_audit.rs`. Human-owned (`gungnir-security`, `gungnir-api` write paths); see docs/signatures.md. The row is left for the owner's walk. GAP-162 and GAP-163 filed. See `../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`.
 - Evidence: `../../verification-capability-table.md` §2, the `gungnir-security` row; nothing under `gungnir-node/src` or `gungnir-api/src` records an audit entry.
 - Severity: 3. Reach: 9 threads. Effort: M. Priority: 27.
 - Impact: The `gungnir-security` verification row cannot be gated: no test checks every role against every action, none checks that a gated act leaves exactly one audit entry, and the node writes no audit entry at all, so a sign-in or a role-gated call on a node leaves no trace.
 - Closing action: (1) A table-driven test over `Role::ALL` against every action constant, `REQUIREMENT` and `ASSIGN_ROLE` included, comparing `role_permits` with a matrix transcribed from `../roles-and-stakeholders.md` §4. (2) A desktop test that performs each audited act and asserts the log grows by exactly one entry naming that action. (3) Audit the node's sign-in and role-gated routes, then the same test there. Then walk the row again.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-112 No test round-trips a fully populated v2 snapshot**
@@ -2198,4 +2201,31 @@ Counts: 146 gaps, 3 mission, 143 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found building GAP-145 (`../../record/2026-09-23/a-register-that-says-how-old-it-is.md`).
 - Depends on: GAP-137.
+
+**GAP-162 A sensor manager may apply a whole baseline, and applying one checks no permission**
+
+- Type: Technical.
+- Capability: CAP-6.2 Authorize by role, class, layer; CAP-5.6 Baselines and plans.
+- History:
+  - 2026-09-25, Open: Found by GAP-111's comparison of `role_permits` with §4: the sensor manager's `config.apply` is the one grant whose coarse action is wider than its cell and was not withheld for it, because withholding it would take away the calibration baselines §2 gives the role. Filed rather than narrowed, since the answer is a per-section check, not a different coarse grant.
+- Evidence: `gungnir-app/src/sustainment.rs` (`ConfigEditorState::apply`; `config_editor_view` is the only `role_permits` check); `docs/mission/roles-and-stakeholders.md` §4's "Apply a sensor or calibration baseline" row; found by GAP-111's matrix test.
+- Severity: 3. Reach: 9 threads. Effort: M. Priority: 27.
+- Impact: `config.apply` is one action for a whole baseline. §4 gives the sensor manager calibration and sensor baselines and gives weapons control status and plan apply to the supervisor and the commander, but a baseline a sensor manager applies may change `policy.control_status` and the authority rules all the same. And `ConfigEditorState::apply` checks no permission at all: PN-14 hides the control from a role without `config.apply`, so the rule holds for a person at the screen and for nothing else that calls the function -- the pattern GAP-127 closed for decide and task.
+- Closing action: Check `config.apply` inside `apply` before anything is written, refusing by name; then refuse a candidate that changes a section the role does not hold -- control status without `weapons.control_status`, authority rules and plans without plan apply -- by comparing it with the baseline in force, after adding the per-section rows to §4 first.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: GAP-111 (`../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`).
+
+**GAP-163 The audit log is written and never read back: no retention, no anchor for its head, and PN-20 shows one run**
+
+- Type: Technical.
+- Capability: CAP-6.3 Audit.
+- History:
+  - 2026-09-25, Open: Filed by GAP-111, which made the audit log durable and left these three for a change of their own: retention wants GAP-122's purge to land first so the journal and the audit record age by one rule, and an anchor is a new event on the journal.
+- Evidence: `gungnir-security/src/audit.rs` (module documentation); `gungnir-store/src/retention.rs` (`audit_log_expired`, no caller); `../../design/DN-23-operator-authentication.md` §13.
+- Severity: 2. Reach: 9 threads. Effort: M. Priority: 18.
+- Impact: The hash-chained audit segments GAP-111 put on disk accumulate for ever: `RetentionPolicy::max_audit_log_age_days` has no caller. The newest segment's last lines can be cut and what is left still verifies, because nothing outside the file holds the chain's head. And PN-20 lists only the entries of the run it is in, so the record since the last restart is on disk and not on the screen.
+- Closing action: Remove whole segments older than the retention age when a log opens, recording the removal in the new segment; anchor the head outside the file -- journaled at session close, and on a desktop linked to a node sent to it -- so a cut tail no longer verifies; and let PN-20 read earlier segments.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: GAP-111 (`../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`).
+- Depends on: GAP-122.
 

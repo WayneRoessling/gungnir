@@ -639,3 +639,63 @@ async fn a_malformed_publish_changes_nothing_and_an_unauthenticated_one_is_refus
     assert!(body.contains("no exchange agreement"), "{body}");
     let _ = std::fs::remove_dir_all(&pki.dir);
 }
+
+/// GAP-111, D-87: what these routes leave on the node's audit record names the operator
+/// the token verified **and** the machine the handshake verified -- a desktop by the name
+/// its key gives it (D-67) -- and a partner refused by its agreement is recorded as the
+/// party it is, with no operator. A read that is served leaves nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_audit_record_names_the_verified_operator_and_the_verified_machine() {
+    use gungnir_security::audit::events;
+
+    let pki = Pki::new("audited");
+    let api = api();
+    let addr = serve(&pki, Arc::clone(&api)).await;
+    let commander = token(&pki, addr, COMMANDER).await;
+    let signed_in = api.take_audit().entries;
+    assert_eq!(signed_in.len(), 1, "{signed_in:?}");
+    assert_eq!(signed_in[0].action, events::SIGN_IN);
+    assert_eq!(signed_in[0].operator, Some(OperatorId(COMMANDER)));
+    assert_eq!(signed_in[0].party.as_deref(), Some("desk-1"));
+    assert!(
+        signed_in[0].detail.contains("Commander"),
+        "{:?}",
+        signed_in[0]
+    );
+    assert!(!signed_in[0].detail.contains(PASSPHRASE));
+
+    let desk = "desktop-0123456789abcdef";
+    let (status, body) = post_warnings(
+        &pki,
+        addr,
+        desk,
+        &commander,
+        vec![product("asset-4/track-4", 50.0, Releasability::AllPeers)],
+    )
+    .await;
+    assert_eq!(status, 202, "{body}");
+    let published = api.take_audit().entries;
+    assert_eq!(published.len(), 1, "{published:?}");
+    assert_eq!(
+        published[0].action,
+        gungnir_security::actions::PUBLISH_EXCHANGE
+    );
+    assert_eq!(published[0].operator, Some(OperatorId(COMMANDER)));
+    assert_eq!(published[0].party.as_deref(), Some(desk));
+
+    let (status, body) = get(&pki, addr, "sector-east", "/v3/exchange/warnings").await;
+    assert_eq!(status, 403, "{body}");
+    let refused = api.take_audit().entries;
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    assert_eq!(refused[0].action, events::ACCESS_REFUSED);
+    assert_eq!(refused[0].operator, None);
+    assert_eq!(refused[0].party.as_deref(), Some("sector-east"));
+
+    let (status, body) = get(&pki, addr, "sector-north", "/v3/exchange/warnings").await;
+    assert_eq!(status, 200, "{body}");
+    assert!(
+        api.take_audit().entries.is_empty(),
+        "a read that is served is not recorded one by one (D-87)"
+    );
+    let _ = std::fs::remove_dir_all(&pki.dir);
+}
