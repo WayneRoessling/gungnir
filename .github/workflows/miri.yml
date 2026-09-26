@@ -4,6 +4,9 @@ name: miri
 
 on:
   pull_request:
+  # Run by hand against any ref, so the gate can be seen to work on a diff with no
+  # `unsafe` in it (GAP-164).
+  workflow_dispatch:
 
 # Nothing here writes to the repository, and the repository is public.
 permissions:
@@ -38,21 +41,94 @@ jobs:
 
   miri:
     needs: detect-unsafe
-    if: needs.detect-unsafe.outputs.has_unsafe == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.detect-unsafe.outputs.has_unsafe == 'true'
     runs-on: ubuntu-latest
-    # miri is an interpreter and twelve crates is a lot of it; the bound is generous,
-    # and it is still a bound rather than six hours.
-    timeout-minutes: 180
+    # One job per crate, in parallel, none cancelling another (GAP-164). miri interprets
+    # about a thousand times slower than native code, so the gate runs what finishes: each
+    # crate's unit tests and the integration suites that finish, with the long-run tests
+    # named below left out (D-92). Every code path those tests reach is still reached by
+    # the unit tests beside them; what is left out is the length of the run, not the
+    # code. Times are measured under miri (CI, or locally with 16 at once where marked).
+    #
+    # Left out, with why:
+    # - gungnir-metrics motmetrics_diff: 2 h 3 min on CI.
+    # - gungnir-tracking-service sample_set_replay, scenario_truth_replay,
+    #   whole_pipeline_replay: hours each; they fail their own 60 s deadlock guard.
+    # - gungnir-fusion-async dense_group: over 5 h on CI.
+    # - gungnir-filters imm_diff, linear_kalman_diff, particle_diff, sqrt_diff: over 10 min
+    #   each (local), and the lib tests named in `skip` below, over 10 min each (local).
+    # - gungnir-rfs cphd_diff, lmb_diff, lmb_label_continuity: over 10 min each (local),
+    #   and the lib tests named in `skip`.
+    # A test is added back here when it is measured to finish.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: gungnir-core
+            targets: --lib --tests
+          - crate: gungnir-coord
+            targets: --lib --tests
+          - crate: gungnir-association
+            targets: --lib --tests
+          - crate: gungnir-track
+            targets: --lib --tests
+          - crate: gungnir-track-fusion
+            targets: --lib --tests
+          - crate: gungnir-allocation
+            targets: --lib --tests
+          - crate: gungnir-intercept-service
+            targets: --lib --tests
+          - crate: gungnir-metrics
+            targets: --lib
+          - crate: gungnir-tracking-service
+            targets: --lib --test sensor_position_resolver
+          - crate: gungnir-fusion-async
+            targets: --lib --test bearing --test oos_convergence
+          - crate: gungnir-filters
+            targets: --lib --test rts_diff --test nonlinear_diff
+            skip: >-
+              --skip imm::tests::mode_probabilities_stay_a_distribution_over_a_long_run
+              --skip imm::tests::probability_moves_to_the_mode_that_explains_the_motion
+              --skip kalman::tests::covariance_stays_psd_over_a_long_run
+              --skip particle::tests::a_bimodal_cloud_keeps_both_plausible_lumps_and_drops_the_impossible_one
+              --skip particle::tests::an_update_pulls_the_cloud_toward_the_measurement_and_shrinks_it
+              --skip sqrt::tests::the_square_root_form_tracks_the_standard_form
+              --skip sqrt::tests::zero_psd_violations_over_a_hundred_thousand_cycles
+          - crate: gungnir-rfs
+            targets: --lib --test phd_diff
+            skip: >-
+              --skip tests::cphd_shows_less_cardinality_swing_than_phd_under_frequent_missed_detections
+              --skip tests::the_mixture_stays_bounded_over_a_long_dense_run
+    name: miri (${{ matrix.crate }})
+    # The slowest job is gungnir-fusion-async at 55 minutes (dispatched run 36253724048,
+    # 2026-09-26); the bound leaves room without letting a hang run for hours.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
       - uses: Swatinem/rust-cache@v2
-      - run: cargo miri setup
-      - name: miri on the tracking core and service layer
-        run: >
-          cargo miri test
-          -p gungnir-core -p gungnir-coord -p gungnir-filters -p gungnir-association
-          -p gungnir-track -p gungnir-rfs -p gungnir-track-fusion -p gungnir-fusion-async
-          -p gungnir-allocation -p gungnir-metrics -p gungnir-tracking-service -p gungnir-intercept-service
+        with:
+          key: miri-${{ matrix.crate }}
+      # `rust-toolchain.toml` pins a stable release, and a toolchain file outranks the
+      # default the action above sets, so a bare `cargo miri` resolves to stable and
+      # fails: miri ships only on nightly. `+nightly` outranks the file (GAP-164).
+      - run: cargo +nightly miri setup
+      - name: miri on ${{ matrix.crate }}
+        # The tests read committed fixtures (testdata/) and the clock; miri's isolation
+        # refuses both. Disabling it lets them run while miri still checks every access
+        # for undefined behaviour, which is what the gate is for (GAP-164).
+        # Tree Borrows is the aliasing model (D-90): nalgebra's own Cholesky, 0.33 and
+        # 0.35 alike, is rejected under Stacked Borrows and accepted under Tree Borrows,
+        # so under the default model the gate fails on a dependency's view code before it
+        # reaches anything a pull request adds (GAP-166).
+        # Deterministic floats: miri otherwise perturbs each `sin`/`cos`/`exp` result by a
+        # few ulp at random, and the tracking core's tests pin bit-for-bit agreement with
+        # their oracles and between two evaluations of one formula. Those are properties
+        # of the hardware's maths, which the other gates check; this one checks memory.
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows -Zmiri-deterministic-floats
+        run: >-
+          cargo +nightly miri test --no-fail-fast -p ${{ matrix.crate }} ${{ matrix.targets }}
+          -- ${{ matrix.skip }}

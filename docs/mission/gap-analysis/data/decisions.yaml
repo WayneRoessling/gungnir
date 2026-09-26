@@ -2227,3 +2227,52 @@
     grant wider than its §4 cell), the commander alone for the engagement chain, any
     whole-baseline role for security, and applying the permitted part (it writes a version
     nobody validated). DN-08 §10; `../../../record/2026-09-26/a-baseline-applied-section-by-section.md`.
+- id: D-90
+  decision: Which aliasing model the miri gate checks
+  question: >-
+    Once the miri gate could run (GAP-164), its first run stopped in `gungnir-association`
+    with a Stacked Borrows violation inside nalgebra's Cholesky (`matrix_view.rs`,
+    `as_mut_slice_unchecked`). The same test passes under Tree Borrows, and the latest
+    nalgebra (0.35.0) fails Stacked Borrows the same way. Run the gate under Tree Borrows,
+    keep Stacked Borrows and exempt the failing tests, or replace nalgebra?
+  raised_in: "GAP-164"
+  decider: Owner
+  unblocks: GAP-164
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** **Tree Borrows**, set in
+    `miri.yml`'s `MIRIFLAGS`. Stacked Borrows is miri's older experimental model, and it
+    rejects a pattern (a raw pointer taken from a view, then a mutable slice built from
+    it) that Tree Borrows, the model the Rust project's aliasing rules are converging on,
+    accepts; every nalgebra decomposition in the tracking core goes through it, so under
+    Stacked Borrows the gate would fail on a dependency before it ever reached the code a
+    pull request adds, and a gate that always fails is one people learn to wave through.
+    Exempting the tests with `#[cfg_attr(miri, ignore)]` was rejected because it removes the
+    filters and gates from the gate entirely, which is where any future `unsafe` would sit;
+    replacing nalgebra was rejected as a numerical-core change out of all proportion to a
+    finding in an experimental model. The Stacked Borrows finding is kept as GAP-166 so it
+    is reported upstream rather than forgotten. See
+    `../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`.
+- id: D-92
+  decision: What the miri gate interprets
+  question: >-
+    Once the miri gate ran (GAP-164), a per-crate matrix showed the oracle and replay
+    suites take hours under miri: gungnir-metrics' motmetrics_diff 2 h, fusion-async's
+    dense_group over 5 h, and filters' and rfs' own unit test binaries over 5 h 50 min,
+    while tracking-service's replays fail their 60 s deadlock guard. Interpret unit tests
+    and the suites that finish, run smaller workloads under cfg(miri), or keep the full
+    suites?
+  raised_in: "GAP-164"
+  decider: Owner
+  unblocks: GAP-164
+  resolved: 2026-09-26
+  outcome: >-
+    **Unit tests and the suites that finish, taken by the owner as recommended.** Each
+    crate's library tests and the integration suites measured to finish run under miri;
+    the long-run tests are left out by name in `miri.yml`, each with its measured time,
+    and one is added back when it is measured to finish. The unit tests reach every code
+    path the long runs do; what is left out is the length of the run. Rejected: smaller
+    workloads under `cfg(miri)` (it changes the tests of human-owned crates and oracle
+    comparisons for a gate with no `unsafe` code to check yet), and the full suites (four
+    jobs would time out and the gate could never pass). See
+    `../../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`.

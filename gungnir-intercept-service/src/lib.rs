@@ -725,6 +725,15 @@ mod tests {
     use super::*;
     use gungnir_model::{Classification, Geodetic, Provenance, Quality, TrackStatus};
 
+    /// A planner whose clock stands still, so no solve can overrun its budget: for every
+    /// test that is not about the budget. On the monotonic clock such a test asserts that
+    /// this machine, in this build, finished a solve inside 4 ms, which is a fact about the
+    /// machine's load and not about the planner; under miri, where a solve runs about a
+    /// thousand times slower, every one of them failed (GAP-164).
+    fn unhurried(horizon: usize) -> DpInterceptService {
+        DpInterceptService::new(horizon).with_clock(Arc::new(SteppedClock::new(Duration::ZERO)))
+    }
+
     fn track(id: u64) -> TrackView {
         TrackView {
             id: TrackId(id),
@@ -758,7 +767,7 @@ mod tests {
 
     #[test]
     fn no_tracks_yields_a_fresh_empty_plan_and_stays_healthy() {
-        let mut svc = DpInterceptService::new(10);
+        let mut svc = unhurried(10);
         let outcome = svc.plan(MissionTime(1.0), &[], &[resource(1, true)]);
         // **Fresh and empty**: the sector needs no action, which is an answer.
         assert!(outcome.is_fresh(), "{outcome:?}");
@@ -776,7 +785,7 @@ mod tests {
     /// optimum, which is a real thing an assessment can hand this service.
     #[test]
     fn a_failed_solve_reports_no_plan_rather_than_an_empty_one() {
-        let mut svc = DpInterceptService::new(10);
+        let mut svc = unhurried(10);
         let mut rewards = DMatrix::from_element(1, 1, 1.0);
         rewards[(0, 0)] = f64::NAN;
         let plan = svc.plan_with_rewards(
@@ -800,7 +809,7 @@ mod tests {
     /// stamped with when it was computed**, which is what a planner needs to judge it.
     #[test]
     fn a_failure_after_a_success_returns_the_last_plan_marked_stale() {
-        let mut svc = DpInterceptService::new(10);
+        let mut svc = unhurried(10);
         // A solve with no tracks succeeds trivially and sets the mark.
         assert!(svc
             .plan(MissionTime(1.0), &[], &[resource(1, true)])
@@ -832,7 +841,7 @@ mod tests {
     /// is not proposed, and it is named as withheld rather than silently left out.
     #[test]
     fn a_resource_at_its_reserve_is_withheld_and_named() {
-        let mut svc = DpInterceptService::new(10);
+        let mut svc = unhurried(10);
         let mut at_reserve = resource(2, true);
         at_reserve.magazine = Some(gungnir_model::Magazine {
             rounds_available: 4,
@@ -854,7 +863,7 @@ mod tests {
 
     #[test]
     fn unready_resources_are_never_tasked() {
-        let mut svc = DpInterceptService::new(10);
+        let mut svc = unhurried(10);
         let outcome = svc.plan(MissionTime(1.0), &[track(1)], &[resource(1, false)]);
         assert!(outcome.plan().expect("a plan").is_empty());
         assert!(svc.is_healthy(), "nothing was attempted, so nothing failed");
@@ -899,8 +908,8 @@ mod tests {
     fn two_fresh_planners_agree_when_every_reward_ties() {
         let tracks = [track(70), track(71), track(72)];
         let resources = ready(&[40, 41, 42]);
-        let mut a = DpInterceptService::new(10);
-        let mut b = DpInterceptService::new(10);
+        let mut a = unhurried(10);
+        let mut b = unhurried(10);
         let pa = a.plan(MissionTime(1.0), &tracks, &resources);
         let pb = b.plan(MissionTime(1.0), &tracks, &resources);
         let (pa, pb) = match (pa, pb) {
@@ -926,8 +935,8 @@ mod tests {
         // Row r, column c: resource 40+r against track 70+c. The unique best matching is
         // 40->72, 41->70, 42->71, worth 9 + 8 + 7 = 24.
         let rewards = DMatrix::from_row_slice(3, 3, &[1.0, 2.0, 9.0, 8.0, 1.0, 3.0, 2.0, 7.0, 1.0]);
-        let mut a = DpInterceptService::new(1);
-        let mut b = DpInterceptService::new(1);
+        let mut a = unhurried(1);
+        let mut b = unhurried(1);
         let pa = a.plan_with_rewards(MissionTime(1.0), &tracks, &resources, &rewards);
         let pb = b.plan_with_rewards(MissionTime(1.0), &tracks, &resources, &rewards);
         assert!(a.is_healthy() && b.is_healthy());
@@ -1087,7 +1096,7 @@ mod tests {
         );
         assert!(svc.is_healthy());
 
-        let mut unhurried = DpInterceptService::new(10);
+        let mut unhurried = unhurried(10);
         let expected = unhurried
             .plan(MissionTime(1.0), &grown, &resources)
             .plan()
@@ -1166,7 +1175,7 @@ mod tests {
     /// approval queue with duplicates of the same recommendation at the tick rate.
     #[test]
     fn an_unchanged_assignment_keeps_the_same_plan_over_many_ticks() {
-        let mut svc = DpInterceptService::new(10);
+        let mut svc = unhurried(10);
         let tracks = [track(1)];
         let resources = [resource(1, true)];
 
