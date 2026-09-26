@@ -1737,3 +1737,71 @@
     The desktop falls back and the sentence says which it is: "has not answered since this
     desktop signed in" rather than "silent for 12 s", because an operator reads the two
     differently. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.
+- id: D-72
+  decision: What truth a rehearsal re-observes, when scans fall between truth records
+  question: >-
+    DN-32 §5.1 had both generators write truth at the finest scan period any sensor uses,
+    and a rehearsal refuse to interpolate, on the premise that most scans fall between
+    truth samples. The build found that the generators observe each scan against the state
+    of the first truth tick at or after it. Rewrite all ten sample sets at the finest scan
+    period, or re-observe on the recording's own tick by the rule that made it?
+  raised_in: "GAP-105; `../../design/DN-32-re-observation-for-a-laydown.md` §12"
+  decider: Owner
+  unblocks: GAP-105
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25: the recording's own tick, by the
+    recording's own rule.** A scan at a given time sees the truth record of the first tick
+    at or after it, which is exactly what every recorded detection saw, so no position is
+    ever computed between two records; a truth record off the tick grid is refused. The
+    finer tick was rejected because it would not have delivered its own aim -- every
+    sensor's first scan is at a random phase, so scans would still fall between 0.5 s
+    samples -- and because it would have rewritten all ten committed sets, which gated rows
+    elsewhere measure, for no gain in what §5.1 protects. Interpolation stays refused, as
+    §5.1 said. DN-32 §12; see
+    `../../record/2026-09-25/gap-105-re-observation-for-a-laydown-built.md`.
+- id: D-73
+  decision: Whether a recording's sensor losses and jamming apply to a deployment's sensors
+  question: >-
+    A recording's `environment.json` holds its sea state and, per sensor, its losses and
+    electronic-attack windows, which name the recording's own sensors. DN-32 §5.3 designed
+    the sidecar and was silent on how a window naming the recording's sensor 1 meets a
+    deployment's sensors. Apply it by identifier, transfer it by sensor type, or count it
+    and not apply it?
+  raised_in: "GAP-105; `../../design/DN-32-re-observation-for-a-laydown.md` §5.3 and §12"
+  decider: Owner
+  unblocks: GAP-105
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25: counted, not applied, and the sea
+    state applied to every sensor.** A window naming the recording's sensor is a fact about
+    that sensor, and applying it by identifier is the accidental match DN-32 §5.4 refuses
+    for detection models. Transfer by type was rejected because jamming depends on where
+    the jammer stands, which no recording states, so a transferred window would invent an
+    effect. The rehearsal record counts what it did not apply and PN-16 says so; when the
+    placed sensors are the recording's own, as in the statistical check, every event
+    applies by identifier as the generator applied it. See
+    `../../record/2026-09-25/gap-105-re-observation-for-a-laydown-built.md`.
+- id: D-74
+  decision: How a rehearsal's random draws are seeded
+  question: >-
+    DN-32 §7 seeded a rehearsal's stream from the recording's seed and the laydown's
+    identifier, so the same laydown rehearsed twice gives the same detections. Seeded by the
+    laydown, two laydowns draw differently everywhere, and a sensor both place identically
+    detects differently under each -- so a comparison names sensors nothing moved. Keep the
+    laydown in the seed, or key the draws by what they concern?
+  raised_in: "GAP-105; `../../design/DN-32-re-observation-for-a-laydown.md` §7 and §12"
+  decider: Owner
+  unblocks: GAP-105
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25: common random numbers, keyed by the
+    recording's seed and by sensor and target, never by the laydown.** One stream per
+    sensor for its scan phase, one per sensor for its false alarms, one per sensor and
+    target for detection. The same laydown still gives the same answer twice, which is what
+    §7 asked, and two laydowns differ only where their geometry does: with round 1's
+    baseline, `current` and `c` give S1 the same 634 detections and S2 1 241 and 1 260, and
+    the comparison names S2 alone. One interleaved stream, as the generator uses, was
+    rejected for the same reason as seeding by laydown: moving one sensor would reshuffle
+    every other's detections. See
+    `../../record/2026-09-25/gap-105-re-observation-for-a-laydown-built.md`.

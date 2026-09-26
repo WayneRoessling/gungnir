@@ -248,7 +248,7 @@ uses:
   - {from: RS-analytics, to: [RS-coord, RS-data, RS-geo, RS-model, RS-sensor-management]}
   - {from: RS-analytics, to: [RS-config], kind: dev}
   - {from: RS-api, to: [RS-model, RS-eventing, RS-security, RS-tracking-service, RS-intercept-service, RS-analytics]}
-  - {from: RS-app, to: [RS-coord, RS-tracking-service, RS-intercept-service, RS-remote, RS-resilience, RS-identification, RS-identity, RS-data, RS-data-fusion, RS-render, RS-viewport3d, RS-ui, RS-model, RS-config, RS-mission, RS-eventing, RS-store, RS-time, RS-ingest, RS-observability, RS-workflow, RS-security, RS-policy, RS-command, RS-geo, RS-approval, RS-sensor-management, RS-analytics, RS-assessment, RS-modelops, RS-decision, RS-replay, RS-reporting]}
+  - {from: RS-app, to: [RS-coord, RS-sensor-sim, RS-tracking-service, RS-intercept-service, RS-remote, RS-resilience, RS-identification, RS-identity, RS-data, RS-data-fusion, RS-render, RS-viewport3d, RS-ui, RS-model, RS-config, RS-mission, RS-eventing, RS-store, RS-time, RS-ingest, RS-observability, RS-workflow, RS-security, RS-policy, RS-command, RS-geo, RS-approval, RS-sensor-management, RS-analytics, RS-assessment, RS-modelops, RS-decision, RS-replay, RS-reporting]}
   - {from: RS-app, to: [RS-scenario, RS-api, RS-node], kind: dev}
   - {from: RS-approval, to: [RS-command, RS-policy, RS-intercept-service, RS-security, RS-config, RS-eventing, RS-model]}
   - {from: RS-assessment, to: [RS-model]}
@@ -296,7 +296,7 @@ uses:
   - {from: RS-resilience, to: [RS-model, RS-eventing, RS-store]}
   - {from: RS-rfs, to: [RS-track]}
   - {from: RS-rfs, to: [RS-testkit], kind: dev}
-  - {from: RS-scenario, to: [RS-core, RS-coord, RS-fusion-async]}
+  - {from: RS-scenario, to: [RS-core, RS-coord, RS-fusion-async, RS-sensor-sim]}
   - {from: RS-scenario, to: [RS-testkit], kind: dev}
   - {from: RS-sensor-management, to: [RS-coord, RS-model, RS-config]}
   - {from: RS-store, to: [RS-model, RS-eventing]}

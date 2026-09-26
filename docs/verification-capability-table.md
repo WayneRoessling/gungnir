@@ -218,6 +218,26 @@ states for a budget.
 | Cross-layer | MT-01 with a watch floor (CAP-4.3) | MT-01 saturation replayed with two Operators and a Supervisor on three desktops against one node | Every queued item ends decided once, expired, or escalated; no track is engaged twice by the same shift; every escalation is visible to the Supervisor; every decision is on the node's record (agreed 2026-09-17; **a gate since 2026-09-22**, checked by `gungnir-app/tests/mt01_watch_floor.rs`'s `a_saturated_node_queue_worked_by_three_consoles_ends_every_item_once`) | TT-01 saturation set |
 | `gungnir-app` | The desktop alone (CAP-5.4) | The existing disconnected-profile tests with no node configured | Unchanged: a desktop with no node queues, decides, engages and hands off locally (agreed 2026-09-17; **a gate since 2026-09-17**, checked by `gungnir-app/tests/approval_gate.rs`, `gungnir-app/tests/engagements.rs` and `gungnir-app/tests/endpoint_delivery.rs`) | Existing fixtures |
 
+### Rows drafted from DN-32, 2026-09-25 -- Draft, not agreed, not gates
+
+Six rows, transcribed from `design/DN-32-re-observation-for-a-laydown.md` §10 when GAP-105
+built what that note designs. **All six are Draft.** §10 was not part of the owner's walk
+of DN-32 on 2026-09-17, so no criterion below has been agreed, and none is a gate; each
+cell says so. Each names the test that implements it, and each test passes on the change
+that added it. A row becomes a gate only when the owner agrees its criterion and confirms
+that its test checks it (D-16); until then a failing test here is a test failing, not a
+gate failing. Where the build read a criterion more narrowly than §10's words, the method
+cell says how and DN-32 §12 says why.
+
+| Crate | Capability | Verification method | Pass criterion | Data source |
+|---|---|---|---|---|
+| `gungnir-sensor-sim`, `gungnir-scenario` | Re-observation: the extraction preserves the verified generator (CAP-5.2) | `gungnir-scenario/tests/reference_parity.rs`, unchanged by the extraction | All ten sample sets byte-identical to the Python reference (**Draft**, DN-32 §10; not agreed) | The ten committed sample sets |
+| `gungnir-sensor-sim` | Re-observation matches the recording statistically (CAP-5.2) | Re-observe each sample set's truth with its own sensors at their own positions, pooled over twelve fixed seeds (`gungnir-sensor-sim/tests/statistical_match.rs`). A detection is a detection of a recorded target; false alarms are held to the configured clutter rate, pooled, because a recording's clutter count is one draw from that rate (DN-32 §12) | Per sensor, detection count within 2σ of the recording's; per axis, measurement-residual variance within 2σ of the model's noise -- the same terms as §1's statistical self-check (**Draft**, DN-32 §10; not agreed) | The ten committed sample sets |
+| `gungnir-sensor-sim`, `gungnir-app` | Geometry moves detections (CAP-5.2) | Property test: move a sensor so a target leaves, then enters, its range band (`gungnir-sensor-sim/tests/geometry.rs`); end to end, `gungnir-app/tests/laydown_rehearsal.rs`'s `moving_a_sensor_out_of_range_of_the_raid_empties_its_detections` | Detections of that target stop, then start, and nothing else changes (**Draft**, DN-32 §10; not agreed) | Generated recordings; TT-01 |
+| `gungnir-app` | A laydown sensor with no detection model is refused (CAP-5.2) | Unit test (`gungnir-app/tests/laydown_rehearsal.rs`'s `a_laydown_sensor_with_no_detection_model_is_refused_by_name_and_nothing_runs`; `gungnir-app/src/laydown_rehearsal.rs`'s `a_sensor_is_resolved_to_its_own_named_model_or_refused_by_name`) | Named refusal; no rehearsal runs (**Draft**, DN-32 §10; not agreed) | TT-01; the committed sensor catalogue export |
+| `gungnir-ingest`, `gungnir-app` | Containment of a re-observed detection (CAP-5.2) (human-owned: the ingest gateway) | Live gateway fed a marked observation (`gungnir-ingest/tests/rehearsal_containment.rs`); a manifest adding a forbidden edge (`gungnir-app/tests/dependency_graph.rs`'s `a_manifest_adding_a_forbidden_edge_to_the_sensor_sim_is_named`); a second module naming the crate (`gungnir-app/tests/architecture_compliance.rs`'s `only_the_laydown_rehearsal_names_the_sensor_simulation`) | Rejected and counted; `sensor_sim_misuse` names the edge; the source test names the module (**Draft**, DN-32 §10; not agreed) | Synthetic |
+| `gungnir-app` | Round 1 laydown `c` (CAP-5.2, CAP-1.4) | Rehearse `current` and `c` over the round-1 scenario (`gungnir-app/tests/laydown_rehearsal.rs`'s `round_1s_forward_radar_changes_its_own_detections_and_nothing_else`) | S2's per-sensor detection counts differ, and the record says which sensor the difference came from (**Draft**, DN-32 §10; not agreed) | `testdata/usability/round-1.json`, over a raid down round 1's declared approach written by the test, because no committed recording reaches round 1's radars (GAP-147) |
+
 ### Rows added by plan 11, agreed 2026-09-05
 
 The twenty-three rows below come from the design notes in `design/`, covering twenty-two

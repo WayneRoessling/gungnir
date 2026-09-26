@@ -29,7 +29,7 @@ Diagrams (rendered under `rendered/resources/` by the render scripts in the UAF 
 | RS-allocation `gungnir-allocation` | `gungnir-core` | `gungnir-testkit` |
 | RS-analytics `gungnir-analytics` | `gungnir-coord`, `gungnir-data`, `gungnir-geo`, `gungnir-model`, `gungnir-sensor-management` | `gungnir-config` |
 | RS-api `gungnir-api` | `gungnir-model`, `gungnir-eventing`, `gungnir-security`, `gungnir-tracking-service`, `gungnir-intercept-service`, `gungnir-analytics` |  |
-| RS-app `gungnir-app` | `gungnir-coord`, `gungnir-tracking-service`, `gungnir-intercept-service`, `gungnir-remote`, `gungnir-resilience`, `gungnir-identification`, `gungnir-identity`, `gungnir-data`, `gungnir-data-fusion`, `gungnir-render`, `gungnir-viewport3d`, `gungnir-ui`, `gungnir-model`, `gungnir-config`, `gungnir-mission`, `gungnir-eventing`, `gungnir-store`, `gungnir-time`, `gungnir-ingest`, `gungnir-observability`, `gungnir-workflow`, `gungnir-security`, `gungnir-policy`, `gungnir-command`, `gungnir-geo`, `gungnir-approval`, `gungnir-sensor-management`, `gungnir-analytics`, `gungnir-assessment`, `gungnir-modelops`, `gungnir-decision`, `gungnir-replay`, `gungnir-reporting` | `gungnir-scenario`, `gungnir-api`, `gungnir-node` |
+| RS-app `gungnir-app` | `gungnir-coord`, `gungnir-sensor-sim`, `gungnir-tracking-service`, `gungnir-intercept-service`, `gungnir-remote`, `gungnir-resilience`, `gungnir-identification`, `gungnir-identity`, `gungnir-data`, `gungnir-data-fusion`, `gungnir-render`, `gungnir-viewport3d`, `gungnir-ui`, `gungnir-model`, `gungnir-config`, `gungnir-mission`, `gungnir-eventing`, `gungnir-store`, `gungnir-time`, `gungnir-ingest`, `gungnir-observability`, `gungnir-workflow`, `gungnir-security`, `gungnir-policy`, `gungnir-command`, `gungnir-geo`, `gungnir-approval`, `gungnir-sensor-management`, `gungnir-analytics`, `gungnir-assessment`, `gungnir-modelops`, `gungnir-decision`, `gungnir-replay`, `gungnir-reporting` | `gungnir-scenario`, `gungnir-api`, `gungnir-node` |
 | RS-approval `gungnir-approval` | `gungnir-command`, `gungnir-policy`, `gungnir-intercept-service`, `gungnir-security`, `gungnir-config`, `gungnir-eventing`, `gungnir-model` |  |
 | RS-assessment `gungnir-assessment` | `gungnir-model` |  |
 | RS-association `gungnir-association` | `gungnir-filters` | `gungnir-testkit` |
@@ -66,9 +66,10 @@ Diagrams (rendered under `rendered/resources/` by the render scripts in the UAF 
 | RS-reporting `gungnir-reporting` | `gungnir-model`, `gungnir-eventing`, `gungnir-store`, `gungnir-metrics`, `gungnir-identity` |  |
 | RS-resilience `gungnir-resilience` | `gungnir-model`, `gungnir-eventing`, `gungnir-store` |  |
 | RS-rfs `gungnir-rfs` | `gungnir-track` | `gungnir-testkit` |
-| RS-scenario `gungnir-scenario` | `gungnir-core`, `gungnir-coord`, `gungnir-fusion-async` | `gungnir-testkit` |
+| RS-scenario `gungnir-scenario` | `gungnir-core`, `gungnir-coord`, `gungnir-fusion-async`, `gungnir-sensor-sim` | `gungnir-testkit` |
 | RS-security `gungnir-security` | none |  |
 | RS-sensor-management `gungnir-sensor-management` | `gungnir-coord`, `gungnir-model`, `gungnir-config` |  |
+| RS-sensor-sim `gungnir-sensor-sim` | none |  |
 | RS-store `gungnir-store` | `gungnir-model`, `gungnir-eventing` |  |
 | RS-testkit `gungnir-testkit` | none |  |
 | RS-time `gungnir-time` | `gungnir-model` |  |
