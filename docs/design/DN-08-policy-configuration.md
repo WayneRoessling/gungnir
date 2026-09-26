@@ -232,9 +232,60 @@ approval queue has quietly stopped filling and looks exactly like a quiet sector
 Still open after this amendment: §7's PN-17 row, and the TT-02 replay §8 names as the data
 source for the supersession case, which needs GAP-046.
 
+## 10. Amendment 2: applying a baseline, section by section
+
+Raised by GAP-162 on 2026-09-26; decided by the owner the same day (D-91). Not a
+signature: see `../signatures.md` for what is signed.
+
+**What was wrong.** §4's authority matrix gives weapons control status and plan apply to
+the supervisor and the commander, and calibration and sensor baselines to the sensor
+manager, but the code had one action, `config.apply`, for a whole baseline. The sensor
+manager held it for its calibration row, so a baseline it applied could change
+`policy.control_status` and the authority rules all the same. And
+`ConfigEditorState::apply` checked no permission at all: PN-14 hid the control, so the
+rule held for a person at the screen and for nothing else that called the function.
+
+**(a) Two apply actions, one per §4 row.** `config.apply` is a whole baseline ("Plan
+apply"); `config.apply_sensing` is a baseline that changes only its sensing sections (the
+calibration row). The sensor manager holds the second alone; the supervisor, the
+commander and the administrator hold both.
+
+**(b) What a candidate changes decides what it needs.** `gungnir_config::changed_sections`
+compares the candidate with the baseline in force -- the one most recently applied in
+this process, or the one running -- and names every section that differs, each with a
+kind. It binds every field of `ConfigBaseline` and of `PolicySettings` by name, so a field
+added without a kind does not compile. `version` and `revision` are not sections. Each
+kind needs:
+
+| Kind | Sections | Needs |
+|---|---|---|
+| Sensing | sensors; the radar, AIS, ADS-B, MISB and SAPIENT feeds and the SAPIENT node id; laydowns; tracking; terrain; point cloud; the sensor-task acknowledgement window | `config.apply_sensing` |
+| Engagement chain | every `policy` section; resources; assets; geofences; hazards; approaches; the allocation horizon and solve budget; assessment | `config.apply` and `weapons.control_status` |
+| Security | security; machine identities; retention | `config.apply` and `account.assign_role` |
+| Deployment | everything else | `config.apply` |
+
+The engagement chain needs weapons control status because a baseline that rewrote the
+control status or the authority rules would be the engagement chain reached through a
+file, which D-88 withholds from every role but the supervisor and the commander. The
+security section needs account administration because it holds the accounts, keys and
+trust roots the administrator already administers.
+
+**(c) Refused whole.** A candidate that changes any section its applier may not change is
+refused and nothing is written or recorded; the refusal names each section and the
+action it needs. Writing the permitted part would write a version nobody validated as a
+whole. PN-14 says so before apply is pressed (`ApplyState::Refused`), so the change can
+be split or taken to the role that holds it.
+
+**(d) Checked inside `apply`.** Before anything is read or written: whether the role may
+apply a baseline at all, then the sections. A successful apply's audit entry names the
+sections it changed.
+
+The rule is written into `../mission/roles-and-stakeholders.md` §4 ("Applying a baseline,
+section by section"), which `gungnir-security/tests/role_matrix.rs` reads.
+
 ## Traceability
 
-GAP-052 (retyped, plan 11 finding F-1); CAP-5.6, CAP-3.6; D-05, D-15;
+GAP-162, D-91 (amendment 2); GAP-052 (retyped, plan 11 finding F-1); CAP-5.6, CAP-3.6; D-05, D-15;
 `../mission/roles-and-stakeholders.md` §4 for the authority matrix;
 `../ux/wireframes/WF-14-config-editor.puml`; principles AP-01, AP-02, AP-17.
 Read by DN-09, DN-10, and gaps GAP-012, GAP-018, GAP-058.

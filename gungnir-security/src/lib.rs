@@ -175,7 +175,16 @@ pub mod actions {
     pub const SUBMIT_DETECTION: &str = "detection.submit";
     pub const DECIDE_PLAN: &str = "plan.decide";
     pub const OVERRIDE_PLAN: &str = "plan.override";
+    /// Applying a whole configuration baseline: §4's "Plan apply" row. Each section a
+    /// baseline changes needs its own action as well (GAP-162, D-91): a change to the
+    /// engagement chain needs [`SET_CONTROL_STATUS`], a change to the security section
+    /// needs [`ASSIGN_ROLE`]. `gungnir-app`'s PN-14 apply checks both.
     pub const APPLY_CONFIG: &str = "config.apply";
+    /// Applying a baseline that changes only its sensing sections -- sensors, feeds,
+    /// laydowns, tracking calibration, terrain and point clouds: §4's "Apply a sensor or
+    /// calibration baseline" row (GAP-162, D-91). The sensor manager's grant, held
+    /// alongside [`APPLY_CONFIG`] by the roles that may apply a whole baseline.
+    pub const APPLY_SENSING_CONFIG: &str = "config.apply_sensing";
     pub const TASK_SENSOR: &str = "sensor.task";
     pub const PROMOTE_MODEL: &str = "model.promote";
     pub const EXPORT_REPORT: &str = "report.export";
@@ -243,6 +252,7 @@ pub mod actions {
         DECIDE_PLAN,
         OVERRIDE_PLAN,
         APPLY_CONFIG,
+        APPLY_SENSING_CONFIG,
         TASK_SENSOR,
         PROMOTE_MODEL,
         EXPORT_REPORT,

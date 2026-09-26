@@ -652,6 +652,10 @@ fn a_baseline_apply_is_audited_under_the_signed_in_operator() {
             .expect("an apply is audited")
     };
 
+    // With nobody signed in the desktop acts in its selected role, which is Operator by
+    // default and may not apply a baseline (GAP-162): select one that may. The selection
+    // is never recorded as anybody's authority, so the entry still names nobody.
+    state.set_role(Role::SensorManager);
     assert_eq!(apply(&mut state, 2), None, "nobody is signed in");
     state
         .sign_in(&LocalAccountAuthority::credential(

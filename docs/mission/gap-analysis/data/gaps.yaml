@@ -10253,6 +10253,18 @@
       not withheld for it, because withholding it would take away the calibration
       baselines §2 gives the role. Filed rather than narrowed, since the answer is a
       per-section check, not a different coarse grant.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Built, per D-91 and DN-08 §10.** The sensor manager holds `config.apply_sensing`,
+      not `config.apply`, and §4 gains "Applying a baseline, section by section".
+      `ConfigEditorState::apply` refuses a role that may not apply, then any candidate
+      changing a section the role does not hold (the engagement chain needs
+      `weapons.control_status`, security `account.assign_role`), refused whole with each
+      section named; PN-14 says so before apply is pressed.
+      `gungnir-app/tests/config_apply_authority.rs` covers four roles. Human-owned
+      (`gungnir-security`); see `../../signatures.md` and
+      `../../record/2026-09-26/a-baseline-applied-section-by-section.md`.
 
 - id: GAP-163
   name: A cut tail of the audit log still verifies, because nothing outside it holds its head
