@@ -176,15 +176,16 @@ history, and an entry is never edited once it has merged.
 | GAP-167 | The outage tests' proxy can let one connection through a cut | Technical | CAP-5.4 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 | GAP-164 | The miri gate could not run miri | Technical | CAP-7.4 | 3 | 5 | S | 15 | I2 | Services engineer | Closed |
 | GAP-166 | nalgebra's decompositions violate Stacked Borrows | Technical | CAP-7.4 | 2 | 5 | S | 10 | I2 | Owner | Open |
-| GAP-175 | A global entity identity is written as a 128-bit JSON number | Technical | CAP-7.2, CAP-2.7 | 2 | 5 | S | 10 | I3 | Services engineer | Open |
-| GAP-171 | The other v3 bodies, and every exchange product's body, still write a non-finite float as null | Technical | CAP-7.1, CAP-7.4 | 3 | 6 | M | 18 | I3 | Services engineer | Open |
+| GAP-175 | A global entity identity is written as a 128-bit JSON number | Technical | CAP-7.2, CAP-2.7 | 2 | 5 | S | 10 | I3 | Services engineer | Closed |
+| GAP-171 | The other v3 bodies, and every exchange product's body, still write a non-finite float as null | Technical | CAP-7.1, CAP-7.4 | 3 | 6 | M | 18 | I3 | Services engineer | Closed |
 | GAP-173 | The late-data row still says nothing consumes the policy | Technical | CAP-1.5 | 3 | 7 | S | 21 | I3 | Owner | Open |
 | GAP-168 | The intercept-service row's degradation clause stops at the last good plan | Technical | CAP-3.3, CAP-5.5 | 1 | 8 | S | 8 | I3 | Owner | Open |
-| GAP-169 | An older desktop reads a newer node's interim plan as the optimum | Technical | CAP-3.3, CAP-7.3 | 2 | 5 | S | 10 | I3 | Owner | Open |
+| GAP-169 | An older desktop reads a newer node's interim plan as the optimum | Technical | CAP-3.3, CAP-7.3 | 2 | 5 | S | 10 | I3 | Owner | Closed |
 | GAP-170 | PN-09's refusal test left its wait before the desktop had seen its link | Technical | CAP-7.3 | 1 | 1 | S | 1 | I3 | Services engineer | Closed |
 | GAP-179 | A node's audit record and its verification reach only the node's log | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-176 | A warning posted to a warned party and a handoff posted to an effector still write a non-finite float as null | Technical | CAP-4.4, CAP-4.5 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
 
-Counts: 170 gaps, 3 mission, 167 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 171 gaps, 3 mission, 168 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2499,11 +2500,12 @@ Counts: 170 gaps, 3 mission, 167 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.2 Interop standards; CAP-2.7 Global identity.
 - History:
   - 2026-09-26, Open: Found by GAP-117's round trip. Not fixed there: changing the writer without a reader for the old form would leave every journal written since GAP-069 with identity events it cannot read, and how to read them is a decision this needs.
+  - 2026-09-26, Closed: Closed as the owner decided (D-101): `GlobalEntityId` is written as the hyphenated RFC 9562 string through D-60's `gungnir_model::identifier::wire` and reads from that or a number; a number wider than 64 bits is read exactly from its digits by `gungnir_eventing::nonfinite::from_line`, which reads every journal line and v3 frame, and refused rather than rounded anywhere else. `SCHEMA_VERSION` is 5, the path stays `/v3`. `serde_round_trip.rs` takes each tag with `serde_json::to_value` now. Tests: `gungnir-app/tests/pre_gap_175_journal.rs` reads `testdata/journals/pre-gap-175/`, two sessions a desktop wrote before the change with real v7 identities no double holds, to the exact identities, writes them as text, and restarts a desktop over them with the same two entities; it fails with the digit reader removed. See `../../record/2026-09-26/an-identity-written-as-text-and-no-float.md`.
 - Evidence: `gungnir-model/src/identity.rs` (the derived `Serialize` and `Deserialize` on `GlobalEntityId(pub u128)`); `gungnir-interop/src/lib.rs` (the catalogue entry's `TextualIdentity { rfc: 9562 }`); `json_tag` in `gungnir-model/tests/serde_round_trip.rs`, which met it.
 - Severity: 2. Reach: 5 threads. Effort: S. Priority: 10.
 - Impact: `GlobalEntityId` serializes as its `u128`, so `serde_json::to_value` refuses any value carrying one ("number out of range"), a JSON reader outside Rust rounds it to a double and can merge or split entities, and the schema catalogue's `gungnir.GlobalEntityId` entry says an identity crosses as RFC 9562 text, which no document carries. D-60 fixed the same defect for the three record identifiers and did not reach this type. No path passes an identity event through a `Value` today, so nothing has been lost yet.
 - Closing action: Write `GlobalEntityId` as the hyphenated RFC 9562 string, as D-60 does for the record identifiers, and decide how a journal holding the number is read: through `deserialize_any`, `serde_json` hands a number wider than 64 bits to the visitor as a float, so D-60's reader cannot read the identities written since GAP-069. Then assert `serde_json::to_value` of an `IdentityEvent` in `serde_round_trip.rs`.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found by GAP-117's round trip (`../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`).
 - Depends on: D-60.
 
@@ -2513,11 +2515,12 @@ Counts: 170 gaps, 3 mission, 167 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.1 Versioned interface; CAP-7.4 Peer and coalition exchange.
 - History:
   - 2026-09-26, Open: Found closing GAP-153. Not widened into it: the exchange body is a write path the owner reviews and a format DN-18 decides, and no live producer puts a non-finite value in any of these bodies today.
+  - 2026-09-26, Closed: Closed as the owner decided (D-102, D-103). The queue, coverage, both session routes and the answers to a sensor task, a decision and a forwarded batch take D-96's lossless form, and the desktop's link reads each by its marker. A partner is sent JSON: each non-finite float in an exchange product's body, and in the answer around it, is DN-18 §15's `{"unavailable": ...}` object, built by `gungnir_eventing::nonfinite::to_partner_value` for the node's and the desktop's producers; an all-finite body is byte for byte what it was. Tests: `a_nan_and_an_infinity_in_a_queue_item_reach_a_linked_desktop` and `a_nan_and_an_infinity_in_coverage_cross_the_route` (`gungnir-remote/tests/transport.rs`), and `a_report_carrying_a_nan_reaches_its_partner_marked_unavailable_and_a_finite_one_unchanged` (`gungnir-app/tests/cut_off_and_reconnected.rs`), over mutual TLS. The changed `gungnir-api` handlers include write paths, so the change is human-owned; see `docs/signatures.md`. Raised GAP-176. See `../../record/2026-09-26/an-identity-written-as-text-and-no-float.md`.
 - Evidence: `gungnir-api/src/v3/mod.rs` (`ExchangeProduct::body: serde_json::Value`); `gungnir-app/src/sustainment.rs`, `handoffs.rs`, `launch_warning.rs` and `desk.rs` build it with `serde_json::to_value`; `gungnir-api/src/transport.rs` (the queue, coverage and exchange handlers' `Json`).
 - Severity: 3. Reach: 6 threads. Effort: M. Priority: 18.
 - Impact: GAP-153 gave the stream, the history and the snapshot the journal's lossless form. The queue view, coverage and the exchange routes are still plain `serde_json`, so a non-finite float in one is `null`, which a desktop fails to decode. Worse, an exchange product's `body` is a `serde_json::Value`, which cannot hold a non-finite float at all: `serde_json::to_value` turns one into `null` without an error, so a mission report with a NaN measure would reach a partner with that figure silently blanked.
 - Closing action: Decide how a partner is sent a non-finite value (DN-18's format, and the `POST` side is a human-owned `gungnir-api` write path): carry the product body as the lossless line rather than a `Value`, or refuse and say so at publish; and give the remaining read routes the form the snapshot has.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-153 (`../../record/2026-09-26/the-report-and-every-float-reach-the-partner.md`).
 - Depends on: GAP-153.
 
@@ -2555,11 +2558,12 @@ Counts: 170 gaps, 3 mission, 167 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.3 Assignment recommendation; CAP-7.3 Three profiles.
 - History:
   - 2026-09-26, Open: Found building GAP-156. Not decided there: a version move refuses every older client of every route, which is a release decision rather than the planner's.
+  - 2026-09-26, Closed: Closed by the owner's decision of 2026-09-26 to keep GAP-175's schema move: D-101 takes `SCHEMA_VERSION` from 4 to 5, so a desktop built before `PlanView::basis` is refused at connect with both versions named and can never read a v5 node's interim plan as the optimum. Mixed-version fleets are refused, not supported.
 - Evidence: `gungnir-model/src/lib.rs` (`PlanView::basis`, defaulted to `Exact`); `docs/gungnir-api-v1.md`, "Compatibility rules"; `gungnir-remote/src/link.rs` (the snapshot's version check is an exact match, so a bump refuses an older desktop by name).
 - Severity: 2. Reach: 5 threads. Effort: S. Priority: 10.
 - Impact: `PlanView::basis` and the snapshot's `plan_standing` are defaulted, which the interface's rules call compatible, so `SCHEMA_VERSION` stands at 4 and a desktop built before them still links to a newer node. That desktop ignores the basis: it draws a node's interim plan on PN-05 and in PN-06 and PN-07 as an ordinary plan, and would let it be accepted without the acknowledgement D-93 puts on it. The same rules name a change "a client could read as valid and act on wrongly" as one that moves a version. Node and desktop are built from one workspace and released together, so the exposure is a fleet running mixed versions.
 - Closing action: Decide between moving `SCHEMA_VERSION` to 5, so an older desktop is refused by name -- and with it every older machine client, since a detection submission's version is checked exactly -- and recording that a node and its desktops are released together and a mixed fleet is not supported.
-- Target: I3. Owner: Owner. Status: Open.
+- Target: I3. Owner: Owner. Status: Closed.
 - Reference: Found building GAP-156 (`../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`).
 - Depends on: GAP-156, GAP-157.
 
@@ -2590,4 +2594,18 @@ Counts: 170 gaps, 3 mission, 167 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
 - Reference: Found building GAP-163 (`../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`).
 - Depends on: GAP-163.
+
+**GAP-176 A warning posted to a warned party and a handoff posted to an effector still write a non-finite float as null**
+
+- Type: Technical.
+- Capability: CAP-4.4 Handoff with provenance; CAP-4.5 Warn assets and authorities.
+- History:
+  - 2026-09-26, Open: Found closing GAP-171. Not widened into it: each payload's format belongs to its own contract, which the owner's GAP-171 decision did not name, and no live producer puts a non-finite value in either today.
+- Evidence: `gungnir-app/src/warnings.rs` (`EndpointDelivery::deliver`) and `gungnir-approval/src/handoffs.rs` (the handoff payload), each `serde_json::to_value(...).unwrap_or(serde_json::Value::Null)`.
+- Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
+- Impact: GAP-171 stopped a partner-bound exchange body blanking a NaN or an infinity. The two posts to an outside endpoint are built the same way and were not in its scope: the launch or threat warning a desktop posts to a warned party's endpoint, and the handoff a desktop or a node posts to an effector, are each `serde_json::to_value` of the record, so a non-finite figure in either reaches the receiver as `null`, silently, indistinguishable from an absent one.
+- Closing action: Decide whether an endpoint's payload takes DN-18 §15's "value unavailable" object, as exchange does, and say so in the effector and warning contracts (DN-07, DN-03); then build it with `gungnir_eventing::nonfinite::to_partner_value` and test a non-finite figure reaching a real endpoint.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found closing GAP-171 (`../../record/2026-09-26/an-identity-written-as-text-and-no-float.md`).
+- Depends on: GAP-171.
 

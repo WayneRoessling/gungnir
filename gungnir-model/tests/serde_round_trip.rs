@@ -1253,13 +1253,13 @@ fn round_trip<T: Serialize + DeserializeOwned + PartialEq + Debug>(what: &str, v
 /// The tag serde writes for an externally tagged enum value: the string of a unit
 /// variant, or the one key of any other.
 ///
-/// Read back from the text rather than taken with `serde_json::to_value`, which refuses
-/// a `GlobalEntityId` outright: it is written as a 128-bit number, which a
-/// `serde_json::Value` cannot hold (GAP-175, found by this file). Parsing the text rounds
-/// that number to a float, which does not matter to a tag.
+/// Taken with `serde_json::to_value`, so every value in this file is also shown to go
+/// into a `serde_json::Value`, the form an exchange product's body and an effector's
+/// payload take. Until GAP-175 this read the text back instead, because `to_value`
+/// refused a `GlobalEntityId` outright: it was written as a 128-bit number, which a
+/// `Value` cannot hold. It is RFC 9562 text now (D-101).
 fn json_tag<T: Serialize>(value: &T) -> String {
-    let text = serde_json::to_string(value).unwrap_or_else(|e| panic!("encode: {e}"));
-    match serde_json::from_str::<serde_json::Value>(&text) {
+    match serde_json::to_value(value) {
         Ok(serde_json::Value::String(tag)) => tag,
         Ok(serde_json::Value::Object(map)) if map.len() == 1 => {
             map.keys().next().cloned().unwrap_or_default()

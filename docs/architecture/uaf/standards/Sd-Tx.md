@@ -23,7 +23,7 @@ Status: first draft, 2026-09-04.
 | Cooperative identity | SD-10 ADS-B 1090 ES (RTCA DO-260B) | air cooperative identity | planned (D-09, GAP-010) |
 | Transport | SD-06 HTTP/1.1 (RFC 9112); SD-07 WebSocket (RFC 6455) | the API and its event stream | planned (GAP-041) |
 | Security | SD-08 TLS 1.3 (RFC 8446) | every network crossing; mutual for machines (D-02) | planned (GAP-060) |
-| Identity | SD-11 UUID v7 (RFC 9562) | `GlobalEntityId` textual form | planned (D-11, GAP-069) |
+| Identity | SD-11 UUID v7 (RFC 9562) | `GlobalEntityId` textual form | real: minted since GAP-069 (D-11), and written on every wire and in every journal in this form since GAP-175 (D-101) |
 | Packaging and release | SD-12 OCI container image | the service node | real |
 | Packaging and release | SD-13 SBOM and signed releases | every release | planned (GAP-061) |
 | Architecture | SD-14 UAF 1.2 (OMG) | this description | real |
