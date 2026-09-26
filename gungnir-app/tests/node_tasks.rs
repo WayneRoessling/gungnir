@@ -37,6 +37,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
             max_range_m: 50_000.0,
             control_endpoint: Some("radar-1-control".into()),
             maintenance: Vec::new(),
+            detection_model: None,
         }],
         endpoints: vec![EndpointConfig {
             name: "radar-1-control".into(),

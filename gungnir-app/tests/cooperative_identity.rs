@@ -72,6 +72,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
             max_range_m: 60_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
         }],
         ais_feeds: vec![AisFeedConfig {
             name: "harbour".into(),

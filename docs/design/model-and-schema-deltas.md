@@ -25,6 +25,7 @@ is how a canonical model stops being canonical.
 | `SensorTaskId` | DN-11 | The event schema carries it, and the model cannot depend on the crate that issues the tasks; `gungnir-sensor-management` re-exports it (added 2026-09-05 with GAP-004) |
 | `Concurrence` | DN-11 amendment 1 (b) | Who concurred with tasking a requirement, distinguishing an attributed operator from a role that acted with no operator session (GAP-057). Workflow writes it, the interface publishes it (added 2026-09-05 with GAP-005) |
 | `PeerOrigin` | DN-16 | Attaches to `Provenance` |
+| `RehearsalOrigin` | DN-32 §6; GAP-105, 2026-09-25 | Attaches to `Provenance`: which recording, which laydown and which seed a re-observed detection came from, so the gateway, the exchange and a reader of the record can each tell it from a sensor's. `gungnir-sensor-sim` sits beneath the model and marks its observations with its own `SimulationMark`; the desktop converts |
 | `Releasability` | DN-17 | Every markable type carries it |
 | `Handoff`, `DecisionAttribution`, `EffectorReport` | DN-07 | The journal records them and the interface carries them |
 | `ExchangeAgreement`, `ExchangeItem`, `ExchangeFormat` | DN-18 | Configuration writes them, the interface enforces them |
@@ -35,6 +36,7 @@ is how a canonical model stops being canonical.
 |---|---|---|---|
 | `ResourceView` | Gains `layer`, `cost`, `magazine` | Yes | DN-04 |
 | `Provenance` | Gains `peer: Option<PeerOrigin>` | Yes | DN-16 |
+| `Provenance` | Gains `rehearsal: Option<RehearsalOrigin>`, defaulted when absent and left out when `None` | Yes: every existing record, journal and fixture reads and is written byte for byte as before, so `SCHEMA_VERSION` is unchanged | DN-32 §6 mechanism 1; GAP-105. A live `IngestGateway` refuses a detection carrying it; the Arrow exchange refuses rather than strips it |
 | `TrackView`, `PlanView`, `MissionReport`, `Handoff`, `Anomaly` | Gain `releasability` | Yes, defaulting to `Internal` | DN-17 |
 | `CommandEvent::Decided` | Gains `decision: DecisionId` | Yes | DN-06 |
 | `CommandEvent::Decided` | Gains `role: Option<String>`, the signed-in account's role, `None` with nobody signed in | Yes, defaulted, so an older journal reads | D-53 (2026-09-16): the arbitration rule needs a role to rank |
@@ -134,6 +136,7 @@ one exception.
 | `radar_feeds[].df_sites: Vec<DfSiteConfig>` (GAP-100, 2026-09-08) | external standards §9.1 | Empty, every Category 205 report counted `unknown_radar`; SAC/SIC and the sensor named for position, so an unknown sensor, a SAC/SIC or a sensor bound twice, and an `azimuth_sigma_rad` that is not finite and positive are all rejected -- never defaulted, since edition 1.0 carries no usable angular error on the wire |
 | `radar_feeds[].uas_sites: Vec<UasSiteConfig>` (GAP-101, 2026-09-08) | external standards §9.3 | Empty, every Category 129 report counted `unknown_radar`; SAC/SIC and the sensor it takes its identity from, no position, so an unknown sensor or a SAC/SIC or a sensor bound twice is rejected. **`00`/`00` is accepted**, being the specification's own recommended pair for an airborne-to-ground broadcast; it is the duplicate that is refused, not the placeholder. **A feed binds a radar, a direction finder or a UAS gateway**; one that binds none of the three is rejected |
 | `policy.delegation.disconnected_lapse_s` (GAP-134, 2026-09-17) | DN-31 §7, D-15 | **None, and absent is not a default interval**: a desktop cut off under a baseline that states none holds no delegation from the moment it falls back. Stated, it must be finite and positive, or the baseline is refused |
+| `sensors[].detection_model` (GAP-105, 2026-09-25) | DN-32 §5.4 | **Absent, and absent means the sensor cannot be rehearsed**: a laydown rehearsal refuses by name a laydown that places it in an observing mode, and never infers a model from `modality` and `max_range_m` or borrows a recording's sensor of the same identifier. Present, it names a sensor type in `testdata/tracks/sensor-models.json`; an empty or spaced name is refused at load, an unknown one by the rehearsal that reads the catalogue |
 
 **`resources[].layer` is the only mandatory addition.** It is mandatory because MOE-03 is
 defined by it, and defaulting it would silently corrupt the product's headline measure.

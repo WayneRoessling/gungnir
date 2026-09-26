@@ -46,6 +46,7 @@ fn sensor(windows: Vec<MaintenanceWindowConfig>) -> SensorConfig {
         max_range_m: 20_000.0,
         control_endpoint: None,
         maintenance: windows,
+        detection_model: None,
     }
 }
 

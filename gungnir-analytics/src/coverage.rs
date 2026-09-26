@@ -398,6 +398,7 @@ mod tests {
                 max_range_m: 1_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
             },
             SensorConfig {
                 id: 2,
@@ -406,6 +407,7 @@ mod tests {
                 max_range_m: 1_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
             },
         ];
         let mut registry = InMemorySensorRegistry::from_config(&configs, "cal-1");

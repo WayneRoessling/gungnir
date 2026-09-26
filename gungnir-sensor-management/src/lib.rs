@@ -648,6 +648,7 @@ mod service_observation_tests {
                 max_range_m: 20_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
             }],
             "v1",
         )
@@ -959,6 +960,7 @@ mod tests {
                 max_range_m: 50_000.0,
                 control_endpoint: Some("radar-control".into()),
                 maintenance: Vec::new(),
+                detection_model: None,
             }],
             "v1",
         )
@@ -1016,6 +1018,7 @@ mod tests {
                 max_range_m: 50_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
             }],
             "v1",
         );
@@ -1134,6 +1137,7 @@ mod tests {
                     max_range_m: 20_000.0,
                     control_endpoint: None,
                     maintenance: Vec::new(),
+                    detection_model: None,
                 },
                 SensorConfig {
                     id: 2,
@@ -1142,6 +1146,7 @@ mod tests {
                     max_range_m: 5_000.0,
                     control_endpoint: None,
                     maintenance: Vec::new(),
+                    detection_model: None,
                 },
             ],
             "cal-2026-09",
@@ -1162,6 +1167,7 @@ mod tests {
                     to_s: 20.0,
                     reason: "antenna swap".into(),
                 }],
+                detection_model: None,
             }],
             "cal-2026-09",
         )

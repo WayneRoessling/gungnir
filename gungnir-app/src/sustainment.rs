@@ -1602,7 +1602,12 @@ pub enum PlanningRows {
 /// Mirrors [`coverage_report`]'s own frame, approach and terrain-masking choices exactly,
 /// for the same reason PN-11 and this panel must agree: the current laydown's row here
 /// and PN-11's live picture are the same computation over the same inputs.
+///
+/// Each row also carries its laydown's last rehearsal, read from the run
+/// (`AppState::row_rehearsal`, GAP-105): coverage is arithmetic over declared placements,
+/// and a rehearsal is what those placements' own sensors re-observed of a recording.
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn planning_rows(state: &AppState) -> PlanningRows {
     use gungnir_ui::panels::planning::{LaydownCoverage, LaydownRow};
 
@@ -1624,6 +1629,8 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
                 coverage: LaydownCoverage::NotComputed {
                     reason: reason.to_string(),
                 },
+                // A rehearsal is read from its run, whether or not coverage computes.
+                rehearsal: state.row_rehearsal(&l.id, l.current),
             })
             .collect()
     };
@@ -1722,6 +1729,7 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
                     uncovered_m,
                     delta_uncovered_m,
                 },
+                rehearsal: state.row_rehearsal(&l.id, l.current),
             }
         })
         .collect();

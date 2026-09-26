@@ -968,18 +968,85 @@ impl AppState {
     /// PN-16's rehearsal section for whichever laydown is selected right now (GAP-045).
     #[must_use]
     pub fn rehearsal_section(&self) -> gungnir_ui::panels::planning::RehearsalSection {
-        use gungnir_ui::panels::planning::{RehearsalSection, RehearsalSummary};
+        use gungnir_ui::panels::planning::{RehearsalSection, RehearsalSummary, RehearsedSensor};
         let Some(id) = self.selected_laydown() else {
             return RehearsalSection::NothingSelected;
         };
-        match self.rehearsal_records.get(id) {
-            Some(record) => RehearsalSection::Ran(RehearsalSummary {
-                scenario: record.scenario,
-                tracks_formed: record.tracks_formed,
-                decisions_raised: record.decisions_raised,
-                decisions_expired: record.decisions_expired,
-            }),
-            None => RehearsalSection::NotYetRun,
+        let Some(record) = self.rehearsal_records.get(id) else {
+            return RehearsalSection::NotYetRun;
+        };
+        // Per sensor, against the current laydown's rehearsal of the same recording --
+        // the comparison DN-32 §10's round-1 row asks for -- and never against a
+        // rehearsal of another recording, or the current laydown against itself.
+        let current = self
+            .current_rehearsal()
+            .filter(|c| c.laydown != record.laydown && c.scenario == record.scenario);
+        RehearsalSection::Ran(RehearsalSummary {
+            scenario: record.scenario,
+            seed: record.seed,
+            tracks_formed: record.tracks_formed,
+            decisions_raised: record.decisions_raised,
+            decisions_expired: record.decisions_expired,
+            sensors: record
+                .sensors
+                .iter()
+                .map(|s| RehearsedSensor {
+                    sensor: s.sensor.0,
+                    detection_model: s.detection_model.clone(),
+                    detections: s.detections,
+                    false_alarms: s.false_alarms,
+                    delta_from_current: current.and_then(|c| {
+                        let theirs = c.sensors.iter().find(|x| x.sensor == s.sensor)?;
+                        Some(signed(s.detections) - signed(theirs.detections))
+                    }),
+                })
+                .collect(),
+            recording_events_not_applied: record.recording_events_not_applied,
+        })
+    }
+
+    /// The current laydown's last rehearsal, if it has one.
+    fn current_rehearsal(&self) -> Option<&crate::laydown_rehearsal::RehearsalRecord> {
+        let current = self.config.laydowns.iter().find(|l| l.current)?;
+        self.rehearsal_records.get(&current.id)
+    }
+
+    /// PN-16's table cells for one laydown's rehearsal (GAP-105): read from its last run
+    /// rather than from its declared placements, and compared with the current laydown's
+    /// run only when both re-observed the same recording, naming the sensors the
+    /// difference came from.
+    #[must_use]
+    pub fn row_rehearsal(
+        &self,
+        id: &gungnir_model::LaydownId,
+        current: bool,
+    ) -> gungnir_ui::panels::planning::RowRehearsal {
+        use gungnir_ui::panels::planning::{RowRehearsal, VersusCurrent};
+        let Some(record) = self.rehearsal_records.get(id) else {
+            return RowRehearsal::NotRehearsed;
+        };
+        let total = |r: &crate::laydown_rehearsal::RehearsalRecord| -> usize {
+            r.sensors.iter().map(|s| s.detections).sum()
+        };
+        let versus_current = if current {
+            VersusCurrent::IsCurrent
+        } else {
+            match self.current_rehearsal() {
+                None => VersusCurrent::CurrentNotRehearsed,
+                Some(c) => match crate::laydown_rehearsal::sensors_that_differ(c, record) {
+                    None => VersusCurrent::DifferentRecording(c.scenario),
+                    Some(differ) => VersusCurrent::Difference {
+                        detections: signed(total(record)) - signed(total(c)),
+                        sensors: differ.iter().map(|d| d.sensor.0).collect(),
+                    },
+                },
+            }
+        };
+        RowRehearsal::Rehearsed {
+            scenario: record.scenario,
+            detections: total(record),
+            tracks_formed: record.tracks_formed,
+            versus_current,
         }
     }
 
@@ -992,8 +1059,13 @@ impl AppState {
     /// to the working directory the binary was launched from
     /// (`docs/agentic-workflow.md`'s "both journal to `./gungnir-journal`"), here
     /// `./testdata`. **Not yet addressed**: whether a packaged release bundles
-    /// `testdata/tracks/samples/` beside the binary, which is a release-packaging
-    /// question this change does not answer.
+    /// `testdata/tracks/samples/` and `testdata/tracks/sensor-models.json` beside the
+    /// binary, which is a release-packaging question this change does not answer; a
+    /// desktop without them refuses a rehearsal by the path it could not read.
+    ///
+    /// The laydown's sensors are re-observed with the detection models this baseline's
+    /// `sensors` name (GAP-105, DN-32 §5.4), so a laydown placing a sensor that names
+    /// none is refused by name and nothing runs.
     pub fn run_rehearsal(
         &mut self,
         scenario: gungnir_model::TestTrackNumber,
@@ -1015,12 +1087,22 @@ impl AppState {
             std::path::Path::new("testdata"),
             scenario,
             &laydown,
+            &self.config.sensors,
             &self.config.resources,
         ) {
             Ok(record) => {
+                let per_sensor = record
+                    .sensors
+                    .iter()
+                    .map(|s| match &s.detection_model {
+                        Some(model) => format!("S{} ({model}) {}", s.sensor.0, s.detections),
+                        None => format!("S{} not observing", s.sensor.0),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 self.alerts.push(format!(
-                    "rehearsal of {} under {}: {} track(s) formed, {} decision(s) raised \
-                     ({} expired)",
+                    "rehearsal of {} re-observed from {}: {} track(s) formed, {} \
+                     decision(s) raised ({} expired); detections {per_sensor}",
                     laydown_id,
                     scenario.label(),
                     record.tracks_formed,
@@ -1046,6 +1128,12 @@ impl AppState {
     pub fn set_role(&mut self, role: Role) {
         self.selected_role = role;
     }
+}
+
+/// A count as a signed number, for a difference between two counts. Saturates rather
+/// than wrapping; no count of detections in a rehearsal comes near it.
+fn signed(n: usize) -> i64 {
+    i64::try_from(n).unwrap_or(i64::MAX)
 }
 
 /// Tell the operator about sessions the last run did not close.
@@ -1729,6 +1817,7 @@ mod tests {
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
         }
     }
 

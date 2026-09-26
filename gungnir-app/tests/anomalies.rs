@@ -29,6 +29,7 @@ fn desktop(name: &str, anomaly: AnomalySettings) -> (AppState, std::path::PathBu
             max_range_m: 20_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
         }],
         ..ConfigBaseline::default()
     };
