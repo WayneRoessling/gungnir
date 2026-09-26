@@ -445,9 +445,8 @@ fn disconnect_if_remote(state: &mut AppState) {
         gungnir_tracking_service::LiveTrackingService::new(&handle)
             .with_staleness(state.config.policy.staleness.clone()),
     );
-    state.intercept = Box::new(gungnir_intercept_service::DpInterceptService::new(
-        state.config.allocation_horizon,
-    ));
+    // The same planner the desktop starts with (GAP-119): horizon, frame and budget.
+    state.intercept = Box::new(crate::state::embedded_planner(&state.config));
     state.backend = BackendConfig::Embedded;
     state.link = None;
     crate::node_tasks::detach(state);

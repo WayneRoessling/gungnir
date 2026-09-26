@@ -21,9 +21,10 @@ Order from `gungnir-app::update::tick` and `gungnir-node::main` (Rs-Pr):
    outcome is an IE-15 published on SV-03.
 3. SV-01 `poll(now)`: the pipeline's output becomes the IE-02 snapshot (today the
    ingest task drains and the snapshot stays empty; `is_healthy` is false).
-4. SV-02 `plan(now, tracks, resources)`: today `NotImplemented` inside the allocator
-   returns the last good plan, flagged; when the plan changes, IE-14 PlanProposed is
-   published.
+4. SV-02 `plan(now, tracks, resources)`: spends at most its solve budget (MOP-06's
+   4 ms by default; D-81); a solve not finished inside it carries on at the next tick
+   and the last good plan is returned, flagged stale with when it was computed
+   (GAP-119); when the plan changes, IE-14 PlanProposed is published.
 5. Design adds (GAP-028): SV-17 scores every track; SV-15 evaluates the plan; the
    verdict and rationale (SV-18) accompany the plan; SV-16 opens a pending approval
    and publishes IE-16 ApprovalRequested.

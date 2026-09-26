@@ -131,7 +131,7 @@ history, and an entry is never edited once it has merged.
 | GAP-116 | Seven interop clauses are unasserted or only partly asserted | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
 | GAP-117 | Most event and view types are never round-tripped through serde | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
 | GAP-118 | Coverage accuracy is untested, and a coverage volume has no bearing | Technical | CAP-2.11 | 3 | 3 | M | 9 | I3 | Services engineer | Closed |
-| GAP-119 | No solve budget exists, and a stale plan is never compared with the last good one | Technical | CAP-3.3, CAP-5.5 | 3 | 8 | M | 24 | I3 | Services engineer | Open |
+| GAP-119 | No solve budget exists, and a stale plan is never compared with the last good one | Technical | CAP-3.3, CAP-5.5 | 3 | 8 | M | 24 | I3 | Services engineer | Closed |
 | GAP-120 | Nothing compares the embedded and remote backends' projections | Technical | CAP-7.3 | 3 | 1 | M | 3 | I3 | Services engineer | Closed |
 | GAP-121 | StoreAndForwardQueue has no production caller | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
 | GAP-122 | Journal retention purge is unbuilt, and nothing says so | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Closed |
@@ -168,8 +168,10 @@ history, and an entry is never edited once it has merged.
 | GAP-160 | A node publishes no track, so a linked desktop's picture is frozen at sign-in | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-161 | A linked desktop's health strip reports the link, not the node's services | Technical | CAP-7.3 | 4 | 1 | S | 4 | I3 | Services engineer | Closed |
 | GAP-147 | No committed recording reaches round 1's radars | Technical | CAP-5.2, CAP-1.4 | 2 | 4 | M | 8 | I3 | Services engineer | Open |
+| GAP-156 | A picture the exact solver cannot finish in time is never answered | Technical | CAP-3.3 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
+| GAP-157 | A linked desktop cannot tell that its node's planner is stale | Technical | CAP-3.3, CAP-7.3 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
 
-Counts: 155 gaps, 3 mission, 152 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 157 gaps, 3 mission, 154 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1825,11 +1827,12 @@ Counts: 155 gaps, 3 mission, 152 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.3 Assignment recommendation; CAP-5.5 Health and alert lifecycle.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which held the `gungnir-intercept-service` row.
+  - 2026-09-25, Closed: Closed under the owner's delegation of 2026-09-25 (D-81, D-82; DN-04 §10). Each planning call spends at most `plan_solve_budget_ms` (MOP-06's 4 ms) on an injected clock; an unfinished solve carries on at the next call, the last good plan is answered `Stale` with its age meanwhile, and health recovers on the first fresh answer. PN-05 and PN-07 show it. The determinism and t = 1 / over-budget t = 2 tests are in `gungnir-intercept-service/src/lib.rs`; the row awaits the owner's walk. The solve's restructuring is human-owned under the numerical-stability clause, see `docs/signatures.md`. Raised GAP-156 and GAP-157. See `../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`.
 - Evidence: `../../verification-capability-table.md` §2, the `gungnir-intercept-service` row; `mod tests` in `gungnir-intercept-service/src/lib.rs`.
 - Severity: 3. Reach: 8 threads. Effort: M. Priority: 24.
 - Impact: The `gungnir-intercept-service` row cannot be gated: its degradation clause names an over-budget solve and no solve budget exists anywhere, the stale plan returned is never compared with the last good plan (which the tests leave empty), and determinism is shown only on a one-by-one plan.
 - Closing action: Add a solve budget whose overrun returns the last good plan, flagged stale with when it was computed. Test that two fresh services given the same three tracks and three ready resources return equal plans, with tied and then distinct rewards; and that a solve at t=1 followed by an over-budget solve at t=2 returns `Stale { plan }` equal to the t=1 plan with `is_healthy()` false.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-120 Nothing compares the embedded and remote backends' projections**
@@ -2346,4 +2349,32 @@ Counts: 155 gaps, 3 mission, 152 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: GAP-105 (the rehearsal); D-28 (round 1's laydown `c`); `../../ux/usability-round-1-session.md` US-15; `../../record/2026-09-25/gap-105-re-observation-for-a-laydown-built.md`.
 - Depends on: GAP-105, D-28.
+
+**GAP-156 A picture the exact solver cannot finish in time is never answered**
+
+- Type: Technical.
+- Capability: CAP-3.3 Assignment recommendation.
+- History:
+  - 2026-09-25, Open: Filed by GAP-119 rather than answered there, because what stands in for an optimum the planner cannot reach is a change to what the allocation row promises -- the crate refuses a heuristic by design -- and that is the owner's to decide.
+- Evidence: `gungnir-allocation/src/bellman.rs` (`MAX_TRACKS`, `MAX_RESOURCES`, `ExactSolve`); a release probe on the development machine, 2026-09-25: at the default horizon of ten, four effectors and eight tracks took 13 ms, four and ten 128 ms, and six and ten 1.3 s (the one-pass solve GAP-119 replaced took about three times as long).
+- Severity: 3. Reach: 5 threads. Effort: M. Priority: 15.
+- Impact: The allocator is exact and refuses to answer with a heuristic, and its cost grows exponentially in the tracks and factorially in the effectors. Since GAP-119 a solve that does not fit one planning call carries on over several, which answers ordinary pictures a few ticks late; but a raid toward the solver's size limits takes seconds to solve outright and several times that at 4 ms a tick, and at the limits (sixteen tracks, eight effectors) longer than any engagement. Throughout, the operator is shown the last good plan, stale, with a percentage that barely moves: honest, and no help.
+- Closing action: Decide what a picture too large to solve exactly in useful time should get: a bounded answer labelled as not optimal (a one-step assignment, or the exact solve at a shorter horizon), a size past which the planner says it will not answer rather than starting, or both; then build it so the label reaches PN-05 and PN-07 the way staleness does.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-119 (`../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`).
+- Depends on: GAP-119.
+
+**GAP-157 A linked desktop cannot tell that its node's planner is stale**
+
+- Type: Technical.
+- Capability: CAP-3.3 Assignment recommendation; CAP-7.3 Three profiles.
+- History:
+  - 2026-09-25, Open: Filed by GAP-119, which made the embedded planner's staleness visible and found that the remote one relays the node's plan without the node's standing. GAP-161, merged alongside, made the linked health flag honest; the plan's age and reason need the node's computed-at time on the wire, a schema change of its own.
+- Evidence: `gungnir-remote/src/lib.rs` (`RemoteInterceptService::plan` answers `Fresh` while linked); the node's snapshot and `HealthEvent::Changed` carry `intercept_healthy` (read since GAP-161) and nothing carries when its plan was last computed.
+- Severity: 3. Reach: 5 threads. Effort: M. Priority: 15.
+- Impact: While a desktop is linked, `RemoteInterceptService::plan` returns the node's plan as `Fresh` whenever the link is up. Since GAP-161 its `is_healthy()` follows the node's word, so when the node's planner cannot answer -- a solve past its budget, a solve that failed -- PN-01 shows the planner down and PN-07 names an unhealthy planner. But PN-05 draws the node's plan with no stale line, and neither panel can say how old the plan is or why, because the desktop never learns when the node last computed it. The node is where the decision is taken while linked, so this is the console most operators use.
+- Closing action: Carry the node's planner standing to the desktop -- when its plan was last computed and why the last call did not answer -- and have `RemoteInterceptService` answer `Stale` with the node's reason and age when the node's planner is stale. Test it with a node whose planner is held past its budget.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-119 (`../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`).
+- Depends on: GAP-119.
 

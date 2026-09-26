@@ -162,9 +162,15 @@ pub const MAX_ALTERNATIVES: usize = 3;
 /// matrix. `gungnir-assessment`'s rewards are not wired into the tick either
 /// (`ARCHITECTURE.md` §7.3), and an alternative solved against a reward matrix the live
 /// plan was never solved against would not be an alternative to it.
+///
+/// **One budget, not four times one.** Each alternative and the what-if is a planner
+/// built for a single question, so a solve that does not finish inside the baseline's
+/// budget (GAP-119) has no later call to finish in: that option is reported unavailable
+/// with the planner's own sentence, rather than holding the tick while it completes.
 struct SnapshotPlanner {
     horizon: usize,
     frame: Option<gungnir_model::LocalFrame>,
+    budget: std::time::Duration,
 }
 
 impl gungnir_decision::PlanSource for SnapshotPlanner {
@@ -175,7 +181,9 @@ impl gungnir_decision::PlanSource for SnapshotPlanner {
         resources: &[gungnir_model::ResourceView],
     ) -> Result<PlanView, gungnir_decision::PlanUnavailable> {
         use gungnir_intercept_service::{DpInterceptService, InterceptService, PlanOutcome};
-        let mut planner = DpInterceptService::new(self.horizon).with_local_frame(self.frame);
+        let mut planner = DpInterceptService::new(self.horizon)
+            .with_local_frame(self.frame)
+            .with_solve_budget(self.budget);
         match planner.plan(now, tracks, resources) {
             PlanOutcome::Fresh(plan) => Ok(plan),
             // A planner constructed a line ago cannot hold a stale plan, but both
@@ -195,6 +203,9 @@ fn snapshot_planner(state: &AppState) -> SnapshotPlanner {
         // GAP-031: the same frame the live planner solves geometry in, so an alternative
         // places its intercept points exactly where the recommendation would.
         frame: crate::sustainment::local_frame(state),
+        // GAP-119: the live planner's budget, read through the same builder so the two
+        // cannot come to differ.
+        budget: crate::state::embedded_planner(&state.config).solve_budget(),
     }
 }
 
