@@ -236,6 +236,80 @@ pub async fn ingest(rx: Receiver<Submission>, out: Sender<PipelineSnapshot>) {
     ingest_with(rx, out, PipelineSettings::default()).await;
 }
 
+/// One submission through `pipeline`, exactly as [`ingest_with`]'s loop takes it, and
+/// the snapshot that loop sends for it: `None` for a position that released no epoch,
+/// which is the one case the loop sends nothing.
+///
+/// **The loop's body, taken out of the loop rather than copied** (GAP-020, D-109), so a
+/// host that must read the picture its own submissions make -- a laydown rehearsal, which
+/// is a measurement of a recording and not of how far a task on another thread had got --
+/// can drive the same pipeline in lock-step on its own thread
+/// (`gungnir_tracking_service::LiveTrackingService::lockstep`). [`ingest_with`] calls
+/// this for every submission it takes, so the two paths cannot drift apart.
+pub fn step(pipeline: &mut FusionPipeline, submission: Submission) -> Option<PipelineSnapshot> {
+    match submission {
+        Submission::Position(det) => {
+            // A position carries the same mission clock a bearing does, so the retained
+            // set ages on it too (2026-09-09): a busy radar beside a quiet acoustic feed
+            // is the ordinary case, and before this the last unmatched bearing stayed in
+            // every snapshot until the next bearing arrived, however long past its own
+            // `until_s` that was.
+            pipeline.expire_bearings(det.timestamp_s);
+            if let Err(err) = pipeline.push(det) {
+                // Counted in the stats this loop publishes (GAP-114); the log line is for
+                // whoever reads the node's log, not the operator's only record.
+                tracing::warn!(
+                    %err,
+                    policy = ?pipeline.settings().late_data,
+                    "detection refused by the reorder buffer"
+                );
+            }
+            (pipeline.run_ready() > 0).then(|| snapshot_output(pipeline))
+        }
+        Submission::Bearing(bearing) => {
+            // DN-27 §5: a bearing may update a track, may not initiate one, and is
+            // retained and shown when it updates nothing. All three are the pipeline's
+            // rules; this loop only reports which happened, because an operator asking
+            // why a direction did not become a track needs the answer to have been
+            // recorded somewhere.
+            match pipeline.offer_bearing(&bearing) {
+                BearingOutcome::Updated(track) => {
+                    tracing::debug!(
+                        sensor = bearing.sensor_id,
+                        ?track,
+                        "a bearing refined a track"
+                    );
+                }
+                BearingOutcome::Retained { until_s } => {
+                    tracing::debug!(
+                        sensor = bearing.sensor_id,
+                        until_s,
+                        "a bearing matched nothing and is retained"
+                    );
+                }
+                BearingOutcome::Refused(why) => {
+                    tracing::warn!(sensor = bearing.sensor_id, ?why, "a bearing was refused");
+                }
+            }
+            // A retained bearing has a stated lifetime and something has to end it.
+            // Doing it here rather than on a timer keeps it on the same clock the
+            // bearings themselves carry; the position arm above does the same, and a
+            // pipeline that receives nothing at all cannot age its set, which is why the
+            // consumer ages the *view* by its own clock as well.
+            pipeline.expire_bearings(bearing.timestamp_s);
+            Some(snapshot_output(pipeline))
+        }
+    }
+}
+
+/// The stream's end: whatever is still inside the reorder horizon is processed, and the
+/// final snapshot returned -- `None` when the flush processed nothing, which is the one
+/// case [`ingest_with`] sends no final snapshot. [`ingest_with`] calls this when its
+/// inbound channel closes; a lock-step host calls it when it has no more to submit.
+pub fn end_of_stream(pipeline: &mut FusionPipeline) -> Option<PipelineSnapshot> {
+    (pipeline.flush() > 0).then(|| snapshot_output(pipeline))
+}
+
 /// [`ingest`] under a deployment's settings.
 ///
 /// **The stream's end is a flush, not a truncation.** When the inbound channel closes,
@@ -250,6 +324,9 @@ pub async fn ingest(rx: Receiver<Submission>, out: Sender<PipelineSnapshot>) {
 /// pipeline with it. What the reorder buffer still holds is lost and the end-of-stream
 /// flush above does not run; the consumer keeps every snapshot already sent, each built
 /// whole before it was sent.
+///
+/// Each submission is applied by [`step`] and the flush by [`end_of_stream`], the same
+/// two functions a lock-step host calls, with no `.await` inside either.
 pub async fn ingest_with(
     rx: Receiver<Submission>,
     out: Sender<PipelineSnapshot>,
@@ -262,69 +339,20 @@ pub async fn ingest_with(
     );
     loop {
         match rx.try_recv() {
-            Ok(Submission::Position(det)) => {
-                // A position carries the same mission clock a bearing does, so the
-                // retained set ages on it too (2026-09-09): a busy radar beside a quiet
-                // acoustic feed is the ordinary case, and before this the last unmatched
-                // bearing stayed in every snapshot until the next bearing arrived,
-                // however long past its own `until_s` that was.
-                pipeline.expire_bearings(det.timestamp_s);
-                if let Err(err) = pipeline.push(det) {
-                    // Counted in the stats this loop publishes (GAP-114); the log line is
-                    // for whoever reads the node's log, not the operator's only record.
-                    tracing::warn!(
-                        %err,
-                        policy = ?pipeline.settings().late_data,
-                        "detection refused by the reorder buffer"
-                    );
-                }
-                if pipeline.run_ready() > 0 && out.send(snapshot_output(&pipeline)).is_err() {
-                    tracing::warn!("track consumer is gone; stopping the pipeline");
-                    return;
-                }
-            }
-            Ok(Submission::Bearing(bearing)) => {
-                // DN-27 §5: a bearing may update a track, may not initiate one, and is
-                // retained and shown when it updates nothing. All three are the
-                // pipeline's rules; this loop only reports which happened, because an
-                // operator asking why a direction did not become a track needs the
-                // answer to have been recorded somewhere.
-                match pipeline.offer_bearing(&bearing) {
-                    BearingOutcome::Updated(track) => {
-                        tracing::debug!(
-                            sensor = bearing.sensor_id,
-                            ?track,
-                            "a bearing refined a track"
-                        );
+            Ok(submission) => {
+                if let Some(snapshot) = step(&mut pipeline, submission) {
+                    if out.send(snapshot).is_err() {
+                        tracing::warn!("track consumer is gone; stopping the pipeline");
+                        return;
                     }
-                    BearingOutcome::Retained { until_s } => {
-                        tracing::debug!(
-                            sensor = bearing.sensor_id,
-                            until_s,
-                            "a bearing matched nothing and is retained"
-                        );
-                    }
-                    BearingOutcome::Refused(why) => {
-                        tracing::warn!(sensor = bearing.sensor_id, ?why, "a bearing was refused");
-                    }
-                }
-                // A retained bearing has a stated lifetime and something has to end it.
-                // Doing it here rather than on a timer keeps it on the same clock the
-                // bearings themselves carry; the position arm above does the same, and a
-                // pipeline that receives nothing at all cannot age its set, which is why
-                // the consumer ages the *view* by its own clock as well.
-                pipeline.expire_bearings(bearing.timestamp_s);
-                if out.send(snapshot_output(&pipeline)).is_err() {
-                    tracing::warn!("track consumer is gone; stopping the pipeline");
-                    return;
                 }
             }
             Err(TryRecvError::Empty) => crate::sync::idle_backoff().await,
             Err(TryRecvError::Disconnected) => break,
         }
     }
-    if pipeline.flush() > 0 {
-        let _ = out.send(snapshot_output(&pipeline));
+    if let Some(snapshot) = end_of_stream(&mut pipeline) {
+        let _ = out.send(snapshot);
     }
     tracing::info!(
         stats = ?pipeline.stats(),

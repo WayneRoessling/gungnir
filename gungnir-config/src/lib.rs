@@ -2111,7 +2111,19 @@ pub struct ApproachConfig {
     /// ground-level axis is reported as hidden past a few kilometres. That is a crude
     /// horizon rather than a bug, but it makes a sea-level axis a poor thing to measure
     /// coverage along. See `ARCHITECTURE.md` §10.
+    ///
+    /// **The order is outer end first, inner end last**: the last point is where the
+    /// approach leads, and a first-engagement range is measured to it
+    /// (`docs/design/DN-02-prediction-and-approach.md` §9, D-107).
     pub points: Vec<[f64; 3]>,
+    /// How far either side of the axis, on the ground, a track counts as coming down
+    /// this approach, metres (DN-02 §9, D-108). It is what places a rehearsal's
+    /// predictions on an approach, so PN-16 can give the approach a first-engagement
+    /// range. **Optional, and absent is not a default**: without it PN-16 says the
+    /// approach declares no corridor rather than guessing which tracks came down it.
+    /// Coverage does not read it; coverage is measured along the axis itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub corridor_half_width_m: Option<f64>,
 }
 
 fn validate_sensor_control(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
@@ -2954,6 +2966,17 @@ fn validate_approaches(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 "approach {} has fewer than two points, so it is a place and not an axis",
                 approach.name
             )));
+        }
+        // DN-02 §9, D-108: a corridor that is not a positive, finite width would put
+        // every track on the approach or none, and either would read as a measurement.
+        if let Some(width) = approach.corridor_half_width_m {
+            if !(width.is_finite() && width > 0.0) {
+                return Err(ConfigError::Invalid(format!(
+                    "approach {} has corridor_half_width_m {width}; it must be finite and \
+                     positive, or absent",
+                    approach.name
+                )));
+            }
         }
         for [lat, lon, alt] in &approach.points {
             if !lat.is_finite() || !lon.is_finite() || !alt.is_finite() {
@@ -7219,6 +7242,44 @@ mod hazard_tests {
             !parsed.blocks_surface,
             "blocks_surface defaults to false, not guessed from the kind"
         );
+    }
+}
+
+#[cfg(test)]
+mod approach_tests {
+    use super::*;
+
+    fn with_corridor(corridor_half_width_m: Option<f64>) -> ConfigBaseline {
+        ConfigBaseline {
+            approaches: vec![ApproachConfig {
+                name: "upper Vell approach".into(),
+                points: vec![[0.961, 0.216, 300.0], [0.960, 0.2097, 300.0]],
+                corridor_half_width_m,
+            }],
+            ..ConfigBaseline::default()
+        }
+    }
+
+    /// DN-02 §9, D-108: a corridor is absent or a positive, finite width, and a
+    /// baseline written before the field reads back with none.
+    #[test]
+    fn a_corridor_width_is_absent_or_finite_and_positive() {
+        validate(&with_corridor(None)).expect("absent is valid");
+        validate(&with_corridor(Some(3_000.0))).expect("a positive width is valid");
+        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            let err = validate(&with_corridor(Some(bad))).expect_err("refused");
+            assert!(
+                err.to_string().contains("upper Vell approach")
+                    && err.to_string().contains("corridor_half_width_m"),
+                "{err}"
+            );
+        }
+        let old: ApproachConfig =
+            serde_json::from_str(r#"{"name": "a", "points": [[0.1, 0.1, 0.0], [0.2, 0.2, 0.0]]}"#)
+                .expect("an approach written before the field parses");
+        assert_eq!(old.corridor_half_width_m, None);
+        let text = serde_json::to_string(&old).expect("serializes");
+        assert!(!text.contains("corridor"), "absent stays absent: {text}");
     }
 }
 
