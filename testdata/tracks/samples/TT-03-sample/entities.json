@@ -1,0 +1,44 @@
+{
+ "entities": [
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.small-multirotor",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT03-recce-001",
+   "occluded_window_s": null,
+   "platform": "mavic-3",
+   "side": "red",
+   "signature": {
+    "acoustic": "quiet",
+    "emission": "datalink",
+    "ir": "low",
+    "rcs": "very-small"
+   },
+   "spawn_s": 100.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.fpv",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT03-fpv-001",
+   "occluded_window_s": null,
+   "platform": "fpv-strike-quad",
+   "side": "red",
+   "signature": {
+    "acoustic": "quiet",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "very-small"
+   },
+   "spawn_s": 840.0,
+   "surface": false
+  }
+ ],
+ "format": 1,
+ "scenario": "TT-03"
+}

@@ -500,7 +500,55 @@ pub struct SensorModels {
     pub types: Vec<SensorType>,
     /// Emission descriptions grouped under the emission class a sensor detects.
     #[serde(default)]
-    pub emission_map: BTreeMap<String, Vec<String>>,
+    pub emission_map: EmissionMap,
+}
+
+/// `sensors.yaml`'s `emission_map`, **in the file's order**.
+///
+/// The order is part of the answer: a description may sit under two classes ("control
+/// and video link" is under both `datalink` and `control`), and the reference takes the
+/// first class, in the YAML's order, whose list names it. This was a `BTreeMap` until
+/// 2026-09-25, which asks in alphabetical order instead and answered `control` where the
+/// reference answers `datalink`. No committed detection showed it -- no sample set has a
+/// sensor reading that class of that platform -- and `entities.json`, which writes every
+/// entity's emission class whether a sensor reads it or not, found it on its first
+/// comparison (`tests/sidecar_parity.rs`, DN-32 §12).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct EmissionMap(pub Vec<(String, Vec<String>)>);
+
+impl EmissionMap {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// The classes and their descriptions, in the file's order.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Vec<String>)> {
+        self.0.iter().map(|(k, v)| (k, v))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for EmissionMap {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = EmissionMap;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a mapping from an emission class to its descriptions")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut out = Vec::new();
+                while let Some((k, v)) = map.next_entry::<String, Vec<String>>()? {
+                    out.push((k, v));
+                }
+                Ok(EmissionMap(out))
+            }
+        }
+        deserializer.deserialize_map(V)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]

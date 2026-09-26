@@ -58,7 +58,7 @@ recorded in each set's `metadata.json`.
 python docs/test-tracks/tools/validate_tracks.py
 ```
 
-runs the 18 checks in `validation.md` over every sample set and writes
+runs the 22 checks in `validation.md` over every sample set and writes
 `validation-report.json` into each.
 
 All three need PyYAML. `tools/gen_tracks.py` is the **reference** generator: it is

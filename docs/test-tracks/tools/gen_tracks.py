@@ -6,8 +6,10 @@
 """Reference generator for test-track sets (plan 07).
 
 Reads classes.yaml, sensors.yaml, scenarios.yaml, and the catalogue, and writes a set
-(metadata.json, truth.jsonl, detections.jsonl, sensors.json, events.jsonl) per
-docs/test-tracks/data-format.md. Deterministic: the same inputs and seed give
+(metadata.json, truth.jsonl, detections.jsonl, sensors.json, events.jsonl, and the
+re-observation sidecars entities.json and environment.json) per
+docs/test-tracks/data-format.md, plus the sensor catalogue's JSON export at
+testdata/tracks/sensor-models.json. Deterministic: the same inputs and seed give
 byte-identical output. This is the specification the gungnir-scenario generator
 (GAP-016) must reproduce; it is written for clarity, not speed.
 
@@ -428,6 +430,9 @@ def run(built, classes, sensors_yaml, out_dir: Path):
     sensors = built["sensors"]
     events = built["events"]
     truth, detections, event_lines = [], [], []
+    # What each scan was subject to, at the tick it was applied: the environment.json
+    # sidecar (docs/design/DN-32-re-observation-for-a-laydown.md section 5.3).
+    env_events = []
     last_seen = {}  # entity id -> time last detected by a non-cued sensor
     active_ea = {}
     lost = set()
@@ -449,13 +454,22 @@ def run(built, classes, sensors_yaml, out_dir: Path):
             if abs(ev["t"] - t) < dt / 2:
                 if ev["kind"] == "sensor_lost":
                     lost.add(ev["sensor"])
+                    env_events.append({"t": t, "kind": "sensor_lost", "sensor": ev["sensor"]})
                 elif ev["kind"] == "sensor_restored":
                     lost.discard(ev["sensor"])
+                    env_events.append({"t": t, "kind": "sensor_restored", "sensor": ev["sensor"]})
                 elif ev["kind"] in ("ea_skew", "ea_dropout"):
                     for sid in ev["sensors"]:
                         active_ea.setdefault(sid, {})[ev["kind"]] = (ev, ev.get("until", duration))
+                        window = {"t": t, "kind": ev["kind"], "sensor": sid, "until_s": ev.get("until", duration)}
+                        if ev["kind"] == "ea_skew":
+                            window["skew_s"] = ev.get("skew_s")
+                        else:
+                            window["multiplier"] = ev.get("multiplier")
+                        env_events.append(window)
                 elif ev["kind"] == "sea_state":
                     sea_state = ev["value"]
+                    env_events.append({"t": t, "kind": "sea_state", "value": ev["value"]})
         # entities
         for e in entities:
             if not e.spawned and t >= e.spawn:
@@ -590,6 +604,27 @@ def run(built, classes, sensors_yaml, out_dir: Path):
     with (out_dir / "events.jsonl").open("w", encoding="utf-8", newline="\n") as f:
         for ev in sorted(event_lines, key=lambda x: x["t"]):
             f.write(json.dumps(ev, separators=(",", ":")) + "\n")
+    # The two sidecars a rehearsal re-observes the truth with (DN-32 sections 5.2 and 5.3):
+    # per entity, what the observation model reads that truth.jsonl does not carry, and
+    # the environment as the scans met it. Keys sorted, so the Rust generator can match
+    # the bytes without keeping Python's insertion order.
+    sidecar_entities = [{
+        "id": e.id, "class": e.cls["id"], "platform": e.platform["id"], "side": e.side,
+        "spawn_s": e.spawn,
+        "occluded_window_s": list(e.occluded_window) if e.occluded_window else None,
+        "signature": {"rcs": e.platform.get("rcs_class"), "ir": e.platform.get("ir_class"),
+                      "acoustic": e.platform.get("acoustic_class"),
+                      "emission": emission_key(e.platform, e, sensors_yaml)},
+        "decoy": e.decoy,
+        "adsb_intermittent": e.flags.get("adsb_intermittent"),
+        "ais_spoof_offset_m": list(e.flags["ais_spoof_offset_m"]) if e.flags.get("ais_spoof_offset_m") is not None else None,
+        "surface": e.platform.get("altitude_m") == [0, 0],
+        "destroyed_at_s": e.flags.get("destroyed_at"),
+    } for e in entities]
+    with (out_dir / "entities.json").open("w", encoding="utf-8", newline="\n") as f:
+        json.dump({"format": 1, "scenario": scen["id"], "entities": sidecar_entities}, f, indent=1, sort_keys=True)
+    with (out_dir / "environment.json").open("w", encoding="utf-8", newline="\n") as f:
+        json.dump({"format": 1, "scenario": scen["id"], "events": env_events}, f, indent=1, sort_keys=True)
     by_class = {}
     for e in entities:
         by_class[e.cls["id"]] = by_class.get(e.cls["id"], 0) + 1
@@ -605,6 +640,27 @@ def run(built, classes, sensors_yaml, out_dir: Path):
     with (out_dir / "metadata.json").open("w", encoding="utf-8", newline="\n") as f:
         json.dump(meta, f, indent=1)
     return meta
+
+
+def write_sensor_catalogue(sensors_yaml):
+    """The JSON export of sensors.yaml a rehearsal reads (DN-32 section 5.4).
+
+    A deployment sensor names one of these types as its detection model, and production
+    reads JSON it already parses rather than the YAML, which D-31 admits for the
+    generator only. Each type's model is exactly the parameters a set's sensors.json
+    carries for it before a scenario's overrides.
+    """
+    export = {
+        "format": 1,
+        "generator": GENERATOR,
+        "source": "docs/test-tracks/sensors.yaml",
+        "sensors_version": sensors_yaml["version"],
+        "types": {t["id"]: {"name": t["name"], "confidence": t.get("confidence"),
+                            "model": {k: v for k, v in t.items() if k not in ("id", "name", "confidence")}}
+                  for t in sensors_yaml["types"]},
+    }
+    with (ROOT / "testdata" / "tracks" / "sensor-models.json").open("w", encoding="utf-8", newline="\n") as f:
+        json.dump(export, f, indent=1, sort_keys=True)
 
 
 CAT_VERSION = None
@@ -627,6 +683,7 @@ def main(argv):
     SCEN_VERSION = scenarios["version"]
     SCEN_ORIGIN = scenarios["origin"]
     base_out = ROOT / "testdata" / "tracks" / ("full" if full else "samples")
+    write_sensor_catalogue(sensors_yaml)
     for scen in scenarios["scenarios"]:
         if ids and scen["id"] not in ids:
             continue

@@ -1,0 +1,332 @@
+{
+ "entities": [
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-shipping-n-001",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 145.88942592491225,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-shipping-n-002",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 157.26189462820847,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-shipping-n-003",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 67.58660512203946,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-shipping-n-004",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 188.5561898019717,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-shipping-n-005",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 211.06892882462955,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-shipping-n-006",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 176.39846242414382,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-shipping-s-001",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 219.9942269094206,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-shipping-s-002",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 104.6861979561727,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-shipping-s-003",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 167.46603559634838,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-shipping-s-004",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 93.51376657782347,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-fishing-001",
+   "occluded_window_s": null,
+   "platform": "fishing-vessel",
+   "side": "civil",
+   "signature": {
+    "acoustic": "moderate",
+    "emission": "ais",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 270.49956942543463,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-fishing-002",
+   "occluded_window_s": null,
+   "platform": "fishing-vessel",
+   "side": "civil",
+   "signature": {
+    "acoustic": "moderate",
+    "emission": "ais",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 131.72449045907274,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-fishing-003",
+   "occluded_window_s": null,
+   "platform": "fishing-vessel",
+   "side": "civil",
+   "signature": {
+    "acoustic": "moderate",
+    "emission": "ais",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 150.20167076236748,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-fishing-004",
+   "occluded_window_s": null,
+   "platform": "fishing-vessel",
+   "side": "civil",
+   "signature": {
+    "acoustic": "moderate",
+    "emission": "ais",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 131.7387981189213,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.fast-craft",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-patrol-001",
+   "occluded_window_s": null,
+   "platform": "gyurza-m",
+   "side": "blue",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "radar",
+    "ir": "medium",
+    "rcs": "medium"
+   },
+   "spawn_s": 0.0,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-ais-off-loiterer-001",
+   "occluded_window_s": null,
+   "platform": "fishing-vessel",
+   "side": "civil",
+   "signature": {
+    "acoustic": "moderate",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 294.0,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": [
+    6000,
+    4000
+   ],
+   "class": "sea.amphibious-auxiliary",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT05-spoofed-coaster-001",
+   "occluded_window_s": null,
+   "platform": "tanker-coastal",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "ais",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 294.0,
+   "surface": true
+  }
+ ],
+ "format": 1,
+ "scenario": "TT-05"
+}

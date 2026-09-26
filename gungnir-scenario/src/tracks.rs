@@ -12,6 +12,14 @@
 //! `testdata/tracks/samples/`. The two descriptors (`sensors.json`, `metadata.json`) are
 //! reproduced in content and compared as values, because Python's `json.dump` writes a
 //! mapping in its insertion order and this crate's typed sensor model does not keep one.
+//! The two re-observation sidecars (`entities.json`, `environment.json`) and the sensor
+//! catalogue's JSON export are written with sorted keys by both generators and are
+//! reproduced byte for byte (`tests/sidecar_parity.rs`,
+//! docs/design/DN-32-re-observation-for-a-laydown.md §5).
+//!
+//! The observation model itself is `gungnir_sensor_sim::observe`, moved there with
+//! [`PythonRandom`] and [`Num`] (DN-32 §4) so a laydown rehearsal can re-observe a
+//! recording without this crate, which makes worlds and may never reach production.
 //!
 //! Parity is the point, so the port keeps the reference's shape: the same draws from the
 //! same [`PythonRandom`] in the same order, [`Num`] where a Python value may be an
@@ -119,6 +127,9 @@ struct Flags {
     ais_spoof_offset_m: Option<Vec<Num>>,
     target_group: Option<String>,
     fired_at: Option<f64>,
+    /// The tick at which another entity's dash destroyed this one (the reference's
+    /// `flags["destroyed_at"]`), for `entities.json` (DN-32 §5.2).
+    destroyed_at: Option<f64>,
 }
 
 // The reference keeps these five flags apart, and so does the port.
@@ -491,6 +502,7 @@ fn step(
                 e.alive = false;
                 if let Some(j) = target {
                     entities[j].alive = false;
+                    entities[j].flags.destroyed_at = Some(t);
                 }
                 return Ok(());
             }
@@ -922,7 +934,7 @@ fn emission_key(plat: &Platform, e: &Entity<'_>, lib: &TrackLibrary) -> String {
     if !e.emitting || em.starts_with("none") {
         return "none".into();
     }
-    for (key, names) in &lib.sensors.emission_map {
+    for (key, names) in lib.sensors.emission_map.iter() {
         if names.iter().any(|n| n == em) {
             return key.clone();
         }
@@ -989,6 +1001,13 @@ pub struct GeneratedSet {
     pub events: String,
     pub sensors_json: serde_json::Value,
     pub metadata_json: serde_json::Value,
+    /// `entities.json`, as text: per entity, what the observation model reads that
+    /// `truth.jsonl` does not carry (docs/design/DN-32-re-observation-for-a-laydown.md
+    /// §5.2).
+    pub entities_json: String,
+    /// `environment.json`, as text: every change to what a scan is subject to, at the
+    /// tick it was applied (DN-32 §5.3).
+    pub environment_json: String,
     pub counts: Counts,
 }
 
@@ -1129,71 +1148,7 @@ fn sensors_value(sensors: &[SensorInst<'_>]) -> serde_json::Value {
         .iter()
         .map(|s| {
             let k = s.kind;
-            let mut params = serde_json::Map::new();
-            params.insert("signature_key".into(), k.signature_key.clone().into());
-            params.insert(
-                "range_m".into(),
-                serde_json::Value::Object(
-                    k.range_m
-                        .iter()
-                        .map(|(c, v)| (c.clone(), num_value(*v)))
-                        .collect(),
-                ),
-            );
-            params.insert("pd_in_range".into(), num_value(k.pd_in_range));
-            params.insert("update_period_s".into(), num_value(k.update_period_s));
-            params.insert(
-                "noise".into(),
-                serde_json::json!({
-                    "range_m": num_value(k.noise.range_m),
-                    "cross_m": num_value(k.noise.cross_m),
-                    "height_m": num_value(k.noise.height_m),
-                }),
-            );
-            params.insert(
-                "field_of_regard_deg".into(),
-                serde_json::Value::Array(k.field_of_regard_deg.iter().map(|n| num_value(*n)).collect()),
-            );
-            params.insert(
-                "altitude_m".into(),
-                serde_json::Value::Array(k.altitude_m.iter().map(|n| num_value(*n)).collect()),
-            );
-            params.insert("horizon".into(), k.horizon.into());
-            params.insert(
-                "latency_s".into(),
-                serde_json::json!({"mean": num_value(k.latency_s.mean), "jitter": num_value(k.latency_s.jitter)}),
-            );
-            params.insert("dropout".into(), num_value(k.dropout));
-            params.insert("out_of_order".into(), num_value(k.out_of_order));
-            params.insert("false_alarms_per_scan".into(), num_value(k.false_alarms_per_scan));
-            params.insert(
-                "ea".into(),
-                serde_json::json!({
-                    "skew_s": num_value(k.ea.skew_s),
-                    "dropout_multiplier": num_value(k.ea.dropout_multiplier),
-                    "fa_multiplier": num_value(k.ea.fa_multiplier),
-                }),
-            );
-            if k.cued {
-                params.insert("cued".into(), true.into());
-            }
-            if k.moving_only {
-                params.insert("moving_only".into(), true.into());
-            }
-            if !k.sea_state_dropout.is_empty() {
-                params.insert(
-                    "sea_state_dropout".into(),
-                    serde_json::Value::Object(
-                        k.sea_state_dropout
-                            .iter()
-                            .map(|(state, v)| (state.to_string(), num_value(*v)))
-                            .collect(),
-                    ),
-                );
-            }
-            for (key, v) in &k.rest {
-                params.insert(key.clone(), scalar_value(v));
-            }
+            let mut params = type_params(k);
             if let Some((east, north)) = s.bias {
                 params.insert(
                     "bias_m".into(),
@@ -1228,6 +1183,7 @@ fn run(lib: &TrackLibrary, mut built: Built<'_>) -> Result<GeneratedSet, TracksE
     let mut active_ea: HashMap<i64, HashMap<&str, ActiveEa<'_>>> = HashMap::new();
     let mut lost: BTreeSet<i64> = BTreeSet::new();
     let mut sea_state: i64 = 0;
+    let mut environment: Vec<serde_json::Value> = Vec::new();
 
     // Interceptor targets.
     let n = built.entities.len();
@@ -1271,7 +1227,8 @@ fn run(lib: &TrackLibrary, mut built: Built<'_>) -> Result<GeneratedSet, TracksE
     let mut fa_total = 0usize;
     let rng = &mut built.rng;
     while t <= duration.f() + 1e-9 {
-        // Events.
+        // Events. Each one that changes what a scan is subject to is also written to
+        // `environment.json` at the tick it was applied (DN-32 §5.3).
         for ev in &events {
             let et = ev.t().map_or(0.0, Num::f);
             if (et - t).abs() < dt / 2.0 {
@@ -1279,27 +1236,52 @@ fn run(lib: &TrackLibrary, mut built: Built<'_>) -> Result<GeneratedSet, TracksE
                     "sensor_lost" => {
                         if let Some(id) = ev.get("sensor").and_then(Scalar::as_i64) {
                             lost.insert(id);
+                            environment.push(serde_json::json!({
+                                "t": t, "kind": "sensor_lost", "sensor": id,
+                            }));
                         }
                     }
                     "sensor_restored" => {
                         if let Some(id) = ev.get("sensor").and_then(Scalar::as_i64) {
                             lost.remove(&id);
+                            environment.push(serde_json::json!({
+                                "t": t, "kind": "sensor_restored", "sensor": id,
+                            }));
                         }
                     }
                     kind @ ("ea_skew" | "ea_dropout") => {
                         let until = ev.get("until").and_then(Scalar::as_num).unwrap_or(duration);
+                        let stated_key = if kind == "ea_skew" {
+                            "skew_s"
+                        } else {
+                            "multiplier"
+                        };
+                        let stated = ev
+                            .get(stated_key)
+                            .and_then(Scalar::as_num)
+                            .map_or(serde_json::Value::Null, num_value);
                         for sid in ev.get("sensors").and_then(Scalar::as_list).unwrap_or(&[]) {
                             if let Some(sid) = sid.as_i64() {
                                 active_ea
                                     .entry(sid)
                                     .or_default()
                                     .insert(kind, ActiveEa { event: ev, until });
+                                let mut window = serde_json::Map::new();
+                                window.insert("t".into(), t.into());
+                                window.insert("kind".into(), kind.into());
+                                window.insert("sensor".into(), sid.into());
+                                window.insert("until_s".into(), num_value(until));
+                                window.insert(stated_key.into(), stated.clone());
+                                environment.push(serde_json::Value::Object(window));
                             }
                         }
                     }
                     "sea_state" => {
                         if let Some(v) = ev.get("value").and_then(Scalar::as_i64) {
                             sea_state = v;
+                            environment.push(serde_json::json!({
+                                "t": t, "kind": "sea_state", "value": v,
+                            }));
                         }
                     }
                     _ => {}
@@ -1478,6 +1460,37 @@ fn run(lib: &TrackLibrary, mut built: Built<'_>) -> Result<GeneratedSet, TracksE
         },
         "validation": {"passed": null, "report": "validation-report.json"},
     });
+    let entities_sidecar: Vec<serde_json::Value> = built
+        .entities
+        .iter()
+        .zip(&signatures)
+        .zip(&surface)
+        .map(|((e, sig), surface)| {
+            serde_json::json!({
+                "id": e.id,
+                "class": e.cls.id,
+                "platform": e.platform.id,
+                "side": e.side,
+                "spawn_s": e.spawn,
+                "occluded_window_s": e.occluded_window.map(|w| vec![num_value(w[0]), num_value(w[1])]),
+                "signature": {
+                    "rcs": sig.rcs, "ir": sig.ir, "acoustic": sig.acoustic, "emission": sig.emission,
+                },
+                "decoy": e.decoy,
+                "adsb_intermittent": e.flags.adsb_intermittent.map(num_value),
+                "ais_spoof_offset_m": e.flags.ais_spoof_offset_m.as_ref()
+                    .map(|o| o.iter().map(|n| num_value(*n)).collect::<Vec<_>>()),
+                "surface": surface,
+                "destroyed_at_s": e.flags.destroyed_at,
+            })
+        })
+        .collect();
+    let entities_json = python_json_dump(&serde_json::json!({
+        "format": 1, "scenario": scen.id, "entities": entities_sidecar,
+    }));
+    let environment_json = python_json_dump(&serde_json::json!({
+        "format": 1, "scenario": scen.id, "events": environment,
+    }));
     Ok(GeneratedSet {
         scenario: scen.id.clone(),
         variant,
@@ -1488,8 +1501,180 @@ fn run(lib: &TrackLibrary, mut built: Built<'_>) -> Result<GeneratedSet, TracksE
         events: events_text,
         sensors_json: sensors_value(&built.sensors),
         metadata_json: metadata,
+        entities_json,
+        environment_json,
         counts,
     })
+}
+
+/// `json.dump(value, f, indent=1, sort_keys=True)`, byte for byte: how the reference
+/// writes the re-observation sidecars (docs/design/DN-32-re-observation-for-a-laydown.md
+/// §5), so this generator reproduces them exactly rather than as equal values. Keys are
+/// sorted here rather than trusted to `serde_json::Map`'s order, which a feature
+/// elsewhere in the build could change.
+fn python_json_dump(v: &serde_json::Value) -> String {
+    fn go(v: &serde_json::Value, level: usize, out: &mut String) {
+        match v {
+            serde_json::Value::Null => out.push_str("null"),
+            serde_json::Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    let _ = write!(out, "{i}");
+                } else if let Some(u) = n.as_u64() {
+                    let _ = write!(out, "{u}");
+                } else {
+                    out.push_str(&json_num(Num::Float(n.as_f64().unwrap_or(f64::NAN))));
+                }
+            }
+            serde_json::Value::String(s) => out.push_str(&json_str(s)),
+            serde_json::Value::Array(a) if a.is_empty() => out.push_str("[]"),
+            serde_json::Value::Array(a) => {
+                out.push_str("[\n");
+                for (i, item) in a.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(",\n");
+                    }
+                    out.push_str(&" ".repeat(level + 1));
+                    go(item, level + 1, out);
+                }
+                out.push('\n');
+                out.push_str(&" ".repeat(level));
+                out.push(']');
+            }
+            serde_json::Value::Object(o) if o.is_empty() => out.push_str("{}"),
+            serde_json::Value::Object(o) => {
+                let mut keys: Vec<&String> = o.keys().collect();
+                keys.sort();
+                out.push_str("{\n");
+                for (i, k) in keys.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(",\n");
+                    }
+                    out.push_str(&" ".repeat(level + 1));
+                    out.push_str(&json_str(k));
+                    out.push_str(": ");
+                    if let Some(value) = o.get(*k) {
+                        go(value, level + 1, out);
+                    }
+                }
+                out.push('\n');
+                out.push_str(&" ".repeat(level));
+                out.push('}');
+            }
+        }
+    }
+    let mut out = String::new();
+    go(v, 0, &mut out);
+    out
+}
+
+/// A sensor type's parameters as the reference writes them: every key the type declares
+/// except `id`, `name` and `confidence`, before a scenario's overrides.
+fn type_params(k: &SensorType) -> serde_json::Map<String, serde_json::Value> {
+    let mut params = serde_json::Map::new();
+    params.insert("signature_key".into(), k.signature_key.clone().into());
+    params.insert(
+        "range_m".into(),
+        serde_json::Value::Object(
+            k.range_m
+                .iter()
+                .map(|(c, v)| (c.clone(), num_value(*v)))
+                .collect(),
+        ),
+    );
+    params.insert("pd_in_range".into(), num_value(k.pd_in_range));
+    params.insert("update_period_s".into(), num_value(k.update_period_s));
+    params.insert(
+        "noise".into(),
+        serde_json::json!({
+            "range_m": num_value(k.noise.range_m),
+            "cross_m": num_value(k.noise.cross_m),
+            "height_m": num_value(k.noise.height_m),
+        }),
+    );
+    params.insert(
+        "field_of_regard_deg".into(),
+        serde_json::Value::Array(
+            k.field_of_regard_deg
+                .iter()
+                .map(|n| num_value(*n))
+                .collect(),
+        ),
+    );
+    params.insert(
+        "altitude_m".into(),
+        serde_json::Value::Array(k.altitude_m.iter().map(|n| num_value(*n)).collect()),
+    );
+    params.insert("horizon".into(), k.horizon.into());
+    params.insert(
+        "latency_s".into(),
+        serde_json::json!({"mean": num_value(k.latency_s.mean), "jitter": num_value(k.latency_s.jitter)}),
+    );
+    params.insert("dropout".into(), num_value(k.dropout));
+    params.insert("out_of_order".into(), num_value(k.out_of_order));
+    params.insert(
+        "false_alarms_per_scan".into(),
+        num_value(k.false_alarms_per_scan),
+    );
+    params.insert(
+        "ea".into(),
+        serde_json::json!({
+            "skew_s": num_value(k.ea.skew_s),
+            "dropout_multiplier": num_value(k.ea.dropout_multiplier),
+            "fa_multiplier": num_value(k.ea.fa_multiplier),
+        }),
+    );
+    if k.cued {
+        params.insert("cued".into(), true.into());
+    }
+    if k.moving_only {
+        params.insert("moving_only".into(), true.into());
+    }
+    if !k.sea_state_dropout.is_empty() {
+        params.insert(
+            "sea_state_dropout".into(),
+            serde_json::Value::Object(
+                k.sea_state_dropout
+                    .iter()
+                    .map(|(state, v)| (state.to_string(), num_value(*v)))
+                    .collect(),
+            ),
+        );
+    }
+    for (key, v) in &k.rest {
+        params.insert(key.clone(), scalar_value(v));
+    }
+    params
+}
+
+/// The JSON export of `sensors.yaml` a rehearsal resolves a deployment sensor's
+/// detection model from (`testdata/tracks/sensor-models.json`,
+/// docs/design/DN-32-re-observation-for-a-laydown.md §5.4), byte for byte as the
+/// reference writes it.
+#[must_use]
+pub fn sensor_catalogue_export(lib: &TrackLibrary) -> String {
+    let types: serde_json::Map<String, serde_json::Value> = lib
+        .sensors
+        .types
+        .iter()
+        .map(|k| {
+            (
+                k.id.clone(),
+                serde_json::json!({
+                    "name": k.name,
+                    "confidence": k.confidence,
+                    "model": serde_json::Value::Object(type_params(k)),
+                }),
+            )
+        })
+        .collect();
+    python_json_dump(&serde_json::json!({
+        "format": 1,
+        "generator": GENERATOR,
+        "source": "docs/test-tracks/sensors.yaml",
+        "sensors_version": lib.sensors.version,
+        "types": types,
+    }))
 }
 
 /// Generate one scenario's set: the committed sample reduction, or the full-size set.
@@ -1526,7 +1711,8 @@ pub fn generate_sample(lib: &TrackLibrary, scenario_id: &str) -> Result<Generate
 }
 
 impl GeneratedSet {
-    /// Write the six files of a set into `dir`, as the reference lays them out.
+    /// Write the eight files of a set into `dir`, as the reference lays them out: the
+    /// six it always wrote and the two re-observation sidecars (DN-32 §5.2, §5.3).
     ///
     /// # Errors
     ///
@@ -1537,6 +1723,8 @@ impl GeneratedSet {
         std::fs::write(dir.join("detections.jsonl"), &self.detections)?;
         std::fs::write(dir.join("detections-truth.jsonl"), &self.detections_truth)?;
         std::fs::write(dir.join("events.jsonl"), &self.events)?;
+        std::fs::write(dir.join("entities.json"), &self.entities_json)?;
+        std::fs::write(dir.join("environment.json"), &self.environment_json)?;
         std::fs::write(
             dir.join("sensors.json"),
             serde_json::to_string_pretty(&self.sensors_json)?,

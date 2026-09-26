@@ -1,0 +1,196 @@
+{
+ "entities": [
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT07-stream-south-001",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 822.9899276233631,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT07-stream-south-002",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 109.07633371192928,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT07-stream-south-003",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 945.200701750321,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT07-stream-south-004",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 831.8477977374918,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT07-stream-south-005",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 864.6681994979314,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT07-stream-south-006",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 1001.2435442885917,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT07-stream-sea-001",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 439.3225081832114,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT07-stream-sea-002",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 1026.5352386192862,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT07-stream-sea-003",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 825.8949010937205,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.loitering",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT07-radar-strike-001",
+   "occluded_window_s": null,
+   "platform": "lancet-3",
+   "side": "red",
+   "signature": {
+    "acoustic": "moderate",
+    "emission": "datalink",
+    "ir": "low",
+    "rcs": "very-small"
+   },
+   "spawn_s": 600.0,
+   "surface": false
+  }
+ ],
+ "format": 1,
+ "scenario": "TT-07"
+}
