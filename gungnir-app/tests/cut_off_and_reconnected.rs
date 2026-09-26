@@ -532,19 +532,30 @@ impl Proxy {
                         return;
                     }
                     let Ok(inbound) = inbound else { continue };
-                    if !open.load(Ordering::Relaxed) {
+                    let Ok(outbound) = TcpStream::connect(upstream) else {
                         let _ = inbound.shutdown(std::net::Shutdown::Both);
                         continue;
+                    };
+                    // **Admitted and registered under the lock `cut` holds** (GAP-167).
+                    // This checked `open`, connected upstream, and only then registered
+                    // the connection, so a cut landing in between drained the list without
+                    // it and the connection was piped anyway: one live socket through a
+                    // cut proxy. The link's WebSocket is opened just after the link reports
+                    // connected, which is exactly when these tests cut, so that socket went
+                    // on carrying the node's heartbeat, the desktop never heard silence,
+                    // and "the desktop to fall back" waited out its 30 s.
+                    let Ok(mut held) = live.lock() else { continue };
+                    if !open.load(Ordering::SeqCst) {
+                        let _ = inbound.shutdown(std::net::Shutdown::Both);
+                        let _ = outbound.shutdown(std::net::Shutdown::Both);
+                        continue;
                     }
-                    let Ok(outbound) = TcpStream::connect(upstream) else {
+                    let (Ok(i), Ok(o)) = (inbound.try_clone(), outbound.try_clone()) else {
                         continue;
                     };
-                    if let (Ok(i), Ok(o), Ok(mut held)) =
-                        (inbound.try_clone(), outbound.try_clone(), live.lock())
-                    {
-                        held.push(i);
-                        held.push(o);
-                    }
+                    held.push(i);
+                    held.push(o);
+                    drop(held);
                     pipe(&inbound, &outbound);
                     pipe(&outbound, &inbound);
                 }
@@ -559,9 +570,12 @@ impl Proxy {
     }
 
     /// Close every connection through the proxy and refuse new ones.
+    ///
+    /// Under the registration lock, so every connection is either registered before the
+    /// cut and closed by it, or admitted after it and refused (GAP-167).
     fn cut(&self) {
-        self.open.store(false, Ordering::Relaxed);
         if let Ok(mut held) = self.live.lock() {
+            self.open.store(false, Ordering::SeqCst);
             for stream in held.drain(..) {
                 let _ = stream.shutdown(std::net::Shutdown::Both);
             }
@@ -569,7 +583,9 @@ impl Proxy {
     }
 
     fn restore(&self) {
-        self.open.store(true, Ordering::Relaxed);
+        if let Ok(_held) = self.live.lock() {
+            self.open.store(true, Ordering::SeqCst);
+        }
     }
 }
 

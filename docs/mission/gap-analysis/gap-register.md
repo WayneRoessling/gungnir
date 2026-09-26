@@ -170,8 +170,9 @@ history, and an entry is never edited once it has merged.
 | GAP-147 | No committed recording reaches round 1's radars | Technical | CAP-5.2, CAP-1.4 | 2 | 4 | M | 8 | I3 | Services engineer | Open |
 | GAP-156 | A picture the exact solver cannot finish in time is never answered | Technical | CAP-3.3 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
 | GAP-157 | A linked desktop cannot tell that its node's planner is stale | Technical | CAP-3.3, CAP-7.3 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
+| GAP-167 | The outage tests' proxy can let one connection through a cut | Technical | CAP-5.4 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 
-Counts: 157 gaps, 3 mission, 154 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 158 gaps, 3 mission, 155 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2377,4 +2378,18 @@ Counts: 157 gaps, 3 mission, 154 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found building GAP-119 (`../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`).
 - Depends on: GAP-119.
+
+**GAP-167 The outage tests' proxy can let one connection through a cut**
+
+- Type: Technical.
+- Capability: CAP-5.4 Disconnected and reconcile.
+- History:
+  - 2026-09-26, Open: Found by one timeout of "the desktop to fall back" while building GAP-165, and reproduced on demand by widening the gap between the proxy's check and its registration.
+  - 2026-09-26, Closed: Both proxies admit and register a connection under the lock `cut` and `restore` hold. With the gap widened to 300 ms every outage test passes, where before the fallback wait timed out. Test code only. See `../../record/2026-09-26/the-outage-tests-proxy-held-a-socket-open.md`.
+- Evidence: `gungnir-app/tests/cut_off_and_reconnected.rs` (`Proxy`); the same proxy copied as `CountingProxy` in `gungnir-remote/tests/transport.rs`; one local timeout of `an_outage_outlives_the_desktop_that_fell_into_it` waiting for the fallback.
+- Severity: 2. Reach: 1 threads. Effort: S. Priority: 2.
+- Impact: The TCP proxy that cuts a desktop from its node in the outage tests checked whether it was open, connected upstream, and only then registered the connection a cut closes. A cut landing between the two left one socket piped through a cut proxy. The tests cut the moment the link reports connected, which is just before it opens its event stream, so that stream kept carrying the node's heartbeat, the desktop never went silent, and a wait for the fallback ran out: a failure that says nothing about the product and would be read as a failover defect or dismissed as a flake.
+- Closing action: Admit and register a connection under the lock the cut holds, so every connection is either closed by the cut or refused by it.
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: Found building GAP-165 (`../../record/2026-09-26/the-outage-tests-proxy-held-a-socket-open.md`).
 

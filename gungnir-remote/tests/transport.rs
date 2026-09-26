@@ -1337,19 +1337,26 @@ impl CountingProxy {
             move || {
                 for inbound in listener.incoming() {
                     let Ok(inbound) = inbound else { continue };
-                    if !open.load(Ordering::Relaxed) {
+                    let Ok(outbound) = std::net::TcpStream::connect(upstream) else {
                         let _ = inbound.shutdown(std::net::Shutdown::Both);
                         continue;
+                    };
+                    // Admitted and registered under the lock `cut` holds, so a cut cannot
+                    // land between the check and the registration and leave one live socket
+                    // through a cut proxy (GAP-167, found in
+                    // `gungnir-app/tests/cut_off_and_reconnected.rs`'s copy of this proxy).
+                    let Ok(mut held) = live.lock() else { continue };
+                    if !open.load(Ordering::SeqCst) {
+                        let _ = inbound.shutdown(std::net::Shutdown::Both);
+                        let _ = outbound.shutdown(std::net::Shutdown::Both);
+                        continue;
                     }
-                    let Ok(outbound) = std::net::TcpStream::connect(upstream) else {
+                    let (Ok(i), Ok(o)) = (inbound.try_clone(), outbound.try_clone()) else {
                         continue;
                     };
-                    if let (Ok(i), Ok(o), Ok(mut held)) =
-                        (inbound.try_clone(), outbound.try_clone(), live.lock())
-                    {
-                        held.push(i);
-                        held.push(o);
-                    }
+                    held.push(i);
+                    held.push(o);
+                    drop(held);
                     pipe(&inbound, &outbound, Some(publishes.clone()));
                     pipe(&outbound, &inbound, None);
                 }
@@ -1373,8 +1380,8 @@ impl CountingProxy {
 
     /// Close every connection through the proxy and refuse new ones.
     fn cut(&self) {
-        self.open.store(false, std::sync::atomic::Ordering::Relaxed);
         if let Ok(mut held) = self.live.lock() {
+            self.open.store(false, std::sync::atomic::Ordering::SeqCst);
             for stream in held.drain(..) {
                 let _ = stream.shutdown(std::net::Shutdown::Both);
             }
@@ -1382,7 +1389,9 @@ impl CountingProxy {
     }
 
     fn restore(&self) {
-        self.open.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(_held) = self.live.lock() {
+            self.open.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
     }
 }
 
