@@ -386,20 +386,18 @@ impl ExactSolve {
         while self.step <= self.horizon {
             let step = self.step;
             let available = u32::try_from(self.subset).unwrap_or(u32::MAX);
-            let mut scan = match self.scan.take() {
-                Some(scan) => scan,
-                None => {
-                    if !keep_going() {
-                        return self.pending();
-                    }
-                    Scan {
-                        enumerator: Enumerator::new(available, self.resources),
-                        best: f64::NEG_INFINITY,
-                        best_matching: None,
-                        walked: 0,
-                    }
-                }
-            };
+            // A state a previous slice stopped inside is resumed; a new one is begun only
+            // once the caller agrees to it.
+            let resumed = self.scan.take();
+            if resumed.is_none() && !keep_going() {
+                return self.pending();
+            }
+            let mut scan = resumed.unwrap_or_else(|| Scan {
+                enumerator: Enumerator::new(available, self.resources),
+                best: f64::NEG_INFINITY,
+                best_matching: None,
+                walked: 0,
+            });
             while let Some(matching) = scan.enumerator.next(&self.reward) {
                 let next = available & !matching.consumed;
                 let total = matching.reward + self.value[step - 1][next as usize];
@@ -432,7 +430,7 @@ impl ExactSolve {
                     scan.best_matching = Some(matching.clone());
                 }
                 scan.walked += 1;
-                if scan.walked % CHECK_EVERY_MATCHINGS == 0 && !keep_going() {
+                if scan.walked.is_multiple_of(CHECK_EVERY_MATCHINGS) && !keep_going() {
                     self.scan = Some(scan);
                     return self.pending();
                 }

@@ -1,7 +1,6 @@
 @startuml If-Sr-picture-tracking-vocabulary
 title If-Sr information structure: Picture & tracking vocabulary
 left to right direction
-!pragma layout smetana
 hide empty members
 skinparam classAttributeIconSize 0
 enum "SensorMode" as SensorMode <<InformationElement>> {

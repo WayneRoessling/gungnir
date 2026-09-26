@@ -1,7 +1,6 @@
 @startuml If-Sr-plans-effectors-handoff
 title If-Sr information structure: Plans, effectors & handoff
 left to right direction
-!pragma layout smetana
 hide empty members
 skinparam classAttributeIconSize 0
 enum "EffectorLayer" as EffectorLayer <<InformationElement>> {

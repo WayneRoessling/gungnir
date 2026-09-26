@@ -1,7 +1,6 @@
 @startuml If-Sr-uas-identification-platform-reports
 title If-Sr information structure: UAS identification & platform reports
 left to right direction
-!pragma layout smetana
 hide empty members
 skinparam classAttributeIconSize 0
 class "UasIdentificationReport" as UasIdentificationReport <<InformationElement>> {
