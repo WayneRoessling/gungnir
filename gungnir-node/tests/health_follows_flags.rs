@@ -121,6 +121,7 @@ fn the_nodes_health_follows_each_flag_true_false_true() {
             None,
             health,
             Vec::new(),
+            Vec::new(),
         );
 
         let expected = SystemHealth {

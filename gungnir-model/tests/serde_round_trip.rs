@@ -45,13 +45,13 @@ use gungnir_model::{
     check_schema_version, AlgorithmBaselineId, AssetExtent, AssetId, AssetListView, AssetPriority,
     BearingRayView, Classification, CollectionRequirement, Concurrence, DecisionId,
     DeconflictionCheck, DeconflictionKind, DeconflictionResult, DefendedAsset, DetectionView,
-    EffectorLayer, EffectorReport, FiresPlan, Geodetic, InterceptSolutionView, LaunchWarningReport,
-    LaydownId, Magazine, Measurement, MissionProfile, MissionTime, ModelError, PeerLaunchWarning,
-    PeerOrigin, PendingApprovalId, PipelineStatsView, PlanBasis, PlanId, PlanKind,
-    PlanStandingView, PlanView, ProductKind, Provenance, Quality, RehearsalOrigin, RelativeCost,
-    Releasability, RequestId, RequirementId, RequirementState, ResourceId, ResourceView, SensorId,
-    SensorMode, SensorTaskId, SessionId, SourceAuthentication, TestTrackNumber, TrackId,
-    TrackStatus, TrackView, WarningObligation, SCHEMA_VERSION,
+    EffectorLayer, EffectorReport, FiresPlan, Geodetic, HeldLayerView, InterceptSolutionView,
+    LaunchWarningReport, LaydownId, Magazine, Measurement, MissionProfile, MissionTime, ModelError,
+    PeerLaunchWarning, PeerOrigin, PendingApprovalId, PipelineStatsView, PlanBasis, PlanId,
+    PlanKind, PlanStandingView, PlanView, ProductKind, Provenance, Quality, RehearsalOrigin,
+    RelativeCost, Releasability, RequestId, RequirementId, RequirementState, ResourceId,
+    ResourceView, SensorId, SensorMode, SensorTaskId, SessionId, SourceAuthentication,
+    TestTrackNumber, TrackId, TrackStatus, TrackView, WarningObligation, SCHEMA_VERSION,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -411,7 +411,19 @@ fn intercept_events() -> Vec<InterceptEvent> {
             engines: vec!["geofence".into(), "control-status".into()],
         },
         InterceptEvent::PlanStanding(plan_standings()[1].clone()),
+        InterceptEvent::HeldLayers(held_layers()),
+        InterceptEvent::HeldLayers(Vec::new()),
     ]
+}
+
+/// GAP-183, D-114: a layer at hold refusing every plan, as the queue's holder says it.
+fn held_layers() -> Vec<HeldLayerView> {
+    vec![HeldLayerView {
+        layer: EffectorLayer::Area,
+        refused: 12,
+        evaluated: 14,
+        since: T0,
+    }]
 }
 
 fn ingest_events() -> Vec<IngestEvent> {
@@ -1003,6 +1015,7 @@ impl Variant for InterceptEvent {
             Self::PlanSuperseded(_) => "PlanSuperseded",
             Self::PlanEvaluated { .. } => "PlanEvaluated",
             Self::PlanStanding(_) => "PlanStanding",
+            Self::HeldLayers(_) => "HeldLayers",
         }
     }
 }
@@ -1586,6 +1599,11 @@ fn every_view_type_round_trips_and_every_one_is_covered() {
         round_trip(&format!("PlanStandingView {i}"), s);
     }
     check("PlanStandingView", standings.len());
+
+    for (i, h) in held_layers().iter().enumerate() {
+        round_trip(&format!("HeldLayerView {i}"), h);
+    }
+    check("HeldLayerView", held_layers().len());
 
     assert_eq!(
         covered,

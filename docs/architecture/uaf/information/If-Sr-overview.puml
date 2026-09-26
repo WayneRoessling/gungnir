@@ -12,11 +12,11 @@ component "Battle rhythm & mission records" as battle_rhythm_mission_records <<G
 component "UAS identification & platform reports" as uas_identification_platform_reports <<Group>> [[If-Sr-uas-identification-platform-reports.svg]]
 policy_authority_settings --> core_identifiers_frames_quality
 events_the_record --> picture_tracking_vocabulary
+events_the_record --> policy_authority_settings
 events_the_record --> core_identifiers_frames_quality
 events_the_record --> battle_rhythm_mission_records
 events_the_record --> plans_effectors_handoff
 events_the_record --> assets_exchange_releasability
-events_the_record --> policy_authority_settings
 assets_exchange_releasability --> core_identifiers_frames_quality
 assets_exchange_releasability --> picture_tracking_vocabulary
 plans_effectors_handoff --> core_identifiers_frames_quality

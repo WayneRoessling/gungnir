@@ -45,6 +45,12 @@ pub enum InterceptEvent {
     /// compatibility rules allow ("Enum variants may be added"): nothing that already
     /// read this enum is misled by a variant it does not know.
     PlanStanding(crate::PlanStandingView),
+    /// The effector layers at hold that are refusing every plan, published whenever the
+    /// list changes -- including when it empties because a plan was offered (GAP-183,
+    /// D-114; DN-09 §9). By whichever machine holds the queue, so a linked desktop draws
+    /// the node's list on PN-06 as an embedded desktop draws its own. Added under the same
+    /// compatibility rule as `PlanStanding`.
+    HeldLayers(Vec<crate::HeldLayerView>),
 }
 
 /// What the ingest gateway did with an observation, for provenance and audit.

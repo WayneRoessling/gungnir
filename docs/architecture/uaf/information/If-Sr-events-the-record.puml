@@ -15,6 +15,7 @@ enum "InterceptEvent" as InterceptEvent <<InformationElement>> {
   PlanSuperseded(PlanView)
   PlanEvaluated { plan: PlanId, verdict: VerdictSummary, engines: Vec<String>, }
   PlanStanding(crate::PlanStandingView)
+  HeldLayers(Vec<crate::HeldLayerView>)
 }
 enum "IngestEvent" as IngestEvent <<InformationElement>> {
   Accepted(DetectionView)
@@ -168,6 +169,8 @@ enum "EffectorReport\n(see If-Sr-plans-effectors-handoff)" as EffectorReport <<E
 }
 class "GlobalEntityId\n(see If-Sr-core-identifiers-frames-quality)" as GlobalEntityId <<External>> #line.dashed {
 }
+class "HeldLayerView\n(see If-Sr-policy-authority-settings)" as HeldLayerView <<External>> #line.dashed {
+}
 class "LaunchWarningReport\n(see If-Sr-assets-exchange-releasability)" as LaunchWarningReport <<External>> #line.dashed {
 }
 class "MissionProfile\n(see If-Sr-core-identifiers-frames-quality)" as MissionProfile <<External>> #line.dashed {
@@ -199,6 +202,7 @@ class "SessionId\n(see If-Sr-picture-tracking-vocabulary)" as SessionId <<Extern
 class "TrackView\n(see If-Sr-picture-tracking-vocabulary)" as TrackView <<External>> #line.dashed {
 }
 TrackingEvent --> TrackView : TrackInitiated, TrackUpdated
+InterceptEvent --> HeldLayerView : HeldLayers
 InterceptEvent --> PlanId : PlanEvaluated
 InterceptEvent --> PlanStandingView : PlanStanding
 InterceptEvent --> PlanView : PlanProposed, PlanApproved, PlanSuperseded

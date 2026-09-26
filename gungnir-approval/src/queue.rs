@@ -18,14 +18,73 @@ use gungnir_command::{
 };
 use gungnir_eventing::Event;
 use gungnir_model::events::{CommandEvent, InterceptEvent};
-use gungnir_model::PlanView;
-use gungnir_policy::PolicyVerdict;
+use gungnir_model::{
+    ControlStatusSettings, HeldLayerView, MissionTime, PlanView, WeaponsControlStatus,
+};
+use gungnir_policy::{DenialReason, PolicyVerdict};
 
-/// The last denial the chain returned, kept so an empty queue can say why.
+/// The last denial the chain returned, kept so an empty queue can say why; and the
+/// layers at hold that are refusing every plan (GAP-183, D-114).
 #[derive(Debug, Clone, Default)]
 pub struct DenialHistory {
     pub count: usize,
     pub last_reason: Option<String>,
+    /// Each layer at hold that has refused a plan since the last plan was offered for
+    /// decision, with its counts. Emptied the moment one is offered: from then on
+    /// "refusing every plan" is no longer true. Read through
+    /// [`DenialHistory::held_layers`], which keeps only layers still at hold.
+    held: Vec<HeldLayerView>,
+}
+
+impl DenialHistory {
+    /// Fold one verdict in. Returns whether the held-layer list changed, which is when
+    /// its holder publishes it.
+    ///
+    /// A refusal adds one to every held layer's `evaluated`, and to `refused` for the
+    /// layer whose hold refused it, opening that layer's entry at `now` if it had none. A
+    /// plan that cleared policy closes the window: nothing is refusing *every* plan once
+    /// one has been offered.
+    pub fn note(&mut self, verdict: &PolicyVerdict, now: MissionTime) -> bool {
+        let PolicyVerdict::Denied { reason_code } = verdict else {
+            let changed = !self.held.is_empty();
+            self.held.clear();
+            return changed;
+        };
+        self.count += 1;
+        self.last_reason = Some(format!("{reason_code:?}"));
+        for held in &mut self.held {
+            held.evaluated += 1;
+        }
+        if let DenialReason::ControlStatus {
+            layer,
+            status: WeaponsControlStatus::Hold,
+        } = *reason_code
+        {
+            match self.held.iter_mut().find(|h| h.layer == layer) {
+                Some(held) => held.refused += 1,
+                None => self.held.push(HeldLayerView {
+                    layer,
+                    refused: 1,
+                    evaluated: 1,
+                    since: now,
+                }),
+            }
+        }
+        !self.held.is_empty()
+    }
+
+    /// The layers refusing every plan, **while it is true**: those that refused one since
+    /// the last plan offered and are still at hold under `control_status`, the settings
+    /// in force. A layer whose hold was lifted is not drawn as refusing, whatever it
+    /// refused before.
+    #[must_use]
+    pub fn held_layers(&self, control_status: &ControlStatusSettings) -> Vec<HeldLayerView> {
+        self.held
+            .iter()
+            .filter(|h| control_status.for_layer(h.layer) == WeaponsControlStatus::Hold)
+            .copied()
+            .collect()
+    }
 }
 
 /// Whether this verdict refuses **the asking role** rather than the plan (GAP-113).
@@ -219,9 +278,18 @@ impl ApprovalDesk {
                     .collect(),
             }),
         );
-        if let PolicyVerdict::Denied { reason_code } = verdict {
-            self.denials.count += 1;
-            self.denials.last_reason = Some(format!("{reason_code:?}"));
+        // GAP-183, D-114: a layer at hold refusing every plan is said, by whichever
+        // machine holds the queue, whenever what it would say changes -- including when
+        // a plan is offered and there is nothing left to say.
+        if self.denials.note(&verdict, cx.now) {
+            host.publish(
+                cx.now,
+                Event::Intercept(InterceptEvent::HeldLayers(
+                    self.denials.held_layers(&cx.config.policy.control_status),
+                )),
+            );
+        }
+        if let PolicyVerdict::Denied { .. } = verdict {
             return Submitted::Evaluated(verdict);
         }
         // The layer whose window closes first governs the deadline; a plan tasking nothing
@@ -509,5 +577,93 @@ impl ApprovalDesk {
             .iter()
             .filter(|r| r.is_expiry())
             .count()
+    }
+}
+
+#[cfg(test)]
+mod held_layer_tests {
+    use super::*;
+    use gungnir_model::EffectorLayer;
+
+    fn held(layer: EffectorLayer) -> PolicyVerdict {
+        PolicyVerdict::Denied {
+            reason_code: DenialReason::ControlStatus {
+                layer,
+                status: WeaponsControlStatus::Hold,
+            },
+        }
+    }
+
+    fn area_held_point_free() -> ControlStatusSettings {
+        ControlStatusSettings {
+            by_layer: [
+                (EffectorLayer::Area, WeaponsControlStatus::Hold),
+                (EffectorLayer::Point, WeaponsControlStatus::Free),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+
+    /// GAP-183, D-114: a held layer's refusals are counted from its first, with every
+    /// plan evaluated since; a refusal for another reason counts as evaluated and not as
+    /// the hold's; and the first plan offered for decision ends it.
+    #[test]
+    fn a_held_layer_is_counted_until_a_plan_is_offered() {
+        let mut d = DenialHistory::default();
+        let control = area_held_point_free();
+        assert!(d.held_layers(&control).is_empty());
+
+        assert!(d.note(&held(EffectorLayer::Area), MissionTime(10.0)));
+        assert!(d.note(
+            &PolicyVerdict::Denied {
+                reason_code: DenialReason::NoGoGeofence
+            },
+            MissionTime(11.0)
+        ));
+        assert!(d.note(&held(EffectorLayer::Area), MissionTime(12.0)));
+        assert_eq!(
+            d.held_layers(&control),
+            vec![HeldLayerView {
+                layer: EffectorLayer::Area,
+                refused: 2,
+                evaluated: 3,
+                since: MissionTime(10.0),
+            }]
+        );
+        assert_eq!(d.count, 3, "every denial is still counted as one");
+
+        // A plan offered for decision: nothing is refusing every plan any more.
+        assert!(d.note(&PolicyVerdict::RequiresHumanApproval, MissionTime(13.0)));
+        assert!(d.held_layers(&control).is_empty());
+        assert!(
+            !d.note(&PolicyVerdict::RequiresHumanApproval, MissionTime(14.0)),
+            "nothing to say twice"
+        );
+    }
+
+    /// While it is true: a layer whose hold has been lifted is not drawn as refusing,
+    /// whatever it refused before; and a denial that is no hold opens nothing.
+    #[test]
+    fn a_lifted_hold_and_other_refusals_are_not_a_held_layer() {
+        let mut d = DenialHistory::default();
+        d.note(&held(EffectorLayer::Area), MissionTime(1.0));
+        let mut lifted = area_held_point_free();
+        lifted
+            .by_layer
+            .insert(EffectorLayer::Area, WeaponsControlStatus::Free);
+        assert!(d.held_layers(&lifted).is_empty());
+
+        let mut other = DenialHistory::default();
+        assert!(!other.note(
+            &PolicyVerdict::Denied {
+                reason_code: DenialReason::ControlStatus {
+                    layer: EffectorLayer::Point,
+                    status: WeaponsControlStatus::Tight,
+                },
+            },
+            MissionTime(1.0)
+        ));
+        assert!(other.held_layers(&area_held_point_free()).is_empty());
     }
 }

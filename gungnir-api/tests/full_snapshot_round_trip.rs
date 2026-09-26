@@ -187,6 +187,13 @@ fn full_snapshot() -> SnapshotResponse {
         optimum_at_most: 7.5,
         reason: "the exact solver takes at most 16 tracks".into(),
     })
+    // GAP-183: a layer at hold refusing every plan.
+    .with_held_layers(vec![gungnir_model::HeldLayerView {
+        layer: EffectorLayer::Area,
+        refused: 9,
+        evaluated: 11,
+        since: MissionTime(380.0),
+    }])
 }
 
 /// Plain serde: the shape of the existing tests in `v3/mod.rs`, over the fully
@@ -220,6 +227,7 @@ fn a_fully_populated_snapshot_survives_plain_serde() {
         Some(gungnir_model::PlanBasis::OneStep)
     );
     assert_eq!(back.plan_standing, original.plan_standing);
+    assert_eq!(back.held_layers, original.held_layers);
 }
 
 async fn serve(api: Arc<NodeApi>) -> std::net::SocketAddr {

@@ -361,7 +361,10 @@ fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
                 // GAP-157: a planner falling behind and catching up is a health fact about
                 // the planner, not a piece of this watch's work; the plan it concerns was
                 // counted when it was proposed.
-                | InterceptEvent::PlanStanding(_),
+                | InterceptEvent::PlanStanding(_)
+                // GAP-183: a held layer refusing plans is a fact about the policy in
+                // force; the plans it refused were counted when they were proposed.
+                | InterceptEvent::HeldLayers(_),
             )
             // GAP-132: an item entering a queue is not one of this watch's counts. The
             // plan it carries was already counted as `plans_proposed`, and counting the

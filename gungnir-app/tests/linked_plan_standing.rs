@@ -345,6 +345,7 @@ impl Node {
             self.announcer.last_standing(),
             health,
             queue,
+            self.approval.held_layers(&self.config),
         );
     }
 }
@@ -571,6 +572,164 @@ fn a_linked_desktop_draws_the_nodes_plan_as_the_node_stands_it() {
         "{}",
         panel.joined()
     );
+
+    drop((desk, node));
+    for dir in [node_dir, desk_dir] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// The node's baseline with a point effector and an area battery, the point layer
+/// weapons free and the area layer at hold (unconfigured, which DN-09 reads as hold), and
+/// the supervisor holding the authority to decide at both -- so the only thing refusing
+/// a plan is the area layer's hold (GAP-183).
+fn held_baseline(dir: &Path, backend: BackendConfig) -> ConfigBaseline {
+    let mut config = baseline(dir, backend);
+    config.resources = vec![
+        effector(40),
+        ResourceConfig {
+            layer: "area".into(),
+            ..effector(50)
+        },
+    ];
+    config.policy.authority.rules.push(AuthorityRule {
+        action: gungnir_app::decisions::DECISION_ACTION.into(),
+        role: "Supervisor".into(),
+        layer: Some(EffectorLayer::Area),
+        class: None,
+        pre_delegated: false,
+    });
+    gungnir_config::validate(&config).expect("the held baseline is valid");
+    config
+}
+
+fn pn06(state: &AppState) -> gungnir_ui::harness::DrawnFrame {
+    RenderProbe::new()
+        .draw(|ui| {
+            let _ = workspace::render_panel(ui, PanelId::ApprovalQueue, state);
+        })
+        .1
+}
+
+/// **A linked desktop is told a held layer refuses every plan, as the node counts it**
+/// (GAP-183, D-114; DN-09 §9). The node holds the queue, so it is the node's desk that
+/// counts: its area layer's hold refuses both plans the growing raid brings, nothing is
+/// queued, and the node says so on the stream (`InterceptEvent::HeldLayers`) and in its
+/// snapshot. The desktop draws the node's list, count for count, on PN-06 with the same
+/// sentence an embedded desktop draws (`held_layer_said.rs`), and PN-05 says the node's
+/// plan will not reach the queue.
+#[test]
+#[allow(clippy::too_many_lines)] // one link told start to finish
+fn a_linked_desktop_is_told_a_held_layer_refuses_every_plan() {
+    let listener = NodeListener::bind();
+    let endpoint = format!("https://localhost:{}", listener.port);
+    let node_pem = listener.identity.certificate_pem.clone();
+
+    let desk_dir = scratch("held-desktop");
+    let mut config = held_baseline(&desk_dir, BackendConfig::Remote { endpoint });
+    config.security.tls.trust_roots_pem = vec![node_pem];
+    let mut desk = AppState::with_config(config).expect("the desktop starts");
+    let certificate = desk
+        .machine_identity
+        .as_ref()
+        .expect("the desktop issued its own identity (GAP-141)")
+        .key
+        .cert[0]
+        .as_ref()
+        .to_vec();
+
+    let node_dir = scratch("held-node");
+    let mut node = Node::start(
+        listener,
+        held_baseline(&node_dir, BackendConfig::Embedded),
+        &certificate,
+        Arc::new(SteppedClock::new(Duration::ZERO)),
+    );
+
+    node.step(MissionTime(0.0), &[]);
+    at(&mut desk, 0.0);
+    let mut draft = SignInDraft {
+        operator: OPERATOR.to_string(),
+        passphrase: PASSPHRASE.into(),
+        ..SignInDraft::default()
+    };
+    session::apply(&mut desk, &mut draft, SessionAction::SignIn);
+    assert_eq!(desk.role(), Role::Supervisor, "{:?}", desk.alerts);
+    until("the link to come up and subscribe", || {
+        update::tick(&mut desk);
+        let up = desk
+            .link
+            .as_ref()
+            .is_some_and(gungnir_remote::link::NodeLink::connected);
+        if up && node.api.subscriber_count() >= 1 {
+            Ok(())
+        } else {
+            Err(format!("alerts {:?}", desk.alerts))
+        }
+    });
+
+    // The raid grows over two node ticks; the node's hold on the area layer refuses both
+    // plans, and the node's own desk counts them.
+    node.step(
+        MissionTime(1.0),
+        &[track(71, 20_000.0), track(72, 10_000.0)],
+    );
+    node.step(
+        MissionTime(2.0),
+        &[
+            track(70, 30_000.0),
+            track(71, 20_000.0),
+            track(72, 10_000.0),
+        ],
+    );
+    let on_the_node = node.approval.held_layers(&node.config);
+    assert_eq!(
+        on_the_node,
+        vec![gungnir_model::HeldLayerView {
+            layer: EffectorLayer::Area,
+            refused: 2,
+            evaluated: 2,
+            since: MissionTime(1.0),
+        }],
+        "the node's desk counts the hold's refusals"
+    );
+    assert!(
+        node.approval
+            .queue_view(&node.config, &node.resources, &[])
+            .is_empty(),
+        "nothing reached the node's queue"
+    );
+
+    // The desktop draws the node's list, not a count of its own.
+    at(&mut desk, 2.0);
+    until("the node's held layers on this desktop", || {
+        update::tick(&mut desk);
+        let here = gungnir_app::decisions::held_layers(&desk);
+        if here == on_the_node {
+            Ok(())
+        } else {
+            Err(format!("{here:?}"))
+        }
+    });
+    let panel = pn06(&desk);
+    assert!(
+        panel.says(
+            "The area layer is at HOLD and is refusing every plan that tasks it: 2 of the 2 \
+             plan(s) evaluated since its first refusal were refused for it"
+        ),
+        "{}",
+        panel.joined()
+    );
+    assert!(panel.says("not a quiet sector"), "{}", panel.joined());
+    until("the node's refused plan on PN-05", || {
+        update::tick(&mut desk);
+        let panel = pn05(&desk);
+        if panel.says("This plan will not reach the approval queue: it tasks the area layer.") {
+            Ok(())
+        } else {
+            Err(panel.joined())
+        }
+    });
 
     drop((desk, node));
     for dir in [node_dir, desk_dir] {

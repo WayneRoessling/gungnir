@@ -316,6 +316,46 @@ pub struct ApprovalQueueView<'a> {
     /// that a queue full of greyed-out controls says why once instead of a person
     /// guessing from each row.
     pub cannot_decide: Option<&'a str>,
+    /// Each effector layer at hold that is refusing every plan, while it is (GAP-183,
+    /// D-114; DN-09 §9): the queue holder's own list, the node's on a linked desktop.
+    /// Drawn above everything else in the queue, because it is why the queue is empty.
+    pub held_layers: &'a [gungnir_model::HeldLayerView],
+}
+
+/// A layer's name as an operator reads it: the baseline's own spelling.
+#[must_use]
+pub fn layer_name(layer: gungnir_model::EffectorLayer) -> &'static str {
+    use gungnir_model::EffectorLayer;
+    match layer {
+        EffectorLayer::Area => "area",
+        EffectorLayer::Point => "point",
+        EffectorLayer::SelfDefence => "self-defence",
+        EffectorLayer::NonKinetic => "non-kinetic",
+    }
+}
+
+/// What PN-06 -- and PN-05, beside a plan it refuses -- says about a layer at hold that
+/// is refusing every plan (GAP-183, D-114). One sentence for both panels, so the two
+/// cannot describe one refusal two ways.
+///
+/// It names the layer, how many plans its hold has refused and out of how many evaluated
+/// since it first refused one, that nothing has been offered since, why the other layers'
+/// engagements went with them (DN-09 refuses a plan whole), and what would let them
+/// through. It does not say the sector is quiet, because it is not saying anything about
+/// the sector: it is saying the queue is empty for a reason.
+#[must_use]
+pub fn held_layer_sentence(held: &gungnir_model::HeldLayerView) -> String {
+    let layer = layer_name(held.layer);
+    format!(
+        "The {layer} layer is at HOLD and is refusing every plan that tasks it: {} of the \
+         {} plan(s) evaluated since its first refusal were refused for it, and none has \
+         been offered for decision since. A plan is refused whole when any engagement in \
+         it is (DN-09), so the engagements those plans proposed on other layers were \
+         refused with them. Lifting the hold on the {layer} layer -- a supervisor's or \
+         commander's act -- is what would let them through. This empty queue is not a \
+         quiet sector.",
+        held.refused, held.evaluated
+    )
 }
 
 /// Render the queue. Returns the item the operator clicked this frame, if any.
@@ -348,6 +388,13 @@ pub fn render_approval_queue(
         // Warning-coloured: this is a console that can see the queue and cannot act on
         // it, which an operator has to know before they reach for a control.
         ui.label(RichText::new(reason).color(palette.warning_color));
+    }
+
+    // GAP-183, D-114: a held layer refusing every plan is said first, in the warning
+    // colour, whether or not older items are still waiting -- it is what is keeping new
+    // ones out.
+    for held in view.held_layers {
+        ui.label(RichText::new(held_layer_sentence(held)).color(palette.warning_color));
     }
 
     let mut clicked = None;
@@ -640,6 +687,36 @@ fn draw_authority(ui: &mut Ui, palette: &theme::Palette, row: &QueueRow<'_>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// GAP-183, D-114: the held-layer line names the layer in the baseline's spelling,
+    /// both counts, the whole-plan rule, who may lift the hold, and that the empty queue
+    /// is not a quiet sector.
+    #[test]
+    fn a_held_layer_sentence_says_what_is_blocked_and_what_would_unblock_it() {
+        let s = held_layer_sentence(&gungnir_model::HeldLayerView {
+            layer: gungnir_model::EffectorLayer::SelfDefence,
+            refused: 7,
+            evaluated: 9,
+            since: gungnir_model::MissionTime(3.0),
+        });
+        assert!(
+            s.starts_with("The self-defence layer is at HOLD and is refusing every plan"),
+            "{s}"
+        );
+        assert!(s.contains("7 of the 9 plan(s)"), "{s}");
+        assert!(s.contains("refused whole"), "{s}");
+        assert!(
+            s.contains(
+                "Lifting the hold on the self-defence layer -- a supervisor's or \
+                        commander's act"
+            ),
+            "{s}"
+        );
+        assert!(
+            s.ends_with("This empty queue is not a quiet sector."),
+            "{s}"
+        );
+    }
 
     /// The distinction the panel exists to preserve. Only one of the three ways to be
     /// empty means what a calm queue looks like it means.

@@ -123,8 +123,8 @@ pub use plans::{
 };
 pub use policy_settings::{
     AuthorityRule, AuthoritySettings, ControlStatusSettings, DecisionSettings, DelegationSettings,
-    FiresSettings, IdentificationSettings, PolicySettings, StalenessSettings, ValidityWindow,
-    WeaponsControlStatus,
+    FiresSettings, HeldLayerView, IdentificationSettings, PolicySettings, StalenessSettings,
+    ValidityWindow, WeaponsControlStatus,
 };
 pub use profiles::{AlgorithmBaselineId, MissionProfile};
 pub use provenance::{Provenance, RehearsalOrigin, SourceAuthentication};

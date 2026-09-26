@@ -73,6 +73,12 @@ class "StalenessSettings" as StalenessSettings <<InformationElement>> {
 class "ControlStatusSettings" as ControlStatusSettings <<InformationElement>> {
   by_layer: BTreeMap<EffectorLayer, WeaponsControlStatus>
 }
+class "HeldLayerView" as HeldLayerView <<InformationElement>> {
+  layer: EffectorLayer
+  refused: u64
+  evaluated: u64
+  since: MissionTime
+}
 class "AuthorityRule" as AuthorityRule <<InformationElement>> {
   action: String
   role: String
@@ -141,6 +147,8 @@ ConflictSide --> MissionTime : at
 ConflictSide --> SideOutcome : outcome
 ControlStatusSettings --> EffectorLayer : by_layer
 ControlStatusSettings --> WeaponsControlStatus : by_layer
+HeldLayerView --> EffectorLayer : layer
+HeldLayerView --> MissionTime : since
 AuthorityRule --> EffectorLayer : layer
 AuthoritySettings --> AuthorityRule : rules
 DecisionSettings --> EffectorLayer : expiry_s, escalate_after_s

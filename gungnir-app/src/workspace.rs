@@ -626,6 +626,9 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
                 .as_ref()
                 .zip(what_if_verdict.as_ref())
                 .map(|(course, verdict)| alternative_line(verdict, course));
+            // GAP-183, D-114: the held layers this plan tasks, so PN-05 says beside the
+            // plan what PN-06 says under the empty queue.
+            let held = crate::decisions::held_layers_tasked(state, &state.last_plan);
             gungnir_ui::panels::intercept_panel::render_intercept_panel(
                 ui,
                 &state.palette,
@@ -633,6 +636,7 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
                 gungnir_ui::panels::intercept_panel::ShownPlan {
                     plan: &state.last_plan,
                     standing: state.plan_standing.view(),
+                    held: &held,
                 },
                 &withheld,
                 &fires,
@@ -1053,7 +1057,8 @@ fn render_approval_queue(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAct
     } else {
         Vec::new()
     };
-    let view = crate::decisions::queue_view(state, &rows, &handoffs, &role_name, &decided);
+    let held = crate::decisions::held_layers(state);
+    let view = crate::decisions::queue_view(state, &rows, &handoffs, &role_name, &decided, &held);
     gungnir_ui::panels::approval_queue::render_approval_queue(ui, &state.palette, &view)
         .map(PanelAction::SelectApproval)
 }

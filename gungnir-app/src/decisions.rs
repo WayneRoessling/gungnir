@@ -495,6 +495,7 @@ pub fn queue_view<'a>(
     handoffs: &'a [gungnir_ui::panels::handoff::HandoffRow<'a>],
     role_name: &'a str,
     decided: &'a [gungnir_ui::panels::approval_queue::DecidedRow<'a>],
+    held_layers: &'a [gungnir_model::HeldLayerView],
 ) -> ApprovalQueueView<'a> {
     let node = crate::projection::node_holds_the_queue(state);
     ApprovalQueueView {
@@ -521,12 +522,51 @@ pub fn queue_view<'a>(
         now: state.clock.now(),
         authority: crate::projection::authority(state),
         decided,
+        // GAP-183, D-114: whichever machine holds the queue says which layers at hold
+        // are refusing every plan -- the node's desk on a linked desktop, this one's
+        // otherwise -- and PN-06 draws that list.
+        held_layers,
         cannot_decide: (node && state.signed_in().is_none()).then_some(
             "Nobody is signed in. The node authorizes every decision against the \
              caller's role, so no decision can be taken from this console until \
              somebody signs in -- this queue is read-only until then.",
         ),
     }
+}
+
+/// The effector layers at hold refusing every plan, from whichever machine holds the
+/// queue (GAP-183, D-114; DN-09 §9): the node's word while it holds it, this desk's
+/// otherwise, filtered to layers still at hold under the policy in force here.
+#[must_use]
+pub fn held_layers(state: &AppState) -> Vec<gungnir_model::HeldLayerView> {
+    if crate::projection::node_holds_the_queue(state) {
+        state.projection.held_layers.clone()
+    } else {
+        state
+            .desk
+            .denials
+            .held_layers(&state.config.policy.control_status)
+    }
+}
+
+/// The held layers refusing every plan that `plan` tasks (GAP-183, D-114), for PN-05: a
+/// plan that tasks one will be refused whole. The layer of each tasked resource is read
+/// from this desktop's resources, which are the deployment's.
+#[must_use]
+pub fn held_layers_tasked(
+    state: &AppState,
+    plan: &gungnir_model::PlanView,
+) -> Vec<gungnir_model::HeldLayerView> {
+    let tasked: Vec<gungnir_model::EffectorLayer> = plan
+        .assignments()
+        .iter()
+        .filter_map(|(resource, _)| state.resources.iter().find(|r| r.id == *resource))
+        .map(|r| r.layer)
+        .collect();
+    held_layers(state)
+        .into_iter()
+        .filter(|h| tasked.contains(&h.layer))
+        .collect()
 }
 
 /// Why the node's queue is showing nothing (GAP-133, DN-31 §6.6).

@@ -533,6 +533,7 @@ impl Node {
             self.announcer.last_standing(),
             health,
             queue,
+            self.approval.held_layers(&self.config),
         );
         offered
     }

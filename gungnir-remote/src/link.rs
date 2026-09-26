@@ -110,6 +110,10 @@ pub struct Projection {
     /// no stale line and no age, on the console most operators use while linked. Its
     /// `computed_at` is the node's clock; `RemoteInterceptService` converts it.
     pub plan_standing: Option<gungnir_model::PlanStandingView>,
+    /// The node's layers at hold refusing every plan (GAP-183, D-114): the snapshot's
+    /// `held_layers` on each connection, then every `InterceptEvent::HeldLayers`. PN-06
+    /// draws them on a linked desktop exactly as an embedded desktop draws its own desk's.
+    pub held_layers: Vec<gungnir_model::HeldLayerView>,
     /// When this link's task started asking (GAP-142).
     ///
     /// **So a node that has never answered can be judged silent.** `last_heard` is `None`
@@ -526,6 +530,15 @@ impl NodeLink {
     #[must_use]
     pub fn node_time(&self) -> Option<gungnir_model::MissionTime> {
         self.read().and_then(|p| p.node_time)
+    }
+
+    /// The node's layers at hold refusing every plan, as it last said (GAP-183, D-114).
+    /// Empty while the link has never heard the node, as well as when none is.
+    #[must_use]
+    pub fn held_layers(&self) -> Vec<gungnir_model::HeldLayerView> {
+        self.read()
+            .map(|p| p.held_layers.clone())
+            .unwrap_or_default()
     }
 
     /// A receiver that changes every time the link task mutates the projection or its
@@ -1159,6 +1172,7 @@ async fn run_link(
         // Taken as the snapshot says, `None` included: a node that says nothing about its
         // plan must not inherit what a previous node on this link said.
         p.plan_standing = snapshot.plan_standing;
+        p.held_layers = snapshot.held_layers;
         p.token = Some(token.clone());
         p.node_time = snapshot.node_time;
         p.connected = true;
@@ -2184,6 +2198,11 @@ fn apply(projection: &Arc<Mutex<Projection>>, envelope: &Envelope) -> Result<(),
         // `Projection::plan_standing`.
         Event::Intercept(InterceptEvent::PlanStanding(standing)) => {
             p.plan_standing = Some(standing.clone());
+        }
+        // GAP-183: the node's word on which layers at hold are refusing every plan. See
+        // `Projection::held_layers`.
+        Event::Intercept(InterceptEvent::HeldLayers(held)) => {
+            p.held_layers = held.clone();
         }
         // GAP-161: the node's services, as the node reports them. See
         // `Projection::node_health`.

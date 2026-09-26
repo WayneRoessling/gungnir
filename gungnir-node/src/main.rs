@@ -2064,6 +2064,7 @@ async fn run(
             // GAP-132: the queue goes out with the picture, so `GET /v3/queue` and the
             // snapshot's `queue` are one publish read through two doors.
             approval_desk.queue_view(&config, &resources, tracking.tracks()),
+            approval_desk.held_layers(&config),
         );
         // Computed here rather than in the request handler, so a caller's polling rate
         // cannot decide this node's load.

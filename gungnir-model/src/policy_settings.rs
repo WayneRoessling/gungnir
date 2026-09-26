@@ -132,6 +132,33 @@ impl ControlStatusSettings {
     }
 }
 
+/// An effector layer at `Hold` that is refusing plans, while no plan is being offered
+/// for decision (GAP-183, D-114; docs/design/DN-09-authority-and-control-status.md §9).
+///
+/// **Why this exists.** DN-09 refuses a plan whole if any of its solutions is refused,
+/// and the allocator tasks every adequate resource, so one layer at hold refuses every
+/// plan that tasks it -- the other layers' engagements in those plans with it -- and the
+/// approval queue stays empty. An empty queue reads as a quiet sector. The owner's answer
+/// (D-114) is to keep the rule and say so: this is what PN-06 and PN-05 say it from.
+///
+/// **A window, not a history.** The counts run from the first refusal after the last
+/// plan that was offered for decision, and the view goes the moment one is: from then on
+/// "refusing every plan" is no longer true. Computed once, by whichever machine holds the
+/// queue, and carried to a linked desktop in `InterceptEvent::HeldLayers` and the
+/// snapshot's `held_layers`, so a linked desktop never re-derives it from a reason string.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct HeldLayerView {
+    pub layer: EffectorLayer,
+    /// Plans the hold on this layer refused in the window.
+    pub refused: u64,
+    /// Plans the chain evaluated in the window since this layer's first refusal, every
+    /// one refused: none has been offered for decision since.
+    pub evaluated: u64,
+    /// When this layer's first refusal in the window was, on the clock of the machine
+    /// that evaluated it.
+    pub since: MissionTime,
+}
+
 /// One row of the authority matrix in
 /// docs/mission/roles-and-stakeholders.md §4, as configuration.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

@@ -474,6 +474,7 @@ pub fn publish_picture(
     standing: Option<&PlanStandingView>,
     health: SystemHealth,
     queue: Vec<gungnir_api::v3::QueueItemView>,
+    held_layers: Vec<gungnir_model::HeldLayerView>,
 ) {
     let mut snapshot =
         SnapshotResponse::new(tracks.to_vec(), Some(plan.clone()), health, Vec::new())
@@ -481,7 +482,10 @@ pub fn publish_picture(
                 bearing_rays.to_vec(),
                 project_pipeline_stats(pipeline_stats),
             )
-            .with_queue(queue);
+            .with_queue(queue)
+            // GAP-183: the layers at hold refusing every plan, beside the queue they are
+            // keeping empty.
+            .with_held_layers(held_layers);
     if let Some(standing) = standing {
         snapshot = snapshot.with_plan_standing(standing.clone());
     }
