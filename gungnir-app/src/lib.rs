@@ -27,6 +27,7 @@ pub mod deliveries;
 pub mod desk;
 pub mod dock;
 pub mod engagements;
+pub mod exchange;
 pub mod failover;
 pub mod fusion;
 pub mod geofences;

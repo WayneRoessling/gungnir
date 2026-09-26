@@ -95,6 +95,17 @@ fn publish(state: &mut AppState, now: MissionTime, event: LaunchWarningEvent) {
     }
 }
 
+/// Publish every issued launch warning to the node again, the tick its link comes back
+/// (GAP-146, DN-18 §13), for the reason `handoffs::republish_to_node` gives. **A console
+/// that has issued none publishes none**: an empty set is the claim "there are none
+/// here", which a console with no ledger of its own has no business making.
+pub(crate) fn republish_to_node(state: &AppState) {
+    if state.issued_launch_warnings.is_empty() {
+        return;
+    }
+    publish_to_exchange(state);
+}
+
 /// Every issued launch warning, republished on each new one -- the same shape
 /// `handoffs.rs::issue_for`/`publish_to_exchange` already use for `Handoffs`:
 /// unfiltered by marking, since `NodeApi::exchange_for` applies that gate per party at

@@ -1737,3 +1737,54 @@
     The desktop falls back and the sentence says which it is: "has not answered since this
     desktop signed in" rather than "silent for 12 s", because an operator reads the two
     differently. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.
+- id: D-75
+  decision: What a desktop's link does with a publish the node refuses, and what the console is told
+  question: >-
+    The link kept any exchange batch the node did not take and offered it again every
+    forward tick, whatever the answer. An Operator's console is refused `403` on every
+    publish, because `PUBLISH_EXCHANGE` is not an Operator's, so it retried four times a
+    second for as long as it ran and said nothing anywhere (GAP-146). How should the link
+    tell a refusal that cannot succeed from one that can, when should it ask again, and
+    what should the console say?
+  raised_in: "GAP-145; GAP-146"
+  decider: Owner
+  unblocks: GAP-146
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** Read each answer for what it
+    says about the caller (DN-18 §13): `2xx` delivered; no answer, `408`, `425`, `429` or
+    a `5xx` (the full register's `507` included) is "not now", retried after an interval
+    doubling from one forward tick to thirty seconds and reset on every new connection;
+    `401` or `403` is "not you", and the link keeps every set and offers nothing more
+    until it signs in again, which every connection does and which a sign-in on the
+    console brings about; any other `4xx` drops that one set, counted. PN-09 carries one
+    line for a linked console, giving the node's reason, what is held and the roles the
+    authority matrix lets publish, read from the matrix itself; nothing goes to the alert
+    list. The reconnection edge republishes launch warnings with handoffs. A timed retry
+    of a `403` was rejected because it asks the same session the same question; stopping
+    the Operator's console from queuing at all was rejected because the node, not the
+    desktop's copy of the matrix, answers for the session, and the held set is what a
+    Supervisor signing in at that console should send. See
+    `../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`.
+- id: D-76
+  decision: How the desktop's exchange outbox is bounded
+  question: >-
+    `queue_exchange` bounded nothing: one batch per handoff issued, for as long as the node
+    did not take them (GAP-146). The detection outbox drops its oldest past a capacity and
+    counts it, and `gungnir_resilience::StoreAndForwardQueue` (GAP-121) does the same for
+    envelopes. Should the exchange outbox take either rule, or another?
+  raised_in: "GAP-146; GAP-121"
+  decider: Owner
+  unblocks: GAP-146
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** One set per item, the newest
+    (DN-18 §13). Every set is its producer's whole current set, so a newer one makes any
+    older one waiting for the same item obsolete: the outbox replaces it in place and
+    counts the replacement, and a set already on its way is removed by its generation so a
+    newer one survives. A capacity with the oldest dropped was rejected because it would
+    keep obsolete sets while dropping by age across items, and post every obsolete set on
+    reconnection; `StoreAndForwardQueue` was rejected for the same rule over a different
+    type and for a `gungnir-remote` to `gungnir-resilience` edge `ARCHITECTURE.md` §7.1
+    does not show, and GAP-121 is left open. See
+    `../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`.
