@@ -121,7 +121,7 @@ fn publish_to_exchange(state: &AppState) {
             id: report.id.clone(),
             at: report.at,
             releasability: report.releasability.clone(),
-            body: serde_json::to_value(report).unwrap_or(serde_json::Value::Null),
+            body: crate::exchange::product_body(report, "a launch warning"),
         })
         .collect();
     link.queue_exchange(ExchangeItem::Warnings, products);

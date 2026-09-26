@@ -258,7 +258,7 @@ IE-07,Information Elements,InformationElement,Provenance,"Source sensors, calibr
 IE-08,Information Elements,InformationElement,Quality,"Association confidence, latency, staleness.",Class
 IE-09,Information Elements,InformationElement,Classification,"Unknown, Neutral, Friendly, Hostile.",Class
 IE-10,Information Elements,InformationElement,MissionTime,Seconds on the mission clock.,Class
-IE-11,Information Elements,InformationElement,GlobalEntityId,Persistent identity across sessions (u128; uuid v7 under GAP-069).,Class
+IE-11,Information Elements,InformationElement,GlobalEntityId,"Persistent identity across sessions (u128; uuid v7 under GAP-069; written as RFC 9562 text since GAP-175, D-101).",Class
 IE-12,Information Elements,InformationElement,Envelope,"Sequence number, mission time, and one Event; the unit the bus carries and the journal stores.",Class
 IE-13,Information Elements,InformationElement,TrackingEvent,"TrackInitiated, TrackUpdated, TrackCoasting, TrackDeleted.",Class
 IE-14,Information Elements,InformationElement,InterceptEvent,"PlanProposed, PlanApproved, PlanSuperseded.",Class

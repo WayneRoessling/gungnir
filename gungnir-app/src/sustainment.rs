@@ -439,12 +439,18 @@ impl ReportState {
 /// The report as coalition exchange carries it, stamped with the time it was generated
 /// (GAP-150, D-97): a republish sends this record unchanged, so `at` stays the report's
 /// age and never becomes the time it was last resent.
-fn exchange_record(state: &AppState, report: &MissionReport) -> ExchangeProductRecord {
+///
+/// The body is the report as a partner is sent it (GAP-171, D-103): a NaN or an infinity
+/// in it -- a diverged tracker's metric in a replay with truth -- goes out as DN-18 §15's
+/// "value unavailable" object, not as `null`. Public so a test can hand it a report the
+/// live journal fold does not produce.
+#[must_use]
+pub fn exchange_record(state: &AppState, report: &MissionReport) -> ExchangeProductRecord {
     ExchangeProductRecord {
         id: report.session.0.to_string(),
         at: state.clock.now(),
         releasability: report.releasability.clone(),
-        body: serde_json::to_value(report).unwrap_or(serde_json::Value::Null),
+        body: crate::exchange::product_body(report, "the mission report"),
     }
 }
 

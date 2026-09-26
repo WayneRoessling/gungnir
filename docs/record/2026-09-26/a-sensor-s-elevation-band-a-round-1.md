@@ -146,8 +146,8 @@ keep obsolete sets; and an outage's decisions as one batch rebuilt from the jour
 §8.4, the crate's description, `gungnir-capabilities.md`'s entry, the glossary, the UAF
 service registry (SV-25 is now "Reconciliation on reconnect", pointing at `reconcile`) and
 its hand-written service views no longer claim the queue carries anything. The
-`gungnir-resilience` row's criterion is unchanged; the note beside it says the queue is
-kept unused.
+`gungnir-resilience` row's cell is untouched: it is gated and the owner's, and its
+existing sentence -- the queue has no caller outside its tests (GAP-121) -- stays true.
 
 ## Found on the way: a test that read the strip a tick early
 

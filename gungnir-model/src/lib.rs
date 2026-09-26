@@ -172,7 +172,15 @@ use nalgebra::{SMatrix, SVector};
 /// which nothing published, was removed (DN-31 §5.3). Every payload carrying a plan or a
 /// decision changed, so the interface path moved from `/v2` to `/v3` whole. A journal
 /// written at version 3 still reads: its identifiers are numbers, and a number reads.
-pub const SCHEMA_VERSION: u32 = 4;
+///
+/// Version 5, 2026-09-26: [`identity::GlobalEntityId`] is written as RFC 9562 text, where
+/// it was a 128-bit JSON number (D-101, GAP-175). The type of a written field changed, so
+/// the version moves; the path does not, because a peer at version 4 cannot misread the
+/// text as a number -- its decode fails, and the exact-match rule refuses it at the
+/// snapshot before it meets one, rather than on the stream, where a frame it cannot decode
+/// reads as the node ending the stream (GAP-153). A journal written at version 4 still
+/// reads: `gungnir_eventing::nonfinite::from_line` reads each wide number exactly.
+pub const SCHEMA_VERSION: u32 = 5;
 
 /// Identifier of one recorded mission session.
 ///

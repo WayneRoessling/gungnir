@@ -7339,6 +7339,20 @@ mod approach_tests {
         assert_eq!(old.corridor_half_width_m, None);
         let text = serde_json::to_string(&old).expect("serializes");
         assert!(!text.contains("corridor"), "absent stays absent: {text}");
+        // A stated width round-trips exactly, through text and through a
+        // `serde_json::Value`, as every field in `gungnir-model/tests/serde_round_trip.rs`
+        // does; that file cannot reach this crate.
+        let stated = with_corridor(Some(3_000.5)).approaches.remove(0);
+        let text = serde_json::to_string(&stated).expect("serializes");
+        assert_eq!(
+            serde_json::from_str::<ApproachConfig>(&text).expect("reads"),
+            stated
+        );
+        let value = serde_json::to_value(&stated).expect("to_value");
+        assert_eq!(
+            serde_json::from_value::<ApproachConfig>(value).expect("from_value"),
+            stated
+        );
     }
 }
 

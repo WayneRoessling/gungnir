@@ -14,6 +14,7 @@
 //! which was a work queue; that is fixed here, ARCHITECTURE.md §10 resolved item 4.)
 
 pub mod nonfinite;
+pub mod wide_integers;
 
 use crossbeam_channel::{unbounded, Sender};
 use gungnir_model::MissionTime;

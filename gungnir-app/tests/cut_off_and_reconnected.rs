@@ -80,6 +80,7 @@ use gungnir_node::approval::{self, Frame, NodeApproval};
 use gungnir_policy::{Delegations, PolicyVerdict};
 use gungnir_remote::link::HEARTBEAT_TIMEOUT;
 use gungnir_remote::queue::DecisionChoice;
+use gungnir_reporting::{Measure, MeasureValue, MissionReport, TrackingMetricsSummary};
 use gungnir_security::{
     actions, hash_passphrase, Account, InMemoryAccountStore, OperatorId, Role, TokenIssuer,
 };
@@ -2036,6 +2037,23 @@ fn partner_reads_reports(
     addr: SocketAddr,
     partnership: &Partnership,
 ) -> Vec<(String, MissionTime)> {
+    let body = partner_reads_reports_as_sent(runtime, addr, partnership);
+    match serde_json::from_str::<gungnir_api::v3::ExchangeResponse>(&body) {
+        Ok(gungnir_api::v3::ExchangeResponse::Held { products, .. }) => {
+            products.into_iter().map(|p| (p.id, p.at)).collect()
+        }
+        Ok(gungnir_api::v3::ExchangeResponse::NotHeld { .. }) => Vec::new(),
+        Err(err) => panic!("the partner's answer does not decode ({err}): {body}"),
+    }
+}
+
+/// The partner's `GET /v3/exchange/reports` as [`partner_reads_reports`] makes it, and the
+/// body exactly as it was sent: the bytes a partner's own JSON reader is given.
+fn partner_reads_reports_as_sent(
+    runtime: &tokio::runtime::Runtime,
+    addr: SocketAddr,
+    partnership: &Partnership,
+) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let tls = gungnir_remote::LinkTls {
         trust_roots_pem: vec![pem(partnership.node.cert[0].as_ref())],
@@ -2070,13 +2088,7 @@ fn partner_reads_reports(
         (status, body)
     });
     assert_eq!(status, 200, "the partner was not served: {body}");
-    match serde_json::from_str::<gungnir_api::v3::ExchangeResponse>(&body) {
-        Ok(gungnir_api::v3::ExchangeResponse::Held { products, .. }) => {
-            products.into_iter().map(|p| (p.id, p.at)).collect()
-        }
-        Ok(gungnir_api::v3::ExchangeResponse::NotHeld { .. }) => Vec::new(),
-        Err(err) => panic!("the partner's answer does not decode ({err}): {body}"),
-    }
+    body
 }
 
 /// Tick one desktop until `check` holds, or fail with what it said.
@@ -2251,6 +2263,147 @@ fn a_console_s_mission_report_reaches_its_partner_again_when_its_link_comes_back
         "the report was generated again rather than republished"
     );
 
+    let _ = std::fs::remove_dir_all(&a_dir);
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+/// A mission report as a replay with truth produces one: tracking metrics, which a
+/// diverged tracker leaves NaN or infinite, and one measure.
+fn report_with_metrics(summary: &str, metrics: TrackingMetricsSummary) -> MissionReport {
+    MissionReport {
+        session: gungnir_store::SessionId(171),
+        summary: summary.into(),
+        counts: gungnir_reporting::EventCounts::default(),
+        measures: vec![Measure {
+            id: "MOP-01".into(),
+            name: "tracks held".into(),
+            target: "all".into(),
+            value: MeasureValue::Fraction {
+                value: 0.75,
+                numerator: 3,
+                denominator: 4,
+            },
+            note: None,
+        }],
+        releasability: Releasability::AllPeers,
+        marking_inputs: gungnir_reporting::MarkingInputs::default(),
+        first_event: Some(MissionTime(100.0)),
+        last_event: Some(MissionTime(160.0)),
+        metrics: Some(metrics),
+    }
+}
+
+/// Publish `report` as this console's report and wait until the partner is served it;
+/// the body exactly as the partner was sent it.
+fn publish_and_read_as_partner(
+    a: &mut AppState,
+    report: &MissionReport,
+    reader: &tokio::runtime::Runtime,
+    partners: SocketAddr,
+    partnership: &Partnership,
+) -> String {
+    a.exchange_report = Some(gungnir_app::sustainment::exchange_record(a, report));
+    gungnir_app::exchange::republish_all(a);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        update::tick(a);
+        let body = partner_reads_reports_as_sent(reader, partners, partnership);
+        if body.contains(&report.summary) {
+            return body;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the partner was never served the report: {body} {:?}",
+            a.alerts
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// **GAP-171, D-103: a report carrying a NaN or an infinity reaches its partner over
+/// mutual TLS with each one marked "value unavailable", and an all-finite report reaches
+/// it byte for byte as before.**
+///
+/// The report's body is a `serde_json::Value`, which cannot hold a non-finite float:
+/// `serde_json::to_value` wrote each as `null`, silently, so the partner read a diverged
+/// tracker's MOTA as absent. The console builds the product with
+/// `sustainment::exchange_record`, its link posts it, the node holds it, and the partner
+/// reads `GET /v3/exchange/reports` under its own certificate, as `sector-north` would.
+#[test]
+fn a_report_carrying_a_nan_reaches_its_partner_marked_unavailable_and_a_finite_one_unchanged() {
+    let scratch = std::env::temp_dir().join(format!(
+        "gungnir-gap171-{}-{}",
+        std::process::id(),
+        scratch_id()
+    ));
+    let partnership = Partnership::new(&scratch);
+    let reader = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("the partner's runtime");
+    let node = Node::spawn_with(api_with_a_partner());
+    let partners = node.serve_partners(&partnership);
+    let (mut a, a_dir) = desktop("gap171-partner", node.addr);
+    sign_in(&mut a, SUPERVISOR);
+    until_desktop(&mut a, "the desktop to link", 15.0, linked);
+
+    // All finite: byte for byte what plain `serde_json` sent before GAP-171.
+    let finite = report_with_metrics(
+        "a replay of the approach with truth",
+        TrackingMetricsSummary {
+            mota: 0.9,
+            motp: 12.5,
+            purity: 1.0,
+            fragmentation: 0.0,
+        },
+    );
+    let sent = publish_and_read_as_partner(&mut a, &finite, &reader, partners, &partnership);
+    let decoded: gungnir_api::v3::ExchangeResponse =
+        serde_json::from_str(&sent).expect("plain JSON");
+    assert_eq!(
+        serde_json::to_string(&decoded).expect("encodes"),
+        sent,
+        "an all-finite answer is not what serde_json writes"
+    );
+    let gungnir_api::v3::ExchangeResponse::Held { products, .. } = &decoded else {
+        panic!("{sent}");
+    };
+    assert_eq!(
+        products[0].body,
+        serde_json::to_value(&finite).expect("serde_json"),
+        "an all-finite body is not what serde_json::to_value wrote before"
+    );
+
+    // A diverged tracker's metrics: each one marked, none blanked.
+    let diverged = report_with_metrics(
+        "a replay whose tracker diverged",
+        TrackingMetricsSummary {
+            mota: f64::NAN,
+            motp: f64::INFINITY,
+            purity: f64::NEG_INFINITY,
+            fragmentation: 0.25,
+        },
+    );
+    let sent = publish_and_read_as_partner(&mut a, &diverged, &reader, partners, &partnership);
+    let value: serde_json::Value = serde_json::from_str(&sent).expect("plain JSON");
+    assert_eq!(
+        value["products"][0]["body"]["metrics"],
+        serde_json::json!({
+            "mota": { "unavailable": "nan" },
+            "motp": { "unavailable": "+inf" },
+            "purity": { "unavailable": "-inf" },
+            "fragmentation": 0.25,
+        }),
+        "the partner was not told which figures are unavailable: {sent}"
+    );
+    // A `None` beside them is still the `null` it always was: absent and unavailable are
+    // told apart.
+    assert_eq!(
+        value["products"][0]["body"]["measures"][0]["note"],
+        serde_json::Value::Null
+    );
+
+    drop(node);
     let _ = std::fs::remove_dir_all(&a_dir);
     let _ = std::fs::remove_dir_all(&scratch);
 }
