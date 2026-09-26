@@ -1626,6 +1626,28 @@ async fn run(
     let session = mission.session;
     tracing::info!(session = session.0, "opened live session");
 
+    // GAP-111, D-87: the audit log is durable and hash-chained, beside the journal.
+    // Opened the way the journal is opened: a node that cannot keep its audit record does
+    // not start, because it would be deciding with nothing to show who decided.
+    let audit_dir = std::path::Path::new(&node_cfg.data_dir).join(gungnir_security::AUDIT_DIR);
+    let mut audit_log = gungnir_security::FileAuditLog::open(
+        &audit_dir,
+        gungnir_security::AuditSync::OnFlush,
+        clock.now().0,
+    )?;
+    tracing::info!(dir = %audit_dir.display(), "audit log open");
+    // GAP-163, D-104: every segment against the last head the journal holds for it, now
+    // that the live session exists to journal the outcome into, and **before either
+    // purge**: the session purge could remove the session holding the last heads, and
+    // the audit purge a segment this verification has not seen.
+    let audit_problems = gungnir_node::audit_record::verify_at_start(
+        &journal,
+        &audit_dir,
+        &mut audit_log,
+        &bus,
+        clock.now(),
+    )?;
+
     // GAP-122, D-78: retention runs now, once the live session exists to protect and to
     // journal what was removed into, and hourly in the loop below. Never the live session
     // nor one under a hold (`session-<id>.hold` beside the journal, which an administrator
@@ -1634,10 +1656,13 @@ async fn run(
     if let Some(policy) = config.retention {
         tracing::info!(
             max_session_age_days = policy.max_session_age_days,
-            "journal retention: sessions not written for longer than this are purged, at start and hourly"
+            max_audit_log_age_days = policy.max_audit_log_age_days,
+            "retention: sessions and audit segments not written for longer than these are purged, at start and hourly"
         );
     } else {
-        tracing::info!("journal retention is not configured; no session is ever purged");
+        tracing::info!(
+            "retention is not configured; no session and no audit segment is ever purged"
+        );
     }
     apply_retention(
         &journal,
@@ -1647,6 +1672,21 @@ async fn run(
         clock.now(),
         &mut retention_purged,
     )?;
+    // GAP-152, D-105: the baseline's audit-log age, beside the session purge.
+    let mut audit_purged: u64 = gungnir_node::audit_record::apply_audit_retention(
+        gungnir_node::audit_record::AuditRetention {
+            audit_dir: &audit_dir,
+            audit: &mut audit_log,
+            journal: &mut journal,
+            journal_rx: &journal_rx,
+            session,
+            bus: &bus,
+        },
+        config.retention.as_ref(),
+        std::time::SystemTime::now(),
+        clock.now(),
+    )
+    .map_or(0, |report| report.purged.len() as u64);
     let mut next_retention = Instant::now() + RETENTION_INTERVAL;
 
     // GAP-086: which algorithm configuration this session opened with, in the journal.
@@ -1799,18 +1839,8 @@ async fn run(
     // the loop, so a decision cannot be taken in a request handler and two decisions
     // cannot be taken at once.
     //
-    // GAP-111, D-87: its audit log is durable and hash-chained, beside the journal, and
-    // takes every sign-in, refusal and role-gated act the routes report as well as the
-    // queue's own entries. Opened the way the journal is opened: a node that cannot keep
-    // its audit record does not start, because it would be deciding with nothing to show
-    // who decided.
-    let audit_dir = std::path::Path::new(&node_cfg.data_dir).join(gungnir_security::AUDIT_DIR);
-    let audit_log = gungnir_security::FileAuditLog::open(
-        &audit_dir,
-        gungnir_security::AuditSync::OnFlush,
-        clock.now().0,
-    )?;
-    tracing::info!(dir = %audit_dir.display(), "audit log open");
+    // GAP-111, D-87: the audit log, opened and verified above, takes every sign-in,
+    // refusal and role-gated act the routes report as well as the queue's own entries.
     let mut approval_desk = approval::NodeApproval::with_audit(&config, Box::new(audit_log));
     // GAP-132, DN-31 §6.3: the node now issues handoffs of its own, so it needs the
     // transport that carries one. A node that could not build the client records every
@@ -1860,6 +1890,20 @@ async fn run(
                 now,
                 &mut retention_purged,
             )?;
+            audit_purged += gungnir_node::audit_record::apply_audit_retention(
+                gungnir_node::audit_record::AuditRetention {
+                    audit_dir: &audit_dir,
+                    audit: approval_desk.audit.as_mut(),
+                    journal: &mut journal,
+                    journal_rx: &journal_rx,
+                    session,
+                    bus: &bus,
+                },
+                config.retention.as_ref(),
+                std::time::SystemTime::now(),
+                now,
+            )
+            .map_or(0, |report| report.purged.len() as u64);
         }
 
         observe_services(&service_sinks, &mut sensors, now);
@@ -2000,6 +2044,10 @@ async fn run(
                 covering = sensors.coverage().len(),
                 feeds = ?feed_reports.summary(),
                 retention_purged,
+                audit_purged,
+                // GAP-163: what verification at start found wrong with the audit record,
+                // repeated on every health line so it is not one line lost at start.
+                audit_problems,
                 "node health"
             );
             last_health_log = Instant::now();
@@ -2035,14 +2083,19 @@ async fn run(
         }
     }
 
-    for envelope in journal_rx.try_iter() {
-        journal.append(session, &envelope)?;
-    }
     // What the routes reported after the last tick, so a sign-in answered in the moment
     // before shutdown is still on the record (GAP-111).
     api.take_audit()
         .record_into(approval_desk.audit.as_mut(), clock.now().0);
     approval_desk.audit.flush()?;
+    // GAP-163, D-104: the closing head, after the sync and before the last drain, so the
+    // journal says where this run's segment ends.
+    if let Some(head) = approval_desk.audit.take_closing_anchor() {
+        gungnir_node::audit_record::publish_anchor(&bus, head, true, clock.now());
+    }
+    for envelope in journal_rx.try_iter() {
+        journal.append(session, &envelope)?;
+    }
     // Drained first, then closed. A record marked closed over a journal still missing its
     // last envelopes would claim a completeness it does not have; the other way round, a
     // failure here leaves the session reported as interrupted, which is true of a node

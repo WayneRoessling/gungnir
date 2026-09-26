@@ -460,6 +460,81 @@ one entry per account change and none for a refusal; `mod tests` in
 `gungnir-app/tests/audit_one_entry_per_act.rs` the desktop's acts one by one and its log across
 a restart.
 
+## 14. Amendment 5 (2026-09-26, D-104, D-105, D-106): the head held by the journal, and old segments aged out on the record
+
+§13 left three things open: a cut tail verified, nothing aged the segments out, and PN-20
+showed one run (GAP-163, GAP-152). This amendment closes them. Human-owned
+(`gungnir-security`); see [`../signatures.md`](../signatures.md). The reasoning is in
+[`../record/2026-09-26/the-audit-log-s-head-held-by-the.md`](../record/2026-09-26/the-audit-log-s-head-held-by-the.md).
+
+**The limit was wider than §13 said.** The chain is unkeyed, so a tail can be not only cut
+but rewritten with lines whose hashes verify. Both are found the same way: by comparing
+the file with a head its writer cannot reach.
+
+**Where the head is kept (D-104, the owner's).** In the event journal, which is durable,
+append-only and sealed (DN-22). `AuditEvent` in `gungnir-model`, carried as
+`Event::Audit`; additive, so `SCHEMA_VERSION` stands:
+
+| Event | When | What it holds |
+|---|---|---|
+| `Anchored` | Every 64 entries, or five seconds after the first entry the last head does not cover, whichever comes first; always at close (`closing`) | The segment's file name, its entry count, and its last line's sequence number and hash |
+| `Verified` | At start on both binaries, once the live session exists and before retention; on the desktop also on demand from PN-20 | The head every earlier segment is expected to reach from now on (it supersedes every audit event before it), the findings as sentences, and any journal session that could not be read |
+| `Purged` | Each segment retention removes, before the file is deleted | The file name, its entries and size, its idle days and the limit it passed |
+
+Only lines already on the disk are anchored -- the node anchors after its once-a-tick sync,
+the desktop syncs every entry -- so a crash can leave the journal behind the file and never
+ahead of it. The window left is what a run wrote after its last anchor and before it
+stopped without closing: at most 64 entries or five seconds, plus the journal's own sync
+interval. A linked desktop does not take its node's audit events off the stream; a
+journal's audit events describe the audit directory beside that journal. A partner is sent
+none of them.
+
+**What verification reports.** `gungnir_security::verify_audit_record` checks the chain and
+each segment against its head: **cut** (fewer entries than the head, naming the file and how
+many are missing), **rewritten** (the entry at the head's position is not the head), **gone**
+(a head and no file and no purge). A segment longer than its last head verifies and says how
+many entries follow it. A segment the journal holds no head for yet -- a run stopped before
+its first anchor, or one written before this amendment -- is checked as a chain and anchored
+by the inventory the verification leaves. A cut or gone segment keeps its expected head in
+that inventory, so it is reported at every start until retention removes it on the record;
+the `audit.anchor_mismatch` entries each verification writes stay in the later segments.
+
+**What the operator sees.** Never silence. The desktop raises one alert per problem naming
+the file, draws PN-20's audit-record summary in the warning colour with every segment's state,
+and writes one `audit.anchor_mismatch` entry into the audit log. The node logs one error line
+per problem, writes the same entry, and carries the count on every health line. A journal
+session that could not be read is said, because a head in it was not checked: a deployment
+that journals under an ephemeral key cannot check its earlier heads at all. The node serves
+no route for its audit record, so a linked desktop's PN-20 cannot show the node's
+verification (GAP-179).
+
+**Retention (D-105).** `RetentionPolicy::max_audit_log_age_days`, applied only when the
+baseline declares a policy, as D-78 applies the session age; both binaries say which at
+start. Age is days since a segment was last written. Beside the session purge, at start and
+hourly. Oldest first, **stopping at the first segment it must keep**: the newest, which holds
+the chain's head; this run's; one under `audit-NNNNNN.hold` (whose text is the reason, placed
+by an administrator); and those a run under a held session anchored in that session, so an
+after-action review keeps its audit record. A held session that cannot be read suspends the
+purge rather than guess. Per segment: renamed `*.jsonl.purging`, the `Purged` event journaled
+and the journal synced, an `audit.purged` entry written, then the file deleted; an
+interrupted purge is finished and recorded by the next, and a `.purging` file the policy
+would not have purged is restored and said. Every removal is also logged, counted, and on
+the desktop an alert.
+
+**PN-20 (D-106).** Every segment, earlier runs' included, with its state from the last
+verification; "Verify now"; and any segment opened read only, its chain checked as it is
+read, drawing its newest 2,000 entries and saying how many more the file holds. No new
+permission: reading the record is what seeing PN-20 already allows.
+
+**Verification.** `gungnir-security/src/audit/anchor.rs` and `audit/retention.rs`, and the
+cadence tests in `gungnir-security/src/audit.rs`; `gungnir-app/tests/audit_record.rs` (a cut
+named with its count at every start, an intact record across restarts, entries after the
+last head with and without a clean close, a deleted segment named, a purge on the record
+that the next start does not report, a held session's segment kept, PN-20 reading an earlier
+run and verifying on demand); `gungnir-node/tests/node_audit_record.rs` (the same on the
+node's path, a burst anchored by count, a purge journaled before the file goes);
+`gungnir-ui/src/panels/rendered.rs` (PN-20 draws the damage and an earlier run).
+
 ## Traceability
 
 GAP-057; CAP-6.1, and CAP-6.2/CAP-6.3 through PN-20; D-02 for the mechanism, D-20 for the

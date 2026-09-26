@@ -1089,6 +1089,14 @@ IE-asset-priority,uafId,IE-asset-priority
 IE-asset-priority,uafKind,InformationElement
 IE-asset-priority,registry.code,gungnir_model::AssetPriority
 IE-asset-priority,registry.domain,"Assets, exchange & releasability"
+IE-audit-event,uafId,IE-audit-event
+IE-audit-event,uafKind,InformationElement
+IE-audit-event,registry.code,gungnir_model::AuditEvent
+IE-audit-event,registry.domain,Events & the record
+IE-audit-head,uafId,IE-audit-head
+IE-audit-head,uafKind,InformationElement
+IE-audit-head,registry.code,gungnir_model::AuditHead
+IE-audit-head,registry.domain,Events & the record
 IE-authority-rule,uafId,IE-authority-rule
 IE-authority-rule,uafKind,InformationElement
 IE-authority-rule,registry.code,gungnir_model::AuthorityRule

@@ -2467,6 +2467,90 @@
     `computed_at` (stale the moment it is sent), putting the standing inside
     `HealthEvent::Changed` (it changes when health does not, stale to interim), and a
     progress event per tick. See `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.
+- id: D-104
+  decision: Where the audit log's head is kept, how often, and what a cut tail tells the operator
+  question: >-
+    A cut tail of an audit segment still verifies, because nothing outside the file holds
+    its head (GAP-163), and the chain is unkeyed, so a tail can be rewritten with lines that
+    verify. Where is the head kept, at what cadence, where does verification run, and what
+    does the operator see when it fails?
+  raised_in: GAP-163
+  decider: Owner
+  unblocks: GAP-163
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken by the owner, 2026-09-26.** **The head is kept in the event journal**, for its
+    durability and its sealing: `AuditEvent::Anchored` names the segment, its entry count
+    and its last line's sequence number and hash. The details were delegated and taken as
+    follows. Cadence: every 64 entries or five seconds after the first entry the last head
+    does not cover, whichever comes first, and always at close, and only over lines already
+    synced, so a crash leaves the journal behind the file and never reads as a cut. Five
+    seconds is the desktop journal's own sync interval (D-04); 64 holds a flood at the
+    node's sustained attributed rate to about three anchors a second. Verification runs at
+    start on both binaries, after the live session exists and before retention, and on the
+    desktop on demand from PN-20; it journals `AuditEvent::Verified`, an inventory of every
+    segment's expected head that supersedes what came before, so a start reads the journal
+    back only to the last one, and a cut or removed segment keeps its expected head and is
+    reported at every start. The operator sees one alert per problem naming the file and
+    the missing count, PN-20's summary in the warning colour, an `audit.anchor_mismatch`
+    entry in the audit log, and on the node an error line per problem and a count on every
+    health line; an unreadable journal session is said. Rejected: an anchor per entry (up
+    to 200 journal and stream events a second under a flood), close-only anchoring (a
+    killed process leaves its whole run unanchored), a keyed chain instead (the key would
+    sit beside the file it protects), and sending a linked desktop's head to its node (the
+    desktop's own journal already holds it, and the owner chose the journal). See
+    `../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`.
+- id: D-105
+  decision: How the audit log is aged out, and how a purge is told from a deletion
+  question: >-
+    `RetentionPolicy::max_audit_log_age_days` governed nothing (GAP-152). Applying it
+    needs an answer to what is measured, what is never removed, how an interrupted purge is
+    survived, and how the verifier GAP-163 adds tells a deliberate removal from a
+    deletion.
+  raised_in: GAP-152
+  decider: Owner
+  unblocks: GAP-152
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **Opt-in exactly as D-78**: no
+    policy in the baseline, nothing purged, and both binaries say which at start. Age is
+    days since a segment was last written, from the file's time. Beside the session purge,
+    at start after verification and hourly. **Oldest first, stopping at the first segment
+    it must keep**: the newest (it holds the chain's head and the numbering), this run's,
+    one under an `audit-NNNNNN.hold`, and those a run under a held session anchored in that
+    session; a held session that cannot be read suspends the purge. Per segment: renamed
+    out of the listing, `AuditEvent::Purged` journaled and the journal synced, an
+    `audit.purged` entry written, then deleted, so no segment is gone without a purge on
+    the record; an interrupted purge is finished and recorded by the next, and a stray
+    `.purging` file the policy would not purge is restored. Rejected: purging any expired
+    segment wherever it sits (a hole in the chain reads as a break, and a real removal in
+    the middle would read as retention), deleting before the journal is synced (a crash
+    would make a purge a deletion), and a tombstone file beside the segments (anyone able
+    to delete a segment could write one). See
+    `../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`.
+- id: D-106
+  decision: What PN-20 shows of earlier runs' audit records, and who may see it
+  question: >-
+    PN-20 showed only the current run's audit entries (GAP-152). What of the earlier runs
+    does it show, how is each file's integrity shown, and is reading them an act that needs
+    a permission of its own?
+  raised_in: GAP-152
+  decider: Owner
+  unblocks: GAP-152
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** PN-20 lists every segment,
+    earlier runs' included, each with its state from the last verification against the
+    journal (verified to its head, with how many entries follow it; not yet anchored; cut;
+    rewritten; removed; being purged), a "Verify now" control, and any segment opened read
+    only with its chain checked as it is read, drawing the newest 2,000 entries and saying
+    how many more the file holds. No new permission: reading the record is what seeing
+    PN-20 already allows, and verifying changes nothing but the record of having checked.
+    Rejected: an `audit.view` action (a change to authority `mission/roles-and-stakeholders.md`
+    §4 does not show, for a read the panel's visibility already governs), loading every
+    segment into memory at start (a long deployment's record in a desktop's memory), and
+    drawing an open segment unbounded. See
+    `../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`.
 - id: D-110
   decision: Whether StoreAndForwardQueue is adopted, retired, or kept
   question: >-

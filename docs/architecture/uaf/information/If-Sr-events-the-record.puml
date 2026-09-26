@@ -114,6 +114,17 @@ enum "RetentionEvent" as RetentionEvent <<InformationElement>> {
   Purged { session: crate::SessionId, idle_days: f64, max_session_age_days: u32, bytes: u64, at: MissionTime, }
   Completed { session: crate::SessionId, at: MissionTime, }
 }
+class "AuditHead" as AuditHead <<InformationElement>> {
+  segment: String
+  entries: u64
+  seq: u64
+  hash: String
+}
+enum "AuditEvent" as AuditEvent <<InformationElement>> {
+  Anchored { head: AuditHead, closing: bool, at: MissionTime, }
+  Verified { heads: Vec<AuditHead>, segments: u64, entries: u64, findings: Vec<String>, unread_sessions: Vec<String>, at: MissionTime, }
+  Purged { segment: String, entries: u64, bytes: u64, idle_days: f64, max_audit_log_age_days: u32, completed: bool, at: MissionTime, }
+}
 enum "LinkEvent" as LinkEvent <<InformationElement>> {
   FellBack { endpoint: String, silent_s: f64, at: MissionTime, last_seq: u64, }
   Restored { endpoint: String, fallback_since: MissionTime, at: MissionTime, }
@@ -237,6 +248,8 @@ LaunchWarningEvent --> MissionTime : Refused
 LaunchWarningEvent --> PeerLaunchWarning : Received
 RetentionEvent --> MissionTime : Purged, Completed
 RetentionEvent --> SessionId : Purged, Completed
+AuditEvent --> AuditHead : Anchored, Verified
+AuditEvent --> MissionTime : Anchored, Verified, Purged
 LinkEvent --> ArbitrationGround : ConflictArbitrated
 LinkEvent --> ConflictSide : ConflictArbitrated
 LinkEvent --> EngagementSide : BothActed

@@ -270,6 +270,7 @@ fn describe(env: &gungnir_eventing::Envelope) -> String {
         Event::Rehearsal(e) => format!("rehearsal {e:?}"),
         Event::Link(e) => format!("link {e:?}"),
         Event::Retention(e) => format!("retention {e:?}"),
+        Event::Audit(e) => format!("audit {e:?}"),
     };
     let short: String = kind.chars().take(120).collect();
     format!("seq {} at {:.1} s: {short}", env.seq, env.mission_time.0)

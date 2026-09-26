@@ -20,6 +20,7 @@
 pub mod adsb;
 pub mod anomaly;
 pub mod audit;
+pub mod audit_record;
 pub mod bearings;
 pub mod cooperative;
 pub mod decisions;
