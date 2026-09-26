@@ -1548,6 +1548,165 @@ fn handoff_ids(node: &Node) -> Vec<String> {
         _ => Vec::new(),
     }
 }
+
+// ---------------------------------------------------------------------------------
+// GAP-146: a console that may not publish says so once, and holds a bounded outbox
+// ---------------------------------------------------------------------------------
+
+/// An accepted decision as the engagement path hands one to `handoffs::issue_for`, with
+/// its own identifier so every handoff is a new one.
+fn accepted_record(id: u128) -> DecisionRecord {
+    DecisionRecord {
+        id: gungnir_model::DecisionId(id),
+        item: None,
+        plan: plan(id, 42),
+        verdict: PolicyVerdict::RequiresHumanApproval,
+        decision: OperatorDecision::Accepted,
+        operator_id: Some(A_OPERATOR.to_string()),
+        role: Some("Operator".into()),
+        request: None,
+        origin: None,
+        mission_time: MissionTime(100.0),
+    }
+}
+
+/// PN-09 as this desktop draws it, as text.
+fn pn09(state: &AppState) -> String {
+    let probe = gungnir_ui::harness::RenderProbe::new();
+    let mut sustainment = gungnir_app::sustainment::SustainmentState::default();
+    let (_, frame) = probe.draw(|ui| {
+        let mut behavior = gungnir_app::dock::PanelBehavior::new(state, &mut sustainment);
+        behavior.draw_panel(ui, gungnir_workflow::PanelId::SystemHealth);
+    });
+    frame.joined()
+}
+
+/// **GAP-146.** A console signed in as an Operator -- the ordinary case on a watch floor --
+/// issues handoffs, and the node refuses every publish `403`, because `PUBLISH_EXCHANGE` is
+/// not an Operator's (DN-18 §5 amendment 2). Before this the link kept the refused batch,
+/// retried it every forward tick and queued one more per handoff, for as long as the
+/// console ran, and nothing said so anywhere.
+///
+/// Now: PN-09 says it **once**, in the node's own words and with the roles that could
+/// publish; the link made **one** request for the whole run; the outbox holds **one** set,
+/// the newest, with every replacement counted; and the node holds nothing. Then a
+/// Supervisor signs in on the same console and the whole set reaches the node with no
+/// further handoff issued.
+// One console's run told in order -- refused, held, then the sign-in that changes it --
+// for the reason row 8's own test gives for not splitting a story.
+#[allow(clippy::too_many_lines)]
+#[test]
+fn an_operator_s_console_says_once_on_pn09_that_it_may_not_publish() {
+    let node = Node::spawn();
+    let (mut a, a_dir) = desktop("publish-refused", node.addr);
+    let (mut idle, idle_dir) = desktop("publish-refused-idle", node.addr);
+    sign_in(&mut a, A_OPERATOR);
+    until(&mut a, &mut idle, "the desktop to link", 15.0, |a, _| {
+        a.link
+            .as_ref()
+            .is_some_and(gungnir_remote::link::NodeLink::connected)
+    });
+    assert!(
+        !pn09(&a).contains("Not publishing"),
+        "nothing refused yet: {}",
+        pn09(&a)
+    );
+
+    for n in 0..20u128 {
+        gungnir_app::handoffs::issue_for(&mut a, &accepted_record(0x4600 + n));
+        update::tick(&mut a);
+    }
+    assert_eq!(a.desk.handoffs.len(), 20);
+    until(
+        &mut a,
+        &mut idle,
+        "PN-09 to say the node refused this console",
+        15.0,
+        |a, _| {
+            gungnir_app::exchange::exchange_line(a).is_some_and(|l| {
+                l.standing == gungnir_ui::panels::sensor_health::ExchangeStanding::Refused
+            })
+        },
+    );
+    // Two seconds of frames: eight forward ticks, each of which used to post again.
+    let settle = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < settle {
+        update::tick(&mut a);
+        update::tick(&mut idle);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let text = pn09(&a);
+    assert_eq!(
+        text.matches("Not publishing to coalition exchange").count(),
+        1,
+        "the refusal is said once on PN-09: {text}"
+    );
+    let roles = format!(
+        "may publish ({})",
+        gungnir_app::exchange::roles_that_may_publish()
+    );
+    for words in [
+        "role Operator may not publish to exchange",
+        "This console's handoffs are held here",
+        roles.as_str(),
+        "19 older sets were replaced",
+    ] {
+        assert!(text.contains(words), "{words:?} is not on PN-09: {text}");
+    }
+    assert!(roles.contains("Supervisor"), "{roles}");
+    assert!(
+        !a.alerts
+            .iter()
+            .any(|alert| alert.contains("coalition exchange")),
+        "the refusal is PN-09's to say, not a stream of alerts: {:?}",
+        a.alerts
+    );
+    let standing = a
+        .link
+        .as_ref()
+        .and_then(gungnir_remote::link::NodeLink::exchange_standing)
+        .expect("the link is readable");
+    assert_eq!(
+        standing.publishing.posts, 1,
+        "one request for the whole run, not one per tick: {standing:?}"
+    );
+    assert_eq!(
+        standing.waiting,
+        vec![gungnir_model::ExchangeItem::Handoffs],
+        "one set held, not one per handoff"
+    );
+    assert_eq!(standing.publishing.superseded, 19);
+    assert!(handoff_ids(&node).is_empty(), "the node took nothing");
+
+    // A Supervisor signs in on this console. A sign-in on a linked desktop builds a new
+    // link, and its connection is the edge that publishes the whole set again.
+    sign_in(&mut a, SUPERVISOR);
+    until(
+        &mut a,
+        &mut idle,
+        "the Supervisor's link to publish the whole set",
+        30.0,
+        |_, _| handoff_ids(&node).len() == 20,
+    );
+    until(
+        &mut a,
+        &mut idle,
+        "PN-09 to stop saying the console is refused",
+        15.0,
+        |a, _| {
+            gungnir_app::exchange::exchange_line(a).is_some_and(|l| {
+                l.standing == gungnir_ui::panels::sensor_health::ExchangeStanding::Current
+                    && l.text.contains("published from this console")
+            })
+        },
+    );
+    assert!(!pn09(&a).contains("Not publishing"), "{}", pn09(&a));
+
+    let _ = std::fs::remove_dir_all(&a_dir);
+    let _ = std::fs::remove_dir_all(&idle_dir);
+}
+
 // ---------------------------------------------------------------------------------
 // GAP-142: an outage outlives the process that fell into it
 // ---------------------------------------------------------------------------------

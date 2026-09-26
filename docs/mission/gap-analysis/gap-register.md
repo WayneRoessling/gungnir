@@ -158,14 +158,15 @@ history, and an entry is never edited once it has merged.
 | GAP-143 | A sign-in during an outage ends it without a person switching back | Technical | CAP-5.4, CAP-6.1 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 | GAP-144 | The release passes only by accepting two quick-xml advisories | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | UI engineer | Closed |
 | GAP-145 | The exchange register has no lifecycle | Technical | CAP-7.4 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
-| GAP-146 | A console that may not publish queues its handoffs for ever | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
+| GAP-146 | A console that may not publish queues its handoffs for ever | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
+| GAP-150 | A console's mission report is not published again when its link comes back | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
 | GAP-154 | The Disconnected reconciliation row still says no decision reaches a node's record | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Owner | Open |
 | GAP-152 | The audit log lives in memory, so nothing outlives the process and no age governs it | Technical | CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-153 | A non-finite float in an envelope breaks the v3 stream and history | Technical | CAP-7.1, CAP-5.4 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
 | GAP-160 | A node publishes no track, so a linked desktop's picture is frozen at sign-in | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-161 | A linked desktop's health strip reports the link, not the node's services | Technical | CAP-7.3 | 4 | 1 | S | 4 | I3 | Services engineer | Closed |
 
-Counts: 151 gaps, 3 mission, 148 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 152 gaps, 3 mission, 149 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2202,13 +2203,28 @@ Counts: 151 gaps, 3 mission, 148 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.4 Peer and coalition exchange.
 - History:
   - 2026-09-23, Open: Found by a test that expected a handoff to reach the node's register and watched it queue instead: the console was an Operator, which is the ordinary case on a watch floor. Filed rather than fixed inside GAP-145, because what a desktop does with a refusal it cannot retry past is a question about the link's own contract, not about the register.
+  - 2026-09-25, Closed: Closed by reading each publish answer for what it says about the caller (DN-18 §13, D-75) and bounding the outbox at one set per item, the newest, replacements counted (D-76). A `401` or `403` stops the link offering until it signs in again; no answer or a `5xx` is retried on a doubling interval; any other `4xx` drops that set, counted. PN-09 says it in one line with the node's reason and the roles that may publish. GAP-121's queue was not adopted: its oldest-dropped rule is wrong for replacement sets. Nothing human-owned was touched. Tests: `an_operator_s_console_says_once_on_pn09_that_it_may_not_publish` (`gungnir-app/tests/cut_off_and_reconnected.rs`) and three in `gungnir-remote/tests/transport.rs`. Found on the way: GAP-150. See `../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`.
 - Evidence: `gungnir-remote/src/link.rs` (`queue_exchange` pushes unbounded; `flush_exchange` returns on any non-success and retries the same batch); `gungnir-security/src/authz.rs` (`PUBLISH_EXCHANGE` is not an Operator's); found when GAP-145's test published nothing until it signed in as a Supervisor.
 - Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
 - Impact: `PUBLISH_EXCHANGE` is granted to Commander, IntelligenceAnalyst and Supervisor (DN-18 §5 amendment 2), so a desktop signed in as an Operator is refused `403` every time it publishes its handoff set. `flush_exchange` keeps a refused batch and retries it, and `queue_exchange` bounds nothing, so one batch is added per handoff issued and none ever leaves: the outbox grows for as long as that console runs, nothing is said on PN-09 or anywhere else, and a partner is never told this deployment holds engagements it cannot send.
 - Closing action: Tell a refusal that cannot succeed from one that can -- a `403` is not a node that is unreachable -- and say it once on PN-09 rather than retrying in silence; bound the exchange outbox as the detection outbox is bounded, counting what it drops.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-145 (`../../record/2026-09-23/a-register-that-says-how-old-it-is.md`).
 - Depends on: GAP-137.
+
+**GAP-150 A console's mission report is not published again when its link comes back**
+
+- Type: Technical.
+- Capability: CAP-7.4 Peer and coalition exchange.
+- History:
+  - 2026-09-25, Open: Filed by GAP-146 rather than folded into it. GAP-146 made a new link the thing a refused console waits on, and a sign-in that builds one drops what the old link held; handoffs and launch warnings are republished from mission state, and the report lives in window state the tick cannot reach.
+- Evidence: `gungnir-app/src/sustainment.rs` (`ReportState` holds the report inside `SustainmentState`, which is window state outside `AppState`, and `publish_to_exchange` is called from `generate` and `export` alone); `gungnir-app/src/exchange.rs` (`republish_all` republishes handoffs and launch warnings).
+- Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
+- Impact: A desktop publishes its mission report to exchange only when PN-13 generates or exports it. Handoffs and launch warnings are published again the tick the link comes back (DN-18 §12, §13), so a node that restarted, or a new link built by a sign-in on the console, is repaired for those; the report is not, and a partner reading `GET /v3/exchange/reports` is served nothing from this console until somebody generates one again -- with the report still on the console's own screen.
+- Closing action: Decide whether the last generated report is mission state -- and move what exchange needs of it into `AppState` so the reconnection edge can publish it with the time it was generated rather than the time it was resent -- or say on PN-13 that a report is published when it is generated and not again.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-146 (`../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`).
+- Depends on: GAP-145, GAP-146.
 
 **GAP-154 The Disconnected reconciliation row still says no decision reaches a node's record**
 

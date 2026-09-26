@@ -337,8 +337,81 @@ running ephemeral identities reaches that bound after sixty-four restarts, and w
 gets is a `507` and a backlog on PN-09 -- visible, and pointing at the key custody that is
 the actual fault -- rather than a list that quietly lost a console.
 
+## 13. Amendment 5: a refusal that says so, and an outbox with a bound (2026-09-25)
+
+**Amendment 2 gave the desktop's link a store-and-forward outbox, and it could tell only
+one answer from all the others** (GAP-146). A publish the node took left the outbox;
+anything else -- no answer, a `507`, a `403` -- kept the batch and offered it again on the
+next forward tick, and every new handoff added one more batch behind it. That is right for
+a node that cannot be reached and wrong for a node that has answered "not you".
+`PUBLISH_EXCHANGE` belongs to Commander, IntelligenceAnalyst and Supervisor (amendment 2),
+so a console signed in as an Operator -- the ordinary case on a watch floor -- was refused
+on every publish, retried four times a second for as long as it ran, grew its outbox by
+one batch per handoff without bound, and said nothing anywhere. §11 and §12 wrote that a
+`507` backlog "is visible on PN-09"; no line on PN-09 read the outbox until this amendment.
+
+**The decision: read the answer for what it says about the caller** (D-75). Four answers,
+not two:
+
+| Answer | Statuses | What the link does |
+|---|---|---|
+| Delivered | `2xx` | Removes the set it sent. |
+| Not now | no answer; `408`, `425`, `429`, `5xx` (including `507`) | Keeps the set and offers it again after an interval that doubles from one forward tick to thirty seconds, reset on delivery and on every new connection. |
+| Not you | `401`, `403` | Keeps every set and **offers nothing more until the link signs in again**. |
+| Not that | any other `4xx` | Drops that one set, counted, and goes on with the rest; the next set for the item replaces it anyway. |
+
+**"Until the link signs in again" is a change that can matter, and a timer is not.** A
+`403` is the node's authority matrix answering for the session the link holds; nothing
+about the set would change it, and asking again in thirty seconds would ask the same
+question of the same session. What can change it is a new session: every connection signs
+in afresh, so the refusal is cleared the moment a snapshot lands and whatever is held is
+offered once. A sign-in on a linked desktop builds a new link, whose connection is the
+edge §12 already publishes on; during an outage the credential is replaced on the link
+that exists (GAP-143) and takes effect at the reconnection. One request per sign-in, not
+one per tick. A `401` is the same case with a different remedy -- the session lapsed, not
+the role -- and PN-09 says which.
+
+**Said once, on PN-09, in the node's words.** PN-09 has a "Coalition exchange" line for
+any linked console: one sentence, never one per handoff or per attempt, whose counts grow
+in place. For a refusal it gives the node's own reason, what is held (the newest set of
+each item), and what would change it: "until this console's link signs in as a role that
+may publish", with the roles read from `gungnir-security`'s matrix -- the table the node
+checks the same action against -- rather than written out where they would drift. A wait
+says how many attempts and the last failure; a rejected set says which item and why.
+Nothing is pushed to the alert list: a refusal that stands for a whole watch is a state,
+and a state belongs on the health panel, not in a stream an operator acknowledges.
+
+**The bound: one set per item, the newest** (D-76). Every set is the producer's whole
+current set, so a newer one makes any older one for the same item obsolete. The outbox
+replaces a waiting set in place and counts the replacement; what it holds is exactly what
+the node should end up with, however long the node does not take it. A set already on its
+way is not recalled: it carries a generation, and the flush removes the generation it sent
+so a set queued meanwhile survives to be sent after it.
+
+**Not the detection outbox's rule, and not `StoreAndForwardQueue`.** The detection outbox
+drops its oldest past 100,000 because every detection is its own fact, and losing the
+oldest is the least harmful loss. An exchange set is not its own fact: it supersedes every
+earlier set for its item. A first-in-first-out bound over sets would keep obsolete ones
+while dropping by age across items -- the only mission report could go while ninety-nine
+stale handoff sets stayed -- and on reconnection it would post every obsolete set in turn.
+`gungnir_resilience::StoreAndForwardQueue` (GAP-121) is that first-in-first-out rule over
+`Envelope`s; adopting it here would take the wrong rule and a manifest edge
+`gungnir-remote` to `gungnir-resilience` that `../../ARCHITECTURE.md` §7.1 does not show,
+for a queue that holds a different type. GAP-121 is left where it was.
+
+**What else the reconnection edge publishes.** §12's edge published handoffs alone. It now
+publishes this console's launch warnings with them, by the same rule -- the whole set,
+and nothing from a console that has issued none -- because a sign-in that builds a new
+link drops what the old link held, and a refused console's warnings would otherwise wait
+for the next one issued. The mission report is PN-13's window state rather than mission
+state and is not reachable from the tick; that is GAP-150.
+
+**What does not change.** The wire: the node's refusal already carried its reason in the
+problem body, so no `gungnir-api` write path was touched. The authority matrix: whether an
+Operator should publish is amendment 2's judgement and is not reopened here.
+
 ## Traceability
 
-GAP-065, GAP-137, GAP-145; CAP-7.4; D-06, D-08, D-09, D-68, D-69; composes DN-07, DN-16,
+GAP-065, GAP-137, GAP-145, GAP-146; CAP-7.4; D-06, D-08, D-09, D-68, D-69, D-75, D-76; composes DN-07, DN-16,
 DN-17, DN-19; depends on GAP-041 for the transport and GAP-064 for the codecs;
 `../gungnir-api-v1.md`; `../architecture/uaf/standards/Sd-Tx.md`; principles AP-04, AP-09.
