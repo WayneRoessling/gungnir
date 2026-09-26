@@ -26,6 +26,14 @@ still matches the word anywhere on an added line, comments included, which is br
 than the code it protects and is left as it is, because narrowing a gate is the owner's
 call.
 
+The first dispatched run, on the fix branch, got past setup for the first time: every
+test in the first crate passed under miri, and the next binary, `gungnir-allocation`'s
+`bellman_diff`, stopped at `open` because miri's isolation refuses file access and the test
+reads a committed fixture. The job now sets `MIRIFLAGS=-Zmiri-disable-isolation`. Marking
+fixture-reading tests `#[cfg_attr(miri, ignore)]` was rejected: it would shrink what the
+gate interprets without saying so, and isolation protects determinism, not memory safety,
+which is the only thing the gate is there to check.
+
 ## Evidence
 
 The first dispatched run on `main` after this merges is the evidence that the job

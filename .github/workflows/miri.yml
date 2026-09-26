@@ -57,6 +57,11 @@ jobs:
       # fails: miri ships only on nightly. `+nightly` outranks the file (GAP-164).
       - run: cargo +nightly miri setup
       - name: miri on the tracking core and service layer
+        # The tests read committed fixtures (testdata/) and the clock; miri's isolation
+        # refuses both. Disabling it lets them run while miri still checks every access
+        # for undefined behaviour, which is what the gate is for (GAP-164).
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation
         run: >
           cargo +nightly miri test
           -p gungnir-core -p gungnir-coord -p gungnir-filters -p gungnir-association
