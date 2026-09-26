@@ -76,6 +76,29 @@ under a forty-minute cap, split the twelve three ways:
 The job is now one job per crate, in parallel, none cancelling another, each bounded at
 350 minutes, just under the hosted runner's ceiling.
 
+The per-crate run (dispatched 2026-09-26, 350 minutes a crate) passed eight crates:
+core, coord, association, track, track-fusion, allocation, metrics and intercept-service.
+`gungnir-tracking-service` passed its unit and resolver tests and failed its three
+whole-pipeline replays on their own 60-second deadlock guard, which counts wall-clock
+seconds against a replay miri stretches to hours. `gungnir-rfs` and `gungnir-filters`
+were still inside their own unit test binaries at the bound, and `gungnir-fusion-async`
+inside `dense_group` after 5 hours. On CI, metrics' `motmetrics_diff` took 2 hours 3
+minutes, allocation's unit tests 28 minutes, fusion-async's 22, core's
+`motion_models_diff` 16 and coord's `invariants` 11.
+
+Every unit test and integration binary of filters and rfs was then run alone under
+miri, sixteen at once, capped at ten minutes. Most unit tests finish in seconds; nine do
+not, and they are the long runs by name ("over a long run", "a hundred thousand cycles",
+"a long dense run", convergence and bimodal-cloud runs), with the `imm_diff`,
+`linear_kalman_diff`, `particle_diff`, `sqrt_diff`, `cphd_diff`, `lmb_diff` and
+`lmb_label_continuity` suites. `rts_diff`, `nonlinear_diff` and `phd_diff` finish in one
+to eight minutes.
+
+The owner chose to interpret each crate's unit tests and the suites that finish, leaving
+the long runs out by name (D-92). `miri.yml` lists every one left out with its measured
+time, and a test is added back when it is measured to finish. The slowest job is now
+about 35 minutes, and the bound is 120.
+
 ## Evidence
 
 The first dispatched run on `main` after this merges is the evidence that the job

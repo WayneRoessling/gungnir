@@ -43,29 +43,66 @@ jobs:
     needs: detect-unsafe
     if: github.event_name == 'workflow_dispatch' || needs.detect-unsafe.outputs.has_unsafe == 'true'
     runs-on: ubuntu-latest
-    # One job per crate, in parallel, none cancelling another: miri interprets about a
-    # thousand times slower than native code, and the twelve crates in one job ran past a
-    # 180-minute bound with four of them unfinished (GAP-164). A crate's own job shows
-    # which crate failed or ran out of time, and the bound is just under the hosted
-    # runner's six-hour ceiling so the job, not the platform, says so.
+    # One job per crate, in parallel, none cancelling another (GAP-164). miri interprets
+    # about a thousand times slower than native code, so the gate runs what finishes: each
+    # crate's unit tests and the integration suites that finish, with the long-run tests
+    # named below left out (D-92). Every code path those tests reach is still reached by
+    # the unit tests beside them; what is left out is the length of the run, not the
+    # code. Times are measured under miri (CI, or locally with 16 at once where marked).
+    #
+    # Left out, with why:
+    # - gungnir-metrics motmetrics_diff: 2 h 3 min on CI.
+    # - gungnir-tracking-service sample_set_replay, scenario_truth_replay,
+    #   whole_pipeline_replay: hours each; they fail their own 60 s deadlock guard.
+    # - gungnir-fusion-async dense_group: over 5 h on CI.
+    # - gungnir-filters imm_diff, linear_kalman_diff, particle_diff, sqrt_diff: over 10 min
+    #   each (local), and the lib tests named in `skip` below, over 10 min each (local).
+    # - gungnir-rfs cphd_diff, lmb_diff, lmb_label_continuity: over 10 min each (local),
+    #   and the lib tests named in `skip`.
+    # A test is added back here when it is measured to finish.
     strategy:
       fail-fast: false
       matrix:
-        crate:
-          - gungnir-core
-          - gungnir-coord
-          - gungnir-filters
-          - gungnir-association
-          - gungnir-track
-          - gungnir-rfs
-          - gungnir-track-fusion
-          - gungnir-fusion-async
-          - gungnir-allocation
-          - gungnir-metrics
-          - gungnir-tracking-service
-          - gungnir-intercept-service
+        include:
+          - crate: gungnir-core
+            targets: --lib --tests
+          - crate: gungnir-coord
+            targets: --lib --tests
+          - crate: gungnir-association
+            targets: --lib --tests
+          - crate: gungnir-track
+            targets: --lib --tests
+          - crate: gungnir-track-fusion
+            targets: --lib --tests
+          - crate: gungnir-allocation
+            targets: --lib --tests
+          - crate: gungnir-intercept-service
+            targets: --lib --tests
+          - crate: gungnir-metrics
+            targets: --lib
+          - crate: gungnir-tracking-service
+            targets: --lib --test sensor_position_resolver
+          - crate: gungnir-fusion-async
+            targets: --lib --test bearing --test oos_convergence
+          - crate: gungnir-filters
+            targets: --lib --test rts_diff --test nonlinear_diff
+            skip: >-
+              --skip imm::tests::mode_probabilities_stay_a_distribution_over_a_long_run
+              --skip imm::tests::probability_moves_to_the_mode_that_explains_the_motion
+              --skip kalman::tests::covariance_stays_psd_over_a_long_run
+              --skip particle::tests::a_bimodal_cloud_keeps_both_plausible_lumps_and_drops_the_impossible_one
+              --skip particle::tests::an_update_pulls_the_cloud_toward_the_measurement_and_shrinks_it
+              --skip sqrt::tests::the_square_root_form_tracks_the_standard_form
+              --skip sqrt::tests::zero_psd_violations_over_a_hundred_thousand_cycles
+          - crate: gungnir-rfs
+            targets: --lib --test phd_diff
+            skip: >-
+              --skip tests::cphd_shows_less_cardinality_swing_than_phd_under_frequent_missed_detections
+              --skip tests::the_mixture_stays_bounded_over_a_long_dense_run
     name: miri (${{ matrix.crate }})
-    timeout-minutes: 350
+    # The slowest job measured is about 35 minutes; the bound leaves room without letting
+    # a hang run for hours.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -92,4 +129,6 @@ jobs:
         # of the hardware's maths, which the other gates check; this one checks memory.
         env:
           MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows -Zmiri-deterministic-floats
-        run: cargo +nightly miri test --no-fail-fast -p ${{ matrix.crate }}
+        run: >-
+          cargo +nightly miri test --no-fail-fast -p ${{ matrix.crate }} ${{ matrix.targets }}
+          -- ${{ matrix.skip }}

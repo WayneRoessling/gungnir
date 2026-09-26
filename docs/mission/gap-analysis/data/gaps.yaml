@@ -10395,6 +10395,15 @@
       the oracle-difference suites of `gungnir-filters`, `gungnir-rfs`,
       `gungnir-fusion-async` and `gungnir-metrics` run for more than forty minutes each.
       The job is now a per-crate matrix bounded at 350 minutes a crate.
+  - date: 2026-09-26
+    status: In progress
+    note: >-
+      The per-crate run: eight crates passed, `gungnir-tracking-service`'s replays failed
+      their own 60 s deadlock guard, and `gungnir-rfs`, `gungnir-filters` and
+      `gungnir-fusion-async` ran to the 350-minute bound, the first two inside their own
+      unit tests. Every filters and rfs test was then timed alone. The gate now runs each
+      crate's unit tests and the suites that finish, with the long-run tests named in
+      `miri.yml` (D-92), bounded at 120 minutes. Closes when a dispatched run passes.
 - id: GAP-166
   name: nalgebra's decompositions violate Stacked Borrows
   type: Technical
