@@ -38,9 +38,10 @@ pub trait Authorizer: Send + Sync {
 /// DN-11 and DN-21 say they are; and `actions::ALL` names every action.
 pub fn role_permits(role: Role, action: &str) -> bool {
     use actions::{
-        ACKNOWLEDGE_HANDOVER, APPLY_CONFIG, CONDUCT_REVIEW, DECIDE_PLAN, EXPORT_REPORT,
-        KEY_ESCROW_RECOVER, OVERRIDE_PLAN, PROMOTE_MODEL, PUBLISH_EXCHANGE, RELEASE_PRODUCT,
-        REQUIREMENT, SET_CONTROL_STATUS, SUBMIT_DETECTION, TASK_SENSOR, VIEW_PICTURE,
+        ACKNOWLEDGE_HANDOVER, APPLY_CONFIG, APPLY_SENSING_CONFIG, CONDUCT_REVIEW, DECIDE_PLAN,
+        EXPORT_REPORT, KEY_ESCROW_RECOVER, OVERRIDE_PLAN, PROMOTE_MODEL, PUBLISH_EXCHANGE,
+        RELEASE_PRODUCT, REQUIREMENT, SET_CONTROL_STATUS, SUBMIT_DETECTION, TASK_SENSOR,
+        VIEW_PICTURE,
     };
     match role {
         // Everything but the engagement chain and escrow recovery (GAP-111, D-88). §1 says
@@ -76,6 +77,7 @@ pub fn role_permits(role: Role, action: &str) -> bool {
                 | OVERRIDE_PLAN
                 | SET_CONTROL_STATUS
                 | APPLY_CONFIG
+                | APPLY_SENSING_CONFIG
                 | RELEASE_PRODUCT
                 | PUBLISH_EXCHANGE
                 | EXPORT_REPORT
@@ -123,6 +125,7 @@ pub fn role_permits(role: Role, action: &str) -> bool {
                 | TASK_SENSOR
                 | EXPORT_REPORT
                 | APPLY_CONFIG
+                | APPLY_SENSING_CONFIG
                 | RELEASE_PRODUCT
                 | PUBLISH_EXCHANGE
                 | ACKNOWLEDGE_HANDOVER
@@ -132,10 +135,13 @@ pub fn role_permits(role: Role, action: &str) -> bool {
             VIEW_PICTURE | SUBMIT_DETECTION | DECIDE_PLAN | ACKNOWLEDGE_HANDOVER
         ),
         // The sensor manager declines a requirement with a reason (DN-11 §5), which is
-        // `requirement.state`; tasking one is `sensor.task`.
+        // `requirement.state`; tasking one is `sensor.task`. It applies sensing baselines
+        // (§4's calibration row), not whole ones: until GAP-162 it held `config.apply`,
+        // and a baseline it applied could change weapons control status and the authority
+        // rules all the same (D-91).
         Role::SensorManager => matches!(
             action,
-            VIEW_PICTURE | TASK_SENSOR | APPLY_CONFIG | REQUIREMENT | ACKNOWLEDGE_HANDOVER
+            VIEW_PICTURE | TASK_SENSOR | APPLY_SENSING_CONFIG | REQUIREMENT | ACKNOWLEDGE_HANDOVER
         ),
         // The analyst works the recorded record, after-action review included (§1, DN-20).
         Role::Analyst => matches!(

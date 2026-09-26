@@ -121,14 +121,31 @@ pub struct Candidate<'a> {
     pub validation: Validation<'a>,
 }
 
+/// One section of a candidate the role applying it may not change, and the action a
+/// change to that section needs (GAP-162, D-91).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RefusedSection<'a> {
+    /// The section as the baseline file names it, `policy.control_status` for instance.
+    pub section: &'a str,
+    /// The action the role does not hold, `weapons.control_status` for instance.
+    pub needs: &'a str,
+}
+
 /// Whether this build can apply a baseline, and what applying means here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApplyState<'a> {
     /// Applying validates, writes, and audits. The running session keeps the baseline
     /// it started with until restart, which is stated on screen.
     PersistOnly,
-    /// The role holds no `config.apply`.
+    /// The role holds neither `config.apply` nor `config.apply_sensing`.
     NotPermitted { role: &'a str },
+    /// The loaded candidate changes sections this role may not change, so applying it
+    /// would be refused whole (GAP-162, D-91). Said before anyone clicks, section by
+    /// section, so the change can be split or taken to the role that holds it.
+    Refused {
+        role: &'a str,
+        sections: &'a [RefusedSection<'a>],
+    },
     /// There is no baseline file to write to: the desktop started from the default.
     NoFile { env_var: &'a str },
 }
@@ -365,6 +382,20 @@ fn draw_apply(
             );
             None
         }
+        ApplyState::Refused { role, sections } => {
+            ui.label(
+                RichText::new(format!(
+                    "This candidate changes sections the {role} role may not apply, so \
+                     it will not be written. Split the change, or have a role that holds \
+                     the action apply it:"
+                ))
+                .color(palette.warning_color),
+            );
+            for refused in sections {
+                ui.label(format!("{} -- needs {}", refused.section, refused.needs));
+            }
+            None
+        }
         ApplyState::NoFile { env_var } => {
             ui.label(
                 RichText::new(format!(
@@ -456,6 +487,13 @@ mod tests {
         let states = [
             ApplyState::PersistOnly,
             ApplyState::NotPermitted { role: "Analyst" },
+            ApplyState::Refused {
+                role: "SensorManager",
+                sections: &[RefusedSection {
+                    section: "policy.control_status",
+                    needs: "weapons.control_status",
+                }],
+            },
             ApplyState::NoFile {
                 env_var: "GUNGNIR_CONFIG",
             },

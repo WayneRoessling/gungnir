@@ -39,7 +39,7 @@ use gungnir_security::{actions, AuditLog};
 use gungnir_store::{EventJournal, SessionId};
 use gungnir_ui::panels::config_editor::{
     ApplyState, AuditLine, Candidate, ConfigEditorView, ConfigSection, GovernedProfiles,
-    ProfileLine, Validation,
+    ProfileLine, RefusedSection, Validation,
 };
 use gungnir_ui::panels::replay::{OpenReplay, PlayRate, ReplayView, SessionSummary};
 use gungnir_ui::panels::reports::{CountLine, ExportState, MetricsLine, ReportsView};
@@ -767,17 +767,74 @@ impl ConfigEditorState {
         self.candidate_error.as_deref()
     }
 
+    /// The sections of the loaded candidate the current role may not change, each with
+    /// the action it needs; empty when nothing is loaded or everything it changes is the
+    /// role's to change (GAP-162, D-91). What PN-14 says before anyone clicks apply, and
+    /// what [`Self::apply`] refuses on.
+    #[must_use]
+    pub fn refused_sections(&self, state: &AppState) -> Vec<RefusedSection<'static>> {
+        self.candidate
+            .as_ref()
+            .map(|candidate| refused_sections(state.role(), in_force(state), candidate))
+            .unwrap_or_default()
+    }
+
     /// Persist the validated candidate and audit it.
+    ///
+    /// **Authorized here, not only drawn** (GAP-162, the pattern GAP-127 set for decide and
+    /// task). PN-14 hides the control from a role that may not apply, and until 2026-09-26
+    /// that was the only check: anything else that called this wrote the baseline. It now
+    /// asks, against [`AppState::role`], before anything is read or written:
+    ///
+    /// 1. whether the role may apply a baseline at all (`config.apply` or
+    ///    `config.apply_sensing`);
+    /// 2. whether every section the candidate changes against the baseline in force is
+    ///    the role's to change (§4, "Applying a baseline, section by section"). A candidate
+    ///    that changes one section the role may not is refused whole: a baseline is one
+    ///    validated, versioned unit, and writing part of one would write a version nobody
+    ///    validated (D-91).
+    ///
+    /// A refusal writes nothing and records nothing, as a refused decision does.
     ///
     /// Refuses anything not validated: `ConfigStore::apply` validates again, but a panel
     /// that let an unvalidated baseline through would be relying on that second check to
     /// catch what it should not have offered.
     pub fn apply(&mut self, state: &mut AppState) -> Result<(), String> {
+        let role = state.role();
+        if !may_apply_a_baseline(role) {
+            return Err(format!(
+                "the {role:?} role may not apply a configuration baseline (needs {} or {})",
+                actions::APPLY_CONFIG,
+                actions::APPLY_SENSING_CONFIG
+            ));
+        }
         if !matches!(self.validated, Some(Ok(()))) {
             return Err("the candidate has not been validated".to_owned());
         }
         let Some(candidate) = self.candidate.clone() else {
             return Err("no candidate is loaded".to_owned());
+        };
+        let refused = refused_sections(role, in_force(state), &candidate);
+        if !refused.is_empty() {
+            let list = refused
+                .iter()
+                .map(|r| format!("{} (needs {})", r.section, r.needs))
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(format!(
+                "this candidate changes sections the {role:?} role may not apply, so nothing \
+                 was written: {list}"
+            ));
+        }
+        let changed = gungnir_config::changed_sections(in_force(state), &candidate)
+            .iter()
+            .map(|c| c.name)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let changed = if changed.is_empty() {
+            "no section changed".to_owned()
+        } else {
+            format!("changes {changed}")
         };
         let version = candidate.version;
         // Read before the store is borrowed, and passed in rather than fetched inside:
@@ -797,11 +854,72 @@ impl ConfigEditorState {
         crate::audit::record(
             state,
             actions::APPLY_CONFIG,
-            format!("baseline version {version} written; in force on restart"),
+            format!("baseline version {version} written ({changed}); in force on restart"),
         );
         self.discard();
         Ok(())
     }
+}
+
+/// The baseline a candidate is compared with: the one most recently applied in this
+/// process, which is what the candidate replaces on disk, or the one running when
+/// nothing has been applied yet (GAP-128's same distinction, for the revision).
+fn in_force(state: &AppState) -> &gungnir_config::ConfigBaseline {
+    state
+        .config_store
+        .as_ref()
+        .and_then(gungnir_config::FileConfigStore::applied)
+        .unwrap_or(&state.config)
+}
+
+/// Whether a role may apply any baseline at all: the whole-baseline action or the
+/// sensing one (§4's two apply rows, D-91).
+#[must_use]
+pub fn may_apply_a_baseline(role: gungnir_security::Role) -> bool {
+    role_permits(role, actions::APPLY_CONFIG) || role_permits(role, actions::APPLY_SENSING_CONFIG)
+}
+
+/// The actions a change to a section of this kind needs (GAP-162, D-91;
+/// `docs/mission/roles-and-stakeholders.md` §4, "Applying a baseline, section by
+/// section"), in the order they are asked: the apply action first, then the authority
+/// over the section itself.
+///
+/// **Why the engagement chain needs weapons control status.** A baseline that rewrote
+/// the control status or the authority rules would be the engagement chain reached
+/// through a file, and D-88 withholds the engagement chain from every role but the
+/// supervisor and the commander, the two that hold `weapons.control_status`.
+#[must_use]
+pub fn actions_for_section(kind: gungnir_config::SectionKind) -> &'static [&'static str] {
+    use gungnir_config::SectionKind;
+    match kind {
+        SectionKind::Sensing => &[actions::APPLY_SENSING_CONFIG],
+        SectionKind::Deployment => &[actions::APPLY_CONFIG],
+        SectionKind::EngagementChain => &[actions::APPLY_CONFIG, actions::SET_CONTROL_STATUS],
+        SectionKind::Security => &[actions::APPLY_CONFIG, actions::ASSIGN_ROLE],
+    }
+}
+
+/// Every section `candidate` changes against `in_force` that `role` may not change,
+/// with the first action it lacks for each (GAP-162, D-91).
+#[must_use]
+pub fn refused_sections(
+    role: gungnir_security::Role,
+    in_force: &gungnir_config::ConfigBaseline,
+    candidate: &gungnir_config::ConfigBaseline,
+) -> Vec<RefusedSection<'static>> {
+    gungnir_config::changed_sections(in_force, candidate)
+        .into_iter()
+        .filter_map(|changed| {
+            actions_for_section(changed.kind)
+                .iter()
+                .copied()
+                .find(|action| !role_permits(role, action))
+                .map(|needs| RefusedSection {
+                    section: changed.name,
+                    needs,
+                })
+        })
+        .collect()
 }
 
 /// One PN-14 line per candidate algorithm baseline (DN-24 §9, GAP-086).
@@ -849,6 +967,10 @@ pub fn governed_profiles<'a>(
 }
 
 /// Build PN-14's view.
+///
+/// Every argument is something the view borrows and the caller has to own for the frame
+/// (the refused sections since GAP-162), so bundling them would only move the list.
+#[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn config_editor_view<'a>(
     state: &'a AppState,
@@ -858,12 +980,18 @@ pub fn config_editor_view<'a>(
     role_name: &'a str,
     validity: Option<&'a str>,
     profiles: GovernedProfiles<'a>,
+    refused: &'a [RefusedSection<'a>],
 ) -> ConfigEditorView<'a> {
-    let apply = if !role_permits(state.role(), actions::APPLY_CONFIG) {
+    let apply = if !may_apply_a_baseline(state.role()) {
         ApplyState::NotPermitted { role: role_name }
     } else if state.config_store.is_none() {
         ApplyState::NoFile {
             env_var: crate::state::CONFIG_ENV_VAR,
+        }
+    } else if !refused.is_empty() {
+        ApplyState::Refused {
+            role: role_name,
+            sections: refused,
         }
     } else {
         ApplyState::PersistOnly

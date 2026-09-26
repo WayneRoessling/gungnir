@@ -171,7 +171,7 @@ history, and an entry is never edited once it has merged.
 | GAP-156 | A picture the exact solver cannot finish in time is never answered | Technical | CAP-3.3 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
 | GAP-157 | A linked desktop cannot tell that its node's planner is stale | Technical | CAP-3.3, CAP-7.3 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
 | GAP-165 | A linked desktop's node session lapses and nothing renews it while the link is up | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
-| GAP-162 | A sensor manager may apply a whole baseline, and applying one checks no permission | Technical | CAP-6.2, CAP-5.6 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-162 | A sensor manager may apply a whole baseline, and applying one checks no permission | Technical | CAP-6.2, CAP-5.6 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-163 | A cut tail of the audit log still verifies, because nothing outside it holds its head | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-167 | The outage tests' proxy can let one connection through a cut | Technical | CAP-5.4 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 
@@ -2404,11 +2404,12 @@ Counts: 161 gaps, 3 mission, 158 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.2 Authorize by role, class, layer; CAP-5.6 Baselines and plans.
 - History:
   - 2026-09-25, Open: Found by GAP-111's comparison of `role_permits` with §4: the sensor manager's `config.apply` is the one grant whose coarse action is wider than its cell and was not withheld for it, because withholding it would take away the calibration baselines §2 gives the role. Filed rather than narrowed, since the answer is a per-section check, not a different coarse grant.
+  - 2026-09-26, Closed: **Built, per D-91 and DN-08 §10.** The sensor manager holds `config.apply_sensing`, not `config.apply`, and §4 gains "Applying a baseline, section by section". `ConfigEditorState::apply` refuses a role that may not apply, then any candidate changing a section the role does not hold (the engagement chain needs `weapons.control_status`, security `account.assign_role`), refused whole with each section named; PN-14 says so before apply is pressed. `gungnir-app/tests/config_apply_authority.rs` covers four roles. Human-owned (`gungnir-security`); see `../../signatures.md` and `../../record/2026-09-26/a-baseline-applied-section-by-section.md`.
 - Evidence: `gungnir-app/src/sustainment.rs` (`ConfigEditorState::apply`; `config_editor_view` is the only `role_permits` check); `docs/mission/roles-and-stakeholders.md` §4's "Apply a sensor or calibration baseline" row; found by GAP-111's matrix test.
 - Severity: 3. Reach: 9 threads. Effort: M. Priority: 27.
 - Impact: `config.apply` is one action for a whole baseline. §4 gives the sensor manager calibration and sensor baselines and gives weapons control status and plan apply to the supervisor and the commander, but a baseline a sensor manager applies may change `policy.control_status` and the authority rules all the same. And `ConfigEditorState::apply` checks no permission at all: PN-14 hides the control from a role without `config.apply`, so the rule holds for a person at the screen and for nothing else that calls the function -- the pattern GAP-127 closed for decide and task.
 - Closing action: Check `config.apply` inside `apply` before anything is written, refusing by name; then refuse a candidate that changes a section the role does not hold -- control status without `weapons.control_status`, authority rules and plans without plan apply -- by comparing it with the baseline in force, after adding the per-section rows to §4 first.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: GAP-111 (`../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`).
 
 **GAP-163 A cut tail of the audit log still verifies, because nothing outside it holds its head**

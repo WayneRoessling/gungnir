@@ -1360,6 +1360,9 @@ pub fn render_config_editor(
     let candidates = state.governance.candidates();
     let lines = crate::sustainment::profile_lines(&candidates);
     let profiles = crate::sustainment::governed_profiles(state, &lines);
+    // GAP-162: what the loaded candidate changes that this role may not, said before
+    // anyone clicks apply.
+    let refused = editor.refused_sections(state);
     let view = crate::sustainment::config_editor_view(
         state,
         editor,
@@ -1368,6 +1371,7 @@ pub fn render_config_editor(
         &role_name,
         validity.as_deref(),
         profiles,
+        &refused,
     );
     gungnir_ui::panels::config_editor::render_config_editor(ui, &state.palette, &view)
         .map(PanelAction::Config)

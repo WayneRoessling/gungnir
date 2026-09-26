@@ -130,7 +130,7 @@ the sensor manager together with the supervisor (planning).
 | Override a recommendation (GAP-111) | | yes | yes | | | |
 | Sensor tasking | camera cue | concur | | yes | | request |
 | Plan apply | | yes | yes | | | |
-| Apply a sensor or calibration baseline (GAP-111) | | | | yes | | |
+| Apply a sensor or calibration baseline (GAP-111, GAP-162) | | yes | yes | yes | | |
 | Model promotion | | concur | | | yes | |
 | Product release | | yes | yes | | | yes |
 | Publish to coalition exchange (GAP-065; amended 2026-09-08 to add Supervisor alongside the Product release row above) | | yes | yes | | | yes |
@@ -169,3 +169,22 @@ compares every role against every action with `role_permits`** (GAP-111), so a c
 authority is made here first and the code follows. The rows marked GAP-111 were added
 2026-09-25 for grants the code already held, or held by the roles §1 and the design notes
 name, rather than grants with no row.
+
+**Applying a baseline, section by section** (GAP-162, D-91, 2026-09-26). The two apply
+rows are the two apply actions: "Plan apply" is `config.apply`, a whole baseline, and the
+calibration row is `config.apply_sensing`. A baseline is one file, so what a person may
+apply is decided by what it changes against the baseline in force, section by section:
+
+| Sections a candidate changes | Action each needs | Who that is |
+|---|---|---|
+| Sensing: sensors, the radar, AIS, ADS-B, MISB and SAPIENT feeds, laydowns, tracking calibration, terrain, point clouds, the sensor-task acknowledgement window | `config.apply_sensing` | Sensor manager, supervisor, commander, administrator |
+| Engagement chain: every policy section (identification, staleness, control status, authority, decisions, delegation, fires), resources, assets, geofences, hazards, approaches, the allocation horizon and solve budget, assessment | `weapons.control_status` as well as `config.apply` | Supervisor, commander |
+| Security: accounts and authentication, key provider, TLS, escrow, machine identities, retention | `account.assign_role` as well as `config.apply` | Administrator |
+| Everything else: backend, node, peers, exchange agreements, endpoints, data directory, frame origin, profiles, display, vocabulary, analytics, reporting, validity window | `config.apply` | Supervisor, commander, administrator |
+
+A candidate that changes any section its applier may not change is refused whole and
+nothing is written; PN-14 names each refused section and the action it needs, so the
+change is split or taken to the role that holds it. The engagement chain needs weapons
+control status because a baseline that rewrote the authority rules or the control status
+would be the engagement chain reached through a file, which D-88 withholds from the
+administrator at the console.

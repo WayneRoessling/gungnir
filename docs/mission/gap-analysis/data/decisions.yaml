@@ -2199,3 +2199,31 @@
     separation of duties the security officer role exists for) and inferring new authority
     for the planner (the owner set it view-only). See
     `../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`.
+- id: D-91
+  decision: What a person may apply of a configuration baseline
+  question: >-
+    `config.apply` was one action for a whole baseline, and the sensor manager held it for
+    its calibration row, so a baseline it applied could change weapons control status and
+    the authority rules; and `ConfigEditorState::apply` checked no permission (GAP-162).
+    How is the sensor manager's authority expressed, who may change the engagement chain
+    and the security section through a baseline, and what happens to a candidate that
+    changes some sections its applier may change and some it may not?
+  raised_in: "GAP-162"
+  decider: Owner
+  unblocks: GAP-162
+  resolved: 2026-09-26
+  outcome: >-
+    **Four answers, taken by the owner as recommended.** A new action,
+    `config.apply_sensing`, for a baseline that changes only sensing sections, held by the
+    sensor manager and by every role that may apply a whole one; the sensor manager no
+    longer holds `config.apply`. The engagement chain (every policy section, resources,
+    assets, geofences, hazards, approaches, the allocation horizon and solve budget,
+    assessment) needs `weapons.control_status` as well, so only the supervisor and the
+    commander change it through a file, as at the console (D-88). The security section
+    (accounts and authentication, keys, TLS, escrow, machine identities, retention) needs
+    `account.assign_role`, the administrator's alone. A candidate that changes any section
+    its applier may not change is refused whole, nothing written, each section named with
+    the action it needs. Rejected: one action with a per-role check (it keeps a coarse
+    grant wider than its §4 cell), the commander alone for the engagement chain, any
+    whole-baseline role for security, and applying the permitted part (it writes a version
+    nobody validated). DN-08 §10; `../../../record/2026-09-26/a-baseline-applied-section-by-section.md`.

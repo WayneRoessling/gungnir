@@ -15,6 +15,9 @@ use gungnir_model::{
 };
 use std::path::{Path, PathBuf};
 
+pub mod sections;
+pub use sections::{changed_sections, ChangedSection, SectionKind};
+
 /// Highest `ConfigBaseline::version` this build understands.
 pub const SUPPORTED_CONFIG_VERSION: u32 = 1;
 
