@@ -11,6 +11,7 @@
 
 pub mod durability;
 pub mod journal;
+pub mod nonfinite;
 pub mod retention;
 pub mod sealing;
 
@@ -40,6 +41,14 @@ pub enum StoreError {
     /// silent downgrade AP-02 exists to prevent.
     #[error("journal sealing failed: {0}")]
     Sealing(String),
+    /// An envelope whose line would not read back as it was written (GAP-126, D-77).
+    ///
+    /// Checked on the marked lines that carry a non-finite float, the one form this crate
+    /// writes that plain JSON cannot. Refused before the file is touched, because a journal
+    /// must never hold a line it cannot read back: mid-session such a line makes the
+    /// whole session unreadable, and as the last line it is dropped as torn.
+    #[error("journal line would not read back faithfully: {0}")]
+    Unfaithful(String),
 }
 
 /// Identifier of one recorded mission session.
@@ -242,6 +251,23 @@ impl FileEventJournal {
             .ok_or_else(|| StoreError::Unavailable("journal session slot vanished".to_string()))
     }
 
+    /// Refuse a marked line that would not come back as it was written (GAP-126).
+    ///
+    /// Compared by re-encoding rather than by `==`, because NaN is unequal to itself and
+    /// the re-encoded line carries every float's bits.
+    fn check_reads_back(line: &str) -> Result<(), StoreError> {
+        let back = journal::decode_line(line)
+            .map_err(|e| StoreError::Unfaithful(format!("the line does not decode: {e}")))?;
+        let again = journal::encode_line(&back)?;
+        if again == line {
+            Ok(())
+        } else {
+            Err(StoreError::Unfaithful(
+                "the line decodes to a different envelope".into(),
+            ))
+        }
+    }
+
     /// Lock the open-file slot, treating a poisoned mutex as recoverable.
     ///
     /// A panic while the lock was held cannot corrupt the file: the only state behind
@@ -277,7 +303,11 @@ impl EventJournal for FileEventJournal {
     fn append(&mut self, session: SessionId, envelope: &Envelope) -> Result<(), StoreError> {
         // Encode before touching the file: an envelope that cannot be encoded must
         // not leave a partial line behind.
-        let line = sealing::encode(&journal::encode_line(envelope)?, self.sealer.as_deref())?;
+        let plain = journal::encode_line(envelope)?;
+        if plain.starts_with(nonfinite::MARKER) {
+            Self::check_reads_back(&plain)?;
+        }
+        let line = sealing::encode(&plain, self.sealer.as_deref())?;
         let policy = self.policy;
         let mut slot = self.slot();
         let open = self.ensure_open(&mut slot, session)?;

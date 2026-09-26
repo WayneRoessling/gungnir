@@ -82,6 +82,27 @@ pub enum Recovered {
 pub fn recover(
     journal: &dyn gungnir_store::EventJournal,
 ) -> (Vec<CollectionRequirement>, Recovered) {
+    let (requirements, recovered, _) = recover_with_sessions(journal);
+    (requirements, recovered)
+}
+
+/// The sessions each recovered requirement has an event in (GAP-122, D-78).
+pub type RequirementSessions = std::collections::BTreeMap<
+    gungnir_model::RequirementId,
+    std::collections::BTreeSet<gungnir_model::SessionId>,
+>;
+
+/// [`recover`], and the sessions each requirement's events are in.
+///
+/// **Retention reads the second half** (GAP-122): a requirement still open is rebuilt
+/// from every session that holds an event for it, so none of them may be purged while
+/// it is open, and the session stating the highest identifier is what keeps a new
+/// requirement from taking an old one's number.
+#[must_use]
+pub fn recover_with_sessions(
+    journal: &dyn gungnir_store::EventJournal,
+) -> (Vec<CollectionRequirement>, Recovered, RequirementSessions) {
+    let mut where_ = RequirementSessions::new();
     let sessions = match journal.sessions() {
         Ok(sessions) => sessions,
         Err(err) => {
@@ -90,6 +111,7 @@ pub fn recover(
                 Recovered::Unreadable {
                     reason: err.to_string(),
                 },
+                where_,
             )
         }
     };
@@ -110,6 +132,7 @@ pub fn recover(
                     Recovered::Unreadable {
                         reason: format!("session {}: {err}", session.0),
                     },
+                    where_,
                 )
             }
         };
@@ -118,6 +141,10 @@ pub fn recover(
             let gungnir_eventing::Event::Requirement(event) = &envelope.event else {
                 continue;
             };
+            where_
+                .entry(event.requirement())
+                .or_default()
+                .insert(session);
             apply_recovered(&mut requirements, event);
         }
     }
@@ -127,7 +154,7 @@ pub fn recover(
     } else {
         Recovered::FromJournal { sessions: read }
     };
-    (requirements, outcome)
+    (requirements, outcome, where_)
 }
 
 /// Fold one event into the recovered list.
@@ -201,6 +228,13 @@ pub enum RequirementError {
     /// baseline changed under the panel rather than a bad click.
     #[error("no defended asset at index {0}")]
     UnknownArea(usize),
+    /// A deadline that is not a positive, finite number of minutes, or one whose mission
+    /// time would not be finite (GAP-126). **Nothing was stated or recorded.** PN-10
+    /// refuses these as they are typed; this is the same rule where the requirement is
+    /// made, because a requirement stated with an infinite deadline never lapses under a
+    /// label that says it does.
+    #[error("a deadline of {0} minutes is not a positive, finite time; nothing was stated")]
+    BadDeadline(f64),
     /// The role acting may not task a sensor (GAP-127). **No command was issued** and
     /// nothing was recorded: the check is the first thing `task` does.
     #[error("{role} may not task a sensor ({action}); no command was issued")]
@@ -327,6 +361,19 @@ pub fn state_requirement(
         .ok_or(RequirementError::UnknownArea(area))?
         .to_asset();
     let now = state.clock.now();
+    // Checked before an identifier is taken, so a refused deadline leaves no hole in the
+    // numbering. `1e308` minutes is finite and positive and still overflows once it is
+    // added to the clock, which is why the sum is checked and not only the input.
+    let needed_by = match within_minutes {
+        None => None,
+        Some(m) => {
+            let due = now.0 + m * 60.0;
+            if !(m.is_finite() && m > 0.0 && due.is_finite()) {
+                return Err(RequirementError::BadDeadline(m));
+            }
+            Some(MissionTime(due))
+        }
+    };
     let id = state.next_requirement_id();
     let requirement = CollectionRequirement {
         id,
@@ -335,7 +382,7 @@ pub fn state_requirement(
         area: asset.extent,
         // Absent means it never lapses, which is a decision rather than a gap: some
         // requirements stand until answered.
-        needed_by: within_minutes.map(|m| MissionTime(now.0 + m * 60.0)),
+        needed_by,
         state: RequirementState::Stated,
     };
     state.requirements.push(requirement.clone());

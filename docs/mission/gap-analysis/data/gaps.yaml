@@ -8522,6 +8522,24 @@
     note: >-
       Filed by the GAP-067 walk, which split the `gungnir-store` row, gated the round
       trip and held retention.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Closed 2026-09-25: the purge is built (D-78), not deferred behind `NotImplemented`.
+      A baseline declares `retention` or nothing is purged, and both binaries say which at
+      start; both purge after the live session exists and hourly, by days since a
+      session's journal was last written. Never purged: the session being appended to, a
+      session under a hold (the after-action review places and releases one), and on the
+      desktop every session recovered state still reads. A purge renames a journal out of
+      the listing, removes its mission record, then deletes it, so an interrupted one
+      leaves the journal readable and the next finishes it; each removal is a
+      `RetentionEvent` in the live session, logged and counted. Tests:
+      `gungnir-store/tests/retention_purge.rs` (below, at and above the limit; the rest
+      read back exactly; an interrupted purge), `gungnir-app/tests/retention.rs`,
+      `gungnir-node/tests/retention.rs`. The `gungnir-store` Retention row of
+      `docs/verification-capability-table.md` is unchanged and awaits the owner's walk.
+      Found on the way: the launch-warning serial continued from a count, which a purge
+      would have made reissue a number (fixed), and GAP-152. See `../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`.
 
 - id: GAP-123
   name: An entity's GlobalEntityId changes at every restart
@@ -8649,6 +8667,22 @@
     note: >-
       Filed by the GAP-067 walk, whose `gungnir-store` round-trip test found that a
       non-finite float does not survive the journal.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Closed 2026-09-25 by a lossless encoding (D-77), not a refusal. A survey of every
+      journaled float found one live producer, a requirement deadline typed as "inf" or
+      "NaN" into PN-10 (Rust parses both) or large enough to overflow once added to the
+      clock, which read back as no deadline; that input is now refused where it is typed
+      and where the requirement is made (`RequirementError::BadDeadline`). Diverging filter
+      covariances are a latent source, so the journal carries whatever arrives: a finite
+      envelope is written byte for byte as before, one with a NaN or an infinity as a marked
+      line holding each float's bits, and `append` refuses with `StoreError::Unfaithful` a
+      marked line that would not read back. `gungnir-store/tests/non_finite_floats.rs`
+      puts a NaN and infinities through `append` and `read_session` mid-session and as the
+      last line, under both D-04 profiles, sealed and not, across a restart, bit for bit.
+      The `gungnir-store` Journal round-trip row is unchanged and awaits the owner's walk.
+      The same values still cannot cross the v3 stream: GAP-153. See `../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`.
 
 - id: GAP-127
   name: The desktop's decide and task functions check no permission
@@ -9546,3 +9580,69 @@
       floor. Filed rather than fixed inside GAP-145, because what a desktop does with a
       refusal it cannot retry past is a question about the link's own contract, not about
       the register.
+- id: GAP-152
+  name: The audit log lives in memory, so nothing outlives the process and no age governs it
+  type: Technical
+  caps: [CAP-6.3]
+  layer: "Productization: security"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Security engineer (human-owned crate)
+  deps: [GAP-059]
+  impact: >-
+    Both binaries keep the audit log in `InMemoryAuditLog`, so every entry an accreditor
+    would read -- a baseline applied, a sign-in, a decision -- is gone when the process
+    stops, and `RetentionPolicy::max_audit_log_age_days`, which a baseline can now declare,
+    has nothing durable to apply to. The decision record survives in the journal, which is
+    one of the "two homes on purpose" the data architecture names; the other does not.
+  evidence: >-
+    `gungnir-security/src/audit.rs` (`InMemoryAuditLog`, the only `AuditLog`);
+    `gungnir-app/src/state.rs` and `gungnir-node/src/approval.rs` construct it;
+    `docs/architecture/togaf/phase-c-information-systems/data-architecture.md` §4
+  action: >-
+    Give the audit log a durable, append-only home beside the journal (sealed as the
+    journal is, DN-22), read it back at start, and apply `max_audit_log_age_days` to it the
+    way D-78 applies the session age.
+  ref: >-
+    Found building GAP-122 (`../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Found building the retention purge: the policy's second field had nothing to purge.
+      Human-owned (`gungnir-security`); filed rather than built inside GAP-122, whose row
+      is about sessions. See docs/signatures.md for what the owner has reviewed.
+- id: GAP-153
+  name: A non-finite float in an envelope breaks the v3 stream and history
+  type: Technical
+  caps: [CAP-7.1, CAP-5.4]
+  layer: Deployment and API
+  sev: 2
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: [GAP-126]
+  impact: >-
+    The node sends each envelope to its desktops as `serde_json` text and serves
+    `GET /v3/history` the same way, so a NaN or an infinity goes out as `null`. The
+    desktop's `serde_json::from_str::<Envelope>` then fails on that frame and treats it
+    as the node ending the stream, and reconnects; a history holding one fails the
+    reconciliation read. The journal carries these values since D-77; the wire does not.
+  evidence: >-
+    `gungnir-api/src/transport.rs` (`send_envelope`; the history handler's `Json`);
+    `gungnir-remote/src/link.rs` (the stream's decode); D-77's survey found no live
+    producer left once PN-10's deadline was fixed, so today this is latent
+  action: >-
+    Carry an envelope over the v3 stream and history in the journal's lossless form
+    (`gungnir_store::nonfinite`, which `gungnir-api` would need an edge or a move to reach)
+    or refuse it at the node with a named, counted error, and amend `docs/gungnir-api-v1.md`
+    to say which.
+  ref: >-
+    Found building GAP-126 (`../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Found by D-77's survey of where a journaled envelope goes next. Filed rather than
+      fixed inside GAP-126: it is an interface contract change for both ends of the link.

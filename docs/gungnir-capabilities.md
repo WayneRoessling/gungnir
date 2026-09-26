@@ -1028,9 +1028,12 @@ policy.
 past session or reproducing an incident depends on this existing.
 
 *Status:* Implemented and tested: `FileEventJournal` writes one JSON-lines file per
-session, tolerates a torn final line after a crash, and lists sessions;
-`RetentionPolicy` has defaults. Wired: both binaries open a journal at startup and
-append every envelope the bus carries.
+session, tolerates a torn final line after a crash, lists sessions, and carries a NaN or
+an infinity bit for bit (D-77). Retention is built (D-78): a baseline that declares a
+`RetentionPolicy` has both binaries purge sessions past its age at start and hourly,
+never the live session or one under a hold, each removal journaled; one that declares
+none purges nothing. Wired: both binaries open a journal at startup and append every
+envelope the bus carries.
 
 **Configuration & Mission Management** — `gungnir-config`, `gungnir-mission` —
 *High*
