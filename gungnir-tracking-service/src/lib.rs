@@ -21,6 +21,7 @@ use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use gungnir_model::Provenance;
 use gungnir_track::Track;
 
+pub mod lifecycle;
 pub mod registration;
 
 pub use gungnir_fusion_async::Detection;
@@ -34,6 +35,7 @@ pub use gungnir_fusion_async::{
 pub use gungnir_model::{
     BearingRayView, DetectionView, MissionTime, SensorId, TrackId, TrackStatus, TrackView,
 };
+pub use lifecycle::TrackLifecycle;
 pub use registration::RegistrationLedger;
 
 /// The one trait `gungnir-app::AppState`, `gungnir-node`, and `gungnir-viewport3d`

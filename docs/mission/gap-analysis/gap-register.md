@@ -132,7 +132,7 @@ history, and an entry is never edited once it has merged.
 | GAP-117 | Most event and view types are never round-tripped through serde | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
 | GAP-118 | Coverage accuracy is untested, and a coverage volume has no bearing | Technical | CAP-2.11 | 3 | 3 | M | 9 | I3 | Services engineer | Closed |
 | GAP-119 | No solve budget exists, and a stale plan is never compared with the last good one | Technical | CAP-3.3, CAP-5.5 | 3 | 8 | M | 24 | I3 | Services engineer | Open |
-| GAP-120 | Nothing compares the embedded and remote backends' projections | Technical | CAP-7.3 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
+| GAP-120 | Nothing compares the embedded and remote backends' projections | Technical | CAP-7.3 | 3 | 1 | M | 3 | I3 | Services engineer | Closed |
 | GAP-121 | StoreAndForwardQueue has no production caller | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
 | GAP-122 | Journal retention purge is unbuilt, and nothing says so | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Closed |
 | GAP-123 | An entity's GlobalEntityId changes at every restart | Technical | CAP-2.7 | 4 | 3 | M | 12 | I3 | Services engineer | Closed |
@@ -165,9 +165,11 @@ history, and an entry is never edited once it has merged.
 | GAP-153 | A non-finite float in an envelope breaks the v3 stream and history | Technical | CAP-7.1, CAP-5.4 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
 | GAP-158 | A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical | Technical | CAP-2.11 | 2 | 3 | M | 6 | I3 | Services engineer | Open |
 | GAP-159 | The Coverage accuracy row still says a coverage volume has no bearing | Technical | CAP-2.11 | 1 | 3 | S | 3 | I3 | Owner | Open |
+| GAP-160 | A node publishes no track, so a linked desktop's picture is frozen at sign-in | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
+| GAP-161 | A linked desktop's health strip reports the link, not the node's services | Technical | CAP-7.3 | 4 | 1 | S | 4 | I3 | Services engineer | Closed |
 | GAP-147 | No committed recording reaches round 1's radars | Technical | CAP-5.2, CAP-1.4 | 2 | 4 | M | 8 | I3 | Services engineer | Open |
 
-Counts: 153 gaps, 3 mission, 150 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 155 gaps, 3 mission, 152 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1836,11 +1838,12 @@ Counts: 153 gaps, 3 mission, 150 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.3 Three profiles.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which held the backend-switching row and dropped '(planned)' from its method.
+  - 2026-09-25, Closed: Built: `gungnir-app/tests/backend_parity.rs` gives one Scenario 1 timeline to an embedded desktop and to one linked over the product's mutual TLS to the node's own code (`gungnir_node::picture`), drains on what each pipeline reports, and compares the picture, health, plan and alerts (D-85). It found GAP-160, GAP-161 and a node planner with no local frame, all fixed here. The row is not gated and its criterion is unchanged: it awaits the owner's walk. See `../../record/2026-09-25/one-scenario-through-both-backends.md`.
 - Evidence: `../../verification-capability-table.md` §2, the `gungnir-app` Backend switching row; `gungnir-app/tests/{failover,failover_e2e}.rs` test failover, not projections.
 - Severity: 3. Reach: 1 threads. Effort: M. Priority: 3.
 - Impact: The `gungnir-app` backend-switching row cannot be gated: no test runs one scenario through both backends, so a projection the remote backend gets wrong would reach an operator on a linked desktop unseen.
 - Closing action: Feed one generated Scenario 1 timeline (`gungnir-scenario`) to an `AppState` on the embedded backend and, through a real `NodeApi` or `gungnir-node`, to one linked to it; after both drain, compare what the panels read -- tracks, plan outcome, health, alerts -- field by field. Then walk the row again.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-121 StoreAndForwardQueue has no production caller**
@@ -2301,6 +2304,34 @@ Counts: 153 gaps, 3 mission, 150 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Owner. Status: Open.
 - Reference: Found closing GAP-118 (`../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`).
 - Depends on: GAP-118.
+
+**GAP-160 A node publishes no track, so a linked desktop's picture is frozen at sign-in**
+
+- Type: Technical.
+- Capability: CAP-7.3 Three profiles.
+- History:
+  - 2026-09-25, Open: Found by the GAP-120 parity test: the linked desktop drew no track while the embedded one drew three.
+  - 2026-09-25, Closed: Closed under D-86: the node diffs its picture each tick against what it last announced and publishes the difference, deletions first (`gungnir_tracking_service::TrackLifecycle`, `gungnir_node::picture::Announcer`). The parity test fails without it. See `../../record/2026-09-25/one-scenario-through-both-backends.md`.
+- Evidence: `gungnir-node/src/main.rs` (the loop published ingest, plan and health events and no tracking event); `gungnir-remote/src/link.rs` (`apply` takes tracks from `TrackingEvent` alone between snapshots).
+- Severity: 5. Reach: 1 threads. Effort: S. Priority: 5.
+- Impact: Nothing in the workspace produced a `TrackingEvent`, though five things read them: a linked desktop's projection between snapshots, a partner's stream (DN-18 §6), the reports, the replay and the node's entity fold. A desktop linked to a node drew the tracks its sign-in snapshot held for as long as the link stayed up, and the node's journal -- the system of record in the connected profiles -- held no track history.
+- Closing action: Publish the track lifecycle from the node's picture every tick -- initiated, updated, deleted -- in an order a reader applying them keeps.
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: Found building GAP-120 (`../../record/2026-09-25/one-scenario-through-both-backends.md`).
+
+**GAP-161 A linked desktop's health strip reports the link, not the node's services**
+
+- Type: Technical.
+- Capability: CAP-7.3 Three profiles.
+- History:
+  - 2026-09-25, Open: Found by the GAP-120 parity test, whose drain stops both trackers: the embedded desktop showed its tracker down and the linked one showed the node's tracking.
+  - 2026-09-25, Closed: Closed under D-86: `link::Projection::node_health` holds the snapshot's health and every `HealthEvent::Changed`, and a remote service is healthy only when linked and the node reports it so. `gungnir-remote/tests/node_health.rs` pins it. See `../../record/2026-09-25/one-scenario-through-both-backends.md`.
+- Evidence: `gungnir-remote/src/lib.rs` (`RemoteTrackingService::is_healthy` and `RemoteInterceptService::is_healthy` returned `connected`); `gungnir-remote/src/link.rs` (`apply` ignored `Event::Health`; the snapshot's `health` was never kept).
+- Severity: 4. Reach: 1 threads. Effort: S. Priority: 4.
+- Impact: Both remote services answered `is_healthy` with whether the link was up, so a node whose tracker or planner had stopped was drawn working on every linked desktop's status strip and PN-09 -- the health flag `CLAUDE.md` forbids, on the path a linked operator relies on. The node reported both, in its snapshot and in `HealthEvent::Changed`, and nothing on the desktop read either.
+- Closing action: Keep the node's word on its services in the link's projection and make each remote service healthy only when the link is up and the node says its service is.
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: Found building GAP-120 (`../../record/2026-09-25/one-scenario-through-both-backends.md`).
 
 **GAP-147 No committed recording reaches round 1's radars**
 
