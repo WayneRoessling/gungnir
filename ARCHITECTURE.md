@@ -56,7 +56,8 @@ because `gungnir-scenario` depends on neither.
 │   gungnir-track-fusion ──► track, coord                                      │
 │   gungnir-fusion-async ──► track, rfs, track-fusion   (the tokio user)       │
 │   gungnir-allocation ──► core                                                │
-│   gungnir-scenario ──► core, coord, fusion-async   (test/bench only)         │
+│   gungnir-sensor-sim   (no workspace deps; scenario, app, verifiers only)    │
+│   gungnir-scenario ──► core, coord, fusion-async, sensor-sim  (test/bench)   │
 │   gungnir-oracle, gungnir-testkit, gungnir-fuzz: dev/test only               │
 └───────────────────────────────────┬──────────────────────────────────────────┘
                                     │ trait facades (§2), typed with gungnir-model
@@ -97,7 +98,7 @@ deployment, and UI crates, from the crate manifests:
 
 | Crate | Depends on |
 |---|---|
-| `gungnir-core`, `gungnir-coord`, `gungnir-testkit`, `gungnir-security`, `gungnir-render`, `gungnir-data` | No workspace crates |
+| `gungnir-core`, `gungnir-coord`, `gungnir-testkit`, `gungnir-security`, `gungnir-render`, `gungnir-data`, `gungnir-sensor-sim` | No workspace crates |
 | `gungnir-model` | `core`, `coord` |
 | `gungnir-filters` | `core`, `coord` |
 | `gungnir-association` | `filters` |
@@ -107,7 +108,7 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-track-fusion` | `track`, `coord` |
 | `gungnir-fusion-async` | `track`, `rfs`, `track-fusion`, `core` (r), `filters` (r), `association` (r) |
 | `gungnir-allocation` | `core` |
-| `gungnir-scenario` | `core`, `coord`, `fusion-async` |
+| `gungnir-scenario` | `core`, `coord`, `fusion-async`, `sensor-sim` (z) |
 | `gungnir-oracle` | `filters`, `association`, `rfs`, `scenario` (dev: `testkit`) |
 | `gungnir-fuzz` (excluded from the default build) | `association`, `ingest`, `model` |
 | `gungnir-approval` | `command`, `policy`, `intercept-service`, `security`, `config`, `eventing`, `model` (w) |
@@ -118,7 +119,7 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-node` | `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `sensor-management`, `tracking-service`, `intercept-service`, `api`, `analytics` (g), `security`, `observability`, `modelops` (h), `policy` (k), `geo` (l), `remote` (p), `identity` (s), `approval` (y), `command` (y) |
 | `gungnir-ui` | `model` |
 | `gungnir-viewport3d` | `data`, `data-fusion`, `model`, `ui` (theme only) |
-| `gungnir-app` | Both facades, `remote`, `data`, `data-fusion`, `render`, `viewport3d`, `ui`, `workflow`, `security`, `policy`, `command`, `geo`, `replay`, `reporting`, `analytics`, `sensor-management`, `assessment`, `modelops` (h), `decision` (i), `resilience` (m), `identification` (n), `identity` (o), `coord` (u), `approval` (x), `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `observability` |
+| `gungnir-app` | Both facades, `remote`, `data`, `data-fusion`, `render`, `viewport3d`, `ui`, `workflow`, `security`, `policy`, `command`, `geo`, `replay`, `reporting`, `analytics`, `sensor-management`, `assessment`, `modelops` (h), `decision` (i), `resilience` (m), `identification` (n), `identity` (o), `coord` (u), `approval` (x), `sensor-sim` (aa), `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `observability` |
 
 The productization-layer edges are listed in §7.1.
 
@@ -143,11 +144,16 @@ to know a UI exists. They keep:
   on independently (`docs/agentic-coding-standards.md` §1.5,
   `docs/rust-ui-architecture-coding-standards.md` §8).
 
-The tracking core is fourteen crates: eleven capability crates (`gungnir-core`,
+The tracking core is fifteen crates: twelve capability crates (`gungnir-core`,
 `gungnir-coord`, `gungnir-filters`, `gungnir-association`, `gungnir-track`, `gungnir-rfs`,
 `gungnir-track-fusion`, `gungnir-fusion-async`, `gungnir-allocation`, `gungnir-scenario`,
-`gungnir-metrics`) and three verification crates (`gungnir-oracle`, `gungnir-testkit`,
-`gungnir-fuzz`). Every other layer depends on them only through the two service facades
+`gungnir-sensor-sim`, `gungnir-metrics`) and three verification crates (`gungnir-oracle`,
+`gungnir-testkit`, `gungnir-fuzz`). `gungnir-sensor-sim` is the observation half of the
+test-track generator, split out of `gungnir-scenario` so a laydown rehearsal can
+re-observe a recording without the crate that makes worlds
+(`docs/design/DN-32-re-observation-for-a-laydown.md`); it is a dependency of
+`gungnir-scenario`, `gungnir-app` and the verifiers and of nothing else, which
+`gungnir-app/tests/dependency_graph.rs`'s `sensor_sim_misuse` enforces. Every other layer depends on them only through the two service facades
 in §2, or through the primitives `gungnir-core` and `gungnir-coord` own and re-export
 upward: `TrackId`, `TrackStatus`, `ResourceId`, the debug-only `assert_psd` helper, and
 `Geodetic`. Those live in the lowest crates precisely so that `gungnir-model` can share
@@ -493,6 +499,20 @@ edge in the graph are checked by `gungnir-app/tests/dependency_graph.rs` on ever
   human-owned queue crate into engagement, configuration and security code. **The node's
   edge (y) landed with GAP-132**, in the change that put it in a manifest; it is drawn
   above (`docs/design/dependency-edges.md` §18).
+- **(z) `gungnir-scenario` ──► `gungnir-sensor-sim`, and (aa) `gungnir-app` ──►
+  `gungnir-sensor-sim`** (2026-09-25, GAP-105, D-64,
+  `docs/design/DN-32-re-observation-for-a-laydown.md`). The observation model moved out
+  of `gungnir-scenario`'s generator into a crate of its own, with the Python-parity
+  arithmetic and random stream it draws from; the generator calls it through (z), and the
+  desktop's laydown rehearsal re-observes a committed recording with a laydown's own
+  sensors through (aa). The crate holds the observation model and not the world model, so
+  a binary that links it can re-observe a recording and cannot invent a target, and
+  `gungnir-scenario` is still never a production dependency (`scenario_misuse` is
+  unchanged). Both edges point down into the core; `gungnir-sensor-sim` depends on no
+  workspace crate, so no cycle is reachable. Nothing else may depend on it --
+  `sensor_sim_misuse` names any edge from the node, ingest, the tracking service, the API
+  or the remote link -- and within the desktop only `src/laydown_rehearsal.rs` may name it
+  (`tests/architecture_compliance.rs`). Recorded in `docs/design/dependency-edges.md` §19.
 - **(q) `gungnir-ml` ──► `gungnir-model` and `gungnir-interop`** (2026-09-06, GAP-077,
   GAP-079). The crate `docs/ml/architecture.md` §1 drew as `gungnir-model ──► gungnir-ml`
   exists: the `Model` and `FeatureExtractor` traits, a fake for the consumers' tests,
@@ -669,7 +689,8 @@ it; `docs/design/DN-31-node-approval-queue.md` plans the change and GAP-130 to G
 
 | Crate group | Disconnected desktop | Service node |
 |---|---|---|
-| Tracking core, service facades | Yes (embedded) | Yes |
+| Tracking core, service facades | Yes (embedded) | Yes, except `gungnir-sensor-sim` |
+| `gungnir-sensor-sim` | Linked for PN-16's laydown rehearsal alone, on a throwaway desktop whose gateway is the only one that admits its detections (DN-32 §6) | Never: a node that cannot rehearse cannot leak a rehearsal (`sensor_sim_misuse`) |
 | `gungnir-model`, `gungnir-eventing`, `gungnir-config`, `gungnir-mission` | Yes | Yes |
 | `gungnir-store` | Local journal | Authoritative journal |
 | `gungnir-time`, `gungnir-ingest`, `gungnir-sensor-management`, `gungnir-interop` | Yes, for locally attached sensors | Yes, for sensors feeding the node |

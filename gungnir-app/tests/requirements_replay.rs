@@ -308,6 +308,7 @@ fn baseline(dir: &Path, steps: &[Step], origin: Geodetic) -> ConfigBaseline {
                 max_range_m: s.params.range_m.values().copied().fold(0.0, f64::max),
                 control_endpoint: tasked.contains(&s.id).then(|| control(s.id)),
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             })
             .collect(),

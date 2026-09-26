@@ -3341,6 +3341,7 @@ dependencies = [
  "gungnir-scenario",
  "gungnir-security",
  "gungnir-sensor-management",
+ "gungnir-sensor-sim",
  "gungnir-store",
  "gungnir-time",
  "gungnir-tracking-service",
@@ -3856,6 +3857,7 @@ dependencies = [
  "gungnir-coord",
  "gungnir-core",
  "gungnir-fusion-async",
+ "gungnir-sensor-sim",
  "gungnir-testkit",
  "nalgebra",
  "proptest",
@@ -3899,6 +3901,16 @@ dependencies = [
  "gungnir-config",
  "gungnir-coord",
  "gungnir-model",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "gungnir-sensor-sim"
+version = "0.1.0"
+dependencies = [
+ "proptest",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

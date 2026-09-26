@@ -62,6 +62,21 @@
    "detail": "8 vs 8"
   },
   {
+   "check": "truth on the truth tick",
+   "passed": true,
+   "detail": "[]"
+  },
+  {
+   "check": "entities.json describes every entity in truth",
+   "passed": true,
+   "detail": "[]"
+  },
+  {
+   "check": "environment.json events on the truth tick",
+   "passed": true,
+   "detail": "[]"
+  },
+  {
    "check": "detections parse as DetectionView",
    "passed": true,
    "detail": "[]"
@@ -88,6 +103,11 @@
   },
   {
    "check": "out-of-order fraction per sensor within the model",
+   "passed": true,
+   "detail": "[]"
+  },
+  {
+   "check": "sensor-models.json holds every sensor type the set uses",
    "passed": true,
    "detail": "[]"
   }

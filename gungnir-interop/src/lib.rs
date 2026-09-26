@@ -42,6 +42,12 @@ pub enum InteropError {
     Arrow(#[from] arrow::error::ArrowError),
     #[error("record batch does not match the detection schema: {0}")]
     SchemaMismatch(String),
+    /// A detection a laydown rehearsal re-observed from a recording
+    /// (docs/design/DN-32-re-observation-for-a-laydown.md §6): it never leaves the
+    /// rehearsal that made it, and the exchange schema has no column that could say what
+    /// it is, so writing it would strip the mark and let it out looking like a sensor's.
+    #[error("detection {row} is {origin}, and a rehearsal's detection is not exchanged")]
+    RehearsalRefused { row: usize, origin: String },
     /// The catalogue's compatibility error (GAP-063): a peer offered a version of a
     /// schema this build does not speak. Exact match is the rule until a second version
     /// exists (`docs/gungnir-api-v1.md`).
@@ -373,10 +379,19 @@ fn authentication_from(name: &str) -> Result<gungnir_model::SourceAuthentication
 
 /// # Errors
 ///
-/// An Arrow error building the batch, or a peer origin that does not serialise.
+/// An Arrow error building the batch, or a peer origin that does not serialise; and,
+/// before either, a detection a laydown rehearsal re-observed
+/// ([`InteropError::RehearsalRefused`]).
 pub fn detections_to_record_batch(
     detections: &[DetectionView],
 ) -> Result<RecordBatch, InteropError> {
+    if let Some((row, origin)) = detections
+        .iter()
+        .enumerate()
+        .find_map(|(i, d)| d.provenance.rehearsal.as_ref().map(|o| (i, o.to_string())))
+    {
+        return Err(InteropError::RehearsalRefused { row, origin });
+    }
     let json = |v: &dyn erased::Json| v.to_json();
     let source_ids: Vec<String> = detections
         .iter()
@@ -515,6 +530,7 @@ pub fn record_batch_to_detections(batch: &RecordBatch) -> Result<Vec<DetectionVi
                     peer: peer_origin,
                     conversion_loss: optional(loss, i),
                     authentication: authentication_from(authentication.value(i))?,
+                    rehearsal: None,
                 },
             })
         })
@@ -547,6 +563,7 @@ mod tests {
                 }),
                 conversion_loss: Some("covariance structure".into()),
                 authentication: gungnir_model::SourceAuthentication::AllowList,
+                rehearsal: None,
             },
         }
     }
@@ -558,6 +575,25 @@ mod tests {
         assert_eq!(batch.num_rows(), 2);
         let back = record_batch_to_detections(&batch).expect("from batch");
         assert_eq!(back, input);
+    }
+
+    /// DN-32 §6: a rehearsal's detection is refused by name rather than written with its
+    /// mark stripped, which is the only way the schema could carry it.
+    #[test]
+    fn a_rehearsals_detection_is_refused_rather_than_exchanged_unmarked() {
+        let mut marked = detection(2);
+        marked.provenance.rehearsal = Some(gungnir_model::RehearsalOrigin {
+            scenario: gungnir_model::TestTrackNumber(1),
+            laydown: gungnir_model::LaydownId("c".into()),
+            seed: 1701,
+        });
+        let err = detections_to_record_batch(&[detection(1), marked])
+            .expect_err("a marked detection is not exchanged");
+        assert!(
+            matches!(err, InteropError::RehearsalRefused { row: 1, .. }),
+            "{err}"
+        );
+        assert!(err.to_string().contains("TT-01"), "{err}");
     }
 
     #[test]

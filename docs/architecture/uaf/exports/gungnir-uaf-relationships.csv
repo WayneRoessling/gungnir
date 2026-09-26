@@ -453,6 +453,7 @@ REL:uses:RS-api->RS-tracking-service,uses,,RS-api,RS-tracking-service,uses: RS-a
 REL:uses:RS-api->RS-intercept-service,uses,,RS-api,RS-intercept-service,uses: RS-api -> RS-intercept-service,Dependency
 REL:uses:RS-api->RS-analytics,uses,,RS-api,RS-analytics,uses: RS-api -> RS-analytics,Dependency
 REL:uses:RS-app->RS-coord,uses,,RS-app,RS-coord,uses: RS-app -> RS-coord,Dependency
+REL:uses:RS-app->RS-sensor-sim,uses,,RS-app,RS-sensor-sim,uses: RS-app -> RS-sensor-sim,Dependency
 REL:uses:RS-app->RS-tracking-service,uses,,RS-app,RS-tracking-service,uses: RS-app -> RS-tracking-service,Dependency
 REL:uses:RS-app->RS-intercept-service,uses,,RS-app,RS-intercept-service,uses: RS-app -> RS-intercept-service,Dependency
 REL:uses:RS-app->RS-remote,uses,,RS-app,RS-remote,uses: RS-app -> RS-remote,Dependency
@@ -610,6 +611,7 @@ REL:uses:RS-rfs->RS-testkit,uses,,RS-rfs,RS-testkit,uses: RS-rfs -> RS-testkit,D
 REL:uses:RS-scenario->RS-core,uses,,RS-scenario,RS-core,uses: RS-scenario -> RS-core,Dependency
 REL:uses:RS-scenario->RS-coord,uses,,RS-scenario,RS-coord,uses: RS-scenario -> RS-coord,Dependency
 REL:uses:RS-scenario->RS-fusion-async,uses,,RS-scenario,RS-fusion-async,uses: RS-scenario -> RS-fusion-async,Dependency
+REL:uses:RS-scenario->RS-sensor-sim,uses,,RS-scenario,RS-sensor-sim,uses: RS-scenario -> RS-sensor-sim,Dependency
 REL:uses:RS-scenario->RS-testkit,uses,,RS-scenario,RS-testkit,uses: RS-scenario -> RS-testkit,Dependency
 REL:uses:RS-sensor-management->RS-coord,uses,,RS-sensor-management,RS-coord,uses: RS-sensor-management -> RS-coord,Dependency
 REL:uses:RS-sensor-management->RS-model,uses,,RS-sensor-management,RS-model,uses: RS-sensor-management -> RS-model,Dependency

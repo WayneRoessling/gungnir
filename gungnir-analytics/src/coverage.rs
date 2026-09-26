@@ -461,6 +461,7 @@ mod tests {
                 max_range_m: 1_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             },
             SensorConfig {
@@ -470,6 +471,7 @@ mod tests {
                 max_range_m: 1_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             },
         ];
@@ -512,6 +514,7 @@ mod tests {
             control_endpoint: None,
             maintenance: Vec::new(),
             azimuth_sector,
+            detection_model: None,
         };
         let mut registry = InMemorySensorRegistry::from_config(
             &[config(1, east, Some(sector)), config(2, origin, None)],

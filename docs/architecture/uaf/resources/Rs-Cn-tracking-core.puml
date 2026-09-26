@@ -15,6 +15,7 @@ package "Tracking core" {
   component "gungnir-oracle" as RS_oracle <<Resource>>
   component "gungnir-rfs" as RS_rfs <<Resource>>
   component "gungnir-scenario" as RS_scenario <<Resource>>
+  component "gungnir-sensor-sim" as RS_sensor_sim <<Resource>>
   component "gungnir-testkit" as RS_testkit <<Resource>>
   component "gungnir-track-fusion" as RS_track_fusion <<Resource>>
   component "gungnir-track" as RS_track <<Resource>>
@@ -39,6 +40,7 @@ RS_rfs --> RS_track
 RS_scenario --> RS_core
 RS_scenario --> RS_coord
 RS_scenario --> RS_fusion_async
+RS_scenario --> RS_sensor_sim
 RS_track_fusion --> RS_track
 RS_track_fusion --> RS_coord
 RS_track --> RS_core

@@ -1,0 +1,11 @@
+{
+ "events": [
+  {
+   "kind": "sea_state",
+   "t": 0.0,
+   "value": 4
+  }
+ ],
+ "format": 1,
+ "scenario": "TT-04"
+}

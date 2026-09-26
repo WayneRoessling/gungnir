@@ -1,0 +1,549 @@
+{
+ "format": 1,
+ "generator": "tt-gen 0.1.0",
+ "sensors_version": "2026-09-04",
+ "source": "docs/test-tracks/sensors.yaml",
+ "types": {
+  "acoustic": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     3000
+    ],
+    "dropout": 0.3,
+    "ea": {
+     "dropout_multiplier": 1.2,
+     "fa_multiplier": 1.0,
+     "skew_s": 2.0
+    },
+    "false_alarms_per_scan": 0.05,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "gnss_dependent": true,
+    "horizon": false,
+    "latency_s": {
+     "jitter": 1.0,
+     "mean": 2.5
+    },
+    "noise": {
+     "cross_m": 400,
+     "height_m": 300,
+     "range_m": 800
+    },
+    "out_of_order": 0.25,
+    "pd_in_range": 0.6,
+    "range_m": {
+     "loud": 4000,
+     "moderate": 1500,
+     "quiet": 400
+    },
+    "signature_key": "acoustic",
+    "update_period_s": 5.0
+   },
+   "name": "Acoustic sensor node (network)"
+  },
+  "adsb": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     15000
+    ],
+    "cooperative": true,
+    "dropout": 0.02,
+    "ea": {
+     "dropout_multiplier": 1.0,
+     "fa_multiplier": 1.0,
+     "skew_s": 0
+    },
+    "false_alarms_per_scan": 0.0,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "horizon": true,
+    "latency_s": {
+     "jitter": 0.2,
+     "mean": 0.5
+    },
+    "noise": {
+     "cross_m": 30,
+     "height_m": 30,
+     "range_m": 30
+    },
+    "out_of_order": 0.02,
+    "pd_in_range": 0.98,
+    "range_m": {
+     "adsb": 250000,
+     "none": 0
+    },
+    "signature_key": "emission",
+    "update_period_s": 1.0
+   },
+   "name": "ADS-B receiver (cooperative air)"
+  },
+  "ais": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     0
+    ],
+    "cooperative": true,
+    "dropout": 0.02,
+    "ea": {
+     "dropout_multiplier": 1.0,
+     "fa_multiplier": 1.0,
+     "skew_s": 0
+    },
+    "false_alarms_per_scan": 0.0,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "horizon": true,
+    "latency_s": {
+     "jitter": 0.5,
+     "mean": 1.0
+    },
+    "noise": {
+     "cross_m": 10,
+     "height_m": 0,
+     "range_m": 10
+    },
+    "out_of_order": 0.05,
+    "pd_in_range": 0.98,
+    "range_m": {
+     "ais": 60000,
+     "none": 0
+    },
+    "signature_key": "emission",
+    "spoofable": true,
+    "update_period_s": 10.0
+   },
+   "name": "AIS receiver (cooperative maritime)"
+  },
+  "bft": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     100
+    ],
+    "cooperative": true,
+    "dropout": 0.05,
+    "ea": {
+     "dropout_multiplier": 2.0,
+     "fa_multiplier": 1.0,
+     "skew_s": 1.0
+    },
+    "false_alarms_per_scan": 0.0,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "gnss_dependent": true,
+    "horizon": false,
+    "latency_s": {
+     "jitter": 1.0,
+     "mean": 2.0
+    },
+    "noise": {
+     "cross_m": 15,
+     "height_m": 5,
+     "range_m": 15
+    },
+    "out_of_order": 0.2,
+    "pd_in_range": 0.99,
+    "range_m": {
+     "bft": 100000,
+     "none": 0
+    },
+    "signature_key": "emission",
+    "update_period_s": 30.0
+   },
+   "name": "Blue-force tracking (own vehicles)"
+  },
+  "eo-ir": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     10000
+    ],
+    "cued": true,
+    "dropout": 0.25,
+    "ea": {
+     "dropout_multiplier": 1.0,
+     "fa_multiplier": 1.0,
+     "skew_s": 0
+    },
+    "false_alarms_per_scan": 0.02,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "horizon": true,
+    "latency_s": {
+     "jitter": 0.3,
+     "mean": 0.6
+    },
+    "noise": {
+     "cross_m": 15,
+     "height_m": 15,
+     "range_m": 150
+    },
+    "out_of_order": 0.05,
+    "pd_in_range": 0.7,
+    "range_m": {
+     "high": 15000,
+     "low": 4000,
+     "medium": 8000
+    },
+    "signature_key": "ir",
+    "update_period_s": 0.5
+   },
+   "name": "Electro-optical and infrared camera (cued)"
+  },
+  "iff": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     20000
+    ],
+    "cooperative": true,
+    "dropout": 0.05,
+    "ea": {
+     "dropout_multiplier": 1.0,
+     "fa_multiplier": 1.0,
+     "skew_s": 0
+    },
+    "false_alarms_per_scan": 0.0,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "horizon": true,
+    "latency_s": {
+     "jitter": 0.1,
+     "mean": 0.3
+    },
+    "noise": {
+     "cross_m": 300,
+     "height_m": 300,
+     "range_m": 100
+    },
+    "out_of_order": 0.01,
+    "pd_in_range": 0.95,
+    "range_m": {
+     "iff": 150000,
+     "none": 0
+    },
+    "signature_key": "emission",
+    "update_period_s": 4.0
+   },
+   "name": "IFF interrogator (cooperative, friendly only)"
+  },
+  "isr-video": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     100
+    ],
+    "bias_m": {
+     "east": 0,
+     "north": 0
+    },
+    "dropout": 0.15,
+    "ea": {
+     "dropout_multiplier": 3.0,
+     "fa_multiplier": 1.0,
+     "skew_s": 1.5
+    },
+    "false_alarms_per_scan": 0.02,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "gnss_dependent": true,
+    "horizon": false,
+    "latency_s": {
+     "jitter": 1.0,
+     "mean": 2.5
+    },
+    "mobile": true,
+    "noise": {
+     "cross_m": 25,
+     "height_m": 10,
+     "range_m": 25
+    },
+    "out_of_order": 0.35,
+    "pd_in_range": 0.8,
+    "range_m": {
+     "high": 12000,
+     "low": 5000,
+     "medium": 8000
+    },
+    "signature_key": "ir",
+    "update_period_s": 3.0
+   },
+   "name": "ISR video observation (from a UAS sortie)"
+  },
+  "radar.coastal": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     300
+    ],
+    "dropout": 0.15,
+    "ea": {
+     "dropout_multiplier": 1.5,
+     "fa_multiplier": 2.0,
+     "skew_s": 0
+    },
+    "false_alarms_per_scan": 2.0,
+    "field_of_regard_deg": [
+     180,
+     360
+    ],
+    "horizon": true,
+    "latency_s": {
+     "jitter": 0.2,
+     "mean": 0.4
+    },
+    "noise": {
+     "cross_m": 60,
+     "height_m": 0,
+     "range_m": 15
+    },
+    "out_of_order": 0.03,
+    "pd_in_range": 0.8,
+    "range_m": {
+     "large": 40000,
+     "medium": 25000,
+     "small": 14000,
+     "very-small": 9000
+    },
+    "sea_state_dropout": {
+     "4": 0.3,
+     "5": 0.45
+    },
+    "signature_key": "rcs",
+    "update_period_s": 2.5
+   },
+   "name": "Coastal surveillance radar (port)"
+  },
+  "radar.ground": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     50
+    ],
+    "dropout": 0.2,
+    "ea": {
+     "dropout_multiplier": 2.0,
+     "fa_multiplier": 2.0,
+     "skew_s": 0
+    },
+    "false_alarms_per_scan": 0.5,
+    "field_of_regard_deg": [
+     30,
+     150
+    ],
+    "horizon": true,
+    "latency_s": {
+     "jitter": 0.3,
+     "mean": 0.5
+    },
+    "moving_only": true,
+    "noise": {
+     "cross_m": 60,
+     "height_m": 0,
+     "range_m": 20
+    },
+    "out_of_order": 0.03,
+    "pd_in_range": 0.75,
+    "range_m": {
+     "large": 40000,
+     "medium": 25000,
+     "small": 12000,
+     "very-small": 6000
+    },
+    "signature_key": "rcs",
+    "update_period_s": 4.0
+   },
+   "name": "Ground surveillance radar (ridge)"
+  },
+  "radar.long": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     30,
+     40000
+    ],
+    "dropout": 0.05,
+    "ea": {
+     "dropout_multiplier": 2.0,
+     "fa_multiplier": 3.0,
+     "skew_s": 0
+    },
+    "false_alarms_per_scan": 0.1,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "horizon": true,
+    "latency_s": {
+     "jitter": 0.15,
+     "mean": 0.3
+    },
+    "noise": {
+     "cross_m": 120,
+     "height_m": 250,
+     "range_m": 40
+    },
+    "out_of_order": 0.02,
+    "pd_in_range": 0.9,
+    "range_m": {
+     "large": 200000,
+     "medium": 140000,
+     "small": 70000,
+     "very-small": 35000
+    },
+    "signature_key": "rcs",
+    "update_period_s": 2.0
+   },
+   "name": "Long-range surveillance radar (ridge site)"
+  },
+  "radar.medium": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     20,
+     25000
+    ],
+    "dropout": 0.04,
+    "ea": {
+     "dropout_multiplier": 2.0,
+     "fa_multiplier": 2.5,
+     "skew_s": 0
+    },
+    "false_alarms_per_scan": 0.08,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "horizon": true,
+    "latency_s": {
+     "jitter": 0.1,
+     "mean": 0.25
+    },
+    "noise": {
+     "cross_m": 60,
+     "height_m": 150,
+     "range_m": 25
+    },
+    "out_of_order": 0.02,
+    "pd_in_range": 0.92,
+    "range_m": {
+     "large": 120000,
+     "medium": 80000,
+     "small": 45000,
+     "very-small": 20000
+    },
+    "signature_key": "rcs",
+    "update_period_s": 1.0
+   },
+   "name": "Medium-range air-defense radar (airfield site)"
+  },
+  "radar.short": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     5000
+    ],
+    "dropout": 0.08,
+    "ea": {
+     "dropout_multiplier": 3.0,
+     "fa_multiplier": 4.0,
+     "skew_s": 0
+    },
+    "false_alarms_per_scan": 0.05,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "horizon": false,
+    "latency_s": {
+     "jitter": 0.05,
+     "mean": 0.15
+    },
+    "noise": {
+     "cross_m": 20,
+     "height_m": 40,
+     "range_m": 8
+    },
+    "out_of_order": 0.01,
+    "pd_in_range": 0.85,
+    "range_m": {
+     "large": 15000,
+     "medium": 10000,
+     "small": 6000,
+     "very-small": 3500
+    },
+    "signature_key": "rcs",
+    "update_period_s": 0.5
+   },
+   "name": "Short-range counter-UAS radar (site)"
+  },
+  "rf": {
+   "confidence": "assumption",
+   "model": {
+    "altitude_m": [
+     0,
+     6000
+    ],
+    "dropout": 0.2,
+    "ea": {
+     "dropout_multiplier": 1.0,
+     "fa_multiplier": 2.0,
+     "skew_s": 0
+    },
+    "false_alarms_per_scan": 0.1,
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "horizon": false,
+    "latency_s": {
+     "jitter": 0.4,
+     "mean": 0.8
+    },
+    "noise": {
+     "cross_m": 300,
+     "height_m": 500,
+     "range_m": 1500
+    },
+    "out_of_order": 0.05,
+    "pd_in_range": 0.8,
+    "range_m": {
+     "control": 5000,
+     "datalink": 8000,
+     "none": 0,
+     "radar": 30000
+    },
+    "signature_key": "emission",
+    "update_period_s": 1.0
+   },
+   "name": "Radio-frequency detector (site)"
+  }
+ }
+}

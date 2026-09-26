@@ -69,6 +69,9 @@ on:
       - "gungnir-metrics/**"
       - "gungnir-oracle/**"
       - "gungnir-scenario/**"
+      # The generator's observation model, which the oracle's scenario inputs run through
+      # since DN-32 moved it out of gungnir-scenario (GAP-105).
+      - "gungnir-sensor-sim/**"
       # The fixtures are half of a differential test. Editing one changes what the
       # comparison asserts, so it has to re-run the comparison.
       - "testdata/oracles/**"

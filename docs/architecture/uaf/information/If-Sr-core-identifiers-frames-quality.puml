@@ -34,6 +34,12 @@ class "Provenance" as Provenance <<InformationElement>> {
   peer: Option<crate::PeerOrigin>
   conversion_loss: Option<String>
   authentication: SourceAuthentication
+  rehearsal: Option<RehearsalOrigin>
+}
+class "RehearsalOrigin" as RehearsalOrigin <<InformationElement>> {
+  scenario: crate::TestTrackNumber
+  laydown: crate::LaydownId
+  seed: u64
 }
 enum "SourceAuthentication" as SourceAuthentication <<InformationElement>> {
   Unauthenticated
@@ -48,9 +54,16 @@ class "Quality" as Quality <<InformationElement>> {
 class "MissionTime" as MissionTime <<InformationElement>> {
   pub f64
 }
+class "LaydownId\n(see If-Sr-battle-rhythm-mission-records)" as LaydownId <<External>> #line.dashed {
+}
 class "PeerOrigin\n(see If-Sr-assets-exchange-releasability)" as PeerOrigin <<External>> #line.dashed {
+}
+class "TestTrackNumber\n(see If-Sr-battle-rhythm-mission-records)" as TestTrackNumber <<External>> #line.dashed {
 }
 AlgorithmBaselineId --> MissionProfile : profile
 Provenance --> PeerOrigin : peer
+Provenance --> RehearsalOrigin : rehearsal
 Provenance --> SourceAuthentication : authentication
+RehearsalOrigin --> LaydownId : laydown
+RehearsalOrigin --> TestTrackNumber : scenario
 @enduml

@@ -95,6 +95,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
             max_range_m: 50_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         }],
         misb_feeds: vec![MisbFeedConfig {
@@ -155,6 +156,7 @@ fn a_misb_feed_with_no_local_frame_origin_binds_nothing_and_alerts() {
             max_range_m: 50_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         }],
         misb_feeds: vec![MisbFeedConfig {

@@ -1,0 +1,196 @@
+{
+ "entities": [
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT02-raid-001",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 177.71557359601502,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT02-raid-002",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 158.80579025669198,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT02-raid-003",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 180.83549393557618,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT02-raid-004",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 277.0598129591267,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT02-raid-005",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 245.739115027773,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT02-raid-006",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 133.33978597350097,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.cruise-subsonic",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT02-salvo-ops-001",
+   "occluded_window_s": null,
+   "platform": "kalibr",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "radar",
+    "ir": "medium",
+    "rcs": "small"
+   },
+   "spawn_s": 294.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.cruise-subsonic",
+   "decoy": false,
+   "destroyed_at_s": 342.0,
+   "id": "TT02-salvo-haf-001",
+   "occluded_window_s": null,
+   "platform": "kh-101",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "radar",
+    "ir": "medium",
+    "rcs": "very-small"
+   },
+   "spawn_s": 294.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.cruise-subsonic",
+   "decoy": true,
+   "destroyed_at_s": null,
+   "id": "TT02-decoy-missiles-001",
+   "occluded_window_s": null,
+   "platform": "kalibr",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "radar",
+    "ir": "medium",
+    "rcs": "small"
+   },
+   "spawn_s": 294.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.interceptor",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT02-interceptors-001",
+   "occluded_window_s": null,
+   "platform": "pac-3",
+   "side": "blue",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "datalink",
+    "ir": "high",
+    "rcs": "small"
+   },
+   "spawn_s": 294.0,
+   "surface": false
+  }
+ ],
+ "format": 1,
+ "scenario": "TT-02"
+}

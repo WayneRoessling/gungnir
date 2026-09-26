@@ -49,6 +49,7 @@ const LAYERS: &[(&str, Layer)] = &[
     ("gungnir-metrics", Layer::Core),
     ("gungnir-fusion-async", Layer::Core),
     ("gungnir-allocation", Layer::Core),
+    ("gungnir-sensor-sim", Layer::Core),
     ("gungnir-scenario", Layer::Core),
     ("gungnir-testkit", Layer::Verifier),
     ("gungnir-oracle", Layer::Verifier),
@@ -106,6 +107,8 @@ const CORE_ORDER: &[&str] = &[
     "gungnir-metrics",
     "gungnir-fusion-async",
     "gungnir-allocation",
+    // Beneath the generator, which depends on it (edge (z), DN-32 §3).
+    "gungnir-sensor-sim",
     "gungnir-scenario",
 ];
 
@@ -253,21 +256,20 @@ fn the_dependency_graph_is_acyclic() {
     }
 }
 
-/// **One-way, by layer** (§1.1, AP-10): nothing below depends on anything above.
-///
-/// - the core chain is ordered, and a core crate depends only on earlier core crates;
-/// - the model depends on the core only;
-/// - a facade depends on the core and the model, never on productization (AP-10 -- the
-///   edge DN-06 refused);
-/// - 3D data depends on nothing above the model;
-/// - productization depends on nothing in deployment or the binaries;
-/// - nothing depends on a verifier, and only a verifier depends on `gungnir-scenario`;
-/// - nothing depends on a binary.
-#[test]
-fn every_edge_points_downward() {
-    let graph = graph();
+/// The crates outside the verifier layer that may depend on `gungnir-sensor-sim`
+/// (`docs/design/DN-32-re-observation-for-a-laydown.md` §6 mechanism 4): the generator
+/// it was extracted from, and the desktop whose laydown rehearsal re-observes a
+/// recording. Not the node, not ingest, not the tracking service, the API or the remote
+/// link: a node that cannot rehearse cannot leak a rehearsal.
+const SENSOR_SIM_DEPENDENTS: &[&str] = &["gungnir-scenario", "gungnir-app"];
+
+/// Every edge of `graph` the layer rules, `scenario_misuse` or `sensor_sim_misuse`
+/// forbid, each named. A function of the graph rather than of the manifests on disk, so
+/// the containment row can hand it a graph with a forbidden edge added and read the name
+/// back.
+fn forbidden_edges(graph: &BTreeMap<String, BTreeSet<String>>) -> Vec<String> {
     let mut violations = Vec::new();
-    for (from, deps) in &graph {
+    for (from, deps) in graph {
         let from_layer = layer(from);
         for to in deps {
             let to_layer = layer(to);
@@ -299,15 +301,126 @@ fn every_edge_points_downward() {
                 Layer::Binary => matches!(to_layer, Layer::Binary | Layer::Verifier),
             };
             let scenario_misuse = to == "gungnir-scenario" && from_layer != Layer::Verifier;
-            if bad || scenario_misuse {
+            let sensor_sim_misuse = to == "gungnir-sensor-sim"
+                && from_layer != Layer::Verifier
+                && !SENSOR_SIM_DEPENDENTS.contains(&from.as_str());
+            if bad {
                 violations.push(format!("{from} ({from_layer:?}) -> {to} ({to_layer:?})"));
+            }
+            if scenario_misuse {
+                violations.push(format!(
+                    "scenario_misuse: {from} ({from_layer:?}) -> {to}: gungnir-scenario is a \
+                     test/bench dependency only"
+                ));
+            }
+            if sensor_sim_misuse {
+                violations.push(format!(
+                    "sensor_sim_misuse: {from} ({from_layer:?}) -> {to}: gungnir-sensor-sim is \
+                     a dependency of {} and the verifier layer only (DN-32 §6)",
+                    SENSOR_SIM_DEPENDENTS.join(", ")
+                ));
             }
         }
     }
+    violations
+}
+
+/// **One-way, by layer** (§1.1, AP-10): nothing below depends on anything above.
+///
+/// - the core chain is ordered, and a core crate depends only on earlier core crates;
+/// - the model depends on the core only;
+/// - a facade depends on the core and the model, never on productization (AP-10 -- the
+///   edge DN-06 refused);
+/// - 3D data depends on nothing above the model;
+/// - productization depends on nothing in deployment or the binaries;
+/// - nothing depends on a verifier, and only a verifier depends on `gungnir-scenario`
+///   (`scenario_misuse`);
+/// - only `gungnir-scenario`, `gungnir-app` and a verifier depend on
+///   `gungnir-sensor-sim` (`sensor_sim_misuse`, DN-32 §6 mechanism 4);
+/// - nothing depends on a binary.
+#[test]
+fn every_edge_points_downward() {
+    let violations = forbidden_edges(&graph());
     assert!(
         violations.is_empty(),
         "upward or forbidden edges:\n  {}",
         violations.join("\n  ")
+    );
+}
+
+/// **Containment, the manifest half** (`docs/verification-capability-table.md` §2,
+/// DN-32's draft *Containment* row): a manifest that adds an edge to
+/// `gungnir-sensor-sim` from any crate the rule does not admit is named by
+/// `sensor_sim_misuse`, edge and all, while the two admitted edges and a verifier's are
+/// not. Checked on the real graph with the forbidden edge added, so it is the rule the
+/// manifests are actually held to that is exercised, not a copy of it.
+#[test]
+fn a_manifest_adding_a_forbidden_edge_to_the_sensor_sim_is_named() {
+    let real = graph();
+    assert!(
+        forbidden_edges(&real).is_empty(),
+        "the workspace's own graph must be clean before a forbidden edge is added to it"
+    );
+    for from in [
+        "gungnir-node",
+        "gungnir-ingest",
+        "gungnir-tracking-service",
+        "gungnir-api",
+        "gungnir-remote",
+        "gungnir-model",
+        "gungnir-ui",
+    ] {
+        let mut graph = real.clone();
+        graph
+            .get_mut(from)
+            .unwrap_or_else(|| panic!("{from} is a workspace crate"))
+            .insert("gungnir-sensor-sim".to_owned());
+        let named: Vec<String> = forbidden_edges(&graph)
+            .into_iter()
+            .filter(|v| v.starts_with("sensor_sim_misuse"))
+            .collect();
+        assert_eq!(
+            named.len(),
+            1,
+            "{from} -> gungnir-sensor-sim should be named once by sensor_sim_misuse: {named:?}"
+        );
+        assert!(
+            named[0].contains(&format!("{from} (")) && named[0].contains("-> gungnir-sensor-sim"),
+            "the violation names the edge: {}",
+            named[0]
+        );
+    }
+    // The admitted edges, and a verifier's, are not named.
+    let mut graph = real;
+    for from in ["gungnir-scenario", "gungnir-app", "gungnir-oracle"] {
+        graph
+            .get_mut(from)
+            .unwrap_or_else(|| panic!("{from} is a workspace crate"))
+            .insert("gungnir-sensor-sim".to_owned());
+    }
+    assert!(
+        !forbidden_edges(&graph)
+            .iter()
+            .any(|v| v.starts_with("sensor_sim_misuse")),
+        "an admitted dependent was named"
+    );
+}
+
+/// `scenario_misuse` is unchanged by the narrower rule beside it (DN-32 §6 mechanism 4:
+/// "keeps `scenario_misuse` exactly as it is"): the desktop that may depend on the
+/// observation model still may not depend on the generator.
+#[test]
+fn scenario_misuse_still_names_the_desktop_reaching_the_generator() {
+    let mut graph = graph();
+    graph
+        .get_mut("gungnir-app")
+        .unwrap_or_else(|| panic!("gungnir-app is a workspace crate"))
+        .insert("gungnir-scenario".to_owned());
+    assert!(
+        forbidden_edges(&graph)
+            .iter()
+            .any(|v| v.starts_with("scenario_misuse: gungnir-app")),
+        "gungnir-app -> gungnir-scenario must stay forbidden"
     );
 }
 
@@ -343,6 +456,8 @@ fn the_recorded_edges_are_in_the_manifests() {
         ("gungnir-app", "gungnir-approval", "(x)"),
         ("gungnir-node", "gungnir-approval", "(y)"),
         ("gungnir-node", "gungnir-command", "(y)"),
+        ("gungnir-scenario", "gungnir-sensor-sim", "(z)"),
+        ("gungnir-app", "gungnir-sensor-sim", "(aa)"),
     ] {
         assert!(
             has(from, to),

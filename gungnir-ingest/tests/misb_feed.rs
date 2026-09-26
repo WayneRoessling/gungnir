@@ -166,6 +166,7 @@ fn the_fixtures_bad_checksum_never_reaches_the_gateway_as_a_detection() {
             quarantined: 0,
             adapter_failures: 0,
             not_accepted: 0,
+            rehearsal_refused: 0,
         }
     );
     // The gateway itself is unaffected by an adapter that decided its own input was

@@ -67,7 +67,8 @@ DATE = "2026-09-04"
 
 LAYERS = [
     ("Tracking core", ["core", "coord", "filters", "association", "track", "rfs", "fusion-async",
-                       "track-fusion", "allocation", "scenario", "metrics", "oracle", "testkit", "fuzz"]),
+                       "track-fusion", "allocation", "scenario", "sensor-sim", "metrics", "oracle",
+                       "testkit", "fuzz"]),
     ("Foundation model", ["model"]),
     ("Service facades", ["tracking-service", "intercept-service"]),
     ("Productization", ["eventing", "store", "config", "mission", "time", "ingest", "sensor-management",

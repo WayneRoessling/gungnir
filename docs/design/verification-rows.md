@@ -47,6 +47,12 @@ change to any of these is a change request under phase H, not an edit.
 | CAP-7.4 SD-16 exchange over a bearer with no party | `gungnir-remote` | [DN-25](DN-25-cursor-on-target.md) |
 | CAP-3.8 Friendly-set provenance in fires deconfliction | `gungnir-policy` | [DN-25](DN-25-cursor-on-target.md) |
 | CAP-1.6 Self-reported positions through the gateway | `gungnir-ingest` | [DN-25](DN-25-cursor-on-target.md) |
+| CAP-5.2 Re-observation for a laydown: six **Draft** rows | `gungnir-sensor-sim`, `gungnir-scenario`, `gungnir-ingest`, `gungnir-app` | [DN-32](DN-32-re-observation-for-a-laydown.md) §10 |
+
+**DN-32's six rows are Draft and were not agreed** (2026-09-25, GAP-105). They were
+transcribed from the note's §10 when the note was built, with the tests that implement
+them, and §10 was not part of the owner's walk of DN-32; the table's own subsection says
+what makes one a gate.
 
 CAP-2.12 takes two rows because two notes touch it from different directions: the tasking
 half is a workflow question and the product half is a reporting one.

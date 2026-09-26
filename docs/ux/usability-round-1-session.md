@@ -190,11 +190,19 @@ measured**, never as a value.
   mechanism, not GAP-089's, and it drives `update::tick` internally the same number of
   times the fixture has detections for -- so its own decision counts were exposed to
   GAP-097 exactly as the seeded tasks were, and are clear for the same reason now that
-  GAP-097 is closed. Note what a rehearsal of `c` can and cannot show: GAP-045's own
-  text says a laydown's *sensor* placements change nothing a run can report, because the
-  fixture's detections were captured against `gungnir-scenario`'s hardcoded geometry, so
-  the rehearsal reads on `c`'s resources -- which are `current`'s. The coverage
-  comparison, not the rehearsal, is where `c` differs. **Three faults in this card, found
+  GAP-097 is closed. Note what a rehearsal of `c` can and cannot show. **Since
+  2026-09-25 (GAP-105) a rehearsal re-observes the recording with the laydown's own
+  sensors where it places them**, each with the detection model `round-1.json` names for
+  it (`radar.short` for both), and PN-16 labels every result "Re-observed from a
+  recording" and lists each sensor's detections; its table carries each rehearsed
+  laydown's run beside its coverage. **But no committed recording reaches round 1's
+  radars** (GAP-147): round 1's harbour sits at the recordings' origin and none of the
+  ten sample sets brings a target within 25 km of it, so a session's rehearsal of any of
+  the three laydowns re-observes nothing, and PN-16 says that the recording's targets never
+  come within the placed sensors' range bands. Until GAP-147 commits a round-1 recording,
+  the coverage comparison, not the rehearsal, is where a participant sees `c` differ, and a
+  rehearsal's zeros are to be read as that sentence says, not scored as a finding about
+  the panel. **Three faults in this card, found
   on 2026-09-08 by reading PN-16 against it rather than by running it, and named here
   rather than worked around. The first is fixed in the baseline, the second was fixed in
   the baseline once the owner had ruled on it, and the third is fixed in §5's card:**

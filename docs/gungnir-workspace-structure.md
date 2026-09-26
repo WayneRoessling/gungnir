@@ -77,6 +77,7 @@ gungnir-workspace/
 ├── gungnir-fusion-async/           # fusion-async: OOS/multi-rate, the tokio user
 ├── gungnir-allocation/             # allocation: Bellman/DP assignment
 ├── gungnir-scenario/               # scenario: five-scenario generator (test/bench only)
+├── gungnir-sensor-sim/             # the observation model, re-observing recorded truth (DN-32); scenario, app and verifiers only
 ├── gungnir-metrics/                # metrics: MOTA/MOTP, purity/fragmentation
 ├── gungnir-oracle/                 # differential-test harness (gate 1)
 ├── gungnir-testkit/                # shared proptest strategies (gate 2); no workspace deps
@@ -152,7 +153,7 @@ Its runner has existed since 2026-09-08.
 
 | # | Gate | Workflow | Trigger |
 |---|---|---|---|
-| 1 | Differential testing versus oracle | `oracle-diff.yml` | PR touching an oracle-comparable core crate, `gungnir-oracle`, or `gungnir-scenario` |
+| 1 | Differential testing versus oracle | `oracle-diff.yml` | PR touching an oracle-comparable core crate, `gungnir-oracle`, `gungnir-scenario` or `gungnir-sensor-sim` |
 | 2 | Property-based invariants (`proptest`) | Runs as part of `cargo test` in `ci.yml`; the strategies live in `gungnir-testkit` | Every PR |
 | 3 | `cargo miri` on `unsafe` | `miri.yml` | Any PR whose diff adds `unsafe` |
 | 4 | `loom` exhaustive interleaving | `loom.yml` | PR touching `gungnir-fusion-async` or `gungnir-tracking-service` |

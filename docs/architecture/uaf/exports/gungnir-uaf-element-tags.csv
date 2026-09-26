@@ -748,6 +748,11 @@ RS-sensor-management,uafKind,ResourceArtifact
 RS-sensor-management,registry.kind,library
 RS-sensor-management,registry.layer,Productization
 RS-sensor-management,registry.code,gungnir-sensor-management/Cargo.toml
+RS-sensor-sim,uafId,RS-sensor-sim
+RS-sensor-sim,uafKind,ResourceArtifact
+RS-sensor-sim,registry.kind,library
+RS-sensor-sim,registry.layer,Tracking core
+RS-sensor-sim,registry.code,gungnir-sensor-sim/Cargo.toml
 RS-store,uafId,RS-store
 RS-store,uafKind,ResourceArtifact
 RS-store,registry.kind,library
@@ -1340,6 +1345,10 @@ IE-rehearsal-event,uafId,IE-rehearsal-event
 IE-rehearsal-event,uafKind,InformationElement
 IE-rehearsal-event,registry.code,gungnir_model::RehearsalEvent
 IE-rehearsal-event,registry.domain,Events & the record
+IE-rehearsal-origin,uafId,IE-rehearsal-origin
+IE-rehearsal-origin,uafKind,InformationElement
+IE-rehearsal-origin,registry.code,gungnir_model::RehearsalOrigin
+IE-rehearsal-origin,registry.domain,"Core identifiers, frames & quality"
 IE-relative-cost,uafId,IE-relative-cost
 IE-relative-cost,uafKind,InformationElement
 IE-relative-cost,registry.code,gungnir_model::RelativeCost
