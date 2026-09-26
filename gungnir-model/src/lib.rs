@@ -702,6 +702,97 @@ pub struct PlanView {
     /// Who may receive this plan (docs/design/DN-17-releasability.md).
     #[serde(default)]
     pub releasability: Releasability,
+    /// How the plan was reached: the planner's optimum, or a one-step answer standing in
+    /// for an optimum it could not reach in time (GAP-156, D-93;
+    /// docs/design/DN-04-effector-model.md §11).
+    ///
+    /// **On the plan, not beside it,** because a plan travels: into the approval queue,
+    /// onto the journal, over the link to every desktop and in a queue item's view. A label
+    /// kept anywhere else would be lost at the first of those, and an interim answer
+    /// approved as though it were the optimum is the mistake the label exists to prevent.
+    ///
+    /// **Additive and defaulted**, as `releasability` is (`docs/gungnir-api-v1.md`,
+    /// "Adding a field with a default is compatible"): a plan written before the field
+    /// existed was the planner's optimum, because nothing else was ever produced, so the
+    /// default says exactly that. No `SCHEMA_VERSION` bump; what a desktop built before
+    /// the field does with a newer node's interim plan is GAP-169.
+    #[serde(default)]
+    pub basis: PlanBasis,
+}
+
+/// How a plan was reached (GAP-156, D-93).
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
+pub enum PlanBasis {
+    /// The planner's optimum over its horizon: `gungnir-allocation`'s exact solve.
+    #[default]
+    Exact,
+    /// The best assignment for this step alone, standing in while the exact solve could
+    /// not answer the picture in time (`gungnir_allocation::stand_in`). A real answer to
+    /// the picture it was computed for, labelled wherever it is shown with how it was
+    /// reached. A plan keeps its basis for life: where the exact solve later reaches the
+    /// same assignment the plan stands, as GAP-097 keeps any unchanged pairing, and where
+    /// it reaches a different one that is a new plan.
+    OneStep,
+}
+
+impl PlanBasis {
+    /// What a panel prints beside a plan with this basis, or nothing for the optimum:
+    /// a line that says "optimal" on every plan is a line an operator learns to read past.
+    ///
+    /// **How the plan was reached, not what the planner thinks of it now**, which is the
+    /// planner's standing and changes when the plan does not.
+    #[must_use]
+    pub fn label(self) -> Option<&'static str> {
+        match self {
+            PlanBasis::Exact => None,
+            PlanBasis::OneStep => Some(
+                "INTERIM: reached as the best assignment for one step, not by the planner's \
+                 full solve",
+            ),
+        }
+    }
+}
+
+/// What a planner says about its answer to the current picture, as a node puts it on the
+/// wire (GAP-157, D-94; docs/design/DN-04-effector-model.md §11).
+///
+/// **The plan's standing, not the plan.** The plan itself travels as it always has, in
+/// `PlanProposed` and the snapshot's `plan`; this says whether that plan answers the
+/// node's current picture, and if not, since when and why. A desktop linked to a node
+/// relayed the node's plan as current whatever the node's planner said, so PN-05 drew a
+/// stale plan with no stale line (GAP-157).
+///
+/// **Times are the node's.** `computed_at` is on the clock of the planner that computed
+/// the plan, and a desktop converts it through the offset it measures per connection
+/// (GAP-140) before drawing an age, exactly as it draws the node's queue deadlines.
+///
+/// **No progress figure.** A node publishes this when it changes, and a solve's progress
+/// changes every tick; carrying it would put an event on the journal and the stream at
+/// the tick rate for as long as a solve ran. The reason says why the plan is not current,
+/// which does not change while the picture does not.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum PlanStandingView {
+    /// The plan answers the planner's current picture, and is its optimum.
+    Current,
+    /// The plan answers the current picture with a one-step answer ([`PlanBasis::OneStep`])
+    /// while the exact solve cannot. `value_at_least` is what the plan is known to reach
+    /// over the horizon and `optimum_at_most` a ceiling on the optimum, so their ratio is
+    /// a floor on the share of the best plan's value this one reaches.
+    Interim {
+        value_at_least: f64,
+        optimum_at_most: f64,
+        reason: String,
+    },
+    /// The plan is the last one the planner computed, at `computed_at`, and it does not
+    /// answer the current picture.
+    Stale {
+        computed_at: MissionTime,
+        reason: String,
+    },
+    /// The planner has never answered.
+    NoPlan { reason: String },
 }
 
 impl PlanView {
@@ -718,6 +809,7 @@ impl PlanView {
             kind: PlanKind::Intercept { solutions },
             policy_value,
             releasability: Releasability::default(),
+            basis: PlanBasis::Exact,
         }
     }
 
@@ -859,6 +951,7 @@ mod tests {
             })),
             policy_value: 1.0,
             releasability: Releasability::default(),
+            basis: PlanBasis::Exact,
         };
         assert_eq!(p.assignments(), vec![(ResourceId(5), TrackId(11))]);
         assert!(p.solutions().is_empty());

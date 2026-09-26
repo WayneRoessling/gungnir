@@ -238,8 +238,98 @@ answer should stand in for it is GAP-156. A desktop linked to a node is told the
 planner is unhealthy (GAP-161) but not how old the node's plan is or why, so PN-05 draws
 it without a stale line; that is GAP-157.
 
+## 11. Amendment 3 -- an interim answer, and the node's word on its plan
+
+**Raised by GAP-156 and GAP-157**, which §10's build filed. Decided under the owner's
+delegation of 2026-09-26 as D-93 (what stands in, when, and how it is labelled) and D-94
+(what a node says about its plan, and how a linked desktop draws it).
+
+**What stands in (D-93).** The best assignment for this step alone:
+`gungnir_allocation::solve_one_step`, the exact answer of the allocator's own problem at a
+horizon of one, found by the Hungarian method in polynomial time and with no size limit,
+under the same tie rule as the exact solve (the higher total, then more pairs, then the
+first matching in its enumeration order). It is not a heuristic dressed as the optimum: it
+is an optimum of a stated, smaller problem, and inside the exact solver's limits it names
+the same assignment the exact solve names at a horizon of one
+(`gungnir-allocation/tests/one_step_oracle.rs`; the module documentation of
+`gungnir-allocation/src/one_step.rs` states the one place they can part, two different
+sums of fractions that round to within the exact solve's tie tolerance of each other). `gungnir_allocation::stand_in` adds how
+good it is known to be over the full horizon: a floor, the value of following it with
+one-step answers (a policy the plan can actually be continued with), and a ceiling on the
+optimum, the smaller of every track's best reward summed and the horizon times the best
+one-step value. The exact optimum lies between them, so "worth at least 87% of the best
+plan's value" is a claim the numbers support. On a uniform matrix -- the one the desktop
+and the node plan on today -- the stand-in and the exact first step name the same pairs.
+It costs microseconds: 16 µs at the exact solver's limits (eight effectors, sixteen
+tracks) and 0.24 ms at sixteen and sixty-four, in release on the development machine.
+
+**When (D-93).** Once the planner has been behind the picture for `plan_stand_in_after_ms`
+of mission time -- 500 ms by default, MOP-07's figure (`../mission/measures.md` §2) --
+measured from the first call it could not answer since its last fresh answer, so a raid
+whose picture changes every few ticks still reaches it; and at once for a picture past
+`MAX_TRACKS` or `MAX_RESOURCES`, which the exact solver refuses and no wait would answer.
+Validation keeps the wait finite, not negative and at most a minute. Inside the wait the
+planner answers exactly as §10 says, stale with the last good plan: an ordinary picture
+finishes inside it and never shows a stand-in, so the queue is not given an interim item
+for every track that appears.
+
+**How it is labelled (D-93).** The plan carries `PlanBasis::OneStep` (`gungnir-model`),
+which travels wherever the plan does -- the approval queue, the journal, the link, a queue
+item's view. The planner answers `PlanOutcome::Interim` with the bound and the reason, and
+stays unhealthy, so the status strip and the record say the planner is not giving its own
+answer (MOE-06). PN-05 draws "INTERIM" above the plan with the bound and the reason, and
+the plan's own label under a stale line if an interim plan later goes stale; PN-06 marks the
+item's row INTERIM; PN-07 names the planner's interim standing and, separately, the item's
+own basis among the degraded conditions, so accept waits on an acknowledgement exactly as
+D-82 has it for a stale plan.
+
+One pairing is one plan, across an interim answer as everywhere else (GAP-097). When
+the exact solve finishes with a different assignment, that is a new plan; with the same
+assignment, the plan in force stands. A stand-in that recommends what the plan in force
+already recommends keeps that plan too, under the interim standing. A plan's basis is
+how it was reached and never changes; PN-05 says so beside it, and says so differently
+once the planner's full solve has reached the same assignment for the picture on screen
+-- then PN-07 asks nothing more about it either. An earlier draft minted a new plan for
+the same pairing in both directions; `gungnir-app/tests/rehearsal.rs` failed on a slow
+runner with the live pairing queued three times, and
+`the_seed_queues_the_same_plans_however_slow_the_planner_is` now runs that session at
+eight planner speeds.
+
+**What a node says (D-94).** `gungnir_model::PlanStandingView` -- current, interim with the
+bound and reason, stale since `computed_at` with the reason, or no plan -- published by
+the node as `InterceptEvent::PlanStanding` when it changes, after the plan it describes,
+and carried in the snapshot's `plan_standing` for a desktop that connects mid-stall. It
+carries no progress figure: a solve's progress changes every tick, and a standing that did
+would put an event on the stream and the journal at the tick rate for as long as a solve
+ran. The reason that does travel is the stable one, and the progress stays on the node;
+`PlanOutcome` therefore carries the progress beside the reason, not inside it.
+
+**How a linked desktop draws it (D-94).** `RemoteInterceptService` answers what the node
+said: current is fresh, interim is interim with the node's bound, stale is stale, no plan is
+no plan, each reason prefixed "on the node". A `computed_at` the node stamped is converted to
+the desktop's clock through the offset the service measures per connection by GAP-140's
+rule, so the age PN-05 draws is the age on the node's clock, as the queue's deadlines are
+drawn (D-70; DN-31 §14). A node that sends no standing is taken as before: its plan, fresh,
+with its health flag beside it (GAP-161).
+
+**Verification.** Three rows are drafted in `../verification-capability-table.md` §2 under
+"Rows drafted from DN-04 §11", Draft and not agreed. The tests:
+`gungnir-allocation/tests/one_step_oracle.rs`; `gungnir-intercept-service/src/lib.rs`
+(`an_interim_answer_stands_in_once_the_planner_has_waited`,
+`a_picture_that_keeps_changing_still_reaches_its_stand_in`,
+`a_picture_past_the_exact_limits_is_answered_at_once`);
+`gungnir-app/tests/interim_plan.rs` for what the operator sees; and
+`gungnir-app/tests/linked_plan_standing.rs`, end to end over the real link, with the
+desktop's clock a hundred seconds from the node's. The `gungnir-intercept-service` row's
+criterion is unchanged; that its degradation clause now describes only the first half a
+second of an overrun is GAP-168, for the owner's walk.
+
+**What it leaves open.** A desktop built before `PlanView::basis` existed reads a newer
+node's interim plan as the optimum, because a defaulted field is compatible by the
+interface's rules; whether that warrants a schema version is GAP-169.
+
 ## Traceability
 
-GAP-030; GAP-031 (§9); GAP-119 (§10); CAP-3.3; MOE-03; MT-01 step 6, MT-02, MT-03;
+GAP-030; GAP-031 (§9); GAP-119 (§10); GAP-156, GAP-157 (§11); CAP-3.3, CAP-7.3; MOE-03; MT-01 step 6, MT-02, MT-03;
 `../ux/wireframes/WF-05-recommendation.puml`; principle AP-17 for the rule that the
 measure defines the field rather than the reverse. Read by DN-05, DN-06, DN-07.

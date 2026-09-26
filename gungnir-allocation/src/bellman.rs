@@ -47,7 +47,9 @@
 //! greedy answer from a function documented as optimal would have no way to know.
 //! `gungnir-intercept-service` sizes its problems by the ready effectors and the
 //! tracks in the sector, which is well inside these bounds; a saturation case that is
-//! not is a real finding and should surface as one.
+//! not is a real finding and should surface as one. It does, since GAP-156: the planner
+//! answers such a picture with [`crate::one_step`]'s answer, labelled as not the optimum,
+//! and this function still refuses it.
 //!
 //! # Ties, and why the answer is a function of the input alone
 //!

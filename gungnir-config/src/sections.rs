@@ -84,6 +84,7 @@ pub fn changed_sections(
         node,
         allocation_horizon,
         plan_solve_budget_ms,
+        plan_stand_in_after_ms,
         data_dir,
         assets,
         endpoints,
@@ -158,6 +159,11 @@ pub fn changed_sections(
         (
             plan_solve_budget_ms != &was.plan_solve_budget_ms,
             "plan_solve_budget_ms",
+            EngagementChain,
+        ),
+        (
+            plan_stand_in_after_ms != &was.plan_stand_in_after_ms,
+            "plan_stand_in_after_ms",
             EngagementChain,
         ),
         (data_dir != &was.data_dir, "data_dir", Deployment),

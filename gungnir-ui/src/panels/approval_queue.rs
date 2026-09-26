@@ -185,6 +185,9 @@ pub struct QueueRow<'a> {
     pub pre_delegated: bool,
     /// Whether the signed-in role may take this particular decision.
     pub may_decide: bool,
+    /// How the item's plan was reached (GAP-156): an interim plan is marked on its row
+    /// and named in PN-07, so it is never decided as though it were the optimum.
+    pub basis: gungnir_model::PlanBasis,
 }
 
 /// Why the queue is empty. Required whenever it is: see the module documentation.
@@ -555,9 +558,17 @@ fn draw_header(ui: &mut Ui) {
 }
 
 fn draw_row(ui: &mut Ui, palette: &theme::Palette, row: &QueueRow<'_>, selected: bool) -> bool {
-    let clicked = ui
-        .selectable_label(selected, format!("#{}", row.plan_id.short()))
-        .clicked();
+    // GAP-156: an interim plan says so in the one cell every row has, rather than in a
+    // column most rows would leave blank.
+    let tag = match row.basis {
+        gungnir_model::PlanBasis::Exact => RichText::new(format!("#{}", row.plan_id.short())),
+        gungnir_model::PlanBasis::OneStep => {
+            RichText::new(format!("#{} INTERIM", row.plan_id.short()))
+                .color(palette.warning_color)
+                .strong()
+        }
+    };
+    let clicked = ui.selectable_label(selected, tag).clicked();
     ui.label(row.assignments.to_string());
     ui.label(RichText::new(row.verdict.label()).color(row.verdict.color(palette)));
     draw_time_remaining(ui, palette, row.time_remaining);
@@ -695,6 +706,7 @@ mod tests {
             may_decide: true,
             offered_to: &[],
             escalated_from: None,
+            basis: gungnir_model::PlanBasis::Exact,
         };
         assert!(
             !matches!(row.verdict, Verdict::Denied { .. }),

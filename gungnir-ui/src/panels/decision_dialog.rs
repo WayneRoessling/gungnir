@@ -305,6 +305,18 @@ fn draw_answer(ui: &mut Ui, palette: &theme::Palette, answer: NodeAnswer<'_>) {
 }
 
 fn draw_plan(ui: &mut Ui, palette: &theme::Palette, view: &DecisionDialogView<'_>) {
+    // GAP-156: first, above the assignments, because it changes what they are.
+    if let Some(label) = view.row.basis.label() {
+        ui.label(RichText::new(label).strong().color(palette.warning_color));
+        ui.label(
+            RichText::new(
+                "It stood in because the exact solve could not answer the picture in time. \
+                 If the full solve reaches the same assignment this plan stands; if it \
+                 reaches a different one, that is a new plan with its own item.",
+            )
+            .color(palette.warning_color),
+        );
+    }
     ui.label(format!("{} assignments", view.row.assignments));
     ui.label(RichText::new(verdict_sentence(view.row.verdict)).color(palette.warning_color));
     match view.row.time_remaining {
@@ -509,6 +521,7 @@ mod tests {
             may_decide: true,
             offered_to: &[],
             escalated_from: None,
+            basis: gungnir_model::PlanBasis::Exact,
         }
     }
 

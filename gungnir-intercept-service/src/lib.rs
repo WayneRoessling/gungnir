@@ -33,27 +33,43 @@
 //! finishes answers fresh and healthy again. A picture that has not changed since the
 //! last finished solve is not solved again: the answer to the same problem is the same
 //! answer, so it is fresh without spending anything.
+//!
+//! # A picture the exact solve cannot finish in time
+//!
+//! A raid toward the exact solver's size limits takes seconds of solving, and at 4 ms a
+//! call far longer; past the limits the solver refuses it. Once the planner has been
+//! behind the picture for longer than its stand-in wait -- MOP-07's 500 ms by default,
+//! measured in mission time -- or at once for a picture the exact solver will not take,
+//! it answers the current picture with `gungnir_allocation::stand_in`: the best assignment
+//! for this step alone, with a floor on what it reaches over the horizon and a ceiling on
+//! the optimum ([`PlanOutcome::Interim`]; GAP-156, D-93; DN-04 §11). The plan carries
+//! `gungnir_model::PlanBasis::OneStep` wherever it goes, the planner stays unhealthy, and
+//! the exact solve carries on underneath. When it finishes, a different assignment is a
+//! new plan; the same assignment keeps the plan in force (GAP-097: one pairing, one
+//! plan), and a stand-in that agrees with the plan in force keeps it too.
 
 pub mod budget;
 pub mod engagement;
 pub mod geometry;
 
-pub use budget::{MonotonicClock, SolveClock, SteppedClock, DEFAULT_SOLVE_BUDGET};
+pub use budget::{
+    MonotonicClock, SolveClock, SteppedClock, DEFAULT_SOLVE_BUDGET, DEFAULT_STAND_IN_AFTER,
+};
 
 pub use engagement::{
     close_stale, EffectEvidence, EffectSource, EffectTally, Engagement, EngagementError,
     EngagementState, EngagementTransition,
 };
 
-use gungnir_allocation::{ExactSolve, Progress};
+use gungnir_allocation::{ExactSolve, Progress, StandIn, MAX_RESOURCES, MAX_TRACKS};
 use nalgebra::DMatrix;
 use std::sync::Arc;
 use std::time::Duration;
 
 pub use gungnir_allocation::{AllocationPolicy, BellmanDpAllocator, ResourceAllocator};
 pub use gungnir_model::{
-    DecisionId, InterceptSolutionView, MissionTime, PlanId, PlanView, ResourceId, ResourceView,
-    TrackId, TrackView,
+    DecisionId, InterceptSolutionView, MissionTime, PlanBasis, PlanId, PlanStandingView, PlanView,
+    ResourceId, ResourceView, TrackId, TrackView,
 };
 
 /// A resource the planner would not propose, and why (DN-04 §5 rule 4, GAP-030).
@@ -95,20 +111,93 @@ impl WithheldReason {
 /// compute, at 13:04".
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlanOutcome {
-    /// Computed for the snapshot that was passed in.
+    /// Computed for the snapshot that was passed in: the planner's optimum.
     Fresh(PlanView),
+    /// Computed for the snapshot that was passed in, **but not the optimum** (GAP-156,
+    /// D-93): the exact solve could not answer this picture in time, so this is the best
+    /// assignment for this step alone, standing in until it does. The plan carries
+    /// [`PlanBasis::OneStep`]; `bound` says how much of the optimum's value it is known
+    /// to reach; `reason` says why the exact answer is not here.
+    Interim {
+        plan: PlanView,
+        bound: InterimBound,
+        reason: String,
+        /// How far the exact solve has got, while one is under way.
+        progress: Option<SolveProgress>,
+    },
     /// The solve failed, or has not finished inside its budget (GAP-119). This is the
     /// last plan that succeeded, when it did, and why this call's did not.
     Stale {
         plan: PlanView,
         computed_at: MissionTime,
         reason: String,
+        /// How far the solve for the current picture has got, while one is under way.
+        progress: Option<SolveProgress>,
     },
     /// No plan has ever been computed successfully, so there is nothing to show.
     ///
     /// Distinct from a fresh plan that proposes nothing: **one says the sector needs no
     /// action and the other says nobody can tell.**
-    NoPlan { reason: String },
+    NoPlan {
+        reason: String,
+        /// How far the solve for the current picture has got, while one is under way.
+        progress: Option<SolveProgress>,
+    },
+}
+
+/// How good an interim answer is known to be (GAP-156): `gungnir_allocation::StandIn`'s
+/// bounds, which a plan's own `policy_value` cannot carry both of.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InterimBound {
+    /// What the plan reaches over the horizon when each later step is also a one-step
+    /// answer: achievable, so a floor.
+    pub value_at_least: f64,
+    /// A ceiling on the optimum over the horizon.
+    pub optimum_at_most: f64,
+}
+
+impl InterimBound {
+    /// The share of the best plan's value this answer is known to reach, 0 to 1: the
+    /// floor over the ceiling, and 1 where nothing is worth doing.
+    #[must_use]
+    pub fn share_of_optimum(&self) -> f64 {
+        gungnir_allocation::one_step::share_of_optimum(self.value_at_least, self.optimum_at_most)
+    }
+
+    /// The bound in words, as PN-05 and PN-07 print it: "worth at least 87% of the best
+    /// plan's value". Whole percent, rounded down, so the claim is never more than the
+    /// numbers support.
+    #[must_use]
+    pub fn sentence(&self) -> String {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let percent = (self.share_of_optimum() * 100.0).floor() as u32;
+        format!("worth at least {percent}% of the best plan's value")
+    }
+}
+
+/// How far a solve that has not finished has got (GAP-119).
+///
+/// **Beside the reason, not inside it,** since GAP-157: the reason says why the plan is
+/// not current and does not change while the picture does not, so a node can publish it
+/// when it changes; this changes every call, and is for the console that owns the planner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SolveProgress {
+    /// Whole percent of the value function filled, rounded down, so a solve never reads
+    /// as finished before it is.
+    pub percent: u64,
+    /// Planning calls that have worked on it.
+    pub calls: u32,
+}
+
+impl SolveProgress {
+    /// "it is 37% done after 12 planning call(s)".
+    #[must_use]
+    pub fn sentence(&self) -> String {
+        format!(
+            "it is {}% done after {} planning call(s)",
+            self.percent, self.calls
+        )
+    }
 }
 
 impl PlanOutcome {
@@ -116,16 +205,73 @@ impl PlanOutcome {
     #[must_use]
     pub fn plan(&self) -> Option<&PlanView> {
         match self {
-            PlanOutcome::Fresh(plan) | PlanOutcome::Stale { plan, .. } => Some(plan),
+            PlanOutcome::Fresh(plan)
+            | PlanOutcome::Interim { plan, .. }
+            | PlanOutcome::Stale { plan, .. } => Some(plan),
             PlanOutcome::NoPlan { .. } => None,
         }
     }
 
-    /// True when this is an answer to the question that was asked, rather than an older
-    /// answer to an older one.
+    /// True when this is the planner's optimum for the question that was asked, rather
+    /// than an older answer to an older one or a stand-in for it.
     #[must_use]
     pub fn is_fresh(&self) -> bool {
         matches!(self, PlanOutcome::Fresh(_))
+    }
+
+    /// True when the plan answers the picture that was passed in: the optimum, or an
+    /// interim answer labelled as not the optimum (GAP-156). What decides whether a plan
+    /// is proposed: an interim answer is a recommendation for the picture in front of the
+    /// operator, and is put in front of them with its label; a stale one is not.
+    #[must_use]
+    pub fn answers_the_picture(&self) -> bool {
+        matches!(self, PlanOutcome::Fresh(_) | PlanOutcome::Interim { .. })
+    }
+
+    /// Why this is not the optimum for the picture, with how far the solve has got where
+    /// one is under way; `None` for a fresh answer.
+    #[must_use]
+    pub fn reason_in_full(&self) -> Option<String> {
+        let (reason, progress) = match self {
+            PlanOutcome::Fresh(_) => return None,
+            PlanOutcome::Interim {
+                reason, progress, ..
+            }
+            | PlanOutcome::Stale {
+                reason, progress, ..
+            }
+            | PlanOutcome::NoPlan { reason, progress } => (reason, progress),
+        };
+        Some(match progress {
+            Some(p) => format!("{reason}; {}", p.sentence()),
+            None => reason.clone(),
+        })
+    }
+
+    /// This answer's standing as a node puts it on the wire (GAP-157, D-94): everything a
+    /// linked desktop needs to draw what an embedded one draws, except the plan -- which
+    /// travels on its own -- and the progress, which changes every call.
+    #[must_use]
+    pub fn standing(&self) -> PlanStandingView {
+        match self {
+            PlanOutcome::Fresh(_) => PlanStandingView::Current,
+            PlanOutcome::Interim { bound, reason, .. } => PlanStandingView::Interim {
+                value_at_least: bound.value_at_least,
+                optimum_at_most: bound.optimum_at_most,
+                reason: reason.clone(),
+            },
+            PlanOutcome::Stale {
+                computed_at,
+                reason,
+                ..
+            } => PlanStandingView::Stale {
+                computed_at: *computed_at,
+                reason: reason.clone(),
+            },
+            PlanOutcome::NoPlan { reason, .. } => PlanStandingView::NoPlan {
+                reason: reason.clone(),
+            },
+        }
     }
 }
 
@@ -145,6 +291,8 @@ pub trait InterceptService: Send + Sync {
     /// False while the plan on screen is not an answer for the current picture -- a solve
     /// failed, or has not finished inside its budget -- and true again from the first
     /// call that answers fresh.
+    /// False while the planner is answering with an interim plan too (GAP-156): the plan
+    /// answers the picture, but it is not the answer the planner exists to give.
     fn is_healthy(&self) -> bool;
 
     /// Resources the last planning call declined to propose, with the reason each
@@ -174,6 +322,16 @@ struct Problem {
     rewards: DMatrix<f64>,
 }
 
+/// Why the exact solve will not answer a problem at all.
+enum Unsolvable {
+    /// Past `gungnir_allocation::MAX_TRACKS` or `MAX_RESOURCES`: the exact solver refuses
+    /// it by design, so a stand-in answers it at once rather than after a wait for an
+    /// answer that will never come (GAP-156).
+    TooLarge { tracks: usize, resources: usize },
+    /// Anything else the solver refuses: a reward that is not finite.
+    Refused(gungnir_allocation::AllocationError),
+}
+
 /// A solve that has not finished, carried from one planning call to the next.
 struct InFlight {
     problem: Problem,
@@ -200,7 +358,24 @@ pub struct DpInterceptService {
     /// When `last_plan` was computed, and why it is being kept if a solve has failed
     /// since (GAP-066). `None` before any solve has succeeded.
     last_solved: Option<MissionTime>,
+    /// Why the plan in force is not the planner's optimum for the current picture. Stable
+    /// while the picture is: how far a solve has got is `progress` (GAP-157).
     last_failure: Option<String>,
+    /// How far the solve for the current picture has got, while one is under way.
+    progress: Option<SolveProgress>,
+    /// How long, in mission time, the planner may be behind the picture before a
+    /// one-step answer stands in (GAP-156, D-93).
+    stand_in_after: Duration,
+    /// When the planner fell behind the picture: the first call since its last fresh
+    /// answer that it could not answer. Measured from here, not from when the current
+    /// solve began, so a raid whose picture changes every few ticks -- dropping each solve
+    /// for the next -- still reaches its stand-in.
+    behind_since: Option<MissionTime>,
+    /// The last stand-in computed, and the problem it answered, so an unchanged picture
+    /// is not re-solved every call.
+    stood_in: Option<(Problem, StandIn)>,
+    /// Set when this call's answer is an interim one: its bound and its reason.
+    interim: Option<(InterimBound, String)>,
     /// The local ENU frame, so a resource's geodetic position can meet a track's ENU
     /// state and the intercept point can be reported geodetic (GAP-031). `None` when the
     /// deployment has declared no origin: the pairing is still produced and the point is
@@ -222,9 +397,29 @@ impl DpInterceptService {
             solver_ok: true,
             last_solved: None,
             last_failure: None,
+            progress: None,
+            stand_in_after: DEFAULT_STAND_IN_AFTER,
+            behind_since: None,
+            stood_in: None,
+            interim: None,
             local_frame: None,
             withheld: Vec::new(),
         }
+    }
+
+    /// How long, in mission time, the planner may be behind the picture before a
+    /// one-step answer stands in (GAP-156, D-93). A deployment sets it through
+    /// `gungnir-config`'s `plan_stand_in_after_ms`, whose validation keeps it finite and
+    /// under a minute; this takes what it is given.
+    #[must_use]
+    pub fn with_stand_in_after(mut self, wait: Duration) -> Self {
+        self.stand_in_after = wait;
+        self
+    }
+
+    #[must_use]
+    pub fn stand_in_after(&self) -> Duration {
+        self.stand_in_after
     }
 
     /// Resources the last planning call would not propose, with the reason each.
@@ -271,6 +466,14 @@ impl DpInterceptService {
     /// none ever has. **The third is not an empty plan** -- an empty plan says the sector
     /// needs no action, and this says nobody can tell.
     fn outcome(&self, plan: PlanView) -> PlanOutcome {
+        if let Some((bound, reason)) = &self.interim {
+            return PlanOutcome::Interim {
+                plan,
+                bound: *bound,
+                reason: reason.clone(),
+                progress: self.progress,
+            };
+        }
         if self.solver_ok {
             return PlanOutcome::Fresh(plan);
         }
@@ -283,8 +486,12 @@ impl DpInterceptService {
                 plan,
                 computed_at,
                 reason,
+                progress: self.progress,
             },
-            None => PlanOutcome::NoPlan { reason },
+            None => PlanOutcome::NoPlan {
+                reason,
+                progress: self.progress,
+            },
         }
     }
 
@@ -379,10 +586,13 @@ impl DpInterceptService {
                 },
             })
             .collect();
+        // Set again below if this call's answer is an interim one or a solve is under way.
+        self.interim = None;
+        self.progress = None;
         let ready: Vec<&ResourceView> = resources.iter().filter(|r| r.is_adequate()).collect();
         if tracks.is_empty() || ready.is_empty() {
             if !self.last_plan.is_empty() {
-                self.last_plan = Self::fresh_plan(now, Vec::new(), 0.0);
+                self.last_plan = Self::fresh_plan(now, Vec::new(), 0.0, PlanBasis::Exact);
             }
             // **Nothing to solve is a fresh answer, not an absent one** (GAP-066): with no
             // tracks or no ready resource the empty plan is correct for this snapshot, and
@@ -399,6 +609,8 @@ impl DpInterceptService {
             self.last_failure = None;
             self.in_flight = None;
             self.solved = None;
+            self.behind_since = None;
+            self.stood_in = None;
             return self.last_plan.clone();
         }
         let problem = Problem {
@@ -406,12 +618,40 @@ impl DpInterceptService {
             resources: ready.iter().map(|r| r.id).collect(),
             rewards: rewards.clone(),
         };
-        let answer = match self.solve(problem) {
+        let answer = match self.solve(problem.clone()) {
             Ok(Some(policy)) => policy,
-            // Not finished inside the budget: `solve` has said why, and the last good plan
-            // stands.
-            Ok(None) => return self.last_plan.clone(),
-            Err(err) => {
+            // Not finished inside the budget: `solve` has said why. The last good plan
+            // stands until the planner has been behind for its stand-in wait (GAP-156).
+            Ok(None) => {
+                let since = *self.behind_since.get_or_insert(now);
+                if now.0 - since.0 >= self.stand_in_after.as_secs_f64() {
+                    let why = format!(
+                        "the exact solve for the current picture ({} track(s), {} ready \
+                         resource(s)) has not finished {} after the planner fell behind \
+                         it; it carries on, and its answer replaces this one when it does",
+                        problem.tracks.len(),
+                        problem.resources.len(),
+                        budget::describe(self.stand_in_after),
+                    );
+                    return self.stand_in(now, tracks, &ready, problem, why);
+                }
+                return self.last_plan.clone();
+            }
+            // No exact answer will ever come, so nothing is gained by waiting for one.
+            Err(Unsolvable::TooLarge {
+                tracks: t,
+                resources: r,
+            }) => {
+                self.in_flight = None;
+                self.behind_since.get_or_insert(now);
+                let why = format!(
+                    "the exact solver takes at most {MAX_TRACKS} tracks and {MAX_RESOURCES} \
+                     ready resources, and this picture has {t} track(s) and {r} ready \
+                     resource(s); no exact answer will come for it"
+                );
+                return self.stand_in(now, tracks, &ready, problem, why);
+            }
+            Err(Unsolvable::Refused(err)) => {
                 self.solver_ok = false;
                 self.last_failure = Some(err.to_string());
                 tracing::error!(%err, "allocation solve failed; keeping last good plan");
@@ -421,6 +661,8 @@ impl DpInterceptService {
         self.solver_ok = true;
         self.last_solved = Some(now);
         self.last_failure = None;
+        self.behind_since = None;
+        self.stood_in = None;
         let solutions = Self::solutions_with_geometry(
             self.local_frame.as_ref(),
             &answer.assignment,
@@ -436,9 +678,93 @@ impl DpInterceptService {
         // with the same pairing at the tick rate. Only a genuinely different assignment
         // gets a new id and timestamp; an unchanged one keeps the plan -- geometry
         // included -- exactly as it was.
+        //
+        //
+        // **The same rule across an interim answer** (GAP-156, D-93). An exact solve that
+        // confirms the pairing of an interim plan keeps that plan, label and all: the
+        // label records how the plan was reached, which does not change, and a second
+        // plan for the same pairing is a second queue item for one recommendation -- the
+        // flooding this rule exists to stop. An earlier draft minted one, and a rehearsal
+        // whose planner fell behind queued the same pairing three times.
         if Self::assignment_changed(&self.last_plan, &solutions) {
-            self.last_plan = Self::fresh_plan(now, solutions, answer.value);
+            self.last_plan = Self::fresh_plan(now, solutions, answer.value, PlanBasis::Exact);
         }
+        self.last_plan.clone()
+    }
+
+    /// Answer the current picture with a one-step answer, labelled as not the optimum,
+    /// while the exact solve cannot (GAP-156, D-93; DN-04 §11).
+    ///
+    /// The planner stays unhealthy: the answer is for the picture, but it is not the one
+    /// the planner exists to give, and the health flag is what puts that on the status
+    /// strip and on the record (MOE-06). The stand-in is computed once per problem; an
+    /// unchanged picture is answered from the one already computed.
+    ///
+    /// **Outside the solve budget, and cheap enough to be.** The one-step answer is an
+    /// assignment problem, polynomial in the picture; at the exact solver's limits it
+    /// takes a small fraction of the budget
+    /// (`docs/record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md` has the release
+    /// probe). Budgeting it too would mean a stand-in that could itself fail to
+    /// arrive, which is the problem it exists to end.
+    fn stand_in(
+        &mut self,
+        now: MissionTime,
+        tracks: &[TrackView],
+        ready: &[&ResourceView],
+        problem: Problem,
+        why: String,
+    ) -> PlanView {
+        // The first stand-in since the planner last answered fresh: what the log says once.
+        let first = self.stood_in.is_none();
+        let computed = match self.stood_in.take() {
+            Some((solved, answer)) if solved == problem => Ok(answer),
+            _ => gungnir_allocation::stand_in(&problem.rewards, self.horizon),
+        };
+        let answer = match computed {
+            Ok(answer) => answer,
+            // Refused for the reason the exact solve would refuse it -- a reward that is
+            // not finite -- so it is that failure, and the last good plan stands.
+            Err(err) => {
+                self.solver_ok = false;
+                self.last_failure = Some(err.to_string());
+                tracing::error!(%err, "the one-step answer failed too; keeping last good plan");
+                return self.last_plan.clone();
+            }
+        };
+        if first {
+            tracing::warn!(
+                tracks = problem.tracks.len(),
+                resources = problem.resources.len(),
+                share = answer.share_of_optimum(),
+                "the exact solve cannot answer this picture in time; a one-step answer \
+                 stands in, labelled as not the optimum"
+            );
+        }
+        let solutions = Self::solutions_with_geometry(
+            self.local_frame.as_ref(),
+            &answer.first_step.assignment,
+            tracks,
+            ready,
+        );
+        // **A stand-in that recommends what the plan in force already recommends is not a
+        // new recommendation** (GAP-097's rule): the plan in force stands, under the
+        // interim standing this call reports. Its basis says how it was reached, which was
+        // exactly; the standing says the planner cannot confirm it for this picture yet.
+        if Self::assignment_changed(&self.last_plan, &solutions) {
+            self.last_plan =
+                Self::fresh_plan(now, solutions, answer.value_at_least, PlanBasis::OneStep);
+        }
+        self.solver_ok = false;
+        self.last_solved = Some(now);
+        self.last_failure = Some(why.clone());
+        self.interim = Some((
+            InterimBound {
+                value_at_least: answer.value_at_least,
+                optimum_at_most: answer.optimum_at_most,
+            },
+            why,
+        ));
+        self.stood_in = Some((problem, answer));
         self.last_plan.clone()
     }
 
@@ -451,8 +777,13 @@ impl DpInterceptService {
     fn solve(
         &mut self,
         problem: Problem,
-    ) -> Result<Option<gungnir_allocation::AllocationPolicy>, gungnir_allocation::AllocationError>
-    {
+    ) -> Result<Option<gungnir_allocation::AllocationPolicy>, Unsolvable> {
+        if problem.tracks.len() > MAX_TRACKS || problem.resources.len() > MAX_RESOURCES {
+            return Err(Unsolvable::TooLarge {
+                tracks: problem.tracks.len(),
+                resources: problem.resources.len(),
+            });
+        }
         if let Some((solved, policy)) = &self.solved {
             if *solved == problem {
                 self.in_flight = None;
@@ -465,7 +796,8 @@ impl DpInterceptService {
         let mut flight = match self.in_flight.take() {
             Some(flight) if flight.problem == problem => flight,
             _ => InFlight {
-                solve: ExactSolve::new(&problem.rewards, self.horizon)?,
+                solve: ExactSolve::new(&problem.rewards, self.horizon)
+                    .map_err(Unsolvable::Refused)?,
                 problem,
                 slices: 0,
             },
@@ -513,15 +845,16 @@ impl DpInterceptService {
                 // it is. The sentence says nothing about the next call: this planner
                 // carries the solve on, but one built for a single question (an
                 // alternative, a what-if) is dropped with it.
-                let percent = states_done.saturating_mul(100) / states_total.max(1);
+                self.progress = Some(SolveProgress {
+                    percent: states_done.saturating_mul(100) / states_total.max(1),
+                    calls: flight.slices,
+                });
                 self.last_failure = Some(format!(
                     "the solve for the current picture ({} track(s), {} ready resource(s)) \
-                     did not finish inside its {} budget; it is {percent}% done after {} \
-                     planning call(s)",
+                     did not finish inside its {} budget",
                     flight.problem.tracks.len(),
                     flight.problem.resources.len(),
                     budget::describe(budget),
-                    flight.slices,
                 ));
                 self.in_flight = Some(flight);
                 Ok(None)
@@ -538,7 +871,12 @@ impl DpInterceptService {
     /// node's plan was taken for the embedded plan of the same number and never proposed.
     /// The alternatives `gungnir-decision` solves on a planner built per call were all
     /// plan 1 as well.
-    fn fresh_plan(now: MissionTime, solutions: Vec<InterceptSolutionView>, value: f64) -> PlanView {
+    fn fresh_plan(
+        now: MissionTime,
+        solutions: Vec<InterceptSolutionView>,
+        value: f64,
+        basis: PlanBasis,
+    ) -> PlanView {
         let id = PlanId(uuid::Uuid::now_v7().as_u128());
         PlanView {
             id,
@@ -546,6 +884,7 @@ impl DpInterceptService {
             kind: gungnir_model::PlanKind::Intercept { solutions },
             policy_value: value,
             releasability: gungnir_model::Releasability::default(),
+            basis,
         }
     }
 
@@ -796,8 +1135,9 @@ mod tests {
         );
         let outcome = svc.outcome(plan);
         match &outcome {
-            PlanOutcome::NoPlan { reason } => {
+            PlanOutcome::NoPlan { reason, progress } => {
                 assert!(reason.contains("finite"), "{reason}");
+                assert_eq!(*progress, None, "nothing is under way after a refusal");
             }
             other => panic!("a solve that never succeeded produced {other:?}"),
         }
@@ -986,11 +1326,19 @@ mod tests {
                 plan,
                 computed_at,
                 reason,
+                progress,
             } => {
                 assert_eq!(plan, first, "the stale plan is not the last good plan");
                 assert_eq!(computed_at, MissionTime(1.0));
                 assert!(reason.contains("4 ms budget"), "{reason}");
                 assert!(reason.contains("4 track(s)"), "{reason}");
+                assert_eq!(
+                    progress,
+                    Some(SolveProgress {
+                        percent: 0,
+                        calls: 1
+                    })
+                );
             }
             other => panic!("an over-budget solve returned {other:?}"),
         }
@@ -1044,11 +1392,17 @@ mod tests {
     /// units of work. Until the solve finishes, every answer is the last good plan, stale,
     /// with the progress rising; then the answer is fresh and is exactly the plan an
     /// unhurried planner computes for the same picture.
+    ///
+    /// The calls are a second of mission time apart, so the stand-in (GAP-156) is held
+    /// off with a wait longer than the loop can run: this test is about the exact solve
+    /// carrying on, and `an_interim_answer_stands_in_once_the_planner_has_waited` is
+    /// about what happens when it takes too long.
     #[test]
     fn a_solve_longer_than_one_budget_carries_on_across_calls() {
         let clock = Arc::new(SteppedClock::new(Duration::ZERO));
         let mut svc = DpInterceptService::new(10)
             .with_solve_budget(Duration::from_millis(4))
+            .with_stand_in_after(Duration::from_secs(100_000))
             .with_clock(clock.clone());
         let resources = ready(&[40, 41, 42]);
         let first = svc
@@ -1070,24 +1424,23 @@ mod tests {
                     plan,
                     computed_at,
                     reason,
+                    progress,
                 } => {
                     assert_eq!(plan, first);
                     assert_eq!(computed_at, MissionTime(1.0));
                     assert!(!svc.is_healthy());
-                    let percent: u64 = reason
-                        .split('%')
-                        .next()
-                        .and_then(|head| head.rsplit(' ').next())
-                        .and_then(|n| n.parse().ok())
-                        .expect("the reason says how far the solve has got");
-                    assert!(percent >= last_percent, "{reason}");
-                    last_percent = percent;
-                    assert!(
-                        reason.contains(&format!("after {calls} planning call(s)")),
-                        "{reason}"
-                    );
+                    let progress = progress.expect("the outcome says how far the solve has got");
+                    assert!(progress.percent >= last_percent, "{reason}: {progress:?}");
+                    last_percent = progress.percent;
+                    assert_eq!(progress.calls, calls);
+                    // The reason is the same sentence on every call, which is what lets a
+                    // node publish it only when it changes (GAP-157).
+                    assert!(!reason.contains('%'), "{reason}");
                 }
-                PlanOutcome::NoPlan { reason } => panic!("the last good plan vanished: {reason}"),
+                PlanOutcome::Interim { .. } => panic!("the stand-in was meant to be held off"),
+                PlanOutcome::NoPlan { reason, .. } => {
+                    panic!("the last good plan vanished: {reason}")
+                }
             }
         };
         assert!(
@@ -1120,13 +1473,14 @@ mod tests {
         let resources = ready(&[40, 41, 42]);
         let four = [track(70), track(71), track(72), track(73)];
         let five = [track(70), track(71), track(72), track(73), track(74)];
+        // A tenth of a second apart, inside the default stand-in wait (GAP-156).
         for n in 1..=3_u32 {
-            let _ = svc.plan(MissionTime(f64::from(n)), &four, &resources);
+            let _ = svc.plan(MissionTime(0.1 * f64::from(n)), &four, &resources);
         }
-        match svc.plan(MissionTime(4.0), &five, &resources) {
-            PlanOutcome::NoPlan { reason } => {
+        match svc.plan(MissionTime(0.4), &five, &resources) {
+            PlanOutcome::NoPlan { reason, progress } => {
                 assert!(reason.contains("5 track(s)"), "{reason}");
-                assert!(reason.contains("after 1 planning call(s)"), "{reason}");
+                assert_eq!(progress.map(|p| p.calls), Some(1), "{progress:?}");
             }
             other => panic!("expected the new picture's solve to have begun: {other:?}"),
         }
@@ -1139,7 +1493,7 @@ mod tests {
         let mut svc = DpInterceptService::new(10)
             .with_clock(Arc::new(SteppedClock::new(Duration::from_millis(10))));
         match svc.plan(MissionTime(1.0), &[track(1)], &[resource(1, true)]) {
-            PlanOutcome::NoPlan { reason } => assert!(reason.contains("budget"), "{reason}"),
+            PlanOutcome::NoPlan { reason, .. } => assert!(reason.contains("budget"), "{reason}"),
             other => panic!("expected no plan, got {other:?}"),
         }
         assert!(!svc.is_healthy());
@@ -1198,5 +1552,226 @@ mod tests {
                  new plan"
             );
         }
+    }
+
+    /// The planner's default wait before a stand-in is MOP-07's 500 ms (D-93).
+    #[test]
+    fn the_default_stand_in_wait_is_mop_07() {
+        let svc = DpInterceptService::new(10);
+        assert_eq!(svc.stand_in_after(), Duration::from_millis(500));
+        assert_eq!(svc.stand_in_after(), DEFAULT_STAND_IN_AFTER);
+    }
+
+    /// **GAP-156, D-93.** A solve that cannot finish -- the clock steps ten milliseconds a
+    /// reading against a four-millisecond budget, so it never advances -- is answered
+    /// stale, with the last good plan, for as long as the planner's wait; from then the
+    /// current picture gets a one-step answer, labelled as not the optimum, with its
+    /// bound; and when the exact solve can run and reaches the same assignment, that
+    /// plan stands (GAP-097), now fresh.
+    ///
+    /// The first picture has two tracks, so its pairing (the later resources, by the tie
+    /// rule) differs from the four-track picture's (the diagonal): the stand-in is a
+    /// different recommendation, and so a new plan.
+    #[test]
+    fn an_interim_answer_stands_in_once_the_planner_has_waited() {
+        let clock = Arc::new(SteppedClock::new(Duration::ZERO));
+        let mut svc = DpInterceptService::new(10)
+            .with_solve_budget(Duration::from_millis(4))
+            .with_stand_in_after(Duration::from_millis(500))
+            .with_clock(clock.clone());
+        let resources = ready(&[40, 41, 42]);
+        let first = match svc.plan(MissionTime(1.0), &[track(71), track(72)], &resources) {
+            PlanOutcome::Fresh(plan) => plan,
+            other => panic!("the in-budget solve was not fresh: {other:?}"),
+        };
+        assert_eq!(first.basis, PlanBasis::Exact);
+
+        let grown = [track(70), track(71), track(72), track(73)];
+        clock.set_step(Duration::from_millis(10));
+        // Behind from t = 2.0; inside the wait, the last good plan, stale -- and the
+        // standing a node would publish does not change from call to call.
+        let mut published = None;
+        for t in [2.0, 2.2, 2.4] {
+            let outcome = svc.plan(MissionTime(t), &grown, &resources);
+            match &outcome {
+                PlanOutcome::Stale {
+                    plan, computed_at, ..
+                } => {
+                    assert_eq!(plan, &first);
+                    assert_eq!(*computed_at, MissionTime(1.0));
+                }
+                other => panic!("t = {t}: inside the wait the answer was {other:?}"),
+            }
+            let standing = outcome.standing();
+            assert!(
+                published.as_ref().is_none_or(|p| p == &standing),
+                "{standing:?}"
+            );
+            published = Some(standing);
+        }
+
+        // Half a second behind: the stand-in.
+        let interim = match svc.plan(MissionTime(2.5), &grown, &resources) {
+            PlanOutcome::Interim {
+                plan,
+                bound,
+                reason,
+                progress,
+            } => {
+                assert_eq!(plan.basis, PlanBasis::OneStep);
+                assert_eq!(plan.mission_time, MissionTime(2.5));
+                assert_ne!(
+                    plan.id, first.id,
+                    "a different pairing is a new recommendation, not the old one relabelled"
+                );
+                // A uniform matrix: one step at a time services all four tracks in two
+                // steps, which is the optimum, so the bound is the whole of it.
+                assert!((bound.value_at_least - 4.0).abs() < 1e-12, "{bound:?}");
+                assert!((bound.share_of_optimum() - 1.0).abs() < 1e-12, "{bound:?}");
+                assert_eq!(
+                    bound.sentence(),
+                    "worth at least 100% of the best plan's value"
+                );
+                assert!(reason.contains("has not finished 500 ms after"), "{reason}");
+                assert!(reason.contains("4 track(s)"), "{reason}");
+                assert!(progress.is_some(), "the exact solve is still under way");
+                plan
+            }
+            other => panic!("half a second behind, the answer was {other:?}"),
+        };
+        assert!(
+            !svc.is_healthy(),
+            "an interim answer is not the planner's own, and the flag says so"
+        );
+        assert_ne!(pairs(&interim), pairs(&first));
+
+        // The same picture again: the same interim plan, not a new one per call.
+        match svc.plan(MissionTime(2.6), &grown, &resources) {
+            PlanOutcome::Interim { plan, .. } => assert_eq!(plan, interim),
+            other => panic!("{other:?}"),
+        }
+
+        // The exact solve can run and reaches the same assignment: the interim plan
+        // stands, identifier, basis and all, now answered fresh. A second plan for the
+        // same pairing would be a second queue item for one recommendation (GAP-097).
+        clock.set_step(Duration::ZERO);
+        match svc.plan(MissionTime(3.0), &grown, &resources) {
+            PlanOutcome::Fresh(plan) => assert_eq!(plan, interim),
+            other => panic!("the exact solve finished and the answer was {other:?}"),
+        }
+        assert!(svc.is_healthy());
+
+        // A different picture whose optimum pairs differently: a new plan, reached
+        // exactly.
+        match svc.plan(MissionTime(4.0), &[track(72)], &resources) {
+            PlanOutcome::Fresh(plan) => {
+                assert_ne!(plan.id, interim.id);
+                assert_eq!(plan.basis, PlanBasis::Exact);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// **A stand-in that recommends what the plan in force recommends is not a new
+    /// plan** (GAP-097's rule, D-93): the plan in force stands, under an interim standing,
+    /// and nothing new reaches the queue. Found by `gungnir-app/tests/rehearsal.rs` on a
+    /// slow runner, where an earlier draft minted a plan for the stand-in and another for
+    /// the exact answer, and queued one pairing three times.
+    #[test]
+    fn a_stand_in_that_agrees_with_the_plan_in_force_keeps_it() {
+        let clock = Arc::new(SteppedClock::new(Duration::ZERO));
+        let mut svc = DpInterceptService::new(10)
+            .with_solve_budget(Duration::from_millis(4))
+            .with_clock(clock.clone());
+        let resources = ready(&[40, 41, 42]);
+        let first = svc
+            .plan(
+                MissionTime(1.0),
+                &[track(70), track(71), track(72)],
+                &resources,
+            )
+            .plan()
+            .cloned()
+            .expect("a plan");
+        let grown = [track(70), track(71), track(72), track(73)];
+        clock.set_step(Duration::from_millis(10));
+        let _ = svc.plan(MissionTime(2.0), &grown, &resources);
+        match svc.plan(MissionTime(2.5), &grown, &resources) {
+            PlanOutcome::Interim { plan, bound, .. } => {
+                assert_eq!(plan, first, "the plan in force was not kept");
+                assert_eq!(plan.basis, PlanBasis::Exact);
+                assert!((bound.share_of_optimum() - 1.0).abs() < 1e-12);
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(!svc.is_healthy());
+        clock.set_step(Duration::ZERO);
+        match svc.plan(MissionTime(3.0), &grown, &resources) {
+            PlanOutcome::Fresh(plan) => assert_eq!(plan, first),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// **The wait is measured from falling behind, not from the current solve**: a raid
+    /// whose picture grows every call drops each solve for the next, and still reaches its
+    /// stand-in.
+    #[test]
+    fn a_picture_that_keeps_changing_still_reaches_its_stand_in() {
+        let clock = Arc::new(SteppedClock::new(Duration::ZERO));
+        let mut svc = DpInterceptService::new(10)
+            .with_solve_budget(Duration::from_millis(4))
+            .with_clock(clock.clone());
+        let resources = ready(&[40, 41, 42]);
+        let _ = svc.plan(MissionTime(1.0), &[track(70)], &resources);
+        clock.set_step(Duration::from_millis(10));
+        let mut picture = vec![track(70)];
+        let mut last = None;
+        for (n, t) in [2.0, 2.2, 2.4, 2.6].into_iter().enumerate() {
+            picture.push(track(71 + n as u64));
+            last = Some(svc.plan(MissionTime(t), &picture, &resources));
+        }
+        match last {
+            Some(PlanOutcome::Interim { plan, .. }) => {
+                assert_eq!(plan.basis, PlanBasis::OneStep);
+                assert_eq!(plan.solutions().len(), 3);
+            }
+            other => panic!("0.6 s behind a changing picture: {other:?}"),
+        }
+    }
+
+    /// **A picture the exact solver will not take is answered at once**: waiting for an
+    /// answer that will never come helps nobody (GAP-156).
+    #[test]
+    fn a_picture_past_the_exact_limits_is_answered_at_once() {
+        let mut svc = unhurried(10);
+        let many: Vec<TrackView> = (0..20).map(|i| track(100 + i)).collect();
+        match svc.plan(MissionTime(1.0), &many, &ready(&[40, 41])) {
+            PlanOutcome::Interim {
+                plan,
+                reason,
+                progress,
+                ..
+            } => {
+                assert_eq!(plan.basis, PlanBasis::OneStep);
+                assert_eq!(pairs(&plan), vec![(40, 100), (41, 101)]);
+                assert!(reason.contains("at most 16 tracks"), "{reason}");
+                assert!(reason.contains("20 track(s)"), "{reason}");
+                assert_eq!(progress, None, "no exact solve is under way, nor will be");
+            }
+            other => panic!("twenty tracks: {other:?}"),
+        }
+        assert!(!svc.is_healthy());
+        let effectors: Vec<u32> = (40..49).collect();
+        match svc.plan(MissionTime(2.0), &[track(1)], &ready(&effectors)) {
+            PlanOutcome::Interim { reason, .. } => {
+                assert!(reason.contains("9 ready resource(s)"), "{reason}");
+            }
+            other => panic!("nine effectors: {other:?}"),
+        }
+        // And a picture back inside the limits is the optimum again.
+        assert!(svc
+            .plan(MissionTime(3.0), &[track(1)], &ready(&[40]))
+            .is_fresh());
+        assert!(svc.is_healthy());
     }
 }

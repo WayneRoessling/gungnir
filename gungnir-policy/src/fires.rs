@@ -393,6 +393,7 @@ mod tests {
             kind: PlanKind::Fires(Box::new(fires)),
             policy_value: 1.0,
             releasability: gungnir_model::Releasability::default(),
+            basis: gungnir_model::PlanBasis::Exact,
         }
     }
 

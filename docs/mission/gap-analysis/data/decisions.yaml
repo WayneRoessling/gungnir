@@ -2404,3 +2404,66 @@
     corruption), keeping two seconds as the default (it doubles every track's delay on
     upgrade), and no ceiling (a slip of units would stall the picture). See
     `../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`.
+- id: D-93
+  decision: What answers a picture the exact solver cannot finish in time, when, and how it is labelled
+  question: >-
+    Since GAP-119 an exact solve that does not fit one planning call carries on over
+    several, and the operator is shown the last good plan, stale, meanwhile. A raid toward
+    the solver's size limits takes seconds of solving and far longer at 4 ms a tick, and
+    past the limits the solver refuses it, so for the pictures that matter most the
+    operator is shown an answer to an older picture for as long as the raid lasts
+    (GAP-156). Should a bounded answer stand in for the optimum, which one, after how
+    long, and how is it kept from being mistaken for the optimum?
+  raised_in: GAP-156
+  decider: Owner
+  unblocks: GAP-156
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **The best assignment for this
+    step alone stands in once the planner has been behind the picture for
+    `plan_stand_in_after_ms` of mission time, 500 ms by default, and at once for a picture
+    past the exact solver's limits; it is labelled `PlanBasis::OneStep` on the plan itself,
+    and one pairing stays one plan across it, as GAP-097 has it** (DN-04 §11). The
+    stand-in is `gungnir_allocation::solve_one_step`, the allocator's own problem at a
+    horizon of one under the same tie rule, found by the Hungarian method in microseconds
+    at any size, with a floor on its value over the horizon and a ceiling on the optimum
+    so the operator is told how much of the best plan it is known to reach. The 500 ms is
+    MOP-07's decision-path budget: an exact answer later than that has cost more than the
+    whole path is allowed, while ordinary pictures finish inside it and never show a
+    stand-in. The label is on `PlanView` because a plan travels -- queue, journal, link --
+    and any label kept beside it would be lost at the first hop. PN-05, PN-06 and PN-07
+    say INTERIM, the planner stays unhealthy, and accept waits on acknowledging it, as
+    D-82 has it for a stale plan. Rejected: the exact solve at a shorter horizon, which
+    is still exponential and at the limits still too slow; a greedy pass, which has no
+    stated optimum and no tie rule, so the exact answer would replace it with a different
+    pairing for no visible reason; a deadline from the tracks' time to impact, which the
+    planner does not have and which would make the stand-in's timing unpredictable; and
+    refusing large pictures outright, which leaves the operator the problem GAP-156
+    describes. See `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.
+- id: D-94
+  decision: What a node says about its plan, and how a linked desktop draws it
+  question: >-
+    A linked desktop relays the node's plan as current whatever the node's planner says,
+    so PN-05 draws a plan the node can no longer refresh with no stale line and no age
+    (GAP-157). What goes on the wire, how often, and on whose clock is its age drawn?
+  raised_in: GAP-157
+  decider: Owner
+  unblocks: GAP-157
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **The node publishes
+    `PlanStandingView` -- current, interim with its bound, stale since `computed_at`, or no
+    plan, each with its reason -- as `InterceptEvent::PlanStanding` when it changes, and
+    carries the last one in the snapshot's `plan_standing`; the desktop converts the
+    node's `computed_at` to its own clock through the offset it measures per connection
+    and draws exactly what an embedded desktop draws** (DN-04 §11). Both additions are
+    defaulted or a new variant, which the interface's rules call compatible, so
+    `SCHEMA_VERSION` stands, as it did for `node_time` and `queue`. The standing carries
+    no progress figure, because progress changes every tick and would put an event on the
+    stream and the journal at the tick rate for as long as a solve ran; the planner keeps
+    its progress beside the reason rather than inside it, so the reason on the wire does
+    not change while the picture does not. The age is drawn on the node's clock as D-70
+    draws the queue's deadlines. Rejected: sending the plan's age rather than its
+    `computed_at` (stale the moment it is sent), putting the standing inside
+    `HealthEvent::Changed` (it changes when health does not, stale to interim), and a
+    progress event per tick. See `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.

@@ -356,7 +356,12 @@ fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
             }
             Event::Tracking(_)
             | Event::Intercept(
-                InterceptEvent::PlanSuperseded(_) | InterceptEvent::PlanEvaluated { .. },
+                InterceptEvent::PlanSuperseded(_)
+                | InterceptEvent::PlanEvaluated { .. }
+                // GAP-157: a planner falling behind and catching up is a health fact about
+                // the planner, not a piece of this watch's work; the plan it concerns was
+                // counted when it was proposed.
+                | InterceptEvent::PlanStanding(_),
             )
             // GAP-132: an item entering a queue is not one of this watch's counts. The
             // plan it carries was already counted as `plans_proposed`, and counting the

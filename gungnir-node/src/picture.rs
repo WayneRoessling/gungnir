@@ -30,7 +30,7 @@ use gungnir_eventing::{Event, EventBus, EventingError};
 use gungnir_ingest::{AllowListAuthenticator, IngestGateway};
 use gungnir_intercept_service::{DpInterceptService, InterceptService, PlanOutcome};
 use gungnir_model::events::InterceptEvent;
-use gungnir_model::{MissionTime, PlanView, SensorId, SystemHealth};
+use gungnir_model::{MissionTime, PlanStandingView, PlanView, SensorId, SystemHealth};
 use gungnir_observability::SnapshotHealthMonitor;
 use gungnir_tracking_service::{
     project_pipeline_stats, LiveTrackingService, PipelineStats, SensorPositions, TrackLifecycle,
@@ -195,15 +195,24 @@ pub fn tracking_service(
 /// longer solve on to the next. The binary validates a baseline before building from it;
 /// one built in code is not, so a bad budget is said loudly and MOP-06's is used, as the
 /// desktop's `embedded_planner` does, rather than panicking here.
+///
+/// **And its stand-in wait** (GAP-156, D-93): how long it may be behind the picture
+/// before a one-step answer, labelled as not the optimum, stands in. The same rule for a
+/// bad value as the budget's.
 #[must_use]
 pub fn intercept_service(config: &ConfigBaseline) -> DpInterceptService {
     let budget = config.plan_solve_budget().unwrap_or_else(|err| {
         tracing::error!(%err, "the baseline's solve budget is invalid; planning with MOP-06's");
         gungnir_intercept_service::DEFAULT_SOLVE_BUDGET
     });
+    let wait = config.plan_stand_in_after().unwrap_or_else(|err| {
+        tracing::error!(%err, "the baseline's stand-in wait is invalid; waiting MOP-07's");
+        gungnir_intercept_service::DEFAULT_STAND_IN_AFTER
+    });
     DpInterceptService::new(config.allocation_horizon)
         .with_local_frame(config.local_frame())
         .with_solve_budget(budget)
+        .with_stand_in_after(wait)
 }
 
 /// The ingest gateway, admitting exactly the sources the baseline names: its sensors,
@@ -293,6 +302,8 @@ pub struct Announcer {
     /// What the services last reported, and whether a report is a change: the same
     /// monitor the desktop's tick reports through (GAP-125, D-100).
     health: SnapshotHealthMonitor,
+    /// Whether the plan answers the current picture, as last published (GAP-157).
+    last_standing: Option<PlanStandingView>,
 }
 
 impl Announcer {
@@ -324,12 +335,15 @@ impl Announcer {
         Ok(())
     }
 
-    /// Propose this tick's plan when it is fresh and not the one last proposed, and hand
-    /// it back for the approval queue (GAP-066, GAP-132).
+    /// Propose this tick's plan when it answers this tick's picture and is not the one
+    /// last proposed, and hand it back for the approval queue (GAP-066, GAP-132).
     ///
     /// Only a plan computed for this snapshot is proposed. A stale one published as
     /// `PlanProposed` would be a recommendation nobody made now, and this node is the
-    /// system of record for every desktop reading it.
+    /// system of record for every desktop reading it. **An interim one is proposed**
+    /// (GAP-156, D-93): it is a recommendation for the picture in front of the operator,
+    /// and it carries `PlanBasis::OneStep` into the queue, onto the record and over the
+    /// link, so every panel that shows it says it is not the optimum.
     ///
     /// # Errors
     ///
@@ -341,7 +355,7 @@ impl Announcer {
         outcome: &PlanOutcome,
     ) -> Result<Option<PlanView>, EventingError> {
         let plan = outcome.plan().cloned().unwrap_or_default();
-        if !outcome.is_fresh() || plan == self.last_plan {
+        if !outcome.answers_the_picture() || plan == self.last_plan {
             return Ok(None);
         }
         bus.publish(
@@ -356,6 +370,45 @@ impl Announcer {
     #[must_use]
     pub fn last_plan(&self) -> &PlanView {
         &self.last_plan
+    }
+
+    /// Put a change in whether the plan answers the current picture on the record and the
+    /// stream, and say whether it changed (GAP-157, D-94).
+    ///
+    /// **Called after [`Announcer::plan`] in the same tick**, so a desktop following the
+    /// stream receives an interim or a fresh plan before the standing that describes it,
+    /// and never a standing that describes a plan it has not yet been sent.
+    ///
+    /// **Published when it changes, not every tick**: it carries no progress figure, so
+    /// it changes when the planner falls behind, stands in, catches up, or is behind a
+    /// different picture -- the transitions MOE-06 asks the record to hold -- and not
+    /// with every slice of a solve.
+    ///
+    /// # Errors
+    ///
+    /// When the bus refuses the event.
+    pub fn standing(
+        &mut self,
+        bus: &dyn EventBus,
+        now: MissionTime,
+        outcome: &PlanOutcome,
+    ) -> Result<bool, EventingError> {
+        let standing = outcome.standing();
+        if self.last_standing.as_ref() == Some(&standing) {
+            return Ok(false);
+        }
+        bus.publish(
+            now,
+            Event::Intercept(InterceptEvent::PlanStanding(standing.clone())),
+        )?;
+        self.last_standing = Some(standing);
+        Ok(true)
+    }
+
+    /// The standing last published, which is the one the snapshot carries (GAP-157).
+    #[must_use]
+    pub fn last_standing(&self) -> Option<&PlanStandingView> {
+        self.last_standing.as_ref()
     }
 
     /// Put a change in this node's health on the record (MOE-06), and say whether it
@@ -408,22 +461,30 @@ impl Announcer {
 /// The tracks and the plan **are** kept live between snapshots, by the events the loop
 /// publishes: `TrackingEvent` from [`gungnir_tracking_service::TrackLifecycle`] since
 /// GAP-160, and `PlanProposed`. The health is too, by `HealthEvent::Changed`, which a
-/// linked desktop has read since GAP-161.
+/// linked desktop has read since GAP-161. And so is the plan's standing, by
+/// `InterceptEvent::PlanStanding` (GAP-157); the snapshot carries the one last published,
+/// so a desktop that connects mid-stall draws the stale line from its first frame.
+#[allow(clippy::too_many_arguments)]
 pub fn publish_picture(
     api: &Arc<NodeApi>,
     tracks: &[gungnir_model::TrackView],
     bearing_rays: &[gungnir_model::BearingRayView],
     pipeline_stats: PipelineStats,
     plan: &PlanView,
+    standing: Option<&PlanStandingView>,
     health: SystemHealth,
     queue: Vec<gungnir_api::v3::QueueItemView>,
 ) {
-    let snapshot = SnapshotResponse::new(tracks.to_vec(), Some(plan.clone()), health, Vec::new())
-        .with_bearing_data(
-            bearing_rays.to_vec(),
-            project_pipeline_stats(pipeline_stats),
-        )
-        .with_queue(queue);
+    let mut snapshot =
+        SnapshotResponse::new(tracks.to_vec(), Some(plan.clone()), health, Vec::new())
+            .with_bearing_data(
+                bearing_rays.to_vec(),
+                project_pipeline_stats(pipeline_stats),
+            )
+            .with_queue(queue);
+    if let Some(standing) = standing {
+        snapshot = snapshot.with_plan_standing(standing.clone());
+    }
     if let Err(err) = api.publish_snapshot(snapshot) {
         tracing::error!(%err, "could not publish the snapshot");
     }

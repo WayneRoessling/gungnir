@@ -1336,6 +1336,14 @@ pub struct ConfigBaseline {
     /// keeps it above zero and at most [`MAX_PLAN_SOLVE_BUDGET_MS`].
     #[serde(default = "default_plan_solve_budget_ms")]
     pub plan_solve_budget_ms: f64,
+    /// Milliseconds of mission time the planner waits for an exact solve it has fallen
+    /// behind on before it answers the current picture with a one-step answer, labelled
+    /// as not the optimum, until the exact solve finishes (GAP-156, D-93; DN-04 §11).
+    /// The default is MOP-07's 500 ms (`docs/mission/measures.md` §2); validation keeps
+    /// it finite, not negative and at most [`MAX_PLAN_STAND_IN_AFTER_MS`]. Zero stands the
+    /// one-step answer in on the first call the exact solve cannot answer.
+    #[serde(default = "default_plan_stand_in_after_ms")]
+    pub plan_stand_in_after_ms: f64,
     /// Directory for the desktop's local `gungnir-store` journal.
     #[serde(default = "default_data_dir")]
     pub data_dir: String,
@@ -1476,6 +1484,30 @@ fn default_plan_solve_budget_ms() -> f64 {
 /// than honoured, because the cost would land on a measure nobody chose to spend.
 pub const MAX_PLAN_SOLVE_BUDGET_MS: f64 = 100.0;
 
+/// How long the planner waits for an exact solve before standing a one-step answer in,
+/// when a baseline names nothing: MOP-07's 500 ms (D-93).
+///
+/// **Why MOP-07's figure.** MOP-07 is the time the deployment allows between a plan being
+/// proposed and a person being able to decide it. An exact answer later than that has
+/// cost the operator more than the whole decision path is allowed to, so from then on a
+/// labelled answer to the picture in front of them serves them better than the last
+/// answer to an older one. Ordinary pictures finish well inside it and never see a
+/// stand-in; the pictures that do are the ones GAP-156 is about.
+/// `gungnir-intercept-service`'s `DEFAULT_STAND_IN_AFTER` is the same figure, and
+/// `gungnir-app/tests/interim_plan.rs` fails if the two part.
+fn default_plan_stand_in_after_ms() -> f64 {
+    500.0
+}
+
+/// The longest a baseline may make the planner wait before standing a one-step answer in
+/// (D-93).
+///
+/// **A minute, and not "never".** A deployment may prefer to wait longer for the optimum
+/// -- a cloud node with a slow sensor picture, say -- but a planner that could be told
+/// never to stand in would be GAP-156 again: a raid past the exact solver's reach, and an
+/// operator shown the last good plan, stale, for as long as it lasts.
+pub const MAX_PLAN_STAND_IN_AFTER_MS: f64 = 60_000.0;
+
 fn default_data_dir() -> String {
     "./gungnir-journal".into()
 }
@@ -1509,6 +1541,7 @@ impl Default for ConfigBaseline {
             node: None,
             allocation_horizon: default_horizon(),
             plan_solve_budget_ms: default_plan_solve_budget_ms(),
+            plan_stand_in_after_ms: default_plan_stand_in_after_ms(),
             data_dir: default_data_dir(),
             assets: Vec::new(),
             endpoints: Vec::new(),
@@ -1550,6 +1583,27 @@ impl ConfigBaseline {
             ))
         };
         if !(ms.is_finite() && ms > 0.0 && ms <= MAX_PLAN_SOLVE_BUDGET_MS) {
+            return Err(refused());
+        }
+        std::time::Duration::try_from_secs_f64(ms / 1e3).map_err(|_| refused())
+    }
+
+    /// How long the planner waits for an exact solve before standing a one-step answer
+    /// in, as a duration (GAP-156, D-93), and the one place its rule is written:
+    /// [`validate`] refuses a baseline by calling this.
+    ///
+    /// # Errors
+    ///
+    /// [`ConfigError::Invalid`] for a wait that is not finite, is negative, or is past
+    /// [`MAX_PLAN_STAND_IN_AFTER_MS`].
+    pub fn plan_stand_in_after(&self) -> Result<std::time::Duration, ConfigError> {
+        let ms = self.plan_stand_in_after_ms;
+        let refused = || {
+            ConfigError::Invalid(format!(
+                "plan_stand_in_after_ms must be finite, at least 0 and at most                  {MAX_PLAN_STAND_IN_AFTER_MS} ms, not {ms}"
+            ))
+        };
+        if !(ms.is_finite() && (0.0..=MAX_PLAN_STAND_IN_AFTER_MS).contains(&ms)) {
             return Err(refused());
         }
         std::time::Duration::try_from_secs_f64(ms / 1e3).map_err(|_| refused())
@@ -3858,6 +3912,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
         ));
     }
     baseline.plan_solve_budget()?;
+    baseline.plan_stand_in_after()?;
     if baseline.data_dir.trim().is_empty() {
         return Err(ConfigError::Invalid("data_dir is empty".into()));
     }
@@ -6599,6 +6654,37 @@ MFkw
         for good in [0.5, 4.0, MAX_PLAN_SOLVE_BUDGET_MS] {
             b.plan_solve_budget_ms = good;
             assert!(validate(&b).is_ok(), "a budget of {good} was refused");
+        }
+    }
+
+    /// GAP-156, D-93: the wait before a one-step answer stands in is MOP-07's 500 ms by
+    /// default, finite, not negative and under the ceiling; zero and the ceiling are both
+    /// allowed.
+    #[test]
+    fn the_plan_stand_in_wait_is_validated() {
+        let mut b = ConfigBaseline::default();
+        assert!((b.plan_stand_in_after_ms - 500.0).abs() < f64::EPSILON);
+        assert_eq!(
+            b.plan_stand_in_after().expect("the default is valid"),
+            std::time::Duration::from_millis(500)
+        );
+        for bad in [
+            -1.0,
+            f64::NAN,
+            f64::INFINITY,
+            MAX_PLAN_STAND_IN_AFTER_MS + 1.0,
+        ] {
+            b.plan_stand_in_after_ms = bad;
+            match validate(&b) {
+                Err(ConfigError::Invalid(msg)) => {
+                    assert!(msg.contains("plan_stand_in_after_ms"), "{msg}");
+                }
+                other => panic!("a wait of {bad} was accepted: {other:?}"),
+            }
+        }
+        for good in [0.0, 500.0, MAX_PLAN_STAND_IN_AFTER_MS] {
+            b.plan_stand_in_after_ms = good;
+            assert!(validate(&b).is_ok(), "a wait of {good} was refused");
         }
     }
 

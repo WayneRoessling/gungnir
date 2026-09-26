@@ -38,6 +38,15 @@ use std::time::{Duration, Instant};
 /// `gungnir-app/tests/solve_budget.rs` fails if the two ever part.
 pub const DEFAULT_SOLVE_BUDGET: Duration = Duration::from_millis(4);
 
+/// How long, in mission time, the planner may be behind the picture before a one-step
+/// answer stands in, when a deployment names nothing: MOP-07's 500 ms (GAP-156, D-93).
+///
+/// Mission time, not the solve clock: this is a wait an operator experiences, measured on
+/// the clock the picture and the plan are stamped with, and a replay decides it the same
+/// way every time. `gungnir-config`'s default for `plan_stand_in_after_ms` is the same
+/// figure, and `gungnir-app/tests/interim_plan.rs` fails if the two ever part.
+pub const DEFAULT_STAND_IN_AFTER: Duration = Duration::from_millis(500);
+
 /// A monotonic reading the planner measures a solve against.
 ///
 /// Only the difference between two readings means anything; the origin is the

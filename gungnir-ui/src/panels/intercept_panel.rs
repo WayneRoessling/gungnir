@@ -23,6 +23,10 @@ pub struct WithheldLine<'a> {
 pub enum Standing<'a> {
     /// The planner answered the current picture with this plan.
     Current,
+    /// The planner answered the current picture with a one-step answer standing in for
+    /// an optimum it could not reach in time (GAP-156, D-93). `share` is the floor on the
+    /// share of the best plan's value this one reaches, as a sentence.
+    Interim { share: &'a str, reason: &'a str },
     /// The planner could not answer the current picture; this is the last plan it did
     /// compute, `age_s` seconds before it was last asked.
     Stale {
@@ -56,7 +60,7 @@ pub fn render_intercept_panel(
     let plan = shown.plan;
     ui.heading("Intercept plan");
     render_standing(ui, palette, shown.standing);
-    render_summary(ui, palette, plan);
+    render_summary(ui, palette, plan, shown.standing);
     render_solution_list(ui, plan);
     render_fires(ui, palette, plan, fires);
     render_withheld(ui, palette, withheld);
@@ -240,6 +244,23 @@ fn render_withheld(ui: &mut egui::Ui, palette: &theme::Palette, withheld: &[With
 fn render_standing(ui: &mut egui::Ui, palette: &theme::Palette, standing: Standing<'_>) {
     match standing {
         Standing::Current => {}
+        // **Said as plainly as STALE is** (GAP-156): an interim plan answers the picture
+        // on screen, which is exactly why it could be mistaken for the optimum.
+        Standing::Interim { share, reason } => {
+            ui.label(
+                RichText::new(format!(
+                    "INTERIM: this plan is the best assignment for this step alone, not the \
+                     planner's optimum; it is {share}. It answers the picture on screen, and \
+                     the optimum replaces it when the exact solve finishes."
+                ))
+                .strong()
+                .color(palette.warning_color),
+            );
+            ui.label(
+                RichText::new(format!("Why: {}.", reason.trim_end_matches('.')))
+                    .color(palette.warning_color),
+            );
+        }
         Standing::Stale {
             computed_at_s,
             age_s,
@@ -276,7 +297,12 @@ fn render_standing(ui: &mut egui::Ui, palette: &theme::Palette, standing: Standi
     }
 }
 
-fn render_summary(ui: &mut egui::Ui, palette: &theme::Palette, plan: &PlanView) {
+fn render_summary(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    plan: &PlanView,
+    standing: Standing<'_>,
+) {
     ui.label(
         RichText::new(format!(
             "Plan #{} at t = {:.1} s, policy value {:.2}",
@@ -286,6 +312,25 @@ fn render_summary(ui: &mut egui::Ui, palette: &theme::Palette, plan: &PlanView) 
         ))
         .color(palette.muted_text_color()),
     );
+    // The plan's own label (GAP-156): how it was reached, whatever the planner says now.
+    // A stale plan that was an interim one is still an interim one, and the standing line
+    // above says only that it is stale. **Current is the one case that changes the
+    // words**: the planner's full solve has reached this same assignment for the picture
+    // on screen, so the plan stands (GAP-097) and saying only "not by the full solve"
+    // would leave out the one thing the operator most wants to know.
+    if let Some(label) = plan.basis.label() {
+        if standing == Standing::Current {
+            ui.label(
+                RichText::new(
+                    "Reached as an interim one-step answer; the planner's full solve has since \
+                     reached the same assignment for the picture on screen.",
+                )
+                .color(palette.muted_text_color()),
+            );
+        } else {
+            ui.label(RichText::new(label).strong().color(palette.warning_color));
+        }
+    }
     if plan.is_empty() {
         ui.label(RichText::new("No assignments").italics());
     }

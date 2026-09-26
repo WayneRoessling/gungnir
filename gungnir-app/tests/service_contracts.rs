@@ -36,6 +36,7 @@ fn no_plan_and_an_empty_plan_are_different_answers() {
     let empty = PlanOutcome::Fresh(gungnir_model::PlanView::default());
     let none = PlanOutcome::NoPlan {
         reason: "the allocator reported itself unimplemented".to_owned(),
+        progress: None,
     };
     assert!(empty.plan().is_some());
     assert!(none.plan().is_none());

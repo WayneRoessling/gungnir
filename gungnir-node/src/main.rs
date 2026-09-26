@@ -1957,6 +1957,9 @@ async fn run(
             // the journal and the stream before MOP-07's window (§6.9).
             approval::propose(&mut approval_desk, &frame, plan);
         }
+        // GAP-157: whether that plan answers this picture, after the plan itself so a
+        // desktop never reads a standing for a plan it has not been sent.
+        announcer.standing(&bus, now, &outcome)?;
         // The sweep on the node's clock (DN-31 §6.4), then the decisions the routes
         // accepted, in arrival order (§6.3). Both before the journal append below, so
         // everything they publish is on disk in the tick it happened.
@@ -2008,6 +2011,7 @@ async fn run(
             tracking.bearing_rays(),
             tracking.pipeline_stats(),
             announcer.last_plan(),
+            announcer.last_standing(),
             health,
             // GAP-132: the queue goes out with the picture, so `GET /v3/queue` and the
             // snapshot's `queue` are one publish read through two doors.

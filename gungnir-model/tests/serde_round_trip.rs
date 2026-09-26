@@ -46,11 +46,11 @@ use gungnir_model::{
     DeconflictionCheck, DeconflictionKind, DeconflictionResult, DefendedAsset, DetectionView,
     EffectorLayer, EffectorReport, FiresPlan, Geodetic, InterceptSolutionView, LaunchWarningReport,
     LaydownId, Magazine, Measurement, MissionProfile, MissionTime, ModelError, PeerLaunchWarning,
-    PeerOrigin, PendingApprovalId, PipelineStatsView, PlanId, PlanKind, PlanView, ProductKind,
-    Provenance, Quality, RehearsalOrigin, RelativeCost, Releasability, RequestId, RequirementId,
-    RequirementState, ResourceId, ResourceView, SensorId, SensorMode, SensorTaskId, SessionId,
-    SourceAuthentication, TestTrackNumber, TrackId, TrackStatus, TrackView, WarningObligation,
-    SCHEMA_VERSION,
+    PeerOrigin, PendingApprovalId, PipelineStatsView, PlanBasis, PlanId, PlanKind,
+    PlanStandingView, PlanView, ProductKind, Provenance, Quality, RehearsalOrigin, RelativeCost,
+    Releasability, RequestId, RequirementId, RequirementState, ResourceId, ResourceView, SensorId,
+    SensorMode, SensorTaskId, SessionId, SourceAuthentication, TestTrackNumber, TrackId,
+    TrackStatus, TrackView, WarningObligation, SCHEMA_VERSION,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -200,6 +200,8 @@ fn plans() -> Vec<PlanView> {
             },
             policy_value: 0.7,
             releasability: parties(),
+            // GAP-156: the one-step basis, so the label is shown to survive the wire.
+            basis: PlanBasis::OneStep,
         },
         PlanView {
             id: PlanId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_61c3),
@@ -220,6 +222,26 @@ fn plans() -> Vec<PlanView> {
             })),
             policy_value: THIRD,
             releasability: Releasability::AllPeers,
+            basis: PlanBasis::Exact,
+        },
+    ]
+}
+
+/// Every standing a planner can report of its plan (GAP-157), with non-dyadic bounds.
+fn plan_standings() -> Vec<PlanStandingView> {
+    vec![
+        PlanStandingView::Current,
+        PlanStandingView::Interim {
+            value_at_least: 6.1,
+            optimum_at_most: 7.3,
+            reason: "the exact solver takes at most 16 tracks".into(),
+        },
+        PlanStandingView::Stale {
+            computed_at: T0,
+            reason: "the solve did not finish inside its 4 ms budget".into(),
+        },
+        PlanStandingView::NoPlan {
+            reason: "no solve has finished".into(),
         },
     ]
 }
@@ -387,6 +409,7 @@ fn intercept_events() -> Vec<InterceptEvent> {
             },
             engines: vec!["geofence".into(), "control-status".into()],
         },
+        InterceptEvent::PlanStanding(plan_standings()[1].clone()),
     ]
 }
 
@@ -935,6 +958,7 @@ impl Variant for InterceptEvent {
             Self::PlanApproved(_) => "PlanApproved",
             Self::PlanSuperseded(_) => "PlanSuperseded",
             Self::PlanEvaluated { .. } => "PlanEvaluated",
+            Self::PlanStanding(_) => "PlanStanding",
         }
     }
 }
@@ -1501,6 +1525,12 @@ fn every_view_type_round_trips_and_every_one_is_covered() {
 
     round_trip("AssetListView", &assets());
     check("AssetListView", 1);
+
+    let standings = plan_standings();
+    for (i, s) in standings.iter().enumerate() {
+        round_trip(&format!("PlanStandingView {i}"), s);
+    }
+    check("PlanStandingView", standings.len());
 
     assert_eq!(
         covered,

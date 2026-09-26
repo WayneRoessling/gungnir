@@ -661,6 +661,7 @@ impl InterceptService for StatedPlans {
     fn plan(&mut self, _: MissionTime, _: &[TrackView], _: &[ResourceView]) -> PlanOutcome {
         PlanOutcome::NoPlan {
             reason: "this test states its plans".into(),
+            progress: None,
         }
     }
     fn is_healthy(&self) -> bool {
@@ -1639,11 +1640,25 @@ fn an_operator_s_console_says_once_on_pn09_that_it_may_not_publish() {
     let (mut a, a_dir) = desktop("publish-refused", node.addr);
     let (mut idle, idle_dir) = desktop("publish-refused-idle", node.addr);
     sign_in(&mut a, A_OPERATOR);
-    until(&mut a, &mut idle, "the desktop to link", 15.0, |a, _| {
-        a.link
-            .as_ref()
-            .is_some_and(gungnir_remote::link::NodeLink::connected)
-    });
+    // **The desktop has seen its link come up, not only the link task** (GAP-170). The
+    // tick that first reads the link as connected republishes this console's exchange
+    // set (`failover::republish_exchange_on_reconnect`); the link task sets `connected`
+    // on its own thread, so reading it here can find it up after a tick that read it
+    // down. Leaving then made the first tick after the first handoff the one that saw
+    // the link come up, which republished the set a twenty-first time and replaced 20
+    // older sets rather than 19 -- once in about a hundred runs under load.
+    until(
+        &mut a,
+        &mut idle,
+        "the desktop to see its link",
+        15.0,
+        |a, _| {
+            a.link_was_connected
+                && a.link
+                    .as_ref()
+                    .is_some_and(gungnir_remote::link::NodeLink::connected)
+        },
+    );
     assert!(
         !pn09(&a).contains("Not publishing"),
         "nothing refused yet: {}",

@@ -324,6 +324,8 @@ pub fn queue_rows(state: &AppState) -> Vec<QueueRow<'_>> {
             escalated_from: (item.offered_to.len() > 1)
                 .then(|| item.offered_to.first().map(String::as_str))
                 .flatten(),
+            // GAP-156: the node's item carries the node's plan, label and all.
+            basis: item.plan.basis,
         })
         .collect()
 }

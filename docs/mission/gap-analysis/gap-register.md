@@ -168,8 +168,8 @@ history, and an entry is never edited once it has merged.
 | GAP-160 | A node publishes no track, so a linked desktop's picture is frozen at sign-in | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-161 | A linked desktop's health strip reports the link, not the node's services | Technical | CAP-7.3 | 4 | 1 | S | 4 | I3 | Services engineer | Closed |
 | GAP-147 | No committed recording reaches round 1's radars | Technical | CAP-5.2, CAP-1.4 | 2 | 4 | M | 8 | I3 | Services engineer | Open |
-| GAP-156 | A picture the exact solver cannot finish in time is never answered | Technical | CAP-3.3 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
-| GAP-157 | A linked desktop cannot tell that its node's planner is stale | Technical | CAP-3.3, CAP-7.3 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
+| GAP-156 | A picture the exact solver cannot finish in time is never answered | Technical | CAP-3.3 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
+| GAP-157 | A linked desktop cannot tell that its node's planner is stale | Technical | CAP-3.3, CAP-7.3 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
 | GAP-165 | A linked desktop's node session lapses and nothing renews it while the link is up | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-162 | A sensor manager may apply a whole baseline, and applying one checks no permission | Technical | CAP-6.2, CAP-5.6 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-163 | A cut tail of the audit log still verifies, because nothing outside it holds its head | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
@@ -179,8 +179,11 @@ history, and an entry is never edited once it has merged.
 | GAP-175 | A global entity identity is written as a 128-bit JSON number | Technical | CAP-7.2, CAP-2.7 | 2 | 5 | S | 10 | I3 | Services engineer | Open |
 | GAP-171 | The other v3 bodies, and every exchange product's body, still write a non-finite float as null | Technical | CAP-7.1, CAP-7.4 | 3 | 6 | M | 18 | I3 | Services engineer | Open |
 | GAP-173 | The late-data row still says nothing consumes the policy | Technical | CAP-1.5 | 3 | 7 | S | 21 | I3 | Owner | Open |
+| GAP-168 | The intercept-service row's degradation clause stops at the last good plan | Technical | CAP-3.3, CAP-5.5 | 1 | 8 | S | 8 | I3 | Owner | Open |
+| GAP-169 | An older desktop reads a newer node's interim plan as the optimum | Technical | CAP-3.3, CAP-7.3 | 2 | 5 | S | 10 | I3 | Owner | Open |
+| GAP-170 | PN-09's refusal test left its wait before the desktop had seen its link | Technical | CAP-7.3 | 1 | 1 | S | 1 | I3 | Services engineer | Closed |
 
-Counts: 166 gaps, 3 mission, 163 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 169 gaps, 3 mission, 166 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2373,11 +2376,12 @@ Counts: 166 gaps, 3 mission, 163 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.3 Assignment recommendation.
 - History:
   - 2026-09-25, Open: Filed by GAP-119 rather than answered there, because what stands in for an optimum the planner cannot reach is a change to what the allocation row promises -- the crate refuses a heuristic by design -- and that is the owner's to decide.
+  - 2026-09-26, Closed: Closed under the owner's delegation of 2026-09-26 (D-93; DN-04 §11). After `plan_stand_in_after_ms` behind the picture (500 ms, MOP-07), or at once past the exact limits, the planner answers with `gungnir_allocation::solve_one_step`, the one-step optimum under the same tie rule, bounded against the horizon's optimum. The plan carries `PlanBasis::OneStep`; PN-05, PN-06 and PN-07 say INTERIM, accept waits on acknowledging it; one pairing stays one plan across it. Tests: `gungnir-allocation/tests/one_step_oracle.rs`, `gungnir-intercept-service/src/lib.rs`, `gungnir-app/tests/interim_plan.rs`. The one-step solver is numerical code, so human-owned; see `docs/signatures.md`. Raised GAP-168 and GAP-169. See `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.
 - Evidence: `gungnir-allocation/src/bellman.rs` (`MAX_TRACKS`, `MAX_RESOURCES`, `ExactSolve`); a release probe on the development machine, 2026-09-25: at the default horizon of ten, four effectors and eight tracks took 13 ms, four and ten 128 ms, and six and ten 1.3 s (the one-pass solve GAP-119 replaced took about three times as long).
 - Severity: 3. Reach: 5 threads. Effort: M. Priority: 15.
 - Impact: The allocator is exact and refuses to answer with a heuristic, and its cost grows exponentially in the tracks and factorially in the effectors. Since GAP-119 a solve that does not fit one planning call carries on over several, which answers ordinary pictures a few ticks late; but a raid toward the solver's size limits takes seconds to solve outright and several times that at 4 ms a tick, and at the limits (sixteen tracks, eight effectors) longer than any engagement. Throughout, the operator is shown the last good plan, stale, with a percentage that barely moves: honest, and no help.
 - Closing action: Decide what a picture too large to solve exactly in useful time should get: a bounded answer labelled as not optimal (a one-step assignment, or the exact solve at a shorter horizon), a size past which the planner says it will not answer rather than starting, or both; then build it so the label reaches PN-05 and PN-07 the way staleness does.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-119 (`../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`).
 - Depends on: GAP-119.
 
@@ -2387,11 +2391,12 @@ Counts: 166 gaps, 3 mission, 163 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.3 Assignment recommendation; CAP-7.3 Three profiles.
 - History:
   - 2026-09-25, Open: Filed by GAP-119, which made the embedded planner's staleness visible and found that the remote one relays the node's plan without the node's standing. GAP-161, merged alongside, made the linked health flag honest; the plan's age and reason need the node's computed-at time on the wire, a schema change of its own.
+  - 2026-09-26, Closed: Closed under the owner's delegation of 2026-09-26 (D-94; DN-04 §11). The node publishes its plan's standing -- current, interim with its bound, stale since `computed_at`, or no plan -- as `InterceptEvent::PlanStanding` when it changes and in the snapshot's `plan_standing`. `RemoteInterceptService` answers what the node says, converting `computed_at` through the offset it measures per connection, so a linked PN-05 draws the STALE line with the age on the node's clock. Additive, so `SCHEMA_VERSION` stands. Tested over mutual TLS with the desktop's clock a hundred seconds from the node's (`gungnir-app/tests/linked_plan_standing.rs`). See `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.
 - Evidence: `gungnir-remote/src/lib.rs` (`RemoteInterceptService::plan` answers `Fresh` while linked); the node's snapshot and `HealthEvent::Changed` carry `intercept_healthy` (read since GAP-161) and nothing carries when its plan was last computed.
 - Severity: 3. Reach: 5 threads. Effort: M. Priority: 15.
 - Impact: While a desktop is linked, `RemoteInterceptService::plan` returns the node's plan as `Fresh` whenever the link is up. Since GAP-161 its `is_healthy()` follows the node's word, so when the node's planner cannot answer -- a solve past its budget, a solve that failed -- PN-01 shows the planner down and PN-07 names an unhealthy planner. But PN-05 draws the node's plan with no stale line, and neither panel can say how old the plan is or why, because the desktop never learns when the node last computed it. The node is where the decision is taken while linked, so this is the console most operators use.
 - Closing action: Carry the node's planner standing to the desktop -- when its plan was last computed and why the last call did not answer -- and have `RemoteInterceptService` answer `Stale` with the node's reason and age when the node's planner is stale. Test it with a node whose planner is held past its budget.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-119 (`../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`).
 - Depends on: GAP-119.
 
@@ -2523,4 +2528,46 @@ Counts: 166 gaps, 3 mission, 163 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Owner. Status: Open.
 - Reference: GAP-114 (`../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`).
 - Depends on: GAP-114.
+
+**GAP-168 The intercept-service row's degradation clause stops at the last good plan**
+
+- Type: Technical.
+- Capability: CAP-3.3 Assignment recommendation; CAP-5.5 Health and alert lifecycle.
+- History:
+  - 2026-09-26, Open: Found closing GAP-156. Not edited in that change: the sentence is in a criterion cell of the verification table, which only the owner changes.
+- Evidence: `docs/verification-capability-table.md` §2 (the `gungnir-intercept-service` Plan determinism and degradation row); `gungnir-intercept-service/src/lib.rs` (`an_over_budget_solve_returns_the_last_good_plan_stale`, `an_interim_answer_stands_in_once_the_planner_has_waited`); D-93.
+- Severity: 1. Reach: 8 threads. Effort: S. Priority: 8.
+- Impact: The `gungnir-intercept-service` "Plan determinism and degradation" row of the verification table says an "over-budget solve returns the last good plan, flagged". Since GAP-156 that holds only for the planner's stand-in wait, 500 ms of mission time by default: after it the planner answers the current picture with an interim one-step plan labelled as not the optimum, and a picture past the exact solver's limits gets one at once. A reader of the table is told the last good plan stands for as long as a solve runs. The sentence is in the row's pass-criterion cell, and any change to a criterion cell is the owner's.
+- Closing action: On the owner's next walk of the table, decide whether the degradation clause names the interim answer that follows the wait and its label, and walk the row against the budget and stand-in tests. The criterion itself is unchanged.
+- Target: I3. Owner: Owner. Status: Open.
+- Reference: Found closing GAP-156 (`../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`).
+- Depends on: GAP-156.
+
+**GAP-169 An older desktop reads a newer node's interim plan as the optimum**
+
+- Type: Technical.
+- Capability: CAP-3.3 Assignment recommendation; CAP-7.3 Three profiles.
+- History:
+  - 2026-09-26, Open: Found building GAP-156. Not decided there: a version move refuses every older client of every route, which is a release decision rather than the planner's.
+- Evidence: `gungnir-model/src/lib.rs` (`PlanView::basis`, defaulted to `Exact`); `docs/gungnir-api-v1.md`, "Compatibility rules"; `gungnir-remote/src/link.rs` (the snapshot's version check is an exact match, so a bump refuses an older desktop by name).
+- Severity: 2. Reach: 5 threads. Effort: S. Priority: 10.
+- Impact: `PlanView::basis` and the snapshot's `plan_standing` are defaulted, which the interface's rules call compatible, so `SCHEMA_VERSION` stands at 4 and a desktop built before them still links to a newer node. That desktop ignores the basis: it draws a node's interim plan on PN-05 and in PN-06 and PN-07 as an ordinary plan, and would let it be accepted without the acknowledgement D-93 puts on it. The same rules name a change "a client could read as valid and act on wrongly" as one that moves a version. Node and desktop are built from one workspace and released together, so the exposure is a fleet running mixed versions.
+- Closing action: Decide between moving `SCHEMA_VERSION` to 5, so an older desktop is refused by name -- and with it every older machine client, since a detection submission's version is checked exactly -- and recording that a node and its desktops are released together and a mixed fleet is not supported.
+- Target: I3. Owner: Owner. Status: Open.
+- Reference: Found building GAP-156 (`../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`).
+- Depends on: GAP-156, GAP-157.
+
+**GAP-170 PN-09's refusal test left its wait before the desktop had seen its link**
+
+- Type: Technical.
+- Capability: CAP-7.3 Three profiles.
+- History:
+  - 2026-09-26, Open: Found running `gungnir-app`'s tests for GAP-156 and GAP-157: one failure in a full run, then one in 30 and one in 140 of the single test under parallel load.
+  - 2026-09-26, Closed: Closed: the mechanism is in the test, and was on main before PR #182. The wait left when the link task reported connected, which it sets on its own thread, so it could leave after a tick that read the link down. The first tick after the first handoff then saw the link come up and republished the set (`republish_exchange_on_reconnect`): 21 sets queued, 20 replaced. The wait now also requires `link_was_connected`. Every passing diagnosed run had seen the edge; the failure had not; forcing that order fails on main every time. See `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.
+- Evidence: `gungnir-app/tests/cut_off_and_reconnected.rs`; `gungnir-app/src/failover.rs` (`republish_exchange_on_reconnect`); a diagnosed failure with one post, no session renewal and generation 21, and a forced reproduction on main at ab0ca325.
+- Severity: 1. Reach: 1 threads. Effort: S. Priority: 1.
+- Impact: `an_operator_s_console_says_once_on_pn09_that_it_may_not_publish` failed about once in a hundred runs under load, reading "20 older sets were replaced" where it asserts 19. A failure nobody can explain is one nobody can trust, and this test holds GAP-146's one-request-per-sign-in behaviour.
+- Closing action: Leave the wait only once the desktop itself has read its link as connected.
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: Found watching PR #182's tests (`../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`).
 

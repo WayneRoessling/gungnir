@@ -100,6 +100,16 @@ pub struct Projection {
     /// Kept across a disconnect as the last thing the node said, and not read while the
     /// link is down: the services report unhealthy then on `connected` alone.
     pub node_health: Option<gungnir_model::SystemHealth>,
+    /// Whether `plan` answers the node's current picture, as the node last said
+    /// (GAP-157): the snapshot's `plan_standing` on each connection, then every
+    /// `InterceptEvent::PlanStanding` on the stream. `None` until a node has said, and
+    /// from a node that never does.
+    ///
+    /// **Why the link keeps it.** The node's plan was relayed as current whatever the
+    /// node's planner said, so a plan the node could no longer refresh reached PN-05 with
+    /// no stale line and no age, on the console most operators use while linked. Its
+    /// `computed_at` is the node's clock; `RemoteInterceptService` converts it.
+    pub plan_standing: Option<gungnir_model::PlanStandingView>,
     /// When this link's task started asking (GAP-142).
     ///
     /// **So a node that has never answered can be judged silent.** `last_heard` is `None`
@@ -1141,6 +1151,10 @@ async fn run_link(
         p.pipeline_stats = snapshot.pipeline_stats;
         // GAP-161: the node's own word on its services, kept live by the stream from here.
         p.node_health = Some(snapshot.health);
+        // GAP-157: whether that plan answers the node's picture, kept live by the stream.
+        // Taken as the snapshot says, `None` included: a node that says nothing about its
+        // plan must not inherit what a previous node on this link said.
+        p.plan_standing = snapshot.plan_standing;
         p.token = Some(token.clone());
         p.node_time = snapshot.node_time;
         p.connected = true;
@@ -2152,6 +2166,11 @@ fn apply(projection: &Arc<Mutex<Projection>>, envelope: &Envelope) -> Result<(),
             InterceptEvent::PlanProposed(plan) | InterceptEvent::PlanApproved(plan),
         ) => {
             p.plan = plan.clone();
+        }
+        // GAP-157: the node's word on whether its plan answers its picture. See
+        // `Projection::plan_standing`.
+        Event::Intercept(InterceptEvent::PlanStanding(standing)) => {
+            p.plan_standing = Some(standing.clone());
         }
         // GAP-161: the node's services, as the node reports them. See
         // `Projection::node_health`.

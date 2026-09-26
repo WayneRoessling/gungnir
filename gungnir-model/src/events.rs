@@ -36,6 +36,15 @@ pub enum InterceptEvent {
         verdict: VerdictSummary,
         engines: Vec<String>,
     },
+    /// Whether the plan in force answers the planner's current picture, published when
+    /// that changes (GAP-157, D-94). A node publishes it so a linked desktop can draw the
+    /// node's plan with the stale or interim line an embedded desktop draws for its own;
+    /// on the record it says when the planner fell behind and when it caught up.
+    ///
+    /// A variant added to an existing enum, which `docs/gungnir-api-v1.md`'s
+    /// compatibility rules allow ("Enum variants may be added"): nothing that already
+    /// read this enum is misled by a variant it does not know.
+    PlanStanding(crate::PlanStandingView),
 }
 
 /// What the ingest gateway did with an observation, for provenance and audit.

@@ -1085,7 +1085,8 @@ pub fn render_decision_dialog(
 
     // Owned for the frame: `NodeAnswer` borrows its sentence (GAP-133).
     let answer_line = crate::projection::answer_line(state, gungnir_model::PendingApprovalId(id.0));
-    let conditions = degraded_conditions(state);
+    let mut conditions = degraded_conditions(state);
+    conditions.extend(interim_item_condition(state, row));
     let degraded: Vec<Degraded<'_>> = conditions
         .iter()
         .map(|(subsystem, detail)| Degraded { subsystem, detail })
@@ -1227,6 +1228,30 @@ fn alternative_rows<'a>(
         .collect()
 }
 
+/// The condition an interim item carries into PN-07, if it carries one (GAP-156, D-93).
+///
+/// An interim plan is decided only once a person has acknowledged that it is one -- the
+/// same gate D-82 put on a stale plan, keyed on the item's own plan so it holds for an
+/// interim item whatever the planner is doing now. **Except where the planner's full
+/// solve has since reached the same assignment for the picture on screen**: that is the
+/// plan in force and the planner is current, so there is nothing left to acknowledge
+/// about how it was reached.
+fn interim_item_condition(
+    state: &AppState,
+    row: &gungnir_ui::panels::approval_queue::QueueRow<'_>,
+) -> Option<(&'static str, String)> {
+    let confirmed = row.plan_id == state.last_plan.id
+        && state.plan_standing == crate::state::PlanStanding::Current;
+    (row.basis == gungnir_model::PlanBasis::OneStep && !confirmed).then(|| {
+        (
+            "plan",
+            "this item's plan is an interim one-step answer, not the planner's optimum; it \
+             stood in because the exact solve could not answer the picture in time"
+                .to_owned(),
+        )
+    })
+}
+
 /// The conditions in force that make a decision a degraded one, as (subsystem, detail).
 ///
 /// Read from the health flags and the journal state rather than from a banner: an
@@ -1265,6 +1290,14 @@ fn degraded_conditions(state: &AppState) -> Vec<(&'static str, String)> {
         crate::state::PlanStanding::NoPlan { reason } => out.push((
             "intercept",
             format!("the planner has never answered; {reason}"),
+        )),
+        // GAP-156, D-93: the planner is answering, but not with its optimum.
+        crate::state::PlanStanding::Interim { share, reason } => out.push((
+            "intercept",
+            format!(
+                "INTERIM PLAN: the planner's answer to the picture on screen is the best \
+                 assignment for this step alone, not its optimum; it is {share}; {reason}"
+            ),
         )),
         crate::state::PlanStanding::Current | crate::state::PlanStanding::NotYetAsked
             if !state.health().intercept_healthy =>
