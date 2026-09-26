@@ -310,7 +310,7 @@ pub fn status_strip_view<'a>(
             TimeClockSource::Wall => ClockSource::Wall,
             TimeClockSource::Replay => ClockSource::Replay,
         },
-        health: state.health,
+        health: state.health(),
         control_status: &data.control_status,
         delegations: &data.delegations,
         // The desktop's alerts are a flat list of strings; their lifecycle states are

@@ -128,8 +128,8 @@ history, and an entry is never edited once it has merged.
 | GAP-113 | An under-authority plan is counted, never escalated | Technical | CAP-3.6, CAP-4.3 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
 | GAP-114 | Nothing consumes LateDataPolicy | Technical | CAP-1.5 | 2 | 7 | M | 14 | I3 | Services engineer | Closed |
 | GAP-115 | The node never times out an unacknowledged sensor task | Technical | CAP-1.3 | 3 | 9 | S | 27 | I3 | Services engineer | Closed |
-| GAP-116 | Seven interop clauses are unasserted or only partly asserted | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
-| GAP-117 | Most event and view types are never round-tripped through serde | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
+| GAP-116 | Seven interop clauses are unasserted or only partly asserted | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Closed |
+| GAP-117 | Most event and view types are never round-tripped through serde | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Closed |
 | GAP-118 | Coverage accuracy is untested, and a coverage volume has no bearing | Technical | CAP-2.11 | 3 | 3 | M | 9 | I3 | Services engineer | Closed |
 | GAP-119 | No solve budget exists, and a stale plan is never compared with the last good one | Technical | CAP-3.3, CAP-5.5 | 3 | 8 | M | 24 | I3 | Services engineer | Closed |
 | GAP-120 | Nothing compares the embedded and remote backends' projections | Technical | CAP-7.3 | 3 | 1 | M | 3 | I3 | Services engineer | Closed |
@@ -137,7 +137,7 @@ history, and an entry is never edited once it has merged.
 | GAP-122 | Journal retention purge is unbuilt, and nothing says so | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Closed |
 | GAP-123 | An entity's GlobalEntityId changes at every restart | Technical | CAP-2.7 | 4 | 3 | M | 12 | I3 | Services engineer | Closed |
 | GAP-124 | The risk score has no time-to-impact term | Technical | CAP-3.2 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
-| GAP-125 | Neither binary's health path is tested against a changing flag | Technical | CAP-5.5 | 2 | 8 | S | 16 | I3 | Services engineer | Open |
+| GAP-125 | Neither binary's health path is tested against a changing flag | Technical | CAP-5.5 | 2 | 8 | S | 16 | I3 | Services engineer | Closed |
 | GAP-126 | A non-finite float in an envelope cannot be journaled faithfully | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Closed |
 | GAP-127 | The desktop's decide and task functions check no permission | Technical | CAP-6.2 | 3 | 9 | S | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-128 | PN-14 cannot apply an edited baseline on its first apply | Technical | CAP-5.6 | 3 | 2 | S | 6 | I3 | Services engineer | Closed |
@@ -176,9 +176,10 @@ history, and an entry is never edited once it has merged.
 | GAP-167 | The outage tests' proxy can let one connection through a cut | Technical | CAP-5.4 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 | GAP-164 | The miri gate could not run miri | Technical | CAP-7.4 | 3 | 5 | S | 15 | I2 | Services engineer | Closed |
 | GAP-166 | nalgebra's decompositions violate Stacked Borrows | Technical | CAP-7.4 | 2 | 5 | S | 10 | I2 | Owner | Open |
+| GAP-175 | A global entity identity is written as a 128-bit JSON number | Technical | CAP-7.2, CAP-2.7 | 2 | 5 | S | 10 | I3 | Services engineer | Open |
 | GAP-173 | The late-data row still says nothing consumes the policy | Technical | CAP-1.5 | 3 | 7 | S | 21 | I3 | Owner | Open |
 
-Counts: 164 gaps, 3 mission, 161 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 165 gaps, 3 mission, 162 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1796,11 +1797,12 @@ Counts: 164 gaps, 3 mission, 161 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.2 Interop standards.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which held the `gungnir-interop` row and struck 'all tested' from its criterion.
+  - 2026-09-26, Closed: Closed: the seven clauses are asserted, one test each, in `gungnir-interop/tests/asterix_fixtures.rs` and, for clause 3, `tests/conformance.rs`. Clause 6 now rewrites each cut block's length so the cut reaches the category's own parser; the old test cut the datagram and stopped at the framing. Clause 4 found a defect, fixed here: a Category 034, 205 or 129 report with no time of day named I048/140 as the missing item, and each category now names its own. The row and its criterion are unchanged and await the owner's walk. See `../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`.
 - Evidence: `../../verification-capability-table.md` §2, the `gungnir-interop` row; its tests are `gungnir-interop/tests/{conformance,asterix_fixtures}.rs` and `mod tests` in `gungnir-interop/src/{lib.rs,asterix/cat048.rs,asterix/cat034.rs,asterix/cat205.rs,asterix/cat129.rs}`.
 - Severity: 2. Reach: 5 threads. Effort: M. Priority: 10.
 - Impact: The `gungnir-interop` row cannot be gated. Never asserted: a status-less Category 034 message carries no status; a Category 205 System Bearing report maps. Only partly asserted: the older-version refusal, 034 losses and item names, truncation (it stops at the length check), and the System Position reason.
 - Closing action: (1) Map every Category 034 record of the capture and assert `status.is_some()` exactly when the record carries I034/050's common subfield. (2) A System Bearing report (I205/000 = 2) carrying I205/080, and one carrying only I205/070, map to `Measurement::Bearing` with the site's variance. (3) `check(name, version - 1)` is refused with `IncompatibleSchema` for every entry. (4) A lossy 034 message carries `conversion_loss`. (5) Carried item names are asserted across the capture and on a 034 record carrying I034/SP. (6) Truncated blocks are re-lengthed so each reaches its own parser. (7) The System Position `NotADetection` reason, data source and time are asserted.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-117 Most event and view types are never round-tripped through serde**
@@ -1809,11 +1811,12 @@ Counts: 164 gaps, 3 mission, 161 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.2 Interop standards.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which held the `gungnir-model` row.
+  - 2026-09-26, Closed: Closed: `gungnir-model/tests/serde_round_trip.rs` round-trips one value per variant of all 22 event enums (82 variants) and every `*View` type, with non-dyadic finite floats, and refuses `SCHEMA_VERSION - 1` with both versions named. Full struct literals and exhaustive matches stop it compiling when a field or variant is added, and it reads the source, so a new enum, variant or view with no value fails by name. It found GAP-175: `GlobalEntityId` is written as a 128-bit number. The row is unchanged and awaits the owner's walk. See `../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`.
 - Evidence: `../../verification-capability-table.md` §2, the `gungnir-model` row; its tests are `gungnir-interop/tests/conformance.rs`, `mod tests` in `gungnir-model`, and the older-version refusal in `gungnir-api/tests/machine.rs`.
 - Severity: 2. Reach: 5 threads. Effort: M. Priority: 10.
 - Impact: The `gungnir-model` row cannot be gated: round trips cover four view types and one event variant, so 20 of 21 event enums (about 77 variants) and `ResourceView`, `BearingRayView` and `PipelineStatsView` could lose a field on the journal or the wire unseen.
 - Closing action: A table-driven serde_json round trip in `gungnir-model` of one value per variant of every event enum in `gungnir_model::events` and of every `*View` type, with non-dyadic floats, asserting equality; and `check_schema_version(SCHEMA_VERSION - 1)` refused with `SchemaVersion { expected, found }`. Then walk the row again.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-118 Coverage accuracy is untested, and a coverage volume has no bearing**
@@ -1919,11 +1922,12 @@ Counts: 164 gaps, 3 mission, 161 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.5 Health and alert lifecycle.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which held the `gungnir-observability` row.
+  - 2026-09-26, Closed: Closed: both binaries report health through `SnapshotHealthMonitor` (D-100), which now says whether a report is a transition; the desktop's `health_journaled` and the node's `last_health` are gone. `gungnir-app/tests/health_follows_flags.rs` and `gungnir-node/tests/health_follows_flags.rs` take each service's flag true, false, true and assert that the health, and exactly one recorded transition per change, follow every step on each binary's own tick. The row is unchanged and awaits the owner's walk. See `../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`.
 - Evidence: `gungnir-observability/src/lib.rs` (`SnapshotHealthMonitor`, set once in its test); the desktop's `update::tick` and `gungnir-node/src/main.rs`.
 - Severity: 2. Reach: 8 threads. Effort: S. Priority: 16.
 - Impact: The `gungnir-observability` row cannot be gated: both binaries build `SystemHealth` directly from each service's `is_healthy()` rather than through `SnapshotHealthMonitor`, and no test toggles a flag and watches the health follow, so a health summary that stuck would pass.
 - Closing action: Route both binaries through `SnapshotHealthMonitor`, or test the paths they use: toggle each service's flag true, false, true and assert `SystemHealth` follows every transition, on the desktop's tick and on the node's.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-126 A non-finite float in an envelope cannot be journaled faithfully**
@@ -2474,6 +2478,20 @@ Counts: 164 gaps, 3 mission, 161 technical; 1 already covered by a plan in `../.
 - Target: I2. Owner: Owner. Status: Open.
 - Reference: Found running the repaired miri gate (`../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`).
 - Depends on: GAP-164.
+
+**GAP-175 A global entity identity is written as a 128-bit JSON number**
+
+- Type: Technical.
+- Capability: CAP-7.2 Interop standards; CAP-2.7 Global identity.
+- History:
+  - 2026-09-26, Open: Found by GAP-117's round trip. Not fixed there: changing the writer without a reader for the old form would leave every journal written since GAP-069 with identity events it cannot read, and how to read them is a decision this needs.
+- Evidence: `gungnir-model/src/identity.rs` (the derived `Serialize` and `Deserialize` on `GlobalEntityId(pub u128)`); `gungnir-interop/src/lib.rs` (the catalogue entry's `TextualIdentity { rfc: 9562 }`); `json_tag` in `gungnir-model/tests/serde_round_trip.rs`, which met it.
+- Severity: 2. Reach: 5 threads. Effort: S. Priority: 10.
+- Impact: `GlobalEntityId` serializes as its `u128`, so `serde_json::to_value` refuses any value carrying one ("number out of range"), a JSON reader outside Rust rounds it to a double and can merge or split entities, and the schema catalogue's `gungnir.GlobalEntityId` entry says an identity crosses as RFC 9562 text, which no document carries. D-60 fixed the same defect for the three record identifiers and did not reach this type. No path passes an identity event through a `Value` today, so nothing has been lost yet.
+- Closing action: Write `GlobalEntityId` as the hyphenated RFC 9562 string, as D-60 does for the record identifiers, and decide how a journal holding the number is read: through `deserialize_any`, `serde_json` hands a number wider than 64 bits to the visitor as a float, so D-60's reader cannot read the identities written since GAP-069. Then assert `serde_json::to_value` of an `IdentityEvent` in `serde_round_trip.rs`.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found by GAP-117's round trip (`../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`).
+- Depends on: D-60.
 
 **GAP-173 The late-data row still says nothing consumes the policy**
 

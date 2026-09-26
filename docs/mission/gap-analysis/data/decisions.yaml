@@ -2276,6 +2276,28 @@
     comparisons for a gate with no `unsafe` code to check yet), and the full suites (four
     jobs would time out and the gate could never pass). See
     `../../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`.
+- id: D-100
+  decision: How the two binaries report health
+  question: >-
+    Neither binary reported health through `SnapshotHealthMonitor`: each built
+    `SystemHealth` from its services' flags and kept its own record of the last health and
+    its own test of a change, and the monitor's one test set a health once. Route both
+    binaries through the monitor, or test each binary's own path?
+  raised_in: "GAP-125"
+  decider: Owner
+  unblocks: GAP-125
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **Both through the monitor.**
+    `SnapshotHealthMonitor::report` holds the health the services last reported and
+    returns the transition to record when it differs from the last or is the first; the
+    desktop's tick and the node's `Announcer` publish what it returns, and the desktop
+    reads its health from it, so there is one holder and one definition of a change. Each
+    binary still reads its own services' flags, the node through `picture::read_health`.
+    Rejected: testing each binary's own copy, which keeps two definitions of a transition
+    for two tests to hold in step; and reading the flags inside `gungnir-observability`,
+    which needs edges `ARCHITECTURE.md` §7.1 does not draw. See
+    `../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`.
 - id: D-98
   decision: Where the late-data policy is applied, and where it is set
   question: >-

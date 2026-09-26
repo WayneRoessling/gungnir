@@ -1983,11 +1983,7 @@ async fn run(
             }
         }
 
-        let health = SystemHealth {
-            tracking_healthy: tracking.is_healthy(),
-            intercept_healthy: intercept.is_healthy(),
-            ingest_healthy: gateway.is_healthy(),
-        };
+        let health = picture::read_health(&tracking, &intercept, &gateway);
         // MOE-06: the transition is on the record, the periodic log is not.
         let changed = announcer.health(&bus, now, health)?;
         if changed || last_health_log.elapsed() >= HEALTH_LOG_INTERVAL {
