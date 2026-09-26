@@ -61,12 +61,12 @@
 //! # Out of sequence, and why a horizon rather than a re-filter
 //!
 //! Detections arrive from several sensors with different latencies, so arrival order
-//! is not measurement order. The pipeline holds a detection in a reorder buffer until
-//! the newest source time it has seen is [`PipelineSettings::reorder_horizon_s`] ahead
-//! of it, then processes buffered detections **in source-time order**. Inside the
-//! horizon, arrival order therefore cannot change the answer at all: the batch and the
-//! shuffled run process an identical sequence of identical epochs, and agree exactly
-//! rather than within a tolerance.
+//! is not measurement order. Under the default late-data policy the pipeline holds a
+//! detection in a reorder buffer until the newest source time it has seen is
+//! [`PipelineSettings::reorder_horizon_s`] ahead of it, then processes buffered
+//! detections **in source-time order**. Inside the horizon, arrival order therefore
+//! cannot change the answer at all: the batch and the shuffled run process an identical
+//! sequence of identical epochs, and agree exactly rather than within a tolerance.
 //!
 //! The alternative -- accept everything immediately and re-filter backwards when a late
 //! measurement lands -- needs a retrodiction step and a stored filter history per
@@ -75,6 +75,37 @@
 //! ([`PipelineStats::too_late`]) rather than folded in as though it were current,
 //! because folding a stale measurement into a current estimate at full weight is a
 //! quiet corruption of the track rather than an approximation of one.
+//!
+//! # The late-data policy decides, and this is the only place it is applied
+//!
+//! [`PipelineSettings::late_data`] is the deployment's [`LateDataPolicy`], from the
+//! baseline's `time.late_data` (GAP-114, D-98). It is applied in [`FusionPipeline::push`]
+//! and nowhere else: the ingest gateway knows when a message was received but not what the
+//! tracker has already processed, and "late" means earlier than that. Lateness is measured
+//! in source time, behind the newest source time taken (the stream's front).
+//!
+//! - **`BufferAndReorder { max_lateness_s }`**: the horizon above is `max_lateness_s`. A
+//!   detection arriving out of order but no more than `max_lateness_s` behind the front
+//!   is put back in source-time order and counted ([`PipelineStats::reordered`]); one
+//!   further behind, or behind the processed cursor, is refused and counted
+//!   ([`PipelineStats::too_late`]). Refusing past the bound rather than only past the
+//!   cursor is what makes the bound the operator set the bound that holds: whether a
+//!   detection three seconds late survived used to depend on whether anything else had
+//!   arrived in between to move the cursor.
+//! - **`Reject`**: nothing is held. Every detection is processed as it arrives, and one
+//!   earlier than any already taken is refused and counted as `too_late`.
+//! - **`AcceptAsIs`** (replay and testing only; a baseline may not choose it, D-99):
+//!   nothing is held and nothing is refused for lateness. A late detection is applied at
+//!   the front, as delivered, never retrodicted, and counted
+//!   ([`PipelineStats::accepted_late`]) so the corruption the paragraph above describes is
+//!   at least visible when it has been chosen.
+//!
+//! **One guarantee is looser than it reads, by at most one epoch.** An epoch takes every
+//! buffered detection within [`PipelineSettings::epoch_s`] of its first, so the cursor
+//! can run up to `epoch_s` past `front - max_lateness_s`, and a detection arriving in that
+//! sliver is behind the cursor and refused although it is inside the bound. Splitting
+//! epochs by ripeness instead would make the grouping depend on arrival order, which is
+//! the property the paragraph above exists to keep.
 //!
 //! # Epochs
 //!
@@ -87,7 +118,7 @@
 use crate::dense_group::{DenseGroupEstimate, DenseGroupSettings, DenseGroupState};
 use crate::{BearingDetection, Detection};
 use gungnir_association::{solve_assignment, ChiSquareGate, GlobalNearestNeighbor};
-use gungnir_core::{ConstantVelocity, CoordinatedTurn};
+use gungnir_core::{ConstantVelocity, CoordinatedTurn, LateDataPolicy};
 use gungnir_filters::{
     AzimuthElevation, BearingOnly, Filter, Imm, KalmanFilter, MeasurementModel, ModeFilter,
 };
@@ -195,10 +226,19 @@ pub enum FilterSelection {
 /// constant, because the baseline supplies them (`ConfigBaseline.tracking`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PipelineSettings {
-    /// How long a detection waits for later-arriving earlier measurements, seconds.
-    /// Larger means more tolerance of latency spread and more delay before a track
-    /// moves; the deployment trades one against the other.
-    pub reorder_horizon_s: f64,
+    /// What happens to a detection that arrives after data measured later than it
+    /// (GAP-114, D-98): held and reordered within a bound, refused, or -- in replay and
+    /// testing only -- applied as delivered. See the module documentation for each.
+    /// A longer bound tolerates more latency spread and delays every track by as much;
+    /// the deployment trades one against the other.
+    ///
+    /// **This replaced a field of its own, `reorder_horizon_s`**, which no baseline set:
+    /// every deployment ran one second whatever `gungnir_time::LateDataPolicy` it had
+    /// been given, and nothing read that policy. The horizon is now
+    /// [`PipelineSettings::reorder_horizon_s`], derived from this. Set it from a baseline
+    /// through [`PipelineSettings::with_late_data`], which refuses a bound it cannot
+    /// honour.
+    pub late_data: LateDataPolicy,
     /// Source times within this of each other are one scan, seconds.
     pub epoch_s: f64,
     /// The association gate. Its threshold is the baseline's `tracking.gate_threshold`.
@@ -283,7 +323,7 @@ pub struct PipelineSettings {
 impl Default for PipelineSettings {
     fn default() -> Self {
         Self {
-            reorder_horizon_s: 1.0,
+            late_data: LateDataPolicy::default(),
             epoch_s: 0.05,
             gate: ChiSquareGate::at_99_percent(3),
             confirm_threshold: 3,
@@ -354,6 +394,31 @@ pub enum BaselineError {
     InvalidMeasurementNoise { axis: &'static str, value: f64 },
 }
 
+/// A late-data policy the pipeline cannot honour (GAP-114).
+///
+/// **Refused, never substituted**, for DN-24 §7's reason: a pipeline that quietly ran a
+/// different bound from the one the baseline names would be dropping, or keeping,
+/// detections nobody decided to. `gungnir-config` refuses these values before a baseline
+/// can be applied; this exists so a caller that bypasses that validation is told.
+#[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
+#[error(
+    "the late-data policy's max_lateness_s is {max_lateness_s}, not a finite positive number \
+     of seconds; the pipeline does not substitute a bound of its own"
+)]
+pub struct InvalidLateData {
+    pub max_lateness_s: f64,
+}
+
+/// Bearings are applied within at least this many seconds of the cursor, whatever the
+/// late-data policy holds positions for (DN-27 §5; GAP-114).
+///
+/// The window every deployment ran bearings under from DN-27's build until GAP-114, when
+/// it was the reorder horizon and the horizon was always one second. It is a floor rather
+/// than the horizon itself because the two now part: under `Reject` nothing is held and
+/// the horizon is zero, and a zero window would refuse every bearing not stamped at the
+/// cursor's exact instant -- which is not lateness, and not what `Reject` asks for.
+pub const MIN_BEARING_WINDOW_S: f64 = 1.0;
+
 /// The axes of [`PipelineSettings::measurement_noise_var`], in its order, named the way
 /// `gungnir-config`'s own validation names them so one message reads like the other.
 const MEASUREMENT_NOISE_AXES: [&str; 3] = ["east", "north", "height"];
@@ -406,6 +471,49 @@ pub struct ImmBaselineFields {
 }
 
 impl PipelineSettings {
+    /// How long the reorder buffer holds a detection, seconds: the late-data policy's
+    /// `max_lateness_s` when it buffers, zero when it does not ([`LateDataPolicy::hold_s`]).
+    #[must_use]
+    pub fn reorder_horizon_s(&self) -> f64 {
+        self.late_data.hold_s()
+    }
+
+    /// How far a bearing's source time may be from the cursor, either side, before it is
+    /// refused as [`BearingRefusal::OutsideHorizon`] (DN-27 §5).
+    ///
+    /// The reorder horizon, and never less than [`MIN_BEARING_WINDOW_S`]. It has to grow
+    /// with the horizon: the cursor trails the newest data by about one horizon, so a
+    /// bearing arriving now is about one horizon ahead of it, and a narrower window would
+    /// refuse bearings for being current.
+    #[must_use]
+    pub fn bearing_window_s(&self) -> f64 {
+        self.reorder_horizon_s().max(MIN_BEARING_WINDOW_S)
+    }
+
+    /// These settings under the deployment's late-data policy (GAP-114, D-98).
+    ///
+    /// Separate from [`PipelineSettings::from_baseline`] because the policy is not part of
+    /// an algorithm baseline: it is the deployment's time discipline, set in the baseline's
+    /// `time` section whether or not any algorithm baseline is promoted, and the clock
+    /// authority judges clock skew against the same value. Both binaries apply it to
+    /// whatever settings the algorithm baseline produced, the defaults included.
+    ///
+    /// `AcceptAsIs` is accepted here, for replay and test harnesses; `gungnir-config` is
+    /// what keeps it out of a deployment's baseline (D-99).
+    ///
+    /// # Errors
+    ///
+    /// [`InvalidLateData`] for a `BufferAndReorder` bound that is not finite and positive.
+    pub fn with_late_data(mut self, policy: LateDataPolicy) -> Result<Self, InvalidLateData> {
+        if let LateDataPolicy::BufferAndReorder { max_lateness_s } = policy {
+            if !(max_lateness_s.is_finite() && max_lateness_s > 0.0) {
+                return Err(InvalidLateData { max_lateness_s });
+            }
+        }
+        self.late_data = policy;
+        Ok(self)
+    }
+
     /// Build settings from a promoted algorithm baseline's fields (DN-24 §7, GAP-053;
     /// `imm` fields added by DN-28 §5; `measurement_noise_var` added by DN-30 §5).
     ///
@@ -468,11 +576,27 @@ impl PipelineSettings {
 /// What the pipeline has done, for the health line and the tests.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PipelineStats {
-    /// Detections taken into the reorder buffer.
+    /// Detections taken into the reorder buffer, late ones the policy kept included.
     pub accepted: u64,
-    /// Detections refused because their source time was already behind the processed
-    /// cursor. **Never silently folded in**; see the module documentation.
+    /// Detections the late-data policy refused (GAP-114): under `Reject`, any earlier
+    /// than one already taken; under `BufferAndReorder`, any further behind the newest
+    /// than `max_lateness_s`, or behind the processed cursor. **Never silently folded
+    /// in**; see the module documentation.
+    ///
+    /// Until GAP-114 this also counted detections whose source time was not a number,
+    /// which are not late and now have [`PipelineStats::not_finite`].
     pub too_late: u64,
+    /// Detections that arrived out of order and were put back in source-time order by
+    /// the reorder buffer (`BufferAndReorder`, GAP-114). A subset of `accepted`: what the
+    /// buffer is for, counted so an operator can see it working.
+    pub reordered: u64,
+    /// Late detections applied as delivered, at the newest time already taken, under
+    /// `AcceptAsIs` (GAP-114). A subset of `accepted`. Zero in any deployment, since a
+    /// baseline may not choose that policy (D-99); non-zero says a replay or a test did.
+    pub accepted_late: u64,
+    /// Detections refused because their source time is not a finite number and so cannot
+    /// be ordered at all.
+    pub not_finite: u64,
     /// Epochs processed.
     pub epochs: u64,
     /// Detections that updated an existing track.
@@ -536,6 +660,11 @@ pub enum BearingRefusal {
     /// corruption `PushError::TooLate` exists to prevent on the position path.
     #[error("the bearing's source time is outside the reorder horizon around the cursor")]
     OutsideHorizon,
+    /// The late-data policy is `Reject` and the bearing's source time is behind the
+    /// cursor (GAP-114): it is late, and the deployment chose to drop late data rather
+    /// than apply it to an estimate that has already moved past it.
+    #[error("the bearing is behind the processed cursor and the late-data policy rejects it")]
+    Late,
 }
 
 /// What [`FusionPipeline::offer_bearing`] did.
@@ -712,22 +841,53 @@ impl FusionPipeline {
             .collect()
     }
 
-    /// Take a detection into the reorder buffer.
+    /// Take a detection into the reorder buffer, as the late-data policy says
+    /// ([`PipelineSettings::late_data`]; the module documentation has each variant).
     ///
     /// # Errors
     ///
-    /// [`PushError::TooLate`] for a detection behind the processed cursor, and
-    /// [`PushError::NotFinite`] for one whose source time cannot be ordered. Both are
-    /// counted in [`PipelineStats`].
-    pub fn push(&mut self, detection: Detection) -> Result<(), PushError> {
+    /// [`PushError::TooLate`] for a detection the policy refuses as late, and
+    /// [`PushError::NotFinite`] for one whose source time cannot be ordered. Every outcome
+    /// is counted in [`PipelineStats`]: `accepted` (with `reordered` or `accepted_late`
+    /// where it applies), `too_late` or `not_finite`.
+    pub fn push(&mut self, mut detection: Detection) -> Result<(), PushError> {
         if !detection.timestamp_s.is_finite() {
-            self.stats.too_late = self.stats.too_late.saturating_add(1);
+            self.stats.not_finite = self.stats.not_finite.saturating_add(1);
             return Err(PushError::NotFinite);
         }
-        if let Some(cursor) = self.cursor_s {
-            if detection.timestamp_s < cursor {
-                self.stats.too_late = self.stats.too_late.saturating_add(1);
-                return Err(PushError::TooLate);
+        let behind_cursor = self
+            .cursor_s
+            .is_some_and(|cursor| detection.timestamp_s < cursor);
+        // `newest_seen_s` starts at negative infinity, so nothing is out of order before
+        // the first detection.
+        let behind_front = self.newest_seen_s - detection.timestamp_s;
+        let out_of_order = behind_front > 0.0;
+        match self.settings.late_data {
+            LateDataPolicy::Reject => {
+                if out_of_order || behind_cursor {
+                    self.stats.too_late = self.stats.too_late.saturating_add(1);
+                    return Err(PushError::TooLate);
+                }
+            }
+            LateDataPolicy::BufferAndReorder { max_lateness_s } => {
+                if behind_cursor || behind_front > max_lateness_s {
+                    self.stats.too_late = self.stats.too_late.saturating_add(1);
+                    return Err(PushError::TooLate);
+                }
+                if out_of_order {
+                    self.stats.reordered = self.stats.reordered.saturating_add(1);
+                }
+            }
+            LateDataPolicy::AcceptAsIs => {
+                if out_of_order || behind_cursor {
+                    // As delivered: at the front, after everything already taken, so it is
+                    // processed in arrival order and the estimate it updates is never
+                    // predicted backwards. Its own source time is not retrodicted to.
+                    detection.timestamp_s = self
+                        .newest_seen_s
+                        .max(self.cursor_s.unwrap_or(f64::NEG_INFINITY));
+                    self.stats.accepted_late = self.stats.accepted_late.saturating_add(1);
+                }
             }
         }
         self.newest_seen_s = self.newest_seen_s.max(detection.timestamp_s);
@@ -771,7 +931,9 @@ impl FusionPipeline {
     ///
     /// The bearing is applied at the pipeline's current cursor rather than retrodicted
     /// to its own source time; one further from the cursor than a reorder horizon is
-    /// refused as [`BearingRefusal::OutsideHorizon`] rather than folded in.
+    /// refused as [`BearingRefusal::OutsideHorizon`] rather than folded in, and under a
+    /// `Reject` late-data policy one behind the cursor at all is refused as
+    /// [`BearingRefusal::Late`] (GAP-114).
     pub fn offer_bearing(&mut self, bearing: &BearingDetection) -> BearingOutcome {
         self.stats.bearings_offered = self.stats.bearings_offered.saturating_add(1);
         let refuse = |stats: &mut PipelineStats, why: BearingRefusal| {
@@ -790,8 +952,14 @@ impl FusionPipeline {
             return refuse(&mut self.stats, BearingRefusal::NoStatedError);
         }
         if let Some(cursor) = self.cursor_s {
-            if (bearing.timestamp_s - cursor).abs() > self.settings.reorder_horizon_s {
+            if (bearing.timestamp_s - cursor).abs() > self.settings.bearing_window_s() {
                 return refuse(&mut self.stats, BearingRefusal::OutsideHorizon);
+            }
+            // GAP-114: a deployment that rejects late data rejects a late bearing too.
+            // Under the other policies a bearing inside the window is applied at the
+            // cursor, the limitation DN-27 §5 already states.
+            if self.settings.late_data == LateDataPolicy::Reject && bearing.timestamp_s < cursor {
+                return refuse(&mut self.stats, BearingRefusal::Late);
             }
         }
 
@@ -983,7 +1151,7 @@ impl FusionPipeline {
     pub fn run_ready(&mut self) -> usize {
         let mut processed = 0;
         while let Some(first) = self.buffer.first() {
-            if first.timestamp_s + self.settings.reorder_horizon_s > self.newest_seen_s {
+            if first.timestamp_s + self.settings.reorder_horizon_s() > self.newest_seen_s {
                 break;
             }
             self.process_next_epoch();
@@ -1560,6 +1728,9 @@ mod tests {
             pipeline.push(detection(1, f64::NAN, [0.0, 0.0, 0.0])),
             Err(PushError::NotFinite)
         );
+        // Not late, so not counted as late (GAP-114): it has a counter of its own.
+        assert_eq!(pipeline.stats().too_late, 1);
+        assert_eq!(pipeline.stats().not_finite, 1);
     }
 
     /// Two detections in one scan compete for one track through the assignment, and

@@ -1759,6 +1759,7 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
                     encryption: EncryptionState::Active,
                     sensors: lines,
                     clocks,
+                    late_data: crate::panels::sensor_health::LateDataLine::default(),
                     detectors: &detectors,
                     terrain: crate::panels::sensor_health::TerrainLine {
                         masking: false,
@@ -1890,6 +1891,7 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                     sources_out_of_sync: 0,
                     max_skew_s: 0.0,
                 },
+                late_data: crate::panels::sensor_health::LateDataLine::default(),
                 detectors: &[],
                 terrain: crate::panels::sensor_health::TerrainLine {
                     masking: false,
@@ -1927,6 +1929,7 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                     sources_out_of_sync: 0,
                     max_skew_s: 0.0,
                 },
+                late_data: crate::panels::sensor_health::LateDataLine::default(),
                 detectors: &[],
                 terrain: crate::panels::sensor_health::TerrainLine {
                     masking: false,
@@ -1970,6 +1973,94 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
     );
 }
 
+/// **GAP-114: the late-data policy and what it did reach PN-09.** The policy in force is
+/// named, each outcome it counted is drawn, and a pipeline this console does not run is
+/// said to be governed by the node's baseline rather than labelled with this console's.
+#[test]
+fn the_health_panel_draws_the_late_data_policy_and_its_counters() {
+    use crate::panels::sensor_health::{
+        late_data_sentence, render_sensor_health, BearingPipelineLine, ClockSyncLine, LateDataLine,
+        PointCloudRegistrationLine, SensorHealthView,
+    };
+    use crate::panels::status_strip::EncryptionState;
+
+    let buffered = LateDataLine {
+        policy: Some(gungnir_model::LateDataPolicy::BufferAndReorder {
+            max_lateness_s: 2.0,
+        }),
+        accepted: 120,
+        reordered: 14,
+        too_late: 3,
+        accepted_late: 0,
+        not_finite: 0,
+    };
+    let health = gungnir_model::SystemHealth::default();
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| {
+        render_sensor_health(
+            ui,
+            &theme::Palette::day(),
+            &SensorHealthView {
+                health: &health,
+                encryption: EncryptionState::Active,
+                sensors: &[],
+                clocks: ClockSyncLine {
+                    sources_observed: 0,
+                    sources_out_of_sync: 0,
+                    max_skew_s: 0.0,
+                },
+                late_data: buffered,
+                detectors: &[],
+                terrain: crate::panels::sensor_health::TerrainLine {
+                    masking: false,
+                    detail: "no terrain configured",
+                },
+                point_cloud_registration: PointCloudRegistrationLine::NotConfigured,
+                feeds: &[],
+                cooperative_feeds: &[],
+                peers: &[],
+                bearing_feeds: &[],
+                bearing_pipeline: BearingPipelineLine::default(),
+                exchange: None,
+            },
+        );
+    });
+    assert!(
+        frame.says(
+            "Late data: reordered within 2.0 s, dropped beyond; 120 taken, 14 reordered, \
+             3 dropped as late"
+        ),
+        "the policy and its counters did not reach the screen: {}",
+        frame.joined()
+    );
+
+    let reject = LateDataLine {
+        policy: Some(gungnir_model::LateDataPolicy::Reject),
+        too_late: 2,
+        ..LateDataLine::default()
+    };
+    assert!(late_data_sentence(&reject).starts_with("Late data: out-of-order data dropped;"));
+    // A replay's policy, and a time nobody could read, are said rather than folded away.
+    let replay = LateDataLine {
+        policy: Some(gungnir_model::LateDataPolicy::AcceptAsIs),
+        accepted_late: 4,
+        not_finite: 1,
+        ..LateDataLine::default()
+    };
+    let text = late_data_sentence(&replay);
+    assert!(
+        text.contains("replay and testing only")
+            && text.contains("4 applied late as delivered")
+            && text.contains("1 with no readable time"),
+        "{text}"
+    );
+    let node = LateDataLine::default();
+    assert!(
+        late_data_sentence(&node).contains("set by the linked node's baseline"),
+        "a node's pipeline was labelled with this console's policy"
+    );
+}
+
 /// **GAP-024: the line that used to not exist.** `FusionBackend::engine_for` could
 /// silently fall back from the GPU path to the CPU reference, and nothing told an
 /// operator which one actually ran -- exactly the kind of quiet fallback this
@@ -2001,6 +2092,7 @@ fn the_point_cloud_registration_line_names_the_backend_and_why() {
                         sources_out_of_sync: 0,
                         max_skew_s: 0.0,
                     },
+                    late_data: crate::panels::sensor_health::LateDataLine::default(),
                     detectors: &[],
                     terrain: crate::panels::sensor_health::TerrainLine {
                         masking: false,
@@ -2085,6 +2177,7 @@ fn the_health_panel_says_once_that_this_console_may_not_publish() {
                         sources_out_of_sync: 0,
                         max_skew_s: 0.0,
                     },
+                    late_data: crate::panels::sensor_health::LateDataLine::default(),
                     detectors: &[],
                     terrain: crate::panels::sensor_health::TerrainLine {
                         masking: false,

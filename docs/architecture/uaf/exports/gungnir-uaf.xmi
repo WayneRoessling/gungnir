@@ -5680,7 +5680,7 @@
       </element>
       <element xmi:idref="EAID_2D226BEB_B7EA_8A30_3699_DBD39A8EAD32" xmi:type="uml:Class" name="gungnir-core" scope="public">
         <model package="EAPK_95514A5C_89FD_8F31_86F8_CF631330FE43" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="ResourceArtifact" documentation="CV/CA/CT motion models -- F/Q generation (exact-match closed-form oracle only) -- plus the identifier, lifecycle-status, and PSD-assertion primitives every higher crate shares (docs/agentic-coding-standards.md §1.2, §2.1)."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="ResourceArtifact" documentation="CV/CA/CT motion models -- F/Q generation (exact-match closed-form oracle only) -- plus the identifier, lifecycle-status, late-data-policy and PSD-assertion primitives every higher crate shares (docs/agentic-coding-standards.md §1.2, §2.1)."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="RS-core"/>

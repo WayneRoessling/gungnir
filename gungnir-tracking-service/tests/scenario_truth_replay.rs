@@ -179,7 +179,9 @@ fn replay_timeline(
         .map(|o| o.receipt_time_s - o.detection.timestamp_s)
         .fold(0.0f64, f64::max);
     let mut settings = PipelineSettings {
-        reorder_horizon_s: spread.mul_add(2.0, 1.0),
+        late_data: gungnir_fusion_async::LateDataPolicy::BufferAndReorder {
+            max_lateness_s: spread.mul_add(2.0, 1.0),
+        },
         ..PipelineSettings::default()
     };
     tune(&mut settings);

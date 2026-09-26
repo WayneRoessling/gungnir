@@ -9,8 +9,10 @@
 //! This crate is also the lowest crate in the workspace, so it owns the primitives
 //! that both the tracking core and the productization layer share without either
 //! depending on the other: [`TrackId`], [`TrackStatus`], [`ResourceId`] (module
-//! [`ident`]) and the debug-only [`assert_psd`] helper (module [`numeric`]), per
-//! agentic-coding-standards.md §1.2 (one owning crate, re-exported upward) and §2.1.
+//! [`ident`]), the [`LateDataPolicy`] the fusion pipeline applies and the clock-skew
+//! estimate judges against (module [`late_data`], GAP-114), and the debug-only
+//! [`assert_psd`] helper (module [`numeric`]), per agentic-coding-standards.md §1.2 (one
+//! owning crate, re-exported upward) and §2.1.
 //!
 //! # State-vector convention
 //!
@@ -47,9 +49,11 @@
 //! both oracles agreeing.
 
 pub mod ident;
+pub mod late_data;
 pub mod numeric;
 
 pub use ident::{ResourceId, TrackId, TrackStatus};
+pub use late_data::LateDataPolicy;
 pub use numeric::assert_psd;
 
 use nalgebra::SMatrix;

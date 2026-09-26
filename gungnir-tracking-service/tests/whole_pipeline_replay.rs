@@ -91,6 +91,17 @@ fn view(detection: &gungnir_fusion_async::Detection) -> DetectionView {
     }
 }
 
+/// Settings whose late-data bound covers a latency spread twice over, plus a second: the
+/// deployment configuring for its sensors (GAP-114's `LateDataPolicy`).
+fn buffered_for(spread: f64) -> PipelineSettings {
+    PipelineSettings {
+        late_data: gungnir_fusion_async::LateDataPolicy::BufferAndReorder {
+            max_lateness_s: spread.mul_add(2.0, 1.0),
+        },
+        ..PipelineSettings::default()
+    }
+}
+
 #[test]
 fn every_scenario_replays_through_the_service_to_the_offline_result() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -121,10 +132,7 @@ fn every_scenario_replays_through_the_service_to_the_offline_result() {
             .iter()
             .map(|o| o.receipt_time_s - o.detection.timestamp_s)
             .fold(0.0f64, f64::max);
-        let settings = PipelineSettings {
-            reorder_horizon_s: spread.mul_add(2.0, 1.0),
-            ..PipelineSettings::default()
-        };
+        let settings = buffered_for(spread);
 
         // The offline result: the same pipeline, the same settings, source order.
         let offline = run_batch(settings.clone(), &detections);

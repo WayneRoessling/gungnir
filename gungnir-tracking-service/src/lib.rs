@@ -29,8 +29,8 @@ pub use gungnir_fusion_async::Detection;
 /// making every host depend on `gungnir-fusion-async`: the hosts speak to the pipeline
 /// through this facade, which is the whole point of `ARCHITECTURE.md` §2.
 pub use gungnir_fusion_async::{
-    BaselineError, FilterSelection, ImmBaselineFields, PipelineSettings, PipelineStats,
-    UnsupportedFilter,
+    BaselineError, FilterSelection, ImmBaselineFields, InvalidLateData, PipelineSettings,
+    PipelineStats, UnsupportedFilter,
 };
 pub use gungnir_model::{
     BearingRayView, DetectionView, MissionTime, SensorId, TrackId, TrackStatus, TrackView,
@@ -381,6 +381,9 @@ pub fn project_pipeline_stats(stats: PipelineStats) -> gungnir_model::PipelineSt
     gungnir_model::PipelineStatsView {
         accepted: stats.accepted,
         too_late: stats.too_late,
+        reordered: stats.reordered,
+        accepted_late: stats.accepted_late,
+        not_finite: stats.not_finite,
         epochs: stats.epochs,
         associated: stats.associated,
         initiated: stats.initiated,
@@ -402,6 +405,9 @@ pub fn pipeline_stats_from_view(view: gungnir_model::PipelineStatsView) -> Pipel
     PipelineStats {
         accepted: view.accepted,
         too_late: view.too_late,
+        reordered: view.reordered,
+        accepted_late: view.accepted_late,
+        not_finite: view.not_finite,
         epochs: view.epochs,
         associated: view.associated,
         initiated: view.initiated,
@@ -1376,6 +1382,9 @@ mod tests {
         let stats = PipelineStats {
             accepted: 11,
             too_late: 2,
+            reordered: 3,
+            accepted_late: 0,
+            not_finite: 1,
             epochs: 5,
             associated: 4,
             initiated: 1,

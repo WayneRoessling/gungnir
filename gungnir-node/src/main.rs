@@ -1601,7 +1601,8 @@ async fn run(
         "entity resolver folded from the retained sessions"
     );
 
-    let clock = WallClockAuthority::default();
+    // GAP-114: the same late-data policy the tracker below applies, so the two agree.
+    let clock = WallClockAuthority::new(config.time.late_data);
     // GAP-051: created through the lifecycle rather than minted from the wall clock, so
     // there is a record on disk saying which baseline this session ran under and how it
     // ended. A node killed without closing leaves that record marked live, and the next

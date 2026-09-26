@@ -662,10 +662,13 @@ fn take_forward_replies(state: &mut AppState, link: &NodeLink) {
 /// to differ between them.
 pub(crate) fn run_embedded(state: &mut AppState) {
     let handle = state.runtime.handle().clone();
-    let embedded = Box::new(
-        gungnir_tracking_service::LiveTrackingService::new(&handle)
-            .with_staleness(state.config.policy.staleness.clone()),
-    );
+    // The tracker the desktop starts with (GAP-114): its late-data policy, its algorithm
+    // baseline and its sensor positions, not the defaults.
+    let embedded = Box::new(crate::state::embedded_tracker(
+        &handle,
+        &state.config,
+        &state.governance,
+    ));
     state.tracking = match state.link.clone() {
         Some(link) => Box::new(TeeTracking {
             inner: embedded,

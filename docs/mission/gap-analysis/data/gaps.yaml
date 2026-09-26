@@ -8326,6 +8326,20 @@
     note: >-
       Filed by the GAP-067 walk, which split the `gungnir-time` row, gated replay
       determinism and held the late-data clause.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Built, per D-98 and D-99.** The fusion pipeline applies the policy
+      (`PipelineSettings::late_data`, replacing a horizon no baseline set), and the
+      baseline's new `time.late_data` sets it for the pipeline and the clock authority
+      both. `Reject` drops and counts an out-of-order detection; `BufferAndReorder` reorders
+      inside its bound and drops beyond it, measured behind the newest detection so the
+      bound no longer depends on traffic; `AcceptAsIs` applies one as delivered and is
+      refused in a baseline. Counted per outcome, on the wire and on PN-09. Tests:
+      `gungnir-fusion-async/tests/late_data_policy.rs`, `gungnir-app/tests/late_data_policy.rs`.
+      The desktop's fallback tracker ran the defaults and now runs the baseline's. The row's
+      walk is GAP-173. Human-owned (`gungnir-fusion-async`); see `../../signatures.md` and
+      `../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`.
 
 - id: GAP-115
   name: The node never times out an unacknowledged sensor task
@@ -10447,3 +10461,34 @@
       Found by the first miri run to get past setup. Not fixed here: the code is
       nalgebra's, the latest release has it too, and posting an upstream issue publishes
       on the owner's behalf.
+
+- id: GAP-173
+  name: The late-data row still says nothing consumes the policy
+  type: Technical
+  caps: [CAP-1.5]
+  layer: "Productization: sensing and time"
+  sev: 3
+  effort: S
+  target: I3
+  owner: Owner
+  deps: [GAP-114]
+  impact: >-
+    The `gungnir-time` "Late-data policy" row in the verification table says it is not
+    gated because nothing consumes `LateDataPolicy`. Since GAP-114 the fusion pipeline
+    applies it and a baseline sets it, so the row describes a build that no longer exists,
+    and its criterion ("policy honoured") has tests nobody has walked.
+  evidence: >-
+    `docs/verification-capability-table.md` §1, the `gungnir-time` Late-data policy row;
+    `gungnir-fusion-async/tests/late_data_policy.rs`; `gungnir-app/tests/late_data_policy.rs`
+  action: >-
+    Walk the row against the two test files: each variant delivered late data and its
+    outcome asserted, the baseline's value reaching the desktop's tracker. Gate it or say
+    what is missing, and restate the row's note, which is the owner's to change.
+  ref: >-
+    GAP-114 (`../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Filed by GAP-114's build, which made the row's note untrue and left the criterion and
+      its gate to the owner.

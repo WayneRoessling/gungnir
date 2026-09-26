@@ -111,12 +111,27 @@ pub fn sensor_positions(config: &ConfigBaseline) -> SensorPositions {
 /// (DN-24 §7). A baseline naming a filter this build does not implement is refused by name
 /// and the tracker stays ungoverned, rather than running a different filter under the
 /// promoted one's identity.
+///
+/// **And it applies the deployment's late-data policy in every case** (GAP-114, D-98):
+/// `config.time.late_data` is time discipline, not part of an algorithm baseline, so it
+/// governs the pipeline whether a baseline is promoted, applied, refused or absent.
 #[must_use]
 pub fn tracking_service(
     config: &ConfigBaseline,
     handle: &tokio::runtime::Handle,
     promoted: Option<&gungnir_modelops::ModelBaseline>,
 ) -> LiveTrackingService {
+    // Validation refuses a policy the pipeline would; reaching the error arm means a
+    // baseline bypassed it, and the log says what runs instead.
+    let with_late_data = |settings: gungnir_tracking_service::PipelineSettings| {
+        settings
+            .clone()
+            .with_late_data(config.time.late_data)
+            .unwrap_or_else(|err| {
+                tracing::error!(%err, "the baseline's late-data policy is not applied; the tracker runs the default one-second reorder buffer");
+                settings
+            })
+    };
     let settings = promoted.map(|b| {
         // DN-28 §5: the imm-cv-ct fields, built from the baseline's own `TrackingConfig`
         // here rather than in `gungnir-tracking-service`, which may not depend on
@@ -139,20 +154,26 @@ pub fn tracking_service(
     match settings {
         Some((baseline, Ok(settings))) => {
             tracing::info!(baseline = %baseline.id, "the promoted algorithm baseline is applied");
-            LiveTrackingService::with_pipeline_settings(handle, settings)
+            LiveTrackingService::with_pipeline_settings(handle, with_late_data(settings))
                 .with_staleness(config.policy.staleness.clone())
                 .with_sensor_positions(sensor_positions(config))
                 .with_algorithm_baseline(&baseline.id)
         }
         Some((baseline, Err(err))) => {
             tracing::error!(baseline = %baseline.id, %err, "the promoted algorithm baseline is not applied; the tracker runs its default filter and stays ungoverned");
-            LiveTrackingService::new(handle)
-                .with_staleness(config.policy.staleness.clone())
-                .with_sensor_positions(sensor_positions(config))
-        }
-        None => LiveTrackingService::new(handle)
+            LiveTrackingService::with_pipeline_settings(
+                handle,
+                with_late_data(gungnir_tracking_service::PipelineSettings::default()),
+            )
             .with_staleness(config.policy.staleness.clone())
-            .with_sensor_positions(sensor_positions(config)),
+            .with_sensor_positions(sensor_positions(config))
+        }
+        None => LiveTrackingService::with_pipeline_settings(
+            handle,
+            with_late_data(gungnir_tracking_service::PipelineSettings::default()),
+        )
+        .with_staleness(config.policy.staleness.clone())
+        .with_sensor_positions(sensor_positions(config)),
     }
 }
 

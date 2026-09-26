@@ -49,6 +49,30 @@ pub struct ClockSyncLine {
     pub max_skew_s: f32,
 }
 
+/// What the tracker's late-data policy did (GAP-114): the policy in force, and every
+/// outcome it counted for a position detection.
+///
+/// Drawn beside the clock line because the two are one question -- a source whose clock
+/// lags past the policy is out of sync on that line exactly because its detections are
+/// being dropped on this one.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct LateDataLine {
+    /// The policy the counters were counted under. `None` when the pipeline is a linked
+    /// node's, which its own baseline governs and this console cannot read; the line says
+    /// so rather than naming this console's policy for a pipeline it does not run.
+    pub policy: Option<gungnir_model::LateDataPolicy>,
+    /// Detections taken, late ones the policy kept included.
+    pub accepted: u64,
+    /// Out-of-order detections put back in source-time order.
+    pub reordered: u64,
+    /// Detections dropped as too late.
+    pub too_late: u64,
+    /// Late detections applied as delivered (`AcceptAsIs`, replay and testing only).
+    pub accepted_late: u64,
+    /// Detections whose source time was not a number.
+    pub not_finite: u64,
+}
+
 /// One sensor's line on the health panel.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SensorHealthLine<'a> {
@@ -181,6 +205,8 @@ pub struct SensorHealthView<'a> {
     pub encryption: crate::panels::status_strip::EncryptionState<'a>,
     pub sensors: &'a [SensorHealthLine<'a>],
     pub clocks: ClockSyncLine,
+    /// The tracker's late-data policy and what it did (GAP-114).
+    pub late_data: LateDataLine,
     pub detectors: &'a [DetectorLine<'a>],
     pub terrain: TerrainLine<'a>,
     /// The point-cloud registration backend (GAP-024, GAP-098): GPU, the CPU fallback
@@ -213,6 +239,7 @@ pub fn render_sensor_health(
         encryption,
         sensors,
         clocks,
+        late_data,
         detectors,
         terrain,
         point_cloud_registration,
@@ -277,7 +304,52 @@ pub fn render_sensor_health(
     render_peers(ui, palette, view.peers);
     render_exchange(ui, palette, exchange);
     render_clocks(ui, palette, clocks);
+    render_late_data(ui, palette, late_data);
     render_detectors(ui, palette, detectors);
+}
+
+/// The sentence PN-09 draws for the late-data policy (GAP-114). Public so it can be
+/// checked without a frame, the way `status_strip::clock_skew_sentence` is.
+#[must_use]
+pub fn late_data_sentence(line: &LateDataLine) -> String {
+    let policy = match line.policy {
+        None => "set by the linked node's baseline".to_owned(),
+        Some(gungnir_model::LateDataPolicy::BufferAndReorder { max_lateness_s }) => {
+            format!("reordered within {max_lateness_s:.1} s, dropped beyond")
+        }
+        Some(gungnir_model::LateDataPolicy::Reject) => "out-of-order data dropped".to_owned(),
+        Some(gungnir_model::LateDataPolicy::AcceptAsIs) => {
+            "applied as delivered (replay and testing only)".to_owned()
+        }
+    };
+    let mut counts = vec![
+        format!("{} taken", line.accepted),
+        format!("{} reordered", line.reordered),
+        format!("{} dropped as late", line.too_late),
+    ];
+    if line.accepted_late > 0 {
+        counts.push(format!("{} applied late as delivered", line.accepted_late));
+    }
+    if line.not_finite > 0 {
+        counts.push(format!("{} with no readable time", line.not_finite));
+    }
+    format!("Late data: {policy}; {}", counts.join(", "))
+}
+
+/// The late-data line (GAP-114): the policy and its counters, in the warning colour once
+/// anything has been dropped or applied late, since each is a detection the picture did
+/// not take at its own time.
+fn render_late_data(ui: &mut egui::Ui, palette: &theme::Palette, line: LateDataLine) {
+    let colour = if line.too_late > 0 || line.accepted_late > 0 || line.not_finite > 0 {
+        palette.warning_color
+    } else {
+        palette.muted_text_color()
+    };
+    ui.label(
+        RichText::new(late_data_sentence(&line))
+            .color(colour)
+            .size(palette.small_font_size),
+    );
 }
 
 /// The point-cloud registration backend (GAP-024): GPU, the CPU fallback and why, or

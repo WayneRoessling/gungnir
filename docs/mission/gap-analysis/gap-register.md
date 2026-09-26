@@ -126,7 +126,7 @@ history, and an entry is never edited once it has merged.
 | GAP-111 | The security row's role matrix and audit rule are untested, and the node audits nothing | Technical | CAP-6.2, CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-112 | No test round-trips a fully populated v2 snapshot | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Closed |
 | GAP-113 | An under-authority plan is counted, never escalated | Technical | CAP-3.6, CAP-4.3 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
-| GAP-114 | Nothing consumes LateDataPolicy | Technical | CAP-1.5 | 2 | 7 | M | 14 | I3 | Services engineer | Open |
+| GAP-114 | Nothing consumes LateDataPolicy | Technical | CAP-1.5 | 2 | 7 | M | 14 | I3 | Services engineer | Closed |
 | GAP-115 | The node never times out an unacknowledged sensor task | Technical | CAP-1.3 | 3 | 9 | S | 27 | I3 | Services engineer | Closed |
 | GAP-116 | Seven interop clauses are unasserted or only partly asserted | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
 | GAP-117 | Most event and view types are never round-tripped through serde | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
@@ -176,8 +176,9 @@ history, and an entry is never edited once it has merged.
 | GAP-167 | The outage tests' proxy can let one connection through a cut | Technical | CAP-5.4 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 | GAP-164 | The miri gate could not run miri | Technical | CAP-7.4 | 3 | 5 | S | 15 | I2 | Services engineer | Closed |
 | GAP-166 | nalgebra's decompositions violate Stacked Borrows | Technical | CAP-7.4 | 2 | 5 | S | 10 | I2 | Owner | Open |
+| GAP-173 | The late-data row still says nothing consumes the policy | Technical | CAP-1.5 | 3 | 7 | S | 21 | I3 | Owner | Open |
 
-Counts: 163 gaps, 3 mission, 160 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 164 gaps, 3 mission, 161 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1767,11 +1768,12 @@ Counts: 163 gaps, 3 mission, 160 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.5 Time discipline.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which split the `gungnir-time` row, gated replay determinism and held the late-data clause.
+  - 2026-09-26, Closed: **Built, per D-98 and D-99.** The fusion pipeline applies the policy (`PipelineSettings::late_data`, replacing a horizon no baseline set), and the baseline's new `time.late_data` sets it for the pipeline and the clock authority both. `Reject` drops and counts an out-of-order detection; `BufferAndReorder` reorders inside its bound and drops beyond it, measured behind the newest detection so the bound no longer depends on traffic; `AcceptAsIs` applies one as delivered and is refused in a baseline. Counted per outcome, on the wire and on PN-09. Tests: `gungnir-fusion-async/tests/late_data_policy.rs`, `gungnir-app/tests/late_data_policy.rs`. The desktop's fallback tracker ran the defaults and now runs the baseline's. The row's walk is GAP-173. Human-owned (`gungnir-fusion-async`); see `../../signatures.md` and `../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`.
 - Evidence: `gungnir-time/src/lib.rs` (`LateDataPolicy`, no caller outside its tests); the `gungnir-time` Late-data policy row, split from replay determinism 2026-09-16.
 - Severity: 2. Reach: 7 threads. Effort: M. Priority: 14.
 - Impact: The `gungnir-time` late-data criterion ('policy honoured') cannot be tested: `LateDataPolicy` has no consumer, so a configured policy changes nothing. What decides late data today is the fusion pipeline's reorder horizon.
 - Closing action: Have the ingest gateway or the fusion pipeline take a `LateDataPolicy`, or record a decision that the reorder horizon is the policy and re-scope the row. Then deliver an out-of-order detection under each variant and assert `Reject` drops and counts it, `BufferAndReorder { max_lateness_s }` reorders inside the bound and drops beyond it, and `AcceptAsIs` processes it as delivered.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-115 The node never times out an unacknowledged sensor task**
@@ -2472,4 +2474,18 @@ Counts: 163 gaps, 3 mission, 160 technical; 1 already covered by a plan in `../.
 - Target: I2. Owner: Owner. Status: Open.
 - Reference: Found running the repaired miri gate (`../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`).
 - Depends on: GAP-164.
+
+**GAP-173 The late-data row still says nothing consumes the policy**
+
+- Type: Technical.
+- Capability: CAP-1.5 Time discipline.
+- History:
+  - 2026-09-26, Open: Filed by GAP-114's build, which made the row's note untrue and left the criterion and its gate to the owner.
+- Evidence: `docs/verification-capability-table.md` §1, the `gungnir-time` Late-data policy row; `gungnir-fusion-async/tests/late_data_policy.rs`; `gungnir-app/tests/late_data_policy.rs`.
+- Severity: 3. Reach: 7 threads. Effort: S. Priority: 21.
+- Impact: The `gungnir-time` "Late-data policy" row in the verification table says it is not gated because nothing consumes `LateDataPolicy`. Since GAP-114 the fusion pipeline applies it and a baseline sets it, so the row describes a build that no longer exists, and its criterion ("policy honoured") has tests nobody has walked.
+- Closing action: Walk the row against the two test files: each variant delivered late data and its outcome asserted, the baseline's value reaching the desktop's tracker. Gate it or say what is missing, and restate the row's note, which is the owner's to change.
+- Target: I3. Owner: Owner. Status: Open.
+- Reference: GAP-114 (`../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`).
+- Depends on: GAP-114.
 

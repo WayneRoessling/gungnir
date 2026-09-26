@@ -756,6 +756,8 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
     // what happened to the bearings among what every bound feed reported.
     let bearing_feeds = crate::sapient::bearing_feed_lines(state);
     let bearing_pipeline = crate::sapient::bearing_pipeline_line(state);
+    // GAP-114: the late-data policy and every outcome it counted.
+    let late_data = crate::status::late_data_line(state);
     // GAP-146: this console's own publishing to coalition exchange, in one line.
     let exchange = crate::exchange::exchange_line(state);
     gungnir_ui::panels::sensor_health::render_sensor_health(
@@ -770,6 +772,7 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
                 sources_out_of_sync: sync.sources_out_of_sync,
                 max_skew_s: sync.max_clock_skew_s,
             },
+            late_data,
             detectors: &detectors,
             terrain: gungnir_ui::panels::sensor_health::TerrainLine {
                 masking: state.terrain.is_masking(),
