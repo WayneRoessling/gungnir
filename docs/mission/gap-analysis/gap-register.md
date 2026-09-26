@@ -141,7 +141,7 @@ history, and an entry is never edited once it has merged.
 | GAP-126 | A non-finite float in an envelope cannot be journaled faithfully | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Open |
 | GAP-127 | The desktop's decide and task functions check no permission | Technical | CAP-6.2 | 3 | 9 | S | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-128 | PN-14 cannot apply an edited baseline on its first apply | Technical | CAP-5.6 | 3 | 2 | S | 6 | I3 | Services engineer | Closed |
-| GAP-129 | No decision reaches a node's record, so reconciliation never meets a conflict | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Owner | In progress |
+| GAP-129 | No decision reaches a node's record, so reconciliation never meets a conflict | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Owner | Closed |
 | GAP-130 | Decision, plan and queue-item identifiers collide across machines and restarts | Technical | CAP-7.2, CAP-4.2 | 4 | 6 | M | 24 | I3 | Services engineer | Closed |
 | GAP-131 | The decision path lives only in gungnir-app | Technical | CAP-4.2, CAP-3.6 | 3 | 7 | L | 21 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-132 | A node runs no approval queue | Technical | CAP-4.2, CAP-4.3, CAP-3.7, CAP-6.2 | 4 | 9 | L | 36 | I3 | Security engineer (human-owned crate) | Closed |
@@ -150,8 +150,8 @@ history, and an entry is never edited once it has merged.
 | GAP-135 | An effector's report moves an engagement without putting the move on the record | Technical | CAP-4.6 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
 | GAP-136 | A rehearsal read its picture before the pipeline had reported the run | Technical | CAP-5.2 | 3 | 1 | S | 3 | I3 | Services engineer | Closed |
 | GAP-137 | A handoff the node issues reaches no exchange partner | Technical | CAP-5.7 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
-| GAP-138 | An unreachable decision type still describes the interface | Technical | CAP-5.7 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
-| GAP-139 | An If-Sr diagram no longer renders under the layout its generator pins | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
+| GAP-138 | An unreachable decision type still describes the interface | Technical | CAP-5.7 | 1 | 1 | S | 1 | I3 | Services engineer | Closed |
+| GAP-139 | An If-Sr diagram no longer renders under the layout its generator pins | Technical | CAP-7.1 | 2 | 6 | S | 12 | I3 | Services engineer | Closed |
 | GAP-140 | A node's deadline is drawn against the desktop's own clock | Technical | CAP-5.9, CAP-3.7 | 2 | 10 | S | 20 | I3 | UI engineer | Closed |
 | GAP-141 | A desktop has no identity of its own | Technical | CAP-6.1, CAP-5.4 | 2 | 10 | M | 20 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-142 | A desktop that restarts during an outage forgets it | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Services engineer | Closed |
@@ -159,10 +159,11 @@ history, and an entry is never edited once it has merged.
 | GAP-144 | The release passes only by accepting two quick-xml advisories | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | UI engineer | Closed |
 | GAP-145 | The exchange register has no lifecycle | Technical | CAP-7.4 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
 | GAP-146 | A console that may not publish queues its handoffs for ever | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
+| GAP-154 | The Disconnected reconciliation row still says no decision reaches a node's record | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Owner | Open |
 | GAP-160 | A node publishes no track, so a linked desktop's picture is frozen at sign-in | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-161 | A linked desktop's health strip reports the link, not the node's services | Technical | CAP-7.3 | 4 | 1 | S | 4 | I3 | Services engineer | Closed |
 
-Counts: 148 gaps, 3 mission, 145 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 149 gaps, 3 mission, 146 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1948,11 +1949,12 @@ Counts: 148 gaps, 3 mission, 145 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, whose arbiter build found that no node records a decision, so the conflicts it resolves arise only in tests.
   - 2026-09-17, In progress: **Decided 2026-09-17 (D-55 to D-59).** Decisions reach the node: it holds the queue for the desktops linked to it, the first valid decision on an item wins, a cut-off desktop decides what its role may and forwards on reconnect, and identifiers become UUID v7. Planned in `../../design/DN-31-node-approval-queue.md` with ten verification rows, and built by GAP-130 to GAP-134.
+  - 2026-09-25, Closed: **Closed: DN-31 is built, and each §9 row's test is on `main` (12a14751).** Row 1: `gungnir-command/tests/identifiers.rs` and four more; 2: `gungnir-app/tests/no_execution_without_decision.rs`; 3 to 6: `gungnir-node/tests/approval_queue.rs`; 7: `gungnir-app/tests/desktop_projection.rs`; 8: `gungnir-app/tests/cut_off_and_reconnected.rs`; 9: `gungnir-app/tests/mt01_watch_floor.rs`; 10: `gungnir-app/tests/approval_gate.rs` and two more. GAP-130 to GAP-134 and the gaps that followed them are closed, and `docs/unbuilt.md` names nothing in DN-31. Gating stays the owner's (D-16). The Disconnected reconciliation row still says no decision reaches a node, in a criterion cell: GAP-154. Every test by row: `../../record/2026-09-25/housekeeping-after-dn-31.md`.
 - Evidence: `gungnir-api/src/transport.rs` (`refuse_decision`: 501, "this node runs no approval queue"); `gungnir-app/tests/failover_e2e.rs` publishes the node's decision onto its record directly; the cross-layer Disconnected reconciliation row, gated 2026-09-16.
 - Severity: 3. Reach: 1 threads. Effort: M. Priority: 3.
 - Impact: A node runs no approval queue and its decision route refuses with 501, so every decision stays on the desktop that took it and a node's history never holds one. Reconciliation after an outage therefore finds no conflicting decision outside the tests that place one on a node's record, D-03's rule and PN-18's person resolution have nothing to resolve in a deployment, and two desktops sharing a node share no decision record.
 - Closing action: Decided by D-55: the node holds the queue for the desktops linked to it. Built by GAP-130 to GAP-134 as `../../design/DN-31-node-approval-queue.md` plans it, each increment writing its verification rows from DN-31 §9.
-- Target: I3. Owner: Owner. Status: In progress.
+- Target: I3. Owner: Owner. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-130 Decision, plan and queue-item identifiers collide across machines and restarts**
@@ -2080,11 +2082,12 @@ Counts: 148 gaps, 3 mission, 145 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.7 Model governance.
 - History:
   - 2026-09-17, Open: Found while moving the decision route to the queue item. Not removed in that change: the type is unreachable and harmless, and deleting it moves the UAF model, which is its own change with its own regeneration.
+  - 2026-09-25, Closed: **Closed by removal (D-80).** `ApprovalRequest` and `ApiHandler::decide` are gone; nothing constructed, served or implemented either, and the workspace checks without them. `ApiHandler` keeps two methods, both describing served routes, and says nothing implements it. `transport.rs`, a `gungnir-remote` test comment and `docs/gungnir-api-v1.md` no longer describe the type as live. The UAF was regenerated: IE-23, the decision over the API that five hand-drawn views name, now names `gungnir_api::v3::DecisionRequest`, and IE-22, IE-24 and IE-25 name `v3` rather than a `v1` module that no longer exists. Human-owned: a `gungnir-api` write path; see `docs/signatures.md`. See `../../record/2026-09-25/housekeeping-after-dn-31.md`.
 - Evidence: `gungnir-api/src/v3/mod.rs` (`ApprovalRequest`); `gungnir-api/src/lib.rs` (`ApiHandler::decide`, no implementor); `gungnir-api/src/transport.rs`'s module documentation, which has to name the type to say it is not believed.
 - Severity: 1. Reach: 1 threads. Effort: S. Priority: 1.
 - Impact: `gungnir_api::v3::ApprovalRequest` describes a plan decision keyed on a plan and naming its own operator in the body. No route serves it since GAP-132 and no caller believes a body's operator, but the type is still exported and still documented as "an operator's decision on a plan the node proposed" -- a second, divergent description of a decision beside `DecisionRequest`, which is what `gungnir-api`'s own module documentation exists to prevent. `ApiHandler`, the trait that names it, has no implementation anywhere in the workspace.
 - Closing action: Remove `ApprovalRequest` and `ApiHandler::decide`, or say in the trait what implements it and when. Regenerate the UAF, which reads the code and carries `ApprovalRequest` as an information element today.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-132 (`../../record/2026-09-17/the-node-runs-the-approval-queue.md`).
 
 **GAP-139 An If-Sr diagram no longer renders under the layout its generator pins**
@@ -2093,11 +2096,12 @@ Counts: 148 gaps, 3 mission, 145 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.1 Versioned interface.
 - History:
   - 2026-09-17, Open: Found when GAP-132 added `PendingApprovalId` to the model and the diagram grew by one class. The committed SVG for that diagram is a Graphviz render, because the check needs every element positioned and smetana will not produce one; every other If-Sr SVG is a smetana render, so the two are laid out differently until this is settled. The code was not moved to another module to dodge the crash: the type belongs beside `DecisionId`.
+  - 2026-09-25, Closed: **Closed: every If-Sr diagram is laid out by Graphviz (D-79).** `build_uaf.py` no longer writes `!pragma layout smetana` on the If-Sr detail diagrams or the If-Sr overview, and `render.sh` and `render.ps1` pin `plantuml/plantuml:1.2026.8`, the latest image and the one with the defect, which is why no fixed version could be pinned instead. All nine If-Sr sources were re-rendered from that image: each exits 0, the plans-effectors- handoff SVG came out byte-identical to the Graphviz render GAP-132 committed, and the registry check positions every element. Measured before deciding: dot's left-to-right layouts cover 1.05x to 1.66x smetana's area on the eight diagrams smetana could draw. The twelve Rs-Cn diagrams render cleanly under smetana with the same image and keep it. See `../../record/2026-09-25/housekeeping-after-dn-31.md`.
 - Evidence: `plantuml/plantuml` 1.2026.8, `docker run --rm plantuml/plantuml -tsvg information/If-Sr-plans-effectors-handoff.puml`; the same source with the pragma line removed renders cleanly through the image's own Graphviz 14.0.1; the version of the diagram before GAP-132 renders under smetana, so what changed is the graph rather than the toolchain; `docs/architecture/uaf/tools/build_uaf.py` (`write_if_sr_domain`, and its comment recording why smetana is pinned).
 - Severity: 2. Reach: 6 threads. Effort: S. Priority: 12.
 - Impact: `docs/architecture/uaf/render.sh` crashes on `information/If-Sr-plans-effectors-handoff.puml`. `build_uaf.py` writes `!pragma layout smetana` on every If-Sr detail diagram -- a measured choice, because smetana wraps these edge-sparse class diagrams into a far squarer layout than Graphviz -- and smetana throws `ArrayIndexOutOfBoundsException: Index 14 out of bounds for length 10` in `mincross__c.left2right` on that diagram. It is deterministic and it reproduces on the committed source, so the whole render is broken rather than flaky, and `build_uaf.py` then reports a problem and exits 1 because the rendered SVG cannot position every element.
 - Closing action: Decide whether this diagram keeps the pinned layout. Either pin the engine per diagram and give this one Graphviz, raise the PlantUML defect and pin a version that has it fixed, or drop the pragma for If-Sr and accept the wider layout its comment measured. Then re-render every If-Sr diagram from one engine, so a reader is not comparing two.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-132 (`../../record/2026-09-17/the-node-runs-the-approval-queue.md`).
 
 **GAP-140 A node's deadline is drawn against the desktop's own clock**
@@ -2201,6 +2205,20 @@ Counts: 148 gaps, 3 mission, 145 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found building GAP-145 (`../../record/2026-09-23/a-register-that-says-how-old-it-is.md`).
 - Depends on: GAP-137.
+
+**GAP-154 The Disconnected reconciliation row still says no decision reaches a node's record**
+
+- Type: Technical.
+- Capability: CAP-5.4 Disconnected and reconcile.
+- History:
+  - 2026-09-25, Open: Found while checking GAP-129 against the code. Not edited in that change: the sentence is in a criterion cell of the verification table, which only the owner changes.
+- Evidence: `docs/verification-capability-table.md` (the cross-layer "Disconnected reconciliation" row); `gungnir-app/tests/cut_off_and_reconnected.rs`; GAP-129's closing entry.
+- Severity: 1. Reach: 1 threads. Effort: S. Priority: 1.
+- Impact: The cross-layer Disconnected reconciliation row of the verification table ends "No build puts a decision on a node's record yet ... outside tests reconciliation meets no conflict (GAP-129)". Since GAP-132 and GAP-134 a node records every decision taken through its queue and every decision forwarded after an outage, and GAP-129 is closed, so a reader of the table is told the opposite of what the code does. The sentence sits inside the row's pass-criterion cell, and any change to a criterion cell is the owner's.
+- Closing action: On the owner's next walk of the table, replace the sentence with what now holds: the node's record carries decisions taken on its queue and forwarded after an outage, and an outage's conflicts are caught by track (D-58) and, for pre-UUID journals, by plan (D-53). The criterion itself is unchanged.
+- Target: I3. Owner: Owner. Status: Open.
+- Reference: Found closing GAP-129 (`../../record/2026-09-25/housekeeping-after-dn-31.md`).
+- Depends on: GAP-129.
 
 **GAP-160 A node publishes no track, so a linked desktop's picture is frozen at sign-in**
 

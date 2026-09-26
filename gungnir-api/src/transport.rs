@@ -17,9 +17,9 @@
 //! The token is minted by the node against its own account store and verified per
 //! request; a caller who presents none, or a bad one, gets `401`. **No route believes a
 //! body that names its own operator**: the caller is whoever the token says, and nobody
-//! else. [`v3::DecisionRequest`] names no operator at all, for that reason -- the
-//! unreachable [`crate::v3::ApprovalRequest`] still carries one, and is why the rule had
-//! to be written down (GAP-138).
+//! else. [`v3::DecisionRequest`] names no operator at all, for that reason. The plan-keyed
+//! `ApprovalRequest`, which named its own operator in the body and which no route had
+//! served since GAP-132, was removed by GAP-138.
 //!
 //! A node with no caller authority configured refuses every route but the session one,
 //! and says so. That is a deployment with no account store, which is the default: it
