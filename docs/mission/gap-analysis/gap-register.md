@@ -170,10 +170,11 @@ history, and an entry is never edited once it has merged.
 | GAP-147 | No committed recording reaches round 1's radars | Technical | CAP-5.2, CAP-1.4 | 2 | 4 | M | 8 | I3 | Services engineer | Open |
 | GAP-156 | A picture the exact solver cannot finish in time is never answered | Technical | CAP-3.3 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
 | GAP-157 | A linked desktop cannot tell that its node's planner is stale | Technical | CAP-3.3, CAP-7.3 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
+| GAP-165 | A linked desktop's node session lapses and nothing renews it while the link is up | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-162 | A sensor manager may apply a whole baseline, and applying one checks no permission | Technical | CAP-6.2, CAP-5.6 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-163 | A cut tail of the audit log still verifies, because nothing outside it holds its head | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
 
-Counts: 159 gaps, 3 mission, 156 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 160 gaps, 3 mission, 157 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2381,6 +2382,20 @@ Counts: 159 gaps, 3 mission, 156 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found building GAP-119 (`../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`).
 - Depends on: GAP-119.
+
+**GAP-165 A linked desktop's node session lapses and nothing renews it while the link is up**
+
+- Type: Technical.
+- Capability: CAP-7.3 Three profiles.
+- History:
+  - 2026-09-26, Open: Found reading the token path while building GAP-120's parity test, recorded there, and assigned its own number by the orchestrator.
+  - 2026-09-26, Closed: Closed under D-89: the link renews at three quarters of the lifetime the node gave, read off the node's clock, and at once when the node refuses the token; a `401` keeps what was offered queued and it goes again under the new token. A renewal the node refuses ends the connection. `gungnir-remote/tests/token_renewal.rs` moves the node's clock past expiry rather than waiting. See `../../record/2026-09-26/a-live-link-keeps-its-session.md`.
+- Evidence: `gungnir-remote/src/link.rs` (`run_link` signed in once per connection and handed the same token to every flusher); `gungnir-node/src/auth.rs` (`unwrap_or(900.0)`); `gungnir-api/src/transport.rs` (the stream verifies its token at subscription only).
+- Severity: 5. Reach: 1 threads. Effort: S. Priority: 5.
+- Impact: A node-issued token expires after the baseline's session lifetime, or 900 s where the baseline names none, and the stream is authenticated once, when it subscribes. Nothing asked for a new token while the stream stayed up, so from then on every write a linked desktop made was refused `401`: its detections, sensor tasks and exchange sets waited in their outboxes, and every decision an operator took on the node's queue came back refused, until the stream happened to reconnect. Where the baseline names no lifetime the desktop's own session never expires, so the link stayed up refusing for ever.
+- Closing action: Renew the session on a live link ahead of the token's expiry, whatever the baseline says, and whenever the node refuses the token; treat a `401` as a lapsed session to renew and retry, never as the node's answer to what was sent.
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: Found building GAP-120 (`../../record/2026-09-25/one-scenario-through-both-backends.md`).
 
 **GAP-162 A sensor manager may apply a whole baseline, and applying one checks no permission**
 
