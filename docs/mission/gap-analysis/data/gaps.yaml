@@ -9920,6 +9920,17 @@
       segments as D-78 applies the session age, and reading earlier segments back for PN-20.
       Human-owned; see docs/signatures.md. See
       `../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed. `gungnir_security::purge_expired_segments` applies `max_audit_log_age_days`
+      in both binaries, opt-in as D-78: oldest first, stopping at the newest segment, this
+      run's, a held one, or one a held session's run wrote; each removal journaled and
+      synced before the file goes, then audited, logged, counted and on the desktop an
+      alert, so GAP-163's verifier reads it as a purge (D-105). PN-20 lists every segment
+      with its verification state and opens earlier runs read only (D-106). Human-owned
+      (`gungnir-security`); see docs/signatures.md. See
+      `../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`.
 
 - id: GAP-153
   name: A non-finite float in an envelope breaks the v3 stream and history
@@ -10403,6 +10414,18 @@
       limit rather than implying it away. An anchor is a new event on the journal and a
       new field on the link, so it is a change of its own; retention and reading earlier
       runs back are GAP-152's.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed. The head is kept in the event journal, as the owner decided (D-104):
+      `AuditEvent::Anchored` every 64 entries or five seconds, and at close, over synced
+      lines only. `gungnir_security::verify_audit_record` runs at start on both binaries
+      and from PN-20, names a cut segment with its missing count, a rewritten tail and a
+      removed file, and says so in an alert, on PN-20, in the audit log and in the node's
+      log. No link field was needed. Human-owned (`gungnir-security`); see
+      docs/signatures.md. Held by `gungnir-app/tests/audit_record.rs` and
+      `gungnir-node/tests/node_audit_record.rs`; the node's verification not reaching
+      PN-20 is GAP-179. See `../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`.
 
 - id: GAP-167
   name: The outage tests' proxy can let one connection through a cut
@@ -10769,3 +10792,36 @@
       passing diagnosed run had seen the edge; the failure had not; forcing that order
       fails on main every time. See
       `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.
+- id: GAP-179
+  name: A node's audit record and its verification reach only the node's log
+  type: Technical
+  caps: [CAP-6.3]
+  layer: "Productization: security"
+  sev: 2
+  effort: M
+  target: I3
+  owner: Security engineer (human-owned crate)
+  deps: [GAP-163]
+  impact: >-
+    A node verifies its audit record at start and says what is wrong in its log and on
+    every health line, but no route serves the record or that verification, so the
+    security officer at a linked desktop -- whose layout is PN-20 and the health panel --
+    sees the desktop's record only. A node whose audit segment was cut is told about in a
+    log file a watch floor may never read.
+  evidence: >-
+    `gungnir-node/src/audit_record.rs` (module documentation); `gungnir-api/src/transport.rs`
+    serves no audit route; `docs/design/DN-23-operator-authentication.md` §14
+  action: >-
+    Decide how a node's audit record reaches PN-20: a read route gated on a permission the
+    security officer holds (a change to `mission/roles-and-stakeholders.md` §4 first), and
+    the node's last verification carried beside its health, then draw both on PN-20 as the
+    desktop's own are drawn.
+  ref: >-
+    Found building GAP-163 (`../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found building GAP-163. Not built there: serving the audit record is a new read path
+      on `gungnir-api` and an authority question §4 does not yet answer, which are changes
+      of their own.

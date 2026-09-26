@@ -23,11 +23,11 @@ pub struct RetentionPolicy {
     /// many days. Measured from the last write, not the first, so a long session is kept
     /// for the full period after it ended.
     pub max_session_age_days: u32,
-    /// The audit log's age limit.
-    ///
-    /// **Governs nothing yet**: the audit log is held in memory for the life of the
-    /// process (`gungnir_security::InMemoryAuditLog`), so nothing durable holds one to
-    /// purge. GAP-152 is the durable log this would apply to.
+    /// An audit-log segment is purged once it has not been written for **more than** this
+    /// many days (GAP-152, D-105): whole segments of `gungnir_security::FileAuditLog`,
+    /// oldest first, never the newest nor one under a hold, each purge journaled before
+    /// the file goes (`gungnir_security::audit::retention`,
+    /// `docs/design/DN-23-operator-authentication.md` §14).
     pub max_audit_log_age_days: u32,
 }
 
