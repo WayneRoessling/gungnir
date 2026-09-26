@@ -3876,6 +3876,9 @@ fn first_engagement_is_drawn_as_a_worst_case_with_its_count_and_never_as_zero() 
                 ],
                 on_no_corridor: 2,
                 clutter_pairings: 5,
+                plans_proposed: 40,
+                plans_not_offered: 3,
+                not_offered_because: vec![("NoGoGeofence".into(), 3)],
             },
         }),
         rehearsal_scenario: TestTrackNumber(1),
@@ -3946,7 +3949,17 @@ fn first_engagement_is_drawn_as_a_worst_case_with_its_count_and_never_as_zero() 
         "{}",
         frame.joined()
     );
+    // GAP-182: plans the deployment's own policy did not offer are said, with why.
+    assert!(
+        frame.says(
+            "3 of the 40 plan(s) the run proposed were not offered for decision under this \
+             deployment's policy (3 denied: NoGoGeofence)"
+        ),
+        "{}",
+        frame.joined()
+    );
     assert!(frame.says("the least ground range"), "{}", frame.joined());
+    assert!(frame.says("own policy offered"), "{}", frame.joined());
 }
 
 /// An empty laydown table says why rather than drawing nothing (DN-26 section 8).

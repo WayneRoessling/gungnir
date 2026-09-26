@@ -202,7 +202,14 @@ measured**, never as a value.
   come within the placed sensors' range bands. Until GAP-147 commits a round-1 recording,
   the coverage comparison, not the rehearsal, is where a participant sees `c` differ, and a
   rehearsal's zeros are to be read as that sentence says, not scored as a finding about
-  the panel. **Three faults in this card, found
+  the panel. **Since 2026-09-26 the options table also carries a first-engagement column
+  for the upper Vell approach** (GAP-020, DN-02 §9), read from each laydown's last
+  rehearsal, and a rehearsal decides under round 1's own policy (GAP-182). Round 1 keeps
+  its area layer at hold and the planner tasks the area battery in every plan, so no plan
+  is offered for decision (GAP-183), and against the committed recordings the column
+  reads "not computable" giving that reason. The moderator reads that
+  cell as the reason it states, as with the zeros above; the card's success line does not
+  ask for the column and is unchanged. **Three faults in this card, found
   on 2026-09-08 by reading PN-16 against it rather than by running it, and named here
   rather than worked around. The first is fixed in the baseline, the second was fixed in
   the baseline once the owner had ruled on it, and the third is fixed in §5's card:**
