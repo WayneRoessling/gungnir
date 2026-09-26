@@ -164,6 +164,41 @@ pub struct Recording {
     pub environment: Vec<EnvironmentEvent>,
 }
 
+/// The bearings a placed sensor can see, clockwise from the recording frame's north:
+/// the deployment's azimuth sector for it (GAP-118, D-84), already turned into the
+/// recording's frame by the caller.
+///
+/// **Applied on top of the detection model's own field of regard**, never instead of
+/// it: the model says what a sensor of that type sees, the sector says which way this one
+/// is pointed, and a target has to be inside both. A target outside the sector is
+/// skipped before any draw, like every other geometric gate, so the per-sensor-and-target
+/// streams stay aligned whichever way the sensor faces (D-74).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sector {
+    /// Centre of the sector, radians clockwise from north; read modulo 2π.
+    pub boresight_rad: f64,
+    /// Full width, radians, in `(0, 2π]`.
+    pub width_rad: f64,
+}
+
+impl Sector {
+    /// Whether the horizontal direction `(east, north)` lies in the sector, edges
+    /// included. A direction with no bearing -- a target straight overhead -- is inside.
+    #[must_use]
+    pub fn contains(&self, east: f64, north: f64) -> bool {
+        let tau = std::f64::consts::TAU;
+        if self.width_rad >= tau {
+            return true;
+        }
+        if east == 0.0 && north == 0.0 {
+            return true;
+        }
+        let pi = std::f64::consts::PI;
+        let offset = (east.atan2(north) - self.boresight_rad + pi).rem_euclid(tau) - pi;
+        offset.abs() <= self.width_rad / 2.0 + 1e-9
+    }
+}
+
 /// A sensor, where it stands, and the model it observes with.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlacedSensor {
@@ -171,6 +206,8 @@ pub struct PlacedSensor {
     pub model: SensorParams,
     /// ENU metres about the recording's origin.
     pub position: [f64; 3],
+    /// The way it is pointed, when it is sectored; `None` is the full circle.
+    pub sector: Option<Sector>,
 }
 
 /// Which of the recording's sensor-specific events apply (D-73).
@@ -438,6 +475,13 @@ pub fn reobserve(
                     if entity.destroyed_at_s.is_some_and(|d| d <= t + 1e-9) {
                         continue;
                     }
+                    if let Some(sector) = s.sector {
+                        let east = record.pos[0].f() - s.position[0];
+                        let north = record.pos[1].f() - s.position[1];
+                        if !sector.contains(east, north) {
+                            continue;
+                        }
+                    }
                     let target = TargetState {
                         id: &entity.id,
                         position: record.pos,
@@ -462,7 +506,18 @@ pub fn reobserve(
                         observations.push(o);
                     }
                 }
-                let fa = false_alarms(&s.model, positions[i], &scan, &mut fa_streams[i]);
+                // Clutter is drawn about the sensor all round, so the stream is the same
+                // whichever way it faces; what falls outside its sector it never saw.
+                let fa: Vec<Observation> =
+                    false_alarms(&s.model, positions[i], &scan, &mut fa_streams[i])
+                        .into_iter()
+                        .filter(|o| {
+                            s.sector.is_none_or(|sector| {
+                                let m = o.measurement();
+                                sector.contains(m[0].f() - s.position[0], m[1].f() - s.position[1])
+                            })
+                        })
+                        .collect();
                 tallies[i].false_alarms += fa.len();
                 observations.extend(fa);
             }
@@ -558,6 +613,7 @@ mod tests {
             id,
             model: radar(1.0),
             position: [0.0, 0.0, 0.0],
+            sector: None,
         }
     }
 
@@ -652,6 +708,49 @@ mod tests {
             assert!(o.scan_time_s() <= 4.0, "seen at {}", o.scan_time_s());
         }
         assert!(run.per_sensor[0].detections > 0);
+    }
+
+    /// A sectored sensor sees only what is inside both its model's field of regard and
+    /// its sector (GAP-118's sector, DN-32 §12): the target stands due east, so a sector
+    /// facing east sees it exactly as the full circle does -- the same draws, the same
+    /// detections -- and one facing west sees nothing of it.
+    #[test]
+    fn a_sensor_sees_only_inside_its_sector_and_facing_it_changes_nothing_else() {
+        let rec = recording(every_tick());
+        let run = |sector: Option<Sector>| {
+            reobserve(
+                &rec,
+                &[PlacedSensor {
+                    sector,
+                    ..placed(1)
+                }],
+                SensorEvents::NotApplied,
+                "x",
+            )
+            .expect("runs")
+        };
+        let quarter = std::f64::consts::FRAC_PI_2;
+        let all_round = run(None);
+        let east = run(Some(Sector {
+            boresight_rad: quarter,
+            width_rad: quarter,
+        }));
+        let west = run(Some(Sector {
+            boresight_rad: 3.0 * quarter,
+            width_rad: quarter,
+        }));
+        assert!(all_round.per_sensor[0].detections > 0);
+        assert_eq!(east.observations, all_round.observations);
+        assert_eq!(west.per_sensor[0].detections, 0);
+        assert_eq!(west.per_sensor[0].scans, all_round.per_sensor[0].scans);
+        assert!(
+            Sector {
+                boresight_rad: 0.0,
+                width_rad: 0.1,
+            }
+            .contains(0.0, 0.0),
+            "straight overhead is inside"
+        );
     }
 
     #[test]

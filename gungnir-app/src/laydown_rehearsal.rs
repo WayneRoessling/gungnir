@@ -83,8 +83,8 @@ use gungnir_coord::{CoordTransform, Enu, Geodetic, Wgs84};
 use gungnir_ingest::adapters::recorded::RecordedFeedAdapter;
 use gungnir_ingest::{AllowListAuthenticator, IngestGateway};
 use gungnir_model::{
-    DetectionView, Laydown, LaydownId, MissionTime, Provenance, RehearsalOrigin, SensorId,
-    SensorMode, TestTrackNumber,
+    AzimuthSector, DetectionView, Laydown, LaydownId, LocalFrame, MissionTime, Provenance,
+    RehearsalOrigin, SensorId, SensorMode, TestTrackNumber,
 };
 use gungnir_sensor_sim as sim;
 use gungnir_time::ReplayClockAuthority;
@@ -140,6 +140,10 @@ pub struct SensorRehearsal {
     pub mode: SensorMode,
     /// Where the laydown places it, ENU metres about the recording's origin (DN-32 §5.5).
     pub position_enu: [f64; 3],
+    /// The way it was pointed: the laydown's re-aim, else the sensor's declared sector,
+    /// against true north where it stands (GAP-118); `None` is the full circle. A target
+    /// outside it was not seen, on top of the detection model's own field of regard.
+    pub azimuth_sector: Option<AzimuthSector>,
     /// The detection model it was re-observed with, or `None` when its mode does not
     /// observe (standby, calibrating, offline) and it was not run at all.
     pub detection_model: Option<String>,
@@ -186,7 +190,7 @@ pub struct SensorDifference {
     pub sensor: SensorId,
     /// Detections of a recorded target under the first record, then the second.
     pub detections: (usize, usize),
-    /// Whether the two laydowns place the sensor in different places or modes.
+    /// Whether the two laydowns place the sensor in different places, modes or sectors.
     pub moved: bool,
 }
 
@@ -219,7 +223,9 @@ pub fn sensors_that_differ(
                 (x.detections != y.detections).then(|| SensorDifference {
                     sensor: x.sensor,
                     detections: (x.detections, y.detections),
-                    moved: x.position_enu != y.position_enu || x.mode != y.mode,
+                    moved: x.position_enu != y.position_enu
+                        || x.mode != y.mode
+                        || x.azimuth_sector != y.azimuth_sector,
                 })
             })
             .collect(),
@@ -382,7 +388,7 @@ fn resolve_sensors<'a>(
 /// A throwaway configuration: the laydown's sensors and resources, placed about the
 /// recording's own origin (DN-32 §5.5), every other field the deployment's defaults.
 fn config_for(
-    placed: &[(&SensorConfig, [f64; 3])],
+    placed: &[(&SensorConfig, [f64; 3], Option<AzimuthSector>)],
     origin: Geodetic,
     laydown: &Laydown,
     base_resources: &[ResourceConfig],
@@ -404,12 +410,13 @@ fn config_for(
     ConfigBaseline {
         sensors: placed
             .iter()
-            .map(|(s, enu)| SensorConfig {
+            .map(|(s, enu, sector)| SensorConfig {
                 position: geodetic_of(*enu, origin),
                 // A rehearsal commands nothing, and a throwaway desktop has no endpoint
                 // to send a command to.
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                azimuth_sector: *sector,
                 ..(*s).clone()
             })
             .collect(),
@@ -517,15 +524,38 @@ pub fn run(
 
     // Every refusal before any work: a laydown that cannot be rehearsed runs nothing.
     let resolved = resolve_sensors(laydown, base_sensors, &catalogue, &catalogue_file)?;
+    let origin = Geodetic {
+        lat_rad: metadata.origin.lat.to_radians(),
+        lon_rad: metadata.origin.lon.to_radians(),
+        alt_m: metadata.origin.alt_m,
+    };
+    let frame = LocalFrame::new(origin);
+    // Each placed sensor's sector: the laydown's re-aim if it states one, else the
+    // sensor's declared sector (GAP-118, D-84), surveyed against true north where it
+    // stands and turned into the recording's frame there.
+    let sectors: Vec<Option<AzimuthSector>> = laydown
+        .sensors
+        .iter()
+        .zip(&resolved)
+        .map(|(p, (declared, _))| p.azimuth_sector.or(declared.azimuth_sector))
+        .collect();
     let placed: Vec<sim::PlacedSensor> = laydown
         .sensors
         .iter()
         .zip(&resolved)
-        .filter_map(|(p, (_, model))| {
+        .zip(&sectors)
+        .filter_map(|((p, (_, model)), sector)| {
             model.as_ref().map(|m| sim::PlacedSensor {
                 id: i64::from(p.sensor.0),
                 model: m.clone(),
                 position: p.position_enu,
+                sector: sector.map(|s| {
+                    let in_frame = frame.sector_in_frame(s, frame.to_geodetic(p.position_enu));
+                    sim::Sector {
+                        boresight_rad: in_frame.boresight_rad,
+                        width_rad: in_frame.width_rad,
+                    }
+                }),
             })
         })
         .collect();
@@ -562,11 +592,6 @@ pub fn run(
         .filter_map(|o| detection_of(o, scenario, &laydown.id))
         .collect();
 
-    let origin = Geodetic {
-        lat_rad: metadata.origin.lat.to_radians(),
-        lon_rad: metadata.origin.lon.to_radians(),
-        alt_m: metadata.origin.alt_m,
-    };
     let run_id = NEXT_RUN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!(
         "gungnir-rehearsal-{}-{}-{}-{run_id}",
@@ -580,11 +605,12 @@ pub fn run(
         source,
     })?;
 
-    let config_sensors: Vec<(&SensorConfig, [f64; 3])> = laydown
+    let config_sensors: Vec<(&SensorConfig, [f64; 3], Option<AzimuthSector>)> = laydown
         .sensors
         .iter()
         .zip(&resolved)
-        .map(|(p, (declared, _))| (*declared, p.position_enu))
+        .zip(&sectors)
+        .map(|((p, (declared, _)), sector)| (*declared, p.position_enu, *sector))
         .collect();
     let config = config_for(&config_sensors, origin, laydown, base_resources, &dir);
     let mut state = AppState::with_config(config)?;
@@ -644,7 +670,8 @@ pub fn run(
         .sensors
         .iter()
         .zip(&resolved)
-        .map(|(p, (declared, model))| {
+        .zip(&sectors)
+        .map(|((p, (declared, model)), sector)| {
             let tally = reobserved
                 .per_sensor
                 .iter()
@@ -653,6 +680,7 @@ pub fn run(
                 sensor: p.sensor,
                 mode: p.mode,
                 position_enu: p.position_enu,
+                azimuth_sector: *sector,
                 detection_model: model.as_ref().and(declared.detection_model.clone()),
                 detections: tally.map_or(0, |t| t.detections),
                 false_alarms: tally.map_or(0, |t| t.false_alarms),
@@ -708,6 +736,7 @@ mod tests {
                 sensor: SensorId(1),
                 position_enu: [0.0, 0.0, 25.0],
                 mode: SensorMode::Search,
+                azimuth_sector: None,
             }],
             resources: vec![ResourcePlacement {
                 resource: ResourceId(1),
@@ -767,14 +796,14 @@ mod tests {
         };
         let sensor = radar(1, Some("radar.short"));
         let close = config_for(
-            &[(&sensor, [100.0, 0.0, 25.0])],
+            &[(&sensor, [100.0, 0.0, 25.0], None)],
             origin,
             &laydown_placing([500.0, 0.0, 0.0]),
             &base_resources(),
             Path::new("."),
         );
         let far = config_for(
-            &[(&sensor, [9_000.0, 0.0, 25.0])],
+            &[(&sensor, [9_000.0, 0.0, 25.0], None)],
             origin,
             &laydown_placing([50_000.0, 50_000.0, 0.0]),
             &base_resources(),

@@ -1097,6 +1097,10 @@ IE-authority-settings,uafId,IE-authority-settings
 IE-authority-settings,uafKind,InformationElement
 IE-authority-settings,registry.code,gungnir_model::AuthoritySettings
 IE-authority-settings,registry.domain,"Policy, authority & settings"
+IE-azimuth-sector,uafId,IE-azimuth-sector
+IE-azimuth-sector,uafKind,InformationElement
+IE-azimuth-sector,registry.code,gungnir_model::AzimuthSector
+IE-azimuth-sector,registry.domain,"Core identifiers, frames & quality"
 IE-bearing-ray-view,uafId,IE-bearing-ray-view
 IE-bearing-ray-view,uafKind,InformationElement
 IE-bearing-ray-view,registry.code,gungnir_model::BearingRayView
@@ -1409,6 +1413,10 @@ IE-scheduled-product,uafId,IE-scheduled-product
 IE-scheduled-product,uafKind,InformationElement
 IE-scheduled-product,registry.code,gungnir_model::ScheduledProduct
 IE-scheduled-product,registry.domain,Battle rhythm & mission records
+IE-sector-error,uafId,IE-sector-error
+IE-sector-error,uafKind,InformationElement
+IE-sector-error,registry.code,gungnir_model::SectorError
+IE-sector-error,registry.domain,"Core identifiers, frames & quality"
 IE-sensor-command,uafId,IE-sensor-command
 IE-sensor-command,uafKind,InformationElement
 IE-sensor-command,registry.code,gungnir_model::SensorCommand

@@ -116,6 +116,7 @@ fn config_for(timeline: &GeneratedTimeline, dir: &Path) -> ConfigBaseline {
                 control_endpoint: None,
                 maintenance: Vec::new(),
                 detection_model: None,
+                azimuth_sector: None,
             })
             .collect(),
         data_dir: dir.to_string_lossy().into_owned(),

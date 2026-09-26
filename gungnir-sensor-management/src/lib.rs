@@ -54,6 +54,11 @@ pub struct SensorRecord {
     /// asks about a window -- is this absence expected, did it overrun, what is due this
     /// watch -- is a question about one sensor.
     pub maintenance: Vec<MaintenanceWindow>,
+    /// The bearings this sensor can see, against true north at the sensor; `None` is the
+    /// full circle (GAP-118, D-84). From the declaration, like the range: a sector is the
+    /// sensor's geometry, not its state.
+    #[serde(default)]
+    pub azimuth_sector: Option<gungnir_model::AzimuthSector>,
 }
 
 impl SensorRecord {
@@ -77,6 +82,7 @@ impl SensorRecord {
                 .iter()
                 .map(|w| w.to_window(SensorId(config.id)))
                 .collect(),
+            azimuth_sector: config.azimuth_sector,
         }
     }
 
@@ -189,6 +195,10 @@ pub struct CoverageRegion {
     pub center: Geodetic,
     pub radius_m: f64,
     pub confidence: f32,
+    /// The bearings the region spans, against true north at `center`; `None` is the full
+    /// circle, so a region without one is the disc it always was (GAP-118, D-84).
+    #[serde(default)]
+    pub azimuth_sector: Option<gungnir_model::AzimuthSector>,
 }
 
 /// The adapter a registry hands tasks to, if one has been attached.
@@ -362,6 +372,7 @@ impl SensorRegistry for InMemorySensorRegistry {
                     center: s.position,
                     radius_m: s.max_range_m,
                     confidence,
+                    azimuth_sector: s.azimuth_sector,
                 })
             })
             .collect()
@@ -649,6 +660,7 @@ mod service_observation_tests {
                 control_endpoint: None,
                 maintenance: Vec::new(),
                 detection_model: None,
+                azimuth_sector: None,
             }],
             "v1",
         )
@@ -961,6 +973,7 @@ mod tests {
                 control_endpoint: Some("radar-control".into()),
                 maintenance: Vec::new(),
                 detection_model: None,
+                azimuth_sector: None,
             }],
             "v1",
         )
@@ -1019,6 +1032,7 @@ mod tests {
                 control_endpoint: None,
                 maintenance: Vec::new(),
                 detection_model: None,
+                azimuth_sector: None,
             }],
             "v1",
         );
@@ -1138,6 +1152,7 @@ mod tests {
                     control_endpoint: None,
                     maintenance: Vec::new(),
                     detection_model: None,
+                    azimuth_sector: None,
                 },
                 SensorConfig {
                     id: 2,
@@ -1147,6 +1162,7 @@ mod tests {
                     control_endpoint: None,
                     maintenance: Vec::new(),
                     detection_model: None,
+                    azimuth_sector: None,
                 },
             ],
             "cal-2026-09",
@@ -1168,6 +1184,7 @@ mod tests {
                     reason: "antenna swap".into(),
                 }],
                 detection_model: None,
+                azimuth_sector: None,
             }],
             "cal-2026-09",
         )
@@ -1290,6 +1307,43 @@ mod tests {
         assert_eq!(cov[0].confidence, 0.7);
         assert_eq!(cov[1].confidence, 1.0);
         assert_eq!(cov[0].radius_m, 20_000.0);
+    }
+
+    /// GAP-118: a declared sector reaches the record and the region drawn from it, and a
+    /// sensor that declares none covers the full circle, spelled `None`.
+    #[test]
+    fn a_declared_sector_reaches_the_coverage_region() {
+        let sector = gungnir_model::AzimuthSector::new(350_f64.to_radians(), 40_f64.to_radians())
+            .expect("a legal sector");
+        let configs = vec![
+            SensorConfig {
+                id: 1,
+                modality: "radar".into(),
+                position: [0.0, 0.0, 0.0],
+                max_range_m: 20_000.0,
+                control_endpoint: None,
+                maintenance: Vec::new(),
+                azimuth_sector: Some(sector),
+                detection_model: None,
+            },
+            SensorConfig {
+                id: 2,
+                modality: "radar".into(),
+                position: [0.0, 0.0, 0.0],
+                max_range_m: 20_000.0,
+                control_endpoint: None,
+                maintenance: Vec::new(),
+                azimuth_sector: None,
+                detection_model: None,
+            },
+        ];
+        let mut r = InMemorySensorRegistry::from_config(&configs, "cal-1");
+        assert_eq!(r.sensors()[0].azimuth_sector, Some(sector));
+        r.set_mode(SensorId(1), SensorMode::Search).expect("search");
+        r.set_mode(SensorId(2), SensorMode::Search).expect("search");
+        let cov = r.coverage();
+        assert_eq!(cov[0].azimuth_sector, Some(sector));
+        assert_eq!(cov[1].azimuth_sector, None, "no sector is the full circle");
     }
 
     #[test]

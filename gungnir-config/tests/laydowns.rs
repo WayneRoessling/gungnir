@@ -41,6 +41,7 @@ fn placed(sensor: u32, position: [f64; 3]) -> SensorPlacement {
         sensor: SensorId(sensor),
         position_enu: position,
         mode: SensorMode::Search,
+        azimuth_sector: None,
     }
 }
 

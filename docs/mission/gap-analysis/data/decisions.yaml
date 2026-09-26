@@ -1647,7 +1647,6 @@
     (DN-31 §9 row 8), and the name says what the origin is worth. A stated, readable label
     was not taken: two desktops could claim one name and nothing would detect it. See
     `../../record/2026-09-22/a-desktop-is-named-by-its-own-key.md`.
-
 - id: D-68
   decision: How the node's own exchange set and a desktop's published set share one register
   question: >-
@@ -1674,7 +1673,6 @@
     answered as proposed on 2026-09-23, the day after the build. See
     `../../record/2026-09-23/a-partner-hears-what-the-node-decided.md` and
     `../../record/2026-09-23/the-register-s-contract-is-decided.md`.
-
 - id: D-69
   decision: What makes a producer's exchange set stale, and what a partner is told about it
   question: >-
@@ -1699,7 +1697,6 @@
     publishes none. The bound is unchanged: a new producer beyond sixty-four is refused
     rather than evicting a set a partner is served from. See
     `../../record/2026-09-23/a-register-that-says-how-old-it-is.md`.
-
 - id: D-70
   decision: Whose clock a node's deadline is drawn against, and when a console is told they differ
   question: >-
@@ -1721,7 +1718,6 @@
     countdown is drawn to the second: below it nothing a person reads can change, above it
     the console and the node disagree by a digit on the screen. Nothing sets or steers a
     clock. See `../../record/2026-09-23/a-deadline-in-the-node-s-own-time.md`.
-
 - id: D-71
   decision: What a desktop that has never reached its node does
   question: >-
@@ -1741,7 +1737,6 @@
     The desktop falls back and the sentence says which it is: "has not answered since this
     desktop signed in" rather than "silent for 12 s", because an operator reads the two
     differently. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.
-
 - id: D-75
   decision: What a desktop's link does with a publish the node refuses, and what the console is told
   question: >-
@@ -1771,7 +1766,6 @@
     desktop's copy of the matrix, answers for the session, and the held set is what a
     Supervisor signing in at that console should send. See
     `../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`.
-
 - id: D-76
   decision: How the desktop's exchange outbox is bounded
   question: >-
@@ -1794,7 +1788,6 @@
     type and for a `gungnir-remote` to `gungnir-resilience` edge `ARCHITECTURE.md` §7.1
     does not show, and GAP-121 is left open. See
     `../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`.
-
 - id: D-79
   decision: Which layout engine the If-Sr diagrams are rendered by
   question: >-
@@ -1820,7 +1813,6 @@
     change away from the next crash while the check needs every element positioned. The
     Rs-Cn family renders cleanly under smetana and keeps it, one engine per family. See
     `../../record/2026-09-25/housekeeping-after-dn-31.md`.
-
 - id: D-80
   decision: Whether the unreachable plan-keyed decision type is removed or documented
   question: >-
@@ -1870,7 +1862,6 @@
     field would reopen the defect; the adapter wraps `serde_json` once and covers every
     field by construction. See
     `../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`.
-
 - id: D-78
   decision: When the journal is purged, what a purge may never take, and who chooses the age
   question: >-
@@ -1901,6 +1892,58 @@
     session, a log line, a count, and on the desktop an alert. The audit-log age governs
     nothing until a durable audit log exists (GAP-152). See
     `../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`.
+
+- id: D-83
+  decision: How the risk score reads time to impact
+  question: >-
+    The `gungnir-assessment` criterion is a score monotonic in time to impact, and the score
+    read range and whether a track closed, never how soon it arrived (GAP-124). Which time
+    to impact -- at the current closing speed, or to the closest point of approach -- how
+    does it combine with range, priority and lethality, and what does the track's
+    covariance change?
+  raised_in: "GAP-124"
+  decider: Owner
+  unblocks: GAP-124
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** **Time to impact stays range to
+    the boundary over closing speed, and a closing track scores on it alone** (DN-01 §10).
+    Urgency is `τ / (τ + T)` with `τ` the baseline's `assessment.urgency_half_time_s`
+    (60 s by default); a confidently closing track's kinematic factor is `1/2 + u/2`, one
+    not closing keeps `p/2` on proximity, and the track's own closing-speed sigma blends
+    the two, so a closing speed within two sigma of zero earns little. Priority and
+    lethality multiply it as before. The time to the closest point of approach was
+    rejected as the time to impact: it ignores the miss distance, so a track passing 20 km
+    off would be "10 s from impact" and trigger impact warnings DN-03 keeps for arrivals,
+    and it halves the score the instant a track passes. A range-and-time product was
+    rejected because a near-slow track then outscores a far-fast one that arrives sooner,
+    which is the defect. See
+    `../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`.
+
+- id: D-84
+  decision: What a sensor's azimuth sector is and where it is stated
+  question: >-
+    `CoverageVolume` had no bearing, so the coverage-accuracy criterion's bearing clause
+    could not be checked and a sectored sensor could not be represented (GAP-118). Give it
+    a sector, or take bearing out of the criterion? And if a sector: stated how, against
+    which north, and where -- the sensor, the laydown, or both?
+  raised_in: "GAP-118"
+  decider: Owner
+  unblocks: GAP-118
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** **A sector, as a boresight and a
+    width in (0, 2π], against true north at the sensor, on the sensor's declaration and
+    optionally on a laydown placement; absent is the full circle** (DN-12 §9). Removing
+    bearing from the criterion was rejected: real sensors have sectors, and a panel radar
+    counted as covering all round is coverage that is not there, which DN-12 exists to
+    prevent. True north at the sensor because that is what a survey states; the local
+    frame's north departs from it by the meridian convergence, 0.35 degree 39 km east at
+    45 degrees north, so the frame turns each sector as it places it. Two edges were
+    rejected for a boresight and width because the width is what validation bounds and a
+    sector across north then needs no special case. A placement may re-aim its sensor, and
+    one that does not inherits the declaration's sector. See
+    `../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`.
 
 - id: D-72
   decision: What truth a rehearsal re-observes, when scans fall between truth records

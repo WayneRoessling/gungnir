@@ -73,6 +73,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
             control_endpoint: None,
             maintenance: Vec::new(),
             detection_model: None,
+            azimuth_sector: None,
         }],
         ais_feeds: vec![AisFeedConfig {
             name: "harbour".into(),

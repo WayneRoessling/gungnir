@@ -254,6 +254,7 @@ mod tests {
             control_endpoint: None,
             maintenance: Vec::new(),
             detection_model: None,
+            azimuth_sector: None,
         }
     }
 
@@ -275,6 +276,7 @@ mod tests {
             control_endpoint: None,
             maintenance: Vec::new(),
             detection_model: None,
+            azimuth_sector: None,
         }
     }
 

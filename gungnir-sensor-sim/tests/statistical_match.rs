@@ -156,6 +156,7 @@ fn load(dir: &Path) -> Set {
                 id: s.id,
                 model: s.params,
                 position: s.pos,
+                sector: None,
             })
             .collect(),
         recorded,

@@ -15,8 +15,8 @@ pub mod anomaly;
 pub mod coverage;
 
 pub use coverage::{
-    combined_coverage, coverage_from_registry, CoverageGap, CoverageParameters, CoverageReport,
-    GapSeverity, PointCoverage,
+    combined_coverage, coverage_from_registry, volume_of, CoverageGap, CoverageParameters,
+    CoverageReport, GapSeverity, PointCoverage,
 };
 
 pub use anomaly::{
@@ -101,17 +101,33 @@ pub fn viewshed(los: &dyn LineOfSight, observer: [f64; 3], points: &[[f64; 3]]) 
     points.iter().map(|p| los.visible(observer, *p)).collect()
 }
 
-/// A sensor's coverage: a range limit and a minimum elevation angle above the
-/// sensor's horizon (terrain masking is applied by combining with a
+/// A sensor's coverage: a range limit, a minimum elevation angle above the sensor's
+/// horizon, and an azimuth sector (terrain masking is applied by combining with a
 /// [`LineOfSight`]).
+///
+/// Every angle is in the local ENU frame the positions are in: elevation against the
+/// frame's `u` axis, bearing clockwise from its `+n` axis. A sector surveyed against true
+/// north is turned into the frame by [`gungnir_model::LocalFrame::sector_in_frame`]
+/// before it is put here, which [`coverage::coverage_from_registry`] does
+/// (`docs/design/DN-12-coverage-and-gaps.md` amendment 1; GAP-118, D-84).
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CoverageVolume {
     pub sensor_enu: [f64; 3],
     pub max_range_m: f64,
     pub min_elevation_rad: f64,
+    /// The bearings the sensor sees, in the frame. **`None` is the full circle**: a
+    /// rotating radar or an omnidirectional receiver, and every volume built before
+    /// sectors existed.
+    #[serde(default)]
+    pub azimuth: Option<gungnir_model::AzimuthSector>,
 }
 
 impl CoverageVolume {
+    /// Whether the volume contains `p`: within range, at or above the minimum elevation,
+    /// and inside the sector.
+    ///
+    /// The sensor's own position is covered. A point directly above or below the sensor
+    /// has no bearing, so the sector does not exclude it and the elevation limit decides.
     pub fn covers(&self, p: [f64; 3]) -> bool {
         let d = [
             p[0] - self.sensor_enu[0],
@@ -123,7 +139,14 @@ impl CoverageVolume {
         if range > self.max_range_m || range == 0.0 {
             return range == 0.0;
         }
-        d[2].atan2(horizontal) >= self.min_elevation_rad
+        if d[2].atan2(horizontal) < self.min_elevation_rad {
+            return false;
+        }
+        match (self.azimuth, gungnir_model::bearing_rad(d[0], d[1])) {
+            (Some(sector), Some(bearing)) => sector.contains(bearing),
+            // No sector, or no bearing to judge one by.
+            _ => true,
+        }
     }
 }
 
@@ -181,6 +204,7 @@ mod tests {
             sensor_enu: [0.0, 0.0, 0.0],
             max_range_m: 1000.0,
             min_elevation_rad: 0.1,
+            azimuth: None,
         };
         assert!(cov.covers([100.0, 0.0, 50.0]));
         assert!(
@@ -188,6 +212,37 @@ mod tests {
             "below the minimum elevation"
         );
         assert!(!cov.covers([2000.0, 0.0, 500.0]), "out of range");
+    }
+
+    /// GAP-118: a sectored volume covers inside its sector, across north, and nothing
+    /// outside it; the sensor's own position and the point overhead are not excluded by a
+    /// bearing they do not have.
+    #[test]
+    fn coverage_volume_respects_its_sector_across_north() {
+        let cov = CoverageVolume {
+            sensor_enu: [100.0, 200.0, 0.0],
+            max_range_m: 1000.0,
+            min_elevation_rad: -0.5,
+            azimuth: Some(
+                gungnir_model::AzimuthSector::new(350_f64.to_radians(), 40_f64.to_radians())
+                    .expect("a legal sector"),
+            ),
+        };
+        let at = |bearing_deg: f64| {
+            let b = bearing_deg.to_radians();
+            [100.0 + 500.0 * b.sin(), 200.0 + 500.0 * b.cos(), 0.0]
+        };
+        for inside in [331.0, 350.0, 0.0, 9.0] {
+            assert!(cov.covers(at(inside)), "{inside} deg is inside 330..10");
+        }
+        for outside in [329.0, 11.0, 90.0, 180.0, 270.0] {
+            assert!(!cov.covers(at(outside)), "{outside} deg is outside 330..10");
+        }
+        assert!(cov.covers([100.0, 200.0, 0.0]), "the sensor's own position");
+        assert!(
+            cov.covers([100.0, 200.0, 300.0]),
+            "straight up has no bearing"
+        );
     }
 
     #[test]

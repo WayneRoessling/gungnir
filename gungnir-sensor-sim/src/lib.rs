@@ -53,5 +53,5 @@ pub use observe::{
 pub use python_random::PythonRandom;
 pub use recording::{
     reobserve, EntitiesFile, EntityRecord, EnvironmentEvent, EnvironmentFile, PlacedSensor,
-    ReObservation, ReObservationError, Recording, SensorEvents, SensorTally, TruthRecord,
+    ReObservation, ReObservationError, Recording, Sector, SensorEvents, SensorTally, TruthRecord,
 };

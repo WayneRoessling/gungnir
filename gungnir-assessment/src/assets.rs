@@ -16,8 +16,11 @@
 //! centre through [`AssetAnchor`], exactly as `ClosingSpeedAssessor` already takes
 //! `protected_point_enu`. Nothing else in the design changes.
 
+use crate::kinematics::{kinematics, Geometry, KinematicFactor, DEFAULT_URGENCY_HALF_TIME_S};
+use crate::prediction::closest_on_course;
 use crate::RiskScore;
 use gungnir_model::{AssetId, AssetListView, DefendedAsset, TrackView};
+use nalgebra::Vector3;
 
 /// One asset with its centre in the local ENU frame the tracks use.
 ///
@@ -69,6 +72,9 @@ pub struct AssetListAssessor {
     /// Platform-class lethality per track (GAP-027), from the host's evidence and the
     /// baseline's table; a track not listed weighs 1.0.
     class_weights: std::collections::HashMap<gungnir_model::TrackId, f64>,
+    /// The time to impact at which urgency is half its maximum, seconds (GAP-124, D-83):
+    /// the baseline's `assessment.urgency_half_time_s`.
+    urgency_half_time_s: f64,
 }
 
 impl AssetListAssessor {
@@ -84,7 +90,19 @@ impl AssetListAssessor {
             baseline_version,
             max_range_m,
             class_weights: std::collections::HashMap::new(),
+            urgency_half_time_s: DEFAULT_URGENCY_HALF_TIME_S,
         }
+    }
+
+    /// The deployment's urgency half-time (GAP-124, D-83), from the baseline's
+    /// `assessment.urgency_half_time_s`. It sets how steeply the score falls with time to
+    /// impact and never the order. A value that is not finite and positive -- which the
+    /// baseline refuses -- is not substituted: the time term then gives no urgency, and
+    /// every closing track scores on its closing alone.
+    #[must_use]
+    pub fn with_urgency_half_time_s(mut self, seconds: f64) -> Self {
+        self.urgency_half_time_s = seconds;
+        self
     }
 
     /// Platform-class lethality per track (GAP-027): the host knows the class (from a
@@ -108,70 +126,69 @@ impl AssetListAssessor {
         self.baseline_version
     }
 
-    /// Exposure of one track to one asset, or `None` beyond `max_range_m`.
-    fn expose(&self, track: &TrackView, anchor: &AssetAnchor) -> Option<AssetExposure> {
+    /// Exposure of one track to one asset with the kinematic factor behind its score, or
+    /// `None` beyond `max_range_m` or for a track whose state is not a finite number.
+    fn expose(
+        &self,
+        track: &TrackView,
+        anchor: &AssetAnchor,
+    ) -> Option<(AssetExposure, KinematicFactor)> {
         let p = track.position_enu();
         let rel = [
             p[0] - anchor.center_enu[0],
             p[1] - anchor.center_enu[1],
             p[2] - anchor.center_enu[2],
         ];
-        let centre_range = (rel[0] * rel[0] + rel[1] * rel[1] + rel[2] * rel[2]).sqrt();
+        let v = [track.state[3], track.state[4], track.state[5]];
         // An area asset is reached at its boundary, not at its centre.
-        let range_m = (centre_range - anchor.asset.extent.radius_m()).max(0.0);
-        if centre_range > self.max_range_m {
+        let k = kinematics(&Geometry {
+            relative_enu: rel,
+            velocity_enu: v,
+            covariance: &track.covariance,
+            boundary_radius_m: anchor.asset.extent.radius_m(),
+            max_range_m: self.max_range_m,
+            urgency_half_time_s: self.urgency_half_time_s,
+        })?;
+        if k.centre_range_m > self.max_range_m {
             return None;
         }
-        let v = [track.state[3], track.state[4], track.state[5]];
-        let closing = if centre_range > f64::EPSILON {
-            -(v[0] * rel[0] + v[1] * rel[1] + v[2] * rel[2]) / centre_range
-        } else {
-            0.0
-        };
-        // Scores and times are reported as f32 by design (`RiskScore`); the
-        // narrowing is intentional and the values are bounded.
-        #[allow(clippy::cast_possible_truncation)]
-        let time_to_impact_s = (closing > 0.0).then(|| (range_m / closing) as f32);
-        // Least range on the current course: |rel + v t| is minimized at
-        // t* = -dot(rel, v) / |v|^2, taken forward in time only.
-        let speed_sq = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
-        let (closest_approach_m, time_to_closest_approach_s) = if speed_sq > f64::EPSILON {
-            let t_star = (-(rel[0] * v[0] + rel[1] * v[1] + rel[2] * v[2]) / speed_sq).max(0.0);
-            let at = [
-                rel[0] + v[0] * t_star,
-                rel[1] + v[1] * t_star,
-                rel[2] + v[2] * t_star,
-            ];
-            let centre = (at[0] * at[0] + at[1] * at[1] + at[2] * at[2]).sqrt();
-            (
-                Some((centre - anchor.asset.extent.radius_m()).max(0.0)),
-                Some(t_star),
-            )
-        } else {
-            (None, None)
-        };
-        Some(AssetExposure {
-            asset: anchor.asset.id,
-            range_m,
-            time_to_impact_s,
-            closest_approach_m,
-            time_to_closest_approach_s,
-        })
+        // Least range on the current course, ever: the predictor's own routine, unbounded
+        // in time (DN-02; GAP-124 took this function's copy of it out).
+        let (closest_approach_m, time_to_closest_approach_s) =
+            match closest_on_course(Vector3::from(rel), Vector3::from(v), f64::INFINITY) {
+                Some((t_star, centre_m)) => (
+                    Some((centre_m - anchor.asset.extent.radius_m()).max(0.0)),
+                    Some(t_star),
+                ),
+                None => (None, None),
+            };
+        Some((
+            AssetExposure {
+                asset: anchor.asset.id,
+                range_m: k.range_m,
+                time_to_impact_s: k.time_to_impact_s,
+                closest_approach_m,
+                time_to_closest_approach_s,
+            },
+            k.factor,
+        ))
     }
 
-    /// Proximity times priority weight times the track's lethality (GAP-027): what
-    /// decides which asset a track is scored against, and the value MOP-28 requires to
-    /// be monotonic in time to impact, asset priority, and class.
-    fn weighted(&self, exposure: &AssetExposure, anchor: &AssetAnchor, track: &TrackView) -> f64 {
-        let proximity = (1.0 - exposure.range_m / self.max_range_m).clamp(0.0, 1.0);
-        let approaching = exposure.time_to_impact_s.is_some();
-        let closing_factor = if approaching { 1.0 } else { 0.5 };
+    /// The kinematic factor (proximity, closing, time to impact; GAP-124) times priority
+    /// weight times the track's lethality (GAP-027): what decides which asset a track is
+    /// scored against, and the value MOP-28 requires to be monotonic in time to impact,
+    /// asset priority, and class.
+    fn weighted(&self, factor: &KinematicFactor, anchor: &AssetAnchor, track: &TrackView) -> f64 {
         let class = self.class_weights.get(&track.id).copied().unwrap_or(1.0);
-        proximity
+        let weighted = factor.value
             * anchor.asset.priority.weight()
-            * closing_factor
             * track.classification.lethality_weight()
-            * class
+            * class;
+        if weighted.is_finite() {
+            weighted
+        } else {
+            0.0
+        }
     }
 
     fn score_one(&self, track: &TrackView) -> RiskScore {
@@ -182,24 +199,25 @@ impl AssetListAssessor {
                 score: 0.0,
                 time_to_impact_s: None,
                 exposure: None,
+                kinematics: None,
             };
         }
         let best = self
             .anchors
             .iter()
-            .filter_map(|a| self.expose(track, a).map(|e| (e, a)))
-            .max_by(|(ea, aa), (eb, ab)| {
-                self.weighted(ea, aa, track)
-                    .partial_cmp(&self.weighted(eb, ab, track))
-                    .unwrap_or(std::cmp::Ordering::Equal)
+            .filter_map(|a| self.expose(track, a).map(|(e, k)| (e, k, a)))
+            .max_by(|(_, ka, aa), (_, kb, ab)| {
+                self.weighted(ka, aa, track)
+                    .total_cmp(&self.weighted(kb, ab, track))
             });
         match best {
             #[allow(clippy::cast_possible_truncation)]
-            Some((exposure, anchor)) => RiskScore {
+            Some((exposure, factor, anchor)) => RiskScore {
                 track_id: track.id,
-                score: self.weighted(&exposure, anchor, track) as f32,
+                score: self.weighted(&factor, anchor, track) as f32,
                 time_to_impact_s: exposure.time_to_impact_s,
                 exposure: Some(exposure),
+                kinematics: Some(factor),
             },
             // Either no asset is configured, or none is within range. Both are
             // reported as "no exposure" rather than as a computed zero.
@@ -208,6 +226,7 @@ impl AssetListAssessor {
                 score: 0.0,
                 time_to_impact_s: None,
                 exposure: None,
+                kinematics: None,
             },
         }
     }

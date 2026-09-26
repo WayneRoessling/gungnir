@@ -33,6 +33,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
             control_endpoint: Some("udp://radar-1.example:7000".into()),
             maintenance: Vec::new(),
             detection_model: None,
+            azimuth_sector: None,
         }],
         resources: vec![ResourceConfig {
             handoff_endpoint: None,

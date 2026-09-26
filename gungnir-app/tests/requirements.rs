@@ -49,6 +49,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
         control_endpoint: endpoint.map(ToOwned::to_owned),
         maintenance: Vec::new(),
         detection_model: None,
+        azimuth_sector: None,
     };
     let config = ConfigBaseline {
         data_dir: dir.to_string_lossy().into_owned(),

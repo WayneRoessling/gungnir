@@ -392,6 +392,7 @@ information_elements:
   - {id: IE-asset-priority, name: AssetPriority, code: gungnir_model::AssetPriority, domain: 'Assets, exchange & releasability', description: 'How the asset is defended, ordered least to most important.'}
   - {id: IE-authority-rule, name: AuthorityRule, code: gungnir_model::AuthorityRule, domain: 'Policy, authority & settings', description: 'One row of the authority matrix in docs/mission/roles-and-stakeholders.md §4, as configuration.'}
   - {id: IE-authority-settings, name: AuthoritySettings, code: gungnir_model::AuthoritySettings, domain: 'Policy, authority & settings', description: 'The authority matrix.'}
+  - {id: IE-azimuth-sector, name: AzimuthSector, code: gungnir_model::AzimuthSector, domain: 'Core identifiers, frames & quality', description: 'The horizontal bearings a sensor can see: a sector centred on its boresight (GAP-118, D-84, docs/design/DN-12-coverage-and-gaps.md amendment 1).'}
   - {id: IE-bearing-ray-view, name: BearingRayView, code: gungnir_model::BearingRayView, domain: 'Picture & tracking vocabulary', description: 'A bearing that matched no track, projected for a caller to draw (docs/design/DN-27-bearing-only-detections.md §5 rule 3, §7; GAP-096).'}
   - {id: IE-calibration-event, name: CalibrationEvent, code: gungnir_model::CalibrationEvent, domain: 'Events & the record', description: 'A sensor''s report of an object whose true position is already known (../../docs/mission/gap-analysis/gap-register.md GAP-014).'}
   - {id: IE-collection-requirement, name: CollectionRequirement, code: gungnir_model::CollectionRequirement, domain: 'Battle rhythm & mission records', description: 'A collection requirement, owned by the intelligence analyst (MT-08).'}
@@ -470,6 +471,7 @@ information_elements:
   - {id: IE-role-layout, name: RoleLayout, code: gungnir_model::RoleLayout, domain: 'Policy, authority & settings', description: 'One role''s screen.'}
   - {id: IE-schedule, name: Schedule, code: gungnir_model::Schedule, domain: 'Battle rhythm & mission records', description: 'A period and an offset, in mission-time seconds.'}
   - {id: IE-scheduled-product, name: ScheduledProduct, code: gungnir_model::ScheduledProduct, domain: 'Battle rhythm & mission records', description: 'A product the deployment produces on a cycle rather than on demand.'}
+  - {id: IE-sector-error, name: SectorError, code: gungnir_model::SectorError, domain: 'Core identifiers, frames & quality', description: 'Why a sector is refused.'}
   - {id: IE-sensor-command, name: SensorCommand, code: gungnir_model::SensorCommand, domain: 'Picture & tracking vocabulary', description: 'A command to a sensor (DN-11 §4).'}
   - {id: IE-sensor-event, name: SensorEvent, code: gungnir_model::SensorEvent, domain: 'Events & the record', description: 'What a sensor is doing changing (GAP-003).'}
   - {id: IE-sensor-id, name: SensorId, code: gungnir_model::SensorId, domain: 'Picture & tracking vocabulary', description: 'Identifier of a sensor as registered in gungnir-sensor-management and named in gungnir-config.'}

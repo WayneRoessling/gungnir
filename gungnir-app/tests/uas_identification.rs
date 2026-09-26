@@ -96,6 +96,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
             control_endpoint: None,
             maintenance: Vec::new(),
             detection_model: None,
+            azimuth_sector: None,
         }],
         radar_feeds: vec![RadarFeedConfig {
             name: "uas-gateway".into(),

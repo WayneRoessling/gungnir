@@ -392,6 +392,17 @@ before (D-28), and is GAP-147's. PN-16 says, when a rehearsal re-observes nothin
 recording's targets never come within the placed sensors' range bands, rather than leaving
 a column of zeros to be read as a fault.
 
+**A sensor's azimuth sector is honoured (GAP-118, D-84, merged beside this build).** A
+deployment sensor may declare the bearings it can see and a laydown placement may re-aim
+it; a rehearsal re-observes with the placement's sector if it states one, else the
+declared one, turned into the recording's frame where the sensor stands. The sector gates
+**on top of** the detection model's own field of regard -- the model says what a sensor of
+that type sees, the sector says which way this one faces -- and a target outside it is
+skipped before any draw, so D-74's streams stay aligned whichever way the sensor faces;
+clutter is still drawn all round and what falls outside the sector is dropped. A re-aim
+counts as a move when two rehearsals are compared. Tested in `gungnir-sensor-sim`'s
+`a_sensor_sees_only_inside_its_sector_and_facing_it_changes_nothing_else`.
+
 **Round 1's laydown `c` is kept, deliberately.** It was added to give the coverage
 comparison a pair that differs in siting (D-28), and it still does: PN-16's coverage
 columns read it exactly as before. It is now also the case §10's round-1 row is written

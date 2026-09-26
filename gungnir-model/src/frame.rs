@@ -62,6 +62,192 @@ impl LocalFrame {
         });
         gungnir_coord::ned_to_geodetic(ned, self.origin)
     }
+
+    /// The bearing, in this frame, of true north at `position`: radians clockwise from the
+    /// frame's `+n` axis, in `(-π, π]`.
+    ///
+    /// Zero at the origin and growing with distance east or west of it (the meridians
+    /// converge), about 0.1 degree eleven kilometres east of an origin at 45 degrees north.
+    /// A sensor's sector is surveyed against true north at the sensor, so a sector placed
+    /// in this frame without this rotation would be off by that much
+    /// (`docs/design/DN-12-coverage-and-gaps.md` amendment 1, D-84).
+    ///
+    /// Taken numerically from this frame's own conversion -- the frame direction of a step
+    /// due north of `position` -- so it is exactly the frame the coverage is computed in.
+    #[must_use]
+    pub fn true_north_at(&self, position: Geodetic) -> f64 {
+        // A step of 1e-6 rad is about 6.4 m; `to_enu` is gated to 1e-6 m, so the bearing
+        // it gives is good to about 1e-7 rad. Stepped south instead at the pole, where
+        // north is not a direction.
+        const STEP_RAD: f64 = 1e-6;
+        let (step, sign) = if position.lat_rad + STEP_RAD <= std::f64::consts::FRAC_PI_2 {
+            (STEP_RAD, 1.0)
+        } else {
+            (-STEP_RAD, -1.0)
+        };
+        let here = self.to_enu(position);
+        let there = self.to_enu(Geodetic {
+            lat_rad: position.lat_rad + step,
+            ..position
+        });
+        let (de, dn) = (sign * (there[0] - here[0]), sign * (there[1] - here[1]));
+        if !(de.is_finite() && dn.is_finite()) || (de == 0.0 && dn == 0.0) {
+            return 0.0;
+        }
+        de.atan2(dn)
+    }
+
+    /// A sector surveyed against true north at `position`, as bearings in this frame.
+    #[must_use]
+    pub fn sector_in_frame(&self, sector: AzimuthSector, position: Geodetic) -> AzimuthSector {
+        sector.rotated(self.true_north_at(position))
+    }
+}
+
+/// Bearing of the horizontal direction `(east, north)`: radians clockwise from north, in
+/// `[0, 2π)`. `None` for the zero vector, which has no bearing, or a non-finite one.
+#[must_use]
+pub fn bearing_rad(east: f64, north: f64) -> Option<f64> {
+    if !(east.is_finite() && north.is_finite()) || (east == 0.0 && north == 0.0) {
+        return None;
+    }
+    Some(normalize_bearing(east.atan2(north)))
+}
+
+/// An angle as a bearing in `[0, 2π)`.
+#[must_use]
+pub fn normalize_bearing(angle_rad: f64) -> f64 {
+    let tau = std::f64::consts::TAU;
+    let b = angle_rad.rem_euclid(tau);
+    // `rem_euclid` can return `tau` itself for a tiny negative input, by rounding.
+    if b >= tau {
+        0.0
+    } else {
+        b
+    }
+}
+
+/// The horizontal bearings a sensor can see: a sector centred on its boresight
+/// (GAP-118, D-84, `docs/design/DN-12-coverage-and-gaps.md` amendment 1).
+///
+/// Bearings are radians clockwise from north. In a baseline -- a sensor's declaration or
+/// a laydown's placement -- north is **true north at the sensor**, because that is what a
+/// sector is surveyed against; [`LocalFrame::sector_in_frame`] turns it into bearings in
+/// the local frame, which is what a `CoverageVolume` holds.
+///
+/// **A sensor with no sector sees the full circle**, and that is spelled `None` wherever a
+/// sector is optional, rather than a sector of width 2π by default. A 2π sector is also
+/// legal and means the same thing, for a baseline that wants to say so.
+///
+/// A sector may straddle north: a boresight of 350 degrees and a width of 40 degrees
+/// covers 330 degrees through north to 10 degrees, and [`AzimuthSector::contains`]
+/// answers that across the wrap.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct AzimuthSector {
+    /// Centre of the sector, radians clockwise from north. Any finite value; it is read
+    /// modulo 2π, so -10 degrees and 350 degrees are the same boresight.
+    pub boresight_rad: f64,
+    /// Full width of the sector, radians, in `(0, 2π]`.
+    pub width_rad: f64,
+}
+
+/// Why a sector is refused.
+#[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
+pub enum SectorError {
+    #[error("the sector's boresight is not a finite number")]
+    NonFiniteBoresight,
+    /// A width of zero sees nothing and more than 2π is not a sector; a sensor that sees
+    /// the full circle declares none, or states 2π.
+    #[error("the sector's width is {0} rad; it must be greater than zero and at most 2π")]
+    WidthOutOfRange(f64),
+}
+
+impl AzimuthSector {
+    /// A sector, refused unless its boresight is finite and its width is in `(0, 2π]`.
+    ///
+    /// # Errors
+    ///
+    /// [`SectorError`] naming which of the two is wrong.
+    pub fn new(boresight_rad: f64, width_rad: f64) -> Result<Self, SectorError> {
+        let sector = Self {
+            boresight_rad,
+            width_rad,
+        };
+        sector.validate()?;
+        Ok(sector)
+    }
+
+    /// The check [`AzimuthSector::new`] applies, for a sector that arrived by
+    /// deserialization.
+    ///
+    /// # Errors
+    ///
+    /// [`SectorError`] naming which of the two is wrong.
+    pub fn validate(&self) -> Result<(), SectorError> {
+        if !self.boresight_rad.is_finite() {
+            return Err(SectorError::NonFiniteBoresight);
+        }
+        if !(self.width_rad.is_finite()
+            && self.width_rad > 0.0
+            && self.width_rad <= std::f64::consts::TAU)
+        {
+            return Err(SectorError::WidthOutOfRange(self.width_rad));
+        }
+        Ok(())
+    }
+
+    /// True when the sector is the whole circle.
+    #[must_use]
+    pub fn is_full_circle(&self) -> bool {
+        self.width_rad >= std::f64::consts::TAU
+    }
+
+    /// The boresight as a bearing in `[0, 2π)`.
+    #[must_use]
+    pub fn boresight(&self) -> f64 {
+        normalize_bearing(self.boresight_rad)
+    }
+
+    /// The sector's anticlockwise edge -- where a sweep clockwise through it starts -- as a
+    /// bearing in `[0, 2π)`.
+    #[must_use]
+    pub fn start_rad(&self) -> f64 {
+        normalize_bearing(self.boresight_rad - self.width_rad / 2.0)
+    }
+
+    /// The sector's clockwise edge, as a bearing in `[0, 2π)`.
+    #[must_use]
+    pub fn end_rad(&self) -> f64 {
+        normalize_bearing(self.boresight_rad + self.width_rad / 2.0)
+    }
+
+    /// Whether `bearing_rad` (clockwise from the same north) lies in the sector, edges
+    /// included. Handles the wrap through north. A non-finite bearing is in no sector,
+    /// and a sector that fails [`AzimuthSector::validate`] contains nothing.
+    #[must_use]
+    pub fn contains(&self, bearing_rad: f64) -> bool {
+        if self.validate().is_err() || !bearing_rad.is_finite() {
+            return false;
+        }
+        if self.is_full_circle() {
+            return true;
+        }
+        let pi = std::f64::consts::PI;
+        // Signed offset from the boresight in [-π, π).
+        let offset = (bearing_rad - self.boresight_rad + pi).rem_euclid(std::f64::consts::TAU) - pi;
+        // Edges included, to a nanoradian: a bearing stated on the edge in degrees and
+        // converted differs from the computed edge by rounding, and must not fall out.
+        offset.abs() <= self.width_rad / 2.0 + 1e-9
+    }
+
+    /// The same sector turned clockwise by `by_rad`.
+    #[must_use]
+    pub fn rotated(&self, by_rad: f64) -> Self {
+        Self {
+            boresight_rad: normalize_bearing(self.boresight_rad + by_rad),
+            width_rad: self.width_rad,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -144,6 +330,114 @@ mod tests {
                 "altitude drifted"
             );
         }
+    }
+
+    fn sector(boresight_deg: f64, width_deg: f64) -> AzimuthSector {
+        AzimuthSector::new(boresight_deg.to_radians(), width_deg.to_radians())
+            .expect("a legal sector")
+    }
+
+    /// A sector straddling north covers both sides of it and nothing opposite.
+    #[test]
+    fn a_sector_across_north_wraps() {
+        let s = sector(350.0, 40.0);
+        for inside in [330.0, 340.0, 359.9, 0.0, 5.0, 10.0] {
+            assert!(
+                s.contains(f64::to_radians(inside)),
+                "{inside} deg is inside 330..10"
+            );
+        }
+        for outside in [329.8, 10.2, 90.0, 170.0, 180.0, 270.0] {
+            assert!(
+                !s.contains(f64::to_radians(outside)),
+                "{outside} deg is outside 330..10"
+            );
+        }
+        // The same boresight written as a negative angle is the same sector.
+        let negative = sector(-10.0, 40.0);
+        assert!(negative.contains(5.0_f64.to_radians()));
+        assert!(!negative.contains(15.0_f64.to_radians()));
+        assert!((s.start_rad() - 330.0_f64.to_radians()).abs() < 1e-12);
+        assert!((s.end_rad() - 10.0_f64.to_radians()).abs() < 1e-12);
+    }
+
+    /// A sector's width must be in (0, 2π]: zero sees nothing and cannot be what anyone
+    /// meant, and more than the circle is not a sector. Full width is legal and total.
+    #[test]
+    fn the_width_is_refused_outside_zero_to_the_full_circle() {
+        for bad in [0.0, -0.1, 7.0, f64::NAN, f64::INFINITY] {
+            assert!(
+                matches!(
+                    AzimuthSector::new(0.0, bad),
+                    Err(SectorError::WidthOutOfRange(_))
+                ),
+                "width {bad} was accepted"
+            );
+        }
+        assert_eq!(
+            AzimuthSector::new(f64::NAN, 1.0),
+            Err(SectorError::NonFiniteBoresight)
+        );
+        let full = AzimuthSector::new(1.0, std::f64::consts::TAU).expect("the full circle");
+        assert!(full.is_full_circle());
+        for b in [0.0, 1.0, 3.0, 6.0] {
+            assert!(full.contains(b));
+        }
+        // A sector built around the check contains nothing rather than something wrong.
+        let forged = AzimuthSector {
+            boresight_rad: 0.0,
+            width_rad: 0.0,
+        };
+        assert!(!forged.contains(0.0));
+        assert!(!sector(90.0, 10.0).contains(f64::NAN));
+    }
+
+    #[test]
+    fn a_bearing_is_clockwise_from_north() {
+        let deg = |e: f64, n: f64| bearing_rad(e, n).map(f64::to_degrees);
+        assert!((deg(0.0, 1.0).expect("north") - 0.0).abs() < 1e-12);
+        assert!((deg(1.0, 0.0).expect("east") - 90.0).abs() < 1e-12);
+        assert!((deg(0.0, -1.0).expect("south") - 180.0).abs() < 1e-12);
+        assert!((deg(-1.0, 0.0).expect("west") - 270.0).abs() < 1e-12);
+        assert!(
+            bearing_rad(0.0, 0.0).is_none(),
+            "straight up has no bearing"
+        );
+    }
+
+    /// True north at the origin is the frame's north. East of it the meridians lean
+    /// toward the pole, so true north turns anticlockwise in the frame (a negative
+    /// bearing) by the convergence, Δλ sin φ to first order; west, clockwise.
+    #[test]
+    fn true_north_departs_from_the_frame_by_the_meridian_convergence() {
+        let frame = LocalFrame::new(origin());
+        assert!(frame.true_north_at(origin()).abs() < 1e-6);
+        let d_lon = 0.5_f64.to_radians();
+        let expected = d_lon * origin().lat_rad.sin();
+        let east = frame.true_north_at(Geodetic {
+            lon_rad: origin().lon_rad + d_lon,
+            ..origin()
+        });
+        let west = frame.true_north_at(Geodetic {
+            lon_rad: origin().lon_rad - d_lon,
+            ..origin()
+        });
+        assert!(
+            (east + expected).abs() < 1e-4,
+            "east: {east} rad, expected {}",
+            -expected
+        );
+        assert!((west - expected).abs() < 1e-4, "west: {west} rad");
+        // The sector follows: a sector surveyed on true north, placed east of the origin,
+        // is rotated by the same amount in the frame.
+        let placed = frame.sector_in_frame(
+            sector(90.0, 30.0),
+            Geodetic {
+                lon_rad: origin().lon_rad + d_lon,
+                ..origin()
+            },
+        );
+        assert!((placed.boresight() - (90.0_f64.to_radians() + east)).abs() < 1e-12);
     }
 
     /// A sanity check against a distance anyone can verify: 0.01 degrees of latitude is

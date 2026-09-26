@@ -98,11 +98,13 @@ fn run(rec: &Recording, moved: [f64; 3], fixed: [f64; 3]) -> Vec<Observation> {
                 id: 1,
                 model: radar(),
                 position: moved,
+                sector: None,
             },
             PlacedSensor {
                 id: 2,
                 model: radar(),
                 position: fixed,
+                sector: None,
             },
         ],
         SensorEvents::NotApplied,

@@ -23,6 +23,7 @@ plans_effectors_handoff --> core_identifiers_frames_quality
 plans_effectors_handoff --> picture_tracking_vocabulary
 plans_effectors_handoff --> assets_exchange_releasability
 battle_rhythm_mission_records --> picture_tracking_vocabulary
+battle_rhythm_mission_records --> core_identifiers_frames_quality
 picture_tracking_vocabulary --> assets_exchange_releasability
 picture_tracking_vocabulary --> core_identifiers_frames_quality
 picture_tracking_vocabulary --> plans_effectors_handoff
@@ -30,7 +31,6 @@ policy_authority_settings --> plans_effectors_handoff
 core_identifiers_frames_quality --> assets_exchange_releasability
 core_identifiers_frames_quality --> battle_rhythm_mission_records
 battle_rhythm_mission_records --> assets_exchange_releasability
-battle_rhythm_mission_records --> core_identifiers_frames_quality
 uas_identification_platform_reports --> picture_tracking_vocabulary
 uas_identification_platform_reports --> core_identifiers_frames_quality
 battle_rhythm_mission_records --> plans_effectors_handoff

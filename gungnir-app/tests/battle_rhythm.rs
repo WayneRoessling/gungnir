@@ -47,6 +47,7 @@ fn sensor(windows: Vec<MaintenanceWindowConfig>) -> SensorConfig {
         control_endpoint: None,
         maintenance: windows,
         detection_model: None,
+        azimuth_sector: None,
     }
 }
 

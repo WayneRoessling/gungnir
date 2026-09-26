@@ -309,6 +309,7 @@ fn baseline(dir: &Path, steps: &[Step], origin: Geodetic) -> ConfigBaseline {
                 control_endpoint: tasked.contains(&s.id).then(|| control(s.id)),
                 maintenance: Vec::new(),
                 detection_model: None,
+                azimuth_sector: None,
             })
             .collect(),
         endpoints: tasked

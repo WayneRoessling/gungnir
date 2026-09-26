@@ -83,6 +83,14 @@ counted and not applied; the sea state is applied to every sensor.
 beneath `gungnir-scenario` in the core and may not reach up into the foundation. The crate
 carries its own mark and the desktop converts it, totally and checked.
 
+**A sensor's azimuth sector arrived on `main` while this was built** (GAP-118, D-84:
+`SensorConfig` and `SensorPlacement` gained `azimuth_sector`). It is honoured: a rehearsal
+re-observes with the placement's re-aim, else the declared sector, turned into the
+recording's frame, as a gate on top of the detection model's own field of regard, before
+any draw; clutter outside the sector is dropped; and a re-aim counts as a move in a
+comparison. DN-32 §12 has the reasoning. This applies the owner's D-84 rather than taking
+a decision of its own.
+
 **The recording's own clutter is not a baseline to compare a re-observation's with.** TT-08's
 sensor 13 recorded 21 false alarms against the 36 its model expects (2.5σ low). The
 statistical row compares detections of a recorded target with the recording, and false

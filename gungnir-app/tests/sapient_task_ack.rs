@@ -42,6 +42,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
             control_endpoint: Some("spotter-30-control".into()),
             maintenance: Vec::new(),
             detection_model: None,
+            azimuth_sector: None,
         }],
         endpoints: vec![gungnir_config::EndpointConfig {
             name: "spotter-30-control".into(),
