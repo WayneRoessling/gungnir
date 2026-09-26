@@ -3555,6 +3555,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
                 delta_uncovered_m: None,
             },
             rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
+            first_engagement: crate::panels::planning::RowFirstEngagement::NotRehearsed,
         },
         LaydownRow {
             id: LaydownId("west".into()),
@@ -3566,6 +3567,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
                 delta_uncovered_m: Some(-500.0),
             },
             rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
+            first_engagement: crate::panels::planning::RowFirstEngagement::NotRehearsed,
         },
         LaydownRow {
             id: LaydownId("untested".into()),
@@ -3575,11 +3577,13 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
                 reason: "no terrain loaded for this sector".into(),
             },
             rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
+            first_engagement: crate::panels::planning::RowFirstEngagement::NotRehearsed,
         },
     ];
     let view = PlanningView {
         laydowns: Section::Present(&rows),
         terrain_model: "flat-terrain line of sight",
+        approaches: &[],
         rehearsal: crate::panels::planning::RehearsalSection::NotYetRun,
         rehearsal_scenario: gungnir_model::TestTrackNumber(1),
         selected: Some(&rows[1].id),
@@ -3646,11 +3650,15 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
 /// from a recording, names the recording and each sensor's detection model, and the
 /// table reads the run, naming the sensor a difference from the current laydown came
 /// from (GAP-105).
+// One scene, both halves of PN-16 read against each other; it crossed the pedantic line
+// limit when GAP-020 gave the rows and the summary their first-engagement fields.
 #[test]
+#[allow(clippy::too_many_lines)]
 fn a_rehearsal_is_labelled_re_observed_and_the_table_reads_the_run() {
     use crate::panels::planning::{
-        render_planning, LaydownCoverage, LaydownRow, PlanningView, RehearsalSection,
-        RehearsalSummary, RehearsedSensor, RowRehearsal, VersusCurrent,
+        render_planning, LaydownCoverage, LaydownRow, PlanningView, RehearsalFirstEngagement,
+        RehearsalSection, RehearsalSummary, RehearsedSensor, RowFirstEngagement, RowRehearsal,
+        VersusCurrent,
     };
     use gungnir_model::{LaydownId, TestTrackNumber};
 
@@ -3670,6 +3678,10 @@ fn a_rehearsal_is_labelled_re_observed_and_the_table_reads_the_run() {
                 detections: 120,
                 tracks_formed: 5,
                 versus_current: VersusCurrent::IsCurrent,
+                ran_at: gungnir_model::MissionTime(0.0),
+            },
+            first_engagement: RowFirstEngagement::NotComputed {
+                reason: "no approach is declared".into(),
             },
         },
         LaydownRow {
@@ -3685,12 +3697,17 @@ fn a_rehearsal_is_labelled_re_observed_and_the_table_reads_the_run() {
                     detections: 48,
                     sensors: vec![2],
                 },
+                ran_at: gungnir_model::MissionTime(0.0),
+            },
+            first_engagement: RowFirstEngagement::NotComputed {
+                reason: "no approach is declared".into(),
             },
         },
     ];
     let view = PlanningView {
         laydowns: Section::Present(&rows),
         terrain_model: "flat-terrain line of sight",
+        approaches: &[],
         rehearsal: RehearsalSection::Ran(RehearsalSummary {
             scenario: TestTrackNumber(1),
             seed: 1701,
@@ -3714,6 +3731,10 @@ fn a_rehearsal_is_labelled_re_observed_and_the_table_reads_the_run() {
                 },
             ],
             recording_events_not_applied: 2,
+            ran_at: gungnir_model::MissionTime(0.0),
+            first_engagement: RehearsalFirstEngagement::NotComputed {
+                reason: "no approach is declared".into(),
+            },
         }),
         rehearsal_scenario: TestTrackNumber(1),
         selected: Some(&rows[1].id),
@@ -3746,6 +3767,188 @@ fn a_rehearsal_is_labelled_re_observed_and_the_table_reads_the_run() {
     );
 }
 
+/// PN-16's first-engagement column paints what D-45 requires (GAP-020, DN-02 section 9):
+/// the figure labelled as the worst case with its count, a difference from the current
+/// laydown in words, an approach with no engagement said to be not computable rather
+/// than drawn as a zero, and the rehearsal it came from -- recording, seed, when run --
+/// with the track and time behind the worst case.
+// One scene -- three rows, two approaches, the section -- so every state D-45 and DN-02
+// section 9 name is drawn beside the others it must be told apart from.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn first_engagement_is_drawn_as_a_worst_case_with_its_count_and_never_as_zero() {
+    use crate::panels::planning::{
+        render_planning, ApproachEngagement, ApproachLine, LaydownCoverage, LaydownRow,
+        PlanningView, RehearsalFirstEngagement, RehearsalSection, RehearsalSummary,
+        RowFirstEngagement, RowRehearsal, VersusCurrent,
+    };
+    use gungnir_model::{LaydownId, MissionTime, ResourceId, TestTrackNumber, TrackId};
+
+    let not_computable = ApproachEngagement::NotComputable {
+        reason: "no recorded target on this approach was engaged in the run".into(),
+    };
+    let worst = |range_m: f64, predictions: usize, versus_current_m: Option<f64>| {
+        ApproachEngagement::WorstCase {
+            range_m,
+            predictions,
+            target: "TT01-stream-south-004".into(),
+            track: TrackId(81),
+            resource: ResourceId(2),
+            proposed_at: MissionTime(376.0),
+            versus_current_m,
+        }
+    };
+    let rehearsed = |versus_current| RowRehearsal::Rehearsed {
+        scenario: TestTrackNumber(1),
+        detections: 408,
+        tracks_formed: 30,
+        versus_current,
+        ran_at: MissionTime(125.0),
+    };
+    let coverage = LaydownCoverage::Computed {
+        gap_segments: 1,
+        uncovered_m: 1000.0,
+        delta_uncovered_m: None,
+    };
+    let rows = vec![
+        LaydownRow {
+            id: LaydownId("current".into()),
+            intent: "the deployment as sited".into(),
+            current: true,
+            coverage: coverage.clone(),
+            rehearsal: rehearsed(VersusCurrent::IsCurrent),
+            first_engagement: RowFirstEngagement::PerApproach(vec![
+                worst(9_000.0, 3, None),
+                not_computable.clone(),
+            ]),
+        },
+        LaydownRow {
+            id: LaydownId("b".into()),
+            intent: "sea-weighted".into(),
+            current: false,
+            coverage: coverage.clone(),
+            rehearsal: rehearsed(VersusCurrent::Difference {
+                detections: 0,
+                sensors: Vec::new(),
+            }),
+            first_engagement: RowFirstEngagement::PerApproach(vec![
+                worst(18_000.0, 4, Some(9_000.0)),
+                not_computable.clone(),
+            ]),
+        },
+        LaydownRow {
+            id: LaydownId("untried".into()),
+            intent: "never rehearsed".into(),
+            current: false,
+            coverage,
+            rehearsal: RowRehearsal::NotRehearsed,
+            first_engagement: RowFirstEngagement::NotRehearsed,
+        },
+    ];
+    let approaches = ["sea approach".to_string(), "upper Vell".to_string()];
+    let view = PlanningView {
+        laydowns: Section::Present(&rows),
+        terrain_model: "flat-terrain line of sight",
+        approaches: &approaches,
+        rehearsal: RehearsalSection::Ran(RehearsalSummary {
+            scenario: TestTrackNumber(1),
+            seed: 1701,
+            tracks_formed: 30,
+            decisions_raised: 12,
+            decisions_expired: 0,
+            sensors: Vec::new(),
+            recording_events_not_applied: 0,
+            ran_at: MissionTime(125.0),
+            first_engagement: RehearsalFirstEngagement::PerApproach {
+                lines: vec![
+                    ApproachLine {
+                        approach: "sea approach".into(),
+                        corridor_half_width_m: Some(5_000.0),
+                        engagement: worst(18_000.0, 4, Some(9_000.0)),
+                    },
+                    ApproachLine {
+                        approach: "upper Vell".into(),
+                        corridor_half_width_m: None,
+                        engagement: ApproachEngagement::NotComputable {
+                            reason: "the approach declares no corridor width".into(),
+                        },
+                    },
+                ],
+                on_no_corridor: 2,
+                clutter_pairings: 5,
+            },
+        }),
+        rehearsal_scenario: TestTrackNumber(1),
+        selected: Some(&rows[1].id),
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));
+
+    // One column per approach, each saying what it holds.
+    assert!(
+        frame.says("sea approach: first engagement (worst case)"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("upper Vell: first engagement (worst case)"),
+        "{}",
+        frame.joined()
+    );
+    // D-45: labelled as the worst case, with its count, and compared in words.
+    assert!(frame.says("worst 9.0 km (n = 3)"), "{}", frame.joined());
+    assert!(
+        frame.says("worst 18.0 km (n = 4); 9.0 km farther out than current"),
+        "{}",
+        frame.joined()
+    );
+    // No engagement is a reason, never a zero.
+    assert!(
+        frame.says("not computable: no recorded target on this approach was engaged in the run"),
+        "{}",
+        frame.joined()
+    );
+    assert!(!frame.says("0.0 km"), "{}", frame.joined());
+    assert!(frame.says("not rehearsed"), "{}", frame.joined());
+    // Provenance: the recording, its seed, and when the rehearsal was run.
+    assert!(frame.says("run at T+125 s"), "{}", frame.joined());
+    assert!(
+        frame.says("Re-observed from a recording: TT-01 (seed 1701)"),
+        "{}",
+        frame.joined()
+    );
+    // The section names the corridor, the track and effector, and when in the run.
+    assert!(
+        frame.says("corridor 5.0 km either side"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says(
+            "target TT01-stream-south-004 (track 81) against resource 2 proposed at T+376 s \
+             of the recording"
+        ),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("no corridor declared): not computable"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("2 paired target(s) were in no declared corridor"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("5 paired track(s) were none of the recording's targets (clutter)"),
+        "{}",
+        frame.joined()
+    );
+    assert!(frame.says("the least ground range"), "{}", frame.joined());
+}
+
 /// An empty laydown table says why rather than drawing nothing (DN-26 section 8).
 #[test]
 fn planning_with_no_laydowns_declared_says_so() {
@@ -3756,6 +3959,7 @@ fn planning_with_no_laydowns_declared_says_so() {
             reason: "This deployment has declared no laydown alternatives.",
         },
         terrain_model: "flat-terrain line of sight",
+        approaches: &[],
         rehearsal: crate::panels::planning::RehearsalSection::NothingSelected,
         rehearsal_scenario: gungnir_model::TestTrackNumber(1),
         selected: None,

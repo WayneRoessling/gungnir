@@ -2551,6 +2551,77 @@
     segment into memory at start (a long deployment's record in a desktop's memory), and
     drawing an open segment unbounded. See
     `../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`.
+- id: D-107
+  decision: What a first-engagement prediction is, and what its range is measured to
+  question: >-
+    D-45 made an approach's first-engagement range the worst case over a rehearsal's
+    predictions and left the predictions undefined. Which of a run's plans count, once or
+    every time a target is re-planned, which tracks are threats rather than clutter, and
+    what is the range measured from?
+  raised_in: "GAP-020; `../../design/DN-02-prediction-and-approach.md` §7"
+  decider: Owner
+  unblocks: GAP-020, GAP-045, GAP-087
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **One prediction per recorded
+    target: its first engagement, the first pairing the planner proposed for a track
+    that is that target and carries DN-04 §9's predicted intercept point; its range is the
+    ground distance from that point to the approach's inner end, its last declared
+    point.** A track is a target's when it lies within the 0.999 gate of its own position
+    covariance about where the recording's truth says the target was; a paired track that
+    is no target is clutter, counted on PN-16 and never measured. A target paired only
+    without an intercept point is counted and given no range. Rejected: every pairing in
+    every plan (n would count replans); every track's first pairing and confirmed tracks
+    only (both measured on round 1: the worst case was a false-alarm track 30 to 106 m
+    from a harbour radar on every laydown, and confirmed-only dropped TT-01 entirely);
+    a fixed truth distance (no one distance suits 20 m and 110 km tracks); range to the
+    nearest defended asset (approaches name none), along the axis (hides a lateral miss)
+    or slant (single-radar altitude noise). See
+    `../../record/2026-09-26/first-engagement-range-over-a-rehearsal.md`.
+- id: D-108
+  decision: Which approach a first-engagement prediction belongs to
+  question: >-
+    An approach is declared as an axis with no width. Which targets came down it, and
+    what does an approach say when nothing declares that?
+  raised_in: "GAP-020; `../../design/DN-02-prediction-and-approach.md` §7"
+  decider: Owner
+  unblocks: GAP-020
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **An approach may declare
+    `corridor_half_width_m`, the ground distance either side of its axis; a prediction
+    belongs to the approach whose corridor the target was in when the pairing was
+    proposed, by where the recording says it was, nearest axis first; an approach with no
+    declared width takes no prediction and reads not computable, naming why.** Targets in
+    no corridor are counted. Rejected: a baseline-wide default width (a mission-analysis
+    answer nobody gave, shown as a measurement); the nearest axis with no gate (a raid down
+    an undeclared axis lands in a declared one's figure); placing by the track's own
+    position (round 1's first track of one drone was six kilometres off the axis with a
+    1.8 km sigma, and would have dropped the drone from its own approach). See
+    `../../record/2026-09-26/first-engagement-range-over-a-rehearsal.md`.
+- id: D-109
+  decision: Whether a rehearsal's run is a property of the recording or of the machine
+  question: >-
+    A first-engagement range is read off the plans a rehearsal proposes mid-run. The
+    throwaway desktop's tracker ran as a task on another thread and each tick planned
+    against however far it had got, so two runs of one laydown proposed different plans.
+    How is a run made deterministic?
+  raised_in: "GAP-020; `../../design/DN-32-re-observation-for-a-laydown.md` §7"
+  decider: Owner
+  unblocks: GAP-020
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **The rehearsal's tracker runs
+    in lock-step on its own thread and its planner measures its budget on a clock that
+    never advances.** `ingest_with`'s loop body becomes `gungnir_fusion_async::step` and
+    `end_of_stream`, which the live loop calls, and `LiveTrackingService::lockstep` calls
+    them on the caller's thread; the planner is built with
+    `SteppedClock::new(Duration::ZERO)`. The live desktop and node are unchanged.
+    `gungnir-fusion-async` is human-owned; see `../../signatures.md`. Rejected: waiting
+    for the channel to empty (the task can hold the last detection mid-update), a
+    current-thread runtime with paused time (tokio's `test-util` in a production binary),
+    and a copy of the loop body in the tracking service (two drivers that drift). See
+    `../../record/2026-09-26/first-engagement-range-over-a-rehearsal.md`.
 - id: D-110
   decision: Whether StoreAndForwardQueue is adopted, retired, or kept
   question: >-
@@ -2619,7 +2690,7 @@
     of six propeller drones down round 1's declared approach onto the harbour, with round
     1's two radars as its own sensors, generated byte for byte alike by both generators and
     validated like every other set; PN-16's picker offers it, US-15's card names it, and
-    the round-1 row's test runs over it** (DN-32 §13). The rows that count "all ten" mean
+    the round-1 row's test runs over it** (DN-32 §14). The rows that count "all ten" mean
     the ten plan-07 library scenarios their criteria were agreed over; their tests iterate
     the committed directory and now pass over TT-11 as well, which is more evidence under
     unchanged criteria. The ten sets are unchanged byte for byte. Rejected: reusing an

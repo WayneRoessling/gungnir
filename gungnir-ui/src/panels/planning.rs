@@ -20,9 +20,15 @@
 //!   result is labelled as re-observed, with the recording and each sensor's model named,
 //!   because a count of detections is exactly the kind of number that could be mistaken
 //!   for one a sensor produced. It reports what the run measured -- detections per
-//!   sensor, tracks formed, decisions raised and expired -- and **not** a
-//!   first-engagement range: DN-02 §7 says that is the aggregate of predictions over a
-//!   rehearsal, and GAP-020 carries its rule.
+//!   sensor, tracks formed, decisions raised and expired -- and each declared
+//!   approach's first-engagement range.
+//! * **First-engagement range is the worst case over the run, and says so** (GAP-020,
+//!   `docs/design/DN-02-prediction-and-approach.md` §9, D-45): the least ground range
+//!   from an approach's inner end at which the planner predicted it would first engage a
+//!   track coming down it, with the number of predictions it is over. An approach with
+//!   no prediction on it is [`ApproachEngagement::NotComputable`] with the reason, never
+//!   a zero, and every figure carries the rehearsal it came from: the recording, its
+//!   seed and when it was run.
 //! * **The table compares the run, not only the arithmetic.** A laydown's coverage
 //!   column is computed from its declared placements; its rehearsal columns are read from
 //!   the last run of it, and the difference from the current laydown is drawn only when
@@ -39,7 +45,7 @@
 use crate::panels::unavailable::Section;
 use crate::theme;
 use egui::{RichText, Ui};
-use gungnir_model::{LaydownId, TestTrackNumber};
+use gungnir_model::{LaydownId, MissionTime, ResourceId, TestTrackNumber, TrackId};
 
 /// One laydown's coverage answer, or the reason it has none (DN-26 §5).
 #[derive(Debug, Clone, PartialEq)]
@@ -85,6 +91,75 @@ pub enum RowRehearsal {
         detections: usize,
         tracks_formed: usize,
         versus_current: VersusCurrent,
+        /// The desktop's mission time when the rehearsal was run.
+        ran_at: MissionTime,
+    },
+}
+
+/// One approach's first-engagement range from one laydown's last rehearsal (GAP-020,
+/// DN-02 §9, D-45).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ApproachEngagement {
+    /// D-45: the worst case, the minimum over the run, and how many predictions it is
+    /// over.
+    WorstCase {
+        /// Ground range from the approach's inner end to the worst predicted first
+        /// engagement, metres.
+        range_m: f64,
+        /// Recorded targets first engaged on this approach in the run: the count the
+        /// minimum is over. Never zero.
+        predictions: usize,
+        /// The recorded target the worst case was predicted for, its track, the
+        /// effector, and when in the run.
+        target: String,
+        track: TrackId,
+        resource: ResourceId,
+        proposed_at: MissionTime,
+        /// This worst case minus the current laydown's on the same approach, when both
+        /// were rehearsed against the same recording and both have one. Positive is
+        /// first engaged farther out than the current laydown.
+        versus_current_m: Option<f64>,
+    },
+    /// No range, and why: never a zero standing in for one.
+    NotComputable { reason: String },
+}
+
+/// A table row's first-engagement cells (GAP-020).
+#[derive(Debug, Clone, PartialEq)]
+pub enum RowFirstEngagement {
+    NotRehearsed,
+    /// Not computed on any approach -- no local frame to place the approaches in, or none
+    /// declared -- and why.
+    NotComputed {
+        reason: String,
+    },
+    /// One per declared approach, in [`PlanningView::approaches`] order.
+    PerApproach(Vec<ApproachEngagement>),
+}
+
+/// One approach's line in the rehearsal section.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApproachLine {
+    pub approach: String,
+    /// The corridor either side of the axis a track counted as on it, metres; `None`
+    /// when the approach declares none (D-108).
+    pub corridor_half_width_m: Option<f64>,
+    pub engagement: ApproachEngagement,
+}
+
+/// The rehearsal section's first-engagement account (GAP-020).
+#[derive(Debug, Clone, PartialEq)]
+pub enum RehearsalFirstEngagement {
+    NotComputed {
+        reason: String,
+    },
+    PerApproach {
+        lines: Vec<ApproachLine>,
+        /// Paired targets in no declared corridor, which no approach's figure includes.
+        on_no_corridor: usize,
+        /// Tracks the planner paired that were none of the recording's targets --
+        /// clutter -- which no figure includes (D-107).
+        clutter_pairings: usize,
     },
 }
 
@@ -98,6 +173,8 @@ pub struct LaydownRow {
     pub coverage: LaydownCoverage,
     /// Read from the last rehearsal of this laydown, not from its declared placements.
     pub rehearsal: RowRehearsal,
+    /// Each approach's first-engagement range from that same rehearsal.
+    pub first_engagement: RowFirstEngagement,
 }
 
 /// One sensor's line in a rehearsal's result: which model re-observed with, what it
@@ -135,6 +212,10 @@ pub struct RehearsalSummary {
     /// The recording's losses and electronic-attack windows, which name its own sensors
     /// and so were not applied to this laydown's (D-73).
     pub recording_events_not_applied: usize,
+    /// The desktop's mission time when the rehearsal was run.
+    pub ran_at: MissionTime,
+    /// Each declared approach's first-engagement range over the run (GAP-020).
+    pub first_engagement: RehearsalFirstEngagement,
 }
 
 /// PN-16's rehearsal section (GAP-045).
@@ -156,6 +237,8 @@ pub struct PlanningView<'a> {
     /// Which line-of-sight model produced every `Computed` row in this comparison
     /// (DN-26 §5's first rule: every laydown compared under the same one).
     pub terrain_model: &'a str,
+    /// The declared approaches' names, in order: one first-engagement column each.
+    pub approaches: &'a [String],
     /// The rehearsal section, for the selected laydown (GAP-045).
     pub rehearsal: RehearsalSection,
     /// Which scenario the rehearsal picker currently has chosen, so a "run" click
@@ -207,14 +290,24 @@ pub fn render_planning(
     let mut action = None;
     if view.laydowns.draw_header(ui, palette, "Laydown options") {
         let rows = view.laydowns.items().unwrap_or_default();
+        // One first-engagement column per declared approach, or one that says why there
+        // is none: a missing column would read as a comparison nobody thought to make.
+        let engagement_columns = view.approaches.len().max(1);
         egui::Grid::new("planning_laydown_options")
-            .num_columns(6)
+            .num_columns(6 + engagement_columns)
             .striped(true)
             .show(ui, |ui| {
                 ui.strong("Option");
                 ui.strong("Intent");
                 ui.strong("Coverage");
                 ui.strong("Difference from current");
+                if view.approaches.is_empty() {
+                    ui.strong("First engagement (worst case)");
+                } else {
+                    for approach in view.approaches {
+                        ui.strong(format!("{approach}: first engagement (worst case)"));
+                    }
+                }
                 ui.strong("Rehearsed (re-observed)");
                 ui.strong("Rehearsal against current");
                 ui.end_row();
@@ -232,42 +325,13 @@ pub fn render_planning(
                         action = Some(PlanningAction::SelectLaydown(row.id.clone()));
                     }
                     ui.label(&row.intent);
-                    match &row.coverage {
-                        LaydownCoverage::Computed {
-                            gap_segments,
-                            uncovered_m,
-                            ..
-                        } => {
-                            ui.label(format!(
-                                "{gap_segments} gap segment(s), {uncovered_m:.0} m uncovered"
-                            ));
-                        }
-                        LaydownCoverage::NotComputed { reason } => {
-                            ui.label(
-                                RichText::new(format!("Not computed: {reason}"))
-                                    .color(palette.warning_color),
-                            );
-                        }
-                    }
-                    match &row.coverage {
-                        LaydownCoverage::Computed {
-                            delta_uncovered_m: Some(delta),
-                            ..
-                        } => {
-                            ui.label(difference_label(*delta));
-                        }
-                        LaydownCoverage::Computed {
-                            delta_uncovered_m: None,
-                            ..
-                        } => {
-                            ui.label(
-                                RichText::new("-- (current)").color(palette.muted_text_color()),
-                            );
-                        }
-                        LaydownCoverage::NotComputed { .. } => {
-                            ui.label(RichText::new("--").color(palette.muted_text_color()));
-                        }
-                    }
+                    draw_row_coverage(ui, palette, &row.coverage);
+                    draw_row_first_engagement(
+                        ui,
+                        palette,
+                        &row.first_engagement,
+                        engagement_columns,
+                    );
                     draw_row_rehearsal(ui, palette, &row.rehearsal);
                     ui.end_row();
                 }
@@ -282,6 +346,11 @@ pub fn render_planning(
             )
             .small()
             .color(palette.muted_text_color()),
+        );
+        ui.label(
+            RichText::new(FIRST_ENGAGEMENT_CAPTION)
+                .small()
+                .color(palette.muted_text_color()),
         );
     }
 
@@ -303,6 +372,42 @@ pub fn render_planning(
     action
 }
 
+/// A row's two coverage cells: the answer or why there is none, and the difference from
+/// the current laydown.
+fn draw_row_coverage(ui: &mut Ui, palette: &theme::Palette, coverage: &LaydownCoverage) {
+    match coverage {
+        LaydownCoverage::Computed {
+            gap_segments,
+            uncovered_m,
+            ..
+        } => {
+            ui.label(format!(
+                "{gap_segments} gap segment(s), {uncovered_m:.0} m uncovered"
+            ));
+        }
+        LaydownCoverage::NotComputed { reason } => {
+            ui.label(RichText::new(format!("Not computed: {reason}")).color(palette.warning_color));
+        }
+    }
+    match coverage {
+        LaydownCoverage::Computed {
+            delta_uncovered_m: Some(delta),
+            ..
+        } => {
+            ui.label(difference_label(*delta));
+        }
+        LaydownCoverage::Computed {
+            delta_uncovered_m: None,
+            ..
+        } => {
+            ui.label(RichText::new("-- (current)").color(palette.muted_text_color()));
+        }
+        LaydownCoverage::NotComputed { .. } => {
+            ui.label(RichText::new("--").color(palette.muted_text_color()));
+        }
+    }
+}
+
 fn draw_row_rehearsal(ui: &mut Ui, palette: &theme::Palette, rehearsal: &RowRehearsal) {
     match rehearsal {
         RowRehearsal::NotRehearsed => {
@@ -314,10 +419,12 @@ fn draw_row_rehearsal(ui: &mut Ui, palette: &theme::Palette, rehearsal: &RowRehe
             detections,
             tracks_formed,
             versus_current,
+            ran_at,
         } => {
             ui.label(format!(
-                "{}: {detections} detection(s), {tracks_formed} track(s)",
-                scenario.label()
+                "{}: {detections} detection(s), {tracks_formed} track(s); run at T+{:.0} s",
+                scenario.label(),
+                ran_at.0
             ));
             match versus_current {
                 VersusCurrent::IsCurrent => {
@@ -344,6 +451,173 @@ fn draw_row_rehearsal(ui: &mut Ui, palette: &theme::Palette, rehearsal: &RowRehe
                         .color(palette.muted_text_color()),
                     );
                 }
+            }
+        }
+    }
+}
+
+/// What the first-engagement column says, under the table: the rule (D-45) and where the
+/// figure comes from, once, rather than in every cell.
+pub const FIRST_ENGAGEMENT_CAPTION: &str =
+    "First engagement is the worst case over each laydown's last rehearsal: the least \
+     ground range from an approach's inner end at which the planner predicted it would \
+     first engage a recorded target coming down it, over the n predictions shown. It is \
+     read from \
+     a re-observed recording, not from sensor data.";
+
+/// A worst case in words: the range, that it is the worst case, and its count (D-45).
+#[must_use]
+pub fn worst_case_label(range_m: f64, predictions: usize) -> String {
+    format!("worst {:.1} km (n = {predictions})", range_m / 1000.0)
+}
+
+/// The difference from the current laydown's worst case, worded so the sign needs no
+/// reading: farther out is engaged earlier.
+#[must_use]
+pub fn engagement_difference_label(delta_m: f64) -> String {
+    if delta_m > 0.0 {
+        format!("{:.1} km farther out than current", delta_m / 1000.0)
+    } else if delta_m < 0.0 {
+        format!("{:.1} km closer in than current", -delta_m / 1000.0)
+    } else {
+        "same as current".to_string()
+    }
+}
+
+fn draw_approach_engagement(ui: &mut Ui, palette: &theme::Palette, e: &ApproachEngagement) {
+    match e {
+        ApproachEngagement::WorstCase {
+            range_m,
+            predictions,
+            versus_current_m,
+            ..
+        } => {
+            let mut text = worst_case_label(*range_m, *predictions);
+            if let Some(delta) = versus_current_m {
+                text.push_str("; ");
+                text.push_str(&engagement_difference_label(*delta));
+            }
+            ui.label(text);
+        }
+        ApproachEngagement::NotComputable { reason } => {
+            ui.label(
+                RichText::new(format!("not computable: {reason}")).color(palette.warning_color),
+            );
+        }
+    }
+}
+
+fn draw_row_first_engagement(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    first_engagement: &RowFirstEngagement,
+    columns: usize,
+) {
+    match first_engagement {
+        RowFirstEngagement::NotRehearsed => {
+            for _ in 0..columns {
+                ui.label(RichText::new("not rehearsed").color(palette.muted_text_color()));
+            }
+        }
+        RowFirstEngagement::NotComputed { reason } => {
+            ui.label(RichText::new(format!("Not computed: {reason}")).color(palette.warning_color));
+            for _ in 1..columns {
+                ui.label(RichText::new("--").color(palette.muted_text_color()));
+            }
+        }
+        RowFirstEngagement::PerApproach(cells) => {
+            for i in 0..columns {
+                match cells.get(i) {
+                    Some(e) => draw_approach_engagement(ui, palette, e),
+                    // A row built against other approaches than the header's: drawn, so
+                    // a caller's mismatch is visible rather than shifting the columns.
+                    None => {
+                        ui.label(RichText::new("--").color(palette.muted_text_color()));
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn draw_first_engagement_account(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    account: &RehearsalFirstEngagement,
+) {
+    match account {
+        RehearsalFirstEngagement::NotComputed { reason } => {
+            ui.label(
+                RichText::new(format!("First engagement: not computed: {reason}"))
+                    .color(palette.warning_color),
+            );
+        }
+        RehearsalFirstEngagement::PerApproach {
+            lines,
+            on_no_corridor,
+            clutter_pairings,
+        } => {
+            ui.label("First engagement, worst case over this run:");
+            for line in lines {
+                let corridor = line.corridor_half_width_m.map_or_else(
+                    || "no corridor declared".to_string(),
+                    |w| format!("corridor {:.1} km either side", w / 1000.0),
+                );
+                match &line.engagement {
+                    ApproachEngagement::WorstCase {
+                        range_m,
+                        predictions,
+                        target,
+                        track,
+                        resource,
+                        proposed_at,
+                        versus_current_m,
+                    } => {
+                        let mut text = format!(
+                            "{} ({corridor}): {}, target {target} (track {}) against resource \
+                             {} proposed at T+{:.0} s of the recording",
+                            line.approach,
+                            worst_case_label(*range_m, *predictions),
+                            track.0,
+                            resource.0,
+                            proposed_at.0
+                        );
+                        if let Some(delta) = versus_current_m {
+                            text.push_str("; ");
+                            text.push_str(&engagement_difference_label(*delta));
+                        }
+                        ui.label(text);
+                    }
+                    ApproachEngagement::NotComputable { reason } => {
+                        ui.label(
+                            RichText::new(format!(
+                                "{} ({corridor}): not computable: {reason}",
+                                line.approach
+                            ))
+                            .color(palette.warning_color),
+                        );
+                    }
+                }
+            }
+            if *on_no_corridor > 0 {
+                ui.label(
+                    RichText::new(format!(
+                        "{on_no_corridor} paired target(s) were in no declared corridor and \
+                         are in no approach's figure."
+                    ))
+                    .small()
+                    .color(palette.muted_text_color()),
+                );
+            }
+            if *clutter_pairings > 0 {
+                ui.label(
+                    RichText::new(format!(
+                        "{clutter_pairings} paired track(s) were none of the recording's \
+                         targets (clutter) and are in no figure."
+                    ))
+                    .small()
+                    .color(palette.muted_text_color()),
+                );
             }
         }
     }
@@ -422,12 +696,14 @@ fn draw_summary(ui: &mut Ui, palette: &theme::Palette, summary: &RehearsalSummar
             .color(palette.warning_color),
     );
     ui.label(format!(
-        "last: {} -- {} track(s) formed, {} decision(s) raised ({} expired)",
+        "last: {}, run at T+{:.0} s -- {} track(s) formed, {} decision(s) raised ({} expired)",
         summary.scenario.label(),
+        summary.ran_at.0,
         summary.tracks_formed,
         summary.decisions_raised,
         summary.decisions_expired
     ));
+    draw_first_engagement_account(ui, palette, &summary.first_engagement);
     egui::Grid::new("planning_rehearsal_sensors")
         .num_columns(5)
         .striped(true)
@@ -542,6 +818,7 @@ mod tests {
                 reason: "This deployment has declared no laydown alternatives.",
             },
             terrain_model: "flat terrain",
+            approaches: &[],
             rehearsal,
             rehearsal_scenario: TestTrackNumber(1),
             selected,
@@ -586,6 +863,24 @@ mod tests {
             detection_difference_label(0, &[2]),
             "same total, redistributed, from S2"
         );
+    }
+
+    /// D-45: the figure says it is the worst case and carries its count, and a
+    /// difference from the current laydown is worded rather than signed.
+    #[test]
+    fn a_first_engagement_says_worst_case_and_its_count() {
+        assert_eq!(worst_case_label(9_240.0, 3), "worst 9.2 km (n = 3)");
+        assert_eq!(
+            engagement_difference_label(9_000.0),
+            "9.0 km farther out than current"
+        );
+        assert_eq!(
+            engagement_difference_label(-2_500.0),
+            "2.5 km closer in than current"
+        );
+        assert_eq!(engagement_difference_label(0.0), "same as current");
+        assert!(FIRST_ENGAGEMENT_CAPTION.contains("worst case"));
+        assert!(FIRST_ENGAGEMENT_CAPTION.contains("not from sensor data"));
     }
 
     #[test]

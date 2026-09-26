@@ -244,3 +244,79 @@ fn every_committed_sample_set_replays_through_the_service_to_the_offline_result(
         );
     }
 }
+
+/// **The lock-step service is the same pipeline** (GAP-020, D-109): every committed
+/// sample set, submitted in receipt order to [`LiveTrackingService::lockstep`], ends at
+/// the offline result to the same tolerance the task path is held to -- and the picture
+/// a poll returns mid-run is a property of what was submitted, so two lock-step runs of
+/// one set agree at every poll, exactly, with no runtime and no wall clock in either.
+///
+/// The end is also the task path's: after `finish` the next poll applies the final
+/// flush and reports the pipeline stopped, and a later submission is refused.
+#[test]
+fn every_committed_sample_set_replays_in_lockstep_to_the_offline_result() {
+    for set in sample_sets() {
+        let name = set
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str)
+            .expect("a sample set directory has a name");
+        let views = detections(&set);
+        let spread = views
+            .iter()
+            .map(|v| v.receipt_time.0 - v.source_time.0)
+            .fold(0.0f64, f64::max);
+        let settings = buffered_for(spread);
+        let core: Vec<Detection> = views.iter().filter_map(to_core_detection).collect();
+        let offline = run_batch(settings.clone(), &core);
+
+        // Two runs side by side, polled after every submission.
+        let mut a = LiveTrackingService::lockstep(settings.clone());
+        let mut b = LiveTrackingService::lockstep(settings);
+        for view in &views {
+            for service in [&mut a, &mut b] {
+                service
+                    .submit_detection(view.clone())
+                    .unwrap_or_else(|e| panic!("{name}: a detection was refused: {e}"));
+                service.poll(view.receipt_time);
+            }
+            assert_eq!(
+                a.tracks(),
+                b.tracks(),
+                "{name}: two lock-step runs disagreed mid-run"
+            );
+        }
+        a.finish();
+        let last_source = views
+            .iter()
+            .map(|v| v.source_time.0)
+            .fold(f64::NEG_INFINITY, f64::max);
+        a.poll(MissionTime(last_source));
+        assert!(
+            !a.is_healthy(),
+            "{name}: the first poll after finish applies the flush and reports the end"
+        );
+        assert!(
+            matches!(
+                a.submit_detection(views[0].clone()),
+                Err(gungnir_tracking_service::SubmitError::PipelineGone)
+            ),
+            "{name}: a submission after the end is refused"
+        );
+
+        let live = a.tracks();
+        assert_eq!(live.len(), offline.len(), "{name}: track counts differ");
+        for expected in &offline {
+            let found = live
+                .iter()
+                .find(|t| t.id == expected.id)
+                .unwrap_or_else(|| panic!("{name}: no track {:?}", expected.id));
+            assert_eq!(found.status, expected.status, "{name}: {:?}", expected.id);
+            let worst = (found.state - expected.state).abs().max();
+            assert!(
+                worst < TOL,
+                "{name}: track {:?} differs by {worst}",
+                expected.id
+            );
+        }
+    }
+}

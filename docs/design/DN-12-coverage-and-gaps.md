@@ -243,7 +243,7 @@ Coverage accuracy row's 0.1 degree.
    recommendations and the node's `/v2|v3/coverage` answer place a sensor identically.
    PN-11's rings still draw the horizontal footprint to the nominal range; the band
    changes which approach samples are counted, which is what the gap layer draws.
-5. **A laydown rehearsal honours it too** (DN-32 §13): on top of the detection model's own
+5. **A laydown rehearsal honours it too** (DN-32 §14): on top of the detection model's own
    altitude band, before any draw.
 
 The verification is `gungnir-analytics/tests/coverage_accuracy.rs`: the frame-stated

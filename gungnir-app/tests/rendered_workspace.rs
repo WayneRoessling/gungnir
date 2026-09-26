@@ -410,6 +410,7 @@ fn coverage_gaps_are_reported_along_the_declared_approaches() {
                 [origin[0], origin[1], 3_000.0],
                 [55.5_f64.to_radians(), 12.0_f64.to_radians(), 3_000.0],
             ],
+            corridor_half_width_m: None,
         }],
         ..ConfigBaseline::default()
     };
@@ -524,6 +525,7 @@ fn no_declared_approaches_is_not_full_coverage() {
                 [55.0_f64.to_radians(), 12.0_f64.to_radians(), 0.0],
                 [55.5_f64.to_radians(), 12.0_f64.to_radians(), 0.0],
             ],
+            corridor_half_width_m: None,
         }],
         ..ConfigBaseline::default()
     })

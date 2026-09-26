@@ -1,7 +1,7 @@
 # A sensor's elevation band, a round-1 recording and an unused queue
 
 GAP-158, GAP-147 and GAP-121 ([`../../mission/gap-analysis/data/gaps.yaml`](../../mission/gap-analysis/data/gaps.yaml)),
-D-110, D-111 and D-112, DN-12 §10 and DN-32 §13. D-111 and D-112 were taken under the
+D-110, D-111 and D-112, DN-12 §10 and DN-32 §14. D-111 and D-112 were taken under the
 owner's delegation of 2026-09-26; D-110 was taken by the owner, directly, on 2026-09-26.
 
 ## GAP-158: what was wrong
@@ -119,6 +119,18 @@ split, because it is not a library scenario.
 **What a session sees.** `TestTrackNumber::ALL` is eleven, so PN-16's picker offers TT-11,
 and US-15's card names it. Rehearsed over TT-11, `current` and `b` give S1 1 142
 detections and S2 2 264, and `c` gives S1 the same 1 142 and S2 2 336; `c`'s row names S2.
+
+**GAP-020's first-engagement column is computable for round 1 over it.** That column
+(D-107 to D-109, which merged while this was built) had been tested for round 1 only over
+the raid the round-1 test wrote, and over a committed recording it read not computable,
+because nothing reached round 1's radars. Over TT-11 the upper Vell approach reads a worst
+case over all six drones on every row: 10 059 m under `current`, 10 123 m under `b` and
+14 967 m under `c`. `b` no longer equals `current`, as it did over the three-drone raid:
+`b` moves the area battery toward the approach, and an effector standing elsewhere
+predicts its intercepts elsewhere, so the test now asserts that the row states the
+difference rather than that there is none. The test that holds the not-computable case
+is renamed for what it holds -- round 1 against a plan-07 recording -- and DN-02 §9's
+verification paragraph and DN-32 §14 say so.
 
 ## GAP-121: what the owner decided (D-110)
 

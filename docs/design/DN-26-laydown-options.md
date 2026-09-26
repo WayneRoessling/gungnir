@@ -4,9 +4,11 @@ Unblocks GAP-087, and through it GAP-020's approach corridors and GAP-045's rehe
 record. Status: `ConfigBaseline.laydowns` with its five refusals,
 §6's options table, and the viewport push (an option selected on the table drawn on
 PN-11 for a visual before-and-after) are **all built (GAP-087, 2026-09-07 and
-2026-09-08)**; the rehearsal section, the gap-acceptance control, and first-engagement
-range -- this note's own §7 and GAP-087's remaining item name them -- are not. What the
-owner has signed of this note is in [`../signatures.md`](../signatures.md).
+2026-09-08)**; so are the rehearsal section (GAP-045, 2026-09-08; re-observed by each
+laydown's own sensors since GAP-105, 2026-09-25) and first-engagement range per option
+(GAP-020, 2026-09-26, by DN-02 §9). The gap-acceptance control is GAP-106's and the
+rehearsal-gated submit GAP-107's. What the owner has signed of this note is in
+[`../signatures.md`](../signatures.md).
 
 ## 1. The gap and what it blocks
 

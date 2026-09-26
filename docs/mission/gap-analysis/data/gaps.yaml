@@ -1674,19 +1674,15 @@
   evidence: >-
     `mission/maritime.md` §8 (closest point of approach: not in the baseline)
   action: >-
-    The panel exists (GAP-087) and rehearsal runs (GAP-045); what is missing is the
-    aggregation rule DN-02 §7 names -- how predictions over a rehearsal become one
-    first-engagement range per approach -- which needs a design decision before it needs
-    code. The predictor half is done. **D-45 (2026-09-15) settles the aggregation rule
-    this entry stopped at**: a laydown's first-engagement range per approach is the
-    **worst case, the minimum over the run**, labelled as such and carrying the number
-    of predictions behind it -- not a mean, a median or a percentile, because US-15
-    compares two laydowns on that column and an averaged figure flatters the weaker one.
-    DN-02 §7 takes the rule as an amendment; the predictor half is already built, so
-    what follows is the aggregation and PN-16's column.
+    Done 2026-09-26. The predictor half was built and wired by 2026-09-06; the PN-16
+    half -- each approach corridor's first-engagement range per laydown, the aggregate of
+    predictions over a rehearsal that DN-02 §7 names -- is built to D-45 (the worst case,
+    the minimum over the run, with its count) as DN-02 §9 specifies, with D-107 to D-109
+    taking what D-45 left open.
   ref: >-
-    `docs/design/DN-02-prediction-and-approach.md`;
-    `gungnir-app/tests/predictions_and_warnings.rs`
+    `docs/design/DN-02-prediction-and-approach.md` (§9 for the approach corridors);
+    `gungnir-app/tests/predictions_and_warnings.rs`; `gungnir-assessment/src/first_engagement.rs`;
+    `gungnir-app/tests/laydown_rehearsal.rs`
   history:
   - date: 2026-09-15
     status: In progress
@@ -1727,6 +1723,19 @@
       and no approach is claimed, and the panel says why. The filter predictor waits on
       GAP-011. Assessment computes closing speed to one point; predicted path, time to
       impact per asset, and closest point of approach for surface craft do not exist.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Closed 2026-09-26: PN-16 compares laydowns on each approach's first-engagement
+      range, built to D-45 as DN-02 §9 specifies**, under the owner's delegation. A
+      prediction is one recorded target's first engagement, measured on the ground from
+      its predicted intercept point to the approach's inner end; clutter is counted,
+      never measured (D-107). Targets are placed by declared corridor (D-108). Nothing
+      engaged reads not computable, never zero, and every figure names its rehearsal.
+      Rehearsals now run in lock-step (D-109) through `gungnir_fusion_async::step`, an
+      extraction in a human-owned crate; see `../../signatures.md`. No verification row:
+      D-45 and DN-02 §7 specify none. See
+      `../../record/2026-09-26/first-engagement-range-over-a-rehearsal.md`.
 
 - id: GAP-021
   name: Track and feed anomaly detection
@@ -3562,20 +3571,11 @@
   impact: MT-09 rehearsal cannot show what the sector would recommend.
   evidence: "`gungnir-tracking-service/tests/scenario_truth_replay.rs`"
   action: >-
-    Done 2026-09-08: the laydown concept and the panel (GAP-087), and the
-    operator-facing rehearsal itself -- choosing a laydown and scenario, running it,
-    reading real tracks-and-decisions back. Remaining, and each its own decision rather
-    than a build: laydown-aware sensor geometry (built 2026-09-25 as GAP-105, by
-    re-observation rather than a placement override); the first-engagement-range
-    aggregation rule DN-02 §7 names and does not specify; the gap-acceptance control;
-    and the rehearsal-gated submit, which has no adoption workflow to gate since DN-26
-    §6 rule 4 deliberately built none. **D-50 (2026-09-15) scopes all three of the
-    controls above, against a recommendation to take only the first**: laydown-aware
-    sensor geometry is now GAP-105, the gap-acceptance control GAP-106, and the
-    rehearsal-gated submit GAP-107. Two of the three have no design at all yet, so each
-    gets a design note before code. D-45 settles the fourth item, the
-    first-engagement-range aggregation rule, and GAP-020 carries it -- so nothing this
-    entry named is undecided any longer.
+    Done 2026-09-26. The operator-facing rehearsal (2026-09-08), laydown-aware sensor
+    geometry (GAP-105, 2026-09-25) and first-engagement range per approach (GAP-020,
+    2026-09-26) all hold. What this entry named that remains belongs to other entries:
+    the gap-acceptance control is GAP-106 and the rehearsal-gated submit is GAP-107,
+    both scoped by D-50.
   ref: "`verification-capability-table.md` §2, `gungnir-mission` row"
   history:
   - date: 2026-09-15
@@ -3595,6 +3595,17 @@
       items are unchanged and each is another gap's: the first-engagement-range
       aggregation (GAP-020, D-45), the gap-acceptance control (GAP-106) and the
       rehearsal-gated submit (GAP-107).
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Closed 2026-09-26: a rehearsal now reports each approach's first-engagement
+      range (GAP-020, closed the same day), the last item this entry held itself.** A
+      run is also now a property of the recording and laydown, not of the machine
+      (D-109), so the decisions raised and expired it reports are repeatable; they
+      followed thread scheduling before. **What remains of this entry's text is wholly
+      other entries'**: the gap-acceptance control is GAP-106 and the rehearsal-gated
+      submit GAP-107 (D-50), each open with its own design to write. See
+      `../../record/2026-09-26/first-engagement-range-over-a-rehearsal.md`.
 
 - id: GAP-046
   name: Test-track suite
@@ -4434,14 +4445,10 @@
     `../../ux/wireframes/WF-16-planning.puml`; `../../ux/ux-to-code-map.md` §1 (PN-16:
     no entry builds this panel); `gungnir-app/src/workspace.rs` `owning_gap`
   action: >-
-    Done 2026-09-08: the viewport push, and GAP-045's rehearsal wired onto this panel.
-    What remains is not this gap's to build: first-engagement range per option (GAP-020,
-    blocked on an aggregation-rule decision), and the gap-acceptance control and the
-    rehearsal-gated submit, both undesigned and named in GAP-045's own text. **Both
-    items this entry named as not its own are settled 2026-09-15**: D-45 gives the
-    first-engagement-range column its aggregation rule (GAP-020 carries it), and D-50
-    scopes the gap-acceptance control and the rehearsal-gated submit as GAP-106 and
-    GAP-107.
+    Done 2026-09-26. The options table, the viewport push, the rehearsal section and
+    first-engagement range per option (GAP-020) are on PN-16. What WF-16 shows that
+    remains belongs to other entries: the gap-acceptance control is GAP-106 and the
+    rehearsal-gated submit is GAP-107, both scoped by D-50.
   ref: "`../../ux/wireframes/WF-16-planning.puml`"
   history:
   - date: 2026-09-15
@@ -4548,6 +4555,18 @@
       The coverage columns are unchanged. The items this entry names as not its own
       are unchanged: first-engagement range (GAP-020), the gap-acceptance control
       (GAP-106) and the rehearsal-gated submit (GAP-107).
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Closed 2026-09-26: first-engagement range per option is on PN-16 (GAP-020,
+      closed the same day).** One column per declared approach gives each option's worst
+      case over its last rehearsal, with its count and, against the current laydown's
+      rehearsal of the same recording, how much farther out or closer in (D-45); nothing
+      engaged or no corridor reads not computable, and an unrehearsed option says so.
+      **Of what this entry named, the two items left are each wholly another entry's**:
+      the gap-acceptance control is GAP-106 and the rehearsal-gated submit GAP-107
+      (D-50), both open; nothing remains that this entry would build. See
+      `../../record/2026-09-26/first-engagement-range-over-a-rehearsal.md`.
 
 - id: GAP-088
   name: Geofences have no configuration source
@@ -10206,13 +10225,16 @@
   - date: 2026-09-26
     status: Closed
     note: >-
-      Closed under the owner's delegation of 2026-09-26 (D-112; DN-32 §13). TT-11, six
+      Closed under the owner's delegation of 2026-09-26 (D-112; DN-32 §14). TT-11, six
       drones down round 1's declared approach, is committed from both generators
       (`reference_parity.rs` and `sidecar_parity.rs` byte for byte) and passes
       `validate_tracks.py`; PN-16's picker offers it and US-15's card names it. The round-1
       row's test runs over it: S2's detections differ under `c` (2 264 against 2 336), S1's
       do not, and `no_plan_07_recording_reaches_round_1s_radars` holds why it is needed.
-      The ten sets are unchanged; the row stays Draft.
+      GAP-020's first-engagement column (#187) is now computable for round 1 over a
+      committed recording rather than the test-written raid: 10 059 m under `current`,
+      10 123 m under `b`, 14 967 m under `c`. The ten sets are unchanged; the row stays
+      Draft.
 
 - id: GAP-156
   name: A picture the exact solver cannot finish in time is never answered
