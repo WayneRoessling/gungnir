@@ -4,6 +4,9 @@ name: miri
 
 on:
   pull_request:
+  # Run by hand against any ref, so the gate can be seen to work on a diff with no
+  # `unsafe` in it (GAP-164).
+  workflow_dispatch:
 
 # Nothing here writes to the repository, and the repository is public.
 permissions:
@@ -38,7 +41,7 @@ jobs:
 
   miri:
     needs: detect-unsafe
-    if: needs.detect-unsafe.outputs.has_unsafe == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.detect-unsafe.outputs.has_unsafe == 'true'
     runs-on: ubuntu-latest
     # miri is an interpreter and twelve crates is a lot of it; the bound is generous,
     # and it is still a bound rather than six hours.
@@ -49,10 +52,13 @@ jobs:
         with:
           components: miri
       - uses: Swatinem/rust-cache@v2
-      - run: cargo miri setup
+      # `rust-toolchain.toml` pins a stable release, and a toolchain file outranks the
+      # default the action above sets, so a bare `cargo miri` resolves to stable and
+      # fails: miri ships only on nightly. `+nightly` outranks the file (GAP-164).
+      - run: cargo +nightly miri setup
       - name: miri on the tracking core and service layer
         run: >
-          cargo miri test
+          cargo +nightly miri test
           -p gungnir-core -p gungnir-coord -p gungnir-filters -p gungnir-association
           -p gungnir-track -p gungnir-rfs -p gungnir-track-fusion -p gungnir-fusion-async
           -p gungnir-allocation -p gungnir-metrics -p gungnir-tracking-service -p gungnir-intercept-service

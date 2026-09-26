@@ -9861,3 +9861,35 @@
     note: >-
       Found closing GAP-118. Not edited in that change: the sentence is in a criterion
       cell of the verification table, which only the owner changes.
+- id: GAP-164
+  name: The miri gate could not run miri
+  type: Technical
+  caps: [CAP-7.4]
+  layer: Verification and governance
+  sev: 3
+  effort: S
+  target: I2
+  owner: Services engineer
+  deps: []
+  impact: >-
+    Gate 3 runs miri on any pull request whose diff adds `unsafe`. The job installed a
+    nightly toolchain and ran `cargo miri`, which the pinned `rust-toolchain.toml` resolved
+    to stable `1.98`; stable ships no miri, so the job failed at setup every time it was
+    triggered. The first pull request to add real `unsafe` code would have met a gate that
+    could not pass, and one that did pass would have proved nothing.
+  evidence: >-
+    `.github/workflows/miri.yml`; `rust-toolchain.toml`; the three miri runs of
+    2026-09-26 on GAP-124's branch, each failing in `cargo miri setup`
+  action: >-
+    Run miri as `cargo +nightly miri`, and give the workflow a manual trigger that runs the
+    job without the scan, then dispatch it on `main` and record the outcome.
+  ref: >-
+    Found merging GAP-124 (`../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`)
+  history:
+  - date: 2026-09-26
+    status: In progress
+    note: >-
+      Found when a doc comment on GAP-124's branch used the word the scan matches and the
+      job failed in setup three times. Fixed in `miri.yml` with `+nightly`, and a
+      `workflow_dispatch` trigger added so the job can be run without an `unsafe` diff.
+      Stays open until a dispatched run on `main` has interpreted the twelve crates.

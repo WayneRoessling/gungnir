@@ -165,8 +165,9 @@ history, and an entry is never edited once it has merged.
 | GAP-153 | A non-finite float in an envelope breaks the v3 stream and history | Technical | CAP-7.1, CAP-5.4 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
 | GAP-158 | A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical | Technical | CAP-2.11 | 2 | 3 | M | 6 | I3 | Services engineer | Open |
 | GAP-159 | The Coverage accuracy row still says a coverage volume has no bearing | Technical | CAP-2.11 | 1 | 3 | S | 3 | I3 | Owner | Open |
+| GAP-164 | The miri gate could not run miri | Technical | CAP-7.4 | 3 | 5 | S | 15 | I2 | Services engineer | In progress |
 
-Counts: 152 gaps, 3 mission, 149 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 153 gaps, 3 mission, 150 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2296,4 +2297,17 @@ Counts: 152 gaps, 3 mission, 149 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Owner. Status: Open.
 - Reference: Found closing GAP-118 (`../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`).
 - Depends on: GAP-118.
+
+**GAP-164 The miri gate could not run miri**
+
+- Type: Technical.
+- Capability: CAP-7.4 Peer and coalition exchange.
+- History:
+  - 2026-09-26, In progress: Found when a doc comment on GAP-124's branch used the word the scan matches and the job failed in setup three times. Fixed in `miri.yml` with `+nightly`, and a `workflow_dispatch` trigger added so the job can be run without an `unsafe` diff. Stays open until a dispatched run on `main` has interpreted the twelve crates.
+- Evidence: `.github/workflows/miri.yml`; `rust-toolchain.toml`; the three miri runs of 2026-09-26 on GAP-124's branch, each failing in `cargo miri setup`.
+- Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
+- Impact: Gate 3 runs miri on any pull request whose diff adds `unsafe`. The job installed a nightly toolchain and ran `cargo miri`, which the pinned `rust-toolchain.toml` resolved to stable `1.98`; stable ships no miri, so the job failed at setup every time it was triggered. The first pull request to add real `unsafe` code would have met a gate that could not pass, and one that did pass would have proved nothing.
+- Closing action: Run miri as `cargo +nightly miri`, and give the workflow a manual trigger that runs the job without the scan, then dispatch it on `main` and record the outcome.
+- Target: I2. Owner: Services engineer. Status: In progress.
+- Reference: Found merging GAP-124 (`../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`).
 
