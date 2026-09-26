@@ -44,6 +44,14 @@ gate now runs under Tree Borrows (D-90): under Stacked Borrows it would fail on 
 dependency before it reached anything a pull request adds. The finding is kept as GAP-166
 so it goes upstream rather than being forgotten.
 
+The third run passed `gungnir-allocation`, `gungnir-association` and `gungnir-coord` and
+failed one `gungnir-core` test, `direct_branch_is_taken_above_the_threshold`, by three
+ulp: miri deliberately perturbs each transcendental result by a small random error, so
+two evaluations of `x.sin() / x` no longer agree bit for bit. The test pins a property of
+the machine's arithmetic, which the ordinary test gate checks on real hardware; the job
+now sets `-Zmiri-deterministic-floats`, under which all nine `gungnir-core` tests pass
+locally.
+
 ## Evidence
 
 The first dispatched run on `main` after this merges is the evidence that the job

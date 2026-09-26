@@ -64,8 +64,12 @@ jobs:
         # 0.35 alike, is rejected under Stacked Borrows and accepted under Tree Borrows,
         # so under the default model the gate fails on a dependency's view code before it
         # reaches anything a pull request adds (GAP-166).
+        # Deterministic floats: miri otherwise perturbs each `sin`/`cos`/`exp` result by a
+        # few ulp at random, and the tracking core's tests pin bit-for-bit agreement with
+        # their oracles and between two evaluations of one formula. Those are properties
+        # of the hardware's maths, which the other gates check; this one checks memory.
         env:
-          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
+          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows -Zmiri-deterministic-floats
         run: >
           cargo +nightly miri test
           -p gungnir-core -p gungnir-coord -p gungnir-filters -p gungnir-association
