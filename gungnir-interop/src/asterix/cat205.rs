@@ -101,6 +101,8 @@ pub const EDITION: &str = "1.0";
 pub const PART1_EDITION_CITED: &str = "2.4";
 
 const CATEGORY: u8 = 205;
+/// The loss a report records when it carries no I205/030 (GAP-116).
+pub const TIME_OF_DAY_ABSENT: &str = "no time of day (I205/030); source time set to receipt time";
 const MAX_FRN: usize = 28;
 /// I205/050 and I205/130: 180 / 2^25 degrees per count (§5.2.6).
 const WGS84_LSB_DEG: f64 = 180.0 / 33_554_432.0;
@@ -533,7 +535,7 @@ impl AsterixCat205Codec {
 
         let mut losses: Vec<&'static str> = Vec::new();
         let (source_time, time_loss) =
-            super::cat048::source_time(record.time_of_day_s, receipt_time);
+            super::cat048::source_time(record.time_of_day_s, receipt_time, TIME_OF_DAY_ABSENT);
         losses.extend(time_loss);
 
         // I205/200 has no companion angular error anywhere in this category, and the

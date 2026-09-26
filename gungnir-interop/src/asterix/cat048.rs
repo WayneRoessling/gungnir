@@ -612,7 +612,8 @@ impl AsterixCat048Codec {
         }
 
         let mut losses: Vec<&'static str> = Vec::new();
-        let (source_time, time_loss) = source_time(record.time_of_day_s, receipt_time);
+        let (source_time, time_loss) =
+            source_time(record.time_of_day_s, receipt_time, TIME_OF_DAY_ABSENT);
         losses.extend(time_loss);
 
         // Height above the radar's own level, when the report gives one.
@@ -700,22 +701,26 @@ impl AsterixCat048Codec {
     }
 }
 
+/// The loss a Category 048 report records when it carries no I048/140.
+pub const TIME_OF_DAY_ABSENT: &str = "no time of day (I048/140); source time set to receipt time";
+
 /// I048/140 is seconds since midnight UTC with no date. The date is taken from
 /// `receipt_time`, which in the live profiles is Unix time (`gungnir_model::time`),
 /// and the result is folded to within twelve hours of receipt so a report time-stamped
 /// just before midnight and received just after it lands on the right day.
 ///
 /// With no time of day at all, the source time is the receipt time and that is
-/// recorded as a loss.
+/// recorded as a loss: `absent`, which the calling category words so that it names its
+/// own time-of-day item. Categories 034, 205 and 129 share this fold, and until GAP-116
+/// every one of them recorded a missing time as "no time of day (I048/140)", an item
+/// their records do not have, on the report an auditor reads to find what was lost.
 pub fn source_time(
     time_of_day_s: Option<f64>,
     receipt_time: MissionTime,
+    absent: &'static str,
 ) -> (MissionTime, Option<&'static str>) {
     let Some(tod) = time_of_day_s else {
-        return (
-            receipt_time,
-            Some("no time of day (I048/140); source time set to receipt time"),
-        );
+        return (receipt_time, Some(absent));
     };
     if !receipt_time.0.is_finite() {
         return (
@@ -902,15 +907,15 @@ mod tests {
     fn source_time_folds_across_midnight() {
         let day = 20_000.0 * SECONDS_PER_DAY;
         // Reported 23:59:59, received 00:00:02 the next day: previous day's stamp.
-        let (t, loss) = source_time(Some(86_399.0), MissionTime(day + 2.0));
+        let (t, loss) = source_time(Some(86_399.0), MissionTime(day + 2.0), TIME_OF_DAY_ABSENT);
         assert!(loss.is_none());
         assert!((t.0 - (day - 1.0)).abs() < 1e-6);
         // Reported 00:00:01, received 23:59:58 the day before: next day's stamp.
-        let (t, _) = source_time(Some(1.0), MissionTime(day - 2.0));
+        let (t, _) = source_time(Some(1.0), MissionTime(day - 2.0), TIME_OF_DAY_ABSENT);
         assert!((t.0 - (day + 1.0)).abs() < 1e-6);
-        let (t, loss) = source_time(None, MissionTime(5.0));
+        let (t, loss) = source_time(None, MissionTime(5.0), TIME_OF_DAY_ABSENT);
         assert!((t.0 - 5.0).abs() < 1e-12);
-        assert!(loss.is_some());
+        assert_eq!(loss, Some(TIME_OF_DAY_ABSENT));
     }
 
     #[test]

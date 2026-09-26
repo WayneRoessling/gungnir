@@ -362,7 +362,7 @@ fn bench_startup(c: &mut Criterion) {
                 current: MissionTime(0.0),
             };
             step(&mut state, &mut clock);
-            black_box(state.health.tracking_healthy)
+            black_box(state.health().tracking_healthy)
         });
     });
     group.finish();

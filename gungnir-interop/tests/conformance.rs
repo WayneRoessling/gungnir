@@ -368,6 +368,11 @@ fn adsb_capture_decodes_and_reports_what_it_carries() {
 
 /// An unsupported version is refused with the catalogue's own error, and an unknown
 /// schema is named.
+///
+/// **Older as well as newer** (GAP-116 clause 3): the rule is an exact match, so a
+/// peer still speaking the previous version is refused as surely as one ahead. Only
+/// `version + 1` was checked before, which a rule of "this version or older" would
+/// also have passed.
 #[test]
 fn an_unsupported_version_is_refused_with_the_catalogues_error() {
     let catalogue = SchemaCatalog::builtin();
@@ -375,18 +380,24 @@ fn an_unsupported_version_is_refused_with_the_catalogues_error() {
         catalogue
             .check(&entry.name, entry.version)
             .expect("the spoken version");
-        match catalogue.check(&entry.name, entry.version + 1) {
-            Err(InteropError::IncompatibleSchema {
-                name,
-                offered,
-                spoken,
-            }) => {
-                assert_eq!(name, entry.name);
-                assert_eq!((offered, spoken), (entry.version + 1, entry.version));
+        let older = entry
+            .version
+            .checked_sub(1)
+            .unwrap_or_else(|| panic!("{}: versions start at 1", entry.name));
+        for offered_version in [entry.version + 1, older] {
+            match catalogue.check(&entry.name, offered_version) {
+                Err(InteropError::IncompatibleSchema {
+                    name,
+                    offered,
+                    spoken,
+                }) => {
+                    assert_eq!(name, entry.name);
+                    assert_eq!((offered, spoken), (offered_version, entry.version));
+                }
+                other => panic!("{} offered {offered_version}: {other:?}", entry.name),
             }
-            other => panic!("{}: {other:?}", entry.name),
+            assert!(!catalogue.is_compatible(&entry.name, offered_version));
         }
-        assert!(!catalogue.is_compatible(&entry.name, entry.version + 1));
     }
     assert!(matches!(
         catalogue.check("gungnir.Nothing", 1),

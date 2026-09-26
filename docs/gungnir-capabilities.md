@@ -1325,8 +1325,8 @@ whoever keeps it running.
 *Status:* `SnapshotHealthMonitor` (alert correlation by summary, highest severity
 kept) implemented and tested; the node uses `WatchdogConfig` for its ingest-gap
 warning, and both binaries report `SystemHealth` from what the services say, never
-by inference. The node's health endpoint waits on the API transport
-(`ARCHITECTURE.md` §8.3).
+by inference, through that monitor, which decides when a change goes on the record
+(GAP-125, D-100). The node serves the summary at `/v3/health` (`ARCHITECTURE.md` §8.3).
 
 ### 5.6 Validate Against Reality
 

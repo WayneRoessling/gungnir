@@ -762,7 +762,7 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
         ui,
         &state.palette,
         &gungnir_ui::panels::sensor_health::SensorHealthView {
-            health: &state.health,
+            health: &state.health(),
             encryption: crate::status::encryption_state(&state.encryption),
             sensors: &sensors,
             clocks: gungnir_ui::panels::sensor_health::ClockSyncLine {
@@ -1238,7 +1238,7 @@ fn alternative_rows<'a>(
 /// clear it, while the planner recovering and going stale again does.
 fn degraded_conditions(state: &AppState) -> Vec<(&'static str, String)> {
     let mut out = Vec::new();
-    if !state.health.tracking_healthy {
+    if !state.health().tracking_healthy {
         out.push((
             "tracking",
             "the tracking pipeline is not running; the picture is not being updated".to_owned(),
@@ -1264,7 +1264,7 @@ fn degraded_conditions(state: &AppState) -> Vec<(&'static str, String)> {
             format!("the planner has never answered; {reason}"),
         )),
         crate::state::PlanStanding::Current | crate::state::PlanStanding::NotYetAsked
-            if !state.health.intercept_healthy =>
+            if !state.health().intercept_healthy =>
         {
             out.push((
                 "intercept",
@@ -1273,7 +1273,7 @@ fn degraded_conditions(state: &AppState) -> Vec<(&'static str, String)> {
         }
         crate::state::PlanStanding::Current | crate::state::PlanStanding::NotYetAsked => {}
     }
-    if !state.health.ingest_healthy {
+    if !state.health().ingest_healthy {
         out.push((
             "ingest",
             "the gateway is not receiving from every expected adapter".to_owned(),

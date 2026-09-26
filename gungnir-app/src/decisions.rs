@@ -390,13 +390,13 @@ pub fn verdict_sentence(verdict: PolicyVerdict) -> String {
 /// policy is refusing them all is the denial history the reason.
 #[must_use]
 pub fn queue_empty_reason(state: &AppState) -> EmptyBecause<'_> {
-    if !state.health.tracking_healthy {
+    if !state.health().tracking_healthy {
         return EmptyBecause::NoPlanProduced {
             because: "the tracking pipeline is not running, so there are no tracks \
                       to plan against",
         };
     }
-    if !state.health.intercept_healthy {
+    if !state.health().intercept_healthy {
         return EmptyBecause::NoPlanProduced {
             because: "the intercept service reports unhealthy; the plan on screen may \
                       be stale",
