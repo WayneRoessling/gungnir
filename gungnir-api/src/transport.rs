@@ -134,7 +134,9 @@
 //!   a refusal of one is recorded.
 //! - **A detection accepted onto the gateway's queue is not recorded** either: it is a
 //!   desktop forwarding its sensors, a data path the gateway journals, and a person's act
-//!   only in the sense that somebody is signed in. Its refusals are recorded.
+//!   only in the sense that somebody is signed in. A refusal of the caller is
+//!   recorded; a body that will not decode or speaks another schema is answered and not
+//!   recorded, as the gateway journals rather than audits what it quarantines.
 
 use crate::tls::{Peer, PlainListener, TlsListener};
 use crate::{routes, v3, ApiError};

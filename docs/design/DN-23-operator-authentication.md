@@ -425,7 +425,8 @@ coverage, queue, exchange, health): a desktop polls, and the session that reads 
 established by a sign-in that was recorded -- the same reasoning as DN-22 §5 not auditing key
 use per operation. A read that is **refused** is recorded. A detection accepted onto the
 gateway's queue: it is a desktop forwarding its sensors, a data path the gateway journals, not
-a person's act; its refusals are recorded.
+a person's act; a refusal of the caller is recorded, and a body that will not decode is answered
+and not recorded, as the gateway journals rather than audits what it quarantines.
 
 **The picture is gated on the node.** The snapshot, history, stream, coverage and exchange
 routes served any valid token, so a security officer -- who "operates nothing -- no decision,
