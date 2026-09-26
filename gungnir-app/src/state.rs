@@ -1083,6 +1083,9 @@ impl AppState {
                 })
                 .collect(),
             recording_events_not_applied: record.recording_events_not_applied,
+            ran_at: record.ran_at,
+            // GAP-020: each approach's worst-case first engagement over this run.
+            first_engagement: crate::sustainment::rehearsal_first_engagement_account(self, record),
         })
     }
 
@@ -1128,6 +1131,7 @@ impl AppState {
             detections: total(record),
             tracks_formed: record.tracks_formed,
             versus_current,
+            ran_at: record.ran_at,
         }
     }
 
@@ -1170,6 +1174,7 @@ impl AppState {
             &laydown,
             &self.config.sensors,
             &self.config.resources,
+            self.clock.now(),
         ) {
             Ok(record) => {
                 let per_sensor = record
@@ -1862,10 +1867,42 @@ pub fn embedded_tracker(
     tracking_service(runtime, config, pipeline, &mut already_raised)
 }
 
+/// The tracker a laydown rehearsal's throwaway desktop runs (GAP-020, D-109): the
+/// embedded tracker's pipeline, settings, staleness policy, sensor positions and
+/// algorithm baseline, driven **in lock-step** on the rehearsal's own thread
+/// (`LiveTrackingService::lockstep`) rather than by a task, so every tick's plan is made
+/// against the picture every detection fed so far has made -- a property of the
+/// recording, where a task's picture is a property of how far it had got.
+#[must_use]
+pub fn rehearsal_tracker(config: &ConfigBaseline) -> LiveTrackingService {
+    let mut already_raised = Vec::new();
+    let governance = crate::governance::Governance::from_config(config);
+    let pipeline = pipeline_settings(config, governance.in_force(), &mut already_raised);
+    configured_tracker(
+        LiveTrackingService::lockstep(pipeline),
+        config,
+        &mut already_raised,
+    )
+}
+
 fn tracking_service(
     runtime: &tokio::runtime::Handle,
     config: &ConfigBaseline,
     pipeline: gungnir_tracking_service::PipelineSettings,
+    alerts: &mut Vec<String>,
+) -> LiveTrackingService {
+    configured_tracker(
+        LiveTrackingService::with_pipeline_settings(runtime, pipeline),
+        config,
+        alerts,
+    )
+}
+
+/// Everything a tracker takes from the baseline beyond its pipeline settings, applied
+/// once for every way a tracker is driven.
+fn configured_tracker(
+    service: LiveTrackingService,
+    config: &ConfigBaseline,
     alerts: &mut Vec<String>,
 ) -> LiveTrackingService {
     // GAP-104: without an origin there is no local frame, so no sensor has an ENU
@@ -1880,7 +1917,7 @@ fn tracking_service(
         );
     }
     let staleness = config.policy.staleness.clone();
-    let service = LiveTrackingService::with_pipeline_settings(runtime, pipeline)
+    let service = service
         .with_staleness(staleness)
         .with_sensor_positions(sensor_positions(config));
     match applied_baseline(

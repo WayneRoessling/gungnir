@@ -54,6 +54,7 @@ fn northern_axis() -> ApproachConfig {
             [ORIGIN[0], ORIGIN[1], 3_000.0],
             [55.5_f64.to_radians(), ORIGIN[1], 3_000.0],
         ],
+        corridor_half_width_m: None,
     }
 }
 

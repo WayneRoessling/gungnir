@@ -435,10 +435,35 @@ pub const UNGOVERNED_ALGORITHM_VERSION: &str = concat!(
     env!("CARGO_PKG_VERSION")
 );
 
+/// How a [`LiveTrackingService`] drives its pipeline.
+enum Engine {
+    /// `gungnir_fusion_async::ingest_with` on the host's tokio runtime, behind the two
+    /// boundary channels: what every desktop and node runs.
+    Task {
+        /// `None` once [`LiveTrackingService::finish`] has ended the stream.
+        detection_tx: Option<Sender<gungnir_fusion_async::Submission>>,
+        track_rx: Receiver<gungnir_fusion_async::PipelineSnapshot>,
+    },
+    /// The same pipeline driven on the caller's own thread, one submission at a time,
+    /// through the same `gungnir_fusion_async::step` the task's loop calls (GAP-020,
+    /// D-109). See [`LiveTrackingService::lockstep`].
+    Lockstep {
+        /// `None` once [`LiveTrackingService::finish`] has ended the stream.
+        ///
+        /// In a `Mutex` only because the trait requires `Sync` and the pipeline's filters
+        /// are not: it is never locked, only reached through `&mut self` with
+        /// `Mutex::get_mut`, so nothing here is shared state.
+        pipeline: Option<Box<std::sync::Mutex<gungnir_fusion_async::FusionPipeline>>>,
+        /// The newest snapshot not yet polled: the task path's drain-to-latest, held.
+        pending: Option<Box<gungnir_fusion_async::PipelineSnapshot>>,
+    },
+}
+
 /// Default implementation wiring IMM filtering -> gating/JPDA association ->
 /// track-manager lifecycle -> optional PHD/CPHD for dense regions -> track-fusion
 /// across sensor platforms, all driven by `gungnir_fusion_async::ingest` on the
-/// host's tokio runtime.
+/// host's tokio runtime -- or, for a host that must read the picture its own
+/// submissions make, by the same pipeline in lock-step ([`LiveTrackingService::lockstep`]).
 pub struct LiveTrackingService {
     tracks: Vec<TrackView>,
     /// Bearings that matched no track, projected for [`TrackingService::bearing_rays`]
@@ -450,11 +475,10 @@ pub struct LiveTrackingService {
     /// The pipeline's own counters as of the last snapshot, for
     /// [`TrackingService::pipeline_stats`] (GAP-096).
     pipeline_stats: gungnir_fusion_async::PipelineStats,
-    /// `None` once [`LiveTrackingService::finish`] has ended the stream.
-    detection_tx: Option<Sender<gungnir_fusion_async::Submission>>,
+    /// The pipeline, and how it is driven.
+    engine: Engine,
     /// Where each sensor measures from, so an angular report can be placed at all.
     sensor_positions: SensorPositions,
-    track_rx: Receiver<gungnir_fusion_async::PipelineSnapshot>,
     pipeline_alive: bool,
     provenance: Provenance,
     /// The staleness policy in force (GAP-012). `Default` is a zero limit, which
@@ -494,12 +518,39 @@ impl LiveTrackingService {
             track_tx,
             settings,
         ));
+        Self::with_engine(Engine::Task {
+            detection_tx: Some(detection_tx),
+            track_rx,
+        })
+    }
+
+    /// The same pipeline under the same settings, driven **in lock-step on the caller's
+    /// thread** rather than by a task on a runtime (GAP-020, D-109): each submission is
+    /// applied by `gungnir_fusion_async::step` before `submit_detection` returns, so the
+    /// next `poll` sees the picture every detection submitted so far has made.
+    ///
+    /// **For a host whose answer must be a property of its input and not of the
+    /// machine**: a laydown rehearsal replays a recording through a throwaway desktop, and
+    /// the plans it measures are made mid-run from whatever picture a poll returns. Behind
+    /// a task that picture is however far the task on another thread had got -- which is
+    /// scheduling, and two runs of one laydown proposed different plans. A live desktop or
+    /// node must not use this: it would put the pipeline's work on the frame.
+    #[must_use]
+    pub fn lockstep(settings: gungnir_fusion_async::PipelineSettings) -> Self {
+        Self::with_engine(Engine::Lockstep {
+            pipeline: Some(Box::new(std::sync::Mutex::new(
+                gungnir_fusion_async::FusionPipeline::new(settings),
+            ))),
+            pending: None,
+        })
+    }
+
+    fn with_engine(engine: Engine) -> Self {
         Self {
             tracks: Vec::new(),
             bearing_rays: Vec::new(),
             pipeline_stats: gungnir_fusion_async::PipelineStats::default(),
-            detection_tx: Some(detection_tx),
-            track_rx,
+            engine,
             pipeline_alive: true,
             provenance: Provenance {
                 source_sensor_ids: Vec::new(),
@@ -654,7 +705,23 @@ impl LiveTrackingService {
     ///
     /// Submitting afterwards returns [`SubmitError::PipelineGone`], which is what it is.
     pub fn finish(&mut self) {
-        self.detection_tx = None;
+        match &mut self.engine {
+            Engine::Task { detection_tx, .. } => *detection_tx = None,
+            // The flush happens here, on this thread, and its snapshot waits for the next
+            // poll exactly as the task's final snapshot waits in the channel.
+            Engine::Lockstep { pipeline, pending } => {
+                if let Some(ended) = pipeline.take() {
+                    // Never locked, so never poisoned; and a poisoned one still holds
+                    // the pipeline, which is what the flush needs.
+                    let mut ended = (*ended)
+                        .into_inner()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if let Some(last) = gungnir_fusion_async::end_of_stream(&mut ended) {
+                        *pending = Some(Box::new(last));
+                    }
+                }
+            }
+        }
     }
 
     /// Project a pipeline snapshot into views, deciding staleness for each track.
@@ -697,11 +764,24 @@ impl LiveTrackingService {
 impl TrackingService for LiveTrackingService {
     fn submit_detection(&mut self, detection: DetectionView) -> Result<(), SubmitError> {
         let core = self.to_submission(&detection)?;
-        if self
-            .detection_tx
-            .as_ref()
-            .is_some_and(|tx| tx.send(core).is_ok())
-        {
+        let handed_off = match &mut self.engine {
+            Engine::Task { detection_tx, .. } => detection_tx
+                .as_ref()
+                .is_some_and(|tx| tx.send(core).is_ok()),
+            Engine::Lockstep { pipeline, pending } => match pipeline {
+                Some(p) => {
+                    let p = p
+                        .get_mut()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if let Some(snapshot) = gungnir_fusion_async::step(p, core) {
+                        *pending = Some(Box::new(snapshot));
+                    }
+                    true
+                }
+                None => false,
+            },
+        };
+        if handed_off {
             return Ok(());
         }
         if self.pipeline_alive {
@@ -715,18 +795,30 @@ impl TrackingService for LiveTrackingService {
 
     fn poll(&mut self, now: MissionTime) {
         let mut latest: Option<gungnir_fusion_async::PipelineSnapshot> = None;
-        loop {
-            match self.track_rx.try_recv() {
-                Ok(snapshot) => latest = Some(snapshot),
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
-                    if self.pipeline_alive {
-                        self.pipeline_alive = false;
-                        tracing::error!(
-                            "fusion-async ingest task stopped; track snapshot is frozen"
-                        );
+        match &mut self.engine {
+            Engine::Task { track_rx, .. } => loop {
+                match track_rx.try_recv() {
+                    Ok(snapshot) => latest = Some(snapshot),
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        if self.pipeline_alive {
+                            self.pipeline_alive = false;
+                            tracing::error!(
+                                "fusion-async ingest task stopped; track snapshot is frozen"
+                            );
+                        }
+                        break;
                     }
-                    break;
+                }
+            },
+            // The same two answers the task path gives: the newest snapshot, and -- once
+            // the stream has ended and its last snapshot is taken -- a pipeline that has
+            // stopped, which is how a host knows the flush arrived.
+            Engine::Lockstep { pipeline, pending } => {
+                latest = pending.take().map(|s| *s);
+                if pipeline.is_none() && self.pipeline_alive {
+                    self.pipeline_alive = false;
+                    tracing::debug!("lock-step pipeline ended; track snapshot is final");
                 }
             }
         }
@@ -1192,7 +1284,10 @@ mod tests {
         // dropped, which `shutdown_timeout` returning does not establish -- see
         // `wait_for_ingest_task_to_drop`.
         runtime.shutdown_timeout(std::time::Duration::from_secs(1));
-        wait_for_ingest_task_to_drop(&svc.track_rx);
+        let Engine::Task { track_rx, .. } = &svc.engine else {
+            panic!("`new` drives the pipeline with a task");
+        };
+        wait_for_ingest_task_to_drop(track_rx);
 
         // The two channel ends are separate pieces of the same dropped future's state,
         // and the drop order of a future's captured arguments is not specified, so the

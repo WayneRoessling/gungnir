@@ -950,9 +950,11 @@ fn render_planning(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
             }
         }
     };
+    let approaches = crate::sustainment::approach_names(state);
     let view = PlanningView {
         laydowns,
         terrain_model,
+        approaches: &approaches,
         rehearsal: state.rehearsal_section(),
         rehearsal_scenario: state.rehearsal_scenario(),
         selected: state.selected_laydown(),

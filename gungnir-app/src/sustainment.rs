@@ -1797,6 +1797,190 @@ pub fn laydown_coverage_volumes(
         .collect()
 }
 
+/// Each declared approach's axis in the local ENU frame, and its corridor half-width.
+type ApproachAxesEnu = Vec<(Vec<[f64; 3]>, Option<f64>)>;
+
+/// The declared approaches in the deployment's local ENU frame, in declared order: each
+/// one's axis and its corridor half-width. `Err` names why there are none to measure a
+/// first-engagement range along.
+fn approach_axes_enu(state: &AppState) -> Result<ApproachAxesEnu, &'static str> {
+    let Some(frame) = local_frame(state) else {
+        return Err("this deployment has declared no local frame origin");
+    };
+    if state.config.approaches.is_empty() {
+        return Err("no approach is declared to measure a first-engagement range along");
+    }
+    Ok(state
+        .config
+        .approaches
+        .iter()
+        .map(|a| {
+            (
+                a.points
+                    .iter()
+                    .map(|[lat_rad, lon_rad, alt_m]| {
+                        frame.to_enu(gungnir_model::Geodetic {
+                            lat_rad: *lat_rad,
+                            lon_rad: *lon_rad,
+                            alt_m: *alt_m,
+                        })
+                    })
+                    .collect(),
+                a.corridor_half_width_m,
+            )
+        })
+        .collect())
+}
+
+/// Each declared approach's first-engagement range over one rehearsal (GAP-020,
+/// `docs/design/DN-02-prediction-and-approach.md` §9, D-45): the worst case over the
+/// run's predictions, or why there is none. `Err` when there is no approach to measure
+/// along, or no frame to place one in.
+///
+/// **The approaches are placed in the deployment's frame and the run's predictions are
+/// in the recording's**, and that is deliberate rather than a mismatch: a rehearsal reads
+/// a laydown's ENU positions as an arrangement about the recording's origin (DN-32
+/// §5.5), and the approaches are part of the same arrangement, so they are read the same
+/// way.
+///
+/// # Errors
+///
+/// The reason no approach can be measured along, as PN-16 says it.
+pub fn rehearsal_first_engagement(
+    state: &AppState,
+    record: &crate::laydown_rehearsal::RehearsalRecord,
+) -> Result<gungnir_assessment::FirstEngagementSummary, &'static str> {
+    let axes = approach_axes_enu(state)?;
+    let approaches: Vec<gungnir_assessment::ApproachAxis<'_>> = state
+        .config
+        .approaches
+        .iter()
+        .zip(&axes)
+        .map(|(a, (points, width))| gungnir_assessment::ApproachAxis {
+            name: &a.name,
+            points_enu: points,
+            corridor_half_width_m: *width,
+        })
+        .collect();
+    Ok(gungnir_assessment::first_engagement_ranges(
+        &record.first_pairings,
+        &approaches,
+    ))
+}
+
+/// One laydown's first-engagement cells as PN-16 draws them, compared with the current
+/// laydown's where both were rehearsed against the same recording and both have a worst
+/// case on the approach (GAP-020).
+fn engagement_cells(
+    state: &AppState,
+    record: &crate::laydown_rehearsal::RehearsalRecord,
+    is_current: bool,
+) -> Result<Vec<gungnir_ui::panels::planning::ApproachEngagement>, &'static str> {
+    use gungnir_assessment::ApproachFirstEngagement as A;
+    use gungnir_ui::panels::planning::ApproachEngagement;
+
+    let summary = rehearsal_first_engagement(state, record)?;
+    let current = if is_current {
+        None
+    } else {
+        state
+            .config
+            .laydowns
+            .iter()
+            .find(|l| l.current)
+            .and_then(|l| state.rehearsal_records.get(&l.id))
+            .filter(|c| c.scenario == record.scenario && c.seed == record.seed)
+            .and_then(|c| rehearsal_first_engagement(state, c).ok())
+    };
+    Ok(summary
+        .approaches
+        .iter()
+        .enumerate()
+        .map(|(i, a)| match a {
+            A::WorstCase {
+                range_m,
+                predictions,
+                target,
+                track,
+                resource,
+                proposed_at,
+            } => ApproachEngagement::WorstCase {
+                range_m: *range_m,
+                predictions: *predictions,
+                target: target.clone(),
+                track: *track,
+                resource: *resource,
+                proposed_at: *proposed_at,
+                versus_current_m: current
+                    .as_ref()
+                    .and_then(|c| c.approaches.get(i))
+                    .and_then(A::range_m)
+                    .map(|theirs| range_m - theirs),
+            },
+            A::NotComputable(reason) => ApproachEngagement::NotComputable {
+                reason: reason.to_string(),
+            },
+        })
+        .collect())
+}
+
+/// PN-16's first-engagement cells for one laydown's row (GAP-020).
+#[must_use]
+pub fn row_first_engagement(
+    state: &AppState,
+    laydown: &gungnir_model::Laydown,
+) -> gungnir_ui::panels::planning::RowFirstEngagement {
+    use gungnir_ui::panels::planning::RowFirstEngagement;
+    let Some(record) = state.rehearsal_records.get(&laydown.id) else {
+        return RowFirstEngagement::NotRehearsed;
+    };
+    match engagement_cells(state, record, laydown.current) {
+        Ok(cells) => RowFirstEngagement::PerApproach(cells),
+        Err(reason) => RowFirstEngagement::NotComputed {
+            reason: reason.to_string(),
+        },
+    }
+}
+
+/// The rehearsal section's first-engagement account for one run (GAP-020).
+#[must_use]
+pub fn rehearsal_first_engagement_account(
+    state: &AppState,
+    record: &crate::laydown_rehearsal::RehearsalRecord,
+) -> gungnir_ui::panels::planning::RehearsalFirstEngagement {
+    use gungnir_ui::panels::planning::{ApproachLine, RehearsalFirstEngagement};
+    let is_current = state
+        .config
+        .laydowns
+        .iter()
+        .any(|l| l.current && l.id == record.laydown);
+    let cells = match engagement_cells(state, record, is_current) {
+        Ok(cells) => cells,
+        Err(reason) => {
+            return RehearsalFirstEngagement::NotComputed {
+                reason: reason.to_string(),
+            }
+        }
+    };
+    let on_no_corridor =
+        rehearsal_first_engagement(state, record).map_or(0, |summary| summary.on_no_corridor);
+    RehearsalFirstEngagement::PerApproach {
+        lines: state
+            .config
+            .approaches
+            .iter()
+            .zip(cells)
+            .map(|(a, engagement)| ApproachLine {
+                approach: a.name.clone(),
+                corridor_half_width_m: a.corridor_half_width_m,
+                engagement,
+            })
+            .collect(),
+        on_no_corridor,
+        clutter_pairings: record.clutter_pairings,
+    }
+}
+
 /// PN-16's rows: one per declared laydown, or the reason there are none (GAP-087,
 /// `docs/design/DN-26-laydown-options.md` §5, §6).
 pub enum PlanningRows {
@@ -1814,7 +1998,9 @@ pub enum PlanningRows {
 ///
 /// Each row also carries its laydown's last rehearsal, read from the run
 /// (`AppState::row_rehearsal`, GAP-105): coverage is arithmetic over declared placements,
-/// and a rehearsal is what those placements' own sensors re-observed of a recording.
+/// and a rehearsal is what those placements' own sensors re-observed of a recording. And
+/// each declared approach's first-engagement range from that same run
+/// ([`row_first_engagement`], GAP-020, DN-02 §9), or why there is none.
 #[must_use]
 #[allow(clippy::too_many_lines)]
 pub fn planning_rows(state: &AppState) -> PlanningRows {
@@ -1840,6 +2026,7 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
                 },
                 // A rehearsal is read from its run, whether or not coverage computes.
                 rehearsal: state.row_rehearsal(&l.id, l.current),
+                first_engagement: row_first_engagement(state, l),
             })
             .collect()
     };
@@ -1934,6 +2121,7 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
                     delta_uncovered_m,
                 },
                 rehearsal: state.row_rehearsal(&l.id, l.current),
+                first_engagement: row_first_engagement(state, l),
             }
         })
         .collect();
