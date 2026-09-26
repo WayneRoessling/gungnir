@@ -167,8 +167,9 @@ history, and an entry is never edited once it has merged.
 | GAP-159 | The Coverage accuracy row still says a coverage volume has no bearing | Technical | CAP-2.11 | 1 | 3 | S | 3 | I3 | Owner | Open |
 | GAP-160 | A node publishes no track, so a linked desktop's picture is frozen at sign-in | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-161 | A linked desktop's health strip reports the link, not the node's services | Technical | CAP-7.3 | 4 | 1 | S | 4 | I3 | Services engineer | Closed |
+| GAP-165 | A linked desktop's node session lapses and nothing renews it while the link is up | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 
-Counts: 154 gaps, 3 mission, 151 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 155 gaps, 3 mission, 152 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2325,6 +2326,20 @@ Counts: 154 gaps, 3 mission, 151 technical; 1 already covered by a plan in `../.
 - Severity: 4. Reach: 1 threads. Effort: S. Priority: 4.
 - Impact: Both remote services answered `is_healthy` with whether the link was up, so a node whose tracker or planner had stopped was drawn working on every linked desktop's status strip and PN-09 -- the health flag `CLAUDE.md` forbids, on the path a linked operator relies on. The node reported both, in its snapshot and in `HealthEvent::Changed`, and nothing on the desktop read either.
 - Closing action: Keep the node's word on its services in the link's projection and make each remote service healthy only when the link is up and the node says its service is.
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: Found building GAP-120 (`../../record/2026-09-25/one-scenario-through-both-backends.md`).
+
+**GAP-165 A linked desktop's node session lapses and nothing renews it while the link is up**
+
+- Type: Technical.
+- Capability: CAP-7.3 Three profiles.
+- History:
+  - 2026-09-26, Open: Found reading the token path while building GAP-120's parity test, recorded there, and assigned its own number by the orchestrator.
+  - 2026-09-26, Closed: Closed under D-89: the link renews at three quarters of the lifetime the node gave, read off the node's clock, and at once when the node refuses the token; a `401` keeps what was offered queued and it goes again under the new token. A renewal the node refuses ends the connection. `gungnir-remote/tests/token_renewal.rs` moves the node's clock past expiry rather than waiting. See `../../record/2026-09-26/a-live-link-keeps-its-session.md`.
+- Evidence: `gungnir-remote/src/link.rs` (`run_link` signed in once per connection and handed the same token to every flusher); `gungnir-node/src/auth.rs` (`unwrap_or(900.0)`); `gungnir-api/src/transport.rs` (the stream verifies its token at subscription only).
+- Severity: 5. Reach: 1 threads. Effort: S. Priority: 5.
+- Impact: A node-issued token expires after the baseline's session lifetime, or 900 s where the baseline names none, and the stream is authenticated once, when it subscribes. Nothing asked for a new token while the stream stayed up, so from then on every write a linked desktop made was refused `401`: its detections, sensor tasks and exchange sets waited in their outboxes, and every decision an operator took on the node's queue came back refused, until the stream happened to reconnect. Where the baseline names no lifetime the desktop's own session never expires, so the link stayed up refusing for ever.
+- Closing action: Renew the session on a live link ahead of the token's expiry, whatever the baseline says, and whenever the node refuses the token; treat a `401` as a lapsed session to renew and retry, never as the node's answer to what was sent.
 - Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-120 (`../../record/2026-09-25/one-scenario-through-both-backends.md`).
 

@@ -9952,3 +9952,48 @@
       every `HealthEvent::Changed`, and a remote service is healthy only when linked and the
       node reports it so. `gungnir-remote/tests/node_health.rs` pins it. See
       `../../record/2026-09-25/one-scenario-through-both-backends.md`.
+
+- id: GAP-165
+  name: A linked desktop's node session lapses and nothing renews it while the link is up
+  type: Technical
+  caps: [CAP-7.3]
+  layer: Deployment and API
+  sev: 5
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    A node-issued token expires after the baseline's session lifetime, or 900 s where the
+    baseline names none, and the stream is authenticated once, when it subscribes. Nothing
+    asked for a new token while the stream stayed up, so from then on every write a linked
+    desktop made was refused `401`: its detections, sensor tasks and exchange sets waited
+    in their outboxes, and every decision an operator took on the node's queue came back
+    refused, until the stream happened to reconnect. Where the baseline names no lifetime
+    the desktop's own session never expires, so the link stayed up refusing for ever.
+  evidence: >-
+    `gungnir-remote/src/link.rs` (`run_link` signed in once per connection and handed the
+    same token to every flusher); `gungnir-node/src/auth.rs` (`unwrap_or(900.0)`);
+    `gungnir-api/src/transport.rs` (the stream verifies its token at subscription only)
+  action: >-
+    Renew the session on a live link ahead of the token's expiry, whatever the baseline
+    says, and whenever the node refuses the token; treat a `401` as a lapsed session to
+    renew and retry, never as the node's answer to what was sent.
+  ref: >-
+    Found building GAP-120
+    (`../../record/2026-09-25/one-scenario-through-both-backends.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found reading the token path while building GAP-120's parity test, recorded there,
+      and assigned its own number by the orchestrator.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed under D-89: the link renews at three quarters of the lifetime the node gave,
+      read off the node's clock, and at once when the node refuses the token; a `401`
+      keeps what was offered queued and it goes again under the new token. A renewal the
+      node refuses ends the connection. `gungnir-remote/tests/token_renewal.rs` moves the
+      node's clock past expiry rather than waiting. See
+      `../../record/2026-09-26/a-live-link-keeps-its-session.md`.
