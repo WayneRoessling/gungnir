@@ -2969,3 +2969,96 @@
   commit: 41c32adaaf9b4a3d7a3d1c73727ebe6c919dbbf6
   pre_repository: false
   record: "GAP-142; DN-31 §15; docs/record/2026-09-23/an-outage-outlives-its-process.md; PR #163"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    D-88: where `role_permits` and roles-and-stakeholders §4 disagreed. The administrator
+    holds everything but the engagement chain (plan decide and override, weapons control
+    status) and escrow recovery; the supervisor sets weapons control status; requirement,
+    review and handover go to the roles whose work they are; §4 gains rows for the code's
+    long-standing grants, the reconciliation row follows D-53, and §2's operator no longer
+    overrides. `Role::rank` is left as it is, the administrator at the top.
+  kind: other
+  paths:
+  - docs/mission/roles-and-stakeholders.md
+  - docs/mission/gap-analysis/data/decisions.yaml
+  commit: 49dcc7e698aaff8a47db227096555a7d75130b10
+  pre_repository: false
+  record: "D-88; GAP-111; docs/record/2026-09-26/the-owner-s-signatures-of-2026-09-26.md; PR #172"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-111's human-owned code: the corrected role matrix and its §4 test, the audit
+    trail kept on disk and hash-chained (`FileAuditLog`), the node's audit of sign-ins,
+    refusals and role-gated acts through a rate-limited outbox (D-87, DN-23 §13), session
+    changes for renewal, and the node's picture routes requiring `picture.view`.
+  kind: code
+  paths:
+  - gungnir-security/src/audit.rs
+  - gungnir-security/src/authz.rs
+  - gungnir-security/src/lib.rs
+  - gungnir-security/src/session.rs
+  - gungnir-security/tests/role_matrix.rs
+  - gungnir-api/src/transport.rs
+  commit: 49dcc7e698aaff8a47db227096555a7d75130b10
+  pre_repository: false
+  record: "GAP-111; D-87; D-88; DN-23 §13; docs/record/2026-09-26/the-security-row-tested-and-the-node-audited.md; PR #172"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-105's ingest gateway change: a live `IngestGateway` refuses and counts a detection
+    marked as rehearsal (`rehearsal_refused`), and only `IngestGateway::for_rehearsal`
+    admits one (DN-32 §6).
+  kind: code
+  paths:
+  - gungnir-ingest/src/lib.rs
+  - gungnir-ingest/src/adapters/recorded.rs
+  - gungnir-ingest/tests/rehearsal_containment.rs
+  commit: 9febda7f439513e7e426095da5a7728a24907924
+  pre_repository: false
+  record: "GAP-105; DN-32 §6 and §12; PR #171"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-138's `gungnir-api` change: the unreachable `ApprovalRequest` and
+    `ApiHandler::decide` removed, a decision being taken on a queue item alone (D-80).
+  kind: code
+  paths:
+  - gungnir-api/src/lib.rs
+  - gungnir-api/src/transport.rs
+  - gungnir-api/src/v3/mod.rs
+  commit: afc0d98ec882e564da38ddc868e9a1dc51897c60
+  pre_repository: false
+  record: "GAP-138; D-80; docs/record/2026-09-25/housekeeping-after-dn-31.md; PR #165"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-119's restructured exact solve under the numerical-stability clause: `ExactSolve`
+    filling the value function a slice at a time with an explicit stack, bit-identical to
+    the one-pass recursion by property test, and the tie rule written down (D-81).
+  kind: code
+  paths:
+  - gungnir-allocation/src/bellman.rs
+  - gungnir-allocation/src/lib.rs
+  commit: f80bbe646881f3db91c5e0192cab31db791a390f
+  pre_repository: false
+  record: "GAP-119; D-81; DN-04 §10; docs/record/2026-09-25/a-stale-plan-says-how-old-it-is.md; PR #169"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-124's risk score under the numerical-stability clause: the time-to-impact term
+    computed without dividing by the closing speed, and a track whose state is not finite
+    left unscored rather than scored NaN (D-83, DN-01 §10).
+  kind: code
+  paths:
+  - gungnir-assessment/src/kinematics.rs
+  - gungnir-assessment/src/lib.rs
+  commit: ca0c8285cf17f3e7b2d0013b0256668179419df2
+  pre_repository: false
+  record: "GAP-124; D-83; DN-01 §10; docs/record/2026-09-25/time-to-impact-and-sensor-sectors.md; PR #168"
