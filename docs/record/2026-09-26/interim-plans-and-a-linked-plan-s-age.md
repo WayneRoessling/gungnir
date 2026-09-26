@@ -103,10 +103,21 @@ waits on an acknowledgement of exactly that -- D-82's gate for a stale plan, for
 reason: during an engagement the stand-in may be the best recommendation there is, and a
 control that vanished would be worked around rather than read.
 
-When the exact solve finishes it replaces the interim plan as a new plan, even where the
-pairing is the same. Keeping the plan and relabelling it would change, under one
-identifier, a plan a person may already have decided, and leave the queue item saying
-something its plan no longer says.
+One pairing stays one plan across an interim answer, by GAP-097's rule. When the exact
+solve finishes with a different assignment, that is a new plan. When it finishes with
+the same assignment, the interim plan stands, and PN-05 says the full solve has since
+reached it. A stand-in that recommends what the plan in force already recommends keeps
+that plan, under the interim standing. The first draft of this change minted a new
+plan in both cases, reasoning that a plan's label should not be left on a plan it no
+longer describes. CI then showed what that costs. `gungnir-app/tests/rehearsal.rs`
+plans on the machine's clock and jumps fifteen seconds between ticks. On a slow runner
+its live planner fell behind, and the stand-in and then the exact answer were each
+minted as a plan for the pairing already in force: 9 queued where 8 are expected. With
+the planner's clock stepped at 100, 70, 50 or 30 microseconds a reading, the first
+draft fails that way every time (11 at 30); the rule now taken passes at every speed
+from 0 to 1 ms. A second queue item for one recommendation is the flooding GAP-097
+closed, and a plan's basis records how it was reached, which does not change. So the
+label stays, and it is PN-05's words that change once the pairing is confirmed.
 
 ## What the node says, and how a linked desktop draws it (D-94)
 
@@ -136,9 +147,11 @@ The snapshot a coalition partner reads withholds the standing with the plan it d
 `gungnir-allocation/tests/one_step_oracle.rs`, as above. In
 `gungnir-intercept-service/src/lib.rs`: a solve that cannot advance is stale with the last
 good plan through the wait, publishing an unchanging standing; half a second behind, an
-interim plan that is a new plan, labelled, with its bound and reason and the solve's
+interim plan that is a new plan where its pairing differs, labelled, with its bound and
+reason and the solve's
 progress, and the planner unhealthy; the same picture again, the same interim plan; the
-exact solve running again, the optimum as a new plan. A picture that grows every call
+exact solve running again and reaching the same pairing, the same plan, now fresh; a
+stand-in that agrees with the plan in force keeps it. A picture that grows every call
 still reaches its stand-in. Twenty tracks, or nine effectors, are answered at once. The
 two GAP-119 tests that advanced mission time by whole seconds now hold the stand-in off
 explicitly, or plan inside the wait, since they are about the exact solve carrying on.

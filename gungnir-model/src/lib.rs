@@ -730,21 +730,27 @@ pub enum PlanBasis {
     Exact,
     /// The best assignment for this step alone, standing in while the exact solve could
     /// not answer the picture in time (`gungnir_allocation::stand_in`). A real answer to
-    /// the current picture, labelled wherever it is shown as not the optimum, and replaced
-    /// by the optimum when the exact solve finishes.
+    /// the picture it was computed for, labelled wherever it is shown with how it was
+    /// reached. A plan keeps its basis for life: where the exact solve later reaches the
+    /// same assignment the plan stands, as GAP-097 keeps any unchanged pairing, and where
+    /// it reaches a different one that is a new plan.
     OneStep,
 }
 
 impl PlanBasis {
     /// What a panel prints beside a plan with this basis, or nothing for the optimum:
     /// a line that says "optimal" on every plan is a line an operator learns to read past.
+    ///
+    /// **How the plan was reached, not what the planner thinks of it now**, which is the
+    /// planner's standing and changes when the plan does not.
     #[must_use]
     pub fn label(self) -> Option<&'static str> {
         match self {
             PlanBasis::Exact => None,
-            PlanBasis::OneStep => {
-                Some("INTERIM: the best assignment for this step alone, not the planner's optimum")
-            }
+            PlanBasis::OneStep => Some(
+                "INTERIM: reached as the best assignment for one step, not by the planner's \
+                 full solve",
+            ),
         }
     }
 }

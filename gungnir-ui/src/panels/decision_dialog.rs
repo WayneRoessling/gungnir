@@ -311,8 +311,8 @@ fn draw_plan(ui: &mut Ui, palette: &theme::Palette, view: &DecisionDialogView<'_
         ui.label(
             RichText::new(
                 "It stood in because the exact solve could not answer the picture in time. \
-                 Accepting it is allowed once the condition below is acknowledged; the \
-                 optimum, when it arrives, is a new plan with its own item.",
+                 If the full solve reaches the same assignment this plan stands; if it \
+                 reaches a different one, that is a new plan with its own item.",
             )
             .color(palette.warning_color),
         );

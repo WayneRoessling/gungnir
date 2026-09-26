@@ -10216,7 +10216,7 @@
       exact limits, the planner answers with `gungnir_allocation::solve_one_step`, the
       one-step optimum under the same tie rule, bounded against the horizon's optimum.
       The plan carries `PlanBasis::OneStep`; PN-05, PN-06 and PN-07 say INTERIM, accept
-      waits on acknowledging it, and the exact plan replaces it. Tests:
+      waits on acknowledging it; one pairing stays one plan across it. Tests:
       `gungnir-allocation/tests/one_step_oracle.rs`, `gungnir-intercept-service/src/lib.rs`,
       `gungnir-app/tests/interim_plan.rs`. The one-step solver is numerical code, so
       human-owned; see `docs/signatures.md`. Raised GAP-168 and GAP-169. See

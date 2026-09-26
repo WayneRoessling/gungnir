@@ -407,11 +407,9 @@ fn a_linked_desktop_draws_the_nodes_plan_as_the_node_stands_it() {
         clock.clone(),
     );
 
-    let three = [
-        track(70, 30_000.0),
-        track(71, 20_000.0),
-        track(72, 10_000.0),
-    ];
+    // Two tracks first, so the node's first plan pairs the later effectors and the
+    // four-track interim answer (the diagonal) is a different recommendation.
+    let three = [track(71, 20_000.0), track(72, 10_000.0)];
     let four = [
         track(70, 30_000.0),
         track(71, 20_000.0),
@@ -544,11 +542,15 @@ fn a_linked_desktop_draws_the_nodes_plan_as_the_node_stands_it() {
         }
     });
 
-    // Node t = 3: the node can solve again. The optimum, current; nothing labelled.
+    // Node t = 3: the node can solve again and reaches the same assignment. Its interim
+    // plan stands, current; PN-05 says the full solve has since reached it.
     clock.set_step(Duration::ZERO);
     node.step(MissionTime(3.0), &four);
     let exact: PlanView = node.announcer.last_plan().clone();
-    assert_eq!(exact.basis, PlanBasis::Exact);
+    assert_eq!(
+        exact, interim,
+        "the node minted a second plan for one pairing"
+    );
     at(&mut desk, 3.0);
     until("the node's optimum, current", || {
         update::tick(&mut desk);
@@ -560,7 +562,12 @@ fn a_linked_desktop_draws_the_nodes_plan_as_the_node_stands_it() {
     });
     let panel = pn05(&desk);
     assert!(
-        !panel.says("STALE") && !panel.says("INTERIM"),
+        !panel.says("STALE") && !panel.says("INTERIM: this plan is"),
+        "{}",
+        panel.joined()
+    );
+    assert!(
+        panel.says("full solve has since reached the same assignment"),
         "{}",
         panel.joined()
     );

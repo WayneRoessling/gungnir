@@ -2422,8 +2422,8 @@
     **Taken under the owner's delegation of 2026-09-26.** **The best assignment for this
     step alone stands in once the planner has been behind the picture for
     `plan_stand_in_after_ms` of mission time, 500 ms by default, and at once for a picture
-    past the exact solver's limits; it is labelled `PlanBasis::OneStep` on the plan itself
-    and replaced, as a new plan, when the exact solve finishes** (DN-04 §11). The
+    past the exact solver's limits; it is labelled `PlanBasis::OneStep` on the plan itself,
+    and one pairing stays one plan across it, as GAP-097 has it** (DN-04 §11). The
     stand-in is `gungnir_allocation::solve_one_step`, the allocator's own problem at a
     horizon of one under the same tie rule, found by the Hungarian method in microseconds
     at any size, with a floor on its value over the horizon and a ceiling on the optimum

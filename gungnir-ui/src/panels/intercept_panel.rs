@@ -60,7 +60,7 @@ pub fn render_intercept_panel(
     let plan = shown.plan;
     ui.heading("Intercept plan");
     render_standing(ui, palette, shown.standing);
-    render_summary(ui, palette, plan);
+    render_summary(ui, palette, plan, shown.standing);
     render_solution_list(ui, plan);
     render_fires(ui, palette, plan, fires);
     render_withheld(ui, palette, withheld);
@@ -297,7 +297,12 @@ fn render_standing(ui: &mut egui::Ui, palette: &theme::Palette, standing: Standi
     }
 }
 
-fn render_summary(ui: &mut egui::Ui, palette: &theme::Palette, plan: &PlanView) {
+fn render_summary(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    plan: &PlanView,
+    standing: Standing<'_>,
+) {
     ui.label(
         RichText::new(format!(
             "Plan #{} at t = {:.1} s, policy value {:.2}",
@@ -307,11 +312,24 @@ fn render_summary(ui: &mut egui::Ui, palette: &theme::Palette, plan: &PlanView) 
         ))
         .color(palette.muted_text_color()),
     );
-    // The plan's own label, whatever the planner says now (GAP-156): a stale plan that
-    // was an interim one is still not the optimum, and the standing line above says only
-    // that it is stale.
+    // The plan's own label (GAP-156): how it was reached, whatever the planner says now.
+    // A stale plan that was an interim one is still an interim one, and the standing line
+    // above says only that it is stale. **Current is the one case that changes the
+    // words**: the planner's full solve has reached this same assignment for the picture
+    // on screen, so the plan stands (GAP-097) and saying only "not by the full solve"
+    // would leave out the one thing the operator most wants to know.
     if let Some(label) = plan.basis.label() {
-        ui.label(RichText::new(label).strong().color(palette.warning_color));
+        if standing == Standing::Current {
+            ui.label(
+                RichText::new(
+                    "Reached as an interim one-step answer; the planner's full solve has since \
+                     reached the same assignment for the picture on screen.",
+                )
+                .color(palette.muted_text_color()),
+            );
+        } else {
+            ui.label(RichText::new(label).strong().color(palette.warning_color));
+        }
     }
     if plan.is_empty() {
         ui.label(RichText::new("No assignments").italics());

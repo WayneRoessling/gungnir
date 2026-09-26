@@ -281,9 +281,19 @@ answer (MOE-06). PN-05 draws "INTERIM" above the plan with the bound and the rea
 the plan's own label under a stale line if an interim plan later goes stale; PN-06 marks the
 item's row INTERIM; PN-07 names the planner's interim standing and, separately, the item's
 own basis among the degraded conditions, so accept waits on an acknowledgement exactly as
-D-82 has it for a stale plan. When the exact solve finishes it replaces the interim plan as
-a new plan with a new identifier, even where the pairing is the same: the interim item in
-the queue keeps its label, and nothing relabels a plan a person may already have decided.
+D-82 has it for a stale plan.
+
+One pairing is one plan, across an interim answer as everywhere else (GAP-097). When
+the exact solve finishes with a different assignment, that is a new plan; with the same
+assignment, the plan in force stands. A stand-in that recommends what the plan in force
+already recommends keeps that plan too, under the interim standing. A plan's basis is
+how it was reached and never changes; PN-05 says so beside it, and says so differently
+once the planner's full solve has reached the same assignment for the picture on screen
+-- then PN-07 asks nothing more about it either. An earlier draft minted a new plan for
+the same pairing in both directions; `gungnir-app/tests/rehearsal.rs` failed on a slow
+runner with the live pairing queued three times, and
+`the_seed_queues_the_same_plans_however_slow_the_planner_is` now runs that session at
+eight planner speeds.
 
 **What a node says (D-94).** `gungnir_model::PlanStandingView` -- current, interim with the
 bound and reason, stale since `computed_at` with the reason, or no plan -- published by

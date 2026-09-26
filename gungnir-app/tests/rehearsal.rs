@@ -45,18 +45,51 @@ fn at(state: &mut AppState, t: f64) {
 }
 
 #[test]
-// One scripted session walked start to finish, not several unrelated cases: splitting
-// it at an arbitrary line count would need the whole `state`/`dir` setup duplicated
-// per fragment for no gain in clarity.
-#[allow(clippy::too_many_lines)]
 fn the_seed_puts_tracks_and_a_plan_in_front_of_the_participant_and_marks_the_journal() {
-    let (mut state, dir) = desktop("seed");
+    seeded_session("seed", None);
+}
+
+/// **The seed's queue does not depend on how fast the planner is** (GAP-156, D-93).
+///
+/// The session above plans on the machine's clock, so whether the live planner finishes a
+/// picture inside its 4 ms budget is a fact about the runner. On a slow CI runner it
+/// did not: the planner fell behind, stood a one-step answer in across one of the
+/// session's fifteen-second jumps, and an earlier draft of GAP-156 minted a plan for the
+/// stand-in and another for the exact answer, queueing the live pairing three times (9
+/// where 8 are expected). Here the same session runs with the planner's clock stepped at
+/// speeds from never over budget to many calls per solve, which reproduced that failure
+/// deterministically at 100, 70, 50 and 30 microseconds a reading; every speed must
+/// queue the same eight.
+#[test]
+fn the_seed_queues_the_same_plans_however_slow_the_planner_is() {
+    for micros in [0_u64, 1000, 200, 100, 70, 50, 30, 10] {
+        seeded_session(
+            &format!("seed-slow-{micros}"),
+            Some(std::time::Duration::from_micros(micros)),
+        );
+    }
+}
+
+/// One scripted session walked start to finish, with the live planner on the machine's
+/// clock (`None`) or on one stepped by `planner_step` a reading.
+// Not several unrelated cases: splitting it at an arbitrary line count would need the
+// whole `state`/`dir` setup duplicated per fragment for no gain in clarity.
+#[allow(clippy::too_many_lines)]
+fn seeded_session(name: &str, planner_step: Option<std::time::Duration>) {
+    let (mut state, dir) = desktop(name);
     let (seed, hash) = rehearsal::load_seed(&testdata("round-1-seed.json")).expect("seed loads");
     // 1181 (US-02, refused on readiness) and 1183 (US-01/03/05) as before, plus six more
     // point-layer plans (1201-1206, GAP-097's US-06 fix) so the queue can reach seven
     // with two near expiry.
     assert_eq!(seed.plans.len(), 8);
     rehearsal::install(&mut state, seed, hash.clone()).expect("installed");
+    if let Some(step) = planner_step {
+        state.intercept = Box::new(
+            gungnir_app::state::embedded_planner(&state.config).with_clock(std::sync::Arc::new(
+                gungnir_intercept_service::SteppedClock::new(step),
+            )),
+        );
+    }
     let events = state.events.subscribe();
     assert!(
         !state

@@ -44,7 +44,9 @@
 //! for this step alone, with a floor on what it reaches over the horizon and a ceiling on
 //! the optimum ([`PlanOutcome::Interim`]; GAP-156, D-93; DN-04 §11). The plan carries
 //! `gungnir_model::PlanBasis::OneStep` wherever it goes, the planner stays unhealthy, and
-//! the exact solve carries on underneath and replaces it, as a new plan, when it finishes.
+//! the exact solve carries on underneath. When it finishes, a different assignment is a
+//! new plan; the same assignment keeps the plan in force (GAP-097: one pairing, one
+//! plan), and a stand-in that agrees with the plan in force keeps it too.
 
 pub mod budget;
 pub mod engagement;
@@ -677,13 +679,14 @@ impl DpInterceptService {
         // gets a new id and timestamp; an unchanged one keeps the plan -- geometry
         // included -- exactly as it was.
         //
-        // **And an interim plan is replaced even where the pairing is the same** (GAP-156):
-        // the plan in the queue and on the record says it is not the optimum, and keeping
-        // it would leave that label on what is now the optimum -- or relabel, under the
-        // same identifier, a plan a person may already have decided as something else.
-        if Self::assignment_changed(&self.last_plan, &solutions)
-            || self.last_plan.basis != PlanBasis::Exact
-        {
+        //
+        // **The same rule across an interim answer** (GAP-156, D-93). An exact solve that
+        // confirms the pairing of an interim plan keeps that plan, label and all: the
+        // label records how the plan was reached, which does not change, and a second
+        // plan for the same pairing is a second queue item for one recommendation -- the
+        // flooding this rule exists to stop. An earlier draft minted one, and a rehearsal
+        // whose planner fell behind queued the same pairing three times.
+        if Self::assignment_changed(&self.last_plan, &solutions) {
             self.last_plan = Self::fresh_plan(now, solutions, answer.value, PlanBasis::Exact);
         }
         self.last_plan.clone()
@@ -711,6 +714,8 @@ impl DpInterceptService {
         problem: Problem,
         why: String,
     ) -> PlanView {
+        // The first stand-in since the planner last answered fresh: what the log says once.
+        let first = self.stood_in.is_none();
         let computed = match self.stood_in.take() {
             Some((solved, answer)) if solved == problem => Ok(answer),
             _ => gungnir_allocation::stand_in(&problem.rewards, self.horizon),
@@ -726,7 +731,7 @@ impl DpInterceptService {
                 return self.last_plan.clone();
             }
         };
-        if self.last_plan.basis != PlanBasis::OneStep {
+        if first {
             tracing::warn!(
                 tracks = problem.tracks.len(),
                 resources = problem.resources.len(),
@@ -741,9 +746,11 @@ impl DpInterceptService {
             tracks,
             ready,
         );
-        if Self::assignment_changed(&self.last_plan, &solutions)
-            || self.last_plan.basis != PlanBasis::OneStep
-        {
+        // **A stand-in that recommends what the plan in force already recommends is not a
+        // new recommendation** (GAP-097's rule): the plan in force stands, under the
+        // interim standing this call reports. Its basis says how it was reached, which was
+        // exactly; the standing says the planner cannot confirm it for this picture yet.
+        if Self::assignment_changed(&self.last_plan, &solutions) {
             self.last_plan =
                 Self::fresh_plan(now, solutions, answer.value_at_least, PlanBasis::OneStep);
         }
@@ -1559,7 +1566,12 @@ mod tests {
     /// reading against a four-millisecond budget, so it never advances -- is answered
     /// stale, with the last good plan, for as long as the planner's wait; from then the
     /// current picture gets a one-step answer, labelled as not the optimum, with its
-    /// bound; and when the exact solve can run, the optimum replaces it as a new plan.
+    /// bound; and when the exact solve can run and reaches the same assignment, that
+    /// plan stands (GAP-097), now fresh.
+    ///
+    /// The first picture has two tracks, so its pairing (the later resources, by the tie
+    /// rule) differs from the four-track picture's (the diagonal): the stand-in is a
+    /// different recommendation, and so a new plan.
     #[test]
     fn an_interim_answer_stands_in_once_the_planner_has_waited() {
         let clock = Arc::new(SteppedClock::new(Duration::ZERO));
@@ -1568,11 +1580,7 @@ mod tests {
             .with_stand_in_after(Duration::from_millis(500))
             .with_clock(clock.clone());
         let resources = ready(&[40, 41, 42]);
-        let first = match svc.plan(
-            MissionTime(1.0),
-            &[track(70), track(71), track(72)],
-            &resources,
-        ) {
+        let first = match svc.plan(MissionTime(1.0), &[track(71), track(72)], &resources) {
             PlanOutcome::Fresh(plan) => plan,
             other => panic!("the in-budget solve was not fresh: {other:?}"),
         };
@@ -1614,7 +1622,7 @@ mod tests {
                 assert_eq!(plan.mission_time, MissionTime(2.5));
                 assert_ne!(
                     plan.id, first.id,
-                    "an interim answer is a new recommendation, not the old one relabelled"
+                    "a different pairing is a new recommendation, not the old one relabelled"
                 );
                 // A uniform matrix: one step at a time services all four tracks in two
                 // steps, which is the optimum, so the bound is the whole of it.
@@ -1635,7 +1643,7 @@ mod tests {
             !svc.is_healthy(),
             "an interim answer is not the planner's own, and the flag says so"
         );
-        assert_eq!(pairs(&interim), pairs(&first));
+        assert_ne!(pairs(&interim), pairs(&first));
 
         // The same picture again: the same interim plan, not a new one per call.
         match svc.plan(MissionTime(2.6), &grown, &resources) {
@@ -1643,17 +1651,65 @@ mod tests {
             other => panic!("{other:?}"),
         }
 
-        // The exact solve can run: the optimum, as a new plan, even though it pairs the
-        // same resources with the same tracks -- the interim one says it is not the
-        // optimum, and that label must not be left on this one.
+        // The exact solve can run and reaches the same assignment: the interim plan
+        // stands, identifier, basis and all, now answered fresh. A second plan for the
+        // same pairing would be a second queue item for one recommendation (GAP-097).
         clock.set_step(Duration::ZERO);
-        let exact = match svc.plan(MissionTime(3.0), &grown, &resources) {
-            PlanOutcome::Fresh(plan) => plan,
+        match svc.plan(MissionTime(3.0), &grown, &resources) {
+            PlanOutcome::Fresh(plan) => assert_eq!(plan, interim),
             other => panic!("the exact solve finished and the answer was {other:?}"),
-        };
-        assert_eq!(exact.basis, PlanBasis::Exact);
-        assert_ne!(exact.id, interim.id);
+        }
         assert!(svc.is_healthy());
+
+        // A different picture whose optimum pairs differently: a new plan, reached
+        // exactly.
+        match svc.plan(MissionTime(4.0), &[track(72)], &resources) {
+            PlanOutcome::Fresh(plan) => {
+                assert_ne!(plan.id, interim.id);
+                assert_eq!(plan.basis, PlanBasis::Exact);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// **A stand-in that recommends what the plan in force recommends is not a new
+    /// plan** (GAP-097's rule, D-93): the plan in force stands, under an interim standing,
+    /// and nothing new reaches the queue. Found by `gungnir-app/tests/rehearsal.rs` on a
+    /// slow runner, where an earlier draft minted a plan for the stand-in and another for
+    /// the exact answer, and queued one pairing three times.
+    #[test]
+    fn a_stand_in_that_agrees_with_the_plan_in_force_keeps_it() {
+        let clock = Arc::new(SteppedClock::new(Duration::ZERO));
+        let mut svc = DpInterceptService::new(10)
+            .with_solve_budget(Duration::from_millis(4))
+            .with_clock(clock.clone());
+        let resources = ready(&[40, 41, 42]);
+        let first = svc
+            .plan(
+                MissionTime(1.0),
+                &[track(70), track(71), track(72)],
+                &resources,
+            )
+            .plan()
+            .cloned()
+            .expect("a plan");
+        let grown = [track(70), track(71), track(72), track(73)];
+        clock.set_step(Duration::from_millis(10));
+        let _ = svc.plan(MissionTime(2.0), &grown, &resources);
+        match svc.plan(MissionTime(2.5), &grown, &resources) {
+            PlanOutcome::Interim { plan, bound, .. } => {
+                assert_eq!(plan, first, "the plan in force was not kept");
+                assert_eq!(plan.basis, PlanBasis::Exact);
+                assert!((bound.share_of_optimum() - 1.0).abs() < 1e-12);
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(!svc.is_healthy());
+        clock.set_step(Duration::ZERO);
+        match svc.plan(MissionTime(3.0), &grown, &resources) {
+            PlanOutcome::Fresh(plan) => assert_eq!(plan, first),
+            other => panic!("{other:?}"),
+        }
     }
 
     /// **The wait is measured from falling behind, not from the current solve**: a raid

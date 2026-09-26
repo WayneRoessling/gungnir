@@ -9,8 +9,9 @@
 //! that PN-05 says INTERIM above the plan, with how much of the optimum it is known to
 //! reach and why the optimum is not here; that the plan is proposed and queued, and its
 //! PN-06 row says INTERIM; that PN-07 names it among the conditions a decision is taken
-//! under, so accept waits on an acknowledgement of exactly that; and that the optimum,
-//! when it arrives, is a new plan and the label clears. These run against a real
+//! under, so accept waits on an acknowledgement of exactly that; and that when the full
+//! solve reaches the same assignment the plan stands and nothing more is asked about it.
+//! These run against a real
 //! `AppState` and the tick the binary runs, with the planner's clock stepped and the
 //! mission clock replayed, so nothing depends on how fast this machine is.
 
@@ -119,12 +120,10 @@ fn desktop(name: &str) -> (AppState, Picture, Arc<SteppedClock>, std::path::Path
     gungnir_config::validate(&config).expect("the baseline is valid");
     let mut state = AppState::with_config(config).expect("the desktop starts");
     let picture = Picture::default();
+    // Two tracks, so the first plan pairs the later effectors (the tie rule) and the
+    // four-track picture's interim answer, the diagonal, is a different recommendation.
     if let Ok(mut tracks) = picture.0.lock() {
-        *tracks = vec![
-            track(70, 30_000.0),
-            track(71, 20_000.0),
-            track(72, 10_000.0),
-        ];
+        *tracks = vec![track(71, 20_000.0), track(72, 10_000.0)];
     }
     state.tracking = Box::new(PictureService {
         picture: picture.clone(),
@@ -209,6 +208,7 @@ fn a_picture_the_planner_cannot_finish_gets_a_labelled_interim_plan() {
     // t = 2: a fourth track, and the exact solve cannot advance. Inside the wait the plan
     // in force is the last good one, stale.
     if let Ok(mut tracks) = picture.0.lock() {
+        tracks.insert(0, track(70, 30_000.0));
         tracks.push(track(73, 40_000.0));
     }
     clock.set_step(Duration::from_millis(10));
@@ -285,19 +285,32 @@ fn a_picture_the_planner_cannot_finish_gets_a_labelled_interim_plan() {
     );
     assert!(!state.dialog.degraded_acknowledged);
 
-    // t = 3: the exact solve can run. The optimum is a new plan, the label is gone from
-    // PN-05, and the interim item's own condition stays on it, because it is still one.
+    // t = 3: the exact solve can run and reaches the same assignment. The interim plan
+    // stands (GAP-097: one pairing, one item), the planner is current, PN-05 says the full
+    // solve has since reached it, and PN-07 asks nothing more about how it was reached.
     clock.set_step(Duration::ZERO);
     tick_at(&mut state, 3.0);
     assert_eq!(state.plan_standing, PlanStanding::Current);
     assert!(state.health().intercept_healthy);
-    assert_eq!(state.last_plan.basis, PlanBasis::Exact);
-    assert_ne!(state.last_plan.id, interim.id);
+    assert_eq!(state.last_plan, interim, "the confirmed plan was not kept");
+    assert_eq!(
+        decisions::queue_rows(&state)
+            .iter()
+            .filter(|r| r.plan_id == interim.id)
+            .count(),
+        1,
+        "the confirmation queued the same pairing again"
+    );
     let panel = pn05(&state);
-    assert!(!panel.says("INTERIM"), "{}", panel.joined());
+    assert!(!panel.says("INTERIM: this plan is"), "{}", panel.joined());
+    assert!(
+        panel.says("full solve has since reached the same assignment"),
+        "{}",
+        panel.joined()
+    );
     let dialog = pn07(&mut state);
     assert!(
-        dialog.says("this item's plan is an interim one-step answer"),
+        !dialog.says("this item's plan is an interim one-step answer"),
         "{}",
         dialog.joined()
     );
