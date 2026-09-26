@@ -15,14 +15,19 @@ Status: first draft, 2026-09-04.
 |---|---|---|---|---|---|
 | `picture.view` | x | x | x | x | x |
 | `detection.submit` | x | x | | | x |
-| `plan.decide` | x | x | | | x |
-| `plan.override` | | x | | | x |
+| `plan.decide` | x | x | | | |
+| `plan.override` | | x | | | |
 | `sensor.task` | | x | | x | x |
 | `config.apply` | | x | | x | x |
 | `model.promote` | | | x | | x |
 | `report.export` | | x | x | | x |
 
-Unknown operators may do nothing. Administrators may do everything.
+Unknown operators may do nothing. Administrators may do everything except the engagement
+chain and escrow recovery: `plan.decide`, `plan.override`, `weapons.control_status` and
+`key.escrow_recover` are withheld (D-88, 2026-09-25, GAP-111). The table shows the five
+original roles and eight actions; the whole matrix, every role against every action, is
+compared with `../../../mission/roles-and-stakeholders.md` §4 by
+`gungnir-security/tests/role_matrix.rs`.
 
 ## Operational authority matrix (`../../../mission/roles-and-stakeholders.md` §4)
 

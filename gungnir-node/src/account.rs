@@ -47,9 +47,17 @@
 //! machine every time it runs: there is no mock to redirect it to outside
 //! `gungnir-security`'s own tests, the same way provisioning a real file always writes
 //! a real file.
+//!
+//! **Every account change is on the audit record** (GAP-111, D-87): an `account.assign_role`
+//! entry in the `audit` directory beside the store the command changed, naming the operator
+//! and the role and never the passphrase or its hash, attributed to nobody because the
+//! command runs outside any session. The log is opened before anything changes, so a change
+//! that could not be recorded is refused rather than made. Listing changes nothing and is
+//! not recorded.
 
 use gungnir_security::{
-    hash_passphrase, Account, EncryptedAccountStore, OperatorId, Role, SecurityError,
+    actions, hash_passphrase, Account, AuditEntry, AuditLog, AuditStatus, AuditSync,
+    EncryptedAccountStore, FileAuditLog, OperatorId, Role, SecurityError, AUDIT_DIR,
 };
 use std::fmt::Write as _;
 use std::io::Read;
@@ -77,6 +85,10 @@ pub enum AccountError {
     /// The operating-system-keystore-backed store could not be reached at all: no
     /// keystore on this platform, or the sealed file did not open under its secret.
     StoreUnavailable(String),
+    /// The audit log beside the store could not be opened, so nothing was changed: an
+    /// account change that leaves no record is the one thing this command will not make
+    /// (GAP-111, D-87).
+    AuditUnavailable(String),
 }
 
 impl std::fmt::Display for AccountError {
@@ -110,6 +122,11 @@ impl std::fmt::Display for AccountError {
             AccountError::StoreUnavailable(why) => {
                 write!(f, "the account store is unavailable: {why}")
             }
+            AccountError::AuditUnavailable(why) => write!(
+                f,
+                "the audit log beside the account store could not be opened, so nothing was \
+                 changed: {why}"
+            ),
         }
     }
 }
@@ -244,6 +261,8 @@ pub fn add(
     if existing.is_some() && !replace {
         return Err(AccountError::AlreadyExists(operator));
     }
+    // Opened before anything changes, so a change that could not be recorded is not made.
+    let audit = provisioning_audit(store_dir(path))?;
     let phc = hash_passphrase(passphrase).map_err(|e| AccountError::HashFailed(e.to_string()))?;
     let account = Account {
         operator: OperatorId(operator),
@@ -258,11 +277,74 @@ pub fn add(
         "added"
     };
     write_accounts(path, &accounts)?;
+    let recorded = record_provisioning(
+        audit,
+        format!(
+            "operator {operator} {verb} as {role:?} in {} by the provisioning command",
+            path.display()
+        ),
+    );
     Ok(format!(
-        "{verb} operator {operator} as {role:?} in {}; {}",
+        "{verb} operator {operator} as {role:?} in {}; {}; {recorded}",
         path.display(),
         permissions_note()
     ))
+}
+
+/// The directory a store lives in: where its audit directory goes.
+fn store_dir(path: &Path) -> &Path {
+    match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    }
+}
+
+/// The audit log a provisioning command records into (GAP-111, D-87): the `audit`
+/// directory beside the store it changes.
+///
+/// For an operating-system-keystore store that is always the node's data directory, so
+/// the entry joins the node's own chain; a plaintext file joins it when the deployment
+/// keeps the file in that directory, as `docs/design/DN-23-operator-authentication.md` §13
+/// recommends, and otherwise has a chain of its own beside it. **Attributed to nobody**:
+/// the command runs outside any session, and whoever has the shell is not a verified
+/// operator (DN-23 §5 rule 1). The passphrase and its hash are in no entry.
+///
+/// # Errors
+///
+/// [`AccountError::AuditUnavailable`] when the log cannot be opened, before anything has
+/// been changed.
+fn provisioning_audit(store_dir: &Path) -> Result<FileAuditLog, AccountError> {
+    FileAuditLog::open(
+        &store_dir.join(AUDIT_DIR),
+        AuditSync::EveryEntry,
+        provisioning_time(),
+    )
+    .map_err(|e| AccountError::AuditUnavailable(e.to_string()))
+}
+
+/// The time a provisioning entry carries: the wall clock, which is the mission time a node
+/// runs on (`gungnir_time::WallClockAuthority`), so the entry sorts among the node's own.
+fn provisioning_time() -> f64 {
+    gungnir_time::TimeAuthority::now(&gungnir_time::WallClockAuthority::default()).0
+}
+
+/// Record one account change and say where it went, or that it did not.
+fn record_provisioning(mut log: FileAuditLog, detail: String) -> String {
+    log.record(AuditEntry::new(
+        None,
+        actions::ASSIGN_ROLE,
+        provisioning_time(),
+        detail,
+    ));
+    match (log.status(), log.segment()) {
+        (AuditStatus::Durable, Some(segment)) => {
+            format!("recorded in the audit log at {}", segment.display())
+        }
+        (AuditStatus::Failing { reason, .. }, _) => {
+            format!("NOT recorded in the audit log, which refused the write: {reason}")
+        }
+        (AuditStatus::Durable, None) => "NOT recorded in the audit log".to_owned(),
+    }
 }
 
 /// List the accounts a file holds: operator and role, never the hash.
@@ -301,13 +383,28 @@ pub fn add_os_keystore(
 ) -> Result<String, AccountError> {
     let store = EncryptedAccountStore::open_or_create(dir, keystore_account)
         .map_err(|e| AccountError::StoreUnavailable(e.to_string()))?;
+    let audit = provisioning_audit(dir)?;
     let phc = hash_passphrase(passphrase).map_err(|e| AccountError::HashFailed(e.to_string()))?;
     match store.add(OperatorId(operator), role, phc, replace) {
-        Ok(()) => Ok(format!(
-            "provisioned operator {operator} as {role:?} in the operating-system keystore \
-             account {keystore_account:?} under {}",
-            dir.display()
-        )),
+        Ok(()) => {
+            let recorded = record_provisioning(
+                audit,
+                format!(
+                    "operator {operator} provisioned as {role:?} in the operating-system \
+                     keystore account {keystore_account:?} by the provisioning command{}",
+                    if replace {
+                        ", replacing any account it had"
+                    } else {
+                        ""
+                    }
+                ),
+            );
+            Ok(format!(
+                "provisioned operator {operator} as {role:?} in the operating-system keystore \
+                 account {keystore_account:?} under {}; {recorded}",
+                dir.display()
+            ))
+        }
         Err(SecurityError::Forbidden(_)) => Err(AccountError::AlreadyExists(operator)),
         Err(e) => Err(AccountError::StoreUnavailable(e.to_string())),
     }

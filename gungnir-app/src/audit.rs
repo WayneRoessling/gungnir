@@ -36,10 +36,5 @@ pub(crate) fn entry(
     action: &str,
     detail: impl Into<String>,
 ) -> AuditEntry {
-    AuditEntry {
-        operator,
-        action: action.to_owned(),
-        mission_time: now.0,
-        detail: detail.into(),
-    }
+    AuditEntry::new(operator, action, now.0, detail)
 }

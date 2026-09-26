@@ -465,6 +465,7 @@ fn a_node_that_no_longer_holds_the_outage_says_so_and_the_switch_records_it() {
 /// accepted while the node was away is queued for it, in order, and a person's
 /// resolution of a conflict is recorded and audited under `plan.decide`.
 #[test]
+#[allow(clippy::too_many_lines)] // One outage, start to finish; GAP-111 added its exactly-one count.
 fn a_conflict_is_resolved_by_a_person_and_the_outage_is_queued_for_the_node() {
     use gungnir_security::{AuditLog, Role};
 
@@ -515,8 +516,22 @@ fn a_conflict_is_resolved_by_a_person_and_the_outage_is_queued_for_the_node() {
         }]),
     );
     // Not a conflict of this outage: refused by name.
+    let before = state.audit.entries().len();
     assert!(failover::resolve_conflict(&mut state, PlanId(9), true).is_err());
+    assert_eq!(
+        state.audit.entries().len(),
+        before,
+        "a refusal is not an act"
+    );
     failover::resolve_conflict(&mut state, PlanId(1), false).expect("resolved");
+    // GAP-111: exactly one entry for the one act, the site
+    // `gungnir-app/tests/audit_one_entry_per_act.rs` counts as performed here.
+    assert_eq!(
+        state.audit.entries().len(),
+        before + 1,
+        "{:?}",
+        &state.audit.entries()[before..]
+    );
     match failover::reconciliation_view(&state) {
         ReconciliationView::Due {
             reconciliation: Some(Ok(r)),

@@ -27,7 +27,10 @@ pub use asymmetric::{
     EscrowOfficerKey, EscrowPublicKey, EscrowedKey, KeystoreSnapshot, P256KeyProvider,
     RecoveredDataKey,
 };
-pub use audit::{AuditEntry, AuditLog, InMemoryAuditLog};
+pub use audit::{
+    verify_audit_dir, AuditDrain, AuditEntry, AuditLog, AuditOutbox, AuditStatus, AuditSync,
+    AuditVerification, ChainBreak, FileAuditLog, InMemoryAuditLog, AUDIT_DIR,
+};
 pub use authn::Authenticator;
 pub use authz::{Authorizer, StaticRoleAuthorizer};
 pub use keys::SignatureScheme;
@@ -79,6 +82,10 @@ pub enum SecurityError {
     /// Hashing or verification could not be performed at all.
     #[error("authentication unavailable: {0}")]
     AuthenticationUnavailable(String),
+    /// The audit log's storage could not be opened, read or synced (GAP-111). A binary
+    /// that cannot open its audit log refuses to start, as it does for its journal.
+    #[error("audit log unavailable: {0}")]
+    AuditUnavailable(String),
 }
 
 #[derive(
@@ -224,6 +231,12 @@ pub mod actions {
     pub const ASSIGN_ROLE: &str = "account.assign_role";
 
     /// Every action this build knows, for validating an authority rule at load.
+    ///
+    /// **Every constant in this module**, one entry per distinct name
+    /// ([`REVIEW_CONDUCT`] and [`CONDUCT_REVIEW`] are one name spelled twice). Until
+    /// GAP-111 it left out [`REQUIREMENT`] and [`ASSIGN_ROLE`], so a baseline naming either
+    /// was refused as a misspelling; `gungnir-security/tests/role_matrix.rs` now fails when
+    /// a constant is added here and not to this list.
     pub const ALL: &[&str] = &[
         VIEW_PICTURE,
         SUBMIT_DETECTION,
@@ -241,6 +254,8 @@ pub mod actions {
         CONDUCT_REVIEW,
         ACKNOWLEDGE_HANDOVER,
         KEY_ESCROW_RECOVER,
+        REQUIREMENT,
+        ASSIGN_ROLE,
     ];
 
     /// True when `action` is one this build knows.

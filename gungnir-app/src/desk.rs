@@ -30,7 +30,7 @@ use gungnir_eventing::{Event, EventBus};
 use gungnir_model::{ExchangeItem, MissionTime};
 use gungnir_remote::endpoint::{DeliveryOutcome, EndpointClient, PendingDelivery};
 use gungnir_remote::link::{ExchangeProductRecord, NodeLink};
-use gungnir_security::{AuditLog, InMemoryAuditLog, OperatorId};
+use gungnir_security::{AuditLog, FileAuditLog, OperatorId};
 
 /// Where this desktop's approval effects go.
 ///
@@ -39,7 +39,7 @@ use gungnir_security::{AuditLog, InMemoryAuditLog, OperatorId};
 pub(crate) struct DesktopHost<'a> {
     events: &'a mut Box<dyn EventBus>,
     alerts: &'a mut Vec<String>,
-    audit: &'a mut InMemoryAuditLog,
+    audit: &'a mut FileAuditLog,
     /// Who the audit log attributes an entry to, and `None` with nobody signed in
     /// (DN-23 §5 rule 1). Read with the rest of the session, once per call.
     operator: Option<OperatorId>,

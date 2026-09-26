@@ -26,7 +26,7 @@ use gungnir_mission::{JournalMissionManager, Mission, MissionManager, MissionSta
 use gungnir_model::{
     CollectionRequirement, PlanView, ResourceView, SensorId, SystemHealth, TrackId,
 };
-use gungnir_security::{InMemoryAuditLog, Role};
+use gungnir_security::{FileAuditLog, Role};
 use gungnir_sensor_management::InMemorySensorRegistry;
 use gungnir_store::{DurabilityPolicy, EventJournal, FileEventJournal, SessionId, StoreError};
 use gungnir_time::{TimeAuthority, WallClockAuthority};
@@ -54,6 +54,11 @@ pub enum AppError {
     /// fabricated to keep the window open would be exactly the fiction GAP-051 found.
     #[error(transparent)]
     Mission(#[from] gungnir_mission::MissionError),
+    /// The audit log beside the journal could not be opened (GAP-111, D-87). Refused as
+    /// a journal that will not open is: a desktop that could not keep the record of who
+    /// did what would run with C-04 silently broken.
+    #[error("the audit log could not be opened: {0}")]
+    Audit(gungnir_security::SecurityError),
 }
 
 pub struct AppState {
@@ -356,7 +361,12 @@ pub struct AppState {
 
     /// Configuration and decision actions, append-only (`gungnir-security`). PN-14
     /// shows it, which is what makes an apply visible to the next person.
-    pub audit: InMemoryAuditLog,
+    ///
+    /// **On disk since GAP-111** (D-87): `<data dir>/audit/`, hash-chained, one segment per
+    /// run. Before, it was held in memory and gone at every restart, so the desktop's
+    /// accountability record lasted exactly as long as the window was open. What
+    /// [`gungnir_security::AuditLog::entries`] returns is still this run's.
+    pub audit: FileAuditLog,
 
     /// The approval gate between a proposed plan and anything acting on it
     /// (GAP-038), and everything the decision path holds between calls: the queue and
@@ -592,6 +602,16 @@ impl AppState {
         }
 
         let clock = WallClockAuthority::default();
+        // GAP-111, D-87: the audit log is durable and hash-chained, beside the journal, in
+        // the format the node keeps. Opened as the journal is: a desktop that could not
+        // record who did what does not start, because the record C-04 asks for would be
+        // gone at the next restart. Synced per entry, since each is a person's act.
+        let audit = FileAuditLog::open(
+            &std::path::Path::new(&config.data_dir).join(gungnir_security::AUDIT_DIR),
+            gungnir_security::AuditSync::EveryEntry,
+            clock.now().0,
+        )
+        .map_err(AppError::Audit)?;
         // **The session is created through the lifecycle, not fabricated here.** This
         // used to mint an identifier from the wall clock and declare the mission `Live`
         // with nothing on disk saying so, which is why a desktop killed mid-session left
@@ -739,7 +759,7 @@ impl AppState {
             next_launch_warning,
             retention,
             config_store,
-            audit: InMemoryAuditLog::new(),
+            audit,
             desk: ApprovalDesk::new(decision_settings),
             selected_approval: None,
             dialog: gungnir_ui::panels::decision_dialog::DecisionDialogState::default(),

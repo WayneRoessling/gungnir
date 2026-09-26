@@ -601,25 +601,20 @@ pub fn audit_attempt(
     now: MissionTimeSeconds,
 ) {
     let (action, detail) = match outcome {
-        Ok(()) => ("session.sign_in", "signed in".to_owned()),
-        Err(failure) => ("session.rejected", failure.to_string()),
+        Ok(()) => (crate::audit::events::SIGN_IN, "signed in".to_owned()),
+        Err(failure) => (crate::audit::events::SIGN_IN_REJECTED, failure.to_string()),
     };
-    log.record(AuditEntry {
-        operator,
-        action: action.to_owned(),
-        mission_time: now,
-        detail,
-    });
+    log.record(AuditEntry::new(operator, action, now, detail));
 }
 
 /// Write a sign-out to the audit log.
 pub fn audit_sign_out(log: &mut dyn AuditLog, operator: OperatorId, now: MissionTimeSeconds) {
-    log.record(AuditEntry {
-        operator: Some(operator),
-        action: "session.sign_out".to_owned(),
-        mission_time: now,
-        detail: "signed out".to_owned(),
-    });
+    log.record(AuditEntry::new(
+        Some(operator),
+        crate::audit::events::SIGN_OUT,
+        now,
+        "signed out",
+    ));
 }
 
 #[cfg(test)]
