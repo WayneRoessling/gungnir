@@ -3,9 +3,9 @@
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
 //! v3 external contract. Read paths: a snapshot and an event stream. Write paths:
-//! detection submission and plan decisions, both authorized per caller through
-//! `gungnir-security`. Every payload carries `gungnir_model::SCHEMA_VERSION` so a
-//! client can refuse data from an incompatible node.
+//! detection submission and a decision on a queue item ([`DecisionRequest`]), both
+//! authorized per caller through `gungnir-security`. Every payload carries
+//! `gungnir_model::SCHEMA_VERSION` so a client can refuse data from an incompatible node.
 //!
 //! Version 2, 2026-09-05: the plan type changed shape so a plan can be an intercept
 //! or a fires task (docs/design/DN-05-fires.md). Under the contract's own
@@ -27,7 +27,6 @@ use gungnir_model::{
     MissionTime, PendingApprovalId, PipelineStatsView, PlanId, PlanView, Releasability,
     SystemHealth, TrackView, SCHEMA_VERSION,
 };
-use gungnir_security::OperatorId;
 
 pub use gungnir_eventing::Envelope as EventFrame;
 
@@ -405,14 +404,6 @@ pub enum ExchangeResponse {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PublishExchangeRequest {
     pub products: Vec<ExchangeProduct>,
-}
-
-/// An operator's decision on a plan the node proposed.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct ApprovalRequest {
-    pub plan: PlanId,
-    pub accepted: bool,
-    pub operator: OperatorId,
 }
 
 /// One item in a node's queue, as `GET /v3/queue` and the snapshot carry it

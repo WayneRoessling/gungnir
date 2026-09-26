@@ -569,7 +569,7 @@ async fn token(url: &str) -> String {
 
 /// **Every route but the session one refuses an unauthenticated caller.** This is the
 /// property that makes the write paths safe to serve at all: the caller is whoever the
-/// token says, and `ApprovalRequest`'s own `operator` field is not believed.
+/// token says, and no decision a caller sends names an operator to be believed.
 #[tokio::test(flavor = "multi_thread")]
 async fn every_other_route_refuses_without_a_token() {
     let url = serve(authenticating(snapshot(Vec::new()))).await;

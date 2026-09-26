@@ -124,8 +124,16 @@ pub enum ApiError {
     NoRoom(String),
 }
 
-/// The transport-neutral request handlers a node implements. Every call names the
+/// A transport-neutral form of two of the node's request handlers. Every call names the
 /// authenticated caller so authorization is enforced per request.
+///
+/// **Nothing implements this trait.** The v3 transport serves every route, these two
+/// included, through [`transport::NodeApi`] and the node loop behind it; this is the
+/// shape a second transport such as the planned gRPC one (docs/gungnir-api-v1.md) would
+/// share. It names no decision: a decision is taken on a queue item through
+/// [`v3::DecisionRequest`], whose caller is whoever the session token says, and a
+/// method here describing it in a second form would be a second, divergent contract
+/// (GAP-138 removed the plan-keyed one that named its own operator in the body).
 pub trait ApiHandler: Send + Sync {
     fn snapshot(&self, caller: OperatorId) -> Result<v3::SnapshotResponse, ApiError>;
     fn submit_detection(
@@ -133,7 +141,6 @@ pub trait ApiHandler: Send + Sync {
         caller: OperatorId,
         request: v3::SubmitDetectionRequest,
     ) -> Result<(), ApiError>;
-    fn decide(&mut self, caller: OperatorId, request: v3::ApprovalRequest) -> Result<(), ApiError>;
 }
 
 /// A version boundary exists specifically so a later version can be added without
