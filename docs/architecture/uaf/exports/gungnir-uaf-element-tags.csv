@@ -1249,6 +1249,10 @@ IE-health-event,uafId,IE-health-event
 IE-health-event,uafKind,InformationElement
 IE-health-event,registry.code,gungnir_model::HealthEvent
 IE-health-event,registry.domain,Events & the record
+IE-held-layer-view,uafId,IE-held-layer-view
+IE-held-layer-view,uafKind,InformationElement
+IE-held-layer-view,registry.code,gungnir_model::HeldLayerView
+IE-held-layer-view,registry.domain,"Policy, authority & settings"
 IE-identification-settings,uafId,IE-identification-settings
 IE-identification-settings,uafKind,InformationElement
 IE-identification-settings,registry.code,gungnir_model::IdentificationSettings
