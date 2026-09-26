@@ -50,7 +50,7 @@ use gungnir_model::{
 };
 use gungnir_node::approval::{self, Frame, NodeApproval};
 use gungnir_security::{
-    actions, hash_passphrase, Account, AuditEntry, AuditLog, InMemoryAccountStore, OperatorId,
+    actions, hash_passphrase, Account, AuditEntry, InMemoryAccountStore, OperatorId,
     OperatorSession, Role, TokenIssuer,
 };
 use std::sync::{Arc, Mutex};
