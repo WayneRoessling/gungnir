@@ -277,6 +277,9 @@ pub struct RemoteTrackingService {
     outbox: Vec<DetectionView>,
     dropped: u64,
     connected: bool,
+    /// Whether the node last reported its tracking pipeline healthy (GAP-161); see
+    /// `link::Projection::node_health`.
+    node_tracking_healthy: bool,
     /// The live link, when this service was built by [`connect`]. `None` for a detached
     /// service, which is every one built before GAP-041 and the ones tests use.
     link: Option<NodeLink>,
@@ -293,6 +296,7 @@ impl RemoteTrackingService {
             outbox: Vec::new(),
             dropped: 0,
             connected: false,
+            node_tracking_healthy: false,
             link: None,
         }
     }
@@ -396,6 +400,7 @@ impl TrackingService for RemoteTrackingService {
             return;
         };
         self.connected = projection.connected;
+        self.node_tracking_healthy = projection.node_health.is_some_and(|h| h.tracking_healthy);
         if projection.connected {
             self.cache.clone_from(&projection.tracks);
             // GAP-096's wire contract: the same projection tracks came from also
@@ -425,8 +430,13 @@ impl TrackingService for RemoteTrackingService {
         gungnir_tracking_service::pipeline_stats_from_view(self.pipeline_stats)
     }
 
+    /// Linked, **and** the node reports its tracking pipeline healthy (GAP-161).
+    ///
+    /// A link that is up to a node whose tracker has stopped is not a working tracker,
+    /// and the status strip reading this is the only place a linked operator would learn
+    /// that the picture has stopped moving.
     fn is_healthy(&self) -> bool {
-        self.connected
+        self.connected && self.node_tracking_healthy
     }
 }
 
@@ -435,6 +445,8 @@ pub struct RemoteInterceptService {
     endpoint: RemoteEndpoint,
     last_plan: PlanView,
     connected: bool,
+    /// Whether the node last reported its planner healthy (GAP-161).
+    node_intercept_healthy: bool,
     link: Option<NodeLink>,
     /// When `last_plan` was last read from a connected node (GAP-066). `None` before the
     /// first one arrives, which is a different thing from a plan that has gone stale.
@@ -447,6 +459,7 @@ impl RemoteInterceptService {
             endpoint,
             last_plan: PlanView::default(),
             connected: false,
+            node_intercept_healthy: false,
             link: None,
             plan_read_at: None,
         }
@@ -484,6 +497,8 @@ impl InterceptService for RemoteInterceptService {
     ) -> PlanOutcome {
         if let Some(projection) = self.link.as_ref().and_then(link::NodeLink::read) {
             self.connected = projection.connected;
+            self.node_intercept_healthy =
+                projection.node_health.is_some_and(|h| h.intercept_healthy);
             if projection.connected {
                 self.last_plan.clone_from(&projection.plan);
                 self.plan_read_at = Some(now);
@@ -505,8 +520,10 @@ impl InterceptService for RemoteInterceptService {
         }
     }
 
+    /// Linked, **and** the node reports its planner healthy (GAP-161), for the reason
+    /// [`RemoteTrackingService::is_healthy`] gives.
     fn is_healthy(&self) -> bool {
-        self.connected
+        self.connected && self.node_intercept_healthy
     }
 }
 

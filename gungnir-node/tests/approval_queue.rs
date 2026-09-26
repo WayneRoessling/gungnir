@@ -222,8 +222,8 @@ struct Node {
     bus: Arc<InProcessBus>,
     dir: std::path::PathBuf,
     running: Arc<std::sync::atomic::AtomicBool>,
-    /// How many ticks the loop has finished, so [`Node::settle`] waits for the loop
-    /// rather than for a length of time.
+    /// How many ticks the loop has finished, so a test can wait for one to have run
+    /// start to finish after it changed something ([`Node::settle`]).
     ticks: Arc<std::sync::atomic::AtomicU64>,
 }
 
@@ -374,20 +374,26 @@ impl Node {
         }
     }
 
-    /// Let the loop finish two whole ticks after this call, so whatever the test just did
-    /// has been taken and published. **Counted, not timed**: this waited a fixed 20 ms,
-    /// and a 2 ms `thread::sleep` is a whole scheduler quantum -- about 15.6 ms -- on a
-    /// Windows host with the default timer resolution, so the loop could run once or not
-    /// at all inside the wait, and `GET /v3/queue` was read before the item reached it.
+    /// Wait until the loop has run one whole tick after this call: the sweep, the
+    /// answers and the published picture all reflect whatever the test just changed.
+    ///
+    /// **Waited on, not slept on.** This was a fixed 20 ms pause, which is a guess at how
+    /// soon the loop thread is scheduled: under a loaded test run it was not, the queue
+    /// read before the loop had published it came back empty, and
+    /// `a_pre_delegated_item_still_expires_and_escalates` indexed an empty list (seen
+    /// twice building GAP-120). The tick in progress when this is called may have read
+    /// the state before the change, so the wait is for the one after it to finish. The
+    /// deadline turns a stopped loop into a failure rather than a hang.
     async fn settle(&self) {
-        let start = self.ticks.load(std::sync::atomic::Ordering::SeqCst);
-        for _ in 0..5_000 {
-            if self.ticks.load(std::sync::atomic::Ordering::SeqCst) >= start + 2 {
-                return;
-            }
+        let from = self.ticks.load(std::sync::atomic::Ordering::SeqCst);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while self.ticks.load(std::sync::atomic::Ordering::SeqCst) < from + 2 {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the node's loop ran no tick in 30 s"
+            );
             tokio::time::sleep(std::time::Duration::from_millis(1)).await;
         }
-        panic!("the node loop stopped ticking");
     }
 
     /// Propose a plan against this picture, as the node's tick does, and return the item

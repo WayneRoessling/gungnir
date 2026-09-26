@@ -43,8 +43,23 @@ fn track(id: u64) -> TrackView {
     }
 }
 
+/// A node's picture, from a node whose services report healthy.
+///
+/// Healthy on purpose since GAP-161: a linked service's `is_healthy` is the link being up
+/// **and** the node saying its own service works, so a fixture node reporting
+/// `SystemHealth::default()` -- every service down -- would be shown unhealthy however
+/// well the link held, which is the point of GAP-161 and not what these tests are about.
 fn snapshot(tracks: Vec<TrackView>) -> SnapshotResponse {
-    SnapshotResponse::new(tracks, None, SystemHealth::default(), Vec::new())
+    SnapshotResponse::new(
+        tracks,
+        None,
+        SystemHealth {
+            tracking_healthy: true,
+            intercept_healthy: true,
+            ingest_healthy: true,
+        },
+        Vec::new(),
+    )
 }
 
 const PASSPHRASE: &str = "correct horse battery staple";
@@ -794,7 +809,15 @@ fn the_client_refuses_an_https_endpoint() {
 /// or an operator's curl asks for.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_health_route_answers() {
-    let url = serve(authenticating(snapshot(Vec::new()))).await;
+    // An unwired node's default rather than `snapshot`'s healthy fixture: the question is
+    // whether the route answers what the node published.
+    let url = serve(authenticating(SnapshotResponse::new(
+        Vec::new(),
+        None,
+        SystemHealth::default(),
+        Vec::new(),
+    )))
+    .await;
 
     let token = token(&url).await;
     let health: SystemHealth = reqwest::Client::new()

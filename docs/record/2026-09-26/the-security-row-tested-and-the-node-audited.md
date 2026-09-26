@@ -106,15 +106,6 @@ reason above. **What it does not do yet**: nothing ages the segments out and PN-
 which stay on GAP-152; and a cut tail still verifies because nothing outside the file holds the
 head, GAP-163.
 
-## A harness that read the queue too early
-
-After merging main a second time, two of `gungnir-node/tests/approval_queue.rs`'s rows failed
-here with an empty queue, and passed with a longer wait. The mechanism: the harness waited a
-fixed 20 ms for its loop, whose `thread::sleep(2 ms)` lasts a whole scheduler quantum -- about
-15.6 ms -- on a Windows host at the default timer resolution, so the loop could publish once or
-not at all inside the wait. The harness now counts the loop's ticks and waits for two, which is
-what "let the loop run" meant. No row's assertion changed.
-
 ## Left for the owner
 
 The `gungnir-security` row in `../../verification-capability-table.md` §2 is unchanged: its three
