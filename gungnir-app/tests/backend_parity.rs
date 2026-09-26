@@ -226,6 +226,7 @@ fn baseline(timeline: &GeneratedTimeline, dir: &Path, backend: BackendConfig) ->
                 maintenance: Vec::new(),
                 // Scenario 1's radar looks all round (GAP-118).
                 azimuth_sector: None,
+                elevation_band: None,
                 detection_model: None,
             })
             .collect(),

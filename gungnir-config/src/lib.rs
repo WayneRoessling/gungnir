@@ -227,6 +227,18 @@ pub struct SensorConfig {
     /// and counted all round.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub azimuth_sector: Option<gungnir_model::AzimuthSector>,
+    /// The elevations this sensor can see (GAP-158, D-111): `floor_rad` and `ceiling_rad`
+    /// above the horizon **at the sensor**, against its own local vertical, both in
+    /// `[-π/2, π/2]` with the ceiling above the floor.
+    ///
+    /// **Absent means the baseline's `analytics.coverage_min_elevation_rad` as the floor
+    /// and the zenith as the ceiling**, which is what every sensor had before bands
+    /// existed, so a baseline written before them means what it always meant. A radar
+    /// masked below a few degrees states its floor; one with a cone of silence overhead
+    /// states its ceiling; a band is stated whole, both limits together. A laydown
+    /// placement may state its own, which then replaces this one entirely.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elevation_band: Option<gungnir_model::ElevationBand>,
 }
 
 /// One planned maintenance window, as it appears in the baseline.
@@ -1766,6 +1778,24 @@ fn validate_placement_sector(
     }
 }
 
+/// GAP-158, D-111: a placement's own elevation band obeys the declaration's rule.
+fn validate_placement_band(
+    laydown: &gungnir_model::Laydown,
+    placement: &gungnir_model::SensorPlacement,
+) -> Result<(), ConfigError> {
+    match placement
+        .elevation_band
+        .as_ref()
+        .map(gungnir_model::ElevationBand::validate)
+    {
+        Some(Err(e)) => Err(ConfigError::Invalid(format!(
+            "laydown {} places sensor {} with an elevation_band that is refused: {e}",
+            laydown.id, placement.sensor.0
+        ))),
+        _ => Ok(()),
+    }
+}
+
 fn validate_laydowns(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     if baseline.laydowns.is_empty() {
         return Ok(());
@@ -1841,6 +1871,7 @@ fn validate_laydowns(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 )));
             }
             validate_placement_sector(l, s)?;
+            validate_placement_band(l, s)?;
         }
         for r in &l.resources {
             if !declared_resources.contains(&r.resource.0) {
@@ -2050,12 +2081,18 @@ pub struct AnalyticsConfig {
     /// fine one. Smaller finds shorter gaps and costs proportionally more.
     #[serde(default = "default_coverage_sample_spacing_m")]
     pub coverage_sample_spacing_m: f64,
-    /// Lowest elevation angle a sensor is credited with covering, radians.
+    /// Lowest elevation angle a sensor is credited with covering, radians, **for a sensor
+    /// that declares no `elevation_band` of its own** (GAP-158, D-111).
+    ///
+    /// The precedence, highest first: a laydown placement's `elevation_band`, then the
+    /// sensor declaration's, then this floor with the zenith as the ceiling. A band is
+    /// taken whole from the first place that states one, so this value is never mixed
+    /// with a stated band's ceiling.
     ///
     /// Defaults to the full lower hemisphere, which credits every sensor with more than
-    /// most have. A deployment that knows its sensors' masks should say so: an
-    /// optimistic elevation limit reports coverage that is not there, and DN-12's whole
-    /// point is not doing that.
+    /// most have. A deployment that knows its sensors' masks should say so, here for the
+    /// site or on each sensor: an optimistic elevation limit reports coverage that is not
+    /// there, and DN-12's whole point is not doing that.
     #[serde(default = "default_coverage_min_elevation_rad")]
     pub coverage_min_elevation_rad: f64,
     /// Anomaly detector thresholds (DN-15 §6, GAP-021). A detector left out is off.
@@ -3838,6 +3875,15 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 )));
             }
         }
+        // GAP-158, D-111: a band that is not one is refused, not clamped into one.
+        if let Some(band) = &s.elevation_band {
+            if let Err(e) = band.validate() {
+                return Err(ConfigError::Invalid(format!(
+                    "sensor {} elevation_band: {e}",
+                    s.id
+                )));
+            }
+        }
     }
     validate_resources(baseline)?;
     validate_laydowns(baseline)?;
@@ -4721,6 +4767,7 @@ MFkw
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         };
         b.sensors = vec![s.clone(), s];
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
@@ -4812,6 +4859,7 @@ MFkw
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             radar_feeds: vec![RadarFeedConfig {
                 name: "north".into(),
@@ -4840,6 +4888,7 @@ MFkw
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             ais_feeds: vec![AisFeedConfig {
                 name: "kal".into(),
@@ -4914,6 +4963,7 @@ MFkw
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         };
         let one = |sensor_id, sac, sic, azimuth_sigma_rad| DfSiteConfig {
             sensor_id,
@@ -4990,6 +5040,7 @@ MFkw
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         };
         let one = |sensor_id, sac, sic| UasSiteConfig {
             sensor_id,
@@ -5051,6 +5102,7 @@ MFkw
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         };
         let adsb = |sensor_id, source| ConfigBaseline {
             sensors: vec![sensor()],
@@ -5124,6 +5176,7 @@ MFkw
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         };
         let misb = |sensor_id, source| ConfigBaseline {
             sensors: vec![sensor()],
@@ -5197,6 +5250,7 @@ MFkw
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         };
         let sapient = |sensor_id, node_type, source| ConfigBaseline {
             sensors: vec![sensor()],
@@ -5289,6 +5343,7 @@ MFkw
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         };
         let with_destination = |destination_id, node_id, source| ConfigBaseline {
             sensors: vec![sensor()],
@@ -5366,6 +5421,7 @@ MFkw
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             endpoints: vec![EndpointConfig {
                 name: "kal".into(),
@@ -5617,6 +5673,7 @@ MFkw
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             resources: vec![ResourceConfig {
                 handoff_endpoint: None,
@@ -5875,6 +5932,7 @@ MFkw
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         }
     }
 
@@ -6198,6 +6256,7 @@ MFkw
                 maintenance: windows,
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             ..ConfigBaseline::default()
         }
@@ -7454,6 +7513,7 @@ mod sector_and_urgency_tests {
             control_endpoint: None,
             maintenance: Vec::new(),
             azimuth_sector,
+            elevation_band: None,
             detection_model: None,
         }
     }
@@ -7524,6 +7584,7 @@ mod sector_and_urgency_tests {
                     boresight_rad: 1.0,
                     width_rad: 0.0,
                 }),
+                elevation_band: None,
             }],
             resources: Vec::new(),
             current: true,
@@ -7535,6 +7596,84 @@ mod sector_and_urgency_tests {
             width_rad: 0.5,
         });
         validate(&b).expect("a legal placement sector");
+    }
+
+    /// GAP-158, D-111: a sensor that declares no band parses as none and is written as
+    /// none, so every baseline written before bands means what it meant; a declared band
+    /// round-trips; one that is not a band is refused naming the sensor, and a placement's
+    /// band is held to the same rule naming the laydown and the sensor.
+    #[test]
+    fn an_elevation_band_is_optional_round_trips_and_is_refused_unless_it_is_one() {
+        let json = r#"{ "id": 7, "modality": "radar", "position": [0.9, 0.2, 10.0] }"#;
+        let parsed: SensorConfig = serde_json::from_str(json).expect("parses");
+        assert_eq!(
+            parsed.elevation_band, None,
+            "absent is the baseline's floor"
+        );
+        let text = serde_json::to_string(&parsed).expect("serializes");
+        assert!(
+            !text.contains("elevation_band"),
+            "written as absent: {text}"
+        );
+
+        let json = r#"{ "id": 7, "modality": "radar", "position": [0.9, 0.2, 10.0],
+            "elevation_band": { "floor_rad": -0.0349066, "ceiling_rad": 1.0471976 } }"#;
+        let parsed: SensorConfig = serde_json::from_str(json).expect("parses");
+        let band = parsed.elevation_band.expect("stated");
+        assert!(band.contains(0.0) && !band.reaches_zenith());
+        let back: SensorConfig =
+            serde_json::from_str(&serde_json::to_string(&parsed).expect("serializes"))
+                .expect("reparses");
+        assert_eq!(back, parsed);
+        validate(&with(parsed)).expect("a legal band");
+
+        for (floor, ceiling) in [
+            (0.2, 0.1),
+            (0.3, 0.3),
+            (-1.6, 0.0),
+            (0.0, 1.6),
+            (f64::NAN, 0.5),
+        ] {
+            let mut s = sensor(None);
+            s.elevation_band = Some(gungnir_model::ElevationBand {
+                floor_rad: floor,
+                ceiling_rad: ceiling,
+            });
+            let err = validate(&with(s)).expect_err("refused");
+            assert!(
+                err.to_string().contains("sensor 7 elevation_band"),
+                "{floor} {ceiling}: {err}"
+            );
+        }
+
+        let mut b = with(sensor(None));
+        b.laydowns = vec![gungnir_model::Laydown {
+            id: gungnir_model::LaydownId("current".into()),
+            intent: "as deployed".into(),
+            sensors: vec![gungnir_model::SensorPlacement {
+                sensor: gungnir_model::SensorId(7),
+                position_enu: [0.0; 3],
+                mode: gungnir_model::SensorMode::Search,
+                azimuth_sector: None,
+                elevation_band: Some(gungnir_model::ElevationBand {
+                    floor_rad: 0.5,
+                    ceiling_rad: 0.1,
+                }),
+            }],
+            resources: Vec::new(),
+            current: true,
+        }];
+        let err = validate(&b).expect_err("refused");
+        assert!(
+            err.to_string()
+                .contains("laydown current places sensor 7 with an elevation_band"),
+            "{err}"
+        );
+        b.laydowns[0].sensors[0].elevation_band = Some(gungnir_model::ElevationBand {
+            floor_rad: 0.1,
+            ceiling_rad: 0.5,
+        });
+        validate(&b).expect("a legal placement band");
     }
 
     #[test]

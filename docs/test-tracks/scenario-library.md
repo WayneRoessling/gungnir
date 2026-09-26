@@ -14,6 +14,7 @@ Status: rendered by `tools/build_catalogue.py` from `scenarios.yaml` (version 20
 | [TT-08](#tt-08) Mixed friendly, civil, and hostile air traffic with cooperative sources | VG-08 | MT-08 | 11 | 5400 s | sector, airfield | 900 s, scale 1.0, seed 1708 |
 | [TT-09](#tt-09) TT-01 replayed under two laydowns | VG-09 | MT-09 | 45 | 4200 s | sector, port | 480 s, scale 0.25, seed 1701 |
 | [TT-10](#tt-10) TT-01 with a mid-raid link loss at the port cell | VG-10 | MT-10 | 45 | 4200 s | sector, port | 480 s, scale 0.25, seed 1701 |
+| [TT-11](#tt-11) Usability round 1's raid down the upper Vell approach | VG-09 | MT-09 | 6 | 1020 s | round-1 | 1020 s, scale 1.0, seed 1711 |
 
 ## TT-01 Night raid of propeller drones with mixed routes and decoys
 
@@ -180,12 +181,24 @@ Events: t=1500 link_lost.
 
 Expected: link_outage_s: 660; success: nothing recorded offline is lost (MOE-11); the one conflict visible and resolved; the operator saw the backend state throughout.
 
+## TT-11 Usability round 1's raid down the upper Vell approach
+
+Vignette VG-09, thread MT-09, start 10:00:00, duration 1020 s.
+
+The recording usability round 1's laydown rehearsal re-observes (US-15, GAP-147). Six propeller one-way attack drones fly down the approach round 1 declares, from 25 km out onto the harbour, in round 1's own local frame, which DN-32 section 5.5 places at this library's origin, so round 1's two short-range radars re-observe the raid under every laydown it declares and a forward-sited radar sees it earlier. Round 1's geography is its own, at 55 degrees north; its upper Vell approach is not this library's VELL_UPPER.
+
+| Group | Class | Platform | Side | Count | Spawn window (s) | Route | Notes |
+|---|---|---|---|---|---|---|---|
+| raid | One-way attack UAS, propeller | shahed-136 | red | 6 | 0 to 480 | round_1_approach |  |
+
+Expected: entities: 6; success: both of round 1's radars see the raid under each of its laydowns; the forward siting (laydown c) changes the forward radar's detections and nothing else's (DN-32 section 10's round-1 row).
+
 ## Geography
 
 Named points (ENU metres from the sector command post): SCP [0, 0, 0]; OPS [0, 0, 0]; KAL [-25000, 2000, 0]; KAL_ANCHORAGE [-29000, 1500, 0]; KAL_BOOM [-24000, 2500, 0]; HAF [-20000, 40000, 0]; RIDGE_RADAR [8000, 3000, 450]; RIDGE_GSR [9000, 2000, 420]; VELL_UPPER [40000, -25000, 0]; FAR_BANK_WOODS [35000, -8000, 0]; VALLEY_ROAD_START [60000, -30000, 0]; VALLEY_ROAD_END [30000, -6000, 0]; TREE_LINE_HAF [-18500, 41200, 0]; SEA_FAR [-90000, 20000, 0]; SEA_MID [-45000, 8000, 0]; EAST_FAR [120000, -80000, 0]; EAST_MID [60000, -40000, 0]; EAST_NEAR [20000, -12000, 0]; NORTH_CORRIDOR_S [-40000, 70000, 9000]; NORTH_CORRIDOR_N [-10000, 110000, 9000]; EAST_ORBIT [60000, 5000, 5000].
 
-Routes: `vell_valley` (6 waypoints); `vell_valley_north` (5 waypoints); `sea_stream` (6 waypoints); `sea_to_haf` (4 waypoints); `usv_approach` (4 waypoints); `coastal_lane_n` (4 waypoints); `coastal_lane_s` (4 waypoints); `valley_road` (5 waypoints); `civil_corridor` (2 waypoints); `fighter_return` (3 waypoints); `haf_apron` (3 waypoints); `fpv_run` (3 waypoints); `light_aircraft_route` (4 waypoints).
+Routes: `vell_valley` (6 waypoints); `vell_valley_north` (5 waypoints); `sea_stream` (6 waypoints); `sea_to_haf` (4 waypoints); `usv_approach` (4 waypoints); `coastal_lane_n` (4 waypoints); `coastal_lane_s` (4 waypoints); `valley_road` (5 waypoints); `civil_corridor` (2 waypoints); `fighter_return` (3 waypoints); `haf_apron` (3 waypoints); `fpv_run` (3 waypoints); `light_aircraft_route` (4 waypoints); `round_1_approach` (4 waypoints).
 
-Sensor sets: `sector` (1 R1 ridge radar, 2 R2 HAF radar, 3 A3 acoustic node upper Vell, 5 A5 acoustic node mid Vell, 9 A9 acoustic node coast, 4 F4 OPS counter-UAS radar, 6 C6 OPS camera); `port` (7 R7 KAL coastal radar, 8 C8 KAL camera, 10 AIS receiver KAL); `airfield` (11 F11 HAF counter-UAS radar, 12 F12 HAF RF detector, 13 C13 HAF camera, 14 ADS-B receiver HAF, 15 IFF interrogator HAF); `land` (16 G16 ridge ground radar, 17 V17 ISR sortie 1, 18 V18 ISR sortie 2, 19 A19 battery-location array).
+Sensor sets: `sector` (1 R1 ridge radar, 2 R2 HAF radar, 3 A3 acoustic node upper Vell, 5 A5 acoustic node mid Vell, 9 A9 acoustic node coast, 4 F4 OPS counter-UAS radar, 6 C6 OPS camera); `port` (7 R7 KAL coastal radar, 8 C8 KAL camera, 10 AIS receiver KAL); `airfield` (11 F11 HAF counter-UAS radar, 12 F12 HAF RF detector, 13 C13 HAF camera, 14 ADS-B receiver HAF, 15 IFF interrogator HAF); `land` (16 G16 ridge ground radar, 17 V17 ISR sortie 1, 18 V18 ISR sortie 2, 19 A19 battery-location array); `round-1` (1 S1 round-1 harbour counter-UAS radar, 2 S2 round-1 plant counter-UAS radar).
 
 Rendered from `scenarios.yaml` by `tools/build_catalogue.py`; the vignettes are `../mission/vignettes.md`.

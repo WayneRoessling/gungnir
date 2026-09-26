@@ -133,7 +133,7 @@ history, and an entry is never edited once it has merged.
 | GAP-118 | Coverage accuracy is untested, and a coverage volume has no bearing | Technical | CAP-2.11 | 3 | 3 | M | 9 | I3 | Services engineer | Closed |
 | GAP-119 | No solve budget exists, and a stale plan is never compared with the last good one | Technical | CAP-3.3, CAP-5.5 | 3 | 8 | M | 24 | I3 | Services engineer | Closed |
 | GAP-120 | Nothing compares the embedded and remote backends' projections | Technical | CAP-7.3 | 3 | 1 | M | 3 | I3 | Services engineer | Closed |
-| GAP-121 | StoreAndForwardQueue has no production caller | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
+| GAP-121 | StoreAndForwardQueue has no production caller | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Services engineer | Closed |
 | GAP-122 | Journal retention purge is unbuilt, and nothing says so | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Closed |
 | GAP-123 | An entity's GlobalEntityId changes at every restart | Technical | CAP-2.7 | 4 | 3 | M | 12 | I3 | Services engineer | Closed |
 | GAP-124 | The risk score has no time-to-impact term | Technical | CAP-3.2 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
@@ -163,11 +163,11 @@ history, and an entry is never edited once it has merged.
 | GAP-154 | The Disconnected reconciliation row still says no decision reaches a node's record | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Owner | Open |
 | GAP-152 | The audit log lives in memory, so nothing outlives the process and no age governs it | Technical | CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-153 | A non-finite float in an envelope breaks the v3 stream and history | Technical | CAP-7.1, CAP-5.4 | 2 | 6 | S | 12 | I3 | Services engineer | Closed |
-| GAP-158 | A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical | Technical | CAP-2.11 | 2 | 3 | M | 6 | I3 | Services engineer | Open |
+| GAP-158 | A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical | Technical | CAP-2.11 | 2 | 3 | M | 6 | I3 | Services engineer | Closed |
 | GAP-159 | The Coverage accuracy row still says a coverage volume has no bearing | Technical | CAP-2.11 | 1 | 3 | S | 3 | I3 | Owner | Open |
 | GAP-160 | A node publishes no track, so a linked desktop's picture is frozen at sign-in | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-161 | A linked desktop's health strip reports the link, not the node's services | Technical | CAP-7.3 | 4 | 1 | S | 4 | I3 | Services engineer | Closed |
-| GAP-147 | No committed recording reaches round 1's radars | Technical | CAP-5.2, CAP-1.4 | 2 | 4 | M | 8 | I3 | Services engineer | Open |
+| GAP-147 | No committed recording reaches round 1's radars | Technical | CAP-5.2, CAP-1.4 | 2 | 4 | M | 8 | I3 | Services engineer | Closed |
 | GAP-156 | A picture the exact solver cannot finish in time is never answered | Technical | CAP-3.3 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
 | GAP-157 | A linked desktop cannot tell that its node's planner is stale | Technical | CAP-3.3, CAP-7.3 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
 | GAP-165 | A linked desktop's node session lapses and nothing renews it while the link is up | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
@@ -1879,11 +1879,12 @@ Counts: 174 gaps, 3 mission, 171 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.4 Disconnected and reconcile.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which gated the `gungnir-resilience` row on the queue's own tests and found no caller.
+  - 2026-09-26, Closed: Closed on the owner's decision of 2026-09-26 (D-110): the queue is kept for a future use and documented as unused. Its doc comment says it has no production caller and why the detection outbox, the exchange outbox (D-76) and the outage's decision batch (DN-31 §15) each have their own queue; `../../../ARCHITECTURE.md` §8.3 and §8.4, the crate description, `../../gungnir-capabilities.md`, the glossary and the UAF service views (SV-25 is now "Reconciliation on reconnect") say the same. The `gungnir-resilience` row's criterion is unchanged.
 - Evidence: `gungnir-resilience/src/lib.rs` (no caller outside its tests); `gungnir-remote`'s `OUTBOX_CAPACITY` outbox.
 - Severity: 1. Reach: 1 threads. Effort: S. Priority: 1.
 - Impact: `gungnir_resilience::StoreAndForwardQueue` is tested and used by nothing: the live outbox is `gungnir-remote`'s own, though `../../../ARCHITECTURE.md` §8.4 said the queue carried envelopes during an outage. Two bounded queues with one rule, one of them dead, is a place for the rule to drift.
 - Closing action: Adopt the queue for what a desktop records during an outage, or retire it and its §2 clause with a decision.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-122 Journal retention purge is unbuilt, and nothing says so**
@@ -2315,11 +2316,12 @@ Counts: 174 gaps, 3 mission, 171 technical; 1 already covered by a plan in `../.
 - Capability: CAP-2.11 Geometric questions.
 - History:
   - 2026-09-25, Open: Found closing GAP-118. Filed rather than built with the sector, because the sector closed the criterion's bearing clause and this is a second geometry change to every sensor declaration with its own question: what an upper limit defaults to.
+  - 2026-09-26, Closed: Closed under the owner's delegation of 2026-09-26 (D-111; DN-12 §10). A sensor declares an `ElevationBand` on `SensorConfig`, a placement may state its own, and one with none keeps the baseline floor and the zenith; `CoverageVolume` measures both against `LocalFrame::vertical_at`, through one builder the registry, DN-13, PN-16 and the node's coverage answer share, and a rehearsal honours a stated band. `coverage_accuracy.rs` recovers every floor and ceiling within the criterion (worst 0.055 degree) and shows the frame's vertical misses it by 0.37 degree at 47 km. The guard that a non-finite vertical covers nothing falls under the numerical-stability clause and is human-owned; see docs/signatures.md. The row awaits the owner's walk.
 - Evidence: `gungnir-analytics/src/lib.rs` (`CoverageVolume::covers`: one `min_elevation_rad`, no upper limit, elevation from the frame's `u`); `gungnir-config/src/lib.rs` (`AnalyticsConfig::coverage_min_elevation_rad`, one value); found closing GAP-118.
 - Severity: 2. Reach: 3 threads. Effort: M. Priority: 6.
 - Impact: Every sensor is credited from the baseline's one `analytics.coverage_min_elevation_rad` up to the zenith: a radar with a 2 degree mask and a camera looking up at 30 degrees get the same floor, and nothing has a ceiling, so a radar's cone of silence overhead is counted as covered. Elevation is measured against the local frame's vertical, which tilts from a distant sensor's own by about 0.009 degree per kilometre from the origin, so beyond about 11 km a stated limit is off by more than the coverage-accuracy criterion's 0.1 degree.
 - Closing action: Give a sensor's declaration its own elevation band -- a lower and an upper limit, the baseline's floor the default for the lower -- carry it through the registry to `CoverageVolume`, and measure elevation against the sensor's own vertical placed in the frame, as the azimuth sector is placed by the convergence. Extend `gungnir-analytics/tests/coverage_accuracy.rs` to recover both limits, with a sensor far enough from the origin that the tilt exceeds the criterion.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found closing GAP-118 (`../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`).
 - Depends on: GAP-118.
 
@@ -2371,11 +2373,12 @@ Counts: 174 gaps, 3 mission, 171 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.2 Replay and rehearse; CAP-1.4 Coverage and gaps.
 - History:
   - 2026-09-25, Open: Found building GAP-105: DN-32 §10's round-1 row, run over the committed recordings, re-observed nothing from round 1's two radars under any laydown. The sample sets are short excerpts -- TT-01's raid is still 85 km out when its 480 s end -- and round 1 sits at their origin. The row's test writes its own round-1 raid and passes. What a session runs over is content, left for the owner rather than taken under delegation, because a new committed sample set moves every row and test that counts the ten.
+  - 2026-09-26, Closed: Closed under the owner's delegation of 2026-09-26 (D-112; DN-32 §15). TT-11, six drones down round 1's approach, is committed from both generators byte for byte and passes `validate_tracks.py`; PN-16's picker offers it and US-15's card names it. The round-1 row's test runs over it: S2's detections differ under `c`, S1's do not. GAP-020's first-engagement column now reads over a committed recording: under round 1's own policy not computable, with the chain's reasons (GAP-183); weapons free 10 059 m under `current`, 10 123 m under `b`, 14 967 m under `c`. The ten sets are unchanged; the row stays Draft. See the 2026-09-26 record item.
 - Evidence: `testdata/tracks/samples/` (the closest any sample brings a target to the origin is about 25 km, TT-04's and TT-05's shipping at KAL); `testdata/usability/round-1.json` (both radars `radar.short`, 15 km at most); `gungnir-app/tests/laydown_rehearsal.rs`'s `round_1s_forward_radar_changes_its_own_detections_and_nothing_else`, which writes its own round-1 raid for that reason; `../../design/DN-32-re-observation-for-a-laydown.md` §12.
 - Severity: 2. Reach: 4 threads. Effort: M. Priority: 8.
 - Impact: US-15's rehearsal of round 1's laydowns re-observes nothing: under DN-32 §5.5's frame round 1's harbour and plant sit at the recordings' origin, and none of the ten committed sample sets brings a target within 25 km of it before its excerpt ends, so both short-range radars detect nothing under `current`, `b` or `c`, whichever recording a participant picks. PN-16 says so rather than showing bare zeros, but a participant cannot see the rehearsal tell the laydowns apart, which is the thing GAP-105 built it to do.
 - Closing action: Decide the round-1 recording, which is scenario content of the kind the owner decided for round 1 in D-28: a raid down round 1's declared upper Vell approach committed as a recording both generators write and `validate_tracks.py` checks, or an excerpt of an existing scenario's terminal phase. Adding a sample set touches rows that count "all ten" sample sets, so the answer has to say how those read. Then point US-15's card at it.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: GAP-105 (the rehearsal); D-28 (round 1's laydown `c`); `../../ux/usability-round-1-session.md` US-15; `../../record/2026-09-25/gap-105-re-observation-for-a-laydown-built.md`.
 - Depends on: GAP-105, D-28.
 

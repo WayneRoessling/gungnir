@@ -310,6 +310,7 @@ fn baseline(dir: &Path, steps: &[Step], origin: Geodetic) -> ConfigBaseline {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             })
             .collect(),
         endpoints: tasked

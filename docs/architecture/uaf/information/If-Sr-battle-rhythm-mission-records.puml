@@ -11,6 +11,7 @@ class "SensorPlacement" as SensorPlacement <<InformationElement>> {
   position_enu: [f64; 3]
   mode: SensorMode
   azimuth_sector: Option<crate::AzimuthSector>
+  elevation_band: Option<crate::ElevationBand>
 }
 class "ResourcePlacement" as ResourcePlacement <<InformationElement>> {
   resource: ResourceId
@@ -100,6 +101,8 @@ enum "Classification\n(see If-Sr-picture-tracking-vocabulary)" as Classification
 }
 enum "EffectorLayer\n(see If-Sr-plans-effectors-handoff)" as EffectorLayer <<External>> #line.dashed {
 }
+class "ElevationBand\n(see If-Sr-core-identifiers-frames-quality)" as ElevationBand <<External>> #line.dashed {
+}
 class "MissionTime\n(see If-Sr-core-identifiers-frames-quality)" as MissionTime <<External>> #line.dashed {
 }
 class "SensorId\n(see If-Sr-picture-tracking-vocabulary)" as SensorId <<External>> #line.dashed {
@@ -109,6 +112,7 @@ enum "SensorMode\n(see If-Sr-picture-tracking-vocabulary)" as SensorMode <<Exter
 enum "WeaponsControlStatus\n(see If-Sr-policy-authority-settings)" as WeaponsControlStatus <<External>> #line.dashed {
 }
 SensorPlacement --> AzimuthSector : azimuth_sector
+SensorPlacement --> ElevationBand : elevation_band
 SensorPlacement --> SensorId : sensor
 SensorPlacement --> SensorMode : mode
 Laydown --> LaydownId : id

@@ -102,6 +102,144 @@ impl LocalFrame {
     pub fn sector_in_frame(&self, sector: AzimuthSector, position: Geodetic) -> AzimuthSector {
         sector.rotated(self.true_north_at(position))
     }
+
+    /// The local vertical at `position` -- the ellipsoid normal there, pointing up -- as a
+    /// unit vector `[e, n, u]` in this frame.
+    ///
+    /// `[0, 0, 1]` at the origin, and tilted away from the frame's `u` everywhere else by
+    /// the angle between the two normals: about 0.009 degree per kilometre from the origin,
+    /// so 0.1 degree -- the coverage-accuracy criterion -- at about 11 km. A sensor's
+    /// elevation band is stated against its own vertical, which is this, not the frame's
+    /// (`docs/design/DN-12-coverage-and-gaps.md` amendment 2; GAP-158, D-111).
+    ///
+    /// Taken numerically from this frame's own conversion, as [`LocalFrame::true_north_at`]
+    /// is: the frame direction of a step straight up from `position`, along which latitude
+    /// and longitude do not change. A step of 100 m against a conversion gated to 1e-6 m
+    /// gives the direction to about 2e-8 rad.
+    #[must_use]
+    pub fn vertical_at(&self, position: Geodetic) -> [f64; 3] {
+        const STEP_M: f64 = 100.0;
+        let here = self.to_enu(position);
+        let above = self.to_enu(Geodetic {
+            alt_m: position.alt_m + STEP_M,
+            ..position
+        });
+        let d = [above[0] - here[0], above[1] - here[1], above[2] - here[2]];
+        let length = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+        if !(length.is_finite() && length > 0.0) {
+            return [0.0, 0.0, 1.0];
+        }
+        [d[0] / length, d[1] / length, d[2] / length]
+    }
+}
+
+/// The elevations a sensor can see: a floor and a ceiling, radians above the horizon **at
+/// the sensor**, measured against its own local vertical (GAP-158, D-111,
+/// `docs/design/DN-12-coverage-and-gaps.md` amendment 2).
+///
+/// A radar masked by the ground or its own site below a few degrees states its floor; one
+/// with a cone of silence overhead states its ceiling; a camera looking up at a sector of
+/// sky states both. **Both limits are stated together or neither is**: a band is one survey
+/// of one sensor, and a floor from one place and a ceiling from another could make an empty
+/// band that nobody stated.
+///
+/// Where a sensor states none, its band is [`ElevationBand::below_zenith`] of the
+/// baseline's one `analytics.coverage_min_elevation_rad`: that floor, and no ceiling -- the
+/// zenith -- so every baseline written before bands existed means what it meant.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ElevationBand {
+    /// The lowest elevation the sensor sees, radians, in `[-π/2, π/2)`.
+    pub floor_rad: f64,
+    /// The highest elevation the sensor sees, radians, in `(floor_rad, π/2]`; `π/2` is the
+    /// zenith, which is no ceiling at all.
+    pub ceiling_rad: f64,
+}
+
+/// Why an elevation band is refused.
+#[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
+pub enum ElevationError {
+    #[error("the band's floor or ceiling is not a finite number")]
+    NonFinite,
+    /// An elevation is an angle above the horizon: below `-π/2` or above `π/2` is not one.
+    #[error("the band's limits must lie within [-π/2, π/2]; the floor is {floor_rad} rad and the ceiling {ceiling_rad} rad")]
+    OutOfRange { floor_rad: f64, ceiling_rad: f64 },
+    /// A band whose ceiling is not above its floor sees nothing, which is a sensor switched
+    /// off, not a band.
+    #[error("the band's ceiling ({ceiling_rad} rad) must be above its floor ({floor_rad} rad)")]
+    Empty { floor_rad: f64, ceiling_rad: f64 },
+}
+
+impl ElevationBand {
+    /// A band, refused unless both limits are finite, within `[-π/2, π/2]`, and the ceiling
+    /// is above the floor.
+    ///
+    /// # Errors
+    ///
+    /// [`ElevationError`] naming what is wrong.
+    pub fn new(floor_rad: f64, ceiling_rad: f64) -> Result<Self, ElevationError> {
+        let band = Self {
+            floor_rad,
+            ceiling_rad,
+        };
+        band.validate()?;
+        Ok(band)
+    }
+
+    /// The band of a sensor that states none: `floor_rad` -- the baseline's
+    /// `coverage_min_elevation_rad` -- up to the zenith. Not validated: a baseline floor of
+    /// exactly `π/2` gives a band that sees straight up and nothing else, which is what
+    /// that floor says.
+    #[must_use]
+    pub fn below_zenith(floor_rad: f64) -> Self {
+        Self {
+            floor_rad,
+            ceiling_rad: std::f64::consts::FRAC_PI_2,
+        }
+    }
+
+    /// The check [`ElevationBand::new`] applies, for a band that arrived by
+    /// deserialization.
+    ///
+    /// # Errors
+    ///
+    /// [`ElevationError`] naming what is wrong.
+    pub fn validate(&self) -> Result<(), ElevationError> {
+        let (floor_rad, ceiling_rad) = (self.floor_rad, self.ceiling_rad);
+        if !(floor_rad.is_finite() && ceiling_rad.is_finite()) {
+            return Err(ElevationError::NonFinite);
+        }
+        let half_pi = std::f64::consts::FRAC_PI_2;
+        if !((-half_pi..=half_pi).contains(&floor_rad)
+            && (-half_pi..=half_pi).contains(&ceiling_rad))
+        {
+            return Err(ElevationError::OutOfRange {
+                floor_rad,
+                ceiling_rad,
+            });
+        }
+        if ceiling_rad <= floor_rad {
+            return Err(ElevationError::Empty {
+                floor_rad,
+                ceiling_rad,
+            });
+        }
+        Ok(())
+    }
+
+    /// Whether the band's ceiling is the zenith, so the sensor sees straight up.
+    #[must_use]
+    pub fn reaches_zenith(&self) -> bool {
+        self.ceiling_rad >= std::f64::consts::FRAC_PI_2
+    }
+
+    /// Whether `elevation_rad` lies in the band, both limits included. A non-finite
+    /// elevation is in no band.
+    #[must_use]
+    pub fn contains(&self, elevation_rad: f64) -> bool {
+        elevation_rad.is_finite()
+            && elevation_rad >= self.floor_rad
+            && elevation_rad <= self.ceiling_rad
+    }
 }
 
 /// Bearing of the horizontal direction `(east, north)`: radians clockwise from north, in
@@ -438,6 +576,76 @@ mod tests {
             },
         );
         assert!((placed.boresight() - (90.0_f64.to_radians() + east)).abs() < 1e-12);
+    }
+
+    /// GAP-158: the vertical at the origin is the frame's `u`, and away from it the vertical
+    /// leans away from the origin by the angle between the two normals -- about 0.009
+    /// degree per kilometre, so a tenth of a degree at about 11 km.
+    #[test]
+    fn the_vertical_leans_away_from_the_origin_by_the_arc_between_them() {
+        let frame = LocalFrame::new(origin());
+        let at_origin = frame.vertical_at(origin());
+        assert!(at_origin[0].abs() < 1e-7 && at_origin[1].abs() < 1e-7);
+        assert!((at_origin[2] - 1.0).abs() < 1e-12);
+
+        let east = Geodetic {
+            lon_rad: origin().lon_rad + 0.5_f64.to_radians(),
+            ..origin()
+        };
+        let v = frame.vertical_at(east);
+        let length = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+        assert!((length - 1.0).abs() < 1e-12, "a unit vector");
+        assert!(
+            v[0] > 0.0 && v[1].abs() < v[0] * 0.05,
+            "it leans east: {v:?}"
+        );
+        let enu = frame.to_enu(east);
+        let distance_km = enu[0].hypot(enu[1]) / 1000.0;
+        let tilt_deg = v[2].acos().to_degrees();
+        let per_km = tilt_deg / distance_km;
+        assert!(
+            (per_km - 0.009).abs() < 0.0005,
+            "{tilt_deg} deg over {distance_km} km is {per_km} deg/km"
+        );
+    }
+
+    /// GAP-158, D-111: a band is refused unless both limits are elevations and the ceiling
+    /// is above the floor; the band of a sensor that states none reaches the zenith.
+    #[test]
+    fn an_elevation_band_is_refused_unless_it_is_a_band() {
+        let deg = f64::to_radians;
+        let band = ElevationBand::new(deg(-2.0), deg(60.0)).expect("a legal band");
+        assert!(band.contains(deg(-2.0)) && band.contains(deg(60.0)) && band.contains(0.0));
+        assert!(!band.contains(deg(-2.1)) && !band.contains(deg(60.1)));
+        assert!(!band.contains(f64::NAN));
+        assert!(!band.reaches_zenith());
+        assert!(ElevationBand::below_zenith(deg(-1.0)).reaches_zenith());
+        assert!(ElevationBand::new(deg(-90.0), deg(90.0)).is_ok());
+
+        assert_eq!(
+            ElevationBand::new(f64::NAN, 1.0),
+            Err(ElevationError::NonFinite)
+        );
+        assert_eq!(
+            ElevationBand::new(0.0, f64::INFINITY),
+            Err(ElevationError::NonFinite)
+        );
+        assert!(matches!(
+            ElevationBand::new(deg(-91.0), 0.0),
+            Err(ElevationError::OutOfRange { .. })
+        ));
+        assert!(matches!(
+            ElevationBand::new(0.0, deg(91.0)),
+            Err(ElevationError::OutOfRange { .. })
+        ));
+        assert!(matches!(
+            ElevationBand::new(deg(10.0), deg(10.0)),
+            Err(ElevationError::Empty { .. })
+        ));
+        assert!(matches!(
+            ElevationBand::new(deg(10.0), deg(5.0)),
+            Err(ElevationError::Empty { .. })
+        ));
     }
 
     /// A sanity check against a distance anyone can verify: 0.01 degrees of latitude is

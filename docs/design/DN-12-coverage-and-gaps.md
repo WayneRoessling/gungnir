@@ -202,3 +202,59 @@ sensor rather than one for the baseline, and elevation measured against the sens
 vertical rather than the frame's. The verification is
 `gungnir-analytics/tests/coverage_accuracy.rs`; the row itself is unchanged, and walking
 it is the owner's.
+
+## 10. Amendment 2: a sensor's own elevation band, against its own vertical
+
+Raised 2026-09-26 by GAP-158, under D-111.
+
+Amendment 1 left every sensor credited from the baseline's one
+`analytics.coverage_min_elevation_rad` up to the zenith, measured against the frame's
+vertical: a radar with a 2 degree mask and a camera looking up at 30 degrees had the same
+floor, nothing had a ceiling, so a radar's cone of silence overhead was counted as
+covered, and a sensor 11 km or more from the origin had its limit off by more than the
+Coverage accuracy row's 0.1 degree.
+
+1. **`gungnir_model::ElevationBand`**: a floor and a ceiling, radians above the horizon at
+   the sensor, both in `[-π/2, π/2]` with the ceiling above the floor. A ceiling of `π/2`
+   is the zenith, which is no ceiling. **A band is stated whole**: a floor and a ceiling
+   are one survey of one sensor, and composing a floor from one place with a ceiling from
+   another could make an empty band nobody stated.
+2. **Declared on the sensor, optionally on a laydown placement**, as amendment 1 did the
+   sector: `SensorConfig.elevation_band` and `SensorPlacement.elevation_band`, both absent
+   by default. **The precedence, highest first: the placement's band, the declaration's,
+   then the baseline's `coverage_min_elevation_rad` as the floor with the zenith as the
+   ceiling** (`gungnir_analytics::band_or_default`). The last is exactly what every sensor
+   had before this amendment, so every baseline written before it means what it meant.
+   Validation refuses a band with a non-finite limit, a limit outside `[-π/2, π/2]`, or a
+   ceiling not above its floor, naming the sensor, or the laydown and the placement.
+3. **Measured against the sensor's own vertical.** `LocalFrame::vertical_at` gives the
+   ellipsoid normal at a position as a unit vector in the frame -- the frame's `u` at the
+   origin, leaning about 0.009 degree per kilometre away from it -- taken numerically from
+   the frame's own conversion as `true_north_at` is. `CoverageVolume` gains
+   `max_elevation_rad` and `vertical` (serde defaults `π/2` and `[0, 0, 1]`, so a volume
+   serialized before them reads as it did), and `covers` measures elevation against
+   `vertical` and bearing in the plane square to it. A vertical that is no direction covers
+   nothing but the sensor's own position: the direction that shows a gap rather than
+   hides one.
+4. **One place builds a volume from a declaration**, `gungnir_analytics::volume_in_frame`:
+   position, sector turned by the convergence, band against the vertical, all where the
+   sensor stands. `volume_of` (the registry's path and DN-13's candidates) and PN-16's
+   `laydown_coverage_volumes` both call it, so PN-11's gap report, PN-16, DN-13's
+   recommendations and the node's `/v2|v3/coverage` answer place a sensor identically.
+   PN-11's rings still draw the horizontal footprint to the nominal range; the band
+   changes which approach samples are counted, which is what the gap layer draws.
+5. **A laydown rehearsal honours it too** (DN-32 §15): on top of the detection model's own
+   altitude band, before any draw.
+
+The verification is `gungnir-analytics/tests/coverage_accuracy.rs`: the frame-stated
+fixture now states a ceiling on five of its six volumes and recovers floor and ceiling;
+the geodetic fixture's floor is recovered against each sensor's own vertical; and a third
+test declares bands on sensors up to 47 km from the origin, runs them through the
+registry, recovers every floor and ceiling in a frame anchored at the sensor within the
+criterion (worst 0.055 degree), and shows that the same volume measured against the
+frame's vertical misses it by 0.37 degree at the floor and 0.40 at the ceiling. PN-16's
+path is `gungnir-app/tests/planning_panel.rs`'s
+`a_laydown_counts_coverage_only_inside_the_sensor_s_elevation_band`, and the node's
+coverage answer `gungnir-node`'s
+`the_coverage_answer_credits_a_sensor_with_its_declared_elevation_band`. The row itself is
+unchanged, and walking it is the owner's.

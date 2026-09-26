@@ -697,7 +697,7 @@ it; `docs/design/DN-31-node-approval-queue.md` plans the change and GAP-130 to G
 | `gungnir-identity`, `gungnir-identification`, `gungnir-assessment`, `gungnir-decision`, `gungnir-modelops` | Yes | Yes |
 | `gungnir-policy`, `gungnir-command` | Yes, local operator approval | `gungnir-policy` only, on every fresh plan. A node runs no approval queue: plans are decided on a desktop, and its decision route refuses with 501, so no decision reaches a node's record (GAP-129) |
 | `gungnir-collab` | Linked by no binary. The arbitration rule it re-exports lives in `gungnir_model::arbitration`, which the desktop's reconciliation applies (D-53) | Linked by no binary |
-| `gungnir-resilience` | Reconciliation on reconnect. Its `StoreAndForwardQueue` has no caller: the desktop's outbox is `gungnir-remote`'s (GAP-121) | Not linked: the node accepts forwarded detections through `gungnir-api` and serves the history a desktop reconciles against |
+| `gungnir-resilience` | Reconciliation on reconnect. Its `StoreAndForwardQueue` has no caller and is kept, unused, for a future use (GAP-121, D-110): the desktop's outboxes are `gungnir-remote`'s | Not linked: the node accepts forwarded detections through `gungnir-api` and serves the history a desktop reconciles against |
 | `gungnir-security` | Operator login and local audit log | Authentication and authorization for every API caller; central audit log |
 | `gungnir-api` | Optional loopback | Yes, the node's only external surface |
 | `gungnir-observability` | Local health panel | Node health endpoint, watchdogs |
@@ -717,8 +717,11 @@ A connected desktop that loses its node must keep operating
 - Detections recorded while disconnected are store-and-forward: `RemoteTrackingService`
   queues them (bounded by `OUTBOX_CAPACITY`, oldest dropped and counted) and the link
   forwards them once the node answers. Operator decisions and audit entries stay on the
-  desktop's own journal. `gungnir_resilience::StoreAndForwardQueue` has no caller
-  (GAP-121).
+  desktop's own journal. Each path that forwards across an outage has its own queue
+  built for what it carries -- this detection outbox; the exchange outbox, one set per
+  item (DN-18 §13); the outage's decisions as one batch rebuilt from the journal (DN-31
+  §15) -- and `gungnir_resilience::StoreAndForwardQueue` is none of them: it has no
+  production caller and is kept for a future use (GAP-121, D-110).
 - Reconciliation: `gungnir_resilience::reconcile` merges the local and node journals by
   mission time, drops exact duplicates, and reports conflicting decisions on the same
   plan, an expiry against a decision included. D-03's rule, `gungnir_model::arbitration`

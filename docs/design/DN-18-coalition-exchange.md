@@ -397,7 +397,10 @@ stale handoff sets stayed -- and on reconnection it would post every obsolete se
 `gungnir_resilience::StoreAndForwardQueue` (GAP-121) is that first-in-first-out rule over
 `Envelope`s; adopting it here would take the wrong rule and a manifest edge
 `gungnir-remote` to `gungnir-resilience` that `../../ARCHITECTURE.md` §7.1 does not show,
-for a queue that holds a different type. GAP-121 is left where it was.
+for a queue that holds a different type. GAP-121 is left where it was. (Closed
+2026-09-26 by the owner's D-110: the queue is kept for a future use and documented as
+having no production caller, with this outbox named on it as one of the paths that has
+its own.)
 
 **What else the reconnection edge publishes.** §12's edge published handoffs alone. It now
 publishes this console's launch warnings with them, by the same rule -- the whole set,

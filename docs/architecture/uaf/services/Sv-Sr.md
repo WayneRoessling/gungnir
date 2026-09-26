@@ -20,8 +20,8 @@ Status: first draft, 2026-09-04.
 | SV-16 Approval workflow | SV-15 verdicts; SV-21 (authorization); SV-22 (audit, pending wiring) | RS-command |
 | SV-18 Decision support | SV-17, SV-15 | RS-decision |
 | SV-23 API v1 | SV-01, SV-02, SV-03, SV-20, SV-21; serves IE-22 to IE-25 | RS-api, RS-node, RS-model |
-| SV-30 Remote backends | SV-23 as a client; SV-25 for the outbox; implements SV-01 and SV-02 traits remotely | RS-remote |
-| SV-25 Store-and-forward and reconciliation | SV-04 (journals to merge); SV-26 (arbitration rule) | RS-resilience |
+| SV-30 Remote backends | SV-23 as a client; its own outboxes (GAP-121); implements SV-01 and SV-02 traits remotely | RS-remote |
+| SV-25 Reconciliation on reconnect | SV-04 (journals to merge); SV-26 (arbitration rule) | RS-resilience |
 | SV-26 Shared picture and arbitration | SV-03 envelopes; SV-16 decisions; SV-21 roles | RS-collab |
 | SV-27 Operator workflow | SV-21 (role layouts); SV-24 (alerts) | RS-workflow |
 | SV-28 Replay | SV-04, SV-03, SV-05 | RS-replay |

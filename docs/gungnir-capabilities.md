@@ -612,15 +612,16 @@ rehearsal replayed the recording's own detections whichever laydown was selected
 comparison between laydowns rested on coverage arithmetic alone (GAP-105).
 
 *How it's verified:* The generator, now calling this crate, still reproduces all ten
-committed sample sets byte for byte; re-observing each set with its own sensors matches
+plan-07 sample sets byte for byte, and TT-11, round 1's own recording, with them; re-observing each set with its own sensors matches
 the recording statistically; moving a sensor moves only the detections its geometry
 changes; and five containment checks keep a re-observed detection out of every live path.
 The six rows are **Draft** in `verification-capability-table.md` §2.
 
 *Definition of done:* Draft (DN-32 §10); not agreed.
 
-*Data used:* The ten committed sample sets and their re-observation sidecars; round 1's
-baseline over a raid its test writes (GAP-147).
+*Data used:* The eleven committed sample sets and their re-observation sidecars; round
+1's baseline over TT-11, the committed raid down round 1's own declared approach (GAP-147,
+D-112).
 
 *Risk if wrong:* A synthetic detection mistaken for a sensor's. That is why every
 observation is marked, a live gateway refuses a marked one, and no crate but the
@@ -1370,14 +1371,17 @@ tie. This default rule is working but not yet locked (`ARCHITECTURE.md` §10).
 
 **Resilience & Disconnected Operations** — `gungnir-resilience` — *Medium*
 
-*What it does:* Store-and-forward of envelopes while a node is unreachable,
-checkpoints for recovery, and reconciliation of a desktop's offline journal with
-the node's when the link returns (`ARCHITECTURE.md` §8.4).
+*What it does:* Reconciliation of a desktop's offline journal with the node's when
+the link returns, and checkpoints for recovery (`ARCHITECTURE.md` §8.4). What a
+desktop records while cut off is forwarded by queues built for each path, not by this
+crate: `gungnir-remote`'s detection and exchange outboxes and the outage's decision
+batch (DN-31 §15).
 
-*Status:* Implemented and tested: a bounded queue that drops and counts the oldest
-when full, and `reconcile`, which merges by mission time, drops exact duplicates,
-and reports conflicting decisions rather than resolving them. Mid-session failover
-waits on the API transport's heartbeat.
+*Status:* Implemented and tested: `reconcile`, which merges by mission time, drops
+exact duplicates, and reports conflicting decisions for the arbitration rule and a
+person to settle. It also holds `StoreAndForwardQueue`, a bounded envelope queue that
+drops and counts the oldest when full; **it has no production caller** and is kept for
+a future use by the owner's decision (GAP-121, D-110).
 
 **Deployment Topology, Scalability & Performance Budgets, Software Assurance &
 Release Governance** — *decided or documented, no crate needed*
@@ -1511,7 +1515,7 @@ calls it in its tick loop.
 | `gungnir-security` | Productization / Secure-Operate | Roles, authorization, audit | Critical | Authorizer and audit implemented and tested; authentication trait only |
 | `gungnir-api` | Productization / Secure-Operate | v1 external contract | High | Types and ICD; transport pending |
 | `gungnir-observability` | Productization / Secure-Operate | Health snapshot, alert correlation, watchdog | High | Implemented and tested; watchdog wired in the node |
-| `gungnir-resilience` | Productization / Secure-Operate | Store-and-forward, checkpoints, reconciliation | Medium | Implemented and tested |
+| `gungnir-resilience` | Productization / Secure-Operate | Reconciliation, checkpoints; an envelope queue kept unused (GAP-121) | Medium | Implemented and tested |
 | `gungnir-collab` | Productization / Secure-Operate | Shared picture sync, authority arbitration | Medium | Implemented and tested |
 | `gungnir-workflow` | Productization / Secure-Operate | Role workspaces, alert lifecycle, cases | Medium | Implemented and tested |
 | `gungnir-replay` | Productization / Validate | Deterministic session playback | Lower | Implemented and tested |

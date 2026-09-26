@@ -31,6 +31,7 @@ fn desktop(name: &str, anomaly: AnomalySettings) -> (AppState, std::path::PathBu
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         }],
         ..ConfigBaseline::default()
     };

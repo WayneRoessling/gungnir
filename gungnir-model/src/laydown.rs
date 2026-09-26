@@ -56,6 +56,16 @@ pub struct SensorPlacement {
     /// re-aims it says so here; one that moves it without re-aiming keeps its boresight.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub azimuth_sector: Option<crate::AzimuthSector>,
+    /// The elevations this placement lets the sensor see, when they differ from the
+    /// sensor's own declaration (GAP-158, D-111): a floor and a ceiling against the local
+    /// vertical at the placement.
+    ///
+    /// **Absent means the declared sensor's band**, and a sensor that declares none has the
+    /// baseline's `analytics.coverage_min_elevation_rad` as its floor and the zenith as its
+    /// ceiling. A placement that states a band states the whole band: it replaces the
+    /// declaration's, never half of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elevation_band: Option<crate::ElevationBand>,
 }
 
 /// Where one effector sits in a laydown.
@@ -112,8 +122,10 @@ impl Laydown {
     }
 }
 
-/// One of the ten committed test-track scenarios (`docs/test-tracks/scenario-library.md`),
-/// naming which fixture a rehearsal replayed a laydown against (GAP-045).
+/// One of the eleven committed test-track scenarios (`docs/test-tracks/scenario-library.md`),
+/// naming which fixture a rehearsal replayed a laydown against (GAP-045): the ten plan-07
+/// scenarios, one per mission vignette, and TT-11, usability round 1's raid down its own
+/// declared approach, which a round-1 laydown rehearsal re-observes (GAP-147, D-112).
 ///
 /// Lives here rather than beside the rehearsal harness that reads the fixture files,
 /// because `gungnir-ui` draws PN-16's rehearsal control and picks this from a list, and
@@ -124,8 +136,8 @@ impl Laydown {
 pub struct TestTrackNumber(pub u8);
 
 impl TestTrackNumber {
-    /// The ten committed scenarios, in order, for a picker to offer.
-    pub const ALL: [TestTrackNumber; 10] = [
+    /// The eleven committed scenarios, in order, for a picker to offer.
+    pub const ALL: [TestTrackNumber; 11] = [
         TestTrackNumber(1),
         TestTrackNumber(2),
         TestTrackNumber(3),
@@ -136,6 +148,7 @@ impl TestTrackNumber {
         TestTrackNumber(8),
         TestTrackNumber(9),
         TestTrackNumber(10),
+        TestTrackNumber(11),
     ];
 
     #[must_use]
@@ -154,6 +167,7 @@ mod tests {
             position_enu: position,
             mode: SensorMode::Search,
             azimuth_sector: None,
+            elevation_band: None,
         }
     }
 
