@@ -33,7 +33,7 @@ Diagram: [`If-Cn.puml`](If-Cn.puml).
 | Intercept service → bus | IE-14 PlanProposed carrying IE-04 | IE-04 |
 | Policy → workflow | IE-19 PolicyVerdict with the plan | IE-19 |
 | Workflow → panel | pending approval with rationale (IE-32 says which roles see it) | IE-04, IE-19 |
-| Decider → workflow | on the desktop a trait call; from a connected desktop IE-23 ApprovalRequest over the API (SD-06, planned) | IE-23 |
+| Decider → workflow | on the desktop a trait call; from a desktop linked to a node IE-23 DecisionRequest on a queue item over the API (SD-06, `POST /v3/queue/{item}/decision`, GAP-132) | IE-23 |
 | Workflow → record | IE-18 DecisionRecord; IE-16 Decided on the bus; IE-20 AuditEntry | IE-18, IE-16, IE-20 |
 | Record → effector | handoff message (planned, GAP-040) with the decision and the track's provenance | pending |
 | Journal → report | IE-28 with every figure traced to IE-12 sequence numbers | IE-28 |

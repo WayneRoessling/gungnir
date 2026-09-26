@@ -5,8 +5,11 @@
 # to SVG under docs/architecture/uaf/rendered/, mirroring the folder structure.
 #
 # PlantUML: uses `plantuml` on PATH if present, else the plantuml/plantuml container
-# through Docker. Mermaid: uses `mmdc` on PATH if present, else
-# `npx @mermaid-js/mermaid-cli`. Exits non-zero if any diagram fails.
+# through Docker, pinned to the version the committed renders came from (D-79): the
+# layout engine is part of what a render looks like, and every SVG records the
+# PlantUML version that drew it (`<?plantuml ...?>`). Mermaid: uses `mmdc` on PATH if
+# present, else `npx @mermaid-js/mermaid-cli`. Exits non-zero if any diagram fails.
+$plantumlImage = "plantuml/plantuml:1.2026.8"
 $ErrorActionPreference = "Continue"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $out = Join-Path $here "rendered"
@@ -21,7 +24,7 @@ function Render-Puml($src) {
     } elseif (Get-Command docker -ErrorAction SilentlyContinue) {
         $relDir = (Split-Path -Parent $rel) -replace "\\", "/"
         $relFile = $rel -replace "\\", "/"
-        & docker run --rm -v "${here}:/work" -w /work plantuml/plantuml -tsvg -o "/work/rendered/$relDir" $relFile
+        & docker run --rm -v "${here}:/work" -w /work $plantumlImage -tsvg -o "/work/rendered/$relDir" $relFile
     } else {
         Write-Error "no plantuml or docker available for $rel"; $script:failed = 1; return
     }

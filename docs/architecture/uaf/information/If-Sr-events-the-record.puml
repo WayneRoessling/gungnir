@@ -1,7 +1,6 @@
 @startuml If-Sr-events-the-record
 title If-Sr information structure: Events & the record
 left to right direction
-!pragma layout smetana
 hide empty members
 skinparam classAttributeIconSize 0
 enum "TrackingEvent" as TrackingEvent <<InformationElement>> {

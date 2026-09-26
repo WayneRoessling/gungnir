@@ -1,7 +1,6 @@
 @startuml If-Sr-policy-authority-settings
 title If-Sr information structure: Policy, authority & settings
 left to right direction
-!pragma layout smetana
 hide empty members
 skinparam classAttributeIconSize 0
 class "AnomalySettings" as AnomalySettings <<InformationElement>> {

@@ -1,6 +1,5 @@
 @startuml If-Sr-overview
 title If-Sr information structure: overview
-!pragma layout smetana
 skinparam componentStyle rectangle
 left to right direction
 component "Core identifiers, frames & quality" as core_identifiers_frames_quality <<Group>> [[If-Sr-core-identifiers-frames-quality.svg]]
