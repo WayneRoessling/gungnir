@@ -636,6 +636,11 @@ mod tests {
         ) {
             const LEVELS: [f64; 6] = [0.0, 0.1, 0.2, 1.0, 1.3, -0.7];
             let reward = DMatrix::from_fn(resources, tracks, |r, t| LEVELS[cells[r * 5 + t]]);
+            // A schedule of nothing but "no" is a solve nobody lets run, which
+            // `a_solve_refused_every_slice_waits_and_then_finishes` covers; here every
+            // schedule has at least one "yes" in its cycle, so the solve must finish.
+            let mut stops = stops;
+            stops.push(false);
             let expected = reference_solve(&reward, horizon);
             let mut solve = ExactSolve::new(&reward, horizon).expect("valid");
             let mut asked = 0_usize;
