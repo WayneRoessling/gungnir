@@ -686,7 +686,11 @@ fn one_scenario_through_both_backends_leaves_both_desktops_the_same_picture() {
         u64::try_from(observations).expect("fits"),
         "A's gateway did not take the whole feed: {ingested:?}"
     );
-    assert_eq!(b.ingest.stats(), ingested, "the two desktops' gateways disagree");
+    assert_eq!(
+        b.ingest.stats(),
+        ingested,
+        "the two desktops' gateways disagree"
+    );
     until(
         "every detection B forwarded to be taken by the node's gateway",
         || {

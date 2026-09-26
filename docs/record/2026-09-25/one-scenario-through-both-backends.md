@@ -60,6 +60,13 @@ it.
 Each of the three was checked by undoing its fix and running the test: each undo fails the
 test at the comparison it concerns, and nothing else.
 
+**A node test waited on a pause.** Running `gungnir-node/tests/approval_queue.rs` beside
+this work, `a_pre_delegated_item_still_expires_and_escalates` failed twice by indexing an
+empty queue: the harness read the node's published queue after a fixed 20 ms `settle()`,
+a guess at when the loop thread would next run, and under load it had not. `settle` now
+waits for the loop to finish a whole tick after the call, on a counter the loop keeps --
+the rule GAP-136 set for the rehearsal, applied to the harness.
+
 ## How the comparison is judged (D-85)
 
 Tracks, retained bearings, PN-09's bearing counters, the health strip, the withheld
