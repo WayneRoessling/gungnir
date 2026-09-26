@@ -136,6 +136,9 @@ fn populated_pipeline_stats() -> PipelineStatsView {
     PipelineStatsView {
         accepted: 120,
         too_late: 3,
+        reordered: 7,
+        accepted_late: 0,
+        not_finite: 1,
         epochs: 40,
         associated: 90,
         initiated: 5,

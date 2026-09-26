@@ -265,7 +265,7 @@ fn a_bearing_with_no_stated_error_is_refused_and_counted() {
 #[test]
 fn a_bearing_outside_the_reorder_horizon_is_refused() {
     let settings = PipelineSettings::default();
-    let horizon = settings.reorder_horizon_s;
+    let horizon = settings.bearing_window_s();
     let mut pipeline = FusionPipeline::new(settings);
     for k in 0..6 {
         let _ = pipeline.push(position(f64::from(k), [1_000.0, 1_000.0, 0.0]));

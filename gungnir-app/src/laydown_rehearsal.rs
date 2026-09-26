@@ -656,7 +656,8 @@ pub fn run(
     }
     if !flushed {
         let counters = state.tracking.pipeline_stats();
-        let taken = counters.accepted + counters.too_late + counters.bearings_offered;
+        let taken =
+            counters.accepted + counters.too_late + counters.not_finite + counters.bearings_offered;
         let submitted = state.ingest.stats().accepted;
         drop(state);
         let _ = std::fs::remove_dir_all(&dir);

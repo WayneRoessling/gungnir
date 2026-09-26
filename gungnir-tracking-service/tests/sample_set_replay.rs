@@ -110,6 +110,17 @@ fn inversion_s(views: &[DetectionView]) -> f64 {
     worst
 }
 
+/// Settings whose late-data bound covers a latency spread twice over, plus a second: the
+/// deployment configuring for its sensors (GAP-114's `LateDataPolicy`).
+fn buffered_for(spread: f64) -> PipelineSettings {
+    PipelineSettings {
+        late_data: gungnir_fusion_async::LateDataPolicy::BufferAndReorder {
+            max_lateness_s: spread.mul_add(2.0, 1.0),
+        },
+        ..PipelineSettings::default()
+    }
+}
+
 #[test]
 fn every_committed_sample_set_replays_through_the_service_to_the_offline_result() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -144,10 +155,7 @@ fn every_committed_sample_set_replays_through_the_service_to_the_offline_result(
             .iter()
             .map(|v| v.receipt_time.0 - v.source_time.0)
             .fold(0.0f64, f64::max);
-        let settings = PipelineSettings {
-            reorder_horizon_s: spread.mul_add(2.0, 1.0),
-            ..PipelineSettings::default()
-        };
+        let settings = buffered_for(spread);
 
         // The offline result: the same pipeline, the same settings, source order.
         // Every sample set is a position feed, so every view converts; DN-27 §4's

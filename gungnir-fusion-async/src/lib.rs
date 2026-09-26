@@ -20,10 +20,13 @@ pub mod sync;
 mod loom_model;
 
 pub use dense_group::{DenseGroupEstimate, DenseGroupFilter, DenseGroupSettings, GroupComponent};
+/// The late-data policy [`PipelineSettings::late_data`] carries (GAP-114). Owned by
+/// `gungnir-core`; re-exported so a caller naming the settings can name the policy too.
+pub use gungnir_core::LateDataPolicy;
 pub use pipeline::{
     run_batch, BaselineError, BearingOutcome, BearingRefusal, FilterSelection, FusionPipeline,
-    ImmBaselineFields, PipelineSettings, PipelineStats, PushError, RetainedBearing, TimedTrack,
-    UnsupportedFilter, IMPLEMENTED_FILTERS,
+    ImmBaselineFields, InvalidLateData, PipelineSettings, PipelineStats, PushError,
+    RetainedBearing, TimedTrack, UnsupportedFilter, IMPLEMENTED_FILTERS, MIN_BEARING_WINDOW_S,
 };
 
 // The channel types come from `crate::sync` rather than straight from
@@ -267,7 +270,13 @@ pub async fn ingest_with(
                 // however long past its own `until_s` that was.
                 pipeline.expire_bearings(det.timestamp_s);
                 if let Err(err) = pipeline.push(det) {
-                    tracing::warn!(%err, "detection refused by the reorder buffer");
+                    // Counted in the stats this loop publishes (GAP-114); the log line is
+                    // for whoever reads the node's log, not the operator's only record.
+                    tracing::warn!(
+                        %err,
+                        policy = ?pipeline.settings().late_data,
+                        "detection refused by the reorder buffer"
+                    );
                 }
                 if pipeline.run_ready() > 0 && out.send(snapshot_output(&pipeline)).is_err() {
                     tracing::warn!("track consumer is gone; stopping the pipeline");

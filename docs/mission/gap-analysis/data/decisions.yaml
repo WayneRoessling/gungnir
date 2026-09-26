@@ -2351,3 +2351,56 @@
     restarted console shows no report, and republishing one nobody there can see would put
     a product before partners that nobody answers for. GAP-146's outbox rules are
     unchanged. See `../../record/2026-09-26/the-report-and-every-float-reach-the-partner.md`.
+- id: D-98
+  decision: Where the late-data policy is applied, and where it is set
+  question: >-
+    `gungnir_time::LateDataPolicy` had no consumer: the fusion pipeline decided every late
+    detection by a reorder horizon of its own that no baseline set, while the clock-skew
+    estimate judged sources against the policy (GAP-114). Should the ingest gateway or the
+    fusion pipeline take the policy, or should a decision record that the reorder horizon
+    is the policy and re-scope the `gungnir-time` row? And where does a deployment set it?
+  raised_in: "GAP-114"
+  decider: Owner
+  unblocks: GAP-114
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **The fusion pipeline applies
+    it; the baseline sets it once, in a new `time` section, for the pipeline and the clock
+    authority both.** Late means earlier than data already taken, which only the pipeline
+    knows; lateness is measured in source time behind the newest detection taken, so the
+    bound holds whatever the traffic. `BufferAndReorder` reorders inside its bound and
+    drops beyond it or behind the processed cursor, `Reject` holds nothing and drops
+    anything out of order, `AcceptAsIs` applies a late detection at the front; each outcome
+    is counted, on the wire and on PN-09. The type moved to `gungnir-core` and is
+    re-exported upward, since the pipeline sits below `gungnir-time`; no edge was added.
+    Rejected: the gateway (it knows receipt time, not what has been processed, and receipt
+    minus source time mixes transit delay with clock error, which the skew estimate
+    reports on its own); re-scoping the row (it keeps a policy nobody can set and a horizon
+    nobody governs); and a field of the algorithm baseline (the policy is time discipline,
+    in force whether or not a candidate is promoted, and the clock reads it too). See
+    `../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`.
+- id: D-99
+  decision: Which late-data policies a baseline may choose, and the default
+  question: >-
+    Once a baseline sets the late-data policy (D-98), which variants and bounds may a
+    deployment choose, and what does a baseline that names none run? `AcceptAsIs` is
+    documented as replay and testing only, and the pipeline's horizon (one second) and the
+    clock's default (two seconds) disagreed.
+  raised_in: "GAP-114"
+  decider: Owner
+  unblocks: GAP-114
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **`buffer-and-reorder` with a
+    bound above zero and at most ten seconds, or `reject`; absent means a one-second
+    buffer.** `accept-as-is` is refused by validation, since it folds a stale detection
+    into a current estimate at full weight; harnesses still set it on the pipeline
+    directly. One second is what every deployment ran, so an upgrade changes nothing the
+    picture does, and the clock's default follows it so a source is called out of sync at
+    the lag its detections start being dropped. Ten seconds is past every latency the
+    test-track sensor models produce, and the buffer delays the whole picture by its bound;
+    longer latencies want retrodiction, not a longer buffer. Rejected: allowing
+    `accept-as-is` with a warning (a deployment would be one edit from silent track
+    corruption), keeping two seconds as the default (it doubles every track's delay on
+    upgrade), and no ceiling (a slip of units would stall the picture). See
+    `../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`.

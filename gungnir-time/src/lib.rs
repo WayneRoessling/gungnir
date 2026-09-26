@@ -31,16 +31,14 @@ impl SourceTime {
 }
 
 /// What to do with an observation whose source time is earlier than data already
-/// processed.
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum LateDataPolicy {
-    /// Drop it and report it.
-    Reject,
-    /// Hold it in the out-of-sequence buffer up to `max_lateness_s`, then drop.
-    BufferAndReorder { max_lateness_s: f64 },
-    /// Process it as if it were in order (replay and testing only).
-    AcceptAsIs,
-}
+/// taken.
+///
+/// **Owned by `gungnir-core` and re-exported here** (GAP-114, D-98), so the fusion
+/// pipeline -- which sits below this crate and is where a late detection is actually
+/// dropped, reordered or accepted -- names the same type this crate's clock-skew estimate
+/// judges against. Before GAP-114 it was defined here and nothing applied it: the
+/// pipeline ran a reorder horizon of its own that no baseline set.
+pub use gungnir_model::LateDataPolicy;
 
 /// The single authority every ingest adapter, the event journal, and replay all
 /// read mission time from -- live wall-clock in production, deterministic
@@ -204,12 +202,14 @@ impl WallClockAuthority {
 }
 
 impl Default for WallClockAuthority {
-    /// Buffer late data for up to two seconds -- a conservative multi-sensor default
-    /// until `gungnir-config` carries a per-deployment value.
+    /// [`LateDataPolicy::default`]: the one-second buffer the pipeline runs when a
+    /// baseline names no policy. Both binaries build this authority from the baseline's
+    /// `time.late_data` instead (GAP-114), the same value they hand the pipeline, so the
+    /// skew the health panel calls out of sync is the lag at which the pipeline starts
+    /// dropping. Until GAP-114 this default was two seconds while the pipeline dropped at
+    /// one, and a source lagging between the two lost detections with no alert.
     fn default() -> Self {
-        Self::new(LateDataPolicy::BufferAndReorder {
-            max_lateness_s: 2.0,
-        })
+        Self::new(LateDataPolicy::default())
     }
 }
 

@@ -105,7 +105,7 @@ clocks (MT-07), replay must be deterministic (MT-09).
 full / I4 full.
 - Threads: MT-01, MT-06, MT-07, MT-09, MT-10.
 - Provided by: `gungnir-time` (implemented; skew tracking pending),
-`gungnir-fusion-async` (late-data handling pending).
+`gungnir-fusion-async` (the late-data policy, set in the baseline; GAP-114).
 - Considerations: time-source policy for sensors (policy).
 
 **CAP-1.6 Receive early warning, tracks, and reports from peers**
