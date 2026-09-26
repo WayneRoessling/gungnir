@@ -16,7 +16,12 @@ testdata/tracks/samples/TT-01-raid-sample/
   detections.jsonl       one DetectionView per line, every sensor, in generation order
   sensors.json           the sensor set used, with each sensor's id, type, position, and parameters
   events.jsonl           scenario events (sensor loss, electronic attack, link loss) with times
+  entities.json          per entity, what the observation model reads that truth does not carry (§10)
+  environment.json       what each scan was subject to, at the tick it was applied (§10)
 ```
+
+Beside the sets, `testdata/tracks/sensor-models.json` is the JSON export of
+`sensors.yaml` a rehearsal resolves a deployment sensor's detection model from (§11).
 
 Sets under `testdata/tracks/samples/` are small (reduced composition or excerpt)
 and committed; full-size sets are generated on demand into `testdata/tracks/full/`
@@ -87,6 +92,13 @@ One record per entity per truth tick (default 1 s):
 Truth for identity: `class` and `side` are the labels the tracker's identification
 is scored against (plan 09 training labels); they are never in the observation
 stream.
+
+**Every scan saw a truth record.** The generators step each entity once per truth tick
+and then run every scan that fell due since the previous tick against the state just
+stepped to, so a detection with source time `st` was made of the target as the record
+of the first tick at or after `st` has it. That is the rule a rehearsal re-observes the
+truth by (§10), and it is why the sample sets keep their 2 s tick rather than moving to
+the finest scan period: see `../design/DN-32-re-observation-for-a-laydown.md` §12.
 
 ## 5. Sensors: `sensors.json`
 
@@ -159,7 +171,7 @@ would state the same time twice.
  "start_time_of_day":"01:38:00","counts":{"entities":12,"truth_records":7200,"detections":9134,"false_alarms":412,"sensors":5},
  "expected":{"entities_by_class":{"air.owa-prop":10,"air.decoy":2}},
  "provenance":{"policy":"docs/test-tracks/sourcing-and-legal.md","generated":"2026-09-04T00:00:00Z"},
- "validation":{"passed":true,"checks":18,"report":"validation-report.json"}}
+ "validation":{"passed":true,"checks":22,"report":"validation-report.json"}}
 ```
 
 The `seed` and the three version stamps make the set reproducible: the same
@@ -182,6 +194,64 @@ one in `gungnir-interop`; no separate Arrow file is committed.
   change only additively.
 - Generated sets record the versions of the three YAML inputs; a set is stale when
   any of them changes, and `validate_tracks.py` reports it.
+
+## 10. Re-observation sidecars: `entities.json` and `environment.json`
+
+Added 2026-09-25 (GAP-105, `../design/DN-32-re-observation-for-a-laydown.md` §5.2 and
+§5.3). A rehearsal re-observes a set's truth with a laydown's own sensors, so it needs
+what the observation model reads and `truth.jsonl` does not carry. Both generators write
+both files with sorted keys and one-space indentation (`json.dump(..., indent=1,
+sort_keys=True)`), so the Rust generator reproduces them **byte for byte**
+(`gungnir-scenario/tests/sidecar_parity.rs`).
+
+`entities.json`: `{"format": 1, "scenario": "TT-01", "entities": [...]}`, one entry per
+entity the scenario declares, spawned or not:
+
+| Field | Meaning |
+|---|---|
+| `id`, `class`, `platform`, `side` | as in `truth.jsonl` |
+| `spawn_s` | mission seconds at which the entity appears |
+| `occluded_window_s` | `[a, b]` seconds after spawn during which no sensor sees it, or null |
+| `signature` | the class each kind of sensor reads: `rcs`, `ir`, `acoustic` (the platform's, or null), and `emission` (resolved from the platform's emissions and the entity's transponder flags through `sensors.yaml`'s `emission_map`, in that map's order) |
+| `decoy` | a decoy shows a `large` radar cross-section whatever its platform's is |
+| `adsb_intermittent` | the chance an emission sensor misses an intermittent transponder per scan, or null |
+| `ais_spoof_offset_m` | `[east, north]` added to what an emission sensor reports, or null |
+| `surface` | the platform is held at zero altitude, so a detection reports zero height |
+| `destroyed_at_s` | the tick at which another entity destroyed it, or null. Its truth record for that tick may still read alive, because it was written before the strike, and no scan at that tick saw it |
+
+`environment.json`: `{"format": 1, "scenario": "TT-07", "events": [...]}`, each change to
+what the scans were subject to, at the tick `t` the generator applied it, in the order it
+applied them:
+
+| `kind` | Other fields | Meaning |
+|---|---|---|
+| `sea_state` | `value` | the sea state from this tick, for every sensor |
+| `sensor_lost`, `sensor_restored` | `sensor` | the named sensor stops scanning, or resumes and runs every scan it missed |
+| `ea_skew` | `sensor`, `until_s`, `skew_s` | a lagging clock on the named sensor until `until_s`; `skew_s` null means the sensor model's own |
+| `ea_dropout` | `sensor`, `until_s`, `multiplier` | raised dropout and false alarms on the named sensor until `until_s`; `multiplier` null means the sensor model's own |
+
+A rehearsal applies the sea state to every sensor it places. The other four name the
+recording's own sensors, so a rehearsal of a deployment's sensors counts them and does
+not apply them (D-73); they apply by identifier only when the recording's own sensors
+are the ones re-observing, which is how the statistical row checks the model.
+
+## 11. The sensor catalogue export: `testdata/tracks/sensor-models.json`
+
+Added 2026-09-25 (GAP-105, DN-32 §5.4). Every type in `sensors.yaml`, by identifier:
+
+```json
+{"format": 1, "generator": "tt-gen 0.1.0", "source": "docs/test-tracks/sensors.yaml",
+ "sensors_version": "2026-09-04",
+ "types": {"radar.short": {"name": "Short-range counter-UAS radar (site)", "confidence": "assumption",
+   "model": {"signature_key": "rcs", "range_m": {"large": 15000, ...}, "pd_in_range": 0.85, ...}}}}
+```
+
+`model` holds exactly the parameters a set's `sensors.json` carries for that type before
+a scenario's overrides. A deployment sensor names one of these identifiers as its
+`detection_model` (`gungnir-config`'s `SensorConfig`), and a rehearsal refuses by name a
+sensor that names none or names one this file does not hold. The file is written by both
+generators and compared byte for byte (`sidecar_parity.rs`); `validate_tracks.py` checks
+that every sensor type a sample set uses is in it.
 
 ## Traceability
 

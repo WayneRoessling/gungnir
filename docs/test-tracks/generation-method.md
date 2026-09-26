@@ -3,7 +3,12 @@
 Status: first draft, 2026-09-04. How a test-track set is produced, why it is
 reproducible, how classes and scenarios are configured, and how the output is
 validated. The reference generator is `tools/gen_tracks.py`; the `gungnir-scenario`
-generator (GAP-016) must reproduce its output for the same inputs and seed.
+generator (GAP-016) must reproduce its output for the same inputs and seed. Since
+2026-09-25 the Rust generator's observation half lives in `gungnir-sensor-sim`, where a
+laydown rehearsal also uses it to re-observe a committed set's truth with a laydown's own
+sensors (GAP-105, `../design/DN-32-re-observation-for-a-laydown.md`); both generators write
+the two re-observation sidecars and the sensor catalogue's JSON export that rehearsal reads
+(`data-format.md` §10 and §11).
 
 ## 1. Inputs
 

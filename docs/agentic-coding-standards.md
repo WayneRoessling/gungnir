@@ -33,7 +33,11 @@ Within the tracking core the chain is `gungnir-core` / `gungnir-coord` → `gung
 `gungnir-metrics` → `gungnir-fusion-async`, with `gungnir-allocation` depending on
 `gungnir-core` only (it needs a track identifier, which `gungnir-core` owns),
 `gungnir-scenario` feeding test/bench code only (never a normal dependency of a
-production crate; it is a dev-dependency of `gungnir-oracle` and `gungnir-mission`), and
+production crate; it is a dev-dependency of `gungnir-oracle` and `gungnir-mission`),
+`gungnir-sensor-sim` -- the observation half of that generator, which re-observes recorded
+truth and generates none -- a dependency of `gungnir-scenario`, `gungnir-app`'s laydown
+rehearsal and the verifiers and of nothing else
+(`docs/design/DN-32-re-observation-for-a-laydown.md` §6), and
 `gungnir-oracle` / `gungnir-fuzz` depending on whatever they verify but nothing depending
 on them. `gungnir-testkit` depends on no workspace crate at all, so it can be a
 dev-dependency of every core crate without a dev-dependency cycle. The workspace

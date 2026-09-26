@@ -2378,6 +2378,7 @@ mod tests {
                 max_range_m: 5_000.0,
                 control_endpoint: Some("sapient".into()),
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             ..ConfigBaseline::default()
@@ -2467,6 +2468,7 @@ mod tests {
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         }
     }
@@ -2495,6 +2497,7 @@ mod tests {
             max_range_m: 20_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         }
     }
@@ -2733,6 +2736,7 @@ mod tests {
                 max_range_m: 5_000.0,
                 control_endpoint: Some("sapient".into()),
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             origin: Some([0.9, 0.2, 0.0]),
@@ -2913,6 +2917,7 @@ mod tests {
                 max_range_m: 5_000.0,
                 control_endpoint: Some("sapient".into()),
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             origin: Some([0.9, 0.2, 0.0]),
@@ -3110,6 +3115,7 @@ mod tests {
                 max_range_m: 50_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             origin: Some(origin),
@@ -3159,6 +3165,7 @@ mod tests {
                 max_range_m: 50_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             origin: None,
@@ -3193,6 +3200,7 @@ mod tests {
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         }
     }

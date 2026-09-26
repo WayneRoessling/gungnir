@@ -17,7 +17,10 @@ Each set contains `metadata.json` (scenario, seed, input versions, counts,
 provenance, validation result), `truth.jsonl` (per entity per tick, with class and
 side labels), `detections.jsonl` (one `DetectionView` per line, the recorded-feed
 format), `detections-truth.jsonl` (which entity caused each detection line, or none
-for a false alarm), `sensors.json`, `events.jsonl`, and `validation-report.json`.
+for a false alarm), `sensors.json`, `events.jsonl`, `validation-report.json`, and the two
+re-observation sidecars a laydown rehearsal reads, `entities.json` and `environment.json`
+(`data-format.md` §10). `sensor-models.json` beside `samples/` is the JSON export of the
+sensor catalogue a rehearsal resolves a deployment sensor's detection model from (§11).
 
 Everything here is synthetic, generated on the fictional Vell estuary of
 `docs/mission/vignettes.md`; no real site, route, unit, or platform identity

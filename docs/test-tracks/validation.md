@@ -10,7 +10,7 @@ are `tools/validate_tracks.py`; the Rust replay test is
 
 | Check | Rule | Source of the rule |
 |---|---|---|
-| Files present | metadata, truth, detections, sensors, events | `data-format.md` |
+| Files present | metadata, truth, detections, sensors, events, and the two re-observation sidecars, `entities.json` and `environment.json` | `data-format.md` |
 | Versions current | the set's catalogue, classes, sensors, and scenarios versions equal the YAML versions | `data-format.md` §9 |
 | Truth speed within the class envelope | speed at most 1.15 times the class maximum plus 0.5 m/s | `classes.yaml` envelopes |
 | Truth altitude within the class envelope | altitude inside the class band (ballistic classes allowed their apogee) | `classes.yaml` |
@@ -24,6 +24,10 @@ are `tools/validate_tracks.py`; the Rust replay test is
 | Receipt order | the file is in non-decreasing receipt time | `data-format.md` §3 |
 | Out-of-order fraction | per sensor, the fraction of source-time inversions is at most four times the model's fraction plus 0.08 | `sensors.yaml` |
 | Expected entity count | full sets only: the scenario's expected entity count | `scenarios.yaml` |
+| Truth on the truth tick | every truth record's `t` is a whole number of `truth_tick_s`, because a rehearsal re-observes the truth on its own tick and refuses a record off it rather than interpolating | `data-format.md` §10, `../design/DN-32-re-observation-for-a-laydown.md` §12 |
+| Entities described | every entity in the truth has an entry in `entities.json` | `data-format.md` §10 |
+| Environment on the tick | every `environment.json` event sits on a truth tick | `data-format.md` §10 |
+| Sensor types exported | every sensor type the set uses is in `testdata/tracks/sensor-models.json` | `data-format.md` §11 |
 
 A failing check leaves `validation.passed = false` in `metadata.json` and the set
 must not be committed.
@@ -66,6 +70,7 @@ file is 772 KB (`TT-07-sample/truth.jsonl`). Full sets are never committed.
 | Date | Sets | Automated | Replay test | Review |
 |---|---|---|---|---|
 | 2026-09-04 | TT-01 to TT-10 samples | 18 checks each, all passing (`validation-report.json` per set) | `every_sample_set_replays_without_quarantine` passes | none yet |
+| 2026-09-25 | TT-01 to TT-10 samples, with the re-observation sidecars (GAP-105) | 22 checks each, all passing; the four data files unchanged byte for byte, and both generators' sidecars byte-identical (`gungnir-scenario/tests/sidecar_parity.rs`) | passes, unchanged | none yet |
 
 Two failures the checks caught on the first run, both fixed in the models rather than
 by loosening the check: an electronic-attack clock skew pushed the apparent latency

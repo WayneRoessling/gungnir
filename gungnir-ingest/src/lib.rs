@@ -29,6 +29,15 @@ pub enum IngestError {
     Quarantined { sensor: SensorId, reason: String },
     #[error("adapter I/O failed: {0}")]
     Io(String),
+    /// A detection a laydown rehearsal re-observed from a recording reached a gateway not
+    /// built for one (docs/design/DN-32-re-observation-for-a-laydown.md §6, mechanism 2).
+    /// Nothing is wrong with the sensor it names: the detection is synthetic, and a live
+    /// picture never takes one.
+    #[error(
+        "detection from {sensor:?} was {origin}; a live gateway refuses a rehearsal's \
+         detection (DN-32 §6)"
+    )]
+    RehearsalRefused { sensor: SensorId, origin: String },
 }
 
 /// One adapter per external protocol (radar-specific, EO/IR, ADS-B/AIS, lidar,
@@ -121,6 +130,13 @@ pub struct IngestStats {
     /// `accepted`, which claims the detection is being tracked. **The gateway used to
     /// count these as accepted** because the submit call returned nothing.
     pub not_accepted: u64,
+    /// Detections a laydown rehearsal re-observed that reached a gateway not built for
+    /// one, and were refused (DN-32 §6, mechanism 2). **A named subset of
+    /// `quarantined`**, as every refusal is counted there: this counter says which of
+    /// them was a rehearsal's leaking rather than a sensor's fault, and any value above
+    /// zero on a live desktop or node is a defect to chase, since containment's other
+    /// four mechanisms exist so that it stays zero.
+    pub rehearsal_refused: u64,
 }
 
 /// Runs every configured adapter's output through authentication, validation, and
@@ -143,9 +159,15 @@ pub struct IngestGateway {
     last_receipt: Option<MissionTime>,
     last_tick_had_failure: bool,
     expected_adapters: usize,
+    /// Whether a detection carrying `Provenance::rehearsal` may pass (DN-32 §6,
+    /// mechanism 2). Set only by [`IngestGateway::for_rehearsal`]; never by `new`, and
+    /// there is no setter, so a gateway built as a live one stays a live one.
+    admits_rehearsal: bool,
 }
 
 impl IngestGateway {
+    /// A live gateway: it refuses, and counts, every detection a laydown rehearsal
+    /// re-observed (`IngestStats::rehearsal_refused`).
     pub fn new(authenticator: Box<dyn SourceAuthenticator>) -> Self {
         Self {
             adapters: Vec::new(),
@@ -154,7 +176,25 @@ impl IngestGateway {
             last_receipt: None,
             last_tick_had_failure: false,
             expected_adapters: 0,
+            admits_rehearsal: false,
         }
+    }
+
+    /// **A rehearsal's own gateway**, the one construction that admits a detection
+    /// carrying `Provenance::rehearsal` (docs/design/DN-32-re-observation-for-a-laydown.md
+    /// §6, mechanism 2). `gungnir-app`'s laydown rehearsal builds it for the throwaway
+    /// desktop it runs on (mechanism 3); nothing that feeds a live picture may.
+    /// Authentication and validation apply exactly as they do on a live gateway.
+    pub fn for_rehearsal(authenticator: Box<dyn SourceAuthenticator>) -> Self {
+        Self {
+            admits_rehearsal: true,
+            ..Self::new(authenticator)
+        }
+    }
+
+    /// Whether this gateway was built by [`IngestGateway::for_rehearsal`].
+    pub fn admits_rehearsal(&self) -> bool {
+        self.admits_rehearsal
     }
 
     pub fn add_adapter(&mut self, adapter: Box<dyn ProtocolAdapter>) {
@@ -229,6 +269,32 @@ impl IngestGateway {
                 }
             };
             for mut detection in detections {
+                // DN-32 §6, mechanism 2: a detection a laydown rehearsal re-observed from a
+                // recording never reaches a live picture. Checked first, so no
+                // authenticator, validator or sink on a live gateway ever handles one,
+                // and counted as a quarantine like every other refusal, under a name of
+                // its own.
+                if !self.admits_rehearsal {
+                    if let Some(origin) = &detection.provenance.rehearsal {
+                        let err = IngestError::RehearsalRefused {
+                            sensor: detection.sensor,
+                            origin: origin.to_string(),
+                        };
+                        self.stats.quarantined += 1;
+                        self.stats.rehearsal_refused += 1;
+                        tracing::error!(
+                            adapter = adapter.name(),
+                            sensor = detection.sensor.0,
+                            %err,
+                            "a rehearsal's detection reached a live gateway"
+                        );
+                        events.push(IngestEvent::Quarantined {
+                            sensor: detection.sensor,
+                            reason: err.to_string(),
+                        });
+                        continue;
+                    }
+                }
                 let checked = authenticator
                     .authenticate(detection.sensor)
                     .and_then(|()| gateway::validate_detection(&detection, now));
@@ -351,6 +417,7 @@ mod tests {
                 quarantined: 2,
                 adapter_failures: 0,
                 not_accepted: 0,
+                rehearsal_refused: 0,
             }
         );
         assert!(gateway.is_healthy());
