@@ -85,6 +85,11 @@ pub enum Event {
     ///
     /// Additive, so `SCHEMA_VERSION` is not bumped -- the treatment [`Event::Link`] had.
     Retention(gungnir_model::events::RetentionEvent),
+    /// The audit log's head and what verifying it found (GAP-163, D-104), and what
+    /// retention removed from it (GAP-152, D-105).
+    ///
+    /// Additive, so `SCHEMA_VERSION` is not bumped -- the treatment [`Event::Link`] had.
+    Audit(gungnir_model::events::AuditEvent),
     Tracking(TrackingEvent),
     Intercept(InterceptEvent),
     Ingest(IngestEvent),

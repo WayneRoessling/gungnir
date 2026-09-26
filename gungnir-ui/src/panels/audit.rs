@@ -4,11 +4,19 @@
 
 //! PN-20, audit and accounts (GAP-057, GAP-059; DN-23 §7; `WF-20-audit-accounts.puml`).
 //!
-//! Four things, in the order an administrator reads them: who is signed in -- or which
+//! Five things, in the order an administrator reads them: who is signed in -- or which
 //! of the three reasons nobody is, which PN-01 and PN-07 have to tell apart -- the
 //! accounts the store lists, the handoffs this desktop issued and what came back of
-//! them, and the audit log with every attempt in it, failed ones included (DN-23 §5
-//! rule 7).
+//! them, the audit record as a whole, and this run's audit log with every attempt in it,
+//! failed ones included (DN-23 §5 rule 7).
+//!
+//! # The audit record (GAP-163, GAP-152; D-104, D-106)
+//!
+//! Whether the record verifies against the heads the event journal holds, said in the
+//! warning colour when it does not, with each problem naming its file; every segment,
+//! earlier runs' included, with its state; a "Verify now" control; and any earlier
+//! segment opened read only. Nothing here changes a segment: the only act is verifying,
+//! which reads.
 //!
 //! The passphrase field is masked and is cleared by the caller on submit; the panel holds
 //! it only in the draft the caller owns.
@@ -71,7 +79,63 @@ pub struct AuditView<'a> {
     /// Whether the signed-in role may assign roles (GAP-057). The form is drawn
     /// disabled otherwise, with the reason.
     pub can_assign_roles: bool,
+    /// The audit record beyond this run's entries: whether it verifies against the heads
+    /// the journal holds, each segment's state, and an earlier segment read back
+    /// (GAP-163, GAP-152).
+    pub record: AuditRecordView<'a>,
 }
+
+/// One segment of the audit record as PN-20 lists it (GAP-152, D-106).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecordSegmentLine<'a> {
+    /// Its state in words, naming its file (`gungnir_security::SegmentReport::describe`).
+    pub description: &'a str,
+    /// No chain break and no finding.
+    pub sound: bool,
+    /// On the disk, so it can be shown.
+    pub readable: bool,
+}
+
+/// An earlier segment PN-20 is showing, read only (GAP-152, D-106).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShownSegment<'a> {
+    pub segment: &'a str,
+    pub lines: &'a [AuditLine<'a>],
+    /// Its chain as it was read, and anything in it that did not read.
+    pub note: &'a str,
+    pub sound: bool,
+}
+
+/// PN-20's account of the audit record as a whole (GAP-163, D-104; GAP-152, D-106).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AuditRecordView<'a> {
+    /// The last verification in one sentence, with when it ran.
+    pub summary: &'a str,
+    /// Whether it verified. Anything else is drawn in the warning colour, never muted.
+    pub sound: bool,
+    /// Each problem found, naming its file.
+    pub problems: &'a [String],
+    pub segments: &'a [RecordSegmentLine<'a>],
+    pub shown: Option<ShownSegment<'a>>,
+    /// Whether and how old audit segments are purged.
+    pub retention: &'a str,
+}
+
+impl AuditRecordView<'static> {
+    /// Before any verification has run: said, not left blank.
+    pub const NOT_VERIFIED: Self = Self {
+        summary: "The audit record has not been verified yet.",
+        sound: false,
+        problems: &[],
+        segments: &[],
+        shown: None,
+        retention: "",
+    };
+}
+
+/// Most entries of an earlier segment PN-20 draws at once; the rest are named, not
+/// dropped in silence.
+pub const SHOWN_ENTRIES_LIMIT: usize = 2_000;
 
 /// What the administrator has typed. The caller clears the passphrase on submit.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -108,6 +172,102 @@ pub enum SessionAction {
         operator: u64,
         role: &'static str,
     },
+    /// Verify the audit record against the journal now (GAP-163, D-104). A read: it
+    /// changes nothing but the record of having checked.
+    VerifyAuditRecord,
+    /// Show the segment at this position in [`AuditRecordView::segments`], read only.
+    ShowAuditSegment(usize),
+    /// Stop showing it.
+    HideAuditSegment,
+}
+
+/// PN-20's audit-record section: the verification, every segment with its state, and an
+/// earlier segment's entries when one is open (GAP-163, GAP-152).
+fn draw_record(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    record: &AuditRecordView<'_>,
+) -> Option<SessionAction> {
+    let mut action = None;
+    ui.separator();
+    ui.strong("Audit record");
+    let colour = if record.sound {
+        palette.muted_text_color()
+    } else {
+        palette.warning_color
+    };
+    ui.label(RichText::new(record.summary).color(colour));
+    for problem in record.problems {
+        ui.label(RichText::new(problem.as_str()).color(palette.warning_color));
+    }
+    if !record.retention.is_empty() {
+        ui.label(
+            RichText::new(record.retention)
+                .small()
+                .color(palette.muted_text_color()),
+        );
+    }
+    if ui.button("Verify now").clicked() {
+        action = Some(SessionAction::VerifyAuditRecord);
+    }
+    for (index, segment) in record.segments.iter().enumerate() {
+        ui.horizontal(|ui| {
+            let text = RichText::new(segment.description);
+            ui.label(if segment.sound {
+                text
+            } else {
+                text.color(palette.warning_color)
+            });
+            if segment.readable && ui.small_button("Show").clicked() {
+                action = Some(SessionAction::ShowAuditSegment(index));
+            }
+        });
+    }
+    if let Some(shown) = &record.shown {
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.strong(format!("{} (read only)", shown.segment));
+            if ui.small_button("Close").clicked() {
+                action = Some(SessionAction::HideAuditSegment);
+            }
+        });
+        let colour = if shown.sound {
+            palette.muted_text_color()
+        } else {
+            palette.warning_color
+        };
+        ui.label(RichText::new(shown.note).small().color(colour));
+        if shown.lines.len() > SHOWN_ENTRIES_LIMIT {
+            ui.label(
+                RichText::new(format!(
+                    "The newest {SHOWN_ENTRIES_LIMIT} of {} entries are drawn; the file holds \
+                     them all.",
+                    shown.lines.len()
+                ))
+                .small()
+                .color(palette.muted_text_color()),
+            );
+        }
+        egui::Grid::new("audit_record_segment")
+            .striped(true)
+            .show(ui, |ui| {
+                for line in shown.lines.iter().rev().take(SHOWN_ENTRIES_LIMIT) {
+                    draw_audit_line(ui, line);
+                }
+            });
+    }
+    action
+}
+
+fn draw_audit_line(ui: &mut Ui, line: &AuditLine<'_>) {
+    ui.label(format!("{} s", line.mission_time_s));
+    ui.label(
+        line.operator
+            .map_or_else(|| "nobody".to_string(), |o| format!("operator {o}")),
+    );
+    ui.label(line.action);
+    ui.label(line.detail);
+    ui.end_row();
 }
 
 /// The assign-role form (GAP-057, WF-20): an operator number and a role, submitted as an
@@ -375,21 +535,18 @@ pub fn render_audit(
 
     draw_handoffs(ui, palette, view);
 
+    if let Some(a) = draw_record(ui, palette, &view.record) {
+        action = Some(a);
+    }
+
     ui.separator();
-    ui.strong("Audit log");
+    ui.strong("Audit log: this run");
     if view.audit.is_empty() {
         ui.label(RichText::new("Nothing recorded yet.").color(palette.muted_text_color()));
     }
     egui::Grid::new("audit_log").striped(true).show(ui, |ui| {
         for line in view.audit.iter().rev().take(200) {
-            ui.label(format!("{} s", line.mission_time_s));
-            ui.label(
-                line.operator
-                    .map_or_else(|| "nobody".to_string(), |o| format!("operator {o}")),
-            );
-            ui.label(line.action);
-            ui.label(line.detail);
-            ui.end_row();
+            draw_audit_line(ui, line);
         }
     });
     action

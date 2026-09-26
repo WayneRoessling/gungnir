@@ -1355,7 +1355,12 @@ pub fn render_audit(
         .collect();
     let audit = crate::sustainment::audit_lines(state);
     let handoffs = crate::handoffs::rows(state);
-    let view = crate::session::audit_view(state, &accounts, &audit, &handoffs);
+    // GAP-163, GAP-152: the audit record as a whole, from the last verification.
+    let text = crate::audit_record::record_text(state);
+    let segments = crate::audit_record::segment_lines(&text);
+    let shown = crate::audit_record::shown_lines(state);
+    let record = crate::audit_record::record_view(state, &text, &segments, &shown);
+    let view = crate::session::audit_view(state, &accounts, &audit, &handoffs, record);
     gungnir_ui::panels::audit::render_audit(ui, &state.palette, &view, &mut sustainment.sign_in)
         .map(PanelAction::Session)
 }

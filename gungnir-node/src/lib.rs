@@ -15,9 +15,13 @@
 //! [`approval`], the node's side of `gungnir-approval` (edge (y), D-57), and since
 //! GAP-120 [`picture`], the construction of the services that make the node's picture
 //! and what goes out with it, which the backend-switching row's test runs against an
-//! embedded desktop. Everything else -- the journal, the transport's start-up, the feeds,
-//! the account command -- stays in `main.rs`, because moving code here that nothing
-//! outside the binary calls would make the crate's surface a list of things nobody uses.
+//! embedded desktop. Since GAP-163 and GAP-152, [`audit_record`]: the audit log's head in
+//! the journal, its verification at start and its retention, which
+//! `gungnir-node/tests/node_audit_record.rs` drives against a real journal. Everything
+//! else -- the journal, the transport's start-up, the feeds, the account command -- stays
+//! in `main.rs`, because moving code here that nothing outside the binary calls would
+//! make the crate's surface a list of things nobody uses.
 
 pub mod approval;
+pub mod audit_record;
 pub mod picture;

@@ -369,6 +369,7 @@ fn the_handoff_record_draws_whole_identifiers_with_copy_controls() {
         now: MissionTime(200.0),
         can_sign_in: true,
         can_assign_roles: true,
+        record: crate::panels::audit::AuditRecordView::NOT_VERIFIED,
     };
     let probe = RenderProbe::new();
     let mut draft = SignInDraft::default();
@@ -3028,6 +3029,7 @@ fn the_audit_panel_tells_the_three_reasons_apart() {
             now: gungnir_model::MissionTime(0.0),
             can_sign_in: true,
             can_assign_roles: true,
+            record: crate::panels::audit::AuditRecordView::NOT_VERIFIED,
         };
         let (_, frame) =
             probe.draw(|ui| render_audit(ui, &theme::Palette::day(), &view, &mut draft));
@@ -3098,6 +3100,7 @@ fn the_audit_panel_draws_what_was_handed_off_and_what_came_back() {
         now: MissionTime(200.0),
         can_sign_in: true,
         can_assign_roles: true,
+        record: crate::panels::audit::AuditRecordView::NOT_VERIFIED,
     };
     let probe = RenderProbe::new();
     let mut draft = SignInDraft::default();
@@ -3164,6 +3167,7 @@ fn the_audit_panel_says_why_nothing_has_reported_back() {
         now: MissionTime(200.0),
         can_sign_in: true,
         can_assign_roles: true,
+        record: crate::panels::audit::AuditRecordView::NOT_VERIFIED,
     };
     let probe = RenderProbe::new();
     let mut draft = SignInDraft::default();
@@ -3967,4 +3971,82 @@ fn planning_with_no_laydowns_declared_says_so() {
         "{}",
         frame.joined()
     );
+}
+
+/// **PN-20 says the audit record is damaged, naming the file, and never mutes it**
+/// (GAP-163, D-104), and lists every segment with its state and an earlier one read back
+/// (GAP-152, D-106).
+#[test]
+fn the_audit_panel_names_a_cut_segment_and_shows_an_earlier_run() {
+    use crate::panels::audit::{
+        render_audit, AuditRecordView, AuditView, RecordSegmentLine, SessionLine, ShownSegment,
+        SignInDraft,
+    };
+    use crate::panels::config_editor::AuditLine;
+
+    let problems = [
+        "audit-000002.jsonl was cut: the journal holds its head at entry 9 and \
+                     6 remain, so 3 entries are missing"
+            .to_owned(),
+    ];
+    let segments = [
+        RecordSegmentLine {
+            description: "audit-000001.jsonl: 4 entries, verified to the head the journal holds",
+            sound: true,
+            readable: true,
+        },
+        RecordSegmentLine {
+            description: "audit-000002.jsonl: 6 entries, CUT: 3 entries missing",
+            sound: false,
+            readable: true,
+        },
+    ];
+    let lines = [AuditLine {
+        action: "session.sign_in",
+        mission_time_s: 12,
+        detail: "signed in as Supervisor",
+        operator: Some(7),
+    }];
+    let view = AuditView {
+        session: SessionLine::NobodySignedIn,
+        accounts: Ok(&[]),
+        audit: &[],
+        handoffs: &[],
+        now: gungnir_model::MissionTime(0.0),
+        can_sign_in: true,
+        can_assign_roles: true,
+        record: AuditRecordView {
+            summary: "The audit record is DAMAGED (verified at 3 s): 1 problem.",
+            sound: false,
+            problems: &problems,
+            segments: &segments,
+            shown: Some(ShownSegment {
+                segment: "audit-000001.jsonl",
+                lines: &lines,
+                note: "Its chain verified as it was read.",
+                sound: true,
+            }),
+            retention: "Audit segments are never purged: the baseline declares no retention.",
+        },
+    };
+    let probe = RenderProbe::new();
+    let mut draft = SignInDraft::default();
+    let (action, frame) =
+        probe.draw(|ui| render_audit(ui, &theme::Palette::day(), &view, &mut draft));
+    assert_eq!(action, Some(None), "drawing is not an act");
+    for said in [
+        "DAMAGED",
+        "3 entries are missing",
+        "audit-000002.jsonl: 6 entries, CUT: 3 entries missing",
+        "Verify now",
+        "audit-000001.jsonl (read only)",
+        "signed in as Supervisor",
+        "never purged",
+    ] {
+        assert!(
+            frame.says(said),
+            "PN-20 did not draw {said:?}: {}",
+            frame.joined()
+        );
+    }
 }

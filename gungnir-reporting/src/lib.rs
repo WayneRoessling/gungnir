@@ -389,7 +389,10 @@ fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
             | Event::Link(_)
             // Retention removing an old session is housekeeping, not this watch's work
             // (GAP-122).
-            | Event::Retention(_) => {}
+            | Event::Retention(_)
+            // The audit log's head and its verification are the record keeping itself,
+            // not the watch's work (GAP-163).
+            | Event::Audit(_) => {}
             Event::Engagement(e) => count_engagement(&mut counts, e),
         }
     }

@@ -21,10 +21,24 @@
 //! - **Hash-chained.** Every line carries the SHA-256 of the line before it and its
 //!   own, over a domain tag, the previous hash, its sequence number and the entry's
 //!   exact JSON text. An edited, removed or inserted line breaks the chain where it
-//!   happened. **A cut tail does not**: the last lines of the newest segment can be
-//!   removed and what is left still verifies, because nothing outside the file holds
-//!   the head. That limit is stated in DN-23 §13 and filed (GAP-163) rather than
-//!   implied away.
+//!   happened. A cut tail does not break a chain -- what is left of it still verifies --
+//!   so the head is kept **outside** the file as well.
+//! - **Its head is kept in the event journal** (GAP-163, D-104, DN-23 §14). A log hands
+//!   its host a [`SegmentHead`] every [`ANCHOR_EVERY_ENTRIES`] entries or
+//!   [`ANCHOR_INTERVAL`] after the first entry since the last one, whichever comes first,
+//!   and always at close ([`AuditLog::take_anchor`], [`AuditLog::take_closing_anchor`]),
+//!   and the host journals it. Only lines already on the disk are anchored, so a crash
+//!   can leave the journal behind the file and never ahead of it. [`anchor`] folds what
+//!   the journal holds into an [`AnchorLedger`], and [`verify_audit_record`] checks every
+//!   segment against it: a segment shorter than its head is reported cut, naming the
+//!   file and how many entries are missing, and a segment the journal knows that is gone
+//!   is reported removed, unless retention recorded removing it ([`retention`]).
+//!   Segments chain into one another, so the newest head fixes every line before it.
+//!   **The window left** is what a run wrote after its last anchor and before it
+//!   stopped without closing -- at most [`ANCHOR_EVERY_ENTRIES`] entries or
+//!   [`ANCHOR_INTERVAL`], plus the journal's own sync interval.
+//! - **Aged out by whole segments** (GAP-152, D-105), oldest first and only when the
+//!   baseline declares an audit-log age: see [`retention`].
 //! - **Not sealed.** The journal is encrypted at rest and this file is not, on purpose:
 //!   an investigation needs the audit record most when the journal key has been lost,
 //!   which is DN-22 §11's reason for writing the escrow recovery's own audit row "into a
@@ -35,13 +49,25 @@
 //!   written after the fault is an `audit.write_failed` line counting what the file is
 //!   missing, so the gap is inside the record rather than beside it.
 
+pub mod anchor;
+pub mod retention;
+
+pub use anchor::{
+    verify_audit_record, AnchorFinding, AnchorLedger, HeadStatement, SegmentReport, SegmentState,
+    SessionHeads,
+};
+pub use retention::{
+    hold_segment, purge_expired_segments, read_segment, release_segment, segment_holds,
+    KeptSegment, PurgedSegment, SegmentEntries, SegmentKeptBecause, SegmentPurgeReport,
+};
+
 use crate::{OperatorId, SecurityError};
 use sha2::{Digest, Sha256};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// The names of audit entries that are not authorization actions (GAP-111).
 ///
@@ -70,6 +96,46 @@ pub mod events {
     pub const CHAIN_BROKEN: &str = "audit.chain_broken";
     /// Entries the file could not take, counted when writing resumed.
     pub const WRITE_FAILED: &str = "audit.write_failed";
+    /// Verification found the record does not reach a head the event journal holds for
+    /// it -- a segment cut short, rewritten at its head, or gone without a purge
+    /// (GAP-163, D-104). Written at every verification that finds it, so the finding is
+    /// inside the record as well as on the operator's screen.
+    pub const ANCHOR_MISMATCH: &str = "audit.anchor_mismatch";
+    /// Retention removed a segment past the deployment's audit-log age (GAP-152, D-105).
+    pub const PURGED: &str = "audit.purged";
+}
+
+/// A head is handed to the host once this many entries have been written since the
+/// last one (GAP-163, D-104).
+///
+/// Bounds the window under a burst: at the node's attributed lane's sustained 200
+/// entries a second (D-87) this is about three anchors a second, and an ordinary watch
+/// never reaches it and is anchored by [`ANCHOR_INTERVAL`] instead.
+pub const ANCHOR_EVERY_ENTRIES: u64 = 64;
+
+/// A head is handed to the host this long after the first entry it does not cover
+/// (GAP-163, D-104).
+///
+/// The desktop journal's own sync interval (D-04), so anchoring adds no window the
+/// journal does not already accept; one anchor per five seconds of activity at most,
+/// and none at all while nothing is recorded.
+pub const ANCHOR_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Where one segment's chain ends: what the event journal keeps for it (GAP-163, D-104).
+///
+/// **Carried as `gungnir_model::events::AuditHead` on the journal.** This crate depends
+/// on no workspace crate (`ARCHITECTURE.md` §7.1), so the host converts one to the other
+/// field for field, as it does `AuditEntry::mission_time` to a `MissionTime`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SegmentHead {
+    /// The segment's file name, `audit-NNNNNN.jsonl`.
+    pub segment: String,
+    /// Lines in the segment up to and including the head.
+    pub entries: u64,
+    /// The head line's chain sequence number.
+    pub seq: u64,
+    /// The head line's hash, as the line stores it.
+    pub hash: String,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -139,6 +205,27 @@ pub trait AuditLog: Send + Sync + std::fmt::Debug {
     /// `SecurityError::AuditUnavailable` when the storage refused.
     fn flush(&mut self) -> Result<(), SecurityError> {
         Ok(())
+    }
+
+    /// The head the host should journal now, when one is due (GAP-163, D-104): see the
+    /// module documentation for the cadence. `None` when nothing is due, when what was
+    /// written is not yet on the disk, and always for a log with no file.
+    fn take_anchor(&mut self, now: Instant) -> Option<SegmentHead> {
+        let _ = now;
+        None
+    }
+
+    /// The head at close, after a sync: always, once this run has written anything, so
+    /// the journal says where the segment was closed. `None` when the sync failed,
+    /// because a head over lines that may not be on the disk is one a crash could make
+    /// the verifier call a cut.
+    fn take_closing_anchor(&mut self) -> Option<SegmentHead> {
+        None
+    }
+
+    /// The segment this run writes, when it has one. Retention never purges it.
+    fn current_segment(&self) -> Option<PathBuf> {
+        None
     }
 }
 
@@ -228,20 +315,45 @@ impl std::fmt::Display for ChainBreak {
     }
 }
 
-/// What [`verify_audit_dir`] found.
+/// What [`verify_audit_dir`] or [`verify_audit_record`] found.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct AuditVerification {
     pub segments: usize,
     pub entries: u64,
     pub breaks: Vec<ChainBreak>,
+    /// Where the record does not reach what the journal holds for it (GAP-163). Always
+    /// empty from [`verify_audit_dir`], which is given no heads.
+    pub findings: Vec<AnchorFinding>,
+    /// Every segment the directory holds or the journal knows, in order, with its state.
+    pub reports: Vec<SegmentReport>,
+    /// The head each segment is expected to reach from now on: what a host journals as
+    /// the inventory this verification leaves (`AuditEvent::Verified`). A segment found
+    /// cut or gone keeps the head it was expected to reach, so the next verification
+    /// finds it again rather than accepting what is left.
+    pub heads: Vec<SegmentHead>,
+    /// Journal sessions newer than the heads used that could not be read, each with
+    /// why: a head or a purge recorded in one of them was not seen.
+    pub unread_sessions: Vec<String>,
 }
 
 impl AuditVerification {
-    /// No break anywhere. **Not** "nothing was removed from the end": see the module
-    /// documentation.
+    /// No break anywhere and every segment reaches the last head the journal holds for
+    /// it. **Not** "nothing written after the last head was removed": see the module
+    /// documentation for that window, and [`SegmentState::Unanchored`] for a segment
+    /// the journal holds no head for yet.
     #[must_use]
     pub fn intact(&self) -> bool {
-        self.breaks.is_empty()
+        self.breaks.is_empty() && self.findings.is_empty()
+    }
+
+    /// Every break and finding as a sentence naming its file, in order.
+    #[must_use]
+    pub fn problems(&self) -> Vec<String> {
+        self.breaks
+            .iter()
+            .map(ToString::to_string)
+            .chain(self.findings.iter().map(ToString::to_string))
+            .collect()
     }
 }
 
@@ -258,6 +370,12 @@ pub struct FileAuditLog {
     status: AuditStatus,
     /// Written and not yet synced.
     dirty: bool,
+    /// Lines this run has written to its segment.
+    segment_entries: u64,
+    /// `segment_entries` when the host last took a head.
+    anchored_entries: u64,
+    /// When the first line the last head does not cover was written.
+    first_unanchored: Option<Instant>,
 }
 
 impl std::fmt::Debug for FileAuditLog {
@@ -299,11 +417,14 @@ impl FileAuditLog {
             recent: Vec::new(),
             status: AuditStatus::Durable,
             dirty: false,
+            segment_entries: 0,
+            anchored_entries: 0,
+            first_unanchored: None,
         };
         let segments = segments(dir)?;
         let mut continued = None;
         for (_, path) in segments.iter().rev() {
-            let scan = scan_segment(path, None)?;
+            let scan = scan_segment(path, None, None)?;
             if let Some((seq, hash)) = scan.last {
                 log.head = hash;
                 log.next_seq = seq.saturating_add(1);
@@ -345,6 +466,29 @@ impl FileAuditLog {
     #[must_use]
     pub fn status(&self) -> &AuditStatus {
         &self.status
+    }
+
+    /// Where this run's segment ends now, once it has written anything. Covers lines
+    /// written and not yet synced; [`AuditLog::take_anchor`] is what a host journals.
+    #[must_use]
+    pub fn head(&self) -> Option<SegmentHead> {
+        let (path, _) = self.segment.as_ref()?;
+        if self.segment_entries == 0 {
+            return None;
+        }
+        Some(SegmentHead {
+            segment: file_name(path),
+            entries: self.segment_entries,
+            seq: self.next_seq.saturating_sub(1),
+            hash: self.head.clone(),
+        })
+    }
+
+    fn mark_anchored(&mut self) -> Option<SegmentHead> {
+        let head = self.head()?;
+        self.anchored_entries = self.segment_entries;
+        self.first_unanchored = None;
+        Some(head)
     }
 
     /// Create this run's segment: the next number after every one there, with
@@ -391,6 +535,10 @@ impl FileAuditLog {
         }
         self.head = hash;
         self.next_seq = self.next_seq.saturating_add(1);
+        self.segment_entries = self.segment_entries.saturating_add(1);
+        if self.first_unanchored.is_none() {
+            self.first_unanchored = Some(Instant::now());
+        }
         self.dirty = true;
         if self.sync == AuditSync::EveryEntry {
             file.sync_data()?;
@@ -465,6 +613,35 @@ impl AuditLog for FileAuditLog {
         self.dirty = false;
         Ok(())
     }
+
+    fn take_anchor(&mut self, now: Instant) -> Option<SegmentHead> {
+        let pending = self.segment_entries.saturating_sub(self.anchored_entries);
+        // Never a head over lines that may not be on the disk: a crash would leave the
+        // journal ahead of the file, and the verifier would call that a cut.
+        if pending == 0 || self.dirty {
+            return None;
+        }
+        let waited = self
+            .first_unanchored
+            .is_some_and(|since| now.saturating_duration_since(since) >= ANCHOR_INTERVAL);
+        if pending >= ANCHOR_EVERY_ENTRIES || waited {
+            self.mark_anchored()
+        } else {
+            None
+        }
+    }
+
+    fn take_closing_anchor(&mut self) -> Option<SegmentHead> {
+        if let Err(err) = self.flush() {
+            tracing::error!(%err, "the audit log could not be synced at close; its head is not anchored");
+            return None;
+        }
+        self.mark_anchored()
+    }
+
+    fn current_segment(&self) -> Option<PathBuf> {
+        self.segment().map(Path::to_path_buf)
+    }
 }
 
 impl Drop for FileAuditLog {
@@ -504,6 +681,21 @@ fn line_hash(seq: u64, prev: &str, entry_json: &str) -> String {
     hex
 }
 
+/// A path's file name as a string: how the journal names a segment.
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// The number in a segment's file name, or `None` when the name is not one.
+fn segment_number(name: &str) -> Option<u64> {
+    name.strip_prefix(SEGMENT_PREFIX)?
+        .strip_suffix(SEGMENT_SUFFIX)?
+        .parse()
+        .ok()
+}
+
 /// Every segment in `dir`, in order.
 fn segments(dir: &Path) -> Result<Vec<(u64, PathBuf)>, SecurityError> {
     let entries = std::fs::read_dir(dir)
@@ -511,13 +703,7 @@ fn segments(dir: &Path) -> Result<Vec<(u64, PathBuf)>, SecurityError> {
     let mut found: Vec<(u64, PathBuf)> = entries
         .filter_map(Result::ok)
         .filter_map(|entry| {
-            let name = entry.file_name();
-            let number = name
-                .to_str()?
-                .strip_prefix(SEGMENT_PREFIX)?
-                .strip_suffix(SEGMENT_SUFFIX)?
-                .parse()
-                .ok()?;
+            let number = segment_number(entry.file_name().to_str()?)?;
             Some((number, entry.path()))
         })
         .collect();
@@ -538,15 +724,19 @@ struct SegmentScan {
     /// The last line's sequence number and stored hash.
     last: Option<(u64, String)>,
     breaks: Vec<ChainBreak>,
+    /// The `(seq, hash)` of the line the caller asked about, when the segment has it.
+    probed: Option<(u64, String)>,
 }
 
 /// Read one segment, checking every line against the one before it.
 ///
 /// `continues` is the `(seq, hash)` the first line must follow, when the caller knows it;
-/// `None` takes the first line as the anchor.
+/// `None` takes the first line as the anchor. `probe` is a count of complete lines whose
+/// last line's chain fields the caller wants back: a journaled head's `entries`.
 fn scan_segment(
     path: &Path,
     continues: Option<&(u64, String)>,
+    probe: Option<u64>,
 ) -> Result<SegmentScan, SecurityError> {
     let mut text = String::new();
     File::open(path)
@@ -556,6 +746,7 @@ fn scan_segment(
         entries: 0,
         last: continues.cloned(),
         breaks: Vec::new(),
+        probed: None,
     };
     let broke = |line: usize, reason: String| ChainBreak {
         segment: path.to_path_buf(),
@@ -599,6 +790,9 @@ fn scan_segment(
             ));
         }
         scan.entries += 1;
+        if probe == Some(scan.entries) {
+            scan.probed = Some((prefix.seq, prefix.hash.clone()));
+        }
         scan.last = Some((prefix.seq, prefix.hash));
     }
     Ok(scan)
@@ -619,27 +813,18 @@ fn split_line(line: &str) -> Option<(LinePrefix, &str)> {
     Some((prefix, entry_json))
 }
 
-/// Verify every segment in `dir`, oldest first, each continuing the one before.
+/// Verify every segment in `dir`, oldest first, each continuing the one before, with no
+/// heads from a journal: the chain alone, which cannot see a cut tail. A host verifies
+/// with [`verify_audit_record`] and the heads its journal holds.
 ///
-/// The oldest segment's first line is taken as the anchor: retention may have removed
-/// what it continued, which is a deletion the policy made rather than a break.
+/// The oldest segment's first line is taken as the anchor: retention removes the oldest
+/// segments first (D-105), which is a deletion the policy made rather than a break.
 ///
 /// # Errors
 ///
 /// `SecurityError::AuditUnavailable` when the directory or a segment cannot be read.
 pub fn verify_audit_dir(dir: &Path) -> Result<AuditVerification, SecurityError> {
-    let mut verification = AuditVerification::default();
-    let mut last: Option<(u64, String)> = None;
-    for (_, path) in segments(dir)? {
-        let scan = scan_segment(&path, last.as_ref())?;
-        verification.segments += 1;
-        verification.entries += scan.entries;
-        verification.breaks.extend(scan.breaks);
-        if scan.entries > 0 {
-            last = scan.last;
-        }
-    }
-    Ok(verification)
+    verify_audit_record(dir, &AnchorLedger::default(), None)
 }
 
 // ---------------------------------------------------------------------------------
@@ -1003,6 +1188,61 @@ mod tests {
         assert_eq!(verified.entries, 2);
         assert_eq!(verified.breaks.len(), 1, "{:?}", verified.breaks);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_head_is_due_after_enough_entries_or_long_enough_and_only_over_synced_lines() {
+        let dir = temp("cadence");
+        let mut log = FileAuditLog::open(&dir, AuditSync::OnFlush, 0.0).expect("opened");
+        assert_eq!(
+            log.take_anchor(Instant::now() + ANCHOR_INTERVAL),
+            None,
+            "nothing written, nothing due"
+        );
+        log.record(entry(0));
+        // After the write, so "long enough" is measured from it.
+        let now = Instant::now();
+        assert_eq!(
+            log.take_anchor(now + ANCHOR_INTERVAL),
+            None,
+            "not synced yet: a crash could leave the journal ahead of the file"
+        );
+        log.flush().expect("synced");
+        assert_eq!(
+            log.take_anchor(now),
+            None,
+            "one entry, and not yet long enough"
+        );
+        let head = log.take_anchor(now + ANCHOR_INTERVAL).expect("due by time");
+        assert_eq!(head.entries, 1);
+        assert_eq!(head.seq, 0);
+        assert_eq!(
+            log.take_anchor(now + 2 * ANCHOR_INTERVAL),
+            None,
+            "nothing new"
+        );
+
+        for i in 1..=ANCHOR_EVERY_ENTRIES {
+            log.record(entry(u32::try_from(i).expect("small")));
+        }
+        log.flush().expect("synced");
+        let head = log.take_anchor(Instant::now()).expect("due by count");
+        assert_eq!(head.entries, ANCHOR_EVERY_ENTRIES + 1);
+        assert_eq!(Some(head.clone()), log.head());
+
+        // At close: always, even with nothing new since the last head.
+        assert_eq!(log.take_closing_anchor(), Some(head));
+        drop(log);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_log_with_no_file_never_offers_a_head() {
+        let mut log = InMemoryAuditLog::new();
+        log.record(entry(0));
+        assert_eq!(log.take_anchor(Instant::now() + ANCHOR_INTERVAL), None);
+        assert_eq!(log.take_closing_anchor(), None);
+        assert_eq!(log.current_segment(), None);
     }
 
     #[test]

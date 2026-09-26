@@ -386,6 +386,10 @@ pub struct AppState {
     /// accountability record lasted exactly as long as the window was open. What
     /// [`gungnir_security::AuditLog::entries`] returns is still this run's.
     pub audit: FileAuditLog,
+    /// The audit record beyond this run's entries (GAP-163, GAP-152): the last
+    /// verification against the heads the journal holds, the earlier segment PN-20 is
+    /// showing, and what retention has removed. See [`crate::audit_record`].
+    pub audit_record: crate::audit_record::AuditRecordState,
 
     /// The approval gate between a proposed plan and anything acting on it
     /// (GAP-038), and everything the decision path holds between calls: the queue and
@@ -779,6 +783,7 @@ impl AppState {
             retention,
             config_store,
             audit,
+            audit_record: crate::audit_record::AuditRecordState::default(),
             desk: ApprovalDesk::new(decision_settings),
             selected_approval: None,
             dialog: gungnir_ui::panels::decision_dialog::DecisionDialogState::default(),
@@ -958,6 +963,8 @@ impl AppState {
     /// The save error if the journal did not reach the disk, or the lifecycle error if
     /// the mission record could not be closed.
     pub fn close_session(&mut self) -> Result<(), AppError> {
+        // GAP-163, D-104: where this run's audit segment ends, journaled with the rest.
+        crate::audit_record::close(self);
         self.save_session()?;
         let Some(mission) = self.mission.take() else {
             return Ok(());
