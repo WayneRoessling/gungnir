@@ -234,8 +234,9 @@ be walked against: `gungnir-intercept-service/src/lib.rs`
 solving -- six effectors and ten tracks at the default horizon took 1.3 s in the probe --
 and so far longer at 4 ms a tick, and at the limits themselves longer than any
 engagement lasts; it is answered stale with its progress meanwhile, and whether a bounded
-answer should stand in for it is GAP-156. A desktop linked to a node reads the
-node's plan as current whether or not the node's own planner is stale, which is GAP-157.
+answer should stand in for it is GAP-156. A desktop linked to a node is told the node's
+planner is unhealthy (GAP-161) but not how old the node's plan is or why, so PN-05 draws
+it without a stale line; that is GAP-157.
 
 ## Traceability
 

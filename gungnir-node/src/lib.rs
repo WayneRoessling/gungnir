@@ -12,9 +12,12 @@
 //!
 //! So this crate is a library the binary uses, rather than a second copy of the loop kept
 //! in step with `main.rs` by hand. It holds only what a test must drive:
-//! [`approval`], the node's side of `gungnir-approval` (edge (y), D-57). Everything else
-//! -- the services, the journal, the transport's start-up, the account command -- stays in
-//! `main.rs`, because moving code here that nothing outside the binary calls would make
-//! the crate's surface a list of things nobody uses.
+//! [`approval`], the node's side of `gungnir-approval` (edge (y), D-57), and since
+//! GAP-120 [`picture`], the construction of the services that make the node's picture
+//! and what goes out with it, which the backend-switching row's test runs against an
+//! embedded desktop. Everything else -- the journal, the transport's start-up, the feeds,
+//! the account command -- stays in `main.rs`, because moving code here that nothing
+//! outside the binary calls would make the crate's surface a list of things nobody uses.
 
 pub mod approval;
+pub mod picture;

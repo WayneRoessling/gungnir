@@ -104,18 +104,19 @@ walk against these tests.
 Consolidating how the desktop builds its planner showed that the two planners it builds
 after start -- on falling back from its node, and on signing out of one -- were built with
 the horizon alone and no local frame, so a desktop that had fallen back paired effectors
-with tracks and placed no intercept point. The node's planner had never had the frame
-either. All are now built with it. On the node that matters beyond PN-05: the geofence
-engine checks an intercept point when there is one, and the node's plans had none to
-check.
+with tracks and placed no intercept point. Both are now built by the one builder the
+desktop starts with. The node's planner had never had the frame either; GAP-120 found and
+fixed that in the same days (`gungnir_node::picture::intercept_service`), and this change
+gives that builder the budget too.
 
 GAP-156: a picture toward the solver's size limits takes seconds of solving, and so far
 longer at 4 ms a tick; what should stand in for an optimum that cannot be reached in time
 is a change to what the allocation row promises, and the owner's.
 
 GAP-157: while a desktop is linked, `RemoteInterceptService` relays the node's plan as
-current whenever the link is up, whatever the node's own planner says. Carrying the node's
-standing across needs its computed-at time on the wire.
+current whenever the link is up. GAP-161 made its health flag follow the node's, so PN-01
+and PN-07 now say the node's planner is down; PN-05 still draws no stale line and nothing
+can say how old the node's plan is, which needs its computed-at time on the wire.
 
 ## Ownership
 
