@@ -21,7 +21,7 @@ line on PN-09 read the outbox.
 **D-75: the answer is read for what it says about the caller.** Delivered; not now (no
 answer, `408`, `425`, `429`, a `5xx`); not you (`401`, `403`); not that (any other
 `4xx`). Only "not now" is retried, and on an interval that doubles from one forward tick to
-thirty seconds, so a register that stays full for an hour is asked a few hundred times
+thirty seconds, so a register that stays full for an hour is asked about a hundred and twenty times
 rather than fourteen thousand. "Not you" stops the link offering anything until it signs
 in again.
 

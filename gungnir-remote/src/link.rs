@@ -252,7 +252,7 @@ pub struct ExchangePublishing {
     pub retrying: Option<PublishRetry>,
     /// Not before this instant is the next retry made. The interval doubles per attempt
     /// from one forward tick to [`PUBLISH_RETRY_CEILING`], so a node that answers `507` for
-    /// an hour is asked a few hundred times, not fourteen thousand.
+    /// an hour is asked about a hundred and twenty times, not fourteen thousand.
     pub retry_at: Option<std::time::Instant>,
     /// The last generation handed out; see [`OutboundExchange::generation`].
     pub generation: u64,
