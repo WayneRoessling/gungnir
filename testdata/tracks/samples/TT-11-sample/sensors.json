@@ -1,0 +1,100 @@
+{
+ "sensors": [
+  {
+   "id": 1,
+   "type": "radar.short",
+   "name": "S1 round-1 harbour counter-UAS radar",
+   "pos": [
+    0.0,
+    0.0,
+    25.0
+   ],
+   "params": {
+    "signature_key": "rcs",
+    "range_m": {
+     "large": 15000,
+     "medium": 10000,
+     "small": 6000,
+     "very-small": 3500
+    },
+    "pd_in_range": 0.85,
+    "update_period_s": 0.5,
+    "noise": {
+     "range_m": 8,
+     "cross_m": 20,
+     "height_m": 40
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     0,
+     5000
+    ],
+    "horizon": false,
+    "latency_s": {
+     "mean": 0.15,
+     "jitter": 0.05
+    },
+    "dropout": 0.08,
+    "out_of_order": 0.01,
+    "false_alarms_per_scan": 0.05,
+    "ea": {
+     "skew_s": 0,
+     "dropout_multiplier": 3.0,
+     "fa_multiplier": 4.0
+    }
+   },
+   "calibration": "cb-2026-09"
+  },
+  {
+   "id": 2,
+   "type": "radar.short",
+   "name": "S2 round-1 plant counter-UAS radar",
+   "pos": [
+    5719.0,
+    1082.0,
+    27.0
+   ],
+   "params": {
+    "signature_key": "rcs",
+    "range_m": {
+     "large": 15000,
+     "medium": 10000,
+     "small": 6000,
+     "very-small": 3500
+    },
+    "pd_in_range": 0.85,
+    "update_period_s": 0.5,
+    "noise": {
+     "range_m": 8,
+     "cross_m": 20,
+     "height_m": 40
+    },
+    "field_of_regard_deg": [
+     0,
+     360
+    ],
+    "altitude_m": [
+     0,
+     5000
+    ],
+    "horizon": false,
+    "latency_s": {
+     "mean": 0.15,
+     "jitter": 0.05
+    },
+    "dropout": 0.08,
+    "out_of_order": 0.01,
+    "false_alarms_per_scan": 0.05,
+    "ea": {
+     "skew_s": 0,
+     "dropout_multiplier": 3.0,
+     "fa_multiplier": 4.0
+    }
+   },
+   "calibration": "cb-2026-09"
+  }
+ ]
+}

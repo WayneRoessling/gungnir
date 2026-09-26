@@ -5,7 +5,10 @@
 //! Resilience & disconnected operations, per docs/gungnir-capabilities.md §5.6 and
 //! ARCHITECTURE.md §8.4. A connected desktop that loses its node keeps operating
 //! on the embedded services and keeps journaling locally; when the link returns,
-//! what it recorded is forwarded and the two journals are reconciled.
+//! what it recorded is forwarded and the two journals are reconciled. **This crate does
+//! the reconciling.** The forwarding is done by queues built for what each path carries,
+//! in `gungnir-remote` and the desktop; [`StoreAndForwardQueue`] is kept for a future use
+//! and has no production caller (GAP-121, D-110).
 //!
 //! [`reconcile`] merges by mission time, drops exact duplicates, and **reports** the
 //! conflicting decisions it finds; it resolves none of them. D-03 locked the rule that
@@ -29,6 +32,29 @@ use std::collections::VecDeque;
 
 /// Bounded queue of envelopes awaiting forwarding. When full, the oldest is
 /// dropped and counted; nothing blocks.
+///
+/// **It has no production caller today, and none of the store-and-forward paths the
+/// system runs uses it** (GAP-121). The owner decided on 2026-09-26 to keep it for a future
+/// use and to say so here (D-110). Each path that does forward across an outage has a
+/// queue built for what it carries, because each needs a rule this one does not have:
+///
+/// - **Detections** go through `gungnir-remote`'s own outbox (`OUTBOX_CAPACITY`, oldest
+///   dropped and counted; `ARCHITECTURE.md` §8.4). That is this rule, but over
+///   `DetectionView`s rather than `Envelope`s, in a crate this one is not a
+///   dependency of: `gungnir-remote` to `gungnir-resilience` is an edge
+///   `ARCHITECTURE.md` §7.1 does not draw.
+/// - **Exchange sets** go through `gungnir-remote`'s exchange outbox, which keeps one set
+///   per item, the newest, and replaces rather than drops (GAP-146, D-76,
+///   `docs/design/DN-18-coalition-exchange.md` §13): every set supersedes the last for its
+///   item, so a first-in-first-out bound would keep obsolete sets and lose current ones.
+/// - **Decisions taken while cut off** are forwarded as one outage batch rebuilt from the
+///   desktop's own journal, whole or not at all, after the reconciliation settles
+///   (`docs/design/DN-31-node-approval-queue.md` §6, §13 and §15). A decision may never
+///   be dropped, so a queue that drops its oldest is the wrong rule for it.
+///
+/// Its own tests hold its rule (the `gungnir-resilience` row of
+/// `docs/verification-capability-table.md` §2); nothing -- no capability list, no health
+/// flag, no architecture view -- should claim that an outage's envelopes are carried by it.
 #[derive(Debug)]
 pub struct StoreAndForwardQueue {
     pending: VecDeque<Envelope>,

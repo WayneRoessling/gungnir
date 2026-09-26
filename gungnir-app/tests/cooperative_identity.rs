@@ -74,6 +74,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         }],
         ais_feeds: vec![AisFeedConfig {
             name: "harbour".into(),

@@ -19,6 +19,7 @@ fn placed(sensor: u32, position_enu: [f64; 3]) -> SensorPlacement {
         position_enu,
         mode: SensorMode::Search,
         azimuth_sector: None,
+        elevation_band: None,
     }
 }
 
@@ -269,6 +270,96 @@ fn a_laydown_counts_coverage_only_inside_the_sensor_s_sector() {
     let rows = uncovered(config);
     assert!((rows["current"] - west).abs() < 1.0, "{rows:?}");
     assert!((rows["aimed-east"] - full).abs() < 1.0, "{rows:?}");
+}
+
+/// GAP-158, D-111: PN-16 counts a sensor's coverage only inside its elevation band. The
+/// approach runs east at 100 m past a radar standing at 10 m, so its first kilometre is
+/// steeply above the radar and its far end low on the horizon: a ceiling of 5 degrees
+/// leaves the near 750 m uncovered -- the cone of silence -- and a floor of half a
+/// degree the far end. A band declared on the sensor is what a placement without one
+/// inherits, and a placement's own band replaces it whole.
+#[test]
+fn a_laydown_counts_coverage_only_inside_the_sensor_s_elevation_band() {
+    let band = |floor_deg: f64, ceiling_deg: f64| {
+        gungnir_model::ElevationBand::new(floor_deg.to_radians(), ceiling_deg.to_radians())
+            .expect("legal")
+    };
+    let banded = |id: &str, b: Option<gungnir_model::ElevationBand>| {
+        let mut p = placed(1, [0.0, 0.0, 10.0]);
+        p.elevation_band = b;
+        laydown(id, id == "current", vec![p])
+    };
+    let uncovered = |config: ConfigBaseline| -> std::collections::HashMap<String, f64> {
+        gungnir_config::validate(&config).expect("valid");
+        let state = AppState::with_config(config).expect("starts");
+        match planning_rows(&state) {
+            PlanningRows::Rows(rows) => rows
+                .into_iter()
+                .map(|r| match r.coverage {
+                    LaydownCoverage::Computed { uncovered_m, .. } => (r.id.0, uncovered_m),
+                    LaydownCoverage::NotComputed { reason } => panic!("{reason}"),
+                })
+                .collect(),
+            PlanningRows::Empty { reason } => panic!("{reason}"),
+        }
+    };
+
+    let mut config = base_config();
+    config.laydowns = vec![
+        banded("current", None),
+        banded("ceiling", Some(band(-90.0, 5.0))),
+        banded("floor", Some(band(0.5, 90.0))),
+        banded("stated-whole", Some(band(-90.0, 90.0))),
+    ];
+    let rows = uncovered(config);
+    let full = rows["current"];
+    // The approach is the straight chord between its two ends, and its far end is 319 m
+    // below the tangent plane, so it descends 5 m a kilometre from 90 m above the radar:
+    // 5 degrees is reached 973 m out, and the samples at 0 to 750 m -- four of them, 750 m
+    // of approach -- lie above the ceiling.
+    let ceiling = rows["ceiling"];
+    assert!(
+        (ceiling - full - 750.0).abs() < 1.0,
+        "a 5 degree ceiling leaves the near 750 m uncovered: {ceiling} m vs {full} m"
+    );
+    assert!(
+        rows["floor"] > full + 1_000.0,
+        "a half-degree floor loses the far end: {} m vs {full} m",
+        rows["floor"]
+    );
+    assert!(
+        (rows["stated-whole"] - full).abs() < 1.0,
+        "the whole hemisphere stated is no band at all"
+    );
+
+    // Declared on the sensor: a placement with none inherits it, and one with its own
+    // replaces it whole.
+    let mut config = base_config();
+    config.sensors[0].elevation_band = Some(band(-90.0, 5.0));
+    config.laydowns = vec![
+        banded("current", None),
+        banded("stated-whole", Some(band(-90.0, 90.0))),
+    ];
+    let rows = uncovered(config);
+    assert!((rows["current"] - ceiling).abs() < 1.0, "{rows:?}");
+    assert!((rows["stated-whole"] - full).abs() < 1.0, "{rows:?}");
+
+    // And the baseline's floor is the default only for a sensor that states no band.
+    let mut config = base_config();
+    config.analytics.coverage_min_elevation_rad = 0.5_f64.to_radians();
+    config.laydowns = vec![
+        banded("current", None),
+        banded("stated-whole", Some(band(-90.0, 90.0))),
+    ];
+    let rows = uncovered(config);
+    assert!(
+        rows["current"] > full + 1_000.0,
+        "the baseline's floor applies to a sensor with no band: {rows:?}"
+    );
+    assert!(
+        (rows["stated-whole"] - full).abs() < 1.0,
+        "and not to one that states its own: {rows:?}"
+    );
 }
 
 #[test]

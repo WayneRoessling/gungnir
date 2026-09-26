@@ -48,6 +48,7 @@ fn sensor(windows: Vec<MaintenanceWindowConfig>) -> SensorConfig {
         maintenance: windows,
         detection_model: None,
         azimuth_sector: None,
+        elevation_band: None,
     }
 }
 

@@ -466,12 +466,21 @@ fn a_linked_desktop_draws_the_nodes_plan_as_the_node_stands_it() {
     clock.set_step(Duration::from_millis(10));
     node.step(MissionTime(2.0), &four);
     at(&mut desk, 2.3);
-    until("the node's stale standing", || {
+    // Wait for the strip as well as the standing. `update::tick` reports health before it
+    // asks the planner for a plan, and the remote planner takes the node's health from the
+    // projection when it is asked, so the strip follows the node's word one tick after the
+    // standing whenever the node's `HealthEvent` and its `PlanStanding` reached the
+    // projection in the same read. Waiting on the standing alone read the strip a tick
+    // early, which is how this failed on CI once (PR #185).
+    until("the node's stale standing, and the strip saying so", || {
         node.step(MissionTime(2.0), &four);
         update::tick(&mut desk);
         match &desk.plan_standing {
-            PlanStanding::Stale { .. } => Ok(()),
-            other => Err(format!("{other:?}")),
+            PlanStanding::Stale { .. } if !desk.health().intercept_healthy => Ok(()),
+            other => Err(format!(
+                "{other:?}, strip intercept_healthy {}",
+                desk.health().intercept_healthy
+            )),
         }
     });
     match &desk.plan_standing {

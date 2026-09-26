@@ -9,6 +9,13 @@ so no third-party licence attaches.
 Each set's `metadata.json` records the scenario, seed, and input versions that make it
 reproducible. `README.md` in this directory describes the files.
 
+**TT-11** (added 2026-09-26, GAP-147, D-112) is generated the same way from the same
+library. Its route and sensor set are taken from `testdata/usability/round-1.json`, which
+is itself synthetic (`../usability/SOURCE.md`): the three points of round 1's declared
+approach converted to ENU about round 1's own origin, and round 1's two radars where its
+`current` laydown sites them, so the set sits in round 1's frame as DN-32 section 5.5
+places it. Nothing else was an input, and no licence attaches.
+
 The sets are test fixtures only: they replay through the ingest gateway in
 `gungnir-ingest/tests/test_track_samples.rs` and are never linked into or shipped with
 a binary.

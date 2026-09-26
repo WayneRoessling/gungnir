@@ -316,7 +316,7 @@ The human-owned column follows the low-trust tier in `docs/agentic-workflow.md`:
 | `gungnir-security` | authentication, authorization, keys, sealing, audit | `Authenticator`, `Role`, `KeyProvider`, `AuditLog` | Y |
 | `gungnir-api` | v2 contract and axum transport | `ApiHandler`, `transport::serve`, `v2` | path (write paths) |
 | `gungnir-observability` | health monitor, watchdog, alerts | `HealthMonitor`, `Alert` | N |
-| `gungnir-resilience` | store-and-forward, checkpoints, reconcile | `StoreAndForwardQueue`, `reconcile` | N (medium-risk) |
+| `gungnir-resilience` | checkpoints, reconcile | `reconcile`; `StoreAndForwardQueue`, kept with no production caller (GAP-121, D-110) | N (medium-risk) |
 | `gungnir-collab` | shared picture, authority arbitration; reached by no binary | `SharedPictureSync`, `RoleRankArbiter` | N (medium-risk) |
 | `gungnir-workflow` | layouts, alert lifecycle, cases, reviews | `PanelId`, `WorkspaceLayout`, `AlertLifecycle` | N |
 | `gungnir-replay` | deterministic journal playback | `ReplaySession` | N |

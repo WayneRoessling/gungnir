@@ -48,11 +48,13 @@ Order from `gungnir-app::update::tick` and `gungnir-node::main` (Rs-Pr):
 
 1. SV-30 detects the link (startup today; heartbeat under GAP-050) and switches the
    desktop to embedded services with an alert through SV-27.
-2. While detached: SV-30's outbox holds IE-24 submissions; SV-25's queue holds
-   envelopes; SV-04 journals locally; decisions are recorded locally under the
-   delegation in force (D-15).
-3. On reconnection: the outbox and queue drain through SV-23; SV-25 `reconcile`
-   merges the local and node journals, drops duplicates, reports conflicts (IE-31).
+2. While detached: SV-30's outbox holds IE-24 submissions and its exchange outbox one
+   set per item; SV-04 journals locally; decisions are recorded locally under the
+   delegation in force (D-15). No envelope queue is involved:
+   `gungnir_resilience::StoreAndForwardQueue` has no production caller (GAP-121, D-110).
+3. On reconnection: the outboxes drain through SV-23; SV-25 `reconcile` merges the local
+   and node journals, drops duplicates, reports conflicts (IE-31), and the outage's
+   decisions are forwarded as one batch rebuilt from the journal (DN-31 §15).
 4. SV-26 resolves each conflict by the role-rank rule; the supervisor confirms
    through SV-16; the desktop returns to the remote backend.
 

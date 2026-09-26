@@ -20,7 +20,7 @@
 //! looks covered but is single-sensor everywhere fails on the first loss.
 
 use crate::{CoverageVolume, LineOfSight};
-use gungnir_model::{LocalFrame, SensorId};
+use gungnir_model::{AzimuthSector, ElevationBand, Geodetic, LocalFrame, SensorId};
 use gungnir_sensor_management::{SensorMode, SensorRecord, SensorRegistry};
 
 /// Coverage of one point by the registry as a whole.
@@ -231,35 +231,78 @@ pub fn combined_coverage(
 ///
 /// `frame` is the local frame the approaches are in. Each sensor's position is placed in
 /// it, and so is its azimuth sector: a sector is surveyed against true north at the
-/// sensor, which the frame's `+n` axis is only at the origin (GAP-118, D-84).
+/// sensor, which the frame's `+n` axis is only at the origin (GAP-118, D-84). So is its
+/// vertical, which its elevation band is measured against (GAP-158, D-111).
+///
+/// `default_floor_rad` is the baseline's `analytics.coverage_min_elevation_rad`: the floor
+/// of a sensor that declares no `elevation_band`, whose ceiling is then the zenith. A
+/// sensor that declares a band is credited with that band alone.
 pub fn coverage_from_registry(
     registry: &dyn SensorRegistry,
-    min_elevation_rad: f64,
+    default_floor_rad: f64,
     frame: &LocalFrame,
 ) -> Vec<(SensorId, CoverageVolume)> {
     registry
         .sensors()
         .iter()
         .filter(|s| matches!(s.mode, SensorMode::Search | SensorMode::Track))
-        .map(|s| (s.id, volume_of(s, min_elevation_rad, frame)))
+        .map(|s| (s.id, volume_of(s, default_floor_rad, frame)))
         .collect()
 }
 
 /// One sensor's volume in `frame`, whatever mode it is in: for a caller asking what a
 /// sensor *would* cover, such as a re-tasking candidate (DN-13).
+///
+/// Its band is the record's declared one, else `default_floor_rad` up to the zenith
+/// ([`band_or_default`]).
 #[must_use]
 pub fn volume_of(
     record: &SensorRecord,
-    min_elevation_rad: f64,
+    default_floor_rad: f64,
     frame: &LocalFrame,
 ) -> CoverageVolume {
+    volume_in_frame(
+        frame,
+        record.position,
+        record.max_range_m,
+        record.azimuth_sector,
+        band_or_default(record.elevation_band, default_floor_rad),
+    )
+}
+
+/// The band a sensor is credited with: the one stated, whole, or the baseline's floor up
+/// to the zenith when none is (GAP-158, D-111).
+///
+/// A caller with a laydown passes the placement's band `or` the declaration's, so the
+/// precedence is placement, then declaration, then the baseline -- and a band is always
+/// taken whole from one of them, never a floor from one and a ceiling from another.
+#[must_use]
+pub fn band_or_default(stated: Option<ElevationBand>, default_floor_rad: f64) -> ElevationBand {
+    stated.unwrap_or_else(|| ElevationBand::below_zenith(default_floor_rad))
+}
+
+/// A sensor's volume in `frame` from its declared geometry, each part placed where the
+/// sensor stands: its position; its sector, surveyed against true north there
+/// ([`LocalFrame::sector_in_frame`]); and its band, measured against its own vertical
+/// ([`LocalFrame::vertical_at`]).
+///
+/// The one place a volume is built from a declaration, so the registry's path, DN-13's
+/// candidates and a laydown's placements cannot place the same sensor differently.
+#[must_use]
+pub fn volume_in_frame(
+    frame: &LocalFrame,
+    position: Geodetic,
+    max_range_m: f64,
+    sector: Option<AzimuthSector>,
+    band: ElevationBand,
+) -> CoverageVolume {
     CoverageVolume {
-        sensor_enu: frame.to_enu(record.position),
-        max_range_m: record.max_range_m,
-        min_elevation_rad,
-        azimuth: record
-            .azimuth_sector
-            .map(|sector| frame.sector_in_frame(sector, record.position)),
+        sensor_enu: frame.to_enu(position),
+        max_range_m,
+        min_elevation_rad: band.floor_rad,
+        max_elevation_rad: band.ceiling_rad,
+        vertical: frame.vertical_at(position),
+        azimuth: sector.map(|sector| frame.sector_in_frame(sector, position)),
     }
 }
 
@@ -273,6 +316,8 @@ mod tests {
             sensor_enu: [east, 0.0, 0.0],
             max_range_m: range,
             min_elevation_rad: -std::f64::consts::FRAC_PI_2,
+            max_elevation_rad: std::f64::consts::FRAC_PI_2,
+            vertical: [0.0, 0.0, 1.0],
             azimuth: None,
         }
     }
@@ -463,6 +508,7 @@ mod tests {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             },
             SensorConfig {
                 id: 2,
@@ -473,6 +519,7 @@ mod tests {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             },
         ];
         let mut registry = InMemorySensorRegistry::from_config(&configs, "cal-1");
@@ -514,6 +561,7 @@ mod tests {
             control_endpoint: None,
             maintenance: Vec::new(),
             azimuth_sector,
+            elevation_band: None,
             detection_model: None,
         };
         let mut registry = InMemorySensorRegistry::from_config(

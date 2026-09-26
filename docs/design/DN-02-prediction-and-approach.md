@@ -203,10 +203,14 @@ tested as a pure function in `gungnir-assessment/src/first_engagement.rs`; end t
 against the committed TT-01 sample set with two laydowns in
 `gungnir-app/tests/laydown_rehearsal.rs`'s
 `first_engagement_is_the_worst_case_over_a_committed_recording_per_laydown` (an approach
-nothing came down reads not computable), and against round 1's committed laydowns in
-`round_1s_forward_radar_changes_its_own_detections_and_nothing_else` (laydown `c` first
-engages farther out than `current`; clutter is counted and not measured) and
-`round_1_against_a_committed_recording_is_not_computable_and_says_why`; the lock-step
+nothing came down reads not computable), and against round 1's committed laydowns over
+TT-11, round 1's committed recording (GAP-147, D-112), in
+`round_1s_forward_radar_changes_its_own_detections_and_nothing_else` -- under round 1's
+own policy not computable, with the chain's reasons (GAP-183); under a weapons-free
+variant laydown `c` first engages farther out than `current`, `b`'s moved battery
+predicts its own intercepts, and clutter is counted and not measured -- and, over a
+plan-07 recording that never reaches round 1's radars,
+`round_1_against_a_plan_07_recording_is_not_computable_and_says_why`; the lock-step
 driver against the offline batch over all ten sample sets in
 `gungnir-tracking-service/tests/sample_set_replay.rs`; PN-16's drawing in
 `gungnir-ui/src/panels/rendered.rs`.

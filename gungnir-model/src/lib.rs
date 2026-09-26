@@ -102,7 +102,10 @@ pub use exchange::{
     ExchangeAgreement, ExchangeFormat, ExchangeItem, ExchangeSet, LaunchWarningReport,
     PeerLaunchWarning, PeerOrigin, ReportedPosition,
 };
-pub use frame::{bearing_rad, normalize_bearing, AzimuthSector, LocalFrame, SectorError};
+pub use frame::{
+    bearing_rad, normalize_bearing, AzimuthSector, ElevationBand, ElevationError, LocalFrame,
+    SectorError,
+};
 pub use gungnir_coord::Geodetic;
 /// The late-data policy (GAP-114), owned by `gungnir-core` so the fusion pipeline that
 /// applies it and the baseline and clock authority that carry it name one type.

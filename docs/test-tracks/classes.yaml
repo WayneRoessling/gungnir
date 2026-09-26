@@ -43,7 +43,7 @@ classes:
     signatures: {rcs: small, ir: low, acoustic: loud}
     sensors: [radar.long, radar.medium, radar.short, acoustic, eo-ir]
     threads: [MT-01, MT-02, MT-07, MT-09, MT-10]
-    scenarios: [TT-01, TT-02, TT-07, TT-09, TT-10]
+    scenarios: [TT-01, TT-02, TT-07, TT-09, TT-10, TT-11]
   - id: air.owa-jet
     domain: air
     name: One-way attack UAS, jet

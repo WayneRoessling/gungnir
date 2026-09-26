@@ -199,6 +199,53 @@ impl Sector {
     }
 }
 
+/// The elevations a placed sensor can see: the deployment's elevation band for it
+/// (GAP-158, D-111), with the local vertical at the sensor in the recording's frame,
+/// both supplied by the caller.
+///
+/// **Applied on top of the detection model's own altitude band**, as [`Sector`] is on top
+/// of its field of regard, and before any draw, so D-74's per-sensor-and-target streams
+/// stay aligned whatever band a sensor is given.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Elevation {
+    /// Lowest elevation seen, radians above the sensor's own horizon.
+    pub floor_rad: f64,
+    /// Highest elevation seen, radians; `π/2` is the zenith.
+    pub ceiling_rad: f64,
+    /// The local vertical at the sensor, a unit vector in the recording's frame.
+    pub vertical: [f64; 3],
+}
+
+impl Elevation {
+    /// Whether the direction `offset` (target minus sensor) lies in the band, both limits
+    /// included. The sensor's own position is inside; a vertical that is no direction
+    /// admits nothing else.
+    #[must_use]
+    pub fn contains(&self, offset: [f64; 3]) -> bool {
+        let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        if dot(offset, offset) == 0.0 {
+            return true;
+        }
+        let length = dot(self.vertical, self.vertical).sqrt();
+        if !(length.is_finite() && length > f64::EPSILON) {
+            return false;
+        }
+        let up = [
+            self.vertical[0] / length,
+            self.vertical[1] / length,
+            self.vertical[2] / length,
+        ];
+        let along = dot(offset, up);
+        let level = [
+            offset[0] - along * up[0],
+            offset[1] - along * up[1],
+            offset[2] - along * up[2],
+        ];
+        let elevation = along.atan2(dot(level, level).sqrt());
+        elevation >= self.floor_rad && elevation <= self.ceiling_rad
+    }
+}
+
 /// A sensor, where it stands, and the model it observes with.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlacedSensor {
@@ -208,6 +255,9 @@ pub struct PlacedSensor {
     pub position: [f64; 3],
     /// The way it is pointed, when it is sectored; `None` is the full circle.
     pub sector: Option<Sector>,
+    /// The elevations it sees, when the deployment states a band for it; `None` leaves the
+    /// detection model's own altitude band alone to decide.
+    pub elevation: Option<Elevation>,
 }
 
 /// Which of the recording's sensor-specific events apply (D-73).
@@ -482,6 +532,16 @@ pub fn reobserve(
                             continue;
                         }
                     }
+                    if let Some(band) = s.elevation {
+                        let offset = [
+                            record.pos[0].f() - s.position[0],
+                            record.pos[1].f() - s.position[1],
+                            record.pos[2].f() - s.position[2],
+                        ];
+                        if !band.contains(offset) {
+                            continue;
+                        }
+                    }
                     let target = TargetState {
                         id: &entity.id,
                         position: record.pos,
@@ -512,9 +572,15 @@ pub fn reobserve(
                     false_alarms(&s.model, positions[i], &scan, &mut fa_streams[i])
                         .into_iter()
                         .filter(|o| {
+                            let m = o.measurement();
                             s.sector.is_none_or(|sector| {
-                                let m = o.measurement();
                                 sector.contains(m[0].f() - s.position[0], m[1].f() - s.position[1])
+                            }) && s.elevation.is_none_or(|band| {
+                                band.contains([
+                                    m[0].f() - s.position[0],
+                                    m[1].f() - s.position[1],
+                                    m[2].f() - s.position[2],
+                                ])
                             })
                         })
                         .collect();
@@ -614,6 +680,7 @@ mod tests {
             model: radar(1.0),
             position: [0.0, 0.0, 0.0],
             sector: None,
+            elevation: None,
         }
     }
 
@@ -750,6 +817,55 @@ mod tests {
             }
             .contains(0.0, 0.0),
             "straight overhead is inside"
+        );
+    }
+
+    /// A sensor given an elevation band sees only what is inside both its model's altitude
+    /// band and its own (GAP-158, D-111): the target stands 5.7 degrees up, so a band
+    /// containing that sees it exactly as no band does -- the same draws -- and one whose
+    /// floor is above it sees nothing, measured against the vertical it is given.
+    #[test]
+    fn a_sensor_sees_only_inside_its_elevation_band_against_its_own_vertical() {
+        let rec = recording(every_tick());
+        let run = |elevation: Option<Elevation>| {
+            reobserve(
+                &rec,
+                &[PlacedSensor {
+                    elevation,
+                    ..placed(1)
+                }],
+                SensorEvents::NotApplied,
+                "x",
+            )
+            .expect("runs")
+        };
+        let band = |floor_deg: f64, ceiling_deg: f64, vertical: [f64; 3]| {
+            Some(Elevation {
+                floor_rad: floor_deg.to_radians(),
+                ceiling_rad: ceiling_deg.to_radians(),
+                vertical,
+            })
+        };
+        let up = [0.0, 0.0, 1.0];
+        let unbanded = run(None);
+        assert!(unbanded.per_sensor[0].detections > 0);
+        assert_eq!(run(band(0.0, 10.0, up)).observations, unbanded.observations);
+        let above = run(band(6.0, 90.0, up));
+        assert_eq!(above.per_sensor[0].detections, 0);
+        assert_eq!(above.per_sensor[0].scans, unbanded.per_sensor[0].scans);
+        assert_eq!(
+            run(band(0.0, 5.0, up)).per_sensor[0].detections,
+            0,
+            "below the ceiling"
+        );
+        // Leaning one degree away from the target, the sensor's horizon rises on its side
+        // and puts it at 4.7 degrees.
+        let tilt = 1.0_f64.to_radians();
+        let leaning = [-tilt.sin(), 0.0, tilt.cos()];
+        assert_eq!(run(band(5.0, 90.0, leaning)).per_sensor[0].detections, 0);
+        assert_eq!(
+            run(band(4.5, 90.0, leaning)).observations,
+            unbanded.observations
         );
     }
 

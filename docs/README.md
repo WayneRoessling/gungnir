@@ -154,4 +154,4 @@ written once, in a `record/` item, the commit or the pull request, and is not ed
 | SBOM | Software bill of materials, produced per release (`release-governance.md`). |
 | SSE | Screen-space error, the level-of-detail criterion for streamed 3D tiles. |
 | Service node | The headless binary `gungnir-node` that hosts the services layer on-prem or in the cloud. See `ARCHITECTURE.md` §8. |
-| Store-and-forward | Queuing detections and envelopes on a disconnected desktop for delivery when its node returns (`gungnir-remote`, `gungnir-resilience`). |
+| Store-and-forward | Queuing what a disconnected desktop records for delivery when its node returns: detections and exchange sets in `gungnir-remote`'s outboxes, and the outage's decisions as one batch from the journal. `gungnir_resilience::StoreAndForwardQueue` is kept unused (GAP-121). |

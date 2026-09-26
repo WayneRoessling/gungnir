@@ -1,0 +1,120 @@
+{
+ "entities": [
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT11-raid-001",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 35.76061328133649,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT11-raid-002",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 404.93422798298747,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT11-raid-003",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 183.8575096783078,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT11-raid-004",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 336.3523674901871,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT11-raid-005",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 208.85446536635047,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT11-raid-006",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 470.4605980737317,
+   "surface": false
+  }
+ ],
+ "format": 1,
+ "scenario": "TT-11"
+}

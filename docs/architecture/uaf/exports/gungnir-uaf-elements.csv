@@ -146,7 +146,7 @@ SV-21,Services,ServiceInterface,Authorization,Role-to-action matrix; unknown ope
 SV-22,Services,ServiceInterface,Audit log,Append-only audit entries per gated action.,Class
 SV-23,Services,ServiceInterface,API v1,"Snapshot, event stream, detection submission and health are served over the v2 transport; the plan-decision route returns 501 because a node runs no approval queue.",Class
 SV-24,Services,ServiceInterface,Health monitor,Health snapshot from service flags; alert correlation; watchdog.,Class
-SV-25,Services,ServiceInterface,Store-and-forward and reconciliation,Bounded queue while disconnected; journal merge with conflict reporting.,Class
+SV-25,Services,ServiceInterface,Reconciliation on reconnect,"Journal merge by mission time, duplicates dropped, conflicts reported. Forwarding across an outage is SV-30's outboxes and the outage's decision batch; gungnir_resilience::StoreAndForwardQueue is kept with no production caller (GAP-121, D-110).",Class
 SV-26,Services,ServiceInterface,Shared picture and arbitration,Apply node envelopes to a projection; role-rank arbitration of conflicts.,Class
 SV-27,Services,ServiceInterface,Operator workflow,Role workspace layouts; alert lifecycle; cases and annotations.,Class
 SV-28,Services,ServiceInterface,Replay,Deterministic playback of a journal under the replay clock.,Class
@@ -194,7 +194,7 @@ RS-remote,Resources,ResourceArtifact,gungnir-remote,"Remote implementations of t
 RS-render,Resources,ResourceArtifact,gungnir-render,"Shared wgpu device/queue/surface management + egui<->wgpu render pass wiring, per rust-ui-architecture-coding-standards.md \u00a71. No tracking-domain knowledge.",Class
 RS-replay,Resources,ResourceArtifact,gungnir-replay,"Deterministic session playback, timeline scrubbing, and recorded-data replay -- reads gungnir-store's event journal through a gungnir-time ReplayClockAuthority. docs/gungnir-capabilities.md \u00a75.6 -- Lower.",Class
 RS-reporting,Resources,ResourceArtifact,gungnir-reporting,Mission reports and export packages with provenance preserved: every figure traces back to the recorded event journal it was computed from. docs/gungnir-capabilities.md \u00a75.6 -- Lower.,Class
-RS-resilience,Resources,ResourceArtifact,gungnir-resilience,"Resilience & disconnected operations: store-and-forward of envelopes while a node is unreachable, checkpoints, and journal reconciliation after the link returns (ARCHITECTURE.md \u00a78.4). docs/gungnir-capabilities.md \u00a75.6 -- Medium.",Class
+RS-resilience,Resources,ResourceArtifact,gungnir-resilience,Resilience & disconnected operations: journal reconciliation after the link returns and checkpoints (ARCHITECTURE.md \u00a78.4); its bounded envelope queue is kept for a future use and has no production caller (GAP-121). docs/gungnir-capabilities.md \u00a75.6 -- Medium.,Class
 RS-rfs,Resources,ResourceArtifact,gungnir-rfs,"PHD/CPHD, GLMB/LMB random finite set filters.",Class
 RS-scenario,Resources,ResourceArtifact,gungnir-scenario,"Ground-truth + sensor simulation, five-scenario generator. Test/bench dependency only -- never a normal dependency of a production crate.",Class
 RS-security,Resources,ResourceArtifact,gungnir-security,"Authentication, role/attribute-based authorization, encryption in transit and at rest, secrets/key management, signed binaries and configuration, audit logging. gungnir-capabilities.md \u00a75.5 -- Critical.",Class
@@ -312,6 +312,8 @@ IE-delegation-settings,Information Elements,InformationElement,DelegationSetting
 IE-delivery-state,Information Elements,InformationElement,DeliveryState,"How the handoff reached, or failed to reach, the effector.",Class
 IE-effector-layer,Information Elements,InformationElement,EffectorLayer,"Defence layer, ordered outermost first.",Class
 IE-effector-report,Information Elements,InformationElement,EffectorReport,What the receiving system reports back.,Class
+IE-elevation-band,Information Elements,InformationElement,ElevationBand,"The elevations a sensor can see: a floor and a ceiling, radians above the horizon **at the sensor**, measured against its own local vertical (GAP-158, D-111, docs/design/DN-12-coverage-and-gaps.md amendment 2).",Class
+IE-elevation-error,Information Elements,InformationElement,ElevationError,Why an elevation band is refused.,Class
 IE-engagement-event,Information Elements,InformationElement,EngagementEvent,"Engagement lifecycle, for the journal and the after-action measures (docs/design/DN-06-engagement-and-effect.md).",Class
 IE-engagement-side,Information Elements,InformationElement,EngagementSide,"One side of a both-acted incident: the engagement one side of an outage opened (D-58, GAP-134).",Class
 IE-enu-point,Information Elements,InformationElement,EnuPoint,"A platform position or ground point, in the local ENU frame, metres.",Class
@@ -387,7 +389,7 @@ IE-side-outcome,Information Elements,InformationElement,SideOutcome,"How one sid
 IE-source-authentication,Information Elements,InformationElement,SourceAuthentication,"The strength of a source's authentication at admission (GAP-002, D-02).",Class
 IE-staleness-settings,Information Elements,InformationElement,StalenessSettings,"How long a track may go unobserved before it is drawn and treated as stale. Per class, because a loitering surface craft and a cruise missile do not age at the same rate. GAP-012 implements against this.",Class
 IE-term,Information Elements,InformationElement,Term,A domain value the interface has to put a word to.,Class
-IE-test-track-number,Information Elements,InformationElement,TestTrackNumber,"One of the ten committed test-track scenarios (docs/test-tracks/scenario-library.md), naming which fixture a rehearsal replayed a laydown against (GAP-045).",Class
+IE-test-track-number,Information Elements,InformationElement,TestTrackNumber,"One of the eleven committed test-track scenarios (docs/test-tracks/scenario-library.md), naming which fixture a rehearsal replayed a laydown against (GAP-045): the ten plan-07 scenarios, one per mission vignette, and TT-11, usability round 1's raid down its own declared approach, which a round-1 laydown rehearsal re-observes (GAP-147, D-112).",Class
 IE-theme-variant,Information Elements,InformationElement,ThemeVariant,"Which colour variant the chrome renders (D-35, DS-07; GAP-095).",Class
 IE-uas-certification-category,Information Elements,InformationElement,UasCertificationCategory,"I129/120's UCC subfield (edition 1.2 \u00a75.2.12). Unlike the AEC subfield beside it, all four wire codes are exhaustively defined by the specification itself.",Class
 IE-uas-identification-report,Information Elements,InformationElement,UasIdentificationReport,"What a UAS Identification and Target Report (ASTERIX Category 129, edition 1.2) says about one UAS, from one message.",Class
