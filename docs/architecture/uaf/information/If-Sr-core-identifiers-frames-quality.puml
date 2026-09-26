@@ -6,6 +6,14 @@ skinparam classAttributeIconSize 0
 class "LocalFrame" as LocalFrame <<InformationElement>> {
   origin: Geodetic
 }
+class "AzimuthSector" as AzimuthSector <<InformationElement>> {
+  boresight_rad: f64
+  width_rad: f64
+}
+enum "SectorError" as SectorError <<InformationElement>> {
+  NonFiniteBoresight
+  WidthOutOfRange(f64)
+}
 class "IdentifierError" as IdentifierError <<InformationElement>> {
   text: String
 }

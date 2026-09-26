@@ -130,13 +130,13 @@ history, and an entry is never edited once it has merged.
 | GAP-115 | The node never times out an unacknowledged sensor task | Technical | CAP-1.3 | 3 | 9 | S | 27 | I3 | Services engineer | Closed |
 | GAP-116 | Seven interop clauses are unasserted or only partly asserted | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
 | GAP-117 | Most event and view types are never round-tripped through serde | Technical | CAP-7.2 | 2 | 5 | M | 10 | I3 | Services engineer | Open |
-| GAP-118 | Coverage accuracy is untested, and a coverage volume has no bearing | Technical | CAP-2.11 | 3 | 3 | M | 9 | I3 | Services engineer | Open |
+| GAP-118 | Coverage accuracy is untested, and a coverage volume has no bearing | Technical | CAP-2.11 | 3 | 3 | M | 9 | I3 | Services engineer | Closed |
 | GAP-119 | No solve budget exists, and a stale plan is never compared with the last good one | Technical | CAP-3.3, CAP-5.5 | 3 | 8 | M | 24 | I3 | Services engineer | Open |
 | GAP-120 | Nothing compares the embedded and remote backends' projections | Technical | CAP-7.3 | 3 | 1 | M | 3 | I3 | Services engineer | Open |
 | GAP-121 | StoreAndForwardQueue has no production caller | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
 | GAP-122 | Journal retention purge is unbuilt, and nothing says so | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Closed |
 | GAP-123 | An entity's GlobalEntityId changes at every restart | Technical | CAP-2.7 | 4 | 3 | M | 12 | I3 | Services engineer | Closed |
-| GAP-124 | The risk score has no time-to-impact term | Technical | CAP-3.2 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
+| GAP-124 | The risk score has no time-to-impact term | Technical | CAP-3.2 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
 | GAP-125 | Neither binary's health path is tested against a changing flag | Technical | CAP-5.5 | 2 | 8 | S | 16 | I3 | Services engineer | Open |
 | GAP-126 | A non-finite float in an envelope cannot be journaled faithfully | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Closed |
 | GAP-127 | The desktop's decide and task functions check no permission | Technical | CAP-6.2 | 3 | 9 | S | 27 | I3 | Security engineer (human-owned crate) | Closed |
@@ -163,10 +163,12 @@ history, and an entry is never edited once it has merged.
 | GAP-154 | The Disconnected reconciliation row still says no decision reaches a node's record | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Owner | Open |
 | GAP-152 | The audit log lives in memory, so nothing outlives the process and no age governs it | Technical | CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | In progress |
 | GAP-153 | A non-finite float in an envelope breaks the v3 stream and history | Technical | CAP-7.1, CAP-5.4 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
+| GAP-158 | A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical | Technical | CAP-2.11 | 2 | 3 | M | 6 | I3 | Services engineer | Open |
+| GAP-159 | The Coverage accuracy row still says a coverage volume has no bearing | Technical | CAP-2.11 | 1 | 3 | S | 3 | I3 | Owner | Open |
 | GAP-162 | A sensor manager may apply a whole baseline, and applying one checks no permission | Technical | CAP-6.2, CAP-5.6 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-163 | A cut tail of the audit log still verifies, because nothing outside it holds its head | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
 
-Counts: 152 gaps, 3 mission, 149 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 154 gaps, 3 mission, 151 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1805,11 +1807,12 @@ Counts: 152 gaps, 3 mission, 149 technical; 1 already covered by a plan in `../.
 - Capability: CAP-2.11 Geometric questions.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which split the `gungnir-analytics` row, gated line of sight and held coverage accuracy.
+  - 2026-09-25, Closed: Closed by giving a coverage volume a bearing (DN-12 §9, D-84): an azimuth sector on a sensor's declaration and optionally a laydown placement, against true north at the sensor, absent the full circle. The frame turns it by the meridian convergence, coverage counts only inside it, and PN-11 draws a wedge. `gungnir-analytics/tests/coverage_accuracy.rs` recovers every stated range, sector edge and lower elevation limit of a fixture, directly and through the frame, from `combined_coverage` within the criterion. The fixture found the approach sampler restarting its spacing at every vertex, so a short segment was never sampled; fixed. The row is unchanged and awaits the owner's walk. Found: GAP-158, GAP-159. See `../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`.
 - Evidence: `../../verification-capability-table.md` §2, the `gungnir-analytics` Coverage accuracy row, split from line of sight 2026-09-16; `gungnir-analytics/src/lib.rs` (`CoverageVolume`).
 - Severity: 3. Reach: 3 threads. Effort: M. Priority: 9.
 - Impact: The coverage-accuracy criterion (range within 1 percent, bearing and elevation within 0.1 degree of a fixture) has no fixture and no test, and `CoverageVolume` has no azimuth sector, so a sectored sensor's coverage cannot be represented, let alone checked.
 - Closing action: Give `CoverageVolume` an azimuth sector, or record a decision removing bearing from the criterion. Build a fixture of sensor volumes with stated range, sector and elevation limits, and test that each limit is recovered from computed coverage, with sample spacing at most 1 percent of range, within the criterion.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-119 No solve budget exists, and a stale plan is never compared with the last good one**
@@ -1885,11 +1888,12 @@ Counts: 152 gaps, 3 mission, 149 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.2 Threat scoring.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which held the `gungnir-assessment` row.
+  - 2026-09-25, Closed: Closed by giving the score a time-to-impact term (DN-01 §10, D-83). A confidently closing track scores on its urgency `τ / (τ + T)` alone, so the sooner of two never scores lower whatever their ranges; a track not closing keeps half its proximity, and the closing-speed sigma blends the two. Nothing divides by the closing speed, and a non-finite state is not scored. The exposure's closest approach uses the predictor's routine; PN-04 shows the term's parts. `gungnir-assessment/tests/time_to_impact.rs`: one range at two speeds, far-fast against near-slow, a sorted grid. The no-NaN guarantee is under `agentic-workflow.md`'s numerical-stability clause, human-owned; see `docs/signatures.md`. The row is unchanged and awaits the owner's walk. See `../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`.
 - Evidence: `gungnir-assessment/src/assets.rs` (`weighted`: proximity, a closing factor of 1.0 or 0.5, priority and class); the `gungnir-assessment` Risk scoring row, whose only fixture pair moves range at a constant speed.
 - Severity: 3. Reach: 5 threads. Effort: M. Priority: 15.
 - Impact: The `gungnir-assessment` criterion is a score monotonic in time-to-impact. The score reads range and whether a track is closing at all, never how soon it arrives, so a far, fast track with less time to impact scores below a near, slow one.
 - Closing action: Give the scorer a time-to-impact term, then test with fixtures that move time-to-impact independently of range -- one range at two closing speeds, and far-fast against near-slow -- asserting the score never rises as time-to-impact grows.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-125 Neither binary's health path is tested against a changing flag**
@@ -2268,6 +2272,34 @@ Counts: 152 gaps, 3 mission, 149 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found building GAP-126 (`../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`).
 - Depends on: GAP-126.
+
+**GAP-158 A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical**
+
+- Type: Technical.
+- Capability: CAP-2.11 Geometric questions.
+- History:
+  - 2026-09-25, Open: Found closing GAP-118. Filed rather than built with the sector, because the sector closed the criterion's bearing clause and this is a second geometry change to every sensor declaration with its own question: what an upper limit defaults to.
+- Evidence: `gungnir-analytics/src/lib.rs` (`CoverageVolume::covers`: one `min_elevation_rad`, no upper limit, elevation from the frame's `u`); `gungnir-config/src/lib.rs` (`AnalyticsConfig::coverage_min_elevation_rad`, one value); found closing GAP-118.
+- Severity: 2. Reach: 3 threads. Effort: M. Priority: 6.
+- Impact: Every sensor is credited from the baseline's one `analytics.coverage_min_elevation_rad` up to the zenith: a radar with a 2 degree mask and a camera looking up at 30 degrees get the same floor, and nothing has a ceiling, so a radar's cone of silence overhead is counted as covered. Elevation is measured against the local frame's vertical, which tilts from a distant sensor's own by about 0.009 degree per kilometre from the origin, so beyond about 11 km a stated limit is off by more than the coverage-accuracy criterion's 0.1 degree.
+- Closing action: Give a sensor's declaration its own elevation band -- a lower and an upper limit, the baseline's floor the default for the lower -- carry it through the registry to `CoverageVolume`, and measure elevation against the sensor's own vertical placed in the frame, as the azimuth sector is placed by the convergence. Extend `gungnir-analytics/tests/coverage_accuracy.rs` to recover both limits, with a sensor far enough from the origin that the tilt exceeds the criterion.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found closing GAP-118 (`../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`).
+- Depends on: GAP-118.
+
+**GAP-159 The Coverage accuracy row still says a coverage volume has no bearing**
+
+- Type: Technical.
+- Capability: CAP-2.11 Geometric questions.
+- History:
+  - 2026-09-25, Open: Found closing GAP-118. Not edited in that change: the sentence is in a criterion cell of the verification table, which only the owner changes.
+- Evidence: `docs/verification-capability-table.md` (the `gungnir-analytics` Coverage accuracy row); `gungnir-analytics/tests/coverage_accuracy.rs`; GAP-118's closing entry.
+- Severity: 1. Reach: 3 threads. Effort: S. Priority: 3.
+- Impact: The `gungnir-analytics` Coverage accuracy row of the verification table says "no test compares a computed volume with a fixture, and `CoverageVolume` has no azimuth sector, so bearing has no representation yet (GAP-118)". Since GAP-118 closed, a volume has a sector and `coverage_accuracy.rs` compares one with a fixture, so a reader is told the opposite of what the code does. The sentence is in the row's pass-criterion cell, and any change to a criterion cell is the owner's.
+- Closing action: On the owner's next walk of the table, replace the sentence with what now holds, and decide the row against `coverage_accuracy.rs`. The criterion itself is unchanged.
+- Target: I3. Owner: Owner. Status: Open.
+- Reference: Found closing GAP-118 (`../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`).
+- Depends on: GAP-118.
 
 **GAP-162 A sensor manager may apply a whole baseline, and applying one checks no permission**
 

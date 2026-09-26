@@ -41,7 +41,50 @@ pub struct CoverageCircle {
     /// 1.0 for a tracking sensor, lower for a searching one. Drawn as opacity, so a
     /// weaker claim looks like one.
     pub confidence: f32,
+    /// The bearings the sensor sees, **in this frame** -- the caller has already turned a
+    /// sector surveyed on true north into the frame (GAP-118, D-84). `None` is the full
+    /// circle and is drawn as a ring; a sector is drawn as a wedge, so a panel radar's
+    /// blind side is not painted as watched.
+    pub sector: Option<gungnir_model::AzimuthSector>,
 }
+
+/// The outline of a sectored coverage region in ENU, ready to project: the sensor, the arc
+/// from the sector's anticlockwise edge clockwise to its clockwise edge, and back to the
+/// sensor. `None` for a full circle, which is drawn as a ring instead.
+///
+/// `segments` is the number of straight pieces the arc is drawn with at a full circle; a
+/// narrower sector gets proportionally fewer, never fewer than two.
+#[must_use]
+pub fn sector_outline(circle: &CoverageCircle, segments: u32) -> Option<Vec<[f64; 3]>> {
+    let sector = circle.sector?;
+    if sector.is_full_circle() || sector.validate().is_err() {
+        return None;
+    }
+    let tau = std::f64::consts::TAU;
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    let pieces = ((f64::from(segments) * sector.width_rad / tau).ceil() as u32).max(2);
+    let start = sector.start_rad();
+    let [e, n, u] = circle.center;
+    let mut outline = Vec::with_capacity(pieces as usize + 3);
+    outline.push(circle.center);
+    for i in 0..=pieces {
+        let bearing = start + sector.width_rad * f64::from(i) / f64::from(pieces);
+        outline.push([
+            e + circle.radius_m * bearing.sin(),
+            n + circle.radius_m * bearing.cos(),
+            u,
+        ]);
+    }
+    outline.push(circle.center);
+    Some(outline)
+}
+
+/// Arc pieces for a full circle's worth of a sector outline on screen.
+const SECTOR_SEGMENTS: u32 = 96;
 
 /// Why there is no coverage to draw. Distinct cases, because they are different
 /// situations for the person looking at the map.
@@ -650,14 +693,20 @@ fn draw_rings(
         if radius_px < 2.0 {
             continue;
         }
-        painter.circle_stroke(
-            center,
-            radius_px,
-            egui::Stroke::new(
-                palette.stroke_hairline,
-                coverage_color(palette, circle.confidence),
-            ),
+        let stroke = egui::Stroke::new(
+            palette.stroke_hairline,
+            coverage_color(palette, circle.confidence),
         );
+        match sector_outline(circle, SECTOR_SEGMENTS) {
+            Some(outline) => {
+                let points: Vec<egui::Pos2> =
+                    outline.iter().map(|p| view.project(*p, rect)).collect();
+                painter.add(egui::Shape::line(points, stroke));
+            }
+            None => {
+                painter.circle_stroke(center, radius_px, stroke);
+            }
+        }
     }
 }
 
@@ -773,7 +822,50 @@ mod tests {
             center: [0.0, 0.0, 0.0],
             radius_m,
             confidence,
+            sector: None,
         }
+    }
+
+    /// GAP-118: a sectored region is drawn as a wedge from the sensor out to its range,
+    /// between its edges and across north when it straddles it; a full circle stays a ring.
+    #[test]
+    fn a_sector_is_outlined_as_a_wedge_between_its_edges() {
+        let mut c = circle(1, 1_000.0, 1.0);
+        c.center = [100.0, -50.0, 0.0];
+        assert!(sector_outline(&c, 96).is_none(), "no sector is a ring");
+        c.sector = Some(
+            gungnir_model::AzimuthSector::new(350_f64.to_radians(), 40_f64.to_radians())
+                .expect("legal"),
+        );
+        let outline = sector_outline(&c, 96).expect("a wedge");
+        assert_eq!(outline.first(), Some(&c.center));
+        assert_eq!(outline.last(), Some(&c.center));
+        let arc = &outline[1..outline.len() - 1];
+        let bearing = |p: &[f64; 3]| {
+            gungnir_model::bearing_rad(p[0] - c.center[0], p[1] - c.center[1])
+                .expect("off centre")
+                .to_degrees()
+        };
+        assert!((bearing(&arc[0]) - 330.0).abs() < 1e-9, "starts at 330");
+        assert!(
+            (bearing(arc.last().expect("an end")) - 10.0).abs() < 1e-9,
+            "ends at 10"
+        );
+        for p in arc {
+            let r = ((p[0] - c.center[0]).powi(2) + (p[1] - c.center[1]).powi(2)).sqrt();
+            assert!((r - 1_000.0).abs() < 1e-6, "on the range");
+            let b = bearing(p);
+            assert!(
+                !(10.0 + 1e-9..330.0 - 1e-9).contains(&b),
+                "{b} is outside the sector"
+            );
+        }
+        c.sector =
+            Some(gungnir_model::AzimuthSector::new(0.0, std::f64::consts::TAU).expect("legal"));
+        assert!(
+            sector_outline(&c, 96).is_none(),
+            "a stated full circle is a ring"
+        );
     }
 
     /// The two reasons for an empty coverage layer are different situations and must not
