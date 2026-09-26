@@ -445,9 +445,9 @@ person's acts, a few a minute. A log keeps its run's most recent 10,000 entries 
 PN-20; the file keeps all. A write that fails is held, counted, and written as
 `audit.write_failed` when writing resumes.
 
-**Left open** (GAP-163): retention (`RetentionPolicy::max_audit_log_age_days` has no caller for
-these files), an anchor for the chain's head outside the file, and PN-20 reading earlier runs'
-segments.
+**Left open**: retention (`RetentionPolicy::max_audit_log_age_days` applied to whole segments, as
+D-78 applies the session age) and PN-20 reading earlier runs' segments, both GAP-152's; and an
+anchor for the chain's head outside the file, GAP-163.
 
 **Verification.** `gungnir-node/tests/node_audit.rs` performs each act above over the real
 transport and asserts one entry naming it, none for a served read, a flood counted rather than

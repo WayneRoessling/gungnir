@@ -153,6 +153,22 @@ fn open(state: &mut AppState, sustainment: &mut SustainmentState) {
     };
     sustainment.review = Some(ReviewCase::open(session));
     sustainment.next_finding = 0;
+    // GAP-122, D-78: a session under review is never purged, however old. The hold is a
+    // file beside the journal, so it outlives this process: a desktop that stops with a
+    // review open keeps the session until somebody closes the review.
+    let reason = format!(
+        "after-action review of session {} opened{}",
+        session.0,
+        operator
+            .as_deref()
+            .map_or(String::new(), |o| format!(" by operator {o}"))
+    );
+    if let Err(err) = state.journal.hold(session, &reason) {
+        state.alerts.push(format!(
+            "session {} could not be protected from retention while it is reviewed: {err}",
+            session.0
+        ));
+    }
     publish(
         state,
         now,
@@ -312,6 +328,14 @@ fn close(state: &mut AppState, sustainment: &mut SustainmentState) {
                 gungnir_security::actions::REVIEW_CONDUCT,
                 format!("closed the review of session {}", session.0),
             );
+            // The review no longer holds it; retention may now reach it (D-78).
+            if let Err(err) = state.journal.release(session) {
+                state.alerts.push(format!(
+                    "the retention hold on session {} could not be released: {err}; it is \
+                     kept until the hold file is removed",
+                    session.0
+                ));
+            }
         }
         Err(err) => state
             .alerts

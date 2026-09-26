@@ -95,6 +95,17 @@ fn publish(state: &mut AppState, now: MissionTime, event: LaunchWarningEvent) {
     }
 }
 
+/// Publish every issued launch warning to the node again, the tick its link comes back
+/// (GAP-146, DN-18 §13), for the reason `handoffs::republish_to_node` gives. **A console
+/// that has issued none publishes none**: an empty set is the claim "there are none
+/// here", which a console with no ledger of its own has no business making.
+pub(crate) fn republish_to_node(state: &AppState) {
+    if state.issued_launch_warnings.is_empty() {
+        return;
+    }
+    publish_to_exchange(state);
+}
+
 /// Every issued launch warning, republished on each new one -- the same shape
 /// `handoffs.rs::issue_for`/`publish_to_exchange` already use for `Handoffs`:
 /// unfiltered by marking, since `NodeApi::exchange_for` applies that gate per party at
@@ -133,6 +144,31 @@ pub enum Recovered {
 /// straight append of every `Issued` event in order, never an update by id.
 #[must_use]
 pub fn recover(journal: &dyn gungnir_store::EventJournal) -> (Vec<LaunchWarningReport>, Recovered) {
+    let (issued, recovered, _) = recover_with_sessions(journal);
+    (issued, recovered)
+}
+
+/// The serial of an identifier this desktop issued (`launch-warning-<n>`), or `None` for
+/// anything else.
+#[must_use]
+pub fn serial(id: &str) -> Option<u64> {
+    id.strip_prefix("launch-warning-")?.parse().ok()
+}
+
+/// [`recover`], and the session holding the highest serial issued (GAP-122, D-78).
+///
+/// **Retention protects that session**: the serial continues past the highest one the
+/// journal holds, so if retention removed it a new warning would take a number an old
+/// one had.
+#[must_use]
+pub fn recover_with_sessions(
+    journal: &dyn gungnir_store::EventJournal,
+) -> (
+    Vec<LaunchWarningReport>,
+    Recovered,
+    Option<gungnir_model::SessionId>,
+) {
+    let mut highest: Option<(u64, gungnir_model::SessionId)> = None;
     let sessions = match journal.sessions() {
         Ok(sessions) => sessions,
         Err(err) => {
@@ -141,6 +177,7 @@ pub fn recover(journal: &dyn gungnir_store::EventJournal) -> (Vec<LaunchWarningR
                 Recovered::Unreadable {
                     reason: err.to_string(),
                 },
+                None,
             )
         }
     };
@@ -158,12 +195,18 @@ pub fn recover(journal: &dyn gungnir_store::EventJournal) -> (Vec<LaunchWarningR
                     Recovered::Unreadable {
                         reason: format!("session {}: {err}", session.0),
                     },
+                    highest.map(|(_, s)| s),
                 )
             }
         };
         read += 1;
         for envelope in envelopes {
             if let Event::LaunchWarning(LaunchWarningEvent::Issued(report)) = envelope.event {
+                if let Some(n) = serial(&report.id) {
+                    if highest.is_none_or(|(h, _)| n >= h) {
+                        highest = Some((n, session));
+                    }
+                }
                 issued.push(report);
             }
         }
@@ -173,5 +216,5 @@ pub fn recover(journal: &dyn gungnir_store::EventJournal) -> (Vec<LaunchWarningR
     } else {
         Recovered::FromJournal { sessions: read }
     };
-    (issued, outcome)
+    (issued, outcome, highest.map(|(_, s)| s))
 }

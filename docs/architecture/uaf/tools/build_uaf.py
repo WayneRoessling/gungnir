@@ -144,7 +144,8 @@ INFORMATION_DOMAINS = [
     ("Policy, authority & settings", ["policy_settings.rs", "anomaly_settings.rs", "ui_settings.rs",
                                       "arbitration.rs"]),
     ("Assets, exchange & releasability", ["assets.rs", "exchange.rs", "releasability.rs"]),
-    ("Battle rhythm & mission records", ["rhythm.rs", "requirements.rs", "laydown.rs", "vocabulary.rs"]),
+    ("Battle rhythm & mission records", ["rhythm.rs", "requirements.rs", "laydown.rs", "vocabulary.rs",
+                                         "retention.rs"]),
     ("UAS identification & platform reports", ["uas_identification.rs", "uas_platform.rs"]),
 ]
 INFORMATION_DOMAIN_OF = {f: d for d, files in INFORMATION_DOMAINS for f in files}
@@ -1000,9 +1001,20 @@ def gen_information_structure() -> None:
         P = [f"@startuml If-Sr-{slugify(domain)}", f"title If-Sr information structure: {domain}",
              # Class diagrams default to top-to-bottom, which stacks these mostly
              # sibling, mostly edge-sparse types into one enormous row (measured:
-             # some domains rendered 30-40x wider than tall). left-to-right plus
-             # smetana wraps them into a far more square layout instead.
-             "left to right direction", "!pragma layout smetana",
+             # some domains rendered 30-40x wider than tall). left-to-right wraps
+             # them into a far squarer layout.
+             #
+             # Laid out by Graphviz dot, never smetana (D-79, GAP-139). smetana, the
+             # Java port of dot these diagrams were once pinned to, threw
+             # ArrayIndexOutOfBoundsException in mincross on the plans-effectors-
+             # handoff domain once it grew by one class, so the family was being
+             # rendered by two engines. Measured with PlantUML 1.2026.8 on every
+             # If-Sr diagram, dot's left-to-right layouts cover 1.05x to 1.66x
+             # smetana's area: the 30-40x above was the top-to-bottom default,
+             # which left-to-right cures under either engine. Every If-Sr diagram,
+             # the overview included, therefore renders under one engine that
+             # positions every element, which the registry check needs.
+             "left to right direction",
              "hide empty members", "skinparam classAttributeIconSize 0"]
         for name in domain_names:
             emit_class(P, name, hollow=False)
@@ -1042,8 +1054,8 @@ def gen_information_structure() -> None:
 
     # Context diagram: domains as boxes, one edge per (domain, domain) pair with at
     # least one real cross-domain member reference.
+    # Graphviz dot, like every If-Sr detail diagram (D-79): one engine per family.
     P = ["@startuml If-Sr-overview", "title If-Sr information structure: overview",
-         "!pragma layout smetana",
          "skinparam componentStyle rectangle", "left to right direction"]
     for domain in if_sr_domain_names():
         P.append(f'component "{domain}" as {slugify(domain).replace("-", "_")} <<Group>> [[{type_file[domain]}.svg]]')

@@ -362,10 +362,10 @@ information_elements:
   - {id: IE-19, name: PolicyVerdict, code: gungnir_policy::PolicyVerdict, description: "Approved (never by built-in engines), Denied with reason, RequiresHumanApproval."}
   - {id: IE-20, name: AuditEntry, code: gungnir_security::AuditEntry, description: "Actor, action, time, outcome; append-only."}
   - {id: IE-21, name: Alert and AlertLifecycle, code: gungnir_workflow::AlertLifecycle, description: "Alert with severity; New, Acknowledged, Escalated, Closed with history."}
-  - {id: IE-22, name: SnapshotResponse, code: gungnir_api::v1::SnapshotResponse, description: "Schema version, tracks, plan, health."}
-  - {id: IE-23, name: ApprovalRequest, code: gungnir_api::v1::ApprovalRequest, description: "Plan id, accepted, operator."}
-  - {id: IE-24, name: SubmitDetectionRequest, code: gungnir_api::v1::SubmitDetectionRequest, description: One DetectionView for the gateway.}
-  - {id: IE-25, name: SubscribeRequest, code: gungnir_api::v1::SubscribeRequest, description: The first frame of the event stream; from_seq.}
+  - {id: IE-22, name: SnapshotResponse, code: gungnir_api::v3::SnapshotResponse, description: "Schema version, tracks, plan, health."}
+  - {id: IE-23, name: DecisionRequest, code: gungnir_api::v3::DecisionRequest, description: "An operator's decision on one queue item over the API; request id, item, choice. Names no operator: the caller is whoever the session token says. Carried by ApprovalRequest (plan, accepted, operator) until GAP-138 removed that type, which no route served after GAP-132."}
+  - {id: IE-24, name: SubmitDetectionRequest, code: gungnir_api::v3::SubmitDetectionRequest, description: One DetectionView for the gateway.}
+  - {id: IE-25, name: SubscribeRequest, code: gungnir_api::v3::SubscribeRequest, description: The first frame of the event stream; from_seq.}
   - {id: IE-26, name: SchemaEntry, code: gungnir_interop::SchemaEntry, description: "Name, version, kind of a schema the build speaks."}
   - {id: IE-27, name: SensorRecord and CoverageRegion, code: gungnir_sensor_management::SensorRecord, description: "Identity, modality, location, calibration version, mode; coverage geometry."}
   - {id: IE-28, name: Report, code: gungnir_reporting, description: A mission report or export with figures traceable to the journal.}
@@ -461,6 +461,8 @@ information_elements:
   - {id: IE-requirement-state, name: RequirementState, code: gungnir_model::RequirementState, domain: 'Battle rhythm & mission records', description: 'Where a CollectionRequirement has got to, from stated to answered.'}
   - {id: IE-resolution, name: Resolution, code: gungnir_model::Resolution, domain: 'Policy, authority & settings', description: 'Which of two conflicting sides stands.'}
   - {id: IE-resource-placement, name: ResourcePlacement, code: gungnir_model::ResourcePlacement, domain: 'Battle rhythm & mission records', description: 'Where one effector sits in a laydown.'}
+  - {id: IE-retention-event, name: RetentionEvent, code: gungnir_model::RetentionEvent, domain: 'Events & the record', description: 'What retention did to the record (GAP-122, D-78), journaled into the session that was live when it happened.'}
+  - {id: IE-retention-policy, name: RetentionPolicy, code: gungnir_model::RetentionPolicy, domain: 'Battle rhythm & mission records', description: 'The ages past which a deployment''s record is purged.'}
   - {id: IE-review-event, name: ReviewEvent, code: gungnir_model::ReviewEvent, domain: 'Events & the record', description: 'After-action review lifecycle (docs/design/DN-20-after-action-review.md, GAP-049).'}
   - {id: IE-rhythm-event, name: RhythmEvent, code: gungnir_model::RhythmEvent, domain: 'Events & the record', description: 'The watch''s rhythm: what came due, what was handed over, what went down on purpose (docs/design/DN-21-battle-rhythm.md §6, GAP-054).'}
   - {id: IE-role-layout, name: RoleLayout, code: gungnir_model::RoleLayout, domain: 'Policy, authority & settings', description: 'One role''s screen.'}

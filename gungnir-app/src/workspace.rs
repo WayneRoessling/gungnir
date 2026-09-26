@@ -752,6 +752,8 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
     // what happened to the bearings among what every bound feed reported.
     let bearing_feeds = crate::sapient::bearing_feed_lines(state);
     let bearing_pipeline = crate::sapient::bearing_pipeline_line(state);
+    // GAP-146: this console's own publishing to coalition exchange, in one line.
+    let exchange = crate::exchange::exchange_line(state);
     gungnir_ui::panels::sensor_health::render_sensor_health(
         ui,
         &state.palette,
@@ -781,6 +783,12 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
             peers: &peers,
             bearing_feeds: &bearing_feeds,
             bearing_pipeline,
+            exchange: exchange.as_ref().map(|line| {
+                gungnir_ui::panels::sensor_health::ExchangeLine {
+                    standing: line.standing,
+                    text: &line.text,
+                }
+            }),
         },
     );
 }

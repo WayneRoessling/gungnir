@@ -100,8 +100,11 @@ passphrase or token, which the node's test and the provisioning test both check 
 files. The account-provisioning command records each change beside the store it changes, opening
 the log before it changes anything so a change that could not be recorded is not made.
 
-**What it does not do yet** is GAP-163: nothing ages the segments out, a cut tail still
-verifies because nothing outside the file holds the head, and PN-20 shows one run.
+This is the durable home GAP-152 asked for, filed the same day by the retention purge's
+build, with one difference its action named: GAP-152 said sealed, and D-87 chose not, for the
+reason above. **What it does not do yet**: nothing ages the segments out and PN-20 shows one run,
+which stay on GAP-152; and a cut tail still verifies because nothing outside the file holds the
+head, GAP-163.
 
 ## Left for the owner
 

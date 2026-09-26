@@ -1,7 +1,6 @@
 @startuml If-Sr-assets-exchange-releasability
 title If-Sr information structure: Assets, exchange & releasability
 left to right direction
-!pragma layout smetana
 hide empty members
 skinparam classAttributeIconSize 0
 class "AssetId" as AssetId <<InformationElement>> {

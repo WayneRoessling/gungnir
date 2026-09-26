@@ -153,8 +153,9 @@ The paths are `/v3` since 2026-09-17 (the "Version 3" section above); they were 
 **Authentication landed the same day (GAP-057, DN-23 §6).** Every route but
 `POST /v3/session` requires a bearer token the node minted; the event stream carries its
 token in the subscribe frame, because a WebSocket client cannot always set a header on the
-upgrade. `ApprovalRequest` names an operator in its body and **that field is not
-believed**: the caller is whoever the token says. A node with no account store configured
+upgrade. **No decision a caller sends names its operator**: the caller is whoever the
+token says. (`ApprovalRequest`, which named one in its body, was never believed and was
+removed on 2026-09-25, GAP-138.) A node with no account store configured
 answers `503` on every route, saying it authenticates nobody -- which is the default
 deployment, and better than serving the picture to anyone who asks.
 
@@ -204,8 +205,9 @@ D-02 has since chosen: operator tokens are GAP-057 and machine identity is GAP-0
 accept a plan as anybody. Both routes existed and returned `501` with that reason, rather
 than `404`, which would have wrongly said they were not part of v2. **The decision route's
 successor names no operator in its body at all** (`DecisionRequest`, GAP-132): the caller
-is whoever the token says. `ApprovalRequest` itself is now reachable from no route and is
-named only by the unimplemented `ApiHandler` trait (GAP-138).
+is whoever the token says. `ApprovalRequest` itself, reachable from no route after GAP-132
+and named only by a method of the unimplemented `ApiHandler` trait, was removed with that
+method on 2026-09-25 (GAP-138), so the contract carries one description of a decision.
 
 **Why only loopback is served.** There is no TLS (GAP-060, which waits on GAP-084's key
 custody), so `gungnir_api::transport::serve` refuses any bind address that is not
