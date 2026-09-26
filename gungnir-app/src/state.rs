@@ -2062,6 +2062,7 @@ mod tests {
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         }
     }
 

@@ -56,6 +56,16 @@ pub struct SensorPlacement {
     /// re-aims it says so here; one that moves it without re-aiming keeps its boresight.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub azimuth_sector: Option<crate::AzimuthSector>,
+    /// The elevations this placement lets the sensor see, when they differ from the
+    /// sensor's own declaration (GAP-158, D-111): a floor and a ceiling against the local
+    /// vertical at the placement.
+    ///
+    /// **Absent means the declared sensor's band**, and a sensor that declares none has the
+    /// baseline's `analytics.coverage_min_elevation_rad` as its floor and the zenith as its
+    /// ceiling. A placement that states a band states the whole band: it replaces the
+    /// declaration's, never half of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elevation_band: Option<crate::ElevationBand>,
 }
 
 /// Where one effector sits in a laydown.
@@ -154,6 +164,7 @@ mod tests {
             position_enu: position,
             mode: SensorMode::Search,
             azimuth_sector: None,
+            elevation_band: None,
         }
     }
 

@@ -15,8 +15,8 @@ pub mod anomaly;
 pub mod coverage;
 
 pub use coverage::{
-    combined_coverage, coverage_from_registry, volume_of, CoverageGap, CoverageParameters,
-    CoverageReport, GapSeverity, PointCoverage,
+    band_or_default, combined_coverage, coverage_from_registry, volume_in_frame, volume_of,
+    CoverageGap, CoverageParameters, CoverageReport, GapSeverity, PointCoverage,
 };
 
 pub use anomaly::{
@@ -101,20 +101,37 @@ pub fn viewshed(los: &dyn LineOfSight, observer: [f64; 3], points: &[[f64; 3]]) 
     points.iter().map(|p| los.visible(observer, *p)).collect()
 }
 
-/// A sensor's coverage: a range limit, a minimum elevation angle above the sensor's
-/// horizon, and an azimuth sector (terrain masking is applied by combining with a
+/// A sensor's coverage: a range limit, an elevation band above the sensor's own horizon,
+/// and an azimuth sector (terrain masking is applied by combining with a
 /// [`LineOfSight`]).
 ///
-/// Every angle is in the local ENU frame the positions are in: elevation against the
-/// frame's `u` axis, bearing clockwise from its `+n` axis. A sector surveyed against true
-/// north is turned into the frame by [`gungnir_model::LocalFrame::sector_in_frame`]
-/// before it is put here, which [`coverage::coverage_from_registry`] does
-/// (`docs/design/DN-12-coverage-and-gaps.md` amendment 1; GAP-118, D-84).
+/// Positions are in the local ENU frame. **Angles are the sensor's own** (GAP-158, D-111):
+/// elevation is measured against `vertical`, the local vertical at the sensor placed in
+/// the frame, and bearing in the plane square to it, clockwise from the frame's `+n` axis
+/// projected into that plane. At the origin that is exactly the frame's `u` and `+n`; a
+/// sensor 11 km away has a vertical a tenth of a degree off the frame's, which is the
+/// coverage-accuracy criterion, so its band is measured against its own.
+///
+/// A sector surveyed against true north is turned into the frame by
+/// [`gungnir_model::LocalFrame::sector_in_frame`] before it is put here, and the vertical
+/// is [`gungnir_model::LocalFrame::vertical_at`]; [`coverage::volume_of`] does both
+/// (`docs/design/DN-12-coverage-and-gaps.md` amendments 1 and 2; GAP-118, D-84).
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CoverageVolume {
     pub sensor_enu: [f64; 3],
     pub max_range_m: f64,
+    /// The lowest elevation the sensor sees, radians above its own horizon.
     pub min_elevation_rad: f64,
+    /// The highest elevation the sensor sees, radians above its own horizon. **`π/2` is the
+    /// zenith, which is no ceiling**, and is what a volume that states none has, including
+    /// every volume serialized before ceilings existed.
+    #[serde(default = "zenith")]
+    pub max_elevation_rad: f64,
+    /// The local vertical at the sensor, a unit vector in the frame. **`[0, 0, 1]` is the
+    /// frame's own**, exact at the origin, and what a volume serialized before this field
+    /// existed has.
+    #[serde(default = "frame_up")]
+    pub vertical: [f64; 3],
     /// The bearings the sensor sees, in the frame. **`None` is the full circle**: a
     /// rotating radar or an omnidirectional receiver, and every volume built before
     /// sectors existed.
@@ -122,30 +139,78 @@ pub struct CoverageVolume {
     pub azimuth: Option<gungnir_model::AzimuthSector>,
 }
 
+fn zenith() -> f64 {
+    std::f64::consts::FRAC_PI_2
+}
+
+fn frame_up() -> [f64; 3] {
+    [0.0, 0.0, 1.0]
+}
+
+fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/// `v` scaled to unit length, or `None` for a zero or non-finite vector.
+fn unit(v: [f64; 3]) -> Option<[f64; 3]> {
+    let length = dot(v, v).sqrt();
+    (length.is_finite() && length > f64::EPSILON)
+        .then(|| [v[0] / length, v[1] / length, v[2] / length])
+}
+
 impl CoverageVolume {
-    /// Whether the volume contains `p`: within range, at or above the minimum elevation,
-    /// and inside the sector.
+    /// Whether the volume contains `p`: within range, inside the elevation band, and
+    /// inside the sector, with elevation and bearing measured against the sensor's own
+    /// vertical.
     ///
     /// The sensor's own position is covered. A point directly above or below the sensor
-    /// has no bearing, so the sector does not exclude it and the elevation limit decides.
+    /// has no bearing, so the sector does not exclude it and the band decides: straight up
+    /// is covered only by a volume whose ceiling is the zenith.
+    ///
+    /// **A vertical that is no direction covers nothing** but the sensor's own position:
+    /// a zero or non-finite vector gives no elevation to judge, and reporting a point
+    /// uncovered is the direction that shows a gap rather than hides one.
     pub fn covers(&self, p: [f64; 3]) -> bool {
         let d = [
             p[0] - self.sensor_enu[0],
             p[1] - self.sensor_enu[1],
             p[2] - self.sensor_enu[2],
         ];
-        let horizontal = (d[0] * d[0] + d[1] * d[1]).sqrt();
-        let range = (horizontal * horizontal + d[2] * d[2]).sqrt();
+        let range = dot(d, d).sqrt();
         if range > self.max_range_m || range == 0.0 {
             return range == 0.0;
         }
-        if d[2].atan2(horizontal) < self.min_elevation_rad {
+        let Some(up) = unit(self.vertical) else {
+            return false;
+        };
+        let along = dot(d, up);
+        let level = [
+            d[0] - along * up[0],
+            d[1] - along * up[1],
+            d[2] - along * up[2],
+        ];
+        let elevation = along.atan2(dot(level, level).sqrt());
+        if elevation < self.min_elevation_rad || elevation > self.max_elevation_rad {
             return false;
         }
-        match (self.azimuth, gungnir_model::bearing_rad(d[0], d[1])) {
-            (Some(sector), Some(bearing)) => sector.contains(bearing),
-            // No sector, or no bearing to judge one by.
-            _ => true,
+        let Some(sector) = self.azimuth else {
+            return true;
+        };
+        // North and east in the sensor's own horizontal plane: the frame's `+n` with its
+        // vertical part removed, and north cross up. Both are the frame's own axes when
+        // the vertical is.
+        let Some(north) = unit([-up[1] * up[0], 1.0 - up[1] * up[1], -up[1] * up[2]]) else {
+            return false;
+        };
+        let east = [
+            north[1] * up[2] - north[2] * up[1],
+            north[2] * up[0] - north[0] * up[2],
+            north[0] * up[1] - north[1] * up[0],
+        ];
+        match gungnir_model::bearing_rad(dot(level, east), dot(level, north)) {
+            Some(bearing) => sector.contains(bearing),
+            // No bearing to judge a sector by: straight up or down.
+            None => true,
         }
     }
 }
@@ -204,6 +269,8 @@ mod tests {
             sensor_enu: [0.0, 0.0, 0.0],
             max_range_m: 1000.0,
             min_elevation_rad: 0.1,
+            max_elevation_rad: std::f64::consts::FRAC_PI_2,
+            vertical: [0.0, 0.0, 1.0],
             azimuth: None,
         };
         assert!(cov.covers([100.0, 0.0, 50.0]));
@@ -223,6 +290,8 @@ mod tests {
             sensor_enu: [100.0, 200.0, 0.0],
             max_range_m: 1000.0,
             min_elevation_rad: -0.5,
+            max_elevation_rad: std::f64::consts::FRAC_PI_2,
+            vertical: [0.0, 0.0, 1.0],
             azimuth: Some(
                 gungnir_model::AzimuthSector::new(350_f64.to_radians(), 40_f64.to_radians())
                     .expect("a legal sector"),
@@ -243,6 +312,88 @@ mod tests {
             cov.covers([100.0, 200.0, 300.0]),
             "straight up has no bearing"
         );
+    }
+
+    /// GAP-158: a ceiling takes the cone overhead out of the volume -- straight up
+    /// included -- and leaves everything below it.
+    #[test]
+    fn coverage_volume_respects_its_ceiling_and_the_cone_of_silence_is_uncovered() {
+        let cov = CoverageVolume {
+            sensor_enu: [0.0, 0.0, 10.0],
+            max_range_m: 1000.0,
+            min_elevation_rad: 2_f64.to_radians(),
+            max_elevation_rad: 60_f64.to_radians(),
+            vertical: [0.0, 0.0, 1.0],
+            azimuth: None,
+        };
+        let at = |elevation_deg: f64| {
+            let e = elevation_deg.to_radians();
+            [500.0 * e.cos(), 0.0, 10.0 + 500.0 * e.sin()]
+        };
+        for inside in [2.01, 30.0, 59.9] {
+            assert!(cov.covers(at(inside)), "{inside} deg is in 2..60");
+        }
+        for outside in [1.9, 60.1, 80.0] {
+            assert!(!cov.covers(at(outside)), "{outside} deg is outside 2..60");
+        }
+        assert!(
+            !cov.covers([0.0, 0.0, 500.0]),
+            "straight up is above the ceiling"
+        );
+        assert!(cov.covers([0.0, 0.0, 10.0]), "the sensor's own position");
+    }
+
+    /// GAP-158: elevation is measured against the volume's own vertical. A vertical tilted
+    /// half a degree east tilts the sensor's horizon down on its east side, so a point 1.5
+    /// degrees above the frame's horizon due east is two degrees above the sensor's, and
+    /// one due west is one degree above it.
+    #[test]
+    fn elevation_is_measured_against_the_sensors_own_vertical() {
+        let tilt = 0.5_f64.to_radians();
+        let cov = CoverageVolume {
+            sensor_enu: [0.0; 3],
+            max_range_m: 10_000.0,
+            min_elevation_rad: 1.25_f64.to_radians(),
+            max_elevation_rad: std::f64::consts::FRAC_PI_2,
+            vertical: [tilt.sin(), 0.0, tilt.cos()],
+            azimuth: None,
+        };
+        let e = 1.5_f64.to_radians();
+        let east = [1000.0 * e.cos(), 0.0, 1000.0 * e.sin()];
+        let west = [-1000.0 * e.cos(), 0.0, 1000.0 * e.sin()];
+        assert!(cov.covers(east), "2.0 deg above its own horizon");
+        assert!(
+            !cov.covers(west),
+            "1.0 deg above its own horizon, below the floor"
+        );
+
+        // With the frame's vertical, both are at 1.5 degrees and both covered.
+        let level = CoverageVolume {
+            vertical: [0.0, 0.0, 1.0],
+            ..cov
+        };
+        assert!(level.covers(east) && level.covers(west));
+
+        // A vertical that is no direction covers nothing but the sensor's own position.
+        for bad in [[0.0; 3], [f64::NAN, 0.0, 1.0]] {
+            let broken = CoverageVolume {
+                vertical: bad,
+                ..cov
+            };
+            assert!(!broken.covers(east));
+            assert!(broken.covers([0.0; 3]));
+        }
+    }
+
+    /// A volume serialized before ceilings and verticals existed reads as no ceiling and
+    /// the frame's vertical, so it means what it meant.
+    #[test]
+    fn a_volume_without_a_ceiling_or_vertical_reads_as_the_zenith_and_the_frames_up() {
+        let old = r#"{"sensor_enu":[1.0,2.0,3.0],"max_range_m":100.0,"min_elevation_rad":0.0}"#;
+        let v: CoverageVolume = serde_json::from_str(old).expect("parses");
+        assert!((v.max_elevation_rad - std::f64::consts::FRAC_PI_2).abs() < f64::EPSILON);
+        assert_eq!(v.vertical, [0.0, 0.0, 1.0]);
+        assert_eq!(v.azimuth, None);
     }
 
     #[test]

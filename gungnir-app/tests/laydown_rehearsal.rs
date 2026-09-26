@@ -78,6 +78,7 @@ fn laydown(id: &str, sensor_enu: [f64; 3]) -> Laydown {
             position_enu: sensor_enu,
             mode: SensorMode::Search,
             azimuth_sector: None,
+            elevation_band: None,
         }],
         resources: vec![ResourcePlacement {
             resource: ResourceId(1),

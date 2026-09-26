@@ -157,6 +157,7 @@ fn load(dir: &Path) -> Set {
                 model: s.params,
                 position: s.pos,
                 sector: None,
+                elevation: None,
             })
             .collect(),
         recorded,

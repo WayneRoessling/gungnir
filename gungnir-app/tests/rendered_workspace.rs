@@ -253,6 +253,7 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
         maintenance: Vec::new(),
         detection_model: None,
         azimuth_sector: None,
+        elevation_band: None,
     }];
 
     // No origin declared: the sensor is configured, and its ring is unplaceable.
@@ -394,6 +395,7 @@ fn coverage_gaps_are_reported_along_the_declared_approaches() {
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         }],
         // At altitude, because an air-defence approach axis is a flight corridor and
         // because of what a ground-level one would run into: in the ENU tangent plane a

@@ -59,6 +59,11 @@ pub struct SensorRecord {
     /// sensor's geometry, not its state.
     #[serde(default)]
     pub azimuth_sector: Option<gungnir_model::AzimuthSector>,
+    /// The elevations this sensor can see, against its own local vertical; `None` is the
+    /// baseline's floor up to the zenith (GAP-158, D-111). From the declaration, like the
+    /// sector.
+    #[serde(default)]
+    pub elevation_band: Option<gungnir_model::ElevationBand>,
 }
 
 impl SensorRecord {
@@ -83,6 +88,7 @@ impl SensorRecord {
                 .map(|w| w.to_window(SensorId(config.id)))
                 .collect(),
             azimuth_sector: config.azimuth_sector,
+            elevation_band: config.elevation_band,
         }
     }
 
@@ -661,6 +667,7 @@ mod service_observation_tests {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             "v1",
         )
@@ -974,6 +981,7 @@ mod tests {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             "v1",
         )
@@ -1033,6 +1041,7 @@ mod tests {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             "v1",
         );
@@ -1153,6 +1162,7 @@ mod tests {
                     maintenance: Vec::new(),
                     detection_model: None,
                     azimuth_sector: None,
+                    elevation_band: None,
                 },
                 SensorConfig {
                     id: 2,
@@ -1163,6 +1173,7 @@ mod tests {
                     maintenance: Vec::new(),
                     detection_model: None,
                     azimuth_sector: None,
+                    elevation_band: None,
                 },
             ],
             "cal-2026-09",
@@ -1185,6 +1196,7 @@ mod tests {
                 }],
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             "cal-2026-09",
         )
@@ -1324,6 +1336,7 @@ mod tests {
                 control_endpoint: None,
                 maintenance: Vec::new(),
                 azimuth_sector: Some(sector),
+                elevation_band: None,
                 detection_model: None,
             },
             SensorConfig {
@@ -1334,6 +1347,7 @@ mod tests {
                 control_endpoint: None,
                 maintenance: Vec::new(),
                 azimuth_sector: None,
+                elevation_band: None,
                 detection_model: None,
             },
         ];

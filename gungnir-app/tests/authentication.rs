@@ -50,6 +50,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         }],
         endpoints: vec![EndpointConfig {
             name: "radar-1-control".into(),

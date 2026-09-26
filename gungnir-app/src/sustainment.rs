@@ -1751,7 +1751,11 @@ pub fn coverage_report(state: &AppState) -> Option<gungnir_analytics::CoverageRe
 /// physical sensor's, unchanged by where a laydown puts it. **Its sector is the
 /// placement's when the placement re-aims the sensor, and the declaration's otherwise**
 /// (GAP-118, D-84), placed in the frame at the laydown's position, where true north may
-/// differ from the frame's.
+/// differ from the frame's. **Its elevation band is likewise the placement's, else the
+/// declaration's, else `default_floor_rad` -- the baseline's
+/// `analytics.coverage_min_elevation_rad` -- up to the zenith**, taken whole from the first
+/// that states one and measured against the vertical where the laydown puts the sensor
+/// (GAP-158, D-111).
 ///
 /// Public so the rehearsal tests compute a laydown's coverage the way PN-16 does rather
 /// than restating it.
@@ -1759,7 +1763,7 @@ pub fn coverage_report(state: &AppState) -> Option<gungnir_analytics::CoverageRe
 pub fn laydown_coverage_volumes(
     laydown: &gungnir_model::Laydown,
     sensors: &[gungnir_config::SensorConfig],
-    min_elevation_rad: f64,
+    default_floor_rad: f64,
     frame: &gungnir_model::LocalFrame,
 ) -> Vec<(gungnir_model::SensorId, gungnir_analytics::CoverageVolume)> {
     laydown
@@ -1773,17 +1777,22 @@ pub fn laydown_coverage_volumes(
         })
         .filter_map(|s| {
             let declared = sensors.iter().find(|d| d.id == s.sensor.0)?;
-            let azimuth = s
-                .azimuth_sector
-                .or(declared.azimuth_sector)
-                .map(|sector| frame.sector_in_frame(sector, frame.to_geodetic(s.position_enu)));
+            let volume = gungnir_analytics::volume_in_frame(
+                frame,
+                frame.to_geodetic(s.position_enu),
+                declared.max_range_m,
+                s.azimuth_sector.or(declared.azimuth_sector),
+                gungnir_analytics::band_or_default(
+                    s.elevation_band.or(declared.elevation_band),
+                    default_floor_rad,
+                ),
+            );
             Some((
                 s.sensor,
                 gungnir_analytics::CoverageVolume {
+                    // Exactly as the laydown declares it, not through the round trip.
                     sensor_enu: s.position_enu,
-                    max_range_m: declared.max_range_m,
-                    min_elevation_rad,
-                    azimuth,
+                    ..volume
                 },
             ))
         })

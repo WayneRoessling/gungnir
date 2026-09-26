@@ -32,3 +32,4 @@ gungnir-sensor-management = { path = "../gungnir-sensor-management", version = "
 
 [dev-dependencies]
 gungnir-config = { path = "../gungnir-config", version = "0.1.0" }
+serde_json.workspace = true

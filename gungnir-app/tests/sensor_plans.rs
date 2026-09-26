@@ -32,6 +32,7 @@ fn desktop(name: &str, approaches: Vec<ApproachConfig>) -> (AppState, std::path:
         maintenance: Vec::new(),
         detection_model: None,
         azimuth_sector: None,
+        elevation_band: None,
     };
     let config = ConfigBaseline {
         data_dir: dir.to_string_lossy().into_owned(),

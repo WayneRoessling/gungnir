@@ -2354,6 +2354,55 @@ mod tests {
     use gungnir_ingest::AllowListAuthenticator;
     use gungnir_node::picture::sensor_positions;
 
+    /// GAP-158, D-111: the node's coverage answer -- what `/v3/coverage` serves -- credits a
+    /// sensor with its declared elevation band. A radar at 10 m under an approach at 100 m
+    /// with a 5 degree ceiling leaves the approach's near stretch uncovered, where the same
+    /// radar with no band covers it.
+    #[test]
+    fn the_coverage_answer_credits_a_sensor_with_its_declared_elevation_band() {
+        use gungnir_sensor_management::SensorControl;
+
+        let uncovered = |band: Option<gungnir_model::ElevationBand>| {
+            let config: ConfigBaseline = serde_json::from_value(serde_json::json!({
+                "version": ConfigBaseline::default().version,
+                "origin": [0.0, 0.0, 0.0],
+                "sensors": [
+                    {"id": 1, "modality": "radar", "position": [0.0, 0.0, 10.0],
+                     "max_range_m": 20_000.0}
+                ],
+                "approaches": [
+                    {"name": "east", "points": [[0.0, 0.0, 100.0], [0.0, 0.001, 100.0]]}
+                ],
+            }))
+            .expect("the fixture baseline parses");
+            let mut config = config;
+            config.sensors[0].elevation_band = band;
+            gungnir_config::validate(&config).expect("valid");
+            let mut sensors = build_registry(&config);
+            sensors
+                .set_mode(SensorId(1), gungnir_model::SensorMode::Search)
+                .expect("search");
+            match coverage_answer(&config, &sensors) {
+                CoverageResponse::Computed(report) => {
+                    report.gap_length_m(gungnir_analytics::GapSeverity::Uncovered)
+                }
+                CoverageResponse::NotComputed { reason } => panic!("{reason}"),
+            }
+        };
+        let open = uncovered(None);
+        let ceiling = uncovered(Some(
+            gungnir_model::ElevationBand::new(-1.0, 5_f64.to_radians()).expect("legal"),
+        ));
+        assert!(
+            open.abs() < f64::EPSILON,
+            "no band covers the whole 6.4 km: {open} m"
+        );
+        assert!(
+            ceiling >= 500.0,
+            "a 5 degree ceiling leaves the steep near stretch uncovered: {ceiling} m"
+        );
+    }
+
     /// A registry for `config` whose sensor 7 is reached through a SAPIENT router that
     /// swallows every task: each line is counted, and nothing ever comes back (GAP-115).
     fn ignoring_sapient_registry(
@@ -2401,6 +2450,7 @@ mod tests {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             ..ConfigBaseline::default()
         };
@@ -2491,6 +2541,7 @@ mod tests {
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         }
     }
 
@@ -2520,6 +2571,7 @@ mod tests {
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         }
     }
 
@@ -2759,6 +2811,7 @@ mod tests {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             origin: Some([0.9, 0.2, 0.0]),
             sapient_feeds: vec![gungnir_config::SapientFeedConfig {
@@ -2940,6 +2993,7 @@ mod tests {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             origin: Some([0.9, 0.2, 0.0]),
             sapient_feeds: vec![gungnir_config::SapientFeedConfig {
@@ -3138,6 +3192,7 @@ mod tests {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             origin: Some(origin),
             misb_feeds: vec![gungnir_config::MisbFeedConfig {
@@ -3188,6 +3243,7 @@ mod tests {
                 maintenance: Vec::new(),
                 detection_model: None,
                 azimuth_sector: None,
+                elevation_band: None,
             }],
             origin: None,
             misb_feeds: vec![gungnir_config::MisbFeedConfig {
@@ -3223,6 +3279,7 @@ mod tests {
             maintenance: Vec::new(),
             detection_model: None,
             azimuth_sector: None,
+            elevation_band: None,
         }
     }
 
