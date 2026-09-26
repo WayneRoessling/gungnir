@@ -52,6 +52,30 @@ the machine's arithmetic, which the ordinary test gate checks on real hardware; 
 now sets `-Zmiri-deterministic-floats`, under which all nine `gungnir-core` tests pass
 locally.
 
+The fourth run, with every flag above, ran out of its 180-minute bound, which GitHub
+reports as "cancelled", with nothing in its log. Timing each crate locally, in parallel,
+under a forty-minute cap, split the twelve three ways:
+
+- **Passed:** `gungnir-core`, `gungnir-coord`, `gungnir-association`, `gungnir-track`,
+  `gungnir-track-fusion` and `gungnir-allocation`, each in minutes.
+- **Failed:** `gungnir-intercept-service`, on five tests GAP-119 had just added or
+  touched. They built their planners on the monotonic clock with the 4 ms budget, so a
+  test that expected a fresh plan was asserting that this machine, in this build, solved
+  inside 4 ms. Under miri no solve did. On an ordinary runner a debug build under load
+  can take that long too, so these were intermittent failures waiting for a busy day.
+  Every test not about the budget now plans on a clock that stands still, as the
+  budget's own tests already did, and so does `gungnir-app`'s failover test that
+  builds a node planner. The crate passes under miri: 35 and 1.
+  `gungnir-tracking-service` also failed locally, only because miri on Windows cannot
+  emulate the I/O completion ports tokio uses there; CI runs Linux.
+- **Unfinished at forty minutes:** `gungnir-filters` (in `imm_diff`), `gungnir-rfs` (in
+  `cphd_diff`), `gungnir-fusion-async` (in `oos_convergence`) and `gungnir-metrics`, whose
+  `every_truth_object_is_accounted_for_exactly_once` alone took thirty minutes. These are
+  the oracle-difference suites, millions of floating-point operations each.
+
+The job is now one job per crate, in parallel, none cancelling another, each bounded at
+350 minutes, just under the hosted runner's ceiling.
+
 ## Evidence
 
 The first dispatched run on `main` after this merges is the evidence that the job

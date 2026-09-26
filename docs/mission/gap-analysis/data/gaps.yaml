@@ -10372,6 +10372,17 @@
       reached `gungnir-association` and stopped at a Stacked Borrows violation in
       nalgebra's Cholesky, which Tree Borrows accepts and nalgebra 0.35.0 still has; the
       gate now runs under Tree Borrows (D-90) and the finding is GAP-166.
+  - date: 2026-09-26
+    status: In progress
+    note: >-
+      The third run failed one `gungnir-core` test by three ulp because miri perturbs
+      transcendental results; the job now sets `-Zmiri-deterministic-floats`. The fourth
+      ran out of its 180-minute bound. Timed per crate: six pass; `gungnir-intercept-service`
+      failed on five tests that planned on the real clock with the 4 ms budget, now on a
+      clock that stands still (they passed or failed with the machine's load natively too);
+      the oracle-difference suites of `gungnir-filters`, `gungnir-rfs`,
+      `gungnir-fusion-async` and `gungnir-metrics` run for more than forty minutes each.
+      The job is now a per-crate matrix bounded at 350 minutes a crate.
 - id: GAP-166
   name: nalgebra's decompositions violate Stacked Borrows
   type: Technical

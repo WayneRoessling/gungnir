@@ -13,10 +13,18 @@
 
 use gungnir_intercept_service::{
     DpInterceptService, InterceptService, MissionTime, PlanId, PlanOutcome, ResourceId,
-    ResourceView, TrackId, TrackView,
+    ResourceView, SteppedClock, TrackId, TrackView,
 };
 use gungnir_model::{Classification, Geodetic, Provenance, Quality, Releasability, TrackStatus};
 use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::Duration;
+
+/// A planner whose clock stands still, so every solve fits its budget whatever the
+/// machine's load: this test is about identifiers, not about time (GAP-164).
+fn planner(horizon: usize) -> DpInterceptService {
+    DpInterceptService::new(horizon).with_clock(Arc::new(SteppedClock::new(Duration::ZERO)))
+}
 
 fn track(id: u64, east_m: f64) -> TrackView {
     TrackView {
@@ -65,9 +73,9 @@ fn propose(planner: &mut DpInterceptService, at: f64, tracks: &[TrackView]) -> P
 /// `PlanView::default()` alone.
 #[test]
 fn separate_planners_standing_in_for_machines_and_restarts_never_mint_the_same_plan_identifier() {
-    let mut node = DpInterceptService::new(4);
-    let mut desktop_a = DpInterceptService::new(4);
-    let mut desktop_b = DpInterceptService::new(4);
+    let mut node = planner(4);
+    let mut desktop_a = planner(4);
+    let mut desktop_b = planner(4);
     let mut minted: Vec<PlanId> = Vec::new();
 
     for round in 0..30_u32 {
@@ -76,13 +84,13 @@ fn separate_planners_standing_in_for_machines_and_restarts_never_mint_the_same_p
         // every round and every round mints a plan on every planner.
         let picture = [track(u64::from(round % 2) + 1, 8_000.0)];
         if round == 15 {
-            desktop_a = DpInterceptService::new(4); // a restart
+            desktop_a = planner(4); // a restart
         }
         for planner in [&mut node, &mut desktop_a, &mut desktop_b] {
             minted.push(propose(planner, at, &picture));
         }
         // An alternative is solved on a planner built for the one question.
-        minted.push(propose(&mut DpInterceptService::new(4), at, &picture));
+        minted.push(propose(&mut planner(4), at, &picture));
     }
 
     let values: Vec<u128> = minted.iter().map(|p| p.0).collect();

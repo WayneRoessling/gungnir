@@ -43,20 +43,42 @@ jobs:
     needs: detect-unsafe
     if: github.event_name == 'workflow_dispatch' || needs.detect-unsafe.outputs.has_unsafe == 'true'
     runs-on: ubuntu-latest
-    # miri is an interpreter and twelve crates is a lot of it; the bound is generous,
-    # and it is still a bound rather than six hours.
-    timeout-minutes: 180
+    # One job per crate, in parallel, none cancelling another: miri interprets about a
+    # thousand times slower than native code, and the twelve crates in one job ran past a
+    # 180-minute bound with four of them unfinished (GAP-164). A crate's own job shows
+    # which crate failed or ran out of time, and the bound is just under the hosted
+    # runner's six-hour ceiling so the job, not the platform, says so.
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - gungnir-core
+          - gungnir-coord
+          - gungnir-filters
+          - gungnir-association
+          - gungnir-track
+          - gungnir-rfs
+          - gungnir-track-fusion
+          - gungnir-fusion-async
+          - gungnir-allocation
+          - gungnir-metrics
+          - gungnir-tracking-service
+          - gungnir-intercept-service
+    name: miri (${{ matrix.crate }})
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: miri-${{ matrix.crate }}
       # `rust-toolchain.toml` pins a stable release, and a toolchain file outranks the
       # default the action above sets, so a bare `cargo miri` resolves to stable and
       # fails: miri ships only on nightly. `+nightly` outranks the file (GAP-164).
       - run: cargo +nightly miri setup
-      - name: miri on the tracking core and service layer
+      - name: miri on ${{ matrix.crate }}
         # The tests read committed fixtures (testdata/) and the clock; miri's isolation
         # refuses both. Disabling it lets them run while miri still checks every access
         # for undefined behaviour, which is what the gate is for (GAP-164).
@@ -70,8 +92,4 @@ jobs:
         # of the hardware's maths, which the other gates check; this one checks memory.
         env:
           MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows -Zmiri-deterministic-floats
-        run: >
-          cargo +nightly miri test
-          -p gungnir-core -p gungnir-coord -p gungnir-filters -p gungnir-association
-          -p gungnir-track -p gungnir-rfs -p gungnir-track-fusion -p gungnir-fusion-async
-          -p gungnir-allocation -p gungnir-metrics -p gungnir-tracking-service -p gungnir-intercept-service
+        run: cargo +nightly miri test --no-fail-fast -p ${{ matrix.crate }}

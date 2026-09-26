@@ -946,7 +946,9 @@ fn proposed(events: &gungnir_eventing::Receiver<Envelope>) -> Vec<PlanId> {
 /// minted by a real planner.
 #[test]
 fn a_plan_from_either_planner_is_proposed_across_a_fall_back_and_a_switch_back() {
-    use gungnir_intercept_service::{DpInterceptService, InterceptService, PlanOutcome};
+    use gungnir_intercept_service::{
+        DpInterceptService, InterceptService, PlanOutcome, SteppedClock,
+    };
     use gungnir_model::{
         Classification, Provenance, Quality, Releasability, TrackId, TrackStatus, TrackView,
     };
@@ -977,7 +979,11 @@ fn a_plan_from_either_planner_is_proposed_across_a_fall_back_and_a_switch_back()
     };
 
     // The node's plan, from the node's own planner.
-    let mut node_planner = DpInterceptService::new(state.config.allocation_horizon);
+    // A clock that stands still, so the node's plan is fresh whatever this machine's load:
+    // the test is about which decision stands, not about the solve budget (GAP-164).
+    let mut node_planner = DpInterceptService::new(state.config.allocation_horizon).with_clock(
+        std::sync::Arc::new(SteppedClock::new(std::time::Duration::ZERO)),
+    );
     let node_plan = match node_planner.plan(
         MissionTime(100.0),
         std::slice::from_ref(&track),
