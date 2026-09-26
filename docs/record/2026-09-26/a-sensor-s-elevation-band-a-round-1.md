@@ -137,6 +137,17 @@ its hand-written service views no longer claim the queue carries anything. The
 `gungnir-resilience` row's criterion is unchanged; the note beside it says the queue is
 kept unused.
 
+## Found on the way: a test that read the strip a tick early
+
+CI failed once on `gungnir-app/tests/linked_plan_standing.rs` (GAP-157's test), which
+none of this touches: the node's planner stood stale and the strip still read healthy.
+`update::tick` reports health before it asks the planner for a plan, and the remote
+planner takes the node's health from the projection when it is asked, so when the node's
+`HealthEvent` and its `PlanStanding` reach the projection in the same read, the strip
+follows the standing one tick later. The test waited for the standing alone. It now waits
+for both. The one-frame lag on the strip is left as it is: a frame is well inside anything
+an operator reads, and the order of the two steps in the tick is GAP-125's.
+
 ## Not done here
 
 The Coverage accuracy row's criterion cell still describes a volume without an azimuth
