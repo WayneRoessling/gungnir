@@ -96,6 +96,13 @@
 //! [`LOSSLESS_JSON`] as its content type. Plain `serde_json` wrote such a value as `null`,
 //! which the desktop could not decode and took for the node ending the stream.
 //!
+//! **Since GAP-171 (D-102) every other body a desktop reads takes the same form**: the
+//! queue, coverage, the session, and the answers to a sensor task, a decision and a
+//! forwarded batch. **A partner is sent JSON instead** (D-103): an exchange product's body
+//! and the answer around it write each non-finite float as DN-18 §15's object
+//! `{"unavailable": "nan" | "+inf" | "-inf"}`, never as `null`, and are byte for byte
+//! what they were when every float is finite. `GET /v3/health` carries no float.
+//!
 //! **An envelope is encoded once, when it is offered** ([`NodeApi::publish_event`]), and
 //! the line is proved to read back before any subscriber sees it; every subscriber is sent
 //! that same line. An envelope with no faithful line is refused there with
@@ -366,11 +373,23 @@ pub const LOSSLESS_JSON: &str = "application/vnd.gungnir.lossless-json";
 /// A `200` body in the lossless form: plain JSON when every float is finite, the marked
 /// form when one is not (GAP-153, D-96).
 ///
-/// For the read routes whose bodies carry the picture's floats -- the history and the
-/// snapshot. **Proved to read back** like an offered envelope, so the body a desktop is
-/// given is one it can decode; a body that cannot be is a `500` naming why, never a `200`
-/// the desktop would misread.
+/// For every body this deployment's own desktops read: the history and the snapshot
+/// since GAP-153, and since GAP-171 (D-102) the queue, coverage, the session and every
+/// answer to a write a desktop reads. **Proved to read back** like an offered envelope, so
+/// the body a desktop is given is one it can decode; a body that cannot be is a `500`
+/// naming why, never a `200` the desktop would misread.
+///
+/// **Not for a partner.** A party reading an exchange item is sent JSON, with DN-18's
+/// "value unavailable" object where a number is not finite ([`partner_json`], D-103).
 fn lossless_json<T>(value: &T) -> Response
+where
+    T: serde::Serialize + serde::de::DeserializeOwned,
+{
+    lossless_json_as(StatusCode::OK, value)
+}
+
+/// [`lossless_json`] with a status other than `200`: a write's answer (GAP-171, D-102).
+fn lossless_json_as<T>(status: StatusCode, value: &T) -> Response
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -382,7 +401,7 @@ where
                 "application/json"
             };
             (
-                StatusCode::OK,
+                status,
                 [(axum::http::header::CONTENT_TYPE, content_type)],
                 line,
             )
@@ -391,6 +410,27 @@ where
         Err(why) => problem(
             StatusCode::INTERNAL_SERVER_ERROR,
             &format!("the node could not write this answer faithfully: {why}"),
+        ),
+    }
+}
+
+/// A `200` body for a partner (GAP-171, D-103; DN-18 §15): JSON, byte for byte what
+/// `serde_json` writes when every float is finite, and with each non-finite float written
+/// as DN-18's object `{"unavailable": "nan" | "+inf" | "-inf"}` rather than `null` -- so a
+/// partner can tell a value this deployment could not give from zero and from a field
+/// that is absent. The exchange products' bodies are already in that form
+/// ([`crate::v3::ExchangeProduct::body_of`]); this covers the answer around them.
+fn partner_json<T: serde::Serialize>(value: &T) -> Response {
+    match nonfinite::to_partner_string(value) {
+        Ok(text) => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            text,
+        )
+            .into_response(),
+        Err(why) => problem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("the node could not write this answer: {why}"),
         ),
     }
 }
@@ -1835,11 +1875,11 @@ async fn sign_in(
                     issued.expires_s
                 ),
             );
-            Json(v3::SessionResponse {
+            // GAP-171, D-102: in the form every body a desktop reads takes.
+            lossless_json(&v3::SessionResponse {
                 token: issued.token,
                 expires_s: issued.expires_s,
             })
-            .into_response()
         }
         Err(failure) => {
             api.audit(
@@ -1937,12 +1977,11 @@ async fn session_status(
 ) -> Response {
     match operator_caller(&api, &headers, &peer, "the session route") {
         Err(response) => response,
-        Ok(session) => Json(v3::SessionStatus {
+        Ok(session) => lossless_json(&v3::SessionStatus {
             operator: session.operator.0,
             role: format!("{:?}", session.role),
             expires_s: session.expires.unwrap_or_default(),
-        })
-        .into_response(),
+        }),
     }
 }
 
@@ -2104,7 +2143,8 @@ async fn coverage(
         }
     }
     match api.coverage() {
-        Some(coverage) => Json(coverage).into_response(),
+        // GAP-171, D-102: a gap's NaN is carried, not written `null`.
+        Some(coverage) => lossless_json(&coverage),
         None => problem(
             StatusCode::INTERNAL_SERVER_ERROR,
             "the node's coverage answer is unreadable",
@@ -2298,7 +2338,7 @@ async fn task_sensor(
     match tokio::time::timeout(TASK_REPLY_TIMEOUT, answer).await {
         Ok(Ok(Ok(task))) => {
             record(&format_args!("commanded {commanded}: task {}", task.0));
-            (StatusCode::ACCEPTED, Json(v3::SensorTaskResponse { task })).into_response()
+            lossless_json_as(StatusCode::ACCEPTED, &v3::SensorTaskResponse { task })
         }
         Ok(Ok(Err(reason))) => {
             record(&format_args!(
@@ -2675,7 +2715,9 @@ fn serve_exchange(
         }
     };
     match held {
-        Some(held) => Json(held).into_response(),
+        // GAP-171, D-103: a partner is sent JSON, and never a `null` for a value this
+        // deployment held as NaN or an infinity.
+        Some(held) => partner_json(&held),
         None => problem(
             StatusCode::INTERNAL_SERVER_ERROR,
             "the node's exchange register is unreadable",
@@ -2822,7 +2864,9 @@ async fn queue(
         );
         return problem(StatusCode::FORBIDDEN, &why);
     }
-    Json(api.queue()).into_response()
+    // GAP-171, D-102: a queue item's NaN priority or infinite deadline is carried as
+    // itself, where plain JSON wrote `null` and the desktop could not read the queue.
+    lossless_json(&api.queue())
 }
 
 /// `POST /v3/queue/{item}/decision` (DN-31 §6.3, GAP-132): a person decides one item.
@@ -2910,11 +2954,12 @@ async fn decide_queued(
         });
     }
     match tokio::time::timeout(DECISION_REPLY_TIMEOUT, answer).await {
+        // GAP-171, D-102: both answers the desktop reads, in the lossless form.
         Ok(Ok(DecisionAnswer::Recorded(decision))) => {
-            (StatusCode::CREATED, Json(v3::DecisionRecorded { decision })).into_response()
+            lossless_json_as(StatusCode::CREATED, &v3::DecisionRecorded { decision })
         }
         Ok(Ok(DecisionAnswer::Refused(refused))) => {
-            (StatusCode::CONFLICT, Json(refused)).into_response()
+            lossless_json_as(StatusCode::CONFLICT, &refused)
         }
         Ok(Ok(DecisionAnswer::Unknown)) => problem(
             StatusCode::NOT_FOUND,
@@ -3045,12 +3090,11 @@ async fn forward_decisions(
         });
     }
     match tokio::time::timeout(DECISION_REPLY_TIMEOUT, answer).await {
+        // GAP-171, D-102: a refusal names the record that stands, plan floats and all.
         Ok(Ok(ForwardAnswer::Accepted(accepted))) => {
-            (StatusCode::ACCEPTED, Json(accepted)).into_response()
+            lossless_json_as(StatusCode::ACCEPTED, &accepted)
         }
-        Ok(Ok(ForwardAnswer::Refused(refused))) => {
-            (StatusCode::CONFLICT, Json(refused)).into_response()
-        }
+        Ok(Ok(ForwardAnswer::Refused(refused))) => lossless_json_as(StatusCode::CONFLICT, &refused),
         Ok(Err(_)) => problem(
             StatusCode::SERVICE_UNAVAILABLE,
             "the node loop dropped the forwarded decisions without answering",

@@ -428,8 +428,67 @@ and Export send the same record.
 no report on PN-13, and republishing one it no longer shows would put a product before
 partners that nobody at that console can see. §13's outbox rules are unchanged.
 
+## 15. Amendment 7: a value this deployment cannot give is said to be unavailable (2026-09-26)
+
+**A product's body is a `serde_json::Value`** (§10), the owning crate's canonical
+serialization, and a `Value` cannot hold a NaN or an infinity. `serde_json::to_value` wrote
+each one as `null` without an error, so a mission report whose tracker diverged reached a
+partner with its MOTA blank, and a partner could not tell that figure from a field the
+report does not have or an `Option` that is empty (GAP-171).
+
+**The decision (D-103): in the number's place, an object saying the value is unavailable
+and which way.**
+
+```json
+{ "unavailable": "nan" }
+{ "unavailable": "+inf" }
+{ "unavailable": "-inf" }
+```
+
+The rules a partner reads a body by:
+
+- **Wherever the product's schema has a number, a partner may meet this object instead.**
+  Its one member is `unavailable`, and its value is one of the three strings: `"nan"` for
+  a figure that is not a number (whatever its sign or payload), `"+inf"` and `"-inf"` for
+  the two infinities.
+- **`null` keeps the one meaning it already had in these bodies**: an optional value that
+  is absent. A figure that is present and cannot be given is never `null`.
+- **Every body whose floats are all finite is byte for byte what it was.** Nothing a
+  partner could read before changes, and no schema or path version moves: a partner that
+  predates this meets an object where it used to meet a `null` it could not use.
+- The answer around the products (`ExchangeResponse`, with `at` and `as_of`) is written
+  the same way, so no number a partner is sent anywhere on these routes is blanked.
+
+**Where it is built.** `gungnir_eventing::nonfinite::to_partner_value` is the one
+implementation: `gungnir_api::v3::ExchangeProduct::body_of` calls it for the node's own
+handoffs, and the desktop calls it for its handoffs, launch warnings and report, since a
+desktop has no production edge to `gungnir-api`. The node serves the exchange routes
+through `to_partner_string`, its text twin. It wraps `serde_json`'s own serializer, so
+every float in every type is covered by construction, including inside buffered enums.
+
+**What was rejected, and why.**
+
+- **A sibling field** (`"mota": null, "mota_unavailable": "nan"`): a float inside an array
+  or a map value has no sibling to carry it, and a reader has to know to look beside every
+  field.
+- **The string `"NaN"`** in the number's place: a partner cannot tell it from a string
+  field, and nothing says it means unavailable rather than a label.
+- **An extended-JSON number** (`{"$numberDouble": "NaN"}`): it states a number that is NaN,
+  which is the sender's representation, not what the partner needs to know, and it ties
+  our format to one vendor's convention.
+- **The lossless line of D-96** as the body: it is not JSON, so every partner's JSON reader
+  would refuse the whole product for one figure, and a partner has no use for a NaN's bits.
+- **Refusing the product at publish**: a report with one unavailable figure still carries
+  every other, and the unavailable one is often the finding.
+
+**No Rust reader of a body exists**, so there is no decoder back to a float; a Gungnir
+partner reading `ExchangeFormat::Canonical` reads the object as it is written here. The
+write path's handlers did not change: a body arrives as JSON, which cannot carry a
+non-finite float, so the node stores what it was sent. The exchange read routes are
+`gungnir-api` code and the change to them is recorded under GAP-171.
+
 ## Traceability
 
-GAP-065, GAP-137, GAP-145, GAP-146, GAP-150; CAP-7.4; D-06, D-08, D-09, D-68, D-69, D-75, D-76, D-97; composes DN-07, DN-16,
+GAP-065, GAP-137, GAP-145, GAP-146, GAP-150, GAP-171; CAP-7.4; D-06, D-08, D-09, D-68, D-69, D-75, D-76, D-97, D-103; composes DN-07, DN-16,
 DN-17, DN-19; depends on GAP-041 for the transport and GAP-064 for the codecs;
 `../gungnir-api-v1.md`; `../architecture/uaf/standards/Sd-Tx.md`; principles AP-04, AP-09.

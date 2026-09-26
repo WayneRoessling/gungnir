@@ -91,7 +91,7 @@ impl ApprovalHost for DesktopHost<'_> {
                 id: record.handoff.decision.to_string(),
                 at: record.handoff.issued,
                 releasability: record.handoff.releasability.clone(),
-                body: serde_json::to_value(&record.handoff).unwrap_or(serde_json::Value::Null),
+                body: crate::exchange::product_body(&record.handoff, "a handoff"),
             })
             .collect();
         link.queue_exchange(ExchangeItem::Handoffs, products);

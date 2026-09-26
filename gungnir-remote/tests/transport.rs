@@ -1868,3 +1868,148 @@ async fn assert_the_history_is_marked_only_where_it_must_be(
     assert_eq!(plain.headers()["content-type"], "application/json");
     assert!(plain.text().await.expect("a body").starts_with('{'));
 }
+
+/// A queue item carrying a NaN with a payload and both infinities (GAP-171): a plan whose
+/// value diverged, and deadlines an unbounded window leaves infinite.
+fn non_finite_queue_item() -> gungnir_api::v3::QueueItemView {
+    gungnir_api::v3::QueueItemView {
+        item: gungnir_model::PendingApprovalId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_0000_0171),
+        plan: PlanView {
+            id: gungnir_model::PlanId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_0000_0172),
+            policy_value: f64::from_bits(PAYLOAD_NAN),
+            ..PlanView::default()
+        },
+        verdict: gungnir_model::events::VerdictSummary::RequiresHumanApproval,
+        layer: gungnir_model::EffectorLayer::Point,
+        submitted: MissionTime(1.0),
+        expires_at: Some(MissionTime(f64::INFINITY)),
+        escalate_at: Some(MissionTime(f64::NEG_INFINITY)),
+        offered_to: vec!["Operator".into()],
+        pre_delegated: false,
+        priority: f32::from_bits(0x7fc0_0171),
+    }
+}
+
+/// **GAP-171, D-102: a NaN and both infinities in a queue item reach a linked desktop
+/// through `GET /v3/queue`, bit for bit.**
+///
+/// The link takes its starting picture of the node's queue from that route, not from the
+/// snapshot (`gungnir_remote::queue`'s module documentation). Plain JSON wrote each
+/// non-finite float as `null`; the desktop could not decode the queue and PN-06 was left
+/// with no picture of it at all. An all-finite queue is still what `serde_json` writes.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_nan_and_an_infinity_in_a_queue_item_reach_a_linked_desktop() {
+    let api = authenticating(snapshot(Vec::new()).with_queue(vec![non_finite_queue_item()]));
+    let url = serve(Arc::clone(&api)).await;
+    let handle = tokio::runtime::Handle::current();
+    let endpoint = RemoteEndpoint::plain(url.clone());
+    let (mut tracking, _intercept, link) =
+        connect_with_link(&endpoint, credential(), &handle).expect("the link starts");
+    until(
+        || {
+            tracking.poll(MissionTime(0.0));
+            link.queue().waiting.is_some()
+        },
+        "the link to take the node's queue",
+    )
+    .await;
+    let waiting = link.queue().waiting.expect("a picture of the queue");
+    assert_eq!(waiting.len(), 1, "{waiting:?}");
+    let item = &waiting[0];
+    assert_eq!(item.plan.policy_value.to_bits(), PAYLOAD_NAN, "the NaN");
+    assert_eq!(item.priority.to_bits(), 0x7fc0_0171, "the f32 NaN");
+    assert_eq!(
+        item.expires_at.map(|t| t.0.to_bits()),
+        Some(f64::INFINITY.to_bits())
+    );
+    assert_eq!(
+        item.escalate_at.map(|t| t.0.to_bits()),
+        Some(f64::NEG_INFINITY.to_bits())
+    );
+
+    // What the route sent: marked and labelled so, and plain JSON once the queue is finite.
+    let token = link.token().expect("the link holds a session");
+    let client = reqwest::Client::new();
+    let marked = client
+        .get(format!("{url}/v3/queue"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("the queue answers");
+    assert_eq!(
+        marked.headers()["content-type"],
+        gungnir_api::transport::LOSSLESS_JSON
+    );
+    assert!(marked
+        .text()
+        .await
+        .expect("a body")
+        .starts_with(gungnir_eventing::nonfinite::MARKER));
+    let mut finite = non_finite_queue_item();
+    finite.plan.policy_value = 0.5;
+    finite.priority = 2.0;
+    finite.expires_at = Some(MissionTime(90.0));
+    finite.escalate_at = None;
+    api.publish_snapshot(snapshot(Vec::new()).with_queue(vec![finite]))
+        .expect("published");
+    let plain = client
+        .get(format!("{url}/v3/queue"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("the queue answers");
+    assert_eq!(plain.headers()["content-type"], "application/json");
+    assert_eq!(
+        plain.text().await.expect("a body"),
+        serde_json::to_string(&api.queue()).expect("serde_json"),
+        "an all-finite queue is not byte for byte what serde_json writes"
+    );
+}
+
+/// **GAP-171, D-102: a NaN and both infinities in a coverage answer cross
+/// `GET /v3/coverage` bit for bit**, read with the decoder the desktop's link reads every
+/// body with (`gungnir_eventing::nonfinite::from_line`), inside the internally tagged
+/// `CoverageResponse` that serde buffers before the float's own type sees it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_nan_and_an_infinity_in_coverage_cross_the_route() {
+    let api = authenticating(snapshot(Vec::new()));
+    api.publish_coverage(gungnir_api::v3::CoverageResponse::Computed(
+        gungnir_analytics::CoverageReport {
+            parameters: gungnir_analytics::CoverageParameters {
+                sample_spacing_m: 250.0,
+                terrain_masking_applied: false,
+            },
+            gaps: vec![gungnir_analytics::CoverageGap {
+                approach: 0,
+                from_m: 1_000.0,
+                to_m: f64::INFINITY,
+                samples: vec![[f64::from_bits(PAYLOAD_NAN), f64::NEG_INFINITY, 0.0]],
+                severity: gungnir_analytics::GapSeverity::Uncovered,
+            }],
+        },
+    ))
+    .expect("published");
+    let url = serve(Arc::clone(&api)).await;
+    let token = token(&url).await;
+
+    let response = reqwest::Client::new()
+        .get(format!("{url}/v3/coverage"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .expect("the route exists");
+    assert_eq!(
+        response.headers()["content-type"],
+        gungnir_api::transport::LOSSLESS_JSON
+    );
+    let body = response.text().await.expect("a body");
+    let read: gungnir_api::v3::CoverageResponse =
+        gungnir_eventing::nonfinite::from_line(&body).expect("the desktop's decoder reads it");
+    let gungnir_api::v3::CoverageResponse::Computed(report) = read else {
+        panic!("{body}");
+    };
+    let gap = &report.gaps[0];
+    assert_eq!(gap.to_m.to_bits(), f64::INFINITY.to_bits());
+    assert_eq!(gap.samples[0][0].to_bits(), PAYLOAD_NAN);
+    assert_eq!(gap.samples[0][1].to_bits(), f64::NEG_INFINITY.to_bits());
+}

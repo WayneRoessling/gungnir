@@ -7724,7 +7724,7 @@
       </element>
       <element xmi:idref="EAID_BC5F0810_E94B_93F4_50FF_21675D7B792E" xmi:type="uml:Class" name="GlobalEntityId" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Persistent identity across sessions (u128; uuid v7 under GAP-069)."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="Persistent identity across sessions (u128; uuid v7 under GAP-069; written as RFC 9562 text since GAP-175, D-101)."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="IE-11"/>

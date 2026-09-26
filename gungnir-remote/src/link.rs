@@ -388,6 +388,10 @@ pub struct ExchangeProductRecord {
     pub id: String,
     pub at: gungnir_model::MissionTime,
     pub releasability: gungnir_model::Releasability,
+    /// Built with `gungnir_eventing::nonfinite::to_partner_value`, the function
+    /// `gungnir_api::v3::ExchangeProduct::body_of` calls, so a non-finite float reaches the
+    /// partner as DN-18 §15's "value unavailable" object and not as a `null` (GAP-171,
+    /// D-103).
     pub body: serde_json::Value,
 }
 
@@ -1273,9 +1277,10 @@ async fn sign_in(
     if !issued.status().is_success() {
         return Err(format!("the node refused the sign-in: {}", issued.status()));
     }
-    issued
-        .json()
+    // GAP-171, D-102: every body a desktop reads is in the lossless form.
+    lossless_body(issued)
         .await
+        .and_then(|text| nonfinite::from_line(&text).map_err(|e| e.to_string()))
         .map_err(|e| format!("the session response could not be decoded: {e}"))
 }
 
@@ -1452,7 +1457,9 @@ async fn flush_tasks(
             // queued, and the link renews before the next tick offers it again.
             Ok(response) if note_refused_token(projection, response.status()) => return,
             Ok(response) if response.status().is_success() => {
-                match response.json::<SensorTaskResponse>().await {
+                match lossless_body(response).await.and_then(|text| {
+                    nonfinite::from_line::<SensorTaskResponse>(&text).map_err(|e| e.to_string())
+                }) {
                     Ok(answer) => Ok(answer.task),
                     Err(e) => Err(format!("the node's answer could not be decoded: {e}")),
                 }
@@ -1709,7 +1716,12 @@ async fn refresh_queue(
             return;
         }
     };
-    match response.json::<Vec<gungnir_api::v3::QueueItemView>>().await {
+    // GAP-171, D-102: the lossless form, so an item carrying a NaN or an infinity is read
+    // as itself rather than failing the whole picture.
+    match lossless_body(response).await.and_then(|text| {
+        nonfinite::from_line::<Vec<gungnir_api::v3::QueueItemView>>(&text)
+            .map_err(|e| e.to_string())
+    }) {
         Ok(items) => {
             if let Ok(mut p) = projection.lock() {
                 p.queue.take_picture(items);
@@ -1880,7 +1892,7 @@ fn count_forward_attempt(projection: &Arc<Mutex<Projection>>) {
 fn forward_reply_of(status: u16, body: &str) -> crate::queue::ForwardReply {
     use crate::queue::ForwardReply;
     if status == 202 {
-        return match serde_json::from_str::<gungnir_api::v3::ForwardAccepted>(body) {
+        return match nonfinite::from_line::<gungnir_api::v3::ForwardAccepted>(body) {
             Ok(accepted) => ForwardReply::Accepted(accepted),
             Err(err) => ForwardReply::Rejected {
                 status,
@@ -1891,7 +1903,7 @@ fn forward_reply_of(status: u16, body: &str) -> crate::queue::ForwardReply {
         };
     }
     if status == 409 {
-        return match serde_json::from_str::<gungnir_api::v3::ForwardRefused>(body) {
+        return match nonfinite::from_line::<gungnir_api::v3::ForwardRefused>(body) {
             Ok(refused) => ForwardReply::Refused(Box::new(refused)),
             Err(err) => ForwardReply::Rejected {
                 status,
@@ -1926,7 +1938,7 @@ fn count_attempt(projection: &Arc<Mutex<Projection>>) {
 fn answer_of(status: u16, body: &str) -> crate::queue::DecisionAnswer {
     use crate::queue::DecisionAnswer;
     if status == 201 {
-        return match serde_json::from_str::<gungnir_api::v3::DecisionRecorded>(body) {
+        return match nonfinite::from_line::<gungnir_api::v3::DecisionRecorded>(body) {
             Ok(recorded) => DecisionAnswer::Recorded {
                 decision: recorded.decision,
             },
@@ -1937,7 +1949,7 @@ fn answer_of(status: u16, body: &str) -> crate::queue::DecisionAnswer {
         };
     }
     if status == 409 {
-        return match serde_json::from_str::<gungnir_api::v3::DecisionRefused>(body) {
+        return match nonfinite::from_line::<gungnir_api::v3::DecisionRefused>(body) {
             Ok(refused) => DecisionAnswer::Refused(refused),
             Err(err) => DecisionAnswer::Rejected {
                 status,
@@ -2087,8 +2099,9 @@ pub fn fetch_history(
     Ok(PendingHistory { rx })
 }
 
-/// A `200` body from a route that answers in the lossless form (GAP-153, D-96): the
-/// snapshot and the history.
+/// A body from a route that answers in the lossless form: the snapshot and the history
+/// (GAP-153, D-96), and since GAP-171 (D-102) every other body this link reads -- the
+/// session, the queue, a sensor task's answer, and a decision's and a forwarded batch's.
 ///
 /// Read as text, for its caller to decode with [`nonfinite::from_line`], which takes plain
 /// JSON exactly as `serde_json` does and a marked body with every NaN and infinity it
