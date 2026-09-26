@@ -1380,15 +1380,17 @@ pub fn kinematic_factor_lines(score: &gungnir_assessment::RiskScore) -> Vec<(Str
                 ),
                 f(k.urgency),
             ));
-            let sure = match k.closing_sigma_mps {
-                Some(sigma) => format!(
-                    "closing speed {:.1} sigma clear of its uncertainty: confidence",
-                    k.closing_speed_mps / sigma.max(f64::MIN_POSITIVE)
-                ),
-                None => {
-                    "velocity uncertainty unreadable, estimate taken whole: confidence".to_string()
-                }
-            };
+            let sure =
+                match k.closing_sigma_mps {
+                    Some(sigma) if sigma > 0.0 => format!(
+                        "closing speed {:.1} sigma clear of its uncertainty: confidence",
+                        k.closing_speed_mps / sigma
+                    ),
+                    Some(_) => "velocity carries no uncertainty, estimate taken whole: confidence"
+                        .to_string(),
+                    None => "velocity uncertainty unreadable, estimate taken whole: confidence"
+                        .to_string(),
+                };
             lines.push((sure, f(k.closing_confidence)));
         }
         None => lines.push(("not closing: no time to impact".to_string(), 0.0)),
