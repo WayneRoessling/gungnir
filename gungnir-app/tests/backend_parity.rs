@@ -736,9 +736,18 @@ fn one_scenario_through_both_backends_leaves_both_desktops_the_same_picture() {
         }
     });
 
-    // Drain 3: the node says everything it has to say, and B hears all of it.
+    // Drain 3: the node says everything it has to say, and B hears all of it. Quiet is two
+    // steps running that offer nothing: what a step publishes after its offer -- a health
+    // change is published there -- is offered by the next step, so one empty step alone
+    // could leave an envelope on the bus that B would never be waited for.
+    let mut empty_steps = 0;
     until("the node to fall quiet", || {
-        if node.step(end) == 0 {
+        empty_steps = if node.step(end) == 0 {
+            empty_steps + 1
+        } else {
+            0
+        };
+        if empty_steps >= 2 {
             Ok(())
         } else {
             Err(format!("last offered {}", node.offered))
@@ -817,15 +826,16 @@ fn one_scenario_through_both_backends_leaves_both_desktops_the_same_picture() {
     assert_eq!(b.withheld_resources(), a.withheld_resources());
     // Both planners, as each backend constructs its own, solving the one final picture at
     // one time: equal in everything but the identifier each minted.
-    let reference = AppState::with_config(baseline(
-        &timeline,
-        &scratch("reference"),
-        BackendConfig::Embedded,
-    ))
-    .expect("a reference desktop starts");
-    let mut desktop_planner = reference.intercept;
+    let reference_dir = scratch("reference");
+    let desktop_answer = {
+        let mut reference =
+            AppState::with_config(baseline(&timeline, &reference_dir, BackendConfig::Embedded))
+                .expect("a reference desktop starts");
+        reference
+            .intercept
+            .plan(end, &a_tracks, &reference.resources)
+    };
     let mut node_planner = picture::intercept_service(&node.config);
-    let desktop_answer = desktop_planner.plan(end, &a_tracks, &reference.resources);
     let node_answer = node_planner.plan(end, &a_tracks, &node.resources);
     match (&desktop_answer, &node_answer) {
         (PlanOutcome::Fresh(desktop_plan), PlanOutcome::Fresh(node_plan)) => {
@@ -871,8 +881,10 @@ fn one_scenario_through_both_backends_leaves_both_desktops_the_same_picture() {
         "the two desktops raised different alerts over one scenario"
     );
 
-    drop(node);
-    for dir in [feed_dir, a_dir, b_dir, node_dir] {
+    // Dropped before the directories go: a journal still open on Windows makes the removal
+    // fail silently.
+    drop((a, b, node));
+    for dir in [feed_dir, a_dir, b_dir, node_dir, reference_dir] {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
