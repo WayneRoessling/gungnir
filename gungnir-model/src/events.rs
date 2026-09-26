@@ -867,6 +867,76 @@ pub enum RetentionEvent {
     },
 }
 
+/// Where one audit-log segment's hash chain ends (GAP-163, D-104).
+///
+/// The same four facts `gungnir_security::SegmentHead` holds; that crate depends on no
+/// workspace crate (`ARCHITECTURE.md` §7.1), so each binary converts one to the other
+/// field for field.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AuditHead {
+    /// The segment's file name under `<data dir>/audit/`, `audit-NNNNNN.jsonl`.
+    pub segment: String,
+    /// Lines in the segment up to and including the head.
+    pub entries: u64,
+    /// The head line's chain sequence number.
+    pub seq: u64,
+    /// The head line's SHA-256, hex, as the line stores it.
+    pub hash: String,
+}
+
+/// The audit log's head, kept in the event journal beside it (GAP-163, D-104; GAP-152,
+/// D-105; `docs/design/DN-23-operator-authentication.md` §14).
+///
+/// **Not the audit entries.** D-87 kept those off the journal, and they stay off it: a
+/// head names a file, a count and a hash, and says nothing of who did what. It is here
+/// because the journal is durable and sealed and the audit file is neither, so a cut in
+/// the file can be found by comparing it with what the journal last said it held.
+///
+/// A journal's audit events describe the audit directory beside that journal and no
+/// other: a linked desktop does not take them off its node's stream.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum AuditEvent {
+    /// This run's segment reached `head`: every 64 entries, five seconds after the first
+    /// entry the last head does not cover, and at close (`closing`).
+    Anchored {
+        head: AuditHead,
+        closing: bool,
+        at: MissionTime,
+    },
+    /// What a verification of the audit record found, at start or on demand from PN-20.
+    ///
+    /// `heads` is the head every earlier segment is expected to reach from now on and
+    /// supersedes every audit event before it; a segment found cut or gone keeps the
+    /// head it should have reached, so the next verification finds it again. `findings`
+    /// are the sentences the operator was shown, each naming its file; empty when the
+    /// record verified.
+    Verified {
+        heads: Vec<AuditHead>,
+        segments: u64,
+        entries: u64,
+        findings: Vec<String>,
+        /// Journal sessions that could not be read, so a head or purge in them was not
+        /// seen, each naming itself.
+        unread_sessions: Vec<String>,
+        at: MissionTime,
+    },
+    /// Retention removed a segment past the deployment's audit-log age (D-105). On the
+    /// record before the file is deleted, so the verifier reads a purged segment as
+    /// purged and never as removed.
+    Purged {
+        segment: String,
+        entries: u64,
+        bytes: u64,
+        /// Days since the segment was last written, when it was purged.
+        idle_days: f64,
+        /// The limit it had passed (`RetentionPolicy::max_audit_log_age_days`).
+        max_audit_log_age_days: u32,
+        /// An interrupted earlier purge began this removal.
+        completed: bool,
+        at: MissionTime,
+    },
+}
+
 /// The node link on a connected desktop (GAP-050, D-23): fell back to embedded
 /// services after the node went silent, and answered again afterwards.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

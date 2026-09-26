@@ -40,6 +40,11 @@
 //! in [`RetentionState::purged_total`], and raised as an alert naming the sessions. An
 //! expired session that is kept is logged with its reason. A purge that fails raises one
 //! alert per distinct failure and is tried again at the next interval.
+//!
+//! # The audit log
+//!
+//! The same policy's `max_audit_log_age_days` is applied to the audit segments on the
+//! same schedule, after the sessions (GAP-152, D-105): see [`crate::audit_record::purge`].
 
 use crate::state::AppState;
 use crate::update::publish;
@@ -119,12 +124,22 @@ pub fn protected(state: &AppState) -> BTreeSet<SessionId> {
     keep
 }
 
-/// Apply the baseline's policy now, measuring ages against `now`. A baseline with no
+/// Apply the baseline's policy now, measuring ages against `now`: the sessions, then the
+/// audit segments (GAP-152, D-105; [`crate::audit_record::purge`]). A baseline with no
 /// policy does nothing. Public so a test can age a journal without waiting an hour.
 pub fn run(state: &mut AppState, now: SystemTime) {
     let Some(policy) = state.config.retention else {
         return;
     };
+    purge_sessions(state, policy, now);
+    crate::audit_record::purge(state, &policy, now);
+}
+
+fn purge_sessions(
+    state: &mut AppState,
+    policy: gungnir_store::retention::RetentionPolicy,
+    now: SystemTime,
+) {
     let keep = protected(state);
     let outcome = match gungnir_mission::apply_retention(&state.journal, &policy, now, &keep) {
         Ok(outcome) => outcome,
@@ -198,4 +213,5 @@ pub fn announce(config: &gungnir_config::ConfigBaseline) {
     } else {
         tracing::info!("journal retention is not configured; no session is ever purged");
     }
+    crate::audit_record::announce(config);
 }

@@ -180,9 +180,16 @@ pub fn tick(state: &mut AppState) {
         publish(state, now, Event::Health(changed));
     }
 
+    // 4a'. The audit record against the heads the journal holds (GAP-163, D-104): on the
+    //      first tick -- "at start", once the live session and the bus exist -- and before
+    //      retention, so a purge never removes a segment this verification has not seen.
+    crate::audit_record::verify_at_start(state);
     // 4b. Journal retention (GAP-122, D-78): on the first tick and hourly, before the
     //     drain below, so what a purge removed is journaled in the frame it happened.
     crate::retention::tick(state);
+    // 4c. The audit log's head, when one is due (GAP-163, D-104), before the drain so it
+    //     is journaled in this frame.
+    crate::audit_record::tick(state);
 
     // 5. Journal everything the bus carried this frame, then honour the D-04 fsync
     //    interval. `sync_if_due` is cheap when nothing is owed: one elapsed-time

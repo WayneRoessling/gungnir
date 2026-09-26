@@ -15,17 +15,20 @@ use gungnir_config::BackendConfig;
 use gungnir_security::{LocalAccountAuthority, OperatorId, SessionState};
 use gungnir_ui::panels::audit::{AccountLine, AuditView, SessionAction, SessionLine, SignInDraft};
 
-/// PN-20's view of the session, the accounts, the handoffs and the audit log.
+/// PN-20's view of the session, the accounts, the handoffs, the audit record and this
+/// run's audit log.
 ///
 /// `handoffs` is every handoff the desktop issued (`handoffs::rows`, GAP-040), delivered
 /// ones included: this is the after-action account, and a delivered handoff is the row a
-/// reconstruction needs most.
+/// reconstruction needs most. `record` is `crate::audit_record::record_view`'s (GAP-163,
+/// GAP-152).
 #[must_use]
 pub fn audit_view<'a>(
     state: &'a AppState,
     accounts: &'a [AccountLine<'a>],
     audit: &'a [gungnir_ui::panels::config_editor::AuditLine<'a>],
     handoffs: &'a [gungnir_ui::panels::handoff::HandoffRow<'a>],
+    record: gungnir_ui::panels::audit::AuditRecordView<'a>,
 ) -> AuditView<'a> {
     let session = match state.session_state() {
         SessionState::SignedIn(s) => SessionLine::SignedIn {
@@ -54,6 +57,7 @@ pub fn audit_view<'a>(
             state.role(),
             gungnir_security::actions::ASSIGN_ROLE,
         ),
+        record,
     }
 }
 
@@ -174,6 +178,11 @@ pub fn apply(state: &mut AppState, draft: &mut SignInDraft, action: SessionActio
             }
         }
         SessionAction::AssignRole { operator, role } => assign_role(state, operator, role),
+        // GAP-163, GAP-152: reads of the audit record, which change nothing in it. No
+        // permission is asked beyond seeing PN-20, as for this run's entries (D-106).
+        SessionAction::VerifyAuditRecord => crate::audit_record::verify(state),
+        SessionAction::ShowAuditSegment(index) => crate::audit_record::show(state, index),
+        SessionAction::HideAuditSegment => crate::audit_record::hide(state),
         SessionAction::SignOut => {
             let was = state.attributed_operator();
             state.sign_out();
