@@ -160,6 +160,40 @@ fn a_requirement_with_no_deadline_never_lapses() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// GAP-126: the one live producer of a non-finite journaled float the survey found.
+/// Rust parses "inf" and "NaN" as numbers, and `1e308` minutes overflows once it is added
+/// to the clock; each is refused, **nothing is stated or journaled**, and no identifier
+/// is spent on it.
+#[test]
+fn a_deadline_that_is_not_a_finite_time_is_refused_and_nothing_is_stated() {
+    let (mut state, dir) = desktop("bad-deadline");
+    let seen = state.events.subscribe();
+    let before = state.requirements.len();
+    for minutes in [f64::INFINITY, f64::NAN, f64::NEG_INFINITY, 1e308, 0.0, -5.0] {
+        let result = requirements::state_requirement(
+            &mut state,
+            "identify the contact in the harbour".into(),
+            0,
+            AssetPriority::High,
+            Some(minutes),
+        );
+        assert!(
+            matches!(result, Err(requirements::RequirementError::BadDeadline(_))),
+            "{minutes} minutes: {result:?}"
+        );
+    }
+    assert_eq!(state.requirements.len(), before, "nothing was stated");
+    let stated = seen
+        .try_iter()
+        .filter(|e| matches!(e.event, Event::Requirement(RequirementEvent::Stated { .. })))
+        .count();
+    assert_eq!(stated, 0, "nothing was published for the journal");
+    // The next good one takes the first identifier, so no refusal spent one.
+    let id = state_one(&mut state, Some(10.0));
+    assert_eq!(id, RequirementId(1));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// Tasking is one act: the command is issued and the concurrence recorded together.
 /// A requirement is tasked only when a task really exists to serve it.
 #[test]

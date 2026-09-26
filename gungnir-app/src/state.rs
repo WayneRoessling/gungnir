@@ -343,6 +343,9 @@ pub struct AppState {
     /// Serial for [`AppState::next_launch_warning_id`]. Private for the same reason
     /// `next_requirement` is.
     next_launch_warning: u64,
+    /// Journal retention (GAP-122, D-78): what it must keep beyond the live session, when
+    /// it runs next, and how many sessions it has removed.
+    pub retention: crate::retention::RetentionState,
 
     /// The baseline file this desktop loaded, when it loaded one (GAP-071).
     ///
@@ -558,10 +561,21 @@ impl AppState {
         // from what was asked for would say "encrypted" about a journal that is not.
         let (encryption, keystore) = build_encryption(&config, &mut journal, &mut alerts);
 
-        let (requirements, recovered, next_requirement) =
+        let (requirements, recovered, next_requirement, requirement_sessions) =
             recover_requirements_or_alert(&journal, &mut alerts);
-        let (issued_launch_warnings, launch_warnings_recovered, next_launch_warning) =
-            recover_launch_warnings_or_alert(&journal, &mut alerts);
+        let (
+            issued_launch_warnings,
+            launch_warnings_recovered,
+            next_launch_warning,
+            launch_warning_session,
+        ) = recover_launch_warnings_or_alert(&journal, &mut alerts);
+        // GAP-122: what retention must keep, read off the same recovery rather than a
+        // second pass over the journal.
+        let retention = crate::retention::RetentionState::from_recovery(
+            requirement_sessions,
+            launch_warning_session,
+        );
+        crate::retention::announce(&config);
         // GAP-142: an outage this desktop was in when it last stopped. Recovered before
         // anything else reads the fallback, because what it changes is what this desktop
         // is: a console that is cut off, not one that has simply not linked yet.
@@ -723,6 +737,7 @@ impl AppState {
             issued_launch_warnings,
             launch_warnings_recovered,
             next_launch_warning,
+            retention,
             config_store,
             audit: InMemoryAuditLog::new(),
             desk: ApprovalDesk::new(decision_settings),
@@ -1364,29 +1379,32 @@ fn recover_requirements_or_alert(
     Vec<gungnir_model::CollectionRequirement>,
     crate::requirements::Recovered,
     u64,
+    crate::requirements::RequirementSessions,
 ) {
-    let (requirements, recovered, next_requirement) = recover_requirements(journal);
+    let (requirements, recovered, next_requirement, sessions) = recover_requirements(journal);
     if let crate::requirements::Recovered::Unreadable { reason } = &recovered {
         alerts.push(format!(
             "Collection requirements could not be recovered ({reason}); whether any \
              are outstanding is unknown"
         ));
     }
-    (requirements, recovered, next_requirement)
+    (requirements, recovered, next_requirement, sessions)
 }
 
-/// Requirements recovered from the journal, and the serial to continue from: past the
-/// highest recovered identifier, so a new requirement cannot collide with an old one.
+/// Requirements recovered from the journal, the serial to continue from -- past the
+/// highest recovered identifier, so a new requirement cannot collide with an old one --
+/// and the sessions each requirement's events are in, for retention (GAP-122).
 fn recover_requirements(
     journal: &FileEventJournal,
 ) -> (
     Vec<gungnir_model::CollectionRequirement>,
     crate::requirements::Recovered,
     u64,
+    crate::requirements::RequirementSessions,
 ) {
-    let (requirements, recovered) = crate::requirements::recover(journal);
+    let (requirements, recovered, sessions) = crate::requirements::recover_with_sessions(journal);
     let next = requirements.iter().map(|r| r.id.0).max().unwrap_or(0);
-    (requirements, recovered, next)
+    (requirements, recovered, next, sessions)
 }
 
 /// An outage this desktop was in when it last stopped (GAP-142), and an alert saying so.
@@ -1430,19 +1448,27 @@ fn recover_launch_warnings_or_alert(
     Vec<gungnir_model::LaunchWarningReport>,
     crate::launch_warning::Recovered,
     u64,
+    Option<SessionId>,
 ) {
-    let (issued, recovered) = crate::launch_warning::recover(journal);
+    let (issued, recovered, highest_session) =
+        crate::launch_warning::recover_with_sessions(journal);
     if let crate::launch_warning::Recovered::Unreadable { reason } = &recovered {
         alerts.push(format!(
             "Issued launch warnings could not be recovered ({reason}); what this \
              deployment has already declared is unknown"
         ));
     }
-    // Append-only and never updated by id (unlike a requirement), so the count
-    // recovered is exactly the serial to continue from.
+    // **The highest serial recovered, not the count.** The two agreed while nothing was
+    // ever removed from the journal; once retention purges an early session (GAP-122) the
+    // count falls below the serials still on record, and continuing from it would issue
+    // a number a recovered warning already carries.
     #[allow(clippy::cast_possible_truncation)]
-    let next = issued.len() as u64;
-    (issued, recovered, next)
+    let next = issued
+        .iter()
+        .filter_map(|r| crate::launch_warning::serial(&r.id))
+        .max()
+        .unwrap_or(issued.len() as u64);
+    (issued, recovered, next, highest_session)
 }
 
 /// The gateway with its allow-list and radar adapters (GAP-001), the radar feeds' service

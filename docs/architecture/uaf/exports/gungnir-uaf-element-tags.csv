@@ -1372,6 +1372,14 @@ IE-resource-placement,uafId,IE-resource-placement
 IE-resource-placement,uafKind,InformationElement
 IE-resource-placement,registry.code,gungnir_model::ResourcePlacement
 IE-resource-placement,registry.domain,Battle rhythm & mission records
+IE-retention-event,uafId,IE-retention-event
+IE-retention-event,uafKind,InformationElement
+IE-retention-event,registry.code,gungnir_model::RetentionEvent
+IE-retention-event,registry.domain,Events & the record
+IE-retention-policy,uafId,IE-retention-policy
+IE-retention-policy,uafKind,InformationElement
+IE-retention-policy,registry.code,gungnir_model::RetentionPolicy
+IE-retention-policy,registry.domain,Battle rhythm & mission records
 IE-review-event,uafId,IE-review-event
 IE-review-event,uafKind,InformationElement
 IE-review-event,registry.code,gungnir_model::ReviewEvent

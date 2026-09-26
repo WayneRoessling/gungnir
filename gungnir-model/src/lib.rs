@@ -79,6 +79,8 @@ pub mod provenance;
 pub mod quality;
 pub mod releasability;
 pub mod requirements;
+/// How long a deployment keeps its record (GAP-122, D-78).
+pub mod retention;
 /// Battle-rhythm data (DN-21 §3): schedules and planned sensor downtime, here rather
 /// than in one consumer so the design keeps its "no new edges" property.
 pub mod rhythm;
@@ -128,6 +130,7 @@ pub use releasability::{filter_for, permits_single, Filtered, Releasability};
 pub use requirements::{
     lapse_overdue, CollectionRequirement, Concurrence, RequirementId, RequirementState,
 };
+pub use retention::RetentionPolicy;
 pub use rhythm::{
     absence_is_planned, MaintenanceState, MaintenanceWindow, ProductKind, Schedule,
     ScheduledProduct,
