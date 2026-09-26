@@ -1944,3 +1944,29 @@
     sector across north then needs no special case. A placement may re-aim its sensor, and
     one that does not inherits the declaration's sector. See
     `../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`.
+- id: D-90
+  decision: Which aliasing model the miri gate checks
+  question: >-
+    Once the miri gate could run (GAP-164), its first run stopped in `gungnir-association`
+    with a Stacked Borrows violation inside nalgebra's Cholesky (`matrix_view.rs`,
+    `as_mut_slice_unchecked`). The same test passes under Tree Borrows, and the latest
+    nalgebra (0.35.0) fails Stacked Borrows the same way. Run the gate under Tree Borrows,
+    keep Stacked Borrows and exempt the failing tests, or replace nalgebra?
+  raised_in: "GAP-164"
+  decider: Owner
+  unblocks: GAP-164
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** **Tree Borrows**, set in
+    `miri.yml`'s `MIRIFLAGS`. Stacked Borrows is miri's older experimental model, and it
+    rejects a pattern (a raw pointer taken from a view, then a mutable slice built from
+    it) that Tree Borrows, the model the Rust project's aliasing rules are converging on,
+    accepts; every nalgebra decomposition in the tracking core goes through it, so under
+    Stacked Borrows the gate would fail on a dependency before it ever reached the code a
+    pull request adds, and a gate that always fails is one people learn to wave through.
+    Exempting the tests with `#[cfg_attr(miri, ignore)]` was rejected because it removes the
+    filters and gates from the gate entirely, which is where any future `unsafe` would sit;
+    replacing nalgebra was rejected as a numerical-core change out of all proportion to a
+    finding in an experimental model. The Stacked Borrows finding is kept as GAP-166 so it
+    is reported upstream rather than forgotten. See
+    `../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`.

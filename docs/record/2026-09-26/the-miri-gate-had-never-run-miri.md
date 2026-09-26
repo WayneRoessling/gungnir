@@ -34,6 +34,16 @@ fixture-reading tests `#[cfg_attr(miri, ignore)]` was rejected: it would shrink 
 gate interprets without saying so, and isolation protects determinism, not memory safety,
 which is the only thing the gate is there to check.
 
+The second dispatched run reached `gungnir-association` and stopped at a Stacked Borrows
+violation inside nalgebra: `Cholesky::new` copies a column through
+`ViewStorageMut::as_mut_slice_unchecked`, which builds a mutable slice from a raw pointer
+an earlier retag had invalidated. A standalone crate holding one 3 by 3 Cholesky
+reproduces it under nalgebra 0.33.3, the workspace's version, and under 0.35.0, the
+latest; under `-Zmiri-tree-borrows` both pass, as does the workspace's gating test. The
+gate now runs under Tree Borrows (D-90): under Stacked Borrows it would fail on a
+dependency before it reached anything a pull request adds. The finding is kept as GAP-166
+so it goes upstream rather than being forgotten.
+
 ## Evidence
 
 The first dispatched run on `main` after this merges is the evidence that the job

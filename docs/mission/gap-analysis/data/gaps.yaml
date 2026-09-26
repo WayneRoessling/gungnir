@@ -9893,3 +9893,48 @@
       job failed in setup three times. Fixed in `miri.yml` with `+nightly`, and a
       `workflow_dispatch` trigger added so the job can be run without an `unsafe` diff.
       Stays open until a dispatched run on `main` has interpreted the twelve crates.
+  - date: 2026-09-26
+    status: In progress
+    note: >-
+      Two dispatched runs on the fix branch. The first passed setup, ran every test in
+      `gungnir-allocation`'s library under miri, and stopped at `open`: isolation refuses
+      the committed fixture a test reads, so isolation is now disabled. The second
+      reached `gungnir-association` and stopped at a Stacked Borrows violation in
+      nalgebra's Cholesky, which Tree Borrows accepts and nalgebra 0.35.0 still has; the
+      gate now runs under Tree Borrows (D-90) and the finding is GAP-166.
+- id: GAP-166
+  name: nalgebra's decompositions violate Stacked Borrows
+  type: Technical
+  caps: [CAP-7.4]
+  layer: Tracking core
+  sev: 2
+  effort: S
+  target: I2
+  owner: Owner
+  deps: [GAP-164]
+  impact: >-
+    Every Cholesky in the tracking core (gating, the filters' updates) goes through
+    nalgebra's `ViewStorageMut::as_mut_slice_unchecked`, which builds a mutable slice from
+    a raw pointer whose tag an earlier retag has already invalidated. miri rejects it under
+    Stacked Borrows and accepts it under Tree Borrows. Neither model is yet the language's
+    rule, so this is not known to be undefined behaviour; it is a dependency the workspace
+    cannot check under the stricter model, and the miri gate runs under Tree Borrows
+    because of it (D-90).
+  evidence: >-
+    The dispatched miri run of 2026-09-26 on GAP-164's branch
+    (`gating::tests::a_distant_measurement_is_rejected`, `gungnir-association/src/gating.rs`
+    line 135); a standalone 3 by 3 Cholesky reproduces it under nalgebra 0.33.3 and 0.35.0
+    and passes under `-Zmiri-tree-borrows`
+  action: >-
+    Report it to nalgebra with the three-line reproduction (a public issue is the owner's
+    to post), and move the gate back to Stacked Borrows, or keep Tree Borrows deliberately,
+    once nalgebra answers or the language settles on a model.
+  ref: >-
+    Found running the repaired miri gate (`../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found by the first miri run to get past setup. Not fixed here: the code is
+      nalgebra's, the latest release has it too, and posting an upstream issue publishes
+      on the owner's behalf.

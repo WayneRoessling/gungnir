@@ -60,8 +60,12 @@ jobs:
         # The tests read committed fixtures (testdata/) and the clock; miri's isolation
         # refuses both. Disabling it lets them run while miri still checks every access
         # for undefined behaviour, which is what the gate is for (GAP-164).
+        # Tree Borrows is the aliasing model (D-90): nalgebra's own Cholesky, 0.33 and
+        # 0.35 alike, is rejected under Stacked Borrows and accepted under Tree Borrows,
+        # so under the default model the gate fails on a dependency's view code before it
+        # reaches anything a pull request adds (GAP-166).
         env:
-          MIRIFLAGS: -Zmiri-disable-isolation
+          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
         run: >
           cargo +nightly miri test
           -p gungnir-core -p gungnir-coord -p gungnir-filters -p gungnir-association

@@ -166,8 +166,9 @@ history, and an entry is never edited once it has merged.
 | GAP-158 | A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical | Technical | CAP-2.11 | 2 | 3 | M | 6 | I3 | Services engineer | Open |
 | GAP-159 | The Coverage accuracy row still says a coverage volume has no bearing | Technical | CAP-2.11 | 1 | 3 | S | 3 | I3 | Owner | Open |
 | GAP-164 | The miri gate could not run miri | Technical | CAP-7.4 | 3 | 5 | S | 15 | I2 | Services engineer | In progress |
+| GAP-166 | nalgebra's decompositions violate Stacked Borrows | Technical | CAP-7.4 | 2 | 5 | S | 10 | I2 | Owner | Open |
 
-Counts: 153 gaps, 3 mission, 150 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 154 gaps, 3 mission, 151 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2304,10 +2305,25 @@ Counts: 153 gaps, 3 mission, 150 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.4 Peer and coalition exchange.
 - History:
   - 2026-09-26, In progress: Found when a doc comment on GAP-124's branch used the word the scan matches and the job failed in setup three times. Fixed in `miri.yml` with `+nightly`, and a `workflow_dispatch` trigger added so the job can be run without an `unsafe` diff. Stays open until a dispatched run on `main` has interpreted the twelve crates.
+  - 2026-09-26, In progress: Two dispatched runs on the fix branch. The first passed setup, ran every test in `gungnir-allocation`'s library under miri, and stopped at `open`: isolation refuses the committed fixture a test reads, so isolation is now disabled. The second reached `gungnir-association` and stopped at a Stacked Borrows violation in nalgebra's Cholesky, which Tree Borrows accepts and nalgebra 0.35.0 still has; the gate now runs under Tree Borrows (D-90) and the finding is GAP-166.
 - Evidence: `.github/workflows/miri.yml`; `rust-toolchain.toml`; the three miri runs of 2026-09-26 on GAP-124's branch, each failing in `cargo miri setup`.
 - Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
 - Impact: Gate 3 runs miri on any pull request whose diff adds `unsafe`. The job installed a nightly toolchain and ran `cargo miri`, which the pinned `rust-toolchain.toml` resolved to stable `1.98`; stable ships no miri, so the job failed at setup every time it was triggered. The first pull request to add real `unsafe` code would have met a gate that could not pass, and one that did pass would have proved nothing.
 - Closing action: Run miri as `cargo +nightly miri`, and give the workflow a manual trigger that runs the job without the scan, then dispatch it on `main` and record the outcome.
 - Target: I2. Owner: Services engineer. Status: In progress.
 - Reference: Found merging GAP-124 (`../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`).
+
+**GAP-166 nalgebra's decompositions violate Stacked Borrows**
+
+- Type: Technical.
+- Capability: CAP-7.4 Peer and coalition exchange.
+- History:
+  - 2026-09-26, Open: Found by the first miri run to get past setup. Not fixed here: the code is nalgebra's, the latest release has it too, and posting an upstream issue publishes on the owner's behalf.
+- Evidence: The dispatched miri run of 2026-09-26 on GAP-164's branch (`gating::tests::a_distant_measurement_is_rejected`, `gungnir-association/src/gating.rs` line 135); a standalone 3 by 3 Cholesky reproduces it under nalgebra 0.33.3 and 0.35.0 and passes under `-Zmiri-tree-borrows`.
+- Severity: 2. Reach: 5 threads. Effort: S. Priority: 10.
+- Impact: Every Cholesky in the tracking core (gating, the filters' updates) goes through nalgebra's `ViewStorageMut::as_mut_slice_unchecked`, which builds a mutable slice from a raw pointer whose tag an earlier retag has already invalidated. miri rejects it under Stacked Borrows and accepts it under Tree Borrows. Neither model is yet the language's rule, so this is not known to be undefined behaviour; it is a dependency the workspace cannot check under the stricter model, and the miri gate runs under Tree Borrows because of it (D-90).
+- Closing action: Report it to nalgebra with the three-line reproduction (a public issue is the owner's to post), and move the gate back to Stacked Borrows, or keep Tree Borrows deliberately, once nalgebra answers or the language settles on a model.
+- Target: I2. Owner: Owner. Status: Open.
+- Reference: Found running the repaired miri gate (`../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`).
+- Depends on: GAP-164.
 
