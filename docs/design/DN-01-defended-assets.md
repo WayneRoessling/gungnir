@@ -233,3 +233,51 @@ the same number for every promotion, so no score could be traced to any particul
 The baseline now carries `revision`, advanced on every promotion and refused when not
 (`ConfigError::RevisionNotAdvanced`), and `asset_list()` stamps that. The field keeps its
 name; its meaning is the revision.
+
+## 10. Amendment 2: the score reads time to impact
+
+Raised 2026-09-25 by GAP-124, under D-83.
+
+§5's rule kept the exposure with the highest product of proximity and priority, and the
+implementation multiplied a closing factor of 1.0 or 0.5 into it. §8 left MOP-28's
+"monotonic in time to impact" to be verified with DN-02, and the GAP-067 walk found the
+score never read time to impact at all: a far, fast track arriving in 40 s scored below a
+near, slow one arriving in 200 s, and the row's only fixture moved range at one speed, so
+it could not tell.
+
+**The kinematic factor** (`gungnir_assessment::kinematics`) replaces the proximity and the
+closing factor; priority, affiliation lethality and class lethality multiply it as before.
+Against one asset, with `r` the range to its boundary and `v_c` the closing speed along the
+line of sight:
+
+1. **Time to impact is unchanged**: `T = r / v_c`, only while `v_c > 0`. §5 and `RiskScore`
+   already defined it, and DN-03's warnings read it. It is **not** the time to the closest
+   point of approach, for the reasons D-83 records: a track passing 20 km off would have
+   a small time to "impact" and trigger impact warnings, and the score would drop by half
+   the instant it passed. The closest approach stays on the exposure, computed by the
+   predictor's own routine (`prediction::closest_on_course`, which the exposure used to
+   restate).
+2. **Urgency** `u = τ / (τ + T)`, computed as `1 / (1 + r / (τ v_c))` so nothing divides by
+   the closing speed. `τ` is the baseline's `assessment.urgency_half_time_s` (default 60 s,
+   finite and positive or the baseline is refused).
+3. **Closing confidence** `c`: zero when not closing; for a closing track,
+   `(Φ(z - 2) - Φ(-2)) / (1 - Φ(-2))` with `z` the closing speed in its own one-sigma from
+   the velocity block of the covariance -- zero at zero, a half at two sigma, one well
+   beyond. A covariance that cannot give a sigma credits the estimate fully.
+4. **The factor** `K = c (1/2 + u/2) + (1 - c) p/2`, with `p = 1 - r / max_range`.
+
+A confidently closing track scores on its time to impact alone, in `(1/2, 1]`; a track that
+is not closing scores `p/2` as before, and has no time to impact. So among confidently
+closing tracks of the same priority and class **the score is non-increasing in time to
+impact whatever their ranges**, which is MOP-28's clause exactly, and every confidently
+closing track outranks every track that is not closing at the same weights, which is what
+monotonicity in time to impact means for a track that has none. Between the two the
+covariance decides, so a contact whose closing is noise is not promoted as inbound and the
+score is continuous as a track turns from closing to passing. A non-finite state gives no
+factor, and the assessor reports no exposure rather than a NaN that would sort to the top
+of a triage.
+
+PN-04's evidence card shows the time to impact, the urgency, the closing confidence, the
+proximity and the factor, read from `RiskScore::kinematics` rather than recomputed. The
+verification is `gungnir-assessment/tests/time_to_impact.rs`; the row itself is unchanged,
+and walking it is the owner's.

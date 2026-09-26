@@ -1858,6 +1858,7 @@ mod tests {
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         }
     }
 

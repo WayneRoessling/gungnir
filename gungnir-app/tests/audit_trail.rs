@@ -32,6 +32,7 @@ fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
             // which is a timeout later and an audit row now.
             control_endpoint: Some("udp://radar-1.example:7000".into()),
             maintenance: Vec::new(),
+            azimuth_sector: None,
         }],
         resources: vec![ResourceConfig {
             handoff_endpoint: None,

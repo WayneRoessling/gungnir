@@ -187,14 +187,10 @@ impl ConstantVelocityPredictor {
             anchor.center_enu[2],
         );
         let rel0 = p - c;
-        let speed_sq = v.norm_squared();
-        let t_star = if speed_sq > f64::EPSILON {
-            (-rel0.dot(&v) / speed_sq).clamp(0.0, horizon_s)
-        } else {
-            0.0
-        };
-        let at = rel0 + v * t_star;
-        let distance_m = (at.norm() - anchor.asset.extent.radius_m()).max(0.0);
+        // A track that is not moving is closest now and stays there.
+        let (t_star, centre_m) =
+            closest_on_course(rel0, v, horizon_s).unwrap_or((0.0, rel0.norm()));
+        let distance_m = (centre_m - anchor.asset.extent.radius_m()).max(0.0);
         if !distance_m.is_finite() {
             return None;
         }
@@ -204,6 +200,28 @@ impl ConstantVelocityPredictor {
             distance_m,
         })
     }
+}
+
+/// Closest approach of a straight course to a point: the one routine both the predictor's
+/// [`ClosestApproach`] and the risk scorer's `AssetExposure` use (GAP-124 took the
+/// scorer's own copy out).
+///
+/// `rel0` is the track's position relative to the point and `v` its velocity.
+/// `|rel0 + v t|` is least at `t* = -dot(rel0, v) / |v|^2`, clamped into
+/// `[0, horizon_s]` (pass `f64::INFINITY` for "on the current course, ever"). Returns
+/// `t*` and the distance to the point then, or `None` when the track is not moving and
+/// has no course.
+pub(crate) fn closest_on_course(
+    rel0: Vector3<f64>,
+    v: Vector3<f64>,
+    horizon_s: f64,
+) -> Option<(f64, f64)> {
+    let speed_sq = v.norm_squared();
+    if !(speed_sq > f64::EPSILON && speed_sq.is_finite()) {
+        return None;
+    }
+    let t_star = (-rel0.dot(&v) / speed_sq).clamp(0.0, horizon_s.max(0.0));
+    Some((t_star, (rel0 + v * t_star).norm()))
 }
 
 /// Propagation under the motion model the tracking pipeline actually runs (GAP-020).

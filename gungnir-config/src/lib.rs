@@ -198,6 +198,17 @@ pub struct SensorConfig {
     /// never goes down": an unplanned outage is a failure and is reported as one.
     #[serde(default)]
     pub maintenance: Vec<MaintenanceWindowConfig>,
+    /// The bearings this sensor can see (GAP-118, D-84): `boresight_rad` clockwise from
+    /// **true north at the sensor**, and `width_rad` in `(0, 2π]`. A sector may straddle
+    /// north.
+    ///
+    /// **Absent means the full circle** -- a rotating radar, an omnidirectional receiver --
+    /// and is the default, so a baseline written before sectors existed means what it
+    /// always meant. A panel radar, a fixed camera, or a sensor masked by its own mast on
+    /// one side declares one, and its coverage stops at the edges instead of being drawn
+    /// and counted all round.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub azimuth_sector: Option<gungnir_model::AzimuthSector>,
 }
 
 /// One planned maintenance window, as it appears in the baseline.
@@ -795,10 +806,25 @@ pub struct AssessmentConfig {
     /// silently zeroed an unlisted class would hide a threat. Values are non-negative.
     #[serde(default)]
     pub lethality_by_class: std::collections::BTreeMap<String, f64>,
+    /// Time to impact at which a closing track's urgency is half its maximum, seconds
+    /// (GAP-124, D-83, `docs/design/DN-01-defended-assets.md` amendment 2).
+    ///
+    /// The risk score's time term is `τ / (τ + time to impact)`: a track arriving now has
+    /// urgency 1, one arriving in `τ` has 1/2, one arriving in `9τ` has 1/10. It sets the
+    /// scale on which "soon" is judged, which differs between a counter-UAS site and a
+    /// port, so it is the deployment's; the default of 60 s suits the former. It changes
+    /// how steeply the score falls with time, never the order: the score is non-increasing
+    /// in time to impact for any value.
+    #[serde(default = "default_urgency_half_time_s")]
+    pub urgency_half_time_s: f64,
 }
 
 fn default_prediction_horizons_s() -> Vec<f64> {
     vec![10.0, 30.0, 60.0, 120.0]
+}
+
+fn default_urgency_half_time_s() -> f64 {
+    60.0
 }
 
 fn default_assessment_max_range_m() -> f64 {
@@ -812,6 +838,7 @@ impl Default for AssessmentConfig {
             max_range_m: default_assessment_max_range_m(),
             effect_window_s: std::collections::BTreeMap::new(),
             lethality_by_class: std::collections::BTreeMap::new(),
+            urgency_half_time_s: default_urgency_half_time_s(),
         }
     }
 }
@@ -1585,6 +1612,24 @@ fn has_duplicate_ids(mut ids: Vec<u32>) -> bool {
 /// is current, ignoring a placement for a sensor no registry declares, or letting one
 /// option omit a sensor another places all yield a coverage number a planner would read
 /// as a property of the laydowns.
+/// GAP-118, D-84: a placement's own sector obeys the declaration's rule.
+fn validate_placement_sector(
+    laydown: &gungnir_model::Laydown,
+    placement: &gungnir_model::SensorPlacement,
+) -> Result<(), ConfigError> {
+    match placement
+        .azimuth_sector
+        .as_ref()
+        .map(gungnir_model::AzimuthSector::validate)
+    {
+        Some(Err(e)) => Err(ConfigError::Invalid(format!(
+            "laydown {} places sensor {} with an azimuth_sector that is refused: {e}",
+            laydown.id, placement.sensor.0
+        ))),
+        _ => Ok(()),
+    }
+}
+
 fn validate_laydowns(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     if baseline.laydowns.is_empty() {
         return Ok(());
@@ -1659,6 +1704,7 @@ fn validate_laydowns(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                     l.id, s.sensor.0
                 )));
             }
+            validate_placement_sector(l, s)?;
         }
         for r in &l.resources {
             if !declared_resources.contains(&r.resource.0) {
@@ -2742,6 +2788,16 @@ fn validate_approaches(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             baseline.analytics.coverage_sample_spacing_m
         )));
     }
+    // GAP-118: an elevation limit is an angle above the horizon, so it lies in
+    // [-π/2, π/2]; a NaN would make every `covers` answer false and read as no coverage.
+    let elevation = baseline.analytics.coverage_min_elevation_rad;
+    if !(elevation.is_finite()
+        && (-std::f64::consts::FRAC_PI_2..=std::f64::consts::FRAC_PI_2).contains(&elevation))
+    {
+        return Err(ConfigError::Invalid(format!(
+            "coverage_min_elevation_rad must be finite and within [-π/2, π/2], not {elevation}"
+        )));
+    }
     let mut names: Vec<&str> = baseline
         .approaches
         .iter()
@@ -3433,6 +3489,14 @@ fn validate_policy(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             "assessment.max_range_m must be finite and positive".into(),
         ));
     }
+    // GAP-124, D-83: the time term divides by nothing, but a zero or negative scale
+    // would make every closing track equally urgent or none of them.
+    if !(a.urgency_half_time_s.is_finite() && a.urgency_half_time_s > 0.0) {
+        return Err(ConfigError::Invalid(format!(
+            "assessment.urgency_half_time_s must be finite and positive, not {}",
+            a.urgency_half_time_s
+        )));
+    }
     for (layer, window) in &a.effect_window_s {
         if !(window.is_finite() && *window > 0.0) {
             return Err(ConfigError::Invalid(format!(
@@ -3593,6 +3657,15 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 "sensor {} has a non-finite position or range",
                 s.id
             )));
+        }
+        // GAP-118, D-84: a sector nobody can draw or count is refused, not narrowed.
+        if let Some(sector) = &s.azimuth_sector {
+            if let Err(e) = sector.validate() {
+                return Err(ConfigError::Invalid(format!(
+                    "sensor {} azimuth_sector: {e}",
+                    s.id
+                )));
+            }
         }
     }
     validate_resources(baseline)?;
@@ -4473,6 +4546,7 @@ MFkw
             max_range_m: 1.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         };
         b.sensors = vec![s.clone(), s];
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
@@ -4562,6 +4636,7 @@ MFkw
                 max_range_m: 20_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                azimuth_sector: None,
             }],
             radar_feeds: vec![RadarFeedConfig {
                 name: "north".into(),
@@ -4588,6 +4663,7 @@ MFkw
                 max_range_m: 60_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                azimuth_sector: None,
             }],
             ais_feeds: vec![AisFeedConfig {
                 name: "kal".into(),
@@ -4660,6 +4736,7 @@ MFkw
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         };
         let one = |sensor_id, sac, sic, azimuth_sigma_rad| DfSiteConfig {
             sensor_id,
@@ -4734,6 +4811,7 @@ MFkw
             max_range_m: 20_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         };
         let one = |sensor_id, sac, sic| UasSiteConfig {
             sensor_id,
@@ -4793,6 +4871,7 @@ MFkw
             max_range_m: 400_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         };
         let adsb = |sensor_id, source| ConfigBaseline {
             sensors: vec![sensor()],
@@ -4864,6 +4943,7 @@ MFkw
             max_range_m: 50_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         };
         let misb = |sensor_id, source| ConfigBaseline {
             sensors: vec![sensor()],
@@ -4935,6 +5015,7 @@ MFkw
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         };
         let sapient = |sensor_id, node_type, source| ConfigBaseline {
             sensors: vec![sensor()],
@@ -5025,6 +5106,7 @@ MFkw
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         };
         let with_destination = |destination_id, node_id, source| ConfigBaseline {
             sensors: vec![sensor()],
@@ -5100,6 +5182,7 @@ MFkw
                 max_range_m: 20_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                azimuth_sector: None,
             }],
             endpoints: vec![EndpointConfig {
                 name: "kal".into(),
@@ -5349,6 +5432,7 @@ MFkw
                 max_range_m: 100.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                azimuth_sector: None,
             }],
             resources: vec![ResourceConfig {
                 handoff_endpoint: None,
@@ -5605,6 +5689,7 @@ MFkw
             max_range_m: 20_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         }
     }
 
@@ -5898,6 +5983,7 @@ MFkw
                 max_range_m: 1000.0,
                 control_endpoint: None,
                 maintenance: windows,
+                azimuth_sector: None,
             }],
             ..ConfigBaseline::default()
         }
@@ -6963,5 +7049,130 @@ mod theme_tests {
         };
         assert_eq!(day.theme_variant(), ThemeVariant::Day);
         assert_eq!(night.theme_variant(), ThemeVariant::Night);
+    }
+}
+
+/// GAP-118 and GAP-124 (D-83, D-84): a sensor's azimuth sector, a laydown placement's, the
+/// coverage elevation limit and the urgency half-time are refused when nothing sensible
+/// can be drawn or scored from them, and an omitted sector is the full circle.
+#[cfg(test)]
+mod sector_and_urgency_tests {
+    use super::*;
+
+    fn sensor(azimuth_sector: Option<gungnir_model::AzimuthSector>) -> SensorConfig {
+        SensorConfig {
+            id: 7,
+            modality: "radar".into(),
+            position: [0.9, 0.2, 10.0],
+            max_range_m: 10_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+            azimuth_sector,
+        }
+    }
+
+    fn with(sensor: SensorConfig) -> ConfigBaseline {
+        ConfigBaseline {
+            sensors: vec![sensor],
+            ..ConfigBaseline::default()
+        }
+    }
+
+    #[test]
+    fn an_omitted_sector_parses_as_the_full_circle_and_a_stated_one_round_trips() {
+        let json = r#"{ "id": 7, "modality": "radar", "position": [0.9, 0.2, 10.0] }"#;
+        let parsed: SensorConfig = serde_json::from_str(json).expect("parses");
+        assert_eq!(parsed.azimuth_sector, None, "absent is the full circle");
+        let text = serde_json::to_string(&parsed).expect("serializes");
+        assert!(
+            !text.contains("azimuth_sector"),
+            "and is written as absent: {text}"
+        );
+
+        let json = r#"{ "id": 7, "modality": "radar", "position": [0.9, 0.2, 10.0],
+            "azimuth_sector": { "boresight_rad": 6.1086524, "width_rad": 0.6981317 } }"#;
+        let parsed: SensorConfig = serde_json::from_str(json).expect("parses");
+        let sector = parsed.azimuth_sector.expect("stated");
+        assert!(sector.contains(0.0), "350 deg +/- 20 deg straddles north");
+        validate(&with(parsed)).expect("a sector across north is legal");
+    }
+
+    #[test]
+    fn a_sector_of_no_width_or_more_than_the_circle_is_refused_and_names_the_sensor() {
+        for (boresight, width) in [
+            (0.0, 0.0),
+            (0.0, -1.0),
+            (0.0, 6.5),
+            (0.0, f64::NAN),
+            (f64::INFINITY, 1.0),
+        ] {
+            let b = with(sensor(Some(gungnir_model::AzimuthSector {
+                boresight_rad: boresight,
+                width_rad: width,
+            })));
+            let err = validate(&b).expect_err("refused");
+            assert!(
+                err.to_string().contains("sensor 7 azimuth_sector"),
+                "{boresight} {width}: {err}"
+            );
+        }
+        let full = with(sensor(Some(gungnir_model::AzimuthSector {
+            boresight_rad: 0.0,
+            width_rad: std::f64::consts::TAU,
+        })));
+        validate(&full).expect("the full circle, stated, is legal");
+    }
+
+    #[test]
+    fn a_placement_sector_is_held_to_the_same_rule() {
+        let mut b = with(sensor(None));
+        b.laydowns = vec![gungnir_model::Laydown {
+            id: gungnir_model::LaydownId("current".into()),
+            intent: "as deployed".into(),
+            sensors: vec![gungnir_model::SensorPlacement {
+                sensor: gungnir_model::SensorId(7),
+                position_enu: [0.0; 3],
+                mode: gungnir_model::SensorMode::Search,
+                azimuth_sector: Some(gungnir_model::AzimuthSector {
+                    boresight_rad: 1.0,
+                    width_rad: 0.0,
+                }),
+            }],
+            resources: Vec::new(),
+            current: true,
+        }];
+        let err = validate(&b).expect_err("refused");
+        assert!(err.to_string().contains("places sensor 7"), "{err}");
+        b.laydowns[0].sensors[0].azimuth_sector = Some(gungnir_model::AzimuthSector {
+            boresight_rad: 1.0,
+            width_rad: 0.5,
+        });
+        validate(&b).expect("a legal placement sector");
+    }
+
+    #[test]
+    fn the_coverage_elevation_limit_must_be_an_elevation() {
+        for bad in [f64::NAN, 1.6, -1.6] {
+            let mut b = ConfigBaseline::default();
+            b.analytics.coverage_min_elevation_rad = bad;
+            let err = validate(&b).expect_err("refused");
+            assert!(
+                err.to_string().contains("coverage_min_elevation_rad"),
+                "{err}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_urgency_half_time_is_finite_and_positive_and_defaults_to_a_minute() {
+        assert!((AssessmentConfig::default().urgency_half_time_s - 60.0).abs() < f64::EPSILON);
+        let parsed: AssessmentConfig = serde_json::from_str("{}").expect("parses");
+        assert!((parsed.urgency_half_time_s - 60.0).abs() < f64::EPSILON);
+        for bad in [0.0, -5.0, f64::NAN, f64::INFINITY] {
+            let mut b = ConfigBaseline::default();
+            b.assessment.urgency_half_time_s = bad;
+            let err = validate(&b).expect_err("refused");
+            assert!(err.to_string().contains("urgency_half_time_s"), "{err}");
+        }
     }
 }
