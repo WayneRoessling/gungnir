@@ -3078,3 +3078,38 @@
   commit: 5b68389df26ecb7e21307369ae3b694c25f82fe3
   pre_repository: false
   record: "GAP-162; D-91; DN-08 §10; docs/record/2026-09-26/a-baseline-applied-section-by-section.md; PR #177"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-114's `gungnir-fusion-async` change: the pipeline applies the baseline's
+    `LateDataPolicy` -- `Reject` drops and counts a detection earlier than one already
+    taken, `BufferAndReorder` reorders inside its bound and drops and counts beyond it,
+    `AcceptAsIs` applies as delivered and counts -- with bearings windowed the same way,
+    and the `reordered`, `accepted_late` and `not_finite` counters (D-98, D-99).
+  kind: code
+  paths:
+  - gungnir-fusion-async/src/lib.rs
+  - gungnir-fusion-async/src/pipeline.rs
+  - gungnir-fusion-async/tests/bearing.rs
+  - gungnir-fusion-async/tests/late_data_policy.rs
+  commit: ab0ca3252e5056b4e7fecb5c943d8f36c995ea9f
+  pre_repository: false
+  record: "GAP-114; D-98; D-99; docs/record/2026-09-26/the-late-data-policy-governs-the-tracker.md; PR #180"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-156's `gungnir-allocation` code under the numerical-stability clause:
+    `one_step`, the allocator's problem at a horizon of one solved exactly by the
+    Hungarian method with the exact solver's tie rule and a reported floor and ceiling on
+    its value, the interim answer's source (D-93), with its oracle test.
+  kind: code
+  paths:
+  - gungnir-allocation/src/one_step.rs
+  - gungnir-allocation/src/lib.rs
+  - gungnir-allocation/src/bellman.rs
+  - gungnir-allocation/tests/one_step_oracle.rs
+  commit: 03c6daa7cd4f1fd116279ae29b91729892d92bc7
+  pre_repository: false
+  record: "GAP-156; D-93; DN-04 §11; docs/record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md; PR #182"
