@@ -1892,3 +1892,55 @@
     session, a log line, a count, and on the desktop an alert. The audit-log age governs
     nothing until a durable audit log exists (GAP-152). See
     `../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`.
+
+- id: D-83
+  decision: How the risk score reads time to impact
+  question: >-
+    The `gungnir-assessment` criterion is a score monotonic in time to impact, and the score
+    read range and whether a track closed, never how soon it arrived (GAP-124). Which time
+    to impact -- at the current closing speed, or to the closest point of approach -- how
+    does it combine with range, priority and lethality, and what does the track's
+    covariance change?
+  raised_in: "GAP-124"
+  decider: Owner
+  unblocks: GAP-124
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** **Time to impact stays range to
+    the boundary over closing speed, and a closing track scores on it alone** (DN-01 §10).
+    Urgency is `τ / (τ + T)` with `τ` the baseline's `assessment.urgency_half_time_s`
+    (60 s by default); a confidently closing track's kinematic factor is `1/2 + u/2`, one
+    not closing keeps `p/2` on proximity, and the track's own closing-speed sigma blends
+    the two, so a closing speed within two sigma of zero earns little. Priority and
+    lethality multiply it as before. The time to the closest point of approach was
+    rejected as the time to impact: it ignores the miss distance, so a track passing 20 km
+    off would be "10 s from impact" and trigger impact warnings DN-03 keeps for arrivals,
+    and it halves the score the instant a track passes. A range-and-time product was
+    rejected because a near-slow track then outscores a far-fast one that arrives sooner,
+    which is the defect. See
+    `../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`.
+
+- id: D-84
+  decision: What a sensor's azimuth sector is and where it is stated
+  question: >-
+    `CoverageVolume` had no bearing, so the coverage-accuracy criterion's bearing clause
+    could not be checked and a sectored sensor could not be represented (GAP-118). Give it
+    a sector, or take bearing out of the criterion? And if a sector: stated how, against
+    which north, and where -- the sensor, the laydown, or both?
+  raised_in: "GAP-118"
+  decider: Owner
+  unblocks: GAP-118
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** **A sector, as a boresight and a
+    width in (0, 2π], against true north at the sensor, on the sensor's declaration and
+    optionally on a laydown placement; absent is the full circle** (DN-12 §9). Removing
+    bearing from the criterion was rejected: real sensors have sectors, and a panel radar
+    counted as covering all round is coverage that is not there, which DN-12 exists to
+    prevent. True north at the sensor because that is what a survey states; the local
+    frame's north departs from it by the meridian convergence, 0.35 degree 39 km east at
+    45 degrees north, so the frame turns each sector as it places it. Two edges were
+    rejected for a boresight and width because the width is what validation bounds and a
+    sector across north then needs no special case. A placement may re-aim its sensor, and
+    one that does not inherits the declaration's sector. See
+    `../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`.

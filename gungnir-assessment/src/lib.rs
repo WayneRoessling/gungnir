@@ -9,9 +9,11 @@
 //! score zero so they are never allocated against (§5.2).
 
 pub mod assets;
+pub mod kinematics;
 pub mod prediction;
 
 pub use assets::{AssetAnchor, AssetExposure, AssetListAssessor};
+pub use kinematics::{KinematicFactor, CLOSING_SIGNIFICANCE_SIGMA, DEFAULT_URGENCY_HALF_TIME_S};
 pub use prediction::{
     ClosestApproach, ConstantVelocityPredictor, FilterPredictor, PredictedPoint, Prediction,
     PredictorKind, TrajectoryPredictor,
@@ -35,6 +37,12 @@ pub struct RiskScore {
     /// zero score as a computed one.
     #[serde(default)]
     pub exposure: Option<AssetExposure>,
+    /// The kinematic terms the score rests on -- proximity, closing confidence, urgency
+    /// from time to impact, and the factor they make (GAP-124, D-83) -- so the evidence
+    /// card can show what was used rather than recompute it. `None` exactly when no
+    /// kinematics were scored: a stale track, or no exposure.
+    #[serde(default)]
+    pub kinematics: Option<KinematicFactor>,
 }
 
 pub trait ThreatAssessor: Send + Sync {
@@ -42,56 +50,58 @@ pub trait ThreatAssessor: Send + Sync {
 }
 
 /// Kinematic baseline: risk grows as a track gets closer to one protected point and
-/// approaches it. Confidence-aware in the minimal sense that stale tracks score zero.
+/// as its time to impact falls, by the same kinematic factor the asset-list assessor uses
+/// (`kinematics`, GAP-124). Stale tracks score zero.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ClosingSpeedAssessor {
     /// ENU position of the asset being protected, meters.
     pub protected_point_enu: [f64; 3],
     /// Range at and beyond which risk is zero, meters.
     pub max_range_m: f64,
+    /// Time to impact at which urgency is half its maximum, seconds
+    /// ([`DEFAULT_URGENCY_HALF_TIME_S`] unless the deployment says otherwise).
+    pub urgency_half_time_s: f64,
 }
 
 impl ClosingSpeedAssessor {
-    // Scores and times are reported as f32 by design (`RiskScore`); the narrowing is
-    // intentional and the values are bounded.
+    // Scores are reported as f32 by design (`RiskScore`); the narrowing is intentional
+    // and the values are bounded.
     #[allow(clippy::cast_possible_truncation)]
     fn score_one(&self, track: &TrackView) -> RiskScore {
+        let unscored = RiskScore {
+            track_id: track.id,
+            score: 0.0,
+            time_to_impact_s: None,
+            exposure: None,
+            kinematics: None,
+        };
         if track.quality.is_stale {
-            return RiskScore {
-                track_id: track.id,
-                score: 0.0,
-                time_to_impact_s: None,
-                exposure: None,
-            };
+            return unscored;
         }
         let p = track.position_enu();
-        let rel = [
-            p[0] - self.protected_point_enu[0],
-            p[1] - self.protected_point_enu[1],
-            p[2] - self.protected_point_enu[2],
-        ];
-        let range = (rel[0] * rel[0] + rel[1] * rel[1] + rel[2] * rel[2]).sqrt();
-        let v = [track.state[3], track.state[4], track.state[5]];
-        // Positive when the track moves toward the protected point.
-        let closing = if range > f64::EPSILON {
-            -(v[0] * rel[0] + v[1] * rel[1] + v[2] * rel[2]) / range
-        } else {
-            0.0
+        let Some(k) = kinematics::kinematics(&kinematics::Geometry {
+            relative_enu: [
+                p[0] - self.protected_point_enu[0],
+                p[1] - self.protected_point_enu[1],
+                p[2] - self.protected_point_enu[2],
+            ],
+            velocity_enu: [track.state[3], track.state[4], track.state[5]],
+            covariance: &track.covariance,
+            boundary_radius_m: 0.0,
+            max_range_m: self.max_range_m,
+            urgency_half_time_s: self.urgency_half_time_s,
+        }) else {
+            // A state that is not a number scores nothing rather than a NaN that would
+            // sort to the top of every ranking.
+            return unscored;
         };
-        let proximity = (1.0 - range / self.max_range_m).clamp(0.0, 1.0);
-        let approaching = closing > 0.0;
-        let score = if approaching {
-            proximity
-        } else {
-            proximity * 0.5
-        };
-        let time_to_impact_s = approaching.then(|| (range / closing) as f32);
         RiskScore {
             track_id: track.id,
-            score: score as f32,
-            time_to_impact_s,
+            score: k.factor.value as f32,
+            time_to_impact_s: k.time_to_impact_s,
             // The single-point assessor has no asset list to expose.
             exposure: None,
+            kinematics: Some(k.factor),
         }
     }
 }
@@ -139,6 +149,7 @@ mod tests {
         ClosingSpeedAssessor {
             protected_point_enu: [0.0; 3],
             max_range_m: 1000.0,
+            urgency_half_time_s: DEFAULT_URGENCY_HALF_TIME_S,
         }
     }
 
@@ -150,12 +161,21 @@ mod tests {
         assert!(scores[1].time_to_impact_s.unwrap() < scores[0].time_to_impact_s.unwrap());
     }
 
+    /// A receding track has no time to impact and scores half its proximity; the same
+    /// track closing scores above half, however slowly it arrives (GAP-124).
     #[test]
-    fn receding_track_has_no_time_to_impact_and_half_score() {
+    fn receding_track_has_no_time_to_impact_and_half_its_proximity() {
         let scores =
             assessor().assess(&[track(1, 500.0, 10.0, false), track(2, 500.0, -10.0, false)]);
         assert!(scores[0].time_to_impact_s.is_none());
-        assert!((scores[0].score - scores[1].score * 0.5).abs() < 1e-6);
+        assert!(
+            (scores[0].score - 0.5 * 0.5).abs() < 1e-6,
+            "{}",
+            scores[0].score
+        );
+        assert!(scores[1].score > 0.5);
+        let k = scores[0].kinematics.expect("scored");
+        assert!(k.urgency.abs() < f64::EPSILON && k.closing_confidence.abs() < f64::EPSILON);
     }
 
     #[test]

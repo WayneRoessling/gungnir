@@ -47,6 +47,15 @@ pub struct SensorPlacement {
     /// Local ENU metres, in the deployment's own frame.
     pub position_enu: [f64; 3],
     pub mode: SensorMode,
+    /// Where this placement points the sensor, when it differs from the sensor's own
+    /// declaration (GAP-118, D-84): bearings against true north at the placement, like
+    /// every sector in a baseline.
+    ///
+    /// **Absent means the declared sensor's sector**, which is itself absent -- the full
+    /// circle -- for a sensor that declares none. A laydown that moves a sectored radar and
+    /// re-aims it says so here; one that moves it without re-aiming keeps its boresight.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub azimuth_sector: Option<crate::AzimuthSector>,
 }
 
 /// Where one effector sits in a laydown.
@@ -144,6 +153,7 @@ mod tests {
             sensor: SensorId(id),
             position_enu: position,
             mode: SensorMode::Search,
+            azimuth_sector: None,
         }
     }
 

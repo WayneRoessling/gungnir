@@ -290,6 +290,7 @@ IE-asset-list-view,Information Elements,InformationElement,AssetListView,"The as
 IE-asset-priority,Information Elements,InformationElement,AssetPriority,"How the asset is defended, ordered least to most important.",Class
 IE-authority-rule,Information Elements,InformationElement,AuthorityRule,"One row of the authority matrix in docs/mission/roles-and-stakeholders.md \u00a74, as configuration.",Class
 IE-authority-settings,Information Elements,InformationElement,AuthoritySettings,The authority matrix.,Class
+IE-azimuth-sector,Information Elements,InformationElement,AzimuthSector,"The horizontal bearings a sensor can see: a sector centred on its boresight (GAP-118, D-84, docs/design/DN-12-coverage-and-gaps.md amendment 1).",Class
 IE-bearing-ray-view,Information Elements,InformationElement,BearingRayView,"A bearing that matched no track, projected for a caller to draw (docs/design/DN-27-bearing-only-detections.md \u00a75 rule 3, \u00a77; GAP-096).",Class
 IE-calibration-event,Information Elements,InformationElement,CalibrationEvent,A sensor's report of an object whose true position is already known (../../docs/mission/gap-analysis/gap-register.md GAP-014).,Class
 IE-collection-requirement,Information Elements,InformationElement,CollectionRequirement,"A collection requirement, owned by the intelligence analyst (MT-08).",Class
@@ -367,6 +368,7 @@ IE-rhythm-event,Information Elements,InformationElement,RhythmEvent,"The watch's
 IE-role-layout,Information Elements,InformationElement,RoleLayout,One role's screen.,Class
 IE-schedule,Information Elements,InformationElement,Schedule,"A period and an offset, in mission-time seconds.",Class
 IE-scheduled-product,Information Elements,InformationElement,ScheduledProduct,A product the deployment produces on a cycle rather than on demand.,Class
+IE-sector-error,Information Elements,InformationElement,SectorError,Why a sector is refused.,Class
 IE-sensor-command,Information Elements,InformationElement,SensorCommand,A command to a sensor (DN-11 \u00a74).,Class
 IE-sensor-event,Information Elements,InformationElement,SensorEvent,What a sensor is doing changing (GAP-003).,Class
 IE-sensor-id,Information Elements,InformationElement,SensorId,Identifier of a sensor as registered in gungnir-sensor-management and named in gungnir-config.,Class

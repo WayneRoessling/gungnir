@@ -103,6 +103,54 @@ fn the_exposure_lines_name_the_asset_and_its_priority() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// GAP-124, D-83: PN-04's card shows the time to impact and the urgency the scorer took
+/// from it, the closing confidence and the kinematic factor -- the scorer's own numbers,
+/// read from the score, so the card and the ranking cannot disagree -- and the baseline's
+/// urgency half-time is the one the scorer used.
+#[test]
+fn the_card_shows_the_time_to_impact_term_the_score_used() {
+    let (mut state, dir) = desktop("urgency", vec![harbour()]);
+    let at = |state: &AppState| {
+        let ranking = sustainment::asset_exposure(state);
+        let score = ranking.scores()[0];
+        let factors = sustainment::score_factors(state, &ranking, TrackId(42));
+        (score, factors)
+    };
+    let (score, factors) = at(&state);
+    let k = score
+        .kinematics
+        .expect("a scored track carries its kinematics");
+    // 2 km from the centre of a 500 m harbour at 100 m/s: 15 s to its edge.
+    let tti = score.time_to_impact_s.expect("closing");
+    assert!((tti - 15.0).abs() < 1e-3, "{tti}");
+    let urgency = factors
+        .iter()
+        .find(|(n, _)| n.contains("15 s to impact: urgency"))
+        .map_or_else(|| panic!("an urgency line: {factors:?}"), |(_, w)| *w);
+    // The default half-time is 60 s: 60 / (60 + 15).
+    assert!((f64::from(urgency) - 60.0 / 75.0).abs() < 1e-6, "{urgency}");
+    assert!((f64::from(urgency) - k.urgency).abs() < 1e-6);
+    let factor = factors
+        .iter()
+        .find(|(n, _)| n == "kinematic factor")
+        .map(|(_, w)| *w)
+        .expect("the factor line");
+    assert!((f64::from(factor) - k.value).abs() < 1e-6);
+    assert!(factors.iter().any(|(n, _)| n.contains("confidence")));
+
+    // The baseline's half-time reaches the scorer: a longer one makes the same 15 s
+    // more urgent, never less.
+    state.config.assessment.urgency_half_time_s = 600.0;
+    let (longer, factors) = at(&state);
+    let urgency = longer.kinematics.expect("scored").urgency;
+    assert!(
+        (urgency - 600.0 / 615.0).abs() < 1e-9,
+        "{urgency} {factors:?}"
+    );
+    assert!(longer.score > score.score);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// With no assets declared, the panels say so; an empty list would read as "nothing is
 /// threatened".
 #[test]

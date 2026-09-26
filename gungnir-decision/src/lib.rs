@@ -122,12 +122,14 @@ mod tests {
                 score: 0.2,
                 time_to_impact_s: None,
                 exposure: None,
+                kinematics: None,
             },
             RiskScore {
                 track_id: TrackId(20),
                 score: 0.9,
                 time_to_impact_s: Some(30.0),
                 exposure: None,
+                kinematics: None,
             },
         ];
         let text = rationale_for(&plan, &scores);

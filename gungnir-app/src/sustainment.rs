@@ -1253,7 +1253,9 @@ pub fn asset_assessor(state: &AppState) -> Option<gungnir_assessment::AssetListA
             anchors,
             state.config.assessment.max_range_m,
         )
-        .with_class_weights(class_weights),
+        .with_class_weights(class_weights)
+        // GAP-124, D-83: the scale time to impact is judged on is the deployment's.
+        .with_urgency_half_time_s(state.config.assessment.urgency_half_time_s),
     )
 }
 
@@ -1350,11 +1352,53 @@ pub fn score_factors(
             )),
         }
     }
-    match score.time_to_impact_s {
-        Some(t) => factors.push((format!("closing, {t:.0} s to impact"), 1.0)),
-        None => factors.push(("not closing".to_string(), 0.0)),
-    }
+    // GAP-124, D-83: the kinematic factor the scorer used, and what it was made of --
+    // the time to impact and its urgency, how sure the scorer is that the track is closing,
+    // and the proximity a track that is not closing is scored on. Read from the score, not
+    // recomputed, so the card and the ranking cannot disagree.
+    factors.extend(kinematic_factor_lines(score));
     factors
+}
+
+/// PN-04's lines for the kinematic factor behind a score (GAP-124, D-83): what the card
+/// shows under the asset, priority and class lines. Empty when nothing kinematic was
+/// scored.
+#[must_use]
+pub fn kinematic_factor_lines(score: &gungnir_assessment::RiskScore) -> Vec<(String, f32)> {
+    let Some(k) = score.kinematics else {
+        return Vec::new();
+    };
+    // Factors are shown as f32, the card's own type; they are bounded to [0, 1].
+    #[allow(clippy::cast_possible_truncation)]
+    let f = |x: f64| x as f32;
+    let mut lines = Vec::new();
+    match score.time_to_impact_s {
+        Some(t) => {
+            lines.push((
+                format!(
+                    "closing at {:.0} m/s, {t:.0} s to impact: urgency",
+                    k.closing_speed_mps
+                ),
+                f(k.urgency),
+            ));
+            let sure =
+                match k.closing_sigma_mps {
+                    Some(sigma) if sigma > 0.0 => format!(
+                        "closing speed {:.1} sigma clear of its uncertainty: confidence",
+                        k.closing_speed_mps / sigma
+                    ),
+                    Some(_) => "velocity carries no uncertainty, estimate taken whole: confidence"
+                        .to_string(),
+                    None => "velocity uncertainty unreadable, estimate taken whole: confidence"
+                        .to_string(),
+                };
+            lines.push((sure, f(k.closing_confidence)));
+        }
+        None => lines.push(("not closing: no time to impact".to_string(), 0.0)),
+    }
+    lines.push(("proximity".to_string(), f(k.proximity)));
+    lines.push(("kinematic factor".to_string(), f(k.value)));
+    lines
 }
 
 pub fn asset_exposure(state: &AppState) -> AssetRanking {
@@ -1443,6 +1487,10 @@ pub fn coverage_circles(state: &AppState) -> Vec<CoverageCircle> {
             center: frame.to_enu(region.center),
             radius_m: region.radius_m,
             confidence: region.confidence,
+            // Surveyed on true north at the sensor; drawn in the frame (GAP-118, D-84).
+            sector: region
+                .azimuth_sector
+                .map(|sector| frame.sector_in_frame(sector, region.center)),
         })
         .collect()
 }
@@ -1505,7 +1553,7 @@ pub fn coverage_report(state: &AppState) -> Option<gungnir_analytics::CoverageRe
     let volumes = gungnir_analytics::coverage_from_registry(
         &state.sensors,
         state.config.analytics.coverage_min_elevation_rad,
-        |record| frame.to_enu(record.position),
+        &frame,
     );
 
     let routes: Vec<Vec<[f64; 3]>> = state
@@ -1559,11 +1607,19 @@ pub fn coverage_report(state: &AppState) -> Option<gungnir_analytics::CoverageRe
 ///
 /// A laydown places every sensor and resource it declares (DN-26 §4 rule 4), but a
 /// laydown's own placement carries no range or modality of its own -- those are the
-/// physical sensor's, unchanged by where a laydown puts it.
-fn laydown_coverage_volumes(
+/// physical sensor's, unchanged by where a laydown puts it. **Its sector is the
+/// placement's when the placement re-aims the sensor, and the declaration's otherwise**
+/// (GAP-118, D-84), placed in the frame at the laydown's position, where true north may
+/// differ from the frame's.
+///
+/// Public so the rehearsal tests compute a laydown's coverage the way PN-16 does rather
+/// than restating it.
+#[must_use]
+pub fn laydown_coverage_volumes(
     laydown: &gungnir_model::Laydown,
-    sensor_ranges: &std::collections::HashMap<u32, f64>,
+    sensors: &[gungnir_config::SensorConfig],
     min_elevation_rad: f64,
+    frame: &gungnir_model::LocalFrame,
 ) -> Vec<(gungnir_model::SensorId, gungnir_analytics::CoverageVolume)> {
     laydown
         .sensors
@@ -1575,16 +1631,20 @@ fn laydown_coverage_volumes(
             )
         })
         .filter_map(|s| {
-            sensor_ranges.get(&s.sensor.0).map(|&max_range_m| {
-                (
-                    s.sensor,
-                    gungnir_analytics::CoverageVolume {
-                        sensor_enu: s.position_enu,
-                        max_range_m,
-                        min_elevation_rad,
-                    },
-                )
-            })
+            let declared = sensors.iter().find(|d| d.id == s.sensor.0)?;
+            let azimuth = s
+                .azimuth_sector
+                .or(declared.azimuth_sector)
+                .map(|sector| frame.sector_in_frame(sector, frame.to_geodetic(s.position_enu)));
+            Some((
+                s.sensor,
+                gungnir_analytics::CoverageVolume {
+                    sensor_enu: s.position_enu,
+                    max_range_m: declared.max_range_m,
+                    min_elevation_rad,
+                    azimuth,
+                },
+            ))
         })
         .collect()
 }
@@ -1659,12 +1719,6 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
         .collect();
     let approaches: Vec<&[[f64; 3]]> = routes.iter().map(Vec::as_slice).collect();
 
-    let sensor_ranges: std::collections::HashMap<u32, f64> = state
-        .config
-        .sensors
-        .iter()
-        .map(|s| (s.id, s.max_range_m))
-        .collect();
     let min_elevation_rad = state.config.analytics.coverage_min_elevation_rad;
     let spacing = state.config.analytics.coverage_sample_spacing_m;
 
@@ -1675,7 +1729,8 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
     };
 
     let report_for = |laydown: &gungnir_model::Laydown| -> gungnir_analytics::CoverageReport {
-        let volumes = laydown_coverage_volumes(laydown, &sensor_ranges, min_elevation_rad);
+        let volumes =
+            laydown_coverage_volumes(laydown, &state.config.sensors, min_elevation_rad, &frame);
         match state.data.terrains.first() {
             Some(terrain) if terrain_masking_applied => gungnir_analytics::combined_coverage(
                 &volumes,
@@ -1822,9 +1877,7 @@ pub fn sensor_plans(
     }
 
     let min_elevation = state.config.analytics.coverage_min_elevation_rad;
-    let current = gungnir_analytics::coverage_from_registry(&state.sensors, min_elevation, |r| {
-        frame.to_enu(r.position)
-    });
+    let current = gungnir_analytics::coverage_from_registry(&state.sensors, min_elevation, &frame);
 
     // Every legal change on every sensor that could make one. The registry's transition
     // rules are the constraint, not a preference (DN-13 rule 1).
@@ -1841,11 +1894,10 @@ pub fn sensor_plans(
                     from: format!("{:?}", r.mode),
                     to: format!("{to:?}"),
                 },
-                volume_after: radiating.then(|| gungnir_analytics::CoverageVolume {
-                    sensor_enu: frame.to_enu(r.position),
-                    max_range_m: r.max_range_m,
-                    min_elevation_rad: min_elevation,
-                }),
+                // The same volume `coverage_from_registry` gives a radiating sensor,
+                // sector included (GAP-118).
+                volume_after: radiating
+                    .then(|| gungnir_analytics::volume_of(r, min_elevation, &frame)),
             });
         }
     }
