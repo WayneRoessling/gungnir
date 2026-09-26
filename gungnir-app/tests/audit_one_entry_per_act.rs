@@ -64,6 +64,7 @@ fn baseline(dir: &std::path::Path, revision: u32) -> ConfigBaseline {
             position: [0.0, 0.0, 10.0],
             max_range_m: 20_000.0,
             azimuth_sector: None,
+            detection_model: None,
             // Commandable, and nothing acknowledges: a timeout later, an entry now.
             control_endpoint: Some("radar-1-control".into()),
             maintenance: Vec::new(),
