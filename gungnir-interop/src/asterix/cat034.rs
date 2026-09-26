@@ -32,6 +32,8 @@ pub const CODEC_NAME: &str = "asterix.cat034";
 pub const EDITION: &str = "1.29";
 
 const CATEGORY: u8 = 34;
+/// The loss a service message records when it carries no I034/030 (GAP-116).
+pub const TIME_OF_DAY_ABSENT: &str = "no time of day (I034/030); source time set to receipt time";
 const MAX_FRN: usize = 14;
 
 // ---------------------------------------------------------------------------
@@ -476,7 +478,8 @@ impl AsterixCat034Codec {
             reason: "I034/000 absent; every service message carries its type".into(),
         })?;
         let mut losses: Vec<&'static str> = Vec::new();
-        let (source_time, time_loss) = source_time(record.time_of_day_s, receipt_time);
+        let (source_time, time_loss) =
+            source_time(record.time_of_day_s, receipt_time, TIME_OF_DAY_ABSENT);
         losses.extend(time_loss);
 
         let event = match message_type {

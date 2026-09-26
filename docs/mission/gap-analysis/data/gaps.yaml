@@ -8399,6 +8399,17 @@
     note: >-
       Filed by the GAP-067 walk, which held the `gungnir-interop` row and struck 'all
       tested' from its criterion.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed: the seven clauses are asserted, one test each, in
+      `gungnir-interop/tests/asterix_fixtures.rs` and, for clause 3,
+      `tests/conformance.rs`. Clause 6 now rewrites each cut block's length so the cut
+      reaches the category's own parser; the old test cut the datagram and stopped at the
+      framing. Clause 4 found a defect, fixed here: a Category 034, 205 or 129 report
+      with no time of day named I048/140 as the missing item, and each category now names
+      its own. The row and its criterion are unchanged and await the owner's walk. See
+      `../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`.
 
 - id: GAP-117
   name: Most event and view types are never round-tripped through serde
@@ -8430,6 +8441,17 @@
   - date: 2026-09-16
     status: Open
     note: "Filed by the GAP-067 walk, which held the `gungnir-model` row."
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed: `gungnir-model/tests/serde_round_trip.rs` round-trips one value
+      per variant of all 22 event enums (82 variants) and every `*View` type, with
+      non-dyadic finite floats, and refuses `SCHEMA_VERSION - 1` with both versions
+      named. Full struct literals and exhaustive matches stop it compiling when a field
+      or variant is added, and it reads the source, so a new enum, variant or view with
+      no value fails by name. It found GAP-175: `GlobalEntityId` is written as a 128-bit
+      number. The row is unchanged and awaits the owner's walk. See
+      `../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`.
 
 - id: GAP-118
   name: Coverage accuracy is untested, and a coverage volume has no bearing
@@ -8746,6 +8768,17 @@
   - date: 2026-09-16
     status: Open
     note: "Filed by the GAP-067 walk, which held the `gungnir-observability` row."
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed: both binaries report health through `SnapshotHealthMonitor`
+      (D-100), which now says whether a report is a transition; the desktop's
+      `health_journaled` and the node's `last_health` are gone.
+      `gungnir-app/tests/health_follows_flags.rs` and
+      `gungnir-node/tests/health_follows_flags.rs` take each service's flag true, false,
+      true and assert that the health, and exactly one recorded transition per change,
+      follow every step on each binary's own tick. The row is unchanged and awaits the
+      owner's walk. See `../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`.
 
 - id: GAP-126
   name: A non-finite float in an envelope cannot be journaled faithfully
@@ -10478,6 +10511,44 @@
       Found by the first miri run to get past setup. Not fixed here: the code is
       nalgebra's, the latest release has it too, and posting an upstream issue publishes
       on the owner's behalf.
+
+- id: GAP-175
+  name: A global entity identity is written as a 128-bit JSON number
+  type: Technical
+  caps: [CAP-7.2, CAP-2.7]
+  layer: Service facades and wiring
+  sev: 2
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: [D-60]
+  impact: >-
+    `GlobalEntityId` serializes as its `u128`, so `serde_json::to_value` refuses any value
+    carrying one ("number out of range"), a JSON reader outside Rust rounds it to a double
+    and can merge or split entities, and the schema catalogue's `gungnir.GlobalEntityId`
+    entry says an identity crosses as RFC 9562 text, which no document carries. D-60 fixed
+    the same defect for the three record identifiers and did not reach this type. No path
+    passes an identity event through a `Value` today, so nothing has been lost yet.
+  evidence: >-
+    `gungnir-model/src/identity.rs` (the derived `Serialize` and `Deserialize` on
+    `GlobalEntityId(pub u128)`); `gungnir-interop/src/lib.rs` (the catalogue entry's
+    `TextualIdentity { rfc: 9562 }`); `json_tag` in
+    `gungnir-model/tests/serde_round_trip.rs`, which met it
+  action: >-
+    Write `GlobalEntityId` as the hyphenated RFC 9562 string, as D-60 does for the record
+    identifiers, and decide how a journal holding the number is read: through
+    `deserialize_any`, `serde_json` hands a number wider than 64 bits to the visitor as a
+    float, so D-60's reader cannot read the identities written since GAP-069. Then assert
+    `serde_json::to_value` of an `IdentityEvent` in `serde_round_trip.rs`.
+  ref: >-
+    Found by GAP-117's round trip (`../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found by GAP-117's round trip. Not fixed there: changing the writer without a
+      reader for the old form would leave every journal written since GAP-069 with
+      identity events it cannot read, and how to read them is a decision this needs.
 - id: GAP-171
   name: The other v3 bodies, and every exchange product's body, still write a non-finite float as null
   type: Technical

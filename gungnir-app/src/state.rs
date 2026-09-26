@@ -254,7 +254,10 @@ pub struct AppState {
     /// baseline's own choice, not a mid-shift change nothing could have made.
     pub palette: gungnir_ui::theme::Palette,
     pub events: Box<dyn EventBus>,
-    pub health: SystemHealth,
+    /// What the services last reported about their health, and whether that was a
+    /// change (GAP-125, D-100). Read through [`AppState::health`]; reported once a tick
+    /// by `update::tick`, and by nothing else, so the strip and the record cannot part.
+    pub health_monitor: gungnir_observability::SnapshotHealthMonitor,
     pub clock: Box<dyn TimeAuthority>,
     pub backend: BackendConfig,
     pub ingest: IngestGateway,
@@ -420,9 +423,6 @@ pub struct AppState {
     /// Sources already alerted as out of sync (GAP-008, MOP-09): the flag is raised once
     /// per source, and PN-09 carries the live figure from then on.
     pub skew_alerted: std::collections::HashSet<u32>,
-    /// The health last put on the record (GAP-047, MOE-06): a transition is journaled,
-    /// a repeat is not.
-    pub health_journaled: Option<SystemHealth>,
     /// Resources the last planning call declined to propose (DN-04 §5, GAP-030).
     ///
     /// Copied out of the planner each tick because `intercept` is a trait object and
@@ -744,7 +744,7 @@ impl AppState {
             config,
             palette,
             events: Box::new(events),
-            health: SystemHealth::default(),
+            health_monitor: gungnir_observability::SnapshotHealthMonitor::new(),
             clock: Box::new(clock),
             backend,
             ingest,
@@ -754,7 +754,6 @@ impl AppState {
             withheld: Vec::new(),
             clock_skew: gungnir_time::ClockSkewEstimator::new(),
             skew_alerted: HashSet::new(),
-            health_journaled: None,
             anomaly: crate::anomaly::AnomalyState::default(),
             identity,
             selected_role: Role::Operator,
@@ -882,6 +881,15 @@ impl AppState {
     pub fn next_launch_warning_id(&mut self) -> String {
         self.next_launch_warning += 1;
         format!("launch-warning-{}", self.next_launch_warning)
+    }
+
+    /// What the services last reported about their health (GAP-125): the strip, PN-09 and
+    /// the decision dialog's conditions all read this, and `update::tick` reports it.
+    /// All-unhealthy before the first tick, because nothing has said otherwise yet.
+    #[must_use]
+    pub fn health(&self) -> SystemHealth {
+        use gungnir_observability::HealthMonitor;
+        self.health_monitor.current_health()
     }
 
     /// The role this desktop acts in: the signed-in account's, or the selected one when

@@ -28,11 +28,13 @@ use gungnir_api::v3::SnapshotResponse;
 use gungnir_config::ConfigBaseline;
 use gungnir_eventing::{Event, EventBus, EventingError};
 use gungnir_ingest::{AllowListAuthenticator, IngestGateway};
-use gungnir_intercept_service::{DpInterceptService, PlanOutcome};
-use gungnir_model::events::{HealthEvent, InterceptEvent};
+use gungnir_intercept_service::{DpInterceptService, InterceptService, PlanOutcome};
+use gungnir_model::events::InterceptEvent;
 use gungnir_model::{MissionTime, PlanView, SensorId, SystemHealth};
+use gungnir_observability::SnapshotHealthMonitor;
 use gungnir_tracking_service::{
     project_pipeline_stats, LiveTrackingService, PipelineStats, SensorPositions, TrackLifecycle,
+    TrackingService,
 };
 use std::sync::Arc;
 
@@ -236,6 +238,25 @@ impl gungnir_ingest::ProtocolAdapter for ApiSubmissionAdapter {
     }
 }
 
+/// What this node's services say about their health, read the way the loop reads it every
+/// tick (GAP-125): each flag is the service's own `is_healthy`, never inferred.
+///
+/// Here rather than in `main.rs` so the test that toggles each flag and watches the node's
+/// health follow (`gungnir-node/tests/health_follows_flags.rs`) reads the flags through the
+/// function the binary calls.
+#[must_use]
+pub fn read_health(
+    tracking: &dyn TrackingService,
+    intercept: &dyn InterceptService,
+    gateway: &IngestGateway,
+) -> SystemHealth {
+    SystemHealth {
+        tracking_healthy: tracking.is_healthy(),
+        intercept_healthy: intercept.is_healthy(),
+        ingest_healthy: gateway.is_healthy(),
+    }
+}
+
 /// What the loop announces about its picture, and remembers so it announces each thing
 /// once: the track lifecycle (GAP-160), the plan (GAP-066) and the health (MOE-06).
 ///
@@ -248,7 +269,9 @@ impl gungnir_ingest::ProtocolAdapter for ApiSubmissionAdapter {
 pub struct Announcer {
     lifecycle: TrackLifecycle,
     last_plan: PlanView,
-    last_health: Option<SystemHealth>,
+    /// What the services last reported, and whether a report is a change: the same
+    /// monitor the desktop's tick reports through (GAP-125, D-100).
+    health: SnapshotHealthMonitor,
 }
 
 impl Announcer {
@@ -318,29 +341,32 @@ impl Announcer {
     /// changed. A repeat is not published: the transition is the fact, and a linked
     /// desktop reads it as the node's word on its services (GAP-161).
     ///
+    /// **What counts as a change is `gungnir-observability`'s answer**
+    /// ([`SnapshotHealthMonitor::report`]), the one the desktop's tick takes too
+    /// (GAP-125, D-100).
+    ///
     /// # Errors
     ///
-    /// When the bus refuses the event.
+    /// When the bus refuses the event, which ends the node's loop (`main.rs` returns
+    /// it), so a transition refused here is never silently skipped by a later tick.
     pub fn health(
         &mut self,
         bus: &dyn EventBus,
         now: MissionTime,
         health: SystemHealth,
     ) -> Result<bool, EventingError> {
-        if self.last_health == Some(health) {
+        let Some(changed) = self.health.report(health, now) else {
             return Ok(false);
-        }
-        bus.publish(
-            now,
-            Event::Health(HealthEvent::Changed {
-                tracking_healthy: health.tracking_healthy,
-                intercept_healthy: health.intercept_healthy,
-                ingest_healthy: health.ingest_healthy,
-                at: now,
-            }),
-        )?;
-        self.last_health = Some(health);
+        };
+        bus.publish(now, Event::Health(changed))?;
         Ok(true)
+    }
+
+    /// The health last reported, which is the one the snapshot carries.
+    #[must_use]
+    pub fn current_health(&self) -> SystemHealth {
+        use gungnir_observability::HealthMonitor;
+        self.health.current_health()
     }
 }
 

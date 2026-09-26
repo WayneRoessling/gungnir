@@ -192,7 +192,7 @@ fn a_plan_the_planner_cannot_refresh_is_shown_stale_and_clears_when_it_can() {
     // nothing on PN-05 or PN-07 calls it stale.
     update::tick(&mut state);
     assert_eq!(state.plan_standing, PlanStanding::Current);
-    assert!(state.health.intercept_healthy);
+    assert!(state.health().intercept_healthy);
     let first = state.last_plan.clone();
     assert!(
         !first.is_empty(),
@@ -233,7 +233,7 @@ fn a_plan_the_planner_cannot_refresh_is_shown_stale_and_clears_when_it_can() {
         "the plan in force changed while stale"
     );
     assert!(
-        !state.health.intercept_healthy,
+        !state.health().intercept_healthy,
         "a stale planner reads healthy"
     );
 
@@ -266,7 +266,7 @@ fn a_plan_the_planner_cannot_refresh_is_shown_stale_and_clears_when_it_can() {
     clock.set_step(Duration::ZERO);
     update::tick(&mut state);
     assert_eq!(state.plan_standing, PlanStanding::Current);
-    assert!(state.health.intercept_healthy);
+    assert!(state.health().intercept_healthy);
     assert!(!pn05(&state).says("STALE"));
     assert!(!pn07(&mut state).says("STALE PLAN"));
 

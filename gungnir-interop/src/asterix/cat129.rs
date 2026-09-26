@@ -149,6 +149,8 @@ pub const EDITION: &str = "1.2";
 pub const PART1_EDITION_CITED: &str = "2.4";
 
 const CATEGORY: u8 = 129;
+/// The loss a report records when it carries no I129/070 (GAP-116).
+pub const TIME_OF_DAY_ABSENT: &str = "no time of day (I129/070); source time set to receipt time";
 const MAX_FRN: usize = 21;
 /// I129/080: 180 / 2^30 degrees per count (§5.2.8) -- see the module documentation for
 /// the cross-check against the specification's own worked decimal, and for why this
@@ -504,7 +506,7 @@ impl AsterixCat129Codec {
 
         let mut losses: Vec<String> = Vec::new();
         let (source_time, time_loss) =
-            super::cat048::source_time(record.time_of_day_s, receipt_time);
+            super::cat048::source_time(record.time_of_day_s, receipt_time, TIME_OF_DAY_ABSENT);
         losses.extend(time_loss.map(str::to_owned));
 
         // Geodetic::alt_m is nominally a WGS-84 ellipsoidal height. I129/090 (AMSL) is
