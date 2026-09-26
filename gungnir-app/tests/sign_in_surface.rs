@@ -123,7 +123,13 @@ fn a_missing_store_starts_the_desktop_and_says_so() {
     ));
     assert!(state.accounts.is_err());
     let audit = gungnir_app::sustainment::audit_lines(&state);
-    let view = session::audit_view(&state, &[], &audit, &[]);
+    let view = session::audit_view(
+        &state,
+        &[],
+        &audit,
+        &[],
+        gungnir_ui::panels::audit::AuditRecordView::NOT_VERIFIED,
+    );
     assert!(!view.can_sign_in);
     assert!(state
         .alerts

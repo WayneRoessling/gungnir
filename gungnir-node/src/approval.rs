@@ -840,6 +840,9 @@ pub fn audit_refused_decisions(approval: &mut NodeApproval, frame: &Frame<'_>) {
 /// are written, only not yet forced to the disk, and a node that stopped deciding because
 /// its audit disk was slow would fail the wrong way round. A write that fails is held and
 /// counted by the log itself (`gungnir_security::AuditStatus`).
+///
+/// Then the log's head, when one is due, goes on the bus for the journal (GAP-163,
+/// D-104; DN-23 §14). A failed sync leaves the log dirty and no head is offered over it.
 pub fn audit_routes(approval: &mut NodeApproval, frame: &Frame<'_>) {
     frame
         .api
@@ -847,6 +850,11 @@ pub fn audit_routes(approval: &mut NodeApproval, frame: &Frame<'_>) {
         .record_into(approval.audit.as_mut(), frame.now.0);
     if let Err(err) = approval.audit.flush() {
         tracing::error!(%err, "the node's audit log could not be synced this tick");
+    }
+    // GAP-163, D-104: after the sync, so the head the journal is given is one the disk
+    // already holds, and before the loop's journal append, so it is on disk this tick.
+    if let Some(head) = approval.audit.take_anchor(std::time::Instant::now()) {
+        crate::audit_record::publish_anchor(frame.bus, head, false, frame.now);
     }
 }
 

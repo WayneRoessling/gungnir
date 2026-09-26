@@ -289,6 +289,8 @@ IE-asset-extent,Information Elements,InformationElement,AssetExtent,The shape an
 IE-asset-id,Information Elements,InformationElement,AssetId,"Identifier of a defended asset, stable across baseline versions.",Class
 IE-asset-list-view,Information Elements,InformationElement,AssetListView,"The asset list as the picture sees it, carrying the baseline revision it came from so a score can be traced to the list that produced it.",Class
 IE-asset-priority,Information Elements,InformationElement,AssetPriority,"How the asset is defended, ordered least to most important.",Class
+IE-audit-event,Information Elements,InformationElement,AuditEvent,"The audit log's head, kept in the event journal beside it (GAP-163, D-104; GAP-152, D-105; docs/design/DN-23-operator-authentication.md \u00a714).",Class
+IE-audit-head,Information Elements,InformationElement,AuditHead,"Where one audit-log segment's hash chain ends (GAP-163, D-104).",Class
 IE-authority-rule,Information Elements,InformationElement,AuthorityRule,"One row of the authority matrix in docs/mission/roles-and-stakeholders.md \u00a74, as configuration.",Class
 IE-authority-settings,Information Elements,InformationElement,AuthoritySettings,The authority matrix.,Class
 IE-azimuth-sector,Information Elements,InformationElement,AzimuthSector,"The horizontal bearings a sensor can see: a sector centred on its boresight (GAP-118, D-84, docs/design/DN-12-coverage-and-gaps.md amendment 1).",Class

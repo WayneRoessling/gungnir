@@ -1183,4 +1183,44 @@ mod tests {
             serde_json::Value::Null
         );
     }
+
+    /// GAP-152's `AuditEvent` (added beside this change) takes the envelope's forms like
+    /// every other event: a finite purge is plain JSON, a non-finite `idle_days` -- the
+    /// age of a segment whose clock was unreadable -- is carried bit for bit in the marked
+    /// line, and its counts, all 64-bit, are untouched by the wide-integer reader.
+    #[test]
+    fn an_audit_event_takes_the_envelope_s_forms() {
+        let purged = |idle_days: f64| crate::Envelope {
+            seq: 9,
+            mission_time: gungnir_model::MissionTime(12.0),
+            event: crate::Event::Audit(gungnir_model::events::AuditEvent::Purged {
+                segment: "audit-000001.jsonl".into(),
+                entries: u64::MAX,
+                bytes: 16_385,
+                idle_days,
+                max_audit_log_age_days: 365,
+                completed: true,
+                at: gungnir_model::MissionTime(12.0),
+            }),
+        };
+        let finite = purged(366.7);
+        let line = to_faithful_line(&finite).expect("encodes");
+        assert_eq!(line, serde_json::to_string(&finite).expect("serde_json"));
+        assert_eq!(from_line::<crate::Envelope>(&line).expect("reads"), finite);
+
+        let odd = f64::from_bits(0x7ff8_0000_0000_0152);
+        let line = to_faithful_line(&purged(odd)).expect("encodes");
+        assert!(line.starts_with(MARKER), "{line}");
+        let back: crate::Envelope = from_line(&line).expect("reads");
+        let crate::Event::Audit(gungnir_model::events::AuditEvent::Purged {
+            idle_days,
+            entries,
+            ..
+        }) = back.event
+        else {
+            panic!("{line}");
+        };
+        assert_eq!(idle_days.to_bits(), odd.to_bits());
+        assert_eq!(entries, u64::MAX);
+    }
 }

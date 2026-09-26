@@ -34,10 +34,11 @@
 
 use gungnir_model::arbitration::{ArbitrationGround, ConflictSide, SideOutcome};
 use gungnir_model::events::{
-    CalibrationEvent, CommandEvent, EngagementEvent, EngagementSide, GovernanceEvent, HandoffEvent,
-    HealthEvent, IdentityEvent, IngestEvent, InterceptEvent, LaunchWarningEvent, LinkEvent,
-    RehearsalEvent, ReplayEvent, RequirementEvent, RetentionEvent, ReviewEvent, RhythmEvent,
-    SensorEvent, SensorTaskEvent, TrackingEvent, VerdictSummary, WarningEvent,
+    AuditEvent, AuditHead, CalibrationEvent, CommandEvent, EngagementEvent, EngagementSide,
+    GovernanceEvent, HandoffEvent, HealthEvent, IdentityEvent, IngestEvent, InterceptEvent,
+    LaunchWarningEvent, LinkEvent, RehearsalEvent, ReplayEvent, RequirementEvent, RetentionEvent,
+    ReviewEvent, RhythmEvent, SensorEvent, SensorTaskEvent, TrackingEvent, VerdictSummary,
+    WarningEvent,
 };
 use gungnir_model::identity::GlobalEntityId;
 use gungnir_model::{
@@ -838,6 +839,49 @@ fn retention_events() -> Vec<RetentionEvent> {
     ]
 }
 
+fn audit_head(segment: &str, entries: u64) -> AuditHead {
+    AuditHead {
+        segment: segment.into(),
+        entries,
+        seq: entries + 1_000,
+        hash: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08".into(),
+    }
+}
+
+fn audit_events() -> Vec<AuditEvent> {
+    vec![
+        AuditEvent::Anchored {
+            head: audit_head("audit-000007.jsonl", 64),
+            closing: true,
+            at: T0,
+        },
+        AuditEvent::Verified {
+            heads: vec![
+                audit_head("audit-000005.jsonl", 12),
+                audit_head("audit-000006.jsonl", 3),
+            ],
+            segments: 2,
+            entries: 12,
+            findings: vec![
+                "audit-000006.jsonl was cut: the journal holds its head at entry 3 and 0 \
+                 remain, so 3 entries are missing"
+                    .into(),
+            ],
+            unread_sessions: vec!["session 4: sealed under a key this process lacks".into()],
+            at: T1,
+        },
+        AuditEvent::Purged {
+            segment: "audit-000001.jsonl".into(),
+            entries: 40,
+            bytes: 16_385,
+            idle_days: 366.7,
+            max_audit_log_age_days: 365,
+            completed: false,
+            at: T2,
+        },
+    ]
+}
+
 fn link_events() -> Vec<LinkEvent> {
     vec![
         LinkEvent::FellBack {
@@ -1146,6 +1190,16 @@ impl Variant for RetentionEvent {
     }
 }
 
+impl Variant for AuditEvent {
+    fn variant(&self) -> &'static str {
+        match self {
+            Self::Anchored { .. } => "Anchored",
+            Self::Verified { .. } => "Verified",
+            Self::Purged { .. } => "Purged",
+        }
+    }
+}
+
 impl Variant for LinkEvent {
     fn variant(&self) -> &'static str {
         match self {
@@ -1313,6 +1367,7 @@ fn event_tables() -> BTreeMap<&'static str, BTreeSet<String>> {
             "RetentionEvent",
             enum_round_trip("RetentionEvent", &retention_events()),
         ),
+        ("AuditEvent", enum_round_trip("AuditEvent", &audit_events())),
         ("LinkEvent", enum_round_trip("LinkEvent", &link_events())),
         (
             "RehearsalEvent",

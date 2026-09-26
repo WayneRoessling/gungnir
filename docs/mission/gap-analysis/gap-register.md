@@ -161,7 +161,7 @@ history, and an entry is never edited once it has merged.
 | GAP-146 | A console that may not publish queues its handoffs for ever | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
 | GAP-150 | A console's mission report is not published again when its link comes back | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
 | GAP-154 | The Disconnected reconciliation row still says no decision reaches a node's record | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Owner | Open |
-| GAP-152 | The audit log lives in memory, so nothing outlives the process and no age governs it | Technical | CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | In progress |
+| GAP-152 | The audit log lives in memory, so nothing outlives the process and no age governs it | Technical | CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-153 | A non-finite float in an envelope breaks the v3 stream and history | Technical | CAP-7.1, CAP-5.4 | 2 | 6 | S | 12 | I3 | Services engineer | Closed |
 | GAP-158 | A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical | Technical | CAP-2.11 | 2 | 3 | M | 6 | I3 | Services engineer | Open |
 | GAP-159 | The Coverage accuracy row still says a coverage volume has no bearing | Technical | CAP-2.11 | 1 | 3 | S | 3 | I3 | Owner | Open |
@@ -172,7 +172,7 @@ history, and an entry is never edited once it has merged.
 | GAP-157 | A linked desktop cannot tell that its node's planner is stale | Technical | CAP-3.3, CAP-7.3 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
 | GAP-165 | A linked desktop's node session lapses and nothing renews it while the link is up | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-162 | A sensor manager may apply a whole baseline, and applying one checks no permission | Technical | CAP-6.2, CAP-5.6 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-163 | A cut tail of the audit log still verifies, because nothing outside it holds its head | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-163 | A cut tail of the audit log still verifies, because nothing outside it holds its head | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-167 | The outage tests' proxy can let one connection through a cut | Technical | CAP-5.4 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 | GAP-164 | The miri gate could not run miri | Technical | CAP-7.4 | 3 | 5 | S | 15 | I2 | Services engineer | Closed |
 | GAP-166 | nalgebra's decompositions violate Stacked Borrows | Technical | CAP-7.4 | 2 | 5 | S | 10 | I2 | Owner | Open |
@@ -182,9 +182,10 @@ history, and an entry is never edited once it has merged.
 | GAP-168 | The intercept-service row's degradation clause stops at the last good plan | Technical | CAP-3.3, CAP-5.5 | 1 | 8 | S | 8 | I3 | Owner | Open |
 | GAP-169 | An older desktop reads a newer node's interim plan as the optimum | Technical | CAP-3.3, CAP-7.3 | 2 | 5 | S | 10 | I3 | Owner | Closed |
 | GAP-170 | PN-09's refusal test left its wait before the desktop had seen its link | Technical | CAP-7.3 | 1 | 1 | S | 1 | I3 | Services engineer | Closed |
+| GAP-179 | A node's audit record and its verification reach only the node's log | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-176 | A warning posted to a warned party and a handoff posted to an effector still write a non-finite float as null | Technical | CAP-4.4, CAP-4.5 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
 
-Counts: 170 gaps, 3 mission, 167 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 171 gaps, 3 mission, 168 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2278,11 +2279,12 @@ Counts: 170 gaps, 3 mission, 167 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-09-25, Open: Found building the retention purge: the policy's second field had nothing to purge. Human-owned (`gungnir-security`); filed rather than built inside GAP-122, whose row is about sessions.
   - 2026-09-25, In progress: GAP-111 gave the audit log its durable home: `gungnir_security::FileAuditLog` under `<data dir>/audit/` in both binaries, append-only and hash-chained (D-87, DN-23 §13). **Not sealed, by decision**: an investigation needs the record most when the journal's key is lost, DN-22 §11's reason for giving escrow recovery a journal of its own; D-87 says why sealing was rejected. Left here: applying `max_audit_log_age_days` to whole segments as D-78 applies the session age, and reading earlier segments back for PN-20. Human-owned; see docs/signatures.md. See `../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`.
+  - 2026-09-26, Closed: Closed. `gungnir_security::purge_expired_segments` applies `max_audit_log_age_days` in both binaries, opt-in as D-78: oldest first, stopping at the newest segment, this run's, a held one, or one a held session's run wrote; each removal journaled and synced before the file goes, then audited, logged, counted and on the desktop an alert, so GAP-163's verifier reads it as a purge (D-105). PN-20 lists every segment with its verification state and opens earlier runs read only (D-106). Human-owned (`gungnir-security`); see docs/signatures.md. See `../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`.
 - Evidence: `gungnir-security/src/audit.rs` (`InMemoryAuditLog`, the only `AuditLog`); `gungnir-app/src/state.rs` and `gungnir-node/src/approval.rs` construct it; `docs/architecture/togaf/phase-c-information-systems/data-architecture.md` §4.
 - Severity: 3. Reach: 9 threads. Effort: M. Priority: 27.
 - Impact: Both binaries keep the audit log in `InMemoryAuditLog`, so every entry an accreditor would read -- a baseline applied, a sign-in, a decision -- is gone when the process stops, and `RetentionPolicy::max_audit_log_age_days`, which a baseline can now declare, has nothing durable to apply to. The decision record survives in the journal, which is one of the "two homes on purpose" the data architecture names; the other does not.
 - Closing action: Give the audit log a durable, append-only home beside the journal (sealed as the journal is, DN-22), read it back at start, and apply `max_audit_log_age_days` to it the way D-78 applies the session age.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: In progress.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: Found building GAP-122 (`../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`).
 - Depends on: GAP-059.
 
@@ -2435,11 +2437,12 @@ Counts: 170 gaps, 3 mission, 167 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.3 Audit.
 - History:
   - 2026-09-25, Open: Filed by GAP-111, which made the audit log durable and hash-chained and stated this limit rather than implying it away. An anchor is a new event on the journal and a new field on the link, so it is a change of its own; retention and reading earlier runs back are GAP-152's.
+  - 2026-09-26, Closed: Closed. The head is kept in the event journal, as the owner decided (D-104): `AuditEvent::Anchored` every 64 entries or five seconds, and at close, over synced lines only. `gungnir_security::verify_audit_record` runs at start on both binaries and from PN-20, names a cut segment with its missing count, a rewritten tail and a removed file, and says so in an alert, on PN-20, in the audit log and in the node's log. No link field was needed. Human-owned (`gungnir-security`); see docs/signatures.md. Held by `gungnir-app/tests/audit_record.rs` and `gungnir-node/tests/node_audit_record.rs`; the node's verification not reaching PN-20 is GAP-179. See `../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`.
 - Evidence: `gungnir-security/src/audit.rs` (module documentation); `../../design/DN-23-operator-authentication.md` §13.
 - Severity: 2. Reach: 9 threads. Effort: M. Priority: 18.
 - Impact: The hash chain GAP-111 put on the audit log finds an edited, removed, inserted or torn line, but not the removal of the newest segment's last lines: what is left is a shorter chain that verifies. Someone able to write the data directory can therefore take back the last things the record says, which are the ones an investigation usually wants.
 - Closing action: Anchor the head outside the file: journal the sequence number and hash at each session's close and periodically in between, send a linked desktop's to its node, and have `verify_audit_dir` compare the chain with the last anchor it can read, reporting a chain shorter than its anchor as cut.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: GAP-111 (`../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`).
 - Depends on: GAP-152.
 
@@ -2574,6 +2577,20 @@ Counts: 170 gaps, 3 mission, 167 technical; 1 already covered by a plan in `../.
 - Closing action: Leave the wait only once the desktop itself has read its link as connected.
 - Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found watching PR #182's tests (`../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`).
+
+**GAP-179 A node's audit record and its verification reach only the node's log**
+
+- Type: Technical.
+- Capability: CAP-6.3 Audit.
+- History:
+  - 2026-09-26, Open: Found building GAP-163. Not built there: serving the audit record is a new read path on `gungnir-api` and an authority question §4 does not yet answer, which are changes of their own.
+- Evidence: `gungnir-node/src/audit_record.rs` (module documentation); `gungnir-api/src/transport.rs` serves no audit route; `../../design/DN-23-operator-authentication.md` §14.
+- Severity: 2. Reach: 9 threads. Effort: M. Priority: 18.
+- Impact: A node verifies its audit record at start and says what is wrong in its log and on every health line, but no route serves the record or that verification, so the security officer at a linked desktop -- whose layout is PN-20 and the health panel -- sees the desktop's record only. A node whose audit segment was cut is told about in a log file a watch floor may never read.
+- Closing action: Decide how a node's audit record reaches PN-20: a read route gated on a permission the security officer holds (a change to `../roles-and-stakeholders.md` §4 first), and the node's last verification carried beside its health, then draw both on PN-20 as the desktop's own are drawn.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: Found building GAP-163 (`../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`).
+- Depends on: GAP-163.
 
 **GAP-176 A warning posted to a warned party and a handoff posted to an effector still write a non-finite float as null**
 

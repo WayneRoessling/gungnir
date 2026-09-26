@@ -28,8 +28,12 @@ pub use asymmetric::{
     RecoveredDataKey,
 };
 pub use audit::{
-    verify_audit_dir, AuditDrain, AuditEntry, AuditLog, AuditOutbox, AuditStatus, AuditSync,
-    AuditVerification, ChainBreak, FileAuditLog, InMemoryAuditLog, AUDIT_DIR,
+    hold_segment, purge_expired_segments, read_segment, release_segment, segment_holds,
+    verify_audit_dir, verify_audit_record, AnchorFinding, AnchorLedger, AuditDrain, AuditEntry,
+    AuditLog, AuditOutbox, AuditStatus, AuditSync, AuditVerification, ChainBreak, FileAuditLog,
+    HeadStatement, InMemoryAuditLog, KeptSegment, PurgedSegment, SegmentEntries, SegmentHead,
+    SegmentKeptBecause, SegmentPurgeReport, SegmentReport, SegmentState, SessionHeads,
+    ANCHOR_EVERY_ENTRIES, ANCHOR_INTERVAL, AUDIT_DIR,
 };
 pub use authn::Authenticator;
 pub use authz::{Authorizer, StaticRoleAuthorizer};
