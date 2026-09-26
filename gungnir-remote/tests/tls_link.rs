@@ -138,7 +138,14 @@ fn api() -> Arc<NodeApi> {
         phc: hash_passphrase(PASSPHRASE).expect("hashed"),
     }]);
     let issuer = TokenIssuer::new(vec![3u8; 32], 300.0).expect("issuer");
-    let snapshot = SnapshotResponse::new(vec![track(1)], None, SystemHealth::default(), Vec::new());
+    // A node whose services report healthy: since GAP-161 a linked service is healthy
+    // only when the node says its own service is.
+    let healthy = SystemHealth {
+        tracking_healthy: true,
+        intercept_healthy: true,
+        ingest_healthy: true,
+    };
+    let snapshot = SnapshotResponse::new(vec![track(1)], None, healthy, Vec::new());
     Arc::new(
         NodeApi::new(snapshot)
             .with_callers(Arc::new(AccountTokenAuthority::new(
