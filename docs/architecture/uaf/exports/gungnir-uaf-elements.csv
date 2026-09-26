@@ -361,6 +361,8 @@ IE-requirement-id,Information Elements,InformationElement,RequirementId,Identifi
 IE-requirement-state,Information Elements,InformationElement,RequirementState,"Where a CollectionRequirement has got to, from stated to answered.",Class
 IE-resolution,Information Elements,InformationElement,Resolution,Which of two conflicting sides stands.,Class
 IE-resource-placement,Information Elements,InformationElement,ResourcePlacement,Where one effector sits in a laydown.,Class
+IE-retention-event,Information Elements,InformationElement,RetentionEvent,"What retention did to the record (GAP-122, D-78), journaled into the session that was live when it happened.",Class
+IE-retention-policy,Information Elements,InformationElement,RetentionPolicy,The ages past which a deployment's record is purged.,Class
 IE-review-event,Information Elements,InformationElement,ReviewEvent,"After-action review lifecycle (docs/design/DN-20-after-action-review.md, GAP-049).",Class
 IE-rhythm-event,Information Elements,InformationElement,RhythmEvent,"The watch's rhythm: what came due, what was handed over, what went down on purpose (docs/design/DN-21-battle-rhythm.md \u00a76, GAP-054).",Class
 IE-role-layout,Information Elements,InformationElement,RoleLayout,One role's screen.,Class

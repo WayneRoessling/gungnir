@@ -381,7 +381,10 @@ fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
             // correlated once and seen for six hours would otherwise inflate a figure
             // MOE-01 reads as work done.
             | Event::Identity(_)
-            | Event::Link(_) => {}
+            | Event::Link(_)
+            // Retention removing an old session is housekeeping, not this watch's work
+            // (GAP-122).
+            | Event::Retention(_) => {}
             Event::Engagement(e) => count_engagement(&mut counts, e),
         }
     }

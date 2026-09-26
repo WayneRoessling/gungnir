@@ -48,6 +48,10 @@ enum "RequirementState" as RequirementState <<InformationElement>> {
   Declined { by: Concurrence, reason: String }
   Lapsed
 }
+class "RetentionPolicy" as RetentionPolicy <<InformationElement>> {
+  max_session_age_days: u32
+  max_audit_log_age_days: u32
+}
 class "ScheduledProduct" as ScheduledProduct <<InformationElement>> {
   name: String
   kind: ProductKind

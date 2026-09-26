@@ -1354,6 +1354,17 @@ pub struct ConfigBaseline {
     /// is version-controlled, hand-edited and copied between machines.
     #[serde(default)]
     pub security: SecurityConfig,
+    /// How long this deployment keeps its journal (GAP-122, D-78).
+    ///
+    /// **Absent means nothing is ever purged**, and both binaries say so at start. The
+    /// period is the customer's record-keeping obligation to state, not the product's to
+    /// assume (`docs/architecture/togaf/phase-c-information-systems/data-architecture.md`
+    /// §4), and a baseline written before this field existed must not begin deleting
+    /// sessions on an upgrade. Present, each binary purges sessions whose journal has not
+    /// been written for more than `max_session_age_days`, at start and hourly, never the
+    /// live session or one under a hold (`gungnir_store::retention`).
+    #[serde(default)]
+    pub retention: Option<gungnir_model::RetentionPolicy>,
 }
 
 fn default_horizon() -> usize {
@@ -1408,6 +1419,7 @@ impl Default for ConfigBaseline {
             origin: None,
             validity: None,
             security: SecurityConfig::default(),
+            retention: None,
         }
     }
 }
@@ -3650,6 +3662,20 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
         return Err(ConfigError::Invalid(
             "reporting.retention_sessions must be at least 1".into(),
         ));
+    }
+    // A zero-day limit would purge every session but the live one the first time the
+    // purge ran: almost certainly a mistake for "keep for ever", which is saying nothing.
+    if let Some(retention) = &baseline.retention {
+        if retention.max_session_age_days == 0 {
+            return Err(ConfigError::Invalid(
+                "retention.max_session_age_days must be at least 1; omit retention to keep every session".into(),
+            ));
+        }
+        if retention.max_audit_log_age_days == 0 {
+            return Err(ConfigError::Invalid(
+                "retention.max_audit_log_age_days must be at least 1".into(),
+            ));
+        }
     }
     validate_trust_roots(baseline)?;
     validate_escrow(baseline)?;
@@ -6695,6 +6721,37 @@ MFkw
 
         b.assessment.prediction_horizons_s = vec![10.0, 30.0, 60.0];
         assert!(validate(&b).is_ok());
+    }
+
+    /// GAP-122, D-78: retention is declared or absent, never assumed. A baseline written
+    /// before the field existed loads with none, so an upgrade purges nothing; a zero-day
+    /// limit, which would purge every session but the live one, is refused.
+    #[test]
+    fn retention_is_absent_unless_declared_and_a_zero_day_limit_is_refused() {
+        let old_file = r#"{"version": 1}"#;
+        let loaded: ConfigBaseline = serde_json::from_str(old_file).expect("an old baseline");
+        assert_eq!(loaded.retention, None);
+        assert!(validate(&loaded).is_ok());
+
+        let mut b = ConfigBaseline {
+            retention: Some(gungnir_model::RetentionPolicy::default()),
+            ..ConfigBaseline::default()
+        };
+        assert!(validate(&b).is_ok());
+        let text = serde_json::to_string(&b).expect("serialised");
+        let back: ConfigBaseline = serde_json::from_str(&text).expect("read back");
+        assert_eq!(back.retention, b.retention);
+
+        b.retention = Some(gungnir_model::RetentionPolicy {
+            max_session_age_days: 0,
+            max_audit_log_age_days: 365,
+        });
+        assert!(matches!(validate(&b), Err(ConfigError::Invalid(m)) if m.contains("retention")));
+        b.retention = Some(gungnir_model::RetentionPolicy {
+            max_session_age_days: 90,
+            max_audit_log_age_days: 0,
+        });
+        assert!(matches!(validate(&b), Err(ConfigError::Invalid(m)) if m.contains("retention")));
     }
 }
 

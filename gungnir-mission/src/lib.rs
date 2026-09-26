@@ -317,6 +317,78 @@ impl MissionManager for JournalMissionManager<'_> {
     }
 }
 
+/// What one application of a retention policy removed (GAP-122, D-78).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct RetentionOutcome {
+    /// What the journal purge did: sessions removed, purges finished, expired sessions
+    /// kept and why.
+    pub journal: gungnir_store::retention::PurgeReport,
+    /// Mission records past the limit whose session never journaled anything -- a process
+    /// that stopped before its first envelope -- removed with nothing beside them.
+    pub records_only: Vec<SessionId>,
+}
+
+/// Apply a deployment's retention policy to the data directory `journal` lives in
+/// (GAP-122, D-78): every session whose journal has not been written for more than
+/// `policy.max_session_age_days` goes, **with its mission record**, except the ones
+/// `gungnir_store::retention` never purges and those in `protect`.
+///
+/// Here rather than in either binary because the record beside a journal is this
+/// crate's (`<id>.mission.json`), and a purge that removed the journal and left the
+/// record would leave a session `missions()` lists and `replay` cannot find -- and the
+/// desktop would report an old interrupted session at every start, for ever. The record
+/// is removed after the journal has left the listing and before its file is deleted, so
+/// an interrupted purge is finished by the next one (`purge_expired`'s crash safety).
+///
+/// # Errors
+///
+/// When the directory cannot be read or a file cannot be removed. What was removed before
+/// the error stays removed; nothing is half-removed.
+pub fn apply_retention(
+    journal: &gungnir_store::FileEventJournal,
+    policy: &gungnir_store::retention::RetentionPolicy,
+    now: std::time::SystemTime,
+    protect: &std::collections::BTreeSet<SessionId>,
+) -> Result<RetentionOutcome, MissionError> {
+    let root = journal.root().to_path_buf();
+    let report = journal.purge_expired(policy, now, protect, &mut |session| {
+        remove_record(&root, session).map_err(gungnir_store::StoreError::from)
+    })?;
+
+    // A record with no journal and no purge in flight, past the limit by its own last
+    // write, and not protected: a session that never recorded anything.
+    let journals: std::collections::BTreeSet<SessionId> = journal.sessions()?.into_iter().collect();
+    let mut records_only = Vec::new();
+    for session in JournalMissionManager::recorded(&root) {
+        if journals.contains(&session) || protect.contains(&session) {
+            continue;
+        }
+        let path = JournalMissionManager::record_path(&root, session);
+        let idle_days = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|written| now.duration_since(written).ok())
+            .map_or(0.0, |idle| idle.as_secs_f64() / 86_400.0);
+        if policy.session_expired(idle_days) {
+            remove_record(&root, session).map_err(|e| MissionError::Io(e.to_string()))?;
+            records_only.push(session);
+        }
+    }
+    Ok(RetentionOutcome {
+        journal: report,
+        records_only,
+    })
+}
+
+/// Remove a session's mission record; one that is already gone is not an error, because
+/// a purge finishing an interrupted one removes it a second time.
+fn remove_record(root: &Path, session: SessionId) -> Result<(), std::io::Error> {
+    match std::fs::remove_file(JournalMissionManager::record_path(root, session)) {
+        Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(err),
+        _ => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -583,6 +655,88 @@ mod tests {
             manager.load(SessionId(999)),
             Err(MissionError::UnknownMission(_))
         ));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    fn set_age(path: &Path, now: std::time::SystemTime, days: u64) {
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .expect("file")
+            .set_modified(now - std::time::Duration::from_secs(days * 86_400))
+            .expect("mtime");
+    }
+
+    /// GAP-122, D-78: a purged session takes its mission record with it, a record that
+    /// never journaled anything goes by its own age, the live session stays whatever its
+    /// age, and **no identifier is reissued afterwards**.
+    #[test]
+    fn retention_removes_a_session_with_its_record_and_never_reissues_its_identifier() {
+        let root = dir("retention");
+        let now = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_790_000_000);
+        let policy = gungnir_store::retention::RetentionPolicy {
+            max_session_age_days: 30,
+            max_audit_log_age_days: 365,
+        };
+        let mut journal =
+            FileEventJournal::open_with_policy(&root, DurabilityPolicy::SyncEveryEnvelope)
+                .expect("journal");
+        let (old, recent, never_recorded, live) = {
+            let mut manager = JournalMissionManager::open(&root, &journal).expect("opened");
+            let mut ids = Vec::new();
+            for _ in 0..4 {
+                let mut m = manager.create(ConfigBaseline::default()).expect("created");
+                manager
+                    .transition(&mut m, MissionState::Live)
+                    .expect("live");
+                ids.push(m.session);
+            }
+            (ids[0], ids[1], ids[2], ids[3])
+        };
+        for session in [old, recent, live] {
+            for e in (1..=3).map(envelope) {
+                journal.append(session, &e).expect("appended");
+            }
+        }
+        journal.sync().expect("synced");
+        let journal_path = |s: SessionId| root.join(gungnir_store::journal::session_file_name(s));
+        let record_path = |s: SessionId| JournalMissionManager::record_path(&root, s);
+        set_age(&journal_path(old), now, 31);
+        set_age(&record_path(old), now, 31);
+        set_age(&journal_path(recent), now, 29);
+        set_age(&record_path(never_recorded), now, 60);
+        set_age(&journal_path(live), now, 400);
+        set_age(&record_path(live), now, 400);
+
+        let outcome = apply_retention(
+            &journal,
+            &policy,
+            now,
+            &std::collections::BTreeSet::from([live]),
+        )
+        .expect("applied");
+        let purged: Vec<SessionId> = outcome.journal.purged.iter().map(|p| p.session).collect();
+        assert_eq!(purged, vec![old]);
+        assert_eq!(outcome.records_only, vec![never_recorded]);
+        assert!(
+            !record_path(old).exists(),
+            "the purged session's record went with it"
+        );
+        assert!(!record_path(never_recorded).exists());
+        assert!(record_path(recent).exists() && record_path(live).exists());
+
+        let mut manager = JournalMissionManager::open(&root, &journal).expect("reopened");
+        assert_eq!(manager.missions().expect("listed"), vec![recent, live]);
+        assert_eq!(
+            manager.replay(recent).expect("replayed"),
+            (1..=3).map(envelope).collect::<Vec<_>>()
+        );
+        let next = manager.create(ConfigBaseline::default()).expect("created");
+        assert!(
+            next.session.0 > live.0,
+            "identifier {} reissued",
+            next.session.0
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 }
