@@ -18,10 +18,11 @@
 //! was. Nothing here makes a target: `gungnir-sensor-sim` holds the observation model and
 //! not the world model, and `gungnir-scenario` -- which makes worlds -- is still never a
 //! dependency of this crate (`gungnir-app/tests/dependency_graph.rs`'s
-//! `scenario_misuse`). The recording read is one of the ten committed
-//! `testdata/tracks/samples/TT-0N-sample/` sets: its truth, its two re-observation
-//! sidecars (`entities.json`, `environment.json`) and its metadata, with the sensor
-//! catalogue's export beside them (`docs/test-tracks/data-format.md` §10 and §11).
+//! `scenario_misuse`). The recording read is one of the eleven committed
+//! `testdata/tracks/samples/TT-NN-sample/` sets (TT-11 is usability round 1's own,
+//! GAP-147): its truth, its two re-observation sidecars (`entities.json`,
+//! `environment.json`) and its metadata, with the sensor catalogue's export beside them
+//! (`docs/test-tracks/data-format.md` §10 and §11).
 //!
 //! **This is the one module in `gungnir-app` that may name `gungnir_sensor_sim`**
 //! (DN-32 §6 mechanism 5, `tests/architecture_compliance.rs`). What it hands the rest of
@@ -392,15 +393,19 @@ fn resolve_sensors<'a>(
         .collect()
 }
 
+/// One sensor as a laydown places it: its declaration, where it stands, and the sector
+/// and elevation band it is credited with there.
+type Placed<'a> = (
+    &'a SensorConfig,
+    [f64; 3],
+    Option<AzimuthSector>,
+    Option<ElevationBand>,
+);
+
 /// A throwaway configuration: the laydown's sensors and resources, placed about the
 /// recording's own origin (DN-32 §5.5), every other field the deployment's defaults.
 fn config_for(
-    placed: &[(
-        &SensorConfig,
-        [f64; 3],
-        Option<AzimuthSector>,
-        Option<ElevationBand>,
-    )],
+    placed: &[Placed<'_>],
     origin: Geodetic,
     laydown: &Laydown,
     base_resources: &[ResourceConfig],
@@ -633,13 +638,7 @@ pub fn run(
         source,
     })?;
 
-    #[allow(clippy::type_complexity)] // one tuple per placed sensor, built and read here
-    let config_sensors: Vec<(
-        &SensorConfig,
-        [f64; 3],
-        Option<AzimuthSector>,
-        Option<ElevationBand>,
-    )> = laydown
+    let config_sensors: Vec<Placed<'_>> = laydown
         .sensors
         .iter()
         .zip(&resolved)

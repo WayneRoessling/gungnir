@@ -184,9 +184,10 @@ measured**, never as a value.
   demonstrable and the moderator should treat US-09 as **not measured** rather than
   script around it.
 - **US-15 runs PN-16's own rehearsal, single desktop, no node, no `--rehearsal` flag.**
-  Pick a scenario in PN-16's picker (any of the ten `testdata/tracks/samples/TT-0N-sample/`
-  fixtures), select laydown `c` in the options table, press Run, and read the rehearsal
-  section's tracks-formed and decisions-raised counts once it finishes. This is GAP-045's
+  Pick **TT-11** in PN-16's picker (`testdata/tracks/samples/TT-11-sample/`, round 1's own
+  raid down the upper Vell approach; GAP-147, D-112), select laydown `current` and press
+  Run, then select laydown `c` and press Run, and read the rehearsal section's per-sensor
+  detections, tracks-formed and decisions-raised counts once each finishes. This is GAP-045's
   mechanism, not GAP-089's, and it drives `update::tick` internally the same number of
   times the fixture has detections for -- so its own decision counts were exposed to
   GAP-097 exactly as the seeded tasks were, and are clear for the same reason now that
@@ -195,14 +196,16 @@ measured**, never as a value.
   sensors where it places them**, each with the detection model `round-1.json` names for
   it (`radar.short` for both), and PN-16 labels every result "Re-observed from a
   recording" and lists each sensor's detections; its table carries each rehearsed
-  laydown's run beside its coverage. **But no committed recording reaches round 1's
-  radars** (GAP-147): round 1's harbour sits at the recordings' origin and none of the
-  ten sample sets brings a target within 25 km of it, so a session's rehearsal of any of
-  the three laydowns re-observes nothing, and PN-16 says that the recording's targets never
-  come within the placed sensors' range bands. Until GAP-147 commits a round-1 recording,
-  the coverage comparison, not the rehearsal, is where a participant sees `c` differ, and a
-  rehearsal's zeros are to be read as that sentence says, not scored as a finding about
-  the panel. **Three faults in this card, found
+  laydown's run beside its coverage. **Only TT-11 reaches round 1's radars** (GAP-147,
+  closed 2026-09-26): round 1's harbour sits at the recordings' origin and none of the
+  ten plan-07 sample sets brings a target within 25 km of it, so a rehearsal over any of
+  TT-01 to TT-10 re-observes nothing and PN-16 says that the recording's targets never
+  come within the placed sensors' range bands. TT-11 is six drones flown down round 1's
+  own declared approach onto the harbour: under `current` S1 re-observes 1 142 detections
+  and S2 2 264, under `c` S1 the same 1 142 and S2 2 336, and `c`'s row names S2 as the
+  sensor the difference came from. A participant who picks another recording and reads
+  zeros is reading that sentence, not a fault in the panel, and the moderator points them
+  at TT-11. **Three faults in this card, found
   on 2026-09-08 by reading PN-16 against it rather than by running it, and named here
   rather than worked around. The first is fixed in the baseline, the second was fixed in
   the baseline once the owner had ruled on it, and the third is fixed in §5's card:**
@@ -284,7 +287,7 @@ One card per task; the moderator reads only the **task** line. The rest is the s
 | US-04 | Operator | "At 02:03 the strip shows Detached." (the moderator kills the node at this cue) | The node link drops and PN-01 shows Detached | States which backend is now live (embedded fallback) and what is queued in the outbox from PN-18; says they can continue deciding under delegation while disconnected | PN-01, PN-18 | D |
 | US-08 | Supervisor | "The KAL cell reconnects with one conflict." (the moderator restarts the node with a contradicting decision on its record) | PN-18 shows a reconciliation due | Resolves the one conflict through PN-18 (keep this desktop's decision or the node's) with the role-rank arbitration explained; presses switch-back once the node answers | PN-18 | D |
 | US-09 | Sensor manager | "R1 is lost at 01:50. Re-task R2 to search, with coverage shown before and after." | Sensor 1 stops reporting | Commands R2 to Search through PN-10; states the coverage difference from PN-11; commits once acknowledged; reports the remaining gap | PN-10, PN-11 | D |
-| US-15 | Planner | "Compare the laydown options and rehearse the one you would take forward. Tell me what you would do next." | Card read | All three rows' coverage read from PN-16's table -- `current` and `b` at two gap segments and 7 000 m uncovered, `c` at two segments and 1 750 m; **`c` identified as the only option that changes coverage**, and its difference column ("5250 m less gap than today") read aloud; `b`'s zero accounted for -- coverage answers for sensors, and `b` moves a battery, so its maintenance-window intent is the reason to take it and not the table; `c` selected and previewed in the viewport and its forward-siting intent named; a scenario run on it and its tracks-formed and decisions-raised counts read; the participant states that there is no adopt or submit control and why | PN-16, PN-11 | D |
+| US-15 | Planner | "Compare the laydown options and rehearse the one you would take forward. Tell me what you would do next." | Card read | All three rows' coverage read from PN-16's table -- `current` and `b` at two gap segments and 7 000 m uncovered, `c` at two segments and 1 750 m; **`c` identified as the only option that changes coverage**, and its difference column ("5250 m less gap than today") read aloud; `b`'s zero accounted for -- coverage answers for sensors, and `b` moves a battery, so its maintenance-window intent is the reason to take it and not the table; `c` selected and previewed in the viewport and its forward-siting intent named; TT-11 rehearsed under `current` and `c`, S2 read as the one sensor whose detections differ and S1's as unchanged, and the tracks-formed and decisions-raised counts read; the participant states that there is no adopt or submit control and why | PN-16, PN-11 | D |
 
 Group C's cards (US-07, US-16) are held for round 2 and are not read in round 1.
 

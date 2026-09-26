@@ -4,7 +4,7 @@ Status: rendered by `tools/build_catalogue.py` from `../classes.yaml` (version 2
 
 | Class | Name | Platforms | Phases | Scenarios |
 |---|---|---|---|---|
-| [`air.owa-prop`](air.owa-prop.md) | One-way attack UAS, propeller | 2 | ingress, valley-run, terminal | TT-01, TT-02, TT-07, TT-09, TT-10 |
+| [`air.owa-prop`](air.owa-prop.md) | One-way attack UAS, propeller | 2 | ingress, valley-run, terminal | TT-01, TT-02, TT-07, TT-09, TT-10, TT-11 |
 | [`air.owa-jet`](air.owa-jet.md) | One-way attack UAS, jet | 1 | ingress, valley-run, terminal | TT-02 |
 | [`air.loitering`](air.loitering.md) | Loitering munition | 2 | transit, loiter, terminal | TT-03, TT-06 |
 | [`air.small-multirotor`](air.small-multirotor.md) | Small multirotor | 1 | approach, observe, return | TT-03 |

@@ -37,7 +37,6 @@
 
 use gungnir_app::laydown_rehearsal::{run, sensors_that_differ, RehearsalError};
 use gungnir_config::{ConfigBaseline, ResourceConfig, SensorConfig};
-use gungnir_coord::{CoordTransform, Geodetic, Wgs84};
 use gungnir_model::laydown::{Laydown, LaydownId, ResourcePlacement, SensorPlacement};
 use gungnir_model::{ResourceId, SensorId, SensorMode, TestTrackNumber};
 use gungnir_ui::panels::planning::{RehearsalSection, RowRehearsal, VersusCurrent};
@@ -268,145 +267,25 @@ fn an_unknown_scenario_number_is_a_clear_error_not_a_panic() {
     assert!(err.to_string().contains("metadata.json"), "{err}");
 }
 
-/// A raid down round 1's own upper Vell approach, written as a recording a rehearsal can
-/// read, into a scratch testdata root beside the committed sensor catalogue.
-///
-/// **Why the test writes it.** No committed recording is a round-1 scenario: round 1's
-/// harbour and plant sit at the recordings' origin under DN-32 §5.5's frame, and none of
-/// the ten sample sets brings a target within 25 km of it before its excerpt ends, so
-/// round 1's two short-range radars re-observe nothing of any of them (GAP-147). Three
-/// one-way drones flying `round-1.json`'s declared approach, in round 1's own local
-/// frame, at its declared 300 m, are the smallest recording that asks the row's question.
-/// It is written by this test, never committed as a sample and never read by the
-/// desktop.
-fn write_round_1_recording(config: &ConfigBaseline) -> std::path::PathBuf {
-    const TICK_S: f64 = 2.0;
-    const DURATION_S: f64 = 900.0;
-    const SPEED_MPS: f64 = 45.0;
-
-    let root =
-        std::env::temp_dir().join(format!("gungnir-round-1-recording-{}", std::process::id()));
-    let set = root.join("tracks/samples/TT-11-sample");
-    std::fs::create_dir_all(&set).expect("scratch recording directory");
-    std::fs::copy(
-        testdata_root().join("tracks/sensor-models.json"),
-        root.join("tracks/sensor-models.json"),
-    )
-    .expect("the committed catalogue export copies");
-
-    let origin = config.origin.expect("round 1 declares an origin");
-    let origin = Geodetic {
-        lat_rad: origin[0],
-        lon_rad: origin[1],
-        alt_m: origin[2],
-    };
-    let approach = &config
-        .approaches
-        .first()
-        .expect("round 1 declares the upper Vell approach")
-        .points;
-    // Outer end first, then along the axis, then over the harbour.
-    let mut path: Vec<[f64; 3]> = approach
-        .iter()
-        .map(|p| {
-            let e = Wgs84::ecef_to_enu(
-                Wgs84::geodetic_to_ecef(Geodetic {
-                    lat_rad: p[0],
-                    lon_rad: p[1],
-                    alt_m: p[2],
-                }),
-                origin,
-            );
-            [e.e_m, e.n_m, 300.0]
-        })
-        .collect();
-    path.push([0.0, 0.0, 300.0]);
-
-    let mut truth = String::new();
-    let mut entities = Vec::new();
-    for (n, spawn) in [0.0f64, 90.0, 180.0].iter().enumerate() {
-        let id = format!("R1-{:03}", n + 1);
-        entities.push(serde_json::json!({
-            "id": id, "spawn_s": spawn, "occluded_window_s": null,
-            "signature": {"rcs": "small", "ir": null, "acoustic": null, "emission": "none"},
-            "decoy": false, "adsb_intermittent": null, "ais_spoof_offset_m": null,
-            "surface": false, "destroyed_at_s": null,
-        }));
-        let (mut leg, mut pos) = (1usize, path[0]);
-        let mut t = 0.0f64;
-        while t <= DURATION_S + 1e-9 {
-            if t >= *spawn {
-                let target = path[leg];
-                let to = [target[0] - pos[0], target[1] - pos[1]];
-                let dist = to[0].hypot(to[1]);
-                let step = SPEED_MPS * TICK_S;
-                let vel = if dist > 0.0 {
-                    [SPEED_MPS * to[0] / dist, SPEED_MPS * to[1] / dist, 0.0]
-                } else {
-                    [0.0; 3]
-                };
-                if dist <= step {
-                    pos = target;
-                    leg += 1;
-                } else {
-                    pos = [pos[0] + vel[0] * TICK_S, pos[1] + vel[1] * TICK_S, 300.0];
-                }
-                let alive = leg < path.len();
-                truth.push_str(
-                    &serde_json::json!({
-                        "t": (t * 1000.0).round() / 1000.0, "entity": id,
-                        "pos": pos, "vel": vel, "alive": alive,
-                    })
-                    .to_string(),
-                );
-                truth.push('\n');
-                if !alive {
-                    break;
-                }
-            }
-            t += TICK_S;
-        }
-    }
-    let write = |name: &str, text: String| {
-        std::fs::write(set.join(name), text).unwrap_or_else(|e| panic!("{name}: {e}"));
-    };
-    write("truth.jsonl", truth);
-    write(
-        "entities.json",
-        serde_json::json!({"format": 1, "scenario": "TT-11", "entities": entities}).to_string(),
-    );
-    write(
-        "environment.json",
-        serde_json::json!({"format": 1, "scenario": "TT-11", "events": []}).to_string(),
-    );
-    write(
-        "metadata.json",
-        serde_json::json!({
-            "scenario": "TT-11", "seed": 1111, "duration_s": DURATION_S,
-            "truth_tick_s": TICK_S,
-            "origin": {"lat": origin.lat_rad.to_degrees(), "lon": origin.lon_rad.to_degrees(), "alt_m": 0.0},
-        })
-        .to_string(),
-    );
-    root
-}
-
 /// **Round 1 laydown `c`** (DN-32 §10): rehearse `current` and `c` over the round-1
 /// scenario. `c` re-sites S2 and keeps S1 where it was, so S2's per-sensor detections
 /// differ and S1's are identical detection for detection -- D-74's per-sensor-and-target
 /// streams at work -- and the comparison names S2 alone, as moved. `b`, which moves a
 /// battery and no sensor, changes no sensor's detections at all.
 ///
-/// The round-1 scenario is a raid down round 1's own declared approach
-/// ([`write_round_1_recording`] says why the test writes it), rehearsed with round 1's
-/// own baseline, laydowns and detection models from `testdata/usability/round-1.json`.
+/// The round-1 scenario is TT-11, the committed recording of a raid down round 1's own
+/// declared approach (GAP-147, D-112), generated by both generators and validated like
+/// every other sample set, rehearsed with round 1's own baseline, laydowns and detection
+/// models from `testdata/usability/round-1.json` -- exactly what a US-15 session runs.
+/// The ten plan-07 recordings bring no target within 25 km of round 1's radars before
+/// they end, which is why TT-11 exists: [`no_plan_07_recording_reaches_round_1s_radars`].
 #[test]
 fn round_1s_forward_radar_changes_its_own_detections_and_nothing_else() {
     let path = testdata_root().join("usability/round-1.json");
     let text = std::fs::read_to_string(&path).expect("round-1.json is committed");
     let config: ConfigBaseline = serde_json::from_str(&text).expect("round-1.json parses");
     gungnir_config::validate(&config).expect("the round-1 baseline is valid");
-    let root = write_round_1_recording(&config);
+    let root = testdata_root();
     let laydown = |id: &str| {
         config
             .laydowns
@@ -428,7 +307,6 @@ fn round_1s_forward_radar_changes_its_own_detections_and_nothing_else() {
     let current = rehearse("current");
     let b = rehearse("b");
     let c = rehearse("c");
-    let _ = std::fs::remove_dir_all(&root);
 
     let s = |r: &gungnir_app::laydown_rehearsal::RehearsalRecord, id: u32| {
         r.sensors
@@ -558,4 +436,46 @@ fn round_1s_forward_radar_changes_its_own_detections_and_nothing_else() {
     );
     drop(state);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// GAP-147: why round 1 needs TT-11. Rehearsing round 1's `current` laydown over each of
+/// the ten plan-07 recordings, both radars re-observe nothing of a recorded target -- the
+/// nearest any of them brings a target to round 1's harbour is about 25 km -- and over
+/// TT-11 both see the raid. A session's rehearsal therefore has something to compare only
+/// when it picks TT-11, which US-15's card names.
+#[test]
+fn no_plan_07_recording_reaches_round_1s_radars() {
+    let text = std::fs::read_to_string(testdata_root().join("usability/round-1.json"))
+        .expect("round-1.json is committed");
+    let config: ConfigBaseline = serde_json::from_str(&text).expect("round-1.json parses");
+    let current = config
+        .laydowns
+        .iter()
+        .find(|l| l.current)
+        .expect("round 1 marks a current laydown")
+        .clone();
+    let detections = |scenario: TestTrackNumber| -> usize {
+        run(
+            &testdata_root(),
+            scenario,
+            &current,
+            &config.sensors,
+            &config.resources,
+        )
+        .unwrap_or_else(|e| panic!("{} rehearses: {e}", scenario.label()))
+        .sensors
+        .iter()
+        .map(|s| s.detections)
+        .sum()
+    };
+    for n in 1..=10 {
+        let scenario = TestTrackNumber(n);
+        assert_eq!(
+            detections(scenario),
+            0,
+            "{} reaches round 1's radars; GAP-147's premise no longer holds",
+            scenario.label()
+        );
+    }
+    assert!(detections(TestTrackNumber(11)) > 0, "TT-11 reaches them");
 }

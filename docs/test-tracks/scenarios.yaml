@@ -51,6 +51,10 @@ routes:
   haf_apron: [[-19500, 40500, 60], [-19800, 40300, 90], [-20100, 40100, 90]]
   fpv_run: [TREE_LINE_HAF, [-19200, 40800, 20], [-19900, 40200, 15]]
   light_aircraft_route: [[-45000, 55000, 1500], [-30000, 48000, 1800], [-14000, 44000, 1500], [-4000, 38000, 1200]]
+  # Usability round 1's declared approach (testdata/usability/round-1.json), its three points
+  # converted to ENU about round 1's own origin, which DN-32 section 5.5 places at this
+  # library's origin, at the approach's declared 300 m; then onto the harbour (GAP-147, D-112).
+  round_1_approach: [[23970, 7041, 300], [11994, 3504, 300], [1000, 299, 300], OPS]
 
 sensor_sets:
   sector:
@@ -76,6 +80,11 @@ sensor_sets:
     - {type: isr-video, id: 17, name: V17 ISR sortie 1, pos: [40000, -15000, 2500], calibration: cb-2026-07, overrides: {bias_m: {east: 35, north: -20}}}
     - {type: isr-video, id: 18, name: V18 ISR sortie 2, pos: [50000, -20000, 2500], calibration: cb-2026-09}
     - {type: acoustic, id: 19, name: A19 battery-location array, pos: [12000, -5000, 60], calibration: cb-2026-08}
+  # Usability round 1's two radars where its `current` laydown sites them, ENU about round 1's
+  # origin (testdata/usability/round-1.json; GAP-147, D-112).
+  round-1:
+    - {type: radar.short, id: 1, name: S1 round-1 harbour counter-UAS radar, pos: [0, 0, 25], calibration: cb-2026-09}
+    - {type: radar.short, id: 2, name: S2 round-1 plant counter-UAS radar, pos: [5719, 1082, 27], calibration: cb-2026-09}
 
 scenarios:
   - id: TT-01
@@ -291,3 +300,18 @@ scenarios:
       link_outage_s: 660
       success: nothing recorded offline is lost (MOE-11); the one conflict visible and resolved; the operator saw the backend state throughout
     sample: {duration_s: 480, entity_scale: 0.25, sensors: [sector, port], seed: 1701, events: [{t: 120, kind: link_lost, node: KAL, until: 360}]}
+  - id: TT-11
+    name: Usability round 1's raid down the upper Vell approach
+    vignette: VG-09
+    thread: MT-09
+    narrative: The recording usability round 1's laydown rehearsal re-observes (US-15, GAP-147). Six propeller one-way attack drones fly down the approach round 1 declares, from 25 km out onto the harbour, in round 1's own local frame, which DN-32 section 5.5 places at this library's origin, so round 1's two short-range radars re-observe the raid under every laydown it declares and a forward-sited radar sees it earlier. Round 1's geography is its own, at 55 degrees north; its upper Vell approach is not this library's VELL_UPPER.
+    duration_s: 1020
+    start_time_of_day: "10:00:00"
+    sensors: [round-1]
+    entities:
+      - {class: air.owa-prop, platform: shahed-136, side: red, count: 6, spawn_s: [0, 480], route: round_1_approach, group: raid}
+    events: []
+    expected:
+      entities: 6
+      success: both of round 1's radars see the raid under each of its laydowns; the forward siting (laydown c) changes the forward radar's detections and nothing else's (DN-32 section 10's round-1 row)
+    sample: {duration_s: 1020, entity_scale: 1.0, sensors: [round-1], seed: 1711}

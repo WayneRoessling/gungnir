@@ -35,6 +35,6 @@ Radar cross-section small, infrared low, acoustic loud. Seen by: `radar.long`, `
 
 ## Threads and scenarios
 
-Threads MT-01, MT-02, MT-07, MT-09, MT-10; scenarios TT-01, TT-02, TT-07, TT-09, TT-10 (`../scenario-library.md`).
+Threads MT-01, MT-02, MT-07, MT-09, MT-10; scenarios TT-01, TT-02, TT-07, TT-09, TT-10, TT-11 (`../scenario-library.md`).
 
 Rendered from `../classes.yaml` by `tools/build_catalogue.py`.

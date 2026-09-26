@@ -14,7 +14,7 @@
 //!   the most dangerous control on the display. This panel compares; a person acts.
 //! * **A rehearsal is re-observed from a recording, and says so every time**
 //!   (`docs/design/DN-32-re-observation-for-a-laydown.md` §6). The desktop re-observes
-//!   one of the ten committed test-track recordings with the selected laydown's own
+//!   one of the eleven committed test-track recordings with the selected laydown's own
 //!   sensors where it places them, each with the detection model the deployment names
 //!   for it, and runs what they would have detected through a throwaway pipeline. Every
 //!   result is labelled as re-observed, with the recording and each sensor's model named,
@@ -610,12 +610,15 @@ mod tests {
         assert_eq!(TestTrackNumber(10).label(), "TT-10");
     }
 
+    /// The picker offers every committed recording once: the ten plan-07 scenarios and
+    /// TT-11, round 1's own raid (GAP-147, D-112).
     #[test]
-    fn all_ten_scenarios_are_distinct() {
+    fn all_eleven_scenarios_are_distinct() {
         let mut seen = std::collections::HashSet::new();
         for s in TestTrackNumber::ALL {
             assert!(seen.insert(s.0), "TT-{:02} listed twice", s.0);
         }
-        assert_eq!(seen.len(), 10);
+        assert_eq!(seen.len(), 11);
+        assert_eq!(TestTrackNumber(11).label(), "TT-11");
     }
 }

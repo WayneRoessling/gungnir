@@ -122,8 +122,10 @@ impl Laydown {
     }
 }
 
-/// One of the ten committed test-track scenarios (`docs/test-tracks/scenario-library.md`),
-/// naming which fixture a rehearsal replayed a laydown against (GAP-045).
+/// One of the eleven committed test-track scenarios (`docs/test-tracks/scenario-library.md`),
+/// naming which fixture a rehearsal replayed a laydown against (GAP-045): the ten plan-07
+/// scenarios, one per mission vignette, and TT-11, usability round 1's raid down its own
+/// declared approach, which a round-1 laydown rehearsal re-observes (GAP-147, D-112).
 ///
 /// Lives here rather than beside the rehearsal harness that reads the fixture files,
 /// because `gungnir-ui` draws PN-16's rehearsal control and picks this from a list, and
@@ -134,8 +136,8 @@ impl Laydown {
 pub struct TestTrackNumber(pub u8);
 
 impl TestTrackNumber {
-    /// The ten committed scenarios, in order, for a picker to offer.
-    pub const ALL: [TestTrackNumber; 10] = [
+    /// The eleven committed scenarios, in order, for a picker to offer.
+    pub const ALL: [TestTrackNumber; 11] = [
         TestTrackNumber(1),
         TestTrackNumber(2),
         TestTrackNumber(3),
@@ -146,6 +148,7 @@ impl TestTrackNumber {
         TestTrackNumber(8),
         TestTrackNumber(9),
         TestTrackNumber(10),
+        TestTrackNumber(11),
     ];
 
     #[must_use]

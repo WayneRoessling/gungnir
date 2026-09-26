@@ -63,7 +63,9 @@ against.
 Proposed (plan 07 open question): at most 1.5 MB per file and 10 MB for the whole
 `testdata/tracks/samples/` folder; the `sample` blocks in `scenarios.yaml` are tuned
 to stay under it. As committed on 2026-09-04 the folder is 6.5 MB and the largest
-file is 772 KB (`TT-07-sample/truth.jsonl`). Full sets are never committed.
+file is 772 KB (`TT-07-sample/truth.jsonl`); with the re-observation sidecars and TT-11
+(2026-09-26) it is 8.7 MB and the largest file 974 KB (`TT-11-sample/detections.jsonl`).
+Full sets are never committed.
 
 ## 6. Record
 
@@ -71,6 +73,7 @@ file is 772 KB (`TT-07-sample/truth.jsonl`). Full sets are never committed.
 |---|---|---|---|---|
 | 2026-09-04 | TT-01 to TT-10 samples | 18 checks each, all passing (`validation-report.json` per set) | `every_sample_set_replays_without_quarantine` passes | none yet |
 | 2026-09-25 | TT-01 to TT-10 samples, with the re-observation sidecars (GAP-105) | 22 checks each, all passing; the four data files unchanged byte for byte, and both generators' sidecars byte-identical (`gungnir-scenario/tests/sidecar_parity.rs`) | passes, unchanged | none yet |
+| 2026-09-26 | TT-11 sample, usability round 1's raid (GAP-147, D-112); TT-01 to TT-10 unchanged byte for byte | 22 checks, all passing; both generators byte-identical on all seven files (`reference_parity.rs`, `sidecar_parity.rs`) | passes | none yet |
 
 Two failures the checks caught on the first run, both fixed in the models rather than
 by loosening the check: an electronic-attack clock skew pushed the apparent latency

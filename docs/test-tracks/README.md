@@ -25,7 +25,7 @@ governs every figure.
 | [`vehicle-catalogue.md`](vehicle-catalogue.md) | 58 platforms in 30 kinematic classes, one table per domain, with per-platform pages under [`platforms/`](platforms/) carrying the sources |
 | [`class-profiles/`](class-profiles/README.md) | One file per class: the envelope every platform fits, the phases of a representative mission with a movement model each, randomization, signatures, sensors, threads |
 | [`sensor-models.md`](sensor-models.md) | The 13 sensor types: range by signature class, detection probability, update period, noise, latency and out-of-order behaviour, dropouts, false alarms, electronic-attack sensitivity |
-| [`scenario-library.md`](scenario-library.md) | Ten scenarios TT-01 to TT-10, one per mission vignette, with composition, events, and expected outcomes |
+| [`scenario-library.md`](scenario-library.md) | Eleven scenarios: TT-01 to TT-10, one per mission vignette, and TT-11, usability round 1's raid down its own declared approach (GAP-147, D-112); composition, events, and expected outcomes |
 | [`data-format.md`](data-format.md) | Truth, observation, sensor, event, and metadata formats; the observation form is exactly what `gungnir-ingest` already reads |
 | [`generation-method.md`](generation-method.md) | How a set is produced, determinism and seeding, how to add a class or scenario, what the reference generator does not model |
 | [`validation.md`](validation.md) | The checks every set must pass, the replay test, the statistical self-checks, the prediction-error tolerances proposed for MOP-25 |
@@ -49,7 +49,7 @@ confidence mark, a class with no platform, or a phase outside its class envelope
 python docs/test-tracks/tools/gen_tracks.py
 ```
 
-regenerates the ten committed sample sets into `testdata/tracks/samples/`. Add
+regenerates the eleven committed sample sets into `testdata/tracks/samples/`. Add
 `--full` for full-size sets into `testdata/tracks/full/` (not committed), or name
 scenarios (`gen_tracks.py TT-01 TT-04`). Output is deterministic under the seed
 recorded in each set's `metadata.json`.
@@ -92,8 +92,11 @@ reproduce, written for clarity rather than speed.
 | TT-08-sample | Mixed friendly, civil, and hostile air traffic | 11 | 1,638 | 1,739 (199) | 5 |
 | TT-09-sample | TT-01 under the sea-weighted laydown | 12 | 1,536 | 751 (560) | 10 |
 | TT-10-sample | TT-01 with a mid-raid link loss | 12 | 1,536 | 751 (560) | 10 |
+| TT-11-sample | Usability round 1's raid down its own declared approach | 6 | 1,609 | 3,615 (217) | 2 |
 
-6.5 MB committed in total; the largest single file is 772 KB.
+6.5 MB committed in total on 2026-09-04, the largest single file 772 KB; 8.7 MB since
+TT-11 and the re-observation sidecars, the largest file 974 KB (TT-11's
+`detections.jsonl`), both inside `validation.md` §5's limits.
 
 ## Open items
 
