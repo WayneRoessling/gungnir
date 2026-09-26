@@ -943,7 +943,7 @@ impl App {
                 let pattern =
                     gungnir_app::identity::pattern_of_life(&self.state).map_err(|e| e.to_string());
                 self.sustainment.reports.set_pattern_of_life(pattern);
-                self.sustainment.reports.generate(&self.state)
+                self.sustainment.reports.generate(&mut self.state)
             }
             ReportsAction::Export => self.sustainment.reports.export(&self.state),
             ReportsAction::Review(a) => {

@@ -122,6 +122,15 @@ pub enum ApiError {
     /// silently and refusing leaves the batch queued where the backlog is visible.
     #[error("no room: {0}")]
     NoRoom(String),
+    /// An envelope with no faithful line on the wire (GAP-153, D-96).
+    ///
+    /// `transport::NodeApi::publish_event` encodes each envelope once, in the lossless
+    /// form a NaN or an infinity survives, and proves the line reads back; one that does
+    /// not is refused and counted rather than offered, because every subscriber would be
+    /// sent a frame it could not read, and a desktop reconnecting from before it would be
+    /// sent it again each time.
+    #[error("envelope {seq} was not offered: {why}")]
+    Unencodable { seq: u64, why: String },
 }
 
 /// A transport-neutral form of two of the node's request handlers. Every call names the

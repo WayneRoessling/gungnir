@@ -53,6 +53,12 @@ gungnir-ui = { path = "../gungnir-ui", version = "0.1.0", features = ["harness"]
 # entry it creates. The runtime edge stays through gungnir-security, the only crate that
 # writes one.
 keyring.workspace = true
+# Dev-only: GAP-150's test reads `GET /v3/exchange/reports` as a coalition partner does,
+# over mutual TLS under the partner's own certificate. The client configuration is
+# `gungnir_remote::client_config`, the product's; this carries it over a socket. No crate
+# enters the graph -- `gungnir-remote` and `gungnir-api` already link it (§2.9, D-18) --
+# and the desktop still names no TLS type outside its tests.
+tokio-rustls.workspace = true
 
 [dependencies]
 eframe.workspace = true
