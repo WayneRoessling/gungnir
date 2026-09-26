@@ -5619,7 +5619,10 @@ MFkw
         validate(&with("radar.short")).expect("a catalogue identifier is accepted");
         for bad in ["", "radar short", " radar.short"] {
             let err = validate(&with(bad)).expect_err("not an identifier");
-            assert!(err.to_string().contains("detection model"), "{bad:?}: {err}");
+            assert!(
+                err.to_string().contains("detection model"),
+                "{bad:?}: {err}"
+            );
         }
     }
 
