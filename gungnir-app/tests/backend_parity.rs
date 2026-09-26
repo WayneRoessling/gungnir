@@ -513,11 +513,7 @@ impl Node {
             offered += 1;
         }
 
-        let health = SystemHealth {
-            tracking_healthy: self.tracking.is_healthy(),
-            intercept_healthy: self.intercept.is_healthy(),
-            ingest_healthy: self.gateway.is_healthy(),
-        };
+        let health = picture::read_health(&self.tracking, &self.intercept, &self.gateway);
         self.announcer
             .health(&self.bus, now, health)
             .expect("published");
@@ -724,7 +720,7 @@ fn one_scenario_through_both_backends_leaves_both_desktops_the_same_picture() {
     a.tracking.finish();
     until("A's pipeline to report its flush", || {
         update::tick(&mut a);
-        if a.health.tracking_healthy {
+        if a.health().tracking_healthy {
             Err(format!("{:?}", a.tracking.pipeline_stats()))
         } else {
             Ok(())
@@ -804,11 +800,12 @@ fn one_scenario_through_both_backends_leaves_both_desktops_the_same_picture() {
 
     // ---- The health strip and PN-09's indicators ----
     assert_eq!(
-        b.health, a.health,
+        b.health(),
+        a.health(),
         "the linked desktop's health strip is not the embedded one's"
     );
     assert!(
-        !b.health.tracking_healthy,
+        !b.health().tracking_healthy,
         "the node's tracker has stopped, and the linked desktop still showed it tracking"
     );
 

@@ -167,24 +167,17 @@ pub fn tick(state: &mut AppState) {
 
     // 4. Health is what the services report, never inferred. A change goes on the
     //    record (MOE-06): a decision taken after it was journaled was taken with the
-    //    degraded state on the strip, which draws the flags every frame.
-    state.health = SystemHealth {
+    //    degraded state on the strip, which draws the flags every frame. Reported
+    //    through `gungnir-observability`'s monitor, which the node's loop reports
+    //    through too, so the two binaries cannot disagree about what a change is
+    //    (GAP-125, D-100).
+    let health = SystemHealth {
         tracking_healthy: state.tracking.is_healthy(),
         intercept_healthy: state.intercept.is_healthy(),
         ingest_healthy: state.ingest.is_healthy(),
     };
-    if state.health_journaled != Some(state.health) {
-        state.health_journaled = Some(state.health);
-        publish(
-            state,
-            now,
-            Event::Health(gungnir_model::events::HealthEvent::Changed {
-                tracking_healthy: state.health.tracking_healthy,
-                intercept_healthy: state.health.intercept_healthy,
-                ingest_healthy: state.health.ingest_healthy,
-                at: now,
-            }),
-        );
+    if let Some(changed) = state.health_monitor.report(health, now) {
+        publish(state, now, Event::Health(changed));
     }
 
     // 4b. Journal retention (GAP-122, D-78): on the first tick and hourly, before the
