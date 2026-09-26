@@ -18,7 +18,6 @@
 use gungnir_app::state::AppState;
 use gungnir_config::{ConfigBaseline, TimeConfig};
 use gungnir_model::{DetectionView, LateDataPolicy, MissionTime, Provenance, SensorId};
-use gungnir_time::TimeAuthority;
 use gungnir_tracking_service::{PipelineStats, TrackingService};
 
 fn view(t: f64) -> DetectionView {
@@ -42,26 +41,27 @@ const STREAM: [f64; 6] = [0.0, 1.0, 2.0, 3.0, 2.5, 4.0];
 /// task and reports when it has processed something, and nothing here depends on how fast.
 fn deliver(tracking: &mut dyn TrackingService) -> PipelineStats {
     for t in STREAM {
-        tracking.submit_detection(view(t)).expect("the pipeline is running");
+        tracking
+            .submit_detection(view(t))
+            .expect("the pipeline is running");
     }
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
         tracking.poll(MissionTime(4.0));
-        let stats = tracking.pipeline_stats();
-        if stats.accepted + stats.too_late >= 6 {
-            return stats;
+        let counted = tracking.pipeline_stats();
+        if counted.accepted + counted.too_late >= 6 {
+            return counted;
         }
         assert!(
             std::time::Instant::now() < deadline,
-            "the pipeline never reported the whole stream: {stats:?}"
+            "the pipeline never reported the whole stream: {counted:?}"
         );
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 }
 
 fn config(name: &str, late_data: LateDataPolicy) -> (ConfigBaseline, std::path::PathBuf) {
-    let dir =
-        std::env::temp_dir().join(format!("gungnir-late-data-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("gungnir-late-data-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     (
         ConfigBaseline {
@@ -77,8 +77,8 @@ fn config(name: &str, late_data: LateDataPolicy) -> (ConfigBaseline, std::path::
 fn a_desktop_whose_baseline_rejects_late_data_drops_it_and_says_so() {
     let (config, dir) = config("reject", LateDataPolicy::Reject);
     let mut state = AppState::with_config(config).expect("the desktop starts");
-    let stats = deliver(state.tracking.as_mut());
-    assert_eq!((stats.too_late, stats.reordered), (1, 0), "{stats:?}");
+    let counted = deliver(state.tracking.as_mut());
+    assert_eq!((counted.too_late, counted.reordered), (1, 0), "{counted:?}");
 
     let line = gungnir_app::status::late_data_line(&state);
     assert_eq!(line.policy, Some(LateDataPolicy::Reject));
@@ -96,8 +96,8 @@ fn a_desktop_whose_baseline_rejects_late_data_drops_it_and_says_so() {
 fn a_desktop_with_no_policy_named_buffers_for_a_second_and_reorders() {
     let (config, dir) = config("default", LateDataPolicy::default());
     let mut state = AppState::with_config(config).expect("the desktop starts");
-    let stats = deliver(state.tracking.as_mut());
-    assert_eq!((stats.too_late, stats.reordered), (0, 1), "{stats:?}");
+    let counted = deliver(state.tracking.as_mut());
+    assert_eq!((counted.too_late, counted.reordered), (0, 1), "{counted:?}");
     assert_eq!(
         gungnir_app::status::late_data_line(&state).policy,
         Some(LateDataPolicy::BufferAndReorder {
@@ -117,9 +117,8 @@ fn the_tracker_a_desktop_falls_back_to_runs_the_baselines_policy() {
     let (config, dir) = config("fallback", LateDataPolicy::Reject);
     let runtime = tokio::runtime::Runtime::new().expect("runtime");
     let governance = gungnir_app::governance::Governance::from_config(&config);
-    let mut tracker =
-        gungnir_app::state::embedded_tracker(runtime.handle(), &config, &governance);
-    let stats = deliver(&mut tracker);
-    assert_eq!((stats.too_late, stats.reordered), (1, 0), "{stats:?}");
+    let mut tracker = gungnir_app::state::embedded_tracker(runtime.handle(), &config, &governance);
+    let counted = deliver(&mut tracker);
+    assert_eq!((counted.too_late, counted.reordered), (1, 0), "{counted:?}");
     let _ = std::fs::remove_dir_all(dir);
 }
