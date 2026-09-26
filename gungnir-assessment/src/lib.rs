@@ -9,10 +9,15 @@
 //! score zero so they are never allocated against (§5.2).
 
 pub mod assets;
+pub mod first_engagement;
 pub mod kinematics;
 pub mod prediction;
 
 pub use assets::{AssetAnchor, AssetExposure, AssetListAssessor};
+pub use first_engagement::{
+    first_engagement_ranges, ApproachAxis, ApproachFirstEngagement, FirstEngagementSummary,
+    FirstPairing, NotComputable, PredictedEngagement,
+};
 pub use kinematics::{KinematicFactor, CLOSING_SIGNIFICANCE_SIGMA, DEFAULT_URGENCY_HALF_TIME_S};
 pub use prediction::{
     ClosestApproach, ConstantVelocityPredictor, FilterPredictor, PredictedPoint, Prediction,

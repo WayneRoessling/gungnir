@@ -410,6 +410,26 @@ against -- the one laydown that moves a sensor and nothing else -- and `b`, whic
 battery and no sensor, is the contrast that shows a rehearsal attributes a difference only
 to what moved. Retiring it would take away both.
 
+## 13. Amendment 2 -- the run itself, in lock-step (2026-09-26)
+
+**Raised by GAP-020**, whose first-engagement range (DN-02 §9) is read off the plans a
+rehearsal proposes *during* the run. §7 made the detections deterministic; the run through
+them was not. The throwaway desktop's tracker ran as a task on another thread, and a
+replay's frames cost so little wall clock that the task was routinely behind, so each
+tick planned against however far it had got: two runs of one laydown proposed different
+plans, and the decisions raised and expired this note's §8 reports were a property of
+thread scheduling. It went unseen because the one determinism test rehearsed with a
+resource the default policy never queued a plan for.
+
+**D-109, taken under the owner's delegation**: the throwaway desktop's tracker runs in
+lock-step on the rehearsal's own thread (`LiveTrackingService::lockstep`), through
+`gungnir_fusion_async::step` -- the live ingest loop's body, extracted rather than copied,
+so the two cannot drift -- and its planner measures its solve budget on a clock that never
+advances. Every figure a rehearsal reports is now a property of the recording and the
+laydown. The live desktop and node are unchanged. `gungnir-fusion-async` is human-owned;
+the extraction is behaviour-preserving and its loom model checks pass unchanged, and what
+the owner has reviewed is in [`../signatures.md`](../signatures.md).
+
 ## Traceability
 
 GAP-105 (the gap), D-50 (which scoped it), D-64 (the choice this note implements), DN-26

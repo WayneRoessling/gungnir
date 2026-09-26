@@ -61,22 +61,41 @@
 //! `gungnir-coord::Wgs84`, which is exact because everything downstream reads them back
 //! into the same frame.
 //!
-//! # What a `RehearsalRecord` reports, and why nothing here is a distance
+//! # What a `RehearsalRecord` reports
 //!
 //! Tracks the pipeline formed, and how the approval queue it drove behaved, as a real
-//! tick loop measured them; and, per sensor the laydown places, what it re-observed. No
-//! first-engagement range: DN-02 §7 says that is an aggregate of predictions over a
-//! rehearsal, and GAP-020 carries its rule.
+//! tick loop measured them; per sensor the laydown places, what it re-observed; and
+//! **each recorded target's first pairing as the planner proposed it** -- the effector,
+//! where the target's track was, and the intercept point the planner predicted, in the
+//! recording's frame (GAP-020). A track is a target's when it lies within the 0.999
+//! gate of its own position covariance about where the recording's truth says the target
+//! was (D-107); a paired track that is no target is clutter, and is counted rather than
+//! measured. The record holds the predictions and not a first-engagement range: the
+//! range is DN-02 §9's aggregate of them over the approaches the deployment declares
+//! (`gungnir_assessment::first_engagement_ranges`, D-45), computed where PN-16 draws it,
+//! so an approach redrawn after the run is read against the run rather than lost.
 //!
-//! # A measurement of the recording, not of the machine
+//! # A measurement of the recording, not of the machine (D-109)
 //!
-//! The fusion pipeline runs on its own task, and a replay's frames cost so little wall
-//! clock that the task is routinely still behind when the last frame ends. A run
-//! therefore ends its detection stream and waits for the pipeline's own end-of-stream
-//! flush before it reads anything off; if it never arrives the run reports nothing
-//! (`RehearsalError::DidNotSettle`) rather than a number an operator would read as a
-//! property of the laydown.
+//! Two runs of one laydown against one recording must propose the same plans, because a
+//! first-engagement range is read off them mid-run. Two things stood in the way, and the
+//! throwaway desktop replaces both of the live desktop's services to remove them:
+//!
+//! - **The tracker runs in lock-step** (`LiveTrackingService::lockstep`,
+//!   `crate::state::rehearsal_tracker`): the same pipeline, driven on this thread through
+//!   the same `gungnir_fusion_async::step` the live task's loop calls, so each tick's
+//!   picture is what every detection fed so far has made. Behind a task on another
+//!   thread, a replay's frames cost so little wall clock that the task was routinely
+//!   behind, and the picture a tick planned against was however far it had got -- which
+//!   made every mid-run count (plans proposed, decisions raised and expired) a property of
+//!   thread scheduling. The run still ends its stream and reads the end-of-stream flush
+//!   before it reads anything off, and still reports nothing
+//!   (`RehearsalError::DidNotSettle`) if the flush never arrives.
+//! - **The planner measures its solve budget on a clock that never advances**, so every
+//!   solve finishes in the call that starts it. The live planner's budget (DN-04 §10) is
+//!   a property of a console under load; a rehearsal is a measurement of a laydown.
 
+use gungnir_assessment::{FirstPairing, PredictedEngagement};
 use gungnir_command::ApprovalWorkflow;
 use gungnir_config::{ConfigBaseline, ResourceConfig, SensorConfig};
 use gungnir_coord::{CoordTransform, Enu, Geodetic, Wgs84};
@@ -180,6 +199,19 @@ pub struct RehearsalRecord {
     /// The recording's sensor-specific events -- losses and electronic-attack windows,
     /// which name the recording's own sensors -- that were not applied (D-73).
     pub recording_events_not_applied: usize,
+    /// The live desktop's mission time when the rehearsal was run: the "when" PN-16
+    /// shows beside every figure read from it.
+    pub ran_at: MissionTime,
+    /// Each recorded target's first pairing the planner proposed during the run -- its
+    /// first with a predicted intercept point, else its first -- in the order proposed,
+    /// with every position in the recording's local ENU frame (DN-32 §5.5). The
+    /// predictions DN-02 §9 aggregates into each approach's first-engagement range
+    /// (GAP-020, D-45, D-107).
+    pub first_pairings: Vec<FirstPairing>,
+    /// Tracks the planner paired that were none of the recording's targets -- clutter the
+    /// pipeline formed from false alarms -- counted so their absence from every
+    /// first-engagement figure is said rather than silent (D-107).
+    pub clutter_pairings: usize,
 }
 
 /// One sensor whose re-observed detections differ between two rehearsals of the same
@@ -468,6 +500,155 @@ fn detection_of(
     })
 }
 
+/// The χ² value a track's position must be within, against its own position covariance,
+/// of where the recording says a target was, for the track to be that target (D-107):
+/// three degrees of freedom at 0.999, so a track that is the target is missed one time
+/// in a thousand and clutter far from every target is never taken for one.
+const TARGET_GATE_CHI2: f64 = 16.266;
+
+/// One target's `(t, position)` truth samples while alive, in time order.
+type TruthSamples = Vec<(f64, [f64; 3])>;
+
+/// The recording's truth, target by target, for telling the track of a recorded target
+/// from a track of clutter (GAP-020, D-107).
+struct TruthIndex {
+    /// Each target's samples, in the recording's local ENU frame -- the frame the
+    /// throwaway desktop's tracks are in.
+    by_target: Vec<(String, TruthSamples)>,
+}
+
+impl TruthIndex {
+    fn new(truth: &[sim::TruthRecord]) -> Self {
+        let mut by_target: Vec<(String, TruthSamples)> = Vec::new();
+        for record in truth.iter().filter(|r| r.alive) {
+            let at = (record.t, record.pos.map(sim::pynum::Num::f));
+            match by_target.iter_mut().find(|(id, _)| *id == record.entity) {
+                Some((_, samples)) => samples.push(at),
+                None => by_target.push((record.entity.clone(), vec![at])),
+            }
+        }
+        for (_, samples) in &mut by_target {
+            samples.sort_by(|a, b| a.0.total_cmp(&b.0));
+        }
+        Self { by_target }
+    }
+
+    /// Where the recording says a target was at `t`, interpolated between its ticks;
+    /// `None` outside the ticks it was alive for.
+    fn position(samples: &[(f64, [f64; 3])], t: f64) -> Option<[f64; 3]> {
+        let after = samples.partition_point(|(ts, _)| *ts < t);
+        match (
+            after.checked_sub(1).and_then(|i| samples.get(i)),
+            samples.get(after),
+        ) {
+            (_, Some((ts, p))) if (*ts - t).abs() <= f64::EPSILON => Some(*p),
+            (Some((t0, p0)), Some((t1, p1))) => {
+                let f = (t - t0) / (t1 - t0);
+                Some([
+                    p0[0] + (p1[0] - p0[0]) * f,
+                    p0[1] + (p1[1] - p0[1]) * f,
+                    p0[2] + (p1[2] - p0[2]) * f,
+                ])
+            }
+            _ => None,
+        }
+    }
+
+    /// The recorded target `track` is -- the one nearest it, by its own position
+    /// covariance, within [`TARGET_GATE_CHI2`] at the track's estimate time -- and where
+    /// the recording says that target was at `at`, else at the track's estimate time.
+    /// `None` for a track of clutter, or one whose covariance cannot be inverted.
+    fn target_of(
+        &self,
+        track: &gungnir_model::TrackView,
+        at: MissionTime,
+    ) -> Option<(&str, [f64; 3])> {
+        let covariance = track.covariance.fixed_view::<3, 3>(0, 0).into_owned();
+        let inverse = covariance.try_inverse()?;
+        let p = track.position_enu();
+        self.by_target
+            .iter()
+            .filter_map(|(id, samples)| {
+                let q = Self::position(samples, track.mission_time.0)?;
+                let d = nalgebra::Vector3::new(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+                let m = (d.transpose() * inverse * d)[(0, 0)];
+                (m.is_finite() && (0.0..=TARGET_GATE_CHI2).contains(&m))
+                    .then(|| (id.as_str(), Self::position(samples, at.0).unwrap_or(q), m))
+            })
+            .min_by(|a, b| a.2.total_cmp(&b.2))
+            .map(|(id, where_, _)| (id, where_))
+    }
+}
+
+/// What a run's plans said about first engagements: each recorded target's first
+/// pairing, and the tracks paired that were no recorded target.
+#[derive(Default)]
+struct PairingLedger {
+    first: Vec<FirstPairing>,
+    clutter_tracks: Vec<gungnir_model::TrackId>,
+}
+
+/// Fold the plan the throwaway desktop just proposed into each recorded target's first
+/// pairing (GAP-020, DN-02 §9, D-107): a target not yet paired takes this pairing; a
+/// target paired so far only without an intercept point takes this one if it has a
+/// point; a target already holding a predicted engagement keeps it, because it is the
+/// *first* engagement that is measured.
+///
+/// A pairing is a target's when its track is the target ([`TruthIndex::target_of`]); a
+/// track that is none of the recording's targets is clutter, counted and never measured,
+/// because a worst case taken over clutter the planner paired beside a radar would be a
+/// figure about the radar's false alarms and not about the approach. The pairing is
+/// placed on an approach by where the recording says the target was when it was
+/// proposed (D-108), and its range is the planner's own predicted intercept point. A
+/// pairing naming a track the picture no longer holds is skipped: without the track it
+/// cannot be told to be any target, and nothing is made up in its place.
+fn fold_first_pairings(
+    ledger: &mut PairingLedger,
+    state: &AppState,
+    frame: &LocalFrame,
+    truth: &TruthIndex,
+) {
+    let plan = &state.last_plan;
+    for solution in plan.solutions() {
+        let Some(track) = state
+            .tracking
+            .tracks()
+            .iter()
+            .find(|t| t.id == solution.track)
+        else {
+            continue;
+        };
+        let Some((target, target_enu)) = truth.target_of(track, plan.mission_time) else {
+            if !ledger.clutter_tracks.contains(&track.id) {
+                ledger.clutter_tracks.push(track.id);
+            }
+            continue;
+        };
+        let engagement = solution
+            .intercept_point
+            .zip(solution.time_to_intercept_s)
+            .map(|(point, time_to_intercept_s)| PredictedEngagement {
+                intercept_enu: frame.to_enu(point),
+                time_to_intercept_s,
+            });
+        let pairing = FirstPairing {
+            target: target.to_owned(),
+            track: solution.track,
+            resource: solution.resource,
+            proposed_at: plan.mission_time,
+            target_enu,
+            engagement,
+        };
+        match ledger.first.iter_mut().find(|p| p.target == target) {
+            None => ledger.first.push(pairing),
+            Some(held) if held.engagement.is_none() && pairing.engagement.is_some() => {
+                *held = pairing;
+            }
+            Some(_) => {}
+        }
+    }
+}
+
 const FRAME_S: f64 = 1.0 / 30.0;
 
 /// How many times a run polls for the pipeline's end-of-stream flush before it gives
@@ -497,7 +678,8 @@ static NEXT_RUN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::ne
 /// `testdata_root` is the workspace's `testdata/` directory; `base_sensors` and
 /// `base_resources` are the deployment's own declarations, whose detection models and
 /// non-position fields (capacity, layer, cost, closing speed) a bare placement does not
-/// carry.
+/// carry. `ran_at` is the live desktop's mission time, recorded as when the rehearsal
+/// was run; nothing in the run reads it.
 ///
 /// # Errors
 ///
@@ -515,6 +697,7 @@ pub fn run(
     laydown: &Laydown,
     base_sensors: &[SensorConfig],
     base_resources: &[ResourceConfig],
+    ran_at: MissionTime,
 ) -> Result<RehearsalRecord, RehearsalError> {
     let fixture = fixture_dir(scenario, testdata_root);
     let metadata: Metadata = read_json(&fixture.join("metadata.json"), "recording metadata")?;
@@ -613,7 +796,18 @@ pub fn run(
         .map(|((p, (declared, _)), sector)| (*declared, p.position_enu, *sector))
         .collect();
     let config = config_for(&config_sensors, origin, laydown, base_resources, &dir);
+    // D-109: the same planner every embedded desktop builds, measuring its budget on a
+    // clock that never advances, so each solve finishes in the call that starts it and
+    // the plans are the recording's answer rather than the machine's.
+    let planner = crate::state::embedded_planner(&config).with_clock(std::sync::Arc::new(
+        gungnir_intercept_service::SteppedClock::new(std::time::Duration::ZERO),
+    ));
+    // And the tracker in lock-step on this thread, so each tick plans against the picture
+    // every detection fed so far has made rather than wherever a task had got to (D-109).
+    let tracker = crate::state::rehearsal_tracker(&config);
     let mut state = AppState::with_config(config)?;
+    state.intercept = Box::new(planner);
+    state.tracking = Box::new(tracker);
     // DN-32 §6 mechanism 2: the throwaway desktop's gateway is the one construction that
     // admits a re-observed detection. It still authenticates each against the sensors
     // this laydown places and validates it as a live gateway would.
@@ -635,10 +829,19 @@ pub fn run(
     // truncation and sign loss are not live concerns for this cast.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let frames = (recording.duration_s / FRAME_S).ceil() as usize;
+    let truth = TruthIndex::new(&recording.truth);
+    let mut pairings = PairingLedger::default();
+    let mut last_proposed = state.last_live_plan_id;
     for _ in 0..frames {
         clock.advance(FRAME_S);
         state.clock = Box::new(clock);
         update::tick(&mut state);
+        // A plan is proposed on the tick it changes (`update::plan_and_queue`); read each
+        // one once, on that tick, while the tracks it pairs are the picture's.
+        if state.last_live_plan_id != last_proposed {
+            last_proposed = state.last_live_plan_id;
+            fold_first_pairings(&mut pairings, &state, &frame, &truth);
+        }
     }
 
     // End the detection stream and wait for the pipeline's own end-of-stream flush,
@@ -697,6 +900,9 @@ pub fn run(
         decisions_expired,
         sensors,
         recording_events_not_applied: reobserved.sensor_events_not_applied,
+        ran_at,
+        first_pairings: pairings.first,
+        clutter_pairings: pairings.clutter_tracks.len(),
     };
     // Dropped before cleanup, deliberately: the journal's file handle is still open on
     // `state`, and `remove_dir_all` racing an open handle fails silently on Windows.
