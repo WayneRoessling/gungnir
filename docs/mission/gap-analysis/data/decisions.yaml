@@ -2622,3 +2622,30 @@
     current-thread runtime with paused time (tokio's `test-util` in a production binary),
     and a copy of the loop body in the tracking service (two drivers that drift). See
     `../../record/2026-09-26/first-engagement-range-over-a-rehearsal.md`.
+- id: D-113
+  decision: What a rehearsal takes from the deployment's baseline, and what counts as an engagement in it
+  question: >-
+    A rehearsal's throwaway desktop was built from default configuration: every layer at
+    hold, no authority, no fences, the default tracker. Which of the deployment's settings
+    should a rehearsal decide and track under, which must it not take, and is a plan the
+    policy refused still an engagement for DN-02 §9's first-engagement range?
+  raised_in: "GAP-182; GAP-184; `../../design/DN-32-re-observation-for-a-laydown.md` §5.5"
+  decider: Owner
+  unblocks: GAP-182, GAP-184
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **Everything that decides or
+    tracks, and nothing that reaches outside the process; and an engagement is a plan
+    the deployment's policy offered for decision.** The throwaway desktop takes the whole
+    `policy`, the allocation horizon, the geofences (re-expressed about the recording's
+    origin, as DN-32 §5.5 reads a laydown; refused by name without a deployment origin),
+    and the tracker's algorithm candidates, profiles and late-data policy. It takes no
+    endpoint, node, peer, feed, account or handoff endpoint, and not the validity
+    window, which is on the live clock. D-107's prediction is amended from a proposed
+    pairing to one in a plan the policy queued; plans not offered are counted with the
+    chain's denial reasons, and nothing offered reads not computable, naming why.
+    Rejected: measuring proposals and marking denied ones (draws an engagement the
+    deployment forbids); cloning the whole baseline and blanking fields (a field added
+    later reaches a rehearsal by default); the live desktop's runtime delegations and
+    signed-in role (a laydown is judged under its baseline, not its operator). See
+    `../../record/2026-09-26/a-rehearsal-decides-and-tracks-under-the-deployment.md`.

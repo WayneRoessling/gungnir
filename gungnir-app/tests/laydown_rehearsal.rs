@@ -57,6 +57,16 @@ fn base_resources() -> Vec<ResourceConfig> {
     serde_json::from_str(&text).expect("the fixture resource config parses")
 }
 
+/// A deployment declaring these sensors and [`base_resources`], under the default
+/// policy: every layer at hold (DN-09), so it offers no plan for decision.
+fn deployment_of(sensors: &[SensorConfig]) -> ConfigBaseline {
+    ConfigBaseline {
+        sensors: sensors.to_vec(),
+        resources: base_resources(),
+        ..ConfigBaseline::default()
+    }
+}
+
 fn sensor(id: u32, model: Option<&str>) -> SensorConfig {
     let mut v = serde_json::json!({
         "id": id, "modality": "radar", "position": [0.0, 0.0, 0.0], "max_range_m": 15000.0
@@ -96,8 +106,7 @@ fn a_rehearsal_re_observes_a_real_recording_and_reports_the_queue_honestly() {
         &testdata_root(),
         TestTrackNumber(1),
         &laydown("rehearsed", RIDGE),
-        &[sensor(1, Some("radar.long"))],
-        &base_resources(),
+        &deployment_of(&[sensor(1, Some("radar.long"))]),
         MissionTime(0.0),
     )
     .expect("TT-01's recording runs");
@@ -133,8 +142,7 @@ fn two_runs_of_one_laydown_report_the_same_thing() {
         &testdata_root(),
         TestTrackNumber(1),
         &l,
-        &sensors,
-        &base_resources(),
+        &deployment_of(&sensors),
         MissionTime(0.0),
     )
     .expect("runs");
@@ -142,8 +150,7 @@ fn two_runs_of_one_laydown_report_the_same_thing() {
         &testdata_root(),
         TestTrackNumber(1),
         &l,
-        &sensors,
-        &base_resources(),
+        &deployment_of(&sensors),
         MissionTime(0.0),
     )
     .expect("runs a second time");
@@ -162,8 +169,7 @@ fn moving_a_sensor_out_of_range_of_the_raid_empties_its_detections() {
         &testdata_root(),
         TestTrackNumber(1),
         &laydown("near", RIDGE),
-        &sensors,
-        &base_resources(),
+        &deployment_of(&sensors),
         MissionTime(0.0),
     )
     .expect("runs");
@@ -171,8 +177,7 @@ fn moving_a_sensor_out_of_range_of_the_raid_empties_its_detections() {
         &testdata_root(),
         TestTrackNumber(1),
         &laydown("far", [-250_000.0, 250_000.0, 450.0]),
-        &sensors,
-        &base_resources(),
+        &deployment_of(&sensors),
         MissionTime(0.0),
     )
     .expect("runs");
@@ -198,8 +203,7 @@ fn a_laydown_sensor_with_no_detection_model_is_refused_by_name_and_nothing_runs(
         &testdata_root(),
         TestTrackNumber(1),
         &laydown("unmodelled", [500.0, 300.0, 20.0]),
-        &[sensor(1, None)],
-        &base_resources(),
+        &deployment_of(&[sensor(1, None)]),
         MissionTime(0.0),
     )
     .expect_err("a sensor that names no detection model is refused");
@@ -223,8 +227,7 @@ fn a_laydown_sensor_with_no_detection_model_is_refused_by_name_and_nothing_runs(
         &testdata_root(),
         TestTrackNumber(1),
         &laydown("unknown", [500.0, 300.0, 20.0]),
-        &[sensor(1, Some("radar.imaginary"))],
-        &base_resources(),
+        &deployment_of(&[sensor(1, Some("radar.imaginary"))]),
         MissionTime(0.0),
     )
     .expect_err("a model the catalogue does not hold is refused");
@@ -238,8 +241,7 @@ fn a_laydown_sensor_with_no_detection_model_is_refused_by_name_and_nothing_runs(
         &testdata_root(),
         TestTrackNumber(1),
         &standby,
-        &[sensor(1, None)],
-        &base_resources(),
+        &deployment_of(&[sensor(1, None)]),
         MissionTime(0.0),
     )
     .expect_err("nothing observes");
@@ -271,8 +273,7 @@ fn an_unknown_scenario_number_is_a_clear_error_not_a_panic() {
         &testdata_root(),
         TestTrackNumber(99),
         &laydown("any", [0.0, 0.0, 0.0]),
-        &[sensor(1, Some("radar.short"))],
-        &base_resources(),
+        &deployment_of(&[sensor(1, Some("radar.short"))]),
         MissionTime(0.0),
     )
     .expect_err("TT-99 does not exist");
@@ -402,6 +403,35 @@ fn write_round_1_recording(config: &ConfigBaseline) -> std::path::PathBuf {
     root
 }
 
+/// Round 1's baseline with its area layer weapons free and the authority to decide an
+/// area-layer plan given to the operator and the supervisor, as round 1 gives them the
+/// point layer's. Round 1 itself keeps the area layer at hold (GAP-182).
+fn round_1_weapons_free(config: &ConfigBaseline) -> ConfigBaseline {
+    let mut free = config.clone();
+    free.policy.control_status.by_layer.insert(
+        gungnir_model::EffectorLayer::Area,
+        gungnir_model::policy_settings::WeaponsControlStatus::Free,
+    );
+    let area_rules: Vec<_> = free
+        .policy
+        .authority
+        .rules
+        .iter()
+        .filter(|r| r.layer == Some(gungnir_model::EffectorLayer::Point))
+        .map(|r| gungnir_model::policy_settings::AuthorityRule {
+            layer: Some(gungnir_model::EffectorLayer::Area),
+            ..r.clone()
+        })
+        .collect();
+    assert!(
+        !area_rules.is_empty(),
+        "round 1 gives someone the point layer"
+    );
+    free.policy.authority.rules.extend(area_rules);
+    gungnir_config::validate(&free).expect("the weapons-free variant is a valid baseline");
+    free
+}
+
 /// **Round 1 laydown `c`** (DN-32 §10): rehearse `current` and `c` over the round-1
 /// scenario. `c` re-sites S2 and keeps S1 where it was, so S2's per-sensor detections
 /// differ and S1's are identical detection for detection -- D-74's per-sensor-and-target
@@ -431,8 +461,7 @@ fn round_1s_forward_radar_changes_its_own_detections_and_nothing_else() {
             &root,
             TestTrackNumber(11),
             &laydown(id),
-            &config.sensors,
-            &config.resources,
+            &config,
             MissionTime(0.0),
         )
         .unwrap_or_else(|e| panic!("laydown {id} rehearses: {e}"))
@@ -440,6 +469,25 @@ fn round_1s_forward_radar_changes_its_own_detections_and_nothing_else() {
     let current = rehearse("current");
     let b = rehearse("b");
     let c = rehearse("c");
+    // The same three under round 1 with its area layer weapons free and an operator and a
+    // supervisor holding authority there: the policy round 1 does not declare, so the
+    // first-engagement comparison below has plans a person would be offered (GAP-182).
+    let free = round_1_weapons_free(&config);
+    let rehearse_free = |id: &str| {
+        run(
+            &root,
+            TestTrackNumber(11),
+            &laydown(id),
+            &free,
+            MissionTime(0.0),
+        )
+        .unwrap_or_else(|e| panic!("laydown {id} rehearses weapons free: {e}"))
+    };
+    let (free_current, free_b, free_c) = (
+        rehearse_free("current"),
+        rehearse_free("b"),
+        rehearse_free("c"),
+    );
     let _ = std::fs::remove_dir_all(&root);
 
     let s = |r: &gungnir_app::laydown_rehearsal::RehearsalRecord, id: u32| {
@@ -570,13 +618,73 @@ fn round_1s_forward_radar_changes_its_own_detections_and_nothing_else() {
         Some(s(&c, 2).detections as i64 - s(&current, 2).detections as i64)
     );
 
+    // GAP-182: under round 1's own policy the area layer is at hold, and the planner tasks
+    // the area battery R2 in every plan it proposes, so the chain denies every plan
+    // (DN-09: a plan is denied if any of its solutions is) and nothing is offered anyone
+    // to decide. The upper Vell approach's first engagement says exactly that, with the
+    // reasons, on every row -- where before this rehearsal ran under an all-default
+    // policy and drew engagements this deployment would never offer.
+    for r in [&current, &b, &c] {
+        assert!(r.plans_proposed > 0, "{}", r.laydown);
+        assert_eq!(r.plans_not_offered, r.plans_proposed, "{}", r.laydown);
+        assert!(r.first_pairings.is_empty(), "{}", r.laydown);
+        assert_eq!(r.decisions_raised, 0, "{}", r.laydown);
+        assert!(
+            r.not_offered_because
+                .iter()
+                .any(|(why, _)| why == "ControlStatus { layer: Area, status: Hold }"),
+            "{}: {:?}",
+            r.laydown,
+            r.not_offered_because
+        );
+    }
+    // And round 1's upper Vell no-go fence, placed beside the laydown as it stands beside
+    // the harbour, refuses the intercepts that fall inside it.
+    assert!(
+        current
+            .not_offered_because
+            .iter()
+            .any(|(why, _)| why == "NoGoGeofence"),
+        "{:?}",
+        current.not_offered_because
+    );
+    for row in &rows {
+        let record = [&current, &b, &c]
+            .into_iter()
+            .find(|r| r.laydown == row.id)
+            .expect("every row was rehearsed");
+        assert_eq!(
+            row.first_engagement,
+            RowFirstEngagement::PerApproach(vec![ApproachEngagement::NotComputable {
+                reason: gungnir_app::sustainment::nothing_offered(record),
+            }]),
+            "{}",
+            row.id
+        );
+    }
+    drop(state);
+    let _ = std::fs::remove_dir_all(&dir);
+
     // GAP-020, D-45: the upper Vell approach's first engagement, per laydown -- the
-    // comparison US-15 makes. Each run's worst case is over the raid's three drones, and
-    // over nothing else: round 1's short-range radars form tracks from their false alarms
-    // beside the harbour and the planner pairs them, and those are clutter, counted and
-    // never measured (D-107), or every laydown's worst case would be a false alarm a few
-    // metres from a radar. `c` sites S2 10 km up the approach, so it first engages farther
-    // out; `b` moves a battery, and its worst case is the same prediction as `current`'s.
+    // comparison US-15 makes -- under the weapons-free variant. Each run's worst case is
+    // over the raid's three drones, and over nothing else: round 1's short-range radars
+    // form tracks from their false alarms beside the harbour and the planner pairs them,
+    // and those are clutter, counted and never measured (D-107), or every laydown's worst
+    // case would be a false alarm a few metres from a radar. `c` sites S2 10 km up the
+    // approach, so it first engages farther out; `b` moves a battery, and its worst case
+    // is the same prediction as `current`'s.
+    let dir = std::env::temp_dir().join(format!("gungnir-round-1-free-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut desk_config = free.clone();
+    desk_config.data_dir = dir.to_string_lossy().into_owned();
+    let mut state = gungnir_app::state::AppState::with_config(desk_config).expect("starts");
+    for r in [&free_current, &free_b, &free_c] {
+        state.rehearsal_records.insert(r.laydown.clone(), r.clone());
+    }
+    let rows = match gungnir_app::sustainment::planning_rows(&state) {
+        gungnir_app::sustainment::PlanningRows::Rows(rows) => rows,
+        gungnir_app::sustainment::PlanningRows::Empty { reason } => panic!("{reason}"),
+    };
     let upper_vell = |id: &str| match &rows
         .iter()
         .find(|r| r.id.0 == id)
@@ -595,7 +703,7 @@ fn round_1s_forward_radar_changes_its_own_detections_and_nothing_else() {
         },
         other => panic!("{id}'s first engagement was not computed: {other:?}"),
     };
-    for r in [&current, &b, &c] {
+    for r in [&free_current, &free_b, &free_c] {
         assert!(
             r.clutter_pairings > 0,
             "{}: the harbour radars' false alarms form tracks the planner pairs",
@@ -633,12 +741,15 @@ const TT01_EAST_AXIS: [[f64; 3]; 2] = [[125_000.0, -83_000.0, 1_000.0], [0.0, 0.
 /// nothing of it in this excerpt, so no track comes down it.
 const TT01_SEA_AXIS: [[f64; 3]; 2] = [[-95_000.0, 21_000.0, 1_000.0], [0.0, 0.0, 1_000.0]];
 
-/// A deployment declaring TT-01's two approach axes, a long-range radar, one effector
-/// with a closing speed, and two laydowns: `current`, the effector at home, and
+/// A deployment declaring TT-01's two approach axes, a long-range radar, one point-layer
+/// effector with a closing speed, and two laydowns: `current`, the effector at home, and
 /// `forward`, the same effector 72 km up the eastern axis. The deployment's origin is
 /// round 1's, not the recording's, so the test also holds DN-32 §5.5's frame: a laydown
 /// and its approaches are read as an arrangement about the recording's origin.
-fn first_engagement_deployment(dir: &std::path::Path) -> ConfigBaseline {
+///
+/// `point` is the point layer's weapons control status; an operator holds the authority
+/// to decide a point-layer plan either way (GAP-182).
+fn first_engagement_deployment(dir: &std::path::Path, point: &str) -> ConfigBaseline {
     let origin = Geodetic {
         lat_rad: 0.959_931,
         lon_rad: 0.209_44,
@@ -692,6 +803,14 @@ fn first_engagement_deployment(dir: &std::path::Path) -> ConfigBaseline {
             placed("forward", [60_000.0, -40_000.0, 0.0], false),
         ],
         data_dir: dir.to_string_lossy().into_owned(),
+        policy: serde_json::from_value(serde_json::json!({
+            "control_status": {"by_layer": {"point": point}},
+            "authority": {"rules": [{
+                "action": "plan.decide", "role": "Operator", "layer": "point",
+                "class": null, "pre_delegated": false
+            }]},
+        }))
+        .expect("the fixture policy parses"),
         ..ConfigBaseline::default()
     };
     gungnir_config::validate(&config).expect("the first-engagement fixture is a valid baseline");
@@ -712,7 +831,7 @@ fn first_engagement_deployment(dir: &std::path::Path) -> ConfigBaseline {
 fn first_engagement_is_the_worst_case_over_a_committed_recording_per_laydown() {
     let dir = std::env::temp_dir().join(format!("gungnir-first-engagement-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let config = first_engagement_deployment(&dir);
+    let config = first_engagement_deployment(&dir, "free");
     let laydown = |id: &str| {
         config
             .laydowns
@@ -726,8 +845,7 @@ fn first_engagement_is_the_worst_case_over_a_committed_recording_per_laydown() {
             &testdata_root(),
             TestTrackNumber(1),
             &laydown(id),
-            &config.sensors,
-            &config.resources,
+            &config,
             MissionTime(ran_at),
         )
         .unwrap_or_else(|e| panic!("laydown {id} rehearses: {e}"))
@@ -851,17 +969,21 @@ fn first_engagement_is_the_worst_case_over_a_committed_recording_per_laydown() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// **Round 1's committed baseline against a committed recording: not computable, and
+/// **Round 1's committed laydowns against a committed recording: not computable, and
 /// why** (GAP-020). No committed recording brings a target within reach of round 1's
 /// short-range radars (GAP-147), so the only tracks the run forms are the radars' own
-/// false alarms beside the harbour. The planner pairs them; they are clutter, counted and
-/// never measured (D-107), and the upper Vell approach's first engagement reads not
-/// computable on every row -- never a range of a few metres from a radar, and never zero.
+/// false alarms beside the harbour. Weapons free, the planner's plans pairing them are
+/// offered; they are clutter, counted and never measured (D-107), and the upper Vell
+/// approach's first engagement reads not computable on every row -- never a range of a
+/// few metres from a radar, and never zero. (Under round 1's own policy nothing is
+/// offered at all; `round_1s_forward_radar_changes_its_own_detections_and_nothing_else`
+/// holds that.)
 #[test]
 fn round_1_against_a_committed_recording_is_not_computable_and_says_why() {
     let path = testdata_root().join("usability/round-1.json");
     let text = std::fs::read_to_string(&path).expect("round-1.json is committed");
-    let mut config: ConfigBaseline = serde_json::from_str(&text).expect("round-1.json parses");
+    let config: ConfigBaseline = serde_json::from_str(&text).expect("round-1.json parses");
+    let mut config = round_1_weapons_free(&config);
     let dir = std::env::temp_dir().join(format!("gungnir-round-1-fe-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     config.data_dir = dir.to_string_lossy().into_owned();
@@ -875,8 +997,7 @@ fn round_1_against_a_committed_recording_is_not_computable_and_says_why() {
         &testdata_root(),
         TestTrackNumber(1),
         &current,
-        &config.sensors,
-        &config.resources,
+        &config,
         MissionTime(0.0),
     )
     .expect("round 1's current laydown rehearses against TT-01");
@@ -916,6 +1037,99 @@ fn round_1_against_a_committed_recording_is_not_computable_and_says_why() {
         summary.first_engagement,
         RehearsalFirstEngagement::PerApproach { clutter_pairings, .. }
             if clutter_pairings == record.clutter_pairings
+    ));
+    drop(state);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// **GAP-182: a deployment at hold rehearses to no engagement, and says why.** The same
+/// TT-01 fixture as
+/// [`first_engagement_is_the_worst_case_over_a_committed_recording_per_laydown`], with
+/// its point layer at hold: the run re-observes and tracks exactly as it does weapons
+/// free, and the planner proposes plans, but the deployment's own policy offers none of
+/// them to anyone to decide. So no decision is raised, no first engagement is measured,
+/// and every approach reads not computable naming the control status -- where a
+/// rehearsal under a default policy would have drawn an engagement range this deployment
+/// would never offer.
+#[test]
+fn a_deployment_at_hold_rehearses_to_no_engagement_and_says_why() {
+    let dir = std::env::temp_dir().join(format!("gungnir-at-hold-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let rehearse = |config: &ConfigBaseline| {
+        let current = config
+            .laydowns
+            .iter()
+            .find(|l| l.current)
+            .expect("the fixture marks a current laydown")
+            .clone();
+        run(
+            &testdata_root(),
+            TestTrackNumber(1),
+            &current,
+            config,
+            MissionTime(0.0),
+        )
+        .expect("TT-01 rehearses")
+    };
+    let at_hold = first_engagement_deployment(&dir, "hold");
+    let held = rehearse(&at_hold);
+    let free = rehearse(&first_engagement_deployment(&dir, "free"));
+
+    // The same recording, sensors and tracks either way: only the policy differs.
+    assert_eq!(held.sensors, free.sensors);
+    assert_eq!(held.tracks_formed, free.tracks_formed);
+    assert!(
+        !free.first_pairings.is_empty(),
+        "weapons free, the raid is engaged"
+    );
+
+    assert!(held.plans_proposed > 0, "the planner still proposes");
+    assert_eq!(held.plans_not_offered, held.plans_proposed);
+    assert_eq!(
+        held.not_offered_because,
+        vec![(
+            "ControlStatus { layer: Point, status: Hold }".to_owned(),
+            held.plans_proposed
+        )]
+    );
+    assert!(held.first_pairings.is_empty(), "{:?}", held.first_pairings);
+    assert_eq!(held.decisions_raised, 0);
+
+    let mut state = gungnir_app::state::AppState::with_config(at_hold).expect("starts");
+    state
+        .rehearsal_records
+        .insert(held.laydown.clone(), held.clone());
+    let rows = match gungnir_app::sustainment::planning_rows(&state) {
+        gungnir_app::sustainment::PlanningRows::Rows(rows) => rows,
+        gungnir_app::sustainment::PlanningRows::Empty { reason } => panic!("{reason}"),
+    };
+    let row = rows
+        .iter()
+        .find(|r| r.id == held.laydown)
+        .expect("a row for the current laydown");
+    let reason = gungnir_app::sustainment::nothing_offered(&held);
+    assert!(
+        reason.contains("ControlStatus { layer: Point, status: Hold }"),
+        "{reason}"
+    );
+    assert_eq!(
+        row.first_engagement,
+        RowFirstEngagement::PerApproach(vec![
+            ApproachEngagement::NotComputable {
+                reason: reason.clone()
+            };
+            2
+        ]),
+        "both approaches say the policy offered nothing, not zero and not a range"
+    );
+    state.select_laydown(held.laydown.clone());
+    let RehearsalSection::Ran(summary) = state.rehearsal_section() else {
+        panic!("rehearsed");
+    };
+    assert!(matches!(
+        summary.first_engagement,
+        RehearsalFirstEngagement::PerApproach { plans_proposed, plans_not_offered, .. }
+            if plans_proposed == held.plans_proposed && plans_not_offered == plans_proposed
     ));
     drop(state);
     let _ = std::fs::remove_dir_all(&dir);

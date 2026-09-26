@@ -129,8 +129,13 @@ owner's delegation) settled what it is taken over. Reasoning:
    rehearsal (DN-32) the throwaway desktop's planner proposes plans; each pairing carries
    DN-04 §9's earliest constant-velocity intercept point, which is this note's
    constant-velocity prediction of the track taken to the moment the effector reaches it.
-   A target's first engagement is the first pairing proposed for a track that *is* that
-   target and carries an intercept point. A track is a target's when its position lies
+   A target's first engagement is the first pairing, **in a plan the deployment's own
+   policy offered for decision** (D-113, amending D-107's "proposed" on 2026-09-26), for a
+   track that *is* that target and carries an intercept point. A plan the policy chain
+   refused -- a layer at hold, no role with the authority, an intercept inside a no-go
+   fence -- was never on offer and is no engagement; such plans are counted with the
+   chain's reasons, and a run in which the policy offered nothing reads not computable
+   saying so. A track is a target's when its position lies
    within the 0.999 gate of its own position covariance (χ², three degrees of freedom,
    16.27) about where the recording's truth says the target was at the track's estimate
    time; nearest target first. A paired track that is no target is clutter the pipeline
@@ -166,6 +171,10 @@ owner's delegation) settled what it is taken over. Reasoning:
    never advances. Before this, the mid-run picture was however far the pipeline task on
    another thread had got, so the plans -- and every figure read off them -- differed
    between two runs of one laydown.
+8. **A rehearsal decides and tracks under the deployment's own baseline** (D-113,
+   GAP-182, GAP-184): its policy, allocation horizon, geofences and tracker
+   configuration, and nothing that reaches outside the process (DN-32 §14). Before
+   2026-09-26 it ran all of them at their defaults, every layer at hold.
 
 **Owning components.** The aggregate is `gungnir-assessment` (this note's §2), a pure
 function over a run's first pairings and the approaches in one frame. The run's pairings

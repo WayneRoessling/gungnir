@@ -430,6 +430,27 @@ laydown. The live desktop and node are unchanged. `gungnir-fusion-async` is huma
 the extraction is behaviour-preserving and its loom model checks pass unchanged, and what
 the owner has reviewed is in [`../signatures.md`](../signatures.md).
 
+## 14. Amendment 3 -- the deployment's own baseline (2026-09-26)
+
+**Raised by GAP-182 and GAP-184.** The throwaway desktop was built from
+`ConfigBaseline::default()` with the laydown's placements in it, so it decided with every
+layer at hold, no authority rule, no decision timeout and no geofence, and tracked with
+the default algorithm baseline and late-data buffer. Every decision count a rehearsal
+reported was the default policy's, and GAP-020's first engagements were read off plans
+the deployment's policy would have refused.
+
+**D-113, taken under the owner's delegation**: the throwaway desktop takes the
+deployment's whole `policy`, allocation horizon, geofences -- re-expressed about the
+recording's origin under §5.5, and refused by name when the deployment declares no origin
+to place them from -- and tracker configuration (algorithm candidates, mission and
+tracking profiles, the active profile, the late-data policy). It takes nothing that
+reaches outside the process: no endpoint, node, peer, feed, account or resource handoff
+endpoint. It does not take the validity window either, since that is on the live mission
+clock. A plan counts as an engagement only when the policy offered it for decision
+(DN-02 §9 rule 1). The plans it did not offer are counted with the chain's reasons and
+shown on PN-16. What running under a real policy showed at once -- one layer at hold
+refuses every plan, on the live desktop too -- is GAP-183.
+
 ## Traceability
 
 GAP-105 (the gap), D-50 (which scoped it), D-64 (the choice this note implements), DN-26

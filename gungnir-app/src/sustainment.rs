@@ -1911,11 +1911,40 @@ fn engagement_cells(
                     .and_then(A::range_m)
                     .map(|theirs| range_m - theirs),
             },
+            // GAP-182: nothing engaged because the deployment's own policy offered
+            // nothing is said as that, with the reasons, and not as a quiet approach.
+            A::NotComputable(gungnir_assessment::NotComputable::NoEngagement { .. })
+                if record.plans_proposed > 0
+                    && record.plans_not_offered == record.plans_proposed =>
+            {
+                ApproachEngagement::NotComputable {
+                    reason: nothing_offered(record),
+                }
+            }
             A::NotComputable(reason) => ApproachEngagement::NotComputable {
                 reason: reason.to_string(),
             },
         })
         .collect())
+}
+
+/// Why a run engaged nothing when its every plan was refused by the deployment's own
+/// policy (GAP-182, D-113): how many were proposed, and each reason the chain recorded
+/// with how many plans it refused -- in the words PN-06 uses for the live queue's
+/// denials, so the two panels cannot describe one refusal two ways.
+#[must_use]
+pub fn nothing_offered(record: &crate::laydown_rehearsal::RehearsalRecord) -> String {
+    let reasons = record
+        .not_offered_because
+        .iter()
+        .map(|(why, n)| format!("{n} denied: {why}"))
+        .collect::<Vec<_>>()
+        .join("; ");
+    format!(
+        "the deployment's policy offered none of the {} plan(s) the run proposed for \
+         decision ({reasons})",
+        record.plans_proposed
+    )
 }
 
 /// PN-16's first-engagement cells for one laydown's row (GAP-020).
@@ -1972,6 +2001,9 @@ pub fn rehearsal_first_engagement_account(
             .collect(),
         on_no_corridor,
         clutter_pairings: record.clutter_pairings,
+        plans_proposed: record.plans_proposed,
+        plans_not_offered: record.plans_not_offered,
+        not_offered_because: record.not_offered_because.clone(),
     }
 }
 
