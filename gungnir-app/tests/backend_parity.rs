@@ -223,6 +223,8 @@ fn baseline(timeline: &GeneratedTimeline, dir: &Path, backend: BackendConfig) ->
                 max_range_m: 200_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                // Scenario 1's radar looks all round (GAP-118).
+                azimuth_sector: None,
             })
             .collect(),
         resources: vec![ResourceConfig {
