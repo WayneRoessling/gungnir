@@ -265,7 +265,12 @@ impl ApprovalHost for NodeHost<'_> {
                 id: record.handoff.decision.to_string(),
                 at: record.handoff.issued,
                 releasability: record.handoff.releasability.clone(),
-                body: serde_json::to_value(&record.handoff).unwrap_or(serde_json::Value::Null),
+                // GAP-171, D-103: a non-finite float reaches a partner as DN-18 §15's
+                // "value unavailable" object, never a silent `null`.
+                body: v3::ExchangeProduct::body_of(&record.handoff).unwrap_or_else(|err| {
+                    tracing::error!(%err, "a handoff's exchange body could not be written");
+                    serde_json::Value::Null
+                }),
             })
             .collect();
         if let Err(err) = self.api.publish_exchange(

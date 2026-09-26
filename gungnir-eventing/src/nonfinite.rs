@@ -77,6 +77,9 @@ enum Mode {
     Detect,
     /// Write the escaped form.
     Escape,
+    /// Write plain JSON with DN-18's "value unavailable" object in place of each
+    /// non-finite float, for a partner ([`to_partner_value`], D-103).
+    Unavailable,
 }
 
 /// Shared by every level of one serialization.
@@ -127,14 +130,79 @@ fn write<T: Serialize + ?Sized>(value: &T, ctx: &Context) -> Result<String, serd
     String::from_utf8(buf).map_err(|e| ser::Error::custom(e.to_string()))
 }
 
+/// The one member of the object a partner is sent in place of a non-finite float
+/// (GAP-171, decision D-103, `docs/design/DN-18-coalition-exchange.md` §15).
+pub const UNAVAILABLE: &str = "unavailable";
+
+/// A value as a partner is sent it, as a `serde_json::Value`: an exchange product's body
+/// (GAP-171, D-103; DN-18 §15).
+///
+/// **Exactly what `serde_json::to_value` gives when every float is finite.** Each
+/// non-finite float becomes the object `{"unavailable": "nan"}`, `{"unavailable": "+inf"}`
+/// or `{"unavailable": "-inf"}` in the number's place, where `to_value` writes `null`
+/// without an error. A partner can then tell a figure this deployment could not give from
+/// zero, and from a field that is absent or an `Option` that is `None`, which is what
+/// `null` already means in these bodies. Unlike the lossless form this is plain JSON any
+/// reader parses, and it keeps what a partner needs -- that the value is unavailable, and
+/// which way -- rather than a NaN's bits.
+///
+/// # Errors
+///
+/// Whatever `serde_json::to_value` refuses for a reason other than a non-finite float, such
+/// as a map whose keys are not strings.
+pub fn to_partner_value<T: Serialize + ?Sized>(
+    value: &T,
+) -> Result<serde_json::Value, serde_json::Error> {
+    let ctx = Context {
+        mode: Mode::Unavailable,
+        found: Cell::new(false),
+    };
+    value.serialize(Esc {
+        inner: serde_json::value::Serializer,
+        ctx: &ctx,
+    })
+}
+
+/// [`to_partner_value`], written as text: what the node serves a partner (D-103). Byte
+/// for byte `serde_json::to_string` when every float is finite.
+///
+/// # Errors
+///
+/// As [`to_partner_value`].
+pub fn to_partner_string<T: Serialize + ?Sized>(value: &T) -> Result<String, serde_json::Error> {
+    write(
+        value,
+        &Context {
+            mode: Mode::Unavailable,
+            found: Cell::new(false),
+        },
+    )
+}
+
+/// What a partner is told a non-finite float was (D-103): not its bits, which a partner
+/// has no use for, but which of the three it is.
+fn unavailable_kind(nan: bool, positive: bool) -> &'static str {
+    match (nan, positive) {
+        (true, _) => "nan",
+        (false, true) => "+inf",
+        (false, false) => "-inf",
+    }
+}
+
 /// Decode one journal line body, marked or not.
+///
+/// **An identity an older journal wrote as a 128-bit number reads as that identity**
+/// (GAP-175, D-101): [`crate::wide_integers::identities_as_text`] reads each such number
+/// from its digits and gives it to the reader as the text it is written as now, before
+/// `serde_json` could turn it into a float. A line holding none is read untouched.
 ///
 /// # Errors
 ///
 /// When the JSON does not describe a `T`, or a marked line holds a malformed float token.
 pub fn from_line<T: de::DeserializeOwned>(line: &str) -> Result<T, serde_json::Error> {
+    let line = crate::wide_integers::identities_as_text(line);
     let Some(body) = line.strip_prefix(MARKER) else {
-        return serde_json::from_str(line);
+        return serde_json::from_str(&line);
     };
     let mut de = serde_json::Deserializer::from_str(body);
     let value = T::deserialize(Unesc(&mut de))?;
@@ -204,8 +272,9 @@ impl<'c, S> Esc<'c, S> {
 }
 
 impl<S: Serializer> Esc<'_, S> {
-    /// A non-finite float: stop (detect) or write its token (escape).
-    fn non_finite(self, token: &str) -> Result<S::Ok, S::Error> {
+    /// A non-finite float: stop (detect), write its token (escape), or write the object a
+    /// partner reads it as (unavailable).
+    fn non_finite(self, token: &str, kind: &'static str) -> Result<S::Ok, S::Error> {
         match self.ctx.mode {
             Mode::Detect => {
                 self.ctx.found.set(true);
@@ -214,6 +283,12 @@ impl<S: Serializer> Esc<'_, S> {
                 ))
             }
             Mode::Escape => self.inner.serialize_str(token),
+            Mode::Unavailable => {
+                use ser::SerializeMap as _;
+                let mut object = self.inner.serialize_map(Some(1))?;
+                object.serialize_entry(UNAVAILABLE, kind)?;
+                object.end()
+            }
         }
     }
 }
@@ -238,7 +313,10 @@ impl<'c, S: Serializer> Serializer for Esc<'c, S> {
         if v.is_finite() {
             self.inner.serialize_f64(v)
         } else {
-            self.non_finite(&format!("{F64_TOKEN}{:016x}", v.to_bits()))
+            self.non_finite(
+                &format!("{F64_TOKEN}{:016x}", v.to_bits()),
+                unavailable_kind(v.is_nan(), v.is_sign_positive()),
+            )
         }
     }
 
@@ -246,7 +324,10 @@ impl<'c, S: Serializer> Serializer for Esc<'c, S> {
         if v.is_finite() {
             self.inner.serialize_f32(v)
         } else {
-            self.non_finite(&format!("{F32_TOKEN}{:08x}", v.to_bits()))
+            self.non_finite(
+                &format!("{F32_TOKEN}{:08x}", v.to_bits()),
+                unavailable_kind(v.is_nan(), v.is_sign_positive()),
+            )
         }
     }
 
@@ -1014,5 +1095,92 @@ mod tests {
         let unkeyable = BTreeMap::from([((1_u8, 2_u8), 1.0_f64)]);
         let why = to_faithful_line(&unkeyable).expect_err("refused");
         assert!(why.contains("cannot be encoded"), "{why}");
+    }
+
+    /// **D-103: a partner is sent what `serde_json` sends when every float is finite**,
+    /// as a `Value` and as text, byte for byte -- a string beginning with U+0000 included,
+    /// since this is not the escaped form.
+    #[test]
+    fn a_finite_value_reaches_a_partner_exactly_as_serde_json_writes_it() {
+        let value = Plain {
+            x: 0.1 + 0.2,
+            y: Some(-0.0),
+            s: " not a token".into(),
+            c: ' ',
+            m: BTreeMap::from([(" k".to_string(), 1.5_f32)]),
+        };
+        assert_eq!(
+            to_partner_value(&value).expect("encodes"),
+            serde_json::to_value(&value).expect("serde_json")
+        );
+        assert_eq!(
+            to_partner_string(&value).expect("encodes"),
+            serde_json::to_string(&value).expect("serde_json")
+        );
+        let tagged = Tagged::Range {
+            metres: 12.5,
+            tag: "a".into(),
+        };
+        assert_eq!(
+            to_partner_string(&tagged).expect("encodes"),
+            serde_json::to_string(&tagged).expect("serde_json")
+        );
+    }
+
+    /// **D-103: a non-finite float reaches a partner as the "value unavailable" object**,
+    /// never `null`: NaN (whatever its sign and payload) and both infinities, `f64` and
+    /// `f32`, in a field, an `Option`, a map value and an internally tagged enum -- and a
+    /// `None` beside them stays the `null` it always was, so the two are told apart.
+    #[test]
+    fn a_non_finite_value_reaches_a_partner_as_unavailable_and_never_as_null() {
+        let value = Plain {
+            x: f64::from_bits(0xfff8_0000_0000_beef), // a negative NaN with a payload
+            y: Some(f64::INFINITY),
+            s: "s".into(),
+            c: 'c',
+            m: BTreeMap::from([
+                ("down".to_string(), f32::NEG_INFINITY),
+                ("gone".to_string(), f32::NAN),
+            ]),
+        };
+        let sent = to_partner_value(&value).expect("encodes");
+        assert_eq!(
+            sent,
+            serde_json::json!({
+                "x": { "unavailable": "nan" },
+                "y": { "unavailable": "+inf" },
+                "s": "s",
+                "c": "c",
+                "m": {
+                    "down": { "unavailable": "-inf" },
+                    "gone": { "unavailable": "nan" },
+                },
+            })
+        );
+        let text = to_partner_string(&value).expect("encodes");
+        assert!(text.starts_with(r#"{"x":{"unavailable":"nan"},"#), "{text}");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&text).expect("plain JSON"),
+            sent,
+            "the text and the Value disagree"
+        );
+        let absent = Plain { y: None, ..value };
+        assert_eq!(
+            to_partner_value(&absent).expect("encodes")["y"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            to_partner_value(&Tagged::Range {
+                metres: f64::NEG_INFINITY,
+                tag: "t".into()
+            })
+            .expect("encodes"),
+            serde_json::json!({ "kind": "range", "metres": { "unavailable": "-inf" }, "tag": "t" })
+        );
+        // Where plain `serde_json` blanks it silently, which is the defect.
+        assert_eq!(
+            serde_json::to_value(f64::NAN).expect("serde_json"),
+            serde_json::Value::Null
+        );
     }
 }

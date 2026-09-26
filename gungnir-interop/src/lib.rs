@@ -161,7 +161,9 @@ impl SchemaCatalog {
                 },
                 // GAP-069: identities are UUID v7 (RFC 9562, which supersedes RFC 4122).
                 // Registered so a peer knows how to read one before it reads a document
-                // that carries one.
+                // that carries one. Written in this textual form since GAP-175 (D-101);
+                // until then a document carried the identity as a 128-bit JSON number,
+                // which this entry never described.
                 SchemaEntry {
                     name: "gungnir.GlobalEntityId".into(),
                     version: SCHEMA_VERSION,

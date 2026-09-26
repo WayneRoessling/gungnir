@@ -2467,3 +2467,87 @@
     `computed_at` (stale the moment it is sent), putting the standing inside
     `HealthEvent::Changed` (it changes when health does not, stale to interim), and a
     progress event per tick. See `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.
+- id: D-101
+  decision: How a global entity identity is written, and how an older journal's is read
+  question: >-
+    `GlobalEntityId` was written as a 128-bit JSON number, which `serde_json::to_value`
+    refuses, a reader outside Rust rounds to a double, and the schema catalogue's
+    `gungnir.GlobalEntityId` entry does not describe: it says RFC 9562 text. Write it as
+    D-60 writes the record identifiers -- and how is a journal written since GAP-069 read,
+    when `serde_json` hands a number wider than 64 bits to a self-describing reader as a
+    float?
+  raised_in: "GAP-175"
+  decider: Owner
+  unblocks: GAP-175
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken by the owner, 2026-09-26.** **The hyphenated RFC 9562 string from now on, and
+    both forms read**: the old number is read exactly from its raw token, not through
+    `serde_json`'s `arbitrary_precision`, which Cargo's feature unification would turn on
+    for every `serde_json` user in the workspace. Existing journals keep reading and
+    nothing is rewritten. Built through D-60's `gungnir_model::identifier::wire`, so the
+    four identifiers share one written form. **Taken under the owner's delegation of
+    2026-09-26, the two consequences.** Where the raw token is read: no `Deserialize` can
+    see it, because `serde_json` gives `deserialize_any` a wide integer as a float and
+    `deserialize_u128` refuses a string, so `gungnir_eventing::nonfinite::from_line`,
+    which reads every journal line and v3 frame, writes each non-negative integer token
+    wider than 64 bits and at most 128 as the identity's text from its digits before
+    parsing (`gungnir_eventing::wide_integers`); nothing else in the workspace writes such
+    an integer, and a plain `serde_json` read of the old number is refused, never rounded.
+    And `SCHEMA_VERSION` goes from 4 to 5 with the path left at `/v3`, which is the
+    interface's rule for a written field whose type changed: a version-4 peer is refused
+    at the snapshot instead of failing on the first identity frame on the stream, which it
+    would take for the node ending the stream (GAP-153). Rejected: a reader inside the
+    type (it cannot see the token), leaving the version at 4 (a mixed pair would fail on
+    the stream rather than at connection), and rewriting old journals (the owner's
+    decision, and a journal is a record). See `../../record/2026-09-26/an-identity-written-as-text-and-no-float.md`.
+- id: D-102
+  decision: Which v3 bodies carry a non-finite float losslessly
+  question: >-
+    GAP-153 gave the stream, the history and the snapshot D-96's lossless form. The queue,
+    coverage and the other bodies a desktop reads were still plain `serde_json`, which
+    writes a NaN or an infinity as `null`, and the desktop then fails to decode the body.
+  raised_in: "GAP-171"
+  decider: Owner
+  unblocks: GAP-171
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken by the owner, 2026-09-26.** **Our own v3 bodies -- the queue, coverage and
+    every other v3 response body the desktop reads -- use D-96's lossless form**
+    (`gungnir-eventing/src/nonfinite.rs`, `application/vnd.gungnir.lossless-json`), sent
+    as before when every float is finite. **Taken under the owner's delegation of
+    2026-09-26, which bodies that is:** `GET /v3/queue`, `GET /v3/coverage`, both session
+    routes, and the answers to a sensor task, a decision (`201`, `409`) and a forwarded
+    batch (`202`, `409`), each proved to read back before it is sent, as the snapshot is;
+    the desktop's link reads every one by its marker. The write routes' answers are
+    included because a `DecisionRefused` and a `ForwardRefused` carry the standing record
+    and its plan's floats. `GET /v3/health` is unchanged: it carries no float, and a
+    partner reads it. No schema or path version moves, for D-96's reason. See `../../record/2026-09-26/an-identity-written-as-text-and-no-float.md`.
+- id: D-103
+  decision: How a partner is sent a value that is not finite
+  question: >-
+    An exchange product's `body` is a `serde_json::Value` (DN-18 §10), which cannot hold a
+    NaN or an infinity: `serde_json::to_value` writes one as `null` without an error, so a
+    report whose tracker diverged reached a partner with that figure silently blanked, and
+    a partner could not tell it from an absent field.
+  raised_in: "GAP-171; `../../design/DN-18-coalition-exchange.md` §15"
+  decider: Owner
+  unblocks: GAP-171
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken by the owner, 2026-09-26.** **A partner-bound exchange product carries an
+    explicit "value unavailable" marker in place of a non-finite value**, a defined JSON
+    shape documented in DN-18, so nothing is blanked to `null` and a partner can tell a
+    missing value from zero and from an absent field. **The shape, taken under the owner's
+    delegation of 2026-09-26: the object `{"unavailable": "nan"}`, `{"unavailable": "+inf"}`
+    or `{"unavailable": "-inf"}` in the number's place** (DN-18 §15), written by one
+    function, `gungnir_eventing::nonfinite::to_partner_value`, which the node's
+    `ExchangeProduct::body_of` and the desktop's producers call, and by its text twin for
+    the whole exchange answer; `null` keeps its meaning of an absent optional value, and a
+    body whose floats are all finite is byte for byte what it was. Rejected: a sibling
+    field (a float in an array or a map has no sibling), the string `"NaN"` (a partner
+    cannot tell it from a string field), an extended-JSON number such as
+    `{"$numberDouble": "NaN"}` (it says what the sender held, not that the value is
+    unavailable, and ties the format to one vendor), D-96's lossless line (not JSON, so a
+    partner's reader refuses the whole product), and refusing the product at publish (it
+    loses every other figure, and the unavailable one is often the finding). See `../../record/2026-09-26/an-identity-written-as-text-and-no-float.md`.

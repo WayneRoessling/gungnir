@@ -116,6 +116,22 @@ A journal written before the change still reads: its identifiers are numbers, an
 reads as the same identifier. `testdata/journals/pre-uuid-v7/` is such a journal, and
 `gungnir-app/tests/pre_uuid_v7_journal.rs` replays it and regenerates its report.
 
+## Schema version 5, decided 2026-09-26
+
+`gungnir_model::identity::GlobalEntityId` is written as the hyphenated RFC 9562 string, as
+the three record identifiers have been since D-60 and as the schema catalogue's
+`gungnir.GlobalEntityId` entry always said (D-101, GAP-175). It was a 128-bit JSON number,
+which `serde_json::to_value` refused and a reader outside Rust rounds to a double.
+
+- `gungnir_model::SCHEMA_VERSION` goes from 4 to 5, because the type of a written field
+  changed. **The path stays `/v3`**: a client at version 4 cannot misread the text as a
+  number, and the exact-match rule refuses it at the snapshot rather than on the stream.
+- **Both forms read.** A journal written at version 4 holds the number, and
+  `gungnir_eventing::nonfinite::from_line`, which reads every journal line and v3 frame,
+  reads it exactly from its digits. Nothing is rewritten.
+  `testdata/journals/pre-gap-175/` is such a journal, and
+  `gungnir-app/tests/pre_gap_175_journal.rs` reads it and restarts a desktop over it.
+
 ## Authentication and authorization
 
 Every request carries a credential that `gungnir_security::Authenticator` resolves
@@ -137,14 +153,14 @@ The paths are `/v3` since 2026-09-17 (the "Version 3" section above); they were 
 | `GET /v3/events` (WebSocket) | `SubscribeRequest { from_seq }` as the first frame | A stream of `EventFrame` (`gungnir_eventing::Envelope`) with `seq >= from_seq`, in order, each in the lossless form of D-96 | `picture.view` | Yes (GAP-041); lossless floats GAP-153 |
 | `GET /v3/history?since_seq=N` | none | `HistoryResponse`: the retained envelopes from `N`, or `410` when the window has moved past `N` | `picture.view` | Yes (GAP-050); lossless floats GAP-153 |
 | `GET /v3/health` | none | `SystemHealth` | an operator's session, whatever its role, or a party's agreement for health: the security officer's layout is health and the audit record (D-30), and health is not the picture (corrected 2026-09-25, GAP-111; the routes above began asking `picture.view` then, which this table had always said) | Yes (GAP-041) |
-| `GET /v3/coverage` | none | `CoverageResponse`: the whole `CoverageReport` when one was computed, or `NotComputed` with a reason. **Not a bare `Vec<CoverageGap>`**, which would discard the sample spacing and terrain-masking flag DN-12 §5 puts on the result | `picture.view` | Yes (GAP-006) |
+| `GET /v3/coverage` | none | `CoverageResponse`: the whole `CoverageReport` when one was computed, or `NotComputed` with a reason. **Not a bare `Vec<CoverageGap>`**, which would discard the sample spacing and terrain-masking flag DN-12 §5 puts on the result | `picture.view` | Yes (GAP-006); lossless floats GAP-171 |
 | `POST /v3/detections` | `SubmitDetectionRequest { detection: DetectionView }` | **`202`**: queued for the ingest gateway, which validates it on its next tick; `IngestEvent::Quarantined` appears on the stream if it is rejected | `detection.submit` | Yes (GAP-057) |
 | `POST /v3/sensors/{sensor_id}/task` | `SensorTaskRequest { command, requirement }` | `202 SensorTaskResponse { task }` once the node loop issued it; `409` naming the registry's refusal | `sensor.task` | Yes (GAP-004) |
 | `POST /v3/handoffs/{decision_id}/report` | `EffectorReportRequest { report }`; the decision as the hyphenated UUID or a decimal number | `202`: queued, and `HandoffEvent::Reported` appears on the stream; `400` naming both forms for any other text | an effector's certificate, or `effector.report` | Yes (GAP-040) |
 | `POST /v3/warnings/{asset_id}/{track_id}/acknowledge` | `WarningAcknowledgementRequest { at }` | `202`: queued, and `WarningEvent::Acknowledged` appears on the stream | a warned party's certificate, or `warning.acknowledge` | Yes (GAP-042) |
-| `GET /v3/exchange/{warnings,reports,handoffs}` | none | `ExchangeResponse`: `Held` with the products both of DN-18 §5's gates release and the count withheld, or `NotHeld` with a reason | a party's agreement, or `picture.view` | Yes (GAP-065) |
+| `GET /v3/exchange/{warnings,reports,handoffs}` | none | `ExchangeResponse`: `Held` with the products both of DN-18 §5's gates release and the count withheld, or `NotHeld` with a reason. JSON, with a non-finite float written as DN-18 §15's `{"unavailable": ...}` object | a party's agreement, or `picture.view` | Yes (GAP-065); unavailable values GAP-171 |
 | `POST /v3/exchange/{warnings,reports,handoffs}` | `PublishExchangeRequest { products }` | `202`: the node's held set for that item is replaced | `exchange.publish` | Yes (GAP-065) |
-| `GET /v3/queue` | none | `Vec<QueueItemView>`: what this node is waiting for a person to decide, ordered by time remaining then priority (DN-10 §5) | `picture.view` | Yes (GAP-132) |
+| `GET /v3/queue` | none | `Vec<QueueItemView>`: what this node is waiting for a person to decide, ordered by time remaining then priority (DN-10 §5) | `picture.view` | Yes (GAP-132); lossless floats GAP-171 |
 | `POST /v3/queue/{item}/decision` | `DecisionRequest { request, item, choice }`; the item as the hyphenated UUID or a decimal number | `201 DecisionRecorded { decision }`, and `CommandEvent::Decided` appears on the stream; `400` for an undecodable body, a mismatched item or a rejection with no reason; `401`; `403` naming the role and the action, or the roles the item is offered to; `409 DecisionRefused` naming the decision that stands or the expiry; `504` if the node loop does not answer, **which does not mean nothing was recorded** | `plan.decide`, or `plan.override` for an override | Yes (GAP-132) |
 | `POST /v3/plans/{plan_id}/decision` | -- | **Not served.** A decision is taken on a queue item, not on a plan | -- | Not part of `/v3` (GAP-132) |
 | `POST /v3/decisions/forwarded` | `Vec<ForwardedDecision { record, origin, settled }>`: every decision a desktop took while cut off, in the order it took them, each with its settlement where its plan was in conflict | `202 ForwardAccepted { recorded, already_held, settled }`, and one `CommandEvent::Decided` carrying `origin` per decision new to the node; `400` for an undecodable body, a record naming no origin, a verdict no queue could have produced or a rejection with no reason; `401`; `403` naming the role; `409 ForwardRefused` naming the record or settlement that stands, **with nothing in the batch applied**; `504` if the node loop does not answer, **which does not mean nothing was recorded** | `plan.decide` | Yes (GAP-134) |
@@ -260,8 +276,20 @@ form (`gungnir_eventing::nonfinite`):
 
 No schema or path version moves. Nothing a client could read before this changes meaning:
 a client that predates it meets a marked frame exactly where it used to meet the `null` it
-could not decode. The other routes' bodies, and the exchange products' `body`, still write
-`null` (GAP-171).
+could not decode.
+
+**Every other body a desktop reads, since 2026-09-26 (D-102, GAP-171)**: `GET /v3/queue`,
+`GET /v3/coverage`, both session routes, and the answers to `POST /v3/sensors/{sensor_id}/task`,
+`POST /v3/queue/{item}/decision` and `POST /v3/decisions/forwarded`, each by the same rules
+and proved to read back before it is sent. `GET /v3/health` carries no float.
+
+**A partner is sent JSON, not this form (D-103, GAP-171).** An exchange product's `body`
+is a `serde_json::Value`, which cannot hold a non-finite float, and `serde_json::to_value`
+wrote one as `null` without an error. It is now written as the object
+`{"unavailable": "nan"}`, `{"unavailable": "+inf"}` or `{"unavailable": "-inf"}` in the
+number's place, and so is any non-finite float in the answer around the products; `null`
+keeps its meaning of an absent optional value. A body whose floats are all finite is byte
+for byte what it was. `design/DN-18-coalition-exchange.md` §15 is the partner's contract.
 
 ## Compatibility rules
 

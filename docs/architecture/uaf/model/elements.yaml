@@ -352,7 +352,7 @@ information_elements:
   - {id: IE-08, name: Quality, code: gungnir_model::Quality, description: "Association confidence, latency, staleness."}
   - {id: IE-09, name: Classification, code: gungnir_model::Classification, description: "Unknown, Neutral, Friendly, Hostile."}
   - {id: IE-10, name: MissionTime, code: gungnir_model::MissionTime, description: Seconds on the mission clock.}
-  - {id: IE-11, name: GlobalEntityId, code: gungnir_model::GlobalEntityId, description: Persistent identity across sessions (u128; uuid v7 under GAP-069).}
+  - {id: IE-11, name: GlobalEntityId, code: gungnir_model::GlobalEntityId, description: "Persistent identity across sessions (u128; uuid v7 under GAP-069; written as RFC 9562 text since GAP-175, D-101)."}
   - {id: IE-12, name: Envelope, code: gungnir_eventing::Envelope, description: "Sequence number, mission time, and one Event; the unit the bus carries and the journal stores."}
   - {id: IE-13, name: TrackingEvent, code: gungnir_model::events::TrackingEvent, description: "TrackInitiated, TrackUpdated, TrackCoasting, TrackDeleted."}
   - {id: IE-14, name: InterceptEvent, code: gungnir_model::events::InterceptEvent, description: "PlanProposed, PlanApproved, PlanSuperseded."}

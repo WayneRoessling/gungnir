@@ -50,6 +50,7 @@ is how a canonical model stops being canonical.
 | **`PlanView.solutions`** | **Replaced by `PlanView.kind: PlanKind`** | **No** | DN-05 |
 | **`DecisionId`, `PlanId`** | **A `u64` counter becomes a UUID v7 held as `u128`**, written as the hyphenated RFC 9562 string and read from that string or a number | **No**; a journal holding the old numbers still reads | D-56, D-60; GAP-130, `DN-31-node-approval-queue.md` §5.1 and amendment 1 |
 | **`gungnir_command::PendingApprovalId`** | **The same change**, through the same helper, `gungnir_model::identifier` | **No** | D-56, D-60; GAP-130 |
+| **`GlobalEntityId`** | **Written as the hyphenated RFC 9562 string** through the same helper, where it was a 128-bit JSON number; read from that string or a number | **No**, so `SCHEMA_VERSION` 4 to 5; a journal holding the numbers still reads, exactly | D-101; GAP-175 |
 | `PendingApprovalId` | **Moves to `gungnir-model`**; `gungnir-command` re-exports it and still mints it | Yes -- the same type, the same written form, the same tag | GAP-132: `CommandEvent::Queued` names the item a node queued, and the model may not depend on the crate holding the queue (DN-31 §5.3) |
 | `RequestId` | New: a client's idempotency key for one decision, a validated non-empty bounded string. **Not a UUID under D-60**, because the client chooses it rather than this deployment minting it | Yes, new | DN-31 §5.2; GAP-132 |
 | `CommandEvent::Decided` | Gains `request: Option<RequestId>` and `origin: Option<String>` | Yes, both defaulted, so an older journal reads | DN-31 §5.3; GAP-132. `origin` is filled by GAP-134 and is `None` for every decision taken here |
@@ -285,6 +286,16 @@ or an infinity is written as `~` and JSON whose non-finite floats are bit-exact 
 tokens, and every other envelope is written as before, byte for byte. **`SCHEMA_VERSION`
 stays 4**: the additions are a defaulted field and a new variant, and every journal that
 read still reads. See [the record](../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md).
+
+**Landed 2026-09-26, GAP-175 and GAP-171**: `GlobalEntityId` is written as the hyphenated
+RFC 9562 string through `gungnir_model::identifier::wire`, as the record identifiers are
+(D-101), so `SCHEMA_VERSION` is 5 and the path stays `/v3`. A journal written at version 4
+holds the identity as a 128-bit number, which `gungnir_eventing::nonfinite::from_line`
+reads exactly from its digits (`gungnir_eventing::wide_integers`); nothing is rewritten.
+No type changed shape for GAP-171: the remaining v3 bodies a desktop reads take the
+lossless form (D-102), and a partner-bound body writes a non-finite float as DN-18 §15's
+"value unavailable" object (D-103). See
+[the record](../record/2026-09-26/an-identity-written-as-text-and-no-float.md).
 
 `SnapshotResponse` gains `assets`, `predictions`, `engagements`, `requirements`,
 `hazards`, and `control_status`, and is filtered per caller by DN-17. The filtering is a

@@ -230,6 +230,26 @@ pub fn republish_all(state: &mut AppState) {
     crate::sustainment::publish_to_exchange(state);
 }
 
+/// The body of a product this console publishes, as a partner is sent it (GAP-171,
+/// D-103; DN-18 §15): a NaN or an infinity becomes the "value unavailable" object, never
+/// a silent `null`. The same function `gungnir_api::v3::ExchangeProduct::body_of` calls
+/// for the node's own products, reached through `gungnir-eventing` because this binary has
+/// no production edge to `gungnir-api`.
+///
+/// A body that cannot be written at all -- `serde_json` refusing a map whose keys are not
+/// strings, which no product type here has -- is logged by name and sent as `null`, the
+/// product's identity, time and marking still going out so a partner is not left without
+/// the product.
+pub(crate) fn product_body<T: serde::Serialize + ?Sized>(
+    value: &T,
+    what: &str,
+) -> serde_json::Value {
+    gungnir_eventing::nonfinite::to_partner_value(value).unwrap_or_else(|err| {
+        tracing::error!(%err, what, "an exchange product's body could not be written");
+        serde_json::Value::Null
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

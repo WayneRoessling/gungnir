@@ -363,7 +363,32 @@ pub struct ExchangeProduct {
     /// The marking, which is the second of DN-18 §5's two gates and the one an
     /// implementation shortcut would skip.
     pub releasability: Releasability,
+    /// Built with [`ExchangeProduct::body_of`], never `serde_json::to_value`, so a
+    /// non-finite float reaches the partner as DN-18 §15's "value unavailable" object and
+    /// not as a `null` (GAP-171, D-103).
     pub body: serde_json::Value,
+}
+
+impl ExchangeProduct {
+    /// A product's body as a partner is sent it (GAP-171, D-103; DN-18 §15).
+    ///
+    /// The owning crate's canonical serialization, exactly as `serde_json::to_value`
+    /// writes it when every float is finite -- so every product without a NaN or an
+    /// infinity goes out as it always did -- and with each non-finite float written as
+    /// `{"unavailable": "nan" | "+inf" | "-inf"}` in the number's place. A `Value` cannot
+    /// hold a non-finite float at all, and `to_value` writes one as `null` without an error,
+    /// which would put a mission report with a NaN measure in front of a partner with that
+    /// figure silently blanked, indistinguishable from an absent one.
+    ///
+    /// # Errors
+    ///
+    /// What `serde_json::to_value` refuses for any other reason, such as a map whose keys
+    /// are not strings.
+    pub fn body_of<T: serde::Serialize + ?Sized>(
+        value: &T,
+    ) -> Result<serde_json::Value, serde_json::Error> {
+        gungnir_eventing::nonfinite::to_partner_value(value)
+    }
 }
 
 /// What `GET /v3/exchange/{warnings,reports,handoffs}` returns (DN-18 §5, GAP-065).

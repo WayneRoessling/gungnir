@@ -4,7 +4,9 @@
 
 //! How a minted record identifier is written, read and shown (GAP-130): [`crate::DecisionId`]
 //! and [`crate::PlanId`] here, and `gungnir_command::PendingApprovalId` through the same
-//! functions, so the three cannot come to disagree about any of it.
+//! functions, so the three cannot come to disagree about any of it. Since GAP-175 (D-101)
+//! [`crate::identity::GlobalEntityId`] is written and read through [`wire`] as well; it is
+//! shown by its own `Display`, always the hyphenated form.
 //!
 //! **Held as a `u128`, minted as UUID v7 where the thing is created** (D-56,
 //! `docs/design/DN-31-node-approval-queue.md` §5.1). The counters these replaced restarted
@@ -128,8 +130,11 @@ pub mod wire {
     /// # Errors
     ///
     /// Anything but a hyphenated UUID string, a decimal string or a non-negative integer. An
-    /// integer too wide for 64 bits reaches this as a float, which no writer of this crate
-    /// ever produced, and is refused rather than rounded.
+    /// integer too wide for 64 bits reaches this as a float and is refused rather than
+    /// rounded. No record identifier was ever written as one, but a
+    /// [`crate::identity::GlobalEntityId`] was from GAP-069 to GAP-175, and a journal line
+    /// holding one is read through `gungnir_eventing::nonfinite::from_line`, which gives
+    /// this the exact value as text before `serde_json` can make a float of it (D-101).
     pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u128, D::Error> {
         deserializer.deserialize_any(IdentifierVisitor)
     }
@@ -142,7 +147,7 @@ pub mod wire {
         fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             f.write_str(
                 "an identifier: a hyphenated UUID string, or the non-negative integer a \
-                 journal written before GAP-130 holds",
+                 journal written before the identifier became text holds",
             )
         }
 
