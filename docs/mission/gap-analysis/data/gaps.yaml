@@ -3565,8 +3565,8 @@
     Done 2026-09-08: the laydown concept and the panel (GAP-087), and the
     operator-facing rehearsal itself -- choosing a laydown and scenario, running it,
     reading real tracks-and-decisions back. Remaining, and each its own decision rather
-    than a build: laydown-aware sensor geometry (needs `gungnir-scenario` extended to
-    accept a placement override, which no gap yet scopes); the first-engagement-range
+    than a build: laydown-aware sensor geometry (built 2026-09-25 as GAP-105, by
+    re-observation rather than a placement override); the first-engagement-range
     aggregation rule DN-02 §7 names and does not specify; the gap-acceptance control;
     and the rehearsal-gated submit, which has no adoption workflow to gate since DN-26
     §6 rule 4 deliberately built none. **D-50 (2026-09-15) scopes all three of the
@@ -3581,6 +3581,20 @@
   - date: 2026-09-15
     status: In progress
     note: "**PN-16's own rehearsal is built and tested 2026-09-08, against real committed fixtures rather than a generated one.** `gungnir-app/src/laydown_rehearsal.rs` replays one of the ten committed `testdata/tracks/samples/TT-0N-sample/` scenarios through a throwaway `AppState` -- the same mechanism `benches/app_tick.rs` already proved, a feed read by `RecordedFeedAdapter` under a `ReplayClockAuthority` driving real `update::tick` calls -- with the candidate laydown's resource placements standing in for the deployment's own, converted from the fixture's own ENU frame through `gungnir-coord::Wgs84` (edge (u), `docs/design/dependency-edges.md` §15). **`gungnir-scenario` is never a dependency of this path**: that crate's own manifest says it is test/bench only, `gungnir-app/tests/dependency_graph.rs`'s `scenario_misuse` check enforces it, and the ten fixtures are read as files a verifier already generated once rather than generated live in the deployed binary. PN-16 gained a scenario picker and a run button (`gungnir-ui`'s `PlanningAction::PickScenario`/`RunRehearsal`) and a rehearsal section that reports what a real run measured -- tracks formed, decisions raised and expired -- rather than the `Unavailable` placeholder it drew before. **Two things this honestly does not do.** A laydown's *sensor* placements change nothing a rehearsal can show: the fixture's detections were captured once against `gungnir-scenario`'s own hardcoded geometry, which today takes no placement override, so only a laydown's *resources* are real inputs to a run. And no run reports a first-engagement range: DN-02 §7 already says that number is the aggregate of predictions over a rehearsal, and nothing has yet specified the aggregation rule -- inventing one here to fill the mockup's shape would be deciding it without the review such a rule needs, the same discipline GAP-087's own text already applies to ranking. A real bug was found and fixed on the way: the throwaway desktop's journal file handle was still open when cleanup tried to remove its scratch directory, which fails silently on Windows, and two rehearsals of the same laydown could inherit each other's stale state; fixed by dropping the state before cleanup and giving every run its own scratch path. **The half that does not need PN-16 is built and gated 2026-09-06.** `gungnir-tracking-service/tests/scenario_truth_replay.rs` drives each scenario's detections through the live service and scores the resulting tracks against the scenario's own **ground truth**, which is the thing the existing whole-pipeline replay cannot do: that test compares the live path against the same estimator run offline, so it proves the channels, the task and the reorder buffer deliver the same picture as the batch, and it cannot say whether the picture is right because both sides are the same estimator. Truth the estimator never saw is the only thing that can. **A subtlety the test had to get right and states.** `TrackView::mission_time` is the time the service was *polled*, not the time of the estimate, so scoring a final snapshot against truth at the poll instant charges the estimator for the gap since the last detection -- 970 ms of a 697 m/s aircraft in scenario 1, which is most of the error. The comparison instant is therefore the last observation in the timeline. Each scenario's bound is argued in the test from its own sensor noise and its own target separation, so the assertion is about estimation rather than about labelling. **What remains is genuinely PN-16's**: reconstituting the desktop's picture at a past moment. Nothing here scrubs a journal or rebuilds `AppState`. **The replay harness exists 2026-09-06 and the blocker is gone.** GAP-011 was the whole remaining substance of this entry, and `gungnir-tracking-service/tests/whole_pipeline_replay.rs` now runs all five scenarios through the live `TrackingService` and compares against the offline result, which is the replay this gap asked for at the service level. What is not built is the *operator-facing* rehearsal on PN-16: choosing a laydown, running a scenario against it and reading the recommendation back (GAP-087, which also needs the laydown concept the baseline does not carry). Replay works over journals; running a scenario through the live pipeline on the same screens under a chosen plan is not built.  **Examined 2026-09-05 and deliberately not built. Every part of the closing action except one already exists, and the one that does not is the whole point.** `gungnir-app/benches/app_tick.rs` composes exactly what the action describes: `gungnir-scenario` output written to a feed, read by `RecordedFeedAdapter`, fed through the real `IngestGateway` under a `ReplayClockAuthority`, against a selected baseline. That harness runs today. What it also documents is why a rehearsal built on it would be worse than none: `gungnir_fusion_async::PIPELINE_IMPLEMENTED` is false, so the tracking stage accepts detections and produces no tracks, and with no tracks there is no plan. **A planner rehearsing a laydown would be shown zero tracks and no recommendation, which reads as 'this laydown is fine'** -- and MT-09's whole question is what the sector would recommend. That is a confidently empty answer to the one question the feature exists to ask. The remaining substance of this gap is therefore GAP-011, which its dependency list already names and which is human-owned Area A work; nothing else here is agent-buildable. Its other dependency GAP-051 was built on 2026-09-05, so GAP-011 is the only thing left holding this one."
+  - date: 2026-09-25
+    status: In progress
+    note: >-
+      **Laydown-aware sensor geometry, the first of this entry's remaining items, now
+      holds (GAP-105, closed 2026-09-25).** A rehearsal re-observes the recording with
+      the laydown's own sensors where it places them, each with the deployment's
+      detection model for it, so a laydown's *sensor* placements are real inputs to a
+      run and no longer change nothing a rehearsal can show; `gungnir-scenario` is
+      still never a production dependency -- the observation model moved to
+      `gungnir-sensor-sim`, which the desktop links and the node may not
+      (`../../design/DN-32-re-observation-for-a-laydown.md`). The other remaining
+      items are unchanged and each is another gap's: the first-engagement-range
+      aggregation (GAP-020, D-45), the gap-acceptance control (GAP-106) and the
+      rehearsal-gated submit (GAP-107).
 
 - id: GAP-046
   name: Test-track suite
@@ -4522,6 +4536,18 @@
       viewport for a visual before-and-after was never in §6's list and is this gap's
       own remaining item. 9 tests (4 pure view, 3 app-side coverage-and-delta, 2
       rendered-frame) plus the existing role-layout tests, all passing.
+  - date: 2026-09-25
+    status: In progress
+    note: >-
+      **PN-16's table now compares the run as well as the arithmetic (GAP-105,
+      2026-09-25).** Each option's row carries its last rehearsal -- the recording,
+      detections of a recorded target and tracks formed -- and, where the current
+      laydown was rehearsed against the same recording, the difference in detections
+      and the sensors it came from; the rehearsal section labels every result as
+      re-observed from a recording and lists each sensor's detection model and counts.
+      The coverage columns are unchanged. The items this entry names as not its own
+      are unchanged: first-engagement range (GAP-020), the gap-acceptance control
+      (GAP-106) and the rehearsal-gated submit (GAP-107).
 
 - id: GAP-088
   name: Geofences have no configuration source
@@ -7846,14 +7872,17 @@
     on a run, so an option cannot be judged by what it would actually have detected --
     which is the question a rehearsal exists to answer.
   evidence: >-
-    `../../design/DN-26-laydown-options.md`; `gungnir-scenario` (no placement override);
-    `../../ux/usability-test-plan.md` US-15 and its `round-1.json` laydown `c`; GAP-045
+    `../../design/DN-26-laydown-options.md`; `../../design/DN-32-re-observation-for-a-laydown.md`
+    (the design, and §12 for what the build found); `gungnir-sensor-sim`;
+    `gungnir-app/src/laydown_rehearsal.rs`; `../../ux/usability-test-plan.md` US-15 and its
+    `round-1.json` laydown `c`; GAP-045
   action: >-
-    Extend `gungnir-scenario` to accept a placement override (sensor id to position) at
-    generation, thread the selected laydown's placements through the rehearsal, and make
-    the comparison table read from the run rather than from the baseline's static
-    placements. Then retire round 1's laydown `c` workaround, or keep it deliberately
-    and say why.
+    Done 2026-09-25, as DN-32 designs it rather than as first written here: the
+    observation model moved to `gungnir-sensor-sim`, and a rehearsal re-observes the
+    recording with the selected laydown's own sensors and detection models instead of
+    `gungnir-scenario` taking a placement override, which no production crate may depend
+    on. PN-16's comparison table reads the run. Round 1's laydown `c` is kept deliberately
+    (DN-32 §12). A committed round-1 recording is GAP-147.
   ref: >-
     D-50 (the decision that scoped this); GAP-045 (the rehearsal); GAP-087 (the panel);
     `../../ux/usability-test-plan.md` US-15
@@ -7884,6 +7913,20 @@
   - date: 2026-09-17
     status: Open
     note: "DN-32 walked with the owner 2026-09-17: every section 5 recommendation, the section 5.5 frame, and all five section 6 containment mechanisms; section 10's verification rows were not part of it. What is signed is in `../../signatures.md`. The build can start: a new `gungnir-sensor-sim` crate with its two edges, three fixture sidecars regenerated by both generators, the ingest gateway's refusal as a human-owned review, and PN-16's label. The gap closes when that lands."
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      **Closed 2026-09-25: built as DN-32 designs it**, under the owner's delegation
+      of that day. A rehearsal re-observes a committed recording with the laydown's
+      own sensors and their named detection models, through the new crate
+      `gungnir-sensor-sim` (edges (z) and (aa)); `reference_parity.rs` passes
+      unchanged, and both generators write the three sidecars byte for byte. All five
+      containment mechanisms are built, including the live ingest gateway's refusal,
+      which is human-owned; see `../../signatures.md`. PN-16 labels every result as
+      re-observed and its table reads the run. D-72, D-73 and D-74 were taken where
+      DN-32 was wrong or silent (its §12). Laydown `c` is kept deliberately; no
+      committed recording reaches round 1's radars (GAP-147). See
+      `../../record/2026-09-25/gap-105-re-observation-for-a-laydown-built.md`.
 
 - id: GAP-106
   name: An operator cannot accept a coverage gap
@@ -7960,6 +8003,17 @@
       and, if it does, whether a rehearsal is advisory beside it or a precondition of it
       -- a gate that refuses an unrehearsed submit is a policy claim about how this
       system is operated, not a UI affordance.
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      **What a rehearsal is changed under this gap, and the gap is not (GAP-105,
+      2026-09-25).** A rehearsal now re-observes a recording with the sensors a
+      laydown places, and the record names the recording, the laydown and each
+      sensor's detection model -- so an adoption step, if one is designed, would have
+      a rehearsal that reflects the option being adopted to consult or to require.
+      Whether an adoption step exists, and whether a rehearsal is advisory beside it
+      or a precondition of it, is still undecided and still needs its own design note
+      extending DN-26 §6, as this entry's action says.
 
 - id: GAP-108
   name: A converted height carries no vertical datum shift
@@ -8127,6 +8181,18 @@
     note: >-
       Filed by the GAP-067 walk, which held the `gungnir-security` row and amended its
       first clause to `AuthFailure::Rejected`.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Closed. `gungnir-security/tests/role_matrix.rs` compares `role_permits` with §4,
+      transcribed as data and checked against the document, for every role and action; its
+      thirteen disagreements are settled by D-88. `gungnir-app/tests/audit_one_entry_per_act.rs`
+      performs every audited desktop act and asserts exactly one entry each. The node now
+      audits sign-ins, refusals and role-gated acts into a hash-chained log beside its
+      journal, as the desktop does (D-87, DN-23 §13), held by `gungnir-node/tests/node_audit.rs`.
+      Human-owned (`gungnir-security`, `gungnir-api` write paths); see docs/signatures.md.
+      The row is left for the owner's walk. GAP-162 and GAP-163 filed. See
+      `../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`.
 
 - id: GAP-112
   name: No test round-trips a fully populated v2 snapshot
@@ -8443,6 +8509,22 @@
     status: Open
     note: >-
       Filed by the GAP-067 walk, which held the `gungnir-intercept-service` row.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Closed under the owner's delegation of 2026-09-25 (D-81, D-82; DN-04 §10). Each
+      planning call spends at most `plan_solve_budget_ms` (MOP-06's 4 ms) on an injected
+      clock; an unfinished solve carries on at the next call, the last good plan is
+      answered `Stale` with its age meanwhile, and health recovers on the first fresh
+      answer. PN-05 and PN-07 show it. The determinism and t = 1 / over-budget t = 2 tests
+      are in `gungnir-intercept-service/src/lib.rs`; the row awaits the owner's walk. The
+      solve's restructuring is human-owned under the numerical-stability clause, see
+      `docs/signatures.md`. Raised GAP-156 and GAP-157. See
+      `../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`.
+
+
+
+
 
 - id: GAP-120
   name: Nothing compares the embedded and remote backends' projections
@@ -8474,6 +8556,16 @@
     note: >-
       Filed by the GAP-067 walk, which held the backend-switching row and dropped
       '(planned)' from its method.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Built: `gungnir-app/tests/backend_parity.rs` gives one Scenario 1 timeline to an
+      embedded desktop and to one linked over the product's mutual TLS to the node's own
+      code (`gungnir_node::picture`), drains on what each pipeline reports, and compares
+      the picture, health, plan and alerts (D-85). It found GAP-160, GAP-161 and a node
+      planner with no local frame, all fixed here. The row is not gated and its criterion
+      is unchanged: it awaits the owner's walk. See
+      `../../record/2026-09-25/one-scenario-through-both-backends.md`.
 
 - id: GAP-121
   name: StoreAndForwardQueue has no production caller
@@ -9755,6 +9847,17 @@
       Found building the retention purge: the policy's second field had nothing to purge.
       Human-owned (`gungnir-security`); filed rather than built inside GAP-122, whose row
       is about sessions.
+  - date: 2026-09-25
+    status: In progress
+    note: >-
+      GAP-111 gave the audit log its durable home: `gungnir_security::FileAuditLog` under
+      `<data dir>/audit/` in both binaries, append-only and hash-chained (D-87, DN-23 §13).
+      **Not sealed, by decision**: an investigation needs the record most when the journal's
+      key is lost, DN-22 §11's reason for giving escrow recovery a journal of its own; D-87
+      says why sealing was rejected. Left here: applying `max_audit_log_age_days` to whole
+      segments as D-78 applies the session age, and reading earlier segments back for PN-20.
+      Human-owned; see docs/signatures.md. See
+      `../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`.
 
 - id: GAP-153
   name: A non-finite float in an envelope breaks the v3 stream and history
@@ -9861,6 +9964,373 @@
     note: >-
       Found closing GAP-118. Not edited in that change: the sentence is in a criterion
       cell of the verification table, which only the owner changes.
+
+- id: GAP-160
+  name: A node publishes no track, so a linked desktop's picture is frozen at sign-in
+  type: Technical
+  caps: [CAP-7.3]
+  layer: Deployment and API
+  sev: 5
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    Nothing in the workspace produced a `TrackingEvent`, though five things read them: a
+    linked desktop's projection between snapshots, a partner's stream (DN-18 §6), the
+    reports, the replay and the node's entity fold. A desktop linked to a node drew the
+    tracks its sign-in snapshot held for as long as the link stayed up, and the node's
+    journal -- the system of record in the connected profiles -- held no track history.
+  evidence: >-
+    `gungnir-node/src/main.rs` (the loop published ingest, plan and health events and no
+    tracking event); `gungnir-remote/src/link.rs` (`apply` takes tracks from
+    `TrackingEvent` alone between snapshots)
+  action: >-
+    Publish the track lifecycle from the node's picture every tick -- initiated, updated,
+    deleted -- in an order a reader applying them keeps.
+  ref: >-
+    Found building GAP-120
+    (`../../record/2026-09-25/one-scenario-through-both-backends.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Found by the GAP-120 parity test: the linked desktop drew no track while the
+      embedded one drew three.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Closed under D-86: the node diffs its picture each tick against what it last
+      announced and publishes the difference, deletions first
+      (`gungnir_tracking_service::TrackLifecycle`, `gungnir_node::picture::Announcer`).
+      The parity test fails without it. See
+      `../../record/2026-09-25/one-scenario-through-both-backends.md`.
+
+- id: GAP-161
+  name: A linked desktop's health strip reports the link, not the node's services
+  type: Technical
+  caps: [CAP-7.3]
+  layer: Deployment and API
+  sev: 4
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    Both remote services answered `is_healthy` with whether the link was up, so a node
+    whose tracker or planner had stopped was drawn working on every linked desktop's status
+    strip and PN-09 -- the health flag `CLAUDE.md` forbids, on the path a linked operator
+    relies on. The node reported both, in its snapshot and in `HealthEvent::Changed`, and
+    nothing on the desktop read either.
+  evidence: >-
+    `gungnir-remote/src/lib.rs` (`RemoteTrackingService::is_healthy` and
+    `RemoteInterceptService::is_healthy` returned `connected`); `gungnir-remote/src/link.rs`
+    (`apply` ignored `Event::Health`; the snapshot's `health` was never kept)
+  action: >-
+    Keep the node's word on its services in the link's projection and make each remote
+    service healthy only when the link is up and the node says its service is.
+  ref: >-
+    Found building GAP-120
+    (`../../record/2026-09-25/one-scenario-through-both-backends.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Found by the GAP-120 parity test, whose drain stops both trackers: the embedded
+      desktop showed its tracker down and the linked one showed the node's tracking.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Closed under D-86: `link::Projection::node_health` holds the snapshot's health and
+      every `HealthEvent::Changed`, and a remote service is healthy only when linked and the
+      node reports it so. `gungnir-remote/tests/node_health.rs` pins it. See
+      `../../record/2026-09-25/one-scenario-through-both-backends.md`.
+
+- id: GAP-147
+  name: No committed recording reaches round 1's radars
+  type: Technical
+  caps: [CAP-5.2, CAP-1.4]
+  layer: Verification and governance
+  sev: 2
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: [GAP-105, D-28]
+  impact: >-
+    US-15's rehearsal of round 1's laydowns re-observes nothing: under DN-32 §5.5's
+    frame round 1's harbour and plant sit at the recordings' origin, and none of the ten
+    committed sample sets brings a target within 25 km of it before its excerpt ends, so
+    both short-range radars detect nothing under `current`, `b` or `c`, whichever
+    recording a participant picks. PN-16 says so rather than showing bare zeros, but a
+    participant cannot see the rehearsal tell the laydowns apart, which is the thing
+    GAP-105 built it to do.
+  evidence: >-
+    `testdata/tracks/samples/` (the closest any sample brings a target to the origin is
+    about 25 km, TT-04's and TT-05's shipping at KAL); `testdata/usability/round-1.json`
+    (both radars `radar.short`, 15 km at most); `gungnir-app/tests/laydown_rehearsal.rs`'s
+    `round_1s_forward_radar_changes_its_own_detections_and_nothing_else`, which writes its
+    own round-1 raid for that reason; `../../design/DN-32-re-observation-for-a-laydown.md`
+    §12
+  action: >-
+    Decide the round-1 recording, which is scenario content of the kind the owner decided
+    for round 1 in D-28: a raid down round 1's declared upper Vell approach committed as a
+    recording both generators write and `validate_tracks.py` checks, or an excerpt of an
+    existing scenario's terminal phase. Adding a sample set touches rows that count "all
+    ten" sample sets, so the answer has to say how those read. Then point US-15's card at
+    it.
+  ref: >-
+    GAP-105 (the rehearsal); D-28 (round 1's laydown `c`); `../../ux/usability-round-1-session.md`
+    US-15; `../../record/2026-09-25/gap-105-re-observation-for-a-laydown-built.md`
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Found building GAP-105: DN-32 §10's round-1 row, run over the committed
+      recordings, re-observed nothing from round 1's two radars under any laydown. The
+      sample sets are short excerpts -- TT-01's raid is still 85 km out when its 480 s
+      end -- and round 1 sits at their origin. The row's test writes its own round-1
+      raid and passes. What a session runs over is content, left for the owner rather
+      than taken under delegation, because a new committed sample set moves every row
+      and test that counts the ten.
+- id: GAP-156
+  name: A picture the exact solver cannot finish in time is never answered
+  type: Technical
+  caps: [CAP-3.3]
+  layer: "Productization: decision and policy"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: [GAP-119]
+  impact: >-
+    The allocator is exact and refuses to answer with a heuristic, and its cost grows
+    exponentially in the tracks and factorially in the effectors. Since GAP-119 a solve
+    that does not fit one planning call carries on over several, which answers ordinary
+    pictures a few ticks late; but a raid toward the solver's size limits takes seconds to
+    solve outright and several times that at 4 ms a tick, and at the limits (sixteen
+    tracks, eight effectors) longer than any engagement. Throughout, the operator is shown
+    the last good plan, stale, with a percentage that barely moves: honest, and no help.
+  evidence: >-
+    `gungnir-allocation/src/bellman.rs` (`MAX_TRACKS`, `MAX_RESOURCES`, `ExactSolve`);
+    a release probe on the development machine, 2026-09-25: at the default horizon of ten,
+    four effectors and eight tracks took 13 ms, four and ten 128 ms, and six and ten 1.3 s
+    (the one-pass solve GAP-119 replaced took about three times as long)
+  action: >-
+    Decide what a picture too large to solve exactly in useful time should get: a bounded
+    answer labelled as not optimal (a one-step assignment, or the exact solve at a shorter
+    horizon), a size past which the planner says it will not answer rather than starting,
+    or both; then build it so the label reaches PN-05 and PN-07 the way staleness does.
+  ref: >-
+    Found building GAP-119
+    (`../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Filed by GAP-119 rather than answered there, because what stands in for an optimum
+      the planner cannot reach is a change to what the allocation row promises -- the
+      crate refuses a heuristic by design -- and that is the owner's to decide.
+- id: GAP-157
+  name: A linked desktop cannot tell that its node's planner is stale
+  type: Technical
+  caps: [CAP-3.3, CAP-7.3]
+  layer: Deployment and API
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: [GAP-119]
+  impact: >-
+    While a desktop is linked, `RemoteInterceptService::plan` returns the node's plan as
+    `Fresh` whenever the link is up. Since GAP-161 its `is_healthy()` follows the node's
+    word, so when the node's planner cannot answer -- a solve past its budget, a solve
+    that failed -- PN-01 shows the planner down and PN-07 names an unhealthy planner.
+    But PN-05 draws the node's plan with no stale line, and neither panel can say how old
+    the plan is or why, because the desktop never learns when the node last computed it.
+    The node is where the decision is taken while linked, so this is the console most
+    operators use.
+  evidence: >-
+    `gungnir-remote/src/lib.rs` (`RemoteInterceptService::plan` answers `Fresh` while
+    linked); the node's snapshot and `HealthEvent::Changed` carry `intercept_healthy`
+    (read since GAP-161) and nothing carries when its plan was last computed
+  action: >-
+    Carry the node's planner standing to the desktop -- when its plan was last computed
+    and why the last call did not answer -- and have `RemoteInterceptService` answer
+    `Stale` with the node's reason and age when the node's planner is stale. Test it with a node whose planner is held past its budget.
+  ref: >-
+    Found building GAP-119
+    (`../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Filed by GAP-119, which made the embedded planner's staleness visible and found that
+      the remote one relays the node's plan without the node's standing. GAP-161, merged
+      alongside, made the linked health flag honest; the plan's age and reason need the
+      node's computed-at time on the wire, a schema change of its own.
+
+
+- id: GAP-165
+  name: A linked desktop's node session lapses and nothing renews it while the link is up
+  type: Technical
+  caps: [CAP-7.3]
+  layer: Deployment and API
+  sev: 5
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    A node-issued token expires after the baseline's session lifetime, or 900 s where the
+    baseline names none, and the stream is authenticated once, when it subscribes. Nothing
+    asked for a new token while the stream stayed up, so from then on every write a linked
+    desktop made was refused `401`: its detections, sensor tasks and exchange sets waited
+    in their outboxes, and every decision an operator took on the node's queue came back
+    refused, until the stream happened to reconnect. Where the baseline names no lifetime
+    the desktop's own session never expires, so the link stayed up refusing for ever.
+  evidence: >-
+    `gungnir-remote/src/link.rs` (`run_link` signed in once per connection and handed the
+    same token to every flusher); `gungnir-node/src/auth.rs` (`unwrap_or(900.0)`);
+    `gungnir-api/src/transport.rs` (the stream verifies its token at subscription only)
+  action: >-
+    Renew the session on a live link ahead of the token's expiry, whatever the baseline
+    says, and whenever the node refuses the token; treat a `401` as a lapsed session to
+    renew and retry, never as the node's answer to what was sent.
+  ref: >-
+    Found building GAP-120
+    (`../../record/2026-09-25/one-scenario-through-both-backends.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found reading the token path while building GAP-120's parity test, recorded there,
+      and assigned its own number by the orchestrator.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed under D-89: the link renews at three quarters of the lifetime the node gave,
+      read off the node's clock, and at once when the node refuses the token; a `401`
+      keeps what was offered queued and it goes again under the new token. A renewal the
+      node refuses ends the connection. `gungnir-remote/tests/token_renewal.rs` moves the
+      node's clock past expiry rather than waiting. See
+      `../../record/2026-09-26/a-live-link-keeps-its-session.md`.
+
+- id: GAP-162
+  name: A sensor manager may apply a whole baseline, and applying one checks no permission
+  type: Technical
+  caps: [CAP-6.2, CAP-5.6]
+  layer: "Productization: security"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Security engineer (human-owned crate)
+  deps: []
+  impact: >-
+    `config.apply` is one action for a whole baseline. §4 gives the sensor manager
+    calibration and sensor baselines and gives weapons control status and plan apply to
+    the supervisor and the commander, but a baseline a sensor manager applies may change
+    `policy.control_status` and the authority rules all the same. And
+    `ConfigEditorState::apply` checks no permission at all: PN-14 hides the control from a
+    role without `config.apply`, so the rule holds for a person at the screen and for
+    nothing else that calls the function -- the pattern GAP-127 closed for decide and task.
+  evidence: >-
+    `gungnir-app/src/sustainment.rs` (`ConfigEditorState::apply`; `config_editor_view` is
+    the only `role_permits` check); `docs/mission/roles-and-stakeholders.md` §4's "Apply a
+    sensor or calibration baseline" row; found by GAP-111's matrix test
+  action: >-
+    Check `config.apply` inside `apply` before anything is written, refusing by name; then
+    refuse a candidate that changes a section the role does not hold -- control status
+    without `weapons.control_status`, authority rules and plans without plan apply -- by
+    comparing it with the baseline in force, after adding the per-section rows to §4 first.
+  ref: >-
+    GAP-111 (`../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Found by GAP-111's comparison of `role_permits` with §4: the sensor manager's
+      `config.apply` is the one grant whose coarse action is wider than its cell and was
+      not withheld for it, because withholding it would take away the calibration
+      baselines §2 gives the role. Filed rather than narrowed, since the answer is a
+      per-section check, not a different coarse grant.
+
+- id: GAP-163
+  name: A cut tail of the audit log still verifies, because nothing outside it holds its head
+  type: Technical
+  caps: [CAP-6.3]
+  layer: "Productization: security"
+  sev: 2
+  effort: M
+  target: I3
+  owner: Security engineer (human-owned crate)
+  deps: [GAP-152]
+  impact: >-
+    The hash chain GAP-111 put on the audit log finds an edited, removed, inserted or torn
+    line, but not the removal of the newest segment's last lines: what is left is a
+    shorter chain that verifies. Someone able to write the data directory can therefore
+    take back the last things the record says, which are the ones an investigation
+    usually wants.
+  evidence: >-
+    `gungnir-security/src/audit.rs` (module documentation);
+    `docs/design/DN-23-operator-authentication.md` §13
+  action: >-
+    Anchor the head outside the file: journal the sequence number and hash at each
+    session's close and periodically in between, send a linked desktop's to its node, and
+    have `verify_audit_dir` compare the chain with the last anchor it can read, reporting
+    a chain shorter than its anchor as cut.
+  ref: >-
+    GAP-111 (`../../record/2026-09-26/the-security-row-tested-and-the-node-audited.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Filed by GAP-111, which made the audit log durable and hash-chained and stated this
+      limit rather than implying it away. An anchor is a new event on the journal and a
+      new field on the link, so it is a change of its own; retention and reading earlier
+      runs back are GAP-152's.
+
+- id: GAP-167
+  name: The outage tests' proxy can let one connection through a cut
+  type: Technical
+  caps: [CAP-5.4]
+  layer: Verification and governance
+  sev: 2
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    The TCP proxy that cuts a desktop from its node in the outage tests checked whether it
+    was open, connected upstream, and only then registered the connection a cut closes. A
+    cut landing between the two left one socket piped through a cut proxy. The tests cut
+    the moment the link reports connected, which is just before it opens its event
+    stream, so that stream kept carrying the node's heartbeat, the desktop never went
+    silent, and a wait for the fallback ran out: a failure that says nothing about the
+    product and would be read as a failover defect or dismissed as a flake.
+  evidence: >-
+    `gungnir-app/tests/cut_off_and_reconnected.rs` (`Proxy`); the same proxy copied as
+    `CountingProxy` in `gungnir-remote/tests/transport.rs`; one local timeout of
+    `an_outage_outlives_the_desktop_that_fell_into_it` waiting for the fallback
+  action: >-
+    Admit and register a connection under the lock the cut holds, so every connection is
+    either closed by the cut or refused by it.
+  ref: >-
+    Found building GAP-165
+    (`../../record/2026-09-26/the-outage-tests-proxy-held-a-socket-open.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found by one timeout of "the desktop to fall back" while building GAP-165, and
+      reproduced on demand by widening the gap between the proxy's check and its
+      registration.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Both proxies admit and register a connection under the lock `cut` and `restore`
+      hold. With the gap widened to 300 ms every outage test passes, where before the
+      fallback wait timed out. Test code only. See
+      `../../record/2026-09-26/the-outage-tests-proxy-held-a-socket-open.md`.
 - id: GAP-164
   name: The miri gate could not run miri
   type: Technical

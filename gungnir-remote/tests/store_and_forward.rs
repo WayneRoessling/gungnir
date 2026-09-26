@@ -139,10 +139,16 @@ fn serve(listener: tokio::net::TcpListener) -> Arc<NodeApi> {
     }]);
     let issuer = TokenIssuer::new(vec![3u8; 32], 300.0).expect("issuer");
     let api = Arc::new(
+        // A node whose services report healthy: since GAP-161 a linked service is healthy
+        // only when the node says its own service is.
         NodeApi::new(SnapshotResponse::new(
             Vec::new(),
             None,
-            SystemHealth::default(),
+            SystemHealth {
+                tracking_healthy: true,
+                intercept_healthy: true,
+                ingest_healthy: true,
+            },
             Vec::new(),
         ))
         .with_callers(Arc::new(AccountTokenAuthority::new(

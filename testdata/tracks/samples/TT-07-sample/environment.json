@@ -1,0 +1,46 @@
+{
+ "events": [
+  {
+   "kind": "ea_skew",
+   "sensor": 3,
+   "skew_s": 2.0,
+   "t": 0.0,
+   "until_s": 3000
+  },
+  {
+   "kind": "ea_skew",
+   "sensor": 5,
+   "skew_s": 2.0,
+   "t": 0.0,
+   "until_s": 3000
+  },
+  {
+   "kind": "ea_skew",
+   "sensor": 9,
+   "skew_s": 2.0,
+   "t": 0.0,
+   "until_s": 3000
+  },
+  {
+   "kind": "ea_dropout",
+   "multiplier": 1.5,
+   "sensor": 1,
+   "t": 0.0,
+   "until_s": 3000
+  },
+  {
+   "kind": "ea_dropout",
+   "multiplier": 1.5,
+   "sensor": 2,
+   "t": 0.0,
+   "until_s": 3000
+  },
+  {
+   "kind": "sensor_lost",
+   "sensor": 1,
+   "t": 1200.0
+  }
+ ],
+ "format": 1,
+ "scenario": "TT-07"
+}

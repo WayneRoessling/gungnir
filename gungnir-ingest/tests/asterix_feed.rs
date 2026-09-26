@@ -288,6 +288,7 @@ fn the_hand_built_bearing_and_uas_position_are_accepted_by_the_gateway() {
             quarantined: 0,
             adapter_failures: 0,
             not_accepted: 0,
+            rehearsal_refused: 0,
         }
     );
     assert_eq!(sink.received.len(), 2, "{:#?}", sink.received);

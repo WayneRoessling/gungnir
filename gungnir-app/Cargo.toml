@@ -74,6 +74,14 @@ crossbeam-channel.workspace = true
 # takes. `gungnir-coord` is `agentic-coding-standards.md` §1.3's oracle-comparable
 # transform surface and has no dependents in this binary before this.
 gungnir-coord = { path = "../gungnir-coord", version = "0.1.0" }
+# Edge (aa), ARCHITECTURE.md §7.1 and docs/design/dependency-edges.md §19 (GAP-105,
+# DN-32, D-64): a laydown rehearsal re-observes a recording's truth with the laydown's own
+# sensors. `gungnir-sensor-sim` is the observation model and not the world model, so this
+# binary can re-observe a recording and cannot invent a target; only
+# `src/laydown_rehearsal.rs` may name it (tests/architecture_compliance.rs), and no crate
+# but `gungnir-scenario`, this one and the verifiers may depend on it
+# (tests/dependency_graph.rs's `sensor_sim_misuse`).
+gungnir-sensor-sim = { path = "../gungnir-sensor-sim", version = "0.1.0" }
 
 gungnir-tracking-service = { path = "../gungnir-tracking-service", version = "0.1.0" }
 gungnir-intercept-service = { path = "../gungnir-intercept-service", version = "0.1.0" }

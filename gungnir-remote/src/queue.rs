@@ -340,7 +340,8 @@ pub enum DecisionAnswer {
     /// role and when, then closes (DN-31 §6.6).
     Refused(DecisionRefused),
     /// `400`, `401` or `403`: the node would not take it. **Nothing was recorded** --
-    /// not on the node and not here (DN-31 §6.3, §6.6).
+    /// not on the node and not here (DN-31 §6.3, §6.6). The link never delivers a `401`
+    /// here since GAP-165: it renews its session and sends the decision again.
     Rejected { status: u16, reason: String },
 }
 
@@ -374,7 +375,8 @@ pub enum ForwardReply {
     /// `409`: it contradicts what the node holds, and **none of it was applied**. Boxed
     /// because it can carry a whole record, plan included.
     Refused(Box<ForwardRefused>),
-    /// `400`, `401` or `403`: the node would not take it, and nothing was recorded.
+    /// `400`, `401` or `403`: the node would not take it, and nothing was recorded. As
+    /// for a decision, the link renews on a `401` rather than delivering it (GAP-165).
     Rejected { status: u16, reason: String },
 }
 

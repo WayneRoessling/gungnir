@@ -43,8 +43,23 @@ fn track(id: u64) -> TrackView {
     }
 }
 
+/// A node's picture, from a node whose services report healthy.
+///
+/// Healthy on purpose since GAP-161: a linked service's `is_healthy` is the link being up
+/// **and** the node saying its own service works, so a fixture node reporting
+/// `SystemHealth::default()` -- every service down -- would be shown unhealthy however
+/// well the link held, which is the point of GAP-161 and not what these tests are about.
 fn snapshot(tracks: Vec<TrackView>) -> SnapshotResponse {
-    SnapshotResponse::new(tracks, None, SystemHealth::default(), Vec::new())
+    SnapshotResponse::new(
+        tracks,
+        None,
+        SystemHealth {
+            tracking_healthy: true,
+            intercept_healthy: true,
+            ingest_healthy: true,
+        },
+        Vec::new(),
+    )
 }
 
 const PASSPHRASE: &str = "correct horse battery staple";
@@ -794,7 +809,15 @@ fn the_client_refuses_an_https_endpoint() {
 /// or an operator's curl asks for.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_health_route_answers() {
-    let url = serve(authenticating(snapshot(Vec::new()))).await;
+    // An unwired node's default rather than `snapshot`'s healthy fixture: the question is
+    // whether the route answers what the node published.
+    let url = serve(authenticating(SnapshotResponse::new(
+        Vec::new(),
+        None,
+        SystemHealth::default(),
+        Vec::new(),
+    )))
+    .await;
 
     let token = token(&url).await;
     let health: SystemHealth = reqwest::Client::new()
@@ -1314,19 +1337,26 @@ impl CountingProxy {
             move || {
                 for inbound in listener.incoming() {
                     let Ok(inbound) = inbound else { continue };
-                    if !open.load(Ordering::Relaxed) {
+                    let Ok(outbound) = std::net::TcpStream::connect(upstream) else {
                         let _ = inbound.shutdown(std::net::Shutdown::Both);
                         continue;
+                    };
+                    // Admitted and registered under the lock `cut` holds, so a cut cannot
+                    // land between the check and the registration and leave one live socket
+                    // through a cut proxy (GAP-167, found in
+                    // `gungnir-app/tests/cut_off_and_reconnected.rs`'s copy of this proxy).
+                    let Ok(mut held) = live.lock() else { continue };
+                    if !open.load(Ordering::SeqCst) {
+                        let _ = inbound.shutdown(std::net::Shutdown::Both);
+                        let _ = outbound.shutdown(std::net::Shutdown::Both);
+                        continue;
                     }
-                    let Ok(outbound) = std::net::TcpStream::connect(upstream) else {
+                    let (Ok(i), Ok(o)) = (inbound.try_clone(), outbound.try_clone()) else {
                         continue;
                     };
-                    if let (Ok(i), Ok(o), Ok(mut held)) =
-                        (inbound.try_clone(), outbound.try_clone(), live.lock())
-                    {
-                        held.push(i);
-                        held.push(o);
-                    }
+                    held.push(i);
+                    held.push(o);
+                    drop(held);
                     pipe(&inbound, &outbound, Some(publishes.clone()));
                     pipe(&outbound, &inbound, None);
                 }
@@ -1350,8 +1380,8 @@ impl CountingProxy {
 
     /// Close every connection through the proxy and refuse new ones.
     fn cut(&self) {
-        self.open.store(false, std::sync::atomic::Ordering::Relaxed);
         if let Ok(mut held) = self.live.lock() {
+            self.open.store(false, std::sync::atomic::Ordering::SeqCst);
             for stream in held.drain(..) {
                 let _ = stream.shutdown(std::net::Shutdown::Both);
             }
@@ -1359,7 +1389,9 @@ impl CountingProxy {
     }
 
     fn restore(&self) {
-        self.open.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(_held) = self.live.lock() {
+            self.open.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
     }
 }
 

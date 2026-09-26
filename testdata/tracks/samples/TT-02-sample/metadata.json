@@ -46,7 +46,7 @@
  },
  "validation": {
   "passed": true,
-  "checks": 18,
+  "checks": 22,
   "report": "validation-report.json"
  }
 }

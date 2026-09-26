@@ -309,6 +309,10 @@ crate = "gungnir-sensor-management"
 allow = ["AGPL-3.0-or-later"]
 
 [[licenses.exceptions]]
+crate = "gungnir-sensor-sim"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
 crate = "gungnir-store"
 allow = ["AGPL-3.0-or-later"]
 

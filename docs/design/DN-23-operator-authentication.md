@@ -376,6 +376,90 @@ requirement and says why. A decline still records either kind. §8's second row 
 amended here; under D-54 its "without one" half is met by a decline, and a tasking
 concurrence with nobody signed in is refused rather than recorded.
 
+## 13. Amendment 4 (2026-09-25, D-87): the audit record, kept on disk by both binaries
+
+Rule 7 says every attempt is an `AuditEntry`. On 2026-09-25 that was true on the desktop and
+false on the node, and on neither did an entry outlive the process: both logs were
+`InMemoryAuditLog`s. The node recorded its queue's decisions and refusals (DN-31 §9 row 4)
+and nothing else -- not a sign-in, not a refused token, not a sensor task -- and the desktop's
+record of who did what was gone at the next restart (GAP-111, found by the GAP-067 walk).
+Human-owned (`gungnir-security`, and `gungnir-api`'s write paths); see
+[`../signatures.md`](../signatures.md).
+
+**Where.** `gungnir_security::FileAuditLog`, under `<data dir>/audit/` beside the journal, in
+the node and in the desktop alike. One format for both, so an auditor reads either with one
+tool, `gungnir_security::verify_audit_dir`. A binary that cannot open it does not start, as it
+does not start without its journal. The account-provisioning command writes to the `audit`
+directory beside the store it changes, which for an operating-system-keystore store is the
+node's own; a deployment keeping its plaintext account file in the node's data directory gets
+one chain, and this note recommends that layout.
+
+**The format.** One JSON line per entry,
+`{"seq":N,"prev":"<hex>","hash":"<hex>","entry":{...}}`, where `hash` is SHA-256 over a domain
+tag, `prev`, `N` and the entry's exact text, and `prev` is the line before's `hash` (64 zeros
+for the first line ever). One segment file per run, `audit-NNNNNN.jsonl`, created with
+`create_new` on the first entry, continuing the newest segment's chain; opening verifies that
+segment and, if it does not verify, the first entry the new run writes says so
+(`audit.chain_broken`). An edited, removed, inserted or torn line is found where it is; two
+processes on one directory fork the chain rather than interleave lines, and the fork is
+reported. **A cut tail is not found**: nothing outside the file holds the head (GAP-163).
+
+**Not sealed**, on purpose. The journal is encrypted at rest; the audit record is what an
+investigation needs when the journal's key is lost, which is DN-22 §11's reason for giving the
+escrow recovery "a journal of its own". No entry holds a passphrase, a token or key material.
+
+**What the node records** -- one entry per request, whatever became of it:
+
+| Event | Action | Attributed to |
+|---|---|---|
+| A sign-in that verified | `session.sign_in`, naming the role the token carries | The operator; the machine the handshake verified |
+| A sign-in refused, or impossible (no store) | `session.rejected`; the identifier tried is in the detail | Nobody (it was claimed); the machine |
+| A request refused for who is asking: no valid token, a machine on an operator's route, a party whose agreement does not cover the item | `access.refused`, naming the route | Nobody; the machine |
+| A verified operator refused for want of a permission | The permission, `refused: ...` | The operator; the machine |
+| A role-gated act: a sensor task (with the registry's answer), an effector report or warning acknowledgement keyed in or sent by a machine, a publish to exchange | The action, with its outcome | The operator, or the machine for a machine's report |
+| A queue decision, an expiry, a forwarded batch, and their refusals | `plan.decide` (DN-31 §9 row 4, unchanged) | As DN-31 has it, now with the machine |
+| An account added or replaced by the provisioning command | `account.assign_role` | Nobody: the command runs outside any session |
+
+**What it does not record**, and why. A read that is served (snapshot, history, stream,
+coverage, queue, exchange, health): a desktop polls, and the session that reads was
+established by a sign-in that was recorded -- the same reasoning as DN-22 §5 not auditing key
+use per operation. A read that is **refused** is recorded. A detection accepted onto the
+gateway's queue: it is a desktop forwarding its sensors, a data path the gateway journals, not
+a person's act; a refusal of the caller is recorded, and a body that will not decode is answered
+and not recorded, as the gateway journals rather than audits what it quarantines.
+
+**The picture is gated on the node.** The snapshot, history, stream, coverage and exchange
+routes served any valid token, so a security officer -- who "operates nothing -- no decision,
+tasking, configuration, or picture" (D-30) -- read the picture its role withholds. Each now asks
+`picture.view`, as `GET /v3/queue` already did; health stays open to any operator, because the
+security officer's layout is the audit and health panels.
+
+**Bounded on the serving path.** A route handler never touches the disk: it puts its entry in
+an `AuditOutbox` on `NodeApi`, and the node loop drains it once a tick into the log and syncs
+once (`AuditSync::OnFlush`), within the journal's 100 ms budget. The outbox has two
+rate-limited lanes: entries with a verified operator or machine behind them (a burst of 1,024,
+200 a second) and entries with nobody verified (64, then 4 a second). What a lane turns away is
+counted, and the count is itself an entry (`audit.overflow`), so a flood from outside is
+bounded in memory and on disk, cannot crowd out an entry a person is owed, and is still on the
+record as a number. The desktop syncs every entry (`AuditSync::EveryEntry`): its entries are a
+person's acts, a few a minute. A log keeps its run's most recent 10,000 entries in memory for
+PN-20; the file keeps all. A write that fails is held, counted, and written as
+`audit.write_failed` when writing resumes.
+
+**Left open**: retention (`RetentionPolicy::max_audit_log_age_days` applied to whole segments, as
+D-78 applies the session age) and PN-20 reading earlier runs' segments, both GAP-152's; and an
+anchor for the chain's head outside the file, GAP-163.
+
+**Verification.** `gungnir-node/tests/node_audit.rs` performs each act above over the real
+transport and asserts one entry naming it, none for a served read, a flood counted rather than
+recorded without crowding out a supervisor's task, and the file one intact chain holding
+exactly those entries and no secret; `gungnir-api/tests/exchange.rs` that an entry names the
+operator and the machine the handshake verified; `gungnir-node/tests/account_provisioning.rs`
+one entry per account change and none for a refusal; `mod tests` in
+`gungnir-security/src/audit.rs` the chain, tampering, forks and the lanes; and
+`gungnir-app/tests/audit_one_entry_per_act.rs` the desktop's acts one by one and its log across
+a restart.
+
 ## Traceability
 
 GAP-057; CAP-6.1, and CAP-6.2/CAP-6.3 through PN-20; D-02 for the mechanism, D-20 for the

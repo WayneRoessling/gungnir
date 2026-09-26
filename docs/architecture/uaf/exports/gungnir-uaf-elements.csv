@@ -123,7 +123,7 @@ OA-34,Operational Activities,OperationalActivity,Authenticate and authorize,Esta
 OA-35,Operational Activities,OperationalActivity,Audit,"Record every decision, configuration change, promotion, tasking, and assistant exchange append-only.",Activity
 OA-36,Operational Activities,OperationalActivity,Exchange cooperative identity,"Receive IFF, ADS-B, AIS, and blue-force identity and attach it as evidence.",Activity
 SV-01,Services,ServiceInterface,Tracking,"Detections in, tracks with quality out; health honest (pipeline not implemented).",Class
-SV-02,Services,ServiceInterface,Intercept planning,"Tracks and resources in, a PlanView out; last-good-plan on over-budget solves (allocator not implemented).",Class
+SV-02,Services,ServiceInterface,Intercept planning,"Tracks and resources in, a PlanView out; at most its solve budget a call, with the last good plan returned stale while a longer solve carries on (GAP-119).",Class
 SV-03,Services,ServiceInterface,Event bus,Broadcast publish and subscribe with sequence-stamped envelopes.,Class
 SV-04,Services,ServiceInterface,Event journal,Append-only JSON-lines session journal; read back for replay; retention.,Class
 SV-05,Services,ServiceInterface,Time authority,Wall and replay clocks; source versus receipt time; late-data policy.,Class
@@ -199,6 +199,7 @@ RS-rfs,Resources,ResourceArtifact,gungnir-rfs,"PHD/CPHD, GLMB/LMB random finite 
 RS-scenario,Resources,ResourceArtifact,gungnir-scenario,"Ground-truth + sensor simulation, five-scenario generator. Test/bench dependency only -- never a normal dependency of a production crate.",Class
 RS-security,Resources,ResourceArtifact,gungnir-security,"Authentication, role/attribute-based authorization, encryption in transit and at rest, secrets/key management, signed binaries and configuration, audit logging. gungnir-capabilities.md \u00a75.5 -- Critical.",Class
 RS-sensor-management,Resources,ResourceArtifact,gungnir-sensor-management,"Sensor registry (identity, modality, location, calibration version, operating state) plus tasking, mode management, and coverage planning. docs/gungnir-capabilities.md \u00a75.2 -- High.",Class
+RS-sensor-sim,Resources,ResourceArtifact,gungnir-sensor-sim,"Simulation: the observation half of the test-track generator, re-observing recorded truth from a given sensor position (DN-32). Generates no truth. A dependency of gungnir-scenario, gungnir-app's laydown rehearsal and the verifier layer only -- never of the node, ingest, the tracking service, the API or the remote link.",Class
 RS-store,Resources,ResourceArtifact,gungnir-store,"Durable storage for mission sessions (an append-only JSON-lines event journal), replay artifacts, configuration baselines, and audit logs, with an explicit retention/deletion policy. docs/gungnir-capabilities.md \u00a75.1 -- High.",Class
 RS-testkit,Resources,ResourceArtifact,gungnir-testkit,Shared proptest strategies for the tracking core. Depends on no workspace crate (so it can be a dev-dependency of every one of them without a dev-dependency cycle); nothing depends on it at runtime.,Class
 RS-time,Resources,ResourceArtifact,gungnir-time,"Clock discipline across sensors: source-time vs. receipt-time semantics, late-data policy, deterministic replay-time control, synchronization health. docs/gungnir-capabilities.md \u00a75.2 -- Critical.",Class
@@ -352,6 +353,7 @@ IE-plan-kind,Information Elements,InformationElement,PlanKind,What a plan propos
 IE-policy-settings,Information Elements,InformationElement,PolicySettings,"Everything about how this deployment decides, in one versioned place.",Class
 IE-product-kind,Information Elements,InformationElement,ProductKind,Which product a ScheduledProduct entry produces on its cycle.,Class
 IE-rehearsal-event,Information Elements,InformationElement,RehearsalEvent,"A seeded session for a usability round (GAP-089). **The first record of a seeded session**, so nothing that follows can be read as an operation.",Class
+IE-rehearsal-origin,Information Elements,InformationElement,RehearsalOrigin,"Where a re-observed detection came from (DN-32 \u00a76, mechanism 1).",Class
 IE-relative-cost,Information Elements,InformationElement,RelativeCost,What one round of this resource costs relative to the others in the same deployment. Unitless by design: it only ever breaks ties between resources of the same layer that are both adequate.,Class
 IE-releasability,Information Elements,InformationElement,Releasability,Who may receive this.,Class
 IE-replay-event,Information Elements,InformationElement,ReplayEvent,A replay session being opened or closed.,Class

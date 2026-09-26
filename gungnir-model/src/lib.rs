@@ -124,7 +124,7 @@ pub use policy_settings::{
     WeaponsControlStatus,
 };
 pub use profiles::{AlgorithmBaselineId, MissionProfile};
-pub use provenance::{Provenance, SourceAuthentication};
+pub use provenance::{Provenance, RehearsalOrigin, SourceAuthentication};
 pub use quality::Quality;
 pub use releasability::{filter_for, permits_single, Filtered, Releasability};
 pub use requirements::{

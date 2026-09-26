@@ -42,7 +42,7 @@ use gungnir_api::v3::{
 };
 use gungnir_eventing::{Envelope, Event};
 use gungnir_intercept_service::PlanView;
-use gungnir_model::events::{InterceptEvent, TrackingEvent};
+use gungnir_model::events::{HealthEvent, InterceptEvent, TrackingEvent};
 use gungnir_model::{BearingRayView, DetectionView, PipelineStatsView};
 use gungnir_tracking_service::TrackView;
 use std::sync::{Arc, Mutex};
@@ -86,6 +86,20 @@ pub struct Projection {
     pub pipeline_stats: PipelineStatsView,
     /// True only once a node has answered. Cleared as soon as it stops.
     pub connected: bool,
+    /// What the node last said about its own services (GAP-161): the snapshot's `health`
+    /// on each connection, then every `HealthEvent::Changed` on the stream. `None` until
+    /// a node has said anything at all.
+    ///
+    /// **Why the link keeps it.** A desktop's status strip draws the tracking pipeline
+    /// and the planner as healthy or not, and on a linked desktop both are the node's.
+    /// Until GAP-161 the two remote services answered `is_healthy` with whether the link
+    /// was up, so a node whose tracker had stopped was shown to every linked operator as
+    /// tracking -- the health flag `CLAUDE.md` forbids, on the path an operator relies on
+    /// most. The node already published both; nothing here read them.
+    ///
+    /// Kept across a disconnect as the last thing the node said, and not read while the
+    /// link is down: the services report unhealthy then on `connected` alone.
+    pub node_health: Option<gungnir_model::SystemHealth>,
     /// When this link's task started asking (GAP-142).
     ///
     /// **So a node that has never answered can be judged silent.** `last_heard` is `None`
@@ -108,9 +122,16 @@ pub struct Projection {
     /// than replaying what has already been seen.
     pub last_seq: u64,
     /// The session token the link signed in with, for requests the desktop makes
-    /// outside the stream (GAP-050's history fetch). Short-lived by design (DN-23 §5);
-    /// a request refused for an expired token says so and the desktop signs in again.
+    /// outside the stream (GAP-050's history fetch). Short-lived by design (DN-23 §5),
+    /// and renewed by the link while it is up (GAP-165): this is always the current one.
     pub token: Option<String>,
+    /// The node refused the current token on a request since the last forward tick
+    /// (GAP-165): the link signs in again before it offers anything more. Set by any
+    /// request answered `401`, and cleared by the renewal.
+    pub token_refused: bool,
+    /// How many times this link has renewed its session without reconnecting (GAP-165):
+    /// ahead of the token's expiry, or because the node refused it.
+    pub session_renewals: u64,
     /// Detections waiting to reach the node (`ARCHITECTURE.md` §8.4 store-and-forward,
     /// GAP-050): queued by the remote service, and by the desktop during an outage, and
     /// posted by the link task whenever the node answers. Bounded; the oldest is dropped
@@ -515,6 +536,12 @@ impl NodeLink {
     #[must_use]
     pub fn token(&self) -> Option<String> {
         self.read().and_then(|p| p.token.clone())
+    }
+
+    /// How many times this link has renewed its session while staying up (GAP-165).
+    #[must_use]
+    pub fn session_renewals(&self) -> u64 {
+        self.read().map_or(0, |p| p.session_renewals)
     }
 
     /// The last envelope sequence applied, or 0 before any.
@@ -1065,28 +1092,13 @@ async fn run_link(
     revision: &watch::Sender<u64>,
 ) -> Result<(), String> {
     let client = http_client(tls)?;
-    let token = match credential {
-        Some(credential) => {
-            let issued = client
-                .post(&urls.session)
-                .json(&SessionRequest {
-                    operator: credential.operator,
-                    passphrase: credential.passphrase.clone(),
-                })
-                .send()
-                .await
-                .map_err(|e| format!("sign-in request failed: {e}"))?;
-            if !issued.status().is_success() {
-                return Err(format!("the node refused the sign-in: {}", issued.status()));
-            }
-            let session: SessionResponse = issued
-                .json()
-                .await
-                .map_err(|e| format!("the session response could not be decoded: {e}"))?;
-            session.token
-        }
-        None => String::new(),
+    let issued = match credential {
+        Some(credential) => Some(sign_in(&client, urls, credential).await?),
+        None => None,
     };
+    let token = issued
+        .as_ref()
+        .map_or_else(String::new, |issued| issued.token.clone());
 
     let response = with_token(client.get(&urls.snapshot), &token)
         .send()
@@ -1109,6 +1121,7 @@ async fn run_link(
         ));
     }
 
+    let node_time = snapshot.node_time;
     // Resume from where the last connection stopped, so a reconnection does not replay
     // what has already been applied.
     let from_seq = {
@@ -1126,6 +1139,8 @@ async fn run_link(
         // not a live one.
         p.bearing_rays = snapshot.bearing_rays;
         p.pipeline_stats = snapshot.pipeline_stats;
+        // GAP-161: the node's own word on its services, kept live by the stream from here.
+        p.node_health = Some(snapshot.health);
         p.token = Some(token.clone());
         p.node_time = snapshot.node_time;
         p.connected = true;
@@ -1135,12 +1150,21 @@ async fn run_link(
         p.last_seq
     };
     revision.send_modify(|r| *r = r.wrapping_add(1));
+    // GAP-165: how long the node's token lasts, read off the node's own clock -- the
+    // expiry it issued against the time the snapshot just said it is.
+    let mut session = LinkSession {
+        renew_after: issued
+            .as_ref()
+            .and_then(|issued| renew_after(issued.expires_s, node_time)),
+        issued_at: std::time::Instant::now(),
+        token,
+    };
 
     let mut socket = open_stream(urls, tls).await?;
 
     let subscribe = serde_json::to_string(&SubscribeRequest {
         from_seq,
-        token: token.clone(),
+        token: session.token.clone(),
     })
     .map_err(|e| format!("could not encode the subscribe frame: {e}"))?;
     socket
@@ -1155,7 +1179,7 @@ async fn run_link(
     // field and was fetched above, before the stream existed; reading it there would
     // leave an item queued in between in neither place until the next reconnection. See
     // `crate::queue`'s module documentation for the whole rule.
-    refresh_queue(&client, urls, &token, projection, true).await;
+    refresh_queue(&client, urls, &session.token, projection, true).await;
 
     // Anything at all resets the clock: an envelope, or the server's heartbeat ping,
     // which `tokio-tungstenite` answers for us. Silence past the timeout means the link
@@ -1170,17 +1194,21 @@ async fn run_link(
     loop {
         tokio::select! {
             _ = forward.tick() => {
-                flush_outbox(&client, urls, &token, projection).await;
-                flush_tasks(&client, urls, &token, projection).await;
-                flush_exchange(&client, urls, &token, projection).await;
-                flush_decisions(&client, urls, &token, projection).await;
-                flush_forwarded(&client, urls, &token, projection).await;
+                // GAP-165: a live link keeps its session, ahead of the token's expiry and
+                // again whenever the node has refused it, before anything is offered.
+                session.keep(&client, urls, credential, projection).await?;
+                let token = session.token.as_str();
+                flush_outbox(&client, urls, token, projection).await;
+                flush_tasks(&client, urls, token, projection).await;
+                flush_exchange(&client, urls, token, projection).await;
+                flush_decisions(&client, urls, token, projection).await;
+                flush_forwarded(&client, urls, token, projection).await;
                 // A picture the stream asked for and a failed fetch left owing. The
                 // stream's own branch below takes it as soon as the event arrives; this
                 // is what bounds the retry at one forward interval rather than at the
                 // next frame, which on a quiet node is one heartbeat away. A no-op unless
                 // a fetch is actually owed.
-                refresh_queue(&client, urls, &token, projection, false).await;
+                refresh_queue(&client, urls, token, projection, false).await;
             }
             next = tokio::time::timeout(gungnir_api::transport::HEARTBEAT_TIMEOUT, socket.next()) => {
                 handle_frame(next, projection)?;
@@ -1190,7 +1218,7 @@ async fn run_link(
                 // an approval control being available on a desktop, and 250 ms of
                 // deliberate wait inside a 500 ms budget would be spent for nothing
                 // (GAP-133, DN-31 §6.9). A no-op unless the stream asked for it.
-                refresh_queue(&client, urls, &token, projection, false).await;
+                refresh_queue(&client, urls, &session.token, projection, false).await;
             }
         }
         // Unconditional rather than only after a confirmed mutation: a spurious wake
@@ -1202,6 +1230,137 @@ async fn run_link(
 
 /// How often the outbox is offered to the node while the link is up.
 const FORWARD_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// How far into a token's life the link renews it (GAP-165): three quarters, so the
+/// renewal has a quarter of the lifetime -- nearly four minutes at the node's default --
+/// to reach a node that is slow to answer before the old token lapses.
+const RENEW_AT_FRACTION: f64 = 0.75;
+
+/// Sign in with `credential` and take the node's answer.
+///
+/// # Errors
+///
+/// When the node cannot be reached, refuses the credential, or answers something that
+/// is not a session.
+async fn sign_in(
+    client: &reqwest::Client,
+    urls: &Urls,
+    credential: &Credential,
+) -> Result<SessionResponse, String> {
+    let issued = client
+        .post(&urls.session)
+        .json(&SessionRequest {
+            operator: credential.operator,
+            passphrase: credential.passphrase.clone(),
+        })
+        .send()
+        .await
+        .map_err(|e| format!("sign-in request failed: {e}"))?;
+    if !issued.status().is_success() {
+        return Err(format!("the node refused the sign-in: {}", issued.status()));
+    }
+    issued
+        .json()
+        .await
+        .map_err(|e| format!("the session response could not be decoded: {e}"))
+}
+
+/// When, after a token is issued, the link renews it (GAP-165): [`RENEW_AT_FRACTION`] of
+/// the lifetime the node gave it, measured as the expiry it issued against the time it
+/// said it was when the link asked. `None` where the node sent no time (a node older
+/// than GAP-140) or the two do not make a lifetime, in which case the link renews only
+/// when the node refuses the token.
+#[must_use]
+pub fn renew_after(
+    expires_s: f64,
+    node_time: Option<gungnir_model::MissionTime>,
+) -> Option<std::time::Duration> {
+    let lifetime_s = expires_s - node_time?.0;
+    if !lifetime_s.is_finite() || lifetime_s <= 0.0 {
+        return None;
+    }
+    std::time::Duration::try_from_secs_f64(lifetime_s * RENEW_AT_FRACTION).ok()
+}
+
+/// A connection's session with the node, kept for as long as the connection is up
+/// (GAP-165).
+///
+/// **Why the link renews and nothing else does.** A node-issued token always expires
+/// (DN-23 §5) -- after the baseline's session lifetime, or the node's own 900 s where the
+/// baseline names none -- and the stream is authenticated once, when it subscribes. Until
+/// GAP-165 nothing asked for a new token while the stream stayed up, so from the moment
+/// the first one lapsed every write the desktop made was refused `401`: its detections
+/// and exchange sets waited in their outboxes, and every decision an operator took on
+/// the node's queue came back refused, for as long as the stream happened to stay open.
+/// The desktop's own session is what decides how long this link may act for -- a desktop
+/// whose session expires drops the link (`gungnir-app`'s `session::sweep_expiry`) -- so
+/// the link keeps the node's side current for exactly as long as it is up.
+struct LinkSession {
+    token: String,
+    issued_at: std::time::Instant,
+    renew_after: Option<std::time::Duration>,
+}
+
+impl LinkSession {
+    /// Renew the session if it is due or the node has refused it, and say so in the
+    /// projection.
+    ///
+    /// A machine link has no session to renew: its certificate is its identity (D-02).
+    ///
+    /// # Errors
+    ///
+    /// When the renewal fails. The connection then ends and the link reconnects -- signing
+    /// in from the start -- which is how a refused or unreachable renewal becomes visible
+    /// as a link that is down, rather than a link that looks up while the node refuses it.
+    async fn keep(
+        &mut self,
+        client: &reqwest::Client,
+        urls: &Urls,
+        credential: Option<&Credential>,
+        projection: &Arc<Mutex<Projection>>,
+    ) -> Result<(), String> {
+        let refused = projection
+            .lock()
+            .is_ok_and(|mut p| std::mem::take(&mut p.token_refused));
+        let Some(credential) = credential else {
+            return Ok(());
+        };
+        let due = self
+            .renew_after
+            .is_some_and(|after| self.issued_at.elapsed() >= after);
+        if !(refused || due) {
+            return Ok(());
+        }
+        let issued = sign_in(client, urls, credential)
+            .await
+            .map_err(|err| format!("the session could not be renewed: {err}"))?;
+        tracing::info!(
+            refused,
+            expires_s = issued.expires_s,
+            "the link renewed its session with the node"
+        );
+        self.token = issued.token;
+        self.issued_at = std::time::Instant::now();
+        if let Ok(mut p) = projection.lock() {
+            p.token = Some(self.token.clone());
+            p.session_renewals = p.session_renewals.saturating_add(1);
+        }
+        Ok(())
+    }
+}
+
+/// The node refused the token this request carried (GAP-165): renew before the next
+/// offer. A `401` is never an answer about what was sent -- the same request under a
+/// current token is a different request.
+fn note_refused_token(projection: &Arc<Mutex<Projection>>, status: reqwest::StatusCode) -> bool {
+    if status != reqwest::StatusCode::UNAUTHORIZED {
+        return false;
+    }
+    if let Ok(mut p) = projection.lock() {
+        p.token_refused = true;
+    }
+    true
+}
 
 /// Post what is queued, oldest first, stopping at the first refusal so nothing is
 /// reordered and nothing is lost: a detection leaves the outbox only on `202`.
@@ -1219,7 +1378,7 @@ async fn flush_outbox(
         else {
             return;
         };
-        let accepted = with_token(client.post(&urls.detections), token)
+        let answered = with_token(client.post(&urls.detections), token)
             .json(&SubmitDetectionRequest {
                 // What this client speaks. The node refuses a mismatch by name
                 // rather than leaving it to whether the payload happens to decode.
@@ -1227,8 +1386,14 @@ async fn flush_outbox(
                 detection,
             })
             .send()
-            .await
-            .is_ok_and(|r| r.status().is_success());
+            .await;
+        let accepted = match answered {
+            Ok(response) => {
+                note_refused_token(projection, response.status());
+                response.status().is_success()
+            }
+            Err(_) => false,
+        };
         if !accepted {
             return;
         }
@@ -1269,6 +1434,9 @@ async fn flush_tasks(
         {
             // Unreachable: keep it queued and try again next tick.
             Err(_) => return,
+            // A lapsed token is not the node's answer to the task (GAP-165): keep it
+            // queued, and the link renews before the next tick offers it again.
+            Ok(response) if note_refused_token(projection, response.status()) => return,
             Ok(response) if response.status().is_success() => {
                 match response.json::<SensorTaskResponse>().await {
                     Ok(answer) => Ok(answer.task),
@@ -1370,6 +1538,10 @@ async fn flush_exchange(
             .await
         {
             Err(err) => (None, format!("the node could not be reached: {err}")),
+            // A lapsed token refuses the session, not this console (GAP-165): the set
+            // stays queued and nothing is recorded as a refusal of the publisher, which
+            // `publish_answer` reads a `401` as and which only a new sign-in would lift.
+            Ok(response) if note_refused_token(projection, response.status()) => return,
             Ok(response) => {
                 let status = response.status().as_u16();
                 let body = if response.status().is_success() {
@@ -1510,6 +1682,7 @@ async fn refresh_queue(
     }
     let response = match with_token(client.get(&urls.queue), token).send().await {
         Ok(response) if response.status().is_success() => response,
+        Ok(response) if note_refused_token(projection, response.status()) => return,
         Ok(response) => {
             tracing::warn!(
                 status = %response.status(),
@@ -1539,8 +1712,9 @@ async fn refresh_queue(
 /// tries the same item again next tick; `flush_exchange` reads the answer too, for its
 /// own reasons (GAP-146, [`publish_answer`]); this one distinguishes an *answer* from *no
 /// answer*. A `201`, a `409`
-/// and a `400`/`401`/`403` are answers and are delivered to the caller, which then knows
-/// what stands. A `504` -- the node's loop did not reply inside the route's window -- is
+/// and a `400`/`403` are answers and are delivered to the caller, which then knows what
+/// stands. A `401` is not: it refuses the link's lapsed token, not the decision, so the
+/// link renews its session and the same request goes again (GAP-165). A `504` -- the node's loop did not reply inside the route's window -- is
 /// not an answer and **does not mean nothing was recorded**, so the same request key goes
 /// back to the same route until the node says which. That is the whole reason the key
 /// exists (DN-31 §5.2).
@@ -1579,6 +1753,12 @@ async fn flush_decisions(
                 return;
             }
         };
+        // A lapsed token is not the node's answer to the decision (GAP-165): the same
+        // request, under the same key, goes again once the link has renewed.
+        if note_refused_token(projection, response.status()) {
+            count_attempt(projection);
+            return;
+        }
         let status = response.status().as_u16();
         if crate::queue::retry_under_same_key(status) {
             tracing::info!(
@@ -1616,9 +1796,9 @@ async fn flush_decisions(
 
 /// Post the outages' batches, oldest first (GAP-134, DN-31 §6.8).
 ///
-/// **The same rule as [`flush_decisions`]**: a `202`, a `409` and a `400`/`401`/`403` are
-/// answers and are delivered; a `504` or `503`, or no connection at all, is not, and the
-/// same batch goes again. That is safe because the node keys the batch on each decision's
+/// **The same rule as [`flush_decisions`]**: a `202`, a `409` and a `400`/`403` are
+/// answers and are delivered; a `504` or `503`, a `401` (renewed first, GAP-165), or no
+/// connection at all, is not, and the same batch goes again. That is safe because the node keys the batch on each decision's
 /// own identifier, answering a repeat `already_held` and recording nothing -- which is
 /// "forwarding twice records nothing new" seen from this side.
 async fn flush_forwarded(
@@ -1647,6 +1827,11 @@ async fn flush_forwarded(
                 return;
             }
         };
+        // As for a decision (GAP-165): renewed, then the same batch again.
+        if note_refused_token(projection, response.status()) {
+            count_forward_attempt(projection);
+            return;
+        }
         let status = response.status().as_u16();
         if crate::queue::retry_under_same_key(status) {
             tracing::info!(
@@ -1946,6 +2131,20 @@ fn apply(projection: &Arc<Mutex<Projection>>, envelope: &Envelope) -> Result<(),
             InterceptEvent::PlanProposed(plan) | InterceptEvent::PlanApproved(plan),
         ) => {
             p.plan = plan.clone();
+        }
+        // GAP-161: the node's services, as the node reports them. See
+        // `Projection::node_health`.
+        Event::Health(HealthEvent::Changed {
+            tracking_healthy,
+            intercept_healthy,
+            ingest_healthy,
+            ..
+        }) => {
+            p.node_health = Some(gungnir_model::SystemHealth {
+                tracking_healthy: *tracking_healthy,
+                intercept_healthy: *intercept_healthy,
+                ingest_healthy: *ingest_healthy,
+            });
         }
         // The node's approval queue (GAP-133, DN-31 §6.6). Taken as itself rather than
         // put on the inbox, because unlike a sensor task or an effector report this is a

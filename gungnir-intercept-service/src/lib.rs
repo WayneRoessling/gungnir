@@ -12,17 +12,43 @@
 //! reward matrix through [`DpInterceptService::plan_with_rewards`] and falls back
 //! to a uniform matrix in the trait method, which yields an assignment that favours
 //! no track over another.
+//!
+//! # Determinism
+//!
+//! The same tracks, resources and rewards give the same assignment on any planner, in
+//! any run (GAP-119). Rows of the reward matrix are the adequate resources in the order
+//! they were passed and columns are the tracks in the order they were passed, and a tie
+//! between equally good assignments is decided by `gungnir_allocation::bellman`'s
+//! documented rule on those positions. The one thing two planners given the same input
+//! do not share is the plan's identifier: a `PlanId` is a UUID v7 minted per plan
+//! (D-56), so that no two machines ever name two recommendations alike.
+//!
+//! # The solve budget
+//!
+//! Every planning call spends at most its budget solving ([`budget`], D-81; DN-04 §10).
+//! A solve that is not finished when the budget is spent is kept, not thrown away, and
+//! the next call carries on with it; meanwhile the planner answers
+//! [`PlanOutcome::Stale`] with the last plan it did compute, when it computed it, and how
+//! far the current solve has got, and `is_healthy()` is false. The first call whose solve
+//! finishes answers fresh and healthy again. A picture that has not changed since the
+//! last finished solve is not solved again: the answer to the same problem is the same
+//! answer, so it is fresh without spending anything.
 
+pub mod budget;
 pub mod engagement;
 pub mod geometry;
+
+pub use budget::{MonotonicClock, SolveClock, SteppedClock, DEFAULT_SOLVE_BUDGET};
 
 pub use engagement::{
     close_stale, EffectEvidence, EffectSource, EffectTally, Engagement, EngagementError,
     EngagementState, EngagementTransition,
 };
 
-use gungnir_allocation::AllocationError;
+use gungnir_allocation::{ExactSolve, Progress};
 use nalgebra::DMatrix;
+use std::sync::Arc;
+use std::time::Duration;
 
 pub use gungnir_allocation::{AllocationPolicy, BellmanDpAllocator, ResourceAllocator};
 pub use gungnir_model::{
@@ -71,7 +97,8 @@ impl WithheldReason {
 pub enum PlanOutcome {
     /// Computed for the snapshot that was passed in.
     Fresh(PlanView),
-    /// The solve failed. This is the last plan that succeeded, and when it did.
+    /// The solve failed, or has not finished inside its budget (GAP-119). This is the
+    /// last plan that succeeded, when it did, and why this call's did not.
     Stale {
         plan: PlanView,
         computed_at: MissionTime,
@@ -104,10 +131,10 @@ impl PlanOutcome {
 
 pub trait InterceptService: Send + Sync {
     /// Non-blocking: recompute the assignment for the latest track snapshot and
-    /// resource pool. Never blocks the caller (per UI standards §5 -- long-running
-    /// work must stay off the render thread; if the DP solve is ever too slow for a
-    /// frame budget, this implementation is expected to move it to a background
-    /// thread and return the last-good plan here rather than block).
+    /// resource pool. Never holds the caller past its budget (per UI standards §5 --
+    /// long-running work must stay off the render thread): the embedded planner spends
+    /// at most its solve budget per call, carries an unfinished solve over to the next,
+    /// and returns the last good plan, stale, until it finishes (GAP-119, MOP-06).
     fn plan(
         &mut self,
         now: MissionTime,
@@ -115,8 +142,9 @@ pub trait InterceptService: Send + Sync {
         resources: &[ResourceView],
     ) -> PlanOutcome;
 
-    /// False once a solve has failed (including "not implemented"), so the health
-    /// panel shows the plan on screen may be stale.
+    /// False while the plan on screen is not an answer for the current picture -- a solve
+    /// failed, or has not finished inside its budget -- and true again from the first
+    /// call that answers fresh.
     fn is_healthy(&self) -> bool;
 
     /// Resources the last planning call declined to propose, with the reason each
@@ -130,14 +158,45 @@ pub trait InterceptService: Send + Sync {
     }
 }
 
+/// The assignment problem a solve answers: which tracks, which adequate resources, in
+/// which order, and what each pairing is worth (GAP-119).
+///
+/// **What makes two pictures the same question.** The allocator sees only the reward
+/// matrix, and its rows and columns stand for these resources and tracks in this order;
+/// a track's position is not part of it (the geometry is worked out afterwards, from the
+/// picture at hand). So a solve finished for one call answers any later call with an
+/// equal problem exactly, and a solve begun for one call answers nothing once the
+/// problem has changed.
+#[derive(Debug, Clone, PartialEq)]
+struct Problem {
+    tracks: Vec<TrackId>,
+    resources: Vec<ResourceId>,
+    rewards: DMatrix<f64>,
+}
+
+/// A solve that has not finished, carried from one planning call to the next.
+struct InFlight {
+    problem: Problem,
+    solve: ExactSolve,
+    /// Planning calls that have worked on it.
+    slices: u32,
+}
+
 /// Bellman/DP-backed planner. Keeps the last good plan and returns it when a solve
-/// fails, flagging `is_healthy() == false`.
+/// fails or has not finished inside its budget, flagging `is_healthy() == false`.
 pub struct DpInterceptService {
-    allocator: BellmanDpAllocator,
     horizon: usize,
+    /// How long one planning call may spend solving (GAP-119, D-81).
+    solve_budget: Duration,
+    /// What the budget is measured on. Shared so a test can hold the handle it steps.
+    clock: Arc<dyn SolveClock>,
+    /// The solve under way, if one is (GAP-119).
+    in_flight: Option<InFlight>,
+    /// The problem the last finished solve answered, and its answer, so an unchanged
+    /// picture is answered without solving it again (GAP-119).
+    solved: Option<(Problem, gungnir_allocation::AllocationPolicy)>,
     last_plan: PlanView,
     solver_ok: bool,
-    warned: bool,
     /// When `last_plan` was computed, and why it is being kept if a solve has failed
     /// since (GAP-066). `None` before any solve has succeeded.
     last_solved: Option<MissionTime>,
@@ -154,11 +213,13 @@ pub struct DpInterceptService {
 impl DpInterceptService {
     pub fn new(horizon: usize) -> Self {
         Self {
-            allocator: BellmanDpAllocator,
             horizon: horizon.max(1),
+            solve_budget: DEFAULT_SOLVE_BUDGET,
+            clock: Arc::new(MonotonicClock::new()),
+            in_flight: None,
+            solved: None,
             last_plan: PlanView::default(),
             solver_ok: true,
-            warned: false,
             last_solved: None,
             last_failure: None,
             local_frame: None,
@@ -174,6 +235,29 @@ impl DpInterceptService {
 
     pub fn horizon(&self) -> usize {
         self.horizon
+    }
+
+    /// How long one planning call may spend solving (GAP-119, D-81). A deployment sets it
+    /// through `gungnir-config`'s `plan_solve_budget_ms`, whose validation keeps it
+    /// positive and finite; this takes what it is given.
+    #[must_use]
+    pub fn with_solve_budget(mut self, budget: Duration) -> Self {
+        self.solve_budget = budget;
+        self
+    }
+
+    #[must_use]
+    pub fn solve_budget(&self) -> Duration {
+        self.solve_budget
+    }
+
+    /// Measure the budget on `clock` instead of the machine's monotonic clock. For a
+    /// test that makes a solve overrun on purpose ([`SteppedClock`]), or a replay that
+    /// must decide it the same way every time.
+    #[must_use]
+    pub fn with_clock(mut self, clock: Arc<dyn SolveClock>) -> Self {
+        self.clock = clock;
+        self
     }
 
     pub fn last_plan(&self) -> &PlanView {
@@ -304,52 +388,145 @@ impl DpInterceptService {
             // tracks or no ready resource the empty plan is correct for this snapshot, and
             // the mark is set so a later failure can report how old the last real answer
             // is rather than reporting that there has never been one.
+            //
+            // **And the planner is healthy again** (GAP-119). This branch set the mark and
+            // cleared the failure and left `solver_ok` alone, so a planner that had failed
+            // once went on reporting itself unhealthy -- and `outcome` went on calling this
+            // correct empty answer stale, with "the solve failed" as the reason -- until a
+            // real solve happened to succeed.
+            self.solver_ok = true;
             self.last_solved = Some(now);
             self.last_failure = None;
+            self.in_flight = None;
+            self.solved = None;
             return self.last_plan.clone();
         }
-        match self.allocator.solve(rewards, self.horizon) {
-            Ok(policy) => {
-                self.solver_ok = true;
-                self.last_solved = Some(now);
-                self.last_failure = None;
-                let solutions = Self::solutions_with_geometry(
-                    self.local_frame.as_ref(),
-                    &policy.assignment,
-                    tracks,
-                    // The adequate list, in the order the matrix rows were built from.
-                    &ready,
-                );
-                // **GAP-097.** A solve that confirms the same resource/track pairs
-                // already in `self.last_plan` is not a new recommendation, and must
-                // not become one: `update::tick`'s "publish only when the plan
-                // changes" gate (GAP-066) compares the whole `PlanView`, so minting a
-                // fresh id and `mission_time` here every tick made that gate never
-                // hold once a solve succeeded, flooding the approval queue with the
-                // same pairing at the tick rate. Only a genuinely different
-                // assignment gets a new id and timestamp; an unchanged one keeps the
-                // plan -- geometry included -- exactly as it was.
-                if Self::assignment_changed(&self.last_plan, &solutions) {
-                    self.last_plan = Self::fresh_plan(now, solutions, policy.value);
-                }
-            }
-            Err(AllocationError::NotImplemented) => {
-                self.solver_ok = false;
-                self.last_failure = Some("the allocator reported itself unimplemented".to_owned());
-                if !self.warned {
-                    self.warned = true;
-                    tracing::warn!(
-                        "Bellman/DP allocator not implemented; intercept plan is empty/stale"
-                    );
-                }
-            }
+        let problem = Problem {
+            tracks: tracks.iter().map(|t| t.id).collect(),
+            resources: ready.iter().map(|r| r.id).collect(),
+            rewards: rewards.clone(),
+        };
+        let answer = match self.solve(problem) {
+            Ok(Some(policy)) => policy,
+            // Not finished inside the budget: `solve` has said why, and the last good plan
+            // stands.
+            Ok(None) => return self.last_plan.clone(),
             Err(err) => {
                 self.solver_ok = false;
                 self.last_failure = Some(err.to_string());
                 tracing::error!(%err, "allocation solve failed; keeping last good plan");
+                return self.last_plan.clone();
             }
+        };
+        self.solver_ok = true;
+        self.last_solved = Some(now);
+        self.last_failure = None;
+        let solutions = Self::solutions_with_geometry(
+            self.local_frame.as_ref(),
+            &answer.assignment,
+            tracks,
+            // The adequate list, in the order the matrix rows were built from.
+            &ready,
+        );
+        // **GAP-097.** A solve that confirms the same resource/track pairs already in
+        // `self.last_plan` is not a new recommendation, and must not become one:
+        // `update::tick`'s "publish only when the plan changes" gate (GAP-066) compares
+        // the whole `PlanView`, so minting a fresh id and `mission_time` here every tick
+        // made that gate never hold once a solve succeeded, flooding the approval queue
+        // with the same pairing at the tick rate. Only a genuinely different assignment
+        // gets a new id and timestamp; an unchanged one keeps the plan -- geometry
+        // included -- exactly as it was.
+        if Self::assignment_changed(&self.last_plan, &solutions) {
+            self.last_plan = Self::fresh_plan(now, solutions, answer.value);
         }
         self.last_plan.clone()
+    }
+
+    /// Answer `problem` inside this call's budget, if it can be (GAP-119).
+    ///
+    /// `Ok(Some)` is the optimum: from the last finished solve when the problem has not
+    /// changed since, or from a solve that finished in this call. `Ok(None)` is a solve
+    /// still under way, kept for the next call, with the reason recorded for
+    /// [`Self::outcome`]. `Err` is a problem the solver refuses outright.
+    fn solve(
+        &mut self,
+        problem: Problem,
+    ) -> Result<Option<gungnir_allocation::AllocationPolicy>, gungnir_allocation::AllocationError>
+    {
+        if let Some((solved, policy)) = &self.solved {
+            if *solved == problem {
+                self.in_flight = None;
+                return Ok(Some(policy.clone()));
+            }
+        }
+        // A solve begun for a different problem answers nothing now: it is dropped and
+        // this one begun in its place. Carrying it on would spend the budget on a
+        // question nobody is asking.
+        let mut flight = match self.in_flight.take() {
+            Some(flight) if flight.problem == problem => flight,
+            _ => InFlight {
+                solve: ExactSolve::new(&problem.rewards, self.horizon)?,
+                problem,
+                slices: 0,
+            },
+        };
+        // The budget, measured from here: everything before this is bookkeeping over the
+        // inputs, and the solve is the part that grows with the picture.
+        let clock = Arc::clone(&self.clock);
+        let budget = self.solve_budget;
+        let started = clock.now();
+        let progress = flight
+            .solve
+            .advance(&mut || clock.now().saturating_sub(started) <= budget);
+        flight.slices += 1;
+        match progress {
+            Progress::Done(policy) => {
+                if flight.slices > 1 {
+                    tracing::info!(
+                        slices = flight.slices,
+                        tracks = flight.problem.tracks.len(),
+                        resources = flight.problem.resources.len(),
+                        "intercept solve finished over several planning calls"
+                    );
+                }
+                self.solved = Some((flight.problem, policy.clone()));
+                Ok(Some(policy))
+            }
+            Progress::Pending {
+                states_done,
+                states_total,
+            } => {
+                // Logged on the way into it only: a picture too big for one budget is
+                // under way for several calls, and a line per call would bury the one
+                // that says when it started.
+                if self.solver_ok {
+                    tracing::warn!(
+                        budget_ms = budget.as_secs_f64() * 1e3,
+                        tracks = flight.problem.tracks.len(),
+                        resources = flight.problem.resources.len(),
+                        "intercept solve did not finish inside its budget; keeping the last \
+                         good plan and carrying the solve on"
+                    );
+                }
+                self.solver_ok = false;
+                // Whole percent, rounded down, so a solve never reads as finished before
+                // it is. The sentence says nothing about the next call: this planner
+                // carries the solve on, but one built for a single question (an
+                // alternative, a what-if) is dropped with it.
+                let percent = states_done.saturating_mul(100) / states_total.max(1);
+                self.last_failure = Some(format!(
+                    "the solve for the current picture ({} track(s), {} ready resource(s)) \
+                     did not finish inside its {} budget; it is {percent}% done after {} \
+                     planning call(s)",
+                    flight.problem.tracks.len(),
+                    flight.problem.resources.len(),
+                    budget::describe(budget),
+                    flight.slices,
+                ));
+                self.in_flight = Some(flight);
+                Ok(None)
+            }
+        }
     }
 
     /// A new plan, with a new identifier.
@@ -681,6 +858,305 @@ mod tests {
         let outcome = svc.plan(MissionTime(1.0), &[track(1)], &[resource(1, false)]);
         assert!(outcome.plan().expect("a plan").is_empty());
         assert!(svc.is_healthy(), "nothing was attempted, so nothing failed");
+    }
+
+    fn ready(ids: &[u32]) -> Vec<ResourceView> {
+        ids.iter().map(|id| resource(*id, true)).collect()
+    }
+
+    /// What two plans recommend, which is everything but the identifier. A `PlanId` is a
+    /// UUID v7 minted per plan (D-56) precisely so that two planners never name two plans
+    /// alike, so it is the one field two fresh services must NOT agree on.
+    fn recommendation(
+        plan: &PlanView,
+    ) -> (
+        MissionTime,
+        gungnir_model::PlanKind,
+        u64,
+        gungnir_model::Releasability,
+    ) {
+        (
+            plan.mission_time,
+            plan.kind.clone(),
+            plan.policy_value.to_bits(),
+            plan.releasability.clone(),
+        )
+    }
+
+    fn pairs(plan: &PlanView) -> Vec<(u32, u64)> {
+        plan.solutions()
+            .iter()
+            .map(|s| (s.resource.0, s.track.0))
+            .collect()
+    }
+
+    /// **GAP-119, determinism with tied rewards.** Two fresh planners, the same three
+    /// tracks and three ready resources, and the uniform matrix the trait method uses, so
+    /// every assignment ties and only the documented tie rule decides: resource `k` in the
+    /// order given takes track `k` in the order given. Identifiers deliberately differ
+    /// from positions, so a rule that leaked identity into the tie would show.
+    #[test]
+    fn two_fresh_planners_agree_when_every_reward_ties() {
+        let tracks = [track(70), track(71), track(72)];
+        let resources = ready(&[40, 41, 42]);
+        let mut a = DpInterceptService::new(10);
+        let mut b = DpInterceptService::new(10);
+        let pa = a.plan(MissionTime(1.0), &tracks, &resources);
+        let pb = b.plan(MissionTime(1.0), &tracks, &resources);
+        let (pa, pb) = match (pa, pb) {
+            (PlanOutcome::Fresh(pa), PlanOutcome::Fresh(pb)) => (pa, pb),
+            other => panic!("expected two fresh plans, got {other:?}"),
+        };
+        assert_eq!(recommendation(&pa), recommendation(&pb));
+        assert_ne!(
+            pa.id, pb.id,
+            "two planners minted the same identifier (D-56)"
+        );
+        let mut got = pairs(&pa);
+        got.sort_unstable();
+        assert_eq!(got, vec![(40, 70), (41, 71), (42, 72)]);
+    }
+
+    /// **GAP-119, determinism with distinct rewards.** The optimum is unique and is not
+    /// the diagonal, so this is the answer the numbers force rather than the tie rule.
+    #[test]
+    fn two_fresh_planners_agree_when_the_rewards_are_distinct() {
+        let tracks = [track(70), track(71), track(72)];
+        let resources = ready(&[40, 41, 42]);
+        // Row r, column c: resource 40+r against track 70+c. The unique best matching is
+        // 40->72, 41->70, 42->71, worth 9 + 8 + 7 = 24.
+        let rewards = DMatrix::from_row_slice(3, 3, &[1.0, 2.0, 9.0, 8.0, 1.0, 3.0, 2.0, 7.0, 1.0]);
+        let mut a = DpInterceptService::new(1);
+        let mut b = DpInterceptService::new(1);
+        let pa = a.plan_with_rewards(MissionTime(1.0), &tracks, &resources, &rewards);
+        let pb = b.plan_with_rewards(MissionTime(1.0), &tracks, &resources, &rewards);
+        assert!(a.is_healthy() && b.is_healthy());
+        assert_eq!(recommendation(&pa), recommendation(&pb));
+        let mut got = pairs(&pa);
+        got.sort_unstable();
+        assert_eq!(got, vec![(40, 72), (41, 70), (42, 71)]);
+        assert!(
+            (pa.policy_value - 24.0).abs() < 1e-12,
+            "{}",
+            pa.policy_value
+        );
+    }
+
+    /// **GAP-119's degradation clause, against a real plan.** A solve at t = 1 inside its
+    /// budget, then a solve at t = 2 that does not finish inside it: the answer is `Stale`
+    /// carrying the t = 1 plan -- the same plan, identifier and all -- stamped t = 1, with
+    /// the budget named in the reason, and the planner reports itself unhealthy. The
+    /// earlier test of this path compared against an empty plan, which any bug that
+    /// dropped the plan would also have produced.
+    ///
+    /// The t = 2 picture has gained a fourth track, because an unchanged picture is not
+    /// solved again (its answer is already known, and is fresh); a new track is what makes
+    /// t = 2 a solve at all. The clock is stepped, not slept on: zero while the first solve
+    /// runs, so it takes no time; then ten milliseconds a reading against a four-millisecond
+    /// budget, so the first question the second solve asks finds the budget spent.
+    #[test]
+    fn an_over_budget_solve_returns_the_last_good_plan_stale() {
+        let clock = Arc::new(SteppedClock::new(Duration::ZERO));
+        let mut svc = DpInterceptService::new(10)
+            .with_solve_budget(Duration::from_millis(4))
+            .with_clock(clock.clone());
+        let tracks = [track(70), track(71), track(72)];
+        let resources = ready(&[40, 41, 42]);
+
+        let first = match svc.plan(MissionTime(1.0), &tracks, &resources) {
+            PlanOutcome::Fresh(plan) => plan,
+            other => panic!("the in-budget solve was not fresh: {other:?}"),
+        };
+        assert!(!first.is_empty(), "the t = 1 plan must be a real plan");
+        assert!(svc.is_healthy());
+
+        let grown = [track(70), track(71), track(72), track(73)];
+        clock.set_step(Duration::from_millis(10));
+        match svc.plan(MissionTime(2.0), &grown, &resources) {
+            PlanOutcome::Stale {
+                plan,
+                computed_at,
+                reason,
+            } => {
+                assert_eq!(plan, first, "the stale plan is not the last good plan");
+                assert_eq!(computed_at, MissionTime(1.0));
+                assert!(reason.contains("4 ms budget"), "{reason}");
+                assert!(reason.contains("4 track(s)"), "{reason}");
+            }
+            other => panic!("an over-budget solve returned {other:?}"),
+        }
+        assert!(!svc.is_healthy(), "a stale planner reported itself healthy");
+        assert_eq!(svc.last_plan(), &first);
+
+        // **Recovery.** The next call whose solve finishes inside its budget is fresh and
+        // healthy again, and answers the picture it was given: the fourth track is in it.
+        clock.set_step(Duration::ZERO);
+        let recovered = match svc.plan(MissionTime(3.0), &grown, &resources) {
+            PlanOutcome::Fresh(plan) => plan,
+            other => panic!("the in-budget solve after an overrun returned {other:?}"),
+        };
+        assert!(
+            svc.is_healthy(),
+            "health did not recover on an in-budget solve"
+        );
+        assert_eq!(
+            recovered.solutions().len(),
+            3,
+            "three resources, three pairs"
+        );
+        // Every reward ties, so the fourth track falls outside the tie rule's diagonal and
+        // the pairing is the t = 1 pairing: the same plan, not a new one (GAP-097).
+        assert_eq!(recovered, first);
+    }
+
+    /// **An unchanged picture is not solved again**, so a budget that could not afford a
+    /// solve is never asked to: the answer is already known, and is fresh.
+    #[test]
+    fn an_unchanged_picture_is_answered_fresh_without_solving() {
+        let clock = Arc::new(SteppedClock::new(Duration::ZERO));
+        let mut svc = DpInterceptService::new(10).with_clock(clock.clone());
+        let tracks = [track(70), track(71), track(72)];
+        let resources = ready(&[40, 41, 42]);
+        let first = svc
+            .plan(MissionTime(1.0), &tracks, &resources)
+            .plan()
+            .cloned()
+            .expect("a plan");
+        clock.set_step(Duration::from_secs(1));
+        match svc.plan(MissionTime(2.0), &tracks, &resources) {
+            PlanOutcome::Fresh(plan) => assert_eq!(plan, first),
+            other => panic!("an unchanged picture was not answered fresh: {other:?}"),
+        }
+        assert!(svc.is_healthy());
+    }
+
+    /// **A solve longer than one budget carries on, and finishes.** A clock that advances a
+    /// millisecond a reading against a four-millisecond budget lets each call do a few
+    /// units of work. Until the solve finishes, every answer is the last good plan, stale,
+    /// with the progress rising; then the answer is fresh and is exactly the plan an
+    /// unhurried planner computes for the same picture.
+    #[test]
+    fn a_solve_longer_than_one_budget_carries_on_across_calls() {
+        let clock = Arc::new(SteppedClock::new(Duration::ZERO));
+        let mut svc = DpInterceptService::new(10)
+            .with_solve_budget(Duration::from_millis(4))
+            .with_clock(clock.clone());
+        let resources = ready(&[40, 41, 42]);
+        let first = svc
+            .plan(MissionTime(1.0), &[track(70)], &resources)
+            .plan()
+            .cloned()
+            .expect("a plan");
+
+        let grown = [track(70), track(71), track(72), track(73)];
+        clock.set_step(Duration::from_millis(1));
+        let mut calls = 0_u32;
+        let mut last_percent = 0_u64;
+        let finished = loop {
+            calls += 1;
+            assert!(calls < 10_000, "the solve never finished");
+            match svc.plan(MissionTime(1.0 + f64::from(calls)), &grown, &resources) {
+                PlanOutcome::Fresh(plan) => break plan,
+                PlanOutcome::Stale {
+                    plan,
+                    computed_at,
+                    reason,
+                } => {
+                    assert_eq!(plan, first);
+                    assert_eq!(computed_at, MissionTime(1.0));
+                    assert!(!svc.is_healthy());
+                    let percent: u64 = reason
+                        .split('%')
+                        .next()
+                        .and_then(|head| head.rsplit(' ').next())
+                        .and_then(|n| n.parse().ok())
+                        .expect("the reason says how far the solve has got");
+                    assert!(percent >= last_percent, "{reason}");
+                    last_percent = percent;
+                    assert!(
+                        reason.contains(&format!("after {calls} planning call(s)")),
+                        "{reason}"
+                    );
+                }
+                PlanOutcome::NoPlan { reason } => panic!("the last good plan vanished: {reason}"),
+            }
+        };
+        assert!(
+            calls > 1,
+            "the solve fitted one budget, so this tested nothing"
+        );
+        assert!(svc.is_healthy());
+
+        let mut unhurried = DpInterceptService::new(10);
+        let expected = unhurried
+            .plan(MissionTime(1.0), &grown, &resources)
+            .plan()
+            .cloned()
+            .expect("a plan");
+        assert_eq!(pairs(&finished), pairs(&expected));
+        assert_eq!(
+            finished.policy_value.to_bits(),
+            expected.policy_value.to_bits()
+        );
+    }
+
+    /// A picture that changes while a solve is under way drops that solve: its answer
+    /// would be to a question nobody is asking any more.
+    #[test]
+    fn a_solve_for_a_picture_that_has_changed_is_dropped() {
+        let clock = Arc::new(SteppedClock::new(Duration::from_millis(1)));
+        let mut svc = DpInterceptService::new(10)
+            .with_solve_budget(Duration::from_millis(4))
+            .with_clock(clock);
+        let resources = ready(&[40, 41, 42]);
+        let four = [track(70), track(71), track(72), track(73)];
+        let five = [track(70), track(71), track(72), track(73), track(74)];
+        for n in 1..=3_u32 {
+            let _ = svc.plan(MissionTime(f64::from(n)), &four, &resources);
+        }
+        match svc.plan(MissionTime(4.0), &five, &resources) {
+            PlanOutcome::NoPlan { reason } => {
+                assert!(reason.contains("5 track(s)"), "{reason}");
+                assert!(reason.contains("after 1 planning call(s)"), "{reason}");
+            }
+            other => panic!("expected the new picture's solve to have begun: {other:?}"),
+        }
+    }
+
+    /// An overrun with nothing to fall back on is `NoPlan`, never an empty plan: the
+    /// budget does not change GAP-066's distinction.
+    #[test]
+    fn an_over_budget_first_solve_has_no_plan_to_offer() {
+        let mut svc = DpInterceptService::new(10)
+            .with_clock(Arc::new(SteppedClock::new(Duration::from_millis(10))));
+        match svc.plan(MissionTime(1.0), &[track(1)], &[resource(1, true)]) {
+            PlanOutcome::NoPlan { reason } => assert!(reason.contains("budget"), "{reason}"),
+            other => panic!("expected no plan, got {other:?}"),
+        }
+        assert!(!svc.is_healthy());
+    }
+
+    /// The shipped planner's budget is MOP-06's. Nothing here times a real solve: a test
+    /// that did would pass or fail with the machine's load, which is what the stepped
+    /// clock exists to avoid.
+    #[test]
+    fn the_default_budget_is_mop_06() {
+        let svc = DpInterceptService::new(10);
+        assert_eq!(svc.solve_budget(), Duration::from_millis(4));
+        assert_eq!(svc.solve_budget(), DEFAULT_SOLVE_BUDGET);
+    }
+
+    /// A planner that failed and then had nothing to solve is healthy again, and its
+    /// answer is fresh: an empty picture is an answer, not a stale one.
+    #[test]
+    fn an_empty_picture_after_a_failure_is_fresh_and_healthy() {
+        let mut svc = DpInterceptService::new(10)
+            .with_clock(Arc::new(SteppedClock::new(Duration::from_millis(10))));
+        let _ = svc.plan(MissionTime(1.0), &[track(1)], &[resource(1, true)]);
+        assert!(!svc.is_healthy());
+        let outcome = svc.plan(MissionTime(2.0), &[], &[resource(1, true)]);
+        assert!(outcome.is_fresh(), "{outcome:?}");
+        assert!(svc.is_healthy());
     }
 
     /// **GAP-097's own closing action**: an unmoving track and a ready resource,

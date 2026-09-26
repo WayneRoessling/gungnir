@@ -50,7 +50,7 @@ use gungnir_model::{
 };
 use gungnir_node::approval::{self, Frame, NodeApproval};
 use gungnir_security::{
-    actions, hash_passphrase, Account, AuditEntry, AuditLog, InMemoryAccountStore, OperatorId,
+    actions, hash_passphrase, Account, AuditEntry, InMemoryAccountStore, OperatorId,
     OperatorSession, Role, TokenIssuer,
 };
 use std::sync::{Arc, Mutex};
@@ -222,6 +222,9 @@ struct Node {
     bus: Arc<InProcessBus>,
     dir: std::path::PathBuf,
     running: Arc<std::sync::atomic::AtomicBool>,
+    /// How many ticks the loop has finished, so a test can wait for one to have run
+    /// start to finish after it changed something ([`Node::settle`]).
+    ticks: Arc<std::sync::atomic::AtomicU64>,
 }
 
 /// A node that knows the four accounts these rows sign in as.
@@ -299,6 +302,7 @@ impl Node {
             tracks: Vec::new(),
         }));
         let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let ticks = Arc::new(std::sync::atomic::AtomicU64::new(0));
         // **A plain thread, not `spawn_blocking`.** A tokio runtime waits for its blocking
         // tasks when it shuts down, so a loop that runs until it is told to stop would
         // hang the test binary for ever the first time an assertion failed before
@@ -311,6 +315,7 @@ impl Node {
             let geo = geo.clone();
             let bus = bus.clone();
             let running = running.clone();
+            let ticks = ticks.clone();
             move || {
                 while running.load(std::sync::atomic::Ordering::Relaxed) {
                     {
@@ -349,6 +354,7 @@ impl Node {
                             .with_queue(queue),
                         );
                     }
+                    ticks.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     std::thread::sleep(std::time::Duration::from_millis(2));
                 }
             }
@@ -364,6 +370,29 @@ impl Node {
             bus,
             dir,
             running,
+            ticks,
+        }
+    }
+
+    /// Wait until the loop has run one whole tick after this call: the sweep, the
+    /// answers and the published picture all reflect whatever the test just changed.
+    ///
+    /// **Waited on, not slept on.** This was a fixed 20 ms pause, which is a guess at how
+    /// soon the loop thread is scheduled: under a loaded test run it was not, the queue
+    /// read before the loop had published it came back empty, and
+    /// `a_pre_delegated_item_still_expires_and_escalates` indexed an empty list (seen
+    /// twice building GAP-120). The tick in progress when this is called may have read
+    /// the state before the change, so the wait is for the one after it to finish. The
+    /// deadline turns a stopped loop into a failure rather than a hang.
+    async fn settle(&self) {
+        let from = self.ticks.load(std::sync::atomic::Ordering::SeqCst);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while self.ticks.load(std::sync::atomic::Ordering::SeqCst) < from + 2 {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the node's loop ran no tick in 30 s"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
         }
     }
 
@@ -398,11 +427,11 @@ impl Node {
             let mut state = self.shared.lock().expect("the loop is running");
             state.now = MissionTime(seconds);
         }
-        settle().await;
+        self.settle().await;
     }
 
     async fn queue(&self) -> Vec<QueueItemView> {
-        settle().await;
+        self.settle().await;
         self.api.queue()
     }
 
@@ -467,12 +496,6 @@ fn account(operator: u64, role: Role) -> Account {
         role,
         phc: hash_passphrase(PASSPHRASE).expect("hashed"),
     }
-}
-
-/// Let the loop run a few ticks. It sleeps 2 ms; ten times that is enough for a decision
-/// to be taken and published without making a test's pass depend on timing.
-async fn settle() {
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 }
 
 // ---------------------------------------------------------------------------------
@@ -769,7 +792,7 @@ async fn every_refusal_records_nothing_and_writes_one_audit_entry() {
     assert_eq!(status, 400, "{body}");
     refusals += 1;
 
-    settle().await;
+    node.settle().await;
     assert!(
         node.records().is_empty(),
         "a refusal records nothing: {:?}",
@@ -796,7 +819,7 @@ async fn every_refusal_records_nothing_and_writes_one_audit_entry() {
     let before = node.audit_entries().len();
     let (status, body) = decide(node.addr, &operator, item, "the-decision", accept()).await;
     assert_eq!(status, 201, "{body}");
-    settle().await;
+    node.settle().await;
     assert_eq!(
         node.audit_entries().len() - before,
         1,
@@ -846,7 +869,7 @@ async fn a_partner_with_an_agreement_receives_a_handoff_this_node_issued() {
     let (status, body) = decide(node.addr, &operator, item, "the-decision", accept()).await;
     assert_eq!(status, 201, "{body}");
     let decision = recorded(&body);
-    settle().await;
+    node.settle().await;
     assert_eq!(node.handoffs(), 1, "the decision issued one handoff");
     assert_eq!(
         partner_handoffs(&node),

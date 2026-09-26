@@ -29,8 +29,9 @@ historical notes.
 ```
 gungnir-core, gungnir-coord, gungnir-filters, gungnir-association,     Tracking core: pure
 gungnir-track, gungnir-rfs, gungnir-track-fusion, gungnir-fusion-async, Rust, no UI or GPU
-gungnir-allocation, gungnir-metrics, gungnir-scenario                   types, verified
-gungnir-oracle, gungnir-testkit, gungnir-fuzz                           against oracles
+gungnir-allocation, gungnir-metrics, gungnir-scenario,                  types, verified
+gungnir-sensor-sim                                                      against oracles
+gungnir-oracle, gungnir-testkit, gungnir-fuzz
 
 gungnir-model                                                          Canonical views and
                                                                         events (foundation)

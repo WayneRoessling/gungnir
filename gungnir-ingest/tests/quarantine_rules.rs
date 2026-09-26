@@ -378,6 +378,7 @@ fn every_refusal_rule_quarantines_its_payload_under_its_own_reason_and_none_reac
             quarantined: 12,
             adapter_failures: 0,
             not_accepted: 0,
+            rehearsal_refused: 0,
         }
     );
     // Quarantine is the gateway doing its job, not the gateway failing.

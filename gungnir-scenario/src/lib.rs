@@ -39,12 +39,14 @@
 //! scenario's geography does not reshuffle its detections.
 
 pub mod library;
-pub mod pynum;
-pub mod python_random;
 pub mod sensor;
 pub mod tracks;
 pub mod truth;
 
+// The Python-parity arithmetic and random stream moved to `gungnir-sensor-sim` with the
+// observation model that needs them (docs/design/DN-32-re-observation-for-a-laydown.md
+// §4); re-exported under their old paths.
+pub use gungnir_sensor_sim::{pynum, python_random};
 pub use library::TrackLibrary;
 pub use python_random::PythonRandom;
 

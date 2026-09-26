@@ -26,7 +26,7 @@ use gungnir_mission::{JournalMissionManager, Mission, MissionManager, MissionSta
 use gungnir_model::{
     CollectionRequirement, PlanView, ResourceView, SensorId, SystemHealth, TrackId,
 };
-use gungnir_security::{InMemoryAuditLog, Role};
+use gungnir_security::{FileAuditLog, Role};
 use gungnir_sensor_management::InMemorySensorRegistry;
 use gungnir_store::{DurabilityPolicy, EventJournal, FileEventJournal, SessionId, StoreError};
 use gungnir_time::{TimeAuthority, WallClockAuthority};
@@ -54,6 +54,11 @@ pub enum AppError {
     /// fabricated to keep the window open would be exactly the fiction GAP-051 found.
     #[error(transparent)]
     Mission(#[from] gungnir_mission::MissionError),
+    /// The audit log beside the journal could not be opened (GAP-111, D-87). Refused as
+    /// a journal that will not open is: a desktop that could not keep the record of who
+    /// did what would run with C-04 silently broken.
+    #[error("the audit log could not be opened: {0}")]
+    Audit(gungnir_security::SecurityError),
 }
 
 pub struct AppState {
@@ -206,6 +211,16 @@ pub struct AppState {
     /// only the id -- tracked here, touched only by the live-planner step -- answers
     /// the actual question without being disturbed by what else wrote `last_plan`.
     pub last_live_plan_id: Option<gungnir_model::PlanId>,
+    /// Whether the planner answered the current picture on the last tick, and if not,
+    /// how old the plan in force is and why (GAP-119, GAP-066).
+    ///
+    /// **So a stale plan never looks fresh.** [`Self::last_plan`] keeps the last plan
+    /// proposed, which is what PN-05 draws and what the queue holds; when the planner
+    /// cannot answer a tick -- a solve not finished inside its budget, a solve that
+    /// failed, a link that is down -- nothing about that plan changes, and before this
+    /// field nothing on PN-05 did either. PN-05 draws this above the plan and PN-07 names
+    /// it among the conditions a decision is taken under.
+    pub plan_standing: PlanStanding,
     /// The recommendation and its policy-checked alternatives for [`Self::last_plan`]
     /// (GAP-032), regenerated when the plan changes rather than every frame because each
     /// alternative is another allocator solve.
@@ -346,7 +361,12 @@ pub struct AppState {
 
     /// Configuration and decision actions, append-only (`gungnir-security`). PN-14
     /// shows it, which is what makes an apply visible to the next person.
-    pub audit: InMemoryAuditLog,
+    ///
+    /// **On disk since GAP-111** (D-87): `<data dir>/audit/`, hash-chained, one segment per
+    /// run. Before, it was held in memory and gone at every restart, so the desktop's
+    /// accountability record lasted exactly as long as the window was open. What
+    /// [`gungnir_security::AuditLog::entries`] returns is still this run's.
+    pub audit: FileAuditLog,
 
     /// The approval gate between a proposed plan and anything acting on it
     /// (GAP-038), and everything the decision path holds between calls: the queue and
@@ -582,6 +602,16 @@ impl AppState {
         }
 
         let clock = WallClockAuthority::default();
+        // GAP-111, D-87: the audit log is durable and hash-chained, beside the journal, in
+        // the format the node keeps. Opened as the journal is: a desktop that could not
+        // record who did what does not start, because the record C-04 asks for would be
+        // gone at the next restart. Synced per entry, since each is a person's act.
+        let audit = FileAuditLog::open(
+            &std::path::Path::new(&config.data_dir).join(gungnir_security::AUDIT_DIR),
+            gungnir_security::AuditSync::EveryEntry,
+            clock.now().0,
+        )
+        .map_err(AppError::Audit)?;
         // **The session is created through the lifecycle, not fabricated here.** This
         // used to mint an identifier from the wall clock and declare the mission `Live`
         // with nothing on disk saying so, which is why a desktop killed mid-session left
@@ -688,6 +718,7 @@ impl AppState {
             // itself produces, exactly as the single `last_plan` field did before this one
             // existed.
             last_live_plan_id: Some(gungnir_model::PlanId::default()),
+            plan_standing: PlanStanding::NotYetAsked,
             alternatives: Vec::new(),
             what_if: None,
             what_if_for: None,
@@ -728,7 +759,7 @@ impl AppState {
             next_launch_warning,
             retention,
             config_store,
-            audit: InMemoryAuditLog::new(),
+            audit,
             desk: ApprovalDesk::new(decision_settings),
             selected_approval: None,
             dialog: gungnir_ui::panels::decision_dialog::DecisionDialogState::default(),
@@ -983,18 +1014,85 @@ impl AppState {
     /// PN-16's rehearsal section for whichever laydown is selected right now (GAP-045).
     #[must_use]
     pub fn rehearsal_section(&self) -> gungnir_ui::panels::planning::RehearsalSection {
-        use gungnir_ui::panels::planning::{RehearsalSection, RehearsalSummary};
+        use gungnir_ui::panels::planning::{RehearsalSection, RehearsalSummary, RehearsedSensor};
         let Some(id) = self.selected_laydown() else {
             return RehearsalSection::NothingSelected;
         };
-        match self.rehearsal_records.get(id) {
-            Some(record) => RehearsalSection::Ran(RehearsalSummary {
-                scenario: record.scenario,
-                tracks_formed: record.tracks_formed,
-                decisions_raised: record.decisions_raised,
-                decisions_expired: record.decisions_expired,
-            }),
-            None => RehearsalSection::NotYetRun,
+        let Some(record) = self.rehearsal_records.get(id) else {
+            return RehearsalSection::NotYetRun;
+        };
+        // Per sensor, against the current laydown's rehearsal of the same recording --
+        // the comparison DN-32 §10's round-1 row asks for -- and never against a
+        // rehearsal of another recording, or the current laydown against itself.
+        let current = self
+            .current_rehearsal()
+            .filter(|c| c.laydown != record.laydown && c.scenario == record.scenario);
+        RehearsalSection::Ran(RehearsalSummary {
+            scenario: record.scenario,
+            seed: record.seed,
+            tracks_formed: record.tracks_formed,
+            decisions_raised: record.decisions_raised,
+            decisions_expired: record.decisions_expired,
+            sensors: record
+                .sensors
+                .iter()
+                .map(|s| RehearsedSensor {
+                    sensor: s.sensor.0,
+                    detection_model: s.detection_model.clone(),
+                    detections: s.detections,
+                    false_alarms: s.false_alarms,
+                    delta_from_current: current.and_then(|c| {
+                        let theirs = c.sensors.iter().find(|x| x.sensor == s.sensor)?;
+                        Some(signed(s.detections) - signed(theirs.detections))
+                    }),
+                })
+                .collect(),
+            recording_events_not_applied: record.recording_events_not_applied,
+        })
+    }
+
+    /// The current laydown's last rehearsal, if it has one.
+    fn current_rehearsal(&self) -> Option<&crate::laydown_rehearsal::RehearsalRecord> {
+        let current = self.config.laydowns.iter().find(|l| l.current)?;
+        self.rehearsal_records.get(&current.id)
+    }
+
+    /// PN-16's table cells for one laydown's rehearsal (GAP-105): read from its last run
+    /// rather than from its declared placements, and compared with the current laydown's
+    /// run only when both re-observed the same recording, naming the sensors the
+    /// difference came from.
+    #[must_use]
+    pub fn row_rehearsal(
+        &self,
+        id: &gungnir_model::LaydownId,
+        current: bool,
+    ) -> gungnir_ui::panels::planning::RowRehearsal {
+        use gungnir_ui::panels::planning::{RowRehearsal, VersusCurrent};
+        let Some(record) = self.rehearsal_records.get(id) else {
+            return RowRehearsal::NotRehearsed;
+        };
+        let total = |r: &crate::laydown_rehearsal::RehearsalRecord| -> usize {
+            r.sensors.iter().map(|s| s.detections).sum()
+        };
+        let versus_current = if current {
+            VersusCurrent::IsCurrent
+        } else {
+            match self.current_rehearsal() {
+                None => VersusCurrent::CurrentNotRehearsed,
+                Some(c) => match crate::laydown_rehearsal::sensors_that_differ(c, record) {
+                    None => VersusCurrent::DifferentRecording(c.scenario),
+                    Some(differ) => VersusCurrent::Difference {
+                        detections: signed(total(record)) - signed(total(c)),
+                        sensors: differ.iter().map(|d| d.sensor.0).collect(),
+                    },
+                },
+            }
+        };
+        RowRehearsal::Rehearsed {
+            scenario: record.scenario,
+            detections: total(record),
+            tracks_formed: record.tracks_formed,
+            versus_current,
         }
     }
 
@@ -1007,8 +1105,13 @@ impl AppState {
     /// to the working directory the binary was launched from
     /// (`docs/agentic-workflow.md`'s "both journal to `./gungnir-journal`"), here
     /// `./testdata`. **Not yet addressed**: whether a packaged release bundles
-    /// `testdata/tracks/samples/` beside the binary, which is a release-packaging
-    /// question this change does not answer.
+    /// `testdata/tracks/samples/` and `testdata/tracks/sensor-models.json` beside the
+    /// binary, which is a release-packaging question this change does not answer; a
+    /// desktop without them refuses a rehearsal by the path it could not read.
+    ///
+    /// The laydown's sensors are re-observed with the detection models this baseline's
+    /// `sensors` name (GAP-105, DN-32 §5.4), so a laydown placing a sensor that names
+    /// none is refused by name and nothing runs.
     pub fn run_rehearsal(
         &mut self,
         scenario: gungnir_model::TestTrackNumber,
@@ -1030,12 +1133,22 @@ impl AppState {
             std::path::Path::new("testdata"),
             scenario,
             &laydown,
+            &self.config.sensors,
             &self.config.resources,
         ) {
             Ok(record) => {
+                let per_sensor = record
+                    .sensors
+                    .iter()
+                    .map(|s| match &s.detection_model {
+                        Some(model) => format!("S{} ({model}) {}", s.sensor.0, s.detections),
+                        None => format!("S{} not observing", s.sensor.0),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 self.alerts.push(format!(
-                    "rehearsal of {} under {}: {} track(s) formed, {} decision(s) raised \
-                     ({} expired)",
+                    "rehearsal of {} re-observed from {}: {} track(s) formed, {} \
+                     decision(s) raised ({} expired); detections {per_sensor}",
                     laydown_id,
                     scenario.label(),
                     record.tracks_formed,
@@ -1061,6 +1174,12 @@ impl AppState {
     pub fn set_role(&mut self, role: Role) {
         self.selected_role = role;
     }
+}
+
+/// A count as a signed number, for a difference between two counts. Saturates rather
+/// than wrapping; no count of detections in a rehearsal comes near it.
+fn signed(n: usize) -> i64 {
+    i64::try_from(n).unwrap_or(i64::MAX)
 }
 
 /// Tell the operator about sessions the last run did not close.
@@ -1694,6 +1813,100 @@ fn tracking_service(
     }
 }
 
+/// What the planner said about the current picture on the last tick (GAP-119, GAP-066):
+/// [`gungnir_intercept_service::PlanOutcome`] without the plan, which the state already
+/// holds as [`AppState::last_plan`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlanStanding {
+    /// No tick has asked the planner yet.
+    NotYetAsked,
+    /// The plan in force answers the picture the last tick planned against.
+    Current,
+    /// The planner could not answer the last tick's picture. The plan in force is the
+    /// last one it did compute, at `computed_at`; `asked_at` is the tick that could not be
+    /// answered, so `asked_at - computed_at` is how old the answer is.
+    Stale {
+        computed_at: gungnir_model::MissionTime,
+        asked_at: gungnir_model::MissionTime,
+        reason: String,
+    },
+    /// The planner has never answered. Not an empty plan: nobody can say what the
+    /// sector needs.
+    NoPlan { reason: String },
+}
+
+impl PlanStanding {
+    /// The standing of one planning call's answer, asked at `now`.
+    #[must_use]
+    pub fn of(
+        outcome: &gungnir_intercept_service::PlanOutcome,
+        now: gungnir_model::MissionTime,
+    ) -> Self {
+        use gungnir_intercept_service::PlanOutcome;
+        match outcome {
+            PlanOutcome::Fresh(_) => Self::Current,
+            PlanOutcome::Stale {
+                computed_at,
+                reason,
+                ..
+            } => Self::Stale {
+                computed_at: *computed_at,
+                asked_at: now,
+                reason: reason.clone(),
+            },
+            PlanOutcome::NoPlan { reason } => Self::NoPlan {
+                reason: reason.clone(),
+            },
+        }
+    }
+
+    /// PN-05's view of it.
+    #[must_use]
+    pub fn view(&self) -> gungnir_ui::panels::intercept_panel::Standing<'_> {
+        use gungnir_ui::panels::intercept_panel::Standing;
+        match self {
+            Self::NotYetAsked => Standing::NoPlan {
+                reason: "the planner has not been asked yet",
+            },
+            Self::Current => Standing::Current,
+            Self::Stale {
+                computed_at,
+                asked_at,
+                reason,
+            } => Standing::Stale {
+                computed_at_s: computed_at.0,
+                age_s: (asked_at.0 - computed_at.0).max(0.0),
+                reason,
+            },
+            Self::NoPlan { reason } => Standing::NoPlan { reason },
+        }
+    }
+}
+
+/// This desktop's own planner, as the baseline describes it: the horizon, the local frame
+/// the geometry is solved in (GAP-031) and the solve budget (GAP-119, D-81).
+///
+/// **One builder for every embedded planner.** The desktop builds one at start, one on
+/// falling back from its node and one on signing out of it, and each was built by hand
+/// with the horizon alone; the two rebuilt ones had lost the local frame, so a desktop
+/// that fell back planned without intercept points. Everything a planner is configured
+/// with is set here, once.
+///
+/// A budget the baseline gets wrong cannot reach here from a file -- both binaries
+/// validate a baseline before building from it -- but a state built from a baseline in
+/// code is not validated, so a bad budget is said loudly and MOP-06's is used rather than
+/// panicking in the constructor.
+#[must_use]
+pub fn embedded_planner(config: &ConfigBaseline) -> DpInterceptService {
+    let budget = config.plan_solve_budget().unwrap_or_else(|err| {
+        tracing::error!(%err, "the baseline's solve budget is invalid; planning with MOP-06's");
+        gungnir_intercept_service::DEFAULT_SOLVE_BUDGET
+    });
+    DpInterceptService::new(config.allocation_horizon)
+        .with_local_frame(crate::sustainment::local_frame_of(config))
+        .with_solve_budget(budget)
+}
+
 /// Embedded services, or remote clients when configured and reachable. On a remote
 /// failure, fall back to embedded and record why (ARCHITECTURE.md §8.4).
 fn build_backends(
@@ -1729,11 +1942,9 @@ fn build_backends(
         // it filters by the promoted algorithm baseline, and stamps that baseline only
         // because it is applying it (DN-24 §7).
         Box::new(tracking_service(runtime, config, pipeline, alerts)),
-        // GAP-031: the planner solves geometry in the deployment's frame, when it has one.
-        Box::new(
-            DpInterceptService::new(config.allocation_horizon)
-                .with_local_frame(crate::sustainment::local_frame_of(config)),
-        ),
+        // GAP-031: the planner solves geometry in the deployment's frame, when it has one;
+        // GAP-119: and spends at most the baseline's budget a tick.
+        Box::new(embedded_planner(config)),
         BackendConfig::Embedded,
     )
 }
@@ -1755,6 +1966,7 @@ mod tests {
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         }
     }

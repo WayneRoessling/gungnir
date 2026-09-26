@@ -415,6 +415,7 @@ fn a_baseline_sector_is_recovered_against_true_north_through_the_frame() {
                 AzimuthSector::new(f64::to_radians(*boresight), f64::to_radians(*width))
                     .expect("legal"),
             ),
+            detection_model: None,
         })
         .collect();
     let mut registry = InMemorySensorRegistry::from_config(&configs, "cal-1");

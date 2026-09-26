@@ -51,8 +51,8 @@ verification row yet. That gap is called out explicitly where it applies.
 
 *Crates: `gungnir-core`, `gungnir-filters`, `gungnir-association`, `gungnir-track`,
 `gungnir-rfs`, `gungnir-fusion-async`, `gungnir-track-fusion`, `gungnir-coord`,
-`gungnir-allocation`, `gungnir-scenario`, `gungnir-metrics`, plus the cross-cutting
-verification crates `gungnir-oracle`, `gungnir-testkit`, `gungnir-fuzz`.*
+`gungnir-allocation`, `gungnir-scenario`, `gungnir-sensor-sim`, `gungnir-metrics`, plus the
+cross-cutting verification crates `gungnir-oracle`, `gungnir-testkit`, `gungnir-fuzz`.*
 
 This is the mathematical foundation of the entire product. Every capability
 described later in this document — the UI, the intercept planner, the ingestion
@@ -596,6 +596,35 @@ within the export format's precision.
 scenarios.
 
 *Risk if wrong:* Undermines trust in recorded test cases and regression fixtures.
+
+### `gungnir-sensor-sim` — Re-observation of Recorded Truth
+
+**Laydown Rehearsal Against a Recording (DN-32)**
+
+*What it does:* Answers, scan by scan, whether a sensor standing at a given place would
+have detected a target where a recording says the target was, and where it would have
+reported it. It is the observation half of the test-track generator, moved out of
+`gungnir-scenario` so that PN-16's laydown rehearsal can re-observe a committed recording
+with a laydown's own sensors without linking the crate that makes worlds.
+
+*Why it matters:* A laydown is chosen on what it would detect. Without re-observation a
+rehearsal replayed the recording's own detections whichever laydown was selected, so a
+comparison between laydowns rested on coverage arithmetic alone (GAP-105).
+
+*How it's verified:* The generator, now calling this crate, still reproduces all ten
+committed sample sets byte for byte; re-observing each set with its own sensors matches
+the recording statistically; moving a sensor moves only the detections its geometry
+changes; and five containment checks keep a re-observed detection out of every live path.
+The six rows are **Draft** in `verification-capability-table.md` §2.
+
+*Definition of done:* Draft (DN-32 §10); not agreed.
+
+*Data used:* The ten committed sample sets and their re-observation sidecars; round 1's
+baseline over a raid its test writes (GAP-147).
+
+*Risk if wrong:* A synthetic detection mistaken for a sensor's. That is why every
+observation is marked, a live gateway refuses a marked one, and no crate but the
+generator, the desktop's rehearsal and the verifiers may depend on this one.
 
 ### `gungnir-metrics` — Tracking Performance Metrics
 
@@ -1453,6 +1482,7 @@ calls it in its tick loop.
 | `gungnir-track-fusion` | Tracking core | Track-to-track CI fusion, registration/bias | Foundational | Trait surface |
 | `gungnir-allocation` | Tracking core | Bellman/DP resource assignment | Foundational | Returns `NotImplemented`; degenerate inputs tested |
 | `gungnir-scenario` | Tracking core | Five-scenario generator | Foundational | **Implemented 2026-09-05**: Scenarios 1 to 5 with truth, sensor model, and detections; both `scenario` verification rows gated. Does not reproduce the plan-07 Python generator byte for byte (GAP-016) |
+| `gungnir-sensor-sim` | Tracking core | Re-observation of recorded truth: the test-track generator's observation model | Foundational | **Implemented 2026-09-25** (GAP-105, DN-32): moved out of `gungnir-scenario` with the generator still byte-identical on all ten sample sets; re-observes a recording with a laydown's own sensors for PN-16's rehearsal. Generates no truth; a dependency of `gungnir-scenario`, `gungnir-app` and the verifiers only. Its six verification rows are Draft |
 | `gungnir-metrics` | Tracking core | MOTA/MOTP, purity/fragmentation | Foundational | **Implemented and gated 2026-09-05** against `py-motmetrics`, counts included |
 | `gungnir-oracle` | Tracking core (verification) | Differential-test harness | Foundational | Harness surface |
 | `gungnir-testkit` | Tracking core (verification) | Shared proptest strategies | Foundational | Implemented and tested |

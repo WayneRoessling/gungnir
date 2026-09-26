@@ -29,6 +29,7 @@ picture_tracking_vocabulary --> core_identifiers_frames_quality
 picture_tracking_vocabulary --> plans_effectors_handoff
 policy_authority_settings --> plans_effectors_handoff
 core_identifiers_frames_quality --> assets_exchange_releasability
+core_identifiers_frames_quality --> battle_rhythm_mission_records
 battle_rhythm_mission_records --> assets_exchange_releasability
 uas_identification_platform_reports --> picture_tracking_vocabulary
 uas_identification_platform_reports --> core_identifiers_frames_quality

@@ -2567,7 +2567,9 @@ fn the_commander_summary_lists_the_most_exposed_assets() {
 /// GAP-036), never colour alone.
 #[test]
 fn the_intercept_panel_lists_fires_checks_with_failures_as_text() {
-    use crate::panels::intercept_panel::{render_intercept_panel, Alternatives, FiresCheckLine};
+    use crate::panels::intercept_panel::{
+        render_intercept_panel, Alternatives, FiresCheckLine, ShownPlan, Standing,
+    };
     use gungnir_model::{
         FiresPlan, Geodetic, MissionTime, PlanId, PlanKind, PlanView, ResourceId, TrackId,
     };
@@ -2605,7 +2607,10 @@ fn the_intercept_panel_lists_fires_checks_with_failures_as_text() {
         render_intercept_panel(
             ui,
             &theme::Palette::day(),
-            &plan,
+            ShownPlan {
+                plan: &plan,
+                standing: Standing::Current,
+            },
             &[],
             &checks,
             &[],
@@ -2621,6 +2626,85 @@ fn the_intercept_panel_lists_fires_checks_with_failures_as_text() {
     assert!(frame.says("FAILED no-fire areas"), "{}", frame.joined());
 }
 
+/// **A stale plan says it is stale, how old it is and why, above the plan** (GAP-119).
+///
+/// The plan drawn is the same either way -- that is the point: the last good plan is
+/// kept, and before this the only thing that told an operator it no longer answered the
+/// picture was a health flag on another panel.
+#[test]
+fn the_intercept_panel_says_a_stale_plan_is_stale_with_its_age() {
+    use crate::panels::intercept_panel::{
+        render_intercept_panel, Alternatives, ShownPlan, Standing,
+    };
+    use gungnir_model::{
+        InterceptSolutionView, MissionTime, PlanKind, PlanView, ResourceId, TrackId,
+    };
+    let plan = PlanView {
+        mission_time: MissionTime(1.0),
+        kind: PlanKind::Intercept {
+            solutions: vec![InterceptSolutionView {
+                resource: ResourceId(40),
+                track: TrackId(70),
+                intercept_point: None,
+                time_to_intercept_s: None,
+            }],
+        },
+        ..PlanView::default()
+    };
+    let draw = |standing| {
+        RenderProbe::new()
+            .draw(|ui| {
+                render_intercept_panel(
+                    ui,
+                    &theme::Palette::day(),
+                    ShownPlan {
+                        plan: &plan,
+                        standing,
+                    },
+                    &[],
+                    &[],
+                    &[],
+                    &Alternatives::default(),
+                );
+            })
+            .1
+    };
+
+    let stale = draw(Standing::Stale {
+        computed_at_s: 1.0,
+        age_s: 2.5,
+        reason: "the solve for the current picture (4 track(s), 3 ready resource(s)) did \
+                 not finish inside its 4 ms budget; it is 12% done after 1 planning call(s)",
+    });
+    assert!(stale.says("STALE"), "{}", stale.joined());
+    assert!(
+        stale.says("computed at t = 1.0 s, 2.5 s before the planner was last asked"),
+        "the age is not on the panel: {}",
+        stale.joined()
+    );
+    assert!(
+        stale.says("did not finish inside its 4 ms budget"),
+        "{}",
+        stale.joined()
+    );
+    // The plan itself is still drawn: stale is a label on it, not a reason to hide it.
+    assert!(stale.says("Resource"), "{}", stale.joined());
+
+    let current = draw(Standing::Current);
+    assert!(!current.says("STALE"), "{}", current.joined());
+    assert!(!current.says("NO PLAN"), "{}", current.joined());
+
+    let none = draw(Standing::NoPlan {
+        reason: "no plan has been received from the node",
+    });
+    assert!(none.says("NO PLAN"), "{}", none.joined());
+    assert!(
+        none.says("no plan has been received from the node"),
+        "{}",
+        none.joined()
+    );
+}
+
 /// **A refused alternative is drawn with its denial rather than filtered out** (GAP-032).
 ///
 /// The failure this guards against is the quiet one: a panel that showed only the options
@@ -2628,7 +2712,9 @@ fn the_intercept_panel_lists_fires_checks_with_failures_as_text() {
 /// already refused, and the answer would arrive later than this line does.
 #[test]
 fn the_intercept_panel_draws_a_refused_alternative_with_its_denial() {
-    use crate::panels::intercept_panel::{render_intercept_panel, AlternativeLine, Alternatives};
+    use crate::panels::intercept_panel::{
+        render_intercept_panel, AlternativeLine, Alternatives, ShownPlan, Standing,
+    };
     use gungnir_model::PlanView;
     let options = [
         AlternativeLine {
@@ -2655,7 +2741,10 @@ fn the_intercept_panel_draws_a_refused_alternative_with_its_denial() {
         render_intercept_panel(
             ui,
             &theme::Palette::day(),
-            &PlanView::default(),
+            ShownPlan {
+                plan: &PlanView::default(),
+                standing: Standing::Current,
+            },
             &[],
             &[],
             &[],
@@ -3244,6 +3333,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
                 uncovered_m: 900.0,
                 delta_uncovered_m: None,
             },
+            rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
         },
         LaydownRow {
             id: LaydownId("west".into()),
@@ -3254,6 +3344,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
                 uncovered_m: 400.0,
                 delta_uncovered_m: Some(-500.0),
             },
+            rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
         },
         LaydownRow {
             id: LaydownId("untested".into()),
@@ -3262,6 +3353,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
             coverage: LaydownCoverage::NotComputed {
                 reason: "no terrain loaded for this sector".into(),
             },
+            rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
         },
     ];
     let view = PlanningView {
@@ -3327,6 +3419,110 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
     // The rehearsal section says a laydown is selected and not yet rehearsed, not
     // silently missing (GAP-045).
     assert!(frame.says("Not yet rehearsed"), "{}", frame.joined());
+}
+
+/// PN-16's label on a rehearsal (DN-32 section 6): every result says it was re-observed
+/// from a recording, names the recording and each sensor's detection model, and the
+/// table reads the run, naming the sensor a difference from the current laydown came
+/// from (GAP-105).
+#[test]
+fn a_rehearsal_is_labelled_re_observed_and_the_table_reads_the_run() {
+    use crate::panels::planning::{
+        render_planning, LaydownCoverage, LaydownRow, PlanningView, RehearsalSection,
+        RehearsalSummary, RehearsedSensor, RowRehearsal, VersusCurrent,
+    };
+    use gungnir_model::{LaydownId, TestTrackNumber};
+
+    let coverage = LaydownCoverage::Computed {
+        gap_segments: 2,
+        uncovered_m: 7000.0,
+        delta_uncovered_m: None,
+    };
+    let rows = vec![
+        LaydownRow {
+            id: LaydownId("current".into()),
+            intent: "the deployment as sited".into(),
+            current: true,
+            coverage: coverage.clone(),
+            rehearsal: RowRehearsal::Rehearsed {
+                scenario: TestTrackNumber(1),
+                detections: 120,
+                tracks_formed: 5,
+                versus_current: VersusCurrent::IsCurrent,
+            },
+        },
+        LaydownRow {
+            id: LaydownId("c".into()),
+            intent: "move S2 forward".into(),
+            current: false,
+            coverage,
+            rehearsal: RowRehearsal::Rehearsed {
+                scenario: TestTrackNumber(1),
+                detections: 168,
+                tracks_formed: 6,
+                versus_current: VersusCurrent::Difference {
+                    detections: 48,
+                    sensors: vec![2],
+                },
+            },
+        },
+    ];
+    let view = PlanningView {
+        laydowns: Section::Present(&rows),
+        terrain_model: "flat-terrain line of sight",
+        rehearsal: RehearsalSection::Ran(RehearsalSummary {
+            scenario: TestTrackNumber(1),
+            seed: 1701,
+            tracks_formed: 6,
+            decisions_raised: 3,
+            decisions_expired: 1,
+            sensors: vec![
+                RehearsedSensor {
+                    sensor: 1,
+                    detection_model: Some("radar.short".into()),
+                    detections: 100,
+                    false_alarms: 44,
+                    delta_from_current: Some(0),
+                },
+                RehearsedSensor {
+                    sensor: 2,
+                    detection_model: Some("radar.short".into()),
+                    detections: 68,
+                    false_alarms: 40,
+                    delta_from_current: Some(48),
+                },
+            ],
+            recording_events_not_applied: 2,
+        }),
+        rehearsal_scenario: TestTrackNumber(1),
+        selected: Some(&rows[1].id),
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));
+
+    assert!(
+        frame.says("Re-observed from a recording: TT-01"),
+        "{}",
+        frame.joined()
+    );
+    assert!(frame.says("not sensor data"), "{}", frame.joined());
+    assert!(frame.says("radar.short"), "{}", frame.joined());
+    assert!(
+        frame.says("TT-01: 168 detection(s), 6 track(s)"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("48 more detection(s), from S2"),
+        "{}",
+        frame.joined()
+    );
+    assert!(frame.says("+48"), "{}", frame.joined());
+    assert!(
+        frame.says("name its own sensors and were not applied"),
+        "{}",
+        frame.joined()
+    );
 }
 
 /// An empty laydown table says why rather than drawing nothing (DN-26 section 8).

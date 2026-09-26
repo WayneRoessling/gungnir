@@ -3,8 +3,8 @@
   "revision": 1,
   "origin": [0.959931, 0.20944, 0.0],
   "sensors": [
-    { "id": 1, "modality": "radar", "position": [0.959931, 0.20944, 25.0], "max_range_m": 15000.0 },
-    { "id": 2, "modality": "radar", "position": [0.96010, 0.21100, 30.0], "max_range_m": 12000.0 }
+    { "id": 1, "modality": "radar", "position": [0.959931, 0.20944, 25.0], "max_range_m": 15000.0, "detection_model": "radar.short" },
+    { "id": 2, "modality": "radar", "position": [0.96010, 0.21100, 30.0], "max_range_m": 12000.0, "detection_model": "radar.short" }
   ],
   "resources": [
     { "id": 1, "position": [0.959931, 0.20944, 0.0], "capacity": 4, "layer": "point", "rounds_available": 8, "reserve": 2, "intercept_speed_mps": 250.0 },
