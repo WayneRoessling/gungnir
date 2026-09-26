@@ -474,3 +474,215 @@ pub fn reobserve(
         sensor_events_not_applied: not_applied,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{ElectronicAttack, Latency, Noise};
+    use std::collections::BTreeMap;
+
+    fn radar(period: f64) -> SensorParams {
+        SensorParams {
+            signature_key: "rcs".into(),
+            range_m: BTreeMap::from([("small".to_owned(), Num::Int(10_000))]),
+            pd_in_range: Num::Float(1.0),
+            update_period_s: Num::Float(period),
+            noise: Noise {
+                range_m: Num::Int(10),
+                cross_m: Num::Int(10),
+                height_m: Num::Int(10),
+            },
+            field_of_regard_deg: [Num::Int(0), Num::Int(360)],
+            altitude_m: [Num::Int(0), Num::Int(10_000)],
+            horizon: false,
+            latency_s: Latency {
+                mean: Num::Float(0.1),
+                jitter: Num::Float(0.0),
+            },
+            dropout: Num::Float(0.0),
+            out_of_order: Num::Float(0.0),
+            false_alarms_per_scan: Num::Float(0.0),
+            ea: ElectronicAttack {
+                skew_s: Num::Int(0),
+                dropout_multiplier: Num::Float(1.0),
+                fa_multiplier: Num::Float(1.0),
+            },
+            cued: false,
+            moving_only: false,
+            sea_state_dropout: BTreeMap::from([(4, Num::Float(1.0))]),
+            bias_m: None,
+        }
+    }
+
+    fn entity(id: &str) -> EntityRecord {
+        EntityRecord {
+            id: id.to_owned(),
+            spawn_s: 0.0,
+            occluded_window_s: None,
+            signature: Signature {
+                rcs: Some("small".into()),
+                ..Signature::default()
+            },
+            decoy: false,
+            adsb_intermittent: None,
+            ais_spoof_offset_m: None,
+            surface: false,
+            destroyed_at_s: None,
+        }
+    }
+
+    fn record(t: f64, entity: &str) -> TruthRecord {
+        TruthRecord {
+            t,
+            entity: entity.to_owned(),
+            pos: [Num::Float(1000.0), Num::Float(0.0), Num::Float(100.0)],
+            vel: [Num::Float(0.0); 3],
+            alive: true,
+        }
+    }
+
+    fn recording(truth: Vec<TruthRecord>) -> Recording {
+        Recording {
+            scenario: "TT-99".into(),
+            seed: 1,
+            duration_s: 10.0,
+            tick_s: 2.0,
+            truth,
+            entities: vec![entity("E")],
+            environment: Vec::new(),
+        }
+    }
+
+    fn placed(id: i64) -> PlacedSensor {
+        PlacedSensor {
+            id,
+            model: radar(1.0),
+            position: [0.0, 0.0, 0.0],
+        }
+    }
+
+    fn every_tick() -> Vec<TruthRecord> {
+        (0..=5).map(|k| record(f64::from(k) * 2.0, "E")).collect()
+    }
+
+    #[test]
+    fn a_truth_record_between_ticks_is_refused_rather_than_interpolated() {
+        let mut truth = every_tick();
+        truth.push(record(3.0, "E"));
+        let err = reobserve(
+            &recording(truth),
+            &[placed(1)],
+            SensorEvents::NotApplied,
+            "x",
+        )
+        .expect_err("3 s is not on a 2 s tick");
+        assert!(matches!(err, ReObservationError::NotOnTick { .. }), "{err}");
+        assert!(err.to_string().contains("does not interpolate"), "{err}");
+    }
+
+    #[test]
+    fn truth_naming_an_undescribed_entity_is_refused() {
+        let err = reobserve(
+            &recording(vec![record(0.0, "ghost")]),
+            &[placed(1)],
+            SensorEvents::NotApplied,
+            "x",
+        )
+        .expect_err("ghost is not in entities.json");
+        assert_eq!(err, ReObservationError::UnknownEntity("ghost".into()));
+    }
+
+    #[test]
+    fn a_sensor_placed_twice_or_nowhere_or_with_no_period_is_refused() {
+        let rec = recording(every_tick());
+        assert_eq!(
+            reobserve(&rec, &[placed(1), placed(1)], SensorEvents::NotApplied, "x"),
+            Err(ReObservationError::DuplicateSensor(1))
+        );
+        let mut nowhere = placed(2);
+        nowhere.position[0] = f64::NAN;
+        assert_eq!(
+            reobserve(&rec, &[nowhere], SensorEvents::NotApplied, "x"),
+            Err(ReObservationError::NonFinitePosition(2))
+        );
+        let mut stuck = placed(3);
+        stuck.model.update_period_s = Num::Int(0);
+        assert!(matches!(
+            reobserve(&rec, &[stuck], SensorEvents::NotApplied, "x"),
+            Err(ReObservationError::BadUpdatePeriod { sensor: 3, .. })
+        ));
+        let mut bad = rec;
+        bad.tick_s = 0.0;
+        assert_eq!(
+            reobserve(&bad, &[placed(1)], SensorEvents::NotApplied, "x"),
+            Err(ReObservationError::BadTick(0.0))
+        );
+    }
+
+    #[test]
+    fn every_observation_is_marked_with_the_recording_the_placement_and_the_seed() {
+        let run = reobserve(
+            &recording(every_tick()),
+            &[placed(1)],
+            SensorEvents::NotApplied,
+            "laydown-c",
+        )
+        .expect("runs");
+        assert!(!run.observations.is_empty());
+        for o in &run.observations {
+            assert_eq!(
+                o.mark(),
+                &SimulationMark {
+                    scenario: "TT-99".into(),
+                    placement: "laydown-c".into(),
+                    seed: 1,
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn a_target_destroyed_at_a_tick_is_not_seen_at_that_tick_though_its_record_reads_alive() {
+        let mut rec = recording(every_tick());
+        rec.entities[0].destroyed_at_s = Some(6.0);
+        let run = reobserve(&rec, &[placed(1)], SensorEvents::NotApplied, "x").expect("runs");
+        // Scans run while the scan time is at or before the tick; the tick at 6 s is the
+        // first the destroyed target is gone from, and nothing after it is recorded.
+        for o in &run.observations {
+            assert!(o.scan_time_s() <= 4.0, "seen at {}", o.scan_time_s());
+        }
+        assert!(run.per_sensor[0].detections > 0);
+    }
+
+    #[test]
+    fn a_deployments_sensors_meet_the_sea_state_and_not_the_recordings_sensor_events() {
+        let mut rec = recording(every_tick());
+        rec.environment = vec![
+            EnvironmentEvent::SensorLost { t: 0.0, sensor: 1 },
+            EnvironmentEvent::EaDropout {
+                t: 0.0,
+                sensor: 1,
+                until_s: Num::Int(10),
+                multiplier: Some(Num::Float(100.0)),
+            },
+        ];
+        let calm = reobserve(&rec, &[placed(1)], SensorEvents::NotApplied, "x").expect("runs");
+        assert_eq!(calm.sensor_events_not_applied, 2);
+        assert!(
+            calm.per_sensor[0].detections > 0,
+            "the loss names the recording's sensor 1"
+        );
+        let own = reobserve(&rec, &[placed(1)], SensorEvents::ById, "x").expect("runs");
+        assert_eq!(own.sensor_events_not_applied, 0);
+        assert_eq!(
+            own.per_sensor[0].scans, 0,
+            "the recording's own sensor 1 was lost"
+        );
+
+        // Sea state 4 raises this model's dropout to the 0.95 cap, whoever placed it.
+        rec.environment = vec![EnvironmentEvent::SeaState { t: 0.0, value: 4 }];
+        let rough = reobserve(&rec, &[placed(1)], SensorEvents::NotApplied, "x").expect("runs");
+        assert_eq!(rough.sensor_events_not_applied, 0);
+        assert!(rough.per_sensor[0].detections < calm.per_sensor[0].detections);
+    }
+}
