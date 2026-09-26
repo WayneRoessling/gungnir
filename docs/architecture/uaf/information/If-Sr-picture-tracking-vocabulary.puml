@@ -99,6 +99,17 @@ class "PlanView" as PlanView <<InformationElement>> {
   kind: PlanKind
   policy_value: f64
   releasability: Releasability
+  basis: PlanBasis
+}
+enum "PlanBasis" as PlanBasis <<InformationElement>> {
+  Exact
+  OneStep
+}
+enum "PlanStandingView" as PlanStandingView <<InformationElement>> {
+  Current
+  Interim { value_at_least: f64, optimum_at_most: f64, reason: String, }
+  Stale { computed_at: MissionTime, reason: String, }
+  NoPlan { reason: String }
 }
 class "SystemHealth" as SystemHealth <<InformationElement>> {
   tracking_healthy: bool
@@ -144,7 +155,9 @@ ResourceView --> EffectorLayer : layer
 ResourceView --> Magazine : magazine
 ResourceView --> RelativeCost : cost
 PlanView --> MissionTime : mission_time
+PlanView --> PlanBasis : basis
 PlanView --> PlanId : id
 PlanView --> PlanKind : kind
 PlanView --> Releasability : releasability
+PlanStandingView --> MissionTime : Stale
 @enduml

@@ -1830,6 +1830,12 @@ pub enum PlanStanding {
     NotYetAsked,
     /// The plan in force answers the picture the last tick planned against.
     Current,
+    /// The plan in force answers the picture the last tick planned against, but it is a
+    /// one-step answer standing in for an optimum the planner could not reach in time
+    /// (GAP-156, D-93). `share` says how much of the best plan's value it is known to
+    /// reach; `reason` why the optimum is not here. On a linked desktop both are the
+    /// node's (GAP-157).
+    Interim { share: String, reason: String },
     /// The planner could not answer the last tick's picture. The plan in force is the
     /// last one it did compute, at `computed_at`; `asked_at` is the tick that could not be
     /// answered, so `asked_at - computed_at` is how old the answer is.
@@ -1845,26 +1851,29 @@ pub enum PlanStanding {
 
 impl PlanStanding {
     /// The standing of one planning call's answer, asked at `now`.
+    ///
+    /// The reason is the planner's in full: why, and how far the solve has got where one
+    /// is under way on this desktop (GAP-119). A linked desktop's planner is the node's,
+    /// whose progress stays on the node (D-94), so its reason is the why alone.
     #[must_use]
     pub fn of(
         outcome: &gungnir_intercept_service::PlanOutcome,
         now: gungnir_model::MissionTime,
     ) -> Self {
         use gungnir_intercept_service::PlanOutcome;
+        let reason = outcome.reason_in_full().unwrap_or_default();
         match outcome {
             PlanOutcome::Fresh(_) => Self::Current,
-            PlanOutcome::Stale {
-                computed_at,
+            PlanOutcome::Interim { bound, .. } => Self::Interim {
+                share: bound.sentence(),
                 reason,
-                ..
-            } => Self::Stale {
+            },
+            PlanOutcome::Stale { computed_at, .. } => Self::Stale {
                 computed_at: *computed_at,
                 asked_at: now,
-                reason: reason.clone(),
+                reason,
             },
-            PlanOutcome::NoPlan { reason } => Self::NoPlan {
-                reason: reason.clone(),
-            },
+            PlanOutcome::NoPlan { .. } => Self::NoPlan { reason },
         }
     }
 
@@ -1877,6 +1886,7 @@ impl PlanStanding {
                 reason: "the planner has not been asked yet",
             },
             Self::Current => Standing::Current,
+            Self::Interim { share, reason } => Standing::Interim { share, reason },
             Self::Stale {
                 computed_at,
                 asked_at,
@@ -1903,16 +1913,22 @@ impl PlanStanding {
 /// A budget the baseline gets wrong cannot reach here from a file -- both binaries
 /// validate a baseline before building from it -- but a state built from a baseline in
 /// code is not validated, so a bad budget is said loudly and MOP-06's is used rather than
-/// panicking in the constructor.
+/// panicking in the constructor. The stand-in wait (GAP-156, D-93) is read by the same
+/// rule, with MOP-07's figure in place of a bad one.
 #[must_use]
 pub fn embedded_planner(config: &ConfigBaseline) -> DpInterceptService {
     let budget = config.plan_solve_budget().unwrap_or_else(|err| {
         tracing::error!(%err, "the baseline's solve budget is invalid; planning with MOP-06's");
         gungnir_intercept_service::DEFAULT_SOLVE_BUDGET
     });
+    let wait = config.plan_stand_in_after().unwrap_or_else(|err| {
+        tracing::error!(%err, "the baseline's stand-in wait is invalid; waiting MOP-07's");
+        gungnir_intercept_service::DEFAULT_STAND_IN_AFTER
+    });
     DpInterceptService::new(config.allocation_horizon)
         .with_local_frame(crate::sustainment::local_frame_of(config))
         .with_solve_budget(budget)
+        .with_stand_in_after(wait)
 }
 
 /// Embedded services, or remote clients when configured and reachable. On a remote

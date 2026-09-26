@@ -496,6 +496,9 @@ impl Node {
         {
             let _ = approval::propose(&mut self.approval, &frame, plan);
         }
+        self.announcer
+            .standing(&self.bus, now, &outcome)
+            .expect("published");
         approval::sweep(&mut self.approval, &frame);
         approval::answer_decisions(&mut self.approval, &frame).expect("answered");
         approval::answer_forwarded(&mut self.approval, &frame);
@@ -527,6 +530,7 @@ impl Node {
             self.tracking.bearing_rays(),
             self.tracking.pipeline_stats(),
             self.announcer.last_plan(),
+            self.announcer.last_standing(),
             health,
             queue,
         );

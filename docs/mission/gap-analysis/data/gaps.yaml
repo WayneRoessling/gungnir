@@ -10163,6 +10163,19 @@
       Filed by GAP-119 rather than answered there, because what stands in for an optimum
       the planner cannot reach is a change to what the allocation row promises -- the
       crate refuses a heuristic by design -- and that is the owner's to decide.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed under the owner's delegation of 2026-09-26 (D-93; DN-04 §11). After
+      `plan_stand_in_after_ms` behind the picture (500 ms, MOP-07), or at once past the
+      exact limits, the planner answers with `gungnir_allocation::solve_one_step`, the
+      one-step optimum under the same tie rule, bounded against the horizon's optimum.
+      The plan carries `PlanBasis::OneStep`; PN-05, PN-06 and PN-07 say INTERIM, accept
+      waits on acknowledging it, and the exact plan replaces it. Tests:
+      `gungnir-allocation/tests/one_step_oracle.rs`, `gungnir-intercept-service/src/lib.rs`,
+      `gungnir-app/tests/interim_plan.rs`. The one-step solver is numerical code, so
+      human-owned; see `docs/signatures.md`. Raised GAP-168 and GAP-169. See
+      `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.
 - id: GAP-157
   name: A linked desktop cannot tell that its node's planner is stale
   type: Technical
@@ -10201,6 +10214,18 @@
       the remote one relays the node's plan without the node's standing. GAP-161, merged
       alongside, made the linked health flag honest; the plan's age and reason need the
       node's computed-at time on the wire, a schema change of its own.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed under the owner's delegation of 2026-09-26 (D-94; DN-04 §11). The node
+      publishes its plan's standing -- current, interim with its bound, stale since
+      `computed_at`, or no plan -- as `InterceptEvent::PlanStanding` when it changes and
+      in the snapshot's `plan_standing`. `RemoteInterceptService` answers what the node
+      says, converting `computed_at` through the offset it measures per connection, so a
+      linked PN-05 draws the STALE line with the age on the node's clock. Additive, so
+      `SCHEMA_VERSION` stands. Tested over mutual TLS with the desktop's clock a hundred
+      seconds from the node's (`gungnir-app/tests/linked_plan_standing.rs`). See
+      `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.
 
 
 - id: GAP-165
@@ -10518,3 +10543,77 @@
       Found by GAP-117's round trip. Not fixed there: changing the writer without a
       reader for the old form would leave every journal written since GAP-069 with
       identity events it cannot read, and how to read them is a decision this needs.
+- id: GAP-168
+  name: >-
+    The intercept-service row's degradation clause stops at the last good plan
+  type: Technical
+  caps: [CAP-3.3, CAP-5.5]
+  layer: Verification and governance
+  sev: 1
+  effort: S
+  target: I3
+  owner: Owner
+  deps: [GAP-156]
+  impact: >-
+    The `gungnir-intercept-service` "Plan determinism and degradation" row of the
+    verification table says an "over-budget solve returns the last good plan, flagged".
+    Since GAP-156 that holds only for the planner's stand-in wait, 500 ms of mission time
+    by default: after it the planner answers the current picture with an interim one-step
+    plan labelled as not the optimum, and a picture past the exact solver's limits gets
+    one at once. A reader of the table is told the last good plan stands for as long as a
+    solve runs. The sentence is in the row's pass-criterion cell, and any change to a
+    criterion cell is the owner's.
+  evidence: >-
+    `docs/verification-capability-table.md` §2 (the `gungnir-intercept-service` Plan
+    determinism and degradation row); `gungnir-intercept-service/src/lib.rs`
+    (`an_over_budget_solve_returns_the_last_good_plan_stale`,
+    `an_interim_answer_stands_in_once_the_planner_has_waited`); D-93
+  action: >-
+    On the owner's next walk of the table, decide whether the degradation clause names
+    the interim answer that follows the wait and its label, and walk the row against the
+    budget and stand-in tests. The criterion itself is unchanged.
+  ref: >-
+    Found closing GAP-156 (`../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found closing GAP-156. Not edited in that change: the sentence is in a criterion
+      cell of the verification table, which only the owner changes.
+- id: GAP-169
+  name: An older desktop reads a newer node's interim plan as the optimum
+  type: Technical
+  caps: [CAP-3.3, CAP-7.3]
+  layer: Deployment and API
+  sev: 2
+  effort: S
+  target: I3
+  owner: Owner
+  deps: [GAP-156, GAP-157]
+  impact: >-
+    `PlanView::basis` and the snapshot's `plan_standing` are defaulted, which the
+    interface's rules call compatible, so `SCHEMA_VERSION` stands at 4 and a desktop built
+    before them still links to a newer node. That desktop ignores the basis: it draws a
+    node's interim plan on PN-05 and in PN-06 and PN-07 as an ordinary plan, and would
+    let it be accepted without the acknowledgement D-93 puts on it. The same rules name a
+    change "a client could read as valid and act on wrongly" as one that moves a version.
+    Node and desktop are built from one workspace and released together, so the exposure
+    is a fleet running mixed versions.
+  evidence: >-
+    `gungnir-model/src/lib.rs` (`PlanView::basis`, defaulted to `Exact`);
+    `docs/gungnir-api-v1.md`, "Compatibility rules"; `gungnir-remote/src/link.rs` (the
+    snapshot's version check is an exact match, so a bump refuses an older desktop by
+    name)
+  action: >-
+    Decide between moving `SCHEMA_VERSION` to 5, so an older desktop is refused by name
+    -- and with it every older machine client, since a detection submission's version is
+    checked exactly -- and recording that a node and its desktops are released together
+    and a mixed fleet is not supported.
+  ref: >-
+    Found building GAP-156 (`../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found building GAP-156. Not decided there: a version move refuses every older
+      client of every route, which is a release decision rather than the planner's.

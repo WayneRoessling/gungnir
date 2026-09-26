@@ -203,7 +203,8 @@ pub fn tick(state: &mut AppState) {
 /// **A stale plan is not proposed** (GAP-066). `PlanOutcome` separates a plan computed
 /// for this snapshot from the last one that succeeded and from never having had one;
 /// publishing `PlanProposed` for a stale plan would put a recommendation in the journal
-/// that nothing recommended now.
+/// that nothing recommended now. An interim plan is proposed (GAP-156, D-93): it answers
+/// this snapshot, and the basis it carries labels it in the queue and on the record.
 ///
 /// **This is the one place the linked and the cut-off paths part** (GAP-133, DN-31 §6,
 /// clause §6.5; D-55), and they part here rather than three steps later on purpose.
@@ -233,10 +234,13 @@ fn plan_and_queue(
     // GAP-119: whether that answer is for this picture, and if not how old the plan in
     // force is -- for PN-05's banner and PN-07's conditions, every tick.
     state.plan_standing = crate::state::PlanStanding::of(&outcome, now);
+    // GAP-156: an interim plan answers this tick's picture too, and is proposed and queued
+    // like a fresh one -- labelled, by the basis it carries, wherever it is drawn.
     let plan = match &outcome {
-        gungnir_intercept_service::PlanOutcome::Fresh(plan) => plan.clone(),
+        gungnir_intercept_service::PlanOutcome::Fresh(plan)
+        | gungnir_intercept_service::PlanOutcome::Interim { plan, .. } => plan.clone(),
         not_fresh => {
-            tracing::debug!(?not_fresh, "no fresh plan this tick");
+            tracing::debug!(?not_fresh, "no plan for this tick's picture");
             state.last_plan.clone()
         }
     };
@@ -248,7 +252,7 @@ fn plan_and_queue(
     // `DpInterceptService::fresh_plan` never reuses a `PlanId` for a different
     // assignment, so the id alone -- tracked here and touched only by this step --
     // answers "have I already announced this one" without that interference.
-    let plan_changed = outcome.is_fresh() && state.last_live_plan_id != Some(plan.id);
+    let plan_changed = outcome.answers_the_picture() && state.last_live_plan_id != Some(plan.id);
     if !plan_changed {
         return crate::decisions::PlanMoved::Unchanged;
     }

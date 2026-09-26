@@ -371,6 +371,7 @@ mod tests {
                 kind: PlanKind::Intercept { solutions },
                 policy_value: value,
                 releasability: gungnir_model::Releasability::default(),
+                basis: gungnir_model::PlanBasis::Exact,
             })
         }
     }

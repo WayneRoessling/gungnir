@@ -115,6 +115,7 @@ mod tests {
             },
             policy_value: 3.5,
             releasability: gungnir_model::Releasability::default(),
+            basis: gungnir_model::PlanBasis::Exact,
         };
         let scores = vec![
             RiskScore {

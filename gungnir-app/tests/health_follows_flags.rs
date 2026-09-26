@@ -68,6 +68,7 @@ impl InterceptService for FlaggedPlanner {
     fn plan(&mut self, _: MissionTime, _: &[TrackView], _: &[ResourceView]) -> PlanOutcome {
         PlanOutcome::NoPlan {
             reason: "a test planner plans nothing".into(),
+            progress: None,
         }
     }
     fn is_healthy(&self) -> bool {

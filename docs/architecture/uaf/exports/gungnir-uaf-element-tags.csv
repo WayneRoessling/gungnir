@@ -1325,6 +1325,10 @@ IE-pipeline-stats-view,uafId,IE-pipeline-stats-view
 IE-pipeline-stats-view,uafKind,InformationElement
 IE-pipeline-stats-view,registry.code,gungnir_model::PipelineStatsView
 IE-pipeline-stats-view,registry.domain,Picture & tracking vocabulary
+IE-plan-basis,uafId,IE-plan-basis
+IE-plan-basis,uafKind,InformationElement
+IE-plan-basis,registry.code,gungnir_model::PlanBasis
+IE-plan-basis,registry.domain,Picture & tracking vocabulary
 IE-plan-id,uafId,IE-plan-id
 IE-plan-id,uafKind,InformationElement
 IE-plan-id,registry.code,gungnir_model::PlanId
@@ -1333,6 +1337,10 @@ IE-plan-kind,uafId,IE-plan-kind
 IE-plan-kind,uafKind,InformationElement
 IE-plan-kind,registry.code,gungnir_model::PlanKind
 IE-plan-kind,registry.domain,"Plans, effectors & handoff"
+IE-plan-standing-view,uafId,IE-plan-standing-view
+IE-plan-standing-view,uafKind,InformationElement
+IE-plan-standing-view,registry.code,gungnir_model::PlanStandingView
+IE-plan-standing-view,registry.domain,Picture & tracking vocabulary
 IE-policy-settings,uafId,IE-policy-settings
 IE-policy-settings,uafKind,InformationElement
 IE-policy-settings,registry.code,gungnir_model::PolicySettings

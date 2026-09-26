@@ -1092,6 +1092,9 @@ impl NodeApi {
             // queue is withheld from it entirely -- but the field says what this node's
             // clock was all the same, rather than a `None` that would read as unknown.
             node_time: None,
+            // GAP-157: the plan's standing goes where the plan goes, and the plan is
+            // withheld above. Not counted separately: it says nothing without the plan.
+            plan_standing: None,
         })
     }
 

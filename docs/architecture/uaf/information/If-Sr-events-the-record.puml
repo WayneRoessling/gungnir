@@ -14,6 +14,7 @@ enum "InterceptEvent" as InterceptEvent <<InformationElement>> {
   PlanApproved(PlanView)
   PlanSuperseded(PlanView)
   PlanEvaluated { plan: PlanId, verdict: VerdictSummary, engines: Vec<String>, }
+  PlanStanding(crate::PlanStandingView)
 }
 enum "IngestEvent" as IngestEvent <<InformationElement>> {
   Accepted(DetectionView)
@@ -168,6 +169,8 @@ class "PendingApprovalId\n(see If-Sr-plans-effectors-handoff)" as PendingApprova
 }
 class "PlanId\n(see If-Sr-picture-tracking-vocabulary)" as PlanId <<External>> #line.dashed {
 }
+enum "PlanStandingView\n(see If-Sr-picture-tracking-vocabulary)" as PlanStandingView <<External>> #line.dashed {
+}
 class "PlanView\n(see If-Sr-picture-tracking-vocabulary)" as PlanView <<External>> #line.dashed {
 }
 enum "ProductKind\n(see If-Sr-battle-rhythm-mission-records)" as ProductKind <<External>> #line.dashed {
@@ -186,6 +189,7 @@ class "TrackView\n(see If-Sr-picture-tracking-vocabulary)" as TrackView <<Extern
 }
 TrackingEvent --> TrackView : TrackInitiated, TrackUpdated
 InterceptEvent --> PlanId : PlanEvaluated
+InterceptEvent --> PlanStandingView : PlanStanding
 InterceptEvent --> PlanView : PlanProposed, PlanApproved, PlanSuperseded
 InterceptEvent --> VerdictSummary : PlanEvaluated
 IngestEvent --> DetectionView : Accepted

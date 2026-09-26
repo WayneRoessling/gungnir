@@ -238,6 +238,22 @@ cell says how and DN-32 §12 says why.
 | `gungnir-ingest`, `gungnir-app` | Containment of a re-observed detection (CAP-5.2) (human-owned: the ingest gateway) | Live gateway fed a marked observation (`gungnir-ingest/tests/rehearsal_containment.rs`); a manifest adding a forbidden edge (`gungnir-app/tests/dependency_graph.rs`'s `a_manifest_adding_a_forbidden_edge_to_the_sensor_sim_is_named`); a second module naming the crate (`gungnir-app/tests/architecture_compliance.rs`'s `only_the_laydown_rehearsal_names_the_sensor_simulation`) | Rejected and counted; `sensor_sim_misuse` names the edge; the source test names the module (**Draft**, DN-32 §10; not agreed) | Synthetic |
 | `gungnir-app` | Round 1 laydown `c` (CAP-5.2, CAP-1.4) | Rehearse `current` and `c` over the round-1 scenario (`gungnir-app/tests/laydown_rehearsal.rs`'s `round_1s_forward_radar_changes_its_own_detections_and_nothing_else`) | S2's per-sensor detection counts differ, and the record says which sensor the difference came from (**Draft**, DN-32 §10; not agreed) | `testdata/usability/round-1.json`, over a raid down round 1's declared approach written by the test, because no committed recording reaches round 1's radars (GAP-147) |
 
+### Rows drafted from DN-04 §11, 2026-09-26 -- Draft, not agreed, not gates
+
+Three rows, from `design/DN-04-effector-model.md` §11's verification paragraph, written
+when GAP-156 and GAP-157 built what that amendment designs. **All three are Draft**: no
+criterion below has been agreed and none is a gate. Each names the test that implements it,
+and each test passes on the change that added it. A row becomes a gate only when the owner
+agrees its criterion and confirms that its test checks it (D-16). The existing
+`gungnir-intercept-service` degradation row above is unchanged; GAP-168 is what it would
+need.
+
+| Crate | Capability | Verification method | Pass criterion | Data source |
+|---|---|---|---|---|
+| `gungnir-allocation` | The one-step answer (CAP-3.3) (human-owned: numerical stability) | Property tests against the exact solve at a horizon of one on integer and fractional rewards, and against an independent dynamic program over resource subsets past the exact limits (`gungnir-allocation/tests/one_step_oracle.rs`) | Integer rewards: the same assignment as `solve_exact` at a horizon of one; any rewards: the value within 1e-9 of it, and of the subset program's past the exact limits; the exact optimum over the horizon lies between `stand_in`'s floor and ceiling; on a uniform matrix, the exact first step at the shipped horizon (**Draft**, DN-04 §11; not agreed) | Generated matrices |
+| `gungnir-intercept-service`, `gungnir-app` | An interim answer while the exact one is late (CAP-3.3, CAP-5.5) | A solve held over budget on a stepped clock, with mission time replayed (`gungnir-intercept-service/src/lib.rs`'s `an_interim_answer_stands_in_once_the_planner_has_waited`, `a_picture_that_keeps_changing_still_reaches_its_stand_in`, `a_picture_past_the_exact_limits_is_answered_at_once`; `gungnir-app/tests/interim_plan.rs`) | Stale with the last good plan until the stand-in wait; then an interim plan for the current picture, labelled on PN-05, PN-06 and PN-07, with the planner unhealthy and accept gated on acknowledging it; at once past the exact limits; the exact plan replaces it as a new plan (**Draft**, DN-04 §11; not agreed) | Synthetic |
+| `gungnir-remote`, `gungnir-node`, `gungnir-app` | A linked desktop draws the node's plan standing (CAP-3.3, CAP-7.3) | A node whose planner is held past its budget, served over mutual TLS to a desktop whose clock is a hundred seconds from the node's (`gungnir-app/tests/linked_plan_standing.rs`; `gungnir-remote/src/lib.rs`'s `a_linked_service_tells_what_the_node_says_about_its_plan`) | The desktop's PN-05 draws the node's STALE line with the age on the node's clock, then its INTERIM line with the node's bound and its queue item marked INTERIM, then nothing once the node is current (**Draft**, DN-04 §11; not agreed) | Synthetic, on the real transport |
+
 ### Rows added by plan 11, agreed 2026-09-05
 
 The twenty-three rows below come from the design notes in `design/`, covering twenty-two

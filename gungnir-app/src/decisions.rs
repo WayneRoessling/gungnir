@@ -185,11 +185,14 @@ impl gungnir_decision::PlanSource for SnapshotPlanner {
             .with_local_frame(self.frame)
             .with_solve_budget(self.budget);
         match planner.plan(now, tracks, resources) {
-            PlanOutcome::Fresh(plan) => Ok(plan),
+            // GAP-156: a picture past the exact solver's limits is answered at once with a
+            // one-step answer, and that is an option like any other -- labelled, by the
+            // basis it carries, as not the optimum.
+            PlanOutcome::Fresh(plan) | PlanOutcome::Interim { plan, .. } => Ok(plan),
             // A planner constructed a line ago cannot hold a stale plan, but both
             // non-fresh outcomes carry a reason and both mean the same thing here: this
             // snapshot has no answer, which is not the same as needing no action.
-            PlanOutcome::Stale { reason, .. } | PlanOutcome::NoPlan { reason } => {
+            PlanOutcome::Stale { reason, .. } | PlanOutcome::NoPlan { reason, .. } => {
                 Err(gungnir_decision::PlanUnavailable::Allocator { reason })
             }
         }
@@ -470,6 +473,8 @@ pub fn queue_rows(state: &AppState) -> Vec<QueueRow<'_>> {
             // queue's own list, in escalation order, not a second derivation of it.
             offered_to: &item.offered_to,
             escalated_from: item.escalated_from.as_deref(),
+            // GAP-156: the label travels with the plan into the queue.
+            basis: item.plan.basis,
         })
         .collect()
 }

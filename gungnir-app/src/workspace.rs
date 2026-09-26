@@ -1082,7 +1082,18 @@ pub fn render_decision_dialog(
 
     // Owned for the frame: `NodeAnswer` borrows its sentence (GAP-133).
     let answer_line = crate::projection::answer_line(state, gungnir_model::PendingApprovalId(id.0));
-    let conditions = degraded_conditions(state);
+    let mut conditions = degraded_conditions(state);
+    // GAP-156, D-93: an interim plan is decided only once a person has acknowledged that
+    // it is one -- the same gate D-82 put on a stale plan, keyed on the item's own plan so
+    // it holds for an interim item whatever the planner is doing now.
+    if row.basis == gungnir_model::PlanBasis::OneStep {
+        conditions.push((
+            "plan",
+            "this item's plan is an interim one-step answer, not the planner's optimum; it \
+             stood in because the exact solve could not answer the picture in time"
+                .to_owned(),
+        ));
+    }
     let degraded: Vec<Degraded<'_>> = conditions
         .iter()
         .map(|(subsystem, detail)| Degraded { subsystem, detail })
@@ -1262,6 +1273,14 @@ fn degraded_conditions(state: &AppState) -> Vec<(&'static str, String)> {
         crate::state::PlanStanding::NoPlan { reason } => out.push((
             "intercept",
             format!("the planner has never answered; {reason}"),
+        )),
+        // GAP-156, D-93: the planner is answering, but not with its optimum.
+        crate::state::PlanStanding::Interim { share, reason } => out.push((
+            "intercept",
+            format!(
+                "INTERIM PLAN: the planner's answer to the picture on screen is the best \
+                 assignment for this step alone, not its optimum; it is {share}; {reason}"
+            ),
         )),
         crate::state::PlanStanding::Current | crate::state::PlanStanding::NotYetAsked
             if !state.health().intercept_healthy =>

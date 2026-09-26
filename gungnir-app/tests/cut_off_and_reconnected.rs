@@ -638,6 +638,7 @@ impl InterceptService for StatedPlans {
     fn plan(&mut self, _: MissionTime, _: &[TrackView], _: &[ResourceView]) -> PlanOutcome {
         PlanOutcome::NoPlan {
             reason: "this test states its plans".into(),
+            progress: None,
         }
     }
     fn is_healthy(&self) -> bool {

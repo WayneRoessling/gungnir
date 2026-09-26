@@ -348,8 +348,10 @@ IE-peer-launch-warning,Information Elements,InformationElement,PeerLaunchWarning
 IE-peer-origin,Information Elements,InformationElement,PeerOrigin,Where a peer-sourced track came from and how far behind it is.,Class
 IE-pending-approval-id,Information Elements,InformationElement,PendingApprovalId,Identifies one item in an approval queue.,Class
 IE-pipeline-stats-view,Information Elements,InformationElement,PipelineStatsView,"The pipeline's own counters, for a caller across a process boundary (GAP-096's wire contract): how many bearings were offered, updated a track, were retained, expired, or were refused, alongside the wider counters they sit next to on gungnir_fusion_async::PipelineStats.",Class
+IE-plan-basis,Information Elements,InformationElement,PlanBasis,"How a plan was reached (GAP-156, D-93).",Class
 IE-plan-id,Information Elements,InformationElement,PlanId,Identifier of one plan produced by the intercept service.,Class
 IE-plan-kind,Information Elements,InformationElement,PlanKind,What a plan proposes. Intercept is the behaviour that existed before fires.,Class
+IE-plan-standing-view,Information Elements,InformationElement,PlanStandingView,"What a planner says about its answer to the current picture, as a node puts it on the wire (GAP-157, D-94; docs/design/DN-04-effector-model.md \u00a711).",Class
 IE-policy-settings,Information Elements,InformationElement,PolicySettings,"Everything about how this deployment decides, in one versioned place.",Class
 IE-product-kind,Information Elements,InformationElement,ProductKind,Which product a ScheduledProduct entry produces on its cycle.,Class
 IE-rehearsal-event,Information Elements,InformationElement,RehearsalEvent,"A seeded session for a usability round (GAP-089). **The first record of a seeded session**, so nothing that follows can be read as an operation.",Class

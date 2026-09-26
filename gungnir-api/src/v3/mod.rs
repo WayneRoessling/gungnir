@@ -24,8 +24,8 @@
 use gungnir_model::events::VerdictSummary;
 use gungnir_model::{
     BearingRayView, CollectionRequirement, DecisionId, DetectionView, EffectorLayer, ExchangeItem,
-    MissionTime, PendingApprovalId, PipelineStatsView, PlanId, PlanView, Releasability,
-    SystemHealth, TrackView, SCHEMA_VERSION,
+    MissionTime, PendingApprovalId, PipelineStatsView, PlanId, PlanStandingView, PlanView,
+    Releasability, SystemHealth, TrackView, SCHEMA_VERSION,
 };
 
 pub use gungnir_eventing::Envelope as EventFrame;
@@ -97,6 +97,20 @@ pub struct SnapshotResponse {
     /// cannot support (`docs/gungnir-api-v1.md`).
     #[serde(default)]
     pub node_time: Option<MissionTime>,
+    /// **Whether `plan` answers this node's current picture** (GAP-157, D-94): current,
+    /// interim (a one-step answer standing in, GAP-156), stale since when and why, or
+    /// never answered. Kept live between snapshots by `InterceptEvent::PlanStanding`.
+    ///
+    /// Until this a linked desktop drew the node's plan as current whatever the node's
+    /// planner said, so a plan the node had stopped being able to refresh reached PN-05
+    /// with no stale line and no age. `computed_at` is the node's clock, as `node_time`
+    /// and every queue deadline are.
+    ///
+    /// **Additive and defaulted**, exactly as `node_time` above: `None` from a node that
+    /// does not say, which leaves a desktop where it was -- drawing the plan as the
+    /// node's latest, with the node's health flag beside it (GAP-161).
+    #[serde(default)]
+    pub plan_standing: Option<PlanStandingView>,
 }
 
 impl SnapshotResponse {
@@ -119,6 +133,9 @@ impl SnapshotResponse {
             // Filled in by the route that answers with it, which is the moment worth
             // stamping (GAP-140).
             node_time: None,
+            // Said by the node that publishes the snapshot (GAP-157); a snapshot built
+            // with nothing to say about its plan says nothing.
+            plan_standing: None,
         }
     }
 
@@ -128,6 +145,13 @@ impl SnapshotResponse {
     #[must_use]
     pub fn with_queue(mut self, queue: Vec<QueueItemView>) -> Self {
         self.queue = queue;
+        self
+    }
+
+    /// Attach whether the plan answers the node's current picture (GAP-157, D-94).
+    #[must_use]
+    pub fn with_plan_standing(mut self, standing: PlanStandingView) -> Self {
+        self.plan_standing = Some(standing);
         self
     }
 

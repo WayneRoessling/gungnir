@@ -95,6 +95,8 @@ fn populated_plan() -> PlanView {
         },
         policy_value: 0.73,
         releasability: Releasability::AllPeers,
+        // GAP-156: not the default, so a wire form that dropped the label shows here.
+        basis: gungnir_model::PlanBasis::OneStep,
     }
 }
 
@@ -176,6 +178,12 @@ fn full_snapshot() -> SnapshotResponse {
     )
     .with_bearing_data(vec![populated_bearing_ray()], populated_pipeline_stats())
     .with_queue(vec![populated_queue_item()])
+    // GAP-157: the plan's standing, with every field of its richest variant set.
+    .with_plan_standing(gungnir_model::PlanStandingView::Interim {
+        value_at_least: 6.25,
+        optimum_at_most: 7.5,
+        reason: "the exact solver takes at most 16 tracks".into(),
+    })
 }
 
 /// Plain serde: the shape of the existing tests in `v3/mod.rs`, over the fully
@@ -204,6 +212,11 @@ fn a_fully_populated_snapshot_survives_plain_serde() {
     assert_eq!(back.bearing_rays, original.bearing_rays);
     assert_eq!(back.pipeline_stats, original.pipeline_stats);
     assert_eq!(back.queue, original.queue);
+    assert_eq!(
+        back.plan.as_ref().map(|p| p.basis),
+        Some(gungnir_model::PlanBasis::OneStep)
+    );
+    assert_eq!(back.plan_standing, original.plan_standing);
 }
 
 async fn serve(api: Arc<NodeApi>) -> std::net::SocketAddr {

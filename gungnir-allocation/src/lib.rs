@@ -7,14 +7,21 @@
 //! (1e-9) vs. textbook-verified DP -- a deterministic optimization problem with one
 //! correct answer, same rationale as the `core` motion-model row. Deterministic math:
 //! no logging here (agentic-coding-standards.md §2.8).
+//!
+//! [`one_step`] is a second, separately named function: the best assignment for one step
+//! alone, which a planner stands in for the exact solve when that cannot answer a picture
+//! in time (GAP-156, D-93; docs/design/DN-04-effector-model.md §11). It never answers in
+//! [`bellman`]'s name, and the plan it produces says what it is.
 
 pub mod bellman;
+pub mod one_step;
 
 pub use bellman::{
     solve_exact, solve_exact_within, value_function, ExactSolve, Progress, CHECK_EVERY_MATCHINGS,
     MAX_RESOURCES, MAX_TRACKS,
 };
 pub use gungnir_core::{ResourceId, TrackId};
+pub use one_step::{solve_one_step, stand_in, StandIn};
 
 /// Why an allocation could not be produced.
 #[derive(Debug, thiserror::Error)]

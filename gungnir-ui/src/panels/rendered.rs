@@ -256,6 +256,7 @@ fn the_queue_draws_a_plans_tag_and_the_dialog_its_whole_identifier() {
         may_decide: true,
         offered_to: &[],
         escalated_from: None,
+        basis: gungnir_model::PlanBasis::Exact,
     };
     let rows = [
         row(1, minted),
@@ -416,6 +417,7 @@ fn the_decision_dialog_draws_accept_last() {
         may_decide: true,
         offered_to: &[],
         escalated_from: None,
+        basis: gungnir_model::PlanBasis::Exact,
     };
     let view = DecisionDialogView {
         row: &row,
@@ -498,6 +500,7 @@ fn a_degraded_decision_draws_why_accept_is_shut() {
         may_decide: true,
         offered_to: &[],
         escalated_from: None,
+        basis: gungnir_model::PlanBasis::Exact,
     };
     let degraded = [Degraded {
         subsystem: "tracking",
@@ -2702,6 +2705,127 @@ fn the_intercept_panel_says_a_stale_plan_is_stale_with_its_age() {
         none.says("no plan has been received from the node"),
         "{}",
         none.joined()
+    );
+
+    // GAP-156: an interim answer says so as plainly, with how good it is known to be.
+    let interim = draw(Standing::Interim {
+        share: "worth at least 87% of the best plan's value",
+        reason: "the exact solver takes at most 16 tracks",
+    });
+    assert!(interim.says("INTERIM"), "{}", interim.joined());
+    assert!(
+        interim.says("not the planner's optimum"),
+        "{}",
+        interim.joined()
+    );
+    assert!(interim.says("at least 87%"), "{}", interim.joined());
+    assert!(interim.says("at most 16 tracks"), "{}", interim.joined());
+    assert!(interim.says("Resource"), "the plan itself is still drawn");
+}
+
+/// **An interim plan carries its label wherever it is drawn** (GAP-156): on PN-05 under
+/// a stale line, where the standing alone says only that it is stale, and on its PN-06
+/// row and in PN-07.
+#[test]
+fn an_interim_plan_is_labelled_on_pn05_pn06_and_pn07() {
+    use crate::panels::approval_queue::{
+        render_approval_queue, ApprovalQueueView, EmptyBecause, PendingId, QueueOrder, QueueRow,
+        TimeRemaining, Verdict,
+    };
+    use crate::panels::decision_dialog::{
+        render_decision_dialog, DecisionDialogState, DecisionDialogView, DecisionRoute,
+        OperatorIdentity,
+    };
+    use crate::panels::intercept_panel::{
+        render_intercept_panel, Alternatives, ShownPlan, Standing,
+    };
+    use gungnir_model::{PlanBasis, PlanId, PlanView};
+    let plan = PlanView {
+        basis: PlanBasis::OneStep,
+        ..PlanView::default()
+    };
+    let pn05 = RenderProbe::new()
+        .draw(|ui| {
+            render_intercept_panel(
+                ui,
+                &theme::Palette::day(),
+                ShownPlan {
+                    plan: &plan,
+                    standing: Standing::Stale {
+                        computed_at_s: 1.0,
+                        age_s: 2.0,
+                        reason: "behind",
+                    },
+                },
+                &[],
+                &[],
+                &[],
+                &Alternatives::default(),
+            );
+        })
+        .1;
+    assert!(pn05.says("STALE"), "{}", pn05.joined());
+    assert!(pn05.says("INTERIM"), "{}", pn05.joined());
+
+    let row = QueueRow {
+        escalated_from: None,
+        offered_to: &[],
+        id: PendingId(1),
+        plan_id: PlanId(7),
+        assignments: 2,
+        verdict: Verdict::RequiresHumanApproval,
+        time_remaining: TimeRemaining::NoExpiryConfigured,
+        pre_delegated: false,
+        may_decide: true,
+        basis: PlanBasis::OneStep,
+    };
+    let rows = [row];
+    let queue = ApprovalQueueView {
+        rows: &rows,
+        order: QueueOrder::TimeThenPriority,
+        empty_because: EmptyBecause::NothingPending,
+        selected: None,
+        may_decide: true,
+        role: "Operator",
+        handoffs: &[],
+        now: gungnir_model::MissionTime(0.0),
+        authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+        decided: &[],
+        cannot_decide: None,
+    };
+    let probe = RenderProbe::new();
+    let (_, pn06) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &queue));
+    assert!(pn06.says("INTERIM"), "{}", pn06.joined());
+
+    let unavailable = Unavailable {
+        owner: "gungnir-assessment",
+        gap: "GAP-028",
+    };
+    let dialog = DecisionDialogView {
+        row: &rows[0],
+        rationale: Err(unavailable),
+        alternatives: Section::Unavailable(unavailable),
+        cost: Err(unavailable),
+        degraded: &[],
+        engines: &["control status"],
+        caveats: &[],
+        operator: OperatorIdentity::Unattributed {
+            role: "Operator",
+            gap: "GAP-057",
+        },
+        may_accept: true,
+        may_override: false,
+        route: DecisionRoute::ThisDesktop,
+        answer: None,
+    };
+    let mut state = DecisionDialogState::default();
+    let (_, pn07) =
+        probe.draw(|ui| render_decision_dialog(ui, &theme::Palette::day(), &dialog, &mut state));
+    assert!(pn07.says("INTERIM"), "{}", pn07.joined());
+    assert!(
+        pn07.says("could not answer the picture in time"),
+        "{}",
+        pn07.joined()
     );
 }
 
