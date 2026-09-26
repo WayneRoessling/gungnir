@@ -174,7 +174,7 @@ history, and an entry is never edited once it has merged.
 | GAP-162 | A sensor manager may apply a whole baseline, and applying one checks no permission | Technical | CAP-6.2, CAP-5.6 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-163 | A cut tail of the audit log still verifies, because nothing outside it holds its head | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-167 | The outage tests' proxy can let one connection through a cut | Technical | CAP-5.4 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
-| GAP-164 | The miri gate could not run miri | Technical | CAP-7.4 | 3 | 5 | S | 15 | I2 | Services engineer | In progress |
+| GAP-164 | The miri gate could not run miri | Technical | CAP-7.4 | 3 | 5 | S | 15 | I2 | Services engineer | Closed |
 | GAP-166 | nalgebra's decompositions violate Stacked Borrows | Technical | CAP-7.4 | 2 | 5 | S | 10 | I2 | Owner | Open |
 
 Counts: 163 gaps, 3 mission, 160 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
@@ -2451,11 +2451,12 @@ Counts: 163 gaps, 3 mission, 160 technical; 1 already covered by a plan in `../.
   - 2026-09-26, In progress: Two dispatched runs on the fix branch. The first passed setup, ran every test in `gungnir-allocation`'s library under miri, and stopped at `open`: isolation refuses the committed fixture a test reads, so isolation is now disabled. The second reached `gungnir-association` and stopped at a Stacked Borrows violation in nalgebra's Cholesky, which Tree Borrows accepts and nalgebra 0.35.0 still has; the gate now runs under Tree Borrows (D-90) and the finding is GAP-166.
   - 2026-09-26, In progress: The third run failed one `gungnir-core` test by three ulp because miri perturbs transcendental results; the job now sets `-Zmiri-deterministic-floats`. The fourth ran out of its 180-minute bound. Timed per crate: six pass; `gungnir-intercept-service` failed on five tests that planned on the real clock with the 4 ms budget, now on a clock that stands still (they passed or failed with the machine's load natively too); the oracle-difference suites of `gungnir-filters`, `gungnir-rfs`, `gungnir-fusion-async` and `gungnir-metrics` run for more than forty minutes each. The job is now a per-crate matrix bounded at 350 minutes a crate.
   - 2026-09-26, In progress: The per-crate run: eight crates passed, `gungnir-tracking-service`'s replays failed their own 60 s deadlock guard, and `gungnir-rfs`, `gungnir-filters` and `gungnir-fusion-async` ran to the 350-minute bound, the first two inside their own unit tests. Every filters and rfs test was then timed alone. The gate now runs each crate's unit tests and the suites that finish, with the long-run tests named in `miri.yml` (D-92), bounded at 120 minutes. Closes when a dispatched run passes.
+  - 2026-09-26, Closed: Dispatched run 36253724048 passed all twelve crates under miri, the slowest `gungnir-fusion-async` at 55 minutes, then `gungnir-filters` at 42 and `gungnir-rfs` at 26. The gate can now pass, and fail, on a pull request that adds `unsafe`. GAP-166 (nalgebra under Stacked Borrows) stays open.
 - Evidence: `.github/workflows/miri.yml`; `rust-toolchain.toml`; the three miri runs of 2026-09-26 on GAP-124's branch, each failing in `cargo miri setup`.
 - Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
 - Impact: Gate 3 runs miri on any pull request whose diff adds `unsafe`. The job installed a nightly toolchain and ran `cargo miri`, which the pinned `rust-toolchain.toml` resolved to stable `1.98`; stable ships no miri, so the job failed at setup every time it was triggered. The first pull request to add real `unsafe` code would have met a gate that could not pass, and one that did pass would have proved nothing.
 - Closing action: Run miri as `cargo +nightly miri`, and give the workflow a manual trigger that runs the job without the scan, then dispatch it on `main` and record the outcome.
-- Target: I2. Owner: Services engineer. Status: In progress.
+- Target: I2. Owner: Services engineer. Status: Closed.
 - Reference: Found merging GAP-124 (`../../record/2026-09-26/the-miri-gate-had-never-run-miri.md`).
 
 **GAP-166 nalgebra's decompositions violate Stacked Borrows**

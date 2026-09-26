@@ -10404,6 +10404,13 @@
       unit tests. Every filters and rfs test was then timed alone. The gate now runs each
       crate's unit tests and the suites that finish, with the long-run tests named in
       `miri.yml` (D-92), bounded at 120 minutes. Closes when a dispatched run passes.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Dispatched run 36253724048 passed all twelve crates under miri, the slowest
+      `gungnir-fusion-async` at 55 minutes, then `gungnir-filters` at 42 and `gungnir-rfs`
+      at 26. The gate can now pass, and fail, on a pull request that adds `unsafe`.
+      GAP-166 (nalgebra under Stacked Borrows) stays open.
 - id: GAP-166
   name: nalgebra's decompositions violate Stacked Borrows
   type: Technical

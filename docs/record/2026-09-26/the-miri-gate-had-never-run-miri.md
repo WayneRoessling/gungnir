@@ -96,10 +96,11 @@ to eight minutes.
 
 The owner chose to interpret each crate's unit tests and the suites that finish, leaving
 the long runs out by name (D-92). `miri.yml` lists every one left out with its measured
-time, and a test is added back when it is measured to finish. The slowest job is now
-about 35 minutes, and the bound is 120.
+time, and a test is added back when it is measured to finish. The bound is 120 minutes.
 
 ## Evidence
 
-The first dispatched run on `main` after this merges is the evidence that the job
-interprets the twelve crates; GAP-164 records its outcome.
+Dispatched run 36253724048 on the pull request's branch, 2026-09-26, with the scope
+above: all twelve crates passed. The slowest were `gungnir-fusion-async` at 55
+minutes, `gungnir-filters` at 42 and `gungnir-rfs` at 26, and the whole run took 55
+minutes. GAP-164 is closed on it.

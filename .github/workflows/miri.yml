@@ -100,8 +100,8 @@ jobs:
               --skip tests::cphd_shows_less_cardinality_swing_than_phd_under_frequent_missed_detections
               --skip tests::the_mixture_stays_bounded_over_a_long_dense_run
     name: miri (${{ matrix.crate }})
-    # The slowest job measured is about 35 minutes; the bound leaves room without letting
-    # a hang run for hours.
+    # The slowest job is gungnir-fusion-async at 55 minutes (dispatched run 36253724048,
+    # 2026-09-26); the bound leaves room without letting a hang run for hours.
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
