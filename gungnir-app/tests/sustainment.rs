@@ -304,6 +304,7 @@ fn a_desktop_with_no_baseline_file_refuses_to_apply() {
         "Operator",
         None,
         gungnir_ui::panels::config_editor::GovernedProfiles::NothingDeclared,
+        &[],
     );
     assert!(
         matches!(
@@ -333,6 +334,8 @@ fn a_desktop_with_no_baseline_file_refuses_to_apply() {
 #[test]
 fn an_unvalidated_candidate_is_not_applied() {
     let (mut state, _dir) = desktop("unvalidated");
+    // A role that may apply, so what is refused is the missing validation (GAP-162).
+    state.set_role(gungnir_security::Role::Administrator);
     let mut editor = ConfigEditorState::default();
     let err = editor
         .apply(&mut state)
@@ -424,7 +427,9 @@ fn pn14_applies_an_edited_baseline_on_its_first_apply() {
             )),
         )
         .expect("desktop state");
-        // The administrator edits the file.
+        // The administrator edits the file, and applies it as one (GAP-162: `apply`
+        // checks the role that applies).
+        state.set_role(gungnir_security::Role::Administrator);
         write(&ConfigBaseline {
             revision: edited_revision,
             ..running

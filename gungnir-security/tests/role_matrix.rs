@@ -69,8 +69,8 @@ const SECTION_4: &[(&str, [&str; 6])] = &[
     ),
     ("Plan apply", ["", "yes", "yes", "", "", ""]),
     (
-        "Apply a sensor or calibration baseline (GAP-111)",
-        ["", "", "", "yes", "", ""],
+        "Apply a sensor or calibration baseline (GAP-111, GAP-162)",
+        ["", "yes", "yes", "yes", "", ""],
     ),
     ("Model promotion", ["", "concur", "", "", "yes", ""]),
     ("Product release", ["", "yes", "yes", "", "", "yes"]),
@@ -138,8 +138,8 @@ const ROW_ACTIONS: &[(&str, &[&str])] = &[
     ("Sensor tasking", &[actions::TASK_SENSOR]),
     ("Plan apply", &[actions::APPLY_CONFIG]),
     (
-        "Apply a sensor or calibration baseline (GAP-111)",
-        &[actions::APPLY_CONFIG],
+        "Apply a sensor or calibration baseline (GAP-111, GAP-162)",
+        &[actions::APPLY_SENSING_CONFIG],
     ),
     ("Model promotion", &[actions::PROMOTE_MODEL]),
     ("Product release", &[actions::RELEASE_PRODUCT]),
@@ -232,6 +232,7 @@ const EVERY_ACTION: &[(&str, &str)] = &[
     ("DECIDE_PLAN", actions::DECIDE_PLAN),
     ("OVERRIDE_PLAN", actions::OVERRIDE_PLAN),
     ("APPLY_CONFIG", actions::APPLY_CONFIG),
+    ("APPLY_SENSING_CONFIG", actions::APPLY_SENSING_CONFIG),
     ("TASK_SENSOR", actions::TASK_SENSOR),
     ("PROMOTE_MODEL", actions::PROMOTE_MODEL),
     ("EXPORT_REPORT", actions::EXPORT_REPORT),
@@ -437,4 +438,24 @@ fn the_corrections_hold() {
     assert!(role_permits(Role::Analyst, actions::CONDUCT_REVIEW));
     assert!(actions::is_known(actions::REQUIREMENT));
     assert!(actions::is_known(actions::ASSIGN_ROLE));
+}
+
+/// GAP-162 (D-91): the sensor manager applies sensing baselines and not whole ones, so a
+/// baseline it applies cannot reach weapons control status or the authority rules; the
+/// roles that may apply a whole baseline hold the sensing action as well.
+#[test]
+fn the_sensor_manager_applies_sensing_baselines_only() {
+    assert!(role_permits(
+        Role::SensorManager,
+        actions::APPLY_SENSING_CONFIG
+    ));
+    assert!(!role_permits(Role::SensorManager, actions::APPLY_CONFIG));
+    for whole in [Role::Supervisor, Role::Commander, Role::Administrator] {
+        assert!(role_permits(whole, actions::APPLY_CONFIG), "{whole:?}");
+        assert!(
+            role_permits(whole, actions::APPLY_SENSING_CONFIG),
+            "{whole:?}"
+        );
+    }
+    assert!(actions::is_known(actions::APPLY_SENSING_CONFIG));
 }
