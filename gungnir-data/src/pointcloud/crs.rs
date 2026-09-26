@@ -16,9 +16,11 @@
 //! this workspace (`ARCHITECTURE.md` §7.1), so it cannot reach `gungnir_model::
 //! LocalFrame` or `gungnir-coord`'s WGS-84 math. It therefore does the half only it can
 //! do -- the file's own CRS to geographic WGS-84 -- and takes the geographic-to-ENU half
-//! as a closure from the caller, which is the same shape
-//! `gungnir_analytics::coverage_from_registry` and `gungnir_assessment::anchor_list`
-//! already use for exactly this reason.
+//! as a closure from the caller, which is the same shape `gungnir_assessment::anchor_list`
+//! already uses for exactly this reason. (`gungnir_analytics::coverage_from_registry`
+//! used it too until GAP-118, when it took the `LocalFrame` itself because a sensor's
+//! sector has to be turned by the frame as well as placed in it; `gungnir-analytics` can
+//! reach the model, and this crate cannot.)
 
 use crate::geospatial::GridCrs;
 use crate::DataError;

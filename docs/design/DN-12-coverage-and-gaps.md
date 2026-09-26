@@ -163,3 +163,42 @@ errors in a coverage routine.
 GAP-006; CAP-1.4; MT-07 step 3, MT-09; depends on GAP-003 for the wired registry and DN-01
 for asset positions; read by DN-13; `../ux/wireframes/WF-11-coverage-layers.puml`,
 `WF-16-planning.puml`; principle AP-02.
+
+## 9. Amendment 1: a coverage volume has a bearing
+
+Raised 2026-09-25 by GAP-118, under D-84.
+
+`CoverageVolume` had a range and a lower elevation limit and no azimuth, so a panel radar,
+a fixed camera or a sensor masked on one side by its own mast was counted, drawn and
+compared as covering the full circle, and the Coverage accuracy row's bearing clause had
+nothing to check.
+
+1. **`gungnir_model::AzimuthSector`**: a boresight and a width in `(0, 2π]`, bearings
+   clockwise from north, contained across the wrap through north. It lives in the model
+   because the baseline, the registry, the analytics and the viewport all carry it (AP-06).
+2. **In a baseline a sector is against true north at the sensor**, which is how a survey
+   states one: `SensorConfig.azimuth_sector`, and a laydown's
+   `SensorPlacement.azimuth_sector` for a placement that re-aims its sensor. **Absent is
+   the full circle**, on both, so every baseline written before sectors existed means what
+   it meant; a placement without its own takes the declaration's. Validation refuses a
+   non-finite boresight or a width outside `(0, 2π]`, naming the sensor or the placement,
+   and `analytics.coverage_min_elevation_rad` is now refused outside `[-π/2, π/2]`.
+3. **A `CoverageVolume`'s sector is in the local frame**, because `covers` is.
+   `LocalFrame::true_north_at` gives the frame bearing of true north at a position -- the
+   meridian convergence, about 0.1 degree eleven kilometres east of an origin at 45 degrees
+   north and 0.35 degree at 39 km -- and `LocalFrame::sector_in_frame` turns a sector with
+   it. `coverage_from_registry` now takes the frame rather than a conversion closure so it
+   can do this, and `volume_of` gives one sensor's volume for DN-13's candidates.
+4. **PN-11 draws a sector as a wedge** from the sensor to its range between its edges; the
+   full circle stays a ring. PN-16 and DN-13's recommendations count coverage only inside
+   the sector.
+
+**Found by the fixture**: the approach sampler restarted its spacing at every vertex, so a
+segment shorter than the spacing contributed no sample and a curved or digitised approach
+was judged by its first point. It now spaces samples along the whole polyline.
+
+Not in this amendment, and filed as GAP-158: an upper elevation limit, a lower one per
+sensor rather than one for the baseline, and elevation measured against the sensor's own
+vertical rather than the frame's. The verification is
+`gungnir-analytics/tests/coverage_accuracy.rs`; the row itself is unchanged, and walking
+it is the owner's.

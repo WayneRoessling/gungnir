@@ -434,10 +434,10 @@ fn moving_round_1s_forward_radar_trades_redundancy_and_does_not_create_coverage(
     // win would otherwise leave three documents describing a trade that no longer
     // exists.
     //
-    // Volumes are built exactly as `sustainment::laydown_coverage_volumes` builds them
-    // -- sensors that search or track, placed by the laydown, ranged by the baseline --
-    // which is itself the finding this scenario rests on: coverage reads placements and
-    // nothing else about a laydown.
+    // Volumes are built by `sustainment::laydown_coverage_volumes` itself -- sensors that
+    // search or track, placed by the laydown, ranged and aimed by the baseline -- which is
+    // itself the finding this scenario rests on: coverage reads placements and nothing
+    // else about a laydown.
     let (state, dir) = desktop("trade");
     let frame = gungnir_app::sustainment::local_frame(&state).expect("round-1 declares an origin");
     let routes: Vec<Vec<[f64; 3]>> = state
@@ -465,33 +465,13 @@ fn moving_round_1s_forward_radar_trades_redundancy_and_does_not_create_coverage(
             .iter()
             .find(|l| l.id.0 == id)
             .unwrap_or_else(|| panic!("laydown {id:?}"));
-        let volumes: Vec<(gungnir_model::SensorId, gungnir_analytics::CoverageVolume)> = laydown
-            .sensors
-            .iter()
-            .filter(|s| {
-                matches!(
-                    s.mode,
-                    gungnir_model::SensorMode::Search | gungnir_model::SensorMode::Track
-                )
-            })
-            .map(|s| {
-                let max_range_m = state
-                    .config
-                    .sensors
-                    .iter()
-                    .find(|d| d.id == s.sensor.0)
-                    .expect("a laydown may only place a declared sensor")
-                    .max_range_m;
-                (
-                    s.sensor,
-                    gungnir_analytics::CoverageVolume {
-                        sensor_enu: s.position_enu,
-                        max_range_m,
-                        min_elevation_rad: state.config.analytics.coverage_min_elevation_rad,
-                    },
-                )
-            })
-            .collect();
+        // The same volumes PN-16 computes, sector and all (GAP-118).
+        let volumes = gungnir_app::sustainment::laydown_coverage_volumes(
+            laydown,
+            &state.config.sensors,
+            state.config.analytics.coverage_min_elevation_rad,
+            &frame,
+        );
         gungnir_analytics::combined_coverage(
             &volumes,
             &gungnir_analytics::FlatTerrainLineOfSight,

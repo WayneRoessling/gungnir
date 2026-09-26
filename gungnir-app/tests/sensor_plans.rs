@@ -30,6 +30,7 @@ fn desktop(name: &str, approaches: Vec<ApproachConfig>) -> (AppState, std::path:
         max_range_m: 20_000.0,
         control_endpoint: None,
         maintenance: Vec::new(),
+        azimuth_sector: None,
     };
     let config = ConfigBaseline {
         data_dir: dir.to_string_lossy().into_owned(),

@@ -18,6 +18,7 @@ fn placed(sensor: u32, position_enu: [f64; 3]) -> SensorPlacement {
         sensor: SensorId(sensor),
         position_enu,
         mode: SensorMode::Search,
+        azimuth_sector: None,
     }
 }
 
@@ -202,6 +203,72 @@ fn a_selection_naming_no_declared_laydown_previews_nothing() {
         laydown_preview(&state).is_none(),
         "a selection naming no declared laydown must not preview a stale one"
     );
+}
+
+/// GAP-118, D-84: PN-16 counts a sensor's coverage only inside its azimuth sector. The
+/// approach runs east; a laydown that re-aims the radar west leaves all of it uncovered,
+/// one that aims it east covers what the full circle did, and a sector declared on the
+/// sensor itself is what a placement without its own inherits.
+#[test]
+fn a_laydown_counts_coverage_only_inside_the_sensor_s_sector() {
+    let sector = |boresight_deg: f64, width_deg: f64| {
+        gungnir_model::AzimuthSector::new(boresight_deg.to_radians(), width_deg.to_radians())
+            .expect("legal")
+    };
+    let aimed = |id: &str, s: Option<gungnir_model::AzimuthSector>| {
+        let mut p = placed(1, [0.0, 0.0, 10.0]);
+        p.azimuth_sector = s;
+        laydown(id, id == "current", vec![p])
+    };
+    let uncovered = |config: ConfigBaseline| -> std::collections::HashMap<String, f64> {
+        gungnir_config::validate(&config).expect("valid");
+        let state = AppState::with_config(config).expect("starts");
+        match planning_rows(&state) {
+            PlanningRows::Rows(rows) => rows
+                .into_iter()
+                .map(|r| match r.coverage {
+                    LaydownCoverage::Computed { uncovered_m, .. } => (r.id.0, uncovered_m),
+                    LaydownCoverage::NotComputed { reason } => panic!("{reason}"),
+                })
+                .collect(),
+            PlanningRows::Empty { reason } => panic!("{reason}"),
+        }
+    };
+
+    let mut config = base_config();
+    config.laydowns = vec![
+        aimed("current", None),
+        aimed("aimed-west", Some(sector(270.0, 90.0))),
+        aimed("aimed-east", Some(sector(90.0, 60.0))),
+    ];
+    let rows = uncovered(config);
+    let (full, west, east) = (rows["current"], rows["aimed-west"], rows["aimed-east"]);
+    // The approach is 0.01 rad of longitude, 63.8 km; sampled at the default 250 m, its
+    // last sample is at 63.5 km. The full circle covers its near stretch (below the
+    // curvature of the earth, flat line of sight loses it further out).
+    assert!(
+        full < 60_000.0,
+        "the full circle covers some of it: {full} m"
+    );
+    assert!(
+        west >= 63_000.0,
+        "aimed away, the radar covers none of the approach: {west} m vs {full} m"
+    );
+    assert!(
+        (east - full).abs() < 1.0,
+        "aimed along it, it covers what the full circle did: {east} m vs {full} m"
+    );
+
+    // Declared on the sensor: every placement without its own sector inherits it.
+    let mut config = base_config();
+    config.sensors[0].azimuth_sector = Some(sector(270.0, 90.0));
+    config.laydowns = vec![
+        aimed("current", None),
+        aimed("aimed-east", Some(sector(90.0, 60.0))),
+    ];
+    let rows = uncovered(config);
+    assert!((rows["current"] - west).abs() < 1.0, "{rows:?}");
+    assert!((rows["aimed-east"] - full).abs() < 1.0, "{rows:?}");
 }
 
 #[test]
