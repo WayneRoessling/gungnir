@@ -41,7 +41,7 @@ six later notes read what they define.
 | Note | State | Where |
 |---|---|---|
 | DN-01 Defended assets | **Implemented and wired** (GAP-026); **amendment 2 (§10, the score reads time to impact), 2026-09-25** (GAP-124, D-83) | `gungnir-model/src/assets.rs`, the asset section and its validation in `gungnir-config`, `gungnir-assessment/src/assets.rs` and `kinematics.rs`; `sustainment::asset_assessor` scores the picture against it and PN-06 draws the score; PN-04's card shows the time to impact, urgency and closing confidence the score used |
-| DN-04 Effector model | **Implemented and wired** (GAP-030, 2026-09-06); **amendment 1 (§9)**, its field landed | `gungnir-model/src/effectors.rs`, the resource fields and their validation in `gungnir-config`, `ResourceView::is_adequate`; the planner filters on it and PN-05 draws what was withheld and why. `intercept_speed_mps` (amendment 1, D-26) is on both types, validated, and read by nothing until GAP-031's solver |
+| DN-04 Effector model | **Implemented and wired** (GAP-030, 2026-09-06); **amendment 1 (§9)**, its field landed; **amendment 2 (§10, the solve budget), 2026-09-25** (GAP-119, D-81, D-82) | `gungnir-model/src/effectors.rs`, the resource fields and their validation in `gungnir-config`, `ResourceView::is_adequate`; the planner filters on it and PN-05 draws what was withheld and why. `intercept_speed_mps` (amendment 1, D-26) is on both types, validated, and read by nothing until GAP-031's solver. Amendment 2: `plan_solve_budget_ms` in `gungnir-config`, `gungnir_allocation::ExactSolve` sliced across planning calls, `gungnir-intercept-service/src/budget.rs`, and PN-05's and PN-07's stale-plan lines |
 | DN-08 Policy configuration | **Implemented and wired** (GAP-052) | `gungnir-model/src/policy_settings.rs`, the policy section and its validation in `gungnir-config`; the desktop's policy chain, staleness rule and decision deadlines read it |
 | DN-02 Prediction and approach | **Implemented and wired** (GAP-020, 2026-09-06) | `gungnir-assessment/src/prediction.rs`, the assessment section in `gungnir-config`, closest approach on `AssetExposure`; `gungnir-app/src/prediction.rs` predicts every frame, PN-04 lists approaches with the predictor named, the viewport draws dashed predicted lines. The filter predictor waits on GAP-011 |
 | DN-09 Authority and control status | **Implemented and wired** (GAP-033, closed 2026-09-06) | `gungnir-policy/src/authority.rs`, two new denial reasons carrying the layer and the status; `decisions::submit` runs the chain with the baseline's control status and authority rules |
@@ -204,7 +204,7 @@ changes are each reviewed once.
 | [DN-01 Defended assets](DN-01-defended-assets.md) | GAP-026 | `gungnir-model`, `gungnir-config`, `gungnir-assessment` | None |
 | [DN-02 Prediction and approach](DN-02-prediction-and-approach.md) | GAP-020 | `gungnir-assessment` | None |
 | [DN-03 Warning](DN-03-warning.md) | GAP-042 | `gungnir-workflow` | To `gungnir-assessment` |
-| [DN-04 Effector model](DN-04-effector-model.md) | GAP-030 | `gungnir-model`, `gungnir-config` | None |
+| [DN-04 Effector model](DN-04-effector-model.md) | GAP-030; GAP-119 (§10) | `gungnir-model`, `gungnir-config`; `gungnir-allocation` and `gungnir-intercept-service` (§10) | None |
 | [DN-05 Fires](DN-05-fires.md) | GAP-036 | `gungnir-model`, `gungnir-policy` | None |
 | [DN-06 Engagement and effect](DN-06-engagement-and-effect.md) | GAP-043 | `gungnir-intercept-service` | None, and one refused |
 | [DN-07 Handoff](DN-07-handoff.md) | GAP-040 | `gungnir-api`, `gungnir-model` | None |

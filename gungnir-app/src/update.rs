@@ -237,6 +237,9 @@ fn plan_and_queue(
         .plan(now, state.tracking.tracks(), &state.resources);
     // GAP-030: what the planner would not propose this tick, for PN-05.
     state.withheld = state.intercept.withheld();
+    // GAP-119: whether that answer is for this picture, and if not how old the plan in
+    // force is -- for PN-05's banner and PN-07's conditions, every tick.
+    state.plan_standing = crate::state::PlanStanding::of(&outcome, now);
     let plan = match &outcome {
         gungnir_intercept_service::PlanOutcome::Fresh(plan) => plan.clone(),
         not_fresh => {

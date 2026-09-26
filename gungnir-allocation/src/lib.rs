@@ -10,7 +10,10 @@
 
 pub mod bellman;
 
-pub use bellman::{solve_exact, value_function, MAX_RESOURCES, MAX_TRACKS};
+pub use bellman::{
+    solve_exact, solve_exact_within, value_function, ExactSolve, Progress, CHECK_EVERY_MATCHINGS,
+    MAX_RESOURCES, MAX_TRACKS,
+};
 pub use gungnir_core::{ResourceId, TrackId};
 
 /// Why an allocation could not be produced.
@@ -24,6 +27,15 @@ pub enum AllocationError {
     /// The reward matrix had zero rows or zero columns, or the horizon was zero.
     #[error("degenerate input: {0}")]
     DegenerateInput(&'static str),
+    /// [`solve_exact_within`]'s one slice ended before the solve did (GAP-119).
+    ///
+    /// **Nothing partial comes back.** A dynamic program stopped half way has filled
+    /// some layers of its value function and not others, and the best first step read
+    /// from that is not an optimum of anything; returning it would be the heuristic
+    /// answer this crate refuses to give (see [`bellman`]'s module documentation). A
+    /// caller that can come back for the rest holds an [`ExactSolve`] instead.
+    #[error("the solve was stopped by its caller before it reached an optimum")]
+    Stopped,
 }
 
 /// Solves which resource should be tasked to which track over a planning horizon,

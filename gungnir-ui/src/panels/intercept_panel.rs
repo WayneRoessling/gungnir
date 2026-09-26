@@ -18,16 +18,44 @@ pub struct WithheldLine<'a> {
     pub reason: &'a str,
 }
 
+/// Whether the plan drawn answers the picture on screen (GAP-119, GAP-066).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Standing<'a> {
+    /// The planner answered the current picture with this plan.
+    Current,
+    /// The planner could not answer the current picture; this is the last plan it did
+    /// compute, `age_s` seconds before it was last asked.
+    Stale {
+        computed_at_s: f64,
+        age_s: f64,
+        reason: &'a str,
+    },
+    /// The planner has never answered. Whatever is drawn below is not a recommendation.
+    NoPlan { reason: &'a str },
+}
+
+/// The plan PN-05 draws, and how far to believe it.
+///
+/// One argument rather than two because they are one fact: a plan is never drawn without
+/// its standing, so a caller cannot forget to say a plan is stale.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShownPlan<'a> {
+    pub plan: &'a PlanView,
+    pub standing: Standing<'a>,
+}
+
 pub fn render_intercept_panel(
     ui: &mut egui::Ui,
     palette: &theme::Palette,
-    plan: &PlanView,
+    shown: ShownPlan<'_>,
     withheld: &[WithheldLine<'_>],
     fires: &[FiresCheckLine<'_>],
     handoffs: &[HandoffLine<'_>],
     alternatives: &Alternatives<'_>,
 ) {
+    let plan = shown.plan;
     ui.heading("Intercept plan");
+    render_standing(ui, palette, shown.standing);
     render_summary(ui, palette, plan);
     render_solution_list(ui, plan);
     render_fires(ui, palette, plan, fires);
@@ -199,6 +227,52 @@ fn render_withheld(ui: &mut egui::Ui, palette: &theme::Palette, withheld: &[With
             RichText::new(format!("Resource {}: {}", w.resource, w.reason))
                 .color(palette.warning_color),
         );
+    }
+}
+
+/// **A stale plan says so above everything else, in words and with its age** (GAP-119).
+///
+/// Drawn first because it changes how everything under it reads: an intercept point in a
+/// plan computed for a picture seconds old is a point against where a track was. Words,
+/// not colour alone (DN-05 §7's rule for failed checks, applied here), and nothing at
+/// all when the plan is current -- a standing "plan is current" line is one an operator
+/// learns to read past, and then reads past the day it changes.
+fn render_standing(ui: &mut egui::Ui, palette: &theme::Palette, standing: Standing<'_>) {
+    match standing {
+        Standing::Current => {}
+        Standing::Stale {
+            computed_at_s,
+            age_s,
+            reason,
+        } => {
+            ui.label(
+                RichText::new(format!(
+                    "STALE: this plan was computed at t = {computed_at_s:.1} s, {age_s:.1} s \
+                     before the planner was last asked, and does not answer the picture on \
+                     screen."
+                ))
+                .strong()
+                .color(palette.warning_color),
+            );
+            ui.label(
+                RichText::new(format!("Why: {}.", reason.trim_end_matches('.')))
+                    .color(palette.warning_color),
+            );
+        }
+        Standing::NoPlan { reason } => {
+            ui.label(
+                RichText::new(
+                    "NO PLAN: the planner has not answered, so nothing here is a \
+                     recommendation for the picture on screen.",
+                )
+                .strong()
+                .color(palette.warning_color),
+            );
+            ui.label(
+                RichText::new(format!("Why: {}.", reason.trim_end_matches('.')))
+                    .color(palette.warning_color),
+            );
+        }
     }
 }
 

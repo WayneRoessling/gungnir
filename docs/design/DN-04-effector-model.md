@@ -172,8 +172,74 @@ closed-form case belongs to GAP-031.
 solver did not: it waits on an assignment to solve for (GAP-029, Area A). The field is
 read by nothing until then, and its doc comment says so.
 
+## 10. Amendment 2 -- a solve budget, and a plan that says how old it is
+
+**Raised by GAP-119**, which the GAP-067 walk filed when it held the
+`gungnir-intercept-service` row of `../verification-capability-table.md` §2: the row's
+degradation clause names an over-budget solve, and no budget existed. Decided under the
+owner's delegation of 2026-09-25 as D-81 (the budget) and D-82 (approving a stale plan).
+
+**The budget.** A planning call spends at most `plan_solve_budget_ms` solving; the default
+is MOP-06's 4 ms (`../mission/measures.md` §2), and validation refuses anything not above
+zero or past 100 ms (`gungnir_config::MAX_PLAN_SOLVE_BUDGET_MS`), the ceiling sized so a
+node's tick keeps the rest of MOP-02's 150 ms. The time is read through
+`gungnir_intercept_service::SolveClock`, so a test decides an overrun with a stepped clock
+rather than a sleep.
+
+**An overrun keeps its work.** The exact solve of an ordinary picture -- eight tracks and
+four effectors at the default horizon of ten -- takes about thirteen milliseconds on the
+development machine in release (and took about forty before the solve was restructured
+for slicing), so a budget that threw an unfinished solve away would
+leave that picture stale for as long as it lasted. `gungnir_allocation::ExactSolve` fills
+the value function a slice at a time and keeps its place, and the planner carries it to
+the next call. MOP-06's "off-thread beyond" is served the same way -- the tick is never
+held past the budget -- without a second thread or a result that lands at a time nothing
+chose. A solve advanced to its end is bit-identical to the one-pass solve however it was
+sliced (`bellman::tests`, a property test), so the oracle comparison of the §1 allocation
+row still measures the same function.
+
+**An unchanged problem is not solved again.** The allocator sees the reward matrix alone,
+and its rows and columns stand for the adequate resources and the tracks in the order they
+were given, so an equal problem has the same answer and the planner answers it fresh
+without spending budget. A problem that changes while its solve is under way drops that
+solve and begins the new one: finishing an answer to a question nobody is asking would
+spend the budget on nothing.
+
+**While the solve runs**, the planner answers `PlanOutcome::Stale` with the last plan it
+did compute, when it computed it, and how far the current solve has got, and
+`is_healthy()` is false. The first call whose solve finishes answers fresh and healthy.
+
+**Determinism.** Two planners given the same tracks, resources and rewards produce the
+same recommendation; only the plan identifier differs, by D-56's design. Ties fall to the
+rule written in `gungnir-allocation/src/bellman.rs`'s module documentation: the higher
+total, then more pairs, then the first matching in enumeration order.
+
+**User-interface delta.** PN-05 draws the plan's standing above it: nothing when current;
+"STALE", when it was computed, how long before the planner was last asked, and why, when
+not; "NO PLAN" and why when the planner has never answered. PN-07 names the stale plan
+among the degraded conditions with the same age and reason. Accept stays available after
+the operator acknowledges that condition, which is D-82: blocking it would leave the
+operator no way to act on the best available recommendation during an engagement, and the
+acknowledgement plus the health change on the journal is what MOE-06 counts.
+
+**Verification.** The row is unchanged and waits for the owner's walk. The tests it will
+be walked against: `gungnir-intercept-service/src/lib.rs`
+(`two_fresh_planners_agree_when_every_reward_ties`,
+`two_fresh_planners_agree_when_the_rewards_are_distinct`,
+`an_over_budget_solve_returns_the_last_good_plan_stale`,
+`a_solve_longer_than_one_budget_carries_on_across_calls`), and
+`gungnir-app/tests/solve_budget.rs` for what the operator sees.
+
+**What it leaves open.** A picture toward the exact solver's size limits takes seconds of
+solving -- six effectors and ten tracks at the default horizon took 1.3 s in the probe --
+and so far longer at 4 ms a tick, and at the limits themselves longer than any
+engagement lasts; it is answered stale with its progress meanwhile, and whether a bounded
+answer should stand in for it is GAP-156. A desktop linked to a node is told the node's
+planner is unhealthy (GAP-161) but not how old the node's plan is or why, so PN-05 draws
+it without a stale line; that is GAP-157.
+
 ## Traceability
 
-GAP-030; GAP-031 (§9); CAP-3.3; MOE-03; MT-01 step 6, MT-02, MT-03;
+GAP-030; GAP-031 (§9); GAP-119 (§10); CAP-3.3; MOE-03; MT-01 step 6, MT-02, MT-03;
 `../ux/wireframes/WF-05-recommendation.puml`; principle AP-17 for the rule that the
 measure defines the field rather than the reverse. Read by DN-05, DN-06, DN-07.
