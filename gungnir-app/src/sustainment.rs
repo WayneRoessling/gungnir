@@ -70,8 +70,10 @@ pub const REPORT_DIR: &str = "reports";
 /// Everything the panels that keep scratch carry across frames.
 ///
 /// Not mission state, which is why it is not in `AppState`: a half-scrubbed replay
-/// cursor, the last report generated, an unapplied candidate baseline and a half-typed
-/// collection requirement are things a window is doing, not things the mission is.
+/// cursor, the last report generated as PN-13 draws it, an unapplied candidate baseline
+/// and a half-typed collection requirement are things a window is doing, not things the
+/// mission is. **What partners were told about that report is mission state** and lives
+/// in `AppState::exchange_report` (GAP-150, D-97).
 ///
 /// Named for the three sustainment panels it began as; PN-15 joined them in GAP-005
 /// because it needs the same thing for the same reason.
@@ -337,8 +339,12 @@ pub struct ReportState {
 }
 
 impl ReportState {
-    /// Fold the journal into a report.
-    pub fn generate(&mut self, state: &AppState) -> Result<(), gungnir_reporting::ReportError> {
+    /// Fold the journal into a report, and publish it to coalition exchange.
+    ///
+    /// Takes the state mutably because the report, as exchange carries it, is mission
+    /// state: it is kept in [`AppState::exchange_report`] with the time it was generated,
+    /// so the link's reconnection edge can publish it again (GAP-150, D-97).
+    pub fn generate(&mut self, state: &mut AppState) -> Result<(), gungnir_reporting::ReportError> {
         let Some(session) = state.session() else {
             return Ok(());
         };
@@ -359,7 +365,8 @@ impl ReportState {
                     report.marking_inputs.parties,
                     report.marking_inputs.all_peers
                 );
-                publish_to_exchange(state, &report);
+                state.exchange_report = Some(exchange_record(state, &report));
+                publish_to_exchange(state);
                 self.report = Some(report);
                 self.nothing_recorded = false;
                 Ok(())
@@ -422,49 +429,55 @@ impl ReportState {
             metrics: None,
         };
         generator.export(report, &path)?;
-        publish_to_exchange(state, report);
+        publish_to_exchange(state);
         self.last_export = Some(path.display().to_string());
         Ok(())
     }
 }
 
-/// Publish this report to the coalition exchange queue (GAP-065, DN-18 §5 amendment 2),
-/// if a node is linked. A no-op otherwise: with no link there is nowhere to queue to,
-/// the same behaviour `handoffs.rs::publish_to_exchange` and
-/// `launch_warning.rs::publish_to_exchange` already have when unlinked.
+/// The report as coalition exchange carries it, stamped with the time it was generated
+/// (GAP-150, D-97): a republish sends this record unchanged, so `at` stays the report's
+/// age and never becomes the time it was last resent.
+fn exchange_record(state: &AppState, report: &MissionReport) -> ExchangeProductRecord {
+    ExchangeProductRecord {
+        id: report.session.0.to_string(),
+        at: state.clock.now(),
+        releasability: report.releasability.clone(),
+        body: serde_json::to_value(report).unwrap_or(serde_json::Value::Null),
+    }
+}
+
+/// Publish this console's report to the coalition exchange queue (GAP-065, DN-18 §5
+/// amendment 2), if it has generated one and a node is linked. A no-op otherwise: with no
+/// link there is nowhere to queue to, the same behaviour `handoffs.rs::publish_to_exchange`
+/// and `launch_warning.rs::publish_to_exchange` already have when unlinked, and a console
+/// that has generated no report claims none -- an empty set would say "there is none
+/// here", which is not what a console that never generated one knows.
 ///
 /// **One report, not a republished collection.** `Handoffs` and `Warnings` each hold
-/// every issued item in a growing `Vec` on `AppState` (`state.desk.handoffs`,
-/// `state.issued_launch_warnings`) and republish that whole current set on every new
-/// one; a `MissionReport` is generated on demand, and `ReportState.report` already holds
-/// exactly this desktop's current one -- `None` until PN-13's first Generate, replaced
-/// (never accumulated) by every Generate after. That single value already *is* this
-/// desktop's whole current set for `Reports`, so queuing it keeps
-/// `NodeLink::queue_exchange`'s "replacement, not addition" contract the same shape
-/// `Handoffs` and `Warnings` use, with no second `Vec<MissionReport>` invented to hold
-/// a history nothing else on this desktop keeps.
+/// every issued item in a growing `Vec` on `AppState` and republish that whole current
+/// set on every new one; a `MissionReport` is generated on demand, and
+/// [`AppState::exchange_report`] holds exactly this console's current one -- `None` until
+/// PN-13's first Generate, replaced (never accumulated) by every Generate after. That
+/// single record already *is* this console's whole current set for `Reports`, so queuing
+/// it keeps `NodeLink::queue_exchange`'s "replacement, not addition" contract the same
+/// shape `Handoffs` and `Warnings` use.
 ///
 /// **Unfiltered by marking**, the reason `handoffs.rs::publish_to_exchange` gives for
 /// the same choice: `NodeApi::exchange_for`/`ExchangeSet::may_send` already apply DN-18
 /// §5's marking and agreement gates together at serve time, so filtering here would
 /// duplicate a decision that is supposed to live in one place.
 ///
-/// **Called from both `generate` and `export`.** PN-13 exposes them as two separate
-/// operator actions -- either can be clicked without the other -- and each is a point at
-/// which this desktop has just produced the report GAP-065's own register entry named
-/// as this gap's last unproduced item: `generate` folds a fresh one from the journal,
-/// `export` writes the current one to disk. Both count.
-fn publish_to_exchange(state: &AppState, report: &MissionReport) {
-    let Some(link) = state.link.clone() else {
+/// **Called from `generate`, `export` and the reconnection edge**
+/// (`crate::exchange::republish_all`, GAP-150). PN-13's two actions each produce the
+/// report GAP-065 named -- `generate` folds a fresh one, `export` writes it to disk -- and
+/// the edge is the moment the node may have forgotten it (DN-18 §12, §14). All three send
+/// the same record, generated-at time and all.
+pub(crate) fn publish_to_exchange(state: &AppState) {
+    let (Some(link), Some(report)) = (state.link.as_ref(), state.exchange_report.as_ref()) else {
         return;
     };
-    let product = ExchangeProductRecord {
-        id: report.session.0.to_string(),
-        at: state.clock.now(),
-        releasability: report.releasability.clone(),
-        body: serde_json::to_value(report).unwrap_or(serde_json::Value::Null),
-    };
-    link.queue_exchange(ExchangeItem::Reports, vec![product]);
+    link.queue_exchange(ExchangeItem::Reports, vec![report.clone()]);
 }
 
 /// The counts, labelled, with a note on the two that are read as each other.

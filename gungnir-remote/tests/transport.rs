@@ -1678,3 +1678,193 @@ async fn a_node_that_says_not_now_is_asked_again_less_often() {
         queued.elapsed()
     );
 }
+
+// ---------------------------------------------------------------------------------
+// GAP-153, D-96: a NaN and an infinity on the wire
+// ---------------------------------------------------------------------------------
+
+/// A quiet NaN with a payload, so a decoder that produced "some NaN" rather than this one
+/// would be caught: what the journal keeps is the bits, and the wire must keep the same.
+const PAYLOAD_NAN: u64 = 0x7ff8_0000_0000_beef;
+
+/// A track whose filter has diverged: a NaN in its covariance and both infinities in its
+/// state, the shape a real divergence leaves (D-77's survey).
+fn diverged(id: u64) -> TrackView {
+    let mut t = track(id);
+    t.covariance[(1, 1)] = f64::from_bits(PAYLOAD_NAN);
+    t.state[0] = f64::INFINITY;
+    t.state[1] = f64::NEG_INFINITY;
+    t
+}
+
+/// The diverged track's three values, bit for bit.
+fn assert_carries(t: &TrackView, what: &str) {
+    assert_eq!(
+        t.covariance[(1, 1)].to_bits(),
+        PAYLOAD_NAN,
+        "{what}: the NaN did not arrive as itself"
+    );
+    assert_eq!(
+        t.state[0].to_bits(),
+        f64::INFINITY.to_bits(),
+        "{what}: +inf"
+    );
+    assert_eq!(
+        t.state[1].to_bits(),
+        f64::NEG_INFINITY.to_bits(),
+        "{what}: -inf"
+    );
+}
+
+/// **GAP-153, D-96: a NaN and an infinity reach a desktop over the real snapshot, stream
+/// and history routes, bit for bit, and end nothing.**
+///
+/// Before this, the node wrote each as `null`. The snapshot then failed to decode and the
+/// link never connected; a frame on the stream failed to decode, the desktop took it for
+/// the node ending the stream, reconnected from the envelope before it -- and was sent the
+/// same frame again, every time, so the track never arrived; and a history holding one
+/// failed the reconciliation's read. Each of the three would fail here: the diverged
+/// track from the snapshot, the one from the stream and the one from the history are each
+/// checked for the NaN's own payload and both infinities.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_nan_and_an_infinity_cross_the_snapshot_the_stream_and_the_history() {
+    let api = authenticating(snapshot(vec![diverged(1)]));
+    let url = serve(Arc::clone(&api)).await;
+    let handle = tokio::runtime::Handle::current();
+    let endpoint = RemoteEndpoint::plain(url.clone());
+    let (mut tracking, _intercept, link) =
+        connect_with_link(&endpoint, credential(), &handle).expect("the link starts");
+
+    // The snapshot.
+    until(
+        || {
+            tracking.poll(MissionTime(0.0));
+            tracking.is_healthy()
+        },
+        "the link to take the node's snapshot",
+    )
+    .await;
+    let from_snapshot = tracking
+        .tracks()
+        .iter()
+        .find(|t| t.id == TrackId(1))
+        .cloned()
+        .expect("the snapshot's diverged track reached the desktop");
+    assert_carries(&from_snapshot, "the snapshot");
+
+    // The stream: follow it first, for the reason `events_published_after_connecting_
+    // reach_the_desktop` gives.
+    let mut seq = 1_000;
+    loop {
+        api.publish_event(Envelope {
+            seq,
+            mission_time: MissionTime(0.0),
+            event: Event::Tracking(TrackingEvent::TrackInitiated(track(9_999))),
+        })
+        .expect("published");
+        seq += 1;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        tracking.poll(MissionTime(0.0));
+        if tracking.tracks().iter().any(|t| t.id == TrackId(9_999)) {
+            break;
+        }
+        assert!(seq < 1_100, "the event stream never began following");
+    }
+    let diverged_seq = seq;
+    api.publish_event(Envelope {
+        seq: diverged_seq,
+        mission_time: MissionTime(1.0),
+        event: Event::Tracking(TrackingEvent::TrackInitiated(diverged(2))),
+    })
+    .expect("a diverged track is offered, not refused");
+    // A finite envelope behind it, on the same stream: it arrives only if the one before
+    // it did not end the stream.
+    api.publish_event(Envelope {
+        seq: diverged_seq + 1,
+        mission_time: MissionTime(2.0),
+        event: Event::Tracking(TrackingEvent::TrackInitiated(track(3))),
+    })
+    .expect("published");
+    until(
+        || {
+            tracking.poll(MissionTime(0.0));
+            tracking.tracks().iter().any(|t| t.id == TrackId(3))
+        },
+        "the finite envelope behind the diverged one",
+    )
+    .await;
+    let from_stream = tracking
+        .tracks()
+        .iter()
+        .find(|t| t.id == TrackId(2))
+        .cloned()
+        .expect("the diverged track arrived over the stream");
+    assert_carries(&from_stream, "the stream");
+    {
+        let projection = link.read().expect("the projection");
+        assert!(
+            projection.connected && projection.last_error.is_none(),
+            "the stream was ended or is down: {:?}",
+            projection.last_error
+        );
+        assert_eq!(projection.last_seq, diverged_seq + 1);
+    }
+    assert_eq!(api.unencodable_envelopes(), 0);
+
+    // The history, as the desktop's reconciliation reads it.
+    let token = link.token().expect("the link holds a session");
+    let pending = gungnir_remote::link::fetch_history(&endpoint, &token, diverged_seq, &handle)
+        .expect("starts");
+    let mut outcome = None;
+    until(
+        || {
+            outcome = pending.poll();
+            outcome.is_some()
+        },
+        "the history to arrive",
+    )
+    .await;
+    let Some(gungnir_remote::link::HistoryOutcome::Complete(envelopes)) = outcome else {
+        panic!("the history holding a NaN was not read: {outcome:?}");
+    };
+    assert_eq!(
+        envelopes.iter().map(|e| e.seq).collect::<Vec<_>>(),
+        vec![diverged_seq, diverged_seq + 1]
+    );
+    let Event::Tracking(TrackingEvent::TrackInitiated(from_history)) = &envelopes[0].event else {
+        panic!("{:?}", envelopes[0].event);
+    };
+    assert_carries(from_history, "the history");
+    assert_the_history_is_marked_only_where_it_must_be(&url, &token, diverged_seq).await;
+}
+
+/// What the history route carries, as a client that does not use this crate would see it:
+/// the marked form, labelled as not being JSON, from `marked_seq`, where a non-finite
+/// float is; plain JSON, labelled as JSON, from the finite envelope after it (GAP-153).
+async fn assert_the_history_is_marked_only_where_it_must_be(
+    url: &str,
+    token: &str,
+    marked_seq: u64,
+) {
+    let client = reqwest::Client::new();
+    let read = |since: u64| {
+        client
+            .get(format!("{url}/v3/history?since_seq={since}"))
+            .bearer_auth(token)
+            .send()
+    };
+    let marked = read(marked_seq).await.expect("the history answers");
+    assert_eq!(
+        marked.headers()["content-type"],
+        gungnir_api::transport::LOSSLESS_JSON
+    );
+    let body = marked.text().await.expect("a body");
+    assert!(
+        body.starts_with(gungnir_eventing::nonfinite::MARKER)
+            && body.contains(r#""\u0000f64:7ff800000000beef""#),
+        "the NaN is not on the wire as its bits: {body}"
+    );
+    let plain = read(marked_seq + 1).await.expect("the history answers");
+    assert_eq!(plain.headers()["content-type"], "application/json");
+    assert!(plain.text().await.expect("a body").starts_with('{'));
+}

@@ -123,7 +123,7 @@ fn moe_02_counts_an_engaged_track_later_shown_friendly() {
     update::tick(&mut state); // journals the frame
 
     let mut reports = ReportState::default();
-    reports.generate(&state).expect("the journal folds");
+    reports.generate(&mut state).expect("the journal folds");
     let view = sustainment::reports_view(&state, &reports);
     assert_eq!(line(&view, "MOE-02").value, MeasureLineValue::Count(1));
     // No `Decided` was journaled for these engagements (opened straight from records),
@@ -167,9 +167,9 @@ fn two_folds_of_one_journal_agree_exactly() {
     update::tick(&mut state);
 
     let mut first = ReportState::default();
-    first.generate(&state).expect("generate");
+    first.generate(&mut state).expect("generate");
     let mut second = ReportState::default();
-    second.generate(&state).expect("generate");
+    second.generate(&mut state).expect("generate");
     let a = sustainment::reports_view(&state, &first);
     let b = sustainment::reports_view(&state, &second);
     assert_eq!(a.measures, b.measures);

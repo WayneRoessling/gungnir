@@ -410,8 +410,26 @@ state and is not reachable from the tick; that is GAP-150.
 problem body, so no `gungnir-api` write path was touched. The authority matrix: whether an
 Operator should publish is amendment 2's judgement and is not reopened here.
 
+## 14. Amendment 6: the mission report on the reconnection edge (2026-09-26)
+
+**§13 left the report off the edge** (GAP-150). PN-13 kept it in window state, which the
+tick does not reach, so after a node restart or a sign-in that built a new link a partner
+was served nothing from that console until somebody generated a report again.
+
+**The decision: the report partners were sent is mission state** (D-97). The desktop keeps
+the record exchange carries -- identifier, marking, body, and the time the report was
+generated -- beside its handoffs and launch warnings, and the edge publishes it by §12's
+rule: the whole set, which for reports is one, and nothing from a console that has
+generated none. **The record goes out unchanged**, so `at` is when the report was made and
+never when it was last resent; a partner comparing ages is told the truth. PN-13's Generate
+and Export send the same record.
+
+**What it deliberately does not do: survive a desktop restart.** A restarted console shows
+no report on PN-13, and republishing one it no longer shows would put a product before
+partners that nobody at that console can see. §13's outbox rules are unchanged.
+
 ## Traceability
 
-GAP-065, GAP-137, GAP-145, GAP-146; CAP-7.4; D-06, D-08, D-09, D-68, D-69, D-75, D-76; composes DN-07, DN-16,
+GAP-065, GAP-137, GAP-145, GAP-146, GAP-150; CAP-7.4; D-06, D-08, D-09, D-68, D-69, D-75, D-76, D-97; composes DN-07, DN-16,
 DN-17, DN-19; depends on GAP-041 for the transport and GAP-064 for the codecs;
 `../gungnir-api-v1.md`; `../architecture/uaf/standards/Sd-Tx.md`; principles AP-04, AP-09.

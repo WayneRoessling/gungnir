@@ -259,7 +259,8 @@ struct Node {
     forwarding_held: Arc<AtomicBool>,
     dir: std::path::PathBuf,
     running: Arc<AtomicBool>,
-    _server: tokio::runtime::Runtime,
+    /// The node's runtime: the transport, and since GAP-150 a partner listener, run here.
+    server: tokio::runtime::Runtime,
 }
 
 impl Drop for Node {
@@ -273,6 +274,12 @@ impl Node {
     /// A node serving on loopback with its approval loop running, on a plain thread for the
     /// reason `gungnir-node/tests/approval_queue.rs` gives.
     fn spawn() -> Self {
+        Self::spawn_with(api_knowing_both_operators())
+    }
+
+    /// [`Self::spawn`] over a transport the test built, so a node can carry an exchange
+    /// agreement with a partner (GAP-150).
+    fn spawn_with(api: Arc<NodeApi>) -> Self {
         let dir = std::env::temp_dir().join(format!(
             "gungnir-row8-node-{}-{}",
             std::process::id(),
@@ -285,7 +292,6 @@ impl Node {
         let bus = Arc::new(InProcessBus::new());
         let api_rx: Receiver<Envelope> = bus.subscribe();
         let journal_rx: Receiver<Envelope> = bus.subscribe();
-        let api = api_knowing_both_operators();
         let shared = Arc::new(Mutex::new(Shared {
             approval: NodeApproval::new(&config),
             now: MissionTime(100.0),
@@ -374,7 +380,7 @@ impl Node {
             forwarding_held,
             dir,
             running,
-            _server: server,
+            server,
         }
     }
 
@@ -509,6 +515,9 @@ fn api_knowing_both_operators() -> Arc<NodeApi> {
 /// side goes on serving everybody else.
 struct Proxy {
     addr: SocketAddr,
+    /// Where connections are sent: a node, or after [`Proxy::retarget`] the node that
+    /// replaced it at the same address as far as a desktop can tell (GAP-150).
+    upstream: Arc<Mutex<SocketAddr>>,
     open: Arc<AtomicBool>,
     live: Arc<Mutex<Vec<TcpStream>>>,
     stop: Arc<AtomicBool>,
@@ -521,7 +530,9 @@ impl Proxy {
         let open = Arc::new(AtomicBool::new(true));
         let live: Arc<Mutex<Vec<TcpStream>>> = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
+        let upstream = Arc::new(Mutex::new(upstream));
         std::thread::spawn({
+            let upstream = upstream.clone();
             let open = open.clone();
             let live = live.clone();
             let stop = stop.clone();
@@ -531,7 +542,10 @@ impl Proxy {
                         return;
                     }
                     let Ok(inbound) = inbound else { continue };
-                    let Ok(outbound) = TcpStream::connect(upstream) else {
+                    let Ok(target) = upstream.lock().map(|a| *a) else {
+                        continue;
+                    };
+                    let Ok(outbound) = TcpStream::connect(target) else {
                         let _ = inbound.shutdown(std::net::Shutdown::Both);
                         continue;
                     };
@@ -562,9 +576,18 @@ impl Proxy {
         });
         Self {
             addr,
+            upstream,
             open,
             live,
             stop,
+        }
+    }
+
+    /// Send every later connection to `upstream` instead: a node restarted where the old
+    /// one was, as a desktop sees it (GAP-150). Connections already piped are the cut's.
+    fn retarget(&self, upstream: SocketAddr) {
+        if let Ok(mut target) = self.upstream.lock() {
+            *target = upstream;
         }
     }
 
@@ -1863,4 +1886,357 @@ fn a_node_that_never_answers_is_silent_rather_than_pending() {
     );
     let _ = std::fs::remove_dir_all(&a_dir);
     let _ = std::fs::remove_dir_all(&idle_dir);
+}
+
+// ---------------------------------------------------------------------------------
+// GAP-150: the mission report is published again when the link comes back
+// ---------------------------------------------------------------------------------
+
+/// The coalition partner the node's agreement sends mission reports to.
+const PARTNER: &str = "sector-north";
+
+/// A node that knows the three accounts and has an agreement sending `PARTNER` this
+/// deployment's mission reports (DN-18 §5).
+fn api_with_a_partner() -> Arc<NodeApi> {
+    let store = InMemoryAccountStore::new(vec![
+        account(A_OPERATOR),
+        account(B_OPERATOR),
+        account_as(SUPERVISOR, Role::Supervisor),
+    ]);
+    // The same key as `api_knowing_both_operators`, so a node restarted here verifies
+    // what the one before it issued, as a node with its key in custody would.
+    let issuer = TokenIssuer::new(vec![8u8; 32], 10_000.0).expect("issuer");
+    let api = Arc::new(
+        NodeApi::new(SnapshotResponse::new(
+            Vec::new(),
+            None,
+            SystemHealth::default(),
+            Vec::new(),
+        ))
+        .with_exchange(gungnir_model::ExchangeSet {
+            agreements: vec![gungnir_model::ExchangeAgreement {
+                party: PARTNER.into(),
+                inbound: Vec::new(),
+                outbound: vec![gungnir_model::ExchangeItem::Reports],
+                format: gungnir_model::ExchangeFormat::Canonical,
+            }],
+        })
+        .with_callers(Arc::new(AccountTokenAuthority::new(
+            Box::new(store),
+            issuer,
+        ))),
+    );
+    api.set_now(100.0);
+    api
+}
+
+/// A certificate as PEM, for the file a node reads its client authority from and the
+/// roots a partner trusts. Written out for the reason `backend_parity.rs`'s copy gives:
+/// the only other way to PEM would be a base64 dependency for one test.
+fn pem(der: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut encoded = String::new();
+    for chunk in der.chunks(3) {
+        let b = [
+            chunk[0],
+            chunk.get(1).copied().unwrap_or(0),
+            chunk.get(2).copied().unwrap_or(0),
+        ];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        for (i, shift) in [18, 12, 6, 0].into_iter().enumerate() {
+            if i <= chunk.len() {
+                encoded.push(char::from(ALPHABET[((n >> shift) & 63) as usize]));
+            } else {
+                encoded.push('=');
+            }
+        }
+    }
+    let mut out = String::from("-----BEGIN CERTIFICATE-----\n");
+    for line in encoded.as_bytes().chunks(64) {
+        out.push_str(std::str::from_utf8(line).expect("base64 is ascii"));
+        out.push('\n');
+    }
+    out.push_str("-----END CERTIFICATE-----\n");
+    out
+}
+
+/// The two machine identities of the partner route: the node's serving certificate and
+/// the partner's, each issued as the product issues a peer's (`issue_for_client`) and
+/// each pinned by the other side, as a deployment pins its partners.
+struct Partnership {
+    node: Arc<tokio_rustls::rustls::sign::CertifiedKey>,
+    partner: Arc<tokio_rustls::rustls::sign::CertifiedKey>,
+    client_ca: std::path::PathBuf,
+}
+
+impl Partnership {
+    fn new(dir: &std::path::Path) -> Self {
+        let node = gungnir_remote::identity::issue_for_client("gungnir-node")
+            .expect("the node's identity");
+        let partner =
+            gungnir_remote::identity::issue_for_client(PARTNER).expect("the partner's identity");
+        std::fs::create_dir_all(dir).expect("dir");
+        let client_ca = dir.join("partners.pem");
+        std::fs::write(&client_ca, pem(partner.cert[0].as_ref())).expect("written");
+        Self {
+            node,
+            partner,
+            client_ca,
+        }
+    }
+}
+
+impl Node {
+    /// Serve partners over mutual TLS beside the desktops' plain loopback, on the node's
+    /// own runtime and the same transport: `gungnir_api::tls::acceptor_with_key` and
+    /// `serve_on_listener`, the binary's own serving path. Dies with the node.
+    fn serve_partners(&self, partnership: &Partnership) -> SocketAddr {
+        let acceptor = gungnir_api::tls::acceptor_with_key(
+            partnership.node.cert[0].as_ref().to_vec(),
+            Arc::clone(&partnership.node.key),
+            &partnership.client_ca.to_string_lossy(),
+        )
+        .expect("the acceptor builds");
+        let api = Arc::clone(&self.api);
+        self.server.block_on(async move {
+            let tcp = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bound");
+            let addr = tcp.local_addr().expect("addr");
+            tokio::spawn(async move {
+                let _ = gungnir_api::transport::serve_on_listener(
+                    gungnir_api::tls::TlsListener::new(tcp, acceptor),
+                    api,
+                )
+                .await;
+            });
+            addr
+        })
+    }
+}
+
+/// The partner's `GET /v3/exchange/reports`, over mutual TLS as `PARTNER`: the ids and
+/// times it is served, or the status and body when it is not served a list.
+fn partner_reads_reports(
+    runtime: &tokio::runtime::Runtime,
+    addr: SocketAddr,
+    partnership: &Partnership,
+) -> Vec<(String, MissionTime)> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let tls = gungnir_remote::LinkTls {
+        trust_roots_pem: vec![pem(partnership.node.cert[0].as_ref())],
+        issued: Some(Arc::clone(&partnership.partner)),
+        identity_pem: None,
+    };
+    let config = gungnir_remote::client_config(&tls).expect("the partner's client");
+    let (status, body) = runtime.block_on(async move {
+        let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
+        let tcp = tokio::net::TcpStream::connect(addr).await.expect("connect");
+        let name = tokio_rustls::rustls::pki_types::ServerName::try_from("localhost")
+            .expect("name");
+        let mut stream = connector.connect(name, tcp).await.expect("handshake");
+        stream
+            .write_all(
+                b"GET /v3/exchange/reports HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            )
+            .await
+            .expect("write");
+        let mut raw = Vec::new();
+        let _ = stream.read_to_end(&mut raw).await;
+        let text = String::from_utf8_lossy(&raw).into_owned();
+        let status: u16 = text
+            .split_whitespace()
+            .nth(1)
+            .and_then(|s| s.parse().ok())
+            .expect("status line");
+        let body = text
+            .split_once("\r\n\r\n")
+            .map(|(_, b)| b.to_owned())
+            .unwrap_or_default();
+        (status, body)
+    });
+    assert_eq!(status, 200, "the partner was not served: {body}");
+    match serde_json::from_str::<gungnir_api::v3::ExchangeResponse>(&body) {
+        Ok(gungnir_api::v3::ExchangeResponse::Held { products, .. }) => {
+            products.into_iter().map(|p| (p.id, p.at)).collect()
+        }
+        Ok(gungnir_api::v3::ExchangeResponse::NotHeld { .. }) => Vec::new(),
+        Err(err) => panic!("the partner's answer does not decode ({err}): {body}"),
+    }
+}
+
+/// Tick one desktop until `check` holds, or fail with what it said.
+fn until_desktop(
+    state: &mut AppState,
+    what: &str,
+    seconds: f64,
+    mut check: impl FnMut(&AppState) -> bool,
+) {
+    let deadline = Instant::now() + Duration::from_secs_f64(seconds);
+    loop {
+        update::tick(state);
+        if check(state) {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "timed out waiting for {what}: {:?}",
+            state.alerts
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+fn linked(state: &AppState) -> bool {
+    state
+        .link
+        .as_ref()
+        .is_some_and(gungnir_remote::link::NodeLink::connected)
+}
+
+/// **GAP-150, D-97: a console's mission report reaches its partner again when the link
+/// comes back, with the time it was generated, and nobody generates it again.**
+///
+/// The report is generated once, at T+120, by a console whose Operator may not publish
+/// (GAP-146), so the node refuses it and the partner is served nothing. PN-13 is then
+/// closed -- its state dropped, so nothing on the desktop's window side holds the report
+/// any more -- and two things happen that each build or meet a new link:
+///
+/// 1. **a sign-in**: a Supervisor signs in on the same console at T+150; the new link's
+///    connection is the edge, and the partner is served the report, stamped T+120;
+/// 2. **a node restart**: the node goes down and a new one, with an empty register, comes
+///    up where it was (the proxy sends the desktop to it) while the console's clock
+///    reads T+200; on the reconnection the new node's partner is served the report again,
+///    still stamped T+120.
+///
+/// Before GAP-150 the report lived in PN-13's window state, which the tick cannot reach:
+/// both steps served the partner nothing until somebody generated a report again. The
+/// partner's read is the real route over mutual TLS, as the partner would make it; the
+/// node is real in both lives; the restart is a new node process in all but the process.
+// One console's run told in order, for the reason row 8's own test gives.
+#[allow(clippy::too_many_lines)]
+#[test]
+fn a_console_s_mission_report_reaches_its_partner_again_when_its_link_comes_back() {
+    let scratch = std::env::temp_dir().join(format!(
+        "gungnir-gap150-{}-{}",
+        std::process::id(),
+        scratch_id()
+    ));
+    let partnership = Partnership::new(&scratch);
+    let reader = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("the partner's runtime");
+
+    let first = Node::spawn_with(api_with_a_partner());
+    let first_partners = first.serve_partners(&partnership);
+    let proxy = Proxy::start(first.addr);
+    let (mut a, a_dir) = desktop("report-republished", proxy.addr);
+
+    // Something releasable to partners on this console's record, so the report is marked
+    // for them rather than `Internal`, which a partner would be withheld.
+    let mut marked = track(42, Classification::Hostile);
+    marked.releasability = Releasability::AllPeers;
+    let now = a.clock.now();
+    a.events
+        .publish(
+            now,
+            gungnir_eventing::Event::Tracking(
+                gungnir_model::events::TrackingEvent::TrackInitiated(marked),
+            ),
+        )
+        .expect("published");
+    update::tick(&mut a);
+
+    // An Operator's console: linked, and refused as a publisher.
+    sign_in(&mut a, A_OPERATOR);
+    until_desktop(&mut a, "the desktop to link", 15.0, linked);
+
+    // PN-13 generates the report at T+120.
+    set_clock(&mut a, 120.0);
+    let mut pn13 = gungnir_app::sustainment::SustainmentState::default();
+    pn13.reports
+        .generate(&mut a)
+        .expect("the journal folds into a report");
+    let generated = a
+        .exchange_report
+        .clone()
+        .expect("the report is mission state");
+    assert_eq!(generated.at, MissionTime(120.0));
+    assert_eq!(
+        generated.releasability,
+        Releasability::AllPeers,
+        "the report is not marked for partners, so this test would prove nothing"
+    );
+    until_desktop(
+        &mut a,
+        "the node to refuse the Operator's publish",
+        15.0,
+        |a| {
+            a.link
+                .as_ref()
+                .and_then(gungnir_remote::link::NodeLink::exchange_standing)
+                .is_some_and(|s| s.publishing.refused.is_some())
+        },
+    );
+    assert!(
+        partner_reads_reports(&reader, first_partners, &partnership).is_empty(),
+        "the node took a report from a console that may not publish"
+    );
+
+    // PN-13 is closed. Nothing on the window side holds the report from here on.
+    drop(pn13);
+    let expected = vec![(generated.id.clone(), MissionTime(120.0))];
+
+    // 1. A sign-in builds a new link.
+    set_clock(&mut a, 150.0);
+    sign_in(&mut a, SUPERVISOR);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        update::tick(&mut a);
+        if partner_reads_reports(&reader, first_partners, &partnership) == expected {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the Supervisor's link did not publish the report again: {:?}",
+            a.alerts
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    // 2. The node restarts: down, and a new one with an empty register where it was.
+    proxy.cut();
+    drop(first);
+    until_desktop(&mut a, "the link to drop", 30.0, |a| !linked(a));
+    let second = Node::spawn_with(api_with_a_partner());
+    let second_partners = second.serve_partners(&partnership);
+    assert!(
+        partner_reads_reports(&reader, second_partners, &partnership).is_empty(),
+        "a new node's register is not empty, so the rest of this proves nothing"
+    );
+    set_clock(&mut a, 200.0);
+    proxy.retarget(second.addr);
+    proxy.restore();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        update::tick(&mut a);
+        if partner_reads_reports(&reader, second_partners, &partnership) == expected {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the restarted node was not given the report again: {:?}",
+            a.alerts
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(
+        a.exchange_report.as_ref().map(|r| r.at),
+        Some(MissionTime(120.0)),
+        "the report was generated again rather than republished"
+    );
+
+    let _ = std::fs::remove_dir_all(&a_dir);
+    let _ = std::fs::remove_dir_all(&scratch);
 }

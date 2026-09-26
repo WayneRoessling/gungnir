@@ -159,10 +159,10 @@ history, and an entry is never edited once it has merged.
 | GAP-144 | The release passes only by accepting two quick-xml advisories | Technical | CAP-6.5 | 3 | 1 | M | 3 | I2 | UI engineer | Closed |
 | GAP-145 | The exchange register has no lifecycle | Technical | CAP-7.4 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
 | GAP-146 | A console that may not publish queues its handoffs for ever | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
-| GAP-150 | A console's mission report is not published again when its link comes back | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
+| GAP-150 | A console's mission report is not published again when its link comes back | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
 | GAP-154 | The Disconnected reconciliation row still says no decision reaches a node's record | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Owner | Open |
 | GAP-152 | The audit log lives in memory, so nothing outlives the process and no age governs it | Technical | CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | In progress |
-| GAP-153 | A non-finite float in an envelope breaks the v3 stream and history | Technical | CAP-7.1, CAP-5.4 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
+| GAP-153 | A non-finite float in an envelope breaks the v3 stream and history | Technical | CAP-7.1, CAP-5.4 | 2 | 6 | S | 12 | I3 | Services engineer | Closed |
 | GAP-158 | A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical | Technical | CAP-2.11 | 2 | 3 | M | 6 | I3 | Services engineer | Open |
 | GAP-159 | The Coverage accuracy row still says a coverage volume has no bearing | Technical | CAP-2.11 | 1 | 3 | S | 3 | I3 | Owner | Open |
 | GAP-160 | A node publishes no track, so a linked desktop's picture is frozen at sign-in | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
@@ -177,10 +177,11 @@ history, and an entry is never edited once it has merged.
 | GAP-164 | The miri gate could not run miri | Technical | CAP-7.4 | 3 | 5 | S | 15 | I2 | Services engineer | Closed |
 | GAP-166 | nalgebra's decompositions violate Stacked Borrows | Technical | CAP-7.4 | 2 | 5 | S | 10 | I2 | Owner | Open |
 | GAP-175 | A global entity identity is written as a 128-bit JSON number | Technical | CAP-7.2, CAP-2.7 | 2 | 5 | S | 10 | I3 | Services engineer | Open |
+| GAP-171 | The other v3 bodies, and every exchange product's body, still write a non-finite float as null | Technical | CAP-7.1, CAP-7.4 | 3 | 6 | M | 18 | I3 | Services engineer | Open |
 | GAP-168 | The intercept-service row's degradation clause stops at the last good plan | Technical | CAP-3.3, CAP-5.5 | 1 | 8 | S | 8 | I3 | Owner | Open |
 | GAP-169 | An older desktop reads a newer node's interim plan as the optimum | Technical | CAP-3.3, CAP-7.3 | 2 | 5 | S | 10 | I3 | Owner | Open |
 
-Counts: 166 gaps, 3 mission, 163 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 167 gaps, 3 mission, 164 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2243,11 +2244,12 @@ Counts: 166 gaps, 3 mission, 163 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.4 Peer and coalition exchange.
 - History:
   - 2026-09-25, Open: Filed by GAP-146 rather than folded into it. GAP-146 made a new link the thing a refused console waits on, and a sign-in that builds one drops what the old link held; handoffs and launch warnings are republished from mission state, and the report lives in window state the tick cannot reach.
+  - 2026-09-26, Closed: Closed by making the report partners were sent mission state (D-97, DN-18 §14): `AppState::exchange_report` holds the record exchange carries, stamped when the report was generated, and `exchange::republish_all` publishes it on the reconnection edge with handoffs and launch warnings; Generate and Export send the same record. A console that has generated none publishes none. GAP-146's outbox rules are unchanged. Tests: `a_console_s_mission_report_reaches_its_partner_again_when_its_link_comes_back` (`gungnir-app/tests/cut_off_and_reconnected.rs`; an Operator's refused report, PN-13 dropped, then a Supervisor's sign-in and a real node restart each serve the partner's `GET /v3/exchange/reports` over mutual TLS the report stamped T+120), and `the_reconnection_edge_publishes_the_last_report_as_it_was_generated` (`gungnir-app/tests/sustainment.rs`). Nothing human-owned was changed. See `../../record/2026-09-26/the-report-and-every-float-reach-the-partner.md`.
 - Evidence: `gungnir-app/src/sustainment.rs` (`ReportState` holds the report inside `SustainmentState`, which is window state outside `AppState`, and `publish_to_exchange` is called from `generate` and `export` alone); `gungnir-app/src/exchange.rs` (`republish_all` republishes handoffs and launch warnings).
 - Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
 - Impact: A desktop publishes its mission report to exchange only when PN-13 generates or exports it. Handoffs and launch warnings are published again the tick the link comes back (DN-18 §12, §13), so a node that restarted, or a new link built by a sign-in on the console, is repaired for those; the report is not, and a partner reading `GET /v3/exchange/reports` is served nothing from this console until somebody generates one again -- with the report still on the console's own screen.
 - Closing action: Decide whether the last generated report is mission state -- and move what exchange needs of it into `AppState` so the reconnection edge can publish it with the time it was generated rather than the time it was resent -- or say on PN-13 that a report is published when it is generated and not again.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-146 (`../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`).
 - Depends on: GAP-145, GAP-146.
 
@@ -2286,11 +2288,12 @@ Counts: 166 gaps, 3 mission, 163 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.1 Versioned interface; CAP-5.4 Disconnected and reconcile.
 - History:
   - 2026-09-25, Open: Found by D-77's survey of where a journaled envelope goes next. Filed rather than fixed inside GAP-126: it is an interface contract change for both ends of the link.
+  - 2026-09-26, Closed: Closed by carrying the journal's lossless form on the wire (D-96): the codec moved to `gungnir_eventing::nonfinite` (re-exported by `gungnir-store`), and the stream, `/v3/history` and `/v3/snapshot` send a finite frame or body byte for byte as before and a non-finite one marked, as `application/vnd.gungnir.lossless-json`; the desktop reads by the marker. `NodeApi::publish_event` encodes each envelope once and proves it reads back, refusing and counting one that does not (`ApiError::Unencodable`). `docs/gungnir-api-v1.md` says so. Test: `a_nan_and_an_infinity_cross_the_snapshot_the_stream_and_the_history` (`gungnir-remote/tests/transport.rs`), a NaN with a payload and both infinities through all three real routes into a real link, bit for bit, with the stream not ended. The stream, history and snapshot are read paths; nothing human-owned was changed. Found on the way: GAP-171. See `../../record/2026-09-26/the-report-and-every-float-reach-the-partner.md`.
 - Evidence: `gungnir-api/src/transport.rs` (`send_envelope`; the history handler's `Json`); `gungnir-remote/src/link.rs` (the stream's decode); D-77's survey found no live producer left once PN-10's deadline was fixed, so today this is latent.
 - Severity: 2. Reach: 6 threads. Effort: S. Priority: 12.
 - Impact: The node sends each envelope to its desktops as `serde_json` text and serves `GET /v3/history` the same way, so a NaN or an infinity goes out as `null`. The desktop's `serde_json::from_str::<Envelope>` then fails on that frame and treats it as the node ending the stream, and reconnects; a history holding one fails the reconciliation read. The journal carries these values since D-77; the wire does not.
 - Closing action: Carry an envelope over the v3 stream and history in the journal's lossless form (`gungnir_store::nonfinite`, which `gungnir-api` would need an edge or a move to reach) or refuse it at the node with a named, counted error, and amend `docs/gungnir-api-v1.md` to say which.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-126 (`../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`).
 - Depends on: GAP-126.
 
@@ -2494,6 +2497,20 @@ Counts: 166 gaps, 3 mission, 163 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found by GAP-117's round trip (`../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`).
 - Depends on: D-60.
+
+**GAP-171 The other v3 bodies, and every exchange product's body, still write a non-finite float as null**
+
+- Type: Technical.
+- Capability: CAP-7.1 Versioned interface; CAP-7.4 Peer and coalition exchange.
+- History:
+  - 2026-09-26, Open: Found closing GAP-153. Not widened into it: the exchange body is a write path the owner reviews and a format DN-18 decides, and no live producer puts a non-finite value in any of these bodies today.
+- Evidence: `gungnir-api/src/v3/mod.rs` (`ExchangeProduct::body: serde_json::Value`); `gungnir-app/src/sustainment.rs`, `handoffs.rs`, `launch_warning.rs` and `desk.rs` build it with `serde_json::to_value`; `gungnir-api/src/transport.rs` (the queue, coverage and exchange handlers' `Json`).
+- Severity: 3. Reach: 6 threads. Effort: M. Priority: 18.
+- Impact: GAP-153 gave the stream, the history and the snapshot the journal's lossless form. The queue view, coverage and the exchange routes are still plain `serde_json`, so a non-finite float in one is `null`, which a desktop fails to decode. Worse, an exchange product's `body` is a `serde_json::Value`, which cannot hold a non-finite float at all: `serde_json::to_value` turns one into `null` without an error, so a mission report with a NaN measure would reach a partner with that figure silently blanked.
+- Closing action: Decide how a partner is sent a non-finite value (DN-18's format, and the `POST` side is a human-owned `gungnir-api` write path): carry the product body as the lossless line rather than a `Value`, or refuse and say so at publish; and give the remaining read routes the form the snapshot has.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-153 (`../../record/2026-09-26/the-report-and-every-float-reach-the-partner.md`).
+- Depends on: GAP-153.
 
 **GAP-168 The intercept-service row's degradation clause stops at the last good plan**
 

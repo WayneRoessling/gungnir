@@ -40,7 +40,7 @@ use gungnir_api::v3::{
     SensorTaskResponse, SessionRequest, SessionResponse, SnapshotResponse, SubmitDetectionRequest,
     SubscribeRequest,
 };
-use gungnir_eventing::{Envelope, Event};
+use gungnir_eventing::{nonfinite, Envelope, Event};
 use gungnir_intercept_service::PlanView;
 use gungnir_model::events::{HealthEvent, InterceptEvent, TrackingEvent};
 use gungnir_model::{BearingRayView, DetectionView, PipelineStatsView};
@@ -1117,9 +1117,9 @@ async fn run_link(
     if !response.status().is_success() {
         return Err(format!("snapshot returned {}", response.status()));
     }
-    let snapshot: SnapshotResponse = response
-        .json()
+    let snapshot: SnapshotResponse = lossless_body(response)
         .await
+        .and_then(|text| nonfinite::from_line(&text).map_err(|e| e.to_string()))
         .map_err(|e| format!("snapshot could not be decoded: {e}"))?;
     // GAP-063: the catalogue's rule is an exact version match, and a picture projected
     // from another schema would be read as this one's.
@@ -1981,7 +1981,11 @@ fn handle_frame(next: Frame, projection: &Arc<Mutex<Projection>>) -> Result<(), 
     // stream -- a `from_seq` older than it retains, or a subscriber that fell
     // behind. Both mean the projection is no longer trustworthy, so say so and let
     // the reconnection take a fresh snapshot.
-    let Ok(envelope) = serde_json::from_str::<Envelope>(&text) else {
+    //
+    // **Read in the lossless form** (GAP-153, D-96): an envelope carrying a NaN or an
+    // infinity arrives marked, with every float's bits, where plain JSON would have
+    // written `null` and this line would have ended a stream nothing was wrong with.
+    let Ok(envelope) = nonfinite::from_line::<Envelope>(&text) else {
         return Err(format!("the node ended the stream: {text}"));
     };
     apply(projection, &envelope)
@@ -2051,7 +2055,9 @@ pub fn fetch_history(
         .await
         {
             Ok(response) if response.status().is_success() => {
-                match response.json::<HistoryResponse>().await {
+                match lossless_body(response).await.and_then(|text| {
+                    nonfinite::from_line::<HistoryResponse>(&text).map_err(|e| e.to_string())
+                }) {
                     Ok(history) => HistoryOutcome::Complete(history.envelopes),
                     Err(e) => HistoryOutcome::Unreachable {
                         reason: format!("the history response could not be decoded: {e}"),
@@ -2079,6 +2085,21 @@ pub fn fetch_history(
         let _ = tx.send(outcome);
     });
     Ok(PendingHistory { rx })
+}
+
+/// A `200` body from a route that answers in the lossless form (GAP-153, D-96): the
+/// snapshot and the history.
+///
+/// Read as text, for its caller to decode with [`nonfinite::from_line`], which takes plain
+/// JSON exactly as `serde_json` does and a marked body with every NaN and infinity it
+/// carries. **The content type is not consulted**: the marker is what says which form a
+/// body is in, as it is in the journal, so a proxy that rewrote the header could not
+/// change the reading.
+async fn lossless_body(response: reqwest::Response) -> Result<String, String> {
+    response
+        .text()
+        .await
+        .map_err(|e| format!("the body could not be read: {e}"))
 }
 
 /// A bearer token on the request when there is one. A machine link carries none: its

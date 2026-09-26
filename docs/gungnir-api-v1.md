@@ -133,9 +133,9 @@ The paths are `/v3` since 2026-09-17 (the "Version 3" section above); they were 
 |---|---|---|---|---|
 | `POST /v3/session` | `SessionRequest { operator, passphrase }` | `SessionResponse { token, expires_s }` | none: this is what establishes identity | Yes (GAP-057) |
 | `GET /v3/session` | none | `SessionStatus { operator, role, expires_s }` | a valid token | Yes (GAP-057) |
-| `GET /v3/snapshot` | none | `SnapshotResponse { schema_version, tracks, plan, health, requirements, bearing_rays, pipeline_stats, withheld, queue, node_time, plan_standing }` | `picture.view` | Yes (GAP-041); `bearing_rays`/`pipeline_stats` GAP-096; `queue` GAP-132; `node_time` GAP-140; `plan_standing`, whether `plan` answers the node's current picture, GAP-157 (kept live by `InterceptEvent::PlanStanding`; a plan's own `basis` says whether it is the optimum or an interim answer, GAP-156) |
-| `GET /v3/events` (WebSocket) | `SubscribeRequest { from_seq }` as the first frame | A stream of `EventFrame` (`gungnir_eventing::Envelope`) with `seq >= from_seq`, in order | `picture.view` | Yes (GAP-041) |
-| `GET /v3/history?since_seq=N` | none | `HistoryResponse`: the retained envelopes from `N`, or `410` when the window has moved past `N` | `picture.view` | Yes (GAP-050) |
+| `GET /v3/snapshot` | none | `SnapshotResponse { schema_version, tracks, plan, health, requirements, bearing_rays, pipeline_stats, withheld, queue, node_time, plan_standing }` | `picture.view` | Yes (GAP-041); `bearing_rays`/`pipeline_stats` GAP-096; `queue` GAP-132; `node_time` GAP-140; `plan_standing`, whether `plan` answers the node's current picture, GAP-157 (kept live by `InterceptEvent::PlanStanding`; a plan's own `basis` says whether it is the optimum or an interim answer, GAP-156); lossless floats GAP-153 |
+| `GET /v3/events` (WebSocket) | `SubscribeRequest { from_seq }` as the first frame | A stream of `EventFrame` (`gungnir_eventing::Envelope`) with `seq >= from_seq`, in order, each in the lossless form of D-96 | `picture.view` | Yes (GAP-041); lossless floats GAP-153 |
+| `GET /v3/history?since_seq=N` | none | `HistoryResponse`: the retained envelopes from `N`, or `410` when the window has moved past `N` | `picture.view` | Yes (GAP-050); lossless floats GAP-153 |
 | `GET /v3/health` | none | `SystemHealth` | an operator's session, whatever its role, or a party's agreement for health: the security officer's layout is health and the audit record (D-30), and health is not the picture (corrected 2026-09-25, GAP-111; the routes above began asking `picture.view` then, which this table had always said) | Yes (GAP-041) |
 | `GET /v3/coverage` | none | `CoverageResponse`: the whole `CoverageReport` when one was computed, or `NotComputed` with a reason. **Not a bare `Vec<CoverageGap>`**, which would discard the sample spacing and terrain-masking flag DN-12 §5 puts on the result | `picture.view` | Yes (GAP-006) |
 | `POST /v3/detections` | `SubmitDetectionRequest { detection: DetectionView }` | **`202`**: queued for the ingest gateway, which validates it on its next tick; `IngestEvent::Quarantined` appears on the stream if it is rejected | `detection.submit` | Yes (GAP-057) |
@@ -237,6 +237,31 @@ Error responses carry `ApiError` as `{ "error": "<variant>", "message": "<text>"
   heartbeat a half-open connection would leave a desktop showing a dead node's picture
   under a "connected" light; with it, a desktop also shows how long ago the node was last
   heard, which is the number that tells an operator how stale the picture is.
+
+## Non-finite floats on the wire
+
+**Decided 2026-09-26 (D-96, GAP-153).** JSON has no spelling for NaN or an infinity, and
+`serde_json` writes both as `null`. The journal has carried them losslessly since D-77.
+The event stream, `GET /v3/history` and `GET /v3/snapshot` now carry them in the same
+form (`gungnir_eventing::nonfinite`):
+
+- A frame or body whose floats are all finite is exactly what `serde_json` writes, byte
+  for byte, with content type `application/json`. Nothing about it changed.
+- A frame or body that carries a non-finite float starts with `~` and holds JSON in which
+  each non-finite `f64` is the string `"\u0000f64:"` followed by the sixteen hex digits of
+  its bits (`"\u0000f32:"` and eight for an `f32`), and a genuine string that begins with
+  U+0000 gains one more. The bits carry the NaN's sign and payload. A body in this form is
+  served as `application/vnd.gungnir.lossless-json`, because it is not JSON.
+- **A client reads by the marker, not by the header**, as the journal reads its lines.
+- The node encodes each envelope once, when it is offered, and proves the line reads back
+  before any subscriber is sent it. An envelope with no faithful line is refused there
+  (`ApiError::Unencodable`) and counted, never sent. The stream then has a gap in `seq`,
+  which the rules above make visible, rather than a frame no client can read.
+
+No schema or path version moves. Nothing a client could read before this changes meaning:
+a client that predates it meets a marked frame exactly where it used to meet the `null` it
+could not decode. The other routes' bodies, and the exchange products' `body`, still write
+`null` (GAP-171).
 
 ## Compatibility rules
 
