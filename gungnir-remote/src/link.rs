@@ -2202,7 +2202,7 @@ fn apply(projection: &Arc<Mutex<Projection>>, envelope: &Envelope) -> Result<(),
         // GAP-183: the node's word on which layers at hold are refusing every plan. See
         // `Projection::held_layers`.
         Event::Intercept(InterceptEvent::HeldLayers(held)) => {
-            p.held_layers = held.clone();
+            p.held_layers.clone_from(held);
         }
         // GAP-161: the node's services, as the node reports them. See
         // `Projection::node_health`.

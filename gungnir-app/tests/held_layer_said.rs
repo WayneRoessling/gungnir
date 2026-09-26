@@ -298,3 +298,67 @@ fn the_line_goes_the_moment_a_plan_is_offered() {
     drop(state);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// **Round 1, as committed** (`testdata/usability/round-1.json`): the area layer at hold,
+/// the point layer weapons free -- the deployment GAP-183 was found on, when its
+/// rehearsals under its own policy were offered nothing (GAP-182). Two drones down the
+/// upper Vell approach; the planner tasks the area battery R2 beside the point battery R1,
+/// the hold refuses the plan whole, and PN-06 says so, naming the area layer.
+#[test]
+fn round_1_as_committed_says_its_area_hold_is_refusing_every_plan() {
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/usability/round-1.json");
+    let text = std::fs::read_to_string(&path).expect("round-1.json is committed");
+    let mut config: ConfigBaseline = serde_json::from_str(&text).expect("round-1.json parses");
+    let dir =
+        std::env::temp_dir().join(format!("gungnir-held-layer-round-1-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    config.data_dir = dir.to_string_lossy().into_owned();
+    gungnir_config::validate(&config).expect("the round-1 baseline is valid");
+    let mut state = AppState::with_config(config).expect("the desktop starts");
+    let picture = Picture::default();
+    state.tracking = Box::new(PictureService {
+        picture: picture.clone(),
+        snapshot: Vec::new(),
+    });
+    state.intercept = Box::new(
+        gungnir_app::state::embedded_planner(&state.config)
+            .with_clock(Arc::new(SteppedClock::new(Duration::ZERO))),
+    );
+    // Up the approach, at its declared 300 m, closing on the harbour.
+    let drone = |id: u64, east_m: f64, north_m: f64| {
+        let mut t = track(id, east_m);
+        t.state[1] = north_m;
+        t.state[2] = 300.0;
+        t.state[3] = -40.0;
+        t.state[4] = -12.0;
+        t
+    };
+    set(
+        &picture,
+        vec![drone(81, 12_000.0, 3_500.0), drone(82, 9_000.0, 2_600.0)],
+    );
+    tick_at(&mut state, 1.0);
+    assert!(
+        state.last_plan.assignments().iter().any(|(r, _)| r.0 == 2),
+        "the planner tasks round 1's area battery: {:?}",
+        state.last_plan.assignments()
+    );
+    assert!(
+        state.desk.approvals.queue().is_empty(),
+        "{:?}",
+        state.alerts
+    );
+    let held = decisions::held_layers(&state);
+    assert_eq!(held.len(), 1, "{held:?}");
+    assert_eq!(held[0].layer, EffectorLayer::Area);
+    let pn06 = panel(&state, PanelId::ApprovalQueue);
+    assert!(
+        pn06.says("The area layer is at HOLD and is refusing every plan that tasks it"),
+        "{}",
+        pn06.joined()
+    );
+
+    drop(state);
+    let _ = std::fs::remove_dir_all(dir);
+}

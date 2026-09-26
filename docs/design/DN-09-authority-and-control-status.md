@@ -136,6 +136,36 @@ Interface:
 |---|---|---|---|
 | CAP-3.6 Rules of engagement | Table-driven test over every authority-matrix cell, plus scenario replay per status | Every cell of the authority matrix is exercised and matches (MOP-38); an unconfigured layer is at `Hold`; no role without a matching rule may accept; a plan denied by status or authority carries a reason naming the layer, the status, or the required role; no verdict permits action without a human decision | The authority matrix; TT-01 and TT-02 replays at each status |
 
+## 9. Amendment 1 -- a layer at hold refusing every plan is said (2026-09-26)
+
+**Raised by GAP-183; decided by the owner as D-114.** §5 refuses a plan whole when any
+of its solutions is refused, and the allocator tasks every adequate resource, so a
+deployment with one layer at hold is offered nothing on any layer while every plan
+tasks that layer: round 1 (area hold, point free) is such a deployment. **The rule
+stands.** What changes is that it is said, so an operator never reads the empty queue as
+a quiet sector.
+
+1. **PN-06 says it, while it is true.** For each layer at hold that has refused a plan
+   since the last plan offered for decision, and is still at hold under the policy in
+   force: the layer; how many plans its hold refused, of how many evaluated since its
+   first refusal; that none has been offered since; that the other layers' engagements
+   in those plans were refused with them (§5's whole-plan rule); and that lifting the
+   hold on that layer -- a supervisor's or commander's act -- is what would let them
+   through. The line goes the moment a plan is offered, or the layer's hold is lifted.
+2. **PN-05 says it beside the plan** that tasks a held layer: that plan will not reach
+   the approval queue, in PN-06's own sentence (§7 already asks PN-05 for the denial in
+   words).
+3. **Whichever machine holds the queue counts, and says.** The approval desk keeps the
+   window (`gungnir_approval::DenialHistory`), publishes `InterceptEvent::HeldLayers`
+   with `gungnir_model::HeldLayerView`s whenever the list changes, and a node carries the
+   last list in its snapshot's `held_layers`, so a linked desktop draws the node's count
+   and not one of its own.
+
+The details in rules 1 to 3 beyond the owner's words were taken under the owner's
+delegation and are recorded with D-114. This note is human-owned; what the owner has
+signed of this amendment is in [`../signatures.md`](../signatures.md). Reasoning:
+`../record/2026-09-26/a-layer-at-hold-refusing-every-plan-is.md`.
+
 ## Traceability
 
 GAP-033, and the specification GAP-058 implements against; CAP-3.6, CAP-6.2; D-05, D-15;
