@@ -1380,7 +1380,7 @@ fn coverage_answer(config: &ConfigBaseline, sensors: &InMemorySensorRegistry) ->
     let volumes = gungnir_analytics::coverage_from_registry(
         sensors,
         config.analytics.coverage_min_elevation_rad,
-        |record| frame.to_enu(record.position),
+        &frame,
     );
     let routes: Vec<Vec<[f64; 3]>> = config
         .approaches
@@ -2446,6 +2446,7 @@ mod tests {
                 max_range_m: 5_000.0,
                 control_endpoint: Some("sapient".into()),
                 maintenance: Vec::new(),
+                azimuth_sector: None,
             }],
             ..ConfigBaseline::default()
         };
@@ -2534,6 +2535,7 @@ mod tests {
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         }
     }
 
@@ -2561,6 +2563,7 @@ mod tests {
             max_range_m: 20_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         }
     }
 
@@ -2798,6 +2801,7 @@ mod tests {
                 max_range_m: 5_000.0,
                 control_endpoint: Some("sapient".into()),
                 maintenance: Vec::new(),
+                azimuth_sector: None,
             }],
             origin: Some([0.9, 0.2, 0.0]),
             sapient_feeds: vec![gungnir_config::SapientFeedConfig {
@@ -2977,6 +2981,7 @@ mod tests {
                 max_range_m: 5_000.0,
                 control_endpoint: Some("sapient".into()),
                 maintenance: Vec::new(),
+                azimuth_sector: None,
             }],
             origin: Some([0.9, 0.2, 0.0]),
             sapient_feeds: vec![gungnir_config::SapientFeedConfig {
@@ -3173,6 +3178,7 @@ mod tests {
                 max_range_m: 50_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                azimuth_sector: None,
             }],
             origin: Some(origin),
             misb_feeds: vec![gungnir_config::MisbFeedConfig {
@@ -3221,6 +3227,7 @@ mod tests {
                 max_range_m: 50_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                azimuth_sector: None,
             }],
             origin: None,
             misb_feeds: vec![gungnir_config::MisbFeedConfig {
@@ -3254,6 +3261,7 @@ mod tests {
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            azimuth_sector: None,
         }
     }
 

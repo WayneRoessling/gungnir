@@ -422,6 +422,7 @@ mod tests {
             score: value,
             time_to_impact_s: Some(60.0),
             exposure: None,
+            kinematics: None,
         }
     }
 

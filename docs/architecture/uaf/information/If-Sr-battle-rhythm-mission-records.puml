@@ -10,6 +10,7 @@ class "SensorPlacement" as SensorPlacement <<InformationElement>> {
   sensor: SensorId
   position_enu: [f64; 3]
   mode: SensorMode
+  azimuth_sector: Option<crate::AzimuthSector>
 }
 class "ResourcePlacement" as ResourcePlacement <<InformationElement>> {
   resource: ResourceId
@@ -89,6 +90,8 @@ enum "AssetExtent\n(see If-Sr-assets-exchange-releasability)" as AssetExtent <<E
 }
 enum "AssetPriority\n(see If-Sr-assets-exchange-releasability)" as AssetPriority <<External>> #line.dashed {
 }
+class "AzimuthSector\n(see If-Sr-core-identifiers-frames-quality)" as AzimuthSector <<External>> #line.dashed {
+}
 enum "Classification\n(see If-Sr-picture-tracking-vocabulary)" as Classification <<External>> #line.dashed {
 }
 enum "EffectorLayer\n(see If-Sr-plans-effectors-handoff)" as EffectorLayer <<External>> #line.dashed {
@@ -101,6 +104,7 @@ enum "SensorMode\n(see If-Sr-picture-tracking-vocabulary)" as SensorMode <<Exter
 }
 enum "WeaponsControlStatus\n(see If-Sr-policy-authority-settings)" as WeaponsControlStatus <<External>> #line.dashed {
 }
+SensorPlacement --> AzimuthSector : azimuth_sector
 SensorPlacement --> SensorId : sensor
 SensorPlacement --> SensorMode : mode
 Laydown --> LaydownId : id

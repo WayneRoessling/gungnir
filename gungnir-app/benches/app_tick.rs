@@ -114,6 +114,7 @@ fn config_for(timeline: &GeneratedTimeline, dir: &Path) -> ConfigBaseline {
                 max_range_m: 200_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                azimuth_sector: None,
             })
             .collect(),
         data_dir: dir.to_string_lossy().into_owned(),

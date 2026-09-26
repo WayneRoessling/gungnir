@@ -178,6 +178,7 @@ mod tests {
             sensor_enu: [east, 0.0, 0.0],
             max_range_m: range,
             min_elevation_rad: -std::f64::consts::FRAC_PI_2,
+            azimuth: None,
         }
     }
 

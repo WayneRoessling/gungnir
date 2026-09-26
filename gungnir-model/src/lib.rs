@@ -100,7 +100,7 @@ pub use exchange::{
     ExchangeAgreement, ExchangeFormat, ExchangeItem, ExchangeSet, LaunchWarningReport,
     PeerLaunchWarning, PeerOrigin, ReportedPosition,
 };
-pub use frame::LocalFrame;
+pub use frame::{bearing_rad, normalize_bearing, AzimuthSector, LocalFrame, SectorError};
 pub use gungnir_coord::Geodetic;
 /// The motion models `gungnir-core` owns, re-exported rather than redefined
 /// (`agentic-coding-standards.md` §1.2). `gungnir-assessment` needs the same process
