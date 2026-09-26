@@ -180,7 +180,7 @@ history, and an entry is never edited once it has merged.
 | GAP-171 | The other v3 bodies, and every exchange product's body, still write a non-finite float as null | Technical | CAP-7.1, CAP-7.4 | 3 | 6 | M | 18 | I3 | Services engineer | Closed |
 | GAP-173 | The late-data row still says nothing consumes the policy | Technical | CAP-1.5 | 3 | 7 | S | 21 | I3 | Owner | Open |
 | GAP-168 | The intercept-service row's degradation clause stops at the last good plan | Technical | CAP-3.3, CAP-5.5 | 1 | 8 | S | 8 | I3 | Owner | Open |
-| GAP-169 | An older desktop reads a newer node's interim plan as the optimum | Technical | CAP-3.3, CAP-7.3 | 2 | 5 | S | 10 | I3 | Owner | Open |
+| GAP-169 | An older desktop reads a newer node's interim plan as the optimum | Technical | CAP-3.3, CAP-7.3 | 2 | 5 | S | 10 | I3 | Owner | Closed |
 | GAP-170 | PN-09's refusal test left its wait before the desktop had seen its link | Technical | CAP-7.3 | 1 | 1 | S | 1 | I3 | Services engineer | Closed |
 | GAP-176 | A warning posted to a warned party and a handoff posted to an effector still write a non-finite float as null | Technical | CAP-4.4, CAP-4.5 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
 
@@ -2552,11 +2552,12 @@ Counts: 170 gaps, 3 mission, 167 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.3 Assignment recommendation; CAP-7.3 Three profiles.
 - History:
   - 2026-09-26, Open: Found building GAP-156. Not decided there: a version move refuses every older client of every route, which is a release decision rather than the planner's.
+  - 2026-09-26, Closed: Closed by the owner's decision of 2026-09-26 to keep GAP-175's schema move: D-101 takes `SCHEMA_VERSION` from 4 to 5, so a desktop built before `PlanView::basis` is refused at connect with both versions named and can never read a v5 node's interim plan as the optimum. Mixed-version fleets are refused, not supported.
 - Evidence: `gungnir-model/src/lib.rs` (`PlanView::basis`, defaulted to `Exact`); `docs/gungnir-api-v1.md`, "Compatibility rules"; `gungnir-remote/src/link.rs` (the snapshot's version check is an exact match, so a bump refuses an older desktop by name).
 - Severity: 2. Reach: 5 threads. Effort: S. Priority: 10.
 - Impact: `PlanView::basis` and the snapshot's `plan_standing` are defaulted, which the interface's rules call compatible, so `SCHEMA_VERSION` stands at 4 and a desktop built before them still links to a newer node. That desktop ignores the basis: it draws a node's interim plan on PN-05 and in PN-06 and PN-07 as an ordinary plan, and would let it be accepted without the acknowledgement D-93 puts on it. The same rules name a change "a client could read as valid and act on wrongly" as one that moves a version. Node and desktop are built from one workspace and released together, so the exposure is a fleet running mixed versions.
 - Closing action: Decide between moving `SCHEMA_VERSION` to 5, so an older desktop is refused by name -- and with it every older machine client, since a detection submission's version is checked exactly -- and recording that a node and its desktops are released together and a mixed fleet is not supported.
-- Target: I3. Owner: Owner. Status: Open.
+- Target: I3. Owner: Owner. Status: Closed.
 - Reference: Found building GAP-156 (`../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`).
 - Depends on: GAP-156, GAP-157.
 

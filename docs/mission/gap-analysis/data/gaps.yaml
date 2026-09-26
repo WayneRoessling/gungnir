@@ -10758,6 +10758,13 @@
     note: >-
       Found building GAP-156. Not decided there: a version move refuses every older
       client of every route, which is a release decision rather than the planner's.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed by the owner's decision of 2026-09-26 to keep GAP-175's schema move: D-101
+      takes `SCHEMA_VERSION` from 4 to 5, so a desktop built before `PlanView::basis`
+      is refused at connect with both versions named and can never read a v5 node's
+      interim plan as the optimum. Mixed-version fleets are refused, not supported.
 - id: GAP-170
   name: PN-09's refusal test left its wait before the desktop had seen its link
   type: Technical
