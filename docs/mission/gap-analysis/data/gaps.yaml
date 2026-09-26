@@ -9606,6 +9606,58 @@
       floor. Filed rather than fixed inside GAP-145, because what a desktop does with a
       refusal it cannot retry past is a question about the link's own contract, not about
       the register.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Closed by reading each publish answer for what it says about the caller (DN-18 §13,
+      D-75) and bounding the outbox at one set per item, the newest, replacements counted
+      (D-76). A `401` or `403` stops the link offering until it signs in again; no answer
+      or a `5xx` is retried on a doubling interval; any other `4xx` drops that set,
+      counted. PN-09 says it in one line with the node's reason and the roles that may
+      publish. GAP-121's queue was not adopted: its oldest-dropped rule is wrong for
+      replacement sets. Nothing human-owned was touched. Tests:
+      `an_operator_s_console_says_once_on_pn09_that_it_may_not_publish`
+      (`gungnir-app/tests/cut_off_and_reconnected.rs`) and three in
+      `gungnir-remote/tests/transport.rs`. Found on the way: GAP-150. See
+      `../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`.
+
+- id: GAP-150
+  name: A console's mission report is not published again when its link comes back
+  type: Technical
+  caps: [CAP-7.4]
+  layer: Deployment and API
+  sev: 3
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: [GAP-145, GAP-146]
+  impact: >-
+    A desktop publishes its mission report to exchange only when PN-13 generates or
+    exports it. Handoffs and launch warnings are published again the tick the link comes
+    back (DN-18 §12, §13), so a node that restarted, or a new link built by a sign-in on
+    the console, is repaired for those; the report is not, and a partner reading
+    `GET /v3/exchange/reports` is served nothing from this console until somebody
+    generates one again -- with the report still on the console's own screen.
+  evidence: >-
+    `gungnir-app/src/sustainment.rs` (`ReportState` holds the report inside
+    `SustainmentState`, which is window state outside `AppState`, and `publish_to_exchange`
+    is called from `generate` and `export` alone); `gungnir-app/src/exchange.rs`
+    (`republish_all` republishes handoffs and launch warnings)
+  action: >-
+    Decide whether the last generated report is mission state -- and move what exchange
+    needs of it into `AppState` so the reconnection edge can publish it with the time it
+    was generated rather than the time it was resent -- or say on PN-13 that a report is
+    published when it is generated and not again.
+  ref: >-
+    Found building GAP-146 (`../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Filed by GAP-146 rather than folded into it. GAP-146 made a new link the thing a
+      refused console waits on, and a sign-in that builds one drops what the old link
+      held; handoffs and launch warnings are republished from mission state, and the
+      report lives in window state the tick cannot reach.
 
 - id: GAP-154
   name: >-
