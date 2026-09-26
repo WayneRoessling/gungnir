@@ -22,5 +22,11 @@ workspace = true
 [dependencies]
 crossbeam-channel.workspace = true
 serde.workspace = true
+# GAP-153, D-96: the lossless JSON form of an envelope carrying a non-finite float
+# (`src/nonfinite.rs`) wraps `serde_json`'s serializer and deserializer. It moved here from
+# `gungnir-store` so the journal, the node's transport and the desktop's link share one
+# codec. `serde_json` is already in the workspace (§2.9) and in both binaries' graphs, so
+# no crate enters either.
+serde_json.workspace = true
 thiserror.workspace = true
 gungnir-model = { path = "../gungnir-model", version = "0.1.0" }

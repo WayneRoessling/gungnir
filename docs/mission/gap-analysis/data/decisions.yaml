@@ -2298,6 +2298,59 @@
     for two tests to hold in step; and reading the flags inside `gungnir-observability`,
     which needs edges `ARCHITECTURE.md` §7.1 does not draw. See
     `../../record/2026-09-26/the-interop-model-and-observability-rows-get-their.md`.
+- id: D-96
+  decision: How the v3 wire carries an envelope holding a NaN or an infinity
+  question: >-
+    The journal carries a non-finite float losslessly since D-77, but the node sent its
+    stream, `/v3/history` and `/v3/snapshot` as plain `serde_json`, which writes one as
+    `null`; the desktop could not decode the frame, took it for the node ending the stream
+    and was sent it again on every reconnection (GAP-153). Carry the journal's lossless form
+    on the wire, or refuse and count such an envelope at the node's publish?
+  raised_in: "GAP-153"
+  decider: Owner
+  unblocks: GAP-153
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** The wire carries it as the
+    journal does. The codec moved to `gungnir-eventing` (`src/nonfinite.rs`, re-exported
+    as `gungnir_store::nonfinite`), which the journal, the node's transport and the
+    desktop's link all reach with no new crate edge. A frame or body whose floats are all
+    finite is byte for byte what it was, as `application/json`; one carrying a non-finite
+    float is the marked form, as `application/vnd.gungnir.lossless-json`; the desktop reads
+    by the marker. `NodeApi::publish_event` encodes each envelope once and proves it reads
+    back; one with no faithful line is refused with `ApiError::Unencodable` and counted, so
+    no stream can carry a frame its desktop cannot read. Refusing every non-finite envelope
+    was rejected for D-77's reason -- it is a true record, often of the fault under
+    investigation -- and because a node whose journal kept what its wire refused would
+    show a reconnecting desktop a divergence that is not one. No schema or path version
+    moves: nothing readable before changes meaning. The snapshot is included because it is
+    the same defect on the route every connection starts with. See
+    `../../record/2026-09-26/the-report-and-every-float-reach-the-partner.md`.
+- id: D-97
+  decision: Whether a console's last generated mission report is mission state
+  question: >-
+    A console republishes its handoffs and launch warnings when its link comes back, but
+    its mission report lived in PN-13's window state, which the tick cannot reach, so after
+    a node restart or a sign-in that built a new link a partner was served no report until
+    somebody generated one again (GAP-150). Move what exchange needs into mission state, or
+    say on PN-13 that a report is published when generated and not again?
+  raised_in: "GAP-150"
+  decider: Owner
+  unblocks: GAP-150
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** The report partners were sent is
+    mission state; the panel's drawing of it is not. `AppState::exchange_report` holds the
+    record exchange carries -- identifier, marking, body and the time it was generated --
+    written by PN-13's Generate and published by Generate, Export and the reconnection edge
+    alike, always with the generated-at time, so a partner is told the report's real age.
+    A console that has generated none publishes none. Saying on PN-13 that the report is
+    not republished was rejected: it leaves the defect and asks a person to react to a node
+    restart they cannot see. Moving all of `ReportState` was rejected: counts, measures and
+    export paths are what a window draws. Not recovered from the journal at start: a
+    restarted console shows no report, and republishing one nobody there can see would put
+    a product before partners that nobody answers for. GAP-146's outbox rules are
+    unchanged. See `../../record/2026-09-26/the-report-and-every-float-reach-the-partner.md`.
 - id: D-98
   decision: Where the late-data policy is applied, and where it is set
   question: >-

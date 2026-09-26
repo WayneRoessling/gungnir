@@ -351,6 +351,22 @@ pub struct AppState {
     /// Serial for [`AppState::next_launch_warning_id`]. Private for the same reason
     /// `next_requirement` is.
     next_launch_warning: u64,
+    /// The mission report this console last generated, as coalition exchange carries it
+    /// (GAP-150, D-97; `docs/design/DN-18-coalition-exchange.md` §14).
+    ///
+    /// **Mission state, not window state.** PN-13's `ReportState` keeps what the panel
+    /// draws; this keeps what partners were told, which the mission depends on after the
+    /// window has moved on. The link's reconnection edge republishes it with handoffs and
+    /// launch warnings (`crate::exchange::republish_all`), so a node that restarted, or a
+    /// new link built by a sign-in, serves it again without anybody generating it again.
+    ///
+    /// **Stamped when it was generated**, and republished with that time, never the time
+    /// it was resent: a partner reading `at` is told how old the report is. `None` until
+    /// PN-13's first Generate, replaced by each one after -- one report, this console's
+    /// whole set for `ExchangeItem::Reports`. Not recovered from the journal at start: a
+    /// console that restarted shows no report on PN-13, and publishing one the console no
+    /// longer shows would put a product before partners that nobody here can see.
+    pub exchange_report: Option<gungnir_remote::link::ExchangeProductRecord>,
     /// Journal retention (GAP-122, D-78): what it must keep beyond the live session, when
     /// it runs next, and how many sessions it has removed.
     pub retention: crate::retention::RetentionState,
@@ -759,6 +775,7 @@ impl AppState {
             issued_launch_warnings,
             launch_warnings_recovered,
             next_launch_warning,
+            exchange_report: None,
             retention,
             config_store,
             audit,

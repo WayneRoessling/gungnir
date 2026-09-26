@@ -9824,6 +9824,21 @@
       refused console waits on, and a sign-in that builds one drops what the old link
       held; handoffs and launch warnings are republished from mission state, and the
       report lives in window state the tick cannot reach.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed by making the report partners were sent mission state (D-97, DN-18 §14):
+      `AppState::exchange_report` holds the record exchange carries, stamped when the report
+      was generated, and `exchange::republish_all` publishes it on the reconnection edge
+      with handoffs and launch warnings; Generate and Export send the same record. A console
+      that has generated none publishes none. GAP-146's outbox rules are unchanged. Tests:
+      `a_console_s_mission_report_reaches_its_partner_again_when_its_link_comes_back`
+      (`gungnir-app/tests/cut_off_and_reconnected.rs`; an Operator's refused report, PN-13
+      dropped, then a Supervisor's sign-in and a real node restart each serve the partner's
+      `GET /v3/exchange/reports` over mutual TLS the report stamped T+120), and
+      `the_reconnection_edge_publishes_the_last_report_as_it_was_generated`
+      (`gungnir-app/tests/sustainment.rs`). Nothing human-owned was changed. See
+      `../../record/2026-09-26/the-report-and-every-float-reach-the-partner.md`.
 
 - id: GAP-154
   name: >-
@@ -9939,6 +9954,22 @@
     note: >-
       Found by D-77's survey of where a journaled envelope goes next. Filed rather than
       fixed inside GAP-126: it is an interface contract change for both ends of the link.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed by carrying the journal's lossless form on the wire (D-96): the codec moved to
+      `gungnir_eventing::nonfinite` (re-exported by `gungnir-store`), and the stream,
+      `/v3/history` and `/v3/snapshot` send a finite frame or body byte for byte as before
+      and a non-finite one marked, as `application/vnd.gungnir.lossless-json`; the desktop
+      reads by the marker. `NodeApi::publish_event` encodes each envelope once and proves
+      it reads back, refusing and counting one that does not (`ApiError::Unencodable`).
+      `docs/gungnir-api-v1.md` says so. Test:
+      `a_nan_and_an_infinity_cross_the_snapshot_the_stream_and_the_history`
+      (`gungnir-remote/tests/transport.rs`), a NaN with a payload and both infinities
+      through all three real routes into a real link, bit for bit, with the stream not
+      ended. The stream, history and snapshot are read paths; nothing human-owned was
+      changed. Found on the way: GAP-171. See
+      `../../record/2026-09-26/the-report-and-every-float-reach-the-partner.md`.
 
 - id: GAP-158
   name: A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical
@@ -10532,6 +10563,42 @@
       Found by GAP-117's round trip. Not fixed there: changing the writer without a
       reader for the old form would leave every journal written since GAP-069 with
       identity events it cannot read, and how to read them is a decision this needs.
+- id: GAP-171
+  name: The other v3 bodies, and every exchange product's body, still write a non-finite float as null
+  type: Technical
+  caps: [CAP-7.1, CAP-7.4]
+  layer: Deployment and API
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: [GAP-153]
+  impact: >-
+    GAP-153 gave the stream, the history and the snapshot the journal's lossless form. The
+    queue view, coverage and the exchange routes are still plain `serde_json`, so a
+    non-finite float in one is `null`, which a desktop fails to decode. Worse, an exchange
+    product's `body` is a `serde_json::Value`, which cannot hold a non-finite float at all:
+    `serde_json::to_value` turns one into `null` without an error, so a mission report with
+    a NaN measure would reach a partner with that figure silently blanked.
+  evidence: >-
+    `gungnir-api/src/v3/mod.rs` (`ExchangeProduct::body: serde_json::Value`);
+    `gungnir-app/src/sustainment.rs`, `handoffs.rs`, `launch_warning.rs` and `desk.rs` build
+    it with `serde_json::to_value`; `gungnir-api/src/transport.rs` (the queue, coverage and
+    exchange handlers' `Json`)
+  action: >-
+    Decide how a partner is sent a non-finite value (DN-18's format, and the `POST` side is
+    a human-owned `gungnir-api` write path): carry the product body as the lossless line
+    rather than a `Value`, or refuse and say so at publish; and give the remaining read
+    routes the form the snapshot has.
+  ref: >-
+    Found building GAP-153 (`../../record/2026-09-26/the-report-and-every-float-reach-the-partner.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found closing GAP-153. Not widened into it: the exchange body is a write path the
+      owner reviews and a format DN-18 decides, and no live producer puts a non-finite
+      value in any of these bodies today.
 
 - id: GAP-173
   name: The late-data row still says nothing consumes the policy

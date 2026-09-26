@@ -325,7 +325,7 @@ fn the_session_report_keeps_the_evidence_sources_apart() {
     update::tick(&mut state); // 8 stayed: ineffective, track-inferred
 
     let mut reports = gungnir_app::sustainment::ReportState::default();
-    reports.generate(&state).expect("the journal folds");
+    reports.generate(&mut state).expect("the journal folds");
     let view = gungnir_app::sustainment::reports_view(&state, &reports);
     let counts = view.counts.expect("counts after generating");
     let value = |label: &str| {

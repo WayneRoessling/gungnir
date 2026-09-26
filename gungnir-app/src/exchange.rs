@@ -214,15 +214,20 @@ fn capitalised(text: &str) -> String {
 /// Publish every set this console holds in mission state, the tick its link comes back
 /// (GAP-145, GAP-146; DN-18 §12, §13).
 ///
-/// **Handoffs and launch warnings.** Both are sets held in [`AppState`] and republished
-/// whole, so sending them again costs a partner nothing and repairs a node that came back
-/// without them -- and since GAP-146 a new link is also what a refused console waits on:
-/// a sign-in on a linked desktop builds a new link, whose connection is this edge, and the
-/// old link's held sets went with it. The mission report is PN-13's window state rather
-/// than mission state and is not reachable from the tick (GAP-150).
+/// **Handoffs, launch warnings and the mission report.** Each is a set held in
+/// [`AppState`] and republished whole, so sending it again costs a partner nothing and
+/// repairs a node that came back without it -- and since GAP-146 a new link is also what a
+/// refused console waits on: a sign-in on a linked desktop builds a new link, whose
+/// connection is this edge, and the old link's held sets went with it.
+///
+/// **The report since GAP-150** (D-97, DN-18 §14): the last one PN-13 generated is kept in
+/// [`AppState::exchange_report`] as partners were sent it, and goes out again here with
+/// the time it was generated, not the time it was resent. A console that has generated
+/// none publishes none, as a console that has issued no handoff publishes no set.
 pub fn republish_all(state: &mut AppState) {
     crate::handoffs::republish_to_node(state);
     crate::launch_warning::republish_to_node(state);
+    crate::sustainment::publish_to_exchange(state);
 }
 
 #[cfg(test)]
