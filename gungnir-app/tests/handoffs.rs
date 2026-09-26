@@ -414,7 +414,7 @@ fn an_effector_completion_reaches_the_journal_as_a_corroborated_outcome() {
     // Through the journal and the report PN-13 generates from it.
     gungnir_app::update::tick(&mut state);
     let mut reports = gungnir_app::sustainment::ReportState::default();
-    reports.generate(&state).expect("the journal folds");
+    reports.generate(&mut state).expect("the journal folds");
     let view = gungnir_app::sustainment::reports_view(&state, &reports);
     let counts = view.counts.expect("counts after generating");
     let value = |label: &str| {

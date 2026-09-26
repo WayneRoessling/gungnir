@@ -86,6 +86,22 @@
 //! none. **Nothing in this workspace issues one**; what exists is the shape a peer's
 //! warning arrives in and the gate it would leave by.
 //!
+//! # A non-finite float on the wire (GAP-153, D-96)
+//!
+//! **The stream, `GET /v3/history` and `GET /v3/snapshot` carry every float as it was**,
+//! NaN and the infinities included, in the journal's own lossless form
+//! ([`gungnir_eventing::nonfinite`], D-77). A frame or body whose floats are all finite is
+//! exactly what `serde_json` writes, byte for byte; one that carries a non-finite float
+//! is [`gungnir_eventing::nonfinite::MARKER`] and the escaped JSON, served with
+//! [`LOSSLESS_JSON`] as its content type. Plain `serde_json` wrote such a value as `null`,
+//! which the desktop could not decode and took for the node ending the stream.
+//!
+//! **An envelope is encoded once, when it is offered** ([`NodeApi::publish_event`]), and
+//! the line is proved to read back before any subscriber sees it; every subscriber is sent
+//! that same line. An envelope with no faithful line is refused there with
+//! [`ApiError::Unencodable`] and counted ([`NodeApi::unencodable_envelopes`]), so no
+//! stream can carry a frame its desktop cannot read, and none is ended by one.
+//!
 //! # Loopback in the clear, or anywhere with mutual TLS
 //!
 //! [`serve`] and [`bind`] refuse any address that is not loopback, because a
@@ -146,7 +162,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use gungnir_eventing::Envelope;
+use gungnir_eventing::{nonfinite, Envelope};
 use gungnir_model::SystemHealth;
 use gungnir_model::{
     AssetId, DecisionId, ExchangeItem, ExchangeSet, MissionTime, SensorId, SensorTaskId, TrackId,
@@ -158,6 +174,7 @@ use gungnir_security::{
 };
 use std::collections::{BTreeMap, VecDeque};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use tokio::sync::broadcast;
 
@@ -333,6 +350,51 @@ impl CallerAuthority for AccountTokenAuthority {
     }
 }
 
+/// One envelope as the node offered it: the envelope, for the routes that filter by
+/// party, and the line every subscriber is sent (GAP-153, D-96).
+#[derive(Debug)]
+struct Offered {
+    envelope: Envelope,
+    line: String,
+}
+
+/// The content type of a body in the lossless form (GAP-153, D-96): a leading
+/// [`nonfinite::MARKER`] and escaped JSON, which is not JSON and is not labelled as JSON.
+/// A body whose floats are all finite is `application/json`, as it always was.
+pub const LOSSLESS_JSON: &str = "application/vnd.gungnir.lossless-json";
+
+/// A `200` body in the lossless form: plain JSON when every float is finite, the marked
+/// form when one is not (GAP-153, D-96).
+///
+/// For the read routes whose bodies carry the picture's floats -- the history and the
+/// snapshot. **Proved to read back** like an offered envelope, so the body a desktop is
+/// given is one it can decode; a body that cannot be is a `500` naming why, never a `200`
+/// the desktop would misread.
+fn lossless_json<T>(value: &T) -> Response
+where
+    T: serde::Serialize + serde::de::DeserializeOwned,
+{
+    match nonfinite::to_faithful_line(value) {
+        Ok(line) => {
+            let content_type = if line.starts_with(nonfinite::MARKER) {
+                LOSSLESS_JSON
+            } else {
+                "application/json"
+            };
+            (
+                StatusCode::OK,
+                [(axum::http::header::CONTENT_TYPE, content_type)],
+                line,
+            )
+                .into_response()
+        }
+        Err(why) => problem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("the node could not write this answer faithfully: {why}"),
+        ),
+    }
+}
+
 /// What a node publishes and what the routes read.
 ///
 /// The tick loop owns every service, so the transport never touches one. Each tick the
@@ -347,8 +409,11 @@ pub struct NodeApi {
     /// would put a sampling loop on the request path and let a caller's polling rate
     /// decide the node's load.
     coverage: RwLock<v3::CoverageResponse>,
-    events: broadcast::Sender<Envelope>,
-    backlog: Mutex<VecDeque<Envelope>>,
+    events: broadcast::Sender<Arc<Offered>>,
+    backlog: Mutex<VecDeque<Arc<Offered>>>,
+    /// Envelopes refused by [`Self::publish_event`] because they have no faithful line
+    /// (GAP-153, D-96).
+    unencodable: AtomicU64,
     /// Mission time as of the last published snapshot, which is what token expiry is
     /// judged against. The node's clock, not the transport's: a token minted against one
     /// clock and checked against another would expire at a time nobody chose.
@@ -683,6 +748,7 @@ impl NodeApi {
             }),
             events,
             backlog: Mutex::new(VecDeque::with_capacity(BACKLOG_CAPACITY)),
+            unencodable: AtomicU64::new(0),
             now: RwLock::new(0.0),
             callers: None,
             submissions: Mutex::new(Vec::new()),
@@ -1211,7 +1277,32 @@ impl NodeApi {
     ///
     /// Returns without error when nobody is listening: a node with no connected desktop
     /// is the normal case, not a failure.
+    ///
+    /// **Encoded here, once, and proved to read back** (GAP-153, D-96): the line every
+    /// subscriber is sent is the one made now, in the lossless form a NaN or an infinity
+    /// survives ([`nonfinite`]). The node binary journals the envelope before it offers it,
+    /// and the journal holds the same line to the same test (D-77), so this refusal is
+    /// the transport's own guarantee rather than one it borrows from its host.
+    ///
+    /// # Errors
+    ///
+    /// [`ApiError::Unencodable`], counted in [`Self::unencodable_envelopes`], for an
+    /// envelope with no faithful line: offering it would send every subscriber a frame it
+    /// could not read, and a desktop that reconnected from before it would be sent it
+    /// again, every time. Refused, the stream has a gap in `seq` that a client sees.
+    /// [`ApiError::Transport`] when the backlog's lock was poisoned.
     pub fn publish_event(&self, envelope: Envelope) -> Result<(), ApiError> {
+        let line = match nonfinite::to_faithful_line(&envelope) {
+            Ok(line) => line,
+            Err(why) => {
+                self.unencodable.fetch_add(1, Ordering::Relaxed);
+                return Err(ApiError::Unencodable {
+                    seq: envelope.seq,
+                    why,
+                });
+            }
+        };
+        let offered = Arc::new(Offered { envelope, line });
         {
             let mut backlog = self
                 .backlog
@@ -1220,11 +1311,19 @@ impl NodeApi {
             if backlog.len() == BACKLOG_CAPACITY {
                 backlog.pop_front();
             }
-            backlog.push_back(envelope.clone());
+            backlog.push_back(Arc::clone(&offered));
         }
         // `Err` here means no receivers, which is not a problem worth reporting.
-        let _ = self.events.send(envelope);
+        let _ = self.events.send(offered);
         Ok(())
+    }
+
+    /// How many envelopes [`Self::publish_event`] has refused for having no faithful line
+    /// since this node started (GAP-153, D-96). Zero on a healthy node; each refusal is
+    /// also the error the caller was returned.
+    #[must_use]
+    pub fn unencodable_envelopes(&self) -> u64 {
+        self.unencodable.load(Ordering::Relaxed)
     }
 
     /// How many event streams are currently subscribed.
@@ -1256,6 +1355,12 @@ impl NodeApi {
     /// backlog rather than the whole window.
     #[must_use]
     pub fn backlog_since(&self, from_seq: u64) -> Option<Vec<Envelope>> {
+        self.offered_since(from_seq)
+            .map(|offered| offered.iter().map(|o| o.envelope.clone()).collect())
+    }
+
+    /// [`Self::backlog_since`], as offered: each envelope with the line it is sent as.
+    fn offered_since(&self, from_seq: u64) -> Option<Vec<Arc<Offered>>> {
         if from_seq == 0 {
             return Some(Vec::new());
         }
@@ -1263,10 +1368,10 @@ impl NodeApi {
         match backlog.front() {
             // Nothing retained yet: there is nothing this client has missed.
             None => Some(Vec::new()),
-            Some(oldest) if oldest.seq <= from_seq => Some(
+            Some(oldest) if oldest.envelope.seq <= from_seq => Some(
                 backlog
                     .iter()
-                    .filter(|e| e.seq >= from_seq)
+                    .filter(|o| o.envelope.seq >= from_seq)
                     .cloned()
                     .collect(),
             ),
@@ -1277,7 +1382,7 @@ impl NodeApi {
         }
     }
 
-    fn subscribe(&self) -> broadcast::Receiver<Envelope> {
+    fn subscribe(&self) -> broadcast::Receiver<Arc<Offered>> {
         self.events.subscribe()
     }
 }
@@ -1921,7 +2026,8 @@ async fn snapshot(
             // this time, and a desktop that draws them against its own is wrong by the
             // difference between two machines with nothing saying so.
             snapshot.node_time = Some(gungnir_model::MissionTime(api.now()));
-            Json(snapshot).into_response()
+            // GAP-153: a diverged track's NaN covariance is carried, not written `null`.
+            lossless_json(&snapshot)
         }
         None => problem(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1960,12 +2066,13 @@ async fn history(
                     .filter(|e| api.releases(party, e))
                     .collect(),
             };
-            Json(v3::HistoryResponse {
+            // GAP-153, D-96: the lossless form, so a NaN in the history is the NaN the
+            // journal holds rather than a `null` that fails the reconciliation's read.
+            lossless_json(&v3::HistoryResponse {
                 since_seq: query.since_seq,
                 withheld: total - envelopes.len(),
                 envelopes,
             })
-            .into_response()
         }
         None => problem(
             StatusCode::GONE,
@@ -3088,7 +3195,7 @@ async fn stream_events(mut socket: WebSocket, api: Arc<NodeApi>, peer: Peer) {
         Some(party) => api.releases(party, envelope),
     };
 
-    let Some(backlog) = api.backlog_since(request.from_seq) else {
+    let Some(backlog) = api.offered_since(request.from_seq) else {
         // The contract's own rule: too far back, so say so and let the client take a
         // fresh snapshot rather than handing it a stream with a hole in it.
         let _ = socket
@@ -3104,12 +3211,12 @@ async fn stream_events(mut socket: WebSocket, api: Arc<NodeApi>, peer: Peer) {
     };
 
     let mut sent_through = 0;
-    for envelope in backlog {
-        sent_through = sent_through.max(envelope.seq);
-        if !releases(&envelope) {
+    for offered in backlog {
+        sent_through = sent_through.max(offered.envelope.seq);
+        if !releases(&offered.envelope) {
             continue;
         }
-        if send_envelope(&mut socket, &envelope).await.is_err() {
+        if send_offered(&mut socket, &offered).await.is_err() {
             return;
         }
     }
@@ -3131,10 +3238,10 @@ async fn stream_events(mut socket: WebSocket, api: Arc<NodeApi>, peer: Peer) {
             received = live.recv() => match received {
                 // Already delivered from the backlog. Sending it twice would break the
                 // contract's "in `seq` order" guarantee for a client that keys on it.
-                Ok(envelope) if envelope.seq <= sent_through => {}
-                Ok(envelope) if !releases(&envelope) => {}
-                Ok(envelope) => {
-                    if send_envelope(&mut socket, &envelope).await.is_err() {
+                Ok(offered) if offered.envelope.seq <= sent_through => {}
+                Ok(offered) if !releases(&offered.envelope) => {}
+                Ok(offered) => {
+                    if send_offered(&mut socket, &offered).await.is_err() {
                         return;
                     }
                 }
@@ -3166,12 +3273,11 @@ async fn read_subscribe(socket: &mut WebSocket) -> Option<v3::SubscribeRequest> 
     }
 }
 
-async fn send_envelope(socket: &mut WebSocket, envelope: &Envelope) -> Result<(), ()> {
-    let Ok(text) = serde_json::to_string(envelope) else {
-        return Err(());
-    };
+/// Send one envelope as the line it was offered as (GAP-153, D-96): encoded once, in the
+/// lossless form, when [`NodeApi::publish_event`] took it.
+async fn send_offered(socket: &mut WebSocket, offered: &Offered) -> Result<(), ()> {
     socket
-        .send(Message::Text(text.into()))
+        .send(Message::Text(offered.line.as_str().into()))
         .await
         .map_err(|_| ())
 }

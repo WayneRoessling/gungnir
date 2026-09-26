@@ -3356,6 +3356,7 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-rustls",
  "tracing",
  "tracing-subscriber",
  "wgpu 22.1.0",
@@ -3504,6 +3505,7 @@ dependencies = [
  "crossbeam-channel",
  "gungnir-model",
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
 ]
 

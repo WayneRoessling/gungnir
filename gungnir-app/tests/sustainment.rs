@@ -164,7 +164,7 @@ fn opening_an_unknown_session_fails() {
 /// what is in it, and exporting writes a file that exists.
 #[test]
 fn a_report_folds_the_journal_and_exports_a_file() {
-    let (state, dir) = desktop_with_events("report", 10);
+    let (mut state, dir) = desktop_with_events("report", 10);
 
     let mut reports = ReportState::default();
     let view = sustainment::reports_view(&state, &reports);
@@ -173,7 +173,7 @@ fn a_report_folds_the_journal_and_exports_a_file() {
         "an ungenerated report must not present counts"
     );
 
-    reports.generate(&state).expect("generate");
+    reports.generate(&mut state).expect("generate");
     let view = sustainment::reports_view(&state, &reports);
     let counts = view.counts.expect("counts after generating");
     assert!(
@@ -223,11 +223,11 @@ fn generating_a_report_queues_it_for_exchange_when_a_node_is_linked() {
     let mut reports = ReportState::default();
 
     // No link yet: generating still works, and there is nothing to queue to.
-    reports.generate(&state).expect("generate");
+    reports.generate(&mut state).expect("generate");
 
     let link = NodeLink::scripted();
     state.link = Some(link.clone());
-    reports.generate(&state).expect("generate while linked");
+    reports.generate(&mut state).expect("generate while linked");
 
     let p = link.read().expect("projection");
     assert_eq!(
@@ -260,7 +260,7 @@ fn exporting_a_report_queues_it_for_exchange_when_a_node_is_linked() {
 
     let (mut state, _dir) = desktop_with_a_marked_track("exchange-export");
     let mut reports = ReportState::default();
-    reports.generate(&state).expect("generate");
+    reports.generate(&mut state).expect("generate");
 
     // No link yet: exporting still writes the file, and there is nothing to queue to.
     reports.export(&state).expect("export");
@@ -282,6 +282,63 @@ fn exporting_a_report_queues_it_for_exchange_when_a_node_is_linked() {
         batch.products[0].releasability,
         Releasability::AllPeers,
         "the queued product must carry the report's own releasability"
+    );
+}
+
+/// GAP-150, D-97: the report partners were sent is mission state. It outlives PN-13's
+/// window state, and the reconnection edge publishes it again with the time it was
+/// generated -- not the time it was resent -- while a console that has generated none
+/// publishes none.
+#[test]
+fn the_reconnection_edge_publishes_the_last_report_as_it_was_generated() {
+    use gungnir_remote::link::NodeLink;
+
+    let (mut state, _dir) = desktop_with_a_marked_track("exchange-republish");
+    let link = NodeLink::scripted();
+    state.link = Some(link.clone());
+
+    // Nothing generated: the edge claims no report.
+    gungnir_app::exchange::republish_all(&mut state);
+    assert!(
+        link.read()
+            .expect("projection")
+            .exchange_outbox
+            .iter()
+            .all(|b| b.item != ExchangeItem::Reports),
+        "a console that generated no report published one"
+    );
+
+    state.clock = Box::new(gungnir_time::ReplayClockAuthority {
+        current: MissionTime(120.0),
+    });
+    let mut reports = ReportState::default();
+    reports.generate(&mut state).expect("generate");
+    let generated = state
+        .exchange_report
+        .clone()
+        .expect("held as mission state");
+    assert_eq!(generated.at, MissionTime(120.0));
+    // PN-13 closes and the node forgets: what the link held is gone.
+    drop(reports);
+    link.read()
+        .map(|mut p| p.exchange_outbox.clear())
+        .expect("projection");
+
+    state.clock = Box::new(gungnir_time::ReplayClockAuthority {
+        current: MissionTime(500.0),
+    });
+    gungnir_app::exchange::republish_all(&mut state);
+    let p = link.read().expect("projection");
+    let batch = p
+        .exchange_outbox
+        .iter()
+        .find(|b| b.item == ExchangeItem::Reports)
+        .expect("the edge republished the report");
+    assert_eq!(batch.products, vec![generated]);
+    assert_eq!(
+        batch.products[0].at,
+        MissionTime(120.0),
+        "republished with the time it was resent"
     );
 }
 
@@ -376,11 +433,11 @@ fn every_configuration_section_is_named() {
 /// what makes the empty case reachable. The other half of that change is tested below.
 #[test]
 fn a_session_that_recorded_nothing_is_not_a_failure() {
-    let (state, _dir) = desktop("nothing");
+    let (mut state, _dir) = desktop("nothing");
 
     let mut reports = ReportState::default();
     reports
-        .generate(&state)
+        .generate(&mut state)
         .expect("an empty session is not an error");
 
     let view = sustainment::reports_view(&state, &reports);
