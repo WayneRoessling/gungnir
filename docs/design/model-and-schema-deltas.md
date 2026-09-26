@@ -134,6 +134,7 @@ one exception.
 | `radar_feeds[].df_sites: Vec<DfSiteConfig>` (GAP-100, 2026-09-08) | external standards §9.1 | Empty, every Category 205 report counted `unknown_radar`; SAC/SIC and the sensor named for position, so an unknown sensor, a SAC/SIC or a sensor bound twice, and an `azimuth_sigma_rad` that is not finite and positive are all rejected -- never defaulted, since edition 1.0 carries no usable angular error on the wire |
 | `radar_feeds[].uas_sites: Vec<UasSiteConfig>` (GAP-101, 2026-09-08) | external standards §9.3 | Empty, every Category 129 report counted `unknown_radar`; SAC/SIC and the sensor it takes its identity from, no position, so an unknown sensor or a SAC/SIC or a sensor bound twice is rejected. **`00`/`00` is accepted**, being the specification's own recommended pair for an airborne-to-ground broadcast; it is the duplicate that is refused, not the placeholder. **A feed binds a radar, a direction finder or a UAS gateway**; one that binds none of the three is rejected |
 | `policy.delegation.disconnected_lapse_s` (GAP-134, 2026-09-17) | DN-31 §7, D-15 | **None, and absent is not a default interval**: a desktop cut off under a baseline that states none holds no delegation from the moment it falls back. Stated, it must be finite and positive, or the baseline is refused |
+| `retention: Option<RetentionPolicy>` (GAP-122, 2026-09-25) | D-78 | **Absent, and nothing is ever purged**: the period is the customer's record-keeping obligation to state, so a baseline written before the field existed deletes nothing on an upgrade. Stated, both day limits must be at least 1 |
 
 **`resources[].layer` is the only mandatory addition.** It is mandatory because MOE-03 is
 defined by it, and defaulting it would silently corrupt the product's headline measure.
@@ -270,6 +271,16 @@ request key of one act cannot be passed separately and disagree.
 `origin`; and `gungnir_resilience::ReconcileReport` gained `both_acted`. `CommandEvent::Decided`
 already carried `origin` and now a forwarded decision fills it. **`SCHEMA_VERSION` stays 4**
 for the reason GAP-132's additions left it there.
+
+**Landed 2026-09-25, GAP-122 and GAP-126**: `RetentionPolicy` moved to `gungnir-model`
+(`gungnir_model::retention`, re-exported by `gungnir_store::retention`) so the baseline can
+declare it, and `ConfigBaseline` gained `retention` (D-78); `Event` gained
+`Retention(RetentionEvent)` with `Purged` and `Completed`, the record of what a purge
+removed. The journal's line format gained a second form (D-77): an envelope carrying a NaN
+or an infinity is written as `~` and JSON whose non-finite floats are bit-exact string
+tokens, and every other envelope is written as before, byte for byte. **`SCHEMA_VERSION`
+stays 4**: the additions are a defaulted field and a new variant, and every journal that
+read still reads. See [the record](../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md).
 
 `SnapshotResponse` gains `assets`, `predictions`, `engagements`, `requirements`,
 `hazards`, and `control_status`, and is filtered per caller by DN-17. The filtering is a

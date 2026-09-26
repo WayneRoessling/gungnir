@@ -134,11 +134,11 @@ history, and an entry is never edited once it has merged.
 | GAP-119 | No solve budget exists, and a stale plan is never compared with the last good one | Technical | CAP-3.3, CAP-5.5 | 3 | 8 | M | 24 | I3 | Services engineer | Open |
 | GAP-120 | Nothing compares the embedded and remote backends' projections | Technical | CAP-7.3 | 3 | 1 | M | 3 | I3 | Services engineer | Closed |
 | GAP-121 | StoreAndForwardQueue has no production caller | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Services engineer | Open |
-| GAP-122 | Journal retention purge is unbuilt, and nothing says so | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Open |
+| GAP-122 | Journal retention purge is unbuilt, and nothing says so | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Closed |
 | GAP-123 | An entity's GlobalEntityId changes at every restart | Technical | CAP-2.7 | 4 | 3 | M | 12 | I3 | Services engineer | Closed |
 | GAP-124 | The risk score has no time-to-impact term | Technical | CAP-3.2 | 3 | 5 | M | 15 | I3 | Services engineer | Open |
 | GAP-125 | Neither binary's health path is tested against a changing flag | Technical | CAP-5.5 | 2 | 8 | S | 16 | I3 | Services engineer | Open |
-| GAP-126 | A non-finite float in an envelope cannot be journaled faithfully | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Open |
+| GAP-126 | A non-finite float in an envelope cannot be journaled faithfully | Technical | CAP-5.1 | 3 | 10 | M | 30 | I3 | Services engineer | Closed |
 | GAP-127 | The desktop's decide and task functions check no permission | Technical | CAP-6.2 | 3 | 9 | S | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-128 | PN-14 cannot apply an edited baseline on its first apply | Technical | CAP-5.6 | 3 | 2 | S | 6 | I3 | Services engineer | Closed |
 | GAP-129 | No decision reaches a node's record, so reconciliation never meets a conflict | Technical | CAP-5.4 | 3 | 1 | M | 3 | I3 | Owner | Closed |
@@ -160,10 +160,12 @@ history, and an entry is never edited once it has merged.
 | GAP-145 | The exchange register has no lifecycle | Technical | CAP-7.4 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
 | GAP-146 | A console that may not publish queues its handoffs for ever | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
 | GAP-154 | The Disconnected reconciliation row still says no decision reaches a node's record | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Owner | Open |
+| GAP-152 | The audit log lives in memory, so nothing outlives the process and no age governs it | Technical | CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-153 | A non-finite float in an envelope breaks the v3 stream and history | Technical | CAP-7.1, CAP-5.4 | 2 | 6 | S | 12 | I3 | Services engineer | Open |
 | GAP-160 | A node publishes no track, so a linked desktop's picture is frozen at sign-in | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-161 | A linked desktop's health strip reports the link, not the node's services | Technical | CAP-7.3 | 4 | 1 | S | 4 | I3 | Services engineer | Closed |
 
-Counts: 149 gaps, 3 mission, 146 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 151 gaps, 3 mission, 148 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1854,11 +1856,12 @@ Counts: 149 gaps, 3 mission, 146 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.1 Journal.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, which split the `gungnir-store` row, gated the round trip and held retention.
+  - 2026-09-25, Closed: Closed 2026-09-25: the purge is built (D-78). A baseline declares `retention` or nothing is purged; both binaries purge after the live session exists and hourly, never the session being appended to, a held one (the after-action review holds its session) or, on the desktop, one that recovered state still reads. An interrupted purge leaves the journal readable and the next finishes it; each removal is a `RetentionEvent`, logged and counted. Tests: `gungnir-store/tests/retention_purge.rs` (below, at and above the limit; the rest read back exactly), `gungnir-app/tests/retention.rs`, `gungnir-node/tests/retention.rs`. The `gungnir-store` Retention row is unchanged and awaits the owner's walk. Also found: GAP-152. See `../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`.
 - Evidence: `gungnir-store` (`RetentionPolicy`); the `gungnir-store` Retention row, split from journal round-trip 2026-09-16.
 - Severity: 3. Reach: 10 threads. Effort: M. Priority: 30.
 - Impact: A deployment's `RetentionPolicy` purges nothing: it is two predicates no code calls, so journals grow without bound, and because nothing returns `NotImplemented` for the purge, `docs/unbuilt.md` does not list it.
 - Closing action: Build the purge, or have the unbuilt purge refuse with `NotImplemented` so `docs/unbuilt.md` lists it until it is built. Then test a journal holding sessions aged below, at and above `max_session_age_days`: only those past the limit are gone, and the rest still read back exactly.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-123 An entity's GlobalEntityId changes at every restart**
@@ -1907,11 +1910,12 @@ Counts: 149 gaps, 3 mission, 146 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.1 Journal.
 - History:
   - 2026-09-16, Open: Filed by the GAP-067 walk, whose `gungnir-store` round-trip test found that a non-finite float does not survive the journal.
+  - 2026-09-25, Closed: Closed 2026-09-25 by a lossless encoding (D-77), not a refusal. The one live producer found, a PN-10 deadline typed as "inf" or "NaN" that read back as no deadline, is now refused (`RequirementError::BadDeadline`); diverging covariances stay a latent source. A finite envelope is written byte for byte as before, one with a non-finite float as a marked line holding its bits, and `append` refuses a marked line that would not read back. `gungnir-store/tests/non_finite_floats.rs` holds a NaN and infinities through `append` and `read_session`, mid-session and last, both profiles, sealed or not, bit for bit. The Journal round-trip row is unchanged and awaits the owner's walk. The wire is GAP-153. See `../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`.
 - Evidence: `gungnir-store/src/lib.rs` (`read_session`: an undecodable final line is dropped as torn, any other fails the read); found writing the round-trip test of the `gungnir-store` Journal round-trip row, which is gated for finite values.
 - Severity: 3. Reach: 10 threads. Effort: M. Priority: 30.
 - Impact: serde_json writes NaN and infinity as `null`, which reads back as an error for an `f64` and as `None` for an `Option<f64>`. `read_session` then fails the whole session when that line is mid-file and drops it as a torn final line when it is last, so one non-finite value in an envelope either makes a session unreadable or loses the envelope with only a log line to say so.
 - Closing action: Establish whether any journaled type can carry a non-finite value. Refuse such an envelope at `append` with a named error rather than write a line that cannot be read back, or give the journal a lossless encoding for non-finite values. Test a NaN and an infinity through `append` and `read_session`, both mid-session and as the last line.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: The GAP-067 walk of 2026-09-16 (`../../record/2026-09-16/gap-067-walk.md`).
 
 **GAP-127 The desktop's decide and task functions check no permission**
@@ -2219,6 +2223,34 @@ Counts: 149 gaps, 3 mission, 146 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Owner. Status: Open.
 - Reference: Found closing GAP-129 (`../../record/2026-09-25/housekeeping-after-dn-31.md`).
 - Depends on: GAP-129.
+
+**GAP-152 The audit log lives in memory, so nothing outlives the process and no age governs it**
+
+- Type: Technical.
+- Capability: CAP-6.3 Audit.
+- History:
+  - 2026-09-25, Open: Found building the retention purge: the policy's second field had nothing to purge. Human-owned (`gungnir-security`); filed rather than built inside GAP-122, whose row is about sessions.
+- Evidence: `gungnir-security/src/audit.rs` (`InMemoryAuditLog`, the only `AuditLog`); `gungnir-app/src/state.rs` and `gungnir-node/src/approval.rs` construct it; `docs/architecture/togaf/phase-c-information-systems/data-architecture.md` §4.
+- Severity: 3. Reach: 9 threads. Effort: M. Priority: 27.
+- Impact: Both binaries keep the audit log in `InMemoryAuditLog`, so every entry an accreditor would read -- a baseline applied, a sign-in, a decision -- is gone when the process stops, and `RetentionPolicy::max_audit_log_age_days`, which a baseline can now declare, has nothing durable to apply to. The decision record survives in the journal, which is one of the "two homes on purpose" the data architecture names; the other does not.
+- Closing action: Give the audit log a durable, append-only home beside the journal (sealed as the journal is, DN-22), read it back at start, and apply `max_audit_log_age_days` to it the way D-78 applies the session age.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: Found building GAP-122 (`../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`).
+- Depends on: GAP-059.
+
+**GAP-153 A non-finite float in an envelope breaks the v3 stream and history**
+
+- Type: Technical.
+- Capability: CAP-7.1 Versioned interface; CAP-5.4 Disconnected and reconcile.
+- History:
+  - 2026-09-25, Open: Found by D-77's survey of where a journaled envelope goes next. Filed rather than fixed inside GAP-126: it is an interface contract change for both ends of the link.
+- Evidence: `gungnir-api/src/transport.rs` (`send_envelope`; the history handler's `Json`); `gungnir-remote/src/link.rs` (the stream's decode); D-77's survey found no live producer left once PN-10's deadline was fixed, so today this is latent.
+- Severity: 2. Reach: 6 threads. Effort: S. Priority: 12.
+- Impact: The node sends each envelope to its desktops as `serde_json` text and serves `GET /v3/history` the same way, so a NaN or an infinity goes out as `null`. The desktop's `serde_json::from_str::<Envelope>` then fails on that frame and treats it as the node ending the stream, and reconnects; a history holding one fails the reconciliation read. The journal carries these values since D-77; the wire does not.
+- Closing action: Carry an envelope over the v3 stream and history in the journal's lossless form (`gungnir_store::nonfinite`, which `gungnir-api` would need an edge or a move to reach) or refuse it at the node with a named, counted error, and amend `docs/gungnir-api-v1.md` to say which.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-126 (`../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`).
+- Depends on: GAP-126.
 
 **GAP-160 A node publishes no track, so a linked desktop's picture is frozen at sign-in**
 

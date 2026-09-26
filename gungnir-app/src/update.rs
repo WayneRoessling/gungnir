@@ -187,6 +187,10 @@ pub fn tick(state: &mut AppState) {
         );
     }
 
+    // 4b. Journal retention (GAP-122, D-78): on the first tick and hourly, before the
+    //     drain below, so what a purge removed is journaled in the frame it happened.
+    crate::retention::tick(state);
+
     // 5. Journal everything the bus carried this frame, then honour the D-04 fsync
     //    interval. `sync_if_due` is cheap when nothing is owed: one elapsed-time
     //    check.

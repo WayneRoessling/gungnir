@@ -63,6 +63,8 @@ use std::time::{Duration, Instant};
 const TICK: Duration = Duration::from_millis(50);
 /// How often health is logged while running.
 const HEALTH_LOG_INTERVAL: Duration = Duration::from_secs(10);
+/// How often journal retention runs after the first, at start (GAP-122, D-78).
+const RETENTION_INTERVAL: Duration = Duration::from_secs(3600);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // **`.with_ansi(false)`, not the bare `fmt::init()`** (GAP-110). Found while building
@@ -1623,6 +1625,29 @@ async fn run(
     let session = mission.session;
     tracing::info!(session = session.0, "opened live session");
 
+    // GAP-122, D-78: retention runs now, once the live session exists to protect and to
+    // journal what was removed into, and hourly in the loop below. Never the live session
+    // nor one under a hold (`session-<id>.hold` beside the journal, which an administrator
+    // places by hand here: no review runs on a node).
+    let mut retention_purged: u64 = 0;
+    if let Some(policy) = config.retention {
+        tracing::info!(
+            max_session_age_days = policy.max_session_age_days,
+            "journal retention: sessions not written for longer than this are purged, at start and hourly"
+        );
+    } else {
+        tracing::info!("journal retention is not configured; no session is ever purged");
+    }
+    apply_retention(
+        &journal,
+        config.retention.as_ref(),
+        session,
+        &bus,
+        clock.now(),
+        &mut retention_purged,
+    )?;
+    let mut next_retention = Instant::now() + RETENTION_INTERVAL;
+
     // GAP-086: which algorithm configuration this session opened with, in the journal.
     // **Not a promotion** -- nobody promoted anything, the baseline said so, and there is
     // nobody signed in to attribute an act to.
@@ -1811,6 +1836,18 @@ async fn run(
         }
         let now = clock.now();
 
+        if Instant::now() >= next_retention {
+            next_retention = Instant::now() + RETENTION_INTERVAL;
+            apply_retention(
+                &journal,
+                config.retention.as_ref(),
+                session,
+                &bus,
+                now,
+                &mut retention_purged,
+            )?;
+        }
+
         observe_services(&service_sinks, &mut sensors, now);
         for event in gateway.tick(now, &mut tracking) {
             bus.publish(now, Event::Ingest(event))?;
@@ -1947,6 +1984,7 @@ async fn run(
                 sensors = sensors.sensors().len(),
                 covering = sensors.coverage().len(),
                 feeds = ?feed_reports.summary(),
+                retention_purged,
                 "node health"
             );
             last_health_log = Instant::now();
@@ -1993,6 +2031,74 @@ async fn run(
         session = session.0,
         "gungnir-node stopped; journal flushed and session closed"
     );
+    Ok(())
+}
+
+/// Apply the baseline's retention policy to this node's journal (GAP-122, D-78).
+///
+/// A baseline with no policy purges nothing. Each removal is journaled as a
+/// `RetentionEvent` into the live session -- the only record of a session whose own
+/// journal is gone -- logged, and counted into `purged`, which the health line carries. A
+/// purge that fails is logged and tried again at the next interval: nothing is
+/// half-removed (`gungnir_store::retention`), and a node that stopped over a housekeeping
+/// failure would lose the mission picture to keep a directory tidy. Only a failure to
+/// publish on the bus stops the loop, as it does everywhere else in it.
+fn apply_retention(
+    journal: &FileEventJournal,
+    policy: Option<&gungnir_store::retention::RetentionPolicy>,
+    live: gungnir_store::SessionId,
+    bus: &InProcessBus,
+    now: gungnir_model::MissionTime,
+    purged: &mut u64,
+) -> Result<(), gungnir_eventing::EventingError> {
+    let Some(policy) = policy else {
+        return Ok(());
+    };
+    let outcome = match gungnir_mission::apply_retention(
+        journal,
+        policy,
+        std::time::SystemTime::now(),
+        &std::collections::BTreeSet::from([live]),
+    ) {
+        Ok(outcome) => outcome,
+        Err(err) => {
+            tracing::error!(%err, "journal retention failed; it is tried again in an hour");
+            return Ok(());
+        }
+    };
+    for p in &outcome.journal.purged {
+        bus.publish(
+            now,
+            Event::Retention(gungnir_model::events::RetentionEvent::Purged {
+                session: p.session,
+                idle_days: p.idle_days,
+                max_session_age_days: policy.max_session_age_days,
+                bytes: p.bytes,
+                at: now,
+            }),
+        )?;
+    }
+    for &session in &outcome.journal.completed {
+        bus.publish(
+            now,
+            Event::Retention(gungnir_model::events::RetentionEvent::Completed { session, at: now }),
+        )?;
+    }
+    for session in &outcome.records_only {
+        tracing::info!(
+            session = session.0,
+            "removed the mission record of a session that journaled nothing"
+        );
+    }
+    let removed = outcome.journal.purged.len() + outcome.journal.completed.len();
+    if removed > 0 {
+        *purged += removed as u64;
+        tracing::info!(
+            removed,
+            total = *purged,
+            "journal retention removed sessions past the limit"
+        );
+    }
     Ok(())
 }
 

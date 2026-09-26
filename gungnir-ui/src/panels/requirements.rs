@@ -688,10 +688,12 @@ fn draw_state_form(
 
     // A deadline that was typed but does not parse must not be silently dropped: the
     // analyst would get a requirement that never lapses when they asked for one that
-    // does.
+    // does. **Rust parses "inf" and "NaN" as numbers**, and both pass `m <= 0.0`, so a
+    // deadline has to be finite as well as positive (GAP-126): an infinite one reads as
+    // "never lapses" under a label that says it does.
     let typed = draft.within_minutes.trim();
     let minutes: Option<f64> = typed.parse().ok();
-    let deadline_broken = !typed.is_empty() && minutes.is_none_or(|m| m <= 0.0);
+    let deadline_broken = !typed.is_empty() && minutes.is_none_or(|m| !m.is_finite() || m <= 0.0);
     if deadline_broken {
         ui.label(
             RichText::new(
