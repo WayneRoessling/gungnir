@@ -16,6 +16,10 @@
 //! everywhere, the last two follow the platform's libm, which is the same one CPython
 //! links on the same machine. A cross-platform last-bit difference in `gauss()` is
 //! therefore a libm difference, not a generator one, and the test tolerance says so.
+//!
+//! Moved here from `gungnir-scenario` with the observation model that draws from it
+//! (docs/design/DN-32-re-observation-for-a-laydown.md §4); `gungnir-scenario` re-exports
+//! it under its old path.
 
 // "CPython" is a proper noun and not an identifier; the lint would have it in backticks.
 #![allow(clippy::doc_markdown)]

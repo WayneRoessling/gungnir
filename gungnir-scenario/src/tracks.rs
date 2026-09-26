@@ -26,6 +26,13 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write as _;
 use std::ops::{Add, Div, Mul, Neg, Sub};
+use std::sync::Arc;
+
+use gungnir_sensor_sim::vec3::{add, f3, norm, pymod, scale, sub, unit, V3};
+use gungnir_sensor_sim::{
+    false_alarms, observe, Observation, ScanConditions, ScanContext, SensorParams, Signature,
+    SimulationMark, TargetState,
+};
 
 use crate::library::{
     ClassProfile, EntitySpec, EventSpec, Key, PhaseSpec, Place, Platform, Range, Scalar,
@@ -36,10 +43,6 @@ use crate::PythonRandom;
 
 const GENERATOR: &str = "tt-gen 0.1.0";
 const G: f64 = 9.806_65;
-/// The recorded adapter's receipt window (see the reference for why 4.9).
-const MAX_LATENCY_S: f64 = 4.9;
-
-type V3 = [Num; 3];
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum TracksError {
@@ -62,60 +65,13 @@ pub enum TracksError {
 }
 
 // ---------------------------------------------------------------------------------
-// Vector helpers with the reference's numeric behaviour.
-
-fn f3(a: [f64; 3]) -> V3 {
-    [Num::Float(a[0]), Num::Float(a[1]), Num::Float(a[2])]
-}
-
-fn norm(v: &V3) -> f64 {
-    let sum = v.iter().fold(Num::Int(0), |acc, x| acc.add(x.mul(*x)));
-    sum.f().sqrt()
-}
-
-fn sub(a: &V3, b: &V3) -> V3 {
-    [a[0].sub(b[0]), a[1].sub(b[1]), a[2].sub(b[2])]
-}
-
-fn add(a: &V3, b: &V3) -> V3 {
-    [a[0].add(b[0]), a[1].add(b[1]), a[2].add(b[2])]
-}
-
-fn scale(a: &V3, k: f64) -> V3 {
-    let k = Num::Float(k);
-    [a[0].mul(k), a[1].mul(k), a[2].mul(k)]
-}
-
-fn unit(v: &V3) -> V3 {
-    let n = norm(v);
-    if n > 1e-9 {
-        [v[0].div(n.into()), v[1].div(n.into()), v[2].div(n.into())]
-    } else {
-        f3([0.0, 0.0, 0.0])
-    }
-}
+// Vector helpers with the reference's numeric behaviour live in
+// `gungnir_sensor_sim::vec3`, beside the observation model that shares them
+// (docs/design/DN-32-re-observation-for-a-laydown.md §4).
 
 /// An entity index as the reference's integer.
 fn index_num(i: usize) -> i64 {
     i64::try_from(i).unwrap_or(i64::MAX)
-}
-
-/// `math.degrees`: CPython divides by `pi / 180`, and the last bit differs from a
-/// multiplication by `180 / pi`.
-fn degrees(x: f64) -> f64 {
-    x / (std::f64::consts::PI / 180.0)
-}
-
-/// Python's float `%` for a positive divisor.
-fn pymod(x: f64, y: f64) -> f64 {
-    let m = x % y;
-    if m != 0.0 && ((y < 0.0) != (m < 0.0)) {
-        m + y
-    } else if m == 0.0 {
-        0.0f64.copysign(y)
-    } else {
-        m
-    }
 }
 
 fn draw(rng: &mut PythonRandom, r: Range) -> f64 {
@@ -600,6 +556,9 @@ struct SensorInst<'a> {
     phase: f64,
     /// `bias_m: {east, north}` from an override.
     bias: Option<(Num, Num)>,
+    /// What `gungnir_sensor_sim::observe` reads: the type's model with this instance's
+    /// bias.
+    model: SensorParams,
 }
 
 struct Built<'a> {
@@ -791,6 +750,7 @@ fn build_scenario<'a>(
                 calibration: s.calibration.clone(),
                 phase,
                 bias,
+                model: kind.detection_model(bias),
             });
         }
     }
@@ -939,7 +899,8 @@ fn build_scenario<'a>(
 }
 
 // ---------------------------------------------------------------------------------
-// The observation model.
+// What the observation model reads of an entity. The model itself is
+// `gungnir_sensor_sim::observe` (docs/design/DN-32-re-observation-for-a-laydown.md §4).
 
 fn emission_key(plat: &Platform, e: &Entity<'_>, lib: &TrackLibrary) -> String {
     let em = plat.emissions.as_deref().unwrap_or("");
@@ -975,8 +936,21 @@ fn emission_key(plat: &Platform, e: &Entity<'_>, lib: &TrackLibrary) -> String {
     "none".into()
 }
 
-fn radar_horizon_m(h1: Num, h2: Num) -> f64 {
-    4120.0 * (h1.max2(Num::Float(0.0)).f().sqrt() + h2.max2(Num::Float(0.0)).f().sqrt())
+/// The signature classes an entity shows each kind of sensor. Fixed for the entity's
+/// life: the emission class depends on its platform and its flags, none of which a run
+/// changes, so it is resolved once rather than per scan (which draws nothing either way).
+fn signature_of(e: &Entity<'_>, lib: &TrackLibrary) -> Signature {
+    Signature {
+        rcs: e.platform.rcs_class.clone(),
+        ir: e.platform.ir_class.clone(),
+        acoustic: e.platform.acoustic_class.clone(),
+        emission: Some(emission_key(e.platform, e, lib)),
+    }
+}
+
+/// A platform held at zero altitude reports zero height.
+fn is_surface(platform: &Platform) -> bool {
+    platform.altitude_m.is_some_and(|alt| nums_eq(alt, [0, 0]))
 }
 
 /// One detection as the reference writes it.
@@ -988,6 +962,19 @@ struct DetectionLine {
     measurement: V3,
     calibration: Option<String>,
     truth: Option<String>,
+}
+
+impl DetectionLine {
+    fn from_observation(o: &Observation, calibration: Option<String>) -> Self {
+        Self {
+            sensor: o.sensor(),
+            source_time: o.source_time(),
+            receipt_time: o.receipt_time(),
+            measurement: o.measurement(),
+            calibration,
+            truth: o.truth().map(str::to_owned),
+        }
+    }
 }
 
 /// What one scenario run produced, as text ready to write.
@@ -1261,6 +1248,24 @@ fn run(lib: &TrackLibrary, mut built: Built<'_>) -> Result<GeneratedSet, TracksE
             .count();
         built.entities[i].target = Some(cands[others % cands.len()]);
     }
+    let signatures: Vec<Signature> = built
+        .entities
+        .iter()
+        .map(|e| signature_of(e, lib))
+        .collect();
+    let surface: Vec<bool> = built
+        .entities
+        .iter()
+        .map(|e| is_surface(e.platform))
+        .collect();
+    // The recording's own placement: the generator is the caller, and its detections
+    // are the recording rather than a re-observation of one. The mark never reaches a
+    // written line; every observation carries one because every observation does.
+    let mark = Arc::new(SimulationMark {
+        scenario: scen.id.clone(),
+        placement: "recorded".to_owned(),
+        seed: built.seed,
+    });
     let mut next_scan: HashMap<i64, f64> = built.sensors.iter().map(|s| (s.id, s.phase)).collect();
     let mut t = 0.0f64;
     let mut fa_total = 0usize;
@@ -1320,197 +1325,63 @@ fn run(lib: &TrackLibrary, mut built: Built<'_>) -> Result<GeneratedSet, TracksE
             write_truth(&mut truth, t, e);
             truth_records += 1;
         }
-        // Sensors.
+        // Sensors: `gungnir_sensor_sim::observe` and `false_alarms`, which are this
+        // block moved statement for statement (DN-32 §4), fed the same draws.
         for s in &built.sensors {
             if lost.contains(&s.id) {
                 continue;
             }
-            let p = s.kind;
+            let p = &s.model;
             while let Some(st) = next_scan.get(&s.id).copied() {
                 if st > t {
                     break;
                 }
                 next_scan.insert(s.id, st + p.update_period_s.f());
-                let mut skew = Num::Float(0.0);
-                let mut drop_mult = Num::Float(1.0);
-                let mut fa_mult = Num::Float(1.0);
+                let mut conditions = ScanConditions::calm(sea_state);
                 if let Some(ea) = active_ea.get(&s.id) {
                     if let Some(a) = ea.get("ea_skew") {
                         if st <= a.until.f() {
-                            skew = a
-                                .event
-                                .get("skew_s")
-                                .and_then(Scalar::as_num)
-                                .unwrap_or(p.ea.skew_s);
+                            conditions = conditions
+                                .with_skew(p, a.event.get("skew_s").and_then(Scalar::as_num));
                         }
                     }
                     if let Some(a) = ea.get("ea_dropout") {
                         if st <= a.until.f() {
-                            drop_mult = a
-                                .event
-                                .get("multiplier")
-                                .and_then(Scalar::as_num)
-                                .unwrap_or(p.ea.dropout_multiplier);
-                            fa_mult = p.ea.fa_multiplier;
+                            conditions = conditions.with_dropout(
+                                p,
+                                a.event.get("multiplier").and_then(Scalar::as_num),
+                            );
                         }
                     }
                 }
-                let sea = p
-                    .sea_state_dropout
-                    .get(&sea_state)
-                    .copied()
-                    .unwrap_or(Num::Float(0.0));
-                let dropout = Num::Float(0.95).min2(p.dropout.mul(drop_mult).add(sea));
-                let bands = &p.range_m;
+                let this_scan = ScanContext::new(s.id, p, st, conditions, Arc::clone(&mark));
                 for i in 0..n {
                     let e = &built.entities[i];
-                    if !e.spawned || !e.alive || e.is_occluded(st) {
+                    if !e.spawned || !e.alive {
                         continue;
                     }
-                    let key = p.signature_key.as_str();
-                    let cl: String = match key {
-                        "rcs" => {
-                            if e.decoy {
-                                "large".into()
-                            } else {
-                                e.platform.rcs_class.clone().unwrap_or_default()
-                            }
-                        }
-                        "ir" => e.platform.ir_class.clone().unwrap_or_default(),
-                        "acoustic" => e.platform.acoustic_class.clone().unwrap_or_default(),
-                        _ => emission_key(e.platform, e, lib),
+                    let target = TargetState {
+                        id: &e.id,
+                        position: e.pos,
+                        velocity: e.vel,
+                        alive: e.alive,
+                        occluded: e.is_occluded(st),
+                        signature: &signatures[i],
+                        decoy: e.decoy,
+                        adsb_intermittent: e.flags.adsb_intermittent,
+                        ais_spoof_offset_m: e.flags.ais_spoof_offset_m.as_deref(),
+                        surface: surface[i],
+                        last_seen_s: last_seen.get(&e.id).copied(),
                     };
-                    let rmax = bands.get(&cl).copied().unwrap_or(Num::Int(0));
-                    if rmax.le(Num::Int(0)) {
-                        continue;
-                    }
-                    let rel = sub(&e.pos, &s.pos);
-                    let r = norm(&rel);
-                    if r > rmax.f() {
-                        continue;
-                    }
-                    if p.horizon && r > radar_horizon_m(s.pos[2], e.pos[2]) {
-                        continue;
-                    }
-                    let [lo, hi] = p.altitude_m;
-                    let z = e.pos[2];
-                    if !(lo.sub(Num::Int(1)).le(z) && z.le(hi.add(Num::Int(1)))) {
-                        continue;
-                    }
-                    let [a, b] = p.field_of_regard_deg;
-                    let bearing = pymod(degrees(rel[0].f().atan2(rel[1].f())) + 360.0, 360.0);
-                    let inside = (a.f() <= bearing && bearing <= b.f())
-                        || (a.gt(b) && (bearing >= a.f() || bearing <= b.f()));
-                    // The reference compares exactly, and so does the port.
-                    #[allow(clippy::float_cmp)]
-                    let whole = a.f() == 0.0 && b.f() == 360.0;
-                    if !inside && !whole {
-                        continue;
-                    }
-                    if p.moving_only && norm(&e.vel) < 1.0 {
-                        continue;
-                    }
-                    if p.cued && st - last_seen.get(&e.id).copied().unwrap_or(-1e9) > 10.0 {
-                        continue;
-                    }
-                    if let Some(chance) = e.flags.adsb_intermittent {
-                        if chance.f() != 0.0 && key == "emission" && rng.random() < chance.f() {
-                            continue;
+                    if let Some(o) = observe(p, s.pos, &this_scan, &target, rng) {
+                        detections.push(DetectionLine::from_observation(&o, s.calibration.clone()));
+                        if !p.cued {
+                            last_seen.insert(e.id.clone(), st);
                         }
-                    }
-                    let pd = p.pd_in_range.f() * (1.0 - dropout.f());
-                    if rng.random() >= pd {
-                        continue;
-                    }
-                    let los = unit(&rel);
-                    let cross = unit(&[los[1].neg(), los[0], Num::Float(0.0)]);
-                    let nz = p.noise;
-                    let mut meas = add(&e.pos, &scale(&los, rng.gauss(0.0, nz.range_m.f())));
-                    meas = add(&meas, &scale(&cross, rng.gauss(0.0, nz.cross_m.f())));
-                    meas[2] = meas[2].add(Num::Float(rng.gauss(0.0, nz.height_m.f())));
-                    if let Some((east, north)) = s.bias {
-                        meas = add(&meas, &[east, north, Num::Float(0.0)]);
-                    }
-                    if let Some(off) = &e.flags.ais_spoof_offset_m {
-                        if !off.is_empty() && key == "emission" {
-                            let east = off.first().copied().unwrap_or(Num::Int(0));
-                            let north = off.get(1).copied().unwrap_or(Num::Int(0));
-                            meas = add(&meas, &[east, north, Num::Float(0.0)]);
-                        }
-                    }
-                    if e.platform
-                        .altitude_m
-                        .is_some_and(|alt| nums_eq(alt, [0, 0]))
-                    {
-                        meas[2] = Num::Float(0.0);
-                    }
-                    let source = Num::Float(st).sub(skew);
-                    let mut latency =
-                        p.latency_s.mean.f() + rng.gauss(0.0, p.latency_s.jitter.f()).abs();
-                    if rng.random() < p.out_of_order.f() {
-                        latency += rng.uniform(0.5, 1.5);
-                    }
-                    let latency = Num::Float(latency).min2(Num::Float(MAX_LATENCY_S).sub(skew));
-                    detections.push(DetectionLine {
-                        sensor: s.id,
-                        source_time: source.round(3),
-                        receipt_time: Num::Float(st).add(latency).round(3),
-                        measurement: meas,
-                        calibration: s.calibration.clone(),
-                        truth: Some(e.id.clone()),
-                    });
-                    if !p.cued {
-                        last_seen.insert(e.id.clone(), st);
                     }
                 }
-                // False alarms.
-                let lam = p.false_alarms_per_scan.mul(fa_mult);
-                let mut k = 0usize;
-                if lam.gt(Num::Int(0)) {
-                    let l = (-lam.f()).exp();
-                    let mut pk = 1.0;
-                    loop {
-                        pk *= rng.random();
-                        if pk <= l {
-                            break;
-                        }
-                        k += 1;
-                    }
-                }
-                for _ in 0..k {
-                    let rmax = bands
-                        .values()
-                        .copied()
-                        .fold(None, |acc: Option<Num>, v| match acc {
-                            None => Some(v),
-                            Some(m) => Some(m.max2(v)),
-                        })
-                        .unwrap_or(Num::Int(0));
-                    let ang = rng.uniform(0.0, 2.0 * std::f64::consts::PI);
-                    let r = rng.uniform(0.05, 1.0) * rmax.f();
-                    let [lo, hi] = p.altitude_m;
-                    let z = if hi.gt(Num::Int(0)) {
-                        rng.uniform(lo.f(), hi.min2(Num::Float(5000.0)).f())
-                    } else {
-                        0.0
-                    };
-                    let meas = [
-                        s.pos[0].add(Num::Float(r * ang.cos())),
-                        s.pos[1].add(Num::Float(r * ang.sin())),
-                        Num::Float(z),
-                    ];
-                    let latency = Num::Float(
-                        p.latency_s.mean.f() + rng.gauss(0.0, p.latency_s.jitter.f()).abs(),
-                    )
-                    .min2(Num::Float(MAX_LATENCY_S).sub(skew));
-                    detections.push(DetectionLine {
-                        sensor: s.id,
-                        source_time: Num::Float(st).sub(skew).round(3),
-                        receipt_time: Num::Float(st).add(latency).round(3),
-                        measurement: meas,
-                        calibration: s.calibration.clone(),
-                        truth: None,
-                    });
+                for o in false_alarms(p, s.pos, &this_scan, rng) {
+                    detections.push(DetectionLine::from_observation(&o, s.calibration.clone()));
                     fa_total += 1;
                 }
             }
