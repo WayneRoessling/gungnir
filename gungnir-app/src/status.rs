@@ -114,6 +114,30 @@ pub fn sensor_health_lines(state: &AppState) -> Vec<SensorHealthLine<'_>> {
         .collect()
 }
 
+/// PN-09's late-data line (GAP-114): the policy the tracker runs and its counters, read
+/// from `tracking.pipeline_stats()` -- the pipeline's own counts, whichever backend
+/// answers, rather than a second tally kept here.
+///
+/// **The policy is named only for a pipeline this console runs.** Linked to a node, the
+/// counters are the node's and its own baseline set the policy they were counted under;
+/// naming this console's `time.late_data` beside them would label the node's pipeline
+/// with a setting it may not have.
+#[must_use]
+pub fn late_data_line(state: &AppState) -> gungnir_ui::panels::sensor_health::LateDataLine {
+    let counters = state.tracking.pipeline_stats();
+    gungnir_ui::panels::sensor_health::LateDataLine {
+        policy: match state.backend {
+            BackendConfig::Embedded => Some(state.config.time.late_data),
+            BackendConfig::Remote { .. } => None,
+        },
+        accepted: counters.accepted,
+        reordered: counters.reordered,
+        too_late: counters.too_late,
+        accepted_late: counters.accepted_late,
+        not_finite: counters.not_finite,
+    }
+}
+
 /// Judge a link's silence against the node's heartbeat (D-23).
 ///
 /// The UI crate cannot see the transport's constants, so the arithmetic lives here: inside

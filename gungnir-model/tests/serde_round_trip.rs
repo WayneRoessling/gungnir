@@ -289,6 +289,10 @@ fn pipeline_stats() -> PipelineStatsView {
     PipelineStatsView {
         accepted: 101,
         too_late: 3,
+        // GAP-114's per-outcome counters, each non-zero and distinct so a swap shows.
+        reordered: 17,
+        accepted_late: 4,
+        not_finite: 6,
         epochs: 57,
         associated: 88,
         initiated: 9,

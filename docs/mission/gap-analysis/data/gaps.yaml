@@ -8326,6 +8326,20 @@
     note: >-
       Filed by the GAP-067 walk, which split the `gungnir-time` row, gated replay
       determinism and held the late-data clause.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Built, per D-98 and D-99.** The fusion pipeline applies the policy
+      (`PipelineSettings::late_data`, replacing a horizon no baseline set), and the
+      baseline's new `time.late_data` sets it for the pipeline and the clock authority
+      both. `Reject` drops and counts an out-of-order detection; `BufferAndReorder` reorders
+      inside its bound and drops beyond it, measured behind the newest detection so the
+      bound no longer depends on traffic; `AcceptAsIs` applies one as delivered and is
+      refused in a baseline. Counted per outcome, on the wire and on PN-09. Tests:
+      `gungnir-fusion-async/tests/late_data_policy.rs`, `gungnir-app/tests/late_data_policy.rs`.
+      The desktop's fallback tracker ran the defaults and now runs the baseline's. The row's
+      walk is GAP-173. Human-owned (`gungnir-fusion-async`); see `../../signatures.md` and
+      `../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`.
 
 - id: GAP-115
   name: The node never times out an unacknowledged sensor task
@@ -10610,6 +10624,37 @@
       Found closing GAP-153. Not widened into it: the exchange body is a write path the
       owner reviews and a format DN-18 decides, and no live producer puts a non-finite
       value in any of these bodies today.
+
+- id: GAP-173
+  name: The late-data row still says nothing consumes the policy
+  type: Technical
+  caps: [CAP-1.5]
+  layer: "Productization: sensing and time"
+  sev: 3
+  effort: S
+  target: I3
+  owner: Owner
+  deps: [GAP-114]
+  impact: >-
+    The `gungnir-time` "Late-data policy" row in the verification table says it is not
+    gated because nothing consumes `LateDataPolicy`. Since GAP-114 the fusion pipeline
+    applies it and a baseline sets it, so the row describes a build that no longer exists,
+    and its criterion ("policy honoured") has tests nobody has walked.
+  evidence: >-
+    `docs/verification-capability-table.md` §1, the `gungnir-time` Late-data policy row;
+    `gungnir-fusion-async/tests/late_data_policy.rs`; `gungnir-app/tests/late_data_policy.rs`
+  action: >-
+    Walk the row against the two test files: each variant delivered late data and its
+    outcome asserted, the baseline's value reaching the desktop's tracker. Gate it or say
+    what is missing, and restate the row's note, which is the owner's to change.
+  ref: >-
+    GAP-114 (`../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Filed by GAP-114's build, which made the row's note untrue and left the criterion and
+      its gate to the owner.
 - id: GAP-168
   name: >-
     The intercept-service row's degradation clause stops at the last good plan
@@ -10684,3 +10729,43 @@
     note: >-
       Found building GAP-156. Not decided there: a version move refuses every older
       client of every route, which is a release decision rather than the planner's.
+- id: GAP-170
+  name: PN-09's refusal test left its wait before the desktop had seen its link
+  type: Technical
+  caps: [CAP-7.3]
+  layer: Verification and governance
+  sev: 1
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    `an_operator_s_console_says_once_on_pn09_that_it_may_not_publish` failed about once in
+    a hundred runs under load, reading "20 older sets were replaced" where it asserts 19.
+    A failure nobody can explain is one nobody can trust, and this test holds GAP-146's
+    one-request-per-sign-in behaviour.
+  evidence: >-
+    `gungnir-app/tests/cut_off_and_reconnected.rs`; `gungnir-app/src/failover.rs`
+    (`republish_exchange_on_reconnect`); a diagnosed failure with one post, no session
+    renewal and generation 21, and a forced reproduction on main at ab0ca325
+  action: >-
+    Leave the wait only once the desktop itself has read its link as connected.
+  ref: >-
+    Found watching PR #182's tests (`../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found running `gungnir-app`'s tests for GAP-156 and GAP-157: one failure in a full
+      run, then one in 30 and one in 140 of the single test under parallel load.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed: the mechanism is in the test, and was on main before PR #182. The wait left
+      when the link task reported connected, which it sets on its own thread, so it could
+      leave after a tick that read the link down. The first tick after the first handoff
+      then saw the link come up and republished the set (`republish_exchange_on_reconnect`):
+      21 sets queued, 20 replaced. The wait now also requires `link_was_connected`. Every
+      passing diagnosed run had seen the edge; the failure had not; forcing that order
+      fails on main every time. See
+      `../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`.

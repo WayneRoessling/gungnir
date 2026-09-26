@@ -617,7 +617,10 @@ impl AppState {
             ));
         }
 
-        let clock = WallClockAuthority::default();
+        // GAP-114: the clock judges skew against the policy the pipeline drops by, so the
+        // health panel calls a source out of sync at the lag its detections start being
+        // dropped, not at a second figure of its own.
+        let clock = WallClockAuthority::new(config.time.late_data);
         // GAP-111, D-87: the audit log is durable and hash-chained, beside the journal, in
         // the format the node keeps. Opened as the journal is: a desktop that could not
         // record who did what does not start, because the record C-04 asks for would be
@@ -1759,12 +1762,38 @@ fn imm_fields(
     }
 }
 
+/// The settings the embedded pipeline runs: the promoted algorithm baseline's where this
+/// build can apply it, and the deployment's late-data policy whatever the algorithm
+/// baseline says (GAP-114, D-98).
+///
+/// The late-data policy is applied in every case, promoted baseline or none, because it
+/// is the deployment's time discipline and not part of an algorithm baseline; the clock
+/// authority judges skew against the same `config.time.late_data`. Validation refuses a
+/// policy the pipeline would refuse, so the alert below is reached only by a baseline that
+/// bypassed validation, and it says what runs instead rather than running it quietly.
 fn pipeline_settings(
     config: &ConfigBaseline,
     in_force: Option<&gungnir_modelops::ModelBaseline>,
     alerts: &mut Vec<String>,
 ) -> gungnir_tracking_service::PipelineSettings {
-    let _ = config;
+    let algorithm = algorithm_settings(in_force, alerts);
+    match algorithm.clone().with_late_data(config.time.late_data) {
+        Ok(settings) => settings,
+        Err(err) => {
+            alerts.push(format!(
+                "the baseline's late-data policy is not applied: {err}; the tracker runs \
+                 the default one-second reorder buffer"
+            ));
+            algorithm
+        }
+    }
+}
+
+/// The promoted algorithm baseline's half of [`pipeline_settings`] (GAP-053, DN-24 §7).
+fn algorithm_settings(
+    in_force: Option<&gungnir_modelops::ModelBaseline>,
+    alerts: &mut Vec<String>,
+) -> gungnir_tracking_service::PipelineSettings {
     let Some(baseline) = in_force else {
         return gungnir_tracking_service::PipelineSettings::default();
     };
@@ -1800,6 +1829,30 @@ fn applied_baseline(
     )
     .ok()
     .map(|_| &baseline.id)
+}
+
+/// The embedded tracker exactly as the desktop starts it, for every path that puts a
+/// running desktop back on its own services: falling back from a silent node, signing in
+/// to an outage, signing out of a link (GAP-114).
+///
+/// Those paths used to build `LiveTrackingService::new` with the default settings, so a
+/// desktop that fell back ran a one-second reorder buffer whatever late-data policy the
+/// baseline named -- and the default filter, with no sensor positions, whatever algorithm
+/// baseline was in force. One constructor means the tracker a cut-off desktop runs cannot
+/// differ from the one it started with, which is what `embedded_planner` already
+/// guarantees for the planner (GAP-119).
+///
+/// The alerts construction raises (a baseline not applied, no origin) were raised when the
+/// desktop started and are still on the panel, so they are not raised a second time here.
+#[must_use]
+pub fn embedded_tracker(
+    runtime: &tokio::runtime::Handle,
+    config: &ConfigBaseline,
+    governance: &crate::governance::Governance,
+) -> LiveTrackingService {
+    let mut already_raised = Vec::new();
+    let pipeline = pipeline_settings(config, governance.in_force(), &mut already_raised);
+    tracking_service(runtime, config, pipeline, &mut already_raised)
 }
 
 fn tracking_service(

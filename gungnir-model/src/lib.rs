@@ -104,6 +104,9 @@ pub use exchange::{
 };
 pub use frame::{bearing_rad, normalize_bearing, AzimuthSector, LocalFrame, SectorError};
 pub use gungnir_coord::Geodetic;
+/// The late-data policy (GAP-114), owned by `gungnir-core` so the fusion pipeline that
+/// applies it and the baseline and clock authority that carry it name one type.
+pub use gungnir_core::LateDataPolicy;
 /// The motion models `gungnir-core` owns, re-exported rather than redefined
 /// (`agentic-coding-standards.md` §1.2). `gungnir-assessment` needs the same process
 /// noise the tracker runs, so that a prediction's uncertainty is the filter's and not a
@@ -537,11 +540,24 @@ pub struct BearingRayView {
 /// already describes for the bearing itself.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PipelineStatsView {
-    /// Detections taken into the reorder buffer.
+    /// Detections taken into the reorder buffer, late ones the policy kept included.
     pub accepted: u64,
-    /// Detections refused because their source time was already behind the processed
-    /// cursor.
+    /// Detections the late-data policy refused as late (GAP-114). Before GAP-114 this
+    /// also counted detections with a source time that was not a number; those are
+    /// `not_finite` now.
     pub too_late: u64,
+    /// Detections that arrived out of order and were put back in source-time order by
+    /// the reorder buffer (GAP-114). `serde(default)`: a peer built before the field
+    /// existed sends none, which reads as none counted rather than as a refusal.
+    #[serde(default)]
+    pub reordered: u64,
+    /// Late detections applied as delivered under `LateDataPolicy::AcceptAsIs`, which
+    /// only a replay or a test chooses (GAP-114, D-99).
+    #[serde(default)]
+    pub accepted_late: u64,
+    /// Detections refused because their source time is not a finite number (GAP-114).
+    #[serde(default)]
+    pub not_finite: u64,
     /// Epochs processed.
     pub epochs: u64,
     /// Detections that updated an existing track.

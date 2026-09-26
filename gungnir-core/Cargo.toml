@@ -7,7 +7,7 @@ name = "gungnir-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "CV/CA/CT motion models -- F/Q generation (exact-match closed-form oracle only) -- plus the identifier, lifecycle-status, and PSD-assertion primitives every higher crate shares (docs/agentic-coding-standards.md §1.2, §2.1)."
+description = "CV/CA/CT motion models -- F/Q generation (exact-match closed-form oracle only) -- plus the identifier, lifecycle-status, late-data-policy and PSD-assertion primitives every higher crate shares (docs/agentic-coding-standards.md §1.2, §2.1)."
 
 [lib]
 # `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's

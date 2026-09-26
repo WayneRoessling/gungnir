@@ -5683,7 +5683,7 @@
       </element>
       <element xmi:idref="EAID_2D226BEB_B7EA_8A30_3699_DBD39A8EAD32" xmi:type="uml:Class" name="gungnir-core" scope="public">
         <model package="EAPK_95514A5C_89FD_8F31_86F8_CF631330FE43" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="ResourceArtifact" documentation="CV/CA/CT motion models -- F/Q generation (exact-match closed-form oracle only) -- plus the identifier, lifecycle-status, and PSD-assertion primitives every higher crate shares (docs/agentic-coding-standards.md §1.2, §2.1)."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="ResourceArtifact" documentation="CV/CA/CT motion models -- F/Q generation (exact-match closed-form oracle only) -- plus the identifier, lifecycle-status, late-data-policy and PSD-assertion primitives every higher crate shares (docs/agentic-coding-standards.md §1.2, §2.1)."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="RS-core"/>
@@ -33509,7 +33509,7 @@
           <element geometry="Left=151;Top=362;Right=367;Bottom=492;" subject="EAID_83BC5A4A_56F9_2ECD_716C_7DEA1FFA9436" seqno="8" style="HideIcon=0;DUID=5868A342;"/>
           <element geometry="Left=142;Top=859;Right=375;Bottom=1054;" subject="EAID_9C0DA999_3AF6_A061_31D0_FA3F4A819831" seqno="9" style="HideIcon=0;DUID=329C6AAC;"/>
           <element geometry="Left=152;Top=528;Right=365;Bottom=674;" subject="EAID_4BEA995D_4963_F5B8_DADA_1F2464B847AA" seqno="10" style="HideIcon=0;DUID=009BB62E;"/>
-          <element geometry="Left=172;Top=1966;Right=346;Bottom=2178;" subject="EAID_30D3DEDE_CE3E_682C_6905_F7F9994DEF74" seqno="11" style="HideIcon=0;DUID=92CA2411;"/>
+          <element geometry="Left=172;Top=1966;Right=346;Bottom=2226;" subject="EAID_30D3DEDE_CE3E_682C_6905_F7F9994DEF74" seqno="11" style="HideIcon=0;DUID=92CA2411;"/>
           <element geometry="Left=127;Top=75;Right=390;Bottom=253;" subject="EAID_A6A6F8DF_E482_9676_D80F_ABED1D882165" seqno="12" style="HideIcon=0;DUID=AA719E28;"/>
           <element geometry="Left=1116;Top=1179;Right=1278;Bottom=1243;" subject="EAID_08145CF6_4EB8_4B75_1AAA_BB08E681020E" seqno="13" style="HideIcon=0;DUID=CAF7394C;"/>
           <element geometry="Left=1067;Top=1742;Right=1327;Bottom=1856;" subject="EAID_AAE1CA4D_EAF9_3B59_732D_D8D79E1DF835" seqno="14" style="HideIcon=0;DUID=C28494F9;"/>

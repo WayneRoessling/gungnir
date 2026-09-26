@@ -65,6 +65,9 @@ class "BearingRayView" as BearingRayView <<InformationElement>> {
 class "PipelineStatsView" as PipelineStatsView <<InformationElement>> {
   accepted: u64
   too_late: u64
+  reordered: u64
+  accepted_late: u64
+  not_finite: u64
   epochs: u64
   associated: u64
   initiated: u64

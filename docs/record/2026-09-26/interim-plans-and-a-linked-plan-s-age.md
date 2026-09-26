@@ -2,7 +2,7 @@
 
 GAP-156 and GAP-157 ([`../../mission/gap-analysis/data/gaps.yaml`](../../mission/gap-analysis/data/gaps.yaml)),
 DN-04 §11, D-93 and D-94, taken under the owner's delegation of 2026-09-26. It raised
-GAP-168 and GAP-169.
+GAP-168 and GAP-169, and found and closed GAP-170.
 
 ## What was wrong
 
@@ -164,6 +164,38 @@ GAP-169: a desktop built before `PlanView::basis` reads a newer node's interim p
 optimum, and would let it be accepted without the acknowledgement. The interface's rules
 call the field compatible and also call a change a client could act on wrongly a reason to
 move a version; which applies is a release decision.
+
+GAP-170, found and closed here. A full run of `gungnir-app`'s tests failed once in
+`cut_off_and_reconnected.rs`'s
+`an_operator_s_console_says_once_on_pn09_that_it_may_not_publish`. It passed alone and in
+three reruns, so the single test was looped under parallel load: one failure in 30 runs,
+then one in 140. The failure text was the same both times: PN-09 said "20 older sets
+were replaced" where the test expects 19.
+
+A diagnostic was added to the test. It printed whether the desktop's own tick had read its
+link as connected before the first handoff was issued, and the link's publishing counters
+at the end. All 139 passing runs had seen the link come up and replaced 19 sets. The
+failing run had not, and it replaced 20: one post, no session renewal, generation 21. So
+there was no reconnection, no second publish, and no second PN-09 line. The node refused
+once, as it should.
+
+The mechanism is the test's wait. `until` ticks the desktop and then reads
+`NodeLink::connected`. The link task sets that on its own thread, so it can become true
+after a tick that read it false. The wait then ends while the desktop has not yet seen the
+link come up. The first tick after the first handoff sees it, and
+`failover::republish_exchange_on_reconnect` republishes the console's whole set. That is
+correct behaviour, and the replacement is harmless. But it means 21 sets are queued where
+the test counted 20. This is the GAP-136 pattern: the wait read a state the system had not
+yet reported through the path the assertion depends on.
+
+This was on main before this change. On origin/main at ab0ca325, a copy of the test was
+changed to wait on the link task alone, with no tick in between, which forces this
+ordering. It then failed every time with the same text and the same counters. It did not
+reproduce by chance in 98 unforced runs there, which is consistent with a one-in-a-hundred
+race. The fix is in the test: its wait now also requires `AppState::link_was_connected`,
+the desktop's own reading. 98 runs of the fixed test under the same load passed. No
+product change was needed. A reconnection cannot slip between two frames, because the
+link waits two seconds before it reconnects.
 
 ## Ownership
 

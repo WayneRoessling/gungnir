@@ -956,6 +956,65 @@ fn default_measurement_noise_var() -> [f64; 3] {
     [400.0, 400.0, 900.0]
 }
 
+/// The longest late-data bound a baseline may set, seconds (GAP-114, D-99).
+///
+/// The reorder buffer delays every track by its bound, so a bound is also how far behind
+/// the newest data the whole picture runs. Ten seconds is past every latency the
+/// test-track sensor models produce -- an out-of-order arrival adds at most four seconds
+/// to a sensor's mean latency (`docs/test-tracks/sensor-models.md`) -- with room to spare,
+/// and a sensor set that needs more is one for retrodiction rather than a longer buffer
+/// (`gungnir-fusion-async`'s pipeline documentation says why that is not what is built).
+/// A larger value is far more likely a slip of units than a deployment's intent.
+pub const MAX_LATE_DATA_BOUND_S: f64 = 10.0;
+
+/// The deployment's time discipline (GAP-114, D-98): today, its late-data policy.
+///
+/// A section of its own rather than a field of [`TrackingConfig`], because it is not
+/// part of an algorithm baseline. It applies whether or not a candidate is promoted, and
+/// two things read it: the fusion pipeline, which drops, reorders or accepts a late
+/// detection by it, and the clock authority, whose clock-skew estimate calls a source out
+/// of sync at the lag this policy starts dropping its detections (MOP-09). One value, so
+/// the two can never disagree about what "too late" is.
+#[derive(Debug, Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TimeConfig {
+    /// What the tracker does with a detection that arrives after data measured later than
+    /// it. Absent means [`gungnir_model::LateDataPolicy::default`]: a one-second reorder
+    /// buffer, which is what every deployment ran before this field existed.
+    ///
+    /// `{"kind": "buffer-and-reorder", "max_lateness_s": 1.0}` or `{"kind": "reject"}`.
+    /// `accept-as-is` is refused ([`validate`]): it is for replay and testing only.
+    #[serde(default)]
+    pub late_data: gungnir_model::LateDataPolicy,
+}
+
+/// The `time` section's rules (GAP-114, D-99).
+fn validate_time(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    match baseline.time.late_data {
+        gungnir_model::LateDataPolicy::BufferAndReorder { max_lateness_s } => {
+            if !(max_lateness_s.is_finite()
+                && max_lateness_s > 0.0
+                && max_lateness_s <= MAX_LATE_DATA_BOUND_S)
+            {
+                return Err(ConfigError::Invalid(format!(
+                    "time.late_data.max_lateness_s is {max_lateness_s}; it must be more than \
+                     zero and at most {MAX_LATE_DATA_BOUND_S} seconds (use \"reject\" to hold \
+                     nothing)"
+                )));
+            }
+        }
+        gungnir_model::LateDataPolicy::Reject => {}
+        gungnir_model::LateDataPolicy::AcceptAsIs => {
+            return Err(ConfigError::Invalid(
+                "time.late_data is \"accept-as-is\", which folds a stale detection into a \
+                 current estimate at full weight; it is for replay and testing only, and a \
+                 deployment chooses \"buffer-and-reorder\" or \"reject\""
+                    .into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Which services-layer backend the desktop uses (ARCHITECTURE.md §8.2).
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -1260,6 +1319,10 @@ pub struct ConfigBaseline {
     pub laydowns: Vec<gungnir_model::Laydown>,
     #[serde(default)]
     pub tracking: Option<TrackingConfig>,
+    /// The deployment's time discipline: its late-data policy (GAP-114, D-98). Absent
+    /// means the one-second reorder buffer every deployment ran before it was settable.
+    #[serde(default)]
+    pub time: TimeConfig,
     #[serde(default)]
     pub backend: BackendConfig,
     #[serde(default)]
@@ -1473,6 +1536,7 @@ impl Default for ConfigBaseline {
             // described any actually has (DN-26 §8).
             laydowns: Vec::new(),
             tracking: None,
+            time: TimeConfig::default(),
             backend: BackendConfig::Embedded,
             node: None,
             allocation_horizon: default_horizon(),
@@ -3813,6 +3877,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     validate_escrow(baseline)?;
     validate_peers(baseline)?;
     validate_sensor_control(baseline)?;
+    validate_time(baseline)?;
     if let Some(t) = &baseline.tracking {
         if !(t.gate_threshold.is_finite() && t.gate_threshold > 0.0) {
             return Err(ConfigError::Invalid(
@@ -6237,6 +6302,95 @@ MFkw
             }
             other => panic!("a zero measurement-noise axis was accepted: {other:?}"),
         }
+    }
+
+    /// GAP-114: a baseline that says nothing about late data reads as the one-second
+    /// buffer every deployment ran before it could, and the section parses in the shape
+    /// the documentation gives.
+    #[test]
+    fn the_late_data_policy_defaults_to_what_ran_before_and_parses_as_documented() {
+        let absent: ConfigBaseline = serde_json::from_str(r#"{"version": 1}"#).expect("parses");
+        assert_eq!(
+            absent.time.late_data,
+            gungnir_model::LateDataPolicy::BufferAndReorder {
+                max_lateness_s: 1.0
+            }
+        );
+        assert!(validate(&absent).is_ok());
+        let reject: ConfigBaseline =
+            serde_json::from_str(r#"{"version": 1, "time": {"late_data": {"kind": "reject"}}}"#)
+                .expect("parses");
+        assert_eq!(reject.time.late_data, gungnir_model::LateDataPolicy::Reject);
+        assert!(validate(&reject).is_ok());
+        let buffered: ConfigBaseline = serde_json::from_str(
+            r#"{"version": 1, "time": {"late_data":
+                {"kind": "buffer-and-reorder", "max_lateness_s": 2.5}}}"#,
+        )
+        .expect("parses");
+        assert_eq!(
+            buffered.time.late_data,
+            gungnir_model::LateDataPolicy::BufferAndReorder {
+                max_lateness_s: 2.5
+            }
+        );
+        assert!(validate(&buffered).is_ok());
+    }
+
+    /// GAP-114, D-99: `accept-as-is` is replay and testing only, and a bound that holds
+    /// nothing, runs backwards or runs the picture past [`MAX_LATE_DATA_BOUND_S`] behind
+    /// is refused rather than applied.
+    #[test]
+    fn a_late_data_policy_a_deployment_should_not_run_is_refused() {
+        let with = |late_data| ConfigBaseline {
+            time: TimeConfig { late_data },
+            ..ConfigBaseline::default()
+        };
+        match validate(&with(gungnir_model::LateDataPolicy::AcceptAsIs)) {
+            Err(ConfigError::Invalid(m)) => assert!(m.contains("replay and testing"), "{m}"),
+            other => panic!("accept-as-is was accepted in a baseline: {other:?}"),
+        }
+        for bad in [
+            0.0,
+            -1.0,
+            f64::NAN,
+            f64::INFINITY,
+            MAX_LATE_DATA_BOUND_S + 0.1,
+        ] {
+            match validate(&with(gungnir_model::LateDataPolicy::BufferAndReorder {
+                max_lateness_s: bad,
+            })) {
+                Err(ConfigError::Invalid(m)) => {
+                    assert!(m.contains("time.late_data.max_lateness_s"), "{m}");
+                }
+                other => panic!("a bound of {bad} was accepted: {other:?}"),
+            }
+        }
+        assert!(
+            validate(&with(gungnir_model::LateDataPolicy::BufferAndReorder {
+                max_lateness_s: MAX_LATE_DATA_BOUND_S,
+            }))
+            .is_ok()
+        );
+    }
+
+    /// GAP-114: the policy is sensing, so the sensor manager's calibration authority
+    /// covers a change to it (D-91's kinds).
+    #[test]
+    fn a_late_data_policy_change_is_a_sensing_section() {
+        let in_force = ConfigBaseline::default();
+        let candidate = ConfigBaseline {
+            time: TimeConfig {
+                late_data: gungnir_model::LateDataPolicy::Reject,
+            },
+            ..in_force.clone()
+        };
+        assert_eq!(
+            crate::sections::changed_sections(&in_force, &candidate),
+            vec![crate::sections::ChangedSection {
+                name: "time",
+                kind: crate::sections::SectionKind::Sensing,
+            }]
+        );
     }
 
     /// **DN-28 §5: a file this function accepts must never be one `Imm::new` refuses.**
