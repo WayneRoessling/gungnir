@@ -144,7 +144,8 @@ INFORMATION_DOMAINS = [
     ("Policy, authority & settings", ["policy_settings.rs", "anomaly_settings.rs", "ui_settings.rs",
                                       "arbitration.rs"]),
     ("Assets, exchange & releasability", ["assets.rs", "exchange.rs", "releasability.rs"]),
-    ("Battle rhythm & mission records", ["rhythm.rs", "requirements.rs", "laydown.rs", "vocabulary.rs"]),
+    ("Battle rhythm & mission records", ["rhythm.rs", "requirements.rs", "laydown.rs", "vocabulary.rs",
+                                         "retention.rs"]),
     ("UAS identification & platform reports", ["uas_identification.rs", "uas_platform.rs"]),
 ]
 INFORMATION_DOMAIN_OF = {f: d for d, files in INFORMATION_DOMAINS for f in files}
