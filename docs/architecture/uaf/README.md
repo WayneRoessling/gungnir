@@ -89,6 +89,13 @@ local Java/Graphviz install needed) and `npx @mermaid-js/mermaid-cli`; all 53
 sources render cleanly. Mermaid sources also render inline on GitLab and GitHub
 when pasted into a Markdown fence.
 
+The Docker image is pinned, `plantuml/plantuml:1.2026.8`, because the layout engine
+is part of what a render looks like and each SVG records the version that drew it.
+Within one family every diagram goes through one layout engine, so a reader compares
+like with like: the `If-Sr` family through Graphviz dot, and the `Rs-Cn` family
+through smetana, whose hub-and-stub layouts are measurably more compact (D-79,
+GAP-139, which found smetana crashing on one If-Sr diagram).
+
 ```bash
 python docs/architecture/uaf/tools/export_xmi.py
 ```
@@ -199,7 +206,8 @@ and laid out here, preserving the authored ORDER, which is what those views are
 about. Each diagram's documentation field in EA says which of the two it is.
 
 Edges come from the PlantUML source, never from the render, because the `Rs-Cn`
-and `If-Sr` views go through `!pragma layout smetana` and it emits no edge ids.
+views go through `!pragma layout smetana` and it emits no edge ids; the `If-Sr` views,
+laid out by Graphviz since D-79, read their edges the same way so that one rule holds.
 An edge whose endpoints are a relationship the registry already carries reuses
 that relationship's connector, so one connector shows up on every diagram that
 draws it. The 225 distinct edges that are not registry relationships -- a post
