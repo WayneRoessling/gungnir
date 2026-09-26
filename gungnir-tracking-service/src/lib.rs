@@ -500,6 +500,7 @@ impl LiveTrackingService {
                 peer: None,
                 conversion_loss: None,
                 authentication: gungnir_model::SourceAuthentication::default(),
+                rehearsal: None,
             },
             staleness: gungnir_model::StalenessSettings::default(),
             sensor_positions: SensorPositions::default(),

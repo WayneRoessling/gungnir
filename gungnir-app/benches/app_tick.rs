@@ -90,6 +90,7 @@ fn write_feed(timeline: &GeneratedTimeline, path: &Path) {
                 peer: None,
                 conversion_loss: None,
                 authentication: gungnir_model::SourceAuthentication::default(),
+                rehearsal: None,
             },
         };
         let line = serde_json::to_string(&view).expect("DetectionView serializes");

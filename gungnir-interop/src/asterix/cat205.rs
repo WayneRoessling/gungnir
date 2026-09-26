@@ -571,6 +571,7 @@ impl AsterixCat205Codec {
                     Some(losses.join("; "))
                 },
                 authentication: gungnir_model::SourceAuthentication::default(),
+                rehearsal: None,
             },
         }))
     }

@@ -42,6 +42,7 @@ fn view(sensor: u32, measurement: Measurement) -> DetectionView {
             peer: None,
             conversion_loss: None,
             authentication: gungnir_model::SourceAuthentication::default(),
+            rehearsal: None,
         },
     }
 }
