@@ -7,7 +7,7 @@ name = "gungnir-resilience"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Resilience & disconnected operations: store-and-forward of envelopes while a node is unreachable, checkpoints, and journal reconciliation after the link returns (ARCHITECTURE.md §8.4). docs/gungnir-capabilities.md §5.6 -- Medium."
+description = "Resilience & disconnected operations: journal reconciliation after the link returns and checkpoints (ARCHITECTURE.md §8.4); its bounded envelope queue is kept for a future use and has no production caller (GAP-121). docs/gungnir-capabilities.md §5.6 -- Medium."
 
 [lib]
 # `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's

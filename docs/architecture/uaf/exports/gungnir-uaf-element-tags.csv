@@ -495,7 +495,7 @@ SV-24,registry.code,gungnir_observability::HealthMonitor
 SV-24,registry.status,real
 SV-25,uafId,SV-25
 SV-25,uafKind,ServiceInterface
-SV-25,registry.code,gungnir_resilience::StoreAndForwardQueue
+SV-25,registry.code,gungnir_resilience::reconcile
 SV-25,registry.status,real
 SV-26,uafId,SV-26
 SV-26,uafKind,ServiceInterface
@@ -1173,6 +1173,14 @@ IE-effector-report,uafId,IE-effector-report
 IE-effector-report,uafKind,InformationElement
 IE-effector-report,registry.code,gungnir_model::EffectorReport
 IE-effector-report,registry.domain,"Plans, effectors & handoff"
+IE-elevation-band,uafId,IE-elevation-band
+IE-elevation-band,uafKind,InformationElement
+IE-elevation-band,registry.code,gungnir_model::ElevationBand
+IE-elevation-band,registry.domain,"Core identifiers, frames & quality"
+IE-elevation-error,uafId,IE-elevation-error
+IE-elevation-error,uafKind,InformationElement
+IE-elevation-error,registry.code,gungnir_model::ElevationError
+IE-elevation-error,registry.domain,"Core identifiers, frames & quality"
 IE-engagement-event,uafId,IE-engagement-event
 IE-engagement-event,uafKind,InformationElement
 IE-engagement-event,registry.code,gungnir_model::EngagementEvent

@@ -8632,6 +8632,16 @@
     note: >-
       Filed by the GAP-067 walk, which gated the `gungnir-resilience` row on the queue's
       own tests and found no caller.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed on the owner's decision of 2026-09-26 (D-110): the queue is kept for a future
+      use and documented as unused. Its doc comment says it has no production caller and
+      why the detection outbox, the exchange outbox (D-76) and the outage's decision batch
+      (DN-31 §15) each have their own queue; `ARCHITECTURE.md` §8.3 and §8.4, the crate
+      description, `gungnir-capabilities.md`, the glossary and the UAF service views (SV-25
+      is now "Reconciliation on reconnect") say the same. The `gungnir-resilience` row's
+      criterion is unchanged.
 
 - id: GAP-122
   name: Journal retention purge is unbuilt, and nothing says so
@@ -10009,6 +10019,18 @@
       Found closing GAP-118. Filed rather than built with the sector, because the sector
       closed the criterion's bearing clause and this is a second geometry change to every
       sensor declaration with its own question: what an upper limit defaults to.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed under the owner's delegation of 2026-09-26 (D-111; DN-12 §10). A sensor
+      declares an `ElevationBand` on `SensorConfig`, a placement may state its own, and one
+      with none keeps the baseline floor and the zenith; `CoverageVolume` measures both
+      against `LocalFrame::vertical_at`, through one builder the registry, DN-13, PN-16 and
+      the node's coverage answer share, and a rehearsal honours a stated band.
+      `coverage_accuracy.rs` recovers every floor and ceiling within the criterion (worst
+      0.055 degree) and shows the frame's vertical misses it by 0.37 degree at 47 km. The
+      guard that a non-finite vertical covers nothing falls under the numerical-stability
+      clause and is human-owned; see docs/signatures.md. The row awaits the owner's walk.
 
 - id: GAP-159
   name: >-
@@ -10170,6 +10192,17 @@
       raid and passes. What a session runs over is content, left for the owner rather
       than taken under delegation, because a new committed sample set moves every row
       and test that counts the ten.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed under the owner's delegation of 2026-09-26 (D-112; DN-32 §13). TT-11, six
+      drones down round 1's declared approach, is committed from both generators
+      (`reference_parity.rs` and `sidecar_parity.rs` byte for byte) and passes
+      `validate_tracks.py`; PN-16's picker offers it and US-15's card names it. The round-1
+      row's test runs over it: S2's detections differ under `c` (2 264 against 2 336), S1's
+      do not, and `no_plan_07_recording_reaches_round_1s_radars` holds why it is needed.
+      The ten sets are unchanged; the row stays Draft.
+
 - id: GAP-156
   name: A picture the exact solver cannot finish in time is never answered
   type: Technical

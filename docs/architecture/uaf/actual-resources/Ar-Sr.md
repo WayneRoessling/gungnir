@@ -29,7 +29,7 @@ end today; the connected profiles are scaffolded but not connectable (GAP-041).
 | RS-identity, RS-identification, RS-assessment, RS-decision, RS-modelops | yes | yes |
 | RS-policy, RS-command | local approval | arbiter for shared missions |
 | RS-collab | projection side | authoritative side |
-| RS-resilience | store-and-forward, reconcile on reconnect | accepts forwarded envelopes, reconciles |
+| RS-resilience | reconcile on reconnect (its envelope queue is unused, GAP-121) | serves the history a desktop reconciles against |
 | RS-security | login and local audit | authentication and authorization for every caller; central audit |
 | RS-api | optional loopback | the node's only external surface |
 | RS-observability | local health panel | health endpoint, watchdogs |

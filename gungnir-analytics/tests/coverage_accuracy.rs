@@ -561,6 +561,18 @@ fn a_baseline_sector_is_recovered_against_true_north_through_the_frame() {
     assert!(registry_sectors.iter().all(Option::is_some));
 }
 
+/// One declared sensor of the band fixture: id, `(lat, lon, alt)` offsets from the origin
+/// in degrees and metres, range, band in degrees or none, `(boresight, width)` or none,
+/// and the true bearing to probe along.
+type Declared = (
+    u32,
+    [f64; 3],
+    f64,
+    Option<(f64, f64)>,
+    Option<(f64, f64)>,
+    f64,
+);
+
 /// [`recover_band`] for a sensor declared at `at`: the arc is stated in a frame anchored at
 /// the sensor -- its own vertical and true north -- on `true_bearing_deg`, placed into
 /// `frame` through the geodetic conversion, and each recovered point is taken back.
@@ -605,16 +617,6 @@ fn each_sensors_band_is_recovered_against_its_own_vertical() {
     let frame = LocalFrame::new(origin);
     let baseline_floor_deg: f64 = -1.5;
     let deg = f64::to_radians;
-    // (id, (lat, lon, alt) offsets from the origin in degrees and metres, range, band in
-    // degrees or none, (boresight, width) or none, the true bearing to probe along)
-    type Declared = (
-        u32,
-        [f64; 3],
-        f64,
-        Option<(f64, f64)>,
-        Option<(f64, f64)>,
-        f64,
-    );
     let declared: [Declared; 4] = [
         // At the origin: its vertical is the frame's.
         (

@@ -46,7 +46,7 @@ and methods are in `../../../mission/capabilities/measures-catalogue.md` and
 | MOP-10 Journal durability | SV-04 | under 100 ms |
 | MOP-11 Fallback to embedded | SV-30 | under 2 s |
 | MOP-12 Reconciliation time | SV-25 | under 60 s for a 10-minute outage |
-| MOP-13 Store-and-forward capacity | SV-30, SV-25 | 100,000 detections |
+| MOP-13 Store-and-forward capacity | SV-30 | 100,000 detections |
 | MOP-14 Coverage recompute | SV-14 | under 10 s |
 | MOP-15 Replay determinism | SV-28 | exact |
 | MOP-16 Frame rate with the viewport open | RS-viewport3d, RS-ui | 60 fps, never below 30 |

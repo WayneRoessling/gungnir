@@ -112,7 +112,7 @@ gungnir-workspace/
 ├── gungnir-security/               # src/{lib,authn,authz,audit}.rs
 ├── gungnir-api/                    # src/lib.rs, src/v1/mod.rs
 ├── gungnir-observability/
-├── gungnir-resilience/             # store-and-forward, checkpoints, reconciliation
+├── gungnir-resilience/             # reconciliation, checkpoints (its envelope queue is unused, GAP-121)
 ├── gungnir-collab/                 # shared picture sync, authority arbitration
 ├── gungnir-workflow/               # role workspaces, alert lifecycle, annotations, cases
 ├── gungnir-replay/

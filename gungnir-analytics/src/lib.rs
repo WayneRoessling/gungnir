@@ -392,7 +392,11 @@ mod tests {
         let old = r#"{"sensor_enu":[1.0,2.0,3.0],"max_range_m":100.0,"min_elevation_rad":0.0}"#;
         let v: CoverageVolume = serde_json::from_str(old).expect("parses");
         assert!((v.max_elevation_rad - std::f64::consts::FRAC_PI_2).abs() < f64::EPSILON);
-        assert_eq!(v.vertical, [0.0, 0.0, 1.0]);
+        assert!(v
+            .vertical
+            .iter()
+            .zip([0.0, 0.0, 1.0])
+            .all(|(a, b)| (a - b).abs() < f64::EPSILON));
         assert_eq!(v.azimuth, None);
     }
 

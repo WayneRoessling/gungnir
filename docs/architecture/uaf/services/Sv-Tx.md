@@ -18,7 +18,7 @@ source by `../tools/build_uaf.py`.
 | Decision | SV-17 Threat assessment (real); SV-02 Intercept planning (scaffold); SV-18 Decision support (scaffold); SV-15 Policy (real); SV-16 Approval workflow (real) |
 | Geospatial and analytics | SV-13 Geospatial (real); SV-14 Analytics (real); SV-31 Data loading (scaffold); SV-32 Point-cloud fusion (scaffold) |
 | Record and sustainment | SV-03 Event bus (real); SV-04 Event journal (real); SV-06 Configuration store (real); SV-07 Mission lifecycle (scaffold); SV-19 Model registry (real); SV-24 Health monitor (real); SV-27 Operator workflow (real); SV-28 Replay (real); SV-29 Reporting (real) |
-| Connectivity | SV-23 API v1 (scaffold); SV-30 Remote backends (scaffold); SV-25 Store-and-forward and reconciliation (real); SV-26 Shared picture and arbitration (real) |
+| Connectivity | SV-23 API v1 (scaffold); SV-30 Remote backends (scaffold); SV-25 Reconciliation on reconnect (real); SV-26 Shared picture and arbitration (real) |
 | Security | SV-20 Authentication (scaffold); SV-21 Authorization (real); SV-22 Audit log (real) |
 
 "Real" means implemented and tested in the crate; "scaffold" means the trait exists

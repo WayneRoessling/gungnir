@@ -223,7 +223,7 @@ impl Elevation {
     #[must_use]
     pub fn contains(&self, offset: [f64; 3]) -> bool {
         let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-        if offset == [0.0; 3] {
+        if dot(offset, offset) == 0.0 {
             return true;
         }
         let length = dot(self.vertical, self.vertical).sqrt();

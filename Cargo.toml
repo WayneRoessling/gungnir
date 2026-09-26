@@ -57,7 +57,7 @@ members = [
     "gungnir-security",           # Secure/Operate / Critical
     "gungnir-api",                # Secure/Operate / High
     "gungnir-observability",      # Secure/Operate / High
-    "gungnir-resilience",         # Secure/Operate / Medium  (offline-first, store-and-forward, reconciliation)
+    "gungnir-resilience",         # Secure/Operate / Medium  (reconciliation, checkpoints; its envelope queue is unused, GAP-121)
     "gungnir-collab",             # Secure/Operate / Medium  (shared picture, multi-user authority)
     "gungnir-workflow",           # Secure/Operate / Medium  (role workspaces, alert lifecycle)
 

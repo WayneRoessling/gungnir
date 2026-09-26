@@ -2360,8 +2360,6 @@ mod tests {
     /// radar with no band covers it.
     #[test]
     fn the_coverage_answer_credits_a_sensor_with_its_declared_elevation_band() {
-        use gungnir_sensor_management::SensorControl;
-
         let uncovered = |band: Option<gungnir_model::ElevationBand>| {
             let config: ConfigBaseline = serde_json::from_value(serde_json::json!({
                 "version": ConfigBaseline::default().version,
