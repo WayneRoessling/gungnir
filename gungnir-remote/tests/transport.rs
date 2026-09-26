@@ -569,7 +569,7 @@ async fn token(url: &str) -> String {
 
 /// **Every route but the session one refuses an unauthenticated caller.** This is the
 /// property that makes the write paths safe to serve at all: the caller is whoever the
-/// token says, and `ApprovalRequest`'s own `operator` field is not believed.
+/// token says, and no decision a caller sends names an operator to be believed.
 #[tokio::test(flavor = "multi_thread")]
 async fn every_other_route_refuses_without_a_token() {
     let url = serve(authenticating(snapshot(Vec::new()))).await;
@@ -1237,4 +1237,412 @@ async fn a_queued_exchange_batch_reaches_the_node_and_replaces_what_it_holds() {
         }
         other @ ExchangeResponse::NotHeld { .. } => panic!("expected held, got {other:?}"),
     }
+}
+
+// ---------------------------------------------------------------------------------
+// GAP-146: a console that may not publish is told once, and holds a bounded outbox
+// ---------------------------------------------------------------------------------
+
+/// The Operator every GAP-146 test signs in as first: `PUBLISH_EXCHANGE` is not an
+/// Operator's (DN-18 §5 amendment 2), so the node answers `403` to every publish.
+const OPERATOR: u64 = 7;
+/// A Supervisor on the same node, which may publish.
+const SUPERVISOR: u64 = 8;
+
+/// A node that knows an Operator and a Supervisor.
+fn authenticating_operator_and_supervisor() -> Arc<NodeApi> {
+    let account = |operator: u64, role| Account {
+        operator: OperatorId(operator),
+        role,
+        phc: hash_passphrase(PASSPHRASE).expect("hashed"),
+    };
+    let store = InMemoryAccountStore::new(vec![
+        account(OPERATOR, gungnir_security::Role::Operator),
+        account(SUPERVISOR, gungnir_security::Role::Supervisor),
+    ]);
+    let issuer = TokenIssuer::new(vec![3u8; 32], 300.0).expect("issuer");
+    Arc::new(
+        NodeApi::new(snapshot(Vec::new())).with_callers(Arc::new(AccountTokenAuthority::new(
+            Box::new(store),
+            issuer,
+        ))),
+    )
+}
+
+fn signed_in_as(operator: u64) -> Credential {
+    Credential {
+        operator,
+        passphrase: PASSPHRASE.into(),
+    }
+}
+
+/// A loopback TCP proxy that counts the exchange publishes passing through it and can be
+/// cut and restored (GAP-146).
+///
+/// **The count is the wire's, not the link's.** `ExchangePublishing::posts` is the link
+/// counting itself; a retry storm is a claim about what reached the node, so this reads
+/// the request lines in the bytes going upstream. Plain threads and `std::net`, as
+/// `gungnir-app/tests/cut_off_and_reconnected.rs`'s proxy is, for the same reason: a cut
+/// is what a network does to every socket at once.
+struct CountingProxy {
+    addr: std::net::SocketAddr,
+    publishes: Arc<std::sync::atomic::AtomicU64>,
+    open: Arc<std::sync::atomic::AtomicBool>,
+    live: Arc<std::sync::Mutex<Vec<std::net::TcpStream>>>,
+}
+
+/// What a publish request line starts with; every exchange write door is under it.
+const PUBLISH_LINE: &[u8] = b"POST /v3/exchange/";
+
+impl CountingProxy {
+    fn start(upstream: &str) -> Self {
+        use std::sync::atomic::Ordering;
+        let upstream: std::net::SocketAddr = upstream
+            .trim_start_matches("http://")
+            .parse()
+            .expect("an address");
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("proxy bound");
+        let addr = listener.local_addr().expect("proxy addr");
+        let publishes = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let open = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let live: Arc<std::sync::Mutex<Vec<std::net::TcpStream>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        std::thread::spawn({
+            let publishes = publishes.clone();
+            let open = open.clone();
+            let live = live.clone();
+            move || {
+                for inbound in listener.incoming() {
+                    let Ok(inbound) = inbound else { continue };
+                    if !open.load(Ordering::Relaxed) {
+                        let _ = inbound.shutdown(std::net::Shutdown::Both);
+                        continue;
+                    }
+                    let Ok(outbound) = std::net::TcpStream::connect(upstream) else {
+                        continue;
+                    };
+                    if let (Ok(i), Ok(o), Ok(mut held)) =
+                        (inbound.try_clone(), outbound.try_clone(), live.lock())
+                    {
+                        held.push(i);
+                        held.push(o);
+                    }
+                    pipe(&inbound, &outbound, Some(publishes.clone()));
+                    pipe(&outbound, &inbound, None);
+                }
+            }
+        });
+        Self {
+            addr,
+            publishes,
+            open,
+            live,
+        }
+    }
+
+    fn url(&self) -> String {
+        format!("http://{}", self.addr)
+    }
+
+    fn publishes(&self) -> u64 {
+        self.publishes.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Close every connection through the proxy and refuse new ones.
+    fn cut(&self) {
+        self.open.store(false, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(mut held) = self.live.lock() {
+            for stream in held.drain(..) {
+                let _ = stream.shutdown(std::net::Shutdown::Both);
+            }
+        }
+    }
+
+    fn restore(&self) {
+        self.open.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// Copy one direction until either side closes, counting publish request lines on the way
+/// if asked to. A request line split across two reads is still counted once: the tail of
+/// each read is carried into the next.
+fn pipe(
+    from: &std::net::TcpStream,
+    to: &std::net::TcpStream,
+    count: Option<Arc<std::sync::atomic::AtomicU64>>,
+) {
+    use std::io::{Read, Write};
+    let (Ok(mut from), Ok(mut to)) = (from.try_clone(), to.try_clone()) else {
+        return;
+    };
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 16 * 1024];
+        let mut carry: Vec<u8> = Vec::new();
+        loop {
+            let n = match from.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => n,
+            };
+            if let Some(count) = &count {
+                carry.extend_from_slice(&buf[..n]);
+                let found = carry
+                    .windows(PUBLISH_LINE.len())
+                    .filter(|w| *w == PUBLISH_LINE)
+                    .count();
+                count.fetch_add(found as u64, std::sync::atomic::Ordering::Relaxed);
+                let keep = carry.len().min(PUBLISH_LINE.len() - 1);
+                carry.drain(..carry.len() - keep);
+            }
+            if to.write_all(&buf[..n]).is_err() {
+                break;
+            }
+        }
+        let _ = from.shutdown(std::net::Shutdown::Both);
+        let _ = to.shutdown(std::net::Shutdown::Both);
+    });
+}
+
+fn handoff_set(n: u32) -> Vec<ExchangeProductRecord> {
+    (1..=n)
+        .map(|i| ExchangeProductRecord {
+            id: format!("decision-{i}"),
+            at: MissionTime(f64::from(i)),
+            releasability: Releasability::AllPeers,
+            body: serde_json::json!({ "decision": i }),
+        })
+        .collect()
+}
+
+fn held_handoff_ids(api: &NodeApi) -> Vec<String> {
+    match api.exchange_all(ExchangeItem::Handoffs) {
+        Some(ExchangeResponse::Held { products, .. }) => {
+            products.into_iter().map(|p| p.id).collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// **GAP-146.** An Operator's console publishing handoffs is refused `403` by the node,
+/// and is told so **once**: one publish reaches the node per sign-in, however many sets
+/// are queued and however long the link stays up, and what is held is one set per item,
+/// the newest, with every replacement counted. Before this the link retried the same
+/// refused batch every forward tick and queued one more per handoff, without bound and
+/// without a word.
+///
+/// Then the change that could make a difference: the link signs in as a Supervisor at its
+/// next connection, the held sets are offered once more, and the node takes the newest.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_operator_s_console_is_refused_once_and_holds_one_set_per_item() {
+    let api = authenticating_operator_and_supervisor();
+    let node = serve(Arc::clone(&api)).await;
+    let proxy = CountingProxy::start(&node);
+    let handle = tokio::runtime::Handle::current();
+    let link = gungnir_remote::link::start(
+        &RemoteEndpoint::plain(proxy.url()),
+        signed_in_as(OPERATOR),
+        &handle,
+    )
+    .expect("the link starts");
+    until(|| link.connected(), "the link to report connected").await;
+
+    // Fifty handoffs issued, each republishing the whole set, and one launch warning.
+    link.queue_exchange(ExchangeItem::Warnings, handoff_set(1));
+    for n in 1..=50 {
+        link.queue_exchange(ExchangeItem::Handoffs, handoff_set(n));
+    }
+    until(
+        || {
+            link.exchange_standing()
+                .is_some_and(|s| s.publishing.refused.is_some())
+        },
+        "the link to hear the node's refusal",
+    )
+    .await;
+
+    // Two seconds is eight forward ticks: the old link would have posted eight more.
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    let standing = link.exchange_standing().expect("readable");
+    let refused = standing.publishing.refused.clone().expect("still refused");
+    assert_eq!(refused.status, 403);
+    assert!(
+        refused.reason.contains("may not publish to exchange"),
+        "the node's own reason was not kept: {}",
+        refused.reason
+    );
+    assert_eq!(
+        proxy.publishes(),
+        1,
+        "a refused console kept publishing: {standing:?}"
+    );
+    assert_eq!(standing.publishing.posts, 1);
+    assert_eq!(
+        standing.waiting.len(),
+        2,
+        "the outbox holds one set per item, not one per handoff: {standing:?}"
+    );
+    assert!(standing.waiting.contains(&ExchangeItem::Handoffs));
+    assert!(standing.waiting.contains(&ExchangeItem::Warnings));
+    assert_eq!(
+        standing.publishing.superseded, 49,
+        "every replaced set is counted"
+    );
+    assert!(held_handoff_ids(&api).is_empty(), "the node took nothing");
+
+    // More handoffs while refused: still held, still bounded, still not sent.
+    for n in 51..=60 {
+        link.queue_exchange(ExchangeItem::Handoffs, handoff_set(n));
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+    assert_eq!(proxy.publishes(), 1, "a new set is not a new sign-in");
+    assert_eq!(link.exchange_standing().expect("readable").waiting.len(), 2);
+
+    // A Supervisor signs in on this console; the link takes the credential at its next
+    // connection, which the cut forces.
+    link.replace_credential(signed_in_as(SUPERVISOR))
+        .expect("an operator's link takes a credential");
+    proxy.cut();
+    until(|| !link.connected(), "the link to drop").await;
+    proxy.restore();
+    until(
+        || held_handoff_ids(&api).len() == 60,
+        "the node to hold the newest set once a Supervisor signed in",
+    )
+    .await;
+    let ids = held_handoff_ids(&api);
+    assert_eq!(ids.last().map(String::as_str), Some("decision-60"));
+    until(
+        || {
+            link.exchange_standing()
+                .is_some_and(|s| s.waiting.is_empty() && s.publishing.refused.is_none())
+        },
+        "the outbox to empty",
+    )
+    .await;
+    assert_eq!(
+        proxy.publishes(),
+        3,
+        "one refused publish, then one for each item held"
+    );
+}
+
+/// **GAP-146: a node that did not answer is not a node that refused.** Sets queued while
+/// the link is cut are held -- the newest per item -- and delivered when it comes back,
+/// with no sign-in change needed; a Supervisor's console publishes as it always did.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_set_queued_while_cut_off_is_delivered_when_the_link_returns() {
+    let api = authenticating_operator_and_supervisor();
+    let node = serve(Arc::clone(&api)).await;
+    let proxy = CountingProxy::start(&node);
+    let handle = tokio::runtime::Handle::current();
+    let link = gungnir_remote::link::start(
+        &RemoteEndpoint::plain(proxy.url()),
+        signed_in_as(SUPERVISOR),
+        &handle,
+    )
+    .expect("the link starts");
+    until(|| link.connected(), "the link to report connected").await;
+
+    // Linked: a Supervisor publishes normally. Waited for on the link's side as well as
+    // the node's: the node holds the set a moment before the link has read the answer and
+    // taken it out of the outbox, and a set queued in between would replace it there.
+    link.queue_exchange(ExchangeItem::Handoffs, handoff_set(1));
+    until(
+        || {
+            held_handoff_ids(&api).len() == 1
+                && link
+                    .exchange_standing()
+                    .is_some_and(|s| s.waiting.is_empty() && s.publishing.delivered == 1)
+        },
+        "the node to hold the Supervisor's first set",
+    )
+    .await;
+
+    proxy.cut();
+    until(|| !link.connected(), "the link to drop").await;
+    for n in 2..=20 {
+        link.queue_exchange(ExchangeItem::Handoffs, handoff_set(n));
+    }
+    let held = link.exchange_standing().expect("readable");
+    assert_eq!(held.waiting, vec![ExchangeItem::Handoffs]);
+    assert!(
+        held.publishing.refused.is_none(),
+        "an unreachable node is not a refusal"
+    );
+
+    proxy.restore();
+    until(
+        || held_handoff_ids(&api).len() == 20,
+        "the newest set to reach the node on reconnection",
+    )
+    .await;
+    until(
+        || {
+            link.exchange_standing()
+                .is_some_and(|s| s.waiting.is_empty())
+        },
+        "the outbox to empty",
+    )
+    .await;
+    let standing = link.exchange_standing().expect("readable");
+    assert_eq!(
+        standing.publishing.delivered, 2,
+        "the first set, then the one newest set held through the cut"
+    );
+    assert_eq!(standing.publishing.superseded, 18);
+    assert_eq!(proxy.publishes(), 2);
+}
+
+/// **GAP-146: "not now" is retried, and retried less often each time.** A node whose
+/// register is full answers `507` (DN-18 §11); the set stays queued and is offered again,
+/// but after a growing interval rather than on every forward tick, and nothing calls it a
+/// refusal of this console.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_node_that_says_not_now_is_asked_again_less_often() {
+    let api = authenticating_operator_and_supervisor();
+    for n in 0..gungnir_api::transport::PRODUCERS_PER_ITEM {
+        api.publish_exchange(
+            gungnir_api::transport::ExchangeProducer::Party(format!("desktop-{n:016x}")),
+            ExchangeItem::Handoffs,
+            Vec::new(),
+        )
+        .expect("admitted");
+    }
+    let node = serve(Arc::clone(&api)).await;
+    let handle = tokio::runtime::Handle::current();
+    let link = gungnir_remote::link::start(
+        &RemoteEndpoint::plain(node),
+        signed_in_as(SUPERVISOR),
+        &handle,
+    )
+    .expect("the link starts");
+    until(|| link.connected(), "the link to report connected").await;
+
+    link.queue_exchange(ExchangeItem::Handoffs, handoff_set(3));
+    let queued = std::time::Instant::now();
+    until(
+        || {
+            link.exchange_standing()
+                .and_then(|s| s.publishing.retrying)
+                .is_some_and(|r| r.attempts >= 3)
+        },
+        "three attempts against a full register",
+    )
+    .await;
+    let standing = link.exchange_standing().expect("readable");
+    let retrying = standing.publishing.retrying.clone().expect("retrying");
+    assert!(retrying.last_failure.starts_with("507"), "{retrying:?}");
+    assert!(
+        standing.publishing.refused.is_none(),
+        "507 is not a refusal of this console"
+    );
+    assert_eq!(standing.waiting, vec![ExchangeItem::Handoffs]);
+    // The second attempt waits one forward tick and the third two more: three attempts
+    // cannot have happened in less than the sum, whatever the machine's load.
+    let floor =
+        gungnir_remote::link::publish_retry_delay(1) + gungnir_remote::link::publish_retry_delay(2);
+    assert!(
+        queued.elapsed() >= floor,
+        "three attempts in {:?}, under the {floor:?} the backoff allows",
+        queued.elapsed()
+    );
 }

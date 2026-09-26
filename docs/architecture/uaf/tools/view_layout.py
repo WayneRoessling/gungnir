@@ -44,8 +44,9 @@ a grouping label -- and is left off the EA diagram rather than invented into the
 model.
 
 What an edge IS. Parsed from the PlantUML source, never from the SVG: the Rs-Cn
-and If-Sr views render through `!pragma layout smetana`, which emits no edge ids,
-so the source is the only complete account. An edge whose two endpoints are a
+views render through `!pragma layout smetana`, which emits no edge ids, so the
+source is the only complete account, and one rule for every view keeps it so for
+the If-Sr views, which Graphviz lays out (D-79). An edge whose two endpoints are a
 relationship the registry already carries reuses that relationship's connector,
 so EA shows one connector on however many diagrams draw it. An edge that is not
 in the registry becomes a view-local connector: the authored view says those two

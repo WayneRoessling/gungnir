@@ -1023,16 +1023,16 @@ IE-21,uafKind,InformationElement
 IE-21,registry.code,gungnir_workflow::AlertLifecycle
 IE-22,uafId,IE-22
 IE-22,uafKind,InformationElement
-IE-22,registry.code,gungnir_api::v1::SnapshotResponse
+IE-22,registry.code,gungnir_api::v3::SnapshotResponse
 IE-23,uafId,IE-23
 IE-23,uafKind,InformationElement
-IE-23,registry.code,gungnir_api::v1::ApprovalRequest
+IE-23,registry.code,gungnir_api::v3::DecisionRequest
 IE-24,uafId,IE-24
 IE-24,uafKind,InformationElement
-IE-24,registry.code,gungnir_api::v1::SubmitDetectionRequest
+IE-24,registry.code,gungnir_api::v3::SubmitDetectionRequest
 IE-25,uafId,IE-25
 IE-25,uafKind,InformationElement
-IE-25,registry.code,gungnir_api::v1::SubscribeRequest
+IE-25,registry.code,gungnir_api::v3::SubscribeRequest
 IE-26,uafId,IE-26
 IE-26,uafKind,InformationElement
 IE-26,registry.code,gungnir_interop::SchemaEntry
@@ -1381,6 +1381,14 @@ IE-resource-placement,uafId,IE-resource-placement
 IE-resource-placement,uafKind,InformationElement
 IE-resource-placement,registry.code,gungnir_model::ResourcePlacement
 IE-resource-placement,registry.domain,Battle rhythm & mission records
+IE-retention-event,uafId,IE-retention-event
+IE-retention-event,uafKind,InformationElement
+IE-retention-event,registry.code,gungnir_model::RetentionEvent
+IE-retention-event,registry.domain,Events & the record
+IE-retention-policy,uafId,IE-retention-policy
+IE-retention-policy,uafKind,InformationElement
+IE-retention-policy,registry.code,gungnir_model::RetentionPolicy
+IE-retention-policy,registry.domain,Battle rhythm & mission records
 IE-review-event,uafId,IE-review-event
 IE-review-event,uafKind,InformationElement
 IE-review-event,registry.code,gungnir_model::ReviewEvent

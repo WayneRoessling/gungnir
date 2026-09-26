@@ -1647,6 +1647,7 @@
     (DN-31 §9 row 8), and the name says what the origin is worth. A stated, readable label
     was not taken: two desktops could claim one name and nothing would detect it. See
     `../../record/2026-09-22/a-desktop-is-named-by-its-own-key.md`.
+
 - id: D-68
   decision: How the node's own exchange set and a desktop's published set share one register
   question: >-
@@ -1673,6 +1674,7 @@
     answered as proposed on 2026-09-23, the day after the build. See
     `../../record/2026-09-23/a-partner-hears-what-the-node-decided.md` and
     `../../record/2026-09-23/the-register-s-contract-is-decided.md`.
+
 - id: D-69
   decision: What makes a producer's exchange set stale, and what a partner is told about it
   question: >-
@@ -1697,6 +1699,7 @@
     publishes none. The bound is unchanged: a new producer beyond sixty-four is refused
     rather than evicting a set a partner is served from. See
     `../../record/2026-09-23/a-register-that-says-how-old-it-is.md`.
+
 - id: D-70
   decision: Whose clock a node's deadline is drawn against, and when a console is told they differ
   question: >-
@@ -1718,6 +1721,7 @@
     countdown is drawn to the second: below it nothing a person reads can change, above it
     the console and the node disagree by a digit on the screen. Nothing sets or steers a
     clock. See `../../record/2026-09-23/a-deadline-in-the-node-s-own-time.md`.
+
 - id: D-71
   decision: What a desktop that has never reached its node does
   question: >-
@@ -1737,6 +1741,167 @@
     The desktop falls back and the sentence says which it is: "has not answered since this
     desktop signed in" rather than "silent for 12 s", because an operator reads the two
     differently. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.
+
+- id: D-75
+  decision: What a desktop's link does with a publish the node refuses, and what the console is told
+  question: >-
+    The link kept any exchange batch the node did not take and offered it again every
+    forward tick, whatever the answer. An Operator's console is refused `403` on every
+    publish, because `PUBLISH_EXCHANGE` is not an Operator's, so it retried four times a
+    second for as long as it ran and said nothing anywhere (GAP-146). How should the link
+    tell a refusal that cannot succeed from one that can, when should it ask again, and
+    what should the console say?
+  raised_in: "GAP-145; GAP-146"
+  decider: Owner
+  unblocks: GAP-146
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** Read each answer for what it
+    says about the caller (DN-18 §13): `2xx` delivered; no answer, `408`, `425`, `429` or
+    a `5xx` (the full register's `507` included) is "not now", retried after an interval
+    doubling from one forward tick to thirty seconds and reset on every new connection;
+    `401` or `403` is "not you", and the link keeps every set and offers nothing more
+    until it signs in again, which every connection does and which a sign-in on the
+    console brings about; any other `4xx` drops that one set, counted. PN-09 carries one
+    line for a linked console, giving the node's reason, what is held and the roles the
+    authority matrix lets publish, read from the matrix itself; nothing goes to the alert
+    list. The reconnection edge republishes launch warnings with handoffs. A timed retry
+    of a `403` was rejected because it asks the same session the same question; stopping
+    the Operator's console from queuing at all was rejected because the node, not the
+    desktop's copy of the matrix, answers for the session, and the held set is what a
+    Supervisor signing in at that console should send. See
+    `../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`.
+
+- id: D-76
+  decision: How the desktop's exchange outbox is bounded
+  question: >-
+    `queue_exchange` bounded nothing: one batch per handoff issued, for as long as the node
+    did not take them (GAP-146). The detection outbox drops its oldest past a capacity and
+    counts it, and `gungnir_resilience::StoreAndForwardQueue` (GAP-121) does the same for
+    envelopes. Should the exchange outbox take either rule, or another?
+  raised_in: "GAP-146; GAP-121"
+  decider: Owner
+  unblocks: GAP-146
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** One set per item, the newest
+    (DN-18 §13). Every set is its producer's whole current set, so a newer one makes any
+    older one waiting for the same item obsolete: the outbox replaces it in place and
+    counts the replacement, and a set already on its way is removed by its generation so a
+    newer one survives. A capacity with the oldest dropped was rejected because it would
+    keep obsolete sets while dropping by age across items, and post every obsolete set on
+    reconnection; `StoreAndForwardQueue` was rejected for the same rule over a different
+    type and for a `gungnir-remote` to `gungnir-resilience` edge `ARCHITECTURE.md` §7.1
+    does not show, and GAP-121 is left open. See
+    `../../record/2026-09-25/a-console-that-may-not-publish-says-so.md`.
+
+- id: D-79
+  decision: Which layout engine the If-Sr diagrams are rendered by
+  question: >-
+    `build_uaf.py` pinned every If-Sr diagram to smetana, PlantUML's Java port of Graphviz
+    dot, as a measured choice for squarer layouts. Since GAP-132 smetana throws in
+    `mincross` on the plans-effectors-handoff diagram, so that one SVG was rendered by
+    Graphviz and every other If-Sr SVG by smetana, and a reader compared two engines'
+    layouts in one family (GAP-139). Pin the engine per diagram, pin a PlantUML version
+    with the defect fixed, or render the family through Graphviz?
+  raised_in: "GAP-132; GAP-139"
+  decider: Owner
+  unblocks: GAP-139
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** Every If-Sr diagram, the overview
+    included, is laid out by Graphviz dot, and the render scripts pin the Docker image,
+    `plantuml/plantuml:1.2026.8`, whose SVGs record the version that drew them. Measured
+    with that image on all nine: dot's left-to-right layouts cover 1.05x to 1.66x smetana's
+    area, and the 30-40x the pin's comment recorded was the top-to-bottom default, which
+    left-to-right cures under either engine. A per-diagram engine was rejected because it
+    keeps two engines in one family, which is the defect; a fixed version was rejected
+    because none exists (1.2026.8 is the latest image), and smetana would stay one graph
+    change away from the next crash while the check needs every element positioned. The
+    Rs-Cn family renders cleanly under smetana and keeps it, one engine per family. See
+    `../../record/2026-09-25/housekeeping-after-dn-31.md`.
+
+- id: D-80
+  decision: Whether the unreachable plan-keyed decision type is removed or documented
+  question: >-
+    `gungnir_api::v3::ApprovalRequest`, a plan decision naming its own operator in the
+    body, has been reachable from no route since GAP-132, and `ApiHandler::decide`, the only
+    thing naming it, has no implementor (GAP-138). Remove both, or keep them and say in the
+    trait what implements it and when?
+  raised_in: "GAP-132; GAP-138"
+  decider: Owner
+  unblocks: GAP-138
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** Removed, both. A decision is taken
+    on a queue item through `DecisionRequest`, whose caller is whoever the session token
+    says; a second, plan-keyed description that names an operator is a contract nothing
+    honours and every reader has to be told not to believe. Documenting it was rejected
+    because no implementation is planned that would take a decision on a plan rather than
+    on the item that carries its deadline and its roles (DN-31 §7). `ApiHandler` keeps its
+    two methods, both of which describe routes the node serves, and now says that nothing
+    implements it. The UAF's IE-23, the operator's decision carried over the API, names
+    `DecisionRequest` as the type that carries it. Human-owned: a `gungnir-api` write path;
+    see `docs/signatures.md`. See `../../record/2026-09-25/housekeeping-after-dn-31.md`.
+
+- id: D-77
+  decision: How the journal holds an envelope carrying a NaN or an infinity
+  question: >-
+    JSON has no spelling for a non-finite float and `serde_json` writes one as `null`, so
+    such an envelope made a journal line that could not be read back: mid-session it failed
+    the whole session, as the last line it was dropped as torn (GAP-126). Should `append`
+    refuse the envelope with a named error, or should the journal carry the value?
+  raised_in: "GAP-126"
+  decider: Owner
+  unblocks: GAP-126
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** The journal carries it,
+    losslessly: an envelope whose floats are all finite is written byte for byte as
+    before, and one that carries a non-finite float is written as a marked line (`~`) in
+    which each such float is a string token holding its bits and a genuine string that
+    could be mistaken for one is escaped. `append` re-reads a marked line before writing it
+    and refuses with `StoreError::Unfaithful` a line that would not come back as written.
+    A refusal was rejected because a real producer can emit one (a deadline typed as "inf"
+    into PN-10, now also refused where it is typed), and a refused envelope is a lost
+    event: the record of the fault is exactly what an investigation of it needs. A
+    per-field serde attribute was rejected because several hundred float fields reach the
+    journal, some inside internally tagged enums serde buffers first, and one forgotten
+    field would reopen the defect; the adapter wraps `serde_json` once and covers every
+    field by construction. See
+    `../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`.
+
+- id: D-78
+  decision: When the journal is purged, what a purge may never take, and who chooses the age
+  question: >-
+    `RetentionPolicy` existed with a 90-day default and no code applied it, so journals
+    grew without bound (GAP-122). Building the purge needs a production answer to when it
+    runs, what "age" is measured from, what it must never remove, how an interrupted purge
+    is survived and seen, and whether a deployment that never declared a policy starts
+    deleting on an upgrade.
+  raised_in: "GAP-122"
+  decider: Owner
+  unblocks: GAP-122
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** Retention is declared in the
+    baseline (`ConfigBaseline::retention`) or nothing is purged, and both binaries say which
+    at start: the period is the customer's record-keeping obligation (data architecture
+    §4), and a default nobody chose must not begin deleting mission records on an upgrade.
+    Age is days since the session's journal was last written, from the file's own time, so
+    a session sealed under a key a later process cannot open is still reached. Both
+    binaries purge after the live session exists and hourly; never while opening the
+    journal. Never purged: the session open for appending, a session under a hold file
+    (placed and released by the after-action review, or by an administrator), and what the
+    caller protects -- on the desktop, every session an open requirement's events are in,
+    the sessions holding the highest requirement identifier and launch-warning serial, and
+    an unfinished outage's session. A purge renames the journal out of the listing, removes
+    the mission record, then deletes the file, so an interrupted purge leaves every session
+    whole or gone and the next finishes it. Each removal is a `RetentionEvent` in the live
+    session, a log line, a count, and on the desktop an alert. The audit-log age governs
+    nothing until a durable audit log exists (GAP-152). See
+    `../../record/2026-09-25/every-float-kept-old-sessions-purged-on-purpose.md`.
+
 - id: D-72
   decision: What truth a rehearsal re-observes, when scans fall between truth records
   question: >-
@@ -1760,6 +1925,7 @@
     elsewhere measure, for no gain in what §5.1 protects. Interpolation stays refused, as
     §5.1 said. DN-32 §12; see
     `../../record/2026-09-25/gap-105-re-observation-for-a-laydown-built.md`.
+
 - id: D-73
   decision: Whether a recording's sensor losses and jamming apply to a deployment's sensors
   question: >-
@@ -1782,6 +1948,7 @@
     placed sensors are the recording's own, as in the statistical check, every event
     applies by identifier as the generator applied it. See
     `../../record/2026-09-25/gap-105-re-observation-for-a-laydown-built.md`.
+
 - id: D-74
   decision: How a rehearsal's random draws are seeded
   question: >-

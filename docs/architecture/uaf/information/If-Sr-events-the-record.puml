@@ -1,7 +1,6 @@
 @startuml If-Sr-events-the-record
 title If-Sr information structure: Events & the record
 left to right direction
-!pragma layout smetana
 hide empty members
 skinparam classAttributeIconSize 0
 enum "TrackingEvent" as TrackingEvent <<InformationElement>> {
@@ -109,6 +108,10 @@ enum "LaunchWarningEvent" as LaunchWarningEvent <<InformationElement>> {
   Issued(crate::LaunchWarningReport)
   Received(crate::PeerLaunchWarning)
   Refused { peer: String, reason: String, at: MissionTime, }
+}
+enum "RetentionEvent" as RetentionEvent <<InformationElement>> {
+  Purged { session: crate::SessionId, idle_days: f64, max_session_age_days: u32, bytes: u64, at: MissionTime, }
+  Completed { session: crate::SessionId, at: MissionTime, }
 }
 enum "LinkEvent" as LinkEvent <<InformationElement>> {
   FellBack { endpoint: String, silent_s: f64, at: MissionTime, last_seq: u64, }
@@ -228,6 +231,8 @@ WarningEvent --> MissionTime : Raised, Sent, Acknowledged, Failed, Late, Waived,
 LaunchWarningEvent --> LaunchWarningReport : Issued
 LaunchWarningEvent --> MissionTime : Refused
 LaunchWarningEvent --> PeerLaunchWarning : Received
+RetentionEvent --> MissionTime : Purged, Completed
+RetentionEvent --> SessionId : Purged, Completed
 LinkEvent --> ArbitrationGround : ConflictArbitrated
 LinkEvent --> ConflictSide : ConflictArbitrated
 LinkEvent --> EngagementSide : BothActed

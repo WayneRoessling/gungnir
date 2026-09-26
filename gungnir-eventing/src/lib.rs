@@ -79,6 +79,10 @@ pub enum Event {
     Rehearsal(gungnir_model::events::RehearsalEvent),
     /// The node link fell back or was restored (GAP-050).
     Link(gungnir_model::events::LinkEvent),
+    /// What retention removed from the record, and under which limit (GAP-122, D-78).
+    ///
+    /// Additive, so `SCHEMA_VERSION` is not bumped -- the treatment [`Event::Link`] had.
+    Retention(gungnir_model::events::RetentionEvent),
     Tracking(TrackingEvent),
     Intercept(InterceptEvent),
     Ingest(IngestEvent),

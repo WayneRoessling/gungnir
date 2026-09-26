@@ -1,7 +1,6 @@
 @startuml If-Sr-core-identifiers-frames-quality
 title If-Sr information structure: Core identifiers, frames & quality
 left to right direction
-!pragma layout smetana
 hide empty members
 skinparam classAttributeIconSize 0
 class "LocalFrame" as LocalFrame <<InformationElement>> {

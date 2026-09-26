@@ -1,7 +1,6 @@
 @startuml If-Sr-battle-rhythm-mission-records
 title If-Sr information structure: Battle rhythm & mission records
 left to right direction
-!pragma layout smetana
 hide empty members
 skinparam classAttributeIconSize 0
 class "LaydownId" as LaydownId <<InformationElement>> {
@@ -47,6 +46,10 @@ enum "RequirementState" as RequirementState <<InformationElement>> {
   Satisfied { evidence: String }
   Declined { by: Concurrence, reason: String }
   Lapsed
+}
+class "RetentionPolicy" as RetentionPolicy <<InformationElement>> {
+  max_session_age_days: u32
+  max_audit_log_age_days: u32
 }
 class "ScheduledProduct" as ScheduledProduct <<InformationElement>> {
   name: String

@@ -148,7 +148,16 @@ pub struct Projection {
     /// unreachable node leaves a batch queued for the next tick rather than dropping it.
     /// No outcome queue beside it, unlike `task_outbox`'s `task_outcomes` -- a publish
     /// generates no node-issued identifier for anything here to wait on.
+    ///
+    /// **At most one batch per item** (GAP-146, DN-18 §13, D-76). Every batch is the
+    /// producer's whole set, so a newer one makes any older one waiting for the same item
+    /// obsolete: [`NodeLink::queue_exchange`] replaces it in place and counts the
+    /// replacement in [`ExchangePublishing::superseded`]. That is the bound, and it drops
+    /// nothing the node should still end up with.
     pub exchange_outbox: std::collections::VecDeque<OutboundExchange>,
+    /// Where this link's exchange publishing stands: what the node took, what it would
+    /// not, and whether the link has stopped offering (GAP-146, DN-18 §13, D-75).
+    pub exchange: ExchangePublishing,
     /// When the node was last heard from at all -- an envelope, a heartbeat, the
     /// snapshot (D-23).
     ///
@@ -205,6 +214,133 @@ pub struct TaskOutcome {
 pub struct OutboundExchange {
     pub item: gungnir_model::ExchangeItem,
     pub products: Vec<ExchangeProductRecord>,
+    /// Which queuing this batch came from, counted per link (GAP-146).
+    ///
+    /// A batch can be replaced by a newer one for the same item while it is on its way
+    /// to the node, and the flush has to remove the batch it sent rather than whichever
+    /// one now stands at that place in the outbox -- or the newer set would be lost.
+    pub generation: u64,
+}
+
+/// Where a link's exchange publishing stands (GAP-146, DN-18 §13, D-75).
+///
+/// **Four answers, not two.** A publish the node took; one that met no answer or an
+/// answer that says try again; one the node refused because of **who is asking**; and one
+/// it refused because of **what was sent**. The link used to treat all but the first as
+/// "try the same batch again next tick", which for an Operator's console -- refused `403`
+/// on every publish, because `PUBLISH_EXCHANGE` is not an Operator's -- meant a retry four
+/// times a second for as long as the console ran, and nothing said on any panel.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ExchangePublishing {
+    /// Publish requests this link has made, answered or not.
+    pub posts: u64,
+    /// Sets the node took (`2xx`).
+    pub delivered: u64,
+    /// Sets replaced by a newer set for the same item before they were sent. Nothing is
+    /// lost by one: the newer set is the whole of what the older one said and more.
+    pub superseded: u64,
+    /// Sets the node rejected on their own merits (a `4xx` other than `401`/`403`), each
+    /// dropped: sending the same bytes again would earn the same answer, and the next set
+    /// for the item replaces it anyway.
+    pub rejected: u64,
+    /// The most recent of those, for the line PN-09 draws.
+    pub last_rejection: Option<PublishRefusal>,
+    /// **The node refused this link as a publisher** (`401` or `403`), and the link has
+    /// stopped offering until it signs in again. The queued sets stay, newest per item.
+    pub refused: Option<PublishRefusal>,
+    /// Sets are waiting on a node that did not answer, or answered "not now".
+    pub retrying: Option<PublishRetry>,
+    /// Not before this instant is the next retry made. The interval doubles per attempt
+    /// from one forward tick to [`PUBLISH_RETRY_CEILING`], so a node that answers `507` for
+    /// an hour is asked about a hundred and twenty times, not fourteen thousand.
+    pub retry_at: Option<std::time::Instant>,
+    /// The last generation handed out; see [`OutboundExchange::generation`].
+    pub generation: u64,
+}
+
+impl ExchangePublishing {
+    /// A new session is the change a refused publisher was waiting for (GAP-146, D-75):
+    /// whoever signed in this time may be allowed what the last one was not, so what is
+    /// held is offered once more, now. So is anything that was backing off, because a
+    /// node that answers a fresh sign-in is not the node that was failing a moment ago.
+    pub fn signed_in_again(&mut self) {
+        if let Some(refused) = self.refused.take() {
+            tracing::info!(
+                status = refused.status,
+                "the link signed in again; offering the held exchange sets once more"
+            );
+        }
+        self.retrying = None;
+        self.retry_at = None;
+    }
+}
+
+/// A publish the node would not take, and the node's own words for why (GAP-146).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishRefusal {
+    pub item: gungnir_model::ExchangeItem,
+    pub status: u16,
+    /// The node's `message`, or its body where that does not decode; never invented.
+    pub reason: String,
+}
+
+/// Sets waiting on a node that has not taken them yet (GAP-146).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishRetry {
+    /// Consecutive attempts without a delivery, on this connection.
+    pub attempts: u32,
+    pub last_failure: String,
+}
+
+/// What one publish request came back with (GAP-146, D-75).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublishAnswer {
+    /// `2xx`: the node holds the set.
+    Delivered,
+    /// No answer, or `408`, `425`, `429` or a `5xx`: the node may take it later, so the
+    /// same set is offered again after a growing interval. `507` is here: the register is
+    /// full and says so, and the backlog is the visible consequence (DN-18 §11).
+    Retry,
+    /// `401` or `403`: **who is asking** may not publish. Nothing about the set would
+    /// change that, so the link stops offering until it signs in again.
+    CallerRefused,
+    /// Any other `4xx`: **what was sent** was not acceptable. That set is dropped and
+    /// counted; the next set for the item is offered as usual.
+    SetRejected,
+}
+
+/// How a publish's status is read (GAP-146, D-75). `None` is no answer at all.
+#[must_use]
+pub fn publish_answer(status: Option<u16>) -> PublishAnswer {
+    match status {
+        None | Some(408 | 425 | 429 | 500..=599) => PublishAnswer::Retry,
+        Some(200..=299) => PublishAnswer::Delivered,
+        Some(401 | 403) => PublishAnswer::CallerRefused,
+        // A 1xx or 3xx is not something this client asked for; it is not an acceptance,
+        // and treating it as one would claim a publish that did not happen.
+        Some(_) => PublishAnswer::SetRejected,
+    }
+}
+
+/// The longest a link waits between two retries of a waiting set (GAP-146).
+pub const PUBLISH_RETRY_CEILING: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// How long after `attempts` consecutive failures the next retry is made: one forward
+/// tick after the first, doubling, and never longer than [`PUBLISH_RETRY_CEILING`].
+#[must_use]
+pub fn publish_retry_delay(attempts: u32) -> std::time::Duration {
+    let doublings = attempts.saturating_sub(1).min(16);
+    FORWARD_INTERVAL
+        .saturating_mul(1u32 << doublings)
+        .min(PUBLISH_RETRY_CEILING)
+}
+
+/// Where this link's exchange publishing stands, and what is waiting (GAP-146).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ExchangeStanding {
+    /// The items with a set waiting for the node, in the order they will be offered.
+    pub waiting: Vec<gungnir_model::ExchangeItem>,
+    pub publishing: ExchangePublishing,
 }
 
 /// One product within an [`OutboundExchange`] (GAP-065).
@@ -538,9 +674,15 @@ impl NodeLink {
     /// **A replacement, not an addition**, mirroring
     /// `gungnir_api::transport::NodeApi::publish_exchange`'s own contract: `products` is
     /// this producer's whole current set for `item`, not a diff against what was queued
-    /// before. Queuing a fresher batch does not remove an older one already in flight for
-    /// the same item; both are sent in order, and since each is a full replacement the
-    /// node's held set still converges on the last one applied.
+    /// before.
+    ///
+    /// **So a newer set replaces an older one still waiting** (GAP-146, D-76), in place,
+    /// and the replacement is counted in [`ExchangePublishing::superseded`]. The outbox
+    /// therefore holds at most one set per item however long the node does not take them
+    /// -- an Operator's console refused `403` used to add one batch per handoff for as long
+    /// as it ran -- and what it holds is exactly what the node should end up with. A set
+    /// already on its way is not recalled; the flush removes the set it sent by its
+    /// generation, so the newer one stays and is sent after it.
     ///
     /// **What it replaces is this desktop's set alone** (DN-18 §5 amendment 3). The node
     /// keys the register on the name this link's certificate was verified under, so the
@@ -552,10 +694,33 @@ impl NodeLink {
         item: gungnir_model::ExchangeItem,
         products: Vec<ExchangeProductRecord>,
     ) {
-        if let Ok(mut p) = self.projection.lock() {
-            p.exchange_outbox
-                .push_back(OutboundExchange { item, products });
+        let Ok(mut guard) = self.projection.lock() else {
+            return;
+        };
+        let p = &mut *guard;
+        p.exchange.generation = p.exchange.generation.wrapping_add(1);
+        let batch = OutboundExchange {
+            item,
+            products,
+            generation: p.exchange.generation,
+        };
+        match p.exchange_outbox.iter_mut().find(|b| b.item == item) {
+            Some(waiting) => {
+                *waiting = batch;
+                p.exchange.superseded += 1;
+            }
+            None => p.exchange_outbox.push_back(batch),
         }
+    }
+
+    /// Where this link's exchange publishing stands, and what is waiting (GAP-146), for
+    /// PN-09. `None` only if the link task panicked holding the lock.
+    #[must_use]
+    pub fn exchange_standing(&self) -> Option<ExchangeStanding> {
+        self.read().map(|p| ExchangeStanding {
+            waiting: p.exchange_outbox.iter().map(|b| b.item).collect(),
+            publishing: p.exchange.clone(),
+        })
     }
 
     /// Queue a detection for the node (§8.4). Taken whether or not the node answers;
@@ -966,6 +1131,7 @@ async fn run_link(
         p.connected = true;
         p.last_error = None;
         p.last_heard = Some(std::time::Instant::now());
+        p.exchange.signed_in_again();
         p.last_seq
     };
     revision.send_modify(|r| *r = r.wrapping_add(1));
@@ -1141,9 +1307,16 @@ fn exchange_url(urls: &Urls, item: gungnir_model::ExchangeItem) -> Option<&str> 
 
 /// Deliver the queued exchange publishes, oldest first (GAP-065, DN-18 §5 amendment 2).
 /// Each is a full replacement of the node's held set for its item -- see
-/// [`NodeLink::queue_exchange`] -- so applying them in order and stopping at the first
-/// refusal is enough to converge the node's held set on this desktop's own, the same
-/// store-and-forward rule [`flush_outbox`] and [`flush_tasks`] follow.
+/// [`NodeLink::queue_exchange`] -- so offering them in order converges the node's held
+/// set on this desktop's own.
+///
+/// **What happens next depends on the answer** (GAP-146, DN-18 §13, D-75; see
+/// [`publish_answer`]). A delivery removes the set it sent. No answer, or "not now",
+/// keeps it and waits a growing interval before offering it again. A refusal of the
+/// caller keeps every set and stops offering until the link signs in again, which is
+/// what a `403` for an Operator's console needs: one request per sign-in rather than
+/// four a second for as long as the console runs. A rejection of the set drops that one
+/// set, counted, and goes on with the rest.
 async fn flush_exchange(
     client: &reqwest::Client,
     urls: &Urls,
@@ -1151,11 +1324,16 @@ async fn flush_exchange(
     projection: &Arc<Mutex<Projection>>,
 ) {
     for _ in 0..16 {
-        let Some(batch) = projection
-            .lock()
-            .ok()
-            .and_then(|p| p.exchange_outbox.front().cloned())
-        else {
+        let Some(batch) = projection.lock().ok().and_then(|p| {
+            if p.exchange.refused.is_some()
+                || p.exchange
+                    .retry_at
+                    .is_some_and(|at| std::time::Instant::now() < at)
+            {
+                return None;
+            }
+            p.exchange_outbox.front().cloned()
+        }) else {
             return;
         };
         let Some(url) = exchange_url(urls, batch.item) else {
@@ -1164,7 +1342,13 @@ async fn flush_exchange(
                 batch.item
             );
             if let Ok(mut p) = projection.lock() {
-                p.exchange_outbox.pop_front();
+                remove_sent(&mut p, batch.generation);
+                p.exchange.rejected += 1;
+                p.exchange.last_rejection = Some(PublishRefusal {
+                    item: batch.item,
+                    status: 0,
+                    reason: format!("{:?} has no exchange publish route", batch.item),
+                });
             }
             continue;
         };
@@ -1180,19 +1364,124 @@ async fn flush_exchange(
                 })
                 .collect(),
         };
-        let accepted = with_token(client.post(url), token)
+        let (status, reason) = match with_token(client.post(url), token)
             .json(&request)
             .send()
             .await
-            .is_ok_and(|r| r.status().is_success());
-        if !accepted {
-            // Unreachable or refused: keep it queued and try again next tick.
+        {
+            Err(err) => (None, format!("the node could not be reached: {err}")),
+            Ok(response) => {
+                let status = response.status().as_u16();
+                let body = if response.status().is_success() {
+                    String::new()
+                } else {
+                    response.text().await.unwrap_or_default()
+                };
+                (Some(status), node_reason(&body))
+            }
+        };
+        let Ok(mut p) = projection.lock() else {
+            return;
+        };
+        if !record_publish(&mut p, &batch, status, reason) {
             return;
         }
-        if let Ok(mut p) = projection.lock() {
-            p.exchange_outbox.pop_front();
+    }
+}
+
+/// Fold one publish answer into the projection (GAP-146, D-75), and say whether the flush
+/// may go on to the next set: after a delivery or a rejected set it may; after "not now"
+/// or a refusal of the caller nothing more is offered this tick.
+fn record_publish(
+    p: &mut Projection,
+    batch: &OutboundExchange,
+    status: Option<u16>,
+    reason: String,
+) -> bool {
+    p.exchange.posts += 1;
+    match publish_answer(status) {
+        PublishAnswer::Delivered => {
+            remove_sent(p, batch.generation);
+            p.exchange.delivered += 1;
+            p.exchange.retrying = None;
+            p.exchange.retry_at = None;
+            true
+        }
+        PublishAnswer::Retry => {
+            let attempts = p
+                .exchange
+                .retrying
+                .as_ref()
+                .map_or(0, |r| r.attempts)
+                .saturating_add(1);
+            let last_failure = match status {
+                Some(status) => format!("{status}: {reason}"),
+                None => reason,
+            };
+            p.exchange.retry_at = Some(std::time::Instant::now() + publish_retry_delay(attempts));
+            p.exchange.retrying = Some(PublishRetry {
+                attempts,
+                last_failure,
+            });
+            false
+        }
+        PublishAnswer::CallerRefused => {
+            let status = status.unwrap_or_default();
+            tracing::warn!(
+                status,
+                %reason,
+                item = ?batch.item,
+                "the node refused this console as an exchange publisher; holding the \
+                 queued sets and offering nothing more until the link signs in again"
+            );
+            p.exchange.refused = Some(PublishRefusal {
+                item: batch.item,
+                status,
+                reason,
+            });
+            p.exchange.retrying = None;
+            p.exchange.retry_at = None;
+            false
+        }
+        PublishAnswer::SetRejected => {
+            let status = status.unwrap_or_default();
+            tracing::warn!(
+                status,
+                %reason,
+                item = ?batch.item,
+                "the node rejected an exchange set as sent; dropping it"
+            );
+            remove_sent(p, batch.generation);
+            p.exchange.rejected += 1;
+            p.exchange.last_rejection = Some(PublishRefusal {
+                item: batch.item,
+                status,
+                reason,
+            });
+            true
         }
     }
+}
+
+/// Remove the set that was sent, and only it (GAP-146): a newer set queued for the same
+/// item while this one was on its way has taken its place and a different generation,
+/// and is still to be sent.
+fn remove_sent(p: &mut Projection, generation: u64) {
+    p.exchange_outbox.retain(|b| b.generation != generation);
+}
+
+/// The node's own words from a refusal's body: the `message` of its problem document, or
+/// the body itself where that does not decode, bounded so a node that answers with a
+/// page of HTML does not put the page on PN-09.
+fn node_reason(body: &str) -> String {
+    let reason = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v.get("message").and_then(|m| m.as_str()).map(str::to_owned))
+        .unwrap_or_else(|| body.trim().to_owned());
+    if reason.is_empty() {
+        return "the node gave no reason".to_owned();
+    }
+    reason.chars().take(300).collect()
 }
 
 /// Take a picture of the node's approval queue, and replace the projection's waiting
@@ -1246,9 +1535,10 @@ async fn refresh_queue(
 /// Post the decisions this desktop has taken on the node's queue, oldest first
 /// (GAP-133, DN-31 §6.3).
 ///
-/// **The one flusher here that retries rather than gives up.** `flush_outbox`,
-/// `flush_tasks` and `flush_exchange` all stop at the first refusal and try the same item
-/// again next tick; this one distinguishes an *answer* from *no answer*. A `201`, a `409`
+/// **Answers are told from non-answers.** `flush_outbox` stops at the first refusal and
+/// tries the same item again next tick; `flush_exchange` reads the answer too, for its
+/// own reasons (GAP-146, [`publish_answer`]); this one distinguishes an *answer* from *no
+/// answer*. A `201`, a `409`
 /// and a `400`/`401`/`403` are answers and are delivered to the caller, which then knows
 /// what stands. A `504` -- the node's loop did not reply inside the route's window -- is
 /// not an answer and **does not mean nothing was recorded**, so the same request key goes
@@ -1781,6 +2071,131 @@ mod tests {
             gungnir_model::ExchangeItem::Handoffs
         );
         assert_eq!(p.exchange_outbox[0].products[0].id, "decision-1");
+    }
+
+    fn product(id: &str) -> ExchangeProductRecord {
+        ExchangeProductRecord {
+            id: id.into(),
+            at: gungnir_model::MissionTime(1.0),
+            releasability: gungnir_model::Releasability::AllPeers,
+            body: serde_json::json!({ "id": id }),
+        }
+    }
+
+    /// GAP-146, D-76: the outbox holds at most one set per item however many are queued
+    /// while nothing is taken, the one it holds is the newest, and every replacement is
+    /// counted. A set for another item is left alone.
+    #[test]
+    fn a_newer_set_replaces_a_waiting_one_and_the_replacement_is_counted() {
+        use gungnir_model::ExchangeItem::{Handoffs, Warnings};
+        let link = NodeLink::scripted();
+        link.queue_exchange(Warnings, vec![product("w-1")]);
+        for n in 1..=500u32 {
+            let set = (1..=n).map(|i| product(&format!("h-{i}"))).collect();
+            link.queue_exchange(Handoffs, set);
+        }
+        let standing = link.exchange_standing().expect("readable");
+        assert_eq!(
+            standing.waiting,
+            vec![Warnings, Handoffs],
+            "one set per item, in the order each item was first queued"
+        );
+        assert_eq!(standing.publishing.superseded, 499);
+        let p = link.read().expect("projection");
+        let handoffs = p
+            .exchange_outbox
+            .iter()
+            .find(|b| b.item == Handoffs)
+            .expect("held");
+        assert_eq!(
+            handoffs.products.len(),
+            500,
+            "the newest set is the one held"
+        );
+        assert_eq!(handoffs.products[499].id, "h-500");
+        assert_eq!(
+            p.exchange_outbox[0].products[0].id, "w-1",
+            "a set for another item is not touched"
+        );
+    }
+
+    /// GAP-146: removing what was sent removes that generation only, so a newer set
+    /// queued while the older one was on its way survives to be sent after it.
+    #[test]
+    fn a_set_replaced_while_in_flight_is_not_lost_when_the_old_one_lands() {
+        let link = NodeLink::scripted();
+        link.queue_exchange(gungnir_model::ExchangeItem::Handoffs, vec![product("h-1")]);
+        let sent = link.read().expect("projection").exchange_outbox[0].generation;
+        link.queue_exchange(
+            gungnir_model::ExchangeItem::Handoffs,
+            vec![product("h-1"), product("h-2")],
+        );
+        let mut p = link.projection.lock().expect("projection");
+        remove_sent(&mut p, sent);
+        assert_eq!(
+            p.exchange_outbox.len(),
+            1,
+            "the newer set was removed with the old"
+        );
+        assert_eq!(p.exchange_outbox[0].products.len(), 2);
+    }
+
+    /// GAP-146, D-75: a refusal of who is asking is told from one of what was sent, and
+    /// both from a node that did not answer. `507` -- the register is full -- is a node
+    /// saying "not now", and stays one.
+    #[test]
+    fn a_publish_answer_is_read_for_what_it_says_about_the_caller() {
+        assert_eq!(publish_answer(Some(202)), PublishAnswer::Delivered);
+        assert_eq!(publish_answer(Some(200)), PublishAnswer::Delivered);
+        for status in [401u16, 403] {
+            assert_eq!(publish_answer(Some(status)), PublishAnswer::CallerRefused);
+        }
+        for status in [400u16, 404, 405, 409, 413, 415, 422] {
+            assert_eq!(publish_answer(Some(status)), PublishAnswer::SetRejected);
+        }
+        for status in [
+            None,
+            Some(408),
+            Some(429),
+            Some(500),
+            Some(503),
+            Some(504),
+            Some(507),
+        ] {
+            assert_eq!(publish_answer(status), PublishAnswer::Retry, "{status:?}");
+        }
+        assert_eq!(
+            publish_answer(Some(302)),
+            PublishAnswer::SetRejected,
+            "a redirect is not an acceptance"
+        );
+    }
+
+    /// GAP-146: a node that keeps answering "not now" is asked less and less often, from
+    /// one forward tick to the ceiling, and never more rarely than the ceiling.
+    #[test]
+    fn a_retry_backs_off_to_a_ceiling() {
+        assert_eq!(publish_retry_delay(1), FORWARD_INTERVAL);
+        assert_eq!(publish_retry_delay(2), FORWARD_INTERVAL * 2);
+        assert_eq!(publish_retry_delay(3), FORWARD_INTERVAL * 4);
+        assert_eq!(publish_retry_delay(8), PUBLISH_RETRY_CEILING);
+        assert_eq!(publish_retry_delay(u32::MAX), PUBLISH_RETRY_CEILING);
+        assert_eq!(publish_retry_delay(0), FORWARD_INTERVAL);
+    }
+
+    /// The node's problem document is read for its message, and anything else is shown
+    /// as it came, bounded.
+    #[test]
+    fn a_refusal_is_given_in_the_node_s_own_words() {
+        assert_eq!(
+            node_reason(
+                r#"{"error":403,"message":"role Operator may not publish to exchange (exchange.publish)"}"#
+            ),
+            "role Operator may not publish to exchange (exchange.publish)"
+        );
+        assert_eq!(node_reason("  plain text  "), "plain text");
+        assert_eq!(node_reason(""), "the node gave no reason");
+        assert_eq!(node_reason(&"x".repeat(1000)).len(), 300);
     }
 
     #[test]
