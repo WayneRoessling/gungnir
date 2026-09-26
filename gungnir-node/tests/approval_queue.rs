@@ -222,6 +222,9 @@ struct Node {
     bus: Arc<InProcessBus>,
     dir: std::path::PathBuf,
     running: Arc<std::sync::atomic::AtomicBool>,
+    /// How many ticks the loop has finished, so [`Node::settle`] waits for the loop
+    /// rather than for a length of time.
+    ticks: Arc<std::sync::atomic::AtomicU64>,
 }
 
 /// A node that knows the four accounts these rows sign in as.
@@ -299,6 +302,7 @@ impl Node {
             tracks: Vec::new(),
         }));
         let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let ticks = Arc::new(std::sync::atomic::AtomicU64::new(0));
         // **A plain thread, not `spawn_blocking`.** A tokio runtime waits for its blocking
         // tasks when it shuts down, so a loop that runs until it is told to stop would
         // hang the test binary for ever the first time an assertion failed before
@@ -311,6 +315,7 @@ impl Node {
             let geo = geo.clone();
             let bus = bus.clone();
             let running = running.clone();
+            let ticks = ticks.clone();
             move || {
                 while running.load(std::sync::atomic::Ordering::Relaxed) {
                     {
@@ -349,6 +354,7 @@ impl Node {
                             .with_queue(queue),
                         );
                     }
+                    ticks.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     std::thread::sleep(std::time::Duration::from_millis(2));
                 }
             }
@@ -364,7 +370,24 @@ impl Node {
             bus,
             dir,
             running,
+            ticks,
         }
+    }
+
+    /// Let the loop finish two whole ticks after this call, so whatever the test just did
+    /// has been taken and published. **Counted, not timed**: this waited a fixed 20 ms,
+    /// and a 2 ms `thread::sleep` is a whole scheduler quantum -- about 15.6 ms -- on a
+    /// Windows host with the default timer resolution, so the loop could run once or not
+    /// at all inside the wait, and `GET /v3/queue` was read before the item reached it.
+    async fn settle(&self) {
+        let start = self.ticks.load(std::sync::atomic::Ordering::SeqCst);
+        for _ in 0..5_000 {
+            if self.ticks.load(std::sync::atomic::Ordering::SeqCst) >= start + 2 {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+        panic!("the node loop stopped ticking");
     }
 
     /// Propose a plan against this picture, as the node's tick does, and return the item
@@ -398,11 +421,11 @@ impl Node {
             let mut state = self.shared.lock().expect("the loop is running");
             state.now = MissionTime(seconds);
         }
-        settle().await;
+        self.settle().await;
     }
 
     async fn queue(&self) -> Vec<QueueItemView> {
-        settle().await;
+        self.settle().await;
         self.api.queue()
     }
 
@@ -467,12 +490,6 @@ fn account(operator: u64, role: Role) -> Account {
         role,
         phc: hash_passphrase(PASSPHRASE).expect("hashed"),
     }
-}
-
-/// Let the loop run a few ticks. It sleeps 2 ms; ten times that is enough for a decision
-/// to be taken and published without making a test's pass depend on timing.
-async fn settle() {
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 }
 
 // ---------------------------------------------------------------------------------
@@ -769,7 +786,7 @@ async fn every_refusal_records_nothing_and_writes_one_audit_entry() {
     assert_eq!(status, 400, "{body}");
     refusals += 1;
 
-    settle().await;
+    node.settle().await;
     assert!(
         node.records().is_empty(),
         "a refusal records nothing: {:?}",
@@ -796,7 +813,7 @@ async fn every_refusal_records_nothing_and_writes_one_audit_entry() {
     let before = node.audit_entries().len();
     let (status, body) = decide(node.addr, &operator, item, "the-decision", accept()).await;
     assert_eq!(status, 201, "{body}");
-    settle().await;
+    node.settle().await;
     assert_eq!(
         node.audit_entries().len() - before,
         1,
@@ -846,7 +863,7 @@ async fn a_partner_with_an_agreement_receives_a_handoff_this_node_issued() {
     let (status, body) = decide(node.addr, &operator, item, "the-decision", accept()).await;
     assert_eq!(status, 201, "{body}");
     let decision = recorded(&body);
-    settle().await;
+    node.settle().await;
     assert_eq!(node.handoffs(), 1, "the decision issued one handoff");
     assert_eq!(
         partner_handoffs(&node),
