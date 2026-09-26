@@ -184,8 +184,11 @@ history, and an entry is never edited once it has merged.
 | GAP-170 | PN-09's refusal test left its wait before the desktop had seen its link | Technical | CAP-7.3 | 1 | 1 | S | 1 | I3 | Services engineer | Closed |
 | GAP-179 | A node's audit record and its verification reach only the node's log | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-176 | A warning posted to a warned party and a handoff posted to an effector still write a non-finite float as null | Technical | CAP-4.4, CAP-4.5 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
+| GAP-182 | A rehearsal decides under a default policy, not the deployment's | Technical | CAP-5.2, CAP-3.6 | 3 | 7 | S | 21 | I3 | Services engineer | Closed |
+| GAP-183 | The planner tasks resources on a layer at hold, so one held layer refuses every plan | Technical | CAP-3.3, CAP-3.6 | 3 | 7 | M | 21 | I3 | Services engineer | Open |
+| GAP-184 | A rehearsal tracks under the default algorithm baseline, not the deployment's | Technical | CAP-5.2, CAP-2.1 | 2 | 8 | S | 16 | I3 | Services engineer | Closed |
 
-Counts: 171 gaps, 3 mission, 168 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 174 gaps, 3 mission, 171 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2370,7 +2373,7 @@ Counts: 171 gaps, 3 mission, 168 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.2 Replay and rehearse; CAP-1.4 Coverage and gaps.
 - History:
   - 2026-09-25, Open: Found building GAP-105: DN-32 §10's round-1 row, run over the committed recordings, re-observed nothing from round 1's two radars under any laydown. The sample sets are short excerpts -- TT-01's raid is still 85 km out when its 480 s end -- and round 1 sits at their origin. The row's test writes its own round-1 raid and passes. What a session runs over is content, left for the owner rather than taken under delegation, because a new committed sample set moves every row and test that counts the ten.
-  - 2026-09-26, Closed: Closed under the owner's delegation of 2026-09-26 (D-112; DN-32 §14). TT-11, six drones down round 1's declared approach, is committed from both generators (`reference_parity.rs` and `sidecar_parity.rs` byte for byte) and passes `validate_tracks.py`; PN-16's picker offers it and US-15's card names it. The round-1 row's test runs over it: S2's detections differ under `c` (2 264 against 2 336), S1's do not, and `no_plan_07_recording_reaches_round_1s_radars` holds why it is needed. GAP-020's first-engagement column (#187) is now computable for round 1 over a committed recording rather than the test-written raid: 10 059 m under `current`, 10 123 m under `b`, 14 967 m under `c`. The ten sets are unchanged; the row stays Draft.
+  - 2026-09-26, Closed: Closed under the owner's delegation of 2026-09-26 (D-112; DN-32 §15). TT-11, six drones down round 1's approach, is committed from both generators byte for byte and passes `validate_tracks.py`; PN-16's picker offers it and US-15's card names it. The round-1 row's test runs over it: S2's detections differ under `c`, S1's do not. GAP-020's first-engagement column now reads over a committed recording: under round 1's own policy not computable, with the chain's reasons (GAP-183); weapons free 10 059 m under `current`, 10 123 m under `b`, 14 967 m under `c`. The ten sets are unchanged; the row stays Draft. See the 2026-09-26 record item.
 - Evidence: `testdata/tracks/samples/` (the closest any sample brings a target to the origin is about 25 km, TT-04's and TT-05's shipping at KAL); `testdata/usability/round-1.json` (both radars `radar.short`, 15 km at most); `gungnir-app/tests/laydown_rehearsal.rs`'s `round_1s_forward_radar_changes_its_own_detections_and_nothing_else`, which writes its own round-1 raid for that reason; `../../design/DN-32-re-observation-for-a-laydown.md` §12.
 - Severity: 2. Reach: 4 threads. Effort: M. Priority: 8.
 - Impact: US-15's rehearsal of round 1's laydowns re-observes nothing: under DN-32 §5.5's frame round 1's harbour and plant sit at the recordings' origin, and none of the ten committed sample sets brings a target within 25 km of it before its excerpt ends, so both short-range radars detect nothing under `current`, `b` or `c`, whichever recording a participant picks. PN-16 says so rather than showing bare zeros, but a participant cannot see the rehearsal tell the laydowns apart, which is the thing GAP-105 built it to do.
@@ -2611,4 +2614,48 @@ Counts: 171 gaps, 3 mission, 168 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found closing GAP-171 (`../../record/2026-09-26/an-identity-written-as-text-and-no-float.md`).
 - Depends on: GAP-171.
+
+**GAP-182 A rehearsal decides under a default policy, not the deployment's**
+
+- Type: Technical.
+- Capability: CAP-5.2 Replay and rehearse; CAP-3.6 Rules of engagement.
+- History:
+  - 2026-09-26, Open: Filed from GAP-020's closing report, which named it and left it: the rehearsal runs under the default policy, so a deployment's control status, authority and fences never reach PN-16's decision counts or its first-engagement column.
+  - 2026-09-26, Closed: **Closed 2026-09-26: a rehearsal decides under the deployment's own policy**, under the owner's delegation (D-113). Its whole `policy`, allocation horizon and geofences reach the throwaway desktop; endpoints, nodes, peers and the validity window do not. A first engagement counts only from a plan the policy offered for decision; plans not offered are counted with the chain's reasons, and nothing offered reads not computable, naming why. A deployment at point-hold rehearses TT-01 to no engagement (`a_deployment_at_hold_rehearses_to_no_engagement_and_says_why`). See `../../record/2026-09-26/a-rehearsal-decides-and-tracks-under-the-deployment.md`.
+- Evidence: `gungnir-app/src/laydown_rehearsal.rs` `config_for` (`..ConfigBaseline::default()` for everything but the placed sensors and resources); GAP-020's closing record's "not changed" section.
+- Severity: 3. Reach: 7 threads. Effort: S. Priority: 21.
+- Impact: PN-16 judges a laydown by a run that no deployment would make. The rehearsal's throwaway desktop plans under `PolicySettings::default()` -- every layer at hold, no authority rule, no decision timeout, no geofence -- so the decisions raised and expired it reports are always zero, and its first-engagement ranges come from plans the deployment's own weapons control status, authority matrix or no-go fences would have refused: a deployment at hold is shown an engagement range it would never offer.
+- Closing action: Done 2026-09-26: the throwaway desktop decides under the deployment's own policy, allocation horizon and geofences (placed beside the laydown), and a first engagement counts only from a plan that policy offered for decision; the plans it did not offer are counted with the chain's reasons on PN-16 (D-113).
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: D-113; `../../design/DN-02-prediction-and-approach.md` §9; `../../design/DN-32-re-observation-for-a-laydown.md` §14.
+- Depends on: GAP-045, GAP-020.
+
+**GAP-183 The planner tasks resources on a layer at hold, so one held layer refuses every plan**
+
+- Type: Technical.
+- Capability: CAP-3.3 Assignment recommendation; CAP-3.6 Rules of engagement.
+- History:
+  - 2026-09-26, Open: Found building GAP-182, when round 1's rehearsal first ran under round 1's own policy. Not built there: it is a choice about what the allocator optimises or what DN-09 permits, on the live desktop and the node as much as in a rehearsal, and it needs a decision before code.
+- Evidence: Round 1 rehearsed under its own policy: 292 of 296 proposed plans denied `ControlStatus { layer: Area, status: Hold }`, 4 `NoGoGeofence`, none offered (`gungnir-app/tests/laydown_rehearsal.rs`, `round_1s_forward_radar_changes_its_own_detections_and_nothing_else`); `../../design/DN-09-authority-and-control-status.md` §5 ("the plan is denied if any solution is"); `gungnir_intercept_service::DpInterceptService::plan_with_rewards` withholds only unready and at-reserve resources (GAP-030).
+- Severity: 3. Reach: 7 threads. Effort: M. Priority: 21.
+- Impact: A deployment with any effector layer at hold is offered nothing to decide on any layer. The allocator pairs every adequate resource, including those whose layer is at hold, and DN-09 denies a plan if any of its solutions is denied, so the weapons-free layer's engagements are refused with the held one's. Round 1 (point free, area hold) is such a deployment.
+- Closing action: Decide, then build: withhold a resource whose layer is at hold from the allocation and name it on PN-05 as GAP-030 names an at-reserve one; or have the chain offer the permitted solutions of a plan and deny the rest; or keep the rule and say on PN-06 that the held layer is refusing the whole plan. The first changes what the allocator optimises, the second changes DN-09 and a human-owned crate (`gungnir-policy`).
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found building GAP-182 (`../../record/2026-09-26/a-rehearsal-decides-and-tracks-under-the-deployment.md`).
+- Depends on: GAP-030.
+
+**GAP-184 A rehearsal tracks under the default algorithm baseline, not the deployment's**
+
+- Type: Technical.
+- Capability: CAP-5.2 Replay and rehearse; CAP-2.1 Multi-sensor picture.
+- History:
+  - 2026-09-26, Open: Found building GAP-182: the same defaulted configuration that dropped the deployment's policy dropped its tracker configuration.
+  - 2026-09-26, Closed: **Closed 2026-09-26**, under the owner's delegation (D-113): a rehearsal's tracker is built from the deployment's algorithm candidates, profiles and late-data policy, through the same `rehearsal_tracker` builder; tested in `a_rehearsal_decides_and_tracks_under_the_deployments_own_baseline`. See `../../record/2026-09-26/a-rehearsal-decides-and-tracks-under-the-deployment.md`.
+- Evidence: `gungnir-app/src/laydown_rehearsal.rs` `config_for`; `gungnir-app/src/state.rs` `rehearsal_tracker` builds its settings from the throwaway configuration.
+- Severity: 2. Reach: 8 threads. Effort: S. Priority: 16.
+- Impact: A rehearsal's tracks come from the pipeline's default filter, gate and one-second late-data buffer, not the deployment's promoted algorithm baseline and its late-data policy, so the tracks a laydown is judged on are not the ones its deployment would form.
+- Closing action: Done 2026-09-26: the throwaway desktop takes the deployment's algorithm candidates, mission and tracking profiles, active profile and late-data policy (D-113).
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: D-113; found building GAP-182.
+- Depends on: GAP-045, GAP-053.
 

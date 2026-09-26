@@ -203,11 +203,18 @@ measured**, never as a value.
   come within the placed sensors' range bands. TT-11 is six drones flown down round 1's
   own declared approach onto the harbour: under `current` S1 re-observes 1 142 detections
   and S2 2 264, under `c` S1 the same 1 142 and S2 2 336, and `c`'s row names S2 as the
-  sensor the difference came from. The upper Vell approach's first-engagement column
-  (GAP-020) is computable over TT-11 too: its worst case over the six drones is 10 059 m
-  under `current`, 10 123 m under `b` and 14 967 m under `c`. A participant who picks
-  another recording and reads zeros, or a first engagement that is not computable, is
-  reading that sentence, not a fault in the panel, and the moderator points them at TT-11. **Three faults in this card, found
+  sensor the difference came from. A participant who picks another recording and reads
+  zeros is reading that sentence, not a fault in the panel, and the moderator points them
+  at TT-11. **Since 2026-09-26 the options table also carries a first-engagement column
+  for the upper Vell approach** (GAP-020, DN-02 §9), read from each laydown's last
+  rehearsal, and a rehearsal decides under round 1's own policy (GAP-182). Round 1 keeps
+  its area layer at hold and the planner tasks the area battery in every plan, so no plan
+  is offered for decision (GAP-183), and the column reads "not computable" giving that
+  reason -- over TT-11 as over every other recording. (With the area layer weapons free,
+  as the tests rehearse it, TT-11 gives 10 059 m under `current`, 10 123 m under `b` and
+  14 967 m under `c`; round 1 does not declare that policy.) The moderator reads that
+  cell as the reason it states, as with the zeros above; the card's success line does not
+  ask for the column and is unchanged. **Three faults in this card, found
   on 2026-09-08 by reading PN-16 against it rather than by running it, and named here
   rather than worked around. The first is fixed in the baseline, the second was fixed in
   the baseline once the owner had ruled on it, and the third is fixed in §5's card:**

@@ -1172,8 +1172,7 @@ impl AppState {
             std::path::Path::new("testdata"),
             scenario,
             &laydown,
-            &self.config.sensors,
-            &self.config.resources,
+            &self.config,
             self.clock.now(),
         ) {
             Ok(record) => {

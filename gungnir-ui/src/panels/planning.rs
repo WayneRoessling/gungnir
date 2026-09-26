@@ -160,6 +160,11 @@ pub enum RehearsalFirstEngagement {
         /// Tracks the planner paired that were none of the recording's targets --
         /// clutter -- which no figure includes (D-107).
         clutter_pairings: usize,
+        /// Plans the run proposed, and how many of them the deployment's own policy did
+        /// not offer for decision, with each reason the chain recorded (GAP-182, D-113).
+        plans_proposed: usize,
+        plans_not_offered: usize,
+        not_offered_because: Vec<(String, usize)>,
     },
 }
 
@@ -460,10 +465,10 @@ fn draw_row_rehearsal(ui: &mut Ui, palette: &theme::Palette, rehearsal: &RowRehe
 /// figure comes from, once, rather than in every cell.
 pub const FIRST_ENGAGEMENT_CAPTION: &str =
     "First engagement is the worst case over each laydown's last rehearsal: the least \
-     ground range from an approach's inner end at which the planner predicted it would \
-     first engage a recorded target coming down it, over the n predictions shown. It is \
-     read from \
-     a re-observed recording, not from sensor data.";
+     ground range from an approach's inner end at which a plan this deployment's own \
+     policy offered for decision would first engage a recorded target coming down it, \
+     over the n predictions shown. It is read from a re-observed recording, not from \
+     sensor data.";
 
 /// A worst case in words: the range, that it is the worst case, and its count (D-45).
 #[must_use]
@@ -556,6 +561,9 @@ fn draw_first_engagement_account(
             lines,
             on_no_corridor,
             clutter_pairings,
+            plans_proposed,
+            plans_not_offered,
+            not_offered_because,
         } => {
             ui.label("First engagement, worst case over this run:");
             for line in lines {
@@ -607,6 +615,22 @@ fn draw_first_engagement_account(
                     ))
                     .small()
                     .color(palette.muted_text_color()),
+                );
+            }
+            if *plans_not_offered > 0 {
+                let why = not_offered_because
+                    .iter()
+                    .map(|(why, n)| format!("{n} denied: {why}"))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                ui.label(
+                    RichText::new(format!(
+                        "{plans_not_offered} of the {plans_proposed} plan(s) the run proposed \
+                         were not offered for decision under this deployment's policy \
+                         ({why}), and engage nothing here."
+                    ))
+                    .small()
+                    .color(palette.warning_color),
                 );
             }
             if *clutter_pairings > 0 {

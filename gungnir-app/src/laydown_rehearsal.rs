@@ -37,6 +37,19 @@
 //! scratch directory, so nothing it produces reaches the live desktop's picture or
 //! record.
 //!
+//! # Under the deployment's own baseline (GAP-182, GAP-184, D-113)
+//!
+//! The throwaway desktop decides under the deployment's own policy -- weapons control
+//! status, the authority matrix, decision expiry and escalation, its geofences placed
+//! beside the laydown -- and tracks under its own algorithm baseline and late-data
+//! policy. Until 2026-09-26 it ran all of these at their defaults: every layer at hold
+//! and no authority, so the decisions a rehearsal reported were never the deployment's,
+//! and its first engagements were read off plans the deployment's policy would have
+//! refused. A plan counts as an engagement only when the policy offered it for decision;
+//! the plans it did not offer are counted with the reasons the chain gave. Nothing that
+//! reaches outside the process is taken -- endpoints, a node, peers, feeds -- nor the
+//! baseline's validity window, which is on the live clock.
+//!
 //! # What a rehearsal refuses, and what it does not claim
 //!
 //! - **A sensor with no detection model, or one the catalogue does not hold, is refused
@@ -208,8 +221,9 @@ pub struct RehearsalRecord {
     /// The live desktop's mission time when the rehearsal was run: the "when" PN-16
     /// shows beside every figure read from it.
     pub ran_at: MissionTime,
-    /// Each recorded target's first pairing the planner proposed during the run -- its
-    /// first with a predicted intercept point, else its first -- in the order proposed,
+    /// Each recorded target's first pairing in a plan the deployment's policy offered
+    /// for decision during the run (D-113) -- its first with a predicted intercept
+    /// point, else its first -- in the order proposed,
     /// with every position in the recording's local ENU frame (DN-32 §5.5). The
     /// predictions DN-02 §9 aggregates into each approach's first-engagement range
     /// (GAP-020, D-45, D-107).
@@ -218,6 +232,15 @@ pub struct RehearsalRecord {
     /// pipeline formed from false alarms -- counted so their absence from every
     /// first-engagement figure is said rather than silent (D-107).
     pub clutter_pairings: usize,
+    /// Plans the planner proposed during the run (each non-empty plan once).
+    pub plans_proposed: usize,
+    /// Of those, the plans the deployment's own policy did not offer anyone to decide --
+    /// a layer at hold, no role with the authority, an intercept inside a no-go fence --
+    /// which no first-engagement figure counts (GAP-182, D-113).
+    pub plans_not_offered: usize,
+    /// Why they were not offered: each denial reason the policy chain recorded, with how
+    /// many plans it refused, in the order first seen.
+    pub not_offered_because: Vec<(String, usize)>,
 }
 
 /// One sensor whose re-observed detections differ between two rehearsals of the same
@@ -323,6 +346,13 @@ pub enum RehearsalError {
     DidNotSettle { submitted: u64, taken: u64 },
     #[error("a rehearsal's own throwaway desktop would not start: {0}")]
     State(#[from] crate::state::AppError),
+    #[error(
+        "the deployment declares {geofences} geofence(s) and no local frame origin, so a \
+         rehearsal cannot place them beside the laydown it rehearses; a rehearsal that \
+         ignored them would offer intercepts the deployment's fences deny (GAP-182). \
+         Declare `origin` in the baseline"
+    )]
+    GeofencesWithoutOrigin { geofences: usize },
 }
 
 fn read_text(path: &Path) -> Result<String, RehearsalError> {
@@ -435,28 +465,72 @@ type Placed<'a> = (
 );
 
 /// A throwaway configuration: the laydown's sensors and resources, placed about the
-/// recording's own origin (DN-32 §5.5), every other field the deployment's defaults.
+/// recording's own origin (DN-32 §5.5), deciding and tracking **under the deployment's
+/// own baseline** (GAP-182, GAP-184, D-113).
+///
+/// What is taken from `deployment`, whole: its policy settings -- weapons control status,
+/// the authority matrix, decision expiry and escalation, identification, staleness,
+/// delegation, fires -- its allocation horizon, and its tracker's configuration (the
+/// algorithm candidates, mission and tracking profiles, the profile in force and the
+/// late-data policy). Its geofences are taken too, re-expressed about the recording's
+/// origin as the arrangement DN-32 §5.5 reads a laydown as: a no-go fence denies an
+/// intercept in a rehearsal exactly where it would deny one on the deployment's ground.
+///
+/// What is deliberately **not** taken, and why: anything that reaches outside this
+/// process -- endpoints, a node, peers, feeds, exchange partners, accounts -- because a
+/// rehearsal commands and sends nothing; and the baseline's validity window, which is on
+/// the live mission clock and means nothing on a recording's.
 fn config_for(
     placed: &[Placed<'_>],
     origin: Geodetic,
     laydown: &Laydown,
-    base_resources: &[ResourceConfig],
+    deployment: &ConfigBaseline,
     dir: &Path,
-) -> ConfigBaseline {
-    let resources = base_resources
+) -> Result<ConfigBaseline, RehearsalError> {
+    let geofences = if deployment.geofences.is_empty() {
+        Vec::new()
+    } else {
+        let frame = deployment
+            .local_frame()
+            .ok_or(RehearsalError::GeofencesWithoutOrigin {
+                geofences: deployment.geofences.len(),
+            })?;
+        deployment
+            .geofences
+            .iter()
+            .map(|g| gungnir_config::GeofenceConfig {
+                center: geodetic_of(
+                    frame.to_enu(Geodetic {
+                        lat_rad: g.center[0],
+                        lon_rad: g.center[1],
+                        alt_m: g.center[2],
+                    }),
+                    origin,
+                ),
+                ..g.clone()
+            })
+            .collect()
+    };
+    let resources = deployment
+        .resources
         .iter()
         .map(|r| {
             let placed = laydown.resources.iter().find(|p| p.resource.0 == r.id);
             match placed {
                 Some(p) => ResourceConfig {
                     position: geodetic_of(p.position_enu, origin),
+                    // A rehearsal hands nothing off: it has no endpoint to post to.
+                    handoff_endpoint: None,
                     ..r.clone()
                 },
-                None => r.clone(),
+                None => ResourceConfig {
+                    handoff_endpoint: None,
+                    ..r.clone()
+                },
             }
         })
         .collect();
-    ConfigBaseline {
+    Ok(ConfigBaseline {
         sensors: placed
             .iter()
             .map(|(s, enu, sector, band)| SensorConfig {
@@ -473,8 +547,18 @@ fn config_for(
         resources,
         origin: Some([origin.lat_rad, origin.lon_rad, origin.alt_m]),
         data_dir: dir.to_string_lossy().into_owned(),
+        // GAP-182: how the deployment decides.
+        policy: deployment.policy.clone(),
+        geofences,
+        allocation_horizon: deployment.allocation_horizon,
+        // GAP-184: how the deployment tracks.
+        tracking: deployment.tracking.clone(),
+        tracking_profiles: deployment.tracking_profiles.clone(),
+        mission_profiles: deployment.mission_profiles.clone(),
+        active_profile: deployment.active_profile.clone(),
+        time: deployment.time,
         ..ConfigBaseline::default()
-    }
+    })
 }
 
 /// The model's rehearsal marker for a simulation mark: the conversion DN-32 §6
@@ -598,6 +682,15 @@ impl TruthIndex {
     }
 }
 
+/// How many plans a run proposed, and how many of those the deployment's policy did not
+/// offer for decision (GAP-182, D-113).
+#[derive(Default)]
+struct PlanTally {
+    proposed: usize,
+    not_offered: usize,
+    why: Vec<(String, usize)>,
+}
+
 /// What a run's plans said about first engagements: each recorded target's first
 /// pairing, and the tracks paired that were no recorded target.
 #[derive(Default)]
@@ -622,11 +715,11 @@ struct PairingLedger {
 /// cannot be told to be any target, and nothing is made up in its place.
 fn fold_first_pairings(
     ledger: &mut PairingLedger,
+    plan: &gungnir_model::PlanView,
     state: &AppState,
     frame: &LocalFrame,
     truth: &TruthIndex,
 ) {
-    let plan = &state.last_plan;
     for solution in plan.solutions() {
         let Some(track) = state
             .tracking
@@ -693,11 +786,12 @@ static NEXT_RUN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::ne
 /// models, and run what they would have detected through the live pipeline on a fresh
 /// throwaway desktop. The live one, its journal and its picture, are never touched.
 ///
-/// `testdata_root` is the workspace's `testdata/` directory; `base_sensors` and
-/// `base_resources` are the deployment's own declarations, whose detection models and
+/// `testdata_root` is the workspace's `testdata/` directory; `deployment` is the
+/// deployment's own baseline: its sensors and resources, whose detection models and
 /// non-position fields (capacity, layer, cost, closing speed) a bare placement does not
-/// carry. `ran_at` is the live desktop's mission time, recorded as when the rehearsal
-/// was run; nothing in the run reads it.
+/// carry, and the policy and tracker configuration the run decides and tracks under
+/// (GAP-182, GAP-184; see `config_for`). `ran_at` is the live desktop's mission time,
+/// recorded as when the rehearsal was run; nothing in the run reads it.
 ///
 /// # Errors
 ///
@@ -713,8 +807,7 @@ pub fn run(
     testdata_root: &Path,
     scenario: TestTrackNumber,
     laydown: &Laydown,
-    base_sensors: &[SensorConfig],
-    base_resources: &[ResourceConfig],
+    deployment: &ConfigBaseline,
     ran_at: MissionTime,
 ) -> Result<RehearsalRecord, RehearsalError> {
     let fixture = fixture_dir(scenario, testdata_root);
@@ -724,7 +817,12 @@ pub fn run(
         read_json(&catalogue_file, "the sensor catalogue export")?;
 
     // Every refusal before any work: a laydown that cannot be rehearsed runs nothing.
-    let resolved = resolve_sensors(laydown, base_sensors, &catalogue, &catalogue_file)?;
+    let resolved = resolve_sensors(laydown, &deployment.sensors, &catalogue, &catalogue_file)?;
+    if !deployment.geofences.is_empty() && deployment.origin.is_none() {
+        return Err(RehearsalError::GeofencesWithoutOrigin {
+            geofences: deployment.geofences.len(),
+        });
+    }
     let origin = Geodetic {
         lat_rad: metadata.origin.lat.to_radians(),
         lon_rad: metadata.origin.lon.to_radians(),
@@ -829,7 +927,13 @@ pub fn run(
         .zip(&bands)
         .map(|(((p, (declared, _)), sector), band)| (*declared, p.position_enu, *sector, *band))
         .collect();
-    let config = config_for(&config_sensors, origin, laydown, base_resources, &dir);
+    let config = match config_for(&config_sensors, origin, laydown, deployment, &dir) {
+        Ok(config) => config,
+        Err(err) => {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Err(err);
+        }
+    };
     // D-109: the same planner every embedded desktop builds, measuring its budget on a
     // clock that never advances, so each solve finishes in the call that starts it and
     // the plans are the recording's answer rather than the machine's.
@@ -865,16 +969,51 @@ pub fn run(
     let frames = (recording.duration_s / FRAME_S).ceil() as usize;
     let truth = TruthIndex::new(&recording.truth);
     let mut pairings = PairingLedger::default();
+    let mut plans = PlanTally::default();
     let mut last_proposed = state.last_live_plan_id;
     for _ in 0..frames {
         clock.advance(FRAME_S);
         state.clock = Box::new(clock);
+        let denials_before = state.desk.denials.count;
         update::tick(&mut state);
         // A plan is proposed on the tick it changes (`update::plan_and_queue`); read each
         // one once, on that tick, while the tracks it pairs are the picture's.
         if state.last_live_plan_id != last_proposed {
             last_proposed = state.last_live_plan_id;
-            fold_first_pairings(&mut pairings, &state, &frame, &truth);
+            if state.last_plan.solutions().is_empty() {
+                continue;
+            }
+            plans.proposed += 1;
+            // D-113: an engagement opportunity is a plan the deployment's own policy
+            // offered a person to decide -- queued, not merely proposed. A plan the chain
+            // denied (a layer at hold, no authority, a no-go fence) was never on offer,
+            // and measuring it would show an engagement the deployment would not make.
+            let offered = state
+                .desk
+                .approvals
+                .queue()
+                .iter()
+                .find(|item| Some(item.plan.id) == last_proposed)
+                .map(|item| item.plan.clone());
+            if let Some(plan) = offered {
+                fold_first_pairings(&mut pairings, &plan, &state, &frame, &truth);
+            } else {
+                plans.not_offered += 1;
+                // The desk records why when it denies. A plan it did not queue and did not
+                // deny on this tick has no reason there, and says so rather than
+                // borrowing the last one.
+                let why = state
+                    .desk
+                    .denials
+                    .last_reason
+                    .clone()
+                    .filter(|_| state.desk.denials.count > denials_before)
+                    .unwrap_or_else(|| "not queued, no denial recorded".to_owned());
+                match plans.why.iter_mut().find(|(w, _)| *w == why) {
+                    Some((_, n)) => *n += 1,
+                    None => plans.why.push((why, 1)),
+                }
+            }
         }
     }
 
@@ -939,6 +1078,9 @@ pub fn run(
         ran_at,
         first_pairings: pairings.first,
         clutter_pairings: pairings.clutter_tracks.len(),
+        plans_proposed: plans.proposed,
+        plans_not_offered: plans.not_offered,
+        not_offered_because: plans.why,
     };
     // Dropped before cleanup, deliberately: the journal's file handle is still open on
     // `state`, and `remove_dir_all` racing an open handle fails silently on Windows.
@@ -952,6 +1094,14 @@ mod tests {
     use super::*;
     use gungnir_model::laydown::{ResourcePlacement, SensorPlacement};
     use gungnir_model::ResourceId;
+
+    /// A deployment declaring [`base_resources`] and nothing else.
+    fn deployment() -> ConfigBaseline {
+        ConfigBaseline {
+            resources: base_resources(),
+            ..ConfigBaseline::default()
+        }
+    }
 
     fn base_resources() -> Vec<ResourceConfig> {
         let text = serde_json::json!([
@@ -1043,16 +1193,18 @@ mod tests {
             &[(&sensor, [100.0, 0.0, 25.0], None, None)],
             origin,
             &laydown_placing([500.0, 0.0, 0.0]),
-            &base_resources(),
+            &deployment(),
             Path::new("."),
-        );
+        )
+        .expect("no geofences to place");
         let far = config_for(
             &[(&sensor, [9_000.0, 0.0, 25.0], None, None)],
             origin,
             &laydown_placing([50_000.0, 50_000.0, 0.0]),
-            &base_resources(),
+            &deployment(),
             Path::new("."),
-        );
+        )
+        .expect("no geofences to place");
         #[allow(clippy::float_cmp)]
         {
             assert_ne!(close.resources[0].position, far.resources[0].position);
@@ -1070,9 +1222,10 @@ mod tests {
                 resources: Vec::new(),
                 ..laydown_placing([0.0, 0.0, 0.0])
             },
-            &base_resources(),
+            &deployment(),
             Path::new("."),
-        );
+        )
+        .expect("no geofences to place");
         #[allow(clippy::float_cmp)]
         {
             assert_eq!(
@@ -1080,6 +1233,101 @@ mod tests {
                 base_resources()[0].position
             );
         }
+    }
+
+    /// GAP-182, GAP-184, D-113: the throwaway desktop decides and tracks under the
+    /// deployment's own baseline -- its policy, horizon, tracker configuration, and its
+    /// geofences placed beside the laydown -- and takes nothing that reaches outside the
+    /// process, nor the validity window of the live clock.
+    #[test]
+    fn a_rehearsal_decides_and_tracks_under_the_deployments_own_baseline() {
+        use gungnir_model::policy_settings::WeaponsControlStatus;
+        use gungnir_model::EffectorLayer;
+
+        let deployment_origin = Geodetic {
+            lat_rad: 0.96,
+            lon_rad: 0.21,
+            alt_m: 0.0,
+        };
+        let recording_origin = Geodetic {
+            lat_rad: 0.0,
+            lon_rad: 0.0,
+            alt_m: 0.0,
+        };
+        let fence_enu = [2_000.0, 1_000.0, 0.0];
+        let mut deployment = deployment();
+        deployment.origin = Some([
+            deployment_origin.lat_rad,
+            deployment_origin.lon_rad,
+            deployment_origin.alt_m,
+        ]);
+        deployment
+            .policy
+            .control_status
+            .by_layer
+            .insert(EffectorLayer::Point, WeaponsControlStatus::Free);
+        deployment.allocation_horizon = 7;
+        deployment.time.late_data = gungnir_model::LateDataPolicy::Reject;
+        deployment.active_profile = Some("littoral".into());
+        deployment.geofences = vec![gungnir_config::GeofenceConfig {
+            name: "no-go".into(),
+            center: geodetic_of(fence_enu, deployment_origin),
+            radius_m: 500.0,
+            no_go: true,
+        }];
+        deployment.validity = Some(gungnir_model::policy_settings::ValidityWindow {
+            valid_from: MissionTime(1.0e6),
+            valid_until: None,
+        });
+        deployment.endpoints = vec![gungnir_config::EndpointConfig {
+            name: "port-authority".into(),
+            kind: "warning".into(),
+            address: "https://example.invalid/warn".into(),
+        }];
+
+        let config = config_for(
+            &[],
+            recording_origin,
+            &laydown_placing([0.0, 0.0, 0.0]),
+            &deployment,
+            Path::new("."),
+        )
+        .expect("the deployment declares an origin, so its fences can be placed");
+        assert_eq!(config.policy, deployment.policy);
+        assert_eq!(config.allocation_horizon, 7);
+        assert_eq!(config.time, deployment.time);
+        assert_eq!(config.active_profile.as_deref(), Some("littoral"));
+        // The fence stands at the same offset from the recording's origin as from the
+        // deployment's: the arrangement, not the place.
+        let placed = LocalFrame::new(recording_origin).to_enu(Geodetic {
+            lat_rad: config.geofences[0].center[0],
+            lon_rad: config.geofences[0].center[1],
+            alt_m: config.geofences[0].center[2],
+        });
+        for axis in 0..3 {
+            assert!((placed[axis] - fence_enu[axis]).abs() < 1e-3, "{placed:?}");
+        }
+        assert!(config.geofences[0].no_go);
+        assert_eq!(
+            config.validity, None,
+            "the live clock's window is not the recording's"
+        );
+        assert!(config.endpoints.is_empty(), "a rehearsal sends nothing");
+
+        // Fences the deployment cannot place are a refusal, not a rehearsal without them.
+        deployment.origin = None;
+        let err = config_for(
+            &[],
+            recording_origin,
+            &laydown_placing([0.0, 0.0, 0.0]),
+            &deployment,
+            Path::new("."),
+        )
+        .expect_err("fences without an origin cannot be placed");
+        assert!(
+            matches!(err, RehearsalError::GeofencesWithoutOrigin { geofences: 1 }),
+            "{err}"
+        );
     }
 
     /// DN-32 §5.4: a sensor with no model, or one the catalogue does not hold, is refused
