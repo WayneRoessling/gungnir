@@ -166,9 +166,21 @@ pub fn tracking_service(
 /// answer an embedded desktop would never have given. Found by running one scenario
 /// through both backends (`gungnir-app/tests/backend_parity.rs`); nothing had compared
 /// them before.
+///
+/// **And its solve budget** (GAP-119, D-81): the node's loop is a tick like the
+/// desktop's, so its planner spends at most the baseline's budget a tick and carries a
+/// longer solve on to the next. The binary validates a baseline before building from it;
+/// one built in code is not, so a bad budget is said loudly and MOP-06's is used, as the
+/// desktop's `embedded_planner` does, rather than panicking here.
 #[must_use]
 pub fn intercept_service(config: &ConfigBaseline) -> DpInterceptService {
-    DpInterceptService::new(config.allocation_horizon).with_local_frame(config.local_frame())
+    let budget = config.plan_solve_budget().unwrap_or_else(|err| {
+        tracing::error!(%err, "the baseline's solve budget is invalid; planning with MOP-06's");
+        gungnir_intercept_service::DEFAULT_SOLVE_BUDGET
+    });
+    DpInterceptService::new(config.allocation_horizon)
+        .with_local_frame(config.local_frame())
+        .with_solve_budget(budget)
 }
 
 /// The ingest gateway, admitting exactly the sources the baseline names: its sensors,

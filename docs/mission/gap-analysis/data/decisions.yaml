@@ -2063,6 +2063,61 @@
     rejected for the same reason as seeding by laydown: moving one sensor would reshuffle
     every other's detections. See
     `../../record/2026-09-25/gap-105-re-observation-for-a-laydown-built.md`.
+- id: D-81
+  decision: How long the planner may solve in a tick, and what it does when that is not enough
+  question: >-
+    The `gungnir-intercept-service` row's degradation clause names an over-budget solve,
+    and no budget existed: the planner ran the exact dynamic program inline in the tick
+    for as long as it took (GAP-119). What is the budget, where is it set, and what does a
+    solve that has not finished inside it do -- stop and start again next tick, move to a
+    thread, or something else?
+  raised_in: GAP-119
+  decider: Owner
+  unblocks: GAP-119
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** **A planning call spends at most
+    `plan_solve_budget_ms` solving, 4 ms by default, and a solve not finished by then keeps
+    its place and carries on at the next call** (DN-04 §10). The figure is MOP-06's own
+    target (`../measures.md` §2), so none was invented; validation refuses anything not
+    above zero or past 100 ms, the ceiling sized so a node's tick keeps the rest of
+    MOP-02's 150 ms. The solve is sliced rather than restarted because an ordinary
+    picture -- eight tracks, four effectors, the default horizon -- takes about thirteen
+    milliseconds on the development machine, so a budget that discarded unfinished work
+    would leave that picture stale for as long as it lasted; and rather than moved to a
+    thread because slicing never holds the frame either, while a thread adds a result that
+    lands at a time nothing chose and an overrun no test can decide. An unchanged problem
+    is answered from the last solve without spending anything, and a problem that changes
+    mid-solve drops the old solve. Time is read through an injected clock so a test steps
+    it. Rejected: a budget in solver iterations, which is deterministic but is not the
+    milliseconds MOP-06 measures and would mean something different on every machine. See
+    `../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`.
+- id: D-82
+  decision: Whether a stale plan may be approved, and how the operator is told it is stale
+  question: >-
+    With a solve budget the planner can answer a tick with the last plan it computed
+    rather than one for the picture on screen (GAP-119). Until now a stale plan looked
+    exactly like a fresh one on PN-05, and PN-07 said only that the plan "may be stale".
+    May an operator accept a plan while the planner reports it stale, and what must they
+    have seen first?
+  raised_in: GAP-119
+  decider: Owner
+  unblocks: GAP-119
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** **Yes, after acknowledging that
+    it is stale; and PN-05 says so above the plan, with its age and the reason, whenever
+    it is** (DN-04 §10). PN-05 draws "STALE", when the plan was computed, how long before
+    the planner was last asked and why; "NO PLAN" and why when the planner has never
+    answered; and nothing when the plan is current, because a standing line is one that
+    gets read past. PN-07 names the stale plan among the degraded conditions with the same
+    age and reason, and accept waits on the acknowledgement of that condition as it does
+    for every other. Refusing accept outright was rejected: during an engagement the last
+    good plan may be the best recommendation there is, the override and reject paths would
+    remain, and a control that disappears is one an operator works around rather than one
+    that informs them. The acknowledgement, and the health change the journal already
+    carries before the decision, are what MOE-06 counts. See
+    `../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`.
 - id: D-87
   decision: What a node audits, where the record lives, and how it stays bounded
   question: >-

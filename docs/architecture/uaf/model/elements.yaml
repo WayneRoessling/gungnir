@@ -202,7 +202,7 @@ operational_activities:
 # tools/build_uaf.py checks that each trait still exists.
 services:
   - {id: SV-01, name: Tracking, code: gungnir_tracking_service::TrackingService, status: scaffold, description: "Detections in, tracks with quality out; health honest (pipeline not implemented)."}
-  - {id: SV-02, name: Intercept planning, code: gungnir_intercept_service::InterceptService, status: scaffold, description: "Tracks and resources in, a PlanView out; last-good-plan on over-budget solves (allocator not implemented)."}
+  - {id: SV-02, name: Intercept planning, code: gungnir_intercept_service::InterceptService, status: scaffold, description: "Tracks and resources in, a PlanView out; at most its solve budget a call, with the last good plan returned stale while a longer solve carries on (GAP-119)."}
   - {id: SV-03, name: Event bus, code: gungnir_eventing::EventBus, status: real, description: Broadcast publish and subscribe with sequence-stamped envelopes.}
   - {id: SV-04, name: Event journal, code: gungnir_store::EventJournal, status: real, description: Append-only JSON-lines session journal; read back for replay; retention.}
   - {id: SV-05, name: Time authority, code: gungnir_time::TimeAuthority, status: real, description: Wall and replay clocks; source versus receipt time; late-data policy.}

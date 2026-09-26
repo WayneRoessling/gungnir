@@ -10,5 +10,6 @@
   "backend": { "kind": "embedded" },
   "node": { "bind_addr": "0.0.0.0:7410", "data_dir": "/var/lib/gungnir" },
   "allocation_horizon": 10,
+  "plan_solve_budget_ms": 4.0,
   "data_dir": "/var/lib/gungnir"
 }

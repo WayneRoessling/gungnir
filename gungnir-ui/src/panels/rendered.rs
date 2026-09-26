@@ -2567,7 +2567,9 @@ fn the_commander_summary_lists_the_most_exposed_assets() {
 /// GAP-036), never colour alone.
 #[test]
 fn the_intercept_panel_lists_fires_checks_with_failures_as_text() {
-    use crate::panels::intercept_panel::{render_intercept_panel, Alternatives, FiresCheckLine};
+    use crate::panels::intercept_panel::{
+        render_intercept_panel, Alternatives, FiresCheckLine, ShownPlan, Standing,
+    };
     use gungnir_model::{
         FiresPlan, Geodetic, MissionTime, PlanId, PlanKind, PlanView, ResourceId, TrackId,
     };
@@ -2605,7 +2607,10 @@ fn the_intercept_panel_lists_fires_checks_with_failures_as_text() {
         render_intercept_panel(
             ui,
             &theme::Palette::day(),
-            &plan,
+            ShownPlan {
+                plan: &plan,
+                standing: Standing::Current,
+            },
             &[],
             &checks,
             &[],
@@ -2621,6 +2626,85 @@ fn the_intercept_panel_lists_fires_checks_with_failures_as_text() {
     assert!(frame.says("FAILED no-fire areas"), "{}", frame.joined());
 }
 
+/// **A stale plan says it is stale, how old it is and why, above the plan** (GAP-119).
+///
+/// The plan drawn is the same either way -- that is the point: the last good plan is
+/// kept, and before this the only thing that told an operator it no longer answered the
+/// picture was a health flag on another panel.
+#[test]
+fn the_intercept_panel_says_a_stale_plan_is_stale_with_its_age() {
+    use crate::panels::intercept_panel::{
+        render_intercept_panel, Alternatives, ShownPlan, Standing,
+    };
+    use gungnir_model::{
+        InterceptSolutionView, MissionTime, PlanKind, PlanView, ResourceId, TrackId,
+    };
+    let plan = PlanView {
+        mission_time: MissionTime(1.0),
+        kind: PlanKind::Intercept {
+            solutions: vec![InterceptSolutionView {
+                resource: ResourceId(40),
+                track: TrackId(70),
+                intercept_point: None,
+                time_to_intercept_s: None,
+            }],
+        },
+        ..PlanView::default()
+    };
+    let draw = |standing| {
+        RenderProbe::new()
+            .draw(|ui| {
+                render_intercept_panel(
+                    ui,
+                    &theme::Palette::day(),
+                    ShownPlan {
+                        plan: &plan,
+                        standing,
+                    },
+                    &[],
+                    &[],
+                    &[],
+                    &Alternatives::default(),
+                );
+            })
+            .1
+    };
+
+    let stale = draw(Standing::Stale {
+        computed_at_s: 1.0,
+        age_s: 2.5,
+        reason: "the solve for the current picture (4 track(s), 3 ready resource(s)) did \
+                 not finish inside its 4 ms budget; it is 12% done after 1 planning call(s)",
+    });
+    assert!(stale.says("STALE"), "{}", stale.joined());
+    assert!(
+        stale.says("computed at t = 1.0 s, 2.5 s before the planner was last asked"),
+        "the age is not on the panel: {}",
+        stale.joined()
+    );
+    assert!(
+        stale.says("did not finish inside its 4 ms budget"),
+        "{}",
+        stale.joined()
+    );
+    // The plan itself is still drawn: stale is a label on it, not a reason to hide it.
+    assert!(stale.says("Resource"), "{}", stale.joined());
+
+    let current = draw(Standing::Current);
+    assert!(!current.says("STALE"), "{}", current.joined());
+    assert!(!current.says("NO PLAN"), "{}", current.joined());
+
+    let none = draw(Standing::NoPlan {
+        reason: "no plan has been received from the node",
+    });
+    assert!(none.says("NO PLAN"), "{}", none.joined());
+    assert!(
+        none.says("no plan has been received from the node"),
+        "{}",
+        none.joined()
+    );
+}
+
 /// **A refused alternative is drawn with its denial rather than filtered out** (GAP-032).
 ///
 /// The failure this guards against is the quiet one: a panel that showed only the options
@@ -2628,7 +2712,9 @@ fn the_intercept_panel_lists_fires_checks_with_failures_as_text() {
 /// already refused, and the answer would arrive later than this line does.
 #[test]
 fn the_intercept_panel_draws_a_refused_alternative_with_its_denial() {
-    use crate::panels::intercept_panel::{render_intercept_panel, AlternativeLine, Alternatives};
+    use crate::panels::intercept_panel::{
+        render_intercept_panel, AlternativeLine, Alternatives, ShownPlan, Standing,
+    };
     use gungnir_model::PlanView;
     let options = [
         AlternativeLine {
@@ -2655,7 +2741,10 @@ fn the_intercept_panel_draws_a_refused_alternative_with_its_denial() {
         render_intercept_panel(
             ui,
             &theme::Palette::day(),
-            &PlanView::default(),
+            ShownPlan {
+                plan: &PlanView::default(),
+                standing: Standing::Current,
+            },
             &[],
             &[],
             &[],

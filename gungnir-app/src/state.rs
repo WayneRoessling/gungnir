@@ -211,6 +211,16 @@ pub struct AppState {
     /// only the id -- tracked here, touched only by the live-planner step -- answers
     /// the actual question without being disturbed by what else wrote `last_plan`.
     pub last_live_plan_id: Option<gungnir_model::PlanId>,
+    /// Whether the planner answered the current picture on the last tick, and if not,
+    /// how old the plan in force is and why (GAP-119, GAP-066).
+    ///
+    /// **So a stale plan never looks fresh.** [`Self::last_plan`] keeps the last plan
+    /// proposed, which is what PN-05 draws and what the queue holds; when the planner
+    /// cannot answer a tick -- a solve not finished inside its budget, a solve that
+    /// failed, a link that is down -- nothing about that plan changes, and before this
+    /// field nothing on PN-05 did either. PN-05 draws this above the plan and PN-07 names
+    /// it among the conditions a decision is taken under.
+    pub plan_standing: PlanStanding,
     /// The recommendation and its policy-checked alternatives for [`Self::last_plan`]
     /// (GAP-032), regenerated when the plan changes rather than every frame because each
     /// alternative is another allocator solve.
@@ -708,6 +718,7 @@ impl AppState {
             // itself produces, exactly as the single `last_plan` field did before this one
             // existed.
             last_live_plan_id: Some(gungnir_model::PlanId::default()),
+            plan_standing: PlanStanding::NotYetAsked,
             alternatives: Vec::new(),
             what_if: None,
             what_if_for: None,
@@ -1802,6 +1813,100 @@ fn tracking_service(
     }
 }
 
+/// What the planner said about the current picture on the last tick (GAP-119, GAP-066):
+/// [`gungnir_intercept_service::PlanOutcome`] without the plan, which the state already
+/// holds as [`AppState::last_plan`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlanStanding {
+    /// No tick has asked the planner yet.
+    NotYetAsked,
+    /// The plan in force answers the picture the last tick planned against.
+    Current,
+    /// The planner could not answer the last tick's picture. The plan in force is the
+    /// last one it did compute, at `computed_at`; `asked_at` is the tick that could not be
+    /// answered, so `asked_at - computed_at` is how old the answer is.
+    Stale {
+        computed_at: gungnir_model::MissionTime,
+        asked_at: gungnir_model::MissionTime,
+        reason: String,
+    },
+    /// The planner has never answered. Not an empty plan: nobody can say what the
+    /// sector needs.
+    NoPlan { reason: String },
+}
+
+impl PlanStanding {
+    /// The standing of one planning call's answer, asked at `now`.
+    #[must_use]
+    pub fn of(
+        outcome: &gungnir_intercept_service::PlanOutcome,
+        now: gungnir_model::MissionTime,
+    ) -> Self {
+        use gungnir_intercept_service::PlanOutcome;
+        match outcome {
+            PlanOutcome::Fresh(_) => Self::Current,
+            PlanOutcome::Stale {
+                computed_at,
+                reason,
+                ..
+            } => Self::Stale {
+                computed_at: *computed_at,
+                asked_at: now,
+                reason: reason.clone(),
+            },
+            PlanOutcome::NoPlan { reason } => Self::NoPlan {
+                reason: reason.clone(),
+            },
+        }
+    }
+
+    /// PN-05's view of it.
+    #[must_use]
+    pub fn view(&self) -> gungnir_ui::panels::intercept_panel::Standing<'_> {
+        use gungnir_ui::panels::intercept_panel::Standing;
+        match self {
+            Self::NotYetAsked => Standing::NoPlan {
+                reason: "the planner has not been asked yet",
+            },
+            Self::Current => Standing::Current,
+            Self::Stale {
+                computed_at,
+                asked_at,
+                reason,
+            } => Standing::Stale {
+                computed_at_s: computed_at.0,
+                age_s: (asked_at.0 - computed_at.0).max(0.0),
+                reason,
+            },
+            Self::NoPlan { reason } => Standing::NoPlan { reason },
+        }
+    }
+}
+
+/// This desktop's own planner, as the baseline describes it: the horizon, the local frame
+/// the geometry is solved in (GAP-031) and the solve budget (GAP-119, D-81).
+///
+/// **One builder for every embedded planner.** The desktop builds one at start, one on
+/// falling back from its node and one on signing out of it, and each was built by hand
+/// with the horizon alone; the two rebuilt ones had lost the local frame, so a desktop
+/// that fell back planned without intercept points. Everything a planner is configured
+/// with is set here, once.
+///
+/// A budget the baseline gets wrong cannot reach here from a file -- both binaries
+/// validate a baseline before building from it -- but a state built from a baseline in
+/// code is not validated, so a bad budget is said loudly and MOP-06's is used rather than
+/// panicking in the constructor.
+#[must_use]
+pub fn embedded_planner(config: &ConfigBaseline) -> DpInterceptService {
+    let budget = config.plan_solve_budget().unwrap_or_else(|err| {
+        tracing::error!(%err, "the baseline's solve budget is invalid; planning with MOP-06's");
+        gungnir_intercept_service::DEFAULT_SOLVE_BUDGET
+    });
+    DpInterceptService::new(config.allocation_horizon)
+        .with_local_frame(crate::sustainment::local_frame_of(config))
+        .with_solve_budget(budget)
+}
+
 /// Embedded services, or remote clients when configured and reachable. On a remote
 /// failure, fall back to embedded and record why (ARCHITECTURE.md §8.4).
 fn build_backends(
@@ -1837,11 +1942,9 @@ fn build_backends(
         // it filters by the promoted algorithm baseline, and stamps that baseline only
         // because it is applying it (DN-24 §7).
         Box::new(tracking_service(runtime, config, pipeline, alerts)),
-        // GAP-031: the planner solves geometry in the deployment's frame, when it has one.
-        Box::new(
-            DpInterceptService::new(config.allocation_horizon)
-                .with_local_frame(crate::sustainment::local_frame_of(config)),
-        ),
+        // GAP-031: the planner solves geometry in the deployment's frame, when it has one;
+        // GAP-119: and spends at most the baseline's budget a tick.
+        Box::new(embedded_planner(config)),
         BackendConfig::Embedded,
     )
 }

@@ -4629,7 +4629,7 @@
       </element>
       <element xmi:idref="EAID_284B8824_3D32_A194_1ADC_EC7DD60370F9" xmi:type="uml:Class" name="Intercept planning" scope="public">
         <model package="EAPK_FA13AF13_B0CC_AEE6_6C1C_35BB98E0F735" tpos="0" ea_eleType="element"/>
-        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="ServiceInterface" documentation="Tracks and resources in, a PlanView out; last-good-plan on over-budget solves (allocator not implemented)."/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="ServiceInterface" documentation="Tracks and resources in, a PlanView out; at most its solve budget a call, with the last good plan returned stale while a longer solve carries on (GAP-119)."/>
         <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
         <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
         <alias alias="SV-02"/>

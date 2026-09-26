@@ -123,7 +123,7 @@ OA-34,Operational Activities,OperationalActivity,Authenticate and authorize,Esta
 OA-35,Operational Activities,OperationalActivity,Audit,"Record every decision, configuration change, promotion, tasking, and assistant exchange append-only.",Activity
 OA-36,Operational Activities,OperationalActivity,Exchange cooperative identity,"Receive IFF, ADS-B, AIS, and blue-force identity and attach it as evidence.",Activity
 SV-01,Services,ServiceInterface,Tracking,"Detections in, tracks with quality out; health honest (pipeline not implemented).",Class
-SV-02,Services,ServiceInterface,Intercept planning,"Tracks and resources in, a PlanView out; last-good-plan on over-budget solves (allocator not implemented).",Class
+SV-02,Services,ServiceInterface,Intercept planning,"Tracks and resources in, a PlanView out; at most its solve budget a call, with the last good plan returned stale while a longer solve carries on (GAP-119).",Class
 SV-03,Services,ServiceInterface,Event bus,Broadcast publish and subscribe with sequence-stamped envelopes.,Class
 SV-04,Services,ServiceInterface,Event journal,Append-only JSON-lines session journal; read back for replay; retention.,Class
 SV-05,Services,ServiceInterface,Time authority,Wall and replay clocks; source versus receipt time; late-data policy.,Class

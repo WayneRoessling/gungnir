@@ -8509,6 +8509,22 @@
     status: Open
     note: >-
       Filed by the GAP-067 walk, which held the `gungnir-intercept-service` row.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Closed under the owner's delegation of 2026-09-25 (D-81, D-82; DN-04 §10). Each
+      planning call spends at most `plan_solve_budget_ms` (MOP-06's 4 ms) on an injected
+      clock; an unfinished solve carries on at the next call, the last good plan is
+      answered `Stale` with its age meanwhile, and health recovers on the first fresh
+      answer. PN-05 and PN-07 show it. The determinism and t = 1 / over-budget t = 2 tests
+      are in `gungnir-intercept-service/src/lib.rs`; the row awaits the owner's walk. The
+      solve's restructuring is human-owned under the numerical-stability clause, see
+      `docs/signatures.md`. Raised GAP-156 and GAP-157. See
+      `../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`.
+
+
+
+
 
 - id: GAP-120
   name: Nothing compares the embedded and remote backends' projections
@@ -10076,6 +10092,82 @@
       raid and passes. What a session runs over is content, left for the owner rather
       than taken under delegation, because a new committed sample set moves every row
       and test that counts the ten.
+- id: GAP-156
+  name: A picture the exact solver cannot finish in time is never answered
+  type: Technical
+  caps: [CAP-3.3]
+  layer: "Productization: decision and policy"
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: [GAP-119]
+  impact: >-
+    The allocator is exact and refuses to answer with a heuristic, and its cost grows
+    exponentially in the tracks and factorially in the effectors. Since GAP-119 a solve
+    that does not fit one planning call carries on over several, which answers ordinary
+    pictures a few ticks late; but a raid toward the solver's size limits takes seconds to
+    solve outright and several times that at 4 ms a tick, and at the limits (sixteen
+    tracks, eight effectors) longer than any engagement. Throughout, the operator is shown
+    the last good plan, stale, with a percentage that barely moves: honest, and no help.
+  evidence: >-
+    `gungnir-allocation/src/bellman.rs` (`MAX_TRACKS`, `MAX_RESOURCES`, `ExactSolve`);
+    a release probe on the development machine, 2026-09-25: at the default horizon of ten,
+    four effectors and eight tracks took 13 ms, four and ten 128 ms, and six and ten 1.3 s
+    (the one-pass solve GAP-119 replaced took about three times as long)
+  action: >-
+    Decide what a picture too large to solve exactly in useful time should get: a bounded
+    answer labelled as not optimal (a one-step assignment, or the exact solve at a shorter
+    horizon), a size past which the planner says it will not answer rather than starting,
+    or both; then build it so the label reaches PN-05 and PN-07 the way staleness does.
+  ref: >-
+    Found building GAP-119
+    (`../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Filed by GAP-119 rather than answered there, because what stands in for an optimum
+      the planner cannot reach is a change to what the allocation row promises -- the
+      crate refuses a heuristic by design -- and that is the owner's to decide.
+- id: GAP-157
+  name: A linked desktop cannot tell that its node's planner is stale
+  type: Technical
+  caps: [CAP-3.3, CAP-7.3]
+  layer: Deployment and API
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: [GAP-119]
+  impact: >-
+    While a desktop is linked, `RemoteInterceptService::plan` returns the node's plan as
+    `Fresh` whenever the link is up. Since GAP-161 its `is_healthy()` follows the node's
+    word, so when the node's planner cannot answer -- a solve past its budget, a solve
+    that failed -- PN-01 shows the planner down and PN-07 names an unhealthy planner.
+    But PN-05 draws the node's plan with no stale line, and neither panel can say how old
+    the plan is or why, because the desktop never learns when the node last computed it.
+    The node is where the decision is taken while linked, so this is the console most
+    operators use.
+  evidence: >-
+    `gungnir-remote/src/lib.rs` (`RemoteInterceptService::plan` answers `Fresh` while
+    linked); the node's snapshot and `HealthEvent::Changed` carry `intercept_healthy`
+    (read since GAP-161) and nothing carries when its plan was last computed
+  action: >-
+    Carry the node's planner standing to the desktop -- when its plan was last computed
+    and why the last call did not answer -- and have `RemoteInterceptService` answer
+    `Stale` with the node's reason and age when the node's planner is stale. Test it with a node whose planner is held past its budget.
+  ref: >-
+    Found building GAP-119
+    (`../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Filed by GAP-119, which made the embedded planner's staleness visible and found that
+      the remote one relays the node's plan without the node's standing. GAP-161, merged
+      alongside, made the linked health flag honest; the plan's age and reason need the
+      node's computed-at time on the wire, a schema change of its own.
 
 - id: GAP-162
   name: A sensor manager may apply a whole baseline, and applying one checks no permission
