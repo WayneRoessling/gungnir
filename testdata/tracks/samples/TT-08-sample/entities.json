@@ -1,0 +1,215 @@
+{
+ "entities": [
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.civil-airliner",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-airliners-001",
+   "occluded_window_s": null,
+   "platform": "airliner-a320",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "adsb",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 458.5365059375333,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.civil-airliner",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-airliners-002",
+   "occluded_window_s": null,
+   "platform": "airliner-a320",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "adsb",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 561.3262925072747,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.civil-airliner",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-airliners-003",
+   "occluded_window_s": null,
+   "platform": "airliner-a320",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "adsb",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 575.6604635385428,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.civil-airliner",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-airliners-004",
+   "occluded_window_s": null,
+   "platform": "airliner-a320",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "adsb",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 130.62204525658427,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.civil-airliner",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-airliners-005",
+   "occluded_window_s": null,
+   "platform": "airliner-a320",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "adsb",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 600.6416816112186,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.civil-airliner",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-airliners-006",
+   "occluded_window_s": null,
+   "platform": "airliner-a320",
+   "side": "civil",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "adsb",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 468.6293539720878,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.tactical-fixed-wing",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-fighters-001",
+   "occluded_window_s": null,
+   "platform": "f-16",
+   "side": "blue",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "iff",
+    "ir": "high",
+    "rcs": "medium"
+   },
+   "spawn_s": 630.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.tactical-fixed-wing",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-fighters-002",
+   "occluded_window_s": null,
+   "platform": "f-16",
+   "side": "blue",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "iff",
+    "ir": "high",
+    "rcs": "medium"
+   },
+   "spawn_s": 630.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.rotary-wing",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-helicopter-001",
+   "occluded_window_s": null,
+   "platform": "mi-8",
+   "side": "blue",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "iff",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 600.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.tactical-isr",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-isr-uas-001",
+   "occluded_window_s": null,
+   "platform": "orlan-10",
+   "side": "red",
+   "signature": {
+    "acoustic": "moderate",
+    "emission": "datalink",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 0.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": 0.6,
+   "ais_spoof_offset_m": null,
+   "class": "air.light-aircraft",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT08-light-aircraft-001",
+   "occluded_window_s": null,
+   "platform": "cessna-172",
+   "side": "civil",
+   "signature": {
+    "acoustic": "moderate",
+    "emission": "adsb",
+    "ir": "medium",
+    "rcs": "medium"
+   },
+   "spawn_s": 630.0,
+   "surface": false
+  }
+ ],
+ "format": 1,
+ "scenario": "TT-08"
+}

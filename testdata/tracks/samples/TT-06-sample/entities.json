@@ -1,0 +1,170 @@
+{
+ "entities": [
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "land.spg",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT06-battery-001",
+   "occluded_window_s": null,
+   "platform": "2s19-msta-s",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 0.0,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "land.spg",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT06-battery-002",
+   "occluded_window_s": null,
+   "platform": "2s19-msta-s",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 0.0,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "land.truck",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT06-convoy-001",
+   "occluded_window_s": [
+    2400,
+    3600
+   ],
+   "platform": "kamaz-truck",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 630.0,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "land.truck",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT06-convoy-002",
+   "occluded_window_s": [
+    2400,
+    3600
+   ],
+   "platform": "kamaz-truck",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 630.0,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "land.truck",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT06-convoy-003",
+   "occluded_window_s": [
+    2400,
+    3600
+   ],
+   "platform": "kamaz-truck",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 630.0,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "land.truck",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT06-convoy-004",
+   "occluded_window_s": [
+    2400,
+    3600
+   ],
+   "platform": "kamaz-truck",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 630.0,
+   "surface": true
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.tactical-isr",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT06-isr-uas-001",
+   "occluded_window_s": null,
+   "platform": "orlan-10",
+   "side": "red",
+   "signature": {
+    "acoustic": "moderate",
+    "emission": "datalink",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 0.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "land.mobile-ad",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT06-own-ad-001",
+   "occluded_window_s": null,
+   "platform": "patriot-launcher",
+   "side": "blue",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "bft",
+    "ir": "high",
+    "rcs": "large"
+   },
+   "spawn_s": 0.0,
+   "surface": true
+  }
+ ],
+ "format": 1,
+ "scenario": "TT-06"
+}

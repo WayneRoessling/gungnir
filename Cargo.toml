@@ -15,6 +15,9 @@ members = [
     "gungnir-fusion-async",
     "gungnir-track-fusion",
     "gungnir-allocation",
+    # Simulation: the observation half of the test-track generator, for a laydown
+    # rehearsal to re-observe recorded truth (DN-32). Scenario, app and verifiers only.
+    "gungnir-sensor-sim",
     "gungnir-scenario",
     "gungnir-metrics",
     "gungnir-oracle",

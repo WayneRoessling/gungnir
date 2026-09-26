@@ -60,7 +60,7 @@ plans execute. `plans/README.md` keeps the execution status in detail.
 
 | Crate group | Standards document |
 |---|---|
-| Tracking core (`gungnir-core` through `gungnir-metrics`, plus `gungnir-oracle`, `gungnir-testkit`, `gungnir-fuzz`) | `agentic-coding-standards.md` |
+| Tracking core (`gungnir-core` through `gungnir-metrics`, `gungnir-sensor-sim` among them, plus `gungnir-oracle`, `gungnir-testkit`, `gungnir-fuzz`) | `agentic-coding-standards.md` |
 | Foundation and service layer (`gungnir-model`, `gungnir-tracking-service`, `gungnir-intercept-service`) | `agentic-coding-standards.md` |
 | Productization layer (`gungnir-eventing` through `gungnir-reporting`, including `gungnir-interop`, `gungnir-analytics`, `gungnir-resilience`, `gungnir-collab`, `gungnir-workflow`) | `agentic-coding-standards.md` |
 | Deployment (`gungnir-remote`, `gungnir-node`) | `agentic-coding-standards.md`; `gungnir-node` is wiring only, like `gungnir-app` |

@@ -304,6 +304,65 @@ fn every_public_async_fn_in_fusion_async_states_its_cancellation_safety() {
     );
 }
 
+/// The one module in `gungnir-app` that may name `gungnir_sensor_sim`
+/// (`docs/design/DN-32-re-observation-for-a-laydown.md` §6 mechanism 5).
+const SENSOR_SIM_MODULE: &str = "gungnir-app/src/laydown_rehearsal.rs";
+
+/// Every `gungnir-app` source outside its integration tests, other than
+/// [`SENSOR_SIM_MODULE`], whose code (comments aside) names `gungnir_sensor_sim`. A
+/// function of the sources handed to it, so the containment row can add a second module
+/// and read its name back.
+fn modules_naming_sensor_sim(sources: &[(String, String)]) -> Vec<String> {
+    sources
+        .iter()
+        .filter(|(rel, _)| {
+            rel.starts_with("gungnir-app/")
+                && !rel.starts_with("gungnir-app/tests/")
+                && rel != SENSOR_SIM_MODULE
+        })
+        .filter(|(_, text)| {
+            text.lines().any(|line| {
+                let code = line.split("//").next().unwrap_or("");
+                code.contains("gungnir_sensor_sim")
+            })
+        })
+        .map(|(rel, _)| rel.clone())
+        .collect()
+}
+
+/// **One module may call the simulation** (DN-32 §6 mechanism 5, the *Containment*
+/// Draft row of `docs/verification-capability-table.md` §2). Within the desktop, only the
+/// laydown rehearsal names `gungnir_sensor_sim`; everything else sees a rehearsal's
+/// record, never an observation. Checked on the tree, and then on the tree with a second
+/// module added, which must be named.
+#[test]
+fn only_the_laydown_rehearsal_names_the_sensor_simulation() {
+    let mut sources = rust_sources();
+    assert!(
+        sources
+            .iter()
+            .any(|(rel, text)| rel == SENSOR_SIM_MODULE && text.contains("use gungnir_sensor_sim")),
+        "{SENSOR_SIM_MODULE} is the module that names the crate; if it moved, this rule \
+         moves with it"
+    );
+    assert_eq!(
+        modules_naming_sensor_sim(&sources),
+        Vec::<String>::new(),
+        "modules other than {SENSOR_SIM_MODULE} name gungnir_sensor_sim"
+    );
+    sources.push((
+        "gungnir-app/src/state.rs".to_owned(),
+        "// a comment naming gungnir_sensor_sim is not a use of it\n\
+         use gungnir_sensor_sim::observe;\n"
+            .to_owned(),
+    ));
+    assert_eq!(
+        modules_naming_sensor_sim(&sources),
+        vec!["gungnir-app/src/state.rs".to_owned()],
+        "a second module naming the crate is named"
+    );
+}
+
 /// Every Markdown file under the workspace root and `docs/`, by basename, with the
 /// paths that carry it.
 fn markdown_index(root: &Path) -> BTreeMap<String, Vec<PathBuf>> {

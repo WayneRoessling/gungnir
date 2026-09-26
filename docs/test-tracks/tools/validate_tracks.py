@@ -8,7 +8,9 @@
 Checks every set under testdata/tracks/samples (or the directories given): files
 present, metadata versions current, truth within the class envelopes and physically
 plausible, detections well formed and inside the gateway's rules, arrival order and
-out-of-order fractions as the sensor models specify, counts matching metadata.
+out-of-order fractions as the sensor models specify, counts matching metadata, and the
+re-observation sidecars (entities.json, environment.json, and the sensor catalogue export)
+consistent with the truth they describe (docs/design/DN-32-re-observation-for-a-laydown.md).
 Writes validation-report.json into each set and records the result in metadata.json.
 
 Usage (from the workspace root):
@@ -50,7 +52,8 @@ def validate(set_dir: Path, classes, sensors_yaml, versions) -> dict:
     def check(name, ok, detail=""):
         checks.append({"check": name, "passed": bool(ok), "detail": detail})
 
-    files = ["metadata.json", "truth.jsonl", "detections.jsonl", "sensors.json", "events.jsonl"]
+    files = ["metadata.json", "truth.jsonl", "detections.jsonl", "sensors.json", "events.jsonl",
+             "entities.json", "environment.json"]
     missing = [f for f in files if not (set_dir / f).exists()]
     check("files present", not missing, f"missing {missing}" if missing else "")
     if missing:
@@ -97,6 +100,19 @@ def validate(set_dir: Path, classes, sensors_yaml, versions) -> dict:
     check("truth alive flag never revives", not alive_viol, f"{alive_viol[:3]}")
     check("truth record count matches metadata", len(truth) == meta["counts"]["truth_records"], f"{len(truth)} vs {meta['counts']['truth_records']}")
     check("entity count matches metadata", len(per) == meta["counts"]["entities"], f"{len(per)} vs {meta['counts']['entities']}")
+
+    # The re-observation sidecars (docs/design/DN-32-re-observation-for-a-laydown.md
+    # section 5): a rehearsal refuses truth off the tick grid and truth naming an entity
+    # entities.json does not describe, so the set is checked for both here first.
+    tick = meta["truth_tick_s"]
+    off_tick = [(r["entity"], r["t"]) for r in truth if abs(r["t"] / tick - round(r["t"] / tick)) > 1e-6]
+    check("truth on the truth tick", not off_tick, f"{off_tick[:3]}")
+    described = {e["id"] for e in json.loads((set_dir / "entities.json").read_text(encoding="utf-8"))["entities"]}
+    undescribed = sorted(set(per) - described)
+    check("entities.json describes every entity in truth", not undescribed, f"{undescribed[:3]}")
+    env = json.loads((set_dir / "environment.json").read_text(encoding="utf-8"))["events"]
+    env_off = [(e["kind"], e["t"]) for e in env if abs(e["t"] / tick - round(e["t"] / tick)) > 1e-6]
+    check("environment.json events on the truth tick", not env_off, f"{env_off[:3]}")
 
     # detections
     lines = [l for l in (set_dir / "detections.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -157,6 +173,12 @@ def validate(set_dir: Path, classes, sensors_yaml, versions) -> dict:
         if frac > spec * 4 + 0.08:
             ooo_bad.append((sid, round(frac, 3), spec))
     check("out-of-order fraction per sensor within the model", not ooo_bad, f"{ooo_bad[:3]}")
+    # Every sensor type the set uses is in the exported catalogue a rehearsal resolves a
+    # detection model from (DN-32 section 5.4).
+    catalogue_path = ROOT / "testdata" / "tracks" / "sensor-models.json"
+    types = json.loads(catalogue_path.read_text(encoding="utf-8"))["types"] if catalogue_path.exists() else {}
+    unexported = sorted({s["type"] for s in sensors.values()} - set(types))
+    check("sensor-models.json holds every sensor type the set uses", not unexported, f"{unexported[:3]}")
     exp = meta.get("expected", {})
     if "entities" in exp and meta["variant"] == "full":
         check("expected entity count (full set)", exp["entities"] == meta["counts"]["entities"], f"{meta['counts']['entities']} vs {exp['entities']}")

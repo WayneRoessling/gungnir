@@ -1,0 +1,234 @@
+{
+ "entities": [
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT01-stream-south-001",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 288.21887287824137,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT01-stream-south-002",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 326.534747744389,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT01-stream-south-003",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 161.00119795187067,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT01-stream-south-004",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 56.20810201319472,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT01-stream-north-001",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 305.1999881112103,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT01-stream-north-002",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 320.6027960845917,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT01-stream-north-003",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 293.4351183316456,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT01-stream-north-004",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 208.7385981909966,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT01-stream-sea-001",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 336.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": false,
+   "destroyed_at_s": null,
+   "id": "TT01-stream-sea-002",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 336.0,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": true,
+   "destroyed_at_s": null,
+   "id": "TT01-decoys-001",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 104.58767180462576,
+   "surface": false
+  },
+  {
+   "adsb_intermittent": null,
+   "ais_spoof_offset_m": null,
+   "class": "air.owa-prop",
+   "decoy": true,
+   "destroyed_at_s": null,
+   "id": "TT01-decoys-002",
+   "occluded_window_s": null,
+   "platform": "shahed-136",
+   "side": "red",
+   "signature": {
+    "acoustic": "loud",
+    "emission": "none",
+    "ir": "low",
+    "rcs": "small"
+   },
+   "spawn_s": 218.59742099935022,
+   "surface": false
+  }
+ ],
+ "format": 1,
+ "scenario": "TT-01"
+}

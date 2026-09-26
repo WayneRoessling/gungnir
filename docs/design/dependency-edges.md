@@ -418,6 +418,46 @@ edge (p), which is the arrangement §17 records for the desktop.
 **Depth after the change**: `gungnir-node` is a binary and depends on everything above it,
 so the graph gains no depth. It gains two edges and no crate.
 
+## 19. Edges (z) and (aa) -- `gungnir-sensor-sim` (2026-09-25, GAP-105, D-64, DN-32)
+
+`gungnir-sensor-sim` is a new tracking-core crate holding the observation half of the
+test-track generator: the model that answers, scan by scan, whether a sensor at a given
+position would have detected a target where a recording says it was, and where it would
+have reported it (`DN-32-re-observation-for-a-laydown.md` §2 to §4). It moved out of
+`gungnir-scenario`'s `tracks.rs` with the Python-parity arithmetic and random stream it
+draws from, and `gungnir-scenario/tests/reference_parity.rs` still reproduces all ten
+committed sample sets byte for byte, unchanged. DN-32 §3 left the letters to whoever
+built it, because the draft's own had been taken while it sat unmerged; they are the next
+two after (y), lettered on past (z) as (aa). Recorded here in the change that adds both to
+a manifest, per §5's rule, with `gungnir-app/tests/dependency_graph.rs` naming them.
+
+| Edge | What it is | Evidence |
+|---|---|---|
+| (z) `gungnir-scenario` → `gungnir-sensor-sim` | The generator calling the observation model it used to hold inline. Core to core, down the chain: `gungnir-sensor-sim` sits before `gungnir-scenario` in `dependency_graph.rs`'s `CORE_ORDER` and depends on no workspace crate, so no cycle is reachable | `gungnir-scenario/tests/reference_parity.rs` (unchanged, byte-identical) and `tests/sidecar_parity.rs` |
+| (aa) `gungnir-app` → `gungnir-sensor-sim` | PN-16's laydown rehearsal re-observing a committed recording with the laydown's own sensors (D-64: generated at rehearsal time, in the production binary). The desktop links the observation model and never the world model, so it can re-observe a recording and cannot invent a target. Binary to core, downward | `gungnir-app/src/laydown_rehearsal.rs`; `gungnir-app/tests/laydown_rehearsal.rs` |
+
+**Narrowed rather than widened** (DN-32 §6 mechanism 4). `scenario_misuse` is unchanged:
+nothing outside the verifier layer may depend on `gungnir-scenario`, the desktop included.
+Beside it, `sensor_sim_misuse` admits `gungnir-scenario`, `gungnir-app` and the verifiers
+to `gungnir-sensor-sim` and names any other edge -- in particular from `gungnir-node`,
+`gungnir-ingest`, `gungnir-tracking-service`, `gungnir-api` or `gungnir-remote`: a node
+that cannot rehearse cannot leak a rehearsal.
+`a_manifest_adding_a_forbidden_edge_to_the_sensor_sim_is_named` adds each such edge to the
+real graph and reads the name back. Within the desktop, mechanism 5 narrows it again:
+only `src/laydown_rehearsal.rs` may name the crate
+(`gungnir-app/tests/architecture_compliance.rs`).
+
+**Refused**: folding the model into `gungnir-sensor-management` (DN-32 §3), which commands
+real sensors, and giving `gungnir-sensor-sim` an edge to `gungnir-model` so it could stamp
+the model's `RehearsalOrigin` itself. The second would have made a core crate depend on the
+foundation above it, through `gungnir-scenario`, against §1.1's one-way chain; the crate
+marks every observation with its own `SimulationMark` instead and the desktop converts it
+(DN-32 §12).
+
+**Depth after the change**: one crate at the bottom of the core with no workspace
+dependencies, and two edges into it. `gungnir-scenario`'s depth grows by nothing it did
+not already have beneath `gungnir-fusion-async`.
+
 ## Traceability
 
 The five notes that add edges: DN-03, DN-11, DN-12, DN-13, DN-19. The four that refuse
