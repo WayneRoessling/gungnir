@@ -2118,3 +2118,29 @@
     that informs them. The acknowledgement, and the health change the journal already
     carries before the decision, are what MOE-06 counts. See
     `../../record/2026-09-25/a-stale-plan-says-how-old-it-is.md`.
+
+
+- id: D-89
+  decision: When a linked desktop renews its session with the node
+  question: >-
+    A node's token lapses after its lifetime and the stream never asks for another, so a
+    linked desktop's writes are refused from then on (GAP-165). Should the link renew on a
+    timer ahead of expiry, only when the node refuses a token, or should the node stop
+    expiring tokens on a live stream?
+  raised_in: "GAP-120; GAP-165"
+  decider: Owner
+  unblocks: GAP-165
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** Both, on the link: it renews at
+    three quarters of the lifetime the node issued -- the expiry against the node's own
+    time on the snapshot -- and at once whenever a request is refused `401`, keeping what
+    it offered and sending it again under the new token. A `401` is never delivered as an
+    answer to a decision, a task or an exchange set. A refused renewal ends the connection,
+    so the link is seen down rather than looking up while every write is refused. The
+    desktop's own session still bounds the link: an expired desktop session drops it.
+    Renewing only on refusal was rejected because every lapse would cost a refused request
+    and a round trip on the path an operator is waiting on; tokens that do not expire on a
+    live stream were rejected because DN-23 §5 makes a node-issued session always expire,
+    and that is a `gungnir-api` authentication change. See
+    `../../record/2026-09-26/a-live-link-keeps-its-session.md`.
