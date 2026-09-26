@@ -1701,7 +1701,13 @@ async fn run(
             .with_staleness(config.policy.staleness.clone())
             .with_sensor_positions(sensor_positions(&config)),
     };
-    let mut intercept = DpInterceptService::new(config.allocation_horizon);
+    // GAP-119, D-81: the node's loop is a tick like the desktop's, so its planner spends
+    // at most the baseline's budget a tick and carries a longer solve on to the next. And
+    // the deployment's local frame (GAP-031, GAP-132): without it the node's plans paired
+    // effectors with tracks and never placed an intercept point, while the desktop's did.
+    let mut intercept = DpInterceptService::new(config.allocation_horizon)
+        .with_local_frame(config.local_frame())
+        .with_solve_budget(config.plan_solve_budget()?);
     let resources = config.resource_views();
     // GAP-088: the fences the baseline declares. None declared is said once, because
     // an engine that can only pass is worth knowing about.

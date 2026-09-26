@@ -1222,6 +1222,12 @@ pub struct ConfigBaseline {
     /// Planning horizon (steps) for the Bellman/DP allocator; at least 1.
     #[serde(default = "default_horizon")]
     pub allocation_horizon: usize,
+    /// Milliseconds one planning call may spend solving before it answers with the last
+    /// good plan, stale, and carries the solve on at the next call (GAP-119, D-81; DN-04
+    /// §10). The default is MOP-06's 4 ms (`docs/mission/measures.md` §2); validation
+    /// keeps it above zero and at most [`MAX_PLAN_SOLVE_BUDGET_MS`].
+    #[serde(default = "default_plan_solve_budget_ms")]
+    pub plan_solve_budget_ms: f64,
     /// Directory for the desktop's local `gungnir-store` journal.
     #[serde(default = "default_data_dir")]
     pub data_dir: String,
@@ -1333,6 +1339,24 @@ fn default_horizon() -> usize {
     10
 }
 
+/// MOP-06's per-frame budget for the planner, embedded profile (D-81).
+/// `gungnir-intercept-service`'s `DEFAULT_SOLVE_BUDGET` is the same figure, and
+/// `gungnir-app/tests/solve_budget.rs` fails if the two part.
+fn default_plan_solve_budget_ms() -> f64 {
+    4.0
+}
+
+/// The longest solve budget a baseline may set (D-81).
+///
+/// **Why a ceiling at all, and why this one.** The planner solves inside the tick, so a
+/// budget is also how long a tick may be held. On the node that tick carries every
+/// detection to the event stream, and MOP-02 gives that path 150 ms on-prem; a planner
+/// allowed more than two thirds of it would leave the rest of the loop too little to
+/// meet it. A deployment that wants its big pictures answered sooner raises the budget
+/// towards this, knowing what it costs the frame; beyond it the budget is refused rather
+/// than honoured, because the cost would land on a measure nobody chose to spend.
+pub const MAX_PLAN_SOLVE_BUDGET_MS: f64 = 100.0;
+
 fn default_data_dir() -> String {
     "./gungnir-journal".into()
 }
@@ -1364,6 +1388,7 @@ impl Default for ConfigBaseline {
             backend: BackendConfig::Embedded,
             node: None,
             allocation_horizon: default_horizon(),
+            plan_solve_budget_ms: default_plan_solve_budget_ms(),
             data_dir: default_data_dir(),
             assets: Vec::new(),
             endpoints: Vec::new(),
@@ -1386,6 +1411,29 @@ impl Default for ConfigBaseline {
 }
 
 impl ConfigBaseline {
+    /// The planner's solve budget as a duration (GAP-119, D-81), and the one place its
+    /// rule is written: [`validate`] refuses a baseline by calling this.
+    ///
+    /// # Errors
+    ///
+    /// [`ConfigError::Invalid`] for a budget that is not finite, not above zero, or past
+    /// [`MAX_PLAN_SOLVE_BUDGET_MS`]. A budget of nothing would answer every changed
+    /// picture stale for ever, and one past the ceiling would hold the tick past what
+    /// MOP-02 leaves for it.
+    pub fn plan_solve_budget(&self) -> Result<std::time::Duration, ConfigError> {
+        let ms = self.plan_solve_budget_ms;
+        let refused = || {
+            ConfigError::Invalid(format!(
+                "plan_solve_budget_ms must be finite, above 0 and at most \
+                 {MAX_PLAN_SOLVE_BUDGET_MS} ms, not {ms}"
+            ))
+        };
+        if !(ms.is_finite() && ms > 0.0 && ms <= MAX_PLAN_SOLVE_BUDGET_MS) {
+            return Err(refused());
+        }
+        std::time::Duration::try_from_secs_f64(ms / 1e3).map_err(|_| refused())
+    }
+
     pub fn resource_views(&self) -> Vec<ResourceView> {
         self.resources.iter().map(ResourceConfig::to_view).collect()
     }
@@ -3615,6 +3663,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             "allocation_horizon must be at least 1".into(),
         ));
     }
+    baseline.plan_solve_budget()?;
     if baseline.data_dir.trim().is_empty() {
         return Err(ConfigError::Invalid("data_dir is empty".into()));
     }
@@ -6185,6 +6234,35 @@ MFkw
         assert_eq!(b.backend, BackendConfig::Embedded);
         assert_eq!(b.allocation_horizon, 10);
         assert!(b.resources.is_empty());
+        // GAP-119: a baseline written before the budget existed gets MOP-06's.
+        assert!((b.plan_solve_budget_ms - 4.0).abs() < f64::EPSILON);
+    }
+
+    /// GAP-119, D-81: the solve budget is positive, finite and under the ceiling; the
+    /// ceiling itself is allowed.
+    #[test]
+    fn the_plan_solve_budget_is_validated() {
+        let mut b = ConfigBaseline::default();
+        assert!(validate(&b).is_ok());
+        for bad in [
+            0.0,
+            -1.0,
+            f64::NAN,
+            f64::INFINITY,
+            MAX_PLAN_SOLVE_BUDGET_MS + 0.5,
+        ] {
+            b.plan_solve_budget_ms = bad;
+            match validate(&b) {
+                Err(ConfigError::Invalid(msg)) => {
+                    assert!(msg.contains("plan_solve_budget_ms"), "{msg}");
+                }
+                other => panic!("a budget of {bad} was accepted: {other:?}"),
+            }
+        }
+        for good in [0.5, 4.0, MAX_PLAN_SOLVE_BUDGET_MS] {
+            b.plan_solve_budget_ms = good;
+            assert!(validate(&b).is_ok(), "a budget of {good} was refused");
+        }
     }
 
     // --- DN-01 defended assets ------------------------------------------------

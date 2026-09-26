@@ -629,7 +629,11 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
             gungnir_ui::panels::intercept_panel::render_intercept_panel(
                 ui,
                 &state.palette,
-                &state.last_plan,
+                // GAP-119: the plan with its standing, so a stale one is drawn as stale.
+                gungnir_ui::panels::intercept_panel::ShownPlan {
+                    plan: &state.last_plan,
+                    standing: state.plan_standing.view(),
+                },
                 &withheld,
                 &fires,
                 &handoffs,
@@ -1070,7 +1074,11 @@ pub fn render_decision_dialog(
 
     // Owned for the frame: `NodeAnswer` borrows its sentence (GAP-133).
     let answer_line = crate::projection::answer_line(state, gungnir_model::PendingApprovalId(id.0));
-    let degraded = degraded_conditions(state);
+    let conditions = degraded_conditions(state);
+    let degraded: Vec<Degraded<'_>> = conditions
+        .iter()
+        .map(|(subsystem, detail)| Degraded { subsystem, detail })
+        .collect();
     let report = crate::decisions::chain_report_for(&state.config);
     let caveats = report.caveats();
     let attributed = state
@@ -1208,36 +1216,66 @@ fn alternative_rows<'a>(
         .collect()
 }
 
-/// The conditions in force that make a decision a degraded one.
+/// The conditions in force that make a decision a degraded one, as (subsystem, detail).
 ///
 /// Read from the health flags and the journal state rather than from a banner: an
 /// operator accepting a plan needs to know the tracker is not running, and needs to be
 /// able to tell that from the journal not writing.
-fn degraded_conditions(state: &AppState) -> Vec<Degraded<'static>> {
+///
+/// **The detail is owned** so the intercept condition can carry the plan's age and the
+/// planner's reason (GAP-119): "this plan may be stale" told an operator to wonder, and
+/// "computed at t = 12.0 s, 3.0 s before the planner was last asked, because the solve
+/// did not finish inside its 4 ms budget" tells them what they are accepting. PN-07's
+/// acknowledgement is keyed on the subsystem, so an age that grows every frame does not
+/// clear it, while the planner recovering and going stale again does.
+fn degraded_conditions(state: &AppState) -> Vec<(&'static str, String)> {
     let mut out = Vec::new();
     if !state.health.tracking_healthy {
-        out.push(Degraded {
-            subsystem: "tracking",
-            detail: "the tracking pipeline is not running; the picture is not being updated",
-        });
+        out.push((
+            "tracking",
+            "the tracking pipeline is not running; the picture is not being updated".to_owned(),
+        ));
     }
-    if !state.health.intercept_healthy {
-        out.push(Degraded {
-            subsystem: "intercept",
-            detail: "the last solve failed; this plan may be stale",
-        });
+    match &state.plan_standing {
+        crate::state::PlanStanding::Stale {
+            computed_at,
+            asked_at,
+            reason,
+        } => out.push((
+            "intercept",
+            format!(
+                "STALE PLAN: computed at t = {:.1} s, {:.1} s before the planner was last \
+                 asked, and not for the picture on screen; {}",
+                computed_at.0,
+                (asked_at.0 - computed_at.0).max(0.0),
+                reason
+            ),
+        )),
+        crate::state::PlanStanding::NoPlan { reason } => out.push((
+            "intercept",
+            format!("the planner has never answered; {reason}"),
+        )),
+        crate::state::PlanStanding::Current | crate::state::PlanStanding::NotYetAsked
+            if !state.health.intercept_healthy =>
+        {
+            out.push((
+                "intercept",
+                "the planner reports unhealthy; this plan may be stale".to_owned(),
+            ));
+        }
+        crate::state::PlanStanding::Current | crate::state::PlanStanding::NotYetAsked => {}
     }
     if !state.health.ingest_healthy {
-        out.push(Degraded {
-            subsystem: "ingest",
-            detail: "the gateway is not receiving from every expected adapter",
-        });
+        out.push((
+            "ingest",
+            "the gateway is not receiving from every expected adapter".to_owned(),
+        ));
     }
     if state.journal_failed {
-        out.push(Degraded {
-            subsystem: "journal",
-            detail: "writes are failing; this decision may not be recorded durably",
-        });
+        out.push((
+            "journal",
+            "writes are failing; this decision may not be recorded durably".to_owned(),
+        ));
     }
     out
 }

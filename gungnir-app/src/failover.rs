@@ -673,9 +673,8 @@ pub(crate) fn run_embedded(state: &mut AppState) {
         }),
         None => embedded,
     };
-    state.intercept = Box::new(gungnir_intercept_service::DpInterceptService::new(
-        state.config.allocation_horizon,
-    ));
+    // The same planner the desktop starts with (GAP-119): horizon, frame and budget.
+    state.intercept = Box::new(crate::state::embedded_planner(&state.config));
     state.backend = BackendConfig::Embedded;
 }
 
