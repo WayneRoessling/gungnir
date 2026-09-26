@@ -269,7 +269,7 @@ IE-19,Information Elements,InformationElement,PolicyVerdict,"Approved (never by 
 IE-20,Information Elements,InformationElement,AuditEntry,"Actor, action, time, outcome; append-only.",Class
 IE-21,Information Elements,InformationElement,Alert and AlertLifecycle,"Alert with severity; New, Acknowledged, Escalated, Closed with history.",Class
 IE-22,Information Elements,InformationElement,SnapshotResponse,"Schema version, tracks, plan, health.",Class
-IE-23,Information Elements,InformationElement,ApprovalRequest,"Plan id, accepted, operator.",Class
+IE-23,Information Elements,InformationElement,DecisionRequest,"An operator's decision on one queue item over the API; request id, item, choice. Names no operator: the caller is whoever the session token says. Carried by ApprovalRequest (plan, accepted, operator) until GAP-138 removed that type, which no route served after GAP-132.",Class
 IE-24,Information Elements,InformationElement,SubmitDetectionRequest,One DetectionView for the gateway.,Class
 IE-25,Information Elements,InformationElement,SubscribeRequest,The first frame of the event stream; from_seq.,Class
 IE-26,Information Elements,InformationElement,SchemaEntry,"Name, version, kind of a schema the build speaks.",Class

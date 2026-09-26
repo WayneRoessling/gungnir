@@ -18,7 +18,7 @@ Status: first draft, 2026-09-04.
 | Events and record | IE-12 Envelope; IE-13 TrackingEvent; IE-14 InterceptEvent; IE-15 IngestEvent; IE-16 CommandEvent; IE-33 Mission and SessionId; IE-31 ReconciliationReport |
 | Configuration and governance | IE-17 ConfigBaseline; IE-26 SchemaEntry; IE-27 SensorRecord and CoverageRegion; IE-32 WorkspaceLayout |
 | Health, alerts, audit | IE-06 SystemHealth; IE-21 Alert and AlertLifecycle; IE-20 AuditEntry |
-| Interface payloads | IE-22 SnapshotResponse; IE-23 ApprovalRequest; IE-24 SubmitDetectionRequest; IE-25 SubscribeRequest |
+| Interface payloads | IE-22 SnapshotResponse; IE-23 DecisionRequest; IE-24 SubmitDetectionRequest; IE-25 SubscribeRequest |
 | Products | IE-28 Report |
 
 ## Versioning and ownership

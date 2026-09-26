@@ -1737,3 +1737,50 @@
     The desktop falls back and the sentence says which it is: "has not answered since this
     desktop signed in" rather than "silent for 12 s", because an operator reads the two
     differently. See `../../record/2026-09-23/an-outage-outlives-its-process.md`.
+- id: D-79
+  decision: Which layout engine the If-Sr diagrams are rendered by
+  question: >-
+    `build_uaf.py` pinned every If-Sr diagram to smetana, PlantUML's Java port of Graphviz
+    dot, as a measured choice for squarer layouts. Since GAP-132 smetana throws in
+    `mincross` on the plans-effectors-handoff diagram, so that one SVG was rendered by
+    Graphviz and every other If-Sr SVG by smetana, and a reader compared two engines'
+    layouts in one family (GAP-139). Pin the engine per diagram, pin a PlantUML version
+    with the defect fixed, or render the family through Graphviz?
+  raised_in: "GAP-132; GAP-139"
+  decider: Owner
+  unblocks: GAP-139
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** Every If-Sr diagram, the overview
+    included, is laid out by Graphviz dot, and the render scripts pin the Docker image,
+    `plantuml/plantuml:1.2026.8`, whose SVGs record the version that drew them. Measured
+    with that image on all nine: dot's left-to-right layouts cover 1.05x to 1.66x smetana's
+    area, and the 30-40x the pin's comment recorded was the top-to-bottom default, which
+    left-to-right cures under either engine. A per-diagram engine was rejected because it
+    keeps two engines in one family, which is the defect; a fixed version was rejected
+    because none exists (1.2026.8 is the latest image), and smetana would stay one graph
+    change away from the next crash while the check needs every element positioned. The
+    Rs-Cn family renders cleanly under smetana and keeps it, one engine per family. See
+    `../../record/2026-09-25/housekeeping-after-dn-31.md`.
+- id: D-80
+  decision: Whether the unreachable plan-keyed decision type is removed or documented
+  question: >-
+    `gungnir_api::v3::ApprovalRequest`, a plan decision naming its own operator in the
+    body, has been reachable from no route since GAP-132, and `ApiHandler::decide`, the only
+    thing naming it, has no implementor (GAP-138). Remove both, or keep them and say in the
+    trait what implements it and when?
+  raised_in: "GAP-132; GAP-138"
+  decider: Owner
+  unblocks: GAP-138
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** Removed, both. A decision is taken
+    on a queue item through `DecisionRequest`, whose caller is whoever the session token
+    says; a second, plan-keyed description that names an operator is a contract nothing
+    honours and every reader has to be told not to believe. Documenting it was rejected
+    because no implementation is planned that would take a decision on a plan rather than
+    on the item that carries its deadline and its roles (DN-31 §7). `ApiHandler` keeps its
+    two methods, both of which describe routes the node serves, and now says that nothing
+    implements it. The UAF's IE-23, the operator's decision carried over the API, names
+    `DecisionRequest` as the type that carries it. Human-owned: a `gungnir-api` write path;
+    see `docs/signatures.md`. See `../../record/2026-09-25/housekeeping-after-dn-31.md`.
