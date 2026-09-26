@@ -37,7 +37,7 @@
 //! then reports no exposure rather than a NaN that would sort to the top of a triage), and
 //! a covariance that is not positive semi-definite along the line of sight gives the
 //! estimate full credit -- down-rating a closing track because its covariance is corrupt is
-//! the unsafe direction. The factor is always in `[0, 1]`.
+//! the direction that fails a defended asset. The factor is always in `[0, 1]`.
 
 use nalgebra::{Matrix3, Vector3};
 
