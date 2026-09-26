@@ -151,6 +151,29 @@ pub struct PeerLine<'a> {
     pub reason: &'a str,
 }
 
+/// Where this console's own publishing to coalition exchange stands (GAP-146, DN-18 §13).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExchangeStanding {
+    /// Nothing waiting, or a set on its way with nothing gone wrong.
+    Current,
+    /// Sets waiting on a node that has not taken them yet; the link keeps offering them.
+    Waiting,
+    /// The node refused this console as a publisher, and the link has stopped offering
+    /// until it signs in again. Not a fault of the network, and not one that retrying
+    /// fixes, which is why it is its own state rather than a long wait.
+    Refused,
+}
+
+/// PN-09's one line about this console's exchange publishing (GAP-146, DN-18 §13).
+///
+/// **One sentence, composed by the binary.** What would change a refusal -- which roles
+/// may publish -- is the authority matrix's answer, and this crate does not read it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExchangeLine<'a> {
+    pub standing: ExchangeStanding,
+    pub text: &'a str,
+}
+
 /// Everything PN-09 draws, borrowed from the binary's state.
 #[derive(Debug, Clone, Copy)]
 pub struct SensorHealthView<'a> {
@@ -174,6 +197,9 @@ pub struct SensorHealthView<'a> {
     pub bearing_feeds: &'a [BearingFeedLine<'a>],
     /// The pipeline's own bearing counters (GAP-096), read alongside `bearing_feeds`.
     pub bearing_pipeline: BearingPipelineLine,
+    /// This console's publishing to coalition exchange (GAP-146). `None` with no node
+    /// linked, where nothing is published and there is nothing to say.
+    pub exchange: Option<ExchangeLine<'a>>,
 }
 
 pub fn render_sensor_health(
@@ -195,6 +221,7 @@ pub fn render_sensor_health(
         peers: _,
         bearing_feeds,
         bearing_pipeline,
+        exchange,
     } = *view;
 
     ui.heading("System health");
@@ -248,6 +275,7 @@ pub fn render_sensor_health(
     render_cooperative_feeds(ui, palette, cooperative_feeds);
     render_bearing_feeds(ui, palette, bearing_feeds, bearing_pipeline);
     render_peers(ui, palette, view.peers);
+    render_exchange(ui, palette, exchange);
     render_clocks(ui, palette, clocks);
     render_detectors(ui, palette, detectors);
 }
@@ -314,6 +342,27 @@ fn render_peers(ui: &mut egui::Ui, palette: &theme::Palette, peers: &[PeerLine<'
                 .size(palette.small_font_size),
         );
     }
+}
+
+/// This console's publishing to coalition exchange (GAP-146, DN-18 §13): one line, in
+/// the colour of its standing. A refusal is said here once and stays said, rather than
+/// being retried in silence or repeated per handoff.
+fn render_exchange(ui: &mut egui::Ui, palette: &theme::Palette, line: Option<ExchangeLine<'_>>) {
+    let Some(line) = line else {
+        return;
+    };
+    ui.separator();
+    ui.label(RichText::new("Coalition exchange").strong());
+    let colour = match line.standing {
+        ExchangeStanding::Current => palette.muted_text_color(),
+        ExchangeStanding::Waiting => palette.warning_color,
+        ExchangeStanding::Refused => palette.class_hostile_color,
+    };
+    ui.label(
+        RichText::new(line.text)
+            .color(colour)
+            .size(palette.small_font_size),
+    );
 }
 
 fn render_cooperative_feeds(

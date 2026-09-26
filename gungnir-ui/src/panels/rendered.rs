@@ -1771,6 +1771,7 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
                     peers: &[],
                     bearing_feeds: &[],
                     bearing_pipeline: crate::panels::sensor_health::BearingPipelineLine::default(),
+                    exchange: None,
                 },
             );
         });
@@ -1901,6 +1902,7 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                 peers: &[],
                 bearing_feeds: &[],
                 bearing_pipeline: BearingPipelineLine::default(),
+                exchange: None,
             },
         );
     });
@@ -1950,6 +1952,7 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                     expired: 12,
                     refused: 2,
                 },
+                exchange: None,
             },
         );
     });
@@ -2009,6 +2012,7 @@ fn the_point_cloud_registration_line_names_the_backend_and_why() {
                     peers: &[],
                     bearing_feeds: &[],
                     bearing_pipeline: BearingPipelineLine::default(),
+                    exchange: None,
                 },
             );
         });
@@ -2050,6 +2054,73 @@ fn the_point_cloud_registration_line_names_the_backend_and_why() {
     assert!(
         text.contains("Point-cloud registration: pair loaded, backend not yet resolved"),
         "{text}"
+    );
+}
+
+/// **GAP-146: a console the node will not take products from is told so, once, on
+/// PN-09.** The line reaches the screen under its own heading, and appears exactly once;
+/// with no node linked there is no section at all, rather than one that implies
+/// publishing is happening somewhere.
+#[test]
+fn the_health_panel_says_once_that_this_console_may_not_publish() {
+    use crate::panels::sensor_health::{
+        render_sensor_health, BearingPipelineLine, ClockSyncLine, ExchangeLine, ExchangeStanding,
+        PointCloudRegistrationLine, SensorHealthView,
+    };
+    use crate::panels::status_strip::EncryptionState;
+
+    let health = gungnir_model::SystemHealth::default();
+    let probe = RenderProbe::new();
+    let draw = |exchange: Option<ExchangeLine<'_>>| {
+        let (_, frame) = probe.draw(|ui| {
+            render_sensor_health(
+                ui,
+                &theme::Palette::day(),
+                &SensorHealthView {
+                    health: &health,
+                    encryption: EncryptionState::Active,
+                    sensors: &[],
+                    clocks: ClockSyncLine {
+                        sources_observed: 0,
+                        sources_out_of_sync: 0,
+                        max_skew_s: 0.0,
+                    },
+                    detectors: &[],
+                    terrain: crate::panels::sensor_health::TerrainLine {
+                        masking: false,
+                        detail: "no terrain configured",
+                    },
+                    point_cloud_registration: PointCloudRegistrationLine::NotConfigured,
+                    feeds: &[],
+                    cooperative_feeds: &[],
+                    peers: &[],
+                    bearing_feeds: &[],
+                    bearing_pipeline: BearingPipelineLine::default(),
+                    exchange,
+                },
+            );
+        });
+        frame
+    };
+
+    let frame = draw(None);
+    assert!(
+        !frame.says("Coalition exchange"),
+        "an unlinked console drew an exchange section: {}",
+        frame.joined()
+    );
+
+    let sentence = "Not publishing to coalition exchange: the node refused this console (403)";
+    let frame = draw(Some(ExchangeLine {
+        standing: ExchangeStanding::Refused,
+        text: sentence,
+    }));
+    assert!(frame.says("Coalition exchange"), "{}", frame.joined());
+    assert_eq!(
+        frame.joined().matches(sentence).count(),
+        1,
+        "the refusal is said once: {}",
+        frame.joined()
     );
 }
 

@@ -587,7 +587,7 @@ pub fn tick(state: &mut AppState) {
 }
 
 /// Publish this desktop's whole handoff set to the node again when the link comes back
-/// (GAP-145, DN-18 §12).
+/// (GAP-145, DN-18 §12), and its launch warnings with it (GAP-146, DN-18 §13).
 ///
 /// **The edge, not the state.** A publish replaces this producer's set, so repeating it
 /// every tick would be a write a second for nothing; what matters is the moment the link
@@ -599,7 +599,7 @@ fn republish_exchange_on_reconnect(state: &mut AppState, link: &NodeLink) {
     let connected = link.connected();
     let was = std::mem::replace(&mut state.link_was_connected, connected);
     if connected && !was {
-        crate::handoffs::republish_to_node(state);
+        crate::exchange::republish_all(state);
     }
 }
 
