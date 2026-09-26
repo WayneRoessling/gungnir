@@ -98,6 +98,7 @@ fn to_detection_view(o: &Observation) -> DetectionView {
             peer: None,
             conversion_loss: None,
             authentication: gungnir_model::SourceAuthentication::default(),
+            rehearsal: None,
         },
     }
 }

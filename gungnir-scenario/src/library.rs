@@ -425,26 +425,11 @@ pub struct ClassProfiles {
     pub classes: Vec<ClassProfile>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
-pub struct Noise {
-    pub range_m: Num,
-    pub cross_m: Num,
-    pub height_m: Num,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
-pub struct Latency {
-    pub mean: Num,
-    pub jitter: Num,
-}
-
-/// Electronic-attack sensitivities a scenario may apply.
-#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
-pub struct ElectronicAttack {
-    pub skew_s: Num,
-    pub dropout_multiplier: Num,
-    pub fa_multiplier: Num,
-}
+// The three parameter groups a detection model carries are the observation model's own
+// types, which moved to `gungnir-sensor-sim` with it
+// (docs/design/DN-32-re-observation-for-a-laydown.md §4); re-exported so the library
+// still names them.
+pub use gungnir_sensor_sim::model::{ElectronicAttack, Latency, Noise};
 
 /// One sensor model, with the fields the observation model reads typed and the rest
 /// kept.
@@ -478,6 +463,36 @@ pub struct SensorType {
     pub rest: BTreeMap<String, Scalar>,
 }
 
+impl SensorType {
+    /// The detection model the observation model reads (`gungnir_sensor_sim::observe`),
+    /// with a sensor instance's registration bias where its override gives one. The
+    /// type's own `bias_m`, where it declares one, stays in [`SensorType::rest`] and is
+    /// not applied: the reference applies only an instance's override, and parity is
+    /// what the generator is held to.
+    #[must_use]
+    pub fn detection_model(&self, bias: Option<(Num, Num)>) -> gungnir_sensor_sim::SensorParams {
+        gungnir_sensor_sim::SensorParams {
+            signature_key: self.signature_key.clone(),
+            range_m: self.range_m.clone(),
+            pd_in_range: self.pd_in_range,
+            update_period_s: self.update_period_s,
+            noise: self.noise,
+            field_of_regard_deg: self.field_of_regard_deg,
+            altitude_m: self.altitude_m,
+            horizon: self.horizon,
+            latency_s: self.latency_s,
+            dropout: self.dropout,
+            out_of_order: self.out_of_order,
+            false_alarms_per_scan: self.false_alarms_per_scan,
+            ea: self.ea,
+            cued: self.cued,
+            moving_only: self.moving_only,
+            sea_state_dropout: self.sea_state_dropout.clone(),
+            bias_m: bias.map(|(east, north)| gungnir_sensor_sim::model::Bias { east, north }),
+        }
+    }
+}
+
 /// `sensors.yaml`.
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct SensorModels {
@@ -485,7 +500,55 @@ pub struct SensorModels {
     pub types: Vec<SensorType>,
     /// Emission descriptions grouped under the emission class a sensor detects.
     #[serde(default)]
-    pub emission_map: BTreeMap<String, Vec<String>>,
+    pub emission_map: EmissionMap,
+}
+
+/// `sensors.yaml`'s `emission_map`, **in the file's order**.
+///
+/// The order is part of the answer: a description may sit under two classes ("control
+/// and video link" is under both `datalink` and `control`), and the reference takes the
+/// first class, in the YAML's order, whose list names it. This was a `BTreeMap` until
+/// 2026-09-25, which asks in alphabetical order instead and answered `control` where the
+/// reference answers `datalink`. No committed detection showed it -- no sample set has a
+/// sensor reading that class of that platform -- and `entities.json`, which writes every
+/// entity's emission class whether a sensor reads it or not, found it on its first
+/// comparison (`tests/sidecar_parity.rs`, DN-32 §12).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct EmissionMap(pub Vec<(String, Vec<String>)>);
+
+impl EmissionMap {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// The classes and their descriptions, in the file's order.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Vec<String>)> {
+        self.0.iter().map(|(k, v)| (k, v))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for EmissionMap {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = EmissionMap;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a mapping from an emission class to its descriptions")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut out = Vec::new();
+                while let Some((k, v)) = map.next_entry::<String, Vec<String>>()? {
+                    out.push((k, v));
+                }
+                Ok(EmissionMap(out))
+            }
+        }
+        deserializer.deserialize_map(V)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]

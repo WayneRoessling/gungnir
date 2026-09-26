@@ -198,6 +198,21 @@ pub struct SensorConfig {
     /// never goes down": an unplanned outage is a failure and is reported as one.
     #[serde(default)]
     pub maintenance: Vec<MaintenanceWindowConfig>,
+    /// The detection model a laydown rehearsal re-observes this sensor with: a sensor
+    /// type from the test-track sensor catalogue (`radar.long`, `radar.short`, `eo-ir`,
+    /// `acoustic`, ...), resolved against its JSON export,
+    /// `testdata/tracks/sensor-models.json`
+    /// (docs/design/DN-32-re-observation-for-a-laydown.md §5.4).
+    ///
+    /// **Absent means the sensor cannot be rehearsed**, and a rehearsal of a laydown that
+    /// places it refuses by name. It is never inferred from `modality` and
+    /// `max_range_m` -- a modality is not a detection model, and a range alone has no
+    /// per-class bands, probability of detection or noise -- and never borrowed from a
+    /// recording's sensor that happens to share this one's identifier. Validated here for
+    /// its form; the catalogue it names is resolved where it is read, by the rehearsal,
+    /// because a baseline does not know where a packaged release keeps it (DN-32 §12).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detection_model: Option<String>,
     /// The bearings this sensor can see (GAP-118, D-84): `boresight_rad` clockwise from
     /// **true north at the sensor**, and `width_rad` in `(0, 2π]`. A sector may straddle
     /// north.
@@ -3658,6 +3673,18 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 s.id
             )));
         }
+        // DN-32 §5.4: a detection model is named by a catalogue identifier, which has no
+        // spaces and is never empty. A name that could not be one is refused at load,
+        // rather than surfacing as an unknown model the first time somebody rehearses.
+        if let Some(model) = &s.detection_model {
+            if model.is_empty() || model.chars().any(char::is_whitespace) {
+                return Err(ConfigError::Invalid(format!(
+                    "sensor {} names the detection model {model:?}, which cannot be a \
+                     sensor type from the catalogue (an identifier such as \"radar.short\")",
+                    s.id
+                )));
+            }
+        }
         // GAP-118, D-84: a sector nobody can draw or count is refused, not narrowed.
         if let Some(sector) = &s.azimuth_sector {
             if let Err(e) = sector.validate() {
@@ -4546,6 +4573,7 @@ MFkw
             max_range_m: 1.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         };
         b.sensors = vec![s.clone(), s];
@@ -4636,6 +4664,7 @@ MFkw
                 max_range_m: 20_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             radar_feeds: vec![RadarFeedConfig {
@@ -4663,6 +4692,7 @@ MFkw
                 max_range_m: 60_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             ais_feeds: vec![AisFeedConfig {
@@ -4736,6 +4766,7 @@ MFkw
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         };
         let one = |sensor_id, sac, sic, azimuth_sigma_rad| DfSiteConfig {
@@ -4811,6 +4842,7 @@ MFkw
             max_range_m: 20_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         };
         let one = |sensor_id, sac, sic| UasSiteConfig {
@@ -4871,6 +4903,7 @@ MFkw
             max_range_m: 400_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         };
         let adsb = |sensor_id, source| ConfigBaseline {
@@ -4943,6 +4976,7 @@ MFkw
             max_range_m: 50_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         };
         let misb = |sensor_id, source| ConfigBaseline {
@@ -5015,6 +5049,7 @@ MFkw
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         };
         let sapient = |sensor_id, node_type, source| ConfigBaseline {
@@ -5106,6 +5141,7 @@ MFkw
             max_range_m: 5_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
         };
         let with_destination = |destination_id, node_id, source| ConfigBaseline {
@@ -5182,6 +5218,7 @@ MFkw
                 max_range_m: 20_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             endpoints: vec![EndpointConfig {
@@ -5432,6 +5469,7 @@ MFkw
                 max_range_m: 100.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             resources: vec![ResourceConfig {
@@ -5689,7 +5727,36 @@ MFkw
             max_range_m: 20_000.0,
             control_endpoint: None,
             maintenance: Vec::new(),
+            detection_model: None,
             azimuth_sector: None,
+        }
+    }
+
+    /// DN-32 §5.4: a sensor's detection model is optional, defaults to absent in every
+    /// baseline written before the field, and when present is a catalogue identifier --
+    /// an empty or spaced name is refused at load rather than at the first rehearsal.
+    #[test]
+    fn a_detection_model_is_optional_and_named_by_an_identifier() {
+        let old: SensorConfig = serde_json::from_value(serde_json::json!({
+            "id": 1, "modality": "radar", "position": [0.0, 0.0, 10.0]
+        }))
+        .expect("a sensor written before the field reads");
+        assert_eq!(old.detection_model, None);
+
+        let with = |model: &str| ConfigBaseline {
+            sensors: vec![SensorConfig {
+                detection_model: Some(model.to_owned()),
+                ..one_radar()
+            }],
+            ..ConfigBaseline::default()
+        };
+        validate(&with("radar.short")).expect("a catalogue identifier is accepted");
+        for bad in ["", "radar short", " radar.short"] {
+            let err = validate(&with(bad)).expect_err("not an identifier");
+            assert!(
+                err.to_string().contains("detection model"),
+                "{bad:?}: {err}"
+            );
         }
     }
 
@@ -5983,6 +6050,7 @@ MFkw
                 max_range_m: 1000.0,
                 control_endpoint: None,
                 maintenance: windows,
+                detection_model: None,
                 azimuth_sector: None,
             }],
             ..ConfigBaseline::default()
@@ -7068,6 +7136,7 @@ mod sector_and_urgency_tests {
             control_endpoint: None,
             maintenance: Vec::new(),
             azimuth_sector,
+            detection_model: None,
         }
     }
 

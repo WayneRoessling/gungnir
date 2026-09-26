@@ -1,0 +1,33 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+
+[package]
+name = "gungnir-sensor-sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Simulation: the observation half of the test-track generator, re-observing recorded truth from a given sensor position (DN-32). Generates no truth. A dependency of gungnir-scenario, gungnir-app's laydown rehearsal and the verifier layer only -- never of the node, ingest, the tracking service, the API or the remote link."
+
+[lib]
+# `cargo bench --workspace -- --baseline main` (bench-regression.yml) passes criterion's
+# flags to every bench target. A lib target's implicit harness is libtest, which rejects
+# them with "Unrecognized option: 'baseline'" and fails the job. Criterion documents this
+# opt-out; it removes no benchmark, because the criterion benches are `[[bench]]` targets.
+bench = false
+
+[lints]
+workspace = true
+
+# No workspace crate. The observation model is a pure function of recorded state, a
+# sensor model and a position (docs/design/DN-32-re-observation-for-a-laydown.md §2), and
+# it sits in the tracking core beside `gungnir-scenario`, which depends on it (edge (z)),
+# so it may not reach up into `gungnir-model`; `gungnir-app` converts its mark into the
+# model's `RehearsalOrigin` (DN-32 §12).
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+serde_json.workspace = true

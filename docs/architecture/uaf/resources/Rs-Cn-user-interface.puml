@@ -36,11 +36,13 @@ component "reporting\n(see Rs-Cn-secure-operate-sustain)" as RS_reporting <<Exte
 component "resilience\n(see Rs-Cn-secure-operate-sustain)" as RS_resilience <<External>> #line.dashed
 component "security\n(see Rs-Cn-secure-operate-sustain)" as RS_security <<External>> #line.dashed
 component "sensor_management\n(see Rs-Cn-sense-ingest-normalize)" as RS_sensor_management <<External>> #line.dashed
+component "sensor_sim\n(see Rs-Cn-tracking-core)" as RS_sensor_sim <<External>> #line.dashed
 component "store\n(see Rs-Cn-foundational)" as RS_store <<External>> #line.dashed
 component "time\n(see Rs-Cn-sense-ingest-normalize)" as RS_time <<External>> #line.dashed
 component "tracking_service\n(see Rs-Cn-service-facades)" as RS_tracking_service <<External>> #line.dashed
 component "workflow\n(see Rs-Cn-secure-operate-sustain)" as RS_workflow <<External>> #line.dashed
 RS_app --> RS_coord
+RS_app --> RS_sensor_sim
 RS_app --> RS_tracking_service
 RS_app --> RS_intercept_service
 RS_app --> RS_remote

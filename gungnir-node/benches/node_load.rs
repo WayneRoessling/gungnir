@@ -85,6 +85,7 @@ fn write_feed(timeline: &GeneratedTimeline, path: &Path) {
                 peer: None,
                 conversion_loss: None,
                 authentication: gungnir_model::SourceAuthentication::default(),
+                rehearsal: None,
             },
         };
         writeln!(
@@ -110,6 +111,7 @@ fn config_for(timeline: &GeneratedTimeline, dir: &Path) -> ConfigBaseline {
                 max_range_m: 200_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             })
             .collect(),

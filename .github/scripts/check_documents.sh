@@ -42,7 +42,7 @@ tracks() {
   python docs/test-tracks/tools/build_catalogue.py
   python docs/test-tracks/tools/gen_tracks.py
   python docs/test-tracks/tools/validate_tracks.py
-  committed docs/test-tracks testdata/tracks/samples
+  committed docs/test-tracks testdata/tracks/samples testdata/tracks/sensor-models.json
 }
 
 records() {

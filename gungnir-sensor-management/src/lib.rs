@@ -659,6 +659,7 @@ mod service_observation_tests {
                 max_range_m: 20_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             "v1",
@@ -971,6 +972,7 @@ mod tests {
                 max_range_m: 50_000.0,
                 control_endpoint: Some("radar-control".into()),
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             "v1",
@@ -1029,6 +1031,7 @@ mod tests {
                 max_range_m: 50_000.0,
                 control_endpoint: None,
                 maintenance: Vec::new(),
+                detection_model: None,
                 azimuth_sector: None,
             }],
             "v1",
@@ -1148,6 +1151,7 @@ mod tests {
                     max_range_m: 20_000.0,
                     control_endpoint: None,
                     maintenance: Vec::new(),
+                    detection_model: None,
                     azimuth_sector: None,
                 },
                 SensorConfig {
@@ -1157,6 +1161,7 @@ mod tests {
                     max_range_m: 5_000.0,
                     control_endpoint: None,
                     maintenance: Vec::new(),
+                    detection_model: None,
                     azimuth_sector: None,
                 },
             ],
@@ -1178,6 +1183,7 @@ mod tests {
                     to_s: 20.0,
                     reason: "antenna swap".into(),
                 }],
+                detection_model: None,
                 azimuth_sector: None,
             }],
             "cal-2026-09",
@@ -1318,6 +1324,7 @@ mod tests {
                 control_endpoint: None,
                 maintenance: Vec::new(),
                 azimuth_sector: Some(sector),
+                detection_model: None,
             },
             SensorConfig {
                 id: 2,
@@ -1327,6 +1334,7 @@ mod tests {
                 control_endpoint: None,
                 maintenance: Vec::new(),
                 azimuth_sector: None,
+                detection_model: None,
             },
         ];
         let mut r = InMemorySensorRegistry::from_config(&configs, "cal-1");

@@ -8,8 +8,10 @@
 //! where it came from: a YAML `0` stays an integer through `min`, `max`, `abs` and `round`,
 //! and is written to JSON as `0`; the same value after one multiplication by a float is
 //! `0.0`. Byte-for-byte parity therefore needs a number that remembers which it is, and a
-//! writer that prints a float the way `repr(float)` does. Nothing else in the workspace
-//! wants either; they are private to this crate's generator.
+//! writer that prints a float the way `repr(float)` does. Only the generator and the
+//! observation model want either. They moved here from `gungnir-scenario` with that model
+//! (docs/design/DN-32-re-observation-for-a-laydown.md §4), and `gungnir-scenario`
+//! re-exports this module under its old path.
 
 // "CPython" is a proper noun and not an identifier; the lint would have it in backticks.
 #![allow(clippy::doc_markdown)]

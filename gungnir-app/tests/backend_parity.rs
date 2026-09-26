@@ -173,6 +173,7 @@ fn write_feed(timeline: &GeneratedTimeline, path: &Path) -> usize {
                 peer: None,
                 conversion_loss: None,
                 authentication: gungnir_model::SourceAuthentication::default(),
+                rehearsal: None,
             },
         };
         writeln!(
@@ -225,6 +226,7 @@ fn baseline(timeline: &GeneratedTimeline, dir: &Path, backend: BackendConfig) ->
                 maintenance: Vec::new(),
                 // Scenario 1's radar looks all round (GAP-118).
                 azimuth_sector: None,
+                detection_model: None,
             })
             .collect(),
         resources: vec![ResourceConfig {

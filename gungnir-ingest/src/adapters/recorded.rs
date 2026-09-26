@@ -33,17 +33,28 @@ impl RecordedFeedAdapter {
                 .map_err(|e| IngestError::Io(format!("{}:{}: {e}", path.display(), n + 1)))?;
             queue.push_back(d);
         }
-        // Release order follows source time regardless of file order.
-        let mut sorted: Vec<DetectionView> = queue.into_iter().collect();
+        Ok(Self::from_views(
+            format!("recorded:{}", path.display()),
+            queue.into_iter().collect(),
+        ))
+    }
+
+    /// A feed already in memory, released the same way a file's is: by source time as
+    /// mission time reaches it. A laydown rehearsal feeds its re-observed detections
+    /// through this (docs/design/DN-32-re-observation-for-a-laydown.md §8), so they meet
+    /// the release rule a recorded file's do rather than a second one.
+    pub fn from_views(name: impl Into<String>, views: Vec<DetectionView>) -> Self {
+        // Release order follows source time regardless of arrival order.
+        let mut sorted = views;
         sorted.sort_by(|a, b| {
             a.source_time
                 .partial_cmp(&b.source_time)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
-        Ok(Self {
-            name: format!("recorded:{}", path.display()),
+        Self {
+            name: name.into(),
             queue: sorted.into(),
-        })
+        }
     }
 
     pub fn remaining(&self) -> usize {
