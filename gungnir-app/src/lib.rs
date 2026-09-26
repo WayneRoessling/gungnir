@@ -47,6 +47,7 @@ pub mod projection;
 pub mod radar;
 pub mod rehearsal;
 pub mod requirements;
+pub mod retention;
 pub mod review;
 pub mod rhythm;
 pub mod sapient;

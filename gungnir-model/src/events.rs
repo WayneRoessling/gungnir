@@ -828,6 +828,36 @@ pub enum LaunchWarningEvent {
     },
 }
 
+/// What retention did to the record (GAP-122, D-78), journaled into the session that was
+/// live when it happened.
+///
+/// **A deletion is on the record.** The purged session's own journal is gone, so the
+/// only account of what was removed, when, and under which limit is this event in a
+/// session that survives it. An administrator asked why a session is missing reads the
+/// answer here.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum RetentionEvent {
+    /// A session's journal and its mission record were removed because the journal had
+    /// not been written for more than the deployment keeps one.
+    Purged {
+        session: crate::SessionId,
+        /// Days since the journal was last written, when it was purged.
+        idle_days: f64,
+        /// The limit it had passed (`RetentionPolicy::max_session_age_days`).
+        max_session_age_days: u32,
+        /// The size of the journal removed.
+        bytes: u64,
+        at: MissionTime,
+    },
+    /// A purge an earlier process began and did not finish was finished (D-78): the
+    /// session had already been taken out of the journal's listing, and its mission
+    /// record and file are removed now.
+    Completed {
+        session: crate::SessionId,
+        at: MissionTime,
+    },
+}
+
 /// The node link on a connected desktop (GAP-050, D-23): fell back to embedded
 /// services after the node went silent, and answered again afterwards.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
