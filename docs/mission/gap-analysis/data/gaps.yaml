@@ -8474,6 +8474,16 @@
     note: >-
       Filed by the GAP-067 walk, which held the backend-switching row and dropped
       '(planned)' from its method.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Built: `gungnir-app/tests/backend_parity.rs` gives one Scenario 1 timeline to an
+      embedded desktop and to one linked over the product's mutual TLS to the node's own
+      code (`gungnir_node::picture`), drains on what each pipeline reports, and compares
+      the picture, health, plan and alerts (D-85). It found GAP-160, GAP-161 and a node
+      planner with no local frame, all fixed here. The row is not gated and its criterion
+      is unchanged: it awaits the owner's walk. See
+      `../../record/2026-09-25/one-scenario-through-both-backends.md`.
 
 - id: GAP-121
   name: StoreAndForwardQueue has no production caller
@@ -9861,3 +9871,84 @@
     note: >-
       Found closing GAP-118. Not edited in that change: the sentence is in a criterion
       cell of the verification table, which only the owner changes.
+
+- id: GAP-160
+  name: A node publishes no track, so a linked desktop's picture is frozen at sign-in
+  type: Technical
+  caps: [CAP-7.3]
+  layer: Deployment and API
+  sev: 5
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    Nothing in the workspace produced a `TrackingEvent`, though five things read them: a
+    linked desktop's projection between snapshots, a partner's stream (DN-18 §6), the
+    reports, the replay and the node's entity fold. A desktop linked to a node drew the
+    tracks its sign-in snapshot held for as long as the link stayed up, and the node's
+    journal -- the system of record in the connected profiles -- held no track history.
+  evidence: >-
+    `gungnir-node/src/main.rs` (the loop published ingest, plan and health events and no
+    tracking event); `gungnir-remote/src/link.rs` (`apply` takes tracks from
+    `TrackingEvent` alone between snapshots)
+  action: >-
+    Publish the track lifecycle from the node's picture every tick -- initiated, updated,
+    deleted -- in an order a reader applying them keeps.
+  ref: >-
+    Found building GAP-120
+    (`../../record/2026-09-25/one-scenario-through-both-backends.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Found by the GAP-120 parity test: the linked desktop drew no track while the
+      embedded one drew three.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Closed under D-86: the node diffs its picture each tick against what it last
+      announced and publishes the difference, deletions first
+      (`gungnir_tracking_service::TrackLifecycle`, `gungnir_node::picture::Announcer`).
+      The parity test fails without it. See
+      `../../record/2026-09-25/one-scenario-through-both-backends.md`.
+
+- id: GAP-161
+  name: A linked desktop's health strip reports the link, not the node's services
+  type: Technical
+  caps: [CAP-7.3]
+  layer: Deployment and API
+  sev: 4
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: []
+  impact: >-
+    Both remote services answered `is_healthy` with whether the link was up, so a node
+    whose tracker or planner had stopped was drawn working on every linked desktop's status
+    strip and PN-09 -- the health flag `CLAUDE.md` forbids, on the path a linked operator
+    relies on. The node reported both, in its snapshot and in `HealthEvent::Changed`, and
+    nothing on the desktop read either.
+  evidence: >-
+    `gungnir-remote/src/lib.rs` (`RemoteTrackingService::is_healthy` and
+    `RemoteInterceptService::is_healthy` returned `connected`); `gungnir-remote/src/link.rs`
+    (`apply` ignored `Event::Health`; the snapshot's `health` was never kept)
+  action: >-
+    Keep the node's word on its services in the link's projection and make each remote
+    service healthy only when the link is up and the node says its service is.
+  ref: >-
+    Found building GAP-120
+    (`../../record/2026-09-25/one-scenario-through-both-backends.md`)
+  history:
+  - date: 2026-09-25
+    status: Open
+    note: >-
+      Found by the GAP-120 parity test, whose drain stops both trackers: the embedded
+      desktop showed its tracker down and the linked one showed the node's tracking.
+  - date: 2026-09-25
+    status: Closed
+    note: >-
+      Closed under D-86: `link::Projection::node_health` holds the snapshot's health and
+      every `HealthEvent::Changed`, and a remote service is healthy only when linked and the
+      node reports it so. `gungnir-remote/tests/node_health.rs` pins it. See
+      `../../record/2026-09-25/one-scenario-through-both-backends.md`.

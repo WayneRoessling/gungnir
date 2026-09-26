@@ -42,7 +42,7 @@ use gungnir_api::v3::{
 };
 use gungnir_eventing::{Envelope, Event};
 use gungnir_intercept_service::PlanView;
-use gungnir_model::events::{InterceptEvent, TrackingEvent};
+use gungnir_model::events::{HealthEvent, InterceptEvent, TrackingEvent};
 use gungnir_model::{BearingRayView, DetectionView, PipelineStatsView};
 use gungnir_tracking_service::TrackView;
 use std::sync::{Arc, Mutex};
@@ -86,6 +86,20 @@ pub struct Projection {
     pub pipeline_stats: PipelineStatsView,
     /// True only once a node has answered. Cleared as soon as it stops.
     pub connected: bool,
+    /// What the node last said about its own services (GAP-161): the snapshot's `health`
+    /// on each connection, then every `HealthEvent::Changed` on the stream. `None` until
+    /// a node has said anything at all.
+    ///
+    /// **Why the link keeps it.** A desktop's status strip draws the tracking pipeline
+    /// and the planner as healthy or not, and on a linked desktop both are the node's.
+    /// Until GAP-161 the two remote services answered `is_healthy` with whether the link
+    /// was up, so a node whose tracker had stopped was shown to every linked operator as
+    /// tracking -- the health flag `CLAUDE.md` forbids, on the path an operator relies on
+    /// most. The node already published both; nothing here read them.
+    ///
+    /// Kept across a disconnect as the last thing the node said, and not read while the
+    /// link is down: the services report unhealthy then on `connected` alone.
+    pub node_health: Option<gungnir_model::SystemHealth>,
     /// When this link's task started asking (GAP-142).
     ///
     /// **So a node that has never answered can be judged silent.** `last_heard` is `None`
@@ -1126,6 +1140,8 @@ async fn run_link(
         // not a live one.
         p.bearing_rays = snapshot.bearing_rays;
         p.pipeline_stats = snapshot.pipeline_stats;
+        // GAP-161: the node's own word on its services, kept live by the stream from here.
+        p.node_health = Some(snapshot.health);
         p.token = Some(token.clone());
         p.node_time = snapshot.node_time;
         p.connected = true;
@@ -1946,6 +1962,20 @@ fn apply(projection: &Arc<Mutex<Projection>>, envelope: &Envelope) -> Result<(),
             InterceptEvent::PlanProposed(plan) | InterceptEvent::PlanApproved(plan),
         ) => {
             p.plan = plan.clone();
+        }
+        // GAP-161: the node's services, as the node reports them. See
+        // `Projection::node_health`.
+        Event::Health(HealthEvent::Changed {
+            tracking_healthy,
+            intercept_healthy,
+            ingest_healthy,
+            ..
+        }) => {
+            p.node_health = Some(gungnir_model::SystemHealth {
+                tracking_healthy: *tracking_healthy,
+                intercept_healthy: *intercept_healthy,
+                ingest_healthy: *ingest_healthy,
+            });
         }
         // The node's approval queue (GAP-133, DN-31 §6.6). Taken as itself rather than
         // put on the inbox, because unlike a sensor task or an effector report this is a

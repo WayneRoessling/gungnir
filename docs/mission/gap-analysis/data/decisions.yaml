@@ -1944,3 +1944,51 @@
     sector across north then needs no special case. A placement may re-aim its sensor, and
     one that does not inherits the declaration's sector. See
     `../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`.
+
+- id: D-85
+  decision: What "identical projections" means for a plan kept from an earlier solve
+  question: >-
+    The backend-switching row asks for identical `AppState` projections from one scenario
+    through the embedded and the remote backends. A plan keeps the geometry, value and time
+    of the solve that first made its pairing (GAP-097), and which solve that was depends on
+    which frame first saw the asynchronous pipeline's report -- so two runs of the same
+    embedded desktop can hold one pairing under different geometry. What does the parity
+    test compare for the plan, and what does it compare exactly?
+  raised_in: "GAP-120"
+  decider: Owner
+  unblocks: GAP-120
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** The picture, the health strip,
+    PN-09's bearing line, the withheld resources, the scenario's alerts and a selected
+    track's what-if are compared exactly; a linked desktop's plan is compared exactly with
+    the node's; the two backends' plans are compared by their pairing, and their planners
+    by one solve of the final picture at one time, equal in all but the minted identifier.
+    Comparing plan vintages exactly was rejected because it would pass or fail on the
+    scheduler; comparing them within a tolerance was rejected because it would hide a real
+    planner difference behind one -- the common solve is what caught the node's missing
+    frame. The row and its criterion are the owner's walk. See
+    `../../record/2026-09-25/one-scenario-through-both-backends.md`.
+- id: D-86
+  decision: How a node's picture stays live on a linked desktop between snapshots
+  question: >-
+    A linked desktop reads the node's snapshot once per connection and follows the stream,
+    and the stream carried plans but no track and no health: nothing in the workspace
+    produced a `TrackingEvent`, and a linked desktop's health was the link's (GAP-160,
+    GAP-161). Should the node publish the track lifecycle and the desktop read the node's
+    health events, or should the link re-read the snapshot on an interval?
+  raised_in: "GAP-120; GAP-160; GAP-161"
+  decider: Owner
+  unblocks: GAP-160, GAP-161
+  resolved: 2026-09-25
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-25.** The node diffs its picture each
+    tick against what it last announced and publishes `TrackInitiated`, `TrackUpdated` for
+    any changed field, and `TrackDeleted`, deletions first so a reader appending keeps the
+    host's order (`TrackLifecycle`, `picture::Announcer`); the link keeps the node's health
+    from the snapshot and every `HealthEvent::Changed`, and a remote service is healthy only
+    when the link is up and the node says its service is. Re-reading the snapshot was
+    rejected: it polls the whole picture per desktop, leaves the journal, the partner stream,
+    the reports, the replay and the entity fold without the events all five were written
+    against, and delays every change by the interval. See
+    `../../record/2026-09-25/one-scenario-through-both-backends.md`.

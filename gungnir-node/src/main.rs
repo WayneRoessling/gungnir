@@ -40,7 +40,7 @@ mod entities;
 
 // GAP-132: the node's approval wiring is a library module so DN-31 §9 rows 3 to 6 can
 // drive the same source this binary runs (see `lib.rs`).
-use gungnir_node::approval;
+use gungnir_node::{approval, picture};
 
 use gungnir_api::transport::NodeApi;
 use gungnir_api::v3::{CoverageResponse, SnapshotResponse};
@@ -48,18 +48,15 @@ use gungnir_api::API_VERSION;
 use gungnir_config::{validate, ConfigBaseline, ConfigStore, FileConfigStore, NodeConfig};
 use gungnir_eventing::{Event, EventBus, InProcessBus};
 use gungnir_ingest::adapters::peer::{LaunchWarningOutcome, LaunchWarningSink};
-use gungnir_ingest::{AllowListAuthenticator, IngestGateway, MachineIdentityAuthenticator};
-use gungnir_intercept_service::{DpInterceptService, InterceptService};
+use gungnir_ingest::{IngestGateway, MachineIdentityAuthenticator};
+use gungnir_intercept_service::InterceptService;
 use gungnir_mission::{JournalMissionManager, MissionManager, MissionState};
-use gungnir_model::events::InterceptEvent;
-use gungnir_model::{PlanView, SensorId, SystemHealth};
+use gungnir_model::{SensorId, SystemHealth};
 use gungnir_observability::WatchdogConfig;
 use gungnir_sensor_management::{InMemorySensorRegistry, SensorRegistry};
 use gungnir_store::{EventJournal, FileEventJournal};
 use gungnir_time::{TimeAuthority, WallClockAuthority};
-use gungnir_tracking_service::{
-    project_pipeline_stats, LiveTrackingService, PipelineStats, TrackingService,
-};
+use gungnir_tracking_service::TrackingService;
 use std::time::{Duration, Instant};
 
 /// Service tick period.
@@ -110,50 +107,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     let handle = runtime.handle().clone();
     runtime.block_on(run(config, node_cfg, handle))
-}
-
-/// The sensor positions the tracker needs to place an angular report (GAP-001, DN-27 §4).
-///
-/// Built from the baseline's own sensor list, which is where a deployment states where
-/// each sensor is. Without it every bearing and every range-azimuth-elevation report is
-/// refused, which is what happened until 2026-09-07.
-///
-/// **Geodetic in, ENU out (GAP-104).** `SensorConfig::position` is
-/// `[lat_rad, lon_rad, alt_m]`; `SensorPositions` is metres in the local ENU frame. From
-/// 2026-09-07 this handed the one straight to the other, which type-checks and placed
-/// every sensor a metre or two from the ENU origin. So the conversion goes through
-/// [`local_frame`], the same one this binary already converts sensor coverage with.
-///
-/// **No origin is a refusal, not a fallback.** A deployment that declared no origin has
-/// no frame to convert into and there is no sound default for one, so this yields an
-/// empty map -- and an empty map refuses every angular report by name
-/// (`SubmitError::NotAPosition`) instead of placing a detection somewhere plausible and
-/// wrong. It warns, because a silent refusal of every bearing looks exactly like no
-/// angular feed reporting.
-fn sensor_positions(config: &ConfigBaseline) -> gungnir_tracking_service::SensorPositions {
-    let Some(frame) = local_frame(config) else {
-        if !config.sensors.is_empty() {
-            tracing::warn!(
-                "no local frame origin is declared, so no sensor has a position in \
-                 the tracking frame; every bearing and range-azimuth-elevation \
-                 report will be refused"
-            );
-        }
-        return gungnir_tracking_service::SensorPositions::default();
-    };
-    gungnir_tracking_service::SensorPositions::from_geodetic(
-        &frame,
-        config.sensors.iter().map(|s| {
-            (
-                s.id,
-                gungnir_model::Geodetic {
-                    lat_rad: s.position[0],
-                    lon_rad: s.position[1],
-                    alt_m: s.position[2],
-                },
-            )
-        }),
-    )
 }
 
 fn load_config(path: Option<String>) -> Result<ConfigBaseline, gungnir_config::ConfigError> {
@@ -403,16 +356,9 @@ fn build_gateway(
     FeedReports,
     BoundSapientFeeds,
 ) {
-    let mut gateway = IngestGateway::new(Box::new(AllowListAuthenticator {
-        // DN-16 §5: a peer is a source and is admitted like one, under its own id.
-        allowed: config
-            .sensors
-            .iter()
-            .map(|s| SensorId(s.id))
-            .chain(config.peers.iter().map(|p| SensorId(p.source_id)))
-            .collect(),
-    }));
-    gateway.set_expected_adapters(config.sensors.len());
+    // DN-16 §5: a peer is a source and is admitted like one, under its own id. The same
+    // gateway `gungnir-app/tests/backend_parity.rs` builds (GAP-120).
+    let mut gateway = picture::gateway(config);
     let mut reports = FeedReports {
         radar: Vec::new(),
         peers: Vec::new(),
@@ -1038,32 +984,6 @@ fn build_registry(config: &ConfigBaseline) -> InMemorySensorRegistry {
     sensors
 }
 
-/// Carries detections submitted over the API into the ingest gateway.
-///
-/// **A `ProtocolAdapter` rather than a direct call into the gateway**, so a submission is
-/// authenticated against the sensor allow-list and validated by exactly the code a
-/// sensor's own feed goes through. `gungnir-ingest` is the trust boundary for external
-/// data; a route that reached past it would be a second way in with no checks on it.
-struct ApiSubmissionAdapter {
-    api: Arc<NodeApi>,
-}
-
-impl gungnir_ingest::ProtocolAdapter for ApiSubmissionAdapter {
-    // The trait ties the returned lifetime to `&self`, so a `&'static str` here would
-    // not match its signature. The adapters in `gungnir-ingest` are written the same way.
-    #[allow(clippy::unnecessary_literal_bound)]
-    fn name(&self) -> &str {
-        "api-v3-submission"
-    }
-
-    fn poll(
-        &mut self,
-        _now: gungnir_model::MissionTime,
-    ) -> Result<Vec<gungnir_model::DetectionView>, gungnir_ingest::IngestError> {
-        Ok(self.api.take_submissions())
-    }
-}
-
 /// Carries the machine-submitted detections (GAP-002) into the gateway, apart from the
 /// operators' queue so the gateway can admit them under the machine-identity
 /// authenticator.
@@ -1415,41 +1335,6 @@ fn coverage_answer(config: &ConfigBaseline, sensors: &InMemorySensorRegistry) ->
     ))
 }
 
-/// Republish the picture for anyone connected.
-///
-/// Every tick: a desktop takes this once on connecting and follows the event stream
-/// after, so it is cheap and always current. Collection requirements are empty because
-/// a node states none of its own -- PN-15 is a desktop panel, and publishing an empty
-/// list is different from the field being absent (GAP-005).
-///
-/// **`bearing_rays`/`pipeline_stats` are the same values `tracking.bearing_rays()`/
-/// `tracking.pipeline_stats()` already give an embedded desktop** (GAP-096's wire
-/// contract): attached here so a connected one reads the same picture rather than the
-/// `TrackingService` trait's defaulted empty answer `gungnir-remote` gave before this
-/// entry. Refreshed every tick like `tracks`, so a snapshot taken right after this call
-/// is as current as the pipeline's last poll -- there is no separate live update for
-/// either between snapshots (see `gungnir_remote::RemoteTrackingService`'s own doc
-/// comment for what that means for a connected desktop).
-fn publish_picture(
-    api: &Arc<NodeApi>,
-    tracks: &[gungnir_model::TrackView],
-    bearing_rays: &[gungnir_model::BearingRayView],
-    pipeline_stats: PipelineStats,
-    plan: &PlanView,
-    health: SystemHealth,
-    queue: Vec<gungnir_api::v3::QueueItemView>,
-) {
-    let snapshot = SnapshotResponse::new(tracks.to_vec(), Some(plan.clone()), health, Vec::new())
-        .with_bearing_data(
-            bearing_rays.to_vec(),
-            project_pipeline_stats(pipeline_stats),
-        )
-        .with_queue(queue);
-    if let Err(err) = api.publish_snapshot(snapshot) {
-        tracing::error!(%err, "could not publish the snapshot");
-    }
-}
-
 /// Start the transport, or say why it is not started.
 ///
 /// Mutual TLS when the deployment configures it, and plaintext on loopback when it does
@@ -1647,63 +1532,13 @@ async fn run(
     // GAP-086 and GAP-053: the promoted algorithm baseline decides how this node
     // filters, so it is read here, before the tracker it configures. It reaches the
     // journal further down, once the event bus exists.
-    let governance = gungnir_modelops::InMemoryModelRegistry::from_baseline(&config);
-    let promoted: Option<gungnir_modelops::ModelBaseline> = match &governance {
-        Ok(registry) => config
-            .operating_profile()
-            .and_then(|p| gungnir_modelops::ModelRegistry::promoted(registry, &p))
-            .cloned(),
-        Err(err) => {
-            tracing::error!(
-                %err,
-                "the baseline's algorithm configuration was refused; this node governs nothing"
-            );
-            None
-        }
-    };
+    let promoted = picture::promoted_baseline(&config);
 
-    // GAP-012: the tracker judges staleness by the baseline's policy. GAP-053: and it
-    // filters as the promoted algorithm baseline says, stamping that baseline's
-    // identifier only because it is applying it (DN-24 §7). A baseline naming a filter
-    // this build does not implement is refused by name and the tracker stays ungoverned,
-    // rather than running a different filter under the promoted one's identity.
-    let mut tracking = match promoted.as_ref().map(|b| {
-        // DN-28 §5: the imm-cv-ct fields, built from the baseline's own `TrackingConfig`
-        // here rather than in `gungnir-tracking-service`, which may not depend on
-        // `gungnir-config`.
-        let imm = gungnir_tracking_service::ImmBaselineFields {
-            turn_rate_rad_s: b.config.imm_turn_rate_rad_s,
-            mode_transition: b.config.imm_mode_transition,
-            initial_mode_probabilities: b.config.imm_initial_mode_probabilities,
-        };
-        (
-            b,
-            gungnir_tracking_service::PipelineSettings::from_baseline(
-                b.config.gate_threshold,
-                &b.config.filter_selection,
-                &imm,
-                b.config.measurement_noise_var,
-            ),
-        )
-    }) {
-        Some((baseline, Ok(settings))) => {
-            tracing::info!(baseline = %baseline.id, "the promoted algorithm baseline is applied");
-            LiveTrackingService::with_pipeline_settings(&handle, settings)
-                .with_staleness(config.policy.staleness.clone())
-                .with_sensor_positions(sensor_positions(&config))
-                .with_algorithm_baseline(&baseline.id)
-        }
-        Some((baseline, Err(err))) => {
-            tracing::error!(baseline = %baseline.id, %err, "the promoted algorithm baseline is not applied; the tracker runs its default filter and stays ungoverned");
-            LiveTrackingService::new(&handle)
-                .with_staleness(config.policy.staleness.clone())
-                .with_sensor_positions(sensor_positions(&config))
-        }
-        None => LiveTrackingService::new(&handle)
-            .with_staleness(config.policy.staleness.clone())
-            .with_sensor_positions(sensor_positions(&config)),
-    };
-    let mut intercept = DpInterceptService::new(config.allocation_horizon);
+    // GAP-012, GAP-053: the tracker, and GAP-031: the planner in the deployment's frame.
+    // Built by the library so the backend-switching row's test builds the same two
+    // (GAP-120), which is how the frame this planner was missing came to light.
+    let mut tracking = picture::tracking_service(&config, &handle, promoted.as_ref());
+    let mut intercept = picture::intercept_service(&config);
     let resources = config.resource_views();
     // GAP-088: the fences the baseline declares. None declared is said once, because
     // an engine that can only pass is worth knowing about.
@@ -1932,9 +1767,9 @@ async fn run(
     // Registered after the transport is built, so a submitted detection has somewhere to
     // arrive from. The gateway counts it as an adapter, so a node with the API enabled
     // reports one more than the baseline's sensors -- which is true.
-    gateway.add_adapter(Box::new(ApiSubmissionAdapter {
-        api: Arc::clone(&api),
-    }));
+    gateway.add_adapter(Box::new(picture::ApiSubmissionAdapter::new(Arc::clone(
+        &api,
+    ))));
     // GAP-002: detections a sensor submitted under its own certificate, admitted by the
     // one authenticator that may stamp `MachineIdentity`. Registered even when no
     // identity is declared: an empty vouched list admits nothing, which is true.
@@ -1983,8 +1818,8 @@ async fn run(
         }
     };
     let mut ticker = tokio::time::interval(TICK);
-    let mut last_plan = PlanView::default();
-    let mut last_health: Option<SystemHealth> = None;
+    // What has already been said about the picture: the tracks, the plan, the health.
+    let mut announcer = picture::Announcer::new();
     let mut last_health_log = Instant::now();
     let mut ingest_gap_warned = false;
 
@@ -2065,6 +1900,12 @@ async fn run(
             bus.publish(now, Event::Rhythm(event))?;
         }
         tracking.poll(now);
+        // GAP-160: what changed in the picture, as the events every reader of this node
+        // was written against -- a linked desktop's projection, a partner's stream, the
+        // journal the reports, the replay and the entity fold read. Until then nothing
+        // published one, and a desktop linked to this node kept the picture its sign-in
+        // snapshot held for as long as the link stayed up.
+        announcer.tracks(&bus, now, tracking.tracks())?;
 
         // GAP-019, edge (s): resolve cross-session identity and journal it. One event per
         // track rather than one per tick -- an identity is a claim about what a track is,
@@ -2080,7 +1921,6 @@ async fn run(
         // published as `PlanProposed` would be a recommendation nobody made now, and this
         // node is the system of record for every desktop reading it.
         let outcome = intercept.plan(now, tracking.tracks(), &resources);
-        let plan = outcome.plan().cloned().unwrap_or_default();
         // The picture this tick's approval work judges against, read once (GAP-132).
         let frame = approval::Frame {
             now,
@@ -2092,11 +1932,7 @@ async fn run(
             endpoint_client: endpoint_client.as_ref(),
             api: &api,
         };
-        if outcome.is_fresh() && plan != last_plan {
-            bus.publish(
-                now,
-                Event::Intercept(InterceptEvent::PlanProposed(plan.clone())),
-            )?;
+        if let Some(plan) = announcer.plan(&bus, now, &outcome)? {
             // GAP-132, D-55: the node runs the **whole** chain and queues what clears it.
             // Until now it ran two of the four engines and threw the verdict away, because
             // authority is a question about who is asking and nobody signs in to a node.
@@ -2105,8 +1941,7 @@ async fn run(
             // it. `submit_to_ladder` publishes `PlanEvaluated` with the engines that ran
             // and `Queued` for what it queued, both in this tick, so the whole path is on
             // the journal and the stream before MOP-07's window (§6.9).
-            approval::propose(&mut approval_desk, &frame, plan.clone());
-            last_plan = plan;
+            approval::propose(&mut approval_desk, &frame, plan);
         }
         // The sweep on the node's clock (DN-31 §6.4), then the decisions the routes
         // accepted, in arrival order (§6.3). Both before the journal append below, so
@@ -2137,7 +1972,9 @@ async fn run(
             intercept_healthy: intercept.is_healthy(),
             ingest_healthy: gateway.is_healthy(),
         };
-        if last_health != Some(health) || last_health_log.elapsed() >= HEALTH_LOG_INTERVAL {
+        // MOE-06: the transition is on the record, the periodic log is not.
+        let changed = announcer.health(&bus, now, health)?;
+        if changed || last_health_log.elapsed() >= HEALTH_LOG_INTERVAL {
             // The registry is reported rather than merely held: a node that built one
             // and never read it would be construction without wiring, which is the
             // thing this gap was open about.
@@ -2150,28 +1987,15 @@ async fn run(
                 retention_purged,
                 "node health"
             );
-            if last_health != Some(health) {
-                // MOE-06: the transition is on the record, the periodic log is not.
-                bus.publish(
-                    now,
-                    Event::Health(gungnir_model::events::HealthEvent::Changed {
-                        tracking_healthy: health.tracking_healthy,
-                        intercept_healthy: health.intercept_healthy,
-                        ingest_healthy: health.ingest_healthy,
-                        at: now,
-                    }),
-                )?;
-            }
-            last_health = Some(health);
             last_health_log = Instant::now();
         }
         api.set_now(now.0);
-        publish_picture(
+        picture::publish_picture(
             &api,
             tracking.tracks(),
             tracking.bearing_rays(),
             tracking.pipeline_stats(),
-            &last_plan,
+            announcer.last_plan(),
             health,
             // GAP-132: the queue goes out with the picture, so `GET /v3/queue` and the
             // snapshot's `queue` are one publish read through two doors.
@@ -2506,6 +2330,8 @@ impl gungnir_store::sealing::JournalSealer for EphemeralSealer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gungnir_ingest::AllowListAuthenticator;
+    use gungnir_node::picture::sensor_positions;
 
     /// A registry for `config` whose sensor 7 is reached through a SAPIENT router that
     /// swallows every task: each line is counted, and nothing ever comes back (GAP-115).
