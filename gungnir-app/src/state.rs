@@ -82,6 +82,12 @@ pub struct AppState {
         gungnir_data::geoid::GeoidModel,
         crossbeam_channel::Receiver<Result<gungnir_data::geoid::GeoidGrid, String>>,
     )>,
+    /// The geoid model every bound radar feed holds (GAP-196): the verified EGM2008 grid
+    /// once [`crate::geoid::lend_to_feeds`] lends it, the reason there is none until then.
+    pub geoid_feeds: gungnir_ingest::geoid::GeoidHandle,
+    /// The EGM2008 grid status last lent to the feeds, so a lookup service starts once
+    /// per change rather than once per tick.
+    pub geoid_lent: Option<crate::geoid::GeoidStatus>,
     /// What this tick's registration of the loaded pair did (GAP-024), read by PN-09
     /// (`crate::pointcloud::registration_line`) and, once GAP-024's own remaining item
     /// finds an owner, the viewport.
@@ -726,6 +732,8 @@ impl AppState {
             point_cloud: crate::pointcloud::PointCloudStatus::NotConfigured,
             geoid: crate::geoid::GeoidGrids::default(),
             geoid_checks: Vec::new(),
+            geoid_feeds: feeds.geoid.clone(),
+            geoid_lent: None,
             registration: crate::pointcloud::RegistrationOutcome::NoPair,
             registration_engine: None,
             service_sinks: feeds.observations,

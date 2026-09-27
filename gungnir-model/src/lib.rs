@@ -145,7 +145,10 @@ pub use rhythm::{
     ScheduledProduct,
 };
 pub use time::MissionTime;
-pub use uas_identification::{OperationalRisk, UasCertificationCategory, UasIdentificationReport};
+pub use uas_identification::{
+    OperationalRisk, UasAltitudeReference, UasCertificationCategory, UasIdentificationReport,
+    EGM2008_MAX_ABS_SEPARATION_M,
+};
 pub use uas_platform::{EnuPoint, UasPlatformReport};
 pub use ui_settings::{LayoutNode, RoleLayout, ThemeVariant, UiSettings};
 pub use vocabulary::{Term, Vocabulary};

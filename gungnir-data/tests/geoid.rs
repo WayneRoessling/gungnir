@@ -165,6 +165,79 @@ fn a_grid_that_disappears_after_verification_is_refused_not_ballparked() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// GAP-196 (D-123): the live lookup a Category 129 feed asks once per report gives the
+/// same undulation as `pyproj` over the full grid, from the thread that started it and
+/// from another one -- the ingest adapter asks from the gateway's thread, and the
+/// service is shared by every feed.
+#[test]
+#[cfg(feature = "crs")]
+fn the_live_lookup_agrees_with_pyproj_from_any_thread() {
+    use gungnir_data::geoid::UndulationService;
+    let service = UndulationService::start(&clip()).expect("PROJ opens the clip");
+    assert_eq!(service.grid().sha256(), CLIP_SHA256);
+    for [lon, lat, want] in PYPROJ {
+        let got = service.undulation(lon, lat).expect("inside the clip");
+        assert!(
+            (got - want).abs() < 1e-6,
+            "at ({lon}, {lat}): {got} vs {want}"
+        );
+    }
+    let shared = service.clone();
+    let from_elsewhere = std::thread::spawn(move || shared.undulation(PYPROJ[2][0], PYPROJ[2][1]))
+        .join()
+        .expect("the asking thread finishes")
+        .expect("inside the clip");
+    assert!((from_elsewhere - PYPROJ[2][2]).abs() < 1e-6);
+}
+
+/// Off the grid is a refusal naming the point, never a zero -- through the live lookup
+/// as through [`gungnir_data::geoid::undulations`]. The Category 129 fixture's own
+/// position (10 N, 20 W) is one such point for the clip.
+#[test]
+#[cfg(feature = "crs")]
+fn the_live_lookup_refuses_a_point_off_the_grid() {
+    let service = gungnir_data::geoid::UndulationService::start(&clip()).expect("opens");
+    let err = service
+        .undulation(-20.0, 10.0)
+        .expect_err("the clip is the Baltic");
+    assert!(err.to_string().contains("longitude -20"), "{err}");
+    let err = service.undulation(f64::NAN, 54.0).expect_err("not finite");
+    assert!(err.to_string().contains("not finite"), "{err}");
+}
+
+/// A grid verified and then taken away is a refusal when the lookup starts, not a
+/// service that answers zero.
+#[test]
+#[cfg(feature = "crs")]
+fn the_live_lookup_refuses_a_grid_that_disappeared_after_verification() {
+    let dir = std::env::temp_dir().join(format!("gungnir-geoid-live-gone-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("scratch");
+    let copy = dir.join("clip.tif");
+    std::fs::copy(clip_path(), &copy).expect("copies");
+    let grid = GeoidGrid::verify(&copy, CLIP_SHA256).expect("same bytes");
+    std::fs::remove_file(&copy).expect("removes");
+    let err = gungnir_data::geoid::UndulationService::start(&grid).expect_err("the file is gone");
+    assert!(
+        err.to_string().contains("cannot read the geoid grid"),
+        "{err}"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Without `crs` there is no PROJ to read the grid with, and the live lookup says so by
+/// naming the feature, rather than answering anything.
+#[test]
+#[cfg(not(feature = "crs"))]
+fn without_crs_the_live_lookup_is_refused_by_naming_the_feature() {
+    let err = gungnir_data::geoid::UndulationService::start(&clip()).expect_err("no PROJ");
+    assert!(
+        matches!(err, gungnir_data::DataError::NotImplemented { .. }),
+        "{err}"
+    );
+    assert!(err.to_string().contains("crs"), "{err}");
+}
+
 /// The whole point-cloud conversion for a file that states its heights as EGM2008:
 /// `pyproj`, over the full grid, took `Transformer.from_crs(<this WKT>, "EPSG:4979",
 /// always_xy=True)` for five-points.las's own first and fifth points (easting 500010,

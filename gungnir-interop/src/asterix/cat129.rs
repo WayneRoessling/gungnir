@@ -130,14 +130,31 @@
 //! adapter (`gungnir_ingest::adapters::asterix`), which holds the `LocalFrame` this
 //! crate may not depend on (`ARCHITECTURE.md` §7) and converts this same geodetic
 //! position for the fusion pipeline as a second, independent step.
+//!
+//! **What I129/090's "mean sea level" is, and where it is corrected (GAP-196, D-123).**
+//! Edition 1.2 §5.2.9 defines I129/090 as "Altitude above Mean Sea Level (AMSL)", LSB
+//! 0.1 m, two's complement, and says nothing more: no geoid model, no source (GNSS or
+//! barometric), and I129/080's WGS-84 position is latitude and longitude only. The
+//! change history's one entry for the item (edition 1.1, 15 August 2018) is the editorial
+//! note on negative values. Edition 1.2 is still the latest: EUROCONTROL's own
+//! publication page for the category lists 1.0, 1.1 and 1.2 and nothing later (checked
+//! 2026-09-26), as its list of ASTERIX categories and statuses did for GAP-101. So a
+//! report's only absolute height is one above mean sea level, which is not the WGS-84
+//! ellipsoidal height `Geodetic::alt_m` means everywhere else. This codec cannot correct
+//! it -- this crate reaches no geoid grid, and may not (`ARCHITECTURE.md` §7.1) -- so it
+//! places I129/090 as sent and says so in the report's own
+//! [`gungnir_model::UasAltitudeReference`], never only in prose. The ingest adapter
+//! (`gungnir_ingest::adapters::asterix`), which places the report in the deployment's
+//! frame, adds the EGM2008 separation when its host attached the verified grid, and
+//! otherwise keeps it flagged as mean sea level with the reason.
 
 use super::{data_blocks, sign_extend, Cursor, DataBlock, Fspec};
 use crate::asterix::cat048::DataSource;
 use crate::asterix::cat205::WgsPosition;
 use crate::{InteropError, UasIdentificationCodec};
 use gungnir_model::{
-    Geodetic, MissionTime, OperationalRisk, SensorId, UasCertificationCategory,
-    UasIdentificationReport,
+    Geodetic, MissionTime, OperationalRisk, SensorId, UasAltitudeReference,
+    UasCertificationCategory, UasIdentificationReport,
 };
 
 /// The codec's name in the schema catalog.
@@ -151,6 +168,11 @@ pub const PART1_EDITION_CITED: &str = "2.4";
 const CATEGORY: u8 = 129;
 /// The loss a report records when it carries no I129/070 (GAP-116).
 pub const TIME_OF_DAY_ABSENT: &str = "no time of day (I129/070); source time set to receipt time";
+/// Why a height this codec maps is still above mean sea level: the codec reaches no geoid
+/// model (module documentation, GAP-196). The ingest adapter replaces this with its own
+/// answer -- corrected, or the reason it could not be.
+pub const DECODED_WITHOUT_A_GEOID: &str =
+    "decoded by the Category 129 codec, which reaches no geoid model";
 const MAX_FRN: usize = 21;
 /// I129/080: 180 / 2^30 degrees per count (§5.2.8) -- see the module documentation for
 /// the cross-check against the specification's own worked decimal, and for why this
@@ -509,30 +531,23 @@ impl AsterixCat129Codec {
             super::cat048::source_time(record.time_of_day_s, receipt_time, TIME_OF_DAY_ABSENT);
         losses.extend(time_loss.map(str::to_owned));
 
-        // Geodetic::alt_m is nominally a WGS-84 ellipsoidal height. I129/090 (AMSL) is
-        // an orthometric height; the two differ by the local geoid undulation, which
-        // this build does not correct for (it has no geoid model to correct with) but
-        // does record as a loss rather than presenting the substitution as exact.
+        // Geodetic::alt_m is a WGS-84 ellipsoidal height everywhere else. I129/090 is a
+        // height above mean sea level, off the ellipsoid by the local geoid separation,
+        // which this crate has no model to add (module documentation, GAP-196). So the
+        // height is placed as sent and the report says what it is, as data: the
+        // adapter that places the report corrects it where a verified grid is attached.
         // I129/100 (AGL) is deliberately never used here even alone: without a ground
         // elevation model, an above-ground-level height cannot honestly become an
         // absolute one, and inventing a ground elevation would be exactly the
-        // confidently-wrong move this workspace forbids.
-        let alt_m = if let Some(amsl) = record.altitude_amsl_m {
-            losses.push(
-                "I129/090 (orthometric height above mean sea level) is placed on a \
-                 nominally WGS-84 ellipsoidal altitude field; the local geoid \
-                 undulation is not corrected for"
-                    .to_owned(),
-            );
-            amsl
-        } else {
-            losses.push(
-                "neither I129/090 nor a usable absolute altitude is present in this \
-                 record; I129/100 (above ground level) cannot substitute without a \
-                 ground elevation model, so altitude is set to 0"
-                    .to_owned(),
-            );
-            0.0
+        // confidently-wrong move this workspace forbids (GAP-199).
+        let (alt_m, altitude_reference) = match record.altitude_amsl_m {
+            Some(amsl) => (
+                amsl,
+                UasAltitudeReference::MeanSeaLevelUncorrected {
+                    reason: DECODED_WITHOUT_A_GEOID.to_owned(),
+                },
+            ),
+            None => (0.0, UasAltitudeReference::NoAbsoluteHeight),
         };
 
         Ok(UasIdentificationReport {
@@ -544,6 +559,7 @@ impl AsterixCat129Codec {
                 lon_rad: position.longitude_deg.to_radians(),
                 alt_m,
             },
+            altitude_reference,
             altitude_amsl_m: record.altitude_amsl_m,
             altitude_agl_m: record.altitude_agl_m,
             gnss_signal_accuracy_m: record.gnss_signal_accuracy_m,
@@ -652,11 +668,19 @@ mod tests {
         assert!((rep.position.alt_m - 500.0).abs() < 1e-9);
         assert!((rep.altitude_amsl_m.expect("amsl") - 500.0).abs() < 1e-9);
         assert!((rep.gnss_signal_accuracy_m.expect("gnss") - 12.0).abs() < 1e-9);
-        let loss = rep
-            .conversion_loss
-            .as_deref()
-            .expect("the geoid-undulation approximation is recorded");
-        assert!(loss.contains("geoid"));
+        assert_eq!(
+            rep.altitude_reference,
+            UasAltitudeReference::MeanSeaLevelUncorrected {
+                reason: DECODED_WITHOUT_A_GEOID.to_owned()
+            },
+            "the codec places I129/090 as sent and says it is mean sea level (GAP-196)"
+        );
+        let loss = rep.losses();
+        assert!(loss.contains("NOT corrected"), "{loss}");
+        assert!(
+            rep.conversion_loss.is_none(),
+            "the height's loss lives in altitude_reference, not in the free text"
+        );
     }
 
     #[test]

@@ -13,12 +13,13 @@ A row is a function that refuses, whether or not anything calls it today. The
 wording is the code's own, so a row whose message has gone stale is a defect in the
 code, not in this page.
 
-17 places in 8 crates.
+18 places in 8 crates.
 
 | Crate | File | Function | Error | What is missing | Waiting on |
 |---|---|---|---|---|---|
 | `gungnir-api` | `src/lib.rs` | `UnimplementedServer::serve` | `ApiError::TransportNotImplemented` | API transport is not implemented in this build | -- |
 | `gungnir-app` | `src/pointcloud.rs` | `convert` | `DataError::NotImplemented` | converting a point cloud out of its own coordinate reference system | a build with gungnir-data's `crs` feature, which links libproj |
+| `gungnir-data` | `src/geoid.rs` | `UndulationService::start` | `DataError::NotImplemented` | reading a geoid undulation for a live report's height | a build with gungnir-data's `crs` feature, which reads the grid through libproj |
 | `gungnir-data` | `src/geoid.rs` | `geoid_to_ellipsoidal` | `DataError::NotImplemented` | adding a geoid undulation to a height | a build with gungnir-data's `crs` feature, which reads the grid through libproj |
 | `gungnir-data` | `src/geospatial/mod.rs` | `classify` | `DataError::NotImplemented` | terrain classification | GAP-082, a classification design over the loaded grid |
 | `gungnir-data` | `src/scientific/filters.rs` | `clip_by_plane` | `DataError::NotImplemented` | the clip-by-plane filter | nothing but the work; the filters are project-owned |

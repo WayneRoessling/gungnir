@@ -37,6 +37,13 @@
 //! because DN-15's cooperative detectors read it; nothing reads one for this source, and
 //! adding the field without the detector would be state nobody consults.
 //!
+//! **The height, and what it is measured from (GAP-196).** A report's height is above
+//! mean sea level on the wire; the feed's adapter puts it on the WGS-84 ellipsoid with
+//! the EGM2008 grid when [`crate::geoid::lend_to_feeds`] has lent it one, and otherwise
+//! leaves it flagged as mean sea level (D-123, D-124). The flag survives association:
+//! each track keeps its last report's [`UasAltitudeReference`], PN-04 says it in a line
+//! ([`height_line`]) and PN-03 marks the track's U ([`msl_height_tracks`]).
+//!
 //! `gungnir-node` binds the same Category 129 gateways and fuses none of this, for the
 //! reason its own AIS and ADS-B bindings already record: that binary has no edge to
 //! `gungnir-identification`. It drains the same sink on its loop so the queue cannot
@@ -46,7 +53,8 @@ use std::collections::{HashMap, HashSet};
 
 use gungnir_identification::{IdentificationEngine, IdentificationEvidence};
 use gungnir_model::{
-    Classification, Geodetic, LocalFrame, MissionTime, TrackId, UasIdentificationReport,
+    Classification, Geodetic, LocalFrame, MissionTime, TrackId, UasAltitudeReference,
+    UasIdentificationReport,
 };
 
 use crate::cooperative::{ASSOCIATION_GATE_M, COOPERATIVE_CONFIDENCE};
@@ -78,6 +86,45 @@ pub struct LastUasIdentification {
     pub registration_country: String,
     pub at: MissionTime,
     pub separation_m: f64,
+    /// I129/090 as sent, metres above mean sea level, when the report carried it.
+    pub altitude_amsl_m: Option<f64>,
+    /// What the report's placed height is measured from (GAP-196).
+    pub altitude: UasAltitudeReference,
+}
+
+/// PN-04's line for a track's last Category 129 report height, and whether that height
+/// is on the WGS-84 ellipsoid; `None` when no report was associated with the track
+/// (GAP-196). A height still above mean sea level is said as such, with the reason,
+/// never as an ellipsoidal one.
+#[must_use]
+pub fn height_line(state: &AppState, track: TrackId) -> Option<(String, bool)> {
+    let last = state.uas.by_track.get(&track)?;
+    let sent = match last.altitude_amsl_m {
+        Some(h) => format!("{h:.1} m above mean sea level"),
+        None => "no height above mean sea level".to_string(),
+    };
+    Some((
+        format!(
+            "UAS report height: {sent}; placed {}",
+            last.altitude.summary()
+        ),
+        last.altitude.is_ellipsoidal(),
+    ))
+}
+
+/// The tracks whose last Category 129 report left the height above mean sea level,
+/// uncorrected: PN-03 marks their U (GAP-196, D-124).
+#[must_use]
+pub fn msl_height_tracks(state: &AppState) -> Vec<TrackId> {
+    let mut tracks: Vec<TrackId> = state
+        .uas
+        .by_track
+        .iter()
+        .filter(|(_, last)| last.altitude.is_msl_uncorrected())
+        .map(|(id, _)| *id)
+        .collect();
+    tracks.sort_by_key(|t| t.0);
+    tracks
 }
 
 /// The claimed identity in one line, for the evidence label and the record.
@@ -178,6 +225,8 @@ fn associate(
             registration_country: report.registration_country.clone(),
             at: report.receipt_time,
             separation_m,
+            altitude_amsl_m: report.altitude_amsl_m,
+            altitude: report.altitude_reference.clone(),
         },
     );
     if state.uas.submitted.insert((track, claim.clone())) {
@@ -205,6 +254,9 @@ mod tests {
                 lat_rad: 0.9,
                 lon_rad: 0.2,
                 alt_m: 120.0,
+            },
+            altitude_reference: UasAltitudeReference::MeanSeaLevelUncorrected {
+                reason: "no grid".into(),
             },
             altitude_amsl_m: Some(120.0),
             altitude_agl_m: None,

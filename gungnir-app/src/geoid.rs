@@ -27,10 +27,25 @@
 //! the grid it needs is still being hashed. That costs the hash's time once at start --
 //! about a fifth of a second for the 80 MB EGM2008 grid in a release build, the three
 //! hashed in parallel -- and nothing when no grid is present.
+//!
+//! **What else the EGM2008 grid corrects: a UAS's height above mean sea level (GAP-196,
+//! D-123).** ASTERIX Category 129 states a UAS's height only above mean sea level
+//! (I129/090). Once the EGM2008 check settles, [`lend_to_feeds`] hands every bound radar
+//! feed the verified grid as a [`gungnir_ingest::geoid::GeoidSeparation`] -- one PROJ
+//! lookup service, `gungnir_data::geoid::UndulationService`, shared by them all -- and
+//! the feed's adapter adds the EGM2008 separation before it places the report. Until
+//! then, and in any deployment without a verified EGM2008 grid or a build without `crs`,
+//! every feed holds the reason instead, and the height reaches the picture flagged as
+//! mean sea level, never as an ellipsoidal one (D-124). EGM96 and GEOID18 are not lent:
+//! D-123 reads an unqualified "mean sea level" as EGM2008. `gungnir-ingest` has no edge to
+//! `gungnir-data` (`ARCHITECTURE.md` §7.1), which is why the grid crosses as an interface
+//! lent here rather than a call made there.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use gungnir_data::geoid::{GeoidGrid, GeoidModel};
+use gungnir_data::geoid::{GeoidGrid, GeoidModel, UndulationService};
+use gungnir_ingest::geoid::GeoidSeparation;
 
 use crate::state::AppState;
 
@@ -115,11 +130,18 @@ impl GeoidStatus {
             "; this build has no crs feature, so it converts no real-world CRS in any case"
         };
         let heights = model.heights();
+        // GAP-196 (D-124): without EGM2008, a UAS's height above mean sea level is
+        // carried uncorrected and flagged, which the grid's own line says.
+        let uas = if model == GeoidModel::Egm2008 {
+            ", and a UAS's height above mean sea level is placed uncorrected and flagged"
+        } else {
+            ""
+        };
         match self {
             GeoidStatus::NotChecked => format!("{model} geoid grid: not checked yet"),
             GeoidStatus::NotConfigured => format!(
                 "{model} geoid grid: none installed ({} is in no geoid_grid_dir or \
-                 PROJ_DATA directory); {heights} are refused{converts}",
+                 PROJ_DATA directory); {heights} are refused{uas}{converts}",
                 model.file()
             ),
             GeoidStatus::Verifying { path, source } => format!(
@@ -139,7 +161,7 @@ impl GeoidStatus {
                 reason,
             } => format!(
                 "{model} geoid grid: refused, {} (from {}): {reason}; {heights} are \
-                 refused{converts}",
+                 refused{uas}{converts}",
                 path.display(),
                 source.words()
             ),
@@ -369,6 +391,68 @@ pub fn poll(state: &mut AppState) {
         false
     });
     state.geoid_checks = pending;
+}
+
+/// The reason every bound feed holds before the grid check has settled.
+pub const NOT_YET_CHECKED: &str = "the EGM2008 geoid grid has not been checked yet";
+
+/// The verified EGM2008 grid as the ingest path sees it (GAP-196): one PROJ lookup
+/// service, lent to every bound feed through its [`gungnir_ingest::geoid::GeoidHandle`].
+#[derive(Debug, Clone)]
+pub struct Egm2008Separation(pub UndulationService);
+
+impl GeoidSeparation for Egm2008Separation {
+    fn model(&self) -> &'static str {
+        GeoidModel::Egm2008.name()
+    }
+
+    fn separation_m(&self, lat_deg: f64, lon_deg: f64) -> Result<f64, String> {
+        self.0
+            .undulation(lon_deg, lat_deg)
+            .map_err(|e| e.to_string())
+    }
+}
+
+/// Lend the grid, or the reason there is none, to every bound feed, whenever the check's
+/// answer changes (GAP-196, D-123 and D-124). Runs on the tick after [`poll`], so a feed
+/// bound before the answer learns it from the next report on; a status a test installs
+/// directly is lent the same way.
+///
+/// A grid that verified and that PROJ still cannot open for lookups is an alert: the
+/// deployment installed it and is not getting what it installed it for. A build without
+/// `crs` says so in the reason and raises nothing, since PN-09's geoid line already
+/// states the build cannot read any grid.
+pub fn lend_to_feeds(state: &mut AppState) {
+    let status = state.geoid.status(GeoidModel::Egm2008).clone();
+    if state.geoid_lent.as_ref() == Some(&status) {
+        return;
+    }
+    state.geoid_lent = Some(status);
+    if state.feed_stats.is_empty() {
+        // No feed holds the handle, so no lookup service is started for nobody.
+        return;
+    }
+    let reason = match state.geoid.grid(GeoidModel::Egm2008) {
+        Ok(grid) => match UndulationService::start(&grid) {
+            Ok(service) => {
+                state
+                    .geoid_feeds
+                    .set_available(Arc::new(Egm2008Separation(service)));
+                return;
+            }
+            Err(e) => {
+                let reason = format!("the verified EGM2008 grid cannot be read for lookups: {e}");
+                if cfg!(feature = "crs") {
+                    state.alerts.push(format!(
+                        "a UAS's height above mean sea level stays uncorrected: {reason}"
+                    ));
+                }
+                reason
+            }
+        },
+        Err(reason) => format!("no verified EGM2008 geoid grid: {reason}"),
+    };
+    state.geoid_feeds.set_unavailable(reason);
 }
 
 /// Record a check's answer, and put a refusal on the alert list: a grid a deployment

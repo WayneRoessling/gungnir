@@ -38,14 +38,32 @@
 //! sign against the primary text's own item pages and reversed the codec's reading of
 //! the one item that text contradicts itself on (`gungnir_interop::asterix::cat129`'s
 //! module documentation: I129/120, one octet).
+//!
+//! **A UAS's height above mean sea level, placed on the ellipsoid (GAP-196, D-123,
+//! D-124): human-owned (the `gungnir-ingest` gateway; see docs/signatures.md).**
+//! I129/090 is the only absolute height a Category 129 record carries, and it is above
+//! mean sea level, not the WGS-84 ellipsoid every other height on the picture is
+//! measured from (`gungnir_interop::asterix::cat129`'s module documentation). Where the
+//! host lent a geoid model through [`FeedSinks::geoid`] (`crate::geoid`), the adapter
+//! adds its separation at the report's position before the report is placed, so the
+//! detection, the report and every consumer of either see one ellipsoidal height. Where
+//! it did not -- no model on this binary, the grid missing or refused, the position off
+//! the grid -- the height stays as sent and the report's `UasAltitudeReference` says it
+//! is mean sea level and why; the detection carries that in its provenance, its vertical
+//! variance is widened by the square of the largest separation EGM2008 has anywhere
+//! (`gungnir_model::EGM2008_MAX_ABS_SEPARATION_M`), and [`AsterixFeedStats`] counts it.
 
+use crate::geoid::GeoidHandle;
 use crate::{DetectionView, IngestError, ProtocolAdapter};
 use gungnir_interop::asterix::{cat034, cat048, cat129, cat205, data_blocks, RadarSite};
 use gungnir_interop::{
     AsterixCat034Codec, AsterixCat048Codec, AsterixCat129Codec, AsterixCat205Codec, DfSite,
     InteropError, RadarServiceReport, UasSite,
 };
-use gungnir_model::{Geodetic, LocalFrame, MissionTime, SensorId, UasIdentificationReport};
+use gungnir_model::{
+    Geodetic, LocalFrame, MissionTime, SensorId, UasAltitudeReference, UasIdentificationReport,
+    EGM2008_MAX_ABS_SEPARATION_M,
+};
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt::Write as _;
 use std::io::ErrorKind;
@@ -68,6 +86,19 @@ pub const MAX_DATAGRAMS_PER_POLL: usize = 4096;
 /// indicator into this variance either, and doing it only for this category would be a
 /// new, unreviewed pattern rather than a consistent one.
 const BASELINE_POSITION_VARIANCE_M2: [f64; 3] = [400.0, 400.0, 900.0];
+
+/// The per-axis variance a Category 129 detection carries: the baseline, with the up
+/// axis widened by the square of the largest geoid separation EGM2008 has anywhere when
+/// the height is still above mean sea level (GAP-196, D-124). A corrected height, and a
+/// record with no absolute height at all (GAP-199), keep the baseline.
+#[must_use]
+pub fn uas_position_variance(reference: &UasAltitudeReference) -> [f64; 3] {
+    let mut variance = BASELINE_POSITION_VARIANCE_M2;
+    if reference.is_msl_uncorrected() {
+        variance[2] += EGM2008_MAX_ABS_SEPARATION_M * EGM2008_MAX_ABS_SEPARATION_M;
+    }
+    variance
+}
 
 /// A feed as a host describes it, so both binaries build adapters the same way
 /// (GAP-001, handoff §4 step 2). Addresses are already validated by the baseline; a
@@ -97,6 +128,10 @@ pub struct FeedSpec {
 pub struct FeedSinks {
     pub observations: ServiceObservationSink,
     pub stats: FeedStatsSink,
+    /// The geoid model this host lends the feed, or why it lends none (GAP-196). The
+    /// default is unavailable, so a host that sets nothing gets every Category 129
+    /// height flagged as mean sea level and counted, never passed off as ellipsoidal.
+    pub geoid: GeoidHandle,
 }
 
 /// The adapter's counters as of its last poll, for a host to read.
@@ -122,6 +157,7 @@ pub fn bind_feed(
         AsterixFeedAdapter::new(spec.name.clone(), source, frame, &spec.radars)
             .with_df_sites(&spec.df_sites, frame)
             .with_uas_sites(&spec.uas_sites)
+            .with_geoid(sinks.geoid.clone())
             .with_observation_sink(sinks.observations.clone())
             .with_stats_sink(sinks.stats.clone()),
     )
@@ -300,6 +336,13 @@ pub struct AsterixFeedStats {
     /// the detections came from a cooperative identity report rather than a radar plot
     /// or a bearing.
     pub uas_reports: u64,
+    /// GAP-196: Category 129 heights above mean sea level placed on the WGS-84
+    /// ellipsoid by adding the lent geoid model's separation (D-123).
+    pub uas_heights_geoid_corrected: u64,
+    /// GAP-196: Category 129 heights above mean sea level that **no** geoid model
+    /// corrected, carried as mean sea level and flagged (D-124). Each is a report
+    /// whose height is off the ellipsoid by the local separation; PN-09 shows the count.
+    pub uas_heights_msl_uncorrected: u64,
     /// Valid Category 048 or 205 records that are not observations (048's `TYP = 0`;
     /// 205's position message types and detection-end reports -- see
     /// `cat205::AsterixCat205Codec::map`).
@@ -333,6 +376,9 @@ pub struct AsterixFeedAdapter<S: DatagramSource> {
     /// GAP-101. Empty until [`Self::with_uas_sites`] is called, the same honest-empty
     /// convention as `cat205` above.
     cat129: AsterixCat129Codec,
+    /// GAP-196: the geoid model the host lends, read on every Category 129 report so a
+    /// model lent after binding is used from the next report on.
+    geoid: GeoidHandle,
     buf: Vec<u8>,
     service_reports: VecDeque<RadarServiceReport>,
     /// UAS identification reports mapped since the last drain (GAP-101), the same
@@ -435,6 +481,7 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
             cat034: AsterixCat034Codec::new(sites),
             cat205: AsterixCat205Codec::default(),
             cat129: AsterixCat129Codec::default(),
+            geoid: GeoidHandle::default(),
             buf: vec![0; MAX_DATAGRAM],
             service_reports: VecDeque::new(),
             uas_reports: VecDeque::new(),
@@ -507,6 +554,16 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
             })
             .collect();
         self.cat129 = AsterixCat129Codec::new(sites);
+        self
+    }
+
+    /// The geoid model a Category 129 report's height above mean sea level is corrected
+    /// with (GAP-196, D-123): a handle the host keeps and may set after binding. Without
+    /// this the adapter holds an unavailable one, and every such height is carried as
+    /// mean sea level, flagged and counted (D-124).
+    #[must_use]
+    pub fn with_geoid(mut self, geoid: GeoidHandle) -> Self {
+        self.geoid = geoid;
         self
     }
 
@@ -610,7 +667,8 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
                     self.stats.blocks_cat129 += 1;
                     match cat129::decode_block(&block) {
                         Ok(record) => match self.cat129.map(&record, receipt_time) {
-                            Ok(report) => {
+                            Ok(mut report) => {
+                                self.place_uas_height(&mut report);
                                 self.stats.uas_reports += 1;
                                 self.stats.detections += 1;
                                 detections.push(self.uas_detection(&report));
@@ -630,11 +688,66 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
         detections
     }
 
+    /// Put a report's height above mean sea level on the WGS-84 ellipsoid, or say why
+    /// it stays where it is (GAP-196; module documentation). Runs before the report is
+    /// placed or queued, so the detection and the report agree.
+    ///
+    /// Only a height the codec left as mean sea level is touched: a record with no
+    /// I129/090 has no height to correct, and one already corrected is not corrected
+    /// twice.
+    fn place_uas_height(&mut self, report: &mut UasIdentificationReport) {
+        let (Some(amsl), UasAltitudeReference::MeanSeaLevelUncorrected { .. }) =
+            (report.altitude_amsl_m, &report.altitude_reference)
+        else {
+            return;
+        };
+        let lat_deg = report.position.lat_rad.to_degrees();
+        let lon_deg = report.position.lon_rad.to_degrees();
+        let corrected = self.geoid.current().and_then(|model| {
+            model
+                .separation_m(lat_deg, lon_deg)
+                .map(|n| (model.model().to_owned(), n))
+                .map_err(|e| format!("{} gives no separation here: {e}", model.model()))
+        });
+        match corrected {
+            Ok((model, separation_m)) if separation_m.is_finite() => {
+                report.position.alt_m = amsl + separation_m;
+                report.altitude_reference = UasAltitudeReference::GeoidCorrected {
+                    model,
+                    separation_m,
+                };
+                self.stats.uas_heights_geoid_corrected += 1;
+            }
+            Ok((model, separation_m)) => {
+                self.keep_msl(
+                    report,
+                    amsl,
+                    format!("{model} returned a separation of {separation_m}"),
+                );
+            }
+            Err(reason) => self.keep_msl(report, amsl, reason),
+        }
+    }
+
+    /// The height stays I129/090 as sent, flagged with `reason` and counted (D-124).
+    fn keep_msl(&mut self, report: &mut UasIdentificationReport, amsl: f64, reason: String) {
+        report.position.alt_m = amsl;
+        report.altitude_reference = UasAltitudeReference::MeanSeaLevelUncorrected { reason };
+        self.stats.uas_heights_msl_uncorrected += 1;
+    }
+
     /// A UAS identification report's own claimed position (`Geodetic`, module
     /// documentation on `gungnir_model::UasIdentificationReport` explains why it stays
     /// geodetic through `gungnir-interop`) placed in this deployment's ENU frame and
     /// stamped with the same baseline variance AIS, ADS-B and MISB ST 0601 already use
     /// for a cooperatively-reported position (GAP-101).
+    ///
+    /// **GAP-196 (D-124).** A height still above mean sea level is off the ellipsoid
+    /// by a separation nobody knows here, anywhere up to
+    /// [`EGM2008_MAX_ABS_SEPARATION_M`]; the up variance is widened by that bound's
+    /// square so the tracker weighs the bias instead of trusting the height as if it
+    /// were ellipsoidal. The report's every loss, the height's included, goes on the
+    /// detection's provenance, so the picture carries the flag and not only the report.
     fn uas_detection(&self, report: &UasIdentificationReport) -> DetectionView {
         let enu = self.frame.to_enu(report.position);
         DetectionView {
@@ -643,12 +756,13 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
             receipt_time: report.receipt_time,
             measurement: gungnir_model::Measurement::Position {
                 enu: nalgebra::Vector3::new(enu[0], enu[1], enu[2]),
-                variance_m2: BASELINE_POSITION_VARIANCE_M2,
+                variance_m2: uas_position_variance(&report.altitude_reference),
             },
             provenance: gungnir_model::Provenance {
                 source_sensor_ids: vec![report.sensor.0],
                 calibration_baseline_version: None,
                 algorithm_version: format!("{}/ed{}", cat129::CODEC_NAME, cat129::EDITION),
+                conversion_loss: Some(report.losses()),
                 ..gungnir_model::Provenance::default()
             },
         }
@@ -973,6 +1087,181 @@ mod tests {
         assert!(adapter.drain_uas_reports().is_empty());
         assert_eq!(adapter.stats().blocks_cat129, 1);
         assert_eq!(adapter.stats().unknown_radar, 1);
+    }
+
+    /// GAP-196: a Category 129 record over the frame origin (0.9 rad N, 0.2 rad E, the
+    /// nearest I129/080 counts, `0x1255_AB96` and `0x0413_09B0`) carrying I129/090 =
+    /// 500.0 m above mean sea level (`0x00_1388`). FSPEC flags FRN 1, 6, 7 and FRN 8, 9:
+    /// `0x87, 0xC0`. LEN 23.
+    fn cat129_msl_datagram() -> Vec<u8> {
+        vec![
+            0x81, 0x00, 0x17, 0x87, 0xC0, 10, 20, b'D', b'E', 0x54, 0x60, 0x00, 0x12, 0x55, 0xAB,
+            0x96, 0x04, 0x13, 0x09, 0xB0, 0x00, 0x13, 0x88,
+        ]
+    }
+
+    /// A geoid model with one separation everywhere, or one that has none; stands in
+    /// for the desktop's EGM2008 grid, which this crate cannot reach (the grid itself is
+    /// tested through PROJ in `gungnir-data/tests/geoid.rs` and end to end in
+    /// `gungnir-app/tests/uas_identification.rs`).
+    struct FixedSeparation(Result<f64, &'static str>);
+    impl crate::geoid::GeoidSeparation for FixedSeparation {
+        fn model(&self) -> &'static str {
+            "EGM2008"
+        }
+        fn separation_m(&self, _: f64, _: f64) -> Result<f64, String> {
+            self.0.map_err(str::to_owned)
+        }
+    }
+
+    fn uas_feed(sinks: &FeedSinks) -> AsterixFeedAdapter<UdpDatagramSource> {
+        let spec = FeedSpec {
+            name: "uas".into(),
+            bind_addr: "127.0.0.1:0".parse().expect("loopback, any port"),
+            multicast: None,
+            radars: Vec::new(),
+            df_sites: Vec::new(),
+            uas_sites: vec![uas_binding()],
+        };
+        bind_feed(&spec, &frame(), sinks).expect("a loopback socket always binds")
+    }
+
+    fn up_and_variance(d: &DetectionView) -> (f64, [f64; 3]) {
+        match &d.measurement {
+            gungnir_model::Measurement::Position { enu, variance_m2 } => (enu[2], *variance_m2),
+            other => panic!("a position, not {other:?}"),
+        }
+    }
+
+    /// **The no-grid path (D-124).** A host that lends no geoid model gets the height as
+    /// sent, flagged as mean sea level with the reason, counted, carried on the
+    /// detection's provenance, and weighed with the up variance widened by the square of
+    /// EGM2008's largest separation -- never passed off as an ellipsoidal height.
+    #[test]
+    fn a_height_above_msl_with_no_geoid_is_flagged_counted_and_widened() {
+        let mut adapter = uas_feed(&FeedSinks::default());
+        let detections = adapter.handle_datagram(&cat129_msl_datagram(), MissionTime(43_205.0));
+        let report = adapter.drain_uas_reports().pop().expect("one report");
+        assert_eq!(
+            report.altitude_reference,
+            UasAltitudeReference::MeanSeaLevelUncorrected {
+                reason: crate::geoid::NO_GEOID_ATTACHED.to_owned()
+            }
+        );
+        assert!((report.position.alt_m - 500.0).abs() < 1e-9, "as sent");
+        let s = adapter.stats();
+        assert_eq!(
+            (s.uas_heights_msl_uncorrected, s.uas_heights_geoid_corrected),
+            (1, 0)
+        );
+        let (up, variance) = up_and_variance(&detections[0]);
+        // Over the frame origin, so up is the height as sent less the origin's 0 m.
+        assert!((up - 500.0).abs() < 1e-3, "{up}");
+        let widened = 900.0 + EGM2008_MAX_ABS_SEPARATION_M * EGM2008_MAX_ABS_SEPARATION_M;
+        assert!((variance[2] - widened).abs() < 1e-9, "{variance:?}");
+        assert!((variance[0] - 400.0).abs() < 1e-12 && (variance[1] - 400.0).abs() < 1e-12);
+        let loss = detections[0]
+            .provenance
+            .conversion_loss
+            .as_deref()
+            .expect("the flag reaches the picture");
+        assert!(loss.contains("NOT corrected"), "{loss}");
+        assert!(loss.contains(crate::geoid::NO_GEOID_ATTACHED), "{loss}");
+    }
+
+    /// **The correction (D-123)**, with the model lent through the host's handle *after*
+    /// the feed was bound, as the desktop's start-up grid check does: the report and the
+    /// detection both carry I129/090 + N as a WGS-84 ellipsoidal height, the variance is
+    /// the baseline's, and the count moves.
+    #[test]
+    // The baseline is returned untouched, so equality is the property.
+    #[allow(clippy::float_cmp)]
+    fn a_model_lent_after_binding_puts_the_height_on_the_ellipsoid() {
+        let sinks = FeedSinks::default();
+        let mut adapter = uas_feed(&sinks);
+        sinks
+            .geoid
+            .set_available(std::sync::Arc::new(FixedSeparation(Ok(34.92))));
+        let detections = adapter.handle_datagram(&cat129_msl_datagram(), MissionTime(43_205.0));
+        let report = adapter.drain_uas_reports().pop().expect("one report");
+        assert_eq!(
+            report.altitude_reference,
+            UasAltitudeReference::GeoidCorrected {
+                model: "EGM2008".into(),
+                separation_m: 34.92
+            }
+        );
+        assert!((report.position.alt_m - 534.92).abs() < 1e-9);
+        assert!((report.altitude_amsl_m.expect("kept as sent") - 500.0).abs() < 1e-9);
+        let (up, variance) = up_and_variance(&detections[0]);
+        assert!((up - 534.92).abs() < 1e-3, "{up}");
+        assert_eq!(variance, BASELINE_POSITION_VARIANCE_M2);
+        let s = adapter.stats();
+        assert_eq!(
+            (s.uas_heights_msl_uncorrected, s.uas_heights_geoid_corrected),
+            (0, 1)
+        );
+        let loss = detections[0]
+            .provenance
+            .conversion_loss
+            .as_deref()
+            .expect("stated");
+        assert!(loss.contains("EGM2008 geoid separation, 34.92 m"), "{loss}");
+    }
+
+    /// A model with no separation at the report's position -- off a clipped grid, or a
+    /// grid PROJ can no longer read -- is a flagged mean-sea-level height with that
+    /// reason, never a zero separation.
+    #[test]
+    fn a_model_with_no_separation_here_leaves_the_height_flagged_with_its_reason() {
+        let sinks = FeedSinks::default();
+        sinks
+            .geoid
+            .set_available(std::sync::Arc::new(FixedSeparation(Err("off the grid"))));
+        let mut adapter = uas_feed(&sinks);
+        adapter.handle_datagram(&cat129_msl_datagram(), MissionTime(43_205.0));
+        let report = adapter.drain_uas_reports().pop().expect("one report");
+        let UasAltitudeReference::MeanSeaLevelUncorrected { reason } = &report.altitude_reference
+        else {
+            panic!("{:?}", report.altitude_reference);
+        };
+        assert!(
+            reason.contains("EGM2008 gives no separation here: off the grid"),
+            "{reason}"
+        );
+        assert!((report.position.alt_m - 500.0).abs() < 1e-9);
+        assert_eq!(adapter.stats().uas_heights_msl_uncorrected, 1);
+    }
+
+    /// A record with no I129/090 has no height to correct, and neither count moves; its
+    /// own loss (altitude set to 0) is still on the detection (GAP-199).
+    #[test]
+    // The baseline is returned untouched, so equality is the property.
+    #[allow(clippy::float_cmp)]
+    fn a_record_with_no_msl_height_is_not_counted_as_either() {
+        let sinks = FeedSinks::default();
+        sinks
+            .geoid
+            .set_available(std::sync::Arc::new(FixedSeparation(Ok(34.92))));
+        let mut adapter = uas_feed(&sinks);
+        let detections = adapter.handle_datagram(&cat129_datagram(), MissionTime(43_205.0));
+        let report = adapter.drain_uas_reports().pop().expect("one report");
+        assert_eq!(
+            report.altitude_reference,
+            UasAltitudeReference::NoAbsoluteHeight
+        );
+        let s = adapter.stats();
+        assert_eq!(
+            (s.uas_heights_msl_uncorrected, s.uas_heights_geoid_corrected),
+            (0, 0)
+        );
+        let (_, variance) = up_and_variance(&detections[0]);
+        assert_eq!(variance, BASELINE_POSITION_VARIANCE_M2);
+        assert!(detections[0]
+            .provenance
+            .conversion_loss
+            .as_deref()
+            .is_some_and(|l| l.contains("set to 0")));
     }
 
     #[test]

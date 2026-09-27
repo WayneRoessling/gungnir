@@ -187,14 +187,16 @@ history, and an entry is never edited once it has merged.
 | GAP-182 | A rehearsal decides under a default policy, not the deployment's | Technical | CAP-5.2, CAP-3.6 | 3 | 7 | S | 21 | I3 | Services engineer | Closed |
 | GAP-183 | The planner tasks resources on a layer at hold, so one held layer refuses every plan | Technical | CAP-3.3, CAP-3.6 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
 | GAP-184 | A rehearsal tracks under the default algorithm baseline, not the deployment's | Technical | CAP-5.2, CAP-2.1 | 2 | 8 | S | 16 | I3 | Services engineer | Closed |
-| GAP-196 | A UAS's height above mean sea level is placed as an ellipsoidal height | Technical | CAP-1.7 | 3 | 6 | S | 18 | I4 | Services engineer | Open |
+| GAP-196 | A UAS's height above mean sea level is placed as an ellipsoidal height | Technical | CAP-1.7 | 3 | 6 | S | 18 | I4 | Services engineer | Closed |
 | GAP-197 | A DEM or point cloud in NAVD88, EGM96 or a national height datum cannot be placed | Technical | CAP-2.10 | 3 | 8 | M | 24 | I4 | UI engineer | Closed |
 | GAP-193 | A linked desktop's rehearsal acknowledgement is not on the node's decision record | Technical | CAP-5.9, CAP-7.3 | 3 | 10 | S | 30 | I3 | Services engineer | Open |
 | GAP-194 | A gap acceptance is held only by the desktop that recorded it | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | M | 12 | I3 | Services engineer | Open |
 | GAP-195 | PN-07's degraded-condition acknowledgement is on no record | Technical | CAP-5.9 | 3 | 10 | S | 30 | I3 | UI engineer | Open |
+| GAP-198 | The node places a UAS's height above mean sea level uncorrected | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
+| GAP-199 | A UAS reporting only its height above ground is placed at height zero | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
 | GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | M | 32 | I4 | UI engineer | Open |
 
-Counts: 180 gaps, 3 mission, 177 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2684,11 +2686,12 @@ Counts: 180 gaps, 3 mission, 177 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.7 Cooperative identity.
 - History:
   - 2026-09-26, Open: Found closing GAP-108, searching the workspace for every place a height crosses a vertical datum. Not built there: GAP-108 is the DEM and point-cloud conversion, and this is a live track's altitude on the ingest path, where which geoid the sender meant is itself the open question.
+  - 2026-09-26, Closed: **Closed 2026-09-26, under the owner's delegation (D-123, D-124).** I129/090 is read as an EGM2008 height (edition 1.2, still the latest, names no geoid): the ASTERIX adapter adds the separation from a `GeoidSeparation` the desktop lends its feeds once the grid verifies, with no new edge. Without the grid -- no `crs`, missing, refused, off the grid, or the node (GAP-198) -- the height stays mean sea level, flagged on the report and the detection, its up variance widened by 106.91 m squared, marked on PN-03 and PN-04, and counted. The adapter's Category 129 arm is the `gungnir-ingest` gateway: human-owned; see docs/signatures.md. See `../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`.
 - Evidence: `gungnir-interop/src/asterix/cat129.rs` (the I129/090 branch records the loss "the local geoid undulation is not corrected for"); `gungnir-data/src/geoid.rs` (the EGM2008 grid a deployment can now carry).
 - Severity: 3. Reach: 6 threads. Effort: S. Priority: 18.
 - Impact: A cooperative UAS reporting only its altitude above mean sea level (ASTERIX Category 129, I129/090) is placed that many metres above the WGS-84 ellipsoid, so its track sits off by the local geoid separation -- about 35 m over the Baltic fixtures -- and says so only as a recorded loss on the report.
 - Closing action: Decide whether the verified EGM2008 grid corrects I129/090 -- and so which geoid an AMSL report means, since a UAS's "mean sea level" may be EGM96 or barometric -- and where the correction runs, since `gungnir-interop` reaches no grid and the grid is read only through PROJ behind `crs`; or keep the recorded loss and say it on the track's card.
-- Target: I4. Owner: Services engineer. Status: Open.
+- Target: I4. Owner: Services engineer. Status: Closed.
 - Reference: Found closing GAP-108 (`../../record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`).
 - Depends on: D-121, GAP-101.
 
@@ -2748,6 +2751,34 @@ Counts: 180 gaps, 3 mission, 177 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: UI engineer. Status: Open.
 - Reference: Found building GAP-107 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`).
 - Depends on: GAP-107.
+
+**GAP-198 The node places a UAS's height above mean sea level uncorrected**
+
+- Type: Technical.
+- Capability: CAP-1.7 Cooperative identity.
+- History:
+  - 2026-09-26, Open: Filed closing GAP-196. The node's feeds hold a named reason and every such height is flagged and counted there, so nothing is silent; what is missing is the correction itself, which needs a dependency edge and a native library the node image does not carry today.
+- Evidence: `gungnir-node/src/main.rs` (`NODE_HAS_NO_GEOID`, the reason every node feed holds); `gungnir-node/Cargo.toml` (no edge to `gungnir-data`, no `crs`).
+- Severity: 3. Reach: 6 threads. Effort: M. Priority: 18.
+- Impact: `gungnir-node` binds the same ASTERIX Category 129 feeds as the desktop and tracks every UAS it hears, but carries no geoid model, so each UAS's height stays above mean sea level -- flagged, counted on the health line and weighed with a widened vertical variance (D-124), but off the ellipsoid by the local separation, about 35 m over the Baltic. A picture a node serves to its clients carries those heights.
+- Closing action: Decide whether the node carries the EGM2008 grid: an edge `gungnir-node` to `gungnir-data` with `crs`, which links libproj and libtiff into the node image and needs the grid installed beside it, verified the same way; or a geoid lookup the node reaches without PROJ, which D-121 rejected for the desktop.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: Found closing GAP-196 (`../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`).
+- Depends on: D-121, D-124, GAP-196.
+
+**GAP-199 A UAS reporting only its height above ground is placed at height zero**
+
+- Type: Technical.
+- Capability: CAP-1.7 Cooperative identity.
+- History:
+  - 2026-09-26, Open: Filed closing GAP-196, which settled the mean-sea-level height and left this one as it was: the report says the height is 0 and not a measurement, and PN-04 says so, but the detection's variance does not.
+- Evidence: `gungnir_model::UasAltitudeReference::NoAbsoluteHeight`; `gungnir-ingest/src/adapters/asterix.rs` (`uas_position_variance` keeps the baseline for it).
+- Severity: 3. Reach: 6 threads. Effort: M. Priority: 18.
+- Impact: A Category 129 record may carry I129/100 (height above ground level) without I129/090. With no ground elevation model on the ingest path the codec sets the height to 0 and records the loss, and the detection keeps the baseline 30 m vertical sigma, so the tracker weighs a height that may be hundreds of metres wrong as if it were measured.
+- Closing action: Decide whether an above-ground height is placed on the deployment's DEM where one is loaded (terrain height plus AGL, with the DEM's own datum handled as GAP-108 does), and otherwise carried with a vertical variance that says the height is unknown, or whether such a detection should carry no vertical information at all.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: Found closing GAP-196 (`../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`).
+- Depends on: GAP-101, GAP-196.
 
 **GAP-200 A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84**
 

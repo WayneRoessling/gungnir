@@ -677,7 +677,18 @@ fn geoid_to_ellipsoidal(
 /// or a clipped test grid), or comes back non-finite.
 #[cfg(feature = "crs")]
 pub fn undulations(grid: &GeoidGrid, lon_lat_deg: &[[f64; 2]]) -> Result<Vec<f64>, DataError> {
-    let path = grid.path().display();
+    let pipeline = geoid_pipeline(grid.path())?;
+    lon_lat_deg
+        .iter()
+        .map(|&[lon, lat]| undulation_at(&pipeline, grid.path(), lon, lat))
+        .collect()
+}
+
+/// The written-out `vgridshift` pipeline over the verified file ([`undulations`] says
+/// why each step is there).
+#[cfg(feature = "crs")]
+fn geoid_pipeline(path: &Path) -> Result<proj::Proj, DataError> {
+    let path = path.display();
     let definition = format!(
         "+proj=pipeline \
          +step +proj=unitconvert +xy_in=deg +xy_out=rad \
@@ -685,34 +696,178 @@ pub fn undulations(grid: &GeoidGrid, lon_lat_deg: &[[f64; 2]]) -> Result<Vec<f64
          +step +proj=unitconvert +xy_in=rad +xy_out=deg \
          +step +proj=axisswap +order=1,3,2"
     );
-    let pipeline = proj::Proj::new(&definition).map_err(|e| {
+    proj::Proj::new(&definition).map_err(|e| {
         DataError::Parse(format!(
             "PROJ cannot read the geoid grid {path} for vgridshift: {e}"
         ))
+    })
+}
+
+/// N at one position through `pipeline`, refused rather than zero when there is none.
+#[cfg(feature = "crs")]
+fn undulation_at(pipeline: &proj::Proj, path: &Path, lon: f64, lat: f64) -> Result<f64, DataError> {
+    let path = path.display();
+    if !(lon.is_finite() && lat.is_finite()) {
+        return Err(DataError::Parse(format!(
+            "position ({lon}, {lat}) is not finite, so it has no geoid undulation"
+        )));
+    }
+    let (_, n) = pipeline.convert((lon, lat)).map_err(|e| {
+        DataError::Parse(format!(
+            "no geoid undulation at longitude {lon}, latitude {lat} in {path}: {e}"
+        ))
     })?;
-    lon_lat_deg
-        .iter()
-        .map(|&[lon, lat]| {
-            if !(lon.is_finite() && lat.is_finite()) {
-                return Err(DataError::Parse(format!(
-                    "position ({lon}, {lat}) is not finite, so it has no geoid undulation"
-                )));
-            }
-            let (_, n) = pipeline.convert((lon, lat)).map_err(|e| {
-                DataError::Parse(format!(
-                    "no geoid undulation at longitude {lon}, latitude {lat} in {path}: {e}"
-                ))
-            })?;
-            if n.is_finite() {
-                Ok(n)
-            } else {
-                Err(DataError::Parse(format!(
-                    "no geoid undulation at longitude {lon}, latitude {lat} in {path}: \
-                     PROJ returned {n}, which is outside the grid"
-                )))
-            }
+    if n.is_finite() {
+        Ok(n)
+    } else {
+        Err(DataError::Parse(format!(
+            "no geoid undulation at longitude {lon}, latitude {lat} in {path}: \
+             PROJ returned {n}, which is outside the grid"
+        )))
+    }
+}
+
+/// How long [`UndulationService::undulation`] waits for its answer before refusing. A
+/// lookup is microseconds of PROJ; the wait only matters if the service thread is gone
+/// or wedged, and then a refusal -- a height left flagged -- is the right outcome, not a
+/// feed that stops.
+pub const UNDULATION_LOOKUP_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// One question to the service thread: N at a longitude and latitude, and where to
+/// answer.
+#[cfg(feature = "crs")]
+struct Lookup {
+    lon: f64,
+    lat: f64,
+    reply: crossbeam_channel::Sender<Result<f64, String>>,
+}
+
+/// A pinned geoid model's undulation at one position at a time, for a live feed (GAP-196,
+/// D-123): a Category 129 report's height above mean sea level becomes an ellipsoidal
+/// one by adding EGM2008's.
+///
+/// **Why a thread of its own.** [`undulations`] builds its PROJ pipeline per call, which
+/// opens the grid each time: right for a file converted once, wrong for a feed asking
+/// once per report. So the pipeline is built once. But `proj` 0.31's `Proj` is neither
+/// `Send` nor `Sync` (it holds PROJ's raw context pointers), and the ingest adapter
+/// that asks is owned by the gateway and must be `Send`. So one thread owns the
+/// pipeline for its whole life and answers lookups over a channel; the service is the
+/// sending end, which is `Send + Sync` and cheap to clone. The thread ends when the last
+/// clone is dropped.
+///
+/// Built only from a [`GeoidGrid`], so only a verified file is ever read, and through
+/// the same written-out pipeline [`undulations`] uses: no ballpark fallback, and a
+/// position off the grid is a refusal, never a zero.
+#[derive(Debug, Clone)]
+pub struct UndulationService {
+    #[cfg(feature = "crs")]
+    lookups: crossbeam_channel::Sender<Lookup>,
+    /// A build without `crs` cannot make one at all: `start` refuses, and this field
+    /// has no value to hold.
+    #[cfg(not(feature = "crs"))]
+    never: std::convert::Infallible,
+    grid: GeoidGrid,
+}
+
+impl UndulationService {
+    /// Build the pipeline over `grid` (a verified grid of any pinned [`GeoidModel`]; the
+    /// one pipeline serves them all, as [`undulations`] says) on a new thread, and return
+    /// once PROJ has opened the file.
+    ///
+    /// # Errors
+    ///
+    /// `DataError::Parse` when PROJ cannot open the grid or the thread cannot start;
+    /// in a build without the `crs` feature, `DataError::NotImplemented` naming it,
+    /// since the grid is read through PROJ.
+    #[cfg(feature = "crs")]
+    pub fn start(grid: &GeoidGrid) -> Result<UndulationService, DataError> {
+        let (lookups, questions) = crossbeam_channel::unbounded::<Lookup>();
+        let (ready_tx, ready_rx) = crossbeam_channel::bounded::<Result<(), DataError>>(1);
+        let path = grid.path().to_path_buf();
+        std::thread::Builder::new()
+            .name("geoid-undulation".to_string())
+            .spawn(move || {
+                let pipeline = match geoid_pipeline(&path) {
+                    Ok(pipeline) => {
+                        let _ = ready_tx.send(Ok(()));
+                        pipeline
+                    }
+                    Err(e) => {
+                        let _ = ready_tx.send(Err(e));
+                        return;
+                    }
+                };
+                for q in questions {
+                    let answer =
+                        undulation_at(&pipeline, &path, q.lon, q.lat).map_err(|e| e.to_string());
+                    // The asker gave up (its timeout); nothing to tell.
+                    let _ = q.reply.send(answer);
+                }
+            })
+            .map_err(|e| DataError::Parse(format!("the geoid lookup thread did not start: {e}")))?;
+        match ready_rx.recv() {
+            Ok(Ok(())) => Ok(UndulationService {
+                lookups,
+                grid: grid.clone(),
+            }),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(DataError::Parse(
+                "the geoid lookup thread stopped before it opened the grid".to_string(),
+            )),
+        }
+    }
+
+    /// See the `crs` build's documentation: this build has no PROJ to read the grid.
+    ///
+    /// # Errors
+    ///
+    /// Always `DataError::NotImplemented`, naming the `crs` feature.
+    #[cfg(not(feature = "crs"))]
+    pub fn start(_grid: &GeoidGrid) -> Result<UndulationService, DataError> {
+        Err(DataError::NotImplemented {
+            what: "reading a geoid undulation for a live report's height",
+            waiting_on: "a build with gungnir-data's `crs` feature, which reads the grid \
+                         through libproj",
         })
-        .collect()
+    }
+
+    /// The undulation N at `lon`, `lat` (degrees): a height H above the grid's geoid is
+    /// the ellipsoidal height H + N.
+    ///
+    /// # Errors
+    ///
+    /// `DataError::Parse` when the position is not finite or is off the grid, or the
+    /// service thread did not answer within [`UNDULATION_LOOKUP_TIMEOUT`].
+    #[cfg(feature = "crs")]
+    pub fn undulation(&self, lon: f64, lat: f64) -> Result<f64, DataError> {
+        let (reply, answer) = crossbeam_channel::bounded(1);
+        self.lookups
+            .send(Lookup { lon, lat, reply })
+            .map_err(|_| DataError::Parse("the geoid lookup thread has stopped".to_string()))?;
+        match answer.recv_timeout(UNDULATION_LOOKUP_TIMEOUT) {
+            Ok(n) => n.map_err(DataError::Parse),
+            Err(_) => Err(DataError::Parse(format!(
+                "the geoid lookup thread did not answer within {} ms",
+                UNDULATION_LOOKUP_TIMEOUT.as_millis()
+            ))),
+        }
+    }
+
+    /// Uncallable in this build: no `UndulationService` can exist without `crs`.
+    ///
+    /// # Errors
+    ///
+    /// None; there is no value to call it on.
+    #[cfg(not(feature = "crs"))]
+    pub fn undulation(&self, _lon: f64, _lat: f64) -> Result<f64, DataError> {
+        match self.never {}
+    }
+
+    /// The verified grid it reads.
+    #[must_use]
+    pub fn grid(&self) -> &GeoidGrid {
+        &self.grid
+    }
 }
 
 #[cfg(test)]

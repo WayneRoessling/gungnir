@@ -1537,6 +1537,10 @@ IE-theme-variant,uafId,IE-theme-variant
 IE-theme-variant,uafKind,InformationElement
 IE-theme-variant,registry.code,gungnir_model::ThemeVariant
 IE-theme-variant,registry.domain,"Policy, authority & settings"
+IE-uas-altitude-reference,uafId,IE-uas-altitude-reference
+IE-uas-altitude-reference,uafKind,InformationElement
+IE-uas-altitude-reference,registry.code,gungnir_model::UasAltitudeReference
+IE-uas-altitude-reference,registry.domain,UAS identification & platform reports
 IE-uas-certification-category,uafId,IE-uas-certification-category
 IE-uas-certification-category,uafKind,InformationElement
 IE-uas-certification-category,registry.code,gungnir_model::UasCertificationCategory

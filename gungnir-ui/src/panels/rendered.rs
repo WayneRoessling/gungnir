@@ -857,6 +857,7 @@ fn the_track_table_draws_the_score_column_as_unavailable() {
             gap: "GAP-028",
         }),
         selected: None,
+        msl_heights: &[],
         vocabulary: &vocab,
     };
     let probe = RenderProbe::new();
@@ -1046,6 +1047,7 @@ fn the_panels_survive_a_narrow_slot() {
             gap: "GAP-028",
         }),
         selected: None,
+        msl_heights: &[],
         vocabulary: &vocab,
     };
     let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &table));
@@ -1096,6 +1098,7 @@ fn the_track_table_draws_the_deployments_words() {
             gap: "GAP-028",
         }),
         selected: None,
+        msl_heights: &[],
         vocabulary: &defaults,
     };
     let probe = RenderProbe::new();
@@ -1130,6 +1133,48 @@ fn the_track_table_draws_the_deployments_words() {
         "overriding one term changed another: {}",
         frame.joined()
     );
+}
+
+/// GAP-196 (D-124): a track whose last Category 129 report left its height above mean
+/// sea level shows its U marked "MSL" in PN-03, and the other tracks' U is unmarked.
+#[test]
+fn the_track_table_marks_a_height_above_mean_sea_level() {
+    use crate::panels::track_table::{render_track_table, TrackTableView};
+    use gungnir_model::{
+        Classification, MissionTime, Provenance, Quality, Releasability, TrackId, TrackStatus,
+        TrackView,
+    };
+
+    let track = |id: u64| TrackView {
+        id: TrackId(id),
+        status: TrackStatus::Confirmed,
+        state: nalgebra::SVector::zeros(),
+        covariance: nalgebra::SMatrix::identity(),
+        classification: Classification::Unknown,
+        provenance: Provenance::default(),
+        quality: Quality::default(),
+        mission_time: MissionTime(0.0),
+        releasability: Releasability::default(),
+    };
+    let tracks = [track(1), track(2)];
+    let vocab = Vocabulary::default();
+    let flagged = [TrackId(2)];
+    let view = TrackTableView {
+        tracks: &tracks,
+        now: MissionTime(0.0),
+        assignments: &[],
+        scores: Err(Unavailable {
+            owner: "gungnir-assessment",
+            gap: "GAP-028",
+        }),
+        selected: None,
+        msl_heights: &flagged,
+        vocabulary: &vocab,
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &view));
+    let marked = frame.texts.iter().filter(|t| t.ends_with(" MSL")).count();
+    assert_eq!(marked, 1, "{}", frame.joined());
 }
 
 /// The status strip shows the joint control-status term, which is the case where the
@@ -1814,6 +1859,8 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
             service_reports: 0,
             not_decoded: 0,
             unknown_radar: 0,
+            uas_heights_geoid_corrected: 0,
+            uas_heights_msl_uncorrected: 0,
         }],
     );
     assert!(
@@ -1829,10 +1876,32 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
             service_reports: 12,
             not_decoded: 3,
             unknown_radar: 1,
+            uas_heights_geoid_corrected: 0,
+            uas_heights_msl_uncorrected: 0,
         }],
     );
     assert!(
         text.contains("400 detections") && text.contains("3 not decoded"),
+        "{text}"
+    );
+    // GAP-196: a UAS height the picture holds above mean sea level is a counted loss on
+    // the feed's own line, and a corrected one is said too.
+    let text = draw_with(
+        &[],
+        &[FeedLine {
+            name: "uas-gateway",
+            datagrams: 10,
+            detections: 10,
+            service_reports: 0,
+            not_decoded: 0,
+            unknown_radar: 0,
+            uas_heights_geoid_corrected: 4,
+            uas_heights_msl_uncorrected: 6,
+        }],
+    );
+    assert!(
+        text.contains("4 UAS heights corrected to the ellipsoid (EGM2008)")
+            && text.contains("6 UAS heights above mean sea level, not corrected"),
         "{text}"
     );
 
