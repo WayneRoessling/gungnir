@@ -44,6 +44,7 @@ fn decided_as(plan: u128, accepted: bool, operator: Option<&str>, role: Option<&
         item: None,
         overridden: false,
         origin: None,
+        acknowledged: Vec::new(),
     })
 }
 

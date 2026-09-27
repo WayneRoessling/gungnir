@@ -124,7 +124,12 @@ and GAP-041/GAP-004 closed on 2026-09-07, which unblocked US-04, US-08 and US-09
 GAP-045 landed PN-16's rehearsal on 2026-09-08, which unblocked US-15. Round 1 is
 therefore **fourteen of the sixteen**, and **US-07 and US-16 alone are round 2's** --
 their blockers, an unwired control-status write and an undesigned gap-acceptance
-control, are unchanged. The four late additions each need a session setup heavier than
+control, are unchanged. **US-16 joined round 1 on 2026-09-26**, when GAP-106 built the
+gap-acceptance control (D-118, `../design/DN-33-accepting-a-coverage-gap.md`): fifteen of
+the sixteen, with US-07 alone round 2's. Its card asks for what was built -- a reason and
+a signed-in commander's name, re-opening on a change rather than an expiry -- and §4's
+row above keeps the wireframe's wording as the record of what the task was designed to
+measure. The four late additions each need a session setup heavier than
 the seed's own flag, and each needs its own dry run before the first participant; the
 session document's §2 and §3 carry the current split and the setups, and are the version
 to run from. Point 3 is unaffected by any of this and still governs.

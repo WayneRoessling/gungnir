@@ -163,6 +163,7 @@ mod tests {
             request: None,
             origin: None,
             mission_time: MissionTime(t),
+            acknowledged: Vec::new(),
         }
     }
 

@@ -242,6 +242,11 @@ pub mod actions {
     /// authority matrix in `docs/mission/roles-and-stakeholders.md` §4 names nobody else
     /// for account administration, and widening it means adding the §4 row first.
     pub const ASSIGN_ROLE: &str = "account.assign_role";
+    /// Accepting a coverage gap: §4's "Accept coverage gap" row, the commander's alone
+    /// (GAP-106, D-118, `docs/design/DN-33-accepting-a-coverage-gap.md` §6). Not the
+    /// administrator's either: accepting a gap is a decision about the risk the mission
+    /// runs, and §4's "Roles without a column" withholds it with the engagement chain.
+    pub const ACCEPT_COVERAGE_GAP: &str = "coverage.accept_gap";
 
     /// Every action this build knows, for validating an authority rule at load.
     ///
@@ -270,6 +275,7 @@ pub mod actions {
         KEY_ESCROW_RECOVER,
         REQUIREMENT,
         ASSIGN_ROLE,
+        ACCEPT_COVERAGE_GAP,
     ];
 
     /// True when `action` is one this build knows.

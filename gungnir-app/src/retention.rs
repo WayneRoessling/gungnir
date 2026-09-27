@@ -29,6 +29,11 @@
 //!   **highest launch-warning serial**, since each serial continues past the highest the
 //!   journal holds and a purge of that session would reissue a number;
 //! - the session an **unfinished outage** is recorded in (GAP-142), which the merge reads;
+//! - every session holding a **coverage gap acceptance that still stands**, and the one
+//!   holding the highest acceptance identifier (GAP-106, DN-33 §8 rule 7), so ageing the
+//!   journal cannot un-accept a gap or reissue a number;
+//! - the session holding **each laydown's latest rehearsal** (GAP-107, D-120), so ageing
+//!   the journal cannot turn a rehearsed laydown into one never rehearsed;
 //! - a session under an **after-action review**, through the hold `review.rs` places.
 //!
 //! A launch warning or a closed requirement older than the policy goes with its session:
@@ -121,6 +126,8 @@ pub fn protected(state: &AppState) -> BTreeSet<SessionId> {
     if let Some(session) = state.fallback.as_ref().and_then(|f| f.session) {
         keep.insert(session);
     }
+    keep.extend(state.gap_acceptances.sessions_to_keep());
+    keep.extend(state.rehearsals.sessions_to_keep());
     keep
 }
 

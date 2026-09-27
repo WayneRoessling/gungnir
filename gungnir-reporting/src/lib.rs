@@ -124,6 +124,14 @@ impl From<TrackingMetrics> for TrackingMetricsSummary {
     }
 }
 
+/// For `skip_serializing_if`: a count added after reports were first exported is left out
+/// at zero, so an export with none of it is unchanged.
+// serde passes the field by reference.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EventCounts {
     pub tracks_initiated: u64,
@@ -219,6 +227,19 @@ pub struct EventCounts {
     /// Neither an expected absence nor an ordinary failure; the case somebody planned and
     /// has not finished.
     pub maintenance_overruns: u64,
+    /// Coverage gaps a commander accepted, and acceptances that re-opened by themselves
+    /// (GAP-106, `docs/design/DN-33-accepting-a-coverage-gap.md` §8): the risks the watch
+    /// ran on purpose, and the ones that stopped being the risk accepted. Defaulted, so a
+    /// report written before them reads, and left out at zero, so a report of a session
+    /// with none is written exactly as it was (`gungnir-app/tests/pre_uuid_v7_journal.rs`
+    /// holds one byte for byte).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub gap_acceptances: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub gap_acceptances_reopened: u64,
+    /// Laydowns rehearsed against a recording (GAP-107, D-120).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub laydown_rehearsals: u64,
     pub total: u64,
 }
 
@@ -357,6 +378,15 @@ fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
             Event::Review(gungnir_model::events::ReviewEvent::FindingPromoted { .. }) => {
                 counts.findings_promoted += 1;
             }
+            Event::Planning(gungnir_model::events::PlanningEvent::GapAccepted(_)) => {
+                counts.gap_acceptances += 1;
+            }
+            Event::Planning(gungnir_model::events::PlanningEvent::GapAcceptanceReopened {
+                ..
+            }) => counts.gap_acceptances_reopened += 1,
+            Event::Planning(gungnir_model::events::PlanningEvent::LaydownRehearsed(_)) => {
+                counts.laydown_rehearsals += 1;
+            }
             Event::Tracking(_)
             | Event::Intercept(
                 InterceptEvent::PlanSuperseded(_)
@@ -483,6 +513,7 @@ mod tests {
                 item: None,
                 overridden: false,
                 origin: None,
+                acknowledged: Vec::new(),
             }),
         ];
         for (seq, event) in events.into_iter().enumerate() {
@@ -565,6 +596,9 @@ mod tests {
     /// went undelivered. Envelope `k` is at 57744.670227102644 + k/3 s, so the time span is
     /// non-dyadic and starts on the double `serde_json` without `float_roundtrip` read back one
     /// ULP off.
+    // One session's envelopes, in order; it passed the pedantic line limit when GAP-107
+    // gave a decision its acknowledgements.
+    #[allow(clippy::too_many_lines)]
     fn traceability_journal() -> Vec<Envelope> {
         let at = |k: u32| MissionTime(57_744.670_227_102_644 + f64::from(k) / 3.0);
         let partners = || Releasability::parties(["partner-a", "partner-b"]);
@@ -628,6 +662,7 @@ mod tests {
                 item: None,
                 overridden: false,
                 origin: None,
+                acknowledged: Vec::new(),
             }),
             Event::Intercept(InterceptEvent::PlanApproved(plan)),
             Event::Engagement(EngagementEvent::Opened {

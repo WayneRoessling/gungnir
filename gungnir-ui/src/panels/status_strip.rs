@@ -650,6 +650,9 @@ pub enum CoverageStatus<'a> {
     Measured {
         uncovered_segments: usize,
         single_sensor_segments: usize,
+        /// Of those segments, the ones a commander accepted (GAP-106, DN-33 §7): counted
+        /// in the two above, never taken out of them.
+        accepted_segments: usize,
         /// False when the answer was computed on flat terrain, which is optimistic by
         /// construction (DN-12 §5 rule 3).
         terrain_masking: bool,
@@ -665,6 +668,7 @@ fn draw_coverage(ui: &mut Ui, palette: &theme::Palette, coverage: CoverageStatus
         CoverageStatus::Measured {
             uncovered_segments,
             single_sensor_segments,
+            accepted_segments,
             terrain_masking,
         } => {
             let colour = if uncovered_segments > 0 {
@@ -672,10 +676,17 @@ fn draw_coverage(ui: &mut Ui, palette: &theme::Palette, coverage: CoverageStatus
             } else {
                 palette.healthy_color()
             };
+            // An accepted gap is still a gap: the colour is the uncovered count's, and the
+            // accepted ones are said beside it rather than taken out of it (DN-33 §7).
+            let accepted = if accepted_segments > 0 {
+                format!(" ({accepted_segments} accepted)")
+            } else {
+                String::new()
+            };
             ui.label(
                 RichText::new(format!(
                     "Coverage {uncovered_segments} uncovered, {single_sensor_segments} \
-                     single-sensor"
+                     single-sensor{accepted}"
                 ))
                 .color(colour),
             );

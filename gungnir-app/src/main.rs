@@ -397,7 +397,13 @@ impl App {
                 let names = sustainment::approach_names(&self.state);
                 let gaps = report
                     .as_ref()
-                    .map(|r| sustainment::gap_polylines(&names, r))
+                    .map(|r| {
+                        sustainment::gap_polylines(
+                            &names,
+                            r,
+                            &sustainment::live_accepted(&self.state, r),
+                        )
+                    })
                     .unwrap_or_default();
                 let placed = hazards::placed(&self.state);
                 let hazards = hazards::outlines(&placed);
@@ -473,6 +479,12 @@ impl App {
                 ui,
                 &self.state,
                 &mut self.sustainment.requirements,
+            ),
+            // GAP-106: PN-11's accept control keeps the reason being typed in this window.
+            PanelId::CoverageLayers => gungnir_app::workspace::render_coverage_layers(
+                ui,
+                &self.state,
+                &mut self.sustainment.gap_acceptance,
             ),
             PanelId::Audit => {
                 gungnir_app::workspace::render_audit(ui, &self.state, &mut self.sustainment)
@@ -573,7 +585,9 @@ impl App {
         let names = sustainment::approach_names(&self.state);
         let gaps = report
             .as_ref()
-            .map(|r| sustainment::gap_polylines(&names, r))
+            .map(|r| {
+                sustainment::gap_polylines(&names, r, &sustainment::live_accepted(&self.state, r))
+            })
             .unwrap_or_default();
         // GAP-017: the hazard layer, on whichever renderer is running.
         let placed = hazards::placed(&self.state);
@@ -736,6 +750,24 @@ impl App {
                     LayerAction::ShowGeofences(on) => self.state.viewport.layers.geofences = on,
                 }
             }
+            // GAP-106: recorded with the signed-in commander's name and the reason, or
+            // refused and said why; either way the draft is the window's to keep or clear.
+            PanelAction::AcceptGap(a) => {
+                match gungnir_app::gap_acceptance::accept(&mut self.state, &a.gap, &a.reason) {
+                    Ok(id) => {
+                        self.state.alerts.push(format!(
+                            "Gap acceptance {id} recorded: {}",
+                            a.gap.describe()
+                        ));
+                        self.sustainment.gap_acceptance =
+                            gungnir_ui::panels::coverage_layers::AcceptanceDraft::default();
+                    }
+                    Err(refused) => self
+                        .state
+                        .alerts
+                        .push(format!("Gap not accepted: {refused}")),
+                }
+            }
             PanelAction::Requirement(a) => self.apply_requirement(a),
             PanelAction::Replay(a) => self.apply_replay(a),
             PanelAction::Reports(a) => self.apply_reports(a),
@@ -862,7 +894,8 @@ impl App {
                 }
                 refused @ (gungnir_command::CommandError::DeniedByPolicy(_)
                 | gungnir_command::CommandError::NotPermitted { .. }
-                | gungnir_command::CommandError::NotOffered { .. }) => refused.to_string(),
+                | gungnir_command::CommandError::NotOffered { .. }
+                | gungnir_command::CommandError::Unacknowledged { .. }) => refused.to_string(),
             };
             self.state
                 .alerts
@@ -883,6 +916,22 @@ impl App {
         reason: String,
     ) {
         use gungnir_remote::queue::DecisionChoice as Wire;
+        // GAP-107: the same question this desktop's own queue asks, before anything is
+        // posted. The node's record does not carry the answer (GAP-193), so it is audited
+        // here, on this desktop's own log.
+        let acknowledged = if matches!(choice, DecisionChoice::Reject) {
+            Vec::new()
+        } else {
+            match gungnir_app::decisions::rehearsal_acknowledgement(&self.state) {
+                Ok(acknowledged) => acknowledged,
+                Err(refused) => {
+                    self.state
+                        .alerts
+                        .push(format!("Decision not sent: {refused}"));
+                    return;
+                }
+            }
+        };
         let wire = match choice {
             DecisionChoice::Accept => Wire::Accept,
             DecisionChoice::Override => Wire::Override,
@@ -894,7 +943,9 @@ impl App {
             self.state
                 .alerts
                 .push(format!("Decision not sent: {why}. Nothing was recorded."));
+            return;
         }
+        gungnir_app::decisions::audit_linked_acknowledgement(&mut self.state, item, &acknowledged);
     }
 
     /// PN-12. A failed open is an alert rather than a silent no-op: the panel would

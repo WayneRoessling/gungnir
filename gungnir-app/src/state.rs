@@ -479,6 +479,15 @@ pub struct AppState {
         gungnir_model::LaydownId,
         crate::laydown_rehearsal::RehearsalRecord,
     >,
+    /// Every laydown rehearsal on this desktop's record, folded from the journal at start
+    /// and added to as rehearsals run (GAP-107, D-120): what says whether the laydown in
+    /// force was ever rehearsed under what is running, across restarts, where
+    /// `rehearsal_records` holds only this session's figures.
+    pub rehearsals: crate::rehearsal_standing::Rehearsals,
+    /// The coverage gap acceptances that stand, and the ones re-opened this session
+    /// (GAP-106, `docs/design/DN-33-accepting-a-coverage-gap.md`), folded from the journal
+    /// at start.
+    pub gap_acceptances: crate::gap_acceptance::GapAcceptances,
 
     pub(crate) journal: FileEventJournal,
     pub(crate) journal_rx: Receiver<Envelope>,
@@ -610,6 +619,15 @@ impl AppState {
         // anything else reads the fallback, because what it changes is what this desktop
         // is: a console that is cut off, not one that has simply not linked yet.
         let fallback = recover_outage_or_alert(&journal, &mut alerts);
+        // GAP-106, GAP-107: the gap acceptances that stand and every rehearsal on the
+        // record, read before this session opens so what earlier ones decided is known.
+        let planning = crate::planning_record::recover(&journal);
+        if let Some(reason) = &planning.unreadable {
+            alerts.push(format!(
+                "The planning record could not be read whole ({reason}); gap acceptances \
+                 and rehearsals from earlier sessions may be missing"
+            ));
+        }
 
         // GAP-086: the registry the baseline describes, built through the real promotion
         // state machine. A deployment whose promoted candidate fails the gate does not stop
@@ -791,6 +809,8 @@ impl AppState {
             selected_laydown: None,
             rehearsal_scenario: gungnir_model::TestTrackNumber(1),
             rehearsal_records: std::collections::HashMap::new(),
+            rehearsals: planning.rehearsals,
+            gap_acceptances: planning.acceptances,
             journal,
             journal_rx,
             journal_failed: false,
@@ -1054,7 +1074,14 @@ impl AppState {
             return RehearsalSection::NothingSelected;
         };
         let Some(record) = self.rehearsal_records.get(id) else {
-            return RehearsalSection::NotYetRun;
+            // GAP-107, D-120: rehearsed before this session is not "not yet rehearsed".
+            return match self.latest_recorded_rehearsal(id) {
+                Some(r) => RehearsalSection::RanInEarlierSession {
+                    scenario: r.stamp.scenario,
+                    session: r.session.map(|s| s.0),
+                },
+                None => RehearsalSection::NotYetRun,
+            };
         };
         // Per sensor, against the current laydown's rehearsal of the same recording --
         // the comparison DN-32 §10's round-1 row asks for -- and never against a
@@ -1089,6 +1116,18 @@ impl AppState {
         })
     }
 
+    /// The newest rehearsal of `id` the record holds, from any session (D-120).
+    fn latest_recorded_rehearsal(
+        &self,
+        id: &gungnir_model::LaydownId,
+    ) -> Option<&crate::rehearsal_standing::RecordedStamp> {
+        self.rehearsals
+            .stamps
+            .iter()
+            .rev()
+            .find(|r| &r.stamp.laydown == id)
+    }
+
     /// The current laydown's last rehearsal, if it has one.
     fn current_rehearsal(&self) -> Option<&crate::laydown_rehearsal::RehearsalRecord> {
         let current = self.config.laydowns.iter().find(|l| l.current)?;
@@ -1107,7 +1146,15 @@ impl AppState {
     ) -> gungnir_ui::panels::planning::RowRehearsal {
         use gungnir_ui::panels::planning::{RowRehearsal, VersusCurrent};
         let Some(record) = self.rehearsal_records.get(id) else {
-            return RowRehearsal::NotRehearsed;
+            // GAP-107, D-120: the record says it was rehearsed; the figures were that
+            // session's, and are not made up here.
+            return match self.latest_recorded_rehearsal(id) {
+                Some(r) => RowRehearsal::RehearsedEarlier {
+                    scenario: r.stamp.scenario,
+                    session: r.session.map(|s| s.0),
+                },
+                None => RowRehearsal::NotRehearsed,
+            };
         };
         let total = |r: &crate::laydown_rehearsal::RehearsalRecord| -> usize {
             r.sensors.iter().map(|s| s.detections).sum()
@@ -1194,6 +1241,9 @@ impl AppState {
                     record.decisions_raised,
                     record.decisions_expired
                 ));
+                // GAP-107, D-120: on the record, so a decision in a later session knows the
+                // laydown was rehearsed and under what.
+                crate::rehearsal_standing::record(self, record.stamp());
                 self.rehearsal_records.insert(laydown_id.clone(), record);
             }
             Err(err) => self

@@ -125,9 +125,22 @@ pub struct DecisionDialogState {
     pub degraded_acknowledged: bool,
     /// The degraded set the acknowledgement was given against.
     pub acknowledged_for: Vec<String>,
+    /// The rehearsal statement the person ticked as read (GAP-107,
+    /// `docs/design/DN-26-laydown-options.md` §11 item 6), exactly as it was drawn, and
+    /// `None` when they have not. Cleared whenever the statement changes, so a tick is
+    /// never carried over to a sentence nobody read. The decision records this sentence.
+    pub rehearsal_acknowledged: Option<String>,
 }
 
 impl DecisionDialogState {
+    /// Forget a rehearsal acknowledgement given against a statement that is no longer the
+    /// one drawn (GAP-107). Called every frame.
+    pub fn reconcile_rehearsal(&mut self, statement: Option<&str>) {
+        if self.rehearsal_acknowledged.as_deref() != statement {
+            self.rehearsal_acknowledged = None;
+        }
+    }
+
     /// Reset the acknowledgement when the degraded conditions have changed.
     ///
     /// Called every frame. An acknowledgement is about a specific set of conditions:
@@ -175,16 +188,40 @@ pub struct DecisionDialogView<'a> {
     /// been asked, and offering it again would either be a second decision or a second
     /// refusal.
     pub answer: Option<NodeAnswer<'a>>,
+    /// Where the laydown in force stands, when a decision acting on a plan must
+    /// acknowledge it (GAP-107, `docs/design/DN-26-laydown-options.md` §11): never
+    /// rehearsed, rehearsed under something other than what is running, or not
+    /// rehearsable under this baseline. `None` asks nothing.
+    pub rehearsal: Option<&'a str>,
+}
+
+/// Whether the rehearsal statement, if there is one, has been ticked as read -- the tick
+/// given against this very sentence (GAP-107).
+#[must_use]
+pub fn rehearsal_acknowledged(view: &DecisionDialogView<'_>, state: &DecisionDialogState) -> bool {
+    view.rehearsal
+        .is_none_or(|s| state.rehearsal_acknowledged.as_deref() == Some(s))
 }
 
 /// Whether the accept control may be enabled.
 ///
 /// Point 2 of the module's "accept is never the default": a degraded condition must be
-/// acknowledged before accept becomes available. With nothing degraded there is
-/// nothing to acknowledge and the authority check is the only gate.
+/// acknowledged before accept becomes available, and so must the rehearsal statement
+/// when there is one (GAP-107). With nothing to acknowledge the authority check is the
+/// only gate.
 #[must_use]
 pub fn accept_enabled(view: &DecisionDialogView<'_>, state: &DecisionDialogState) -> bool {
-    view.may_accept && (view.degraded.is_empty() || state.degraded_acknowledged)
+    view.may_accept
+        && (view.degraded.is_empty() || state.degraded_acknowledged)
+        && rehearsal_acknowledged(view, state)
+}
+
+/// Whether the override control may be enabled: the authority, and the rehearsal
+/// statement acknowledged when there is one, because an override acts on a plan as an
+/// acceptance does (GAP-107). A rejection acts on nothing and asks for neither.
+#[must_use]
+pub fn override_enabled(view: &DecisionDialogView<'_>, state: &DecisionDialogState) -> bool {
+    view.may_override && rehearsal_acknowledged(view, state)
 }
 
 /// A rejection is recorded with its reason, so an empty reason is not a rejection.
@@ -206,6 +243,7 @@ pub fn render_decision_dialog(
     state: &mut DecisionDialogState,
 ) -> Option<DecisionChoice> {
     state.reconcile(view.degraded);
+    state.reconcile_rehearsal(view.rehearsal);
 
     ui.heading(format!("Decide plan #{}", view.row.plan_id.short()));
     // The whole identifier, with a copy control (D-61): this is the plan a person quotes
@@ -225,6 +263,9 @@ pub fn render_decision_dialog(
     ui.separator();
     draw_degraded(ui, palette, view, state);
     ui.separator();
+    if draw_rehearsal(ui, palette, view, state) {
+        ui.separator();
+    }
     draw_attribution(ui, palette, view.operator);
     draw_route(ui, palette, view.route);
     ui.separator();
@@ -426,6 +467,39 @@ fn draw_degraded(
     );
 }
 
+/// The rehearsal of the laydown in force, when a decision must acknowledge it (GAP-107,
+/// DN-26 §11 item 6). Its own section, not one of the degraded conditions: nothing here is
+/// failing, and the person is told something about the plan's ground rather than about a
+/// subsystem. Returns whether it drew anything.
+fn draw_rehearsal(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &DecisionDialogView<'_>,
+    state: &mut DecisionDialogState,
+) -> bool {
+    let Some(statement) = view.rehearsal else {
+        return false;
+    };
+    ui.strong("Rehearsal of the laydown in force");
+    ui.label(RichText::new(statement).color(palette.warning_color));
+    ui.label(
+        RichText::new(
+            "Nothing refuses this plan for it; accepting or overriding records that you \
+             were told.",
+        )
+        .color(palette.muted_text_color())
+        .size(palette.small_font_size),
+    );
+    let mut ticked = state.rehearsal_acknowledged.as_deref() == Some(statement);
+    if ui
+        .checkbox(&mut ticked, "I have read where the laydown in force stands")
+        .changed()
+    {
+        state.rehearsal_acknowledged = ticked.then(|| statement.to_owned());
+    }
+    true
+}
+
 fn draw_attribution(ui: &mut Ui, palette: &theme::Palette, operator: OperatorIdentity<'_>) {
     match operator {
         OperatorIdentity::Authenticated(id) => {
@@ -471,7 +545,13 @@ fn draw_controls(
 
     ui.separator();
     if view.may_override {
-        if ui.button("Override with a substitute").clicked() {
+        if ui
+            .add_enabled(
+                override_enabled(view, state),
+                egui::Button::new("Override with a substitute"),
+            )
+            .clicked()
+        {
             choice = Some(DecisionChoice::Override);
         }
     } else {
@@ -488,8 +568,12 @@ fn draw_controls(
         );
     } else if !accept_enabled(view, state) {
         ui.label(
-            RichText::new("Acknowledge the degraded conditions before accepting.")
-                .color(palette.warning_color),
+            RichText::new(if rehearsal_acknowledged(view, state) {
+                "Acknowledge the degraded conditions before accepting."
+            } else {
+                "Acknowledge where the laydown in force stands before accepting."
+            })
+            .color(palette.warning_color),
         );
     }
     if ui
@@ -551,6 +635,7 @@ mod tests {
             may_override: false,
             route: DecisionRoute::ThisDesktop,
             answer: None,
+            rehearsal: None,
         }
     }
 
@@ -669,5 +754,43 @@ mod tests {
             !v.may_override,
             "an operator holds DECIDE_PLAN without OVERRIDE_PLAN"
         );
+    }
+
+    /// GAP-107, DN-26 §11 item 6: a rehearsal statement closes accept and override until
+    /// that very sentence is ticked as read, and a tick does not survive the sentence
+    /// changing. With no statement nothing is asked. Rejecting never needs it.
+    #[test]
+    fn a_rehearsal_statement_is_acknowledged_before_a_plan_is_acted_on() {
+        let r = row();
+        let never = "The laydown in force, current, has never been rehearsed.";
+        let mut v = view(&r, &[]);
+        v.may_override = true;
+        v.rehearsal = Some(never);
+
+        let mut state = DecisionDialogState::default();
+        state.reconcile_rehearsal(v.rehearsal);
+        assert!(!accept_enabled(&v, &state));
+        assert!(!override_enabled(&v, &state));
+        state.reject_reason = "not this one".into();
+        assert!(reject_enabled(&state), "a rejection acts on nothing");
+
+        state.rehearsal_acknowledged = Some(never.to_owned());
+        state.reconcile_rehearsal(v.rehearsal);
+        assert!(accept_enabled(&v, &state));
+        assert!(override_enabled(&v, &state));
+
+        let other = "The laydown in force, current, was rehearsed under another policy.";
+        v.rehearsal = Some(other);
+        state.reconcile_rehearsal(v.rehearsal);
+        assert_eq!(
+            state.rehearsal_acknowledged, None,
+            "a tick for another sentence"
+        );
+        assert!(!accept_enabled(&v, &state));
+
+        v.rehearsal = None;
+        let fresh = DecisionDialogState::default();
+        assert!(accept_enabled(&v, &fresh), "nothing asked, nothing to tick");
+        assert!(override_enabled(&v, &fresh));
     }
 }

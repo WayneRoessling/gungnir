@@ -15,8 +15,9 @@ pub mod anomaly;
 pub mod coverage;
 
 pub use coverage::{
-    band_or_default, combined_coverage, coverage_from_registry, volume_in_frame, volume_of,
-    CoverageGap, CoverageParameters, CoverageReport, GapSeverity, PointCoverage,
+    accepted_gap, band_or_default, combined_coverage, coverage_from_registry, same_gap, standing,
+    volume_in_frame, volume_of, CoverageGap, CoverageMeasure, CoverageParameters, CoverageReport,
+    GapSeverity, PointCoverage, Standing,
 };
 
 pub use anomaly::{

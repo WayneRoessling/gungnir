@@ -148,10 +148,12 @@ the sensor manager together with the supervisor (planning).
 
 **Roles without a column.** The administrator holds every decision above **except** the
 engagement chain -- both engagement-acceptance rows, weapons control status, hold or
-cease, overriding a recommendation, reconciliation conflict resolution -- and escrow
-recovery; it holds the last two rows alone (D-88, 2026-09-25: §1 and §2 say the
-administrator is not a decision-maker in the engagement chain, and the escrow row says
-the security officer alone). The planner may view the picture and nothing else (the
+cease, overriding a recommendation, reconciliation conflict resolution -- escrow
+recovery, and accepting a coverage gap; it holds the last two rows alone (D-88,
+2026-09-25: §1 and §2 say the administrator is not a decision-maker in the engagement
+chain, and the escrow row says the security officer alone). Accepting a coverage gap is
+the commander's alone (the owner, 2026-09-26, D-118): it is a decision about the risk the
+mission runs, which §1 keeps from the account that administers the system. The planner may view the picture and nothing else (the
 owner, 2026-09-05). The security officer may recover an escrowed journal key and nothing
 else (D-30).
 
@@ -162,8 +164,9 @@ when it reads `yes`, `delegated`, `pre-delegated cases`, `decline` or `state, sa
 `concur` on sensor tasking, because concurring in a tasking is `sensor.task` (DN-11 §5).
 It does not when it reads `concur` on model promotion (concurring is not promoting, and
 nothing promotes, DN-24 §9), `camera cue` or `request` (the coarse action would be wider
-than the cell). The identity-declaration and coverage-gap rows have no coarse action yet;
-the per-class and per-layer refinements are GAP-058. **`gungnir-security/tests/role_matrix.rs`
+than the cell). The coverage-gap row is `coverage.accept_gap` (GAP-106, D-118,
+`../design/DN-33-accepting-a-coverage-gap.md` §6). The identity-declaration row has no
+coarse action yet; the per-class and per-layer refinements are GAP-058. **`gungnir-security/tests/role_matrix.rs`
 holds this table transcribed as data, reads this file to check the transcription, and
 compares every role against every action with `role_permits`** (GAP-111), so a change to
 authority is made here first and the code follows. The rows marked GAP-111 were added

@@ -33,6 +33,9 @@ pub struct LayerCounts {
     pub rings: usize,
     /// Gap segments found along the declared approaches.
     pub gaps: usize,
+    /// Of those, the segments a standing acceptance names (GAP-106): counted in `gaps`,
+    /// never taken out of it.
+    pub accepted_gaps: usize,
     /// Hazards placed on the map (DN-14, GAP-017).
     pub hazards: usize,
     /// Geofences placed on the map (GAP-088).
@@ -133,13 +136,15 @@ pub fn render_coverage_layers(
     }
 
     let mut gaps = view.gaps_visible;
-    if ui
-        .checkbox(
-            &mut gaps,
-            layer_label("Gaps along approaches", view.counts.gaps),
+    let gap_label = if view.counts.accepted_gaps > 0 {
+        format!(
+            "Gaps along approaches ({}, {} accepted)",
+            view.counts.gaps, view.counts.accepted_gaps
         )
-        .changed()
-    {
+    } else {
+        layer_label("Gaps along approaches", view.counts.gaps)
+    };
+    if ui.checkbox(&mut gaps, gap_label).changed() {
         action = Some(LayerAction::ShowGaps(gaps));
     }
 
@@ -215,6 +220,193 @@ fn draw_laydown_comparison(
             );
         }
     }
+}
+
+/// Who accepted a gap, and why (GAP-106, `docs/design/DN-33-accepting-a-coverage-gap.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AcceptanceLine<'a> {
+    pub id: gungnir_model::GapAcceptanceId,
+    pub operator: &'a str,
+    pub role: &'a str,
+    pub at: gungnir_model::MissionTime,
+    pub reason: &'a str,
+    /// What it holds for: the baseline revision and the laydown in force when accepted.
+    pub revision: u32,
+    pub laydown: Option<&'a str>,
+}
+
+/// One gap of the live report, and the acceptance that stands for it, if any.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GapLine<'a> {
+    pub gap: &'a gungnir_model::AcceptedGap,
+    pub acceptance: Option<AcceptanceLine<'a>>,
+}
+
+/// An acceptance that re-opened by itself this session, and why (DN-33 §5).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ReopenedLine<'a> {
+    pub id: gungnir_model::GapAcceptanceId,
+    pub gap: &'a gungnir_model::AcceptedGap,
+    pub because: &'a str,
+    pub at: gungnir_model::MissionTime,
+}
+
+/// DN-12's measure with the accepted part beside each total, never taken out of it
+/// (DN-33 §7). The panel's own copy of `gungnir_analytics::CoverageMeasure`: this crate
+/// depends on the model alone.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct MeasureLine {
+    pub segments: usize,
+    pub accepted_segments: usize,
+    pub uncovered_m: f64,
+    pub uncovered_accepted_m: f64,
+    pub single_sensor_m: f64,
+    pub single_sensor_accepted_m: f64,
+}
+
+impl MeasureLine {
+    /// The measure in words: each total, with the accepted part of it.
+    #[must_use]
+    pub fn sentence(&self) -> String {
+        format!(
+            "{} gap segment(s), {} accepted; {:.0} m uncovered ({:.0} m of it accepted), \
+             {:.0} m single-sensor ({:.0} m of it accepted). An accepted gap still counts.",
+            self.segments,
+            self.accepted_segments,
+            self.uncovered_m,
+            self.uncovered_accepted_m,
+            self.single_sensor_m,
+            self.single_sensor_accepted_m
+        )
+    }
+}
+
+/// PN-11's gap list and its accept control (GAP-106).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GapAcceptanceView<'a> {
+    /// The live report's gaps, in its order; empty with a reason when there is no report.
+    pub gaps: &'a [GapLine<'a>],
+    pub measure: Option<MeasureLine>,
+    /// Acceptances that re-opened this session.
+    pub reopened: &'a [ReopenedLine<'a>],
+    /// `Ok` when the signed-in role may accept a gap; otherwise who may, in words.
+    pub may_accept: Result<(), &'a str>,
+}
+
+/// What the commander has typed and not recorded: the gap being accepted, and the reason
+/// so far. Held by the window, like PN-15's draft, because a half-typed reason is nobody's
+/// record until it is.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AcceptanceDraft {
+    pub gap: Option<gungnir_model::AcceptedGap>,
+    pub reason: String,
+}
+
+/// An acceptance to record: the gap as it was drawn, and the reason.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AcceptGap {
+    pub gap: gungnir_model::AcceptedGap,
+    pub reason: String,
+}
+
+/// Render PN-11's gap list (GAP-106, DN-33 §8 rule 1): each gap with the acceptance that
+/// stands for it or an accept control, the measure, and what re-opened. **Accepted gaps
+/// are listed and drawn like any other**, marked accepted; nothing here hides one.
+pub fn render_gap_acceptance(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &GapAcceptanceView<'_>,
+    draft: &mut AcceptanceDraft,
+) -> Option<AcceptGap> {
+    let mut action = None;
+    ui.label(RichText::new("Gaps and their acceptance").small().strong());
+    if let Some(measure) = view.measure {
+        ui.label(
+            RichText::new(measure.sentence())
+                .small()
+                .color(palette.muted_text_color()),
+        );
+    }
+    if view.gaps.is_empty() {
+        ui.label(
+            RichText::new("No gap on the declared approaches to accept.")
+                .small()
+                .color(palette.muted_text_color()),
+        );
+    }
+    for (i, line) in view.gaps.iter().enumerate() {
+        if let Some(a) = line.acceptance {
+            ui.label(format!("{} -- ACCEPTED {}", line.gap.describe(), a.id));
+            ui.label(
+                RichText::new(format!(
+                    "by operator {} as {} at T+{:.0} s, under baseline revision {}{}: {}",
+                    a.operator,
+                    a.role,
+                    a.at.0,
+                    a.revision,
+                    a.laydown
+                        .map_or_else(String::new, |l| format!(" and laydown {l}")),
+                    a.reason
+                ))
+                .small()
+                .color(palette.muted_text_color()),
+            );
+        } else {
+            ui.horizontal(|ui| {
+                ui.label(line.gap.describe());
+                let drafting = draft.gap.as_ref() == Some(line.gap);
+                if view.may_accept.is_ok()
+                    && !drafting
+                    && ui
+                        .push_id(("accept_gap", i), |ui| ui.small_button("Accept..."))
+                        .inner
+                        .clicked()
+                {
+                    draft.gap = Some(line.gap.clone());
+                    draft.reason.clear();
+                }
+            });
+            if draft.gap.as_ref() == Some(line.gap) {
+                ui.label("Why is this gap accepted? (recorded with your name)");
+                ui.text_edit_singleline(&mut draft.reason);
+                ui.horizontal(|ui| {
+                    let has_reason = !draft.reason.trim().is_empty();
+                    if ui
+                        .add_enabled(has_reason, egui::Button::new("Record acceptance"))
+                        .clicked()
+                    {
+                        action = Some(AcceptGap {
+                            gap: line.gap.clone(),
+                            reason: draft.reason.trim().to_owned(),
+                        });
+                    }
+                    if ui.small_button("Cancel").clicked() {
+                        *draft = AcceptanceDraft::default();
+                    }
+                });
+            }
+        }
+    }
+    if let Err(who) = view.may_accept {
+        ui.label(RichText::new(who).small().color(palette.muted_text_color()));
+    }
+    if !view.reopened.is_empty() {
+        ui.label(RichText::new("Re-opened this session").small().strong());
+        for r in view.reopened {
+            ui.label(
+                RichText::new(format!(
+                    "{} of {} re-opened at T+{:.0} s: {}",
+                    r.id,
+                    r.gap.describe(),
+                    r.at.0,
+                    r.because
+                ))
+                .small()
+                .color(palette.warning_color),
+            );
+        }
+    }
+    action
 }
 
 /// DN-14 §5: the layer is static and says so, with the baseline version it came from.

@@ -196,6 +196,19 @@ impl std::fmt::Display for RequestId {
     }
 }
 
+/// Something the person deciding a plan was told and acknowledged before acting on it
+/// (GAP-107, `docs/design/DN-26-laydown-options.md` §11 item 6): carried on the decision
+/// record and on `CommandEvent::Decided`, so what they were told travels with what they
+/// decided.
+///
+/// `subject` names the kind of statement -- `"rehearsal"` for the standing of the laydown
+/// in force -- and `statement` is the sentence exactly as the dialog drew it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Acknowledgement {
+    pub subject: String,
+    pub statement: String,
+}
+
 /// What a plan proposes. `Intercept` is the behaviour that existed before fires.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]

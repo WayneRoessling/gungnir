@@ -536,6 +536,20 @@ fn every_audit_site_is_an_act_this_file_or_another_performs() {
             "tests/failover.rs: a conflict resolved",
         ),
         (
+            "gungnir-app/src/gap_acceptance.rs",
+            "crate::audit::record(",
+            1,
+            "tests/gap_acceptance.rs: a coverage gap accepted (its re-opening is nobody's \
+             act, and is written against nobody through `audit::entry`)",
+        ),
+        (
+            "gungnir-app/src/decisions.rs",
+            "crate::audit::record(",
+            1,
+            "a rehearsal standing acknowledged before a decision posted through the node \
+             (GAP-193: the node's record does not carry it)",
+        ),
+        (
             "gungnir-approval/src/queue.rs",
             "host.audit(",
             2,

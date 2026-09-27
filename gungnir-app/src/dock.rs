@@ -242,6 +242,13 @@ impl<'a> PanelBehavior<'a> {
                 self.state,
                 &mut self.sustainment.requirements,
             ),
+            // GAP-106: PN-11's accept control writes the reason into its draft as it is
+            // typed, the same reason PN-15 takes its draft mutably.
+            PanelId::CoverageLayers => crate::workspace::render_coverage_layers(
+                ui,
+                self.state,
+                &mut self.sustainment.gap_acceptance,
+            ),
             // PN-20 edits the sign-in draft in place (GAP-057).
             PanelId::Audit => crate::workspace::render_audit(ui, self.state, self.sustainment),
             other => crate::workspace::render_panel(ui, other, self.state),

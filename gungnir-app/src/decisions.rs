@@ -130,13 +130,79 @@ pub fn decide(
             });
         }
     }
+    // GAP-107: a decision that acts on a plan carries what it was told about the laydown in
+    // force, and is refused without the tick when it was told something.
+    let acknowledged = if matches!(
+        decision,
+        OperatorDecision::Accepted | OperatorDecision::Overridden
+    ) {
+        rehearsal_acknowledgement(state)?
+    } else {
+        Vec::new()
+    };
     crate::desk::with_desk(state, |desk, cx, host| {
-        desk.decide(cx, host, PendingApprovalId(id.0), decision)
+        desk.decide_acknowledging(
+            cx,
+            host,
+            PendingApprovalId(id.0),
+            decision,
+            None,
+            acknowledged,
+        )
     })?;
     // The panel state is this binary's, not the desk's: the dialog is open on an item that
     // has just left the queue.
     state.clear_selected_approval();
     Ok(())
+}
+
+/// Audit what a person acknowledged before deciding `item` through the node (GAP-107,
+/// GAP-193): the node's record does not carry it, so this desktop's own log does, one
+/// entry per statement acknowledged.
+pub fn audit_linked_acknowledgement(
+    state: &mut AppState,
+    item: gungnir_model::PendingApprovalId,
+    acknowledged: &[gungnir_model::Acknowledgement],
+) {
+    for a in acknowledged {
+        crate::audit::record(
+            state,
+            gungnir_security::actions::DECIDE_PLAN,
+            format!(
+                "acknowledged {}: {} -- before deciding queue item {item} through the node, \
+                 whose record does not carry it",
+                a.subject, a.statement
+            ),
+        );
+    }
+}
+
+/// What a decision acting on a plan acknowledges about the laydown in force (GAP-107,
+/// `docs/design/DN-26-laydown-options.md` §11 item 6): nothing when nothing is asked, and
+/// otherwise the statement PN-07 drew, **provided the person ticked that very sentence**
+/// (`state.dialog.rehearsal_acknowledged`).
+///
+/// Here as well as on the panel, because the panel's disabled button holds the rule only
+/// for a person at the screen; this is the place every decision on this desktop's queue
+/// passes through. A desktop deciding through its node asks the same question before it
+/// posts (`main.rs`), and audits the answer on its own log (GAP-193).
+///
+/// # Errors
+///
+/// `CommandError::Unacknowledged` with the statement, when one is asked and not ticked.
+pub fn rehearsal_acknowledgement(
+    state: &AppState,
+) -> Result<Vec<gungnir_model::Acknowledgement>, CommandError> {
+    match crate::rehearsal_standing::advisory(state) {
+        None => Ok(Vec::new()),
+        Some(a) if state.dialog.rehearsal_acknowledged.as_deref() == Some(a.statement.as_str()) => {
+            Ok(vec![a])
+        }
+        Some(a) => Err(CommandError::Unacknowledged {
+            subject: a.subject,
+            statement: a.statement,
+        }),
+    }
 }
 
 /// How many alternatives the desktop asks for alongside a recommendation (GAP-032).
