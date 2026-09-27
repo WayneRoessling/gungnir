@@ -211,9 +211,10 @@ tiff = "0.11"
 # through `proj-sys` 0.27, which links a system libproj when pkg-config finds one at
 # >= 9.6.2 and builds it from source with cmake otherwise. Taken WITHOUT default
 # features: the default `geo-types` feature only adds trait impls for a geometry type
-# this workspace does not use, and `network`/`tiff` would let libproj fetch grid files
-# over the internet at runtime, which no deployment profile in ARCHITECTURE.md §8
-# permits. Every member that takes it does so as an OPTIONAL dependency behind a
+# this workspace does not use, and `network` would let libproj fetch grid files over the
+# internet at runtime, which no deployment profile in ARCHITECTURE.md §8 permits. (GAP-108
+# takes libproj's GeoTIFF reader, `tiff`, through `proj-sys` below and not through
+# `network`: reading a grid a deployment installed is not fetching one.) Every member that takes it does so as an OPTIONAL dependency behind a
 # default-off feature, because the native build is not available on every developer
 # machine -- see gungnir-data's `crs` feature for the whole of that reasoning.
 #
@@ -223,6 +224,15 @@ tiff = "0.11"
 # one library, one feature, one CI job, and `default-features = false`'s refusal of
 # `network`/`tiff` kept rather than reintroduced.
 proj = { version = "0.31", default-features = false }
+# libproj's GeoTIFF grid reader, for the EGM2008 geoid grid (GAP-108, D-121;
+# docs/agentic-coding-standards.md §2.9). `proj` 0.31 has no feature of its own for it:
+# its `network` feature turns `tiff` on only as part of turning on run-time grid
+# fetching, which stays refused. Naming `proj-sys` here -- the same 0.27 `proj` already
+# resolves, so no crate is added to the graph -- switches on `tiff` alone, which builds
+# libproj with ENABLE_TIFF and links a system libtiff (`libtiff-dev`); `proj-sys`'s
+# from-source build keeps ENABLE_CURL off whatever features are set. Optional wherever it
+# is taken, behind the same default-off `crs` feature as `proj`.
+proj-sys = { version = "0.27", default-features = false, features = ["tiff"] }
 
 # Docking for the role workspaces (D-19;
 # docs/agentic-coding-standards.md §2.9). Pinned to 0.15 because that is the line that

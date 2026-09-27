@@ -74,6 +74,12 @@ pub struct AppState {
     pub terrain: crate::terrain::TerrainStatus,
     /// Where the configured point-cloud pair stands (GAP-098).
     pub point_cloud: crate::pointcloud::PointCloudStatus,
+    /// Where the EGM2008 geoid grid stands (GAP-108, D-121): checked at start, read by
+    /// every conversion of an EGM2008 height and by PN-09.
+    pub geoid: crate::geoid::GeoidStatus,
+    /// The grid check in flight, off the render thread.
+    pub geoid_check:
+        Option<crossbeam_channel::Receiver<Result<gungnir_data::geoid::GeoidGrid, String>>>,
     /// What this tick's registration of the loaded pair did (GAP-024), read by PN-09
     /// (`crate::pointcloud::registration_line`) and, once GAP-024's own remaining item
     /// finds an owner, the viewport.
@@ -695,6 +701,8 @@ impl AppState {
             rehearsal: None,
             terrain: crate::terrain::TerrainStatus::NotConfigured,
             point_cloud: crate::pointcloud::PointCloudStatus::NotConfigured,
+            geoid: crate::geoid::GeoidStatus::NotChecked,
+            geoid_check: None,
             registration: crate::pointcloud::RegistrationOutcome::NoPair,
             registration_engine: None,
             service_sinks: feeds.observations,

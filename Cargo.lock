@@ -3468,6 +3468,8 @@ dependencies = [
  "gltf",
  "las",
  "proj",
+ "proj-sys",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
  "tiff",
  "tracing",

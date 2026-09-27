@@ -44,11 +44,22 @@ workspace = true
 # GAP-023 folded the DEM loader's conversion into this same feature rather than keeping
 # the separate `crs-projection` it first shipped under: one `proj` link, one feature,
 # one CI job for both file kinds.
-crs = ["dep:proj"]
+#
+# GAP-108 (D-121) adds `proj-sys` with its `tiff` feature, which is what lets libproj
+# read a GeoTIFF grid at all -- the EGM2008 geoid grid PROJ-data distributes is one. It
+# adds libtiff to the native build (`libtiff-dev` in CI) and nothing else: `network`,
+# the feature that lets libproj fetch grids at run time, stays refused.
+crs = ["dep:proj", "dep:proj-sys"]
 
 [dependencies]
 # Optional: see the `crs` feature above for why this is not a plain dependency.
 proj = { workspace = true, optional = true }
+# Named only to switch on libproj's GeoTIFF grid reader (the `crs` feature above; §2.9's
+# `proj-sys` row). No code here calls it: every PROJ call goes through `proj`.
+proj-sys = { workspace = true, optional = true }
+# The EGM2008 geoid grid is accepted only by its SHA-256 (GAP-108, `geoid::GeoidGrid`);
+# §2.9's `sha2` row, "dataset hashes".
+sha2.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 crossbeam-channel.workspace = true

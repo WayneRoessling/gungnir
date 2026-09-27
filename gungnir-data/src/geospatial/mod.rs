@@ -59,6 +59,11 @@ pub struct HeightGrid {
     /// The value that marks a cell with no height, as the file wrote it.
     pub nodata: Option<f32>,
     pub crs: GridCrs,
+    /// The `GeoTIFF` `VerticalGeoKey` (4096): the EPSG code of the vertical system the
+    /// heights are in, when the file states one (GAP-108). `None` for an ESRI ASCII grid,
+    /// which never can, and for a `GeoTIFF` that does not; see
+    /// [`crate::geoid::VerticalDatum::from_epsg`] for what a code means.
+    pub vertical: Option<u16>,
     /// `rows * columns` values, row-major, north row first. No-data cells hold `nodata`
     /// exactly as written, so a caller can tell "no data" from "sea level".
     pub heights: Vec<f32>,
@@ -120,6 +125,10 @@ pub struct TerrainMesh {
     /// What the `x` and `y` of every position are relative to, and in what frame.
     pub origin: [f64; 2],
     pub crs: GridCrs,
+    /// The vertical system the heights are in, as the grid stated it
+    /// ([`HeightGrid::vertical`]); `None` once [`Self::with_enu`] has placed the mesh,
+    /// since its heights are then local ENU up and no longer the file's.
+    pub vertical: Option<u16>,
     /// The grid the vertices came from, north row first, `rows * columns` positions,
     /// so a viewport can decimate by stride rather than by triangle. Zero for a mesh
     /// built by hand rather than from a grid.
@@ -176,6 +185,7 @@ impl TerrainMesh {
             indices,
             origin: grid.origin,
             crs: grid.crs,
+            vertical: grid.vertical,
             rows: grid.rows,
             columns: grid.columns,
         })
@@ -185,6 +195,14 @@ impl TerrainMesh {
     #[must_use]
     pub fn triangle_count(&self) -> usize {
         self.indices.len() / 3
+    }
+
+    /// The vertical datum the file stated for these heights, or `None` when it stated
+    /// none (GAP-108): an ESRI ASCII grid never does, and most `GeoTIFF` DEMs do not.
+    #[must_use]
+    pub fn vertical_datum(&self) -> Option<crate::geoid::VerticalDatum> {
+        self.vertical
+            .map(|code| crate::geoid::VerticalDatum::from_epsg(u32::from(code)))
     }
 
     /// The same surface with `origin` folded into every position, for a grid whose frame
@@ -211,7 +229,7 @@ impl TerrainMesh {
     /// Exists for a real-world-CRS conversion (GAP-023, D-41): a caller reprojects the
     /// result (`geospatial::crs::to_wgs84`, or a further conversion this crate does not
     /// hold, such as `gungnir_coord`'s geographic-to-local-ENU) and returns it through
-    /// [`Self::with_xy`], which is the only place a coordinate re-enters `f32`.
+    /// [`Self::with_enu`], which is the only place a coordinate re-enters `f32`.
     #[must_use]
     pub fn absolute_positions_xy(&self) -> Vec<[f64; 2]> {
         let [ox, oy] = self.origin;
@@ -221,37 +239,53 @@ impl TerrainMesh {
             .collect()
     }
 
-    /// This mesh with its `[x, y]` replaced by `xy` (the same length and order as
-    /// `positions` -- `absolute_positions_xy`'s own order) and `crs` set to `new_crs`.
-    /// Height (`positions[_][2]`), `indices` and the grid shape (`rows`, `columns`) are
-    /// unchanged: only where a vertex sits moved, never which ones exist or how they
-    /// connect. `origin` becomes `[0.0, 0.0]`: `xy` is already absolute in whatever
-    /// frame the caller placed it into, with nothing left to fold in later --
-    /// `.placed()` on the result is a no-op, the same as it would be on any mesh whose
-    /// origin is already zero.
+    /// This mesh placed: every position replaced by `enu` (the same length and order as
+    /// `positions` -- `absolute_positions_xy`'s own order), `crs` set to `new_crs` and
+    /// `vertical` cleared.
+    ///
+    /// **The height is replaced too, and that is the point** (GAP-108, D-122): `enu[_][2]`
+    /// is the vertex's local up, computed by the caller from its WGS-84 ellipsoidal height,
+    /// which is what line of sight compares a sensor's own up against. A vertex whose
+    /// height was no data (`NaN`) stays `NaN` whatever `enu` says, so a hole stays a
+    /// hole. `indices` and the grid shape are unchanged: placing moves vertices and never
+    /// changes which exist or how they connect. `origin` becomes `[0.0, 0.0]`, so
+    /// `.placed()` on the result is a no-op.
+    ///
+    /// Before GAP-108 this was `with_xy`, which replaced `[x, y]` and carried the file's
+    /// own height through unchanged -- so a DEM's surface sat at its file heights rather
+    /// than at its local up: off by the geoid separation everywhere, and by the Earth's
+    /// curvature away from the origin (about 31 m at 20 km).
     ///
     /// # Errors
     ///
-    /// When `xy.len()` does not equal `self.positions.len()`.
-    pub fn with_xy(&self, xy: &[[f64; 2]], new_crs: GridCrs) -> Result<Self, DataError> {
-        if xy.len() != self.positions.len() {
+    /// When `enu.len()` does not equal `self.positions.len()`.
+    pub fn with_enu(&self, enu: &[[f64; 3]], new_crs: GridCrs) -> Result<Self, DataError> {
+        if enu.len() != self.positions.len() {
             return Err(DataError::Parse(format!(
                 "{} coordinates for {} vertices",
-                xy.len(),
+                enu.len(),
                 self.positions.len()
             )));
         }
         let positions = self
             .positions
             .iter()
-            .zip(xy)
-            .map(|(p, &[x, y])| [relative_to_f32(x), relative_to_f32(y), p[2]])
+            .zip(enu)
+            .map(|(p, &[e, n, u])| {
+                let up = if p[2].is_nan() {
+                    f32::NAN
+                } else {
+                    relative_to_f32(u)
+                };
+                [relative_to_f32(e), relative_to_f32(n), up]
+            })
             .collect();
         Ok(Self {
             positions,
             indices: self.indices.clone(),
             origin: [0.0, 0.0],
             crs: new_crs,
+            vertical: None,
             rows: self.rows,
             columns: self.columns,
         })
@@ -573,6 +607,7 @@ pub mod ascii_grid {
             cell_size: [cell_size, cell_size],
             nodata,
             crs: GridCrs::Unstated,
+            vertical: None,
             heights,
         })
     }
@@ -598,6 +633,13 @@ pub mod geotiff {
     const GT_RASTER_TYPE: u16 = 1025;
     const GEOGRAPHIC_TYPE: u16 = 2048;
     const PROJECTED_CS_TYPE: u16 = 3072;
+    /// `VerticalGeoKey` (`VerticalCSTypeGeoKey` in GeoTIFF 1.0): the vertical system's
+    /// EPSG code (GAP-108).
+    const VERTICAL_TYPE: u16 = 4096;
+    /// `VerticalUnitsGeoKey`: the unit of the heights, an EPSG unit code (GAP-108).
+    const VERTICAL_UNITS: u16 = 4099;
+    /// EPSG:9001, the metre.
+    const UNIT_METRE: u16 = 9001;
     const MODEL_TYPE_PROJECTED: u16 = 1;
     const MODEL_TYPE_GEOGRAPHIC: u16 = 2;
     const RASTER_PIXEL_IS_POINT: u16 = 2;
@@ -621,6 +663,7 @@ pub mod geotiff {
         /// `[x, y]` of the north-west corner of the raster.
         top_left: [f64; 2],
         crs: GridCrs,
+        vertical: Option<u16>,
     }
 
     fn read<R: std::io::Read + std::io::Seek>(
@@ -656,6 +699,7 @@ pub mod geotiff {
             cell_size: [dx, dy],
             nodata,
             crs: georeference.crs,
+            vertical: georeference.vertical,
             heights,
         })
     }
@@ -749,10 +793,23 @@ pub mod geotiff {
             },
             _ => GridCrs::Unstated,
         };
+        // GAP-108: every height this crate hands on is in metres, and a DEM that states
+        // another unit for them is refused by name rather than read as metres -- a
+        // height in feet read as metres is a silent factor of 3.28, which converting it
+        // through the geoid would only make harder to see. Absent means metres, which is
+        // what GDAL writes (it omits the key for a metric vertical system) and what this
+        // loader has always read.
+        if let Some(unit) = key(VERTICAL_UNITS).filter(|unit| *unit != UNIT_METRE) {
+            return Err(format!(
+                "its heights are in unit EPSG:{unit} (VerticalUnitsGeoKey), not metres; this \
+                 loader reads DEM heights in metres only"
+            ));
+        }
         Ok(Georeference {
             scale: [*dx, *dy],
             top_left,
             crs,
+            vertical: key(VERTICAL_TYPE),
         })
     }
 
