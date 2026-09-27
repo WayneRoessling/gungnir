@@ -160,11 +160,11 @@ history, and an entry is never edited once it has merged.
 | GAP-145 | The exchange register has no lifecycle | Technical | CAP-7.4 | 3 | 5 | M | 15 | I3 | Services engineer | Closed |
 | GAP-146 | A console that may not publish queues its handoffs for ever | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
 | GAP-150 | A console's mission report is not published again when its link comes back | Technical | CAP-7.4 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
-| GAP-154 | The Disconnected reconciliation row still says no decision reaches a node's record | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Owner | Open |
+| GAP-154 | The Disconnected reconciliation row still says no decision reaches a node's record | Technical | CAP-5.4 | 1 | 1 | S | 1 | I3 | Owner | Closed |
 | GAP-152 | The audit log lives in memory, so nothing outlives the process and no age governs it | Technical | CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-153 | A non-finite float in an envelope breaks the v3 stream and history | Technical | CAP-7.1, CAP-5.4 | 2 | 6 | S | 12 | I3 | Services engineer | Closed |
 | GAP-158 | A coverage volume's elevation limit is one floor for every sensor, against the frame's vertical | Technical | CAP-2.11 | 2 | 3 | M | 6 | I3 | Services engineer | Closed |
-| GAP-159 | The Coverage accuracy row still says a coverage volume has no bearing | Technical | CAP-2.11 | 1 | 3 | S | 3 | I3 | Owner | Open |
+| GAP-159 | The Coverage accuracy row still says a coverage volume has no bearing | Technical | CAP-2.11 | 1 | 3 | S | 3 | I3 | Owner | Closed |
 | GAP-160 | A node publishes no track, so a linked desktop's picture is frozen at sign-in | Technical | CAP-7.3 | 5 | 1 | S | 5 | I3 | Services engineer | Closed |
 | GAP-161 | A linked desktop's health strip reports the link, not the node's services | Technical | CAP-7.3 | 4 | 1 | S | 4 | I3 | Services engineer | Closed |
 | GAP-147 | No committed recording reaches round 1's radars | Technical | CAP-5.2, CAP-1.4 | 2 | 4 | M | 8 | I3 | Services engineer | Closed |
@@ -178,8 +178,8 @@ history, and an entry is never edited once it has merged.
 | GAP-166 | nalgebra's decompositions violate Stacked Borrows | Technical | CAP-7.4 | 2 | 5 | S | 10 | I2 | Owner | Open |
 | GAP-175 | A global entity identity is written as a 128-bit JSON number | Technical | CAP-7.2, CAP-2.7 | 2 | 5 | S | 10 | I3 | Services engineer | Closed |
 | GAP-171 | The other v3 bodies, and every exchange product's body, still write a non-finite float as null | Technical | CAP-7.1, CAP-7.4 | 3 | 6 | M | 18 | I3 | Services engineer | Closed |
-| GAP-173 | The late-data row still says nothing consumes the policy | Technical | CAP-1.5 | 3 | 7 | S | 21 | I3 | Owner | Open |
-| GAP-168 | The intercept-service row's degradation clause stops at the last good plan | Technical | CAP-3.3, CAP-5.5 | 1 | 8 | S | 8 | I3 | Owner | Open |
+| GAP-173 | The late-data row still says nothing consumes the policy | Technical | CAP-1.5 | 3 | 7 | S | 21 | I3 | Owner | Closed |
+| GAP-168 | The intercept-service row's degradation clause stops at the last good plan | Technical | CAP-3.3, CAP-5.5 | 1 | 8 | S | 8 | I3 | Owner | Closed |
 | GAP-169 | An older desktop reads a newer node's interim plan as the optimum | Technical | CAP-3.3, CAP-7.3 | 2 | 5 | S | 10 | I3 | Owner | Closed |
 | GAP-170 | PN-09's refusal test left its wait before the desktop had seen its link | Technical | CAP-7.3 | 1 | 1 | S | 1 | I3 | Services engineer | Closed |
 | GAP-179 | A node's audit record and its verification reach only the node's log | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
@@ -2274,11 +2274,12 @@ Counts: 176 gaps, 3 mission, 173 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.4 Disconnected and reconcile.
 - History:
   - 2026-09-25, Open: Found while checking GAP-129 against the code. Not edited in that change: the sentence is in a criterion cell of the verification table, which only the owner changes.
+  - 2026-09-26, Closed: Restated by the owner on the 2026-09-26 walk: the row now says a node records every decision taken on its queue and every decision forwarded after an outage, and how an outage's conflicts are caught (D-58, D-53). The criterion and the row's gate are unchanged. See `../../record/2026-09-26/the-owner-s-walk-of-2026-09-26.md`.
 - Evidence: `docs/verification-capability-table.md` (the cross-layer "Disconnected reconciliation" row); `gungnir-app/tests/cut_off_and_reconnected.rs`; GAP-129's closing entry.
 - Severity: 1. Reach: 1 threads. Effort: S. Priority: 1.
 - Impact: The cross-layer Disconnected reconciliation row of the verification table ends "No build puts a decision on a node's record yet ... outside tests reconciliation meets no conflict (GAP-129)". Since GAP-132 and GAP-134 a node records every decision taken through its queue and every decision forwarded after an outage, and GAP-129 is closed, so a reader of the table is told the opposite of what the code does. The sentence sits inside the row's pass-criterion cell, and any change to a criterion cell is the owner's.
 - Closing action: On the owner's next walk of the table, replace the sentence with what now holds: the node's record carries decisions taken on its queue and forwarded after an outage, and an outage's conflicts are caught by track (D-58) and, for pre-UUID journals, by plan (D-53). The criterion itself is unchanged.
-- Target: I3. Owner: Owner. Status: Open.
+- Target: I3. Owner: Owner. Status: Closed.
 - Reference: Found closing GAP-129 (`../../record/2026-09-25/housekeeping-after-dn-31.md`).
 - Depends on: GAP-129.
 
@@ -2334,11 +2335,12 @@ Counts: 176 gaps, 3 mission, 173 technical; 1 already covered by a plan in `../.
 - Capability: CAP-2.11 Geometric questions.
 - History:
   - 2026-09-25, Open: Found closing GAP-118. Not edited in that change: the sentence is in a criterion cell of the verification table, which only the owner changes.
+  - 2026-09-26, Closed: Gated by the owner on the 2026-09-26 walk against `gungnir-analytics/tests/coverage_accuracy.rs`, which recovers every range within 1 percent and every sector edge and elevation limit within 0.1 degree, against the vertical at each sensor. The stale sentence is replaced. See `../../record/2026-09-26/the-owner-s-walk-of-2026-09-26.md`.
 - Evidence: `docs/verification-capability-table.md` (the `gungnir-analytics` Coverage accuracy row); `gungnir-analytics/tests/coverage_accuracy.rs`; GAP-118's closing entry.
 - Severity: 1. Reach: 3 threads. Effort: S. Priority: 3.
 - Impact: The `gungnir-analytics` Coverage accuracy row of the verification table says "no test compares a computed volume with a fixture, and `CoverageVolume` has no azimuth sector, so bearing has no representation yet (GAP-118)". Since GAP-118 closed, a volume has a sector and `coverage_accuracy.rs` compares one with a fixture, so a reader is told the opposite of what the code does. The sentence is in the row's pass-criterion cell, and any change to a criterion cell is the owner's.
 - Closing action: On the owner's next walk of the table, replace the sentence with what now holds, and decide the row against `coverage_accuracy.rs`. The criterion itself is unchanged.
-- Target: I3. Owner: Owner. Status: Open.
+- Target: I3. Owner: Owner. Status: Closed.
 - Reference: Found closing GAP-118 (`../../record/2026-09-25/time-to-impact-and-sensor-sectors.md`).
 - Depends on: GAP-118.
 
@@ -2539,11 +2541,12 @@ Counts: 176 gaps, 3 mission, 173 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.5 Time discipline.
 - History:
   - 2026-09-26, Open: Filed by GAP-114's build, which made the row's note untrue and left the criterion and its gate to the owner.
+  - 2026-09-26, Closed: Gated by the owner on the 2026-09-26 walk against `gungnir-fusion-async/tests/late_data_policy.rs` (each variant's outcome asserted) and `gungnir-app/tests/late_data_policy.rs` (the baseline's policy reaches the desktop's tracker, the fallback included). The stale note is replaced. See `../../record/2026-09-26/the-owner-s-walk-of-2026-09-26.md`.
 - Evidence: `docs/verification-capability-table.md` §1, the `gungnir-time` Late-data policy row; `gungnir-fusion-async/tests/late_data_policy.rs`; `gungnir-app/tests/late_data_policy.rs`.
 - Severity: 3. Reach: 7 threads. Effort: S. Priority: 21.
 - Impact: The `gungnir-time` "Late-data policy" row in the verification table says it is not gated because nothing consumes `LateDataPolicy`. Since GAP-114 the fusion pipeline applies it and a baseline sets it, so the row describes a build that no longer exists, and its criterion ("policy honoured") has tests nobody has walked.
 - Closing action: Walk the row against the two test files: each variant delivered late data and its outcome asserted, the baseline's value reaching the desktop's tracker. Gate it or say what is missing, and restate the row's note, which is the owner's to change.
-- Target: I3. Owner: Owner. Status: Open.
+- Target: I3. Owner: Owner. Status: Closed.
 - Reference: GAP-114 (`../../record/2026-09-26/the-late-data-policy-governs-the-tracker.md`).
 - Depends on: GAP-114.
 
@@ -2553,11 +2556,12 @@ Counts: 176 gaps, 3 mission, 173 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.3 Assignment recommendation; CAP-5.5 Health and alert lifecycle.
 - History:
   - 2026-09-26, Open: Found closing GAP-156. Not edited in that change: the sentence is in a criterion cell of the verification table, which only the owner changes.
+  - 2026-09-26, Closed: Amended by the owner on the 2026-09-26 walk: the degradation clause now names the stand-in wait and the interim plan that follows it, labelled as not optimal, until the exact solve finishes (D-93). The row is not gated by this change. See `../../record/2026-09-26/the-owner-s-walk-of-2026-09-26.md`.
 - Evidence: `docs/verification-capability-table.md` §2 (the `gungnir-intercept-service` Plan determinism and degradation row); `gungnir-intercept-service/src/lib.rs` (`an_over_budget_solve_returns_the_last_good_plan_stale`, `an_interim_answer_stands_in_once_the_planner_has_waited`); D-93.
 - Severity: 1. Reach: 8 threads. Effort: S. Priority: 8.
 - Impact: The `gungnir-intercept-service` "Plan determinism and degradation" row of the verification table says an "over-budget solve returns the last good plan, flagged". Since GAP-156 that holds only for the planner's stand-in wait, 500 ms of mission time by default: after it the planner answers the current picture with an interim one-step plan labelled as not the optimum, and a picture past the exact solver's limits gets one at once. A reader of the table is told the last good plan stands for as long as a solve runs. The sentence is in the row's pass-criterion cell, and any change to a criterion cell is the owner's.
 - Closing action: On the owner's next walk of the table, decide whether the degradation clause names the interim answer that follows the wait and its label, and walk the row against the budget and stand-in tests. The criterion itself is unchanged.
-- Target: I3. Owner: Owner. Status: Open.
+- Target: I3. Owner: Owner. Status: Closed.
 - Reference: Found closing GAP-156 (`../../record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md`).
 - Depends on: GAP-156.
 
