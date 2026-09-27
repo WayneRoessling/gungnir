@@ -3301,3 +3301,16 @@
   commit: a4981a0e2b8ae1062b4c908123313862de4fa1db
   pre_repository: false
   record: "GAP-196; D-123; D-124; docs/record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md; PR #197"
+
+- date: 2026-09-27
+  signer: Owner
+  subject: >-
+    GAP-107's decision-path plumbing in `gungnir-approval`: `ApprovalDesk::decide_acknowledging`
+    carrying what the person deciding was told and acknowledged onto the decision record,
+    `CommandEvent::Decided` and the decision's audit entry (D-119).
+  kind: code
+  paths:
+  - gungnir-approval/src/queue.rs
+  commit: 1c9fe4dc5039822f66b43359e14f7be77251b355
+  pre_repository: false
+  record: "GAP-107; D-119; DN-26 §11; PR #195"

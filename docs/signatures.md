@@ -21,7 +21,7 @@ the owner reviewed. A signature from before the repository existed on 2026-09-07
 the first commit and is marked as such. An entry is never edited; a withdrawn signature
 gets a new entry.
 
-256 signatures.
+257 signatures.
 
 | Date | Signer | What was signed | Kind | Paths | Commit | Record |
 |---|---|---|---|---|---|---|
@@ -281,3 +281,4 @@ gets a new entry.
 | 2026-09-27 | Owner | GAP-179 and GAP-176's human-owned code: `audit.read` (`actions::READ_AUDIT`) held by the administrator and the commander, its §4 row and role-matrix cells (D-116); the node's `GET /v3/audit`, every read and refusal audited, verification against the in-memory heads (`gungnir-node/src/audit_record.rs`); and the effector handoff's body writing a non-finite figure as `{"unavailable": ...}`, never withheld (D-115). | code | `gungnir-security/src/authz.rs`<br>`gungnir-security/src/lib.rs`<br>`gungnir-security/tests/role_matrix.rs`<br>`gungnir-api/src/lib.rs`<br>`gungnir-api/src/transport.rs`<br>`gungnir-api/src/v3/mod.rs`<br>`gungnir-node/src/audit_record.rs`<br>`gungnir-approval/src/handoffs.rs` | `0bcc3142dd` | GAP-176; GAP-179; D-115; D-116; DN-23 §15; docs/record/2026-09-26/a-figure-the-endpoint-cannot-be-given-and.md; PR #193 |
 | 2026-09-27 | Owner | GAP-106 and GAP-107's human-owned code: `coverage.accept_gap` held by the commander alone, its §4 row and role-matrix cells (D-118); and in `gungnir-command` the decision record's acknowledgement fields and the refusal of an unacknowledged accept or override (D-119). | code | `gungnir-security/src/authz.rs`<br>`gungnir-security/src/lib.rs`<br>`gungnir-security/tests/role_matrix.rs`<br>`gungnir-command/src/lib.rs`<br>`gungnir-command/src/queue.rs` | `1c9fe4dc50` | GAP-106; GAP-107; D-118; D-119; DN-33; DN-26 §11; PR #195 |
 | 2026-09-27 | Owner | GAP-196's `gungnir-ingest` gateway code: the ASTERIX Category 129 arm adding the EGM2008 separation to an I129/090 height when the verified grid is lent, and keeping it flagged as mean sea level with a widened vertical variance and a count when not (D-123, D-124); and the geoid lookup interface in `gungnir-ingest/src/geoid.rs`. | code | `gungnir-ingest/src/adapters/asterix.rs`<br>`gungnir-ingest/src/geoid.rs`<br>`gungnir-ingest/src/lib.rs` | `a4981a0e2b` | GAP-196; D-123; D-124; docs/record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md; PR #197 |
+| 2026-09-27 | Owner | GAP-107's decision-path plumbing in `gungnir-approval`: `ApprovalDesk::decide_acknowledging` carrying what the person deciding was told and acknowledged onto the decision record, `CommandEvent::Decided` and the decision's audit entry (D-119). | code | `gungnir-approval/src/queue.rs` | `1c9fe4dc50` | GAP-107; D-119; DN-26 §11; PR #195 |
