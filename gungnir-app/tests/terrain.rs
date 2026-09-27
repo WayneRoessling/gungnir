@@ -20,12 +20,14 @@
 //! grid are behind the `crs` feature. The expected ups are an independent computation:
 //! `pyproj` for the horizontal, the geoid and geodetic-to-ECEF, and a hand rotation into
 //! the origin's tangent plane, nothing of `gungnir_coord`'s (recorded in
-//! `docs/record/2026-09-26/`'s GAP-108 item).
+//! `docs/record/2026-09-26/`'s GAP-108 item). GAP-197 (D-125) adds EGM96 and NAVD88
+//! (GEOID18) the same way, each through its own grid.
 
 use gungnir_app::state::AppState;
 use gungnir_app::terrain::TerrainStatus;
 use gungnir_app::{sustainment, update};
 use gungnir_config::{ConfigBaseline, TerrainConfig};
+use gungnir_data::geoid::GeoidModel;
 use std::path::{Path, PathBuf};
 
 /// `testdata/geoid/SOURCE.md` records this digest for the committed EGM2008 clip.
@@ -339,12 +341,34 @@ fn a_real_world_dem_whose_heights_nobody_states_is_refused_by_name() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// GAP-108: a vertical datum this deployment carries no grid for is refused by name,
-/// whichever side states it -- here the baseline says NAVD88 (EPSG:5703).
+/// GAP-108, GAP-197: a vertical datum this deployment carries no grid for is refused by
+/// name, whichever side states it -- here the baseline says NN2000 (EPSG:5941), a
+/// national levelling datum with no pinned grid -- and the refusal names the procedure
+/// for pinning one.
 #[test]
 fn a_dem_in_a_vertical_datum_with_no_grid_is_refused_by_name() {
     let (mut state, dir) = desktop_vertical(
-        "navd88",
+        "nn2000",
+        fixture("small.tif"),
+        "epsg:32633",
+        Some("epsg:5941"),
+        [54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 0.0],
+    );
+    settle(&mut state);
+    let reason = refusal(&state);
+    assert!(reason.contains("EPSG:5941"), "{reason}");
+    assert!(reason.contains("no geoid grid"), "{reason}");
+    assert!(reason.contains("Pinning a further geoid grid"), "{reason}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// GAP-197 (D-125): NAVD88 (EPSG:5703) takes GEOID18, and a deployment without that grid
+/// refuses the DEM naming the grid it needs -- never converting it with EGM2008 or
+/// EGM96, whichever of those is installed.
+#[test]
+fn a_navd88_dem_without_geoid18_is_refused_naming_the_grid() {
+    let (mut state, dir) = desktop_vertical(
+        "navd88-no-grid",
         fixture("small.tif"),
         "epsg:32633",
         Some("epsg:5703"),
@@ -352,32 +376,39 @@ fn a_dem_in_a_vertical_datum_with_no_grid_is_refused_by_name() {
     );
     settle(&mut state);
     let reason = refusal(&state);
-    assert!(reason.contains("EPSG:5703"), "{reason}");
-    assert!(reason.contains("no geoid grid"), "{reason}");
+    assert!(reason.contains("us_noaa_g2018u0.tif"), "{reason}");
+    assert!(reason.contains("NAVD88"), "{reason}");
     let _ = std::fs::remove_dir_all(dir);
 }
 
 /// GAP-108: `small-egm2008.tif` states EGM2008 heights itself (`VerticalGeoKey` 3855,
 /// written by GDAL), and a baseline claiming they are ellipsoidal contradicts the file,
-/// so it is refused rather than obeyed.
+/// so it is refused rather than obeyed. So does one claiming EGM96: the two models differ
+/// by decimetres here, and are not interchangeable.
 #[test]
 fn a_baseline_that_contradicts_the_dems_own_vertical_system_is_refused() {
-    let (mut state, dir) = desktop_vertical(
-        "contradiction",
-        fixture("small-egm2008.tif"),
-        "epsg:32633",
-        Some("ellipsoidal"),
-        [54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 0.0],
-    );
-    settle(&mut state);
-    let reason = refusal(&state);
-    assert!(reason.contains("EGM2008"), "{reason}");
-    assert!(reason.contains("the file states"), "{reason}");
-    let _ = std::fs::remove_dir_all(dir);
+    for (name, claim) in [
+        ("contradiction", "ellipsoidal"),
+        ("egm96-claim", "epsg:5773"),
+    ] {
+        let (mut state, dir) = desktop_vertical(
+            name,
+            fixture("small-egm2008.tif"),
+            "epsg:32633",
+            Some(claim),
+            [54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 0.0],
+        );
+        settle(&mut state);
+        let reason = refusal(&state);
+        assert!(reason.contains("EGM2008"), "{reason}");
+        assert!(reason.contains("the file states"), "{reason}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
 
 /// GAP-108: a DEM stating EGM2008 heights where the named grid directory holds no grid
-/// is refused, naming the grid; PN-09's geoid line says the same.
+/// is refused, naming the grid; PN-09's geoid lines say the same, one per grid, and one
+/// alert says the named directory holds none of them.
 #[test]
 fn an_egm2008_dem_without_the_grid_is_refused_and_pn_09_says_why() {
     let (mut state, dir) = desktop_vertical(
@@ -391,19 +422,47 @@ fn an_egm2008_dem_without_the_grid_is_refused_and_pn_09_says_why() {
     let reason = refusal(&state);
     assert!(reason.contains("us_nga_egm08_25.tif"), "{reason}");
     assert!(reason.contains("is not there"), "{reason}");
-    assert!(!state.geoid.is_verified());
-    let line = state.geoid.line();
-    assert!(line.contains("refused"), "{line}");
-    assert!(line.contains("the baseline's geoid_grid_dir"), "{line}");
-    assert!(
-        state
-            .alerts
-            .iter()
-            .any(|a| a.contains("EGM2008 geoid grid")),
-        "{:?}",
-        state.alerts
-    );
+    for model in GeoidModel::ALL {
+        assert!(!state.geoid.is_verified(model));
+        let line = state.geoid.status(model).line(model);
+        assert!(line.contains("refused"), "{line}");
+        assert!(line.contains("the baseline's geoid_grid_dir"), "{line}");
+        assert!(line.contains(model.file()), "{line}");
+    }
+    let alerts: Vec<_> = state
+        .alerts
+        .iter()
+        .filter(|a| a.contains("holds none of the pinned grids"))
+        .collect();
+    assert_eq!(alerts.len(), 1, "{:?}", state.alerts);
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The committed clip of `model`'s pinned grid, verified, as the desktop's start-up
+/// check would have installed it (`testdata/geoid/SOURCE.md` records each digest).
+#[cfg(feature = "crs")]
+fn install_clip(state: &mut AppState, model: GeoidModel) {
+    let (file, sha256) = match model {
+        GeoidModel::Egm2008 => ("egm08_25_clip_53n56n_13e17e.tif", CLIP_SHA256),
+        GeoidModel::Egm96 => (
+            "egm96_15_clip_53n56n_13e17e.tif",
+            "9b8e9b6c7811e88b72af9191e118e9c43ed03630b84ea2b3789647e925300b19",
+        ),
+        GeoidModel::Geoid18Conus => (
+            "g2018u0_clip_43n45n_124w122w.tif",
+            "a93c8ca6a47cc3d5a58ffeeac469aa9c8c9ca2400a0113a1976eb0a4bc9b16eb",
+        ),
+    };
+    let clip = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../testdata/geoid")
+        .join(file);
+    state.geoid.set(
+        model,
+        gungnir_app::geoid::GeoidStatus::Verified {
+            grid: gungnir_data::geoid::GeoidGrid::verify(&clip, sha256).expect("the clip"),
+            source: gungnir_app::geoid::GridSource::Baseline,
+        },
+    );
 }
 
 /// **GAP-108 end to end through the grid**: `small-egm2008.tif` states EGM2008 heights,
@@ -426,12 +485,7 @@ fn an_egm2008_dem_lands_at_the_up_its_ellipsoidal_height_gives() {
         None,
         [54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 30.0],
     );
-    let clip = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../testdata/geoid/egm08_25_clip_53n56n_13e17e.tif");
-    state.geoid = gungnir_app::geoid::GeoidStatus::Verified {
-        grid: gungnir_data::geoid::GeoidGrid::verify(&clip, CLIP_SHA256).expect("the clip"),
-        source: gungnir_app::geoid::GridSource::Baseline,
-    };
+    install_clip(&mut state, GeoidModel::Egm2008);
     settle(&mut state);
     assert!(state.terrain.is_masking(), "{:?}", state.terrain);
     let mesh = &state.data.terrains[0];
@@ -448,45 +502,92 @@ fn an_egm2008_dem_lands_at_the_up_its_ellipsoidal_height_gives() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// The same, through the start-up check against the **full pinned grid**
-/// (`GUNGNIR_EGM2008_GRID_DIR`, which `ci.yml`'s `proj-crs` job fetches and checks): the
-/// baseline names the directory, the desktop hashes the 80 MB file off the render thread,
-/// PN-09 says it is verified, and the DEM lands at the same up as through the clip.
+/// **GAP-197 (D-125): an EGM96 DEM, end to end through its own grid.** `small.tif` with
+/// `terrain.vertical: "epsg:5773"` (the SRTM case: a DEM whose heights are EGM96 and
+/// whose `GeoTIFF` keys do not say so), the EGM96 clip installed and the EGM2008 one too,
+/// so the test would see EGM2008 used in EGM96's place.
+///
+/// Independently: `pyproj` over the full pinned EGM96 grid, `EPSG:32633+5773` to
+/// `EPSG:4979`, takes vertex 0 (500015, 6000105, 10 m) to an ellipsoidal height of
+/// 44.53717006681509 m, and the same hand rotation into the tangent plane at the corner,
+/// 30 m up, puts it 14.536287383431059 m up. EGM2008's grid in its place would put it
+/// 0.387 m higher, 3870 times the tolerance.
 #[test]
-#[ignore = "needs the pinned 80 MB grid; ci.yml's proj-crs job fetches it and runs this"]
 #[cfg(feature = "crs")]
-fn the_pinned_grid_is_verified_at_start_and_places_an_egm2008_dem() {
-    let grid_dir = std::env::var("GUNGNIR_EGM2008_GRID_DIR")
-        .expect("GUNGNIR_EGM2008_GRID_DIR names the directory holding the pinned grid");
-    let dir = std::env::temp_dir().join(format!("gungnir-terrain-pinned-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    let config = ConfigBaseline {
-        data_dir: dir.to_string_lossy().into_owned(),
-        origin: Some([54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 30.0]),
-        terrain: Some(TerrainConfig {
-            path: fixture("small-egm2008.tif"),
-            frame: "epsg:32633".into(),
-            vertical: None,
-        }),
-        geoid_grid_dir: Some(grid_dir),
-        ..ConfigBaseline::default()
-    };
-    gungnir_config::validate(&config).expect("valid");
-    let mut state = AppState::with_config(config).expect("starts");
-    settle(&mut state);
-    assert!(state.geoid.is_verified(), "{}", state.geoid.line());
-    assert!(
-        state.geoid.line().contains("verified"),
-        "{}",
-        state.geoid.line()
+fn an_egm96_dem_lands_at_the_up_its_own_grid_gives() {
+    let (mut state, dir) = desktop_vertical(
+        "egm96-clip",
+        fixture("small.tif"),
+        "epsg:32633",
+        Some("epsg:5773"),
+        [54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 30.0],
     );
+    install_clip(&mut state, GeoidModel::Egm96);
+    install_clip(&mut state, GeoidModel::Egm2008);
+    settle(&mut state);
     assert!(state.terrain.is_masking(), "{:?}", state.terrain);
     let up = f64::from(state.data.terrains[0].positions[0][2]);
     assert!(
-        (up - 14.922_914_990_572_664).abs() < 1e-4,
+        (up - 14.536_287_383_431_059).abs() < 1e-4,
         "vertex 0's up: {up} m"
     );
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The same, through the start-up check against the **full pinned grids**
+/// (`GUNGNIR_GEOID_GRID_DIR`, which `ci.yml`'s `proj-crs` job fetches and checks): the
+/// baseline names the directory, the desktop hashes all three files off the render
+/// thread, PN-09 says each is verified, and an EGM2008 and an EGM96 DEM land at the same
+/// ups as through the clips.
+#[test]
+#[ignore = "needs the pinned grids; ci.yml's proj-crs job fetches them and runs this"]
+#[cfg(feature = "crs")]
+fn the_pinned_grids_are_verified_at_start_and_place_a_dem() {
+    let grid_dir = std::env::var("GUNGNIR_GEOID_GRID_DIR")
+        .expect("GUNGNIR_GEOID_GRID_DIR names the directory holding the pinned grids");
+    for (name, path, vertical, want) in [
+        (
+            "egm2008",
+            fixture("small-egm2008.tif"),
+            None,
+            14.922_914_990_572_664,
+        ),
+        (
+            "egm96",
+            fixture("small.tif"),
+            Some("epsg:5773".to_string()),
+            14.536_287_383_431_059,
+        ),
+    ] {
+        let dir = std::env::temp_dir().join(format!(
+            "gungnir-terrain-pinned-{name}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let config = ConfigBaseline {
+            data_dir: dir.to_string_lossy().into_owned(),
+            origin: Some([54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 30.0]),
+            terrain: Some(TerrainConfig {
+                path,
+                frame: "epsg:32633".into(),
+                vertical,
+            }),
+            geoid_grid_dir: Some(grid_dir.clone()),
+            ..ConfigBaseline::default()
+        };
+        gungnir_config::validate(&config).expect("valid");
+        let mut state = AppState::with_config(config).expect("starts");
+        settle(&mut state);
+        for model in GeoidModel::ALL {
+            let line = state.geoid.status(model).line(model);
+            assert!(state.geoid.is_verified(model), "{line}");
+            assert!(line.contains("verified"), "{line}");
+        }
+        assert!(state.terrain.is_masking(), "{:?}", state.terrain);
+        let up = f64::from(state.data.terrains[0].positions[0][2]);
+        assert!((up - want).abs() < 1e-4, "{name}: vertex 0's up: {up} m");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
 
 #[test]

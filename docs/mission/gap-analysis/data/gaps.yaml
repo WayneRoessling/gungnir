@@ -1828,19 +1828,12 @@
     `gungnir-data/src/lib.rs` (`spawn_loader`, `DataError::NotImplemented`);
     `verification-capability-table.md` §2, `gungnir-data` rows
   action: >-
-    Done 2026-09-07: the COPC fixture, sourced and recorded with the same SOURCE.md
-    provenance testdata/asterix, testdata/sapient and the rest of testdata/pointcloud
-    already carry; the bounded-read happy path is tested against it. **The
-    projection-library decision is taken (D-41, 2026-09-08): `proj`, full support, not
-    WGS84-only.** Written and wired 2026-09-08: the crate is recorded (§2.9's D-41
-    entry), `validate_terrain` accepts `"epsg:<code>"`, and the conversion runs in
-    `gungnir-data` (behind its `crs` feature, PROJ) and `gungnir-app` (the
-    WGS84-to-local-ENU half, unconditional). **CI-verified 2026-09-08/09, never
-    author-verified**: `proj-sys` needs `cmake` and SQLite3, which the author's machine
-    has not; `ci.yml`'s `proj-crs` job installs them, builds the feature and runs both
-    halves' tests, and this gap's status reflects that run rather than assuming it
-    green. Its first run disproved the fixture test's own cell-spacing expectation,
-    which the description above decomposes.
+    Done 2026-09-26: every format loads (LAS/LAZ, COPC bounded, VTK, glTF, ESRI ASCII
+    and GeoTIFF DEMs); a DEM in a real-world CRS converts through PROJ (D-41), lands at
+    its local up (D-122) with its height made ellipsoidal through the pinned EGM2008,
+    EGM96 or GEOID18 grid (D-121, D-125), and one whose `VerticalGeoKey` fixes a foot is
+    refused by name (D-126). The feature-gated tests ran on the author's Linux container
+    and in `ci.yml`'s `proj-crs` job.
   ref: >-
     `verification-capability-table.md` §2, `gungnir-data` rows; `testdata/dem/SOURCE.md`
   history:
@@ -2030,6 +2023,19 @@
       That is the honest first step and it was not taken today because the stack
       question (GeoTIFF or not) is the owner's, and building the ASCII path alone would
       be presented as 'DEM loads' when most terrain arrives as GeoTIFF.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Closed 2026-09-26.** What the 2026-09-08 entry left is done. The defect it
+      recorded and did not fix, a converted DEM's height carried through as its up, was
+      fixed by GAP-108 (D-122). Its heights are made ellipsoidal through EGM2008
+      (GAP-108), and now EGM96 and GEOID18 (GAP-197, D-125):
+      `gungnir-app/tests/terrain.rs` places an EGM96 DEM at the up an independent
+      `pyproj` run gives. A `VerticalGeoKey` whose code fixes a foot (NAVD88's 6360,
+      8228) is refused at load, never read as metres (`gungnir-data/tests/dem.rs`,
+      D-126). The feature-gated DEM tests, CI-verified only until now, ran in
+      `rust:1.98-slim-bookworm` before pushing. No human-owned code. See
+      `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`.
 
 - id: GAP-024
   name: Point-cloud registration, CPU reference and GPU
@@ -7451,33 +7457,17 @@
     `gungnir-app/tests/pointcloud_crs.rs`; `.github/workflows/ci.yml` (`proj-crs`);
     `docs/agentic-coding-standards.md` §2.9 (D-41); `testdata/pointcloud/SOURCE.md`
   action: >-
-    Done 2026-09-08: `proj` recorded in `docs/agentic-coding-standards.md` §2.9 under
-    D-41 with the three things that row left open now answered from a real build; the
-    file's own CRS read from its VLRs and carried on `PointBuffer`; `frame` widened to
-    `"epsg:<code>"`; the conversion built behind a default-off feature and gated in CI
-    against the real Autzen capture with an independent `pyproj` check. **What remains,
-    named rather than implied closed.** (1) **The conversion has never run on the
-    author's machine**: `proj-sys` cannot build libproj on Windows MSVC, so `ci.yml`'s
-    `proj-crs` job is the first and only place the feature-gated tests execute. (2) A
-    geokey file's vertical unit (`VerticalUnitsGeoKey`, 4099) is deliberately unread, so
-    a LAS 1.0-1.3 file in non-metre heights is refused rather than mis-scaled; this
-    workspace holds no such fixture, and the code should not ship untested against a
-    real file. The next fixture with one is what turns it on. (3) No vertical datum
-    shift is applied, so a converted height is the file's own vertical datum in metres
-    and not a WGS-84 ellipsoidal height; supplying a geoid model is its own gap. (4) The
-    baseline-versus-WKT agreement check is a containment test on the claimed EPSG code,
-    which cannot tell a horizontal authority from a datum's; it guards against operator
-    error and is not what makes the conversion correct, since the conversion reads the
-    file's own declaration. (5) `deny.toml` sets `[graph] all-features = false`, so
-    `cargo deny check licenses` does not evaluate the optional `proj` subtree; the
-    licences were confirmed by hand on crates.io (`proj` and `proj-sys` MIT OR
-    Apache-2.0, `libproj` X/MIT) and a change making this feature default must re-run
-    the gate expecting new crates. (6) The DEM half is GAP-023's and is not touched
-    here. **D-51 (2026-09-15) settles items (3) and (5)**: `proj` stays behind its
-    default-off feature -- making it default would put libproj, cmake and SQLite3 in
-    front of every contributor's build and every `cargo deny` run -- and the vertical
-    datum becomes a register entry of its own, GAP-108, rather than a sentence inside
-    this one.
+    Done 2026-09-26 (D-126, D-125). The six items the 2026-09-08 action named as
+    remaining, each answered: (1) the conversion had never run on the author's machine --
+    it ran in `rust:1.98-slim-bookworm` before pushing, and `proj-crs` still gates it;
+    (2) a geokey file's vertical unit (`VerticalUnitsGeoKey`, 4099) was unread -- read,
+    with the datum and the unit a vertical code fixes (D-126), and tested against a
+    GDAL-written key directory; (3) no vertical datum shift -- GAP-108 and GAP-197; (4)
+    the baseline-versus-WKT check was containment, which a datum's code passed -- now
+    exact on the horizontal system's own authority; (5) `cargo deny` does not see the
+    optional `proj` subtree -- settled by D-51, which keeps the feature opt-in; (6) the
+    DEM half -- GAP-023, closed the same day. The Autzen capture converts end to end
+    through GEOID18.
   ref: >-
     D-41 (the decision this builds); GAP-023 (the DEM half, the sibling doing the same
     work for terrain); GAP-098 (the point-cloud capability this extends, closed and not
@@ -7585,6 +7575,21 @@
       on `docs/agentic-workflow.md`'s low-trust list, and the numerical-stability entry
       there names covariance and NaN propagation, neither of which this touches. **What
       is honestly not done** is in the closing action.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Closed 2026-09-26 (D-126).** Item (2): a geokey file's datum is its
+      `VerticalGeoKey`; its height unit is `VerticalUnitsGeoKey`, else the unit that
+      code fixes (GDAL writes 6360 and no unit key), else `ProjLinearUnitsGeoKey`;
+      anything contradictory or not a metre or foot is refused by name. Tested against
+      `testdata/pointcloud/autzen-geokeys.las`, a LAS 1.2 file carrying the key
+      directory GDAL 3.11.3 writes for EPSG:2992+6360, converted through GEOID18 to an
+      independent `pyproj` run. Item (4): the baseline's code must be the WKT's own
+      horizontal authority, so NAD83's datum code no longer passes. The Autzen capture,
+      refused since GAP-108, converts again through GEOID18 (GAP-197), end to end
+      through a real tick. Item (1): the feature-gated tests ran in
+      `rust:1.98-slim-bookworm` before pushing. No human-owned code. See
+      `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`.
 
 - id: GAP-103
   name: >-
@@ -11168,19 +11173,23 @@
     (NAVD88, the Autzen capture among it) and EGM96 DEMs such as SRTM unusable until
     they are reprojected outside Gungnir.
   evidence: >-
-    `gungnir-data/src/geoid.rs` (`height_reference` refuses every other datum);
-    `gungnir-app/tests/pointcloud_crs.rs` (the Autzen capture's NAVD88 heights refused
-    through a real tick); `deploy/geoid/SHA256SUMS` (the one grid a deployment carries)
+    `gungnir-data/src/geoid.rs` (`GeoidModel`, `VerticalDatum::from_epsg`,
+    `height_reference`); `gungnir-app/src/geoid.rs` (`GeoidGrids`, one PN-09 line per
+    grid); `deploy/geoid/SHA256SUMS`; `deploy/README.md` ("The geoid grids", "Pinning a
+    further geoid grid"); `testdata/geoid/SOURCE.md`; `gungnir-data/tests/geoid.rs`,
+    `pointcloud_crs.rs`; `gungnir-app/tests/terrain.rs`, `pointcloud_crs.rs`;
+    `.github/workflows/ci.yml` (`proj-crs`)
   action: >-
-    Decide which further grids a deployment may carry -- PROJ-data publishes NOAA's
-    GEOID18 (`us_noaa_g2018u0.tif`, NAVD88) and NGA's EGM96 (`us_nga_egm96_15.tif`) among
-    others -- each pinned by the digest PROJ-data publishes, installed and verified the
-    same way as EGM2008, and mapped from its vertical CRS code in
-    `VerticalDatum::from_epsg`; a NAVD88 height also needs its NAD83 realisation stated,
-    since GEOID18 converts to NAD83(2011) ellipsoidal heights, not WGS-84.
+    Done 2026-09-26 (D-125): NGA's EGM96 15' grid for EGM96 heights and NOAA's GEOID18
+    CONUS grid for NAVD88 heights pinned, installed, verified and reported exactly as
+    EGM2008 is; a NAVD88 height stated as NAD83(2011) read as WGS 84 to the metre level;
+    every other datum refused by name, with the procedure for pinning a further grid.
   ref: >-
-    D-121 (EGM2008 only, everything else refused); found closing GAP-108
-    (`../../record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`)
+    D-121 (EGM2008 only, everything else refused); D-125 (the decision that closed it);
+    found closing GAP-108
+    (`../../record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`); closed
+    by `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`; GAP-200
+    (the NAD83(2011) residue)
   history:
   - date: 2026-09-26
     status: Open
@@ -11189,3 +11198,57 @@
       name, which ends the silent mix; this is what that refusal costs a user with
       ordinary US or SRTM-derived data, recorded so it is a row in the register rather
       than a sentence in a decision.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Closed 2026-09-26 (D-125): EGM96 and NAVD88 heights convert, each through its
+      own pinned grid.** PROJ-data's `us_nga_egm96_15.tif` and `us_noaa_g2018u0.tif`,
+      from cdn.proj.org, pinned by the SHA-256 its index publishes (both downloads
+      matched), never committed, verified at start, one PN-09 line per grid, fetched and
+      checked in `proj-crs`. GEOID18 covers the conterminous United States only; NAVD88
+      elsewhere, and every other datum, is refused by name, and `deploy/README.md` gives
+      the pinning procedure. A NAVD88 height becomes a NAD83(2011) ellipsoidal height
+      read as WGS 84's, stated as metre-level and filed as GAP-200. Committed clips
+      agree with an independent `pyproj` run to a micrometre, and the Autzen capture
+      converts again through a real tick. Run on Linux before pushing. No human-owned
+      code. See `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`.
+
+- id: GAP-200
+  name: A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84
+  type: Technical
+  caps: [CAP-2.10]
+  layer: UI and data ecosystem
+  sev: 4
+  effort: M
+  target: I4
+  owner: UI engineer
+  deps: [D-125, GAP-197]
+  impact: >-
+    A file in NAD83 -- most United States LIDAR, and every NAVD88 height through GEOID18
+    -- is converted with PROJ's null NAD83-to-WGS-84 step, horizontally and vertically,
+    so it lands 1 to 2 m off horizontally and up to a metre vertically in WGS-84 terms
+    (1.4 m and -0.38 m at the Autzen fixture, epoch 2010.0). Stated on the conversion,
+    in `deploy/README.md` and in D-125, never claimed as centimetres; a metre-level
+    offset against radar and cooperative tracks, not tens of metres.
+  evidence: >-
+    `gungnir-data/src/geoid.rs` (module documentation, the NAD83(2011) paragraph);
+    `gungnir-data/src/pointcloud/crs.rs` (`to_local_enu`); `gungnir-app/src/terrain.rs`
+    (`to_wgs84`); PROJ's own choice for the Autzen WKT to EPSG:4979 is the same null
+    step (`gungnir-data/tests/pointcloud_crs.rs`)
+  action: >-
+    Decide whether a NAD83(2011) position is carried to WGS 84 by the published
+    time-dependent transformation (EPSG's "ITRF2014 to NAD83(2011) (1)" and WGS 84's own
+    realisation step), which needs an observation epoch that LAS and GeoTIFF files do
+    not carry, so a baseline field or a documented default; and whether the older NAD83
+    realisations a file may name (HARN, CORS96, the unqualified NAD83) are refused or
+    taken as NAD83(2011). Apply it to the horizontal and vertical together.
+  ref: >-
+    D-125; GAP-197;
+    `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Filed closing GAP-197, which asked for the NAD83 realisation question to be
+      handled honestly. D-125 reads NAD83(2011) as WGS 84 and says what that costs; this
+      row keeps the metre in the register rather than only in a decision.

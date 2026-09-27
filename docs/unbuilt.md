@@ -19,7 +19,7 @@ code, not in this page.
 |---|---|---|---|---|---|
 | `gungnir-api` | `src/lib.rs` | `UnimplementedServer::serve` | `ApiError::TransportNotImplemented` | API transport is not implemented in this build | -- |
 | `gungnir-app` | `src/pointcloud.rs` | `convert` | `DataError::NotImplemented` | converting a point cloud out of its own coordinate reference system | a build with gungnir-data's `crs` feature, which links libproj |
-| `gungnir-data` | `src/geoid.rs` | `egm2008_to_ellipsoidal` | `DataError::NotImplemented` | adding the EGM2008 geoid undulation to a height | a build with gungnir-data's `crs` feature, which reads the grid through libproj |
+| `gungnir-data` | `src/geoid.rs` | `geoid_to_ellipsoidal` | `DataError::NotImplemented` | adding a geoid undulation to a height | a build with gungnir-data's `crs` feature, which reads the grid through libproj |
 | `gungnir-data` | `src/geospatial/mod.rs` | `classify` | `DataError::NotImplemented` | terrain classification | GAP-082, a classification design over the loaded grid |
 | `gungnir-data` | `src/scientific/filters.rs` | `clip_by_plane` | `DataError::NotImplemented` | the clip-by-plane filter | nothing but the work; the filters are project-owned |
 | `gungnir-data` | `src/scientific/filters.rs` | `threshold` | `DataError::NotImplemented` | the threshold filter | nothing but the work; the filters are project-owned |

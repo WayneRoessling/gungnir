@@ -172,12 +172,12 @@ pub fn placement(
         // A file that declares a system but no readable unit for its heights is refused,
         // not assumed: there the file had something to say and it could not be read, and
         // a wrong vertical unit is a silent factor-of-three error in every height.
-        Some(declared) => match declared.vertical_unit_metres() {
-            Some(metres) => metres,
-            None => {
+        Some(declared) => match declared.vertical_unit() {
+            Ok(metres) => metres,
+            Err(reason) => {
                 return Placement::Refused(format!(
-                    "the file declares {} but no unit this build can read for its \
-                     heights, so they cannot be scaled to metres",
+                    "the file declares {} but {reason}, so its heights cannot be scaled \
+                     to metres",
                     describe(file)
                 ))
             }
@@ -209,7 +209,10 @@ fn describe(file: Option<&PointCloudCrs>) -> String {
                 .map_or("an unnamed system", |(name, _)| name);
             format!("{name:?}")
         }
-        Some(PointCloudCrs::Geokeys(crs)) => format!("{crs:?}"),
+        Some(PointCloudCrs::Geokeys(keys)) => match keys.vertical {
+            Some(vertical) => format!("{:?} with vertical EPSG:{vertical}", keys.horizontal),
+            None => format!("{:?}", keys.horizontal),
+        },
         None => "nothing".to_string(),
     }
 }
@@ -254,7 +257,7 @@ fn place(state: &AppState, buffer: PointBuffer) -> Result<PointBuffer, String> {
                     .and_then(PointCloudCrs::vertical_datum)
                     .as_ref(),
                 declared.as_ref(),
-                state.geoid.grid().as_deref().map_err(String::as_str),
+                &|model| state.geoid.grid(model),
             )?;
             // `placement` already refused the no-origin case, so this is defensive
             // rather than a state a running deployment reaches; a `let-else` keeps the
@@ -322,8 +325,8 @@ pub fn start(state: &mut AppState) {
     let Some(pair) = state.config.point_cloud.clone() else {
         return;
     };
-    // GAP-108: a pair stating EGM2008 heights needs the verified grid when it is placed,
-    // so the load waits for the start-up check to settle (`crate::geoid`).
+    // GAP-108, GAP-197: a pair stating geoid heights needs its verified grid when it is
+    // placed, so the load waits for the start-up checks to settle (`crate::geoid`).
     if !state.geoid.is_settled() {
         return;
     }

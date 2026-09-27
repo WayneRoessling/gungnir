@@ -401,5 +401,37 @@ own design, recorded here so the amendment has something to amend:
    independent `pyproj` run to a micrometre. On the full pinned grid, which that job
    fetches and checks, they include the desktop's own start-up check.
 
+**Amendment 2 (2026-09-26, GAP-197, GAP-102, GAP-023; D-125 and D-126, taken under the
+owner's delegation).** Items 1 to 6 stand, widened:
+
+7. **Three pinned grids, not one** (`gungnir_data::geoid::GeoidModel`). NGA's EGM96 15'
+   grid (`us_nga_egm96_15.tif`) converts EGM96 heights (EPSG:5773); NOAA's GEOID18 grid
+   for the conterminous United States (`us_noaa_g2018u0.tif`) converts NAVD88 heights
+   (EPSG:5703, and 6360 and 8228 in feet). Each is PROJ-data's file from `cdn.proj.org`,
+   pinned by the digest PROJ-data publishes, installed, verified at start and reported
+   on PN-09 exactly as EGM2008 is -- one PN-09 line per grid -- and fetched, checked and
+   cached by `proj-crs`. A datum takes its own grid and never another's. A `VERT_DATUM`
+   authority (1027, 5171, 5103) names the datum whatever the unit; a `VERT_CS` whose axis
+   points down is a depth and is refused.
+8. **A NAVD88 height is good to the metre in WGS-84 terms, not the centimetre.** GEOID18
+   gives a NAD83(2011) ellipsoidal height; it is read as WGS 84's with no frame step, the
+   same null step the horizontal conversion takes for NAD83 and PROJ itself chooses for
+   the whole chain. The frames differ by 1 to 2 m horizontally and up to a metre
+   vertically across the United States (1.4 m and -0.38 m at Autzen, epoch 2010.0).
+   NAVD88 outside GEOID18's grid (Alaska and Hawaii, GEOID12B's) is refused by PROJ and
+   named. Every other vertical datum is refused by name; `deploy/README.md`, "Pinning a
+   further geoid grid", is how one more is admitted.
+9. **A LAS 1.0-1.3 file's geokeys are read for its heights** (GAP-102 item (2)): the
+   datum from `VerticalGeoKey` (4096); the unit from `VerticalUnitsGeoKey` (4099), else
+   the unit the vertical code fixes (GDAL writes 6360 and no 4099), else, with no
+   vertical key, `ProjLinearUnitsGeoKey` (3076) of a projected system. A contradiction
+   between them, or a unit other than the metre and the two feet, is refused by name. A
+   DEM stays metres-only, now including a `VerticalGeoKey` whose code fixes a foot.
+10. **A WKT's horizontal code is checked exactly** (GAP-102 item (4)): the baseline's
+    `epsg:<code>` must be the `AUTHORITY` of the WKT's own horizontal `PROJCS` or
+    `GEOGCS`, not merely appear somewhere in it.
+
 What the owner has signed of this document is in [`signatures.md`](signatures.md).
-Reasoning: `record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`.
+Reasoning: `record/2026-09-26/a-converted-height-carries-its-vertical-datum.md` (items 1
+to 6) and `record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md` (items 7 to
+10).

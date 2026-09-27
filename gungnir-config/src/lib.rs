@@ -663,8 +663,10 @@ impl std::str::FromStr for Frame {
 pub enum VerticalFrame {
     /// Heights above the WGS-84 ellipsoid: what the picture wants, converted by nothing.
     Ellipsoidal,
-    /// A vertical coordinate reference system by EPSG code: `3855` is EGM2008 height,
-    /// the one gravity-related datum a deployment carries a geoid grid for.
+    /// A vertical coordinate reference system by EPSG code. The gravity-related ones a
+    /// deployment carries a pinned geoid grid for are `3855` (EGM2008 height), `5773`
+    /// (EGM96 height) and `5703` (NAVD88 height, with its foot forms `6360` and `8228`)
+    /// (GAP-108, GAP-197; `gungnir_data::geoid::GeoidModel`).
     Epsg(u32),
 }
 
@@ -690,7 +692,7 @@ impl std::str::FromStr for VerticalFrame {
             format!(
                 "{s:?} is not \"ellipsoidal\" (WGS-84 ellipsoidal heights) or \"epsg:<code>\" \
                  naming a vertical system by a non-zero EPSG code (\"epsg:3855\" is EGM2008 \
-                 height)"
+                 height, \"epsg:5773\" EGM96, \"epsg:5703\" NAVD88)"
             )
         })
     }
@@ -1447,13 +1449,16 @@ pub struct ConfigBaseline {
     /// load -- the desktop's own load status says which.
     #[serde(default)]
     pub point_cloud: Option<PointCloudConfig>,
-    /// The directory holding the EGM2008 geoid grid, `us_nga_egm08_25.tif` (GAP-108,
-    /// D-121; `deploy/README.md`, "The EGM2008 geoid grid").
+    /// The directory holding the pinned geoid grids (GAP-108, D-121; GAP-197, D-125;
+    /// `deploy/README.md`, "The geoid grids"): `us_nga_egm08_25.tif` (EGM2008),
+    /// `us_nga_egm96_15.tif` (EGM96) and `us_noaa_g2018u0.tif` (GEOID18, for NAVD88),
+    /// any or all of them.
     ///
     /// Absent means the desktop looks in `PROJ_DATA` (PROJ's own convention, then its
-    /// older `PROJ_LIB`), and a deployment with neither has no grid: an EGM2008 height is
-    /// then refused by name, never converted without one. Wherever it is found, the file
-    /// is used only if its SHA-256 is the pinned one, and PN-09 says which of those it is.
+    /// older `PROJ_LIB`), and a deployment with neither has no grid: a height in a datum
+    /// whose grid is missing is then refused by name, never converted without one.
+    /// Wherever a grid is found, it is used only if its SHA-256 is the pinned one, and
+    /// PN-09 says which of those it is, grid by grid.
     #[serde(default)]
     pub geoid_grid_dir: Option<String>,
     /// Per-role window arrangement (D-17, GAP-075). Absent means every role uses the
@@ -2880,8 +2885,9 @@ fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
 fn validate_geoid_grid_dir(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     match &baseline.geoid_grid_dir {
         Some(dir) if dir.trim().is_empty() => Err(ConfigError::Invalid(
-            "geoid_grid_dir is empty; name the directory holding us_nga_egm08_25.tif, or \
-             leave the field out to use PROJ_DATA"
+            "geoid_grid_dir is empty; name the directory holding the pinned geoid grids \
+             (us_nga_egm08_25.tif, us_nga_egm96_15.tif, us_noaa_g2018u0.tif), or leave the \
+             field out to use PROJ_DATA"
                 .to_string(),
         )),
         _ => Ok(()),
