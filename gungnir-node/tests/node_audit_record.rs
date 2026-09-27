@@ -7,10 +7,11 @@
 //! [`gungnir_node::audit_record`] over a real journal, a real bus and a real
 //! `FileAuditLog` synced as the node syncs it, once a tick.
 
+use gungnir_api::v3::AuditVerificationView;
 use gungnir_eventing::{Envelope, Event, EventBus as _, InProcessBus, Receiver};
 use gungnir_model::events::AuditEvent;
 use gungnir_model::{MissionTime, SessionId};
-use gungnir_node::audit_record::{self, AuditRetention};
+use gungnir_node::audit_record::{self, AuditRetention, NodeAuditRecord};
 use gungnir_security::audit::events;
 use gungnir_security::{
     AuditEntry, AuditLog, AuditSync, FileAuditLog, OperatorId, ANCHOR_EVERY_ENTRIES,
@@ -309,6 +310,105 @@ fn a_baseline_without_a_policy_purges_nothing() {
         1,
         "the one segment is still there"
     );
+    drop(node);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// GAP-179, D-116: a verification a reader asks for is taken against the heads the node
+/// holds as it journals them -- its start's inventory, and every head and purge after it
+/// -- so it finds a cut made to an earlier run's segment while this run is up, and does not
+/// call this run's own segment, anchored as it goes, anything but sound.
+#[test]
+fn a_verification_on_request_finds_a_cut_made_while_the_node_runs() {
+    let dir = data_dir("on-request");
+    let mut node = Node::start(&dir, 1);
+    node.tick(4, Instant::now());
+    let first = node.close();
+
+    let mut node = Node::start(&dir, 2);
+    let mut record = NodeAuditRecord::new(&node.audit_dir, &node.bus);
+    assert!(
+        matches!(record.verification(), AuditVerificationView::NotRun),
+        "nothing is claimed before the node has verified"
+    );
+    let problems = record
+        .verify_at_start(&node.journal, &mut node.audit, &node.bus, NOW)
+        .expect("published");
+    assert_eq!(problems, 0);
+    node.audit.flush().expect("synced");
+    node.drain();
+    // This run's entries, anchored by count as the loop anchors them.
+    node.tick(ANCHOR_EVERY_ENTRIES + 1, Instant::now());
+
+    record
+        .verify_now(&node.journal, &mut node.audit, &node.bus, NOW)
+        .expect("published");
+    node.drain();
+    match record.verification() {
+        AuditVerificationView::Ran {
+            on_request: true,
+            problems,
+            reports,
+            ..
+        } => {
+            assert!(problems.is_empty(), "{problems:?}");
+            assert_eq!(reports.len(), 2, "{reports:?}");
+        }
+        other => panic!("{other:?}"),
+    }
+
+    // The first run's segment cut while this run is up: no restart, no journal fold.
+    cut_lines(&node.audit_dir.join(&first), 2);
+    record
+        .verify_now(&node.journal, &mut node.audit, &node.bus, NOW)
+        .expect("published");
+    node.drain();
+    match record.verification() {
+        AuditVerificationView::Ran {
+            on_request: true,
+            problems,
+            reports,
+            ..
+        } => {
+            assert!(
+                problems
+                    .iter()
+                    .any(|p| p.contains(&first) && p.contains("2 entries are missing")),
+                "{problems:?}"
+            );
+            let cut = reports
+                .iter()
+                .find(|r| r.segment == first)
+                .expect("the cut segment is listed");
+            assert!(!cut.sound);
+            assert!(
+                cut.description.contains("CUT: 2 entries missing"),
+                "{}",
+                cut.description
+            );
+            // The chain runs across segments, so this run's first line no longer continues
+            // the one before it: the same cut, seen from the other side, as a start would
+            // see it too.
+            assert!(
+                problems
+                    .iter()
+                    .filter(|p| !p.contains(&first))
+                    .all(|p| p.contains("line 1: does not continue the line before it")),
+                "{problems:?}"
+            );
+        }
+        other => panic!("{other:?}"),
+    }
+    // Said as the start says it: journaled, and in the audit log itself.
+    assert!(journaled(&dir, 2).iter().any(|e| matches!(
+        e,
+        AuditEvent::Verified { findings, .. } if findings.iter().any(|f| f.contains("2 entries are missing"))
+    )));
+    assert!(node
+        .audit
+        .entries()
+        .iter()
+        .any(|e| e.action == events::ANCHOR_MISMATCH && e.detail.contains("on request")));
     drop(node);
     let _ = std::fs::remove_dir_all(dir);
 }

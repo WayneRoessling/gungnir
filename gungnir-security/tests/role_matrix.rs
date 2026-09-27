@@ -119,6 +119,10 @@ const SECTION_4: &[(&str, [&str; 6])] = &[
         "Assign a role to an account (GAP-057)",
         ["", "", "", "", "", ""],
     ),
+    (
+        "Read a node's audit record and its verification (GAP-179; D-116)",
+        ["", "", "yes", "", "", ""],
+    ),
 ];
 
 /// Which coarse actions each §4 row stands for. A row with none has no coarse action yet
@@ -185,6 +189,12 @@ const ROW_ACTIONS: &[(&str, &[&str])] = &[
         "Assign a role to an account (GAP-057)",
         &[actions::ASSIGN_ROLE],
     ),
+    // The owner's, 2026-09-26: the commander in the row, the administrator by the rule for
+    // roles without a column.
+    (
+        "Read a node's audit record and its verification (GAP-179; D-116)",
+        &[actions::READ_AUDIT],
+    ),
 ];
 
 /// What a cell means for the coarse action, as §4's own "How the code reads this table"
@@ -250,6 +260,7 @@ const EVERY_ACTION: &[(&str, &str)] = &[
     ("KEY_ESCROW_RECOVER", actions::KEY_ESCROW_RECOVER),
     ("ASSIGN_ROLE", actions::ASSIGN_ROLE),
     ("ACCEPT_COVERAGE_GAP", actions::ACCEPT_COVERAGE_GAP),
+    ("READ_AUDIT", actions::READ_AUDIT),
 ];
 
 fn row_actions(decision: &str) -> &'static [&'static str] {
@@ -461,4 +472,19 @@ fn the_sensor_manager_applies_sensing_baselines_only() {
         );
     }
     assert!(actions::is_known(actions::APPLY_SENSING_CONFIG));
+}
+
+/// GAP-179 (D-116, the owner's): a node's audit record is read by the administrator and
+/// the commander, and by nobody else -- the security officer included, whose one action
+/// is escrow recovery (D-30).
+#[test]
+fn a_node_s_audit_record_is_read_by_the_administrator_and_the_commander_alone() {
+    for role in Role::ALL {
+        assert_eq!(
+            role_permits(*role, actions::READ_AUDIT),
+            matches!(role, Role::Administrator | Role::Commander),
+            "{role:?}"
+        );
+    }
+    assert!(actions::is_known(actions::READ_AUDIT));
 }

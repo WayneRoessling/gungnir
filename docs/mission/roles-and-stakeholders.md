@@ -145,6 +145,7 @@ the sensor manager together with the supervisor (planning).
 | Acknowledge a watch handover (GAP-111; DN-21) | yes | yes | yes | yes | | |
 | Key in an effector's report or a warned party's acknowledgement (GAP-040, GAP-042) | | | | | | |
 | Assign a role to an account (GAP-057) | | | | | | |
+| Read a node's audit record and its verification (GAP-179; D-116) | | | yes | | | |
 
 **Roles without a column.** The administrator holds every decision above **except** the
 engagement chain -- both engagement-acceptance rows, weapons control status, hold or
@@ -153,9 +154,18 @@ recovery, and accepting a coverage gap; it holds the last two rows alone (D-88,
 2026-09-25: §1 and §2 say the administrator is not a decision-maker in the engagement
 chain, and the escrow row says the security officer alone). Accepting a coverage gap is
 the commander's alone (the owner, 2026-09-26, D-118): it is a decision about the risk the
-mission runs, which §1 keeps from the account that administers the system. The planner may view the picture and nothing else (the
-owner, 2026-09-05). The security officer may recover an escrowed journal key and nothing
+mission runs, which §1 keeps from the account that administers the system. The planner
+may view the picture and nothing else (the owner, 2026-09-05). The security officer may recover an escrowed journal key and nothing
 else (D-30).
+
+**Reading a node's audit record** (GAP-179, D-116, the owner's, 2026-09-26) is
+`audit.read`: the node's segments, entry by entry, and what its verification against the
+journal's heads found, read from a linked desktop's PN-20. The owner gave it to the
+commander, in the row above, and to the administrator, who holds it by the rule for roles
+without a column. Nobody else: a node's record names every operator's acts on every desktop
+linked to it, which is more than one watch's own. **Every read is itself on the node's
+record**, one entry each, and so is every refusal. A desktop's own record on its own PN-20
+asks no permission beyond seeing the panel (D-106).
 
 **How the code reads this table.** `gungnir-security::authz::role_permits` is a coarser
 matrix: one action per decision, and some decisions share one. A cell grants its action

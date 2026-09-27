@@ -199,6 +199,9 @@ pub fn tick(state: &mut AppState) {
     // 4c. The audit log's head, when one is due (GAP-163, D-104), before the drain so it
     //     is journaled in this frame.
     crate::audit_record::tick(state);
+    // 4d. A read of the node's audit record PN-20 asked for, when its answer has landed
+    //     (GAP-179, D-116). Never a read of its own: each is an entry on the node's record.
+    crate::node_audit::poll(state);
 
     // 5. Journal everything the bus carried this frame, then honour the D-04 fsync
     //    interval. `sync_if_due` is cheap when nothing is owed: one elapsed-time

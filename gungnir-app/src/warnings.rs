@@ -19,6 +19,14 @@
 //! party now posts to the node's `POST /v3/warnings/{asset}/{track}/acknowledge`, the node
 //! puts it on the record because it holds no ledger of its own, and
 //! [`apply_acknowledgement`] discharges the warning here.
+//!
+//! **A figure the warning cannot give is said to be unavailable** (GAP-176, D-115;
+//! `docs/design/DN-03-warning.md` §12). The body posted to the warned party is built by
+//! [`endpoint_payload`] with `gungnir_eventing::nonfinite::to_partner_value`, the one
+//! implementation exchange uses (D-103): a NaN or an infinity is
+//! `{"unavailable": "nan" | "+inf" | "-inf"}` in the number's place, where
+//! `serde_json::to_value` wrote `null`, and a warning whose figures are all finite is byte
+//! for byte what it was. A warning is never withheld for a figure in it.
 
 use gungnir_eventing::Event;
 use gungnir_model::events::WarningEvent;
@@ -50,7 +58,7 @@ impl WarningDelivery for EndpointDelivery<'_> {
         let client = self
             .client
             .ok_or_else(|| "no endpoint client; warn by voice".to_string())?;
-        let payload = serde_json::to_value(warning).unwrap_or(serde_json::Value::Null);
+        let payload = endpoint_payload(warning)?;
         self.posted
             .borrow_mut()
             .push(crate::deliveries::PendingWarning {
@@ -61,6 +69,57 @@ impl WarningDelivery for EndpointDelivery<'_> {
             });
         Ok(())
     }
+}
+
+/// The body a warned party's endpoint is posted (DN-03 §12, GAP-176, D-115).
+///
+/// **Exactly what `serde_json::to_value` gave when every figure is finite**, so a warned
+/// party reading a warning today reads the same bytes. A NaN or an infinity -- a due time
+/// taken from a diverged prediction, a transition stamped by a clock that failed -- is
+/// DN-18 §15's object `{"unavailable": "nan" | "+inf" | "-inf"}` in the number's place:
+/// the party can tell a time this desktop could not give from one that is absent, where
+/// `to_value` wrote `null` for both without a word. **A non-finite figure never stops the
+/// warning going out**: a warning with one field marked unavailable still warns, and one
+/// withheld leaves the party unwarned.
+///
+/// # Errors
+///
+/// Only what `serde_json` refuses for another reason -- a map whose keys are not strings,
+/// which a warning has none of. The reason ends in "warn by voice", because the ledger
+/// turns it into a `Failed` warning and an alert (DN-03 §5: failure is loud), which is
+/// what posting `null` in its place used to hide.
+pub fn endpoint_payload(warning: &Warning) -> Result<serde_json::Value, String> {
+    gungnir_eventing::nonfinite::to_partner_value(warning).map_err(|err| {
+        format!("the warning could not be written for its endpoint ({err}); warn by voice")
+    })
+}
+
+/// Post one warning to its channel's endpoint, as the tick's delivery does: the address
+/// from the baseline, the body from [`endpoint_payload`], the desktop's endpoint client.
+/// The answer arrives on the returned delivery, which the tick's
+/// `crate::deliveries` step reads.
+///
+/// Public so a test can put a warning carrying a non-finite figure on a real socket
+/// through the same code, since the rule raises one only with a finite due time.
+///
+/// # Errors
+///
+/// Why the warning was not posted, ending in "warn by voice", verbatim into the record.
+pub fn post(
+    state: &AppState,
+    warning: &Warning,
+) -> Result<crate::deliveries::PendingWarning, String> {
+    let delivery = EndpointDelivery {
+        endpoints: &state.config.endpoints,
+        client: state.endpoint_client.as_ref(),
+        posted: std::cell::RefCell::new(Vec::new()),
+    };
+    delivery.deliver(warning)?;
+    delivery
+        .posted
+        .into_inner()
+        .pop()
+        .ok_or_else(|| "the warning was not handed to the transport; warn by voice".to_string())
 }
 
 /// The tick step: evaluate the rule over this frame's exposures, journal every change,

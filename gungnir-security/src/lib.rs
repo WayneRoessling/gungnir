@@ -247,6 +247,15 @@ pub mod actions {
     /// administrator's either: accepting a gap is a decision about the risk the mission
     /// runs, and §4's "Roles without a column" withholds it with the engagement chain.
     pub const ACCEPT_COVERAGE_GAP: &str = "coverage.accept_gap";
+    /// Reading a node's audit record -- its segments, entry by entry, and what its
+    /// verification against the journal's heads found -- from a linked desktop's PN-20
+    /// (GAP-179, D-116; `docs/design/DN-23-operator-authentication.md` §15). The owner gave
+    /// it to the administrator and the commander (2026-09-26), in the §4 row added for it
+    /// first. **Every read is itself recorded on the node**, under this name, and so is
+    /// every refusal. A desktop reading its own record asks nothing beyond seeing PN-20
+    /// (D-106): this action is for the record of a machine that serves every desktop
+    /// linked to it.
+    pub const READ_AUDIT: &str = "audit.read";
 
     /// Every action this build knows, for validating an authority rule at load.
     ///
@@ -276,6 +285,7 @@ pub mod actions {
         REQUIREMENT,
         ASSIGN_ROLE,
         ACCEPT_COVERAGE_GAP,
+        READ_AUDIT,
     ];
 
     /// True when `action` is one this build knows.

@@ -29,6 +29,7 @@ pub fn audit_view<'a>(
     audit: &'a [gungnir_ui::panels::config_editor::AuditLine<'a>],
     handoffs: &'a [gungnir_ui::panels::handoff::HandoffRow<'a>],
     record: gungnir_ui::panels::audit::AuditRecordView<'a>,
+    node: Option<gungnir_ui::panels::audit::NodeAuditRecordView<'a>>,
 ) -> AuditView<'a> {
     let session = match state.session_state() {
         SessionState::SignedIn(s) => SessionLine::SignedIn {
@@ -58,6 +59,7 @@ pub fn audit_view<'a>(
             gungnir_security::actions::ASSIGN_ROLE,
         ),
         record,
+        node,
     }
 }
 
@@ -183,6 +185,13 @@ pub fn apply(state: &mut AppState, draft: &mut SignInDraft, action: SessionActio
         SessionAction::VerifyAuditRecord => crate::audit_record::verify(state),
         SessionAction::ShowAuditSegment(index) => crate::audit_record::show(state, index),
         SessionAction::HideAuditSegment => crate::audit_record::hide(state),
+        // GAP-179, D-116: the node's record, which asks `audit.read` of the signed-in role
+        // and is an entry on the node's record each time.
+        SessionAction::ReadNodeAuditRecord => crate::node_audit::read(state),
+        SessionAction::VerifyNodeAuditRecord => crate::node_audit::verify(state),
+        SessionAction::ShowNodeAuditSegment(index) => crate::node_audit::show(state, index),
+        SessionAction::PageNodeAuditSegment { older } => crate::node_audit::page(state, older),
+        SessionAction::HideNodeAuditSegment => crate::node_audit::hide(state),
         SessionAction::SignOut => {
             let was = state.attributed_operator();
             state.sign_out();
