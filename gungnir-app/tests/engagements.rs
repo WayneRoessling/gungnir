@@ -132,6 +132,7 @@ fn accepted(decision: u128, tracks: &[u64]) -> DecisionRecord {
         request: None,
         origin: None,
         mission_time: MissionTime(0.0),
+        acknowledged: Vec::new(),
     }
 }
 

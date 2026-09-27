@@ -126,7 +126,7 @@ const SECTION_4: &[(&str, [&str; 6])] = &[
 ];
 
 /// Which coarse actions each §4 row stands for. A row with none has no coarse action yet
-/// (GAP-058's per-class refinement; the coverage-gap control, GAP-087).
+/// (GAP-058's per-class refinement).
 const ROW_ACTIONS: &[(&str, &[&str])] = &[
     ("Identity declaration (per class policy)", &[]),
     ("Engagement acceptance, point layer", &[actions::DECIDE_PLAN]),
@@ -151,7 +151,8 @@ const ROW_ACTIONS: &[(&str, &[&str])] = &[
         "Publish to coalition exchange (GAP-065; amended 2026-09-08 to add Supervisor alongside the Product release row above)",
         &[actions::PUBLISH_EXCHANGE],
     ),
-    ("Accept coverage gap", &[]),
+    // GAP-106, D-118: the commander's alone (DN-33 §6).
+    ("Accept coverage gap", &[actions::ACCEPT_COVERAGE_GAP]),
     (
         "Recover an escrowed journal key (D-30)",
         &[actions::KEY_ESCROW_RECOVER],
@@ -222,7 +223,7 @@ const PLANNER: &[&str] = &[actions::VIEW_PICTURE];
 const SECURITY_OFFICER: &[&str] = &[actions::KEY_ESCROW_RECOVER];
 
 /// The rows the administrator does not hold (D-88; §4's "Roles without a column"): the
-/// engagement chain, and escrow recovery.
+/// engagement chain, escrow recovery, and accepting a coverage gap (D-118).
 const ADMINISTRATOR_WITHHELD: &[&str] = &[
     "Engagement acceptance, point layer",
     "Engagement acceptance, area layer",
@@ -231,6 +232,7 @@ const ADMINISTRATOR_WITHHELD: &[&str] = &[
     "Override a recommendation (GAP-111)",
     "Reconciliation conflict resolution (Operator amended 2026-09-25: D-53)",
     "Recover an escrowed journal key (D-30)",
+    "Accept coverage gap",
 ];
 
 /// Every constant in `gungnir_security::actions`, by name, `REQUIREMENT` and
@@ -257,6 +259,7 @@ const EVERY_ACTION: &[(&str, &str)] = &[
     ("ACKNOWLEDGE_HANDOVER", actions::ACKNOWLEDGE_HANDOVER),
     ("KEY_ESCROW_RECOVER", actions::KEY_ESCROW_RECOVER),
     ("ASSIGN_ROLE", actions::ASSIGN_ROLE),
+    ("ACCEPT_COVERAGE_GAP", actions::ACCEPT_COVERAGE_GAP),
     ("READ_AUDIT", actions::READ_AUDIT),
 ];
 

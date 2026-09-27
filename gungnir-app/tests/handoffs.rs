@@ -76,6 +76,7 @@ fn accepted() -> DecisionRecord {
         request: None,
         origin: None,
         mission_time: MissionTime(0.0),
+        acknowledged: Vec::new(),
     }
 }
 

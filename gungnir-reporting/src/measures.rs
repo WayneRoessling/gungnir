@@ -491,6 +491,7 @@ mod tests {
                 item: None,
                 overridden: false,
                 origin: None,
+                acknowledged: Vec::new(),
             }),
         )
     }

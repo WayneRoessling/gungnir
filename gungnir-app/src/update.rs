@@ -161,6 +161,11 @@ pub fn tick(state: &mut AppState) {
     //     feeds, raising each finding once and naming what it cannot know.
     crate::anomaly::tick(state);
 
+    // 3i. Coverage gap acceptances that no longer hold re-open by themselves (GAP-106,
+    //     DN-33 §5): against the live report the sensor changes above just made, before
+    //     the drain below journals what re-opened. Nothing to do while nothing stands.
+    crate::gap_acceptance::reconcile(state);
+
     // 3g. Once per session, journal which algorithm configuration the deployment opened
     //     with (GAP-086). Here rather than in `AppState::with_config`, because that
     //     function builds the bus it would have to publish on.

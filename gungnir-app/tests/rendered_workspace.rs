@@ -458,7 +458,7 @@ fn coverage_gaps_are_reported_along_the_declared_approaches() {
 
     // The gaps reach the map, named by their approach rather than by an index.
     let names = sustainment::approach_names(&state);
-    let gaps = sustainment::gap_polylines(&names, &report);
+    let gaps = sustainment::gap_polylines(&names, &report, &[]);
     assert!(gaps.iter().any(|g| g.approach == "northern axis"));
     assert!(gaps.iter().any(|g| g.uncovered));
 

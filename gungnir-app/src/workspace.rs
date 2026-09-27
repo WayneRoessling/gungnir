@@ -513,6 +513,8 @@ pub enum PanelAction {
     RecordSensorMode(u32, gungnir_model::SensorMode),
     /// PN-11: show or hide a coverage layer.
     CoverageLayer(gungnir_ui::panels::coverage_layers::LayerAction),
+    /// PN-11: a commander accepts a coverage gap, with a reason (GAP-106, DN-33 §8).
+    AcceptGap(gungnir_ui::panels::coverage_layers::AcceptGap),
     /// PN-15: state, task, decline or answer a collection requirement.
     Requirement(gungnir_ui::panels::requirements::RequirementAction),
     /// PN-12: open, close, step, seek or change rate.
@@ -549,7 +551,9 @@ pub fn render_panel(ui: &mut egui::Ui, panel: PanelId, state: &AppState) -> Opti
         PanelId::TrackTable => return render_track_table(ui, state),
         PanelId::ApprovalQueue => return render_approval_queue(ui, state),
         PanelId::SensorManagement => return render_sensor_management(ui, state),
-        PanelId::CoverageLayers => return render_coverage_layers(ui, state),
+        // Drawn with the window's own draft by `main.rs` and the dock; a caller without one
+        // draws it with an empty draft, which offers the controls and keeps nothing typed.
+        PanelId::CoverageLayers => return render_coverage_layers_undrafted(ui, state),
         PanelId::Planning => return render_planning(ui, state),
         // The three sustainment panels are drawn by `main.rs`, which owns the state
         // they read: a replay cursor, the last report, and a candidate baseline all
@@ -883,7 +887,25 @@ fn render_sensor_management(ui: &mut egui::Ui, state: &AppState) -> Option<Panel
 ///
 /// Reads exactly what the viewport reads, so the panel's counts and the map cannot
 /// disagree about how much there is to draw or why there is nothing.
-fn render_coverage_layers(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
+/// PN-11 for a caller that holds no draft: the controls are offered and nothing typed is
+/// kept. `main.rs` and the dock draw it with the window's own draft instead.
+fn render_coverage_layers_undrafted(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
+    render_coverage_layers(
+        ui,
+        state,
+        &mut gungnir_ui::panels::coverage_layers::AcceptanceDraft::default(),
+    )
+}
+
+/// PN-11, the coverage layer controls, and under them the gap list with each gap's
+/// acceptance or its accept control (GAP-106, `docs/design/DN-33-accepting-a-coverage-gap.md`
+/// §8). `draft` is the reason a commander is typing, which this window holds
+/// (`SustainmentState::gap_acceptance`).
+pub fn render_coverage_layers(
+    ui: &mut egui::Ui,
+    state: &AppState,
+    draft: &mut gungnir_ui::panels::coverage_layers::AcceptanceDraft,
+) -> Option<PanelAction> {
     use gungnir_ui::panels::coverage_layers::{
         CoverageLayersView, LaydownComparison, LayerCounts, NothingToDraw,
     };
@@ -893,9 +915,13 @@ fn render_coverage_layers(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAc
     let layer = crate::sustainment::coverage_layer(state, &circles);
     let report = crate::sustainment::coverage_report(state);
     let names = crate::sustainment::approach_names(state);
+    let accepted = report
+        .as_ref()
+        .map(|r| crate::sustainment::live_accepted(state, r))
+        .unwrap_or_default();
     let gaps = report
         .as_ref()
-        .map(|r| crate::sustainment::gap_polylines(&names, r))
+        .map(|r| crate::sustainment::gap_polylines(&names, r, &accepted))
         .unwrap_or_default();
 
     let placed = crate::hazards::placed(state);
@@ -927,6 +953,7 @@ fn render_coverage_layers(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAc
             gaps: gaps.len(),
             hazards: placed.len(),
             geofences: crate::geofences::placed(state).len(),
+            accepted_gaps: accepted.iter().filter(|a| **a).count(),
         },
         hazards: gungnir_ui::panels::coverage_layers::HazardCurrency {
             declared: state.hazards.hazards.len(),
@@ -935,8 +962,121 @@ fn render_coverage_layers(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAc
         coverage,
         comparison,
     };
-    gungnir_ui::panels::coverage_layers::render_coverage_layers(ui, &state.palette, &view)
-        .map(PanelAction::CoverageLayer)
+    let layer_action =
+        gungnir_ui::panels::coverage_layers::render_coverage_layers(ui, &state.palette, &view)
+            .map(PanelAction::CoverageLayer);
+
+    // GAP-106: the gaps of the same live report, named, with the acceptance that stands
+    // for each or the control to accept it.
+    ui.separator();
+    render_gap_acceptance_section(ui, state, report.as_ref(), &names, draft).or(layer_action)
+}
+
+/// PN-11's gap list under the layer controls (GAP-106, DN-33 §8 rule 1): the gaps of the
+/// live `report`, named, each with the acceptance that stands for it or the control to
+/// accept it, the measure beside each total, and what re-opened this session.
+fn render_gap_acceptance_section(
+    ui: &mut egui::Ui,
+    state: &AppState,
+    report: Option<&gungnir_analytics::CoverageReport>,
+    names: &[String],
+    draft: &mut gungnir_ui::panels::coverage_layers::AcceptanceDraft,
+) -> Option<PanelAction> {
+    use gungnir_ui::panels::coverage_layers::{
+        AcceptanceLine, GapAcceptanceView, GapLine, MeasureLine, ReopenedLine,
+    };
+    let in_force = crate::gap_acceptance::laydown_in_force(state);
+    let gaps_named: Vec<gungnir_model::AcceptedGap> = report
+        .map(|r| {
+            r.gaps
+                .iter()
+                .map(|g| {
+                    gungnir_analytics::accepted_gap(
+                        g,
+                        names
+                            .get(g.approach)
+                            .map_or("unnamed approach", String::as_str),
+                        r.parameters,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let standing = report
+        .map(|r| crate::gap_acceptance::acceptances_for(state, r, in_force.as_ref()))
+        .unwrap_or_default();
+    let lines: Vec<GapLine<'_>> = gaps_named
+        .iter()
+        .zip(standing.iter().chain(std::iter::repeat(&None)))
+        .map(|(gap, a)| GapLine {
+            gap,
+            acceptance: a.map(|a| AcceptanceLine {
+                id: a.id,
+                operator: &a.operator,
+                role: &a.role,
+                at: a.at,
+                reason: &a.reason,
+                revision: a.revision,
+                laydown: a.laydown.as_ref().map(|l| l.0.as_str()),
+            }),
+        })
+        .collect();
+    let because: Vec<String> = state
+        .gap_acceptances
+        .reopened
+        .iter()
+        .map(|r| r.because.sentence())
+        .collect();
+    let reopened: Vec<ReopenedLine<'_>> = state
+        .gap_acceptances
+        .reopened
+        .iter()
+        .zip(&because)
+        .map(|(r, because)| ReopenedLine {
+            id: r.acceptance.id,
+            gap: &r.acceptance.gap,
+            because,
+            at: r.at,
+        })
+        .collect();
+    let measure = report.map(|r| {
+        let m = crate::gap_acceptance::measure(state, r, in_force.as_ref());
+        MeasureLine {
+            segments: m.segments,
+            accepted_segments: m.accepted_segments,
+            uncovered_m: m.uncovered_m,
+            uncovered_accepted_m: m.uncovered_accepted_m,
+            single_sensor_m: m.single_sensor_m,
+            single_sensor_accepted_m: m.single_sensor_accepted_m,
+        }
+    });
+    // DN-33 §6: a signed-in role holding the action; a selected role is nobody's authority.
+    let may_accept = match state.signed_in() {
+        Some(s)
+            if gungnir_security::authz::role_permits(
+                s.role,
+                gungnir_security::actions::ACCEPT_COVERAGE_GAP,
+            ) =>
+        {
+            Ok(())
+        }
+        Some(_) => Err("Only a signed-in commander may accept a coverage gap (§4)."),
+        None => {
+            Err("Only a signed-in commander may accept a coverage gap (§4); nobody is signed in.")
+        }
+    };
+    gungnir_ui::panels::coverage_layers::render_gap_acceptance(
+        ui,
+        &state.palette,
+        &GapAcceptanceView {
+            gaps: &lines,
+            measure,
+            reopened: &reopened,
+            may_accept,
+        },
+        draft,
+    )
+    .map(PanelAction::AcceptGap)
 }
 
 /// PN-16, the planning panel: laydown options, compared (GAP-087,
@@ -961,6 +1101,9 @@ fn render_planning(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
         }
     };
     let approaches = crate::sustainment::approach_names(state);
+    // GAP-107, DN-26 §11: where the laydown in force stands, in the words PN-07 uses.
+    let standing = crate::rehearsal_standing::in_force(state);
+    let sentence = standing.sentence(state.session());
     let view = PlanningView {
         laydowns,
         terrain_model,
@@ -968,6 +1111,12 @@ fn render_planning(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
         rehearsal: state.rehearsal_section(),
         rehearsal_scenario: state.rehearsal_scenario(),
         selected: state.selected_laydown(),
+        in_force: sentence
+            .as_deref()
+            .map(|sentence| gungnir_ui::panels::planning::InForceLine {
+                sentence,
+                asks: standing.asks(),
+            }),
     };
     match gungnir_ui::panels::planning::render_planning(ui, &state.palette, &view)? {
         PlanningAction::SelectLaydown(id) => Some(PanelAction::SelectLaydown(id)),
@@ -1100,6 +1249,10 @@ pub fn render_decision_dialog(
     let answer_line = crate::projection::answer_line(state, gungnir_model::PendingApprovalId(id.0));
     let mut conditions = degraded_conditions(state);
     conditions.extend(interim_item_condition(state, row));
+    // GAP-107, DN-26 §11: where the laydown in force stands, when a decision acting on a
+    // plan must acknowledge it -- the same sentence `decisions::decide` checks the tick
+    // against and records.
+    let advisory = crate::rehearsal_standing::advisory(state);
     let degraded: Vec<Degraded<'_>> = conditions
         .iter()
         .map(|(subsystem, detail)| Degraded { subsystem, detail })
@@ -1190,6 +1343,7 @@ pub fn render_decision_dialog(
                 },
             }
         }),
+        rehearsal: advisory.as_ref().map(|a| a.statement.as_str()),
     };
     gungnir_ui::panels::decision_dialog::render_decision_dialog(ui, &state.palette, &view, dialog)
         .map(|choice| PanelAction::Decide(id, choice))

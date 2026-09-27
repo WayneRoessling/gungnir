@@ -102,6 +102,9 @@ pub struct SustainmentState {
     pub next_finding: u64,
     /// PN-20's sign-in form (GAP-057). The passphrase is cleared on submit.
     pub sign_in: gungnir_ui::panels::audit::SignInDraft,
+    /// PN-11's gap acceptance as a commander types its reason (GAP-106). Session state: an
+    /// acceptance reaches the record when it is recorded, not as it is typed.
+    pub gap_acceptance: gungnir_ui::panels::coverage_layers::AcceptanceDraft,
 }
 
 /// The desktop's replay state: which session is open and how fast it is running.
@@ -271,6 +274,7 @@ fn describe(env: &gungnir_eventing::Envelope) -> String {
         Event::Link(e) => format!("link {e:?}"),
         Event::Retention(e) => format!("retention {e:?}"),
         Event::Audit(e) => format!("audit {e:?}"),
+        Event::Planning(e) => format!("planning {e:?}"),
     };
     let short: String = kind.chars().take(120).collect();
     format!("seq {} at {:.1} s: {short}", env.seq, env.mission_time.0)
@@ -2152,6 +2156,10 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
             } else {
                 current_uncovered_m.map(|current| uncovered_m - current)
             };
+            // GAP-106: the acceptances that stand for this laydown's gaps -- only the
+            // laydown in force can have any, since an acceptance holds for the laydown it
+            // was made under (DN-33 §8 rule 5).
+            let measure = crate::gap_acceptance::measure(state, &report, Some(&l.id));
             LaydownRow {
                 id: l.id.clone(),
                 intent: l.intent.clone(),
@@ -2159,6 +2167,8 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
                 coverage: LaydownCoverage::Computed {
                     gap_segments: report.gaps.len(),
                     uncovered_m,
+                    accepted_segments: measure.accepted_segments,
+                    accepted_uncovered_m: measure.uncovered_accepted_m,
                     delta_uncovered_m,
                 },
                 rehearsal: state.row_rehearsal(&l.id, l.current),
@@ -2336,21 +2346,41 @@ pub fn approach_names(state: &AppState) -> Vec<String> {
         .collect()
 }
 
-/// The gaps as the viewport draws them.
+/// For each gap of PN-11's live `report`, whether a standing acceptance names it (GAP-106,
+/// `docs/design/DN-33-accepting-a-coverage-gap.md` §8): what the viewport, PN-11's count
+/// and the status strip mark as accepted.
+#[must_use]
+pub fn live_accepted(state: &AppState, report: &gungnir_analytics::CoverageReport) -> Vec<bool> {
+    crate::gap_acceptance::acceptances_for(
+        state,
+        report,
+        crate::gap_acceptance::laydown_in_force(state).as_ref(),
+    )
+    .iter()
+    .map(Option::is_some)
+    .collect()
+}
+
+/// The gaps as the viewport draws them. `accepted[i]` marks `report.gaps[i]` as accepted
+/// ([`live_accepted`]): **drawn as the gap it is, and marked, never hidden** (GAP-106,
+/// DN-33 §8 rule 4).
 #[must_use]
 pub fn gap_polylines<'a>(
     names: &'a [String],
     report: &'a gungnir_analytics::CoverageReport,
+    accepted: &[bool],
 ) -> Vec<gungnir_viewport3d::layers::GapPolyline<'a>> {
     report
         .gaps
         .iter()
-        .map(|gap| gungnir_viewport3d::layers::GapPolyline {
+        .enumerate()
+        .map(|(i, gap)| gungnir_viewport3d::layers::GapPolyline {
             approach: names
                 .get(gap.approach)
                 .map_or("unnamed approach", String::as_str),
             samples: &gap.samples,
             uncovered: gap.severity == gungnir_analytics::GapSeverity::Uncovered,
+            accepted: accepted.get(i).copied().unwrap_or(false),
         })
         .collect()
 }
@@ -2375,6 +2405,11 @@ pub fn coverage_status<'a>(
                 .filter(|g| g.severity == gungnir_analytics::GapSeverity::SingleSensor)
                 .count(),
             terrain_masking: report.parameters.terrain_masking_applied,
+            // GAP-106: said beside the counts above, never taken out of them.
+            accepted_segments: live_accepted(state, report)
+                .into_iter()
+                .filter(|a| *a)
+                .count(),
         },
         None if state.config.approaches.is_empty() => CoverageStatus::NoApproaches,
         None => CoverageStatus::NotPlaceable { setting: "origin" },

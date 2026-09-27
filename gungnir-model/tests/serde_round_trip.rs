@@ -36,9 +36,9 @@ use gungnir_model::arbitration::{ArbitrationGround, ConflictSide, SideOutcome};
 use gungnir_model::events::{
     AuditEvent, AuditHead, CalibrationEvent, CommandEvent, EngagementEvent, EngagementSide,
     GovernanceEvent, HandoffEvent, HealthEvent, IdentityEvent, IngestEvent, InterceptEvent,
-    LaunchWarningEvent, LinkEvent, RehearsalEvent, ReplayEvent, RequirementEvent, RetentionEvent,
-    ReviewEvent, RhythmEvent, SensorEvent, SensorTaskEvent, TrackingEvent, VerdictSummary,
-    WarningEvent,
+    LaunchWarningEvent, LinkEvent, PlanningEvent, RehearsalEvent, ReplayEvent, RequirementEvent,
+    RetentionEvent, ReviewEvent, RhythmEvent, SensorEvent, SensorTaskEvent, TrackingEvent,
+    VerdictSummary, WarningEvent,
 };
 use gungnir_model::identity::GlobalEntityId;
 use gungnir_model::{
@@ -636,6 +636,10 @@ fn command_events() -> Vec<CommandEvent> {
             item: Some(PendingApprovalId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_0002)),
             overridden: true,
             origin: Some("desktop-2".into()),
+            acknowledged: vec![gungnir_model::Acknowledgement {
+                subject: "rehearsal".into(),
+                statement: "The laydown in force, current, has never been rehearsed.".into(),
+            }],
         },
         CommandEvent::Expired {
             plan: plan_id(),
@@ -970,6 +974,56 @@ fn rehearsal_events() -> Vec<RehearsalEvent> {
     }]
 }
 
+fn accepted_gap() -> gungnir_model::AcceptedGap {
+    gungnir_model::AcceptedGap {
+        approach: "upper Vell approach".into(),
+        severity: gungnir_model::GapSeverity::Uncovered,
+        from_m: 17_300.1,
+        to_m: 21_900.3,
+        sample_spacing_m: 100.1,
+        terrain_masking_applied: true,
+    }
+}
+
+fn planning_events() -> Vec<PlanningEvent> {
+    vec![
+        PlanningEvent::GapAccepted(gungnir_model::GapAcceptance {
+            id: gungnir_model::GapAcceptanceId(3),
+            gap: accepted_gap(),
+            reason: "covered by the harbour patrol".into(),
+            operator: "41".into(),
+            role: "Commander".into(),
+            revision: 7,
+            laydown: Some(LaydownId("current".into())),
+            at: T0,
+        }),
+        PlanningEvent::GapAcceptanceReopened {
+            acceptance: gungnir_model::GapAcceptanceId(3),
+            because: gungnir_model::ReopenedBecause::ShapeChanged {
+                now: vec![gungnir_model::AcceptedGap {
+                    severity: gungnir_model::GapSeverity::SingleSensor,
+                    ..accepted_gap()
+                }],
+            },
+            at: T1,
+        },
+        PlanningEvent::LaydownRehearsed(gungnir_model::RehearsalStamp {
+            laydown: LaydownId("c".into()),
+            scenario: TestTrackNumber(11),
+            seed: 1701,
+            revision: 7,
+            basis: gungnir_model::RehearsalBasis {
+                placements: "a1".repeat(32),
+                sensors: "b2".repeat(32),
+                resources: "c3".repeat(32),
+                policy: "d4".repeat(32),
+                tracking: "e5".repeat(32),
+            },
+            ran_at: T2,
+        }),
+    ]
+}
+
 fn replay_events() -> Vec<ReplayEvent> {
     vec![
         ReplayEvent::Opened {
@@ -1235,6 +1289,16 @@ impl Variant for RehearsalEvent {
     }
 }
 
+impl Variant for PlanningEvent {
+    fn variant(&self) -> &'static str {
+        match self {
+            Self::GapAccepted(_) => "GapAccepted",
+            Self::GapAcceptanceReopened { .. } => "GapAcceptanceReopened",
+            Self::LaydownRehearsed(_) => "LaydownRehearsed",
+        }
+    }
+}
+
 impl Variant for ReplayEvent {
     fn variant(&self) -> &'static str {
         match self {
@@ -1389,6 +1453,10 @@ fn event_tables() -> BTreeMap<&'static str, BTreeSet<String>> {
         (
             "ReplayEvent",
             enum_round_trip("ReplayEvent", &replay_events()),
+        ),
+        (
+            "PlanningEvent",
+            enum_round_trip("PlanningEvent", &planning_events()),
         ),
     ])
 }

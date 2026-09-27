@@ -324,6 +324,7 @@ fn the_queue_draws_a_plans_tag_and_the_dialog_its_whole_identifier() {
         may_override: true,
         route: DecisionRoute::ThisDesktop,
         answer: None,
+        rehearsal: None,
     };
     let mut state = DecisionDialogState::default();
     let (_, frame) =
@@ -450,6 +451,7 @@ fn the_decision_dialog_draws_accept_last() {
         may_override: true,
         route: DecisionRoute::ThisDesktop,
         answer: None,
+        rehearsal: None,
     };
 
     let probe = RenderProbe::new();
@@ -532,6 +534,7 @@ fn a_degraded_decision_draws_why_accept_is_shut() {
         may_override: false,
         route: DecisionRoute::ThisDesktop,
         answer: None,
+        rehearsal: None,
     };
 
     let probe = RenderProbe::new();
@@ -2935,6 +2938,7 @@ fn an_interim_plan_is_labelled_on_pn05_pn06_and_pn07() {
         may_override: false,
         route: DecisionRoute::ThisDesktop,
         answer: None,
+        rehearsal: None,
     };
     let mut state = DecisionDialogState::default();
     let (_, pn07) =
@@ -3310,6 +3314,7 @@ fn hiding_a_layer_says_the_map_is_not_showing_everything() {
             gaps: 2,
             hazards: 0,
             geofences: 0,
+            accepted_gaps: 0,
         },
         hazards: HazardCurrency {
             declared: 0,
@@ -3357,6 +3362,7 @@ fn the_hazard_layer_states_its_currency() {
             gaps: 0,
             hazards: 2,
             geofences: 0,
+            accepted_gaps: 0,
         },
         hazards: HazardCurrency {
             declared: 2,
@@ -3378,6 +3384,7 @@ fn the_hazard_layer_states_its_currency() {
             gaps: 0,
             hazards: 0,
             geofences: 0,
+            accepted_gaps: 0,
         },
         ..view
     };
@@ -3402,6 +3409,7 @@ fn an_empty_layer_and_a_hidden_one_read_differently() {
             gaps: 0,
             hazards: 0,
             geofences: 0,
+            accepted_gaps: 0,
         },
         hazards: HazardCurrency {
             declared: 0,
@@ -3440,6 +3448,7 @@ fn the_comparison_status_says_nothing_is_selected_when_nothing_is() {
             gaps: 0,
             hazards: 0,
             geofences: 0,
+            accepted_gaps: 0,
         },
         hazards: HazardCurrency {
             declared: 0,
@@ -3473,6 +3482,7 @@ fn the_comparison_status_names_the_selected_options_intent_and_counts() {
             gaps: 0,
             hazards: 0,
             geofences: 0,
+            accepted_gaps: 0,
         },
         hazards: HazardCurrency {
             declared: 0,
@@ -3581,6 +3591,8 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
                 gap_segments: 1,
                 uncovered_m: 900.0,
                 delta_uncovered_m: None,
+                accepted_segments: 0,
+                accepted_uncovered_m: 0.0,
             },
             rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
             first_engagement: crate::panels::planning::RowFirstEngagement::NotRehearsed,
@@ -3593,6 +3605,8 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
                 gap_segments: 0,
                 uncovered_m: 400.0,
                 delta_uncovered_m: Some(-500.0),
+                accepted_segments: 0,
+                accepted_uncovered_m: 0.0,
             },
             rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
             first_engagement: crate::panels::planning::RowFirstEngagement::NotRehearsed,
@@ -3615,6 +3629,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
         rehearsal: crate::panels::planning::RehearsalSection::NotYetRun,
         rehearsal_scenario: gungnir_model::TestTrackNumber(1),
         selected: Some(&rows[1].id),
+        in_force: None,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));
@@ -3694,6 +3709,8 @@ fn a_rehearsal_is_labelled_re_observed_and_the_table_reads_the_run() {
         gap_segments: 2,
         uncovered_m: 7000.0,
         delta_uncovered_m: None,
+        accepted_segments: 0,
+        accepted_uncovered_m: 0.0,
     };
     let rows = vec![
         LaydownRow {
@@ -3766,6 +3783,7 @@ fn a_rehearsal_is_labelled_re_observed_and_the_table_reads_the_run() {
         }),
         rehearsal_scenario: TestTrackNumber(1),
         selected: Some(&rows[1].id),
+        in_force: None,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));
@@ -3837,6 +3855,8 @@ fn first_engagement_is_drawn_as_a_worst_case_with_its_count_and_never_as_zero() 
         gap_segments: 1,
         uncovered_m: 1000.0,
         delta_uncovered_m: None,
+        accepted_segments: 0,
+        accepted_uncovered_m: 0.0,
     };
     let rows = vec![
         LaydownRow {
@@ -3911,6 +3931,7 @@ fn first_engagement_is_drawn_as_a_worst_case_with_its_count_and_never_as_zero() 
         }),
         rehearsal_scenario: TestTrackNumber(1),
         selected: Some(&rows[1].id),
+        in_force: None,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));
@@ -4004,6 +4025,7 @@ fn planning_with_no_laydowns_declared_says_so() {
         rehearsal: crate::panels::planning::RehearsalSection::NothingSelected,
         rehearsal_scenario: gungnir_model::TestTrackNumber(1),
         selected: None,
+        in_force: None,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));

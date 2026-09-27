@@ -64,7 +64,7 @@ enum "RequirementEvent" as RequirementEvent <<InformationElement>> {
   Lapsed { requirement: RequirementId, at: MissionTime, }
 }
 enum "CommandEvent" as CommandEvent <<InformationElement>> {
-  Decided { plan: PlanId, decision: DecisionId, accepted: bool, operator: Option<String>, role: Option<String>, verdict: VerdictSummary, rationale: Option<String>, request: Option<RequestId>, item: Option<PendingApprovalId>, overridden: bool, origin: Option<String>, }
+  Decided { plan: PlanId, decision: DecisionId, accepted: bool, operator: Option<String>, role: Option<String>, verdict: VerdictSummary, rationale: Option<String>, request: Option<RequestId>, item: Option<PendingApprovalId>, overridden: bool, origin: Option<String>, acknowledged: Vec<crate::Acknowledgement>, }
   Expired { plan: PlanId, at: MissionTime }
   Queued { item: PendingApprovalId, plan: PlanId, layer: EffectorLayer, offered_to: Vec<String>, expires_at: Option<MissionTime>, escalate_at: Option<MissionTime>, }
   Escalated { plan: PlanId, to_role: String, at: MissionTime, }
@@ -140,12 +140,19 @@ class "EngagementSide" as EngagementSide <<InformationElement>> {
   plan: PlanId
   at: MissionTime
 }
+enum "PlanningEvent" as PlanningEvent <<InformationElement>> {
+  GapAccepted(crate::GapAcceptance)
+  GapAcceptanceReopened { acceptance: crate::GapAcceptanceId, because: crate::ReopenedBecause, at: MissionTime, }
+  LaydownRehearsed(crate::RehearsalStamp)
+}
 enum "RehearsalEvent" as RehearsalEvent <<InformationElement>> {
   Started { seed: String, seed_sha256: String, at: MissionTime, }
 }
 enum "ReplayEvent" as ReplayEvent <<InformationElement>> {
   Opened { session: crate::SessionId, at: MissionTime, }
   Closed { session: crate::SessionId, stepped: usize, at: MissionTime, }
+}
+class "Acknowledgement\n(see If-Sr-plans-effectors-handoff)" as Acknowledgement <<External>> #line.dashed {
 }
 class "AlgorithmBaselineId\n(see If-Sr-core-identifiers-frames-quality)" as AlgorithmBaselineId <<External>> #line.dashed {
 }
@@ -166,6 +173,10 @@ class "DetectionView\n(see If-Sr-picture-tracking-vocabulary)" as DetectionView 
 enum "EffectorLayer\n(see If-Sr-plans-effectors-handoff)" as EffectorLayer <<External>> #line.dashed {
 }
 enum "EffectorReport\n(see If-Sr-plans-effectors-handoff)" as EffectorReport <<External>> #line.dashed {
+}
+class "GapAcceptance\n(see If-Sr-battle-rhythm-mission-records)" as GapAcceptance <<External>> #line.dashed {
+}
+class "GapAcceptanceId\n(see If-Sr-battle-rhythm-mission-records)" as GapAcceptanceId <<External>> #line.dashed {
 }
 class "GlobalEntityId\n(see If-Sr-core-identifiers-frames-quality)" as GlobalEntityId <<External>> #line.dashed {
 }
@@ -188,6 +199,10 @@ enum "PlanStandingView\n(see If-Sr-picture-tracking-vocabulary)" as PlanStanding
 class "PlanView\n(see If-Sr-picture-tracking-vocabulary)" as PlanView <<External>> #line.dashed {
 }
 enum "ProductKind\n(see If-Sr-battle-rhythm-mission-records)" as ProductKind <<External>> #line.dashed {
+}
+class "RehearsalStamp\n(see If-Sr-battle-rhythm-mission-records)" as RehearsalStamp <<External>> #line.dashed {
+}
+enum "ReopenedBecause\n(see If-Sr-battle-rhythm-mission-records)" as ReopenedBecause <<External>> #line.dashed {
 }
 class "RequirementId\n(see If-Sr-battle-rhythm-mission-records)" as RequirementId <<External>> #line.dashed {
 }
@@ -230,6 +245,7 @@ RequirementEvent --> Concurrence : Tasked, Declined
 RequirementEvent --> MissionTime : Stated, Tasked, Declined, Satisfied, Lapsed
 RequirementEvent --> RequirementId : Tasked, Declined, Satisfied, Lapsed
 RequirementEvent --> SensorTaskId : Tasked
+CommandEvent --> Acknowledgement : Decided
 CommandEvent --> DecisionId : Decided
 CommandEvent --> EffectorLayer : Queued
 CommandEvent --> MissionTime : Expired, Queued, Escalated
@@ -262,6 +278,11 @@ LinkEvent --> PlanId : ConflictResolved, ConflictArbitrated, DelegationsLapsed
 EngagementSide --> DecisionId : decision
 EngagementSide --> MissionTime : at
 EngagementSide --> PlanId : plan
+PlanningEvent --> GapAcceptance : GapAccepted
+PlanningEvent --> GapAcceptanceId : GapAcceptanceReopened
+PlanningEvent --> MissionTime : GapAcceptanceReopened
+PlanningEvent --> RehearsalStamp : LaydownRehearsed
+PlanningEvent --> ReopenedBecause : GapAcceptanceReopened
 RehearsalEvent --> MissionTime : Started
 ReplayEvent --> MissionTime : Opened, Closed
 ReplayEvent --> SessionId : Opened, Closed
