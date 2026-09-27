@@ -21,7 +21,7 @@ the owner reviewed. A signature from before the repository existed on 2026-09-07
 the first commit and is marked as such. An entry is never edited; a withdrawn signature
 gets a new entry.
 
-252 signatures.
+253 signatures.
 
 | Date | Signer | What was signed | Kind | Paths | Commit | Record |
 |---|---|---|---|---|---|---|
@@ -277,3 +277,4 @@ gets a new entry.
 | 2026-09-26 | Owner | GAP-159: the gungnir-analytics Coverage accuracy row gated against gungnir-analytics/tests/coverage_accuracy.rs (range within 1 percent, sector edges and elevation limits within 0.1 degree, against the vertical at each sensor). | criterion | `docs/verification-capability-table.md`<br>`gungnir-analytics/tests/coverage_accuracy.rs` | `e932b14dd4` | GAP-159; docs/record/2026-09-26/the-owner-s-walk-of-2026-09-26.md; PR #191 |
 | 2026-09-26 | Owner | GAP-168: the gungnir-intercept-service Plan determinism and degradation criterion amended -- an over-budget solve returns the last good plan, flagged stale, until the stand-in wait (500 ms) expires, then an interim plan labelled as not optimal, replaced when the exact solve finishes (D-93). | criterion | `docs/verification-capability-table.md` | `e932b14dd4` | GAP-168; D-93; docs/record/2026-09-26/the-owner-s-walk-of-2026-09-26.md; PR #191 |
 | 2026-09-26 | Owner | GAP-173: the gungnir-time Late-data policy row gated against gungnir-fusion-async/tests/late_data_policy.rs and gungnir-app/tests/late_data_policy.rs. | criterion | `docs/verification-capability-table.md`<br>`gungnir-fusion-async/tests/late_data_policy.rs`<br>`gungnir-app/tests/late_data_policy.rs` | `e932b14dd4` | GAP-173; docs/record/2026-09-26/the-owner-s-walk-of-2026-09-26.md; PR #191 |
+| 2026-09-26 | Owner | D-121: `proj-sys` 0.27 admitted to §2.9 with only its `tiff` feature, so libproj reads the EGM2008 geoid GeoTIFF grid; the version `proj` already resolves, so no crate is added; `network` stays refused; behind the default-off `crs` feature. | stack | `Cargo.toml`<br>`docs/agentic-coding-standards.md` | `723c5097b0` | D-121; GAP-108; docs/record/2026-09-26/a-converted-height-carries-its-vertical-datum.md; PR #194 |
