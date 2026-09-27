@@ -3175,3 +3175,59 @@
   commit: 95685450653e4cc1c50f370cd5603cb12c5162ad
   pre_repository: false
   record: "GAP-158; D-111; DN-12 §10; docs/record/2026-09-26/a-sensor-s-elevation-band-a-round-1.md; PR #185"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-154: the cross-layer Disconnected reconciliation row's stale sentence restated --
+    a node records every decision taken on its queue and every decision forwarded after
+    an outage, and an outage's conflicts are caught by track (D-58) and, for pre-UUID-v7
+    journals, by plan (D-53). Criterion and gate unchanged.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: e932b14dd441b9e6d5042a7259e999e7183cd18b
+  pre_repository: false
+  record: "GAP-154; docs/record/2026-09-26/the-owner-s-walk-of-2026-09-26.md; PR #191"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-159: the gungnir-analytics Coverage accuracy row gated against
+    gungnir-analytics/tests/coverage_accuracy.rs (range within 1 percent, sector edges and
+    elevation limits within 0.1 degree, against the vertical at each sensor).
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-analytics/tests/coverage_accuracy.rs
+  commit: e932b14dd441b9e6d5042a7259e999e7183cd18b
+  pre_repository: false
+  record: "GAP-159; docs/record/2026-09-26/the-owner-s-walk-of-2026-09-26.md; PR #191"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-168: the gungnir-intercept-service Plan determinism and degradation criterion
+    amended -- an over-budget solve returns the last good plan, flagged stale, until the
+    stand-in wait (500 ms) expires, then an interim plan labelled as not optimal, replaced
+    when the exact solve finishes (D-93).
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  commit: e932b14dd441b9e6d5042a7259e999e7183cd18b
+  pre_repository: false
+  record: "GAP-168; D-93; docs/record/2026-09-26/the-owner-s-walk-of-2026-09-26.md; PR #191"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-173: the gungnir-time Late-data policy row gated against
+    gungnir-fusion-async/tests/late_data_policy.rs and gungnir-app/tests/late_data_policy.rs.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-fusion-async/tests/late_data_policy.rs
+  - gungnir-app/tests/late_data_policy.rs
+  commit: e932b14dd441b9e6d5042a7259e999e7183cd18b
+  pre_repository: false
+  record: "GAP-173; docs/record/2026-09-26/the-owner-s-walk-of-2026-09-26.md; PR #191"

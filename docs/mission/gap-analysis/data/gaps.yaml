@@ -9944,7 +9944,11 @@
       Found while checking GAP-129 against the code. Not edited in that change: the
       sentence is in a criterion cell of the verification table, which only the owner
       changes.
-
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Restated by the owner on the 2026-09-26 walk: the row now says a node records every decision taken on its queue and every decision forwarded after an outage, and how an outage's conflicts are caught (D-58, D-53). The criterion and the row's gate are unchanged.
+      See `../../record/2026-09-26/the-owner-s-walk-of-2026-09-26.md`.
 - id: GAP-152
   name: The audit log lives in memory, so nothing outlives the process and no age governs it
   type: Technical
@@ -10134,7 +10138,11 @@
     note: >-
       Found closing GAP-118. Not edited in that change: the sentence is in a criterion
       cell of the verification table, which only the owner changes.
-
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Gated by the owner on the 2026-09-26 walk against `gungnir-analytics/tests/coverage_accuracy.rs`, which recovers every range within 1 percent and every sector edge and elevation limit within 0.1 degree, against the vertical at each sensor. The stale sentence is replaced.
+      See `../../record/2026-09-26/the-owner-s-walk-of-2026-09-26.md`.
 - id: GAP-160
   name: A node publishes no track, so a linked desktop's picture is frozen at sign-in
   type: Technical
@@ -10800,6 +10808,11 @@
     note: >-
       Filed by GAP-114's build, which made the row's note untrue and left the criterion and
       its gate to the owner.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Gated by the owner on the 2026-09-26 walk against `gungnir-fusion-async/tests/late_data_policy.rs` (each variant's outcome asserted) and `gungnir-app/tests/late_data_policy.rs` (the baseline's policy reaches the desktop's tracker, the fallback included). The stale note is replaced.
+      See `../../record/2026-09-26/the-owner-s-walk-of-2026-09-26.md`.
 - id: GAP-168
   name: >-
     The intercept-service row's degradation clause stops at the last good plan
@@ -10837,6 +10850,11 @@
     note: >-
       Found closing GAP-156. Not edited in that change: the sentence is in a criterion
       cell of the verification table, which only the owner changes.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Amended by the owner on the 2026-09-26 walk: the degradation clause now names the stand-in wait and the interim plan that follows it, labelled as not optimal, until the exact solve finishes (D-93). The row is not gated by this change.
+      See `../../record/2026-09-26/the-owner-s-walk-of-2026-09-26.md`.
 - id: GAP-169
   name: An older desktop reads a newer node's interim plan as the optimum
   type: Technical
