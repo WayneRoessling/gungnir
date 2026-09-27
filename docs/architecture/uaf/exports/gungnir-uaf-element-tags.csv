@@ -1057,6 +1057,14 @@ IE-32,registry.code,gungnir_workflow::WorkspaceLayout
 IE-33,uafId,IE-33
 IE-33,uafKind,InformationElement
 IE-33,registry.code,gungnir_mission::Mission
+IE-accepted-gap,uafId,IE-accepted-gap
+IE-accepted-gap,uafKind,InformationElement
+IE-accepted-gap,registry.code,gungnir_model::AcceptedGap
+IE-accepted-gap,registry.domain,Battle rhythm & mission records
+IE-acknowledgement,uafId,IE-acknowledgement
+IE-acknowledgement,uafKind,InformationElement
+IE-acknowledgement,registry.code,gungnir_model::Acknowledgement
+IE-acknowledgement,registry.domain,"Plans, effectors & handoff"
 IE-algorithm-baseline-id,uafId,IE-algorithm-baseline-id
 IE-algorithm-baseline-id,uafKind,InformationElement
 IE-algorithm-baseline-id,registry.code,gungnir_model::AlgorithmBaselineId
@@ -1229,6 +1237,18 @@ IE-fires-settings,uafId,IE-fires-settings
 IE-fires-settings,uafKind,InformationElement
 IE-fires-settings,registry.code,gungnir_model::FiresSettings
 IE-fires-settings,registry.domain,"Policy, authority & settings"
+IE-gap-acceptance,uafId,IE-gap-acceptance
+IE-gap-acceptance,uafKind,InformationElement
+IE-gap-acceptance,registry.code,gungnir_model::GapAcceptance
+IE-gap-acceptance,registry.domain,Battle rhythm & mission records
+IE-gap-acceptance-id,uafId,IE-gap-acceptance-id
+IE-gap-acceptance-id,uafKind,InformationElement
+IE-gap-acceptance-id,registry.code,gungnir_model::GapAcceptanceId
+IE-gap-acceptance-id,registry.domain,Battle rhythm & mission records
+IE-gap-severity,uafId,IE-gap-severity
+IE-gap-severity,uafKind,InformationElement
+IE-gap-severity,registry.code,gungnir_model::GapSeverity
+IE-gap-severity,registry.domain,Battle rhythm & mission records
 IE-governance-event,uafId,IE-governance-event
 IE-governance-event,uafKind,InformationElement
 IE-governance-event,registry.code,gungnir_model::GovernanceEvent
@@ -1361,6 +1381,10 @@ IE-plan-standing-view,uafId,IE-plan-standing-view
 IE-plan-standing-view,uafKind,InformationElement
 IE-plan-standing-view,registry.code,gungnir_model::PlanStandingView
 IE-plan-standing-view,registry.domain,Picture & tracking vocabulary
+IE-planning-event,uafId,IE-planning-event
+IE-planning-event,uafKind,InformationElement
+IE-planning-event,registry.code,gungnir_model::PlanningEvent
+IE-planning-event,registry.domain,Events & the record
 IE-policy-settings,uafId,IE-policy-settings
 IE-policy-settings,uafKind,InformationElement
 IE-policy-settings,registry.code,gungnir_model::PolicySettings
@@ -1369,6 +1393,10 @@ IE-product-kind,uafId,IE-product-kind
 IE-product-kind,uafKind,InformationElement
 IE-product-kind,registry.code,gungnir_model::ProductKind
 IE-product-kind,registry.domain,Battle rhythm & mission records
+IE-rehearsal-basis,uafId,IE-rehearsal-basis
+IE-rehearsal-basis,uafKind,InformationElement
+IE-rehearsal-basis,registry.code,gungnir_model::RehearsalBasis
+IE-rehearsal-basis,registry.domain,Battle rhythm & mission records
 IE-rehearsal-event,uafId,IE-rehearsal-event
 IE-rehearsal-event,uafKind,InformationElement
 IE-rehearsal-event,registry.code,gungnir_model::RehearsalEvent
@@ -1377,6 +1405,10 @@ IE-rehearsal-origin,uafId,IE-rehearsal-origin
 IE-rehearsal-origin,uafKind,InformationElement
 IE-rehearsal-origin,registry.code,gungnir_model::RehearsalOrigin
 IE-rehearsal-origin,registry.domain,"Core identifiers, frames & quality"
+IE-rehearsal-stamp,uafId,IE-rehearsal-stamp
+IE-rehearsal-stamp,uafKind,InformationElement
+IE-rehearsal-stamp,registry.code,gungnir_model::RehearsalStamp
+IE-rehearsal-stamp,registry.domain,Battle rhythm & mission records
 IE-relative-cost,uafId,IE-relative-cost
 IE-relative-cost,uafKind,InformationElement
 IE-relative-cost,registry.code,gungnir_model::RelativeCost
@@ -1385,6 +1417,10 @@ IE-releasability,uafId,IE-releasability
 IE-releasability,uafKind,InformationElement
 IE-releasability,registry.code,gungnir_model::Releasability
 IE-releasability,registry.domain,"Assets, exchange & releasability"
+IE-reopened-because,uafId,IE-reopened-because
+IE-reopened-because,uafKind,InformationElement
+IE-reopened-because,registry.code,gungnir_model::ReopenedBecause
+IE-reopened-because,registry.domain,Battle rhythm & mission records
 IE-replay-event,uafId,IE-replay-event
 IE-replay-event,uafKind,InformationElement
 IE-replay-event,registry.code,gungnir_model::ReplayEvent
