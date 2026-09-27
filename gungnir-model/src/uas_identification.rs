@@ -67,7 +67,18 @@ pub struct UasIdentificationReport {
     pub source_time: MissionTime,
     pub receipt_time: MissionTime,
     /// I129/080: the UAS's own claimed WGS-84 position. Mandatory in every record.
+    ///
+    /// Its `alt_m` is what [`Self::altitude_reference`] says it is, and **only** a
+    /// [`UasAltitudeReference::GeoidCorrected`] one is the WGS-84 ellipsoidal height
+    /// every other `Geodetic` in the picture carries (GAP-196, D-123). I129/080 itself
+    /// holds latitude and longitude only; the height comes from I129/090.
     pub position: Geodetic,
+    /// What [`Self::position`]'s `alt_m` is measured from (GAP-196, D-123, D-124): the
+    /// datum is carried as data rather than only as a sentence in
+    /// [`Self::conversion_loss`], so a consumer -- the adapter that places the
+    /// detection, PN-03 and PN-04 -- can tell a corrected height from one that is still
+    /// above mean sea level without reading prose.
+    pub altitude_reference: UasAltitudeReference,
     /// I129/090, metres above mean sea level; negative is below MSL (edition 1.2
     /// §5.2.9's own note). Either this or [`Self::altitude_agl_m`] is mandatory per the
     /// specification's own encoding rule for the pair, but this build does not enforce
@@ -101,14 +112,144 @@ pub struct UasIdentificationReport {
     pub horizontal_velocity_enu_m_s: Option<[f64; 2]>,
     /// I129/220, metres/second; positive is climbing (edition 1.2 §5.2.14).
     pub vertical_velocity_m_s: Option<f64>,
-    /// Anything the mapping could not do faithfully, in words -- the same convention
-    /// `gungnir_interop::RadarServiceReport::conversion_loss` uses for a non-detection
-    /// ASTERIX report, and for the identical reason: I129/070's time of day needs the
-    /// same receipt-date fold `cat048::source_time` performs for every other category,
-    /// and [`Self::position`]'s altitude is approximated from whichever of I129/090 or
-    /// I129/100 the record carries (`gungnir_interop::asterix::cat129`'s module
-    /// documentation explains the approximation).
+    /// Anything the mapping could not do faithfully, in words, **apart from the
+    /// height** -- the same convention `gungnir_interop::RadarServiceReport::
+    /// conversion_loss` uses for a non-detection ASTERIX report: today that is I129/070's
+    /// time of day, which needs the same receipt-date fold `cat048::source_time`
+    /// performs for every other category.
+    ///
+    /// The height's own loss is not written here, because it is not settled when the
+    /// codec builds the report: the ingest adapter may correct it afterwards (D-123).
+    /// It is derived from [`Self::altitude_reference`] instead, and [`Self::losses`]
+    /// joins the two -- which is what a reader of the whole report wants.
     pub conversion_loss: Option<String>,
+}
+
+impl UasIdentificationReport {
+    /// Every loss the report carries, the height's included; what a detection's
+    /// `Provenance::conversion_loss` carries for this report (GAP-196). Never empty,
+    /// because even a corrected height states the residue it keeps
+    /// ([`UasAltitudeReference::loss`]).
+    #[must_use]
+    pub fn losses(&self) -> String {
+        let height = self.altitude_reference.loss();
+        match &self.conversion_loss {
+            Some(other) => format!("{other}; {height}"),
+            None => height,
+        }
+    }
+}
+
+/// The largest magnitude the EGM2008 geoid separation reaches anywhere on Earth, metres,
+/// rounded up to the centimetre: the pinned 2.5-arc-minute grid
+/// (`gungnir_data::geoid::EGM2008_GRID_FILE`) runs from -106.909 m to +85.824 m (GDAL
+/// 3.11.3's `gdalinfo -mm` over the whole pinned file, 2026-09-26; the record item
+/// `docs/record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`).
+///
+/// A height above mean sea level that no geoid model corrected is off the ellipsoid by
+/// the local separation, which is unknown without the grid and bounded by this; D-124
+/// widens such a detection's vertical variance by its square, so the tracker weighs a
+/// bias it cannot remove instead of trusting the number as if it were ellipsoidal.
+pub const EGM2008_MAX_ABS_SEPARATION_M: f64 = 106.91;
+
+/// What a Category 129 report's height is measured from (GAP-196; D-123 decides the
+/// correction, D-124 what happens without it).
+///
+/// Edition 1.2 of the specification, the latest EUROCONTROL publishes (checked
+/// 2026-09-26), defines I129/090 as "Altitude above Mean Sea Level (AMSL)" and names no
+/// geoid model and no source for it, and I129/080's WGS-84 position carries no height at
+/// all (`gungnir_interop::asterix::cat129`'s module documentation). So the only height a
+/// report states on an absolute scale is one above mean sea level, which is not the
+/// WGS-84 ellipsoidal height the picture reads.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UasAltitudeReference {
+    /// `position.alt_m` is I129/090 plus the geoid separation at the report's position:
+    /// a WGS-84 ellipsoidal height, as the picture reads every other one (D-123).
+    GeoidCorrected {
+        /// The model the separation came from, as it names itself (`"EGM2008"`).
+        model: String,
+        /// The separation N added, metres: I129/090 + N is the ellipsoidal height.
+        separation_m: f64,
+    },
+    /// `position.alt_m` is I129/090 **as sent**: a height above mean sea level, **not**
+    /// a WGS-84 ellipsoidal one, and off it by the local geoid separation, anywhere up
+    /// to [`EGM2008_MAX_ABS_SEPARATION_M`] (D-124). Never read as ellipsoidal: PN-03 and
+    /// PN-04 flag it, and the detection placed from it carries a vertical variance
+    /// widened by that bound.
+    MeanSeaLevelUncorrected {
+        /// Why no correction was applied, in words an operator reads: no geoid model on
+        /// this binary, the grid missing or refused, the position off the grid.
+        reason: String,
+    },
+    /// The record carries no I129/090, so there is no absolute height: `position.alt_m`
+    /// is set to 0 and is not a measurement. I129/100 (above ground level) cannot stand
+    /// in without a ground elevation model (GAP-199).
+    NoAbsoluteHeight,
+}
+
+impl UasAltitudeReference {
+    /// Whether `position.alt_m` is a WGS-84 ellipsoidal height.
+    #[must_use]
+    pub fn is_ellipsoidal(&self) -> bool {
+        matches!(self, UasAltitudeReference::GeoidCorrected { .. })
+    }
+
+    /// Whether `position.alt_m` is a height above mean sea level no model corrected.
+    #[must_use]
+    pub fn is_msl_uncorrected(&self) -> bool {
+        matches!(self, UasAltitudeReference::MeanSeaLevelUncorrected { .. })
+    }
+
+    /// What placing the height cost, in words. Even a corrected height states one:
+    /// edition 1.2 names no geoid, so a sender whose receiver reports mean sea level
+    /// over EGM96 or a coarser built-in model differs from EGM2008 by decimetres to
+    /// metres, and that residue is said rather than assumed away (D-123).
+    #[must_use]
+    pub fn loss(&self) -> String {
+        match self {
+            UasAltitudeReference::GeoidCorrected {
+                model,
+                separation_m,
+            } => format!(
+                "I129/090 (height above mean sea level) is placed on the WGS-84 \
+                 ellipsoid by adding the {model} geoid separation, {separation_m:.2} m, at \
+                 the report's position; edition 1.2 names no geoid, and a sender whose \
+                 mean sea level is EGM96 or a receiver's coarser model differs from \
+                 {model} by decimetres to metres"
+            ),
+            UasAltitudeReference::MeanSeaLevelUncorrected { reason } => format!(
+                "I129/090 is a height above mean sea level and is NOT corrected to the \
+                 WGS-84 ellipsoid ({reason}); it is off by the local geoid separation, up \
+                 to {EGM2008_MAX_ABS_SEPARATION_M} m, and is carried as mean sea level, \
+                 never as an ellipsoidal height"
+            ),
+            UasAltitudeReference::NoAbsoluteHeight => "neither I129/090 nor a usable \
+                 absolute altitude is present in this record; I129/100 (above ground \
+                 level) cannot substitute without a ground elevation model, so altitude is \
+                 set to 0"
+                .to_string(),
+        }
+    }
+
+    /// One short line for a panel: what the height is, with the reason when it is not
+    /// ellipsoidal.
+    #[must_use]
+    pub fn summary(&self) -> String {
+        match self {
+            UasAltitudeReference::GeoidCorrected {
+                model,
+                separation_m,
+            } => format!(
+                "WGS-84 ellipsoidal: mean sea level + {model} separation {separation_m:.2} m"
+            ),
+            UasAltitudeReference::MeanSeaLevelUncorrected { reason } => {
+                format!("above mean sea level, NOT corrected to the ellipsoid: {reason}")
+            }
+            UasAltitudeReference::NoAbsoluteHeight => {
+                "no absolute height reported (altitude set to 0, not a measurement)".to_string()
+            }
+        }
+    }
 }
 
 /// I129/120 Operational Risk Levels (edition 1.2 §5.2.12), decoded from the one octet
@@ -167,5 +308,34 @@ mod tests {
             ..risk
         };
         assert_eq!(risk.air_risk_category_label(), 4);
+    }
+
+    /// Each datum says what it is, and only a corrected height calls itself
+    /// ellipsoidal; an uncorrected one names its reason and never the word
+    /// "ellipsoidal" as a claim about itself (D-124).
+    #[test]
+    fn each_altitude_reference_says_what_the_height_is() {
+        let corrected = UasAltitudeReference::GeoidCorrected {
+            model: "EGM2008".into(),
+            separation_m: 34.92,
+        };
+        assert!(corrected.is_ellipsoidal() && !corrected.is_msl_uncorrected());
+        assert!(corrected
+            .loss()
+            .contains("EGM2008 geoid separation, 34.92 m"));
+        assert!(corrected.loss().contains("EGM96"), "the residue is stated");
+
+        let msl = UasAltitudeReference::MeanSeaLevelUncorrected {
+            reason: "no grid".into(),
+        };
+        assert!(!msl.is_ellipsoidal() && msl.is_msl_uncorrected());
+        assert!(msl.loss().contains("NOT corrected") && msl.loss().contains("no grid"));
+        assert!(msl
+            .summary()
+            .starts_with("above mean sea level, NOT corrected"));
+
+        let none = UasAltitudeReference::NoAbsoluteHeight;
+        assert!(!none.is_ellipsoidal() && !none.is_msl_uncorrected());
+        assert!(none.loss().contains("set to 0"));
     }
 }

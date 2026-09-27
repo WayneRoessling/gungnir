@@ -322,13 +322,26 @@ impl FeedReports {
             .iter()
             .map(|(name, sink)| {
                 let s = sink.lock().map(|s| *s).unwrap_or_default();
-                format!(
+                let mut line = format!(
                     "{name}: {} datagrams, {} detections, {} service reports, {} not decoded",
                     s.datagrams,
                     s.detections,
                     s.service_reports,
                     s.malformed_datagrams + s.not_detections
-                )
+                );
+                // GAP-196 (D-124): every Category 129 height this binary tracks is above
+                // mean sea level, uncorrected ([`NODE_HAS_NO_GEOID`]); the count is the
+                // loss, said where the feed's other losses are.
+                if s.uas_heights_msl_uncorrected > 0 {
+                    use std::fmt::Write as _;
+                    // Writing into a `String` cannot fail.
+                    let _ = write!(
+                        line,
+                        ", {} UAS heights above mean sea level, not corrected to the ellipsoid",
+                        s.uas_heights_msl_uncorrected
+                    );
+                }
+                line
             })
             .collect();
         lines.extend(self.peers.iter().map(|peer| {
@@ -438,6 +451,13 @@ fn build_gateway(
     (gateway, sinks, reports, sapient)
 }
 
+/// Why a Category 129 height stays above mean sea level on this binary (GAP-196,
+/// D-124): the EGM2008 grid is read through PROJ in `gungnir-data` behind its `crs`
+/// feature (D-121), and this binary has no edge to that crate (`ARCHITECTURE.md` §7.1)
+/// and links no libproj. GAP-198 is what would change it.
+const NODE_HAS_NO_GEOID: &str = "gungnir-node carries no geoid model: the EGM2008 grid is \
+     read through libproj in gungnir-data, which this binary does not link (GAP-198)";
+
 /// GAP-001, GAP-064: the ASTERIX feeds, each bound to its socket with the sinks this
 /// binary drains. Split out of [`build_gateway`] for the same reason `bind_adsb_feeds`
 /// and `bind_misb_feeds` already are -- attaching the Category 129 sink took that
@@ -461,7 +481,10 @@ fn bind_radar_feeds(
         return;
     };
     for spec in feed_specs(config) {
-        let feed_sinks = gungnir_ingest::adapters::asterix::FeedSinks::default();
+        let feed_sinks = gungnir_ingest::adapters::asterix::FeedSinks {
+            geoid: gungnir_ingest::geoid::GeoidHandle::unavailable(NODE_HAS_NO_GEOID),
+            ..gungnir_ingest::adapters::asterix::FeedSinks::default()
+        };
         match gungnir_ingest::adapters::asterix::bind_feed(&spec, &frame, &feed_sinks) {
             Ok(adapter) => {
                 tracing::info!(feed = %spec.name, addr = %spec.bind_addr, radars = spec.radars.len(), df_sites = spec.df_sites.len(), uas_sites = spec.uas_sites.len(), "radar feed bound");
@@ -2755,6 +2778,31 @@ mod tests {
             1,
             "a bound feed must hand its Category 129 reports somewhere this binary drains"
         );
+    }
+
+    /// GAP-196 (D-124): the node lends no geoid model, so a Category 129 height it
+    /// tracks stays above mean sea level; the health line counts such heights beside the
+    /// feed's other losses, and says nothing when there are none.
+    #[test]
+    fn the_health_line_counts_uas_heights_left_above_mean_sea_level() {
+        let stats = gungnir_ingest::adapters::asterix::FeedStatsSink::default();
+        let reports = FeedReports {
+            radar: vec![("uas".into(), stats.clone())],
+            peers: Vec::new(),
+            uas: Vec::new(),
+        };
+        assert!(
+            !reports.summary()[0].contains("mean sea level"),
+            "{:?}",
+            reports.summary()
+        );
+        stats.lock().expect("stats").uas_heights_msl_uncorrected = 3;
+        let line = &reports.summary()[0];
+        assert!(
+            line.contains("3 UAS heights above mean sea level, not corrected to the ellipsoid"),
+            "{line}"
+        );
+        assert!(NODE_HAS_NO_GEOID.contains("GAP-198"));
     }
 
     /// GAP-084: the two custody profiles DN-22 §5 assigns to the disconnected desktop are

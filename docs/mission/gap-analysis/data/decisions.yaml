@@ -2889,3 +2889,54 @@
     Rejected: keeping the file's height (the defect GAP-023 recorded); an ellipsoidal
     height as z (right at the origin only). See
     `../../record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`.
+- id: D-123
+  decision: What a Category 129 height above mean sea level is, and where it is corrected
+  question: >-
+    ASTERIX Category 129 states a UAS's height only above mean sea level (I129/090), and
+    the picture reads every height as WGS-84 ellipsoidal, so a UAS sits off by the local
+    geoid separation (GAP-196). Which geoid does the sender's "mean sea level" mean, may
+    the verified EGM2008 grid correct it, and where does the correction run, since
+    `gungnir-interop` and `gungnir-ingest` have no edge to `gungnir-data`, where the grid
+    is read through PROJ behind `crs`?
+  raised_in: "GAP-196; D-121; GAP-101"
+  decider: Owner
+  unblocks: GAP-196
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26: I129/090 is read as a height
+    above the EGM2008 geoid and placed on the ellipsoid by adding EGM2008's separation at
+    the report's position, in the ingest adapter, from a geoid model the host lends it.**
+    Edition 1.2, still the latest (checked 2026-09-26), names no geoid and no source for
+    the item, so no sender can be held to one; EGM2008 is the model this deployment
+    verifies, and the residue against an EGM96 or receiver-built-in "mean sea level" --
+    decimetres to metres -- is stated on every corrected report, against 35 m (up to
+    107 m) left in place. `gungnir-ingest` names a `GeoidSeparation` interface; the
+    desktop lends it the verified grid through one PROJ lookup thread
+    (`gungnir_data::geoid::UndulationService`), so no dependency edge is added. The
+    report carries the datum as data (`UasAltitudeReference`). Rejected: leaving the
+    loss recorded (a known, fixable 35 m error); refusing EGM2008 as D-121 refuses it for
+    a file stating EGM96, since here nothing is stated; correcting in the codec, which
+    reaches no grid; a per-feed geoid declaration, since no other grid ships (GAP-197).
+    See `../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`.
+- id: D-124
+  decision: What a Category 129 height no geoid model corrected does on the picture
+  question: >-
+    Where the grid is not available -- a build without `crs`, a grid missing or refused,
+    a position off the grid, and the node, which links no libproj -- what happens to a
+    UAS's height above mean sea level, and how is the loss shown and counted?
+  raised_in: "GAP-196; D-123"
+  decider: Owner
+  unblocks: GAP-196
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26: the height is kept as sent,
+    flagged as mean sea level with the reason, weighed as a bias, and counted.** The
+    report's `UasAltitudeReference::MeanSeaLevelUncorrected` names why; the detection's
+    provenance carries it, so the picture holds the flag and not only the report; the
+    up variance is widened by the square of EGM2008's largest separation anywhere,
+    106.91 m (the pinned grid's own extreme), because a 30 m sigma on a number up to
+    107 m off is the silent ellipsoidal reading this ends; PN-03 marks the track's U
+    "MSL", PN-04 says the height and why, and PN-09 and the node's health line count
+    such heights. Rejected: dropping the height or the report (loses a real track); a
+    zero separation; the baseline variance alone (the tracker would trust it as
+    ellipsoidal). See `../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`.

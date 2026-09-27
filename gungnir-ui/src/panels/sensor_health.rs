@@ -131,6 +131,12 @@ pub struct FeedLine<'a> {
     pub not_decoded: u64,
     /// Records from a radar no binding names; never attributed, never guessed.
     pub unknown_radar: u64,
+    /// ASTERIX Category 129 heights above mean sea level the EGM2008 grid put on the
+    /// WGS-84 ellipsoid (GAP-196).
+    pub uas_heights_geoid_corrected: u64,
+    /// ASTERIX Category 129 heights above mean sea level no geoid model corrected:
+    /// carried as mean sea level and flagged, never as ellipsoidal (GAP-196, D-124).
+    pub uas_heights_msl_uncorrected: u64,
 }
 
 /// One bound AIS feed's counters (GAP-010).
@@ -561,6 +567,7 @@ fn render_bearing_feeds(
 /// warning colour: it is the state a wrong multicast group or a quiet radar produces,
 /// and it looks like health until somebody reads the number.
 fn render_feeds(ui: &mut egui::Ui, palette: &theme::Palette, feeds: &[FeedLine<'_>]) {
+    use std::fmt::Write as _;
     if feeds.is_empty() {
         return;
     }
@@ -577,18 +584,33 @@ fn render_feeds(ui: &mut egui::Ui, palette: &theme::Palette, feeds: &[FeedLine<'
                 "{}: {} datagrams, {} detections, {} service reports",
                 f.name, f.datagrams, f.detections, f.service_reports
             );
-            let colour = if f.not_decoded > 0 || f.unknown_radar > 0 {
-                use std::fmt::Write as _;
+            if f.uas_heights_geoid_corrected > 0 {
                 // Writing into a `String` cannot fail.
+                let _ = write!(
+                    text,
+                    "; {} UAS heights corrected to the ellipsoid (EGM2008)",
+                    f.uas_heights_geoid_corrected
+                );
+            }
+            let mut colour = palette.healthy_color();
+            if f.not_decoded > 0 || f.unknown_radar > 0 {
                 let _ = write!(
                     text,
                     "; {} not decoded, {} from unknown radars",
                     f.not_decoded, f.unknown_radar
                 );
-                palette.warning_color
-            } else {
-                palette.healthy_color()
-            };
+                colour = palette.warning_color;
+            }
+            // GAP-196 (D-124): a height the picture holds above mean sea level rather
+            // than the ellipsoid is a loss, counted where the feed's other losses are.
+            if f.uas_heights_msl_uncorrected > 0 {
+                let _ = write!(
+                    text,
+                    "; {} UAS heights above mean sea level, not corrected to the ellipsoid",
+                    f.uas_heights_msl_uncorrected
+                );
+                colour = palette.warning_color;
+            }
             (text, colour)
         };
         ui.label(

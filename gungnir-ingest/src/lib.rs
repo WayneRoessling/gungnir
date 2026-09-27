@@ -12,6 +12,7 @@
 
 pub mod adapters;
 pub mod gateway;
+pub mod geoid;
 
 use gungnir_model::events::IngestEvent;
 use gungnir_model::MissionTime;

@@ -88,6 +88,9 @@ pub fn tick(state: &mut AppState) {
     // 1a'''. The EGM2008 geoid grid (GAP-108): checked off the render thread at start,
     //        before the terrain and the point-cloud pair below, which wait for it.
     crate::geoid::poll(state);
+    // GAP-196: and lent to every bound radar feed, so a UAS's height above mean sea
+    // level is corrected from the next report on, or stays flagged with the reason.
+    crate::geoid::lend_to_feeds(state);
 
     // 1b. The terrain, if one is loading (GAP-023): polled here so a slow file never
     //     stalls a frame, and refused by name if its frame is not the picture's.

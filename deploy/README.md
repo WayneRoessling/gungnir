@@ -133,6 +133,19 @@ Two notes on scope:
   that too.
 - **The node does not convert terrain or point clouds**, so a node image needs no grid.
 
+**A UAS's height above mean sea level uses the same grid (GAP-196, D-123, D-124).** An
+ASTERIX Category 129 report states its height only above mean sea level (I129/090). On
+a `crs` desktop with the grid verified, every bound radar feed adds the EGM2008
+separation at the report's position, so the UAS is placed at a WGS-84 ellipsoidal
+height like everything else. Without the grid, on a desktop built without `crs`, and on
+the node (which links no libproj; GAP-198), the height is kept as mean sea level and
+flagged, never passed off as ellipsoidal:
+
+- PN-03 marks the track's U "MSL", and PN-04 says why the height is uncorrected;
+- the detection's provenance says so, and its vertical variance is widened by the square
+  of EGM2008's largest separation, 106.91 m;
+- PN-09's radar-feed line, and the node's health line, count such heights.
+
 A DEM whose `GeoTIFF` keys state no vertical system, which is most of them, needs
 `terrain.vertical` declared: `"ellipsoidal"` or `"epsg:3855"`. A point-cloud pair whose
 WKT names no `VERT_CS` needs `point_cloud.vertical`. Where the file does state one, a

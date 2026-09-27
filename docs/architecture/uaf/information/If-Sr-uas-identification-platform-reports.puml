@@ -8,6 +8,7 @@ class "UasIdentificationReport" as UasIdentificationReport <<InformationElement>
   source_time: MissionTime
   receipt_time: MissionTime
   position: Geodetic
+  altitude_reference: UasAltitudeReference
   altitude_amsl_m: Option<f64>
   altitude_agl_m: Option<f64>
   gnss_signal_accuracy_m: Option<f64>
@@ -19,6 +20,11 @@ class "UasIdentificationReport" as UasIdentificationReport <<InformationElement>
   horizontal_velocity_enu_m_s: Option<[f64; 2]>
   vertical_velocity_m_s: Option<f64>
   conversion_loss: Option<String>
+}
+enum "UasAltitudeReference" as UasAltitudeReference <<InformationElement>> {
+  GeoidCorrected { model: String, separation_m: f64, }
+  MeanSeaLevelUncorrected { reason: String, }
+  NoAbsoluteHeight
 }
 class "OperationalRisk" as OperationalRisk <<InformationElement>> {
   certification_category: UasCertificationCategory
@@ -61,6 +67,7 @@ class "SensorId\n(see If-Sr-picture-tracking-vocabulary)" as SensorId <<External
 UasIdentificationReport --> MissionTime : source_time, receipt_time
 UasIdentificationReport --> OperationalRisk : operational_risk
 UasIdentificationReport --> SensorId : sensor
+UasIdentificationReport --> UasAltitudeReference : altitude_reference
 OperationalRisk --> UasCertificationCategory : certification_category
 UasPlatformReport --> EnuPoint : platform_position, frame_center
 UasPlatformReport --> MissionTime : source_time, receipt_time

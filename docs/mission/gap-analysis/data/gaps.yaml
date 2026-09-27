@@ -11151,6 +11151,18 @@
       vertical datum. Not built there: GAP-108 is the DEM and point-cloud conversion, and
       this is a live track's altitude on the ingest path, where which geoid the sender
       meant is itself the open question.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Closed 2026-09-26, under the owner's delegation (D-123, D-124).** I129/090 is
+      read as an EGM2008 height (edition 1.2, still the latest, names no geoid): the
+      ASTERIX adapter adds the separation from a `GeoidSeparation` the desktop lends its
+      feeds once the grid verifies, with no new edge. Without the grid -- no `crs`,
+      missing, refused, off the grid, or the node (GAP-198) -- the height stays mean sea
+      level, flagged on the report and the detection, its up variance widened by 106.91 m
+      squared, marked on PN-03 and PN-04, and counted. The adapter's Category 129 arm is
+      the `gungnir-ingest` gateway: human-owned; see docs/signatures.md. See
+      `../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`.
 - id: GAP-197
   name: A DEM or point cloud in NAVD88, EGM96 or a national height datum cannot be placed
   type: Technical
@@ -11189,3 +11201,71 @@
       name, which ends the silent mix; this is what that refusal costs a user with
       ordinary US or SRTM-derived data, recorded so it is a row in the register rather
       than a sentence in a decision.
+- id: GAP-198
+  name: The node places a UAS's height above mean sea level uncorrected
+  type: Technical
+  caps: [CAP-1.7]
+  layer: "Productization: sensing and time"
+  sev: 3
+  effort: M
+  target: I4
+  owner: Services engineer
+  deps: [D-121, D-124, GAP-196]
+  impact: >-
+    `gungnir-node` binds the same ASTERIX Category 129 feeds as the desktop and tracks
+    every UAS it hears, but carries no geoid model, so each UAS's height stays above mean
+    sea level -- flagged, counted on the health line and weighed with a widened vertical
+    variance (D-124), but off the ellipsoid by the local separation, about 35 m over the
+    Baltic. A picture a node serves to its clients carries those heights.
+  evidence: >-
+    `gungnir-node/src/main.rs` (`NODE_HAS_NO_GEOID`, the reason every node feed holds);
+    `gungnir-node/Cargo.toml` (no edge to `gungnir-data`, no `crs`)
+  action: >-
+    Decide whether the node carries the EGM2008 grid: an edge `gungnir-node` to
+    `gungnir-data` with `crs`, which links libproj and libtiff into the node image and
+    needs the grid installed beside it, verified the same way; or a geoid lookup the
+    node reaches without PROJ, which D-121 rejected for the desktop.
+  ref: >-
+    Found closing GAP-196 (`../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Filed closing GAP-196. The node's feeds hold a named reason and every such height
+      is flagged and counted there, so nothing is silent; what is missing is the
+      correction itself, which needs a dependency edge and a native library the node
+      image does not carry today.
+- id: GAP-199
+  name: A UAS reporting only its height above ground is placed at height zero
+  type: Technical
+  caps: [CAP-1.7]
+  layer: "Productization: sensing and time"
+  sev: 3
+  effort: M
+  target: I4
+  owner: Services engineer
+  deps: [GAP-101, GAP-196]
+  impact: >-
+    A Category 129 record may carry I129/100 (height above ground level) without
+    I129/090. With no ground elevation model on the ingest path the codec sets the
+    height to 0 and records the loss, and the detection keeps the baseline 30 m vertical
+    sigma, so the tracker weighs a height that may be hundreds of metres wrong as if it
+    were measured.
+  evidence: >-
+    `gungnir_model::UasAltitudeReference::NoAbsoluteHeight`;
+    `gungnir-ingest/src/adapters/asterix.rs` (`uas_position_variance` keeps the
+    baseline for it)
+  action: >-
+    Decide whether an above-ground height is placed on the deployment's DEM where one is
+    loaded (terrain height plus AGL, with the DEM's own datum handled as GAP-108 does),
+    and otherwise carried with a vertical variance that says the height is unknown, or
+    whether such a detection should carry no vertical information at all.
+  ref: >-
+    Found closing GAP-196 (`../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Filed closing GAP-196, which settled the mean-sea-level height and left this one
+      as it was: the report says the height is 0 and not a measurement, and PN-04 says
+      so, but the detection's variance does not.

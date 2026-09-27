@@ -282,11 +282,14 @@ jobs:
           cargo test -p gungnir-data --features crs --lib 2>&1 | tee dem-unit.log
           cargo test -p gungnir-app --features crs --test terrain 2>&1 | tee dem-app.log
       # GAP-108: the EGM2008 geoid through PROJ, on the committed clip of the pinned grid,
-      # against the independent pyproj values the tests carry.
+      # against the independent pyproj values the tests carry. GAP-196: and a UAS's
+      # height above mean sea level (ASTERIX Category 129) corrected with it through the
+      # desktop's own feed wiring, and refused off the clip.
       - name: geoid -- the EGM2008 grid through PROJ, on the committed clip
         run: |
           set -o pipefail
           cargo test -p gungnir-data --features crs --test geoid 2>&1 | tee geoid.log
+          cargo test -p gungnir-app --features crs --test uas_identification 2>&1 | tee -a geoid.log
       # The full pinned grid: restored from the cache under its own digest, fetched from
       # PROJ's CDN only on a miss, and checked against deploy/geoid/SHA256SUMS either way,
       # so a changed or truncated file stops the job before any test reads it.

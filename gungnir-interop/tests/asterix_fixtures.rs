@@ -513,11 +513,17 @@ fn category_129_fixture_maps_to_a_uas_identification_report() {
     assert!((rep.position.lat_rad.to_degrees() - 10.0).abs() < 0.001);
     assert!((rep.position.lon_rad.to_degrees() + 20.0).abs() < 0.001);
     assert!((rep.position.alt_m - 500.0).abs() < 1e-9);
+    // GAP-196: the codec places I129/090 as sent and says, as data, that it is a height
+    // above mean sea level no geoid corrected -- never an ellipsoidal one.
     assert!(
-        rep.conversion_loss
-            .as_deref()
-            .is_some_and(|s| s.contains("geoid")),
-        "the AMSL-as-ellipsoidal approximation is recorded, not silently assumed exact"
+        rep.altitude_reference.is_msl_uncorrected(),
+        "{:?}",
+        rep.altitude_reference
+    );
+    assert!(
+        rep.losses()
+            .contains("NOT corrected to the WGS-84 ellipsoid"),
+        "the mean-sea-level height is recorded, not silently assumed ellipsoidal"
     );
 }
 

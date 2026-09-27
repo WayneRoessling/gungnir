@@ -101,7 +101,7 @@ pub fn feed_specs(config: &ConfigBaseline) -> Vec<FeedSpec> {
 }
 
 /// What the desktop keeps of its bound feeds (GAP-001, GAP-064).
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct BoundFeeds {
     pub observations: Vec<ServiceObservationSink>,
     /// Each feed by name with its counters, for PN-09.
@@ -109,6 +109,20 @@ pub struct BoundFeeds {
     /// The Category 129 UAS identification reports each feed decoded, drained by
     /// [`crate::uas::tick`] (GAP-101).
     pub uas_reports: Vec<UasIdentificationSink>,
+    /// The geoid model every feed bound here holds (GAP-196), one handle cloned into
+    /// each: unavailable until [`crate::geoid::lend_to_feeds`] lends the verified grid.
+    pub geoid: gungnir_ingest::geoid::GeoidHandle,
+}
+
+impl Default for BoundFeeds {
+    fn default() -> Self {
+        BoundFeeds {
+            observations: Vec::new(),
+            stats: Vec::new(),
+            uas_reports: Vec::new(),
+            geoid: gungnir_ingest::geoid::GeoidHandle::unavailable(crate::geoid::NOT_YET_CHECKED),
+        }
+    }
 }
 
 /// Bind every configured feed into the gateway. A feed that cannot be bound is an alert,
@@ -137,7 +151,10 @@ pub fn bind_feeds(
         return sinks;
     };
     for spec in feed_specs(config) {
-        let feed_sinks = FeedSinks::default();
+        let feed_sinks = FeedSinks {
+            geoid: sinks.geoid.clone(),
+            ..FeedSinks::default()
+        };
         match bind_feed(&spec, &frame, &feed_sinks) {
             Ok(adapter) => {
                 // GAP-101: attached here at the call site rather than through
@@ -177,6 +194,8 @@ pub fn feed_lines(state: &AppState) -> Vec<gungnir_ui::panels::sensor_health::Fe
                     + s.malformed_blocks
                     + s.unsupported_category_blocks,
                 unknown_radar: s.unknown_radar,
+                uas_heights_geoid_corrected: s.uas_heights_geoid_corrected,
+                uas_heights_msl_uncorrected: s.uas_heights_msl_uncorrected,
             }
         })
         .collect()

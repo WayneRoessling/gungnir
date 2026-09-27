@@ -811,12 +811,15 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
 }
 
 fn render_track_table(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
+    // GAP-196: the tracks whose last UAS report's height is still above mean sea level.
+    let msl_heights = crate::uas::msl_height_tracks(state);
     let view = TrackTableView {
         tracks: state.tracking.tracks(),
         now: state.clock.now(),
         assignments: state.last_plan.kind.solutions(),
         scores: Err(ASSESSMENT),
         selected: state.selected_track(),
+        msl_heights: &msl_heights,
         vocabulary: &state.config.vocabulary,
     };
     gungnir_ui::panels::track_table::render_track_table(ui, &state.palette, &view)
@@ -1504,6 +1507,16 @@ fn render_track_detail(ui: &mut egui::Ui, state: &AppState) {
         egui::RichText::new(crate::cooperative::decision_sentence(state, id))
             .color(state.palette.muted_text_color()),
     );
+    // GAP-196 (D-124): what the last UAS report's height is measured from; a height
+    // still above mean sea level is said in the warning colour, with why.
+    if let Some((line, ellipsoidal)) = crate::uas::height_line(state, id) {
+        let colour = if ellipsoidal {
+            state.palette.muted_text_color()
+        } else {
+            state.palette.warning_color
+        };
+        ui.label(egui::RichText::new(line).color(colour));
+    }
     // GAP-019: the lineage the resolver holds for this track, across sessions.
     let lineage_owned = crate::identity::lineage_lines(state, id);
     let lineage_lines: Vec<gungnir_ui::panels::track_detail::LineageLine> = lineage_owned
