@@ -182,8 +182,8 @@ history, and an entry is never edited once it has merged.
 | GAP-168 | The intercept-service row's degradation clause stops at the last good plan | Technical | CAP-3.3, CAP-5.5 | 1 | 8 | S | 8 | I3 | Owner | Closed |
 | GAP-169 | An older desktop reads a newer node's interim plan as the optimum | Technical | CAP-3.3, CAP-7.3 | 2 | 5 | S | 10 | I3 | Owner | Closed |
 | GAP-170 | PN-09's refusal test left its wait before the desktop had seen its link | Technical | CAP-7.3 | 1 | 1 | S | 1 | I3 | Services engineer | Closed |
-| GAP-179 | A node's audit record and its verification reach only the node's log | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
-| GAP-176 | A warning posted to a warned party and a handoff posted to an effector still write a non-finite float as null | Technical | CAP-4.4, CAP-4.5 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
+| GAP-179 | A node's audit record and its verification reach only the node's log | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Closed |
+| GAP-176 | A warning posted to a warned party and a handoff posted to an effector still write a non-finite float as null | Technical | CAP-4.4, CAP-4.5 | 3 | 5 | S | 15 | I3 | Services engineer | Closed |
 | GAP-182 | A rehearsal decides under a default policy, not the deployment's | Technical | CAP-5.2, CAP-3.6 | 3 | 7 | S | 21 | I3 | Services engineer | Closed |
 | GAP-183 | The planner tasks resources on a layer at hold, so one held layer refuses every plan | Technical | CAP-3.3, CAP-3.6 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
 | GAP-184 | A rehearsal tracks under the default algorithm baseline, not the deployment's | Technical | CAP-5.2, CAP-2.1 | 2 | 8 | S | 16 | I3 | Services engineer | Closed |
@@ -2602,11 +2602,12 @@ Counts: 178 gaps, 3 mission, 175 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.3 Audit.
 - History:
   - 2026-09-26, Open: Found building GAP-163. Not built there: serving the audit record is a new read path on `gungnir-api` and an authority question §4 does not yet answer, which are changes of their own.
+  - 2026-09-26, Closed: Closed as the owner decided (D-116): `audit.read` for the administrator and the commander, its §4 row first; `GET /v3/audit` serves the node's verification and paged segments, each read and refusal one entry on the node's record; a linked desktop's PN-20 shows them beside its own, read when a person asks, and says when the role lacks the action or the node is unreachable (DN-23 §15). Tests: `gungnir-app/tests/node_audit_on_pn20.rs` over mutual TLS, and `gungnir-node/tests/node_audit_record.rs`. Human-owned (`gungnir-security` and the `gungnir-api` route); see `docs/signatures.md`. See `../../record/2026-09-26/a-figure-the-endpoint-cannot-be-given-and.md`.
 - Evidence: `gungnir-node/src/audit_record.rs` (module documentation); `gungnir-api/src/transport.rs` serves no audit route; `../../design/DN-23-operator-authentication.md` §14.
 - Severity: 2. Reach: 9 threads. Effort: M. Priority: 18.
 - Impact: A node verifies its audit record at start and says what is wrong in its log and on every health line, but no route serves the record or that verification, so the security officer at a linked desktop -- whose layout is PN-20 and the health panel -- sees the desktop's record only. A node whose audit segment was cut is told about in a log file a watch floor may never read.
 - Closing action: Decide how a node's audit record reaches PN-20: a read route gated on a permission the security officer holds (a change to `../roles-and-stakeholders.md` §4 first), and the node's last verification carried beside its health, then draw both on PN-20 as the desktop's own are drawn.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: Found building GAP-163 (`../../record/2026-09-26/the-audit-log-s-head-held-by-the.md`).
 - Depends on: GAP-163.
 
@@ -2616,11 +2617,12 @@ Counts: 178 gaps, 3 mission, 175 technical; 1 already covered by a plan in `../.
 - Capability: CAP-4.4 Handoff with provenance; CAP-4.5 Warn assets and authorities.
 - History:
   - 2026-09-26, Open: Found closing GAP-171. Not widened into it: each payload's format belongs to its own contract, which the owner's GAP-171 decision did not name, and no live producer puts a non-finite value in either today.
+  - 2026-09-26, Closed: Closed under the owner's delegation (D-115). A warning posted to a warned party and a handoff posted to an effector carry each non-finite float as DN-18 §15's `{"unavailable": ...}` object, built by `gungnir_eventing::nonfinite::to_partner_value`; an all-finite body is byte for byte what it was, and nothing is withheld for a figure in it (DN-03 §12, DN-07 §9). Tested against a real endpoint in `gungnir-app/tests/endpoint_delivery.rs`. The handoff delivery is the decision path (`gungnir-approval`, D-65), so that half is human-owned; see `docs/signatures.md`. See `../../record/2026-09-26/a-figure-the-endpoint-cannot-be-given-and.md`.
 - Evidence: `gungnir-app/src/warnings.rs` (`EndpointDelivery::deliver`) and `gungnir-approval/src/handoffs.rs` (the handoff payload), each `serde_json::to_value(...).unwrap_or(serde_json::Value::Null)`.
 - Severity: 3. Reach: 5 threads. Effort: S. Priority: 15.
 - Impact: GAP-171 stopped a partner-bound exchange body blanking a NaN or an infinity. The two posts to an outside endpoint are built the same way and were not in its scope: the launch or threat warning a desktop posts to a warned party's endpoint, and the handoff a desktop or a node posts to an effector, are each `serde_json::to_value` of the record, so a non-finite figure in either reaches the receiver as `null`, silently, indistinguishable from an absent one.
 - Closing action: Decide whether an endpoint's payload takes DN-18 §15's "value unavailable" object, as exchange does, and say so in the effector and warning contracts (DN-07, DN-03); then build it with `gungnir_eventing::nonfinite::to_partner_value` and test a non-finite figure reaching a real endpoint.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found closing GAP-171 (`../../record/2026-09-26/an-identity-written-as-text-and-no-float.md`).
 - Depends on: GAP-171.
 

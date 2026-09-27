@@ -18,6 +18,15 @@
 //! segment opened read only. Nothing here changes a segment: the only act is verifying,
 //! which reads.
 //!
+//! # The node's audit record (GAP-179, D-116)
+//!
+//! On a desktop linked to a node, the node's record beside this desktop's own, read only:
+//! the node's verification against its journal's heads, its segments, and a page of any
+//! one of them. **Read when a person asks, never polled**, because every read is an entry
+//! on the node's record. Said plainly when the signed-in role does not hold `audit.read`,
+//! when nothing has been read yet, and when the node could not be reached -- in which case
+//! whatever an earlier read showed stays, labelled with when it was read.
+//!
 //! The passphrase field is masked and is cleared by the caller on submit; the panel holds
 //! it only in the draft the caller owns.
 //!
@@ -83,6 +92,45 @@ pub struct AuditView<'a> {
     /// the journal holds, each segment's state, and an earlier segment read back
     /// (GAP-163, GAP-152).
     pub record: AuditRecordView<'a>,
+    /// The node's audit record, on a desktop linked to one (GAP-179, D-116); `None` on a
+    /// desktop that has no node, which has no second record to show.
+    pub node: Option<NodeAuditRecordView<'a>>,
+}
+
+/// The node's audit record as a linked desktop's PN-20 draws it (GAP-179, D-116).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NodeAuditRecordView<'a> {
+    /// Which node, in words.
+    pub node: &'a str,
+    /// Where the read stands, in one sentence: the node's verification with when it ran
+    /// and when it was read, or why nothing is shown.
+    pub summary: &'a str,
+    /// Whether the node's record verified. Anything else is drawn in the warning colour.
+    pub sound: bool,
+    /// A second sentence when there is one: why the last read failed, or that what is
+    /// shown is an earlier read.
+    pub note: &'a str,
+    /// Whether the signed-in role may read it here: `audit.read`, and a session the link
+    /// signed in with.
+    pub can_read: bool,
+    /// A read is on its way.
+    pub reading: bool,
+    /// Each problem the node's verification found, naming its file.
+    pub problems: &'a [String],
+    pub segments: &'a [RecordSegmentLine<'a>],
+    pub shown: Option<NodeShownPage<'a>>,
+}
+
+/// A page of one of the node's segments, read only.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NodeShownPage<'a> {
+    pub segment: &'a str,
+    pub lines: &'a [AuditLine<'a>],
+    /// Which entries these are of how many, and the segment's chain as read.
+    pub note: &'a str,
+    pub sound: bool,
+    pub has_older: bool,
+    pub has_newer: bool,
 }
 
 /// One segment of the audit record as PN-20 lists it (GAP-152, D-106).
@@ -179,6 +227,20 @@ pub enum SessionAction {
     ShowAuditSegment(usize),
     /// Stop showing it.
     HideAuditSegment,
+    /// Read the node's audit record: its last verification and its segments (GAP-179,
+    /// D-116). One entry on the node's record.
+    ReadNodeAuditRecord,
+    /// Ask the node to verify its record again, and read it.
+    VerifyNodeAuditRecord,
+    /// Read the newest page of the node's segment at this position in
+    /// [`NodeAuditRecordView::segments`].
+    ShowNodeAuditSegment(usize),
+    /// The page before (`older`) or after the one shown.
+    PageNodeAuditSegment {
+        older: bool,
+    },
+    /// Stop showing the node's segment.
+    HideNodeAuditSegment,
 }
 
 /// PN-20's audit-record section: the verification, every segment with its state, and an
@@ -252,6 +314,112 @@ fn draw_record(
             .striped(true)
             .show(ui, |ui| {
                 for line in shown.lines.iter().rev().take(SHOWN_ENTRIES_LIMIT) {
+                    draw_audit_line(ui, line);
+                }
+            });
+    }
+    action
+}
+
+/// The node's audit record, on a linked desktop (GAP-179, D-116): read only, and read only
+/// when a person asks.
+fn draw_node_record(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    node: &NodeAuditRecordView<'_>,
+) -> Option<SessionAction> {
+    let mut action = None;
+    ui.separator();
+    ui.strong(format!("The node's audit record ({})", node.node));
+    let colour = if node.sound {
+        palette.muted_text_color()
+    } else {
+        palette.warning_color
+    };
+    ui.label(RichText::new(node.summary).color(colour));
+    if !node.note.is_empty() {
+        ui.label(
+            RichText::new(node.note)
+                .small()
+                .color(palette.warning_color),
+        );
+    }
+    for problem in node.problems {
+        ui.label(RichText::new(problem.as_str()).color(palette.warning_color));
+    }
+    ui.horizontal(|ui| {
+        let ready = node.can_read && !node.reading;
+        if ui
+            .add_enabled(ready, egui::Button::new("Read the node's record"))
+            .clicked()
+        {
+            action = Some(SessionAction::ReadNodeAuditRecord);
+        }
+        if ui
+            .add_enabled(ready, egui::Button::new("Verify the node's record now"))
+            .clicked()
+        {
+            action = Some(SessionAction::VerifyNodeAuditRecord);
+        }
+    });
+    ui.label(
+        RichText::new("Each read is recorded on the node's own audit record.")
+            .small()
+            .color(palette.muted_text_color()),
+    );
+    for (index, segment) in node.segments.iter().enumerate() {
+        ui.horizontal(|ui| {
+            let text = RichText::new(segment.description);
+            ui.label(if segment.sound {
+                text
+            } else {
+                text.color(palette.warning_color)
+            });
+            if segment.readable
+                && ui
+                    .add_enabled(
+                        node.can_read && !node.reading,
+                        egui::Button::new("Show").small(),
+                    )
+                    .clicked()
+            {
+                action = Some(SessionAction::ShowNodeAuditSegment(index));
+            }
+        });
+    }
+    if let Some(shown) = &node.shown {
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.strong(format!("{} on the node (read only)", shown.segment));
+            let ready = node.can_read && !node.reading;
+            if shown.has_older
+                && ui
+                    .add_enabled(ready, egui::Button::new("Older").small())
+                    .clicked()
+            {
+                action = Some(SessionAction::PageNodeAuditSegment { older: true });
+            }
+            if shown.has_newer
+                && ui
+                    .add_enabled(ready, egui::Button::new("Newer").small())
+                    .clicked()
+            {
+                action = Some(SessionAction::PageNodeAuditSegment { older: false });
+            }
+            if ui.small_button("Close").clicked() {
+                action = Some(SessionAction::HideNodeAuditSegment);
+            }
+        });
+        let colour = if shown.sound {
+            palette.muted_text_color()
+        } else {
+            palette.warning_color
+        };
+        ui.label(RichText::new(shown.note).small().color(colour));
+        egui::Grid::new("node_audit_record_segment")
+            .striped(true)
+            .show(ui, |ui| {
+                for line in shown.lines.iter().rev() {
                     draw_audit_line(ui, line);
                 }
             });
@@ -537,6 +705,11 @@ pub fn render_audit(
 
     if let Some(a) = draw_record(ui, palette, &view.record) {
         action = Some(a);
+    }
+    if let Some(node) = &view.node {
+        if let Some(a) = draw_node_record(ui, palette, node) {
+            action = Some(a);
+        }
     }
 
     ui.separator();

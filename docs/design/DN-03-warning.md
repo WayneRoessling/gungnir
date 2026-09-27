@@ -198,8 +198,40 @@ acknowledge.
 Widening it to a supervisor or an operator keying in a radio acknowledgement wants a row
 in `../mission/roles-and-stakeholders.md` §4 first.
 
+## 12. Amendment 4: a figure the warning cannot give (2026-09-26, D-115)
+
+§6 says a warning is posted to the endpoint its obligation names, and never said what the
+body was. It was `serde_json::to_value` of the `Warning` (asset, track, `due_by`, channel,
+state, history), and `to_value` writes a NaN or an infinity as `null` without an error: a
+due time taken from a diverged prediction, or a transition stamped by a clock that failed,
+reached the warned party blank and could not be told from an absent value (GAP-176).
+
+**The body, stated.** The `Warning` record as JSON, exactly as before when every figure is
+finite, byte for byte. **Wherever it has a number, a warned party may meet DN-18 §15's
+object instead:**
+
+```json
+{ "unavailable": "nan" }
+{ "unavailable": "+inf" }
+{ "unavailable": "-inf" }
+```
+
+`null` keeps the one meaning it had, an absent optional, of which a warning has none. It is
+built by `gungnir_eventing::nonfinite::to_partner_value`, the one implementation the
+exchange bodies use (D-103), in `gungnir_app::warnings::endpoint_payload`.
+
+**A warning is never withheld for a figure in it.** A warning with one field marked
+unavailable still warns; one that does not go out leaves the party unwarned, which §5
+calls worse than none. A body `serde_json` refuses for another reason -- a map whose keys
+are not strings, which a warning does not have -- makes the warning `Failed` with the
+reason and "warn by voice", where posting `null` used to claim it was sent.
+
+Verification row (§8) unchanged in criterion; `gungnir-app/tests/endpoint_delivery.rs`
+posts a warning carrying a NaN and both infinities to a real endpoint and reads the three
+objects back, and checks an all-finite warning is the bytes `to_value` gave.
+
 ## Traceability
 
-GAP-042; CAP-4.5; D-08 for endpoints; depends on DN-01 for obligations and DN-02 for
-predictions; `../ux/wireframes/WF-08-alerts-incidents.puml`; principles AP-01, AP-02,
+GAP-042, GAP-176; CAP-4.5; D-08 for endpoints, D-115 for the body; depends on DN-01 for
+obligations and DN-02 for predictions; `../ux/wireframes/WF-08-alerts-incidents.puml`; principles AP-01, AP-02,
 AP-03.

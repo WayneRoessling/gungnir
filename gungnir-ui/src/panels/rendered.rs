@@ -374,6 +374,7 @@ fn the_handoff_record_draws_whole_identifiers_with_copy_controls() {
         can_sign_in: true,
         can_assign_roles: true,
         record: crate::panels::audit::AuditRecordView::NOT_VERIFIED,
+        node: None,
     };
     let probe = RenderProbe::new();
     let mut draft = SignInDraft::default();
@@ -3123,6 +3124,7 @@ fn the_audit_panel_tells_the_three_reasons_apart() {
             can_sign_in: true,
             can_assign_roles: true,
             record: crate::panels::audit::AuditRecordView::NOT_VERIFIED,
+            node: None,
         };
         let (_, frame) =
             probe.draw(|ui| render_audit(ui, &theme::Palette::day(), &view, &mut draft));
@@ -3194,6 +3196,7 @@ fn the_audit_panel_draws_what_was_handed_off_and_what_came_back() {
         can_sign_in: true,
         can_assign_roles: true,
         record: crate::panels::audit::AuditRecordView::NOT_VERIFIED,
+        node: None,
     };
     let probe = RenderProbe::new();
     let mut draft = SignInDraft::default();
@@ -3261,6 +3264,7 @@ fn the_audit_panel_says_why_nothing_has_reported_back() {
         can_sign_in: true,
         can_assign_roles: true,
         record: crate::panels::audit::AuditRecordView::NOT_VERIFIED,
+        node: None,
     };
     let probe = RenderProbe::new();
     let mut draft = SignInDraft::default();
@@ -4081,8 +4085,12 @@ fn planning_with_no_laydowns_declared_says_so() {
 
 /// **PN-20 says the audit record is damaged, naming the file, and never mutes it**
 /// (GAP-163, D-104), and lists every segment with its state and an earlier one read back
-/// (GAP-152, D-106).
+/// (GAP-152, D-106). Since GAP-179 (D-116) it draws the node's record beside this
+/// desktop's, on a desktop linked to one.
 #[test]
+// One PN-20 drawn whole: both records have to be on the same frame to show they sit side
+// by side, and splitting the view's construction would split the frame.
+#[allow(clippy::too_many_lines)]
 fn the_audit_panel_names_a_cut_segment_and_shows_an_earlier_run() {
     use crate::panels::audit::{
         render_audit, AuditRecordView, AuditView, RecordSegmentLine, SessionLine, ShownSegment,
@@ -4113,6 +4121,29 @@ fn the_audit_panel_names_a_cut_segment_and_shows_an_earlier_run() {
         detail: "signed in as Supervisor",
         operator: Some(7),
     }];
+    let node_problems = vec![
+        "audit-000003.jsonl was cut: the journal holds its head at entry 11 and 9 remain, \
+         so 2 entries are missing"
+            .to_owned(),
+    ];
+    let node_segments = [
+        RecordSegmentLine {
+            description: "audit-000003.jsonl: 9 entries, CUT: 2 entries missing",
+            sound: false,
+            readable: true,
+        },
+        RecordSegmentLine {
+            description: "audit-000004.jsonl: 1 entries, this run's, anchored as it is written",
+            sound: true,
+            readable: true,
+        },
+    ];
+    let node_lines = [AuditLine {
+        action: "audit.read",
+        mission_time_s: 9,
+        detail: "read the audit record's verification and segment list as Administrator",
+        operator: Some(25),
+    }];
     let view = AuditView {
         session: SessionLine::NobodySignedIn,
         accounts: Ok(&[]),
@@ -4134,6 +4165,26 @@ fn the_audit_panel_names_a_cut_segment_and_shows_an_earlier_run() {
             }),
             retention: "Audit segments are never purged: the baseline declares no retention.",
         },
+        // GAP-179, D-116: the node's record beside this desktop's own.
+        node: Some(crate::panels::audit::NodeAuditRecordView {
+            node: "https://node.example:8443",
+            summary: "The node's audit record is DAMAGED (verified at start at node T+4 s, \
+                      read at T+9 s): 1 problem(s) across 2 segment(s).",
+            sound: false,
+            note: "",
+            can_read: true,
+            reading: false,
+            problems: &node_problems,
+            segments: &node_segments,
+            shown: Some(crate::panels::audit::NodeShownPage {
+                segment: "audit-000004.jsonl",
+                lines: &node_lines,
+                note: "Entries 1 to 1 of 1. Its chain verified as it was read.",
+                sound: true,
+                has_older: false,
+                has_newer: false,
+            }),
+        }),
     };
     let probe = RenderProbe::new();
     let mut draft = SignInDraft::default();
@@ -4148,6 +4199,13 @@ fn the_audit_panel_names_a_cut_segment_and_shows_an_earlier_run() {
         "audit-000001.jsonl (read only)",
         "signed in as Supervisor",
         "never purged",
+        "The node's audit record (https://node.example:8443)",
+        "audit-000003.jsonl: 9 entries, CUT: 2 entries missing",
+        "Read the node's record",
+        "Verify the node's record now",
+        "Each read is recorded on the node's own audit record.",
+        "audit-000004.jsonl on the node (read only)",
+        "read the audit record's verification and segment list",
     ] {
         assert!(
             frame.says(said),

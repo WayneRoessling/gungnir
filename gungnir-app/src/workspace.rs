@@ -1374,7 +1374,20 @@ pub fn render_audit(
     let segments = crate::audit_record::segment_lines(&text);
     let shown = crate::audit_record::shown_lines(state);
     let record = crate::audit_record::record_view(state, &text, &segments, &shown);
-    let view = crate::session::audit_view(state, &accounts, &audit, &handoffs, record);
+    // GAP-179, D-116: the node's record beside it, on a desktop linked to a node.
+    let node_text = crate::node_audit::text(state);
+    let node_segments = node_text
+        .as_ref()
+        .map(crate::node_audit::segment_lines)
+        .unwrap_or_default();
+    let node_lines = node_text
+        .as_ref()
+        .map(crate::node_audit::page_lines)
+        .unwrap_or_default();
+    let node = node_text
+        .as_ref()
+        .map(|t| crate::node_audit::view(t, &node_segments, &node_lines));
+    let view = crate::session::audit_view(state, &accounts, &audit, &handoffs, record, node);
     gungnir_ui::panels::audit::render_audit(ui, &state.palette, &view, &mut sustainment.sign_in)
         .map(PanelAction::Session)
 }
