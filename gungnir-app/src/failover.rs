@@ -483,6 +483,9 @@ fn rebuild_decisions(
                 item,
                 overridden,
                 origin,
+                // The node's forwarded route does not carry what was acknowledged
+                // (GAP-193); the desktop's own record keeps it.
+                acknowledged: _,
             }) if at >= since => {
                 // A decision another machine forwarded is not this desktop's to forward
                 // on, which is the filter the live path applies to its own records.

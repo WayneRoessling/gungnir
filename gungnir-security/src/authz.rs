@@ -38,10 +38,10 @@ pub trait Authorizer: Send + Sync {
 /// DN-11 and DN-21 say they are; and `actions::ALL` names every action.
 pub fn role_permits(role: Role, action: &str) -> bool {
     use actions::{
-        ACKNOWLEDGE_HANDOVER, APPLY_CONFIG, APPLY_SENSING_CONFIG, CONDUCT_REVIEW, DECIDE_PLAN,
-        EXPORT_REPORT, KEY_ESCROW_RECOVER, OVERRIDE_PLAN, PROMOTE_MODEL, PUBLISH_EXCHANGE,
-        READ_AUDIT, RELEASE_PRODUCT, REQUIREMENT, SET_CONTROL_STATUS, SUBMIT_DETECTION,
-        TASK_SENSOR, VIEW_PICTURE,
+        ACCEPT_COVERAGE_GAP, ACKNOWLEDGE_HANDOVER, APPLY_CONFIG, APPLY_SENSING_CONFIG,
+        CONDUCT_REVIEW, DECIDE_PLAN, EXPORT_REPORT, KEY_ESCROW_RECOVER, OVERRIDE_PLAN,
+        PROMOTE_MODEL, PUBLISH_EXCHANGE, READ_AUDIT, RELEASE_PRODUCT, REQUIREMENT,
+        SET_CONTROL_STATUS, SUBMIT_DETECTION, TASK_SENSOR, VIEW_PICTURE,
     };
     match role {
         // Everything but the engagement chain and escrow recovery (GAP-111, D-88). §1 says
@@ -53,18 +53,27 @@ pub fn role_permits(role: Role, action: &str) -> bool {
         // control status, or recover a sealed journal's key. Anything else, including an
         // action a later build adds, stays the administrator's: administration is
         // everything that is not somebody else's authority.
+        //
+        // ACCEPT_COVERAGE_GAP (GAP-106, D-118): the owner gave it to the commander alone,
+        // and §4's "Roles without a column" withholds it from the administrator with the
+        // engagement chain -- accepting a gap is a decision about the mission's risk.
         Role::Administrator => !matches!(
             action,
-            DECIDE_PLAN | OVERRIDE_PLAN | SET_CONTROL_STATUS | KEY_ESCROW_RECOVER
+            DECIDE_PLAN
+                | OVERRIDE_PLAN
+                | SET_CONTROL_STATUS
+                | KEY_ESCROW_RECOVER
+                | ACCEPT_COVERAGE_GAP
         ),
         // The security officer operates nothing (DN-22 §11, D-30): one action, and not
         // even the picture, because recovery is an offline act on a machine of its own.
         Role::SecurityOfficer => matches!(action, KEY_ESCROW_RECOVER),
         // Commander: the §4 rows are engagement acceptance at both layers, weapons
         // control status, hold or cease, overriding a recommendation, plan apply, product
-        // release and publishing it, reports, and a watch's handover. Identity
-        // declaration per class and coverage-gap acceptance have no coarse action yet
-        // and stay with GAP-058's per-class refinement.
+        // release and publishing it, reports, a watch's handover, and accepting a
+        // coverage gap, which is this role's alone (GAP-106, D-118; DN-33 §6). Identity
+        // declaration per class has no coarse action yet and stays with GAP-058's
+        // per-class refinement.
         //
         // PUBLISH_EXCHANGE (GAP-065): granted alongside
         // RELEASE_PRODUCT on the judgment that whoever may mark a product releasable
@@ -86,6 +95,7 @@ pub fn role_permits(role: Role, action: &str) -> bool {
                 | PUBLISH_EXCHANGE
                 | EXPORT_REPORT
                 | ACKNOWLEDGE_HANDOVER
+                | ACCEPT_COVERAGE_GAP
                 | READ_AUDIT
         ),
         // Intelligence analyst: product release and reporting, and the requirements it
@@ -303,6 +313,20 @@ mod tests {
     fn unknown_operator_may_do_nothing() {
         let a = StaticRoleAuthorizer::default();
         assert!(!a.can(OperatorId(9), actions::VIEW_PICTURE));
+    }
+
+    /// GAP-106, D-118: accepting a coverage gap is the commander's alone -- not the
+    /// supervisor's, the operator's, nor the administrator's.
+    #[test]
+    fn only_the_commander_accepts_a_coverage_gap() {
+        for role in Role::ALL.iter().copied() {
+            assert_eq!(
+                role_permits(role, actions::ACCEPT_COVERAGE_GAP),
+                role == Role::Commander,
+                "{role:?}"
+            );
+        }
+        assert!(actions::is_known(actions::ACCEPT_COVERAGE_GAP));
     }
 
     /// Everything but the engagement chain and escrow recovery (GAP-111, D-88).

@@ -1607,6 +1607,7 @@ fn accepted_record(id: u128) -> DecisionRecord {
         request: None,
         origin: None,
         mission_time: MissionTime(100.0),
+        acknowledged: Vec::new(),
     }
 }
 

@@ -20,7 +20,10 @@
 //! looks covered but is single-sensor everywhere fails on the first loss.
 
 use crate::{CoverageVolume, LineOfSight};
-use gungnir_model::{AzimuthSector, ElevationBand, Geodetic, LocalFrame, SensorId};
+use gungnir_model::{
+    AcceptedGap, AzimuthSector, ElevationBand, GapAcceptance, Geodetic, LaydownId, LocalFrame,
+    ReopenedBecause, SensorId,
+};
 use gungnir_sensor_management::{SensorMode, SensorRecord, SensorRegistry};
 
 /// Coverage of one point by the registry as a whole.
@@ -47,16 +50,10 @@ impl PointCoverage {
     }
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
-#[serde(rename_all = "kebab-case")]
-pub enum GapSeverity {
-    /// Covered by one sensor only: detectable, not fusible.
-    SingleSensor,
-    /// Covered by nothing.
-    Uncovered,
-}
+/// Declared in `gungnir-model` since GAP-106, because a gap acceptance on the journal names
+/// one (`docs/design/DN-33-accepting-a-coverage-gap.md` §3), and re-exported here where it
+/// was computed all along.
+pub use gungnir_model::GapSeverity;
 
 /// A hole along an approach: a contiguous run of samples below the threshold.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -303,6 +300,167 @@ pub fn volume_in_frame(
         max_elevation_rad: band.ceiling_rad,
         vertical: frame.vertical_at(position),
         azimuth: sector.map(|sector| frame.sector_in_frame(sector, position)),
+    }
+}
+
+/// A gap in a report as an acceptance names it (GAP-106,
+/// `docs/design/DN-33-accepting-a-coverage-gap.md` §4): the approach by name, how it falls
+/// short, where, and what the report was computed with.
+#[must_use]
+pub fn accepted_gap(
+    gap: &CoverageGap,
+    approach: &str,
+    parameters: CoverageParameters,
+) -> AcceptedGap {
+    AcceptedGap {
+        approach: approach.to_owned(),
+        severity: gap.severity,
+        from_m: gap.from_m,
+        to_m: gap.to_m,
+        sample_spacing_m: parameters.sample_spacing_m,
+        terrain_masking_applied: parameters.terrain_masking_applied,
+    }
+}
+
+/// Whether two named gaps are the same gap (DN-33 §5): the same approach, severity, sample
+/// spacing and terrain-masking flag, and each end within **half a sample spacing**.
+///
+/// Every sample sits at a multiple of the spacing along the whole polyline ([`sample`]), and
+/// a gap's ends are samples, so a real change moves an end by at least one spacing while
+/// computing the same report again moves it only by rounding. Half a spacing is the widest
+/// tolerance that cannot absorb a one-sample change. Two reports at different spacings, or
+/// one flat and one masked, are different answers and never the same gap. The comparison
+/// is exact for the spacing and the flag because both are read from the baseline, never
+/// computed.
+#[must_use]
+// The spacing is compared exactly: it is the same configured value or it is not.
+#[allow(clippy::float_cmp)]
+pub fn same_gap(a: &AcceptedGap, b: &AcceptedGap) -> bool {
+    let tolerance = a.sample_spacing_m / 2.0;
+    a.approach == b.approach
+        && a.severity == b.severity
+        && a.sample_spacing_m == b.sample_spacing_m
+        && a.terrain_masking_applied == b.terrain_masking_applied
+        && tolerance.is_finite()
+        && (a.from_m - b.from_m).abs() <= tolerance
+        && (a.to_m - b.to_m).abs() <= tolerance
+}
+
+/// What a coverage report says about one acceptance (DN-33 §5).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Standing {
+    /// It holds, for this gap of the report.
+    Holds { gap: usize },
+    /// It stopped holding, and why.
+    Reopens(ReopenedBecause),
+}
+
+/// Whether `acceptance` still holds (DN-33 §5), checked **in order**: the revision it was
+/// made under, the laydown it was made under, then a gap of its shape in `report`.
+///
+/// `report` is the coverage report now, or the reason there is none. `approaches` are the
+/// declared approaches' names, in the report's order. `revision` and `laydown` are what is
+/// in force now: the running baseline's revision and the laydown it marks current.
+#[must_use]
+pub fn standing(
+    acceptance: &GapAcceptance,
+    report: Result<&CoverageReport, &str>,
+    approaches: &[String],
+    revision: u32,
+    laydown: Option<&LaydownId>,
+) -> Standing {
+    if acceptance.revision != revision {
+        return Standing::Reopens(ReopenedBecause::RevisionChanged {
+            from: acceptance.revision,
+            to: revision,
+        });
+    }
+    if acceptance.laydown.as_ref() != laydown {
+        return Standing::Reopens(ReopenedBecause::LaydownChanged {
+            from: acceptance.laydown.clone(),
+            to: laydown.cloned(),
+        });
+    }
+    let report = match report {
+        Ok(report) => report,
+        Err(reason) => {
+            return Standing::Reopens(ReopenedBecause::NotMeasured {
+                reason: reason.to_owned(),
+            })
+        }
+    };
+    let named: Vec<(usize, AcceptedGap)> = report
+        .gaps
+        .iter()
+        .enumerate()
+        .filter_map(|(i, gap)| {
+            let approach = approaches.get(gap.approach)?;
+            Some((i, accepted_gap(gap, approach, report.parameters)))
+        })
+        .collect();
+    if let Some((i, _)) = named.iter().find(|(_, g)| same_gap(&acceptance.gap, g)) {
+        return Standing::Holds { gap: *i };
+    }
+    // What is there instead: every gap on the same approach that overlaps the accepted
+    // stretch, whatever its severity. None at all means the stretch is covered now.
+    let accepted = &acceptance.gap;
+    Standing::Reopens(ReopenedBecause::ShapeChanged {
+        now: named
+            .into_iter()
+            .map(|(_, g)| g)
+            .filter(|g| {
+                g.approach == accepted.approach
+                    && g.from_m <= accepted.to_m
+                    && g.to_m >= accepted.from_m
+            })
+            .collect(),
+    })
+}
+
+/// DN-12's coverage measure with acceptance reported beside it, never taken out of it
+/// (GAP-106, D-118, DN-33 §7): an accepted gap still counts, and the accepted part is a
+/// part of each total rather than a subtraction from it.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct CoverageMeasure {
+    /// Gap segments on the approaches, accepted or not.
+    pub segments: usize,
+    /// Of those, the segments a standing acceptance names.
+    pub accepted_segments: usize,
+    /// Approach metres covered by nothing, accepted or not.
+    pub uncovered_m: f64,
+    /// Of `uncovered_m`, the metres a standing acceptance names.
+    pub uncovered_accepted_m: f64,
+    /// Approach metres covered by one sensor only, accepted or not.
+    pub single_sensor_m: f64,
+    /// Of `single_sensor_m`, the metres a standing acceptance names.
+    pub single_sensor_accepted_m: f64,
+}
+
+impl CoverageMeasure {
+    /// The measure of `report`, where `accepted[i]` says whether `report.gaps[i]` is named
+    /// by a standing acceptance; a gap with no entry is not.
+    #[must_use]
+    pub fn of(report: &CoverageReport, accepted: &[bool]) -> Self {
+        let mut m = Self::default();
+        for (i, gap) in report.gaps.iter().enumerate() {
+            let is_accepted = accepted.get(i).copied().unwrap_or(false);
+            let length = gap.to_m - gap.from_m;
+            m.segments += 1;
+            if is_accepted {
+                m.accepted_segments += 1;
+            }
+            let (total, part) = match gap.severity {
+                GapSeverity::Uncovered => (&mut m.uncovered_m, &mut m.uncovered_accepted_m),
+                GapSeverity::SingleSensor => {
+                    (&mut m.single_sensor_m, &mut m.single_sensor_accepted_m)
+                }
+            };
+            *total += length;
+            if is_accepted {
+                *part += length;
+            }
+        }
+        m
     }
 }
 
@@ -591,5 +749,174 @@ mod tests {
         );
         assert!((placed.width_rad - 60_f64.to_radians()).abs() < 1e-12);
         assert_eq!(volumes[1].1.azimuth, None, "no sector is the full circle");
+    }
+
+    /// A report whose one gap is where one sensor at `east` metres leaves a 2 km approach.
+    fn report_with_sensor_at(east: f64) -> CoverageReport {
+        let los = FlatTerrainLineOfSight;
+        let route = approach();
+        combined_coverage(
+            &[
+                (SensorId(1), volume(east, 900.0)),
+                (SensorId(2), volume(east, 900.0)),
+            ],
+            &los,
+            &[route.as_slice()],
+            parameters(),
+        )
+    }
+
+    fn acceptance_of(report: &CoverageReport, gap: usize) -> GapAcceptance {
+        GapAcceptance {
+            id: gungnir_model::GapAcceptanceId(1),
+            gap: accepted_gap(&report.gaps[gap], "east", report.parameters),
+            reason: "the ridge closes it".into(),
+            operator: "7".into(),
+            role: "Commander".into(),
+            revision: 3,
+            laydown: Some(LaydownId("current".into())),
+            at: gungnir_model::MissionTime(10.0),
+        }
+    }
+
+    /// GAP-106, DN-33 §5: the tolerance absorbs rounding and not one sample. An end moved
+    /// by a hair is the same gap; an end moved by one sample spacing either way is not; a
+    /// different severity, spacing, masking or approach is never the same gap.
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn the_same_gap_is_the_same_to_within_rounding_and_not_to_within_one_sample() {
+        let report = report_with_sensor_at(0.0);
+        let a = accepted_gap(&report.gaps[0], "east", report.parameters);
+        assert_eq!(a.sample_spacing_m, 100.0);
+        let moved = |from: f64, to: f64| AcceptedGap {
+            from_m: a.from_m + from,
+            to_m: a.to_m + to,
+            ..a.clone()
+        };
+        assert!(same_gap(&a, &a));
+        assert!(
+            same_gap(&a, &moved(1e-6, -1e-6)),
+            "rounding is not a change"
+        );
+        for one_sample in [100.0, -100.0] {
+            assert!(!same_gap(&a, &moved(one_sample, 0.0)), "{one_sample}");
+            assert!(!same_gap(&a, &moved(0.0, one_sample)), "{one_sample}");
+        }
+        assert!(!same_gap(
+            &a,
+            &AcceptedGap {
+                severity: GapSeverity::SingleSensor,
+                ..a.clone()
+            }
+        ));
+        assert!(!same_gap(
+            &a,
+            &AcceptedGap {
+                sample_spacing_m: 50.0,
+                ..a.clone()
+            }
+        ));
+        assert!(!same_gap(
+            &a,
+            &AcceptedGap {
+                terrain_masking_applied: true,
+                ..a.clone()
+            }
+        ));
+        assert!(!same_gap(
+            &a,
+            &AcceptedGap {
+                approach: "west".into(),
+                ..a.clone()
+            }
+        ));
+    }
+
+    /// DN-33 §5: the checks run in order -- revision, laydown, shape -- and a changed shape
+    /// names what is there now.
+    #[test]
+    fn an_acceptance_holds_until_the_revision_the_laydown_or_the_shape_changes() {
+        let report = report_with_sensor_at(0.0);
+        let names = vec!["east".to_owned()];
+        let acceptance = acceptance_of(&report, 0);
+        let current = LaydownId("current".into());
+        assert_eq!(
+            standing(&acceptance, Ok(&report), &names, 3, Some(&current)),
+            Standing::Holds { gap: 0 }
+        );
+        assert_eq!(
+            standing(&acceptance, Ok(&report), &names, 4, Some(&current)),
+            Standing::Reopens(ReopenedBecause::RevisionChanged { from: 3, to: 4 })
+        );
+        let other = LaydownId("c".into());
+        assert_eq!(
+            standing(&acceptance, Ok(&report), &names, 3, Some(&other)),
+            Standing::Reopens(ReopenedBecause::LaydownChanged {
+                from: Some(current.clone()),
+                to: Some(other),
+            })
+        );
+        // Both sensors moved 300 m along: the gap on the approach is now 300 m shorter.
+        let shifted = report_with_sensor_at(300.0);
+        match standing(&acceptance, Ok(&shifted), &names, 3, Some(&current)) {
+            Standing::Reopens(ReopenedBecause::ShapeChanged { now }) => {
+                assert_eq!(now.len(), 1, "{now:?}");
+                assert!(now[0].from_m > acceptance.gap.from_m, "{now:?}");
+            }
+            other => panic!("expected a shape change, got {other:?}"),
+        }
+        // The stretch covered: a sensor on each end and one in the middle.
+        let los = FlatTerrainLineOfSight;
+        let route = approach();
+        let covered = combined_coverage(
+            &[
+                (SensorId(1), volume(1_000.0, 5_000.0)),
+                (SensorId(2), volume(1_000.0, 5_000.0)),
+            ],
+            &los,
+            &[route.as_slice()],
+            parameters(),
+        );
+        assert_eq!(
+            standing(&acceptance, Ok(&covered), &names, 3, Some(&current)),
+            Standing::Reopens(ReopenedBecause::ShapeChanged { now: Vec::new() })
+        );
+        assert!(matches!(
+            standing(&acceptance, Err("no origin"), &names, 3, Some(&current)),
+            Standing::Reopens(ReopenedBecause::NotMeasured { .. })
+        ));
+    }
+
+    /// D-118: an accepted gap still counts, and the accepted part is reported beside the
+    /// total rather than taken out of it.
+    #[test]
+    fn the_measure_reports_accepted_metres_inside_the_total() {
+        let los = FlatTerrainLineOfSight;
+        let route = approach();
+        // One sensor at the west end: single-sensor for 900 m, then uncovered.
+        let report = combined_coverage(
+            &[(SensorId(1), volume(0.0, 900.0))],
+            &los,
+            &[route.as_slice()],
+            parameters(),
+        );
+        assert_eq!(report.gaps.len(), 2, "{:?}", report.gaps);
+        let none = CoverageMeasure::of(&report, &[]);
+        let uncovered = report
+            .gaps
+            .iter()
+            .position(|g| g.severity == GapSeverity::Uncovered)
+            .expect("an uncovered stretch");
+        let mut flags = vec![false; report.gaps.len()];
+        flags[uncovered] = true;
+        let some = CoverageMeasure::of(&report, &flags);
+        assert!(
+            (some.uncovered_m - none.uncovered_m).abs() < 1e-9,
+            "never subtracted"
+        );
+        assert!((some.uncovered_accepted_m - none.uncovered_m).abs() < 1e-9);
+        assert!(some.single_sensor_accepted_m.abs() < 1e-9);
+        assert_eq!((some.segments, some.accepted_segments), (2, 1));
+        assert_eq!(none.accepted_segments, 0);
     }
 }

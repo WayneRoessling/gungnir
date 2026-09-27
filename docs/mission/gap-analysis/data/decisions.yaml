@@ -2945,6 +2945,75 @@
     verification on the node's health line, which every role and partner reads; and a
     verification on request that folds the journal, for the loop's sake. DN-23 §15. See
     `../../record/2026-09-26/a-figure-the-endpoint-cannot-be-given-and.md`.
+- id: D-118
+  decision: What accepting a coverage gap records, who may, how long it holds, and whether it still counts
+  question: >-
+    GAP-106: nothing lets a commander record that a coverage gap is deliberately
+    tolerated. What does an acceptance record, who may make one, does it expire, and does an
+    accepted gap still count in the coverage measure?
+  raised_in: "GAP-106; D-50; `../../design/DN-33-accepting-a-coverage-gap.md`"
+  decider: Owner
+  unblocks: GAP-106
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken by the owner, 2026-09-26: an acceptance names the gap, a reason (required)
+    and the commander who accepted it; it holds for the baseline revision and laydown it
+    was made under and re-opens by itself if either changes or the gap's own shape
+    changes; accepted gaps stay drawn on PN-11 and PN-16 as accepted and still count, the
+    measure reporting accepted and unaccepted separately; only the commander may accept;
+    accepting and re-opening are journaled and audited.** **Taken under the owner's
+    delegation of 2026-09-26**, the details: a shape change is any end moved by more than
+    half a sample spacing, the widest tolerance that cannot absorb a one-sample change
+    (rejected: containment, under which a shrunken gap holds -- a smaller gap is a
+    different risk; a tolerance in metres, which means different things at different
+    spacings); "the commander" is a signed-in commander, never a selected role; the
+    administrator is withheld from `coverage.accept_gap` with the engagement chain;
+    re-opening is checked every frame except while the baseline's terrain is still
+    loading. See `../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`.
+- id: D-119
+  decision: Whether a plan is gated on its laydown having been rehearsed, and what "rehearsed under an older revision or policy" means
+  question: >-
+    GAP-107: DN-26 built no adoption step, so nothing ties a rehearsal to a decision. Is
+    an unrehearsed laydown a gate on a plan, an advisory, or nothing -- and when is a
+    rehearsal too old to count?
+  raised_in: "GAP-107; D-50; `../../design/DN-26-laydown-options.md` §6 rule 4, §11"
+  decider: Owner
+  unblocks: GAP-107
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken by the owner, 2026-09-26: advisory and acknowledged, no hard gate.** PN-16 and
+    the plan's decision say plainly when the laydown in force was never rehearsed or was
+    rehearsed under an older revision or policy, a decision asks for that to be
+    acknowledged, and the acknowledgement is audited and travels with the decision record.
+    **Taken under the owner's delegation of 2026-09-26**, the definition: a rehearsal
+    records five digests of what the throwaway desktop takes (placements, sensors,
+    resources, policy, tracking), and it stands while any rehearsal of the laydown in
+    force ran under the five running now; a revision that changed none of them asks
+    nothing but is named, and a changed part is named with both revisions. Accept and
+    override ask; a rejection does not; a deployment with no laydown is asked nothing.
+    Rejected: comparing revisions alone (asks on every endpoint edit and teaches the box
+    to be ticked unread) and the policy alone (misses a moved radar or a re-tuned
+    tracker). See `../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`.
+- id: D-120
+  decision: Where the record of a laydown rehearsal lives
+  question: >-
+    A rehearsal's figures were session state, so after a restart every laydown read as
+    never rehearsed. What does the record keep of a rehearsal, so a decision in a later
+    session is told the truth?
+  raised_in: "GAP-107; `../../design/DN-26-laydown-options.md` §11 item 2"
+  decider: Owner
+  unblocks: GAP-107
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26: a rehearsal journals a stamp --
+    the laydown, the recording and its seed, the revision, when, and the five digests it
+    ran under -- and the desktop folds the stamps at start**; retention keeps each
+    laydown's latest. PN-16 says a laydown was rehearsed in an earlier session and does
+    not invent that session's figures. Rejected: journaling the whole run (its figures
+    are a view of one session's pipeline, and a later session re-running is cheap);
+    keeping rehearsals in the session (a restart would put "never rehearsed", which is
+    false, on a decision record). See
+    `../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`.
 - id: D-125
   decision: Which further geoid grids a deployment carries, what a NAVD88 height is worth in WGS-84 terms, and how any other grid is admitted
   question: >-

@@ -436,10 +436,34 @@ impl ApprovalDesk {
         decision: OperatorDecision,
         request: Option<gungnir_model::RequestId>,
     ) -> Result<gungnir_model::DecisionId, CommandError> {
+        self.decide_acknowledging(cx, host, id, decision, request, Vec::new())
+    }
+
+    /// The same, carrying what the person deciding was told and acknowledged (GAP-107,
+    /// `docs/design/DN-26-laydown-options.md` §11 item 6). It goes onto the record, and
+    /// therefore onto `CommandEvent::Decided`, and the decision's audit entry quotes it.
+    ///
+    /// **Whether something had to be acknowledged is the host's question**, because only
+    /// the host knows what it told the person: this records what it is handed.
+    ///
+    /// # Errors
+    ///
+    /// `CommandError::NotFound`, exactly as [`ApprovalDesk::decide`].
+    pub fn decide_acknowledging(
+        &mut self,
+        cx: &ApprovalContext<'_>,
+        host: &mut dyn ApprovalHost,
+        id: PendingApprovalId,
+        decision: OperatorDecision,
+        request: Option<gungnir_model::RequestId>,
+        acknowledged: Vec<gungnir_model::Acknowledgement>,
+    ) -> Result<gungnir_model::DecisionId, CommandError> {
         let now = cx.now;
         let operator = cx.signed_in.as_ref().map(|s| s.operator.clone());
         let role = cx.signed_in.as_ref().map(|s| s.role.clone());
-        let who = DecidedBy::session(operator, role).with_request(request);
+        let who = DecidedBy::session(operator, role)
+            .with_request(request)
+            .with_acknowledged(acknowledged);
         let record = self.approvals.decide(id, decision, who, now)?;
         tracing::info!(
             plan = %record.plan.id,
@@ -453,8 +477,19 @@ impl ApprovalDesk {
         host.audit(
             crate::chain::DECISION_ACTION,
             // The whole identifier: an audit entry is searched for, never glanced at
-            // (D-61).
-            format!("plan {} {:?}", record.plan.id, record.decision),
+            // (D-61). What the person acknowledged is on the same entry, because it is
+            // part of the one act (GAP-107).
+            format!(
+                "plan {} {:?}{}",
+                record.plan.id,
+                record.decision,
+                record
+                    .acknowledged
+                    .iter()
+                    .map(|a| format!("; acknowledged {}: {}", a.subject, a.statement))
+                    .collect::<Vec<_>>()
+                    .concat()
+            ),
         );
         // GAP-043: an actionable decision is the moment an engagement opens (DN-06 §5).
         let opened = self.open_for(cx, host, &record);

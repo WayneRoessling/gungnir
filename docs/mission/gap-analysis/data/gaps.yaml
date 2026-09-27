@@ -3519,6 +3519,15 @@
       down a hash that no longer matched what `--rehearsal` reads; it is now the
       committed seed's `d685a981`. **No session has run and no measured field is
       filled**; every correction here is to an instruction, not to a result.
+  - date: 2026-09-26
+    status: In progress
+    note: >-
+      **US-16 joined round 1 (GAP-106, D-118).** The gap-acceptance control that held it
+      for round 2 is built, so round 1 is fifteen tasks and group C is US-07 alone. Its
+      card asks for what was built -- a reason and a signed-in commander's name, and
+      re-opening on a change instead of the wireframe's expiry and warning obligation --
+      and its setup needs a commander account and both radars searching
+      (`../../ux/usability-round-1-session.md` §2, §3, §5). No session has run.
 
 - id: GAP-075
   name: Docking and multi-window
@@ -7969,10 +7978,10 @@
     `../../ux/usability-test-plan.md` US-16; `gungnir-analytics/src/coverage.rs`; PN-11;
     GAP-045
   action: >-
-    Design it first -- a note in `../../design/` naming what acceptance records, who may
-    record it, whether it expires, and how it meets the coverage measure -- then build
-    the control on PN-11 and the event behind it. US-16 moves into round 1's scope when
-    it lands.
+    Done 2026-09-26: designed in `../../design/DN-33-accepting-a-coverage-gap.md` on the
+    owner's decision (D-118) and built -- the control on PN-11, the events behind it, the
+    marking on PN-11, PN-16, the map and the strip, and the measure beside the total.
+    US-16 moved into round 1's scope.
   ref: >-
     D-50 (the decision that scoped this); GAP-006 (the detection this annotates);
     GAP-074 (US-16, held for round 2)
@@ -7990,6 +7999,19 @@
       on the journal, a field on the laydown, or both), who may do it, whether it
       expires, and whether an accepted gap still counts against the coverage measure are
       each open.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Closed 2026-09-26: the owner decided it (D-118); designed and built**
+      (`../../design/DN-33-accepting-a-coverage-gap.md`). An acceptance names the gap, a
+      reason and the signed-in commander; it holds for its revision, laydown and shape --
+      an end moved over half a sample spacing re-opens it (DN-33 §5) -- and re-opens by
+      itself, journaled and audited. It stays drawn, marked accepted, and the measure
+      reports the accepted metres inside the total. `coverage.accept_gap` is the
+      commander's alone, in `gungnir-security`, human-owned; see `../../signatures.md`.
+      Tested in `gungnir-app/tests/gap_acceptance.rs`; DN-33 §12's row is Draft. US-16
+      joined round 1. Found: GAP-194. See
+      `../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`.
 
 - id: GAP-107
   name: Nothing gates a plan on having been rehearsed
@@ -8008,9 +8030,8 @@
     `../../design/DN-26-laydown-options.md` §6 rule 4; GAP-045;
     `../../ux/usability-test-plan.md` US-07
   action: >-
-    Decide the adoption step first, in its own design note extending or amending DN-26
-    §6, then build the gate if the answer is that one exists. Advisory-beside-it is a
-    legitimate answer and would close this gap without a gate.
+    Done 2026-09-26: advisory and acknowledged, no gate (D-119), as DN-26 §11, amendment
+    1; rehearsals on the record (D-120).
   ref: >-
     D-50 (the decision that scoped this); `../../design/DN-26-laydown-options.md` §6
     rule 4; GAP-045; GAP-074 (US-07, held for round 2)
@@ -8038,6 +8059,19 @@
       Whether an adoption step exists, and whether a rehearsal is advisory beside it
       or a precondition of it, is still undecided and still needs its own design note
       extending DN-26 §6, as this entry's action says.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Closed 2026-09-26: the owner decided advisory and acknowledged, no gate (D-119)**,
+      as `../../design/DN-26-laydown-options.md` §11, amendment 1. Nothing refuses a plan;
+      PN-16 and PN-07 say when the laydown in force was never rehearsed or ran under other
+      inputs than are running -- five digests of what a rehearsal takes (D-119) -- and
+      accept or override needs the sentence ticked. It goes onto the decision record, the
+      journal and the audit entry; `decisions::decide` refuses without it. Rehearsals are
+      journaled (D-120). `gungnir-command`'s record is human-owned; see
+      `../../signatures.md`. Tested in `gungnir-app/tests/rehearsal_advisory.rs`. Found:
+      GAP-193, GAP-195. See
+      `../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`.
 
 - id: GAP-108
   name: A converted height carries no vertical datum shift
@@ -11235,6 +11269,101 @@
       agree with an independent `pyproj` run to a micrometre, and the Autzen capture
       converts again through a real tick. Run on Linux before pushing. No human-owned
       code. See `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`.
+- id: GAP-193
+  name: A linked desktop's rehearsal acknowledgement is not on the node's decision record
+  type: Technical
+  caps: [CAP-5.9, CAP-7.3]
+  layer: Service facades and wiring
+  sev: 3
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: [GAP-107, GAP-133, GAP-134]
+  impact: >-
+    A decision taken on a linked desktop, or forwarded after an outage, reaches the node's
+    record without the rehearsal standing the person acknowledged, so the node's record
+    cannot say what the decider was told; only the desktop's audit log can.
+  evidence: >-
+    `gungnir-app/src/main.rs` `decide_through_the_node`; `gungnir-api` `/v3` decision
+    route; `gungnir-node/src/approval.rs` `record_of`
+  action: >-
+    Carry `acknowledged` on the `/v3` decision body and on a forwarded decision, into the
+    node's `DecidedBy`, so the node's `DecisionRecord` and `CommandEvent::Decided` hold it
+    as the desktop's own do. A `gungnir-api` write path, so human-owned.
+  ref: >-
+    Found building GAP-107 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found building GAP-107. A linked desktop asks, gates and audits the acknowledgement
+      on its own log before it posts; the route has nowhere to put it, and a forwarded
+      record is rebuilt without it. Not built there because the route is a `gungnir-api`
+      write path, which is human-owned, and the change is the node's record as much as the
+      desktop's.
+- id: GAP-194
+  name: A gap acceptance is held only by the desktop that recorded it
+  type: Technical
+  caps: [CAP-1.4, CAP-7.3]
+  layer: Service facades and wiring
+  sev: 3
+  effort: M
+  target: I3
+  owner: Services engineer
+  deps: [GAP-106]
+  impact: >-
+    A commander's acceptance is drawn on the desktop that recorded it and nowhere else: a
+    node's `/v2|v3/coverage` answer and a second desktop's PN-11 show the same gap as
+    unexamined.
+  evidence: >-
+    `gungnir-app/src/gap_acceptance.rs`; `gungnir-node/src/main.rs`'s coverage answer;
+    `../../design/DN-33-accepting-a-coverage-gap.md` §9
+  action: >-
+    Decide who holds an acceptance in a linked deployment -- the node, as it holds the
+    queue (D-55), or each desktop with an exchange between them -- then carry it on the
+    coverage answer so every console marks it.
+  ref: >-
+    Found building GAP-106 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found building GAP-106. The owner's decision is about what an acceptance is, not
+      where it lives in a system of systems; the node already answers coverage and holds
+      the queue, so which machine holds acceptances is a design question of its own, not
+      a detail to take under the delegation.
+- id: GAP-195
+  name: PN-07's degraded-condition acknowledgement is on no record
+  type: Technical
+  caps: [CAP-5.9]
+  layer: UI and data ecosystem
+  sev: 3
+  effort: S
+  target: I3
+  owner: UI engineer
+  deps: [GAP-107]
+  impact: >-
+    A plan accepted while the tracker was down or the journal failing was gated on a
+    person ticking that they read it, and nothing records that they did: the decision
+    record and the audit entry say nothing of the conditions it was taken under.
+  evidence: >-
+    `gungnir-ui/src/panels/decision_dialog.rs` `degraded_acknowledged`;
+    `gungnir-app/src/decisions.rs` `decide`
+  action: >-
+    Put each degraded condition acknowledged onto `DecisionRecord::acknowledged`, as the
+    rehearsal standing now is (GAP-107), and check it in `decisions::decide` rather than
+    only in the dialog.
+  ref: >-
+    Found building GAP-107 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`)
+  history:
+  - date: 2026-09-26
+    status: Open
+    note: >-
+      Found building GAP-107, when the rehearsal acknowledgement was made to travel with
+      the decision and the older degraded-condition one beside it turned out not to.
+      Not folded in: which conditions are recorded, and whether `decide` refuses without
+      them, changes what every decision on a degraded picture records, and the degraded
+      set is recomputed every frame.
 
 - id: GAP-200
   name: A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84

@@ -251,6 +251,8 @@ pub fn expiry_record(
         request: None,
         origin: None,
         mission_time: at,
+        // Nobody decided, so nobody was told anything.
+        acknowledged: Vec::new(),
     }
 }
 

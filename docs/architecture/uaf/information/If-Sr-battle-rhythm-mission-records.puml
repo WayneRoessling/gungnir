@@ -27,6 +27,52 @@ class "Laydown" as Laydown <<InformationElement>> {
 class "TestTrackNumber" as TestTrackNumber <<InformationElement>> {
   pub u8
 }
+enum "GapSeverity" as GapSeverity <<InformationElement>> {
+  SingleSensor
+  Uncovered
+}
+class "AcceptedGap" as AcceptedGap <<InformationElement>> {
+  approach: String
+  severity: GapSeverity
+  from_m: f64
+  to_m: f64
+  sample_spacing_m: f64
+  terrain_masking_applied: bool
+}
+class "GapAcceptanceId" as GapAcceptanceId <<InformationElement>> {
+  pub u64
+}
+class "GapAcceptance" as GapAcceptance <<InformationElement>> {
+  id: GapAcceptanceId
+  gap: AcceptedGap
+  reason: String
+  operator: String
+  role: String
+  revision: u32
+  laydown: Option<LaydownId>
+  at: crate::MissionTime
+}
+enum "ReopenedBecause" as ReopenedBecause <<InformationElement>> {
+  RevisionChanged { from: u32, to: u32 }
+  LaydownChanged { from: Option<LaydownId>, to: Option<LaydownId>, }
+  ShapeChanged { now: Vec<AcceptedGap> }
+  NotMeasured { reason: String }
+}
+class "RehearsalBasis" as RehearsalBasis <<InformationElement>> {
+  placements: String
+  sensors: String
+  resources: String
+  policy: String
+  tracking: String
+}
+class "RehearsalStamp" as RehearsalStamp <<InformationElement>> {
+  laydown: LaydownId
+  scenario: TestTrackNumber
+  seed: u64
+  revision: u32
+  basis: RehearsalBasis
+  ran_at: crate::MissionTime
+}
 class "RequirementId" as RequirementId <<InformationElement>> {
   pub u64
 }
@@ -118,6 +164,17 @@ SensorPlacement --> SensorMode : mode
 Laydown --> LaydownId : id
 Laydown --> ResourcePlacement : resources
 Laydown --> SensorPlacement : sensors
+AcceptedGap --> GapSeverity : severity
+GapAcceptance --> AcceptedGap : gap
+GapAcceptance --> GapAcceptanceId : id
+GapAcceptance --> LaydownId : laydown
+GapAcceptance --> MissionTime : at
+ReopenedBecause --> AcceptedGap : ShapeChanged
+ReopenedBecause --> LaydownId : LaydownChanged
+RehearsalStamp --> LaydownId : laydown
+RehearsalStamp --> MissionTime : ran_at
+RehearsalStamp --> RehearsalBasis : basis
+RehearsalStamp --> TestTrackNumber : scenario
 CollectionRequirement --> AssetExtent : area
 CollectionRequirement --> AssetPriority : priority
 CollectionRequirement --> MissionTime : needed_by

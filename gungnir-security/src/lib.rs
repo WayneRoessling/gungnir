@@ -242,6 +242,11 @@ pub mod actions {
     /// authority matrix in `docs/mission/roles-and-stakeholders.md` §4 names nobody else
     /// for account administration, and widening it means adding the §4 row first.
     pub const ASSIGN_ROLE: &str = "account.assign_role";
+    /// Accepting a coverage gap: §4's "Accept coverage gap" row, the commander's alone
+    /// (GAP-106, D-118, `docs/design/DN-33-accepting-a-coverage-gap.md` §6). Not the
+    /// administrator's either: accepting a gap is a decision about the risk the mission
+    /// runs, and §4's "Roles without a column" withholds it with the engagement chain.
+    pub const ACCEPT_COVERAGE_GAP: &str = "coverage.accept_gap";
     /// Reading a node's audit record -- its segments, entry by entry, and what its
     /// verification against the journal's heads found -- from a linked desktop's PN-20
     /// (GAP-179, D-116; `docs/design/DN-23-operator-authentication.md` §15). The owner gave
@@ -279,6 +284,7 @@ pub mod actions {
         KEY_ESCROW_RECOVER,
         REQUIREMENT,
         ASSIGN_ROLE,
+        ACCEPT_COVERAGE_GAP,
         READ_AUDIT,
     ];
 

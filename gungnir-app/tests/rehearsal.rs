@@ -392,6 +392,7 @@ fn the_round_1_baseline_gives_pn_16_a_laydown_pair_us_15_can_compare() {
             gap_segments,
             uncovered_m,
             delta_uncovered_m,
+            ..
         } = &row.coverage
         else {
             panic!(

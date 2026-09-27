@@ -117,7 +117,8 @@ use gungnir_ingest::adapters::recorded::RecordedFeedAdapter;
 use gungnir_ingest::{AllowListAuthenticator, IngestGateway};
 use gungnir_model::{
     AzimuthSector, DetectionView, ElevationBand, Laydown, LaydownId, LocalFrame, MissionTime,
-    Provenance, RehearsalOrigin, SensorId, SensorMode, TestTrackNumber,
+    Provenance, RehearsalBasis, RehearsalOrigin, RehearsalStamp, SensorId, SensorMode,
+    TestTrackNumber,
 };
 use gungnir_sensor_sim as sim;
 use gungnir_time::ReplayClockAuthority;
@@ -241,6 +242,27 @@ pub struct RehearsalRecord {
     /// Why they were not offered: each denial reason the policy chain recorded, with how
     /// many plans it refused, in the order first seen.
     pub not_offered_because: Vec<(String, usize)>,
+    /// The deployment's baseline revision the run was under (GAP-107).
+    pub revision: u32,
+    /// What the run took from the deployment, part by part ([`basis_of`], D-119): what a
+    /// decision on a plan compares with what is running.
+    pub basis: RehearsalBasis,
+}
+
+impl RehearsalRecord {
+    /// The run as the record holds it (D-120): journaled when a desktop runs one, and what
+    /// a later session reads to say whether the laydown was ever rehearsed.
+    #[must_use]
+    pub fn stamp(&self) -> RehearsalStamp {
+        RehearsalStamp {
+            laydown: self.laydown.clone(),
+            scenario: self.scenario,
+            seed: self.seed,
+            revision: self.revision,
+            basis: self.basis.clone(),
+            ran_at: self.ran_at,
+        }
+    }
 }
 
 /// One sensor whose re-observed detections differ between two rehearsals of the same
@@ -353,6 +375,8 @@ pub enum RehearsalError {
          Declare `origin` in the baseline"
     )]
     GeofencesWithoutOrigin { geofences: usize },
+    #[error("what a rehearsal runs under could not be written down ({part}): {reason}")]
+    Unhashable { part: &'static str, reason: String },
 }
 
 fn read_text(path: &Path) -> Result<String, RehearsalError> {
@@ -558,6 +582,140 @@ fn config_for(
         active_profile: deployment.active_profile.clone(),
         time: deployment.time,
         ..ConfigBaseline::default()
+    })
+}
+
+/// The origin [`basis_of`] builds its throwaway configuration about. Any fixed origin
+/// serves: a basis is compared only with another basis, and both are built about this one,
+/// so a change in the deployment changes the part it is in and nothing else does.
+const BASIS_ORIGIN: Geodetic = Geodetic {
+    lat_rad: 0.0,
+    lon_rad: 0.0,
+    alt_m: 0.0,
+};
+
+/// A value as canonical JSON: every object's keys sorted, so a map held in hash order is
+/// written the same way in every process.
+fn canonical(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut entries: Vec<(String, serde_json::Value)> = map.into_iter().collect();
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            serde_json::Value::Object(
+                entries
+                    .into_iter()
+                    .map(|(k, v)| (k, canonical(v)))
+                    .collect(),
+            )
+        }
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.into_iter().map(canonical).collect())
+        }
+        other => other,
+    }
+}
+
+/// SHA-256 of a value's canonical JSON, in hex.
+fn digest<T: serde::Serialize>(part: &'static str, value: &T) -> Result<String, RehearsalError> {
+    use sha2::Digest as _;
+    let value = serde_json::to_value(value).map_err(|e| RehearsalError::Unhashable {
+        part,
+        reason: e.to_string(),
+    })?;
+    let text = canonical(value).to_string();
+    Ok(format!("{:x}", sha2::Sha256::digest(text.as_bytes())))
+}
+
+/// What a rehearsal of `laydown` runs under, taken from `deployment` (GAP-107,
+/// `docs/design/DN-26-laydown-options.md` §11 item 3, D-119): five digests, each of one
+/// part of **the configuration `config_for` builds** for the throwaway desktop, so the
+/// basis is exactly what DN-32 §14 (D-113) has a rehearsal take and cannot drift from it.
+///
+/// - `placements`: the laydown's sensor and resource placements -- positions, modes,
+///   sectors and bands;
+/// - `sensors`: the placed sensors as the run declares them, their positions left to
+///   `placements`;
+/// - `resources`: the deployment's resources as the run takes them, a placed one's
+///   position left to `placements`;
+/// - `policy`: the whole `policy`, the geofences as placed beside the laydown (so the
+///   deployment's origin is in it), and the allocation horizon;
+/// - `tracking`: the tracker's configuration, profiles, the profile in force and the
+///   late-data policy.
+///
+/// What the run does not take -- endpoints, peers, feeds, accounts, a sensor's control
+/// endpoint and maintenance windows, the validity window, the approaches, the revision
+/// itself -- is in no part, so changing it stales no rehearsal.
+///
+/// # Errors
+///
+/// The refusals a run itself would make before running: a placed sensor the baseline does
+/// not declare, or geofences with no origin to place them from.
+pub fn basis_of(
+    deployment: &ConfigBaseline,
+    laydown: &Laydown,
+) -> Result<RehearsalBasis, RehearsalError> {
+    let placed: Vec<Placed<'_>> = laydown
+        .sensors
+        .iter()
+        .map(|p| {
+            let declared = deployment
+                .sensors
+                .iter()
+                .find(|s| s.id == p.sensor.0)
+                .ok_or_else(|| RehearsalError::UndeclaredSensor {
+                    laydown: laydown.id.clone(),
+                    sensor: p.sensor.0,
+                })?;
+            Ok((
+                declared,
+                p.position_enu,
+                p.azimuth_sector.or(declared.azimuth_sector),
+                p.elevation_band.or(declared.elevation_band),
+            ))
+        })
+        .collect::<Result<_, RehearsalError>>()?;
+    let built = config_for(&placed, BASIS_ORIGIN, laydown, deployment, Path::new(""))?;
+    let placed_resources: Vec<u32> = laydown.resources.iter().map(|r| r.resource.0).collect();
+    let sensors: Vec<SensorConfig> = built
+        .sensors
+        .iter()
+        .map(|s| SensorConfig {
+            position: [0.0; 3],
+            ..s.clone()
+        })
+        .collect();
+    let resources: Vec<ResourceConfig> = built
+        .resources
+        .iter()
+        .map(|r| {
+            if placed_resources.contains(&r.id) {
+                ResourceConfig {
+                    position: [0.0; 3],
+                    ..r.clone()
+                }
+            } else {
+                r.clone()
+            }
+        })
+        .collect();
+    Ok(RehearsalBasis {
+        placements: digest("placements", &(&laydown.sensors, &laydown.resources))?,
+        sensors: digest("sensors", &sensors)?,
+        resources: digest("resources", &resources)?,
+        policy: digest(
+            "policy",
+            &(&built.policy, &built.geofences, built.allocation_horizon),
+        )?,
+        tracking: digest(
+            "tracking",
+            &(
+                &built.tracking,
+                &built.tracking_profiles,
+                &built.mission_profiles,
+                &built.active_profile,
+                &built.time,
+            ),
+        )?,
     })
 }
 
@@ -823,6 +981,8 @@ pub fn run(
             geofences: deployment.geofences.len(),
         });
     }
+    // GAP-107, D-119: what this run is under, written down before it runs.
+    let basis = basis_of(deployment, laydown)?;
     let origin = Geodetic {
         lat_rad: metadata.origin.lat.to_radians(),
         lon_rad: metadata.origin.lon.to_radians(),
@@ -1081,6 +1241,8 @@ pub fn run(
         plans_proposed: plans.proposed,
         plans_not_offered: plans.not_offered,
         not_offered_because: plans.why,
+        revision: deployment.revision,
+        basis,
     };
     // Dropped before cleanup, deliberately: the journal's file handle is still open on
     // `state`, and `remove_dir_all` racing an open handle fails silently on Windows.
@@ -1361,6 +1523,110 @@ mod tests {
         let resolved =
             resolve_sensors(&standby, &unnamed, &catalogue, path).expect("standby needs none");
         assert!(resolved[0].1.is_none());
+    }
+
+    /// GAP-107, D-119 (DN-26 §11 item 3): every setting a rehearsal takes from the
+    /// deployment changes the part of its basis it belongs to and no other, and nothing a
+    /// rehearsal does not take changes any part -- so a basis says exactly whether a run
+    /// was under what is running. Round 1's committed baseline, which declares geofences
+    /// and an origin, so the policy part covers the fences' placement too.
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn the_basis_changes_with_what_a_rehearsal_takes_and_nothing_else() {
+        use gungnir_model::policy_settings::WeaponsControlStatus;
+        use gungnir_model::EffectorLayer;
+        type Change = fn(&mut ConfigBaseline);
+
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/usability/round-1.json");
+        let text = std::fs::read_to_string(path).expect("round-1.json is committed");
+        let base: ConfigBaseline = serde_json::from_str(&text).expect("round-1.json parses");
+        let current = |c: &ConfigBaseline| {
+            c.laydowns
+                .iter()
+                .find(|l| l.current)
+                .expect("round 1 marks one current")
+                .clone()
+        };
+        let basis = |c: &ConfigBaseline| basis_of(c, &current(c)).expect("round 1 has a basis");
+        let before = basis(&base);
+        assert_eq!(
+            before,
+            basis(&base.clone()),
+            "the same inputs, the same basis"
+        );
+
+        let taken: [(&str, Change); 11] = [
+            ("placements", |c| {
+                let l = c.laydowns.iter_mut().find(|l| l.current).expect("current");
+                l.sensors[1].position_enu[0] += 100.0;
+            }),
+            ("placements", |c| {
+                let l = c.laydowns.iter_mut().find(|l| l.current).expect("current");
+                l.sensors[1].mode = SensorMode::Track;
+            }),
+            ("placements", |c| {
+                let l = c.laydowns.iter_mut().find(|l| l.current).expect("current");
+                l.resources[1].position_enu[1] += 50.0;
+            }),
+            ("sensors", |c| c.sensors[0].max_range_m = 20_000.0),
+            ("sensors", |c| {
+                c.sensors[1].detection_model = Some("radar.long".into());
+            }),
+            ("resources", |c| c.resources[0].capacity = 6),
+            ("policy", |c| {
+                c.policy
+                    .control_status
+                    .by_layer
+                    .insert(EffectorLayer::Area, WeaponsControlStatus::Free);
+            }),
+            ("policy", |c| c.geofences[0].radius_m = 2_000.0),
+            ("policy", |c| c.allocation_horizon += 1),
+            ("tracking", |c| {
+                c.time.late_data = gungnir_model::LateDataPolicy::Reject;
+            }),
+            ("tracking", |c| c.active_profile = Some("littoral".into())),
+        ];
+        for (part, change) in taken {
+            let mut changed = base.clone();
+            change(&mut changed);
+            assert_eq!(
+                before.differs_in(&basis(&changed)),
+                vec![part],
+                "a change to what a rehearsal takes, in {part}"
+            );
+        }
+
+        let not_taken: [Change; 6] = [
+            |c| c.revision += 1,
+            |c| {
+                c.endpoints.push(gungnir_config::EndpointConfig {
+                    name: "harbour-master".into(),
+                    kind: "warning".into(),
+                    address: "https://example.invalid/warn".into(),
+                });
+            },
+            |c| c.sensors[0].control_endpoint = Some("tcp://127.0.0.1:9100".into()),
+            |c| c.approaches[0].name = "renamed".into(),
+            |c| {
+                c.validity = Some(gungnir_model::policy_settings::ValidityWindow {
+                    valid_from: MissionTime(0.0),
+                    valid_until: None,
+                });
+            },
+            |c| {
+                let l = c.laydowns.iter_mut().find(|l| l.current).expect("current");
+                l.intent = "reworded".into();
+            },
+        ];
+        for (i, change) in not_taken.into_iter().enumerate() {
+            let mut changed = base.clone();
+            change(&mut changed);
+            assert_eq!(
+                before,
+                basis(&changed),
+                "change {i} is not something a rehearsal takes"
+            );
+        }
     }
 
     #[test]

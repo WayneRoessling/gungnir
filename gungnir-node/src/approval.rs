@@ -692,6 +692,7 @@ fn record_of(forwarded: &v3::ForwardedDecision) -> DecisionRecord {
         request: r.request.clone(),
         origin: Some(forwarded.origin.clone()),
         mission_time: r.at,
+        acknowledged: Vec::new(),
     }
 }
 
