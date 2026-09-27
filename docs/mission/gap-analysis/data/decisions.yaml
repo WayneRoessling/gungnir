@@ -3014,6 +3014,61 @@
     keeping rehearsals in the session (a restart would put "never rehearsed", which is
     false, on a decision record). See
     `../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`.
+- id: D-125
+  decision: Which further geoid grids a deployment carries, what a NAVD88 height is worth in WGS-84 terms, and how any other grid is admitted
+  question: >-
+    D-121 pinned EGM2008 and refuses every other vertical datum by name (GAP-197), which
+    leaves most United States LIDAR (NAVD88) and EGM96 DEMs such as SRTM unusable. Which
+    grids join EGM2008, from where and pinned how; and since GEOID18 relates NAVD88 to
+    NAD83(2011) ellipsoidal heights rather than WGS-84 ones, what does a converted NAVD88
+    height claim?
+  raised_in: GAP-197; D-121; `../../rust-3d-data-ecosystem-build-vs-adopt.md` §5
+  decider: Owner
+  unblocks: GAP-197
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26: NGA's EGM96 15' grid for EGM96
+    heights (EPSG:5773) and NOAA's GEOID18 CONUS grid for NAVD88 heights (EPSG:5703,
+    6360, 8228) join EGM2008, each admitted exactly as EGM2008 was.** PROJ-data's
+    `us_nga_egm96_15.tif` and `us_noaa_g2018u0.tif` from cdn.proj.org, pinned by the
+    SHA-256 its `files.geojson` publishes (both downloads matched), never committed,
+    verified at start, one PN-09 line per grid, fetched and cached by `proj-crs`, clipped
+    for tests against `pyproj`. A datum takes its own grid only. PROJ-data has no GEOID18
+    file for Alaska or Hawaii (GEOID12B) and relates PRVI to PRVD02, so only CONUS is
+    pinned; NAVD88 outside the grid is refused. **A NAVD88 height is read as NAD83(2011)
+    = WGS 84, stated as metre-level** (1.4 m horizontal, -0.38 m vertical at Autzen),
+    the null step PROJ itself takes. Every other datum stays refused by name;
+    `deploy/README.md` gives the pinning procedure. Rejected: EGM2008 standing in for
+    EGM96 or NAVD88 (decimetres to a metre, silently); a time-dependent NAD83(2011) to
+    ITRF Helmert (needs an epoch no file carries, and would leave the horizontal on the
+    null step, filed as GAP-200); GEOID12B now (no data needs it yet). See
+    `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`.
+- id: D-126
+  decision: How a LAS 1.0-1.3 file's geokeys state the unit and datum of its heights, and how a WKT's horizontal code is checked
+  question: >-
+    GAP-102 left a geokey file's `VerticalUnitsGeoKey` unread, so every LAS 1.0-1.3 file
+    was refused before its datum was asked (item (2)), and checked a baseline's EPSG code
+    against a WKT only for containment, which a datum's code passed (item (4)). Real
+    writers put the unit in different keys, and NAVD88 converting since D-125 makes a
+    code-implied foot a live silent factor of 3.28. What does the loader read, and what
+    does it refuse?
+  raised_in: GAP-102 items (2) and (4); GAP-023; D-125
+  decider: Owner
+  unblocks: GAP-102, GAP-023
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** A geokey file's datum is its
+    `VerticalGeoKey` (4096) code. Its height unit is `VerticalUnitsGeoKey` (4099) where
+    present (LAStools), else the unit the 4096 code fixes (GDAL writes 6360 and no 4099),
+    else, with no vertical key, `ProjLinearUnitsGeoKey` (3076) of a projected system, the
+    WKT path's own fallback; only the metre and the two feet are read, and a
+    contradiction or anything else is refused by name. A point cloud is scaled; a DEM
+    stays metres-only (GAP-108's rule), which now refuses a `VerticalGeoKey` whose code
+    fixes a foot. A WKT `VERT_CS` with a down axis is a depth and refused. A baseline's
+    horizontal code must equal the WKT's own `PROJCS`/`GEOGCS` authority. Rejected:
+    guessing metres (a silent 3.28); reading 3076 over a stated vertical unit; converting
+    a DEM in feet with no real fixture to test it on; keeping containment. See
+    `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`.
 - id: D-123
   decision: What a Category 129 height above mean sea level is, and where it is corrected
   question: >-
@@ -3041,8 +3096,9 @@
     report carries the datum as data (`UasAltitudeReference`). Rejected: leaving the
     loss recorded (a known, fixable 35 m error); refusing EGM2008 as D-121 refuses it for
     a file stating EGM96, since here nothing is stated; correcting in the codec, which
-    reaches no grid; a per-feed geoid declaration, since no other grid ships (GAP-197).
-    See `../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`.
+    reaches no grid; a per-feed declaration naming EGM96 (pinned since D-125), since
+    edition 1.2 gives a sender no way to state its geoid and a gateway rarely knows its
+    senders' receivers. See `../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`.
 - id: D-124
   decision: What a Category 129 height no geoid model corrected does on the picture
   question: >-

@@ -805,6 +805,22 @@ pub mod geotiff {
                  loader reads DEM heights in metres only"
             ));
         }
+        // GAP-197: a vertical CRS code fixes its own unit, and GDAL writes the code and
+        // omits VerticalUnitsGeoKey -- so NAVD88 in feet (EPSG:6360, 8228) arrives with
+        // no unit key at all. Since NAVD88 now converts, reading such a DEM as metres
+        // would be the silent factor of 3.28 above, and it is refused the same way (as
+        // is a file whose unit key says metres of a code that says feet).
+        if let Some((code, factor)) = key(VERTICAL_TYPE).and_then(|code| {
+            crate::geoid::vertical_crs_unit_metres(u32::from(code))
+                .filter(|factor| (factor - 1.0).abs() > f64::EPSILON)
+                .map(|factor| (code, factor))
+        }) {
+            return Err(format!(
+                "its heights are in vertical system EPSG:{code} (VerticalGeoKey), whose unit \
+                 is {factor} m rather than the metre; this loader reads DEM heights in \
+                 metres only"
+            ));
+        }
         Ok(Georeference {
             scale: [*dx, *dy],
             top_left,

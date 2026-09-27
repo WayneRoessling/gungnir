@@ -382,10 +382,13 @@ fn with_the_verified_grid_a_uas_height_reaches_the_ellipsoid() {
     let (mut state, dir) = desktop_with_grid_dir("clip", Some("no-grid-here"));
     let clip = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../testdata/geoid/egm08_25_clip_53n56n_13e17e.tif");
-    state.geoid = gungnir_app::geoid::GeoidStatus::Verified {
-        grid: gungnir_data::geoid::GeoidGrid::verify(&clip, CLIP_SHA256).expect("the clip"),
-        source: gungnir_app::geoid::GridSource::Baseline,
-    };
+    state.geoid.set(
+        gungnir_data::geoid::GeoidModel::Egm2008,
+        gungnir_app::geoid::GeoidStatus::Verified {
+            grid: gungnir_data::geoid::GeoidGrid::verify(&clip, CLIP_SHA256).expect("the clip"),
+            source: gungnir_app::geoid::GridSource::Baseline,
+        },
+    );
     update::tick(&mut state);
     assert!(state.geoid_feeds.is_available(), "{:?}", state.geoid_feeds);
 
@@ -442,14 +445,17 @@ fn without_crs_a_verified_grid_is_not_lent_and_the_reason_names_the_feature() {
     // Any verified file stands in for the grid here: nothing reads it without PROJ.
     let stand_in = dir.join("stand-in.tif");
     std::fs::write(&stand_in, b"abc").expect("writes");
-    state.geoid = gungnir_app::geoid::GeoidStatus::Verified {
-        grid: gungnir_data::geoid::GeoidGrid::verify(
-            &stand_in,
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-        )
-        .expect("SHA-256 of abc"),
-        source: gungnir_app::geoid::GridSource::Baseline,
-    };
+    state.geoid.set(
+        gungnir_data::geoid::GeoidModel::Egm2008,
+        gungnir_app::geoid::GeoidStatus::Verified {
+            grid: gungnir_data::geoid::GeoidGrid::verify(
+                &stand_in,
+                "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            )
+            .expect("SHA-256 of abc"),
+            source: gungnir_app::geoid::GridSource::Baseline,
+        },
+    );
     let alerts_before = state.alerts.len();
     update::tick(&mut state);
     let reason = state.geoid_feeds.current().err().expect("nothing is lent");

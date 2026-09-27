@@ -85,8 +85,8 @@ pub fn tick(state: &mut AppState) {
     crate::sapient::tick(state);
     crate::identity::tick(state);
 
-    // 1a'''. The EGM2008 geoid grid (GAP-108): checked off the render thread at start,
-    //        before the terrain and the point-cloud pair below, which wait for it.
+    // 1a'''. The pinned geoid grids (GAP-108, GAP-197): checked off the render thread at
+    //        start, before the terrain and the point-cloud pair below, which wait for them.
     crate::geoid::poll(state);
     // GAP-196: and lent to every bound radar feed, so a UAS's height above mean sea
     // level is corrected from the next report on, or stays flagged with the reason.

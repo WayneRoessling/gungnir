@@ -127,6 +127,48 @@ fn a_dem_whose_heights_are_not_metres_is_refused_by_name() {
     }
 }
 
+/// GAP-197: NAVD88 now converts, and GDAL writes NAVD88 in US survey feet as
+/// `VerticalGeoKey` 6360 with **no** `VerticalUnitsGeoKey` (the code fixes the unit;
+/// `gungnir_data::geoid::vertical_crs_unit_metres`). Such a DEM is refused by name at
+/// load, never read as metres and converted. Made from `small-egm2008.tif` by rewriting
+/// its `VerticalGeoKey` value from 3855 to 6360 in place, the directory GDAL writes for
+/// `-a_srs EPSG:32633+6360` in every other respect. 5703, NAVD88 in metres, loads.
+#[test]
+fn a_dem_whose_vertical_code_fixes_a_foot_is_refused_by_name() {
+    let original = std::fs::read(fixture("small-egm2008.tif")).expect("fixture");
+    let entry = |code: u16| -> Vec<u8> {
+        [4096u16, 0, 1, code]
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect()
+    };
+    let at = original
+        .windows(8)
+        .position(|w| w == entry(3855).as_slice())
+        .expect("GDAL wrote the VerticalGeoKey inline");
+    for (code, refused) in [(6360u16, true), (8228, true), (5703, false)] {
+        let mut bytes = original.clone();
+        bytes[at..at + 8].copy_from_slice(&entry(code));
+        let path = scratch(&format!("navd88-{code}.tif"));
+        std::fs::write(&path, &bytes).expect("write");
+        match (geospatial::load_height_grid(&path), refused) {
+            (Err(DataError::Parse(message)), true) => {
+                assert!(message.contains(&format!("EPSG:{code}")), "{message}");
+                assert!(message.contains("metres only"), "{message}");
+            }
+            (Ok(grid), false) => {
+                assert_eq!(grid.vertical, Some(code));
+                let mesh = TerrainMesh::from_grid(&grid).expect("indexable");
+                assert_eq!(
+                    mesh.vertical_datum(),
+                    Some(gungnir_data::geoid::VerticalDatum::Navd88)
+                );
+            }
+            (other, _) => panic!("EPSG:{code}: {other:?}"),
+        }
+    }
+}
+
 #[test]
 fn a_centre_referenced_ascii_grid_is_shifted_to_its_corner() {
     let text = "ncols 2\nnrows 1\nxllcenter 115\nyllcenter 15\ncellsize 30\n1 2\n";

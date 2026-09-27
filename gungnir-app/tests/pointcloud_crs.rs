@@ -33,7 +33,11 @@ fn an_undeclared_file_under_a_local_enu_baseline_is_drawn_as_loaded() {
     assert_eq!(placement(None, None, true), Placement::AsLoaded);
     // A geokey directory that names no code declares nothing either.
     assert_eq!(
-        placement(None, Some(&PointCloudCrs::Geokeys(GridCrs::Unstated)), true),
+        placement(
+            None,
+            Some(&PointCloudCrs::Geokeys(GridCrs::Unstated.into())),
+            true
+        ),
         Placement::AsLoaded
     );
 }
@@ -54,7 +58,7 @@ fn a_local_enu_baseline_is_refused_when_the_file_declares_a_real_system() {
     assert!(reason.contains("epsg:<code>"), "{reason}");
 
     // The geokey form contradicts it just as well.
-    let geokeys = PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) });
+    let geokeys = PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) }.into());
     assert!(matches!(
         placement(None, Some(&geokeys), true),
         Placement::Refused(_)
@@ -130,7 +134,7 @@ fn an_undeclared_file_under_an_epsg_baseline_takes_the_baselines_code() {
 /// (`PointCloudCrs::vertical_unit_metres` says why it is left unread).
 #[test]
 fn a_declared_system_with_no_readable_vertical_unit_is_refused() {
-    let geokeys = PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) });
+    let geokeys = PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) }.into());
     let Placement::Refused(reason) = placement(Some(32610), Some(&geokeys), true) else {
         panic!("no readable vertical unit must refuse");
     };
@@ -196,48 +200,234 @@ fn fixture(name: &str) -> String {
         .into_owned()
 }
 
-/// **GAP-108 (D-121) on the real capture, through a real tick.** Until GAP-108 this test
-/// converted the Autzen cloud and drew it, with its NAVD88 heights used as though they
-/// were WGS-84 ellipsoidal ones -- about 22.6 m high, the geoid separation there. NAVD88
-/// has no grid in this deployment, so the pair is now refused by name, the reason naming
-/// the datum the file itself states, and nothing is drawn. The refusal is decided before
-/// PROJ runs, so it holds in every build, not only a `crs` one.
-///
-/// The horizontal half this test used to carry end to end is still checked against an
-/// independent `pyproj` run on the same capture (`gungnir-data/tests/pointcloud_crs.rs`),
-/// and the whole pipeline -- PROJ, the geoid, `LocalFrame` -- is checked end to end
-/// below on a file whose heights this deployment can convert.
-#[test]
-fn the_real_fixtures_navd88_heights_are_refused_by_name_through_a_real_tick() {
-    use gungnir_app::pointcloud::PointCloudStatus;
-    use gungnir_config::{PointCloudConfig, PointCloudFileConfig};
-
-    let bounded = |path: &str| PointCloudFileConfig {
+/// The Autzen query box, the same one `gungnir-data`'s own tests read.
+fn autzen_bounded(path: &str) -> gungnir_config::PointCloudFileConfig {
+    gungnir_config::PointCloudFileConfig {
         path: path.to_string(),
         copc_bounds: Some([637_200.0, 851_100.0, 400.0, 637_300.0, 851_200.0, 620.0]),
-    };
+    }
+}
+
+/// The deployment origin the Autzen tests place onto: the query box's centre, 100 m
+/// above the ellipsoid.
+fn autzen_origin() -> [f64; 3] {
+    [
+        44.056_081_952_041_154_f64.to_radians(),
+        (-123.068_898_230_983_63_f64).to_radians(),
+        100.0,
+    ]
+}
+
+/// **GAP-197 (D-125) on the real capture, through a real tick, without the grid.**
+/// NAVD88 takes GEOID18 and no other model, so a deployment that has not installed
+/// GEOID18 refuses the pair, naming the grid it needs -- decided before PROJ runs, so it
+/// holds in every build. (Before GAP-108 these NAVD88 heights were drawn as though
+/// ellipsoidal, 23 m high; between GAP-108 and GAP-197 they were refused outright.)
+#[test]
+fn the_real_fixtures_navd88_heights_are_refused_without_geoid18_naming_it() {
+    use gungnir_app::pointcloud::PointCloudStatus;
+    use gungnir_config::PointCloudConfig;
+
     let autzen = fixture("autzen-classified.copc.laz");
     let (mut state, dir) = desktop(
-        "navd88",
+        "navd88-no-grid",
         PointCloudConfig {
-            source: bounded(&autzen),
-            target: bounded(&autzen),
+            source: autzen_bounded(&autzen),
+            target: autzen_bounded(&autzen),
             frame: "epsg:2992".into(),
             vertical: None,
         },
-        [
-            44.056_081_952_041_154_f64.to_radians(),
-            (-123.068_898_230_983_63_f64).to_radians(),
-            152.400_304_800_609_6,
-        ],
+        autzen_origin(),
     );
     settle(&mut state);
     let PointCloudStatus::Failed { reason, .. } = &state.point_cloud else {
-        panic!("NAVD88 heights must be refused: {:?}", state.point_cloud);
+        panic!("NAVD88 without GEOID18 is refused: {:?}", state.point_cloud);
     };
-    assert!(reason.contains("NAVD88 height (ftUS)"), "{reason}");
-    assert!(reason.contains("no geoid grid"), "{reason}");
+    assert!(reason.contains("us_noaa_g2018u0.tif"), "{reason}");
+    assert!(reason.contains("NAVD88"), "{reason}");
     assert!(state.data.point_clouds.is_empty(), "nothing is drawn");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The committed GEOID18 clip, verified, as the start-up check would have installed it
+/// (`testdata/geoid/SOURCE.md`).
+#[cfg(feature = "crs")]
+fn install_geoid18_clip(state: &mut gungnir_app::state::AppState) {
+    let clip = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../testdata/geoid/g2018u0_clip_43n45n_124w122w.tif");
+    state.geoid.set(
+        gungnir_data::geoid::GeoidModel::Geoid18Conus,
+        gungnir_app::geoid::GeoidStatus::Verified {
+            grid: gungnir_data::geoid::GeoidGrid::verify(
+                &clip,
+                "a93c8ca6a47cc3d5a58ffeeac469aa9c8c9ca2400a0113a1976eb0a4bc9b16eb",
+            )
+            .expect("the committed GEOID18 clip"),
+            source: gungnir_app::geoid::GridSource::Baseline,
+        },
+    );
+}
+
+/// The absolute ENU of point `i` of the first loaded cloud: its `f64` corner plus its
+/// `f32` offset.
+#[cfg(feature = "crs")]
+fn enu_of(state: &gungnir_app::state::AppState, i: usize) -> [f64; 3] {
+    let cloud = &state.data.point_clouds[0];
+    let p = cloud.positions[i];
+    [
+        f64::from(p[0]) + cloud.origin[0],
+        f64::from(p[1]) + cloud.origin[1],
+        f64::from(p[2]) + cloud.origin[2],
+    ]
+}
+
+/// **GAP-197 (D-125): the real capture converts again, now through GEOID18, end to end
+/// through a real tick** -- PROJ for the Lambert inverse, the grid for the NAVD88 height,
+/// `gungnir_model::LocalFrame` for ENU. This is the test GAP-108 took away and the one
+/// GAP-102 was built around.
+///
+/// Independently, with nothing of this workspace's: `pyproj` over the full pinned GEOID18
+/// grid took `Transformer.from_crs(<the fixture's WKT>, "EPSG:4979")` for three of the
+/// box's points, in the loader's own order, to ECEF, and a hand rotation into the tangent
+/// plane at [`autzen_origin`] put them at the values below
+/// (`gungnir-data/tests/pointcloud_crs.rs` has the geodetic ones). Dropping GEOID18 would
+/// miss every up by 23.3 m; the tolerance is a tenth of a millimetre.
+#[test]
+#[cfg(feature = "crs")]
+fn the_real_capture_lands_through_geoid18_where_an_independent_computation_puts_it() {
+    use gungnir_app::pointcloud::PointCloudStatus;
+    use gungnir_config::PointCloudConfig;
+
+    let autzen = fixture("autzen-classified.copc.laz");
+    let (mut state, dir) = desktop(
+        "navd88-geoid18",
+        PointCloudConfig {
+            source: autzen_bounded(&autzen),
+            target: autzen_bounded(&autzen),
+            frame: "epsg:2992".into(),
+            vertical: None,
+        },
+        autzen_origin(),
+    );
+    install_geoid18_clip(&mut state);
+    settle(&mut state);
+    assert!(
+        matches!(state.point_cloud, PointCloudStatus::Loaded { .. }),
+        "{:?}",
+        state.point_cloud
+    );
+    assert_eq!(state.data.point_clouds[0].positions.len(), 4767);
+    for (i, want) in [
+        (
+            0,
+            [
+                -15.632_399_400_289_087,
+                14.322_704_328_325_154,
+                5.001_896_268_387_805,
+            ],
+        ),
+        (
+            2383,
+            [
+                4.199_937_042_242_675,
+                14.821_449_285_954_024,
+                4.611_462_284_825_729,
+            ],
+        ),
+        (
+            4766,
+            [
+                -7.645_210_074_340_254,
+                -9.606_629_005_367_767,
+                4.642_099_538_056_842,
+            ],
+        ),
+    ] {
+        let got = enu_of(&state, i);
+        for axis in 0..3 {
+            assert!(
+                (got[axis] - want[axis]).abs() < 1e-4,
+                "point {i} axis {axis}: {} against {}",
+                got[axis],
+                want[axis]
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// **GAP-102 item (2) and GAP-197 through a real tick: a LAS 1.2 file whose geokeys
+/// state NAVD88 in US survey feet** (`testdata/pointcloud/autzen-geokeys.las`, the key
+/// directory GDAL writes for EPSG:2992+6360), placed through GEOID18. `pyproj` took
+/// `EPSG:2992+6360` to `EPSG:4979` for its five points, then the same hand rotation at
+/// [`autzen_origin`]; the first point is the box centre, 29.063 m up because the origin
+/// sits 100 m above the ellipsoid and the point 129.063 m. The cloud spans 1.25 km, where
+/// the loader's `f32` offsets in feet and the placed `f32` offsets in metres each carry
+/// tens of micrometres, so the tolerance is two tenths of a millimetre.
+#[test]
+#[cfg(feature = "crs")]
+fn a_geokey_file_in_navd88_feet_lands_through_geoid18_where_pyproj_puts_it() {
+    use gungnir_app::pointcloud::PointCloudStatus;
+    use gungnir_config::{PointCloudConfig, PointCloudFileConfig};
+
+    let plain = |path: String| PointCloudFileConfig {
+        path,
+        copc_bounds: None,
+    };
+    let (mut state, dir) = desktop(
+        "geokeys-geoid18",
+        PointCloudConfig {
+            source: plain(fixture("autzen-geokeys.las")),
+            target: plain(fixture("autzen-geokeys.las")),
+            frame: "epsg:2992".into(),
+            vertical: None,
+        },
+        autzen_origin(),
+    );
+    install_geoid18_clip(&mut state);
+    settle(&mut state);
+    assert!(
+        matches!(state.point_cloud, PointCloudStatus::Loaded { .. }),
+        "{:?}",
+        state.point_cloud
+    );
+    for (i, want) in [
+        [0.0, 0.0, 29.062_630_753_229_662],
+        [
+            -487.936_104_413_653_54,
+            -707.021_701_265_043_4,
+            0.403_309_564_943_924_67,
+        ],
+        [
+            511.640_178_016_742_8,
+            744.316_031_152_460_3,
+            64.123_472_020_214_25,
+        ],
+        [
+            -14.759_457_977_780_002,
+            -15.713_213_344_444_414,
+            13.975_171_759_190_776,
+        ],
+        [
+            220.437_830_523_481_95,
+            266.170_492_937_138_7,
+            4.742_427_778_033_175,
+        ],
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let got = enu_of(&state, i);
+        for axis in 0..3 {
+            assert!(
+                (got[axis] - want[axis]).abs() < 2e-4,
+                "point {} axis {axis}: {} against {}",
+                i + 1,
+                got[axis],
+                want[axis]
+            );
+        }
+    }
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -276,14 +466,17 @@ fn a_pair_with_egm2008_heights_lands_where_an_independent_computation_puts_it() 
     );
     let clip = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../testdata/geoid/egm08_25_clip_53n56n_13e17e.tif");
-    state.geoid = gungnir_app::geoid::GeoidStatus::Verified {
-        grid: gungnir_data::geoid::GeoidGrid::verify(
-            &clip,
-            "60a16af44ca47724fd6cbb58565104a010dd2ef8c2d5ec1c666552052fa83e10",
-        )
-        .expect("the committed clip, testdata/geoid/SOURCE.md"),
-        source: gungnir_app::geoid::GridSource::Baseline,
-    };
+    state.geoid.set(
+        gungnir_data::geoid::GeoidModel::Egm2008,
+        gungnir_app::geoid::GeoidStatus::Verified {
+            grid: gungnir_data::geoid::GeoidGrid::verify(
+                &clip,
+                "60a16af44ca47724fd6cbb58565104a010dd2ef8c2d5ec1c666552052fa83e10",
+            )
+            .expect("the committed clip, testdata/geoid/SOURCE.md"),
+            source: gungnir_app::geoid::GridSource::Baseline,
+        },
+    );
     settle(&mut state);
     assert!(
         matches!(state.point_cloud, PointCloudStatus::Loaded { .. }),

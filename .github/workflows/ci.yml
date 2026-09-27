@@ -250,7 +250,7 @@ jobs:
         # build script runs. pkg-config so proj-sys can look for a system libproj first
         # and report cleanly when it does not find an acceptable one.
         # libtiff-dev since GAP-108: libproj's GeoTIFF grid reader, which proj-sys's
-        # `tiff` feature builds and links, is what reads the EGM2008 geoid grid.
+        # `tiff` feature builds and links, is what reads the pinned geoid grids.
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake pkg-config libsqlite3-dev sqlite3 libtiff-dev
@@ -281,52 +281,57 @@ jobs:
           set -o pipefail
           cargo test -p gungnir-data --features crs --lib 2>&1 | tee dem-unit.log
           cargo test -p gungnir-app --features crs --test terrain 2>&1 | tee dem-app.log
-      # GAP-108: the EGM2008 geoid through PROJ, on the committed clip of the pinned grid,
-      # against the independent pyproj values the tests carry. GAP-196: and a UAS's
-      # height above mean sea level (ASTERIX Category 129) corrected with it through the
-      # desktop's own feed wiring, and refused off the clip.
-      - name: geoid -- the EGM2008 grid through PROJ, on the committed clip
+      # GAP-108, GAP-197: the EGM2008, EGM96 and GEOID18 grids through PROJ, on the
+      # committed clips of the pinned grids, against the independent pyproj values the
+      # tests carry. GAP-196: and a UAS's height above mean sea level (ASTERIX Category
+      # 129) corrected with the EGM2008 clip through the desktop's own feed wiring, and
+      # refused off the clip.
+      - name: geoid -- the pinned grids through PROJ, on the committed clips
         run: |
           set -o pipefail
           cargo test -p gungnir-data --features crs --test geoid 2>&1 | tee geoid.log
           cargo test -p gungnir-app --features crs --test uas_identification 2>&1 | tee -a geoid.log
-      # The full pinned grid: restored from the cache under its own digest, fetched from
-      # PROJ's CDN only on a miss, and checked against deploy/geoid/SHA256SUMS either way,
-      # so a changed or truncated file stops the job before any test reads it.
-      - name: restore the pinned EGM2008 grid
-        id: egm2008-cache
+      # The full pinned grids: restored from the cache under the manifest's own digest,
+      # each fetched from PROJ's CDN only when missing, and every one checked against
+      # deploy/geoid/SHA256SUMS either way, so a changed or truncated file stops the job
+      # before any test reads it. The file list is the manifest's, so a grid pinned
+      # there (deploy/README.md, "Pinning a further geoid grid") is fetched here too.
+      - name: restore the pinned geoid grids
+        id: geoid-cache
         uses: actions/cache/restore@v4
         with:
           path: ~/.cache/gungnir-geoid
-          key: egm2008-${{ hashFiles('deploy/geoid/SHA256SUMS') }}
-      - name: fetch the pinned EGM2008 grid on a cache miss, and check it either way
+          key: geoid-${{ hashFiles('deploy/geoid/SHA256SUMS') }}
+      - name: fetch the pinned geoid grids on a cache miss, and check them either way
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ~/.cache/gungnir-geoid
           cd ~/.cache/gungnir-geoid
-          if [ ! -f us_nga_egm08_25.tif ]; then
-            curl -fsSL --retry 3 -o us_nga_egm08_25.tif https://cdn.proj.org/us_nga_egm08_25.tif
-          fi
+          awk 'NF == 2 { print $2 }' "$GITHUB_WORKSPACE/deploy/geoid/SHA256SUMS" | while read -r grid; do
+            if [ ! -f "$grid" ]; then
+              curl -fsSL --retry 3 -o "$grid" "https://cdn.proj.org/$grid"
+            fi
+          done
           sha256sum -c "$GITHUB_WORKSPACE/deploy/geoid/SHA256SUMS"
-      - name: save the pinned EGM2008 grid (main only)
-        if: github.ref == 'refs/heads/main' && steps.egm2008-cache.outputs.cache-hit != 'true'
+      - name: save the pinned geoid grids (main only)
+        if: github.ref == 'refs/heads/main' && steps.geoid-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ~/.cache/gungnir-geoid
-          key: egm2008-${{ hashFiles('deploy/geoid/SHA256SUMS') }}
-      - name: geoid -- the full pinned grid, and the desktop's start-up check against it
+          key: geoid-${{ hashFiles('deploy/geoid/SHA256SUMS') }}
+      - name: geoid -- the full pinned grids, and the desktop's start-up check against them
         shell: bash
         run: |
           set -o pipefail
-          export GUNGNIR_EGM2008_GRID_DIR="$HOME/.cache/gungnir-geoid"
+          export GUNGNIR_GEOID_GRID_DIR="$HOME/.cache/gungnir-geoid"
           cargo test -p gungnir-data --features crs --test geoid -- --ignored 2>&1 | tee geoid-full.log
           cargo test -p gungnir-app --features crs --test terrain -- --ignored 2>&1 | tee -a geoid-full.log
       # The same anti-vacuous-pass check gpu-fusion.yml uses, carried over from the
       # crs-projection.yml this job absorbed: a feature-gated suite that silently
       # compiled zero tests in (a typo in the cfg, the wrong crate, a renamed feature)
       # would otherwise report success for running nothing. The full-grid run is held to
-      # its own count, since its two tests are `#[ignore]`d and a missed `--ignored`
+      # its own count, since its four tests are `#[ignore]`d and a missed `--ignored`
       # would otherwise pass as zero tests inside a non-zero total.
       - name: a gate that ran nothing has not passed
         shell: bash
@@ -340,8 +345,8 @@ jobs:
           fi
           full=$(awk '/^test result:/ { s += $4 } END { print s + 0 }' geoid-full.log)
           echo "full-grid tests executed: $full"
-          if [ "$full" -lt 2 ]; then
-            echo "::error::the full-grid geoid run executed $full tests, not the two it holds (GAP-108)"
+          if [ "$full" -lt 4 ]; then
+            echo "::error::the full-grid geoid run executed $full tests, not the four it holds (GAP-108, GAP-197)"
             exit 1
           fi
 

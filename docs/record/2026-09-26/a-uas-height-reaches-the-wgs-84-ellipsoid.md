@@ -103,8 +103,13 @@ height's loss is not settled until the adapter has run.
 - Keeping the recorded loss: a known 35 m error that the grid can remove.
 - Refusing EGM2008 here as D-121 does for a stated EGM96: nothing is stated.
 - Correcting in the codec: it reaches no grid.
-- A per-feed declaration of which geoid the sender uses: no other grid ships (GAP-197),
-  so every declaration but EGM2008 could only be refused.
+- A per-feed declaration of which geoid the sender uses, now that EGM96 is pinned too
+  (D-125, merged while this was built): edition 1.2 gives a sender no way to state its
+  geoid, and a gateway rarely knows which receiver each of its senders flies, so the
+  declaration would be a guess made once for every UAS on the feed. The EGM2008/EGM96
+  difference stays the stated residue instead. The lookup goes through the multi-grid
+  model D-125 introduced: `lend_to_feeds` lends the EGM2008 grid's status and nothing
+  else.
 
 ## D-124: without the grid, the height is flagged, weighed as a bias and counted
 

@@ -29,6 +29,43 @@ use crate::DataError;
 const MODEL_TYPE_PROJECTED: u16 = 1;
 /// `GTModelTypeGeoKey` value for a geographic two-dimensional system.
 const MODEL_TYPE_GEOGRAPHIC: u16 = 2;
+/// `ProjLinearUnitsGeoKey` (OGC `GeoTIFF` 1.1 §7.4.7; `ProjLinearUnitsGeoKey` in 1.0):
+/// the linear unit of a projected system's easting and northing.
+const PROJ_LINEAR_UNITS_GEO_KEY: u16 = 3076;
+/// `VerticalGeoKey` (`VerticalCSTypeGeoKey` in `GeoTIFF` 1.0): the vertical CRS code.
+const VERTICAL_GEO_KEY: u16 = 4096;
+/// `VerticalUnitsGeoKey`: the vertical axis's linear unit code.
+const VERTICAL_UNITS_GEO_KEY: u16 = 4099;
+
+/// What a LAS 1.0-1.3 `GeoTIFF` key directory states: the horizontal system, reduced to
+/// the EPSG code it names (the same [`GridCrs`] the DEM reader reduces a `GeoTIFF` to),
+/// and the three keys that say what the heights are (GAP-102 item (2), GAP-197).
+///
+/// Every field is the key's raw value, `None` where the directory omits the key, so what
+/// the file said and what this crate concluded from it stay apart:
+/// [`PointCloudCrs::vertical_unit`] and [`PointCloudCrs::vertical_datum`] draw the
+/// conclusions.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GeokeyCrs {
+    /// `GTModelTypeGeoKey` with `ProjectedCRSGeoKey` or `GeodeticCRSGeoKey`.
+    pub horizontal: GridCrs,
+    /// `VerticalGeoKey` (4096): an EPSG vertical CRS code, `32767` for user-defined.
+    pub vertical: Option<u16>,
+    /// `VerticalUnitsGeoKey` (4099): an EPSG linear unit code.
+    pub vertical_units: Option<u16>,
+    /// `ProjLinearUnitsGeoKey` (3076): an EPSG linear unit code.
+    pub linear_units: Option<u16>,
+}
+
+impl From<GridCrs> for GeokeyCrs {
+    /// A directory stating a horizontal system and nothing about its heights.
+    fn from(horizontal: GridCrs) -> Self {
+        GeokeyCrs {
+            horizontal,
+            ..GeokeyCrs::default()
+        }
+    }
+}
 
 /// The coordinate reference system a LAS file declares for itself, in whichever of the
 /// two forms the LAS specification allows.
@@ -36,17 +73,16 @@ const MODEL_TYPE_GEOGRAPHIC: u16 = 2;
 /// Deliberately not `GridCrs`, and not an extension of it: a LAS 1.4 file declares its
 /// CRS as WKT, which carries a compound (horizontal + vertical) system that a
 /// `GeoTIFF`
-/// geokey directory reduced to one EPSG code cannot express. The geokey form *is*
-/// `GridCrs`, reused rather than redefined, because there it is the same set of keys
-/// read from the same spec.
+/// geokey directory reduced to one EPSG code cannot express. The geokey form carries
+/// `GridCrs` for its horizontal half, reused rather than redefined, because there it is
+/// the same set of keys read from the same spec.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PointCloudCrs {
     /// The LAS 1.4 WKT VLR: user id `LASF_Projection`, record 2112. The LAS 1.4
     /// specification names OGC WKT 1 here, which is what the parsing below assumes.
     Wkt(String),
-    /// The LAS 1.0-1.3 `GeoTIFF` geokey VLRs (records 34735/34736/34737), reduced to
-    /// EPSG code they name.
-    Geokeys(GridCrs),
+    /// The LAS 1.0-1.3 `GeoTIFF` geokey VLRs (records 34735/34736/34737).
+    Geokeys(GeokeyCrs),
 }
 
 impl PointCloudCrs {
@@ -59,19 +95,30 @@ impl PointCloudCrs {
     pub fn proj_definition(&self) -> Option<String> {
         match self {
             PointCloudCrs::Wkt(wkt) => Some(wkt.clone()),
-            PointCloudCrs::Geokeys(
-                GridCrs::Projected { epsg: Some(code) } | GridCrs::Geographic { epsg: Some(code) },
-            ) => Some(format!("EPSG:{code}")),
+            PointCloudCrs::Geokeys(GeokeyCrs {
+                horizontal:
+                    GridCrs::Projected { epsg: Some(code) } | GridCrs::Geographic { epsg: Some(code) },
+                ..
+            }) => Some(format!("EPSG:{code}")),
             PointCloudCrs::Geokeys(_) => None,
         }
     }
 
-    /// How many metres one unit of the file's **vertical** axis is, when the file says.
+    /// How many metres one unit of the file's **vertical** axis is, when the file says;
+    /// `None` when it does not, which the loader refuses. [`Self::vertical_unit`] says
+    /// why.
+    #[must_use]
+    pub fn vertical_unit_metres(&self) -> Option<f64> {
+        self.vertical_unit().ok()
+    }
+
+    /// How many metres one unit of the file's **vertical** axis is, or why the file does
+    /// not say in a form this build reads.
     ///
-    /// `Some(1.0)` for a file whose heights are already metres. See [`to_local_enu`] for
+    /// `Ok(1.0)` for a file whose heights are already metres. See [`to_local_enu`] for
     /// why this is read here at all rather than left to PROJ.
     ///
-    /// **Two places are consulted, in order, and the second is not a guess.** A WKT that
+    /// **A WKT: two places, in order, and the second is not a guess.** A WKT that
     /// declares a `VERT_CS` states the vertical unit outright and that answer is final.
     /// A WKT that declares none -- which is the ordinary case for a file in a metric
     /// projected system such as a UTM zone -- leaves the height in the same linear unit
@@ -79,47 +126,124 @@ impl PointCloudCrs {
     /// and that is read instead. Without this second step every plain UTM file would be
     /// refused, and a file in a projected system measured in feet would be off by a
     /// factor of 3.28 if the first step's absence were read as "metres".
-    #[must_use]
-    pub fn vertical_unit_metres(&self) -> Option<f64> {
+    ///
+    /// **A geokey directory (GAP-102 item (2), GAP-197): the same two places, read from
+    /// its keys.** The vertical system's unit first: `VerticalUnitsGeoKey` (4099) where
+    /// the directory has it, which is what `LAStools` writes; otherwise the unit the
+    /// `VerticalGeoKey` (4096) code itself fixes, which is what GDAL writes -- for
+    /// EPSG:2992+6360 it writes 4096 = 6360 and no 4099, the US survey foot being part of
+    /// what 6360 means ([`crate::geoid::vertical_crs_unit_metres`]). Where the directory
+    /// states both and they disagree, the file contradicts itself and is refused. With no
+    /// vertical key at all, the height is in the projected system's linear unit,
+    /// `ProjLinearUnitsGeoKey` (3076), which GDAL and libLAS both write for a projected
+    /// system; a geographic directory has no linear unit to fall back to. Only the metre
+    /// and the two feet are read ([`crate::geoid::linear_unit_metres`]).
+    ///
+    /// # Errors
+    ///
+    /// The reason in words, for the loader's refusal.
+    pub fn vertical_unit(&self) -> Result<f64, String> {
+        use crate::geoid::{linear_unit_metres, vertical_crs_unit_metres};
         match self {
-            PointCloudCrs::Wkt(wkt) => wkt1_vertical_unit_metres(wkt),
-            // **Deliberately unread for a geokey file, rather than guessed.** A geokey
-            // directory states its vertical unit as `VerticalUnitsGeoKey` (4099), an
-            // EPSG unit code. Reading it would be a handful of lines, and this crate
-            // holds no LAS 1.0-1.3 fixture that carries one -- the five-point fixture
-            // it generates declares no CRS at all -- so the code would ship untested
-            // against any real file. `None` means the loader refuses such a file by
-            // name, which is recoverable and honest; a wrong factor would be a silent
-            // three-fold error in every height. The next fixture with a geokey vertical
-            // system is what should turn this on.
-            PointCloudCrs::Geokeys(_) => None,
+            PointCloudCrs::Wkt(wkt) => wkt1_vertical_unit_metres(wkt).ok_or_else(|| {
+                "its WKT states no unit this build reads for its heights (a VERT_CS with a \
+                 UNIT, or a PROJCS whose own linear UNIT applies)"
+                    .to_string()
+            }),
+            PointCloudCrs::Geokeys(keys) => {
+                let unit_key = keys
+                    .vertical_units
+                    .map(|code| {
+                        linear_unit_metres(code).ok_or_else(|| {
+                            format!(
+                                "its VerticalUnitsGeoKey names unit EPSG:{code}, which is \
+                                 not the metre or a foot"
+                            )
+                        })
+                    })
+                    .transpose()?;
+                let implied = keys
+                    .vertical
+                    .and_then(|code| vertical_crs_unit_metres(u32::from(code)));
+                match (keys.vertical, unit_key, implied) {
+                    (Some(code), Some(stated), Some(implied))
+                        if (stated - implied).abs() > 1e-12 =>
+                    {
+                        Err(format!(
+                            "its VerticalGeoKey EPSG:{code} is in units of {implied} m and \
+                             its VerticalUnitsGeoKey says {stated} m, so the file \
+                             contradicts itself about its heights"
+                        ))
+                    }
+                    (_, Some(stated), _) => Ok(stated),
+                    (Some(_), None, Some(implied)) => Ok(implied),
+                    (Some(code), None, None) => Err(format!(
+                        "its VerticalGeoKey is EPSG:{code} with no VerticalUnitsGeoKey, and \
+                         this build does not know the unit that code fixes"
+                    )),
+                    (None, None, _) => match (keys.horizontal, keys.linear_units) {
+                        (GridCrs::Projected { .. }, Some(code)) => linear_unit_metres(code)
+                            .ok_or_else(|| {
+                                format!(
+                                    "its ProjLinearUnitsGeoKey names unit EPSG:{code}, which \
+                                     is not the metre or a foot"
+                                )
+                            }),
+                        _ => Err("its geokeys state no unit for its heights (no \
+                                  VerticalGeoKey or VerticalUnitsGeoKey, and no \
+                                  ProjLinearUnitsGeoKey of a projected system)"
+                            .to_string()),
+                    },
+                }
+            }
         }
     }
 
     /// The vertical datum the file states for its heights, or `None` when it states none
-    /// (GAP-108, D-121).
+    /// (GAP-108 and D-121; GAP-197 and D-125).
     ///
-    /// Read from a WKT 1 `VERT_CS` node, in this order: a `VERT_DATUM` of type 2002 (OGC
-    /// 01-009's ellipsoidal datum type) is a WGS-84 ellipsoidal height; a `VERT_DATUM`
-    /// whose authority is EPSG:1027 (the EGM2008 geoid) is an EGM2008 height whatever its
-    /// unit, which [`Self::vertical_unit_metres`] reads separately; otherwise the
-    /// `VERT_CS`'s own EPSG authority decides, through
-    /// [`VerticalDatum::from_epsg`](crate::geoid::VerticalDatum::from_epsg); and a
-    /// `VERT_CS` with no authority at all is kept by its name, which a refusal quotes.
+    /// **A geokey directory** states it as its `VerticalGeoKey` code, read through
+    /// [`VerticalDatum::from_epsg`](crate::geoid::VerticalDatum::from_epsg).
     ///
-    /// **A WKT with no `VERT_CS` states nothing**, and neither does a geokey file here:
-    /// a plain projected system says nothing about what its heights are measured from,
-    /// and reading that silence as "ellipsoidal" or "above the geoid" would be the guess
-    /// D-121 refuses. The baseline's `point_cloud.vertical` is where such a file's datum
-    /// is declared.
+    /// **A WKT** states it in a WKT 1 `VERT_CS` node, read in this order: a `VERT_CS`
+    /// whose axis points **down** is a depth, not a height, and is refused by its name
+    /// whatever its datum; a `VERT_DATUM` of type 2002 (OGC 01-009's ellipsoidal datum
+    /// type) is a WGS-84 ellipsoidal height; a `VERT_DATUM` whose own authority is one
+    /// of the geoid datums a grid is pinned for -- EPSG:1027 (EGM2008), 5171 (EGM96),
+    /// 5103 (NAVD88) -- names that datum whatever its unit, which
+    /// [`Self::vertical_unit`] reads separately; otherwise the `VERT_CS`'s own EPSG
+    /// authority decides; and a `VERT_CS` with no authority at all is kept by its name,
+    /// which a refusal quotes.
+    ///
+    /// **A WKT with no `VERT_CS`, or a directory with no `VerticalGeoKey`, states
+    /// nothing**: a plain projected system says nothing about what its heights are
+    /// measured from, and reading that silence as "ellipsoidal" or "above the geoid"
+    /// would be the guess D-121 refuses. The baseline's `point_cloud.vertical` is where
+    /// such a file's datum is declared.
     #[must_use]
     pub fn vertical_datum(&self) -> Option<crate::geoid::VerticalDatum> {
-        use crate::geoid::{VerticalDatum, EPSG_EGM2008_GEOID};
-        let PointCloudCrs::Wkt(wkt) = self else {
-            return None;
+        use crate::geoid::VerticalDatum;
+        let wkt = match self {
+            PointCloudCrs::Wkt(wkt) => wkt,
+            PointCloudCrs::Geokeys(keys) => {
+                return keys
+                    .vertical
+                    .map(|code| VerticalDatum::from_epsg(u32::from(code)));
+            }
         };
         let start = wkt.find("VERT_CS[")?;
         let node = balanced_node(&wkt[start..])?;
+        let name = node
+            .split_once('"')
+            .and_then(|(_, rest)| rest.split_once('"'))
+            .map_or("an unnamed vertical system", |(name, _)| name)
+            .to_string();
+        if direct_child(node, "AXIS").is_some_and(|axis| axis.contains("DOWN")) {
+            return Some(VerticalDatum::Other {
+                epsg: direct_child(node, "AUTHORITY").and_then(epsg_authority),
+                name: format!("{name}, a depth axis rather than a height"),
+            });
+        }
         if let Some(datum_at) = node.find("VERT_DATUM[") {
             if let Some(datum) = balanced_node(&node[datum_at..]) {
                 // VERT_DATUM["name", type, AUTHORITY[...]]: the type is the field after
@@ -132,18 +256,14 @@ impl PointCloudCrs {
                 if datum_type == Some("2002") {
                     return Some(VerticalDatum::Ellipsoidal);
                 }
-                if direct_child(datum, "AUTHORITY").and_then(epsg_authority)
-                    == Some(EPSG_EGM2008_GEOID)
+                if let Some(known) = direct_child(datum, "AUTHORITY")
+                    .and_then(epsg_authority)
+                    .and_then(VerticalDatum::from_datum_epsg)
                 {
-                    return Some(VerticalDatum::Egm2008);
+                    return Some(known);
                 }
             }
         }
-        let name = node
-            .split_once('"')
-            .and_then(|(_, rest)| rest.split_once('"'))
-            .map_or("an unnamed vertical system", |(name, _)| name)
-            .to_string();
         Some(
             match direct_child(node, "AUTHORITY").and_then(epsg_authority) {
                 Some(code) => match VerticalDatum::from_epsg(code) {
@@ -157,25 +277,28 @@ impl PointCloudCrs {
 
     /// Whether this declaration is consistent with a baseline that claims `epsg`.
     ///
-    /// **The geokey check is exact and the WKT check is deliberately weak, and the
-    /// difference is stated rather than smoothed over.** A geokey directory names one
+    /// **Both checks are exact since GAP-102 closed.** A geokey directory names one
     /// horizontal code, so equality is the whole question. A WKT names an authority on
     /// every node it has -- the projected system, the geographic system beneath it, the
-    /// datum, the spheroid, the prime meridian, the units -- and picking the horizontal
-    /// one out needs a WKT parser this crate does not have and PROJ already is. So the
-    /// WKT case asks only whether the claimed code appears in the file's WKT at all.
-    /// That catches an operator who named the wrong file or the wrong code, which is
-    /// what this check is for; it does not certify the code is the *horizontal* one,
-    /// and it is not what makes the conversion correct. What makes the conversion
-    /// correct is that [`to_local_enu`] converts from the file's own declaration and
-    /// never from the baseline's claim.
+    /// datum, the spheroid, the prime meridian, the units -- and this used to ask only
+    /// whether the claimed code appeared anywhere in it, which a datum's code (Autzen's
+    /// NAD83 datum, EPSG:6269) passed as readily as the system's own (GAP-102 item (4)).
+    /// It now reads the horizontal system's own code: the `AUTHORITY` that is a direct
+    /// child of the top `PROJCS` or `GEOGCS`, or of the one that is a direct child of a
+    /// `COMPD_CS` ([`wkt1_horizontal_epsg`]). A WKT whose horizontal system carries no
+    /// EPSG authority contradicts nothing, the same as a geokey directory naming no
+    /// code. This catches an operator who named the wrong file or the wrong code; what
+    /// makes the conversion correct is still that [`to_local_enu`] converts from the
+    /// file's own declaration and never from the baseline's claim.
     #[must_use]
     pub fn agrees_with_epsg(&self, epsg: u32) -> bool {
         match self {
-            PointCloudCrs::Wkt(wkt) => wkt.contains(&format!("\"EPSG\",\"{epsg}\"")),
-            PointCloudCrs::Geokeys(
-                GridCrs::Projected { epsg: Some(code) } | GridCrs::Geographic { epsg: Some(code) },
-            ) => u32::from(*code) == epsg,
+            PointCloudCrs::Wkt(wkt) => wkt1_horizontal_epsg(wkt).is_none_or(|code| code == epsg),
+            PointCloudCrs::Geokeys(GeokeyCrs {
+                horizontal:
+                    GridCrs::Projected { epsg: Some(code) } | GridCrs::Geographic { epsg: Some(code) },
+                ..
+            }) => u32::from(*code) == epsg,
             // A geokey directory that names no code contradicts nothing.
             PointCloudCrs::Geokeys(_) => true,
         }
@@ -206,6 +329,23 @@ fn wkt1_vertical_unit_metres(wkt: &str) -> Option<f64> {
     let start = wkt.find("PROJCS[")?;
     let node = balanced_node(&wkt[start..])?;
     direct_child(node, "UNIT").and_then(unit_factor)
+}
+
+/// The EPSG code of a WKT 1 definition's **horizontal** system, or `None` when it has no
+/// EPSG authority of its own: the top node when that is a `PROJCS` or `GEOGCS`, or the
+/// `PROJCS` or `GEOGCS` that is a direct child of a top `COMPD_CS`, and then only the
+/// `AUTHORITY` that is that node's direct child -- never a datum's, a spheroid's or a
+/// unit's nested inside it.
+fn wkt1_horizontal_epsg(wkt: &str) -> Option<u32> {
+    let top = balanced_node(wkt.trim_start())?;
+    let horizontal = if top.starts_with("COMPD_CS[") {
+        direct_child(top, "PROJCS").or_else(|| direct_child(top, "GEOGCS"))?
+    } else if top.starts_with("PROJCS[") || top.starts_with("GEOGCS[") {
+        top
+    } else {
+        return None;
+    };
+    direct_child(horizontal, "AUTHORITY").and_then(epsg_authority)
 }
 
 /// The `NAME[...]` node that is a direct child of `node`, skipping any nested inside a
@@ -316,10 +456,27 @@ pub fn declared(
     let Some(geo) = geo else {
         return Ok(None);
     };
-    // The same three keys `gungnir-data`'s `GeoTIFF` DEM reader already reduces to a
-    // `GridCrs` (`geospatial::georeference`), read here through the `las` crate's own
-    // accessors rather than re-walking the key directory.
-    let crs = match geo.get_gt_model_type_geo_key_value() {
+    Ok(Some(PointCloudCrs::Geokeys(geokey_crs(&geo))))
+}
+
+/// A `GeoTIFF` key directory as [`GeokeyCrs`]: the same three horizontal keys
+/// `gungnir-data`'s `GeoTIFF` DEM reader already reduces to a `GridCrs`
+/// (`geospatial::georeference`), read through the `las` crate's own accessors, and the
+/// three unit and vertical keys read from its entries directly (the crate has an accessor
+/// for `VerticalGeoKey` and none for the two unit keys). A key stored anywhere but inline
+/// as a `SHORT` is not a code, and reads as absent.
+#[must_use]
+pub fn geokey_crs(geo: &las::crs::GeoTiffCrs) -> GeokeyCrs {
+    let key = |id: u16| {
+        geo.entries
+            .iter()
+            .find(|entry| entry.id == id)
+            .and_then(|entry| match entry.data {
+                las::crs::GeoTiffData::U16(value) => Some(value),
+                _ => None,
+            })
+    };
+    let horizontal = match geo.get_gt_model_type_geo_key_value() {
         Some(MODEL_TYPE_PROJECTED) => GridCrs::Projected {
             epsg: geo.get_projected_crs_geo_key_value(),
         },
@@ -328,7 +485,12 @@ pub fn declared(
         },
         _ => GridCrs::Unstated,
     };
-    Ok(Some(PointCloudCrs::Geokeys(crs)))
+    GeokeyCrs {
+        horizontal,
+        vertical: key(VERTICAL_GEO_KEY),
+        vertical_units: key(VERTICAL_UNITS_GEO_KEY),
+        linear_units: key(PROJ_LINEAR_UNITS_GEO_KEY),
+    }
 }
 
 /// Convert a buffer's points from the coordinate reference system `source` names into
@@ -348,17 +510,25 @@ pub fn declared(
 /// through `proj_trans` from `source` to `EPSG:4979`, so a projected system's inverse
 /// projection and whatever datum step PROJ selects for it are both applied.
 ///
-/// **The vertical conversion is the file's unit, then the vertical datum (GAP-108,
-/// D-121).** The height is first scaled by the metres-per-unit factor the file declares.
-/// It is then made an ellipsoidal height under `heights`: unchanged when it already is
-/// one, and with the EGM2008 undulation at the point's own longitude and latitude added
-/// when it is an EGM2008 height, read from the verified grid by PROJ
-/// ([`crate::geoid::undulations`]). A height in any other datum never reaches this
-/// function: `height_reference` refuses it by name. (Before GAP-108 no datum shift was
-/// applied at all, so a NAVD88 height was used as though it were ellipsoidal -- about
-/// 22 m high at the Autzen fixture. `proj` 0.31's `Proj::convert` still zeroes the `z`
-/// it hands `proj_trans`, which is why the height does not ride the horizontal
-/// transform and the geoid is applied as its own step.)
+/// **The vertical conversion is the file's unit, then the vertical datum (GAP-108 and
+/// D-121; GAP-197 and D-125).** The height is first scaled by the metres-per-unit factor
+/// the file declares. It is then made an ellipsoidal height under `heights`: unchanged
+/// when it already is one, and with the undulation of its datum's pinned geoid grid at
+/// the point's own longitude and latitude added when it is an EGM2008, EGM96 or NAVD88
+/// height, read from the verified grid by PROJ ([`crate::geoid::undulations`]); a point
+/// outside that grid -- NAVD88 outside the conterminous United States -- fails the whole
+/// conversion by name. A height in any other datum never reaches this function:
+/// `height_reference` refuses it by name. (Before GAP-108 no datum shift was applied at
+/// all, so a NAVD88 height was used as though it were ellipsoidal -- about 23 m high at
+/// the Autzen fixture. `proj` 0.31's `Proj::convert` still zeroes the `z` it hands
+/// `proj_trans`, which is why the height does not ride the horizontal transform and the
+/// geoid is applied as its own step.)
+///
+/// **A NAVD88 height lands at the metre level, not the centimetre.** GEOID18 makes it a
+/// NAD83(2011) ellipsoidal height, and the horizontal half likewise converts a NAD83
+/// latitude and longitude with PROJ's null NAD83-to-WGS-84 step; the metre or two
+/// between the two frames is not modelled on either axis (`crate::geoid`'s module
+/// documentation has the figures).
 ///
 /// # Performance
 ///
@@ -575,20 +745,35 @@ mod tests {
         }
     }
 
-    /// GAP-108: the vertical datum each form of WKT states. Autzen's is NAVD88 in US
-    /// survey feet, kept by name and code so the refusal can say which; the UTM + EGM2008
-    /// WKT is the one GDAL writes for EPSG:32633+3855 (`pyproj`'s `to_wkt("WKT1_GDAL")`,
-    /// transcribed); a datum of type 2002 is OGC 01-009's ellipsoidal type.
+    /// GAP-108, GAP-197: the vertical datum each form of WKT states. Autzen's is NAVD88
+    /// (its `VERT_DATUM` authority is EPSG:5103), in US survey feet, which the unit reader
+    /// takes separately; the UTM + EGM2008 WKT is the one GDAL writes for EPSG:32633+3855
+    /// (`pyproj`'s `to_wkt("WKT1_GDAL")`, transcribed); a datum of type 2002 is OGC
+    /// 01-009's ellipsoidal type.
     #[test]
     fn the_vertical_datum_is_read_from_vert_cs_and_silence_stays_silence() {
         use crate::geoid::VerticalDatum;
         assert_eq!(
             PointCloudCrs::Wkt(AUTZEN_WKT.to_string()).vertical_datum(),
-            Some(VerticalDatum::Other {
-                epsg: Some(6360),
-                name: "NAVD88 height (ftUS)".to_string()
-            })
+            Some(VerticalDatum::Navd88)
         );
+        // The EGM96 form GDAL writes for EPSG:32633+5773 (`pyproj`, transcribed): the
+        // datum authority is EPSG:5171.
+        let egm96 = r#"COMPD_CS["WGS 84 / UTM zone 33N + EGM96 height",PROJCS["WGS 84 / UTM zone 33N",UNIT["metre",1,AUTHORITY["EPSG","9001"]],AUTHORITY["EPSG","32633"]],VERT_CS["EGM96 height",VERT_DATUM["EGM96 geoid",2005,AUTHORITY["EPSG","5171"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Gravity-related height",UP],AUTHORITY["EPSG","5773"]]]"#;
+        assert_eq!(
+            PointCloudCrs::Wkt(egm96.to_string()).vertical_datum(),
+            Some(VerticalDatum::Egm96)
+        );
+        // A depth below NAVD88 (EPSG:6357) is not a height, whatever its datum: it is
+        // refused by name rather than converted upside down.
+        let depth = r#"COMPD_CS["x",PROJCS["y",UNIT["metre",1]],VERT_CS["NAVD88 depth",VERT_DATUM["North American Vertical Datum 1988",2005,AUTHORITY["EPSG","5103"]],UNIT["metre",1],AXIS["Gravity-related depth",DOWN],AUTHORITY["EPSG","6357"]]]"#;
+        let Some(VerticalDatum::Other { epsg, name }) =
+            PointCloudCrs::Wkt(depth.to_string()).vertical_datum()
+        else {
+            panic!("a depth is refused");
+        };
+        assert_eq!(epsg, Some(6357));
+        assert!(name.contains("depth"), "{name}");
         let egm2008 = r#"COMPD_CS["WGS 84 / UTM zone 33N + EGM2008 height",PROJCS["WGS 84 / UTM zone 33N",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",15],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","32633"]],VERT_CS["EGM2008 height",VERT_DATUM["EGM2008 geoid",2005,AUTHORITY["EPSG","1027"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Gravity-related height",UP],AUTHORITY["EPSG","3855"]]]"#;
         assert_eq!(
             PointCloudCrs::Wkt(egm2008.to_string()).vertical_datum(),
@@ -615,9 +800,140 @@ mod tests {
             None
         );
         assert_eq!(
-            PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) }).vertical_datum(),
+            PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) }.into())
+                .vertical_datum(),
             None
         );
+        // A geokey directory states its datum by its VerticalGeoKey code.
+        assert_eq!(
+            PointCloudCrs::Geokeys(GeokeyCrs {
+                vertical: Some(6360),
+                ..GridCrs::Projected { epsg: Some(2992) }.into()
+            })
+            .vertical_datum(),
+            Some(VerticalDatum::Navd88)
+        );
+    }
+
+    /// The key directory GDAL 3.11.3 writes for `-a_srs EPSG:2992+6360` (a `GeoTIFF` 1.1
+    /// directory, transcribed from the file `gdal_create` wrote): 4096 = 6360 and no unit
+    /// key at all. The same directory is what `testdata/pointcloud/autzen-geokeys.las`
+    /// carries.
+    fn gdal_2992_6360() -> las::crs::GeoTiffCrs {
+        use las::crs::{GeoTiffCrs, GeoTiffData, GeoTiffKeyEntry};
+        let short = |id, value| GeoTiffKeyEntry {
+            id,
+            data: GeoTiffData::U16(value),
+        };
+        GeoTiffCrs {
+            entries: vec![
+                short(1024, 1),
+                short(1025, 1),
+                GeoTiffKeyEntry {
+                    id: 1026,
+                    data: GeoTiffData::String(
+                        "NAD83 / Oregon GIC Lambert (ft) + NAVD88 height (ftUS)|".to_string(),
+                    ),
+                },
+                short(3072, 2992),
+                short(4096, 6360),
+            ],
+        }
+    }
+
+    /// GAP-102 item (2): the geokey form's vertical unit, from each of the places a real
+    /// writer puts it. The US survey foot comes from the code 6360 itself in GDAL's
+    /// directory; the international foot from `ProjLinearUnitsGeoKey` in the one GDAL
+    /// writes for a bare EPSG:2992 (3076 = 9002) and libLAS wrote for its own Autzen LAS
+    /// 1.2 sample; the metre from `VerticalUnitsGeoKey` beside NN2000 (4096 = 5941,
+    /// 4099 = 9001), as `LAStools` writes it.
+    #[test]
+    // Each factor is a defining constant passed through, so equality is the property.
+    #[allow(clippy::float_cmp)]
+    fn a_geokey_directory_states_its_vertical_unit_where_real_writers_put_it() {
+        let gdal = geokey_crs(&gdal_2992_6360());
+        assert_eq!(
+            gdal,
+            GeokeyCrs {
+                horizontal: GridCrs::Projected { epsg: Some(2992) },
+                vertical: Some(6360),
+                vertical_units: None,
+                linear_units: None,
+            }
+        );
+        assert_eq!(
+            PointCloudCrs::Geokeys(gdal).vertical_unit(),
+            Ok(1200.0 / 3937.0)
+        );
+
+        let horizontal_only = GeokeyCrs {
+            linear_units: Some(9002),
+            ..GridCrs::Projected { epsg: Some(2992) }.into()
+        };
+        assert_eq!(
+            PointCloudCrs::Geokeys(horizontal_only).vertical_unit(),
+            Ok(0.3048)
+        );
+
+        let lastools = GeokeyCrs {
+            horizontal: GridCrs::Projected { epsg: Some(25832) },
+            vertical: Some(5941),
+            vertical_units: Some(9001),
+            linear_units: Some(9001),
+        };
+        assert_eq!(PointCloudCrs::Geokeys(lastools).vertical_unit(), Ok(1.0));
+    }
+
+    /// And where the directory does not say, or says something contradictory or unread,
+    /// the file is refused with the reason rather than read as metres.
+    #[test]
+    fn a_geokey_directory_that_does_not_state_a_readable_unit_is_refused_with_the_reason() {
+        for (keys, reason) in [
+            // A horizontal system with no unit key of any kind.
+            (
+                GeokeyCrs::from(GridCrs::Projected { epsg: Some(32610) }),
+                "state no unit",
+            ),
+            // A geographic system has no linear unit to fall back to.
+            (
+                GeokeyCrs {
+                    linear_units: Some(9001),
+                    ..GridCrs::Geographic { epsg: Some(4326) }.into()
+                },
+                "state no unit",
+            ),
+            // NN2000 alone: a code this build does not know the unit of.
+            (
+                GeokeyCrs {
+                    vertical: Some(5941),
+                    ..GridCrs::Projected { epsg: Some(25832) }.into()
+                },
+                "EPSG:5941",
+            ),
+            // NAVD88 in US survey feet, with a unit key saying metres.
+            (
+                GeokeyCrs {
+                    vertical: Some(6360),
+                    vertical_units: Some(9001),
+                    ..GridCrs::Projected { epsg: Some(2992) }.into()
+                },
+                "contradicts itself",
+            ),
+            // A unit this build does not read: the kilometre.
+            (
+                GeokeyCrs {
+                    vertical: Some(5703),
+                    vertical_units: Some(9036),
+                    ..GridCrs::Projected { epsg: Some(26910) }.into()
+                },
+                "EPSG:9036",
+            ),
+        ] {
+            let err = PointCloudCrs::Geokeys(keys)
+                .vertical_unit()
+                .expect_err("no readable unit");
+            assert!(err.contains(reason), "{keys:?}: {err}");
+        }
     }
 
     /// The file's own WKT is what PROJ is given, in full: a bare `EPSG:2992` would
@@ -630,39 +946,56 @@ mod tests {
 
     #[test]
     fn a_geokey_file_is_offered_to_proj_as_an_epsg_code() {
-        let crs = PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) });
+        let crs = PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) }.into());
         assert_eq!(crs.proj_definition().as_deref(), Some("EPSG:32610"));
-        let geographic = PointCloudCrs::Geokeys(GridCrs::Geographic { epsg: Some(4326) });
+        let geographic = PointCloudCrs::Geokeys(GridCrs::Geographic { epsg: Some(4326) }.into());
         assert_eq!(geographic.proj_definition().as_deref(), Some("EPSG:4326"));
         // A directory that names no code has nothing to offer, and the loader refuses
         // it by name rather than falling back to the baseline's claim.
-        let unstated = PointCloudCrs::Geokeys(GridCrs::Unstated);
+        let unstated = PointCloudCrs::Geokeys(GridCrs::Unstated.into());
         assert_eq!(unstated.proj_definition(), None);
     }
 
     #[test]
     fn a_geokey_code_must_match_the_baseline_exactly() {
-        let crs = PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) });
+        let crs = PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) }.into());
         assert!(crs.agrees_with_epsg(32610));
         assert!(!crs.agrees_with_epsg(32611));
         // Nothing declared contradicts nothing.
-        assert!(PointCloudCrs::Geokeys(GridCrs::Unstated).agrees_with_epsg(32610));
+        assert!(PointCloudCrs::Geokeys(GridCrs::Unstated.into()).agrees_with_epsg(32610));
     }
 
-    /// The weak half of the check, pinned as weak on purpose: 2992 is Autzen's
-    /// horizontal code and passes, 32610 is unrelated and fails, and 6269 -- the
-    /// *datum's* authority, not a horizontal CRS code -- also passes, which is exactly
-    /// the limitation `agrees_with_epsg`'s own documentation states.
+    /// GAP-102 item (4), closed: the WKT check reads the horizontal system's own code. 2992
+    /// is Autzen's horizontal code and passes; 32610 is unrelated and fails; and 6269 (the
+    /// NAD83 *datum*), 4269 (the geographic system beneath the projection), 9002 (its
+    /// unit) and 6360 (the vertical system) all appear in the same WKT and all fail now,
+    /// where the old containment check passed every one of them.
     #[test]
-    fn a_wkt_is_checked_only_for_containment_of_the_claimed_code() {
+    fn a_wkt_is_checked_against_its_horizontal_systems_own_code() {
         let crs = PointCloudCrs::Wkt(AUTZEN_WKT.to_string());
         assert!(crs.agrees_with_epsg(2992));
-        assert!(!crs.agrees_with_epsg(32610));
-        assert!(
-            crs.agrees_with_epsg(6269),
-            "the containment check cannot tell a datum authority from a horizontal one, \
-             and its documentation says so"
+        for other in [32610, 6269, 4269, 9002, 6360, 5103] {
+            assert!(!crs.agrees_with_epsg(other), "EPSG:{other}");
+        }
+        // A plain PROJCS and a plain GEOGCS read their own direct AUTHORITY.
+        let utm = PointCloudCrs::Wkt(
+            r#"PROJCS["WGS 84 / UTM zone 10N",GEOGCS["WGS 84",AUTHORITY["EPSG","4326"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AUTHORITY["EPSG","32610"]]"#
+                .to_string(),
         );
+        assert!(utm.agrees_with_epsg(32610));
+        assert!(!utm.agrees_with_epsg(4326));
+        let geographic = PointCloudCrs::Wkt(
+            r#"GEOGCS["WGS 84",DATUM["WGS_1984",AUTHORITY["EPSG","6326"]],AUTHORITY["EPSG","4326"]]"#
+                .to_string(),
+        );
+        assert!(geographic.agrees_with_epsg(4326));
+        assert!(!geographic.agrees_with_epsg(6326));
+        // A horizontal system with no EPSG authority of its own contradicts nothing.
+        let unnamed = PointCloudCrs::Wkt(
+            r#"PROJCS["local",GEOGCS["x",DATUM["d",AUTHORITY["EPSG","6326"]]],UNIT["metre",1]]"#
+                .to_string(),
+        );
+        assert!(unnamed.agrees_with_epsg(32610));
     }
 
     /// The re-basing arithmetic, without PROJ: three points placed by an identity-ish

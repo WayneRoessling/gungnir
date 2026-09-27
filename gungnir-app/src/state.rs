@@ -74,17 +74,19 @@ pub struct AppState {
     pub terrain: crate::terrain::TerrainStatus,
     /// Where the configured point-cloud pair stands (GAP-098).
     pub point_cloud: crate::pointcloud::PointCloudStatus,
-    /// Where the EGM2008 geoid grid stands (GAP-108, D-121): checked at start, read by
-    /// every conversion of an EGM2008 height and by PN-09.
-    pub geoid: crate::geoid::GeoidStatus,
-    /// The grid check in flight, off the render thread.
-    pub geoid_check:
-        Option<crossbeam_channel::Receiver<Result<gungnir_data::geoid::GeoidGrid, String>>>,
-    /// The geoid model every bound radar feed holds (GAP-196): the verified grid once
-    /// [`crate::geoid::lend_to_feeds`] lends it, the reason there is none until then.
+    /// Where each pinned geoid grid stands (GAP-108 and D-121; GAP-197 and D-125):
+    /// checked at start, read by every conversion of a geoid height and by PN-09.
+    pub geoid: crate::geoid::GeoidGrids,
+    /// The grid checks in flight, off the render thread, one per grid being hashed.
+    pub geoid_checks: Vec<(
+        gungnir_data::geoid::GeoidModel,
+        crossbeam_channel::Receiver<Result<gungnir_data::geoid::GeoidGrid, String>>,
+    )>,
+    /// The geoid model every bound radar feed holds (GAP-196): the verified EGM2008 grid
+    /// once [`crate::geoid::lend_to_feeds`] lends it, the reason there is none until then.
     pub geoid_feeds: gungnir_ingest::geoid::GeoidHandle,
-    /// The grid status last lent to the feeds, so a lookup service starts once per
-    /// change rather than once per tick.
+    /// The EGM2008 grid status last lent to the feeds, so a lookup service starts once
+    /// per change rather than once per tick.
     pub geoid_lent: Option<crate::geoid::GeoidStatus>,
     /// What this tick's registration of the loaded pair did (GAP-024), read by PN-09
     /// (`crate::pointcloud::registration_line`) and, once GAP-024's own remaining item
@@ -728,8 +730,8 @@ impl AppState {
             rehearsal: None,
             terrain: crate::terrain::TerrainStatus::NotConfigured,
             point_cloud: crate::pointcloud::PointCloudStatus::NotConfigured,
-            geoid: crate::geoid::GeoidStatus::NotChecked,
-            geoid_check: None,
+            geoid: crate::geoid::GeoidGrids::default(),
+            geoid_checks: Vec::new(),
             geoid_feeds: feeds.geoid.clone(),
             geoid_lent: None,
             registration: crate::pointcloud::RegistrationOutcome::NoPair,
