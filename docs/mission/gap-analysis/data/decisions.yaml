@@ -2809,3 +2809,29 @@
     comparison or every deployment's rehearsal frame; and lengthening an existing excerpt,
     which rewrites a set gated rows measured. See
     `../../record/2026-09-26/a-sensor-s-elevation-band-a-round-1.md`.
+- id: D-114
+  decision: A layer at hold refuses every plan that tasks it -- change the rule, or say so
+  question: >-
+    DN-09 refuses a plan whole if any solution is refused, and the allocator tasks every
+    adequate resource, so one layer at hold refuses every plan, the other layers'
+    engagements with it, and the approval queue stays empty (GAP-183). Withhold held
+    resources from the allocator, offer the permitted part of a plan, or keep the rule
+    and say so?
+  raised_in: "GAP-183; `../../design/DN-09-authority-and-control-status.md` §5"
+  decider: Owner
+  unblocks: GAP-183
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken by the owner, 2026-09-26: keep the rule, and say so.** No change to the
+    planner or to DN-09's whole-plan refusal. PN-06 says plainly, while it is true, that a
+    layer at hold is refusing every plan -- the layer, the count of plans refused for it,
+    and that lifting the hold on that layer, a supervisor's or commander's act, is what
+    would let the other layers' engagements through -- so an operator never reads an empty
+    queue as a quiet sector. **Taken under the owner's delegation of 2026-09-26**, the
+    details: the count runs from the layer's first refusal after the last plan offered and
+    the line goes when one is offered or the hold is lifted (a count since the layer went
+    to hold says nothing about now); PN-05 says the same beside a plan that tasks a held
+    layer; and whichever machine holds the queue counts and publishes
+    `InterceptEvent::HeldLayers`, carried in the snapshot's `held_layers`, so a linked
+    desktop draws the node's count rather than deriving one from reason strings. See
+    `../../record/2026-09-26/a-layer-at-hold-refusing-every-plan-is.md`.

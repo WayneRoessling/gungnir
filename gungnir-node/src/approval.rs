@@ -128,6 +128,13 @@ impl NodeApproval {
         }
     }
 
+    /// The layers at hold refusing every plan while no plan is offered, under the
+    /// deployment's control status (GAP-183, D-114), for the snapshot.
+    #[must_use]
+    pub fn held_layers(&self, config: &ConfigBaseline) -> Vec<gungnir_model::HeldLayerView> {
+        self.desk.denials.held_layers(&config.policy.control_status)
+    }
+
     /// The queue as the wire carries it (DN-31 §5.2), in the queue's own order.
     ///
     /// Read off the workflow rather than remembered, so `GET /v3/queue`, the snapshot and

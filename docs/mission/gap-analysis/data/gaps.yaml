@@ -11021,12 +11021,9 @@
     solution is"); `gungnir_intercept_service::DpInterceptService::plan_with_rewards`
     withholds only unready and at-reserve resources (GAP-030)
   action: >-
-    Decide, then build: withhold a resource whose layer is at hold from the allocation
-    and name it on PN-05 as GAP-030 names an at-reserve one; or have the chain offer the
-    permitted solutions of a plan and deny the rest; or keep the rule and say on PN-06
-    that the held layer is refusing the whole plan. The first changes what the
-    allocator optimises, the second changes DN-09 and a human-owned crate
-    (`gungnir-policy`).
+    Done 2026-09-26, as the owner decided (D-114): the rule is kept and said -- PN-06 and
+    PN-05 name a layer at hold refusing every plan, with its count and what would lift
+    it, on an embedded desktop and on one linked to a node alike (DN-09 §9).
   ref: >-
     Found building GAP-182 (`../../record/2026-09-26/a-rehearsal-decides-and-tracks-under-the-deployment.md`)
   history:
@@ -11037,6 +11034,18 @@
       policy. Not built there: it is a choice about what the allocator optimises or what
       DN-09 permits, on the live desktop and the node as much as in a rehearsal, and it
       needs a decision before code.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      **Closed 2026-09-26: the owner kept the rule and asked for it to be said (D-114).**
+      PN-06 names each layer at hold refusing every plan, with how many plans its hold
+      refused of how many evaluated since its first refusal, that the other layers'
+      engagements went with them, and that lifting the hold -- a supervisor's or
+      commander's act -- would let them through; PN-05 says it beside the plan. Whichever
+      machine holds the queue counts and publishes it (`InterceptEvent::HeldLayers`, the
+      snapshot's `held_layers`), so a linked desktop draws the node's count. DN-09, the
+      note amended, is human-owned; see `../../signatures.md`. See
+      `../../record/2026-09-26/a-layer-at-hold-refusing-every-plan-is.md`.
 - id: GAP-184
   name: A rehearsal tracks under the default algorithm baseline, not the deployment's
   type: Technical

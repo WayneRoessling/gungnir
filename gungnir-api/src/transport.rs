@@ -1201,6 +1201,9 @@ impl NodeApi {
             // GAP-157: the plan's standing goes where the plan goes, and the plan is
             // withheld above. Not counted separately: it says nothing without the plan.
             plan_standing: None,
+            // GAP-183: a statement about this deployment's approval queue, which is
+            // withheld from a partner entirely.
+            held_layers: Vec::new(),
         })
     }
 

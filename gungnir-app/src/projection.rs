@@ -114,6 +114,8 @@ pub struct ProjectionState {
     /// (GAP-140). `None` until a snapshot carrying one has been read, which is every
     /// desktop that has never linked and every node built before the field existed.
     pub node_clock: Option<NodeClock>,
+    /// The node's layers at hold refusing every plan (GAP-183, D-114), as of this tick.
+    pub held_layers: Vec<gungnir_model::HeldLayerView>,
 }
 
 /// The node's clock and this desktop's, read at one moment (GAP-140).
@@ -164,6 +166,9 @@ pub fn tick(state: &mut AppState) {
     };
     state.projection.queue = link.queue();
     state.projection.in_flight = link.decisions_in_flight();
+    // GAP-183: the node's word on which layers at hold are refusing every plan, taken with
+    // the queue they are keeping empty.
+    state.projection.held_layers = link.held_layers();
     // GAP-140: the two clocks, read together the first frame that sees a new reading from
     // the node. Re-read only when the node's own value changes, which is once per
     // connection: taking it every frame would re-measure the offset against a snapshot

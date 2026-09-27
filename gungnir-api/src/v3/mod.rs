@@ -24,8 +24,8 @@
 use gungnir_model::events::VerdictSummary;
 use gungnir_model::{
     BearingRayView, CollectionRequirement, DecisionId, DetectionView, EffectorLayer, ExchangeItem,
-    MissionTime, PendingApprovalId, PipelineStatsView, PlanId, PlanStandingView, PlanView,
-    Releasability, SystemHealth, TrackView, SCHEMA_VERSION,
+    HeldLayerView, MissionTime, PendingApprovalId, PipelineStatsView, PlanId, PlanStandingView,
+    PlanView, Releasability, SystemHealth, TrackView, SCHEMA_VERSION,
 };
 
 pub use gungnir_eventing::Envelope as EventFrame;
@@ -111,6 +111,16 @@ pub struct SnapshotResponse {
     /// node's latest, with the node's health flag beside it (GAP-161).
     #[serde(default)]
     pub plan_standing: Option<PlanStandingView>,
+    /// **The effector layers at hold that are refusing every plan** (GAP-183, D-114;
+    /// DN-09 §9), as the node's own desk counts them. Kept live between snapshots by
+    /// `InterceptEvent::HeldLayers`; carried here so a desktop that links while a hold is
+    /// refusing everything says so from its first frame rather than after the next plan.
+    ///
+    /// **Additive and defaulted**, as `plan_standing` is: empty from a node that does not
+    /// say, which is also what "no layer is refusing every plan" looks like -- the one
+    /// ambiguity this field has, and the same one `plan_standing`'s `None` has.
+    #[serde(default)]
+    pub held_layers: Vec<HeldLayerView>,
 }
 
 impl SnapshotResponse {
@@ -136,6 +146,8 @@ impl SnapshotResponse {
             // Said by the node that publishes the snapshot (GAP-157); a snapshot built
             // with nothing to say about its plan says nothing.
             plan_standing: None,
+            // GAP-183: said by the node's desk, attached by the publisher.
+            held_layers: Vec::new(),
         }
     }
 
@@ -145,6 +157,13 @@ impl SnapshotResponse {
     #[must_use]
     pub fn with_queue(mut self, queue: Vec<QueueItemView>) -> Self {
         self.queue = queue;
+        self
+    }
+
+    /// Attach the layers at hold that are refusing every plan (GAP-183, D-114).
+    #[must_use]
+    pub fn with_held_layers(mut self, held: Vec<HeldLayerView>) -> Self {
+        self.held_layers = held;
         self
     }
 

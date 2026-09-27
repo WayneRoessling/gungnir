@@ -68,6 +68,7 @@ fn the_empty_approval_queue_draws_its_reason() {
         authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
         decided: &[],
         cannot_decide: None,
+        held_layers: &[],
     };
     let probe = RenderProbe::new();
     let (clicked, frame) =
@@ -142,6 +143,7 @@ fn the_approval_queue_keeps_a_handoff_visible_until_it_is_delivered() {
         authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
         decided: &[],
         cannot_decide: None,
+        held_layers: &[],
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &view));
@@ -209,6 +211,7 @@ fn the_approval_queue_is_silent_when_every_handoff_is_delivered() {
         authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
         decided: &[],
         cannot_decide: None,
+        held_layers: &[],
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &view));
@@ -275,6 +278,7 @@ fn the_queue_draws_a_plans_tag_and_the_dialog_its_whole_identifier() {
         authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
         decided: &[],
         cannot_decide: None,
+        held_layers: &[],
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &queue));
@@ -1018,6 +1022,7 @@ fn the_panels_survive_a_narrow_slot() {
         authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
         decided: &[],
         cannot_decide: None,
+        held_layers: &[],
     };
     let (_, frame) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &queue));
     assert!(!frame.texts.is_empty(), "the queue drew nothing at 220 px");
@@ -2705,6 +2710,7 @@ fn the_intercept_panel_lists_fires_checks_with_failures_as_text() {
             ui,
             &theme::Palette::day(),
             ShownPlan {
+                held: &[],
                 plan: &plan,
                 standing: Standing::Current,
             },
@@ -2755,6 +2761,7 @@ fn the_intercept_panel_says_a_stale_plan_is_stale_with_its_age() {
                     ui,
                     &theme::Palette::day(),
                     ShownPlan {
+                        held: &[],
                         plan: &plan,
                         standing,
                     },
@@ -2844,6 +2851,7 @@ fn an_interim_plan_is_labelled_on_pn05_pn06_and_pn07() {
                 ui,
                 &theme::Palette::day(),
                 ShownPlan {
+                    held: &[],
                     plan: &plan,
                     standing: Standing::Stale {
                         computed_at_s: 1.0,
@@ -2886,6 +2894,7 @@ fn an_interim_plan_is_labelled_on_pn05_pn06_and_pn07() {
         authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
         decided: &[],
         cannot_decide: None,
+        held_layers: &[],
     };
     let probe = RenderProbe::new();
     let (_, pn06) = probe.draw(|ui| render_approval_queue(ui, &theme::Palette::day(), &queue));
@@ -2960,6 +2969,7 @@ fn the_intercept_panel_draws_a_refused_alternative_with_its_denial() {
             ui,
             &theme::Palette::day(),
             ShownPlan {
+                held: &[],
                 plan: &PlanView::default(),
                 standing: Standing::Current,
             },

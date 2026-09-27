@@ -277,6 +277,9 @@ fn count_engagement(counts: &mut EventCounts, event: &gungnir_model::events::Eng
     }
 }
 
+// One arm per event kind, exhaustive on purpose so a new kind is counted or said not to
+// be; it crossed the pedantic line limit when GAP-183 added `HeldLayers`.
+#[allow(clippy::too_many_lines)]
 fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
     let mut counts = EventCounts::default();
     for env in envelopes {
@@ -358,10 +361,11 @@ fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
             | Event::Intercept(
                 InterceptEvent::PlanSuperseded(_)
                 | InterceptEvent::PlanEvaluated { .. }
-                // GAP-157: a planner falling behind and catching up is a health fact about
-                // the planner, not a piece of this watch's work; the plan it concerns was
-                // counted when it was proposed.
-                | InterceptEvent::PlanStanding(_),
+                // GAP-157, GAP-183: a planner's standing and a held layer's refusals are
+                // facts about the planner and the policy, not this watch's work; the plans
+                // they concern were counted when they were proposed.
+                | InterceptEvent::PlanStanding(_)
+                | InterceptEvent::HeldLayers(_),
             )
             // GAP-132: an item entering a queue is not one of this watch's counts. The
             // plan it carries was already counted as `plans_proposed`, and counting the

@@ -185,7 +185,7 @@ history, and an entry is never edited once it has merged.
 | GAP-179 | A node's audit record and its verification reach only the node's log | Technical | CAP-6.3 | 2 | 9 | M | 18 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-176 | A warning posted to a warned party and a handoff posted to an effector still write a non-finite float as null | Technical | CAP-4.4, CAP-4.5 | 3 | 5 | S | 15 | I3 | Services engineer | Open |
 | GAP-182 | A rehearsal decides under a default policy, not the deployment's | Technical | CAP-5.2, CAP-3.6 | 3 | 7 | S | 21 | I3 | Services engineer | Closed |
-| GAP-183 | The planner tasks resources on a layer at hold, so one held layer refuses every plan | Technical | CAP-3.3, CAP-3.6 | 3 | 7 | M | 21 | I3 | Services engineer | Open |
+| GAP-183 | The planner tasks resources on a layer at hold, so one held layer refuses every plan | Technical | CAP-3.3, CAP-3.6 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
 | GAP-184 | A rehearsal tracks under the default algorithm baseline, not the deployment's | Technical | CAP-5.2, CAP-2.1 | 2 | 8 | S | 16 | I3 | Services engineer | Closed |
 
 Counts: 174 gaps, 3 mission, 171 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
@@ -2636,11 +2636,12 @@ Counts: 174 gaps, 3 mission, 171 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.3 Assignment recommendation; CAP-3.6 Rules of engagement.
 - History:
   - 2026-09-26, Open: Found building GAP-182, when round 1's rehearsal first ran under round 1's own policy. Not built there: it is a choice about what the allocator optimises or what DN-09 permits, on the live desktop and the node as much as in a rehearsal, and it needs a decision before code.
+  - 2026-09-26, Closed: **Closed 2026-09-26: the owner kept the rule and asked for it to be said (D-114).** PN-06 names each layer at hold refusing every plan, with how many plans its hold refused of how many evaluated since its first refusal, that the other layers' engagements went with them, and that lifting the hold -- a supervisor's or commander's act -- would let them through; PN-05 says it beside the plan. Whichever machine holds the queue counts and publishes it (`InterceptEvent::HeldLayers`, the snapshot's `held_layers`), so a linked desktop draws the node's count. DN-09, the note amended, is human-owned; see `../../signatures.md`. See `../../record/2026-09-26/a-layer-at-hold-refusing-every-plan-is.md`.
 - Evidence: Round 1 rehearsed under its own policy: 292 of 296 proposed plans denied `ControlStatus { layer: Area, status: Hold }`, 4 `NoGoGeofence`, none offered (`gungnir-app/tests/laydown_rehearsal.rs`, `round_1s_forward_radar_changes_its_own_detections_and_nothing_else`); `../../design/DN-09-authority-and-control-status.md` §5 ("the plan is denied if any solution is"); `gungnir_intercept_service::DpInterceptService::plan_with_rewards` withholds only unready and at-reserve resources (GAP-030).
 - Severity: 3. Reach: 7 threads. Effort: M. Priority: 21.
 - Impact: A deployment with any effector layer at hold is offered nothing to decide on any layer. The allocator pairs every adequate resource, including those whose layer is at hold, and DN-09 denies a plan if any of its solutions is denied, so the weapons-free layer's engagements are refused with the held one's. Round 1 (point free, area hold) is such a deployment.
-- Closing action: Decide, then build: withhold a resource whose layer is at hold from the allocation and name it on PN-05 as GAP-030 names an at-reserve one; or have the chain offer the permitted solutions of a plan and deny the rest; or keep the rule and say on PN-06 that the held layer is refusing the whole plan. The first changes what the allocator optimises, the second changes DN-09 and a human-owned crate (`gungnir-policy`).
-- Target: I3. Owner: Services engineer. Status: Open.
+- Closing action: Done 2026-09-26, as the owner decided (D-114): the rule is kept and said -- PN-06 and PN-05 name a layer at hold refusing every plan, with its count and what would lift it, on an embedded desktop and on one linked to a node alike (DN-09 §9).
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-182 (`../../record/2026-09-26/a-rehearsal-decides-and-tracks-under-the-deployment.md`).
 - Depends on: GAP-030.
 

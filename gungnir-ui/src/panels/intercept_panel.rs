@@ -46,6 +46,11 @@ pub enum Standing<'a> {
 pub struct ShownPlan<'a> {
     pub plan: &'a PlanView,
     pub standing: Standing<'a>,
+    /// The layers this plan tasks that are at hold and refusing every plan (GAP-183,
+    /// D-114), from whichever machine holds the queue: this plan will be refused whole,
+    /// and PN-05 says so beside it rather than drawing it as a recommendation on its way
+    /// to a person.
+    pub held: &'a [gungnir_model::HeldLayerView],
 }
 
 pub fn render_intercept_panel(
@@ -60,6 +65,18 @@ pub fn render_intercept_panel(
     let plan = shown.plan;
     ui.heading("Intercept plan");
     render_standing(ui, palette, shown.standing);
+    // GAP-183, D-114: the queue's sentence, beside the plan it is about.
+    for held in shown.held {
+        ui.label(
+            RichText::new(format!(
+                "This plan will not reach the approval queue: it tasks the {} layer. {}",
+                crate::panels::approval_queue::layer_name(held.layer),
+                crate::panels::approval_queue::held_layer_sentence(held)
+            ))
+            .strong()
+            .color(palette.warning_color),
+        );
+    }
     render_summary(ui, palette, plan, shown.standing);
     render_solution_list(ui, plan);
     render_fires(ui, palette, plan, fires);
