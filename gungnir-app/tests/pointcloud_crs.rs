@@ -139,109 +139,194 @@ fn a_declared_system_with_no_readable_vertical_unit_is_refused() {
 
 // -- The conversion itself, through a real desktop tick -----------------------------
 
-/// **The composed pipeline, end to end, on the real fixture**: the loader reads the
-/// Autzen file's own CRS, `placement` plans a conversion from it, `libproj` does the
-/// horizontal half, and `gungnir_model::LocalFrame` -- the same type every radar site,
-/// asset and geofence on this picture is placed through -- does the ENU half.
-///
-/// The deployment origin is set to the geodetic centre of the very box the query asks
-/// for, which the independent `pyproj` run recorded in
-/// `gungnir-data/tests/pointcloud_crs.rs` gives as latitude 44.056081952041154,
-/// longitude -123.06889823098363, height 152.4003048006096. The box is 100 x 100 in the
-/// file's own feet, about 30 m square, so **every converted point must land within a few
-/// tens of metres of the origin**. That is a real check rather than a loose one: a
-/// feet-for-metres slip would put the cloud out by a factor of 3.28, a wrong projection
-/// by kilometres, and a swapped axis order by thousands of kilometres. Any of the three
-/// fails this bound by orders of magnitude.
-#[test]
-#[cfg(feature = "crs")]
-fn the_real_fixture_converts_through_a_real_tick_onto_the_deployments_own_frame() {
+/// A desktop over `pair` with `origin`, CPU registration forced (never a real `wgpu`
+/// device in a test: `gungnir-app/tests/pointcloud.rs`'s module doc comment has the
+/// history), and a `geoid_grid_dir` that holds no grid, so the state of the grid is the
+/// test's to set rather than `PROJ_DATA`'s.
+fn desktop(
+    name: &str,
+    pair: gungnir_config::PointCloudConfig,
+    origin: [f64; 3],
+) -> (gungnir_app::state::AppState, std::path::PathBuf) {
     use gungnir_app::fusion::FusionBackend;
-    use gungnir_app::pointcloud::PointCloudStatus;
-    use gungnir_app::state::AppState;
-    use gungnir_app::update;
-    use gungnir_config::{ConfigBaseline, PointCloudConfig, PointCloudFileConfig};
+    use gungnir_config::ConfigBaseline;
 
-    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../testdata/pointcloud/autzen-classified.copc.laz")
-        .to_string_lossy()
-        .into_owned();
-    let bounded = |path: &str| PointCloudFileConfig {
-        path: path.to_string(),
-        copc_bounds: Some([637_200.0, 851_100.0, 400.0, 637_300.0, 851_200.0, 620.0]),
-    };
-    let dir = std::env::temp_dir().join(format!("gungnir-pointcloud-crs-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "gungnir-pointcloud-crs-{name}-{}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     let config = ConfigBaseline {
         data_dir: dir.to_string_lossy().into_owned(),
-        origin: Some([
-            44.056_081_952_041_154_f64.to_radians(),
-            (-123.068_898_230_983_63_f64).to_radians(),
-            152.400_304_800_609_6,
-        ]),
-        point_cloud: Some(PointCloudConfig {
-            // The same file on both halves: this test is about the conversion, and a
-            // cloud registered onto itself is the one pair whose correct answer is known
-            // without doing any registration at all.
-            source: bounded(&fixture),
-            target: bounded(&fixture),
-            frame: "epsg:2992".into(),
-        }),
+        origin: Some(origin),
+        point_cloud: Some(pair),
+        geoid_grid_dir: Some(dir.join("no-grid-here").to_string_lossy().into_owned()),
         ..ConfigBaseline::default()
     };
     gungnir_config::validate(&config).expect("an epsg frame is valid since GAP-102");
-    let mut state = AppState::with_config(config).expect("starts");
-    // Never let a real tick resolve a real `wgpu` device (this crate's hard rule; see
-    // `gungnir-app/tests/pointcloud.rs`'s module doc comment for the history).
+    let mut state = gungnir_app::state::AppState::with_config(config).expect("starts");
     state.fusion = FusionBackend::Cpu {
         reason: "test: forced CPU path (gungnir-app/tests/pointcloud_crs.rs)".into(),
     };
+    (state, dir)
+}
 
+/// Tick until the pair has loaded or failed. A deadlock guard, not a performance
+/// assertion: the loop exits the moment the pair settles.
+fn settle(state: &mut gungnir_app::state::AppState) {
+    use gungnir_app::pointcloud::PointCloudStatus;
     for _ in 0..6_000 {
-        update::tick(&mut state);
+        gungnir_app::update::tick(state);
         if !matches!(
             state.point_cloud,
             PointCloudStatus::Loading { .. } | PointCloudStatus::NotConfigured
         ) {
-            break;
+            return;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    match &state.point_cloud {
-        PointCloudStatus::Loaded {
-            source_points,
-            target_points,
-            ..
-        } => {
-            assert_eq!(*source_points, 4767);
-            assert_eq!(*target_points, 4767);
-        }
-        other => panic!("{other:?}"),
-    }
+    panic!("the pair never settled: {:?}", state.point_cloud);
+}
 
-    let cloud = &state.data.point_clouds[0];
-    assert_eq!(
-        cloud.crs, None,
-        "a converted cloud no longer carries the file's own claim"
+fn fixture(name: &str) -> String {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../testdata/pointcloud")
+        .join(name)
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// **GAP-108 (D-121) on the real capture, through a real tick.** Until GAP-108 this test
+/// converted the Autzen cloud and drew it, with its NAVD88 heights used as though they
+/// were WGS-84 ellipsoidal ones -- about 22.6 m high, the geoid separation there. NAVD88
+/// has no grid in this deployment, so the pair is now refused by name, the reason naming
+/// the datum the file itself states, and nothing is drawn. The refusal is decided before
+/// PROJ runs, so it holds in every build, not only a `crs` one.
+///
+/// The horizontal half this test used to carry end to end is still checked against an
+/// independent `pyproj` run on the same capture (`gungnir-data/tests/pointcloud_crs.rs`),
+/// and the whole pipeline -- PROJ, the geoid, `LocalFrame` -- is checked end to end
+/// below on a file whose heights this deployment can convert.
+#[test]
+fn the_real_fixtures_navd88_heights_are_refused_by_name_through_a_real_tick() {
+    use gungnir_app::pointcloud::PointCloudStatus;
+    use gungnir_config::{PointCloudConfig, PointCloudFileConfig};
+
+    let bounded = |path: &str| PointCloudFileConfig {
+        path: path.to_string(),
+        copc_bounds: Some([637_200.0, 851_100.0, 400.0, 637_300.0, 851_200.0, 620.0]),
+    };
+    let autzen = fixture("autzen-classified.copc.laz");
+    let (mut state, dir) = desktop(
+        "navd88",
+        PointCloudConfig {
+            source: bounded(&autzen),
+            target: bounded(&autzen),
+            frame: "epsg:2992".into(),
+            vertical: None,
+        },
+        [
+            44.056_081_952_041_154_f64.to_radians(),
+            (-123.068_898_230_983_63_f64).to_radians(),
+            152.400_304_800_609_6,
+        ],
     );
-    for p in &cloud.positions {
-        let enu = [
+    settle(&mut state);
+    let PointCloudStatus::Failed { reason, .. } = &state.point_cloud else {
+        panic!("NAVD88 heights must be refused: {:?}", state.point_cloud);
+    };
+    assert!(reason.contains("NAVD88 height (ftUS)"), "{reason}");
+    assert!(reason.contains("no geoid grid"), "{reason}");
+    assert!(state.data.point_clouds.is_empty(), "nothing is drawn");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// **The composed pipeline, end to end, through the geoid**: `five-points.las` states no
+/// CRS, the baseline says it is EPSG:32633 with EGM2008 heights, the committed clip of
+/// the pinned grid is installed verified, and a real tick converts the pair through PROJ
+/// (horizontal), the grid (vertical) and `gungnir_model::LocalFrame` (ENU).
+///
+/// Independently, with nothing of this workspace's: `pyproj` over the full pinned grid
+/// takes point 1 (easting 500010, northing 6000020, 12.5 m EGM2008 height) to longitude
+/// 15.00015310098077, latitude 54.14828385766182 and an ellipsoidal height of
+/// 47.42449178478446 m, then to ECEF; a hand rotation into the tangent plane at the
+/// origin below puts it at east 10.004075820331082, north 20.0081374609536, up
+/// 47.42445256905888 m. Point 4 (500012, 6000022, 18.25) lands at east
+/// 12.004901783352192, north 22.00897250261202, up 53.174404143393154. Dropping the
+/// geoid misses the up by 34.9 m; the tolerance is a tenth of a millimetre.
+#[test]
+#[cfg(feature = "crs")]
+fn a_pair_with_egm2008_heights_lands_where_an_independent_computation_puts_it() {
+    use gungnir_app::pointcloud::PointCloudStatus;
+    use gungnir_config::{PointCloudConfig, PointCloudFileConfig};
+
+    let plain = |path: String| PointCloudFileConfig {
+        path,
+        copc_bounds: None,
+    };
+    let (mut state, dir) = desktop(
+        "egm2008",
+        PointCloudConfig {
+            source: plain(fixture("five-points.las")),
+            target: plain(fixture("five-points.las")),
+            frame: "epsg:32633".into(),
+            vertical: Some("epsg:3855".into()),
+        },
+        [54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 0.0],
+    );
+    let clip = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../testdata/geoid/egm08_25_clip_53n56n_13e17e.tif");
+    state.geoid = gungnir_app::geoid::GeoidStatus::Verified {
+        grid: gungnir_data::geoid::GeoidGrid::verify(
+            &clip,
+            "60a16af44ca47724fd6cbb58565104a010dd2ef8c2d5ec1c666552052fa83e10",
+        )
+        .expect("the committed clip, testdata/geoid/SOURCE.md"),
+        source: gungnir_app::geoid::GridSource::Baseline,
+    };
+    settle(&mut state);
+    assert!(
+        matches!(state.point_cloud, PointCloudStatus::Loaded { .. }),
+        "{:?}",
+        state.point_cloud
+    );
+    let cloud = &state.data.point_clouds[0];
+    let enu = |i: usize| {
+        let p = cloud.positions[i];
+        [
             f64::from(p[0]) + cloud.origin[0],
             f64::from(p[1]) + cloud.origin[1],
             f64::from(p[2]) + cloud.origin[2],
-        ];
-        assert!(
-            enu[0].abs() < 60.0 && enu[1].abs() < 60.0,
-            "a 30 m box centred on the origin must land within tens of metres of it, \
-             got east {} north {}",
-            enu[0],
-            enu[1]
-        );
-        assert!(
-            enu[2].abs() < 120.0,
-            "the box's own height range is about 64 m, got up {}",
-            enu[2]
-        );
+        ]
+    };
+    for (i, want) in [
+        (
+            0,
+            [
+                10.004_075_820_331_082,
+                20.008_137_460_953_6,
+                47.424_452_569_058_88,
+            ],
+        ),
+        (
+            3,
+            [
+                12.004_901_783_352_192,
+                22.008_972_502_612_02,
+                53.174_404_143_393_154,
+            ],
+        ),
+    ] {
+        let got = enu(i);
+        for axis in 0..3 {
+            assert!(
+                (got[axis] - want[axis]).abs() < 1e-4,
+                "point {} axis {axis}: {} against {}",
+                i + 1,
+                got[axis],
+                want[axis]
+            );
+        }
     }
     let _ = std::fs::remove_dir_all(dir);
 }

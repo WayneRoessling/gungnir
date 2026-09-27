@@ -235,13 +235,34 @@ fn place(state: &AppState, buffer: PointBuffer) -> Result<PointBuffer, String> {
             source,
             vertical_metres,
         } => {
+            // GAP-108 (D-121): how the heights become WGS-84 ellipsoidal ones, decided
+            // from the file's own `VERT_CS` and `point_cloud.vertical` before PROJ runs,
+            // so a datum with no grid is refused by name in any build.
+            let declared = crate::geoid::declared_datum(
+                "point_cloud.vertical",
+                state
+                    .config
+                    .point_cloud
+                    .as_ref()
+                    .and_then(|pc| pc.vertical.as_deref()),
+            )?;
+            let heights = gungnir_data::geoid::height_reference(
+                "point_cloud.vertical",
+                buffer
+                    .crs
+                    .as_ref()
+                    .and_then(PointCloudCrs::vertical_datum)
+                    .as_ref(),
+                declared.as_ref(),
+                state.geoid.grid().as_deref().map_err(String::as_str),
+            )?;
             // `placement` already refused the no-origin case, so this is defensive
             // rather than a state a running deployment reaches; a `let-else` keeps the
             // no-`expect` rule without pretending the combination cannot occur.
             let Some(frame) = crate::sustainment::local_frame(state) else {
                 return Err("the baseline declares no origin to convert onto".to_string());
             };
-            convert(&buffer, &source, vertical_metres, &frame).map_err(|e| e.to_string())
+            convert(&buffer, &source, vertical_metres, &heights, &frame).map_err(|e| e.to_string())
         }
     }
 }
@@ -252,12 +273,14 @@ fn convert(
     buffer: &PointBuffer,
     source: &str,
     vertical_metres: f64,
+    heights: &gungnir_data::geoid::HeightReference,
     frame: &gungnir_model::LocalFrame,
 ) -> Result<PointBuffer, DataError> {
     gungnir_data::pointcloud::crs::to_local_enu(
         buffer,
         source,
         vertical_metres,
+        heights,
         &|[lat_rad, lon_rad, alt_m]| {
             frame.to_enu(gungnir_model::Geodetic {
                 lat_rad,
@@ -279,6 +302,7 @@ fn convert(
     _buffer: &PointBuffer,
     _source: &str,
     _vertical_metres: f64,
+    _heights: &gungnir_data::geoid::HeightReference,
     _frame: &gungnir_model::LocalFrame,
 ) -> Result<PointBuffer, DataError> {
     Err(DataError::NotImplemented {
@@ -298,6 +322,11 @@ pub fn start(state: &mut AppState) {
     let Some(pair) = state.config.point_cloud.clone() else {
         return;
     };
+    // GAP-108: a pair stating EGM2008 heights needs the verified grid when it is placed,
+    // so the load waits for the start-up check to settle (`crate::geoid`).
+    if !state.geoid.is_settled() {
+        return;
+    }
     let (requests, results) = gungnir_data::spawn_loader();
     // Both are sent before either is read, so the worker moves straight to the second
     // file once the first is done rather than waiting for a tick to hand it the next

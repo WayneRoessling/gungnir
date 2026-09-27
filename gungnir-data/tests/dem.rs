@@ -69,6 +69,62 @@ fn the_geotiff_fixture_loads_to_the_same_figures_and_names_its_frame() {
     assert_eq!(grid.crs, GridCrs::Projected { epsg: Some(32633) });
     let ascii = geospatial::load_height_grid(&fixture("small.asc")).expect("loads");
     assert_eq!(grid.heights, ascii.heights, "the two fixtures are one grid");
+    assert_eq!(grid.vertical, None, "small.tif states no vertical system");
+    assert_eq!(ascii.vertical, None, "an ASCII grid never can");
+}
+
+/// GAP-108: a `GeoTIFF` that states its vertical system is read for it. The fixture was
+/// written by GDAL (`gdal_translate -a_srs EPSG:32633+3855` over `small.tif`,
+/// `testdata/dem/SOURCE.md`), so the `VerticalGeoKey` this reads is the one a real tool
+/// writes, not one this workspace laid out to suit its own reader.
+#[test]
+fn a_geotiff_that_states_egm2008_heights_is_read_for_its_vertical_system() {
+    let grid = geospatial::load_height_grid(&fixture("small-egm2008.tif")).expect("loads");
+    assert_is_the_small_grid(&grid);
+    assert_eq!(grid.crs, GridCrs::Projected { epsg: Some(32633) });
+    assert_eq!(grid.vertical, Some(3855), "VerticalGeoKey, EGM2008 height");
+    let plain = geospatial::load_height_grid(&fixture("small.tif")).expect("loads");
+    assert_eq!(
+        grid.heights, plain.heights,
+        "GDAL rewrote the tags, not the raster"
+    );
+    let mesh = TerrainMesh::from_grid(&grid).expect("indexable");
+    assert_eq!(
+        mesh.vertical_datum(),
+        Some(gungnir_data::geoid::VerticalDatum::Egm2008)
+    );
+}
+
+/// GAP-108: a DEM whose `VerticalUnitsGeoKey` (4099) says its heights are not metres is
+/// refused by name rather than read as metres. Made from `small-egm2008.tif` by
+/// rewriting its `VerticalGeoKey` entry, in place, into a `VerticalUnitsGeoKey` of
+/// EPSG:9002, the international foot -- a directory entry is four shorts, key, location,
+/// count, value, and location 0 means the value is inline.
+#[test]
+fn a_dem_whose_heights_are_not_metres_is_refused_by_name() {
+    let mut bytes = std::fs::read(fixture("small-egm2008.tif")).expect("fixture");
+    let vertical: Vec<u8> = [4096u16, 0, 1, 3855]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let feet: Vec<u8> = [4099u16, 0, 1, 9002]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let at = bytes
+        .windows(vertical.len())
+        .position(|w| w == vertical.as_slice())
+        .expect("GDAL wrote the VerticalGeoKey inline");
+    bytes[at..at + feet.len()].copy_from_slice(&feet);
+    let path = scratch("feet.tif");
+    std::fs::write(&path, &bytes).expect("write");
+    match geospatial::load_height_grid(&path) {
+        Err(DataError::Parse(message)) => {
+            assert!(message.contains("EPSG:9002"), "{message}");
+            assert!(message.contains("not metres"), "{message}");
+        }
+        other => panic!("heights in feet must be refused: {other:?}"),
+    }
 }
 
 #[test]

@@ -116,6 +116,40 @@ fn passthrough(g: [f64; 3]) -> [f64; 3] {
     [g[0].to_degrees(), g[1].to_degrees(), g[2]]
 }
 
+/// **These tests check the horizontal conversion and the vertical unit, and hold the
+/// vertical datum still on purpose.** The Autzen fixture's heights are NAVD88, which a
+/// deployment refuses by name since GAP-108 (see
+/// `the_real_fixtures_navd88_heights_are_refused_by_name_since_gap_108` below): no grid
+/// for NAVD88 ships. Handing `to_local_enu` `Ellipsoidal` here tells it to add nothing,
+/// so the height that comes back is the file's own scaled to metres -- exactly what the
+/// `pyproj` run below gives for this compound CRS with no NAVD88 grid on its path --
+/// and the Lambert inverse and the US-survey-foot scale stay checked against a real
+/// capture. The geoid step itself is checked in `tests/geoid.rs` against a file that
+/// states EGM2008 heights.
+#[cfg(feature = "crs")]
+const HORIZONTAL_ONLY: gungnir_data::geoid::HeightReference =
+    gungnir_data::geoid::HeightReference::Ellipsoidal;
+
+/// GAP-108 (D-121): the real capture's heights are NAVD88 in US survey feet, a vertical
+/// datum this deployment carries no grid for, so they are refused by name -- the file's
+/// NAVD88 height is no longer used as though it were a WGS-84 ellipsoidal height, which
+/// at Autzen put every point about 22.6 m high (the EGM2008 undulation there is
+/// -22.61 m, and NAVD88 sits within a metre or so of it).
+#[test]
+fn the_real_fixtures_navd88_heights_are_refused_by_name_since_gap_108() {
+    let declared = autzen().crs.expect("the fixture declares a CRS");
+    let datum = declared.vertical_datum().expect("a VERT_CS");
+    let err = gungnir_data::geoid::height_reference(
+        "point_cloud.vertical",
+        Some(&datum),
+        None,
+        Err("no grid is needed to refuse this"),
+    )
+    .expect_err("NAVD88 has no grid here");
+    assert!(err.contains("NAVD88 height (ftUS)"), "{err}");
+    assert!(err.contains("EPSG:6360"), "{err}");
+}
+
 /// **Independently checked against `pyproj`, and the check is recorded here rather than
 /// committed as a script** -- the same discipline `gungnir-data-fusion/src/normals.rs`
 /// and `point_to_plane.rs` apply to their own Python oracles.
@@ -144,15 +178,18 @@ fn passthrough(g: [f64; 3]) -> [f64; 3] {
 /// number above tests the projection inverse, not a datum model. Second, `pyproj`'s
 /// height for the compound CRS is exactly `Z * 1200/3937`, the US survey foot's
 /// definition -- so PROJ itself, with no vertical-datum grid available, applies the unit
-/// conversion and no geoid separation. That is precisely what
-/// `pointcloud::crs::to_local_enu` does by hand, for the reason its own documentation
-/// gives (`proj` 0.31's high-level API zeroes every `z` it passes to `proj_trans`), which
-/// is why this test can hold the height to the same figure rather than to a looser one.
+/// conversion and no geoid separation -- falling back to a "ballpark" operation
+/// silently, which is the behaviour GAP-108 (D-121) refuses in a deployment and this
+/// test reproduces deliberately through [`HORIZONTAL_ONLY`], so the height can be held
+/// to the same figure rather than a looser one.
 ///
 /// The script is not committed: it is four lines of `pyproj`, and the two numbers it
 /// produced are above.
 #[test]
 #[cfg(feature = "crs")]
+// A single point is its own minimum corner, so its re-based position is exactly zero by
+// construction; an epsilon would only hide a re-basing that had drifted.
+#[allow(clippy::float_cmp)]
 fn the_conversion_out_of_the_fixtures_own_crs_matches_an_independent_pyproj_run() {
     let declared = autzen().crs.clone().expect("the fixture declares a CRS");
     let source = declared.proj_definition().expect("a WKT is a definition");
@@ -165,8 +202,9 @@ fn the_conversion_out_of_the_fixtures_own_crs_matches_an_independent_pyproj_run(
         origin: [637_250.0, 851_150.0, 500.0],
         ..pointcloud::PointBuffer::default()
     };
-    let out = pointcloud::crs::to_local_enu(&one, &source, vertical, &passthrough)
-        .expect("the fixture's own WKT is a CRS PROJ can transform from");
+    let out =
+        pointcloud::crs::to_local_enu(&one, &source, vertical, &HORIZONTAL_ONLY, &passthrough)
+            .expect("the fixture's own WKT is a CRS PROJ can transform from");
 
     assert_eq!(out.positions.len(), 1);
     // A single point is its own minimum corner, so the whole answer is in `origin` and
@@ -204,7 +242,8 @@ fn every_point_of_the_real_cloud_converts_and_lands_inside_the_fixtures_own_boun
     let vertical = declared.vertical_unit_metres().expect("a VERT_CS");
 
     let out =
-        pointcloud::crs::to_local_enu(&cloud, &source, vertical, &passthrough).expect("converts");
+        pointcloud::crs::to_local_enu(&cloud, &source, vertical, &HORIZONTAL_ONLY, &passthrough)
+            .expect("converts");
 
     assert_eq!(out.positions.len(), 4767, "no point is dropped");
     assert_eq!(out.intensity.as_ref().map(Vec::len), Some(4767));
@@ -258,8 +297,9 @@ fn an_unknown_crs_is_refused_by_name_rather_than_placed_somewhere_plausible() {
         origin: [1.0, 2.0, 3.0],
         ..pointcloud::PointBuffer::default()
     };
-    let err = pointcloud::crs::to_local_enu(&one, "EPSG:999999", 1.0, &passthrough)
-        .expect_err("999999 is not an EPSG code");
+    let err =
+        pointcloud::crs::to_local_enu(&one, "EPSG:999999", 1.0, &HORIZONTAL_ONLY, &passthrough)
+            .expect_err("999999 is not an EPSG code");
     let text = err.to_string();
     assert!(
         text.contains("999999"),

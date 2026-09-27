@@ -115,8 +115,12 @@ ellipsoid.** NAVD88 is a gravity-related datum, and the separation between it an
 ellipsoid in this part of Oregon is of the order of -22 m. `libproj` applies that
 separation only when it has the relevant vertical-datum grid, which a deployment that
 never fetches grids over the network does not; without it PROJ converts the unit and
-stops, and so does this workspace. `gungnir-data/src/pointcloud/crs.rs::to_local_enu`
-says the same thing at the point where it matters.
+stops. Since GAP-108 (D-121) this workspace does not stop there: a deployment carries a
+geoid grid for EGM2008 heights only, so this file's NAVD88 heights are **refused by
+name** when a deployment converts it, rather than used as though they were ellipsoidal
+(`gungnir-data/src/geoid.rs`; `gungnir-app/tests/pointcloud_crs.rs` checks the refusal
+through a real tick). The fixture still checks the horizontal conversion and the vertical
+unit, with the datum held still on purpose.
 
 The bounds above, put through that conversion, are longitude [-123.07498674,
 -123.06251260], latitude [44.04971882, 44.06278031], height [123.79171958,
