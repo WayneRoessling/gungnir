@@ -401,6 +401,7 @@
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_3B4863DA_F269_BFF7_2861_F863C19674AB" name="Term" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_540E2BBA_C836_BE66_F684_1BCCA70EE29C" name="TestTrackNumber" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_9ECAF522_B44D_5A22_EADA_A68D7A217D45" name="ThemeVariant" visibility="public"/>
+        <packagedElement xmi:type="uml:Class" xmi:id="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB" name="UasAltitudeReference" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_89D82F8B_94AF_54D6_518F_BBF65D82E225" name="UasCertificationCategory" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD" name="UasIdentificationReport" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_1EF66555_FDB6_6DCE_6C44_1334186ABE36" name="UasPlatformReport" visibility="public"/>
@@ -482,6 +483,7 @@
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_F53AD604_BD61_AEDB_84FC_337C3DE58C02" name="main" visibility="public" supplier="EAID_1EBFDC91_8F4E_5222_5A21_B5B7EDE1A242" client="EAID_50DB0FA1_397C_C9A7_A8BB_0BAB032C3FBB"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_36FCEEBD_5973_E9DB_763C_D8BDADB4A1DE" name="layouts" visibility="public" supplier="EAID_50DB0FA1_397C_C9A7_A8BB_0BAB032C3FBB" client="EAID_BF1F7D40_C9DD_F92C_8E60_17CEF52E08F7"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_42CE0DCF_C2E3_31AA_46C1_38F52B209341" name="operational_risk" visibility="public" supplier="EAID_4A158ABC_B3ED_E3A7_B29C_36BD1EF49EDA" client="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD"/>
+        <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_12A61852_B54B_6025_1C5B_8EBA99A8D909" name="altitude_reference" visibility="public" supplier="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB" client="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_A8117911_6736_485D_8D38_8251D1CA6BF7" name="certification_category" visibility="public" supplier="EAID_89D82F8B_94AF_54D6_518F_BBF65D82E225" client="EAID_4A158ABC_B3ED_E3A7_B29C_36BD1EF49EDA"/>
         <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_4E5939F0_E7AB_AFE6_8546_C949CBA6EA4A" name="platform_position, frame_center" visibility="public" supplier="EAID_77552E51_3F76_6C83_423C_31A0359AEBC4" client="EAID_1EF66555_FDB6_6DCE_6C44_1334186ABE36"/>
       </packagedElement>
@@ -10277,6 +10279,24 @@
         <links>
         </links>
       </element>
+      <element xmi:idref="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB" xmi:type="uml:Class" name="UasAltitudeReference" scope="public">
+        <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="What a Category 129 report's height is measured from (GAP-196; D-123 decides the correction, D-124 what happens without it)."/>
+        <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
+        <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
+        <alias alias="IE-uas-altitude-reference"/>
+        <tags>
+          <tag xmi:id="EAID_E5B1F984_98A1_1F4D_48D6_EFC053A24D73" name="uafKind" value="InformationElement" modelElement="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB"/>
+          <tag xmi:id="EAID_6674DD4E_3870_3DB8_99B2_5B83FFFA7A73" name="uafId" value="IE-uas-altitude-reference" modelElement="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB"/>
+          <tag xmi:id="EAID_5D0D4787_8E70_C909_C865_B637625DE560" name="registry.code" value="gungnir_model::UasAltitudeReference" modelElement="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB"/>
+          <tag xmi:id="EAID_589AD80E_D7A1_0AA7_86A0_CE4060913CCF" name="registry.domain" value="UAS identification &amp; platform reports" modelElement="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB"/>
+        </tags>
+        <xrefs/>
+        <extendedProperties tagged="0"/>
+        <links>
+          <Dependency xmi:id="EAID_12A61852_B54B_6025_1C5B_8EBA99A8D909" start="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD" end="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB"/>
+        </links>
+      </element>
       <element xmi:idref="EAID_89D82F8B_94AF_54D6_518F_BBF65D82E225" xmi:type="uml:Class" name="UasCertificationCategory" scope="public">
         <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
         <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="I129/120's UCC subfield (edition 1.2 §5.2.12). Unlike the AEC subfield beside it, all four wire codes are exhaustively defined by the specification itself."/>
@@ -10311,6 +10331,7 @@
         <extendedProperties tagged="0"/>
         <links>
           <Dependency xmi:id="EAID_42CE0DCF_C2E3_31AA_46C1_38F52B209341" start="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD" end="EAID_4A158ABC_B3ED_E3A7_B29C_36BD1EF49EDA"/>
+          <Dependency xmi:id="EAID_12A61852_B54B_6025_1C5B_8EBA99A8D909" start="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD" end="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB"/>
         </links>
       </element>
       <element xmi:idref="EAID_1EF66555_FDB6_6DCE_6C44_1334186ABE36" xmi:type="uml:Class" name="UasPlatformReport" scope="public">
@@ -29623,6 +29644,27 @@
         </tags>
         <xrefs/>
       </connector>
+      <connector xmi:idref="EAID_12A61852_B54B_6025_1C5B_8EBA99A8D909" name="altitude_reference">
+        <source xmi:idref="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD">
+          <role visibility="Public" targetScope="instance"/>
+          <type aggregation="none" containment="Unspecified"/>
+          <modifiers isOrdered="false" changeable="none" isNavigable="false"/>
+        </source>
+        <target xmi:idref="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB">
+          <role visibility="Public" targetScope="instance"/>
+          <type aggregation="none" containment="Unspecified"/>
+          <modifiers isOrdered="false" changeable="none" isNavigable="true"/>
+        </target>
+        <properties ea_type="Dependency" direction="Source -&gt; Destination"/>
+        <modifiers isRoot="false" isLeaf="false"/>
+        <appearance linemode="3" linecolor="-1" linewidth="0" seqno="0" headStyle="0" lineStyle="0"/>
+        <labels mt="altitude_reference"/>
+        <tags>
+          <tag xmi:id="EAID_B4D1206C_5B97_DA5D_0796_C4B3A2874BAD" name="uafViewEdge" value="If-Sr-uas-identification-platform-reports" modelElement="EAID_12A61852_B54B_6025_1C5B_8EBA99A8D909"/>
+          <tag xmi:id="EAID_52DD80C3_C0D4_3F63_59BA_B30618F19E0A" name="uafViewSource" value="information/If-Sr-uas-identification-platform-reports.puml" modelElement="EAID_12A61852_B54B_6025_1C5B_8EBA99A8D909"/>
+        </tags>
+        <xrefs/>
+      </connector>
       <connector xmi:idref="EAID_A8117911_6736_485D_8D38_8251D1CA6BF7" name="certification_category">
         <source xmi:idref="EAID_4A158ABC_B3ED_E3A7_B29C_36BD1EF49EDA">
           <role visibility="Public" targetScope="instance"/>
@@ -33830,18 +33872,19 @@
           <element geometry="Left=1385;Top=922;Right=1545;Bottom=982;" subject="EAID_3B4863DA_F269_BFF7_2861_F863C19674AB" seqno="151" style="HideIcon=0;DUID=BB45D5F1;"/>
           <element geometry="Left=1580;Top=922;Right=1740;Bottom=982;" subject="EAID_540E2BBA_C836_BE66_F684_1BCCA70EE29C" seqno="152" style="HideIcon=0;DUID=AA9DAFFC;"/>
           <element geometry="Left=1775;Top=922;Right=1935;Bottom=982;" subject="EAID_9ECAF522_B44D_5A22_EADA_A68D7A217D45" seqno="153" style="HideIcon=0;DUID=FBF1BB15;"/>
-          <element geometry="Left=1970;Top=922;Right=2130;Bottom=982;" subject="EAID_89D82F8B_94AF_54D6_518F_BBF65D82E225" seqno="154" style="HideIcon=0;DUID=C07CFF22;"/>
-          <element geometry="Left=2165;Top=922;Right=2325;Bottom=982;" subject="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD" seqno="155" style="HideIcon=0;DUID=6B2C906F;"/>
-          <element geometry="Left=2360;Top=922;Right=2520;Bottom=982;" subject="EAID_1EF66555_FDB6_6DCE_6C44_1334186ABE36" seqno="156" style="HideIcon=0;DUID=A6435D89;"/>
-          <element geometry="Left=20;Top=1004;Right=180;Bottom=1064;" subject="EAID_BF1F7D40_C9DD_F92C_8E60_17CEF52E08F7" seqno="157" style="HideIcon=0;DUID=C834402B;"/>
-          <element geometry="Left=215;Top=1004;Right=375;Bottom=1064;" subject="EAID_64E82625_6707_3EF5_CC78_928A0767AA8B" seqno="158" style="HideIcon=0;DUID=4C28A95E;"/>
-          <element geometry="Left=410;Top=1004;Right=570;Bottom=1064;" subject="EAID_E0B422A8_7DAD_1334_BAB4_9F655D25B9C2" seqno="159" style="HideIcon=0;DUID=B47F7BE9;"/>
-          <element geometry="Left=605;Top=1004;Right=765;Bottom=1064;" subject="EAID_A9BA8C22_51CB_3A62_04BC_DCD652002896" seqno="160" style="HideIcon=0;DUID=B8BAA3DE;"/>
-          <element geometry="Left=800;Top=1004;Right=960;Bottom=1064;" subject="EAID_DC5D9917_CB8F_0AD1_0A1D_BF75D5DE151F" seqno="161" style="HideIcon=0;DUID=CFFF2B44;"/>
-          <element geometry="Left=995;Top=1004;Right=1155;Bottom=1064;" subject="EAID_903C5F2D_0BED_87CD_5938_C807DBEE6E6D" seqno="162" style="HideIcon=0;DUID=23E2DA67;"/>
-          <element geometry="Left=1190;Top=1004;Right=1350;Bottom=1064;" subject="EAID_1FCF627C_5285_9076_6F80_DBB01040A1CA" seqno="163" style="HideIcon=0;DUID=203366A8;"/>
-          <element geometry="Left=1385;Top=1004;Right=1545;Bottom=1064;" subject="EAID_DAA0F716_E446_E11A_B4EC_0D423AAC1CE6" seqno="164" style="HideIcon=0;DUID=3D02E1F0;"/>
-          <element geometry="Left=10;Top=10;Right=2540;Bottom=1084;" subject="EAID_C28BC5E6_431E_003B_2A45_085E49D96456" seqno="165" style="DUID=DA0844B0;"/>
+          <element geometry="Left=1970;Top=922;Right=2130;Bottom=982;" subject="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB" seqno="154" style="HideIcon=0;DUID=FDD2ECB5;"/>
+          <element geometry="Left=2165;Top=922;Right=2325;Bottom=982;" subject="EAID_89D82F8B_94AF_54D6_518F_BBF65D82E225" seqno="155" style="HideIcon=0;DUID=C07CFF22;"/>
+          <element geometry="Left=2360;Top=922;Right=2520;Bottom=982;" subject="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD" seqno="156" style="HideIcon=0;DUID=6B2C906F;"/>
+          <element geometry="Left=20;Top=1004;Right=180;Bottom=1064;" subject="EAID_1EF66555_FDB6_6DCE_6C44_1334186ABE36" seqno="157" style="HideIcon=0;DUID=A6435D89;"/>
+          <element geometry="Left=215;Top=1004;Right=375;Bottom=1064;" subject="EAID_BF1F7D40_C9DD_F92C_8E60_17CEF52E08F7" seqno="158" style="HideIcon=0;DUID=C834402B;"/>
+          <element geometry="Left=410;Top=1004;Right=570;Bottom=1064;" subject="EAID_64E82625_6707_3EF5_CC78_928A0767AA8B" seqno="159" style="HideIcon=0;DUID=4C28A95E;"/>
+          <element geometry="Left=605;Top=1004;Right=765;Bottom=1064;" subject="EAID_E0B422A8_7DAD_1334_BAB4_9F655D25B9C2" seqno="160" style="HideIcon=0;DUID=B47F7BE9;"/>
+          <element geometry="Left=800;Top=1004;Right=960;Bottom=1064;" subject="EAID_A9BA8C22_51CB_3A62_04BC_DCD652002896" seqno="161" style="HideIcon=0;DUID=B8BAA3DE;"/>
+          <element geometry="Left=995;Top=1004;Right=1155;Bottom=1064;" subject="EAID_DC5D9917_CB8F_0AD1_0A1D_BF75D5DE151F" seqno="162" style="HideIcon=0;DUID=CFFF2B44;"/>
+          <element geometry="Left=1190;Top=1004;Right=1350;Bottom=1064;" subject="EAID_903C5F2D_0BED_87CD_5938_C807DBEE6E6D" seqno="163" style="HideIcon=0;DUID=23E2DA67;"/>
+          <element geometry="Left=1385;Top=1004;Right=1545;Bottom=1064;" subject="EAID_1FCF627C_5285_9076_6F80_DBB01040A1CA" seqno="164" style="HideIcon=0;DUID=203366A8;"/>
+          <element geometry="Left=1580;Top=1004;Right=1740;Bottom=1064;" subject="EAID_DAA0F716_E446_E11A_B4EC_0D423AAC1CE6" seqno="165" style="HideIcon=0;DUID=3D02E1F0;"/>
+          <element geometry="Left=10;Top=10;Right=2540;Bottom=1084;" subject="EAID_C28BC5E6_431E_003B_2A45_085E49D96456" seqno="166" style="DUID=DA0844B0;"/>
         </elements>
       </diagram>
       <diagram xmi:id="EAID_2D96ADBD_6E7F_803D_0705_C944F5EF0961">
@@ -34164,12 +34207,14 @@
         <persistentstyle value="DGS=On=0:CNT=8:W=120:H=40:SG=0:SGH=0:AEB=0:;AR=0;DCL=0;"/>
         <xrefs/>
         <elements>
-          <element geometry="Left=7;Top=44;Right=349;Bottom=337;" subject="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD" seqno="1" style="HideIcon=0;DUID=082A879E;"/>
-          <element geometry="Left=619;Top=142;Right=968;Bottom=239;" subject="EAID_4A158ABC_B3ED_E3A7_B29C_36BD1EF49EDA" seqno="2" style="HideIcon=0;DUID=5A81E625;"/>
-          <element geometry="Left=1171;Top=133;Right=1379;Bottom=247;" subject="EAID_89D82F8B_94AF_54D6_518F_BBF65D82E225" seqno="3" style="HideIcon=0;DUID=6D941D5B;"/>
-          <element geometry="Left=702;Top=494;Right=886;Bottom=575;" subject="EAID_77552E51_3F76_6C83_423C_31A0359AEBC4" seqno="4" style="HideIcon=0;DUID=607E8775;"/>
-          <element geometry="Left=17;Top=372;Right=339;Bottom=697;" subject="EAID_1EF66555_FDB6_6DCE_6C44_1334186ABE36" seqno="5" style="HideIcon=0;DUID=93B43DD3;"/>
+          <element geometry="Left=7;Top=72;Right=349;Bottom=381;" subject="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD" seqno="1" style="HideIcon=0;DUID=082A879E;"/>
+          <element geometry="Left=619;Top=184;Right=1008;Bottom=281;" subject="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB" seqno="2" style="HideIcon=0;DUID=99DCAE90;"/>
+          <element geometry="Left=639;Top=52;Right=988;Bottom=149;" subject="EAID_4A158ABC_B3ED_E3A7_B29C_36BD1EF49EDA" seqno="3" style="HideIcon=0;DUID=5A81E625;"/>
+          <element geometry="Left=1211;Top=44;Right=1418;Bottom=157;" subject="EAID_89D82F8B_94AF_54D6_518F_BBF65D82E225" seqno="4" style="HideIcon=0;DUID=6D941D5B;"/>
+          <element geometry="Left=722;Top=538;Right=905;Bottom=619;" subject="EAID_77552E51_3F76_6C83_423C_31A0359AEBC4" seqno="5" style="HideIcon=0;DUID=607E8775;"/>
+          <element geometry="Left=17;Top=416;Right=339;Bottom=741;" subject="EAID_1EF66555_FDB6_6DCE_6C44_1334186ABE36" seqno="6" style="HideIcon=0;DUID=93B43DD3;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_42CE0DCF_C2E3_31AA_46C1_38F52B209341" style="Mode=3;EOID=5A81E625;SOID=082A879E;Color=-1;LWidth=0;Hidden=0;"/>
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_12A61852_B54B_6025_1C5B_8EBA99A8D909" style="Mode=3;EOID=99DCAE90;SOID=082A879E;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_A8117911_6736_485D_8D38_8251D1CA6BF7" style="Mode=3;EOID=6D941D5B;SOID=5A81E625;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_4E5939F0_E7AB_AFE6_8546_C949CBA6EA4A" style="Mode=3;EOID=607E8775;SOID=93B43DD3;Color=-1;LWidth=0;Hidden=0;"/>
         </elements>
@@ -37152,6 +37197,7 @@
     <UAF:InformationElement base_Class="EAID_3B4863DA_F269_BFF7_2861_F863C19674AB"/>
     <UAF:InformationElement base_Class="EAID_540E2BBA_C836_BE66_F684_1BCCA70EE29C"/>
     <UAF:InformationElement base_Class="EAID_9ECAF522_B44D_5A22_EADA_A68D7A217D45"/>
+    <UAF:InformationElement base_Class="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB"/>
     <UAF:InformationElement base_Class="EAID_89D82F8B_94AF_54D6_518F_BBF65D82E225"/>
     <UAF:InformationElement base_Class="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD"/>
     <UAF:InformationElement base_Class="EAID_1EF66555_FDB6_6DCE_6C44_1334186ABE36"/>
