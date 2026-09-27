@@ -281,6 +281,8 @@ IE-30,Information Elements,InformationElement,RiskScore,Threat score per track w
 IE-31,Information Elements,InformationElement,ReconciliationReport,Merged journal statistics and the conflicting decisions found.,Class
 IE-32,Information Elements,InformationElement,WorkspaceLayout,"The panels a role sees, in order.",Class
 IE-33,Information Elements,InformationElement,Mission and SessionId,A session with its state and configuration.,Class
+IE-accepted-gap,Information Elements,InformationElement,AcceptedGap,"A coverage gap as an acceptance names it: enough to find the same gap in a later coverage report (DN-33 \u00a74, \u00a75).",Class
+IE-acknowledgement,Information Elements,InformationElement,Acknowledgement,"Something the person deciding a plan was told and acknowledged before acting on it (GAP-107, docs/design/DN-26-laydown-options.md \u00a711 item 6): carried on the decision record and on CommandEvent::Decided, so what they were told travels with what they decided.",Class
 IE-algorithm-baseline-id,Information Elements,InformationElement,AlgorithmBaselineId,"Which candidate, in which profile.",Class
 IE-anomaly-settings,Information Elements,InformationElement,AnomalySettings,"Which anomaly detectors a baseline turns on, and how each is tuned.",Class
 IE-arbitration-facts,Information Elements,InformationElement,ArbitrationFacts,"What the rule reads from one side of a conflict, and nothing else.",Class
@@ -324,6 +326,9 @@ IE-exchange-set,Information Elements,InformationElement,ExchangeSet,"The agreeme
 IE-feed-settings,Information Elements,InformationElement,FeedSettings,"Tuning for the feed detector: when silence, a departure from the expected rate, or a run of rejections makes the feed itself the anomaly rather than what it carries.",Class
 IE-fires-plan,Information Elements,InformationElement,FiresPlan,A fires task against a located ground target.,Class
 IE-fires-settings,Information Elements,InformationElement,FiresSettings,Limits on fires tasks (docs/design/DN-05-fires.md \u00a76).,Class
+IE-gap-acceptance,Information Elements,InformationElement,GapAcceptance,"A commander's acceptance of a coverage gap (GAP-106, D-118, DN-33 \u00a74): the gap, why, who, and what it holds for.",Class
+IE-gap-acceptance-id,Information Elements,InformationElement,GapAcceptanceId,"Identifies one gap acceptance: a per-deployment serial, continued past the highest the journal holds (DN-33 \u00a78 rule 6).",Class
+IE-gap-severity,Information Elements,InformationElement,GapSeverity,"How a coverage gap falls short: detectable by one sensor, or watched by nothing (docs/design/DN-12-coverage-and-gaps.md \u00a73).",Class
 IE-governance-event,Information Elements,InformationElement,GovernanceEvent,"Which algorithm configuration is in force, and how it got there (docs/design/DN-24-mission-profiles-and-algorithm-baselines.md \u00a78, GAP-086).",Class
 IE-handoff,Information Elements,InformationElement,Handoff,What is handed to an effector or fires system.,Class
 IE-handoff-error,Information Elements,InformationElement,HandoffError,Why an effector report could not be applied to the handoff it names.,Class
@@ -357,12 +362,16 @@ IE-plan-basis,Information Elements,InformationElement,PlanBasis,"How a plan was 
 IE-plan-id,Information Elements,InformationElement,PlanId,Identifier of one plan produced by the intercept service.,Class
 IE-plan-kind,Information Elements,InformationElement,PlanKind,What a plan proposes. Intercept is the behaviour that existed before fires.,Class
 IE-plan-standing-view,Information Elements,InformationElement,PlanStandingView,"What a planner says about its answer to the current picture, as a node puts it on the wire (GAP-157, D-94; docs/design/DN-04-effector-model.md \u00a711).",Class
+IE-planning-event,Information Elements,InformationElement,PlanningEvent,"The planning record (GAP-106, GAP-107): a commander accepting a coverage gap, the acceptance re-opening, and a laydown rehearsed (docs/design/DN-33-accepting-a-coverage-gap.md \u00a78, docs/design/DN-26-laydown-options.md \u00a711).",Class
 IE-policy-settings,Information Elements,InformationElement,PolicySettings,"Everything about how this deployment decides, in one versioned place.",Class
 IE-product-kind,Information Elements,InformationElement,ProductKind,Which product a ScheduledProduct entry produces on its cycle.,Class
+IE-rehearsal-basis,Information Elements,InformationElement,RehearsalBasis,"What a laydown rehearsal ran under (docs/design/DN-26-laydown-options.md \u00a711 item 3, D-119): five SHA-256 digests, each over the canonical JSON of one part of what the throwaway desktop took from the deployment (DN-32 \u00a714, D-113). Two rehearsals ran under the same thing exactly when every part is equal.",Class
 IE-rehearsal-event,Information Elements,InformationElement,RehearsalEvent,"A seeded session for a usability round (GAP-089). **The first record of a seeded session**, so nothing that follows can be read as an operation.",Class
 IE-rehearsal-origin,Information Elements,InformationElement,RehearsalOrigin,"Where a re-observed detection came from (DN-32 \u00a76, mechanism 1).",Class
+IE-rehearsal-stamp,Information Elements,InformationElement,RehearsalStamp,"A laydown rehearsal as the record holds it (docs/design/DN-26-laydown-options.md \u00a711 item 2, D-120): which laydown, against which recording, under which baseline, when, and what it ran under.",Class
 IE-relative-cost,Information Elements,InformationElement,RelativeCost,What one round of this resource costs relative to the others in the same deployment. Unitless by design: it only ever breaks ties between resources of the same layer that are both adequate.,Class
 IE-releasability,Information Elements,InformationElement,Releasability,Who may receive this.,Class
+IE-reopened-because,Information Elements,InformationElement,ReopenedBecause,"Why a gap acceptance stopped holding (DN-33 \u00a75), in the order the checks run.",Class
 IE-replay-event,Information Elements,InformationElement,ReplayEvent,A replay session being opened or closed.,Class
 IE-reported-position,Information Elements,InformationElement,ReportedPosition,"A position an entity reports about itself, from something that is not a sensor.",Class
 IE-requirement-event,Information Elements,InformationElement,RequirementEvent,"The life of one collection requirement (docs/design/DN-11-sensor-control-and-tasking.md, GAP-005).",Class

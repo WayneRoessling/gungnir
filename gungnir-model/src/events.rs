@@ -545,6 +545,17 @@ pub enum CommandEvent {
         /// them. `None` means "taken here", which is what every decision is today.
         #[serde(default)]
         origin: Option<String>,
+        /// What the person deciding was told and acknowledged before acting on the plan
+        /// (GAP-107, `docs/design/DN-26-laydown-options.md` §11 item 6): the rehearsal
+        /// standing of the laydown in force, when it was not rehearsed under what is
+        /// running. Copied from `gungnir_command::DecisionRecord::acknowledged`.
+        ///
+        /// Empty for a decision that asked nothing, and for every journal written before
+        /// the field existed; defaulted and left out when empty, so the change is additive,
+        /// `SCHEMA_VERSION` stands and a line with nothing acknowledged is written exactly
+        /// as it was.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        acknowledged: Vec<crate::Acknowledgement>,
     },
     /// The window closed with nobody deciding. **Not a rejection**: nobody chose,
     /// and an after-action review must be able to tell the two apart
@@ -1072,6 +1083,27 @@ pub struct EngagementSide {
     pub at: MissionTime,
 }
 
+/// The planning record (GAP-106, GAP-107): a commander accepting a coverage gap, the
+/// acceptance re-opening, and a laydown rehearsed
+/// (`docs/design/DN-33-accepting-a-coverage-gap.md` §8,
+/// `docs/design/DN-26-laydown-options.md` §11).
+///
+/// **Additive**: a reader that does not know it ignores it, and `SCHEMA_VERSION` stands.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum PlanningEvent {
+    /// A signed-in commander accepted a coverage gap, with a reason (D-118).
+    GapAccepted(crate::GapAcceptance),
+    /// An acceptance stopped holding, by itself: nobody did it, and the reason says what
+    /// changed (DN-33 §5).
+    GapAcceptanceReopened {
+        acceptance: crate::GapAcceptanceId,
+        because: crate::ReopenedBecause,
+        at: MissionTime,
+    },
+    /// A laydown was rehearsed against a recording, under what the stamp names (D-120).
+    LaydownRehearsed(crate::RehearsalStamp),
+}
+
 /// A seeded session for a usability round (GAP-089). **The first record of a seeded
 /// session**, so nothing that follows can be read as an operation.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -1124,6 +1156,7 @@ mod tests {
             item: None,
             overridden: false,
             origin: None,
+            acknowledged: Vec::new(),
         };
         let mut before = serde_json::to_value(&decided).expect("encode");
         let removed = before
@@ -1150,6 +1183,7 @@ mod tests {
             item: None,
             overridden: false,
             origin: None,
+            acknowledged: Vec::new(),
         };
         let json = serde_json::to_string(&now).expect("encode");
         assert_eq!(
@@ -1176,6 +1210,7 @@ mod tests {
             item: None,
             overridden: false,
             origin: None,
+            acknowledged: Vec::new(),
         };
         let mut before = serde_json::to_value(&decided).expect("encode");
         let fields = before
@@ -1221,6 +1256,7 @@ mod tests {
             item: None,
             overridden: false,
             request: Some(RequestId::new("console-2/17").expect("a key")),
+            acknowledged: Vec::new(),
         };
         let json = serde_json::to_string(&with_key).expect("encode");
         assert_eq!(

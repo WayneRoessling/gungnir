@@ -96,6 +96,10 @@ pub struct DecidedBy {
     /// The machine a forwarded decision was taken on. Filled by GAP-134; `None` here
     /// means "taken on this machine", which every decision in this build is.
     pub origin: Option<String>,
+    /// What the person was told and acknowledged in taking it (GAP-107,
+    /// `docs/design/DN-26-laydown-options.md` §11 item 6). Carried to
+    /// [`DecisionRecord::acknowledged`] unchanged; empty when nothing was asked.
+    pub acknowledged: Vec<gungnir_model::Acknowledgement>,
 }
 
 impl DecidedBy {
@@ -113,6 +117,13 @@ impl DecidedBy {
     #[must_use]
     pub fn with_request(mut self, request: Option<RequestId>) -> Self {
         self.request = request;
+        self
+    }
+
+    /// The same, with what the person acknowledged in taking it (GAP-107).
+    #[must_use]
+    pub fn with_acknowledged(mut self, acknowledged: Vec<gungnir_model::Acknowledgement>) -> Self {
+        self.acknowledged = acknowledged;
         self
     }
 }
@@ -156,6 +167,15 @@ pub struct DecisionRecord {
     #[serde(default)]
     pub origin: Option<String>,
     pub mission_time: MissionTime,
+    /// What the person deciding was told and acknowledged before acting on the plan
+    /// (GAP-107, `docs/design/DN-26-laydown-options.md` §11 item 6): the rehearsal standing
+    /// of the laydown in force when it was not rehearsed under what is running.
+    ///
+    /// Empty for a decision that asked nothing, an expiry, a forwarded record, and every
+    /// record written before the field existed; defaulted and left out when empty, so the
+    /// change is additive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acknowledged: Vec<gungnir_model::Acknowledgement>,
 }
 
 impl DecisionRecord {
@@ -212,6 +232,8 @@ impl DecisionRecord {
                 item: self.item,
                 overridden: matches!(self.decision, OperatorDecision::Overridden),
                 origin: self.origin.clone(),
+                // GAP-107: what the person was told travels with what they decided.
+                acknowledged: self.acknowledged.clone(),
             },
         }
     }
@@ -248,6 +270,14 @@ pub enum CommandError {
         role: String,
         offered_to: Vec<String>,
     },
+    /// The decision acts on a plan, and the person taking it was told something they
+    /// have not acknowledged (GAP-107, `docs/design/DN-26-laydown-options.md` §11 item 6).
+    /// Nothing was recorded.
+    #[error(
+        "this decision acts on a plan and {subject} has not been acknowledged ({statement}); \
+         nothing was recorded"
+    )]
+    Unacknowledged { subject: String, statement: String },
 }
 
 /// What became of a decision another machine took and forwarded
@@ -587,6 +617,7 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
             request: who.request,
             origin: who.origin,
             mission_time: now,
+            acknowledged: who.acknowledged,
         };
         self.records.push(record.clone());
         Ok(record)
@@ -1218,6 +1249,7 @@ mod tests {
             request: None,
             origin: Some(origin.to_owned()),
             mission_time: MissionTime(at),
+            acknowledged: Vec::new(),
         }
     }
 

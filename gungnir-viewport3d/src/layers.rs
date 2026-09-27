@@ -127,6 +127,11 @@ pub struct GapPolyline<'a> {
     pub samples: &'a [[f64; 3]],
     /// Covered by nothing, as opposed to covered by one sensor.
     pub uncovered: bool,
+    /// A commander accepted this gap and the acceptance stands (GAP-106,
+    /// `docs/design/DN-33-accepting-a-coverage-gap.md` §8 rule 4). **Drawn as the gap it
+    /// is**, in its own colour and pattern, and marked "accepted" beside it: an accepted
+    /// gap is a risk somebody took, not a stretch that is covered.
+    pub accepted: bool,
 }
 
 /// The coverage layer for a frame: circles, or the reason there are none.
@@ -194,6 +199,17 @@ pub fn draw_gaps_2d(
                 palette.warning_color
             },
         );
+        // GAP-106: the mark goes beside the gap's middle sample, in the muted colour, so it
+        // labels the gap without covering it.
+        if gap.accepted {
+            painter.text(
+                points[points.len() / 2] + egui::vec2(6.0, -6.0),
+                egui::Align2::LEFT_BOTTOM,
+                "accepted",
+                egui::FontId::proportional(palette.small_font_size),
+                palette.muted_text_color(),
+            );
+        }
         if gap.uncovered {
             painter.add(egui::Shape::line(points, stroke));
         } else {

@@ -53,6 +53,7 @@ fn decided(plan: u128, accepted: bool, operator: &str, role: &str) -> Event {
         item: None,
         overridden: false,
         origin: None,
+        acknowledged: Vec::new(),
     })
 }
 

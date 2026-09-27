@@ -52,6 +52,10 @@ class "DecisionId" as DecisionId <<InformationElement>> {
 class "PendingApprovalId" as PendingApprovalId <<InformationElement>> {
   pub u128
 }
+class "Acknowledgement" as Acknowledgement <<InformationElement>> {
+  subject: String
+  statement: String
+}
 enum "PlanKind" as PlanKind <<InformationElement>> {
   Intercept { solutions: Vec<InterceptSolutionView>, }
   Fires(Box<FiresPlan>)

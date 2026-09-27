@@ -54,6 +54,11 @@ pub enum LaydownCoverage {
     Computed {
         gap_segments: usize,
         uncovered_m: f64,
+        /// Of `gap_segments` and `uncovered_m`, what a standing acceptance names (GAP-106,
+        /// DN-33 §7): counted in both, never taken out of them. Only the laydown in force
+        /// can have any, because an acceptance holds for the laydown it was made under.
+        accepted_segments: usize,
+        accepted_uncovered_m: f64,
         /// This laydown's `uncovered_m` minus the current laydown's. Negative is less
         /// gap than today; positive is more. `None` for the current laydown itself,
         /// which is not a difference from itself.
@@ -85,6 +90,12 @@ pub enum VersusCurrent {
 #[derive(Debug, Clone, PartialEq)]
 pub enum RowRehearsal {
     NotRehearsed,
+    /// Rehearsed only in an earlier session (GAP-107, D-120): the record says it was run,
+    /// against which recording and in which session; the figures were that session's.
+    RehearsedEarlier {
+        scenario: TestTrackNumber,
+        session: Option<u64>,
+    },
     Rehearsed {
         scenario: TestTrackNumber,
         /// Detections of a recorded target, every sensor summed.
@@ -230,6 +241,11 @@ pub enum RehearsalSection {
     NothingSelected,
     /// A laydown is selected and no rehearsal has been run for it.
     NotYetRun,
+    /// Rehearsed in an earlier session only (D-120): on the record, figures not held.
+    RanInEarlierSession {
+        scenario: TestTrackNumber,
+        session: Option<u64>,
+    },
     /// The last rehearsal recorded for the selected laydown.
     Ran(RehearsalSummary),
 }
@@ -253,6 +269,19 @@ pub struct PlanningView<'a> {
     /// (GAP-087's own remaining item). Clicking the selected option again clears it,
     /// the same toggle-by-reclick rule PN-03's track selection uses.
     pub selected: Option<&'a LaydownId>,
+    /// Where the laydown in force stands (GAP-107, `docs/design/DN-26-laydown-options.md`
+    /// §11 item 5), and whether a decision on a plan must acknowledge it; `None` for a
+    /// deployment that declares no laydown.
+    pub in_force: Option<InForceLine<'a>>,
+}
+
+/// The rehearsal standing of the laydown in force, as PN-16 says it (GAP-107).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InForceLine<'a> {
+    pub sentence: &'a str,
+    /// True when a decision acting on a plan asks for it to be acknowledged: never
+    /// rehearsed, rehearsed under something else, or not rehearsable (D-119).
+    pub asks: bool,
 }
 
 /// What an operator did on this frame, for the caller to apply (the same shape PN-03's
@@ -284,6 +313,11 @@ pub fn render_planning(
     view: &PlanningView<'_>,
 ) -> Option<PlanningAction> {
     ui.heading("Planning: laydown options");
+
+    // GAP-107, DN-26 §11: first, because it is what a decision on a plan is told.
+    if let Some(line) = view.in_force {
+        draw_in_force(ui, palette, line);
+    }
 
     ui.label(
         RichText::new(format!("Coverage compared under: {}", view.terrain_model))
@@ -384,11 +418,21 @@ fn draw_row_coverage(ui: &mut Ui, palette: &theme::Palette, coverage: &LaydownCo
         LaydownCoverage::Computed {
             gap_segments,
             uncovered_m,
+            accepted_segments,
+            accepted_uncovered_m,
             ..
         } => {
-            ui.label(format!(
-                "{gap_segments} gap segment(s), {uncovered_m:.0} m uncovered"
-            ));
+            // GAP-106: the accepted part is said inside the total, never taken out of it.
+            if *accepted_segments > 0 {
+                ui.label(format!(
+                    "{gap_segments} gap segment(s) ({accepted_segments} accepted), \
+                     {uncovered_m:.0} m uncovered ({accepted_uncovered_m:.0} m of it accepted)"
+                ));
+            } else {
+                ui.label(format!(
+                    "{gap_segments} gap segment(s), {uncovered_m:.0} m uncovered"
+                ));
+            }
         }
         LaydownCoverage::NotComputed { reason } => {
             ui.label(RichText::new(format!("Not computed: {reason}")).color(palette.warning_color));
@@ -417,6 +461,12 @@ fn draw_row_rehearsal(ui: &mut Ui, palette: &theme::Palette, rehearsal: &RowRehe
     match rehearsal {
         RowRehearsal::NotRehearsed => {
             ui.label(RichText::new("not rehearsed").color(palette.muted_text_color()));
+            ui.label(RichText::new("--").color(palette.muted_text_color()));
+        }
+        RowRehearsal::RehearsedEarlier { scenario, session } => {
+            ui.label(
+                RichText::new(earlier_label(*scenario, *session)).color(palette.muted_text_color()),
+            );
             ui.label(RichText::new("--").color(palette.muted_text_color()));
         }
         RowRehearsal::Rehearsed {
@@ -707,6 +757,16 @@ fn draw_rehearsal(
                     .color(palette.muted_text_color()),
             );
         }
+        RehearsalSection::RanInEarlierSession { scenario, session } => {
+            ui.label(
+                RichText::new(format!(
+                    "{}. Its figures were that session's; run it again to see them here.",
+                    earlier_label(*scenario, *session)
+                ))
+                .small()
+                .color(palette.muted_text_color()),
+            );
+        }
         RehearsalSection::Ran(summary) => draw_summary(ui, palette, summary),
     }
     action
@@ -797,6 +857,39 @@ fn draw_summary(ui: &mut Ui, palette: &theme::Palette, summary: &RehearsalSummar
     }
 }
 
+/// Where the laydown in force stands (GAP-107, DN-26 §11 item 5): warning-coloured, with
+/// what a decision will ask, when a decision will ask; muted when it will not.
+fn draw_in_force(ui: &mut Ui, palette: &theme::Palette, line: InForceLine<'_>) {
+    ui.label(RichText::new(line.sentence).color(if line.asks {
+        palette.warning_color
+    } else {
+        palette.muted_text_color()
+    }));
+    if line.asks {
+        ui.label(
+            RichText::new(
+                "Advisory: a decision on a plan asks for this to be acknowledged, and \
+                 records that it was. Nothing refuses a plan for it.",
+            )
+            .small()
+            .color(palette.muted_text_color()),
+        );
+    }
+    ui.separator();
+}
+
+/// A rehearsal the record holds from an earlier session (D-120), in words.
+#[must_use]
+pub fn earlier_label(scenario: TestTrackNumber, session: Option<u64>) -> String {
+    match session {
+        Some(n) => format!("rehearsed against {} in session {n}", scenario.label()),
+        None => format!(
+            "rehearsed against {} in an earlier session",
+            scenario.label()
+        ),
+    }
+}
+
 /// The signed difference, in metres, worded so a reader does not have to interpret the
 /// sign: "less" is unambiguous where "-120 m" is not.
 fn difference_label(delta_m: f64) -> String {
@@ -846,6 +939,7 @@ mod tests {
             rehearsal,
             rehearsal_scenario: TestTrackNumber(1),
             selected,
+            in_force: None,
         }
     }
 
@@ -855,6 +949,8 @@ mod tests {
             gap_segments: 0,
             uncovered_m: 0.0,
             delta_uncovered_m: None,
+            accepted_segments: 0,
+            accepted_uncovered_m: 0.0,
         };
         let not_computed = LaydownCoverage::NotComputed {
             reason: "no terrain loaded".into(),

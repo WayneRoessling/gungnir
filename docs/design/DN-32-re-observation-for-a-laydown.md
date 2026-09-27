@@ -250,7 +250,7 @@ exactly that.
 
 * **No truth generation in production.** §2.
 * **No arbitrary scenario authoring.** Rehearsals run against committed fixtures only.
-* **No adoption workflow.** GAP-107 owns that question.
+* **No adoption workflow.** GAP-107 answered that question: there is none, and a decision on a plan is told whether the laydown in force was rehearsed under what is running (DN-26 §11, D-119).
 * **No change to where the deployment is.** §5.5.
 * **No byte-identical reproduction of a fixture's detections.** §7.
 

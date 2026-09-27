@@ -91,6 +91,11 @@ pub enum Event {
     ///
     /// Additive, so `SCHEMA_VERSION` is not bumped -- the treatment [`Event::Link`] had.
     Audit(gungnir_model::events::AuditEvent),
+    /// A coverage gap accepted or re-opened, and a laydown rehearsed (GAP-106, GAP-107;
+    /// DN-33 §8, DN-26 §11).
+    ///
+    /// Additive, so `SCHEMA_VERSION` is not bumped -- the treatment [`Event::Link`] had.
+    Planning(gungnir_model::events::PlanningEvent),
     Tracking(TrackingEvent),
     Intercept(InterceptEvent),
     Ingest(IngestEvent),

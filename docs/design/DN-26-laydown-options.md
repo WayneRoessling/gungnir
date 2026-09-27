@@ -6,9 +6,10 @@ record. Status: `ConfigBaseline.laydowns` with its five refusals,
 PN-11 for a visual before-and-after) are **all built (GAP-087, 2026-09-07 and
 2026-09-08)**; so are the rehearsal section (GAP-045, 2026-09-08; re-observed by each
 laydown's own sensors since GAP-105, 2026-09-25) and first-engagement range per option
-(GAP-020, 2026-09-26, by DN-02 §9). The gap-acceptance control is GAP-106's and the
-rehearsal-gated submit GAP-107's. What the owner has signed of this note is in
-[`../signatures.md`](../signatures.md).
+(GAP-020, 2026-09-26, by DN-02 §9). The gap-acceptance control is DN-33's (GAP-106,
+built 2026-09-26), and §11, amendment 1, is what a decision is told about the rehearsal of
+the laydown in force (GAP-107, built 2026-09-26). What the owner has signed of this note is
+in [`../signatures.md`](../signatures.md).
 
 ## 1. The gap and what it blocks
 
@@ -173,7 +174,8 @@ and the reason written in `intent` are others the system knows nothing about.
 4. Adopting a laydown is **out of scope for this note**. Moving a sensor is a physical
    act with an authority chain this system does not model, and a button that appeared to
    do it would be the most dangerous control on the display. The panel compares; a person
-   acts.
+   acts. Amendment 1 (§11) keeps this rule and adds the one thing a decision is told about
+   the laydown in force: whether it was rehearsed under what is running.
 
 ## 7. What this note deliberately does not do
 
@@ -213,6 +215,69 @@ One new row in `docs/verification-capability-table.md` §1:
 
 The comparison itself needs no new row: it is `gungnir-analytics`'s existing coverage
 computation applied to more than one input, and that row is already gated.
+
+## 11. Amendment 1 -- the laydown in force, rehearsed or said (2026-09-26)
+
+Raised by GAP-107 under D-50. What the owner has signed of this amendment is in
+[`../signatures.md`](../signatures.md).
+
+**The owner's decision (D-119, taken by the owner 2026-09-26): advisory and acknowledged,
+no gate.** §6 rule 4 stands: there is still no adoption step, and nothing refuses a plan
+because the laydown under it was never rehearsed. Instead, **PN-16 and the decision on a
+plan say plainly when the laydown in force was never rehearsed, or was rehearsed under
+something other than what is running, and a decision that acts on a plan asks the person
+taking it to acknowledge that.** The acknowledgement is audited and travels with the
+decision record.
+
+The rule, with the definitions the owner delegated (D-119, D-120):
+
+1. **The laydown in force** is the one the running baseline marks `current`. A deployment
+   that declares no laydown has nothing to rehearse (§8: empty means none offered), and
+   nothing is said or asked; PN-16 already says it declares none.
+2. **A rehearsal is on the record** (D-120). Running one journals
+   `PlanningEvent::LaydownRehearsed` with a `RehearsalStamp`: the laydown, the recording
+   and its seed, the baseline revision, when, and **what it ran under** (item 3). The
+   desktop folds the stamps from its journal at start, so a restart does not turn a
+   rehearsed laydown into a "never rehearsed" one, and retention keeps the session holding
+   each laydown's latest stamp. PN-16's figures stay the run's own, for this session; a
+   laydown rehearsed only in an earlier session says so and when.
+3. **What a rehearsal ran under** is exactly what DN-32 §14 (D-113) has the throwaway
+   desktop take from the deployment, in five parts, each a SHA-256 of its canonical JSON:
+   the **laydown's placements** (every sensor's position, mode, sector and band, every
+   resource's position); the **sensors** it places, as their declarations reach the run;
+   the **resources**; the **policy** (the whole `policy`, the geofences with the origin they
+   are placed from, the allocation horizon); and the **tracking** (algorithm candidates,
+   mission and tracking profiles, the profile in force, the late-data policy). What a run
+   does not take -- endpoints, peers, feeds, accounts, a sensor's control endpoint and
+   maintenance windows, the validity window, approaches -- is in no part.
+4. **"Rehearsed under an older revision or policy"** means: no rehearsal of the laydown in
+   force on the record ran under the five parts now running. A baseline revision that
+   changed none of them does not stale a rehearsal -- an exchange endpoint edited is not a
+   reason to re-run one, and asking would teach a person to tick the box unread -- but PN-16
+   still names the revision the run was under. When the parts differ, PN-16 and the
+   decision **name which**, and the revision then and now.
+5. **Standing**, as PN-16 and PN-07 say it: *never rehearsed*; *rehearsed under other
+   placements / sensors / resources / policy / tracking than are running* (naming them);
+   *cannot be rehearsed under this baseline* (with the reason: a deployment with geofences
+   and no origin, DN-32 §14); or *rehearsed against TT-NN under what is running*.
+6. **The acknowledgement.** In any of the first three, PN-07 draws the standing in its own
+   section and **accept and override stay disabled until the person ticks that they have
+   read it**; the tick is reset when the sentence changes. A rejection acts on nothing and
+   asks for nothing. The decision record carries it as
+   `DecisionRecord::acknowledged` -- `Acknowledgement { subject: "rehearsal", statement }` --
+   and so does `CommandEvent::Decided` on the journal, and the decision's own audit entry
+   quotes it. `decisions::decide` refuses an actionable decision without it,
+   `CommandError::Unacknowledged`, and records nothing: the panel's gate is not the only
+   place the rule holds.
+7. **A desktop linked to a node** asks and gates the same and audits the acknowledgement on
+   its own log; the node's decision record does not yet carry it (**GAP-193**).
+
+Verification: `gungnir-app/tests/rehearsal_advisory.rs` over round 1's baseline and TT-11
+-- a decision with the laydown in force never rehearsed asks, refuses without the tick, and
+records it with; the same laydown rehearsed under the running baseline asks nothing; a
+rehearsal before a policy change is named stale by its part; and a restart keeps a
+rehearsal on the record. `gungnir-app/src/laydown_rehearsal.rs`'s unit tests hold item 3:
+every field a rehearsal takes changes a part, and none it does not take changes any.
 
 ## Traceability
 

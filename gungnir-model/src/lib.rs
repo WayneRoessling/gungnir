@@ -119,10 +119,13 @@ pub use gungnir_core::{ResourceId, TrackId, TrackStatus};
 pub use handoff::{
     accept_report, DecisionAttribution, DeliveryState, EffectorReport, Handoff, HandoffError,
 };
-pub use laydown::{Laydown, LaydownId, ResourcePlacement, SensorPlacement, TestTrackNumber};
+pub use laydown::{
+    AcceptedGap, GapAcceptance, GapAcceptanceId, GapSeverity, Laydown, LaydownId, RehearsalBasis,
+    RehearsalStamp, ReopenedBecause, ResourcePlacement, SensorPlacement, TestTrackNumber,
+};
 pub use plans::{
-    DecisionId, DeconflictionCheck, DeconflictionKind, DeconflictionResult, FiresPlan,
-    PendingApprovalId, PlanKind, RequestId, REQUEST_ID_MAX_LEN,
+    Acknowledgement, DecisionId, DeconflictionCheck, DeconflictionKind, DeconflictionResult,
+    FiresPlan, PendingApprovalId, PlanKind, RequestId, REQUEST_ID_MAX_LEN,
 };
 pub use policy_settings::{
     AuthorityRule, AuthoritySettings, ControlStatusSettings, DecisionSettings, DelegationSettings,
