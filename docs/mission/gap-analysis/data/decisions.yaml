@@ -2835,6 +2835,60 @@
     `InterceptEvent::HeldLayers`, carried in the snapshot's `held_layers`, so a linked
     desktop draws the node's count rather than deriving one from reason strings. See
     `../../record/2026-09-26/a-layer-at-hold-refusing-every-plan-is.md`.
+- id: D-121
+  decision: Which geoid model ships, how it reaches a deployment, and what a height in any other datum does
+  question: >-
+    A DEM or point cloud converted from a real-world CRS keeps its height in its own
+    vertical datum, tens of metres off the WGS-84 ellipsoidal heights the picture uses
+    (GAP-108, filed by D-51). Does a geoid model ship -- which, under what licence, at
+    what size, through what -- or is a converted height refused unless the file is
+    already ellipsoidal? And how does a grid too large for the repository reach a
+    deployment, and get checked in CI?
+  raised_in: "GAP-108; D-51; GAP-102 item (3); `../../rust-3d-data-ecosystem-build-vs-adopt.md` §5"
+  decider: Owner
+  unblocks: GAP-108
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken by the owner, 2026-09-26: NGA's EGM2008 2.5-arc-minute geoid grid, public
+    domain, applied through PROJ behind the existing `crs` feature; a file whose vertical
+    datum has no grid is refused by name, never a silent ellipsoid/geoid mix.** **Taken
+    under the owner's delegation of 2026-09-26**, the details: the grid is PROJ-data's
+    GeoTIFF `us_nga_egm08_25.tif` from cdn.proj.org, a deployment artifact pinned by the
+    SHA-256 PROJ-data publishes (`deploy/geoid/SHA256SUMS`), never committed; a
+    `GeoidGrid` exists only once a file hashed to it, and PROJ is handed that file's
+    absolute path in a written-out `vgridshift` pipeline, so neither a stale copy on
+    `PROJ_DATA` nor PROJ's "ballpark" no-op can stand in; the baseline's
+    `geoid_grid_dir` names the directory, else `PROJ_DATA`, and PN-09 says verified,
+    refused or none. Ellipsoidal heights pass unchanged; EGM2008 heights (EPSG:3855) gain
+    N; every other datum, EGM96 included, and a datum nobody states are refused -- the
+    baseline's `vertical` declares one for a file that does not, and loses to a file
+    that does. `proj-sys` is named for its `tiff` feature alone (libtiff), `network`
+    refused. CI tests on a committed clip and fetches the pinned grid, cached under its
+    digest. Rejected: a committed grid (80 MB); PROJ's own operation search (ballpark
+    fallback); EGM2008 for EGM96 or NAVD88 heights (a smaller silent mix). See
+    `../../record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`.
+- id: D-122
+  decision: Where a converted DEM's height goes in the local frame
+  question: >-
+    `TerrainMesh::with_xy` placed a converted DEM's east and north and carried the file's
+    own height through as its up (GAP-023, recorded and not changed). With GAP-108 that
+    height becomes a WGS-84 ellipsoidal one; does it then stay the vertex's z, or become
+    its local ENU up, which is what line of sight compares a sensor's up against?
+  raised_in: "GAP-108; GAP-023 (the 2026-09-08 entry's 'one thing this exposed and did not fix')"
+  decider: Owner
+  unblocks: GAP-108
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **The vertex's up is its local
+    ENU up, computed from its ellipsoidal height by the same `gungnir_coord` transform
+    that places its east and north** (`TerrainMesh::with_enu`); a no-data vertex stays a
+    hole. The file's height as the up is off by the origin's own altitude, the geoid
+    separation and the Earth's curvature (about 31 m at 20 km), and line of sight was
+    masked against that; a geoid-corrected height left in z would only move the error.
+    A `"local-enu"` DEM is untouched: its heights are already the deployment's up.
+    Rejected: keeping the file's height (the defect GAP-023 recorded); an ellipsoidal
+    height as z (right at the origin only). See
+    `../../record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`.
 - id: D-118
   decision: What accepting a coverage gap records, who may, how long it holds, and whether it still counts
   question: >-

@@ -96,6 +96,65 @@ impl PointCloudCrs {
         }
     }
 
+    /// The vertical datum the file states for its heights, or `None` when it states none
+    /// (GAP-108, D-121).
+    ///
+    /// Read from a WKT 1 `VERT_CS` node, in this order: a `VERT_DATUM` of type 2002 (OGC
+    /// 01-009's ellipsoidal datum type) is a WGS-84 ellipsoidal height; a `VERT_DATUM`
+    /// whose authority is EPSG:1027 (the EGM2008 geoid) is an EGM2008 height whatever its
+    /// unit, which [`Self::vertical_unit_metres`] reads separately; otherwise the
+    /// `VERT_CS`'s own EPSG authority decides, through
+    /// [`VerticalDatum::from_epsg`](crate::geoid::VerticalDatum::from_epsg); and a
+    /// `VERT_CS` with no authority at all is kept by its name, which a refusal quotes.
+    ///
+    /// **A WKT with no `VERT_CS` states nothing**, and neither does a geokey file here:
+    /// a plain projected system says nothing about what its heights are measured from,
+    /// and reading that silence as "ellipsoidal" or "above the geoid" would be the guess
+    /// D-121 refuses. The baseline's `point_cloud.vertical` is where such a file's datum
+    /// is declared.
+    #[must_use]
+    pub fn vertical_datum(&self) -> Option<crate::geoid::VerticalDatum> {
+        use crate::geoid::{VerticalDatum, EPSG_EGM2008_GEOID};
+        let PointCloudCrs::Wkt(wkt) = self else {
+            return None;
+        };
+        let start = wkt.find("VERT_CS[")?;
+        let node = balanced_node(&wkt[start..])?;
+        if let Some(datum_at) = node.find("VERT_DATUM[") {
+            if let Some(datum) = balanced_node(&node[datum_at..]) {
+                // VERT_DATUM["name", type, AUTHORITY[...]]: the type is the field after
+                // the quoted name.
+                let datum_type = datum
+                    .strip_prefix("VERT_DATUM[")
+                    .and_then(|inside| inside.split_once(',').map(|(_, rest)| rest))
+                    .and_then(|rest| rest.split([',', ']']).next())
+                    .map(str::trim);
+                if datum_type == Some("2002") {
+                    return Some(VerticalDatum::Ellipsoidal);
+                }
+                if direct_child(datum, "AUTHORITY").and_then(epsg_authority)
+                    == Some(EPSG_EGM2008_GEOID)
+                {
+                    return Some(VerticalDatum::Egm2008);
+                }
+            }
+        }
+        let name = node
+            .split_once('"')
+            .and_then(|(_, rest)| rest.split_once('"'))
+            .map_or("an unnamed vertical system", |(name, _)| name)
+            .to_string();
+        Some(
+            match direct_child(node, "AUTHORITY").and_then(epsg_authority) {
+                Some(code) => match VerticalDatum::from_epsg(code) {
+                    VerticalDatum::Other { epsg, .. } => VerticalDatum::Other { epsg, name },
+                    known => known,
+                },
+                None => VerticalDatum::Other { epsg: None, name },
+            },
+        )
+    }
+
     /// Whether this declaration is consistent with a baseline that claims `epsg`.
     ///
     /// **The geokey check is exact and the WKT check is deliberately weak, and the
@@ -146,22 +205,30 @@ fn wkt1_vertical_unit_metres(wkt: &str) -> Option<f64> {
     // `UNIT["degree", ...]` nested inside the `GEOGCS` beneath it.
     let start = wkt.find("PROJCS[")?;
     let node = balanced_node(&wkt[start..])?;
-    direct_child_unit(node).and_then(unit_factor)
+    direct_child(node, "UNIT").and_then(unit_factor)
 }
 
-/// The `UNIT[...]` node that is a direct child of `node`, skipping any nested inside a
-/// sub-node such as the `GEOGCS` within a `PROJCS`.
-fn direct_child_unit(node: &str) -> Option<&str> {
+/// The `NAME[...]` node that is a direct child of `node`, skipping any nested inside a
+/// sub-node such as the `GEOGCS` within a `PROJCS` or the `VERT_DATUM` within a
+/// `VERT_CS`.
+fn direct_child<'a>(node: &'a str, name: &str) -> Option<&'a str> {
     let mut depth = 0usize;
     let bytes = node.as_bytes();
+    let name = name.as_bytes();
     for (i, c) in node.char_indices() {
         match c {
             '[' => {
-                // Depth is counted *before* this bracket is opened, so a `UNIT[` whose
+                // Depth is counted *before* this bracket is opened, so a `NAME[` whose
                 // name begins at depth 1 is a direct child of the outer node and one at
-                // depth 2 or more belongs to something nested inside it.
-                if depth == 1 && i >= 4 && &bytes[i - 4..i] == b"UNIT" {
-                    return balanced_node(&node[i - 4..]);
+                // depth 2 or more belongs to something nested inside it. The byte before
+                // the name must end the previous field, so `UNIT` is never read out of
+                // the tail of a longer keyword.
+                if depth == 1
+                    && i > name.len()
+                    && &bytes[i - name.len()..i] == name
+                    && matches!(bytes[i - name.len() - 1], b',' | b'[' | b' ')
+                {
+                    return balanced_node(&node[i - name.len()..]);
                 }
                 depth += 1;
             }
@@ -170,6 +237,17 @@ fn direct_child_unit(node: &str) -> Option<&str> {
         }
     }
     None
+}
+
+/// The code of an `AUTHORITY["EPSG","<code>"]` node; `None` for another authority or a
+/// code that is not a whole number.
+fn epsg_authority(node: &str) -> Option<u32> {
+    let inside = node.strip_prefix("AUTHORITY[")?.strip_suffix(']')?;
+    let (authority, code) = inside.split_once(',')?;
+    if authority.trim().trim_matches('"') != "EPSG" {
+        return None;
+    }
+    code.trim().trim_matches('"').parse().ok()
 }
 
 /// The conversion factor of a `UNIT["name",factor,...]` node: the field after the
@@ -258,30 +336,29 @@ pub fn declared(
 ///
 /// `source` is any definition PROJ accepts -- an `EPSG:<code>` string, or the file's own
 /// WKT, which is what [`PointCloudCrs::proj_definition`] hands over. `vertical_metres`
-/// is how many metres one unit of the source's vertical axis is. `to_enu` takes
-/// `[lat_rad, lon_rad, alt_m]` and returns `[east_m, north_m, up_m]`; on the desktop
-/// that is `gungnir_model::LocalFrame::to_enu`.
+/// is how many metres one unit of the source's vertical axis is. `heights` is how a
+/// height in metres becomes a WGS-84 ellipsoidal one, which
+/// [`crate::geoid::height_reference`] decides from what the file and the baseline state.
+/// `to_enu` takes `[lat_rad, lon_rad, alt_m]` and returns `[east_m, north_m, up_m]`; on
+/// the desktop that is `gungnir_model::LocalFrame::to_enu`.
 ///
-/// # What this converts, and what it deliberately does not
+/// # What this converts
 ///
 /// **The horizontal conversion is PROJ's and is complete.** Easting and northing go
 /// through `proj_trans` from `source` to `EPSG:4979`, so a projected system's inverse
 /// projection and whatever datum step PROJ selects for it are both applied.
 ///
-/// **The vertical conversion is a unit scale and nothing more, and that is a limitation
-/// of the pinned crate rather than a choice.** `proj` 0.31's high-level `Proj::convert`
-/// sets the `z` of every coordinate it hands `proj_trans` to `0.0`, so a height cannot
-/// be routed through PROJ at all from this API. What is applied instead is the metres-
-/// per-unit factor the file itself declares -- arithmetic on a number in the file, not
-/// an invented datum shift. **No vertical datum shift is applied**: a height above a
-/// gravity-related datum such as NAVD88 stays that height, expressed in metres, and is
-/// not converted to a height above the WGS-84 ellipsoid. In the Pacific Northwest that
-/// separation is of the order of -22 m. This is named here, in the register, and in
-/// `testdata/pointcloud/SOURCE.md` rather than left for a reader to discover. It is
-/// also, for what it is worth, exactly what PROJ itself does when its optional
-/// vertical-datum grids are absent, which is the state a deployment that never fetches
-/// grids over the network is always in: the independent `pyproj` check recorded in
-/// `gungnir-data/tests/pointcloud_crs.rs` returns the same unit-only height.
+/// **The vertical conversion is the file's unit, then the vertical datum (GAP-108,
+/// D-121).** The height is first scaled by the metres-per-unit factor the file declares.
+/// It is then made an ellipsoidal height under `heights`: unchanged when it already is
+/// one, and with the EGM2008 undulation at the point's own longitude and latitude added
+/// when it is an EGM2008 height, read from the verified grid by PROJ
+/// ([`crate::geoid::undulations`]). A height in any other datum never reaches this
+/// function: `height_reference` refuses it by name. (Before GAP-108 no datum shift was
+/// applied at all, so a NAVD88 height was used as though it were ellipsoidal -- about
+/// 22 m high at the Autzen fixture. `proj` 0.31's `Proj::convert` still zeroes the `z`
+/// it hands `proj_trans`, which is why the height does not ride the horizontal
+/// transform and the geoid is applied as its own step.)
 ///
 /// # Performance
 ///
@@ -295,13 +372,14 @@ pub fn declared(
 /// # Errors
 ///
 /// `DataError::Parse` when PROJ cannot build a transformation from `source` to
-/// `EPSG:4979` (an unknown EPSG code, or a WKT it will not parse), or when a point does
-/// not convert. Never a panic.
+/// `EPSG:4979` (an unknown EPSG code, or a WKT it will not parse), when a point does
+/// not convert, or when the geoid grid has no undulation for it. Never a panic.
 #[cfg(feature = "crs")]
 pub fn to_local_enu(
     buffer: &super::PointBuffer,
     source: &str,
     vertical_metres: f64,
+    heights: &crate::geoid::HeightReference,
     to_enu: &dyn Fn([f64; 3]) -> [f64; 3],
 ) -> Result<super::PointBuffer, DataError> {
     // EPSG:4979 is WGS 84 three-dimensional geographic. `Proj::new_known_crs`
@@ -312,7 +390,8 @@ pub fn to_local_enu(
             "cannot build a transformation from {source:?} to EPSG:4979: {e}"
         ))
     })?;
-    let mut geodetic = Vec::with_capacity(buffer.positions.len());
+    let mut lon_lat_deg = Vec::with_capacity(buffer.positions.len());
+    let mut heights_m = Vec::with_capacity(buffer.positions.len());
     for p in &buffer.positions {
         let x = f64::from(p[0]) + buffer.origin[0];
         let y = f64::from(p[1]) + buffer.origin[1];
@@ -322,12 +401,15 @@ pub fn to_local_enu(
                 "{source:?}: point ({x}, {y}) does not convert: {e}"
             ))
         })?;
-        geodetic.push([
-            lat_deg.to_radians(),
-            lon_deg.to_radians(),
-            z * vertical_metres,
-        ]);
+        lon_lat_deg.push([lon_deg, lat_deg]);
+        heights_m.push(z * vertical_metres);
     }
+    let ellipsoidal = crate::geoid::ellipsoidal_heights(heights, &lon_lat_deg, &heights_m)?;
+    let geodetic: Vec<[f64; 3]> = lon_lat_deg
+        .iter()
+        .zip(ellipsoidal)
+        .map(|(&[lon_deg, lat_deg], h)| [lat_deg.to_radians(), lon_deg.to_radians(), h])
+        .collect();
     Ok(place_geodetic(buffer, &geodetic, to_enu))
 }
 
@@ -491,6 +573,51 @@ mod tests {
                 "{text:?}"
             );
         }
+    }
+
+    /// GAP-108: the vertical datum each form of WKT states. Autzen's is NAVD88 in US
+    /// survey feet, kept by name and code so the refusal can say which; the UTM + EGM2008
+    /// WKT is the one GDAL writes for EPSG:32633+3855 (`pyproj`'s `to_wkt("WKT1_GDAL")`,
+    /// transcribed); a datum of type 2002 is OGC 01-009's ellipsoidal type.
+    #[test]
+    fn the_vertical_datum_is_read_from_vert_cs_and_silence_stays_silence() {
+        use crate::geoid::VerticalDatum;
+        assert_eq!(
+            PointCloudCrs::Wkt(AUTZEN_WKT.to_string()).vertical_datum(),
+            Some(VerticalDatum::Other {
+                epsg: Some(6360),
+                name: "NAVD88 height (ftUS)".to_string()
+            })
+        );
+        let egm2008 = r#"COMPD_CS["WGS 84 / UTM zone 33N + EGM2008 height",PROJCS["WGS 84 / UTM zone 33N",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",15],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","32633"]],VERT_CS["EGM2008 height",VERT_DATUM["EGM2008 geoid",2005,AUTHORITY["EPSG","1027"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Gravity-related height",UP],AUTHORITY["EPSG","3855"]]]"#;
+        assert_eq!(
+            PointCloudCrs::Wkt(egm2008.to_string()).vertical_datum(),
+            Some(VerticalDatum::Egm2008)
+        );
+        let ellipsoidal = r#"COMPD_CS["x",PROJCS["y",UNIT["metre",1]],VERT_CS["ellipsoidal height",VERT_DATUM["Ellipsoid",2002],UNIT["metre",1]]]"#;
+        assert_eq!(
+            PointCloudCrs::Wkt(ellipsoidal.to_string()).vertical_datum(),
+            Some(VerticalDatum::Ellipsoidal)
+        );
+        let unnamed_authority = r#"COMPD_CS["x",PROJCS["y",UNIT["metre",1]],VERT_CS["Local datum",VERT_DATUM["Local",2005],UNIT["metre",1]]]"#;
+        assert_eq!(
+            PointCloudCrs::Wkt(unnamed_authority.to_string()).vertical_datum(),
+            Some(VerticalDatum::Other {
+                epsg: None,
+                name: "Local datum".to_string()
+            })
+        );
+        // No VERT_CS, and a geokey directory: nothing stated, which is not the same as
+        // ellipsoidal and is not read as it.
+        let plain_utm = r#"PROJCS["WGS 84 / UTM zone 10N",GEOGCS["WGS 84",UNIT["degree",0.0174532925199433]],UNIT["metre",1],AUTHORITY["EPSG","32610"]]"#;
+        assert_eq!(
+            PointCloudCrs::Wkt(plain_utm.to_string()).vertical_datum(),
+            None
+        );
+        assert_eq!(
+            PointCloudCrs::Geokeys(GridCrs::Projected { epsg: Some(32610) }).vertical_datum(),
+            None
+        );
     }
 
     /// The file's own WKT is what PROJ is given, in full: a bare `EPSG:2992` would

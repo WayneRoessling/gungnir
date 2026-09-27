@@ -88,6 +88,14 @@ pub struct TerrainLine<'a> {
     pub detail: &'a str,
 }
 
+/// The EGM2008 geoid grid line (GAP-108): whether the pinned grid is installed and
+/// verified, and if not, what is wrong and that EGM2008 heights are refused.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GeoidLine<'a> {
+    pub verified: bool,
+    pub detail: &'a str,
+}
+
 /// Which backend is registering the configured point-cloud pair, and why (GAP-024,
 /// GAP-098). Four states, the same reason `PointCloudStatus`/`TerrainStatus` each use
 /// more than a boolean: collapsing "no pair" and "GPU" and "the CPU fallback" into one
@@ -209,6 +217,8 @@ pub struct SensorHealthView<'a> {
     pub late_data: LateDataLine,
     pub detectors: &'a [DetectorLine<'a>],
     pub terrain: TerrainLine<'a>,
+    /// The EGM2008 geoid grid (GAP-108): what a converted EGM2008 height needs.
+    pub geoid: GeoidLine<'a>,
     /// The point-cloud registration backend (GAP-024, GAP-098): GPU, the CPU fallback
     /// and why, or that no pair is configured at all.
     pub point_cloud_registration: PointCloudRegistrationLine<'a>,
@@ -242,6 +252,7 @@ pub fn render_sensor_health(
         late_data,
         detectors,
         terrain,
+        geoid,
         point_cloud_registration,
         feeds,
         cooperative_feeds,
@@ -289,6 +300,20 @@ pub fn render_sensor_health(
     ui.label(
         egui::RichText::new(terrain.detail)
             .color(if terrain.masking {
+                palette.muted_text_color()
+            } else {
+                palette.warning_color
+            })
+            .size(palette.small_font_size),
+    );
+
+    // GAP-108: whether the pinned EGM2008 grid is installed and verified. Not a fault
+    // when no file needs it, so a missing grid is muted rather than a warning; one that
+    // is present and wrong is a warning, since somebody installed it meaning it to work.
+    render_indicator(ui, palette, "Geoid grid (EGM2008)", geoid.verified);
+    ui.label(
+        egui::RichText::new(geoid.detail)
+            .color(if geoid.verified || !geoid.detail.contains("refused,") {
                 palette.muted_text_color()
             } else {
                 palette.warning_color

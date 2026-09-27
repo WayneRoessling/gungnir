@@ -650,6 +650,52 @@ impl std::str::FromStr for Frame {
     }
 }
 
+/// What a [`TerrainConfig::vertical`] or [`PointCloudConfig::vertical`] string means:
+/// the vertical datum a file's heights are measured from, declared by the deployment for
+/// a file that does not state its own (GAP-108, D-121).
+///
+/// Parsed here, in one place, so validation and the desktop's placement read it the same
+/// way. **Whether the datum is one this deployment can convert is not decided here**: a
+/// baseline names what its files *are*, and a file whose datum has no geoid grid is
+/// refused by name when it loads (`gungnir_data::geoid::height_reference`), the same
+/// split [`Frame`] keeps for an EPSG code PROJ may not know.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerticalFrame {
+    /// Heights above the WGS-84 ellipsoid: what the picture wants, converted by nothing.
+    Ellipsoidal,
+    /// A vertical coordinate reference system by EPSG code: `3855` is EGM2008 height,
+    /// the one gravity-related datum a deployment carries a geoid grid for.
+    Epsg(u32),
+}
+
+impl std::fmt::Display for VerticalFrame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VerticalFrame::Ellipsoidal => f.write_str("ellipsoidal"),
+            VerticalFrame::Epsg(code) => write!(f, "EPSG:{code}"),
+        }
+    }
+}
+
+impl std::str::FromStr for VerticalFrame {
+    type Err = String;
+
+    /// `"ellipsoidal"`, or `"epsg:<code>"` with the same strict grammar as a horizontal
+    /// frame's code: case-insensitive prefix, ASCII digits only, never zero.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "ellipsoidal" {
+            return Ok(VerticalFrame::Ellipsoidal);
+        }
+        parse_epsg_frame(s).map(VerticalFrame::Epsg).ok_or_else(|| {
+            format!(
+                "{s:?} is not \"ellipsoidal\" (WGS-84 ellipsoidal heights) or \"epsg:<code>\" \
+                 naming a vertical system by a non-zero EPSG code (\"epsg:3855\" is EGM2008 \
+                 height)"
+            )
+        })
+    }
+}
+
 /// The terrain a deployment masks line of sight against (GAP-023).
 ///
 /// `frame` says what the file's coordinates are: `"local-enu"` (the DEM was prepared in
@@ -665,6 +711,19 @@ pub struct TerrainConfig {
     pub path: String,
     #[serde(default = "default_terrain_frame")]
     pub frame: String,
+    /// What the DEM's heights are measured from, for a file that does not say
+    /// (GAP-108, D-121): `"ellipsoidal"` or `"epsg:<code>"` ([`VerticalFrame`]).
+    ///
+    /// Read only when `frame` names a real-world CRS -- a `"local-enu"` DEM's heights are
+    /// already the deployment's own up. A `GeoTIFF` that states its own vertical system
+    /// (`VerticalGeoKey`) is taken at its word and a declaration here that contradicts it
+    /// is refused; a file that states none and a baseline that declares none is refused
+    /// too, by name, because a height converted from a datum nobody stated is exactly the
+    /// silent ellipsoid/geoid mix this field exists to end. Absent by default, so every
+    /// baseline written before GAP-108 still parses, and a real-world DEM in one now asks
+    /// for this line rather than being drawn tens of metres off.
+    #[serde(default)]
+    pub vertical: Option<String>,
 }
 
 fn default_terrain_frame() -> String {
@@ -721,6 +780,12 @@ pub struct PointCloudConfig {
     pub target: PointCloudFileConfig,
     #[serde(default = "default_pointcloud_frame")]
     pub frame: String,
+    /// What the pair's heights are measured from, for files that do not say (GAP-108,
+    /// D-121): `"ellipsoidal"` or `"epsg:<code>"` ([`VerticalFrame`]). The same rules as
+    /// [`TerrainConfig::vertical`]: read only for an `"epsg:<code>"` frame, a file's own
+    /// `VERT_CS` wins and a contradiction is refused, and nobody stating it is refused.
+    #[serde(default)]
+    pub vertical: Option<String>,
 }
 
 impl PointCloudConfig {
@@ -1382,6 +1447,15 @@ pub struct ConfigBaseline {
     /// load -- the desktop's own load status says which.
     #[serde(default)]
     pub point_cloud: Option<PointCloudConfig>,
+    /// The directory holding the EGM2008 geoid grid, `us_nga_egm08_25.tif` (GAP-108,
+    /// D-121; `deploy/README.md`, "The EGM2008 geoid grid").
+    ///
+    /// Absent means the desktop looks in `PROJ_DATA` (PROJ's own convention, then its
+    /// older `PROJ_LIB`), and a deployment with neither has no grid: an EGM2008 height is
+    /// then refused by name, never converted without one. Wherever it is found, the file
+    /// is used only if its SHA-256 is the pinned one, and PN-09 says which of those it is.
+    #[serde(default)]
+    pub geoid_grid_dir: Option<String>,
     /// Per-role window arrangement (D-17, GAP-075). Absent means every role uses the
     /// default order `gungnir_workflow::WorkspaceLayout::for_role` produces.
     #[serde(default)]
@@ -1561,6 +1635,7 @@ impl Default for ConfigBaseline {
             assessment: AssessmentConfig::default(),
             terrain: None,
             point_cloud: None,
+            geoid_grid_dir: None,
             ui: UiSettings::default(),
             vocabulary: Vocabulary::default(),
             analytics: AnalyticsConfig::default(),
@@ -2793,7 +2868,24 @@ fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     if let Err(reason) = t.frame.parse::<Frame>() {
         return Err(ConfigError::Invalid(format!("terrain.frame {reason}")));
     }
+    if let Some(Err(reason)) = t.vertical.as_deref().map(str::parse::<VerticalFrame>) {
+        return Err(ConfigError::Invalid(format!("terrain.vertical {reason}")));
+    }
     Ok(())
+}
+
+/// GAP-108: a named geoid grid directory is a path, not an empty string. Its existence is
+/// not checked here for the reason no other path's is: a baseline is validated on
+/// machines that do not hold the file. The desktop checks it at start and says so.
+fn validate_geoid_grid_dir(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    match &baseline.geoid_grid_dir {
+        Some(dir) if dir.trim().is_empty() => Err(ConfigError::Invalid(
+            "geoid_grid_dir is empty; name the directory holding us_nga_egm08_25.tif, or \
+             leave the field out to use PROJ_DATA"
+                .to_string(),
+        )),
+        _ => Ok(()),
+    }
 }
 
 /// GAP-098: each of the pair names a file the loader reads, a COPC file carries the
@@ -2818,6 +2910,11 @@ fn validate_point_cloud(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
              \"epsg:<code>\" with a non-zero EPSG code (the files are in that coordinate \
              reference system and are converted on load)",
             pc.frame
+        )));
+    }
+    if let Some(Err(reason)) = pc.vertical.as_deref().map(str::parse::<VerticalFrame>) {
+        return Err(ConfigError::Invalid(format!(
+            "point_cloud.vertical {reason}"
         )));
     }
     Ok(())
@@ -3909,6 +4006,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     validate_handoff_endpoints(baseline)?;
     validate_terrain(baseline)?;
     validate_point_cloud(baseline)?;
+    validate_geoid_grid_dir(baseline)?;
     validate_radar_feeds(baseline)?;
     validate_ais_feeds(baseline)?;
     validate_adsb_feeds(baseline)?;
@@ -5490,6 +5588,7 @@ MFkw
             terrain: Some(TerrainConfig {
                 path: "dem/site.asc".into(),
                 frame: "local-enu".into(),
+                vertical: None,
             }),
             ..ConfigBaseline::default()
         };
@@ -5497,6 +5596,7 @@ MFkw
         b.terrain = Some(TerrainConfig {
             path: "dem/site.png".into(),
             frame: "local-enu".into(),
+            vertical: None,
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
         // GAP-023, D-41: a real-world CRS by EPSG code is now accepted syntactically --
@@ -5505,22 +5605,26 @@ MFkw
         b.terrain = Some(TerrainConfig {
             path: "dem/site.tif".into(),
             frame: "EPSG:32633".into(),
+            vertical: None,
         });
         validate(&b).expect("a declared real-world CRS by EPSG code is valid");
         b.terrain = Some(TerrainConfig {
             path: "dem/site.tif".into(),
             frame: "epsg:4326".into(),
+            vertical: None,
         });
         validate(&b).expect("lowercase epsg: is accepted the same way");
         // Neither "local-enu" nor "epsg:<code>" is still refused, whatever the reason.
         b.terrain = Some(TerrainConfig {
             path: "dem/site.tif".into(),
             frame: "wgs84".into(),
+            vertical: None,
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
         b.terrain = Some(TerrainConfig {
             path: "dem/site.tif".into(),
             frame: "epsg:not-a-number".into(),
+            vertical: None,
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
     }
@@ -5537,6 +5641,51 @@ MFkw
         assert!("".parse::<Frame>().is_err());
     }
 
+    /// GAP-108: the vertical declaration's grammar, and that it is validated on both the
+    /// terrain and the point-cloud pair. A datum this deployment cannot convert (NAVD88,
+    /// EPSG:5703) is still a *valid declaration* -- it is refused by name when the file
+    /// loads, where the refusal can say why.
+    #[test]
+    fn a_vertical_declaration_is_ellipsoidal_or_an_epsg_code() {
+        assert_eq!("ellipsoidal".parse(), Ok(VerticalFrame::Ellipsoidal));
+        assert_eq!("epsg:3855".parse(), Ok(VerticalFrame::Epsg(3855)));
+        assert_eq!("EPSG:5703".parse(), Ok(VerticalFrame::Epsg(5703)));
+        assert_eq!(VerticalFrame::Epsg(3855).to_string(), "EPSG:3855");
+        for refused in [
+            "",
+            "egm2008",
+            "Ellipsoidal",
+            "epsg:0",
+            "epsg:+3855",
+            "epsg:",
+        ] {
+            assert!(refused.parse::<VerticalFrame>().is_err(), "{refused:?}");
+        }
+
+        let mut b = ConfigBaseline {
+            terrain: Some(TerrainConfig {
+                path: "dem/site.tif".into(),
+                frame: "epsg:32633".into(),
+                vertical: Some("epsg:3855".into()),
+            }),
+            geoid_grid_dir: Some("/opt/gungnir/geoid".into()),
+            ..ConfigBaseline::default()
+        };
+        validate(&b).expect("EGM2008 heights with a grid directory are valid");
+        if let Some(t) = b.terrain.as_mut() {
+            t.vertical = Some("msl".into());
+        }
+        let Err(ConfigError::Invalid(reason)) = validate(&b) else {
+            panic!("an unreadable vertical declaration is refused");
+        };
+        assert!(reason.contains("terrain.vertical"), "{reason}");
+        if let Some(t) = b.terrain.as_mut() {
+            t.vertical = None;
+        }
+        b.geoid_grid_dir = Some("  ".into());
+        assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
+    }
+
     #[test]
     fn a_point_cloud_pair_needs_known_formats_bounds_only_on_copc_and_the_local_frame() {
         let file = |path: &str, bounds: Option<[f32; 6]>| PointCloudFileConfig {
@@ -5548,6 +5697,7 @@ MFkw
                 source: file("clouds/a.las", None),
                 target: file("clouds/b.copc.laz", Some([0.0, 0.0, 0.0, 1.0, 1.0, 1.0])),
                 frame: "local-enu".into(),
+                vertical: None,
             }),
             ..ConfigBaseline::default()
         };

@@ -744,6 +744,7 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
             )
             .collect();
     let terrain_line = state.terrain.line();
+    let geoid_line = state.geoid.line();
     let feeds = crate::radar::feed_lines(state);
     // AIS and ADS-B are both cooperative-identity feeds (transponders reporting their
     // own position); each feed's own name is what distinguishes one from the other on
@@ -785,6 +786,11 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
             terrain: gungnir_ui::panels::sensor_health::TerrainLine {
                 masking: state.terrain.is_masking(),
                 detail: &terrain_line,
+            },
+            // GAP-108: the EGM2008 geoid grid, verified or not and why.
+            geoid: gungnir_ui::panels::sensor_health::GeoidLine {
+                verified: state.geoid.is_verified(),
+                detail: &geoid_line,
             },
             // GAP-024: which backend registered this tick's pair, and why, so a quiet
             // GPU-to-CPU fallback never reads as the GPU path working (CLAUDE.md's

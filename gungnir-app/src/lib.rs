@@ -33,6 +33,7 @@ pub mod failover;
 pub mod fusion;
 pub mod gap_acceptance;
 pub mod geofences;
+pub mod geoid;
 pub mod governance;
 pub mod handoffs;
 pub mod hazards;

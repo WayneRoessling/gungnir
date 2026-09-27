@@ -218,6 +218,18 @@ jobs:
   # `crs-projection.yml` workflow, which was the first place that code ever built. Both
   # merged into this job when the two halves met: one `proj` link, one feature, one place
   # PROJ is compiled from source per pull request rather than two.
+  #
+  # **GAP-108 (D-121) adds the vertical datum.** libproj is built with its GeoTIFF grid
+  # reader now (`proj-sys`'s `tiff` feature, so `libtiff-dev` below), and the EGM2008 geoid
+  # tests run here: `gungnir-data/tests/geoid.rs` and the geoid cases of
+  # `gungnir-app/tests/terrain.rs` and `pointcloud_crs.rs`, on the committed clip of the
+  # grid (`testdata/geoid/`). Then the job fetches the **full pinned grid** -- 80 MB,
+  # never committed -- from PROJ's own CDN, checks it against `deploy/geoid/SHA256SUMS`,
+  # and runs the `#[ignore]`d tests that need it, including the desktop's own start-up
+  # check. Fetching is allowed because the file is pinned by digest: a changed file fails
+  # `sha256sum -c` and the job, it is never used. It is cached under that digest and saved
+  # from main only (the cache-quota rule the Rust cache above follows), so a pull request
+  # restores it and the CDN is asked once per cache eviction, not once per run.
   proj-crs:
     name: DEM and point-cloud CRS conversion (libproj)
     runs-on: ubuntu-latest
@@ -237,9 +249,11 @@ jobs:
         # library `libsqlite3-sys` and PROJ both link; sqlite3 for the binary PROJ's
         # build script runs. pkg-config so proj-sys can look for a system libproj first
         # and report cleanly when it does not find an acceptable one.
+        # libtiff-dev since GAP-108: libproj's GeoTIFF grid reader, which proj-sys's
+        # `tiff` feature builds and links, is what reads the EGM2008 geoid grid.
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake pkg-config libsqlite3-dev sqlite3
+          sudo apt-get install -y cmake pkg-config libsqlite3-dev sqlite3 libtiff-dev
       # gungnir-app's test binaries link eframe/glow, the same libraries the
       # `fmt, clippy, test` job installs for exactly that reason. This job builds
       # gungnir-app too, so it needs them for the same reason and not a new one.
@@ -267,18 +281,64 @@ jobs:
           set -o pipefail
           cargo test -p gungnir-data --features crs --lib 2>&1 | tee dem-unit.log
           cargo test -p gungnir-app --features crs --test terrain 2>&1 | tee dem-app.log
+      # GAP-108: the EGM2008 geoid through PROJ, on the committed clip of the pinned grid,
+      # against the independent pyproj values the tests carry.
+      - name: geoid -- the EGM2008 grid through PROJ, on the committed clip
+        run: |
+          set -o pipefail
+          cargo test -p gungnir-data --features crs --test geoid 2>&1 | tee geoid.log
+      # The full pinned grid: restored from the cache under its own digest, fetched from
+      # PROJ's CDN only on a miss, and checked against deploy/geoid/SHA256SUMS either way,
+      # so a changed or truncated file stops the job before any test reads it.
+      - name: restore the pinned EGM2008 grid
+        id: egm2008-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/gungnir-geoid
+          key: egm2008-${{ hashFiles('deploy/geoid/SHA256SUMS') }}
+      - name: fetch the pinned EGM2008 grid on a cache miss, and check it either way
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.cache/gungnir-geoid
+          cd ~/.cache/gungnir-geoid
+          if [ ! -f us_nga_egm08_25.tif ]; then
+            curl -fsSL --retry 3 -o us_nga_egm08_25.tif https://cdn.proj.org/us_nga_egm08_25.tif
+          fi
+          sha256sum -c "$GITHUB_WORKSPACE/deploy/geoid/SHA256SUMS"
+      - name: save the pinned EGM2008 grid (main only)
+        if: github.ref == 'refs/heads/main' && steps.egm2008-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/gungnir-geoid
+          key: egm2008-${{ hashFiles('deploy/geoid/SHA256SUMS') }}
+      - name: geoid -- the full pinned grid, and the desktop's start-up check against it
+        shell: bash
+        run: |
+          set -o pipefail
+          export GUNGNIR_EGM2008_GRID_DIR="$HOME/.cache/gungnir-geoid"
+          cargo test -p gungnir-data --features crs --test geoid -- --ignored 2>&1 | tee geoid-full.log
+          cargo test -p gungnir-app --features crs --test terrain -- --ignored 2>&1 | tee -a geoid-full.log
       # The same anti-vacuous-pass check gpu-fusion.yml uses, carried over from the
       # crs-projection.yml this job absorbed: a feature-gated suite that silently
       # compiled zero tests in (a typo in the cfg, the wrong crate, a renamed feature)
-      # would otherwise report success for running nothing.
+      # would otherwise report success for running nothing. The full-grid run is held to
+      # its own count, since its two tests are `#[ignore]`d and a missed `--ignored`
+      # would otherwise pass as zero tests inside a non-zero total.
       - name: a gate that ran nothing has not passed
         shell: bash
         run: |
-          ran=$(cat pointcloud.log dem-unit.log dem-app.log \
+          ran=$(cat pointcloud.log dem-unit.log dem-app.log geoid.log \
             | awk '/^test result:/ { s += $4 } END { print s + 0 }')
           echo "crs tests executed: $ran"
           if [ "$ran" -eq 0 ]; then
             echo "::error::the crs test run executed zero tests; the gate cannot pass vacuously (GAP-023, GAP-102)"
+            exit 1
+          fi
+          full=$(awk '/^test result:/ { s += $4 } END { print s + 0 }' geoid-full.log)
+          echo "full-grid tests executed: $full"
+          if [ "$full" -lt 2 ]; then
+            echo "::error::the full-grid geoid run executed $full tests, not the two it holds (GAP-108)"
             exit 1
           fi
 

@@ -26,7 +26,8 @@ use crate::ConfigBaseline;
 /// it needs (§4, D-91).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SectionKind {
-    /// Sensors, feeds, laydowns, tracking calibration, the late-data policy (`time`), terrain, point clouds: the sensor
+    /// Sensors, feeds, laydowns, tracking calibration, the late-data policy (`time`), terrain, point clouds and the
+    /// geoid grid they convert heights with (GAP-108): the sensor
     /// manager's calibration row.
     Sensing,
     /// The engagement chain: every policy section, resources, assets, geofences, hazards,
@@ -92,6 +93,7 @@ pub fn changed_sections(
         assessment,
         terrain,
         point_cloud,
+        geoid_grid_dir,
         ui,
         vocabulary,
         analytics,
@@ -203,6 +205,11 @@ pub fn changed_sections(
         (assessment != &was.assessment, "assessment", EngagementChain),
         (terrain != &was.terrain, "terrain", Sensing),
         (point_cloud != &was.point_cloud, "point_cloud", Sensing),
+        (
+            geoid_grid_dir != &was.geoid_grid_dir,
+            "geoid_grid_dir",
+            Sensing,
+        ),
         (ui != &was.ui, "ui", Deployment),
         (vocabulary != &was.vocabulary, "vocabulary", Deployment),
         (analytics != &was.analytics, "analytics", Deployment),
