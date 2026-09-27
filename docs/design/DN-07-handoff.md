@@ -135,9 +135,39 @@ shape for both directions is deliberate: two shapes would drift.
 The first criterion is checked by the compiler as well as by a test, which is the strongest
 form available: there is no constructor taking a bare plan.
 
+## 9. Amendment 1: a figure the handoff cannot give (2026-09-26, D-115)
+
+§6 says the outbound direction posts "the same message shape" as `POST /v2/handoffs` takes:
+the `Handoff`. It was built as `serde_json::to_value`, which writes a NaN or an infinity as
+`null` without an error, so a track's association confidence or latency from a filter that
+diverged, or an issue time from a clock that failed, reached the effector blank and could
+not be told from an optional the handoff does not carry, such as an intercept point
+(GAP-176). A body `to_value` refused for any other reason was posted as `null` and recorded
+as posted.
+
+**The body, stated.** The `Handoff` as JSON, exactly as before when every figure is finite,
+byte for byte. **Wherever it has a number, an effector may meet DN-18 §15's object
+instead**: `{"unavailable": "nan"}`, `{"unavailable": "+inf"}` or `{"unavailable": "-inf"}`.
+`null` keeps the one meaning it had, an absent optional. It is built by
+`gungnir_eventing::nonfinite::to_partner_value`, the one implementation the exchange bodies
+use (D-103), in `gungnir_approval::handoffs::endpoint_payload`, which the desktop and the
+node both post through; a retry re-posts the same payload.
+
+**A handoff is never withheld for a figure in it**: the effector needs the decision, and a
+figure it is told is unavailable is something to judge by. A body `serde_json` refuses for
+another reason -- a map whose keys are not strings, which a handoff does not have -- is
+recorded undelivered with the reason and an alert (§5 case 3), never posted as `null`.
+
+The builder and its delivery are the decision path, which is human-owned (D-65); see
+[`../signatures.md`](../signatures.md). Verification row (§8) unchanged in criterion;
+`gungnir-app/tests/endpoint_delivery.rs` posts a handoff built by the decision path from
+tracks whose quality is NaN, `+inf` and `-inf` to a real endpoint and reads the three
+objects back, and checks an all-finite handoff is the bytes `to_value` gave.
+
 ## Traceability
 
-GAP-040; CAP-4.4; D-08 for endpoints, D-02 for the effector's identity; depends on DN-06
+GAP-040, GAP-176; CAP-4.4; D-08 for endpoints, D-02 for the effector's identity, D-115 for
+the body; depends on DN-06
 for engagement state, DN-05 for the fires variant, DN-17 for the marking;
 `../gungnir-api-v1.md`; `../ux/wireframes/WF-05-recommendation.puml`; contracts C-01,
 C-04, C-08.

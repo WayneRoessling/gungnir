@@ -129,6 +129,7 @@ fn a_missing_store_starts_the_desktop_and_says_so() {
         &audit,
         &[],
         gungnir_ui::panels::audit::AuditRecordView::NOT_VERIFIED,
+        None,
     );
     assert!(!view.can_sign_in);
     assert!(state

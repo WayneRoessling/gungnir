@@ -692,6 +692,170 @@ pub enum ForwardRefused {
     SettledOtherwise { plan: PlanId, held: Settlement },
 }
 
+/// Most entries one `GET /v3/audit` answers with (GAP-179, D-116). A page, so a segment
+/// a long-running node wrote is read a page at a time rather than in one answer the size
+/// of the file.
+pub const AUDIT_PAGE_LIMIT: u64 = 500;
+
+/// The query half of `GET /v3/audit` (GAP-179, D-116;
+/// `docs/design/DN-23-operator-authentication.md` §15). Every field is optional: no query
+/// at all asks for the node's last verification and its segment list.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AuditQuery {
+    /// Verify the record against the heads the node's journal holds before answering,
+    /// rather than answering with the last verification the node ran.
+    #[serde(default)]
+    pub verify: bool,
+    /// A segment to read entries from, by its file name as a verification lists it.
+    #[serde(default)]
+    pub segment: Option<String>,
+    /// The first entry of the page, counting the segment's oldest as 0.
+    #[serde(default)]
+    pub from: u64,
+    /// How many entries at most; [`AUDIT_PAGE_LIMIT`] when absent, and never more.
+    #[serde(default)]
+    pub limit: Option<u64>,
+}
+
+impl AuditQuery {
+    /// The page size this query is answered with.
+    #[must_use]
+    pub fn page_size(&self) -> u64 {
+        self.limit
+            .map_or(AUDIT_PAGE_LIMIT, |l| l.min(AUDIT_PAGE_LIMIT))
+    }
+
+    /// The query string a client sends, `?` included, or empty for no query.
+    ///
+    /// Written by hand because `reqwest`'s `query` feature is off in §2.9's pin. A segment
+    /// name is a file name the node listed (`audit-NNNNNN.jsonl`); one holding a character
+    /// that would need encoding is `None`, because no segment is named that way and a
+    /// client must not send a query the node would read differently from what it meant.
+    #[must_use]
+    pub fn to_query_string(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        if self.verify {
+            parts.push("verify=true".to_owned());
+        }
+        if let Some(segment) = &self.segment {
+            if segment.is_empty()
+                || !segment
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+            {
+                return None;
+            }
+            parts.push(format!("segment={segment}"));
+        }
+        if self.from > 0 {
+            parts.push(format!("from={}", self.from));
+        }
+        if let Some(limit) = self.limit {
+            parts.push(format!("limit={limit}"));
+        }
+        Some(if parts.is_empty() {
+            String::new()
+        } else {
+            format!("?{}", parts.join("&"))
+        })
+    }
+}
+
+/// `GET /v3/audit`: a node's audit record, read from a linked desktop's PN-20 by a role
+/// holding `audit.read` (GAP-179, D-116; DN-23 §15). **Every read is on the node's record**,
+/// one `audit.read` entry each, written before the page is read, so a page of the running
+/// segment ends with the read that fetched it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AuditRecordResponse {
+    /// The node's mission time when it answered.
+    pub at: MissionTime,
+    /// What the node's last verification found, or why it has none.
+    pub verification: AuditVerificationView,
+    /// The page of entries the query asked for, when it named a segment.
+    #[serde(default)]
+    pub page: Option<AuditPageView>,
+}
+
+/// A node's verification of its audit record against the heads its journal holds
+/// (GAP-163, D-104), as it is sent.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "state", rename_all = "kebab-case")]
+pub enum AuditVerificationView {
+    /// The node has not verified its record in this run. A node verifies at every start,
+    /// so this is a node answering before its start finished, never a clean record.
+    NotRun,
+    /// The verification could not run -- the journal could not be listed, or the audit
+    /// directory not read -- and why. **Not a sound record**: nothing was checked.
+    Failed { reason: String, at: MissionTime },
+    /// What the verification found.
+    Ran {
+        at: MissionTime,
+        /// False for the verification at start, true for one a reader asked for.
+        on_request: bool,
+        segments: u64,
+        entries: u64,
+        /// Every chain break and finding as a sentence naming its file; empty when the
+        /// record verifies.
+        problems: Vec<String>,
+        /// Journal sessions that could not be read, so a head or purge in them was not
+        /// checked.
+        unread_sessions: Vec<String>,
+        /// Every segment, earlier runs' included, with its state.
+        reports: Vec<AuditSegmentView>,
+    },
+}
+
+/// One segment as a verification found it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AuditSegmentView {
+    /// The file name, which a page is asked for by.
+    pub segment: String,
+    /// Complete lines in it when it was verified.
+    pub entries: u64,
+    /// Its state in words, naming the file (`gungnir_security::SegmentReport::describe`).
+    pub description: String,
+    /// No chain break and no finding.
+    pub sound: bool,
+    /// On the node's disk, so a page of it can be read.
+    pub readable: bool,
+}
+
+/// A page of one segment's entries, or why it could not be read.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "state", rename_all = "kebab-case")]
+pub enum AuditPageView {
+    Read {
+        segment: String,
+        /// Entries that read in the whole segment, oldest first; the page is
+        /// `from..from + entries.len()` of them.
+        total: u64,
+        from: u64,
+        entries: Vec<AuditEntryView>,
+        /// Lines in the segment that are not entries of this format.
+        unreadable: u64,
+        /// The segment's own chain as it was read for this page; empty when it verifies.
+        breaks: Vec<String>,
+    },
+    Unreadable {
+        segment: String,
+        reason: String,
+    },
+}
+
+/// One audit entry as the node's record holds it: who, which machine, what, when.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AuditEntryView {
+    /// The verified operator, or none.
+    pub operator: Option<u64>,
+    /// The verified machine, by its certificate's common name, or none.
+    #[serde(default)]
+    pub party: Option<String>,
+    pub action: String,
+    /// Mission time, seconds, on the node's clock.
+    pub mission_time: f64,
+    pub detail: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

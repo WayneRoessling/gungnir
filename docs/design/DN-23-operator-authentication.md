@@ -504,9 +504,9 @@ the file, draws PN-20's audit-record summary in the warning colour with every se
 and writes one `audit.anchor_mismatch` entry into the audit log. The node logs one error line
 per problem, writes the same entry, and carries the count on every health line. A journal
 session that could not be read is said, because a head in it was not checked: a deployment
-that journals under an ephemeral key cannot check its earlier heads at all. The node serves
-no route for its audit record, so a linked desktop's PN-20 cannot show the node's
-verification (GAP-179).
+that journals under an ephemeral key cannot check its earlier heads at all. The node served
+no route for its audit record, so a linked desktop's PN-20 could not show the node's
+verification (GAP-179); §15 serves it.
 
 **Retention (D-105).** `RetentionPolicy::max_audit_log_age_days`, applied only when the
 baseline declares a policy, as D-78 applies the session age; both binaries say which at
@@ -535,9 +535,70 @@ run and verifying on demand); `gungnir-node/tests/node_audit_record.rs` (the sam
 node's path, a burst anchored by count, a purge journaled before the file goes);
 `gungnir-ui/src/panels/rendered.rs` (PN-20 draws the damage and an earlier run).
 
+## 15. Amendment 6 (2026-09-26, D-116): the node's audit record on a linked desktop's PN-20
+
+§14 left the node's verification in the node's log: "the node serves no route for its
+audit record" (GAP-179). This amendment serves it. Human-owned (`gungnir-security`, and
+the `gungnir-api` route its authorization guards); see [`../signatures.md`](../signatures.md).
+The reasoning is in
+[`../record/2026-09-26/a-figure-the-endpoint-cannot-be-given-and.md`](../record/2026-09-26/a-figure-the-endpoint-cannot-be-given-and.md).
+
+**Who may read it (the owner's, D-116).** A new action, `audit.read`, held by the
+administrator and the commander: `../mission/roles-and-stakeholders.md` §4's row "Read a
+node's audit record and its verification", added before the code. Nobody else, the
+security officer included (D-30). A desktop's own record on its own PN-20 asks nothing new
+(§14, D-106).
+
+**The route.** `GET /v3/audit`, served under the lossless body encoding (D-96, D-102):
+
+| Query | Answer |
+|---|---|
+| none | `AuditRecordResponse { at, verification, page: None }`: the node's last verification -- `NotRun`, `Failed { reason, at }`, or `Ran { at, on_request, segments, entries, problems, unread_sessions, reports }` with every segment's state in words |
+| `segment=<file>&from=<n>&limit=<n>` | the same, and a page of that segment's entries, oldest first from entry `n`, at most 500 (`AUDIT_PAGE_LIMIT`), with the segment's total, its unreadable lines and its chain as read; or `Unreadable { reason }` |
+| `verify=true` | the node verifies again first, and answers with that verification |
+
+`401` without a session, `403` for a machine or a role without `audit.read`, `400` for a
+query that does not read, `504` when the loop does not answer (the read may be on the
+record).
+
+**Every read is on the node's record.** The handler hands the read to the node loop
+(`PendingAuditRead`), which writes one `audit.read` entry -- the operator, the desktop's
+machine, the address, and what was asked -- syncs it, and only then reads the page, so a
+page of the running segment ends with the read that fetched it. Each refusal is one entry,
+under `audit.read` for a missing permission or an unreadable query and `access.refused`
+for a caller with no session. A verification on request that finds damage also writes the
+`audit.anchor_mismatch` entry a start writes, and journals its `Verified` inventory.
+
+**A verification on request reads no journal.** The node's `NodeAuditRecord` subscribes to
+its own bus before the start's verification and applies every `Anchored`, `Verified` and
+`Purged` it carries -- what the journal appends, in its order -- to the ledger that
+verification left. A request is checked against those heads, which reads the audit
+directory only: folding the journal again would read the whole running session on the loop
+that tracks. While no heads are held, because the start could not read the journal, a
+request folds it the start's way.
+
+**PN-20 on a linked desktop.** Below the desktop's own record, "The node's audit record":
+the node's verification in one sentence with when it ran on the node and when it was read,
+in the warning colour when it is not sound; each problem; every segment with "Show"; a
+page of one with "Older" and "Newer"; "Read the node's record" and "Verify the node's
+record now". **Read when a person asks, never polled**, because each read is an entry on
+the node's record. A role without `audit.read` is told so, naming the roles that hold it,
+and nothing is sent. A refusal is drawn with the node's reason; a node that could not be
+reached is said to be, and what an earlier read showed stays, labelled with when it was
+read. A damaged record raises an alert, as the desktop's own does.
+
+**Verification.** `gungnir-app/tests/node_audit_on_pn20.rs` (over mutual TLS: the
+administrator and the commander read a node whose earlier segment was cut, and PN-20 shows
+the cut, a page and a verification on request, each read one entry; an Operator's console
+sends nothing and the route refuses its session `403` with one entry; the node gone is
+said); `gungnir-node/tests/node_audit_record.rs` (a cut made while the node runs, found on
+request against the heads held); `gungnir-security/tests/role_matrix.rs`;
+`gungnir-ui/src/panels/rendered.rs` (PN-20 draws the node's section).
+
 ## Traceability
 
 GAP-057; CAP-6.1, and CAP-6.2/CAP-6.3 through PN-20; D-02 for the mechanism, D-20 for the
 crates; unblocks the CAP-2.12 criterion in DN-11 §8 and the write paths GAP-041 left
 refusing; depends on GAP-060 for the machine-identity row and on GAP-059 for the account
-list; `../ux/wireframes/WF-20-audit.puml`; principles AP-02, AP-03.
+list; GAP-163, GAP-152 and GAP-179 for the audit record (D-104, D-105, D-106, D-116);
+`../ux/wireframes/WF-20-audit.puml`; principles AP-02, AP-03.

@@ -40,8 +40,8 @@ pub fn role_permits(role: Role, action: &str) -> bool {
     use actions::{
         ACKNOWLEDGE_HANDOVER, APPLY_CONFIG, APPLY_SENSING_CONFIG, CONDUCT_REVIEW, DECIDE_PLAN,
         EXPORT_REPORT, KEY_ESCROW_RECOVER, OVERRIDE_PLAN, PROMOTE_MODEL, PUBLISH_EXCHANGE,
-        RELEASE_PRODUCT, REQUIREMENT, SET_CONTROL_STATUS, SUBMIT_DETECTION, TASK_SENSOR,
-        VIEW_PICTURE,
+        READ_AUDIT, RELEASE_PRODUCT, REQUIREMENT, SET_CONTROL_STATUS, SUBMIT_DETECTION,
+        TASK_SENSOR, VIEW_PICTURE,
     };
     match role {
         // Everything but the engagement chain and escrow recovery (GAP-111, D-88). §1 says
@@ -70,6 +70,10 @@ pub fn role_permits(role: Role, action: &str) -> bool {
         // RELEASE_PRODUCT on the judgment that whoever may mark a product releasable
         // should be who may send it, matching the §4 row this change added in
         // `docs/mission/roles-and-stakeholders.md`.
+        //
+        // READ_AUDIT (GAP-179, D-116): the owner's grant of 2026-09-26, the §4 row
+        // "Read a node's audit record and its verification". The administrator holds it by
+        // the arm above; nobody else does.
         Role::Commander => matches!(
             action,
             VIEW_PICTURE
@@ -82,6 +86,7 @@ pub fn role_permits(role: Role, action: &str) -> bool {
                 | PUBLISH_EXCHANGE
                 | EXPORT_REPORT
                 | ACKNOWLEDGE_HANDOVER
+                | READ_AUDIT
         ),
         // Intelligence analyst: product release and reporting, and the requirements it
         // owns (§1; DN-11 §5, "the intelligence analyst states a requirement"). Sensor

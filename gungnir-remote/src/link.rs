@@ -65,6 +65,13 @@ const RECONNECT_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 /// already depends on the transport, and the binary depends on this crate.
 pub use gungnir_api::transport::{HEARTBEAT_INTERVAL, HEARTBEAT_TIMEOUT};
 
+/// A node's audit record as `GET /v3/audit` sends it (GAP-179, D-116), re-exported for the
+/// reason the heartbeat is: the desktop reads it without a manifest edge to `gungnir-api`.
+pub use gungnir_api::v3::{
+    AuditEntryView, AuditPageView, AuditQuery, AuditRecordResponse, AuditSegmentView,
+    AuditVerificationView, AUDIT_PAGE_LIMIT,
+};
+
 /// What the link task has learned, and what the two services read.
 #[derive(Debug, Default)]
 pub struct Projection {
@@ -844,6 +851,8 @@ struct Urls {
     queue: String,
     /// Where an outage's decisions go when the node answers again (GAP-134, DN-31 §7).
     forwarded: String,
+    /// The node's audit record (GAP-179, D-116).
+    audit: String,
     /// True for an `https` endpoint: the stream is `wss` over our own TLS stream.
     tls: bool,
     host: String,
@@ -906,6 +915,7 @@ fn urls(endpoint: &RemoteEndpoint) -> Result<Urls, RemoteError> {
         exchange_handoffs: format!("{base}{}", path(routes::EXCHANGE_HANDOFFS)),
         queue: format!("{base}{}", path(routes::QUEUE)),
         forwarded: format!("{base}{}", path(routes::DECISIONS_FORWARDED)),
+        audit: format!("{base}{}", path(routes::AUDIT)),
         events: format!("{scheme}://{rest}{}", path(routes::EVENTS)),
         tls,
         host,
@@ -2111,6 +2121,104 @@ pub fn fetch_history(
         let _ = tx.send(outcome);
     });
     Ok(PendingHistory { rx })
+}
+
+/// What a read of a node's audit record came back with (GAP-179, D-116).
+#[derive(Debug, Clone, PartialEq)]
+pub enum AuditRecordOutcome {
+    /// The node answered, and recorded the read.
+    Read(Box<AuditRecordResponse>),
+    /// The node refused the read -- `403` for a role without `audit.read`, `401` for a
+    /// session it does not believe -- with its reason. A refusal is on the node's record
+    /// too.
+    Refused { status: u16, reason: String },
+    /// The node could not be reached, or its answer could not be read.
+    Unreachable { reason: String },
+}
+
+/// A read of the audit record in flight. Poll it from the frame loop; it never blocks.
+#[derive(Debug)]
+pub struct PendingAuditRecord {
+    rx: std::sync::mpsc::Receiver<AuditRecordOutcome>,
+}
+
+impl PendingAuditRecord {
+    /// The outcome once it has arrived.
+    #[must_use]
+    pub fn poll(&self) -> Option<AuditRecordOutcome> {
+        match self.rx.try_recv() {
+            Ok(outcome) => Some(outcome),
+            Err(std::sync::mpsc::TryRecvError::Empty) => None,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                Some(AuditRecordOutcome::Unreachable {
+                    reason: "the read ended without answering".into(),
+                })
+            }
+        }
+    }
+}
+
+/// Read the node's audit record with `token` (GAP-179, D-116): `GET /v3/audit` with
+/// `query`, over the same pinned roots and identity as the link. **Each call is one read
+/// on the node's record**, so the desktop calls it when a person asks and never polls.
+///
+/// # Errors
+///
+/// `RemoteError::InvalidEndpoint` for an endpoint the link would refuse too, or a query
+/// naming a segment no node lists.
+pub fn fetch_audit_record(
+    endpoint: &RemoteEndpoint,
+    token: &str,
+    query: &AuditQuery,
+    handle: &tokio::runtime::Handle,
+) -> Result<PendingAuditRecord, RemoteError> {
+    let urls = urls(endpoint)?;
+    let query_string = query.to_query_string().ok_or_else(|| {
+        RemoteError::InvalidEndpoint(format!(
+            "{:?} is not the name of an audit segment",
+            query.segment
+        ))
+    })?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    let token = token.to_owned();
+    let tls = endpoint.tls.clone();
+    handle.spawn(async move {
+        let client = match http_client(&tls) {
+            Ok(client) => client,
+            Err(reason) => {
+                let _ = tx.send(AuditRecordOutcome::Unreachable { reason });
+                return;
+            }
+        };
+        let outcome = match with_token(client.get(format!("{}{query_string}", urls.audit)), &token)
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => {
+                match lossless_body(response).await.and_then(|text| {
+                    nonfinite::from_line::<AuditRecordResponse>(&text).map_err(|e| e.to_string())
+                }) {
+                    Ok(record) => AuditRecordOutcome::Read(Box::new(record)),
+                    Err(e) => AuditRecordOutcome::Unreachable {
+                        reason: format!("the node's audit record could not be decoded: {e}"),
+                    },
+                }
+            }
+            Ok(response) => {
+                let status = response.status().as_u16();
+                let body = response.text().await.unwrap_or_default();
+                AuditRecordOutcome::Refused {
+                    status,
+                    reason: node_reason(&body),
+                }
+            }
+            Err(e) => AuditRecordOutcome::Unreachable {
+                reason: e.to_string(),
+            },
+        };
+        let _ = tx.send(outcome);
+    });
+    Ok(PendingAuditRecord { rx })
 }
 
 /// A body from a route that answers in the lossless form: the snapshot and the history

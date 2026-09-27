@@ -2889,3 +2889,59 @@
     Rejected: keeping the file's height (the defect GAP-023 recorded); an ellipsoidal
     height as z (right at the origin only). See
     `../../record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`.
+- id: D-115
+  decision: How a warned party's and an effector's endpoint are sent a figure that is not finite
+  question: >-
+    The warning a desktop posts to a warned party and the handoff a desktop or a node posts
+    to an effector are each `serde_json::to_value` of the record, so a NaN or an infinity
+    reaches the receiver as `null`, indistinguishable from an absent optional (GAP-176).
+    Take DN-18 §15's "value unavailable" object, as exchange does (D-103), or another form,
+    or refuse the record at the post; and say so in DN-03 and DN-07.
+  raised_in: "GAP-176; `../../design/DN-03-warning.md` §6, `../../design/DN-07-handoff.md` §6"
+  decider: Owner
+  unblocks: GAP-176
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken under the owner's delegation of 2026-09-26.** **The same marker the owner chose
+    for a partner (D-103)**: each non-finite float is `{"unavailable": "nan" | "+inf" |
+    "-inf"}` in the number's place, built by
+    `gungnir_eventing::nonfinite::to_partner_value`, the one implementation, in
+    `gungnir_app::warnings::endpoint_payload` and `gungnir_approval::handoffs::endpoint_payload`;
+    a body whose figures are all finite is byte for byte what it was. **A warning is never
+    withheld because a figure in it is not finite**, nor a handoff: one with a marked field
+    still warns or tasks, one that does not go out leaves the party unwarned. A body
+    `serde_json` refuses for another reason fails the warning loudly ("warn by voice") or
+    leaves the handoff undelivered with the reason, never a body of `null` counted as
+    posted. DN-03 §12 and DN-07 §9 state the body. Rejected: `null` as before, the string
+    `"NaN"`, an extended-JSON number, D-96's lossless line, and refusing the record, each
+    for the reason D-103 gives. See
+    `../../record/2026-09-26/a-figure-the-endpoint-cannot-be-given-and.md`.
+- id: D-116
+  decision: Who reads a node's audit record from a linked desktop, and how
+  question: >-
+    A node verifies its audit record at start and says what it found only in its log
+    (GAP-179, GAP-163). What permission gates a route serving the record and that
+    verification, who holds it (a §4 change first), what the route serves, and how PN-20 on
+    a linked desktop draws it?
+  raised_in: "GAP-179; `../../design/DN-23-operator-authentication.md` §14"
+  decider: Owner
+  unblocks: GAP-179
+  resolved: 2026-09-26
+  outcome: >-
+    **Taken by the owner, 2026-09-26: a new action, `audit.read`, held by the administrator
+    and the commander**, its row added to `../roles-and-stakeholders.md` §4 first; a v3
+    read route under the lossless body encoding serving the node's audit segments (entries,
+    paged) and its verification (GAP-163's anchor check), authorised by `audit.read`, with
+    **every read itself audited**; a linked desktop's PN-20 shows the node's record and
+    verification beside its own, read only, and says so when the role lacks `audit.read`
+    or the node is unreachable. **Taken under the owner's delegation of 2026-09-26**, the
+    details: `GET /v3/audit` with an optional `verify`, `segment`, `from` and `limit` (at
+    most 500); the handler checks the session and the action and the node loop answers,
+    writing one `audit.read` entry before it reads the page; a verification on request runs
+    against the heads the node holds in memory, taken off its own bus as it journals them,
+    so no reader can make the node fold its running session on the loop that tracks; PN-20
+    reads only when a person asks, never polling, since each read is an entry on the node's
+    record, and sends nothing for a role without the action. Rejected: carrying the
+    verification on the node's health line, which every role and partner reads; and a
+    verification on request that folds the journal, for the loop's sake. DN-23 §15. See
+    `../../record/2026-09-26/a-figure-the-endpoint-cannot-be-given-and.md`.

@@ -155,6 +155,10 @@
 //!   session that reads was established by a sign-in that was. The picture's routes now
 //!   ask for `picture.view`, which every role holds but the security officer (D-30), and
 //!   a refusal of one is recorded.
+//! - **The one read that is: `GET /v3/audit`** (GAP-179, D-116). Reading the node's
+//!   audit record is an act on the record of every desktop linked to it, so each read
+//!   served is one `audit.read` entry, written by the loop that answers it, and each
+//!   refusal is one too. Nothing polls it: a desktop reads it when a person asks.
 //! - **A detection accepted onto the gateway's queue is not recorded** either: it is a
 //!   desktop forwarding its sensors, a data path the gateway journals, and a person's act
 //!   only in the sense that somebody is signed in. A refusal of the caller is
@@ -519,6 +523,9 @@ pub struct NodeApi {
     /// path. Rate-limited per lane, so a flood from nobody in particular is bounded in
     /// memory and on disk and counted rather than recorded one by one.
     audit: AuditOutbox,
+    /// Reads of the audit record waiting for the node loop to record and answer them
+    /// (GAP-179, D-116).
+    audit_reads: Mutex<Vec<PendingAuditRead>>,
 }
 
 /// Who wrote a set into this deployment's exchange register (GAP-137, DN-18 §5
@@ -720,6 +727,35 @@ pub enum ForwardAnswer {
     Refused(Box<v3::ForwardRefused>),
 }
 
+/// A read of the node's audit record the route accepted and the node loop has not yet
+/// answered (GAP-179, D-116; DN-23 §15).
+///
+/// The fourth of these carriers and for the reason the others give: the audit log and the
+/// last verification are the loop's. The loop records the read -- one `audit.read` entry,
+/// before the page is read, so the entry is on the record the reader is shown -- and then
+/// answers.
+pub struct PendingAuditRead {
+    pub query: v3::AuditQuery,
+    /// The verified session the read is attributed to.
+    pub operator: OperatorId,
+    pub role: gungnir_security::Role,
+    /// The machine the connection was verified as, for the audit entry; `None` over
+    /// plaintext.
+    pub party: Option<String>,
+    /// Where the request came from, for the audit entry, as every route's entry says.
+    pub from: std::net::SocketAddr,
+    pub reply: tokio::sync::oneshot::Sender<v3::AuditRecordResponse>,
+}
+
+impl std::fmt::Debug for PendingAuditRead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PendingAuditRead")
+            .field("query", &self.query)
+            .field("role", &self.role)
+            .finish_non_exhaustive()
+    }
+}
+
 /// A decision request the route refused, for the node loop to audit (GAP-132).
 ///
 /// DN-31 §9 row 4: **every decision and every refusal writes exactly one audit entry on
@@ -803,7 +839,19 @@ impl NodeApi {
             acknowledgements: Mutex::new(Vec::new()),
             exchange_products: RwLock::new(BTreeMap::new()),
             audit: AuditOutbox::new(),
+            audit_reads: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Take the reads of the audit record the route accepted since the last call, in
+    /// arrival order (GAP-179, D-116). The node loop records each and answers it through
+    /// its `reply`.
+    #[must_use]
+    pub fn take_audit_reads(&self) -> Vec<PendingAuditRead> {
+        self.audit_reads
+            .lock()
+            .map(|mut queue| std::mem::take(&mut *queue))
+            .unwrap_or_default()
     }
 
     /// Everything the routes owe the node's audit record since the last call, and what
@@ -1487,7 +1535,10 @@ pub fn router(api: Arc<NodeApi>) -> Router {
         .route(
             &crate::path(routes::DECISIONS_FORWARDED),
             post(forward_decisions),
-        );
+        )
+        // GAP-179, D-116: the node's audit record, for a role holding `audit.read`. New in
+        // `/v3`; not in `RETIRED`.
+        .route(&crate::path(routes::AUDIT), get(audit_record));
     RETIRED
         .iter()
         .fold(served, |router, retired| {
@@ -2870,6 +2921,94 @@ async fn queue(
     // GAP-171, D-102: a queue item's NaN priority or infinite deadline is carried as
     // itself, where plain JSON wrote `null` and the desktop could not read the queue.
     lossless_json(&api.queue())
+}
+
+/// How long the audit route waits for the node loop to record the read and answer. A
+/// verification on request reads every segment, so it is given longer than a decision.
+const AUDIT_REPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// `GET /v3/audit` (GAP-179, D-116; DN-23 §15): the node's audit record for a person at a
+/// linked desktop whose role holds `audit.read` -- the administrator and the commander.
+///
+/// **Authenticate, authorise, hand over, wait**, as the decision route does, and for its
+/// reason: the audit log and the verification are the loop's. The checks here, each
+/// refusing with exactly one entry on the node's record:
+///
+/// 1. an operator's session -- `401`, or `403` for a machine, as `access.refused`;
+/// 2. `audit.read` -- `403` naming the role and the action, recorded under `audit.read`;
+/// 3. a query that reads -- `400`, recorded under `audit.read`.
+///
+/// Then the loop records the read, one `audit.read` entry, and answers with its last
+/// verification -- or one it runs now when the query asks -- and the page of entries the
+/// query names, in the lossless form every body a desktop reads takes (D-102): an entry's
+/// mission time is a float. A `504` means the loop did not answer in time; the read may
+/// be on the record.
+async fn audit_record(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+    query: Result<axum::extract::Query<v3::AuditQuery>, axum::extract::rejection::QueryRejection>,
+) -> Response {
+    let session = match operator_caller(&api, &headers, &peer, "the audit record") {
+        Ok(session) => session,
+        Err(response) => return response,
+    };
+    if !gungnir_security::authz::role_permits(session.role, actions::READ_AUDIT) {
+        let why = format!(
+            "role {:?} may not read this node's audit record ({})",
+            session.role,
+            actions::READ_AUDIT
+        );
+        api.audit(
+            &peer,
+            Some(session.operator),
+            actions::READ_AUDIT,
+            format_args!("refused: {why}"),
+        );
+        return problem(StatusCode::FORBIDDEN, &why);
+    }
+    let query = match query {
+        Ok(axum::extract::Query(query)) => query,
+        Err(rejection) => {
+            let why = format!("the audit query does not read: {rejection}");
+            api.audit(
+                &peer,
+                Some(session.operator),
+                actions::READ_AUDIT,
+                format_args!("refused: {why}"),
+            );
+            return problem(StatusCode::BAD_REQUEST, &why);
+        }
+    };
+    let (reply, answer) = tokio::sync::oneshot::channel();
+    {
+        let Ok(mut queue) = api.audit_reads.lock() else {
+            return problem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "the audit read queue lock was poisoned",
+            );
+        };
+        queue.push(PendingAuditRead {
+            query,
+            operator: session.operator,
+            role: session.role,
+            party: peer.party.clone(),
+            from: peer.addr,
+            reply,
+        });
+    }
+    match tokio::time::timeout(AUDIT_REPLY_TIMEOUT, answer).await {
+        Ok(Ok(record)) => lossless_json(&record),
+        Ok(Err(_)) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the node loop dropped the read without answering",
+        ),
+        Err(_) => problem(
+            StatusCode::GATEWAY_TIMEOUT,
+            "the node loop did not answer within the reply window; the read may be on the \
+             node's record",
+        ),
+    }
 }
 
 /// `POST /v3/queue/{item}/decision` (DN-31 §6.3, GAP-132): a person decides one item.

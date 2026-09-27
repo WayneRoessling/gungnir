@@ -17,6 +17,10 @@
 //! accepts, refused if it refuses, retried and never dropped if it is silent; one with an
 //! endpoint of any other kind is undelivered with the reason. DN-07 §5 case 3's rule
 //! throughout.
+//!
+//! **What the endpoint is posted** is [`endpoint_payload`]: the handoff as JSON, with a
+//! figure that is not finite said to be unavailable rather than written `null` (GAP-176,
+//! D-115; `docs/design/DN-07-handoff.md` §9).
 
 use crate::{ApprovalContext, ApprovalDesk, ApprovalHost};
 use gungnir_command::DecisionRecord;
@@ -328,10 +332,11 @@ impl ApprovalDesk {
                 DeliveryState::Manual
             }
             Some(name) => {
-                let reason = match host.address_for(name) {
-                    Ok(address) => {
-                        let payload =
-                            serde_json::to_value(handoff).unwrap_or(serde_json::Value::Null);
+                let reason = match host
+                    .address_for(name)
+                    .and_then(|address| Ok((address, endpoint_payload(handoff)?)))
+                {
+                    Ok((address, payload)) => {
                         self.post_handoff(host, decision, name.to_string(), address, payload, now);
                         host.alert(format!(
                             "decision {}: handoff posted to {name}; awaiting the endpoint",
@@ -358,6 +363,31 @@ impl ApprovalDesk {
             }
         }
     }
+}
+
+/// The body an effector's endpoint is posted (DN-07 §9, GAP-176, D-115), on a desktop and
+/// on a node alike, and again unchanged on every retry.
+///
+/// **Exactly what `serde_json::to_value` gave when every figure is finite**, so an
+/// effector reading a handoff today reads the same bytes. A NaN or an infinity -- a
+/// track's association confidence or latency from a filter that diverged, an issue time
+/// from a clock that failed -- is DN-18 §15's object
+/// `{"unavailable": "nan" | "+inf" | "-inf"}` in the number's place, built by
+/// `gungnir_eventing::nonfinite::to_partner_value`, the one implementation exchange uses
+/// (D-103). `to_value` wrote `null` there, which an effector could not tell from a figure
+/// the handoff does not carry. A non-finite figure never holds a handoff back: the receiver
+/// needs the decision, and a quality figure it is told is unavailable is a fact to judge
+/// by, where a handoff withheld is an engagement nobody was told about.
+///
+/// # Errors
+///
+/// Only what `serde_json` refuses for another reason -- a map whose keys are not strings,
+/// which a handoff has none of. The caller records the handoff undelivered with the reason
+/// and raises an alert (DN-07 §5 case 3), where posting `null` used to claim a delivery of
+/// nothing.
+pub fn endpoint_payload(handoff: &Handoff) -> Result<serde_json::Value, String> {
+    gungnir_eventing::nonfinite::to_partner_value(handoff)
+        .map_err(|err| format!("the handoff could not be written for its endpoint: {err}"))
 }
 
 /// Why an engagement could not take a report, in an alert's words.

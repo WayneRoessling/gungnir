@@ -416,3 +416,224 @@ fn a_warning_is_sent_through_the_endpoint_and_fails_loudly_when_it_refuses() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+// ---------------------------------------------------------------------------------
+// GAP-176, D-115: a figure the record cannot give reaches the endpoint said to be
+// unavailable, and a record whose figures are all finite is posted byte for byte as it
+// was (DN-03 §12, DN-07 §9).
+// ---------------------------------------------------------------------------------
+
+/// The body the stub kept at `index`, once it has arrived. A deadlock guard, not a
+/// pacing device: the loop exits the moment the body is there.
+fn body_at(bodies: &Arc<Mutex<Vec<String>>>, index: usize) -> String {
+    for _ in 0..6_000 {
+        if let Some(body) = bodies.lock().expect("bodies").get(index).cloned() {
+            return body;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the endpoint never received body {index}");
+}
+
+/// A plan tasking resource 1 against each of `tracks`, decided and issued.
+fn decide_tracks(state: &mut AppState, plan: u128, tracks: &[u64]) -> gungnir_model::DecisionId {
+    let pending = state
+        .desk
+        .approvals
+        .submit_for_approval(Submission {
+            plan: PlanView::intercept(
+                PlanId(plan),
+                MissionTime(0.0),
+                tracks
+                    .iter()
+                    .map(|t| InterceptSolutionView {
+                        resource: ResourceId(1),
+                        track: TrackId(*t),
+                        intercept_point: None,
+                        time_to_intercept_s: None,
+                    })
+                    .collect(),
+                0.0,
+            ),
+            verdict: PolicyVerdict::RequiresHumanApproval,
+            submitted: MissionTime(0.0),
+            layer: EffectorLayer::Point,
+            priority: 0.0,
+            role: "Operator".into(),
+        })
+        .expect("queued");
+    decisions::decide(state, PendingId(pending.0), OperatorDecision::Accepted).expect("decided");
+    state
+        .desk
+        .handoffs
+        .last()
+        .expect("an accepted decision issues a handoff")
+        .handoff
+        .decision
+}
+
+fn unavailable(kind: &str) -> serde_json::Value {
+    serde_json::json!({ "unavailable": kind })
+}
+
+#[test]
+// A handoff and a warning, each told start to finish against the one socket.
+#[allow(clippy::too_many_lines)]
+fn a_nan_and_both_infinities_reach_the_endpoint_marked_unavailable_in_a_handoff_and_a_warning() {
+    let status = Arc::new(AtomicU16::new(200));
+    let hits = Arc::new(AtomicU16::new(0));
+    let bodies = Arc::new(Mutex::new(Vec::new()));
+    let url = stub(status, hits.clone(), bodies.clone());
+    let (mut state, dir) = desktop("nonfinite", &url);
+
+    // The handoff: two tracks whose quality a diverged filter left non-finite. The
+    // handoff builder copies each track's quality from the picture, so the figures reach
+    // the effector through the one builder and the one delivery path.
+    let mut diverged = track(1, 3000.0, 0.0);
+    diverged.quality = Quality {
+        association_confidence: f32::NAN,
+        latency_s: f32::INFINITY,
+        is_stale: false,
+    };
+    let mut late = track(2, 3500.0, 0.0);
+    late.quality = Quality {
+        association_confidence: 0.5,
+        latency_s: f32::NEG_INFINITY,
+        is_stale: false,
+    };
+    state.tracking = Box::new(Picture(vec![diverged, late]));
+    let decision = decide_tracks(&mut state, 9, &[1, 2]);
+    settle(&mut state, 1.0, |s| {
+        s.desk.handoffs.iter().any(|h| {
+            h.handoff.decision == decision && matches!(h.delivery, DeliveryState::Delivered { .. })
+        })
+    });
+    let posted = body_at(&bodies, 0);
+    let handoff: serde_json::Value =
+        serde_json::from_str(&posted).expect("the effector is sent JSON any reader parses");
+    assert_eq!(
+        handoff["decision"].as_str(),
+        Some(decision.to_string().as_str()),
+        "{posted}"
+    );
+    let provenance = handoff["track_provenance"]
+        .as_array()
+        .expect("the tracks the plan names");
+    assert_eq!(provenance.len(), 2, "{posted}");
+    assert_eq!(
+        provenance[0][2]["association_confidence"],
+        unavailable("nan"),
+        "{posted}"
+    );
+    assert_eq!(
+        provenance[0][2]["latency_s"],
+        unavailable("+inf"),
+        "{posted}"
+    );
+    assert_eq!(
+        provenance[1][2]["latency_s"],
+        unavailable("-inf"),
+        "{posted}"
+    );
+    assert_eq!(
+        provenance[1][2]["association_confidence"].as_f64(),
+        Some(0.5),
+        "a finite figure beside them is the number it was: {posted}"
+    );
+    // `null` keeps the one meaning it has in these bodies, an optional value that is
+    // absent (`intercept_point`, `authority_rule`); no figure in either quality is one.
+    for (_, quality) in provenance
+        .iter()
+        .filter_map(|t| t[2].as_object())
+        .flat_map(|q| q.iter())
+    {
+        assert!(!quality.is_null(), "a figure was blanked to null: {posted}");
+    }
+
+    // The warning: its due time taken from a prediction that diverged, and its state and
+    // a transition stamped by a clock that failed each way. Posted by the desktop's own
+    // delivery path to the party's configured endpoint.
+    let warning = gungnir_workflow::warning::Warning {
+        asset: gungnir_model::AssetId(1),
+        track: TrackId(1),
+        due_by: MissionTime(f64::NAN),
+        channel: "port-authority".into(),
+        state: gungnir_workflow::warning::WarningState::Sent {
+            at: MissionTime(f64::INFINITY),
+        },
+        history: vec![gungnir_workflow::warning::WarningTransition {
+            to: gungnir_workflow::warning::WarningState::Owed,
+            at: MissionTime(f64::NEG_INFINITY),
+        }],
+    };
+    let pending = warnings::post(&state, &warning).expect("a warning is never withheld");
+    state.pending_warnings.push(pending);
+    let posted = body_at(&bodies, 1);
+    let sent: serde_json::Value =
+        serde_json::from_str(&posted).expect("the party is sent JSON any reader parses");
+    assert_eq!(sent["due_by"], unavailable("nan"), "{posted}");
+    assert_eq!(sent["state"]["at"], unavailable("+inf"), "{posted}");
+    assert_eq!(sent["history"][0]["at"], unavailable("-inf"), "{posted}");
+    assert_eq!(sent["channel"].as_str(), Some("port-authority"), "{posted}");
+    // A warning has no optional figure, so no `null` anywhere in it.
+    assert!(
+        !posted.contains("null"),
+        "a figure was blanked to null: {posted}"
+    );
+    settle(&mut state, 2.0, |s| s.pending_warnings.is_empty());
+    assert_eq!(hits.load(Ordering::SeqCst), 2);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_handoff_and_a_warning_whose_figures_are_all_finite_are_posted_byte_for_byte_as_before() {
+    let status = Arc::new(AtomicU16::new(200));
+    let hits = Arc::new(AtomicU16::new(0));
+    let bodies = Arc::new(Mutex::new(Vec::new()));
+    let url = stub(status, hits, bodies.clone());
+    let (mut state, dir) = desktop("finite", &url);
+
+    // The warning first, raised by the rule itself: 5 km out at 50 m/s, inside the lead
+    // time, posted by the tick.
+    state.tracking = Box::new(Picture(vec![track(1, 5_000.0, -50.0)]));
+    at(&mut state, 0.0);
+    let posted_warning = body_at(&bodies, 0);
+    let raised = state.warnings.open()[0].clone();
+    // What the ledger handed the delivery: the warning as raised, before `sent` moved it.
+    let as_delivered = gungnir_workflow::warning::Warning {
+        state: gungnir_workflow::warning::WarningState::Owed,
+        history: Vec::new(),
+        ..raised
+    };
+    let before =
+        serde_json::to_vec(&serde_json::to_value(&as_delivered).expect("to_value")).expect("bytes");
+    assert_eq!(
+        posted_warning.as_bytes(),
+        before.as_slice(),
+        "an all-finite warning is posted exactly as `serde_json::to_value` posted it"
+    );
+
+    // Then a handoff, through the decision path.
+    let decision = decide(&mut state);
+    settle(&mut state, 1.0, |s| {
+        s.desk.handoffs.iter().any(|h| {
+            h.handoff.decision == decision && matches!(h.delivery, DeliveryState::Delivered { .. })
+        })
+    });
+    let handoff = state
+        .desk
+        .handoffs
+        .iter()
+        .find(|h| h.handoff.decision == decision)
+        .expect("issued")
+        .handoff
+        .clone();
+    let before =
+        serde_json::to_vec(&serde_json::to_value(&handoff).expect("to_value")).expect("bytes");
+    assert_eq!(
+        body_at(&bodies, 1).as_bytes(),
+        before.as_slice(),
+        "an all-finite handoff is posted exactly as `serde_json::to_value` posted it"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
