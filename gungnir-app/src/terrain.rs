@@ -23,8 +23,9 @@
 //!
 //! **A converted height is a real height since GAP-108** (D-121, D-122). The DEM's own
 //! height is made a WGS-84 ellipsoidal one -- unchanged when the file or `terrain.vertical`
-//! says it already is, with the EGM2008 undulation added when it is an EGM2008 height, and
-//! refused by name in any other datum or when nobody states one -- and each vertex's
+//! says it already is, with its datum's geoid undulation added when it is an EGM2008, EGM96
+//! or NAVD88 height (GAP-197, D-125), and refused by name in any other datum or when
+//! nobody states one -- and each vertex's
 //! height becomes its local ENU up, the quantity line of sight compares a sensor's own up
 //! against. Before, the file's height was used as the up unchanged.
 
@@ -113,8 +114,8 @@ pub fn start(state: &mut AppState) {
     if state.loader.is_some() || !matches!(state.terrain, TerrainStatus::NotConfigured) {
         return;
     }
-    // GAP-108: a DEM stating EGM2008 heights needs the verified grid when it is placed,
-    // so the load waits for the start-up check to settle (`crate::geoid`).
+    // GAP-108, GAP-197: a DEM stating geoid heights needs its verified grid when it is
+    // placed, so the load waits for the start-up checks to settle (`crate::geoid`).
     if !state.geoid.is_settled() {
         return;
     }
@@ -241,7 +242,7 @@ fn place(
     declared_frame: &str,
     declared_vertical: Option<&str>,
     origin: Option<[f64; 3]>,
-    geoid: &crate::geoid::GeoidStatus,
+    geoid: &crate::geoid::GeoidGrids,
 ) -> Result<TerrainMesh, String> {
     let frame: Frame = declared_frame
         .parse()
@@ -260,7 +261,7 @@ fn place(
         "terrain.vertical",
         mesh.vertical_datum().as_ref(),
         baseline_vertical.as_ref(),
-        geoid.grid().as_deref().map_err(String::as_str),
+        &|model| geoid.grid(model),
     )?;
     let absolute = mesh.absolute_positions_xy();
     let lon_lat_deg = if source_epsg == WGS84_EPSG {

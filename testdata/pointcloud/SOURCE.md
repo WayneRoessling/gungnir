@@ -115,14 +115,69 @@ ellipsoid.** NAVD88 is a gravity-related datum, and the separation between it an
 ellipsoid in this part of Oregon is of the order of -22 m. `libproj` applies that
 separation only when it has the relevant vertical-datum grid, which a deployment that
 never fetches grids over the network does not; without it PROJ converts the unit and
-stops. Since GAP-108 (D-121) this workspace does not stop there: a deployment carries a
-geoid grid for EGM2008 heights only, so this file's NAVD88 heights are **refused by
-name** when a deployment converts it, rather than used as though they were ellipsoidal
-(`gungnir-data/src/geoid.rs`; `gungnir-app/tests/pointcloud_crs.rs` checks the refusal
-through a real tick). The fixture still checks the horizontal conversion and the vertical
-unit, with the datum held still on purpose.
+stops. Since GAP-108 (D-121) this workspace does not stop there. Between GAP-108 and
+GAP-197 this file's NAVD88 heights were **refused by name**, no NAVD88 grid being pinned;
+since GAP-197 (D-125) they convert through NOAA's GEOID18 grid, pinned for the
+conterminous United States, and are refused by name, naming that grid, only where a
+deployment has not installed it (`gungnir-data/src/geoid.rs`;
+`gungnir-app/tests/pointcloud_crs.rs` checks both through a real tick). GEOID18 gives a
+NAD83(2011) ellipsoidal height, which the desktop reads as WGS 84's to the metre level
+(`gungnir-data/src/geoid.rs` states the figures). The horizontal-only test still holds
+the datum still on purpose, so the Lambert inverse and the vertical unit are checked on
+their own too.
 
-The bounds above, put through that conversion, are longitude [-123.07498674,
--123.06251260], latitude [44.04971882, 44.06278031], height [123.79171958,
-187.53162306] -- an independent `pyproj` computation, recorded in
+The bounds above, put through the horizontal-only conversion, are longitude
+[-123.07498674, -123.06251260], latitude [44.04971882, 44.06278031], height
+[123.79171958, 187.53162306] -- an independent `pyproj` computation, recorded in
 `gungnir-data/tests/pointcloud_crs.rs` with what it checked and to what tolerance.
+Through GEOID18 the box's centre (X 637250, Y 851150, Z 500 ftUS) is 129.06263075346988 m
+above the ellipsoid, GEOID18's undulation there being -23.33767404713973 m.
+
+## `autzen-geokeys.las`
+
+Generated 2026-09-26 for GAP-197 by a short script in that change (not committed, the
+five-point fixture's precedent); nothing in it was copied from any dataset, so no licence
+attaches. It exists to test what no committed fixture could: a LAS 1.0-1.3 file whose
+`GeoTIFF` key directory states a vertical system (GAP-102 item (2)).
+
+LAS 1.2, point data format 0, one 227-byte header, two VLRs and five 20-byte records,
+little endian. Scale 0.01 on every axis, offset (637000, 851000, 0). The coordinates are
+the Autzen capture's own numbers, in its own system -- NAD83 / Oregon GIC Lambert in
+international feet, NAVD88 heights in US survey feet -- so they convert through the same
+GEOID18 clip as the capture:
+
+| # | x (ft) | y (ft) | z (ftUS) | intensity | classification | what it is |
+|---|---|---|---|---|---|---|
+| 1 | 637250.00 | 851150.00 | 500.00 | 100 | 2 | the centre of the capture's test query box |
+| 2 | 635577.79 | 848882.15 | 406.14 | 120 | 2 | the capture's minimum corner |
+| 3 | 639003.73 | 853537.66 | 615.26 | 140 | 5 | the capture's maximum corner |
+| 4 | 637200.00 | 851100.00 | 450.50 | 160 | 6 | the query box's corner |
+| 5 | 638000.00 | 852000.00 | 420.25 | 180 | 2 | between |
+
+**The key directory is GDAL's, not this workspace's.** GDAL 3.11.3
+(`ghcr.io/osgeo/gdal:alpine-small-3.11.3`) wrote a two-by-two GeoTIFF with
+`gdal_create -a_srs EPSG:2992+6360`, and its `GeoKeyDirectoryTag` and
+`GeoAsciiParamsTag` were copied byte for byte into the two `LASF_Projection` VLRs
+(records 34735 and 34737), which is where the LAS 1.2 specification puts them:
+
+| Key | Value |
+|---|---|
+| directory header | version 1, revision 1.1, five keys (GeoTIFF 1.1) |
+| `GTModelTypeGeoKey` (1024) | 1, projected |
+| `GTRasterTypeGeoKey` (1025) | 1 |
+| `GTCitationGeoKey` (1026) | "NAD83 / Oregon GIC Lambert (ft) + NAVD88 height (ftUS)\|" |
+| `ProjectedCRSGeoKey` (3072) | 2992 |
+| `VerticalGeoKey` (4096) | 6360 |
+
+GDAL writes **no** `VerticalUnitsGeoKey` and no `ProjLinearUnitsGeoKey` for this compound
+system: the codes fix the units. So the loader reads the US survey foot from the code
+6360 itself. For comparison, GDAL writes a GeoTIFF 1.0 directory with
+`ProjLinearUnitsGeoKey` (3076 = 9002 for 2992, 9001 for a UTM zone) for a horizontal
+system alone, and LAStools writes `VerticalUnitsGeoKey` (4099) beside `VerticalGeoKey`;
+`gungnir-data/src/pointcloud/crs.rs`'s unit tests carry those two directories too.
+
+`pyproj` 3.8.0, with the full pinned GEOID18 grid, took `EPSG:2992+6360` to `EPSG:4979`
+for the five points; `gungnir-data/tests/pointcloud_crs.rs` and
+`gungnir-app/tests/pointcloud_crs.rs` hold the conversion to those values.
+
+SHA-256: `3c754bf7d97c98bcdc3d8e9effa773a3994202114db1995f6439f8237ff6508c` (539 bytes).

@@ -88,10 +88,12 @@ pub struct TerrainLine<'a> {
     pub detail: &'a str,
 }
 
-/// The EGM2008 geoid grid line (GAP-108): whether the pinned grid is installed and
-/// verified, and if not, what is wrong and that EGM2008 heights are refused.
+/// One pinned geoid grid's line (GAP-108, GAP-197): whether it is installed and
+/// verified, and if not, what is wrong and which heights are refused for it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GeoidLine<'a> {
+    /// The model, as the indicator names it: "EGM2008", "EGM96", "GEOID18 (CONUS)".
+    pub model: &'a str,
     pub verified: bool,
     pub detail: &'a str,
 }
@@ -217,8 +219,9 @@ pub struct SensorHealthView<'a> {
     pub late_data: LateDataLine,
     pub detectors: &'a [DetectorLine<'a>],
     pub terrain: TerrainLine<'a>,
-    /// The EGM2008 geoid grid (GAP-108): what a converted EGM2008 height needs.
-    pub geoid: GeoidLine<'a>,
+    /// The pinned geoid grids (GAP-108, GAP-197), one line each: what a converted
+    /// EGM2008, EGM96 or NAVD88 height needs.
+    pub geoid: &'a [GeoidLine<'a>],
     /// The point-cloud registration backend (GAP-024, GAP-098): GPU, the CPU fallback
     /// and why, or that no pair is configured at all.
     pub point_cloud_registration: PointCloudRegistrationLine<'a>,
@@ -307,19 +310,26 @@ pub fn render_sensor_health(
             .size(palette.small_font_size),
     );
 
-    // GAP-108: whether the pinned EGM2008 grid is installed and verified. Not a fault
+    // GAP-108, GAP-197: whether each pinned grid is installed and verified. Not a fault
     // when no file needs it, so a missing grid is muted rather than a warning; one that
     // is present and wrong is a warning, since somebody installed it meaning it to work.
-    render_indicator(ui, palette, "Geoid grid (EGM2008)", geoid.verified);
-    ui.label(
-        egui::RichText::new(geoid.detail)
-            .color(if geoid.verified || !geoid.detail.contains("refused,") {
-                palette.muted_text_color()
-            } else {
-                palette.warning_color
-            })
-            .size(palette.small_font_size),
-    );
+    for line in geoid {
+        render_indicator(
+            ui,
+            palette,
+            &format!("Geoid grid ({})", line.model),
+            line.verified,
+        );
+        ui.label(
+            egui::RichText::new(line.detail)
+                .color(if line.verified || !line.detail.contains("refused,") {
+                    palette.muted_text_color()
+                } else {
+                    palette.warning_color
+                })
+                .size(palette.small_font_size),
+        );
+    }
 
     render_point_cloud_registration(ui, palette, point_cloud_registration);
     render_sensors(ui, palette, sensors);

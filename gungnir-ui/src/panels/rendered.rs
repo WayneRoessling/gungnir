@@ -1727,13 +1727,14 @@ fn the_strip_says_who_is_signed_in_and_when_nobody_is() {
     assert!(text.contains("nobody can sign in"), "{text}");
 }
 
-/// PN-09's geoid line (GAP-108) as a deployment with no grid installed draws it; the
+/// PN-09's geoid lines (GAP-108, GAP-197) as a deployment with no grid installed draws it; the
 /// health-panel tests below are about other lines and take this one as it stands.
-const NO_GEOID_GRID: crate::panels::sensor_health::GeoidLine<'static> =
-    crate::panels::sensor_health::GeoidLine {
+const NO_GEOID_GRID: &[crate::panels::sensor_health::GeoidLine<'static>] =
+    &[crate::panels::sensor_health::GeoidLine {
+        model: "EGM2008",
         verified: false,
         detail: "EGM2008 geoid grid: none installed",
-    };
+    }];
 
 /// **A silent sensor means four different things and only two of them need somebody.**
 /// PN-09 has to keep them apart: collapsing them into a health dot is how a scheduled
