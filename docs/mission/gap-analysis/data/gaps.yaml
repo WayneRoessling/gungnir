@@ -7458,15 +7458,15 @@
     `docs/agentic-coding-standards.md` §2.9 (D-41); `testdata/pointcloud/SOURCE.md`
   action: >-
     Done 2026-09-26 (D-126, D-125). The six items the 2026-09-08 action named as
-    remaining, each answered: (1) the conversion had never run on the author's machine --
-    it ran in `rust:1.98-slim-bookworm` before pushing, and `proj-crs` still gates it;
-    (2) a geokey file's vertical unit (`VerticalUnitsGeoKey`, 4099) was unread -- read,
-    with the datum and the unit a vertical code fixes (D-126), and tested against a
-    GDAL-written key directory; (3) no vertical datum shift -- GAP-108 and GAP-197; (4)
-    the baseline-versus-WKT check was containment, which a datum's code passed -- now
-    exact on the horizontal system's own authority; (5) `cargo deny` does not see the
-    optional `proj` subtree -- settled by D-51, which keeps the feature opt-in; (6) the
-    DEM half -- GAP-023, closed the same day. The Autzen capture converts end to end
+    remaining, each answered: (1) the conversion had never run on the author's machine
+    -- it ran in `rust:1.98-slim-bookworm` before pushing, and `proj-crs` still gates
+    it; (2) a geokey file's vertical unit (`VerticalUnitsGeoKey`, 4099) was unread --
+    read, with the datum and the unit a vertical code fixes (D-126), and tested against
+    a GDAL-written key directory; (3) no vertical datum shift -- GAP-108 and GAP-197;
+    (4) the baseline-versus-WKT check was containment, which a datum's code passed --
+    now exact on the horizontal system's own authority; (5) `cargo deny` does not see
+    the optional `proj` subtree -- settled by D-51, which keeps the feature opt-in; (6)
+    the DEM half -- GAP-023, closed the same day. The Autzen capture converts end to end
     through GEOID18.
   ref: >-
     D-41 (the decision this builds); GAP-023 (the DEM half, the sibling doing the same
@@ -10953,6 +10953,18 @@
       Found building GAP-163. Not built there: serving the audit record is a new read path
       on `gungnir-api` and an authority question §4 does not yet answer, which are changes
       of their own.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed as the owner decided (D-116): `audit.read` for the administrator and the
+      commander, its §4 row first; `GET /v3/audit` serves the node's verification and paged
+      segments, each read and refusal one entry on the node's record; a linked desktop's
+      PN-20 shows them beside its own, read when a person asks, and says when the role lacks
+      the action or the node is unreachable (DN-23 §15). Tests:
+      `gungnir-app/tests/node_audit_on_pn20.rs` over mutual TLS, and
+      `gungnir-node/tests/node_audit_record.rs`. Human-owned (`gungnir-security` and the
+      `gungnir-api` route); see `docs/signatures.md`. See
+      `../../record/2026-09-26/a-figure-the-endpoint-cannot-be-given-and.md`.
 - id: GAP-176
   name: A warning posted to a warned party and a handoff posted to an effector still write a non-finite float as null
   type: Technical
@@ -10988,6 +11000,17 @@
       Found closing GAP-171. Not widened into it: each payload's format belongs to its own
       contract, which the owner's GAP-171 decision did not name, and no live producer puts
       a non-finite value in either today.
+  - date: 2026-09-26
+    status: Closed
+    note: >-
+      Closed under the owner's delegation (D-115). A warning posted to a warned party and a
+      handoff posted to an effector carry each non-finite float as DN-18 §15's
+      `{"unavailable": ...}` object, built by `gungnir_eventing::nonfinite::to_partner_value`;
+      an all-finite body is byte for byte what it was, and nothing is withheld for a figure
+      in it (DN-03 §12, DN-07 §9). Tested against a real endpoint in
+      `gungnir-app/tests/endpoint_delivery.rs`. The handoff delivery is the decision path
+      (`gungnir-approval`, D-65), so that half is human-owned; see `docs/signatures.md`. See
+      `../../record/2026-09-26/a-figure-the-endpoint-cannot-be-given-and.md`.
 - id: GAP-182
   name: A rehearsal decides under a default policy, not the deployment's
   type: Technical

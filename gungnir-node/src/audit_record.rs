@@ -21,7 +21,18 @@
 //! against it. What it found is journaled as `AuditEvent::Verified` and, when anything
 //! is wrong, logged at error level one line per problem, recorded as an
 //! `audit.anchor_mismatch` entry in this run's segment, and carried on the node's health
-//! line. The node's surface is its log: no route serves its audit record (GAP-179).
+//! line.
+//!
+//! # Read from a linked desktop (GAP-179, D-116)
+//!
+//! [`NodeAuditRecord`] keeps what the node knows of its record between starts: the last
+//! verification, and the heads the journal holds, taken off the node's own bus as it
+//! journals them. [`NodeAuditRecord::answer_reads`] answers `GET /v3/audit` once a tick:
+//! each read is recorded as one `audit.read` entry **before** its page is read, then
+//! answered with the last verification -- or one run now, when the reader asks -- and the
+//! page of entries asked for. A verification on request reads the audit directory against
+//! the heads held in memory rather than folding the journal again, so a reader cannot make
+//! the node read its whole running session on the loop that tracks.
 //!
 //! # Retention
 //!
@@ -30,17 +41,20 @@
 //! is deleted, then recorded in the audit log itself, so the verifier always reads a
 //! purged segment as purged.
 
+use gungnir_api::transport::{NodeApi, PendingAuditRead};
+use gungnir_api::v3;
 use gungnir_eventing::{Envelope, Event, EventBus, InProcessBus, Receiver};
 use gungnir_model::events::{AuditEvent, AuditHead};
 use gungnir_model::{MissionTime, SessionId};
 use gungnir_security::{
-    audit::events, verify_audit_record, AnchorLedger, AuditEntry, AuditLog, AuditVerification,
-    HeadStatement, PurgedSegment, SecurityError, SegmentHead, SegmentPurgeReport, SessionHeads,
+    actions, audit::events, verify_audit_record, AnchorLedger, AuditEntry, AuditLog,
+    AuditVerification, HeadStatement, PurgedSegment, SecurityError, SegmentHead,
+    SegmentPurgeReport, SegmentState, SessionHeads,
 };
 use gungnir_store::retention::RetentionPolicy;
 use gungnir_store::{EventJournal, FileEventJournal};
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 /// The journal's form of a head.
@@ -149,20 +163,35 @@ pub fn verify_at_start(
     now: MissionTime,
 ) -> Result<usize, gungnir_eventing::EventingError> {
     let current = audit.current_segment();
-    let verification = match verify(journal, audit_dir, current.as_deref()) {
+    let outcome = verify(journal, audit_dir, current.as_deref());
+    report(&outcome, audit_dir, audit, bus, now, "at start")
+}
+
+/// Say what a verification found on every record the node keeps, as
+/// [`verify_at_start`] documents, and return how many problems it counts. `when` is "at
+/// start" or "on request", for the entry and the log.
+fn report(
+    outcome: &Result<AuditVerification, String>,
+    audit_dir: &Path,
+    audit: &mut dyn AuditLog,
+    bus: &InProcessBus,
+    now: MissionTime,
+    when: &str,
+) -> Result<usize, gungnir_eventing::EventingError> {
+    let verification = match outcome {
         Ok(v) => v,
         Err(why) => {
-            tracing::error!(%why, dir = %audit_dir.display(), "the audit record could not be verified");
+            tracing::error!(%why, dir = %audit_dir.display(), when, "the audit record could not be verified");
             audit.record(AuditEntry::new(
                 None,
                 events::ANCHOR_MISMATCH,
                 now.0,
-                format!("the audit record could not be verified: {why}"),
+                format!("the audit record could not be verified {when}: {why}"),
             ));
             return Ok(1);
         }
     };
-    bus.publish(now, verified_event(&verification, now))?;
+    bus.publish(now, verified_event(verification, now))?;
     for why in &verification.unread_sessions {
         tracing::warn!(%why, "a journal session could not be read; an audit head or purge in it was not seen");
     }
@@ -171,23 +200,311 @@ pub fn verify_at_start(
         tracing::info!(
             segments = verification.segments,
             entries = verification.entries,
+            when,
             "audit record verified against the heads the journal holds"
         );
     } else {
         for problem in &problems {
-            tracing::error!(%problem, "the audit record does not verify");
+            tracing::error!(%problem, when, "the audit record does not verify");
         }
         audit.record(AuditEntry::new(
             None,
             events::ANCHOR_MISMATCH,
             now.0,
             format!(
-                "verification at start found the audit record damaged: {}",
+                "verification {when} found the audit record damaged: {}",
                 problems.join("; ")
             ),
         ));
     }
     Ok(problems.len())
+}
+
+/// The node's last verification, when it ran, and whether a reader asked for it.
+#[derive(Debug)]
+struct LastVerification {
+    outcome: Result<AuditVerification, String>,
+    at: MissionTime,
+    on_request: bool,
+}
+
+/// What the node knows of its own audit record between starts, for `GET /v3/audit`
+/// (GAP-179, D-116; `docs/design/DN-23-operator-authentication.md` §15). Human-owned:
+/// see `docs/signatures.md`.
+///
+/// **The heads are held as the node journals them.** The record subscribes to the node's
+/// bus before anything about the audit log is published, and applies each `Anchored`,
+/// `Verified` and `Purged` it carries -- the statements the journal appends, in the order
+/// it appends them -- to the ledger the start's verification left. A verification a reader
+/// asks for is then [`gungnir_security::verify_audit_record`] against that ledger: it
+/// reads the audit directory, which it must, and not the running session's journal, which
+/// on a node that has run for days is most of its disk.
+#[derive(Debug)]
+pub struct NodeAuditRecord {
+    audit_dir: PathBuf,
+    /// The node's bus, drained once a tick by [`Self::answer_reads`].
+    watch: Receiver<Envelope>,
+    /// The heads the journal holds. `None` until a verification has read the journal's
+    /// heads -- and so while the one at start could not -- because an empty ledger would
+    /// verify every earlier segment as merely unanchored, which is not what the journal
+    /// says of them.
+    ledger: Option<AnchorLedger>,
+    last: Option<LastVerification>,
+}
+
+impl NodeAuditRecord {
+    /// Subscribe to the node's bus. Called before [`Self::verify_at_start`], so the
+    /// inventory it journals is the first statement the record takes off the bus.
+    #[must_use]
+    pub fn new(audit_dir: &Path, bus: &InProcessBus) -> Self {
+        Self {
+            audit_dir: audit_dir.to_path_buf(),
+            watch: bus.subscribe(),
+            ledger: None,
+            last: None,
+        }
+    }
+
+    /// [`verify_at_start`](self::verify_at_start), keeping what it found for the route.
+    ///
+    /// # Errors
+    ///
+    /// As the free function: only a failure to publish on the bus.
+    pub fn verify_at_start(
+        &mut self,
+        journal: &dyn EventJournal,
+        audit: &mut dyn AuditLog,
+        bus: &InProcessBus,
+        now: MissionTime,
+    ) -> Result<usize, gungnir_eventing::EventingError> {
+        let current = audit.current_segment();
+        let outcome = verify(journal, &self.audit_dir, current.as_deref());
+        let problems = report(&outcome, &self.audit_dir, audit, bus, now, "at start")?;
+        self.took_the_journal(&outcome);
+        self.last = Some(LastVerification {
+            outcome,
+            at: now,
+            on_request: false,
+        });
+        Ok(problems)
+    }
+
+    /// Once a verification has read the journal, the heads are held from here on: the
+    /// inventory it journaled is on the bus, and [`Self::observe`] takes it first.
+    fn took_the_journal(&mut self, outcome: &Result<AuditVerification, String>) {
+        if outcome.is_ok() && self.ledger.is_none() {
+            self.ledger = Some(AnchorLedger::default());
+        }
+    }
+
+    /// Apply what the node has journaled about its audit log since the last call.
+    pub fn observe(&mut self) {
+        for envelope in self.watch.try_iter() {
+            let Some(ledger) = self.ledger.as_mut() else {
+                continue;
+            };
+            for statement in statements(std::slice::from_ref(&envelope)) {
+                ledger.apply(statement);
+            }
+        }
+    }
+
+    /// Verify again now, as a reader asked, and say what was found as the verification at
+    /// start does: journaled, logged, and an `audit.anchor_mismatch` entry when anything
+    /// is wrong.
+    ///
+    /// Against the heads held in memory; while none are held -- the verification at start
+    /// could not read the journal -- the journal is folded again, the start's way, so a
+    /// node whose journal came back is not stuck with that failure until it restarts.
+    ///
+    /// # Errors
+    ///
+    /// Only a failure to publish on the bus.
+    pub fn verify_now(
+        &mut self,
+        journal: &dyn EventJournal,
+        audit: &mut dyn AuditLog,
+        bus: &InProcessBus,
+        now: MissionTime,
+    ) -> Result<(), gungnir_eventing::EventingError> {
+        self.observe();
+        // The running segment's chain is checked too, so what it holds goes to the disk
+        // first.
+        if let Err(err) = audit.flush() {
+            tracing::error!(%err, "the audit log could not be synced before verifying it");
+        }
+        let current = audit.current_segment();
+        let outcome = match &self.ledger {
+            Some(ledger) => verify_audit_record(&self.audit_dir, ledger, current.as_deref())
+                .map_err(|e| e.to_string()),
+            None => verify(journal, &self.audit_dir, current.as_deref()),
+        };
+        report(&outcome, &self.audit_dir, audit, bus, now, "on request")?;
+        self.took_the_journal(&outcome);
+        self.last = Some(LastVerification {
+            outcome,
+            at: now,
+            on_request: true,
+        });
+        Ok(())
+    }
+
+    /// The last verification as it is sent.
+    #[must_use]
+    pub fn verification(&self) -> v3::AuditVerificationView {
+        match &self.last {
+            None => v3::AuditVerificationView::NotRun,
+            Some(LastVerification {
+                outcome: Err(reason),
+                at,
+                ..
+            }) => v3::AuditVerificationView::Failed {
+                reason: reason.clone(),
+                at: *at,
+            },
+            Some(LastVerification {
+                outcome: Ok(v),
+                at,
+                on_request,
+            }) => v3::AuditVerificationView::Ran {
+                at: *at,
+                on_request: *on_request,
+                segments: v.segments as u64,
+                entries: v.entries,
+                problems: v.problems(),
+                unread_sessions: v.unread_sessions.clone(),
+                reports: v
+                    .reports
+                    .iter()
+                    .map(|r| v3::AuditSegmentView {
+                        segment: r.segment.clone(),
+                        entries: r.entries,
+                        description: r.describe(),
+                        sound: r.sound(),
+                        readable: !matches!(
+                            r.state,
+                            SegmentState::Removed | SegmentState::PurgeInterrupted
+                        ),
+                    })
+                    .collect(),
+            },
+        }
+    }
+
+    /// The page `query` asks for, read from the disk now, or `None` when it names no
+    /// segment.
+    fn page(&self, query: &v3::AuditQuery) -> Option<v3::AuditPageView> {
+        let segment = query.segment.clone()?;
+        Some(
+            match gungnir_security::read_segment(&self.audit_dir, &segment) {
+                Ok(read) => {
+                    let total = read.entries.len() as u64;
+                    let from = query.from.min(total);
+                    let skip = usize::try_from(from).unwrap_or(usize::MAX);
+                    let take = usize::try_from(query.page_size()).unwrap_or(usize::MAX);
+                    v3::AuditPageView::Read {
+                        segment,
+                        total,
+                        from,
+                        entries: read
+                            .entries
+                            .iter()
+                            .skip(skip)
+                            .take(take)
+                            .map(|e| v3::AuditEntryView {
+                                operator: e.operator.map(|o| o.0),
+                                party: e.party.clone(),
+                                action: e.action.clone(),
+                                mission_time: e.mission_time,
+                                detail: e.detail.clone(),
+                            })
+                            .collect(),
+                        unreadable: read.unreadable as u64,
+                        breaks: read.breaks.iter().map(ToString::to_string).collect(),
+                    }
+                }
+                Err(err) => v3::AuditPageView::Unreadable {
+                    segment,
+                    reason: err.to_string(),
+                },
+            },
+        )
+    }
+
+    /// Answer every read of the audit record the route accepted since the last tick, in
+    /// arrival order (GAP-179, D-116). Called once a tick, before `audit_routes`, so the
+    /// same tick's sync and anchor cover the entries written here.
+    ///
+    /// For each read: verify again first when the query asks; then record the read, one
+    /// `audit.read` entry naming the operator, the machine and the address, and sync it,
+    /// so a page of the running segment holds the read that fetched it; then read the
+    /// page and answer. A reader who went away before the answer is still on the record,
+    /// which is right: the read happened.
+    ///
+    /// # Errors
+    ///
+    /// Only a failure to publish a verification on the bus.
+    pub fn answer_reads(
+        &mut self,
+        audit: &mut dyn AuditLog,
+        journal: &dyn EventJournal,
+        api: &NodeApi,
+        bus: &InProcessBus,
+        now: MissionTime,
+    ) -> Result<(), gungnir_eventing::EventingError> {
+        self.observe();
+        for read in api.take_audit_reads() {
+            let PendingAuditRead {
+                query,
+                operator,
+                role,
+                party,
+                from,
+                reply,
+            } = read;
+            if query.verify {
+                self.verify_now(journal, audit, bus, now)?;
+            }
+            audit.record(
+                AuditEntry::new(
+                    Some(operator),
+                    actions::READ_AUDIT,
+                    now.0,
+                    format!("{} as {role:?} (from {from})", describe_read(&query)),
+                )
+                .by_party(party),
+            );
+            if let Err(err) = audit.flush() {
+                tracing::error!(%err, "the audit log could not be synced before a page of it was read");
+            }
+            let answer = v3::AuditRecordResponse {
+                at: now,
+                verification: self.verification(),
+                page: self.page(&query),
+            };
+            // A reader that went away is not an error: the read is on the record.
+            let _ = reply.send(answer);
+        }
+        Ok(())
+    }
+}
+
+/// A read in the audit entry's words: what was asked for, not what was found, because the
+/// entry is written before the page is read.
+fn describe_read(query: &v3::AuditQuery) -> String {
+    let verified = if query.verify {
+        "verified the audit record again and read "
+    } else {
+        "read "
+    };
+    match &query.segment {
+        None => format!("{verified}the audit record's verification and segment list"),
+        Some(segment) => format!(
+            "{verified}up to {} entries of {segment} from entry {}, with the verification",
+            query.page_size(),
+            query.from
+        ),
+    }
 }
 
 /// Journal a head the log handed over.

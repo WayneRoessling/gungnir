@@ -398,6 +398,9 @@ pub struct AppState {
     /// verification against the heads the journal holds, the earlier segment PN-20 is
     /// showing, and what retention has removed. See [`crate::audit_record`].
     pub audit_record: crate::audit_record::AuditRecordState,
+    /// The node's audit record as PN-20 last read it, on a desktop linked to a node
+    /// (GAP-179, D-116). See [`crate::node_audit`].
+    pub node_audit: crate::node_audit::NodeAuditState,
 
     /// The approval gate between a proposed plan and anything acting on it
     /// (GAP-038), and everything the decision path holds between calls: the queue and
@@ -794,6 +797,7 @@ impl AppState {
             config_store,
             audit,
             audit_record: crate::audit_record::AuditRecordState::default(),
+            node_audit: crate::node_audit::NodeAuditState::default(),
             desk: ApprovalDesk::new(decision_settings),
             selected_approval: None,
             dialog: gungnir_ui::panels::decision_dialog::DecisionDialogState::default(),

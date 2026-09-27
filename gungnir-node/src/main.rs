@@ -1640,13 +1640,13 @@ async fn run(
     // that the live session exists to journal the outcome into, and **before either
     // purge**: the session purge could remove the session holding the last heads, and
     // the audit purge a segment this verification has not seen.
-    let audit_problems = gungnir_node::audit_record::verify_at_start(
-        &journal,
-        &audit_dir,
-        &mut audit_log,
-        &bus,
-        clock.now(),
-    )?;
+    //
+    // GAP-179, D-116: kept, with the heads the journal holds from here on, for the route
+    // a linked desktop's PN-20 reads it by. Subscribed to the bus before the verification
+    // journals its inventory, which is the first statement it takes.
+    let mut audit_record = gungnir_node::audit_record::NodeAuditRecord::new(&audit_dir, &bus);
+    let audit_problems =
+        audit_record.verify_at_start(&journal, &mut audit_log, &bus, clock.now())?;
 
     // GAP-122, D-78: retention runs now, once the live session exists to protect and to
     // journal what was removed into, and hourly in the loop below. Never the live session
@@ -2014,6 +2014,9 @@ async fn run(
         // before the journal append, for the same reason.
         approval::answer_forwarded(&mut approval_desk, &frame);
         approval::audit_refused_decisions(&mut approval_desk, &frame);
+        // GAP-179, D-116: the reads of this node's audit record, each recorded before it is
+        // answered; before the routes' entries, so this tick's sync and anchor cover it.
+        audit_record.answer_reads(approval_desk.audit.as_mut(), &journal, &api, &bus, now)?;
         // GAP-111: the routes' sign-ins, refusals and acts, then one sync for the tick.
         approval::audit_routes(&mut approval_desk, &frame);
 
