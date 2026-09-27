@@ -3113,3 +3113,65 @@
   commit: 03c6daa7cd4f1fd116279ae29b91729892d92bc7
   pre_repository: false
   record: "GAP-156; D-93; DN-04 §11; docs/record/2026-09-26/interim-plans-and-a-linked-plan-s-age.md; PR #182"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-163 and GAP-152's `gungnir-security` code: the audit chain's head anchored in the
+    event journal and verified at start and on demand, naming a cut, a rewritten tail or
+    a deleted segment (D-104); retention of audit segments, opt-in, recorded before
+    removal so a purge never reads as a deletion (D-105); earlier runs read on PN-20
+    (D-106).
+  kind: code
+  paths:
+  - gungnir-security/src/audit.rs
+  - gungnir-security/src/audit/anchor.rs
+  - gungnir-security/src/audit/retention.rs
+  - gungnir-security/src/lib.rs
+  commit: 66fec5c6302b0b7f7c98b56170968b96b3cca0b5
+  pre_repository: false
+  record: "GAP-163; GAP-152; D-104 to D-106; DN-23 §14; docs/record/2026-09-26/the-audit-log-s-head-held-by-the.md; PR #186"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-020's `gungnir-fusion-async` change: the ingest loop's body moved into `step` and
+    `end_of_stream`, which the live loop and the rehearsal's lock-step tracker both call,
+    so a rehearsal gives the same answer every run (D-109).
+  kind: code
+  paths:
+  - gungnir-fusion-async/src/lib.rs
+  commit: 9205d68954774a082151ace001d10ab3431eb29c
+  pre_repository: false
+  record: "GAP-020; D-109; DN-02 §9; docs/record/2026-09-26/first-engagement-range-over-a-rehearsal.md; PR #187"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-171 and GAP-175's `gungnir-api` changes: the exchange read routes and
+    `ExchangeProduct::body_of` writing a partner's non-finite value as
+    `{"unavailable": ...}` (D-103), and the response bodies of sign-in, sensor task,
+    queue decision and forwarded decisions in the lossless form (D-102); encoding only,
+    no check, authority or state change moved.
+  kind: code
+  paths:
+  - gungnir-api/src/transport.rs
+  - gungnir-api/src/v3/mod.rs
+  commit: 3c0e63c69b12a12b3f40ca0fb26f0cffdb252a48
+  pre_repository: false
+  record: "GAP-171; GAP-175; D-101 to D-103; DN-18 §15; docs/record/2026-09-26/an-identity-written-as-text-and-no-float.md; PR #184"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    GAP-158's numerical-stability guard: `CoverageVolume::covers` measures elevation
+    against `LocalFrame::vertical_at`, the vertical at the sensor, and a vertical that is
+    zero or non-finite covers nothing but the sensor's own position (D-111).
+  kind: code
+  paths:
+  - gungnir-analytics/src/lib.rs
+  - gungnir-model/src/frame.rs
+  - gungnir-analytics/tests/coverage_accuracy.rs
+  commit: 95685450653e4cc1c50f370cd5603cb12c5162ad
+  pre_repository: false
+  record: "GAP-158; D-111; DN-12 §10; docs/record/2026-09-26/a-sensor-s-elevation-band-a-round-1.md; PR #185"
