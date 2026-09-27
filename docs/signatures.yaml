@@ -3231,3 +3231,17 @@
   commit: e932b14dd441b9e6d5042a7259e999e7183cd18b
   pre_repository: false
   record: "GAP-173; docs/record/2026-09-26/the-owner-s-walk-of-2026-09-26.md; PR #191"
+
+- date: 2026-09-26
+  signer: Owner
+  subject: >-
+    D-121: `proj-sys` 0.27 admitted to §2.9 with only its `tiff` feature, so libproj reads
+    the EGM2008 geoid GeoTIFF grid; the version `proj` already resolves, so no crate is
+    added; `network` stays refused; behind the default-off `crs` feature.
+  kind: stack
+  paths:
+  - Cargo.toml
+  - docs/agentic-coding-standards.md
+  commit: 723c5097b0f2ccb6005d95236ac4b6a3d0924b18
+  pre_repository: false
+  record: "D-121; GAP-108; docs/record/2026-09-26/a-converted-height-carries-its-vertical-datum.md; PR #194"
