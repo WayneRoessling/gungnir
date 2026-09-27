@@ -350,3 +350,56 @@ The workspace `README.md` merges this order with the tracking-core and productiz
 3. `cpu_reference.rs` for point-to-plane ICP (§3.6, step 1) — de-risks the fusion algorithm choice before any GPU work starts.
 4. GPU fusion pipeline (§3.4–3.5) — highest-risk, highest-value piece; build once the reference implementation gives a correctness baseline to validate against.
 5. `tiles3d-threed` (§2.1) — largest scope, defer until a specific panel actually requires planet/site-scale streamed terrain or point clouds; don't build ahead of a concrete requirement.
+
+---
+
+## 5. Coordinate Reference Systems and the Vertical Datum (amendment 1, 2026-09-26)
+
+**Raised by GAP-108; decided by the owner as D-121, with its details and D-122 taken under
+the owner's delegation of 2026-09-26.** This section is new. D-41 chose `proj` for
+real-world coordinate reference systems in 2026-09 and was built (GAP-023, GAP-102), but
+this document never gained a section for it. What stood before this amendment is D-41's
+own design, recorded here so the amendment has something to amend:
+
+- **Horizontal (D-41).** A DEM's `GeoTIFF` keys or a point cloud's LAS CRS VLRs are read
+  always; the conversion to WGS-84 runs through `proj` behind `gungnir-data`'s
+  default-off `crs` feature (D-51), and `gungnir_coord`'s transform takes it to the
+  deployment's local ENU frame. A file whose declaration contradicts the baseline's
+  `frame` is refused by name.
+- **Vertical, before this amendment.** The height was scaled to metres by the file's own
+  unit and otherwise used as it stood: a NAVD88 or EGM2008 height went into the picture
+  as though it were a WGS-84 ellipsoidal one, and a DEM's height became its local up
+  unchanged.
+
+**The amendment.**
+
+1. **A converted height is a WGS-84 ellipsoidal height.** A height stated as ellipsoidal
+   passes unchanged. An EGM2008 height (EPSG:3855) gains the EGM2008 undulation N, read
+   from NGA's 2.5-arc-minute grid by PROJ (`vgridshift`, written out in full and pointed
+   at the verified file, so PROJ's "ballpark" no-op can never stand in). Every other
+   vertical datum, and a height whose datum neither the file nor the baseline states, is
+   refused by name. `gungnir_data::geoid::height_reference` is where the rule lives.
+2. **Who states the datum.** The file where it can: a WKT `VERT_CS`, or a `GeoTIFF`
+   `VerticalGeoKey`. For a file that states none, the baseline's `terrain.vertical` or
+   `point_cloud.vertical` (`"ellipsoidal"` or `"epsg:<code>"`). A baseline that
+   contradicts the file is refused. A DEM whose `VerticalUnitsGeoKey` is not the metre
+   is refused at load.
+3. **The grid is a deployment artifact.** It is PROJ-data's `us_nga_egm08_25.tif`, 80 MB,
+   pinned by the SHA-256 PROJ-data publishes (`deploy/geoid/SHA256SUMS`), and never in
+   the repository. The desktop finds it through `geoid_grid_dir`, else `PROJ_DATA`. It
+   hashes the file off the render thread at start, uses it only when it is the pinned
+   file, and says which on PN-09. The terrain and the point-cloud pair wait for that
+   check.
+4. **libproj reads `GeoTIFF` grids.** `proj-sys` is named for its `tiff` feature alone
+   (§2.9 of `agentic-coding-standards.md`); `network` stays refused, so nothing is
+   fetched at run time.
+5. **A converted DEM's vertex lands at its local up** (D-122): the up the same transform
+   gives its east and north, computed from the ellipsoidal height, which is what line of
+   sight compares a sensor's up against. A no-data vertex stays a hole.
+6. **Verification.** The grid-dependent tests run in `ci.yml`'s `proj-crs` job. On a
+   committed clip of the grid (`testdata/geoid/SOURCE.md`) they are held against an
+   independent `pyproj` run to a micrometre. On the full pinned grid, which that job
+   fetches and checks, they include the desktop's own start-up check.
+
+What the owner has signed of this document is in [`signatures.md`](signatures.md).
+Reasoning: `record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`.

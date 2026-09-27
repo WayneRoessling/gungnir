@@ -120,7 +120,7 @@ history, and an entry is never edited once it has merged.
 | GAP-105 | A rehearsal cannot move the sensors a laydown declares | Technical | CAP-5.2, CAP-1.4 | 3 | 4 | M | 12 | I3 | Services engineer | Closed |
 | GAP-106 | An operator cannot accept a coverage gap | Technical | CAP-1.4, CAP-5.9 | 2 | 10 | M | 20 | I3 | UI engineer | Open |
 | GAP-107 | Nothing gates a plan on having been rehearsed | Technical | CAP-5.2, CAP-5.9 | 2 | 10 | M | 20 | I3 | UI engineer | Open |
-| GAP-108 | A converted height carries no vertical datum shift | Technical | CAP-2.10 | 2 | 8 | M | 16 | I4 | UI engineer | Open |
+| GAP-108 | A converted height carries no vertical datum shift | Technical | CAP-2.10 | 2 | 8 | M | 16 | I4 | UI engineer | Closed |
 | GAP-109 | Nothing counts per-frame resource creation in gungnir-render | Technical | CAP-5.10 | 2 | 8 | S | 16 | I3 | UI engineer | Closed |
 | GAP-110 | The node's headless loop has no automated test | Technical | CAP-7.3 | 2 | 1 | S | 2 | I3 | Services engineer | Closed |
 | GAP-111 | The security row's role matrix and audit rule are untested, and the node audits nothing | Technical | CAP-6.2, CAP-6.3 | 3 | 9 | M | 27 | I3 | Security engineer (human-owned crate) | Closed |
@@ -187,8 +187,10 @@ history, and an entry is never edited once it has merged.
 | GAP-182 | A rehearsal decides under a default policy, not the deployment's | Technical | CAP-5.2, CAP-3.6 | 3 | 7 | S | 21 | I3 | Services engineer | Closed |
 | GAP-183 | The planner tasks resources on a layer at hold, so one held layer refuses every plan | Technical | CAP-3.3, CAP-3.6 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
 | GAP-184 | A rehearsal tracks under the default algorithm baseline, not the deployment's | Technical | CAP-5.2, CAP-2.1 | 2 | 8 | S | 16 | I3 | Services engineer | Closed |
+| GAP-196 | A UAS's height above mean sea level is placed as an ellipsoidal height | Technical | CAP-1.7 | 3 | 6 | S | 18 | I4 | Services engineer | Open |
+| GAP-197 | A DEM or point cloud in NAVD88, EGM96 or a national height datum cannot be placed | Technical | CAP-2.10 | 3 | 8 | M | 24 | I4 | UI engineer | Open |
 
-Counts: 174 gaps, 3 mission, 171 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 176 gaps, 3 mission, 173 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1696,12 +1698,13 @@ Counts: 174 gaps, 3 mission, 171 technical; 1 already covered by a plan in `../.
 - Capability: CAP-2.10 Terrain and map context.
 - History:
   - 2026-09-15, Open: **Filed 2026-09-15 by D-51**, out of GAP-102's own text, which named it and did not file it. A point cloud or DEM converted from a real-world CRS arrives with its horizontal position correct and its **height still in the file's own vertical datum, in metres** -- not a WGS-84 ellipsoidal height, because no geoid model is applied anywhere in `gungnir-data`. For a terrain surface or a point cloud drawn beside tracks whose altitudes are geodetic, the error is the geoid-ellipsoid separation at that place: tens of metres over much of the world, and a systematic offset rather than noise. GAP-102 records it accurately; what it did not do is give it a row in the summary table, so it was invisible to anyone reading the register rather than the entry. **Related but distinct**: GAP-102 also deliberately leaves `VerticalUnitsGeoKey` (4099) unread, refusing a LAS file in non-metre heights rather than mis-scaling it, which is the honest half of the same subject and stays in that entry until a fixture exists.
-- Evidence: GAP-102 items (2) and (3); `gungnir-data/src/geospatial/`; `gungnir-coord` (the local-ENU transform the converted value feeds).
+  - 2026-09-26, Closed: **Closed 2026-09-26: the owner chose NGA's EGM2008 grid through PROJ, any other vertical datum refused by name (D-121); a converted DEM lands at its local up (D-122).** Ellipsoidal heights pass unchanged; EGM2008 heights gain the undulation; NAVD88, EGM96 and an unstated datum are refused, the Autzen capture's NAVD88 among them. The grid is a SHA-256-pinned deployment artifact, never committed, verified at start and reported on PN-09. In `proj-crs`, `tests/geoid.rs` agrees with an independent `pyproj` run to a micrometre on a committed clip, and the fetched pinned grid is tested too. Run on Linux before pushing; each geoid test failed with the undulation removed. No human-owned code. See `../../record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`.
+- Evidence: GAP-102 items (2) and (3); `gungnir-data/src/geoid.rs`; `gungnir-data/src/pointcloud/crs.rs` (`vertical_datum`, `to_local_enu`); `gungnir-data/src/geospatial/mod.rs` (`HeightGrid::vertical`, `TerrainMesh::with_enu`); `gungnir-app/src/geoid.rs`, `terrain.rs`, `pointcloud.rs`; `gungnir-config` (`VerticalFrame`, `geoid_grid_dir`); `deploy/geoid/SHA256SUMS`; `testdata/geoid/SOURCE.md`; `.github/workflows/ci.yml` (`proj-crs`).
 - Severity: 2. Reach: 8 threads. Effort: M. Priority: 16.
 - Impact: Converted elevation data sits tens of metres off in the vertical, consistently and silently, wherever the geoid separates from the ellipsoid.
-- Closing action: Decide whether a geoid model ships (which one, under what licence, at what size) or whether a converted height is refused unless the file already states an ellipsoidal datum -- the same shape of answer GAP-102 gave for vertical units. Then build it behind the same `crs` feature and gate it in CI, since that is the only place PROJ builds.
-- Target: I4. Owner: UI engineer. Status: Open.
-- Reference: D-51 (the decision that filed this); GAP-102 (where it was recorded before it had a row); GAP-023 (the DEM half of the same conversion).
+- Closing action: Done 2026-09-26 (D-121, D-122): EGM2008 through PROJ from a SHA-256-pinned deployment grid, every other vertical datum refused by name, a converted DEM placed at its local up, gated in `proj-crs` on a committed clip and on the fetched pinned grid.
+- Target: I4. Owner: UI engineer. Status: Closed.
+- Reference: D-51 (the decision that filed this); D-121, D-122 (the decisions that closed it); GAP-102 (where it was recorded before it had a row); GAP-023 (the DEM half of the same conversion); `../../rust-3d-data-ecosystem-build-vs-adopt.md` §5.
 - Depends on: D-51, GAP-102.
 
 **GAP-109 Nothing counts per-frame resource creation in gungnir-render**
@@ -2665,4 +2668,32 @@ Counts: 174 gaps, 3 mission, 171 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: D-113; found building GAP-182.
 - Depends on: GAP-045, GAP-053.
+
+**GAP-196 A UAS's height above mean sea level is placed as an ellipsoidal height**
+
+- Type: Technical.
+- Capability: CAP-1.7 Cooperative identity.
+- History:
+  - 2026-09-26, Open: Found closing GAP-108, searching the workspace for every place a height crosses a vertical datum. Not built there: GAP-108 is the DEM and point-cloud conversion, and this is a live track's altitude on the ingest path, where which geoid the sender meant is itself the open question.
+- Evidence: `gungnir-interop/src/asterix/cat129.rs` (the I129/090 branch records the loss "the local geoid undulation is not corrected for"); `gungnir-data/src/geoid.rs` (the EGM2008 grid a deployment can now carry).
+- Severity: 3. Reach: 6 threads. Effort: S. Priority: 18.
+- Impact: A cooperative UAS reporting only its altitude above mean sea level (ASTERIX Category 129, I129/090) is placed that many metres above the WGS-84 ellipsoid, so its track sits off by the local geoid separation -- about 35 m over the Baltic fixtures -- and says so only as a recorded loss on the report.
+- Closing action: Decide whether the verified EGM2008 grid corrects I129/090 -- and so which geoid an AMSL report means, since a UAS's "mean sea level" may be EGM96 or barometric -- and where the correction runs, since `gungnir-interop` reaches no grid and the grid is read only through PROJ behind `crs`; or keep the recorded loss and say it on the track's card.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: Found closing GAP-108 (`../../record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`).
+- Depends on: D-121, GAP-101.
+
+**GAP-197 A DEM or point cloud in NAVD88, EGM96 or a national height datum cannot be placed**
+
+- Type: Technical.
+- Capability: CAP-2.10 Terrain and map context.
+- History:
+  - 2026-09-26, Open: Filed closing GAP-108. D-121 shipped one grid and refuses every other datum by name, which ends the silent mix; this is what that refusal costs a user with ordinary US or SRTM-derived data, recorded so it is a row in the register rather than a sentence in a decision.
+- Evidence: `gungnir-data/src/geoid.rs` (`height_reference` refuses every other datum); `gungnir-app/tests/pointcloud_crs.rs` (the Autzen capture's NAVD88 heights refused through a real tick); `deploy/geoid/SHA256SUMS` (the one grid a deployment carries).
+- Severity: 3. Reach: 8 threads. Effort: M. Priority: 24.
+- Impact: Since GAP-108 a real-world DEM or point cloud whose heights are in any vertical datum but WGS-84 ellipsoidal or EGM2008 is refused by name, rather than drawn tens of metres off. That is the honest answer, and it leaves most United States LIDAR (NAVD88, the Autzen capture among it) and EGM96 DEMs such as SRTM unusable until they are reprojected outside Gungnir.
+- Closing action: Decide which further grids a deployment may carry -- PROJ-data publishes NOAA's GEOID18 (`us_noaa_g2018u0.tif`, NAVD88) and NGA's EGM96 (`us_nga_egm96_15.tif`) among others -- each pinned by the digest PROJ-data publishes, installed and verified the same way as EGM2008, and mapped from its vertical CRS code in `VerticalDatum::from_epsg`; a NAVD88 height also needs its NAD83 realisation stated, since GEOID18 converts to NAD83(2011) ellipsoidal heights, not WGS-84.
+- Target: I4. Owner: UI engineer. Status: Open.
+- Reference: D-121 (EGM2008 only, everything else refused); found closing GAP-108 (`../../record/2026-09-26/a-converted-height-carries-its-vertical-datum.md`).
+- Depends on: D-121, GAP-108.
 

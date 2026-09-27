@@ -20,6 +20,13 @@
 //! deployment's own declared origin. A file whose tags still contradict what `frame`
 //! declares, or a real-world CRS this build was not compiled to convert, is refused by
 //! name exactly as before.
+//!
+//! **A converted height is a real height since GAP-108** (D-121, D-122). The DEM's own
+//! height is made a WGS-84 ellipsoidal one -- unchanged when the file or `terrain.vertical`
+//! says it already is, with the EGM2008 undulation added when it is an EGM2008 height, and
+//! refused by name in any other datum or when nobody states one -- and each vertex's
+//! height becomes its local ENU up, the quantity line of sight compares a sensor's own up
+//! against. Before, the file's height was used as the up unchanged.
 
 use gungnir_config::Frame;
 use gungnir_coord::CoordTransform;
@@ -106,6 +113,11 @@ pub fn start(state: &mut AppState) {
     if state.loader.is_some() || !matches!(state.terrain, TerrainStatus::NotConfigured) {
         return;
     }
+    // GAP-108: a DEM stating EGM2008 heights needs the verified grid when it is placed,
+    // so the load waits for the start-up check to settle (`crate::geoid`).
+    if !state.geoid.is_settled() {
+        return;
+    }
     let Some(terrain) = state.config.terrain.clone() else {
         return;
     };
@@ -151,12 +163,20 @@ pub fn poll(state: &mut AppState) {
             // `Some` (its own early return above), so this is reachable only with one
             // configured; the fallback is defensive rather than reachable in practice,
             // and "local-enu" is the same as `mesh.placed()`'s original behaviour.
-            let declared_frame = state
+            let (declared_frame, declared_vertical) = state
                 .config
                 .terrain
                 .as_ref()
-                .map_or("local-enu", |t| t.frame.as_str());
-            match place(mesh, declared_frame, state.config.origin) {
+                .map_or(("local-enu", None), |t| {
+                    (t.frame.as_str(), t.vertical.as_deref())
+                });
+            match place(
+                mesh,
+                declared_frame,
+                declared_vertical,
+                state.config.origin,
+                &state.geoid,
+            ) {
                 Ok(placed) => {
                     state.terrain = TerrainStatus::Loaded {
                         path,
@@ -208,10 +228,20 @@ const WGS84_EPSG: u32 = 4326;
 /// file's own tags when it has any (a `GeoTIFF`) and trusted outright when it does not
 /// (an ESRI ASCII grid, which never carries CRS tags at all -- `frame` is the only place
 /// its CRS could ever come from).
+///
+/// **The height, since GAP-108** (D-121, D-122): `declared_vertical` is
+/// `terrain.vertical`, and with the file's own `VerticalGeoKey` it decides how the DEM's
+/// heights become WGS-84 ellipsoidal ones (`gungnir_data::geoid::height_reference`),
+/// refusing by name what cannot be converted. That is decided before any projection runs,
+/// so a refusal needs no PROJ. Each vertex then lands at its full local ENU position, up
+/// included. A `"local-enu"` DEM is untouched: its heights are already the deployment's
+/// own up.
 fn place(
     mesh: TerrainMesh,
     declared_frame: &str,
+    declared_vertical: Option<&str>,
     origin: Option<[f64; 3]>,
+    geoid: &crate::geoid::GeoidStatus,
 ) -> Result<TerrainMesh, String> {
     let frame: Frame = declared_frame
         .parse()
@@ -225,6 +255,13 @@ fn place(
              no declared local ENU origin (config.origin) to place it against"
         ));
     };
+    let baseline_vertical = crate::geoid::declared_datum("terrain.vertical", declared_vertical)?;
+    let heights = gungnir_data::geoid::height_reference(
+        "terrain.vertical",
+        mesh.vertical_datum().as_ref(),
+        baseline_vertical.as_ref(),
+        geoid.grid().as_deref().map_err(String::as_str),
+    )?;
     let absolute = mesh.absolute_positions_xy();
     let lon_lat_deg = if source_epsg == WGS84_EPSG {
         // Already geographic WGS84: what a GeoTIFF's own [x, y] already means for a
@@ -234,12 +271,16 @@ fn place(
     } else {
         to_wgs84(&absolute, source_epsg)?
     };
-    let enu = to_local_enu(&mesh, &lon_lat_deg, origin);
+    let file_heights: Vec<f64> = mesh.positions.iter().map(|p| f64::from(p[2])).collect();
+    let ellipsoidal =
+        gungnir_data::geoid::ellipsoidal_heights(&heights, &lon_lat_deg, &file_heights)
+            .map_err(|e| e.to_string())?;
+    let enu = to_local_enu(&lon_lat_deg, &ellipsoidal, origin);
     // 32767 is GeoTIFF's "user-defined" projected code, the existing convention this
     // codebase already uses for "trust it as local" (see `source_epsg` below); reused
     // here as the marker for "already placed", since a mesh in this state has exactly
     // that property and `.placed()` on it is correctly a no-op (`origin` is `[0, 0]`).
-    mesh.with_xy(&enu, GridCrs::Projected { epsg: Some(32_767) })
+    mesh.with_enu(&enu, GridCrs::Projected { epsg: Some(32_767) })
         .map_err(|e| e.to_string())
 }
 
@@ -319,33 +360,32 @@ fn to_wgs84(_points: &[[f64; 2]], source_epsg: u32) -> Result<Vec<[f64; 2]>, Str
     ))
 }
 
-/// `lon_lat_deg` (the same length and order as `mesh.positions`) placed into the local
-/// ENU frame anchored at `origin`, via `gungnir_coord::Wgs84` -- the same
-/// oracle-verified tangent-plane transform every other geodetic thing in the system
-/// already goes through, rather than a second implementation of the same math here.
+/// `lon_lat_deg` and `ellipsoidal_m` (the same length and order as the mesh's
+/// positions) placed into the local ENU frame anchored at `origin`, via
+/// `gungnir_coord::Wgs84` -- the same oracle-verified tangent-plane transform every other
+/// geodetic thing in the system already goes through, rather than a second implementation
+/// of the same math here.
 ///
-/// Each vertex's own height (`mesh.positions[_][2]`, `f32::NAN` for a no-data cell)
-/// feeds the conversion as that point's altitude, which is the geometrically correct
-/// input for *where the point sits horizontally* relative to an origin at a different
-/// altitude, however small the effect; a no-data cell's non-finite height is read as
-/// `0.0` for this purpose only; the output `z` stays untouched (`TerrainMesh::with_xy`
-/// carries it through unchanged, `NaN` included) since this is a horizontal conversion,
-/// not a vertical datum reconciliation the DEM's own height does or does not need.
-fn to_local_enu(mesh: &TerrainMesh, lon_lat_deg: &[[f64; 2]], origin: [f64; 3]) -> Vec<[f64; 2]> {
+/// **All three components are kept** (GAP-108, D-122): the up is what the vertex's height
+/// is in the picture, and it differs from the file's height by the origin's own altitude,
+/// the geoid separation when the file's was an EGM2008 height, and the Earth's curvature
+/// away from the origin. A no-data vertex's non-finite height is read as `0.0` for placing
+/// it horizontally only; `TerrainMesh::with_enu` keeps its up `NaN`, so the hole stays.
+fn to_local_enu(
+    lon_lat_deg: &[[f64; 2]],
+    ellipsoidal_m: &[f64],
+    origin: [f64; 3],
+) -> Vec<[f64; 3]> {
     let origin = gungnir_coord::Geodetic {
         lat_rad: origin[0],
         lon_rad: origin[1],
         alt_m: origin[2],
     };
-    mesh.positions
+    lon_lat_deg
         .iter()
-        .zip(lon_lat_deg)
-        .map(|(p, &[lon_deg, lat_deg])| {
-            let alt_m = if p[2].is_finite() {
-                f64::from(p[2])
-            } else {
-                0.0
-            };
+        .zip(ellipsoidal_m)
+        .map(|(&[lon_deg, lat_deg], &h)| {
+            let alt_m = if h.is_finite() { h } else { 0.0 };
             let point = gungnir_coord::Geodetic {
                 lat_rad: lat_deg.to_radians(),
                 lon_rad: lon_deg.to_radians(),
@@ -355,7 +395,7 @@ fn to_local_enu(mesh: &TerrainMesh, lon_lat_deg: &[[f64; 2]], origin: [f64; 3]) 
                 gungnir_coord::Wgs84::geodetic_to_ecef(point),
                 origin,
             );
-            [enu.e_m, enu.n_m]
+            [enu.e_m, enu.n_m, enu.u_m]
         })
         .collect()
 }

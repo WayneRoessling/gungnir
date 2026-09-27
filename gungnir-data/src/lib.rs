@@ -15,6 +15,7 @@
 //! code, and that is where the list is.
 
 pub mod assets;
+pub mod geoid;
 pub mod geospatial;
 pub mod pointcloud;
 pub mod scientific;

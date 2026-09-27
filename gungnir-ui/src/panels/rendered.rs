@@ -1724,6 +1724,14 @@ fn the_strip_says_who_is_signed_in_and_when_nobody_is() {
     assert!(text.contains("nobody can sign in"), "{text}");
 }
 
+/// PN-09's geoid line (GAP-108) as a deployment with no grid installed draws it; the
+/// health-panel tests below are about other lines and take this one as it stands.
+const NO_GEOID_GRID: crate::panels::sensor_health::GeoidLine<'static> =
+    crate::panels::sensor_health::GeoidLine {
+        verified: false,
+        detail: "EGM2008 geoid grid: none installed",
+    };
+
 /// **A silent sensor means four different things and only two of them need somebody.**
 /// PN-09 has to keep them apart: collapsing them into a health dot is how a scheduled
 /// outage becomes an unnoticed hole, and how a real failure gets shrugged off as "that's
@@ -1775,6 +1783,7 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
                         masking: false,
                         detail: "no terrain configured",
                     },
+                    geoid: NO_GEOID_GRID,
                     point_cloud_registration:
                         crate::panels::sensor_health::PointCloudRegistrationLine::NotConfigured,
                     feeds,
@@ -1907,6 +1916,7 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                     masking: false,
                     detail: "no terrain configured",
                 },
+                geoid: NO_GEOID_GRID,
                 point_cloud_registration:
                     crate::panels::sensor_health::PointCloudRegistrationLine::NotConfigured,
                 feeds: &[],
@@ -1945,6 +1955,7 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                     masking: false,
                     detail: "no terrain configured",
                 },
+                geoid: NO_GEOID_GRID,
                 point_cloud_registration:
                     crate::panels::sensor_health::PointCloudRegistrationLine::NotConfigured,
                 feeds: &[],
@@ -2025,6 +2036,7 @@ fn the_health_panel_draws_the_late_data_policy_and_its_counters() {
                     masking: false,
                     detail: "no terrain configured",
                 },
+                geoid: NO_GEOID_GRID,
                 point_cloud_registration: PointCloudRegistrationLine::NotConfigured,
                 feeds: &[],
                 cooperative_feeds: &[],
@@ -2108,6 +2120,7 @@ fn the_point_cloud_registration_line_names_the_backend_and_why() {
                         masking: false,
                         detail: "no terrain configured",
                     },
+                    geoid: NO_GEOID_GRID,
                     point_cloud_registration: line,
                     feeds: &[],
                     cooperative_feeds: &[],
@@ -2193,6 +2206,7 @@ fn the_health_panel_says_once_that_this_console_may_not_publish() {
                         masking: false,
                         detail: "no terrain configured",
                     },
+                    geoid: NO_GEOID_GRID,
                     point_cloud_registration: PointCloudRegistrationLine::NotConfigured,
                     feeds: &[],
                     cooperative_feeds: &[],

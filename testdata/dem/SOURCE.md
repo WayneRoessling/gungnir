@@ -32,3 +32,23 @@ triangles.
 EPSG 32633 (WGS 84 / UTM zone 33N) is a plausible frame for a coastal-defence
 laydown and is otherwise arbitrary; the fixture asserts that the code is carried, not
 that the coordinates fall anywhere in particular.
+
+## `small-egm2008.tif` (GAP-108, 2026-09-26)
+
+The same raster as `small.tif`, with GDAL's own GeoTIFF keys for the compound system
+EPSG:32633+3855 (WGS 84 / UTM zone 33N + EGM2008 height), so the loader's reading of a
+file's own `VerticalGeoKey` is checked against keys a real tool wrote rather than ones
+this workspace laid out. Made with GDAL 3.11.3 (the OSGeo image
+`ghcr.io/osgeo/gdal:alpine-small-3.11.3`) from `small.tif` above, nothing else changed:
+
+```sh
+gdal_translate -q -a_srs EPSG:32633+3855 small.tif small-egm2008.tif
+```
+
+| File | What it is | SHA-256 |
+|---|---|---|
+| `small-egm2008.tif` | 452 bytes; the four-row, five-column raster unchanged, one strip of 32-bit floats, `GDAL_NODATA` "-9999", `ModelPixelScale` [30, 30, 1], `ModelTiepoint` raster (0, 0) at model (500000, 6000120, 0), and a `GeoKeyDirectory` of five keys -- `GTModelType` 1, `GTRasterType` 1, `GTCitation` (ASCII, "WGS 84 / UTM zone 33N + EGM2008 height"), `ProjectedCSType` 32633 and `VerticalGeoKey` 3855 | `8f9f9e16927b24e422431a1c32de7fcb93fc9dc11be9e5e8b90c3be151672bb1` |
+
+It lies inside the committed clip of the EGM2008 grid (`../geoid/SOURCE.md`), which is
+what lets `gungnir-app/tests/terrain.rs` convert it through the geoid without the 80 MB
+grid.
