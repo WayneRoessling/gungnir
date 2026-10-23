@@ -39,6 +39,9 @@ use gungnir_ui::panels::approval_queue::PendingId;
 use gungnir_ui::panels::audit::{SessionAction, SignInDraft};
 use gungnir_ui::panels::reports::{FindingKindView, ReviewAction};
 
+#[path = "support/healthy.rs"]
+mod healthy;
+
 const PASSPHRASE: &str = "correct horse battery staple";
 const SUPERVISOR: u64 = 11;
 const SENSOR_MANAGER: u64 = 12;
@@ -243,7 +246,7 @@ fn every_audited_act_on_the_desktop_leaves_exactly_one_entry_naming_it() {
                     role: "Supervisor".into(),
                 })
                 .expect("queued");
-            acknowledge_degraded(s, PendingId(pending.0));
+            healthy::healthy(s);
             decisions::decide(s, PendingId(pending.0), OperatorDecision::Accepted)
                 .expect("decided");
         },
@@ -598,20 +601,4 @@ fn every_audit_site_is_an_act_this_file_or_another_performs() {
             }
         }
     }
-}
-
-/// Tick PN-07's degraded-condition acknowledgement against the set in force for `id`, as a
-/// person at the dialog does (GAP-195, D-132): this test's picture is degraded under test,
-/// and what it tests is something else.
-fn acknowledge_degraded(
-    state: &mut gungnir_app::state::AppState,
-    id: gungnir_ui::panels::approval_queue::PendingId,
-) {
-    let subsystems: Vec<String> = gungnir_app::workspace::decision_conditions(state, id)
-        .into_iter()
-        .map(|(subsystem, _)| subsystem.to_owned())
-        .collect();
-    state.select_approval(id);
-    state.dialog.degraded_acknowledged = true;
-    state.dialog.acknowledged_for = subsystems;
 }

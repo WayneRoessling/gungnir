@@ -58,17 +58,27 @@ decided how GAP-195 is built.
   desktop after upgrading, would arrive with its acknowledgements and be answered
   `Contradicts`. A forward is re-sent only when its first answer was lost, and a desktop and
   its node are upgraded together, so this was left as it is and stated here.
-- **Most test desktops are degraded, and many tests decide on them.** A desktop under test
-  usually has tracking not running, ingest short of an adapter, or a planner never asked,
-  and until now only PN-07's button knew. The first full run after the change refused
-  eleven decisions in seven test files (`approval_gate`, `audit_one_entry_per_act`,
-  `audit_trail`, `cut_off_and_reconnected`, `endpoint_delivery`,
-  `no_execution_without_decision`, `report_reaches_one_handoff`), every one with
-  `Unacknowledged` naming a real condition. Those tests are about something else, so each
-  now ticks the set in force before deciding, as a person at the dialog would. The rule was
-  not relaxed for them. `rehearsal_advisory.rs` ticks them too, before asking about the
-  rehearsal statement, and its assertions now expect the degraded acknowledgements first
-  and the rehearsal last.
+- **Most test desktops were degraded, and many tests decided on them.** The first full run
+  after the change refused eleven decisions in seven test files (`approval_gate`,
+  `audit_one_entry_per_act`, `audit_trail`, `cut_off_and_reconnected`,
+  `endpoint_delivery`, `no_execution_without_decision`, `report_reaches_one_handoff`),
+  each naming a real condition, and the two in `rehearsal_advisory.rs` likewise. The
+  causes were three, all true of the test desktop and none what the test was about:
+  `AppState::health` reports every service unhealthy until the first `update::tick`, and
+  several tests decided before one; the ingest gateway is unhealthy with fewer adapters
+  bound than it expects (one per configured sensor, and at least one), and none bound any;
+  and `cut_off_and_reconnected`'s stub planner answered `NoPlan`, the planner never having
+  answered, when the test meant a planner with nothing to propose.
+- **So those tests now have the picture they assume, rather than acknowledging one they do
+  not.** A first pass ticked the degraded set before each decision; the owner asked for
+  tests that make sense instead, and that pass was replaced. `tests/support/healthy.rs`
+  binds a quiet feed per configured sensor -- connected, nothing to report -- and lets the
+  services report once; each of those tests calls it before deciding, and the round-1
+  desktop in `rehearsal_advisory.rs` calls it when built, which leaves that file's GAP-107
+  assertions exactly as they were. The stub planner answers the empty fresh plan the real
+  planner gives a picture with nothing to solve (GAP-066). `degraded_acknowledgement.rs`
+  starts healthy and then fails the journal, so it names the one condition it tests. No
+  rule was relaxed for any of them.
 - **An item the queue does not hold asks nothing.** The same run showed `decide` asking for
   acknowledgements before learning the item was gone, so a decision on a missing item said
   "unacknowledged" instead of "not found". `decide` now asks only for an item its queue

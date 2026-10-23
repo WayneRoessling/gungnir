@@ -13,9 +13,9 @@
 //! `CommandEvent::Decided` and the decision's audit entry, one acknowledgement per
 //! condition, subject `degraded <subsystem>` and statement as PN-07 drew it.
 //!
-//! The conditions are read from the desktop rather than assumed, so the test holds
-//! whatever a fresh desktop reports about its own health; the journal failing is set to
-//! be sure at least one is in force.
+//! The desktop starts healthy -- every feed bound and the services reported
+//! (`support/healthy.rs`) -- and then its journal fails, so exactly one condition is in
+//! force and the test says which.
 
 use gungnir_app::state::AppState;
 use gungnir_app::{decisions, update, workspace};
@@ -31,8 +31,11 @@ use gungnir_security::{AuditLog, Role};
 use gungnir_time::ReplayClockAuthority;
 use gungnir_ui::panels::approval_queue::PendingId;
 
-/// A desktop with no laydown, so no rehearsal statement is asked (D-119), acting as a
-/// supervisor, who may accept and override, with its journal failing.
+#[path = "support/healthy.rs"]
+mod healthy;
+
+/// A healthy desktop with no laydown, so no rehearsal statement is asked (D-119), acting
+/// as a supervisor, who may accept and override -- and then its journal fails.
 fn desktop(name: &str) -> AppState {
     let dir = std::env::temp_dir().join(format!("gungnir-degraded-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -45,6 +48,7 @@ fn desktop(name: &str) -> AppState {
         current: MissionTime(100.0),
     });
     state.set_role(Role::Supervisor);
+    healthy::healthy(&mut state);
     state.journal_failed = true;
     state
 }
@@ -97,7 +101,11 @@ fn a_decision_on_a_degraded_picture_records_what_was_acknowledged() {
     let item = queued(&mut state, 1);
     let conditions = workspace::decision_conditions(&state, item);
     let subsystems: Vec<&str> = conditions.iter().map(|(s, _)| *s).collect();
-    assert!(subsystems.contains(&"journal"), "{subsystems:?}");
+    assert_eq!(
+        subsystems,
+        ["journal"],
+        "a healthy desktop whose journal failed"
+    );
 
     // Refused without the tick, for an accept and for an override alike; the refusal
     // names the first condition, and nothing is recorded.

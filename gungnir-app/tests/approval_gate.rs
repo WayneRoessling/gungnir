@@ -27,6 +27,9 @@ use gungnir_model::{
 use gungnir_policy::PolicyVerdict;
 use gungnir_ui::panels::approval_queue::EmptyBecause;
 
+#[path = "support/healthy.rs"]
+mod healthy;
+
 /// A desktop over a scratch journal directory, so a test never writes into the
 /// developer's `./gungnir-journal`.
 fn desktop(name: &str) -> AppState {
@@ -522,25 +525,9 @@ mod decide_is_authorized_where_it_acts {
         let mut state = desktop("gap127-allowed");
         let item = queued(&mut state, "Operator");
         state.set_role(Role::Operator);
-        super::acknowledge_degraded(&mut state, PendingId(item.0));
+        super::healthy::healthy(&mut state);
         decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted)
             .expect("the Operator may accept an item offered to the Operator");
         assert_eq!(state.desk.approvals.records().len(), 1);
     }
-}
-
-/// Tick PN-07's degraded-condition acknowledgement against the set in force for `id`, as a
-/// person at the dialog does (GAP-195, D-132): this test's picture is degraded under test,
-/// and what it tests is something else.
-fn acknowledge_degraded(
-    state: &mut gungnir_app::state::AppState,
-    id: gungnir_ui::panels::approval_queue::PendingId,
-) {
-    let subsystems: Vec<String> = gungnir_app::workspace::decision_conditions(state, id)
-        .into_iter()
-        .map(|(subsystem, _)| subsystem.to_owned())
-        .collect();
-    state.select_approval(id);
-    state.dialog.degraded_acknowledged = true;
-    state.dialog.acknowledged_for = subsystems;
 }
