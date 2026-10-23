@@ -68,6 +68,20 @@ ignore = [
     # ab_glyph moves to ttf-parser's successor and egui takes that release; loading a
     # user-supplied font before then would need this entry removed first.
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser: parses only the four fonts embedded at build time, never a file from outside; no upstream path until ab_glyph moves (owner, 2026-09-07)" },
+    # zbus_names, zvariant and zvariant_derive were merged into zbus 6.0 (2026-10-16) and
+    # are no longer maintained apart from it. They ship on Linux by two paths, and the
+    # first reaches a released binary: keyring's Secret Service store
+    # (zbus-secret-service-keyring-store, secret-service) into gungnir-security, so
+    # gungnir-node and gungnir-app; and accesskit_unix (atspi) under eframe into
+    # gungnir-app. Both speak D-Bus to the local session bus only, never a network peer.
+    # No upstream path: secret-service 5.2.0, the keyring store 1.0.1, accesskit_unix
+    # 0.24.0 and atspi 0.30.0 all require zbus 5, and forking them was rejected. These
+    # entries come out once secret-service and accesskit_unix release on zbus 6, or at
+    # once if a defect is published against any of the three. Decided by the owner
+    # 2026-10-23.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: keyring Secret Service (gungnir-node, gungnir-app) and accesskit_unix (gungnir-app) on Linux, local D-Bus only; out when secret-service and accesskit_unix move to zbus 6 (owner, 2026-10-23)" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: keyring Secret Service (gungnir-node, gungnir-app) and accesskit_unix (gungnir-app) on Linux, local D-Bus only; out when secret-service and accesskit_unix move to zbus 6 (owner, 2026-10-23)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: proc-macro under zvariant, same paths; out when secret-service and accesskit_unix move to zbus 6 (owner, 2026-10-23)" },
 ]
 
 # The workspace is AGPL-3.0-or-later, so every entry below must be one-way compatible

@@ -417,6 +417,23 @@ outcomes are explained in `../../record/`; mission outcomes in `../mission-analy
   reaches a derivative under AGPL section 5(d). PN-21 is the twenty-first panel and is
   in `../../ux/information-architecture.md` §3 and `ux-to-code-map.md` §1; it is in no
   role's layout by design, and two tests hold that open.
+- D-34's advisories gate **failed again on 2026-10-23**, on advisories published after
+  main last passed it (2026-09-27), and was found on PR #200. Seven were patch updates in
+  `Cargo.lock` alone: `rustls` 0.23.46 (RUSTSEC-2026-0346 to -0349), `rustls-webpki`
+  0.103.16 (RUSTSEC-2026-0382), `ctutils` 0.4.5 (RUSTSEC-2026-0385) and `clipboard-win`
+  5.4.3, whose 5.4.1 was yanked. The other three are unmaintained notices for
+  `zbus_names`, `zvariant` and `zvariant_derive` (RUSTSEC-2026-0370 to -0372), merged into
+  zbus 6.0 on 2026-10-16. They are not confined to the Linux desktop, as the quick-xml
+  entries are: `keyring`'s Secret Service store carries them into `gungnir-security`, and
+  so into the released Linux `gungnir-node`, besides `accesskit_unix` into `gungnir-app`.
+  Nothing upstream has a zbus 6 release (`secret-service` 5.2.0, the keyring store
+  1.0.1, `accesskit_unix` 0.24.0, `atspi` 0.30.0), and the newest `eframe` (0.37.0)
+  still takes zbus 5. **The owner decided on 2026-10-23 to ignore all three** in
+  `deny.toml`, each entry naming both paths and that they speak D-Bus to the local
+  session bus only, and each coming out once `secret-service` and `accesskit_unix`
+  release on zbus 6, or at once if a defect is published. Forking the four crates was
+  not taken (four crates of a D-Bus path with no section 2.9 row), nor was dropping the
+  Secret Service backend, which would have the Linux node refuse the OS keystore.
 - D-40, D-41 and D-42 (2026-09-08) each un-blocked an owner-only judgement call the
   register had been carrying: the ML inference runtime GAP-077 deferred (`ort`, native
   dependency accepted, `download-binaries` refused for its third-party-CDN telemetry
