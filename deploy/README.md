@@ -98,12 +98,11 @@ Every other vertical datum is refused by name, and so is a NAVD88 height outside
 GEOID18's grid: Alaska and Hawaii NAVD88 is NOAA's GEOID12B, which is not pinned.
 
 **What a NAVD88 height is worth.** GEOID18 turns a NAVD88 height into a NAD83(2011)
-ellipsoidal height, and the desktop reads that as a WGS-84 one, the same null step PROJ
-itself takes for NAD83 horizontally. The two frames differ by one to two metres
-horizontally and up to a metre vertically across the United States (1.4 m and -0.38 m at
-the Autzen fixture in Oregon), so a NAVD88 surface lands to the metre in WGS-84 terms,
-not to the centimetre. EGM2008 and EGM96 heights land to the grids' own interpolation,
-centimetres.
+ellipsoidal height, and since GAP-200 (D-127) the desktop carries that to WGS 84 by EPSG's
+time-dependent ITRF2014 to NAD83(2011) transformation at the picture's epoch, so it lands
+to GEOID18's own centimetres rather than the metre the null step left (-0.38 m at the
+Autzen fixture). EGM2008 and EGM96 heights land to the grids' own interpolation,
+centimetres. "NAD83 positions and the frame epoch" below has the horizontal half.
 
 Fetch the grids from PROJ's own CDN and check them before use:
 
@@ -143,8 +142,8 @@ off the render thread, and PN-09 gives one line per grid saying which of these h
   alert;
 - **none installed**.
 
-A grid is used only when it is verified. A `geoid_grid_dir` that holds none of the three
-is taken for a mistake: every grid is refused as missing, with one alert naming the
+A grid is used only when it is verified. A `geoid_grid_dir` that holds none of the pinned
+grids is taken for a mistake: every grid is refused as missing, with one alert naming the
 directory. One that holds some has just not installed the rest. Without a height's grid,
 the terrain or point-cloud pair that states that height is refused and not drawn. It is
 never converted with another model's separation, and never used unconverted.
@@ -178,6 +177,53 @@ A DEM whose `GeoTIFF` keys state no vertical system, which is most of them, need
 does state one, a baseline that contradicts it is refused. A DEM's heights must be
 metres (a `VerticalGeoKey` of 6360 or 8228 is refused at load); a point cloud's are
 scaled from the unit the file states.
+
+### NAD83 positions and the frame epoch
+
+A DEM or point cloud whose horizontal system is NAD83 -- most United States data -- is
+carried to WGS 84 by its realisation and the picture's epoch (GAP-200, D-127, D-128), not
+by PROJ's null step, which left it one to two metres off:
+
+- **NAD83(2011)** goes straight to WGS 84 by EPSG's ITRF2014 to NAD83(2011) Helmert at the
+  epoch, WGS 84 read as ITRF2014 to centimetres. No grid is needed.
+- **An older realisation** is first carried to NAD83(2011) through NOAA's NADCON5 grids
+  for the conterminous United States, one per step, then the same Helmert:
+
+  | Step | Grid | Bytes |
+  |---|---|---|
+  | NAD83(1986) to NAD83(HARN) | `us_noaa_nadcon5_nad83_1986_nad83_harn_conus.tif` | 3 522 682 |
+  | NAD83(HARN) to NAD83(FBN) | `us_noaa_nadcon5_nad83_harn_nad83_fbn_conus.tif` | 9 111 570 |
+  | NAD83(FBN) to NAD83(NSRS2007) | `us_noaa_nadcon5_nad83_fbn_nad83_2007_conus.tif` | 42 709 110 |
+  | NAD83(NSRS2007) to NAD83(2011) | `us_noaa_nadcon5_nad83_2007_nad83_2011_conus.tif` | 39 965 338 |
+
+  A file in NAD83(HARN) needs the last three; one in NAD83(NSRS2007) the last one.
+  NAD83(CORS96) has no grid of its own and is read as NSRS2007, which held the CORS at
+  their CORS96 coordinates. The grids are pinned in `geoid/SHA256SUMS` beside the geoid
+  ones, installed in the same directory, verified the same way, and listed on PN-09 the
+  same way. A position outside them is refused by name.
+- **A file in the unqualified NAD83** (EPSG datum 6269, the code most US LIDAR carries)
+  is ambiguous: the code names the 1986 adjustment, but most surveys labelled with it are
+  NAD83(2011), and the two sit up to a metre apart. Declare which it is, by the
+  realisation's geographic code, or the file is refused by name:
+
+  ```json
+  { "terrain": { "path": "...", "frame": "epsg:26910", "vertical": "epsg:5703",
+                 "nad83_realisation": "epsg:6318" } }
+  ```
+
+  `"epsg:6318"` is NAD83(2011), `"epsg:4759"` NSRS2007, `"epsg:8860"` FBN, `"epsg:4152"`
+  HARN, `"epsg:6783"` CORS96 and `"epsg:4269"` the 1986 adjustment. `point_cloud` takes
+  the same field. A file that names its realisation is taken at its word, and a
+  declaration that contradicts it is refused.
+
+**The epoch is the picture's.** A NAD83(2011) point's coordinates do not change, while its
+place in WGS 84 moves about 2 cm a year, and the tracks a surface is drawn against are
+measured now. So the epoch is the current date unless the baseline pins one, for a
+replay or a test that must give the same answer every year:
+
+```json
+{ "version": 1, "frame_epoch": 2026.5 }
+```
 
 ### Pinning a further geoid grid
 

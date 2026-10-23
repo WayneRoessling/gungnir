@@ -265,25 +265,72 @@ fn place(state: &AppState, buffer: PointBuffer) -> Result<PointBuffer, String> {
             let Some(frame) = crate::sustainment::local_frame(state) else {
                 return Err("the baseline declares no origin to convert onto".to_string());
             };
-            convert(&buffer, &source, vertical_metres, &heights, &frame).map_err(|e| e.to_string())
+            let realisation = Realisation {
+                declared: state
+                    .config
+                    .point_cloud
+                    .as_ref()
+                    .and_then(|pc| pc.nad83_realisation.as_deref()),
+                epoch: crate::geoid::frame_epoch(&state.config),
+                grids: &state.geoid,
+            };
+            convert(
+                &buffer,
+                &source,
+                vertical_metres,
+                &heights,
+                &realisation,
+                &frame,
+            )
+            .map_err(|e| e.to_string())
         }
     }
 }
 
+/// What the frame step of a conversion is decided from (GAP-200, D-127, D-128): the
+/// baseline's `point_cloud.nad83_realisation`, the picture's epoch, and the deployment's
+/// verified NADCON5 grids.
+// Read only by the `crs` build's `convert`; a build without it refuses the conversion
+// before any of this matters, and still carries it so the two `convert`s share a shape.
+#[cfg_attr(not(feature = "crs"), allow(dead_code))]
+struct Realisation<'a> {
+    declared: Option<&'a str>,
+    epoch: f64,
+    grids: &'a crate::geoid::GeoidGrids,
+}
+
 /// The conversion, when this binary was built with the `crs` feature.
+///
+/// The frame step is decided here, from the file's own definition read through PROJ: a
+/// NAD83 pair is carried to WGS 84 by its realisation and the epoch (GAP-200), and the
+/// realisation of an unqualified NAD83 pair is the baseline's to declare.
 #[cfg(feature = "crs")]
 fn convert(
     buffer: &PointBuffer,
     source: &str,
     vertical_metres: f64,
     heights: &gungnir_data::geoid::HeightReference,
+    realisation: &Realisation<'_>,
     frame: &gungnir_model::LocalFrame,
 ) -> Result<PointBuffer, DataError> {
+    const FIELD: &str = "point_cloud.nad83_realisation";
+    let declared = crate::geoid::declared_realisation(FIELD, realisation.declared)
+        .map_err(DataError::Parse)?;
+    let file = gungnir_data::nad83::horizontal_datum(source)?;
+    let conversion = gungnir_data::nad83::FrameConversion::resolve(
+        FIELD,
+        file,
+        declared,
+        realisation.epoch,
+        &|step| realisation.grids.grid(step),
+    )
+    .map_err(DataError::Parse)?;
     gungnir_data::pointcloud::crs::to_local_enu(
         buffer,
         source,
         vertical_metres,
         heights,
+        &conversion,
         &|[lat_rad, lon_rad, alt_m]| {
             frame.to_enu(gungnir_model::Geodetic {
                 lat_rad,
@@ -306,6 +353,7 @@ fn convert(
     _source: &str,
     _vertical_metres: f64,
     _heights: &gungnir_data::geoid::HeightReference,
+    _realisation: &Realisation<'_>,
     _frame: &gungnir_model::LocalFrame,
 ) -> Result<PointBuffer, DataError> {
     Err(DataError::NotImplemented {

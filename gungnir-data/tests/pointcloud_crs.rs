@@ -128,6 +128,22 @@ fn passthrough(g: [f64; 3]) -> [f64; 3] {
 const HORIZONTAL_ONLY: gungnir_data::geoid::HeightReference =
     gungnir_data::geoid::HeightReference::Ellipsoidal;
 
+/// The epoch every frame step in this file is taken at (GAP-200, D-127): pinned, so the
+/// expected values hold every year rather than drifting 2 cm a year with the date.
+#[cfg(feature = "crs")]
+const EPOCH: f64 = 2020.0;
+
+/// **PROJ's own horizontal conversion, held still on purpose**, as [`HORIZONTAL_ONLY`]
+/// holds the vertical datum still: the Autzen capture is NAD83, which a deployment now
+/// carries to WGS 84 by its realisation (`nad83_frame_step` below), but these tests check
+/// the Lambert inverse and the US survey foot on their own, against `pyproj`'s
+/// projection-only figures. A NAVD88 height through GEOID18 still takes the Helmert's
+/// height difference at [`EPOCH`] under it (D-127).
+#[cfg(feature = "crs")]
+fn not_nad83() -> gungnir_data::nad83::FrameConversion {
+    gungnir_data::nad83::FrameConversion::not_nad83(EPOCH).expect("an epoch in range")
+}
+
 /// The committed GEOID18 clip (`testdata/geoid/SOURCE.md`).
 const GEOID18_CLIP_SHA256: &str =
     "a93c8ca6a47cc3d5a58ffeeac469aa9c8c9ca2400a0113a1976eb0a4bc9b16eb";
@@ -230,9 +246,15 @@ fn the_conversion_out_of_the_fixtures_own_crs_matches_an_independent_pyproj_run(
         origin: [637_250.0, 851_150.0, 500.0],
         ..pointcloud::PointBuffer::default()
     };
-    let out =
-        pointcloud::crs::to_local_enu(&one, &source, vertical, &HORIZONTAL_ONLY, &passthrough)
-            .expect("the fixture's own WKT is a CRS PROJ can transform from");
+    let out = pointcloud::crs::to_local_enu(
+        &one,
+        &source,
+        vertical,
+        &HORIZONTAL_ONLY,
+        &not_nad83(),
+        &passthrough,
+    )
+    .expect("the fixture's own WKT is a CRS PROJ can transform from");
 
     assert_eq!(out.positions.len(), 1);
     // A single point is its own minimum corner, so the whole answer is in `origin` and
@@ -269,9 +291,15 @@ fn every_point_of_the_real_cloud_converts_and_lands_inside_the_fixtures_own_boun
     let source = declared.proj_definition().expect("a WKT is a definition");
     let vertical = declared.vertical_unit_metres().expect("a VERT_CS");
 
-    let out =
-        pointcloud::crs::to_local_enu(&cloud, &source, vertical, &HORIZONTAL_ONLY, &passthrough)
-            .expect("converts");
+    let out = pointcloud::crs::to_local_enu(
+        &cloud,
+        &source,
+        vertical,
+        &HORIZONTAL_ONLY,
+        &not_nad83(),
+        &passthrough,
+    )
+    .expect("converts");
 
     assert_eq!(out.positions.len(), 4767, "no point is dropped");
     assert_eq!(out.intensity.as_ref().map(Vec::len), Some(4767));
@@ -325,9 +353,15 @@ fn an_unknown_crs_is_refused_by_name_rather_than_placed_somewhere_plausible() {
         origin: [1.0, 2.0, 3.0],
         ..pointcloud::PointBuffer::default()
     };
-    let err =
-        pointcloud::crs::to_local_enu(&one, "EPSG:999999", 1.0, &HORIZONTAL_ONLY, &passthrough)
-            .expect_err("999999 is not an EPSG code");
+    let err = pointcloud::crs::to_local_enu(
+        &one,
+        "EPSG:999999",
+        1.0,
+        &HORIZONTAL_ONLY,
+        &not_nad83(),
+        &passthrough,
+    )
+    .expect_err("999999 is not an EPSG code");
     let text = err.to_string();
     assert!(
         text.contains("999999"),
@@ -348,11 +382,19 @@ fn an_unknown_crs_is_refused_by_name_rather_than_placed_somewhere_plausible() {
 // is the point: the metre-level NAD83(2011)-to-WGS-84 difference is unmodelled by PROJ's
 // own choice too (`gungnir_data::geoid`'s module documentation). The figures below are
 // that run's, transcribed; the script is not committed (the GAP-102 precedent).
+//
+// **Since GAP-200 (D-127) each height also carries the Helmert's height difference.** A
+// NAVD88 height is a NAD83(2011) ellipsoidal one once GEOID18 has run, and the frame step
+// to WGS 84 changes it by -0.3701 m here at epoch 2020.0 (between -0.37010 and -0.37014 m
+// across the fixture). The same `pyproj` gave that difference from PROJ's own
+// "Inverse of ITRF2014 to NAD83(2011) (1)" at each point, and each height below is the
+// run above plus it. The positions stay PROJ's own (`not_nad83`), so the projection and
+// the geoid step stay checked on their own.
 
 /// The centre of `QUERY_BOX` (X=637250, Y=851150, Z=500 ftUS) converts to longitude
 /// -123.06889823098363, latitude 44.056081952041154 and an ellipsoidal height of
-/// 129.06263075346988 m: 152.4003048006096 m of NAVD88 height plus GEOID18's
-/// -23.33767404713973 m there. The horizontal pair is unchanged from the horizontal-only
+/// 128.6925129932065 m: 152.4003048006096 m of NAVD88 height plus GEOID18's
+/// -23.33767404713973 m there, plus the Helmert's -0.3701177602633834 m at 2020.0. The horizontal pair is unchanged from the horizontal-only
 /// test above, to all seventeen digits.
 #[test]
 #[cfg(feature = "crs")]
@@ -373,6 +415,7 @@ fn the_real_capture_converts_through_geoid18_to_the_pyproj_heights() {
         &source,
         vertical,
         &HeightReference::Geoid(GeoidModel::Geoid18Conus, geoid18_clip()),
+        &not_nad83(),
         &passthrough,
     )
     .expect("inside the clip");
@@ -381,8 +424,8 @@ fn the_real_capture_converts_through_geoid18_to_the_pyproj_heights() {
     assert!((lat_deg - 44.056_081_952_041_154).abs() < 1e-9, "{lat_deg}");
     assert!((lon_deg + 123.068_898_230_983_63).abs() < 1e-9, "{lon_deg}");
     assert!(
-        (h_m - 129.062_630_753_469_88).abs() < 1e-6,
-        "height {h_m}, pyproj 129.06263075346988"
+        (h_m - 128.692_512_993_206_5).abs() < 1e-6,
+        "height {h_m}, pyproj 128.6925129932065"
     );
 }
 
@@ -404,6 +447,7 @@ fn every_point_of_the_real_cloud_converts_through_geoid18_where_pyproj_puts_it()
         &source,
         vertical,
         &HeightReference::Geoid(GeoidModel::Geoid18Conus, geoid18_clip()),
+        &not_nad83(),
         &passthrough,
     )
     .expect("every point is inside the clip");
@@ -414,7 +458,7 @@ fn every_point_of_the_real_cloud_converts_through_geoid18_where_pyproj_puts_it()
             [
                 -123.069_093_314_703,
                 44.056_210_851_503_74,
-                105.001_931_506_726_11,
+                104.631_820_927_891_1,
             ],
         ),
         (
@@ -422,7 +466,7 @@ fn every_point_of_the_real_cloud_converts_through_geoid18_where_pyproj_puts_it()
             [
                 -123.068_845_818_079_5,
                 44.056_215_340_207_004,
-                104.611_480_919_130_27,
+                104.241_364_547_468_85,
             ],
         ),
         (
@@ -430,7 +474,7 @@ fn every_point_of_the_real_cloud_converts_through_geoid18_where_pyproj_puts_it()
             [
                 -123.068_993_638_646_72,
                 44.055_995_495_492_74,
-                104.642_111_361_520_62,
+                104.271_994_162_844_75,
             ],
         ),
     ] {
@@ -511,6 +555,7 @@ fn a_geokey_file_in_navd88_feet_converts_through_geoid18_where_pyproj_puts_it() 
         &source,
         vertical,
         &HeightReference::Geoid(GeoidModel::Geoid18Conus, geoid18_clip()),
+        &not_nad83(),
         &passthrough,
     )
     .expect("inside the clip");
@@ -518,27 +563,27 @@ fn a_geokey_file_in_navd88_feet_converts_through_geoid18_where_pyproj_puts_it() 
         [
             -123.068_898_230_983_63,
             44.056_081_952_041_154,
-            129.062_630_753_469_88,
+            128.692_512_993_206_5,
         ],
         [
             -123.074_986_743_530_63,
             44.049_718_818_802_12,
-            100.461_202_001_772_02,
+            100.091_103_403_470_61,
         ],
         [
             -123.062_512_596_976_29,
             44.062_780_307_017_22,
-            164.187_469_121_073_86,
+            163.817_331_800_242_44,
         ],
         [
             -123.069_082_419_779_08,
             44.055_940_538_335_6,
-            113.975_208_200_441_46,
+            113.605_092_029_014_39,
         ],
         [
             -123.066_147_183_440_44,
             44.058_477_365_450_614,
-            104.751_794_960_105_09,
+            104.381_659_087_480_27,
         ],
     ]
     .into_iter()
@@ -566,4 +611,195 @@ fn a_geokey_file_in_navd88_feet_converts_through_geoid18_where_pyproj_puts_it() 
         );
         assert!((got[2] - h).abs() < 1e-5, "point {i}: height {}", got[2]);
     }
+}
+
+// -- GAP-200 (D-127, D-128): the Autzen capture carried to WGS 84 by its realisation ----
+//
+// **The independent values.** `pyproj` 3.8.0 (PROJ 9.8.1), network off, with the four
+// full pinned NADCON5 grids on its data path, took the query-box centre from EPSG:2992 to
+// EPSG:4269 (the Lambert inverse alone, in the file's own datum), then from each
+// realisation's geographic system to NAD83(2011) by PROJ's own choice of operation (none
+// for NAD83(2011); NADCON5's grids for the others), then "Inverse of ITRF2014 to
+// NAD83(2011) (1)" at epoch 2020.0. The height is the NAVD88 height plus GEOID18 plus
+// that operation's height difference. The figures are transcribed; the clips agree with
+// the full grids to 0.6 mm at most over this area (`testdata/nadcon5/SOURCE.md`), so the
+// horizontal tolerance is 1e-8 degree (about a millimetre).
+
+/// The four NADCON5 clips (`testdata/nadcon5/SOURCE.md`), as the verified grids a
+/// deployment would hold.
+#[cfg(feature = "crs")]
+fn nadcon5_clip(
+    step: gungnir_data::nad83::Nadcon5Step,
+) -> Result<gungnir_data::geoid::GeoidGrid, String> {
+    use gungnir_data::nad83::Nadcon5Step;
+    let (file, sha256) = match step {
+        Nadcon5Step::Nad83ToHarn => (
+            "nadcon5_1986_harn_clip_43n45n_124w122w.tif",
+            "2c1de773467589732394ca55fba70e194969b23cbcfb78c9b0655125804c1828",
+        ),
+        Nadcon5Step::HarnToFbn => (
+            "nadcon5_harn_fbn_clip_43n45n_124w122w.tif",
+            "efd6c9de5569ab7e6451be9a5deda1cf079c75ffee8a74ac10c5b80ab29bb639",
+        ),
+        Nadcon5Step::FbnToNsrs2007 => (
+            "nadcon5_fbn_2007_clip_43n45n_124w122w.tif",
+            "2cf42b29211aaf3a6b0ac20ccbfcc6bb623c1badb580770a1c263edae20f8a80",
+        ),
+        Nadcon5Step::Nsrs2007To2011 => (
+            "nadcon5_2007_2011_clip_43n45n_124w122w.tif",
+            "a460457996126ebef3a71232aa7f25e50bef8207516ab0e81648d7189e1eebe5",
+        ),
+    };
+    gungnir_data::geoid::GeoidGrid::verify(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../testdata/nadcon5")
+            .join(file),
+        sha256,
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// D-128 on the real capture: its datum, read by PROJ from its own WKT, is the
+/// unqualified NAD83, refused without a declaration and taken as the declared realisation
+/// with one; a realisation whose grids are missing is refused naming the grid.
+#[test]
+#[cfg(feature = "crs")]
+fn the_real_capture_is_unqualified_nad83_and_needs_its_realisation_declared() {
+    use gungnir_data::nad83::{FrameConversion, HorizontalDatum, Realisation};
+    let declared = autzen().crs.clone().expect("the fixture declares a CRS");
+    let source = declared.proj_definition().expect("a WKT is a definition");
+    let file = gungnir_data::nad83::horizontal_datum(&source).expect("PROJ reads the WKT");
+    assert_eq!(file, HorizontalDatum::Nad83Unqualified);
+    assert_eq!(
+        gungnir_data::nad83::horizontal_datum("EPSG:2992").expect("a code"),
+        HorizontalDatum::Nad83Unqualified
+    );
+    assert_eq!(
+        gungnir_data::nad83::horizontal_datum("EPSG:6339").expect("UTM 10N on NAD83(2011)"),
+        HorizontalDatum::Nad83(Realisation::Nad83_2011)
+    );
+    assert_eq!(
+        gungnir_data::nad83::horizontal_datum("EPSG:32610").expect("UTM 10N on WGS 84"),
+        HorizontalDatum::NotNad83
+    );
+    let field = "point_cloud.nad83_realisation";
+    let refused = FrameConversion::resolve(field, file, None, EPOCH, &nadcon5_clip)
+        .expect_err("an unqualified NAD83 file needs its realisation declared");
+    assert!(refused.contains(field), "{refused}");
+    let missing = FrameConversion::resolve(field, file, Some(Realisation::Harn), EPOCH, &|step| {
+        Err(format!("{} is not there", step.file()))
+    })
+    .expect_err("HARN needs three NADCON5 grids");
+    assert!(
+        missing.contains("us_noaa_nadcon5_nad83_harn_nad83_fbn_conus.tif"),
+        "{missing}"
+    );
+    let conversion =
+        FrameConversion::resolve(field, file, Some(Realisation::Harn), EPOCH, &nadcon5_clip)
+            .expect("declared, with the clips");
+    let nad83 = conversion.nad83().expect("a NAD83 step");
+    assert_eq!(
+        nad83.unprojected_to(),
+        4269,
+        "unprojected in the file's own datum"
+    );
+    assert_eq!(nad83.step().realisation(), Realisation::Harn);
+}
+
+/// D-127 and D-128 end to end: the query-box centre, declared each of three
+/// realisations, lands where PROJ's own operations put it at epoch 2020.0 -- each a
+/// different place, up to 0.8 m from the null step's -- with the NAVD88 height through
+/// GEOID18 and the Helmert's height difference.
+#[test]
+#[cfg(feature = "crs")]
+fn the_real_capture_reaches_wgs_84_by_its_realisation_where_pyproj_puts_it() {
+    use gungnir_data::geoid::{GeoidModel, HeightReference};
+    use gungnir_data::nad83::{FrameConversion, Realisation};
+    let declared = autzen().crs.clone().expect("the fixture declares a CRS");
+    let source = declared.proj_definition().expect("a WKT is a definition");
+    let vertical = declared.vertical_unit_metres().expect("a VERT_CS");
+    let file = gungnir_data::nad83::horizontal_datum(&source).expect("PROJ reads the WKT");
+    let one = pointcloud::PointBuffer {
+        positions: vec![[0.0, 0.0, 0.0]],
+        origin: [637_250.0, 851_150.0, 500.0],
+        ..pointcloud::PointBuffer::default()
+    };
+    for (realisation, [lon, lat, h]) in [
+        (
+            Realisation::Nad83_2011,
+            [
+                -123.068_916_764_793_5,
+                44.056_084_529_291_53,
+                128.692_513_484_944_8,
+            ],
+        ),
+        (
+            Realisation::Harn,
+            [
+                -123.068_916_311_826_33,
+                44.056_085_968_351_85,
+                128.692_513_504_502_59,
+            ],
+        ),
+        (
+            Realisation::Nad83_1986,
+            [
+                -123.068_908_997_868_28,
+                44.056_081_759_368_89,
+                128.692_513_246_526_23,
+            ],
+        ),
+    ] {
+        let conversion = FrameConversion::resolve(
+            "point_cloud.nad83_realisation",
+            file,
+            Some(realisation),
+            EPOCH,
+            &nadcon5_clip,
+        )
+        .expect("declared, with the clips");
+        let out = pointcloud::crs::to_local_enu(
+            &one,
+            &source,
+            vertical,
+            &HeightReference::Geoid(GeoidModel::Geoid18Conus, geoid18_clip()),
+            &conversion,
+            &passthrough,
+        )
+        .expect("inside every clip");
+        let [got_lat, got_lon, got_h] = out.origin;
+        assert!(
+            (got_lat - lat).abs() < 1e-8,
+            "{realisation}: latitude {got_lat}, pyproj {lat}"
+        );
+        assert!(
+            (got_lon - lon).abs() < 1e-8,
+            "{realisation}: longitude {got_lon}, pyproj {lon}"
+        );
+        // GEOID18 is read at the converted WGS 84 position, about 1.5 m from the NAD83(2011)
+        // one it is indexed by and pyproj read it at: 0.02 mm here, so a tenth of a mm.
+        assert!(
+            (got_h - h).abs() < 1e-4,
+            "{realisation}: height {got_h}, pyproj {h}"
+        );
+    }
+}
+
+/// The Helmert's height difference agrees with PROJ's own operation, and a position off a
+/// NADCON5 clip is refused rather than placed by a grid that does not reach it.
+#[test]
+#[cfg(feature = "crs")]
+fn the_height_difference_is_projs_and_a_position_off_the_grid_is_refused() {
+    use gungnir_data::nad83::{FrameStep, Realisation};
+    let dh = gungnir_data::nad83::nad83_2011_height_shift(
+        EPOCH,
+        &[[-123.068_898_230_983_63, 44.056_081_952_041_154]],
+    )
+    .expect("defined everywhere");
+    assert!((dh[0] + 0.370_117_760_263_383_4).abs() < 1e-9, "{dh:?}");
+    let step = FrameStep::new(Realisation::Harn, EPOCH, &nadcon5_clip).expect("the clips");
+    let refused = step
+        .to_wgs84(&[[-124.2, 44.0]])
+        .expect_err("124.2 W is west of every clip");
+    assert!(refused.to_string().contains("NAD83(HARN)"), "{refused}");
 }

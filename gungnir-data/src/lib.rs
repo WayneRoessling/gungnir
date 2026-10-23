@@ -17,6 +17,7 @@
 pub mod assets;
 pub mod geoid;
 pub mod geospatial;
+pub mod nad83;
 pub mod pointcloud;
 pub mod scientific;
 

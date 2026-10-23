@@ -97,6 +97,7 @@ fn desktop_vertical(
             path,
             frame: frame.into(),
             vertical: vertical.map(str::to_string),
+            nad83_realisation: None,
         }),
         geoid_grid_dir: Some(dir.join("no-grid-here").to_string_lossy().into_owned()),
         ..ConfigBaseline::default()

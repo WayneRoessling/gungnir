@@ -698,6 +698,50 @@ impl std::str::FromStr for VerticalFrame {
     }
 }
 
+/// A NAD83 realisation a baseline declares for an unqualified NAD83 file (GAP-200,
+/// D-128), by the EPSG code of the realisation's two-dimensional geographic system.
+///
+/// The six this deployment converts are [`Nad83Realisation::CODES`]; `gungnir-data`'s
+/// `nad83::Realisation` is what they mean, and `gungnir-app` holds the two lists equal
+/// by test, since this crate may not depend on that one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Nad83Realisation(pub u32);
+
+impl Nad83Realisation {
+    /// NAD83(2011), NSRS2007, FBN, HARN, CORS96 and the 1986 adjustment, by geographic
+    /// code.
+    pub const CODES: [(u32, &'static str); 6] = [
+        (6318, "NAD83(2011)"),
+        (4759, "NAD83(NSRS2007)"),
+        (8860, "NAD83(FBN)"),
+        (4152, "NAD83(HARN)"),
+        (6783, "NAD83(CORS96)"),
+        (4269, "NAD83(1986)"),
+    ];
+}
+
+impl std::str::FromStr for Nad83Realisation {
+    type Err = String;
+
+    /// `"epsg:<code>"`, the strict grammar of a frame's code, naming one of
+    /// [`Nad83Realisation::CODES`].
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_epsg_frame(s)
+            .filter(|code| Self::CODES.iter().any(|(c, _)| c == code))
+            .map(Nad83Realisation)
+            .ok_or_else(|| {
+                let known: Vec<String> = Self::CODES
+                    .iter()
+                    .map(|(code, name)| format!("\"epsg:{code}\" {name}"))
+                    .collect();
+                format!(
+                    "{s:?} is not a NAD83 realisation this deployment converts; declare one of {}",
+                    known.join(", ")
+                )
+            })
+    }
+}
+
 /// The terrain a deployment masks line of sight against (GAP-023).
 ///
 /// `frame` says what the file's coordinates are: `"local-enu"` (the DEM was prepared in
@@ -726,6 +770,18 @@ pub struct TerrainConfig {
     /// for this line rather than being drawn tens of metres off.
     #[serde(default)]
     pub vertical: Option<String>,
+    /// Which realisation of NAD83 an unqualified NAD83 DEM is in (GAP-200, D-128):
+    /// `"epsg:<code>"` naming the realisation's geographic system -- `6318` NAD83(2011),
+    /// `4759` NSRS2007, `8860` FBN, `4152` HARN, `6783` CORS96, `4269` the 1986
+    /// adjustment ([`Nad83Realisation`]).
+    ///
+    /// Read only when the DEM's horizontal datum is NAD83's. A file that states its
+    /// realisation is taken at its word and a declaration here that contradicts it is
+    /// refused; a file in the unqualified NAD83 with no declaration is refused by name,
+    /// because the realisations sit up to a metre apart and the unqualified code labels
+    /// most NAD83(2011) surveys as well as the 1986 adjustment it names. Absent by default.
+    #[serde(default)]
+    pub nad83_realisation: Option<String>,
 }
 
 fn default_terrain_frame() -> String {
@@ -788,6 +844,11 @@ pub struct PointCloudConfig {
     /// `VERT_CS` wins and a contradiction is refused, and nobody stating it is refused.
     #[serde(default)]
     pub vertical: Option<String>,
+    /// Which realisation of NAD83 an unqualified NAD83 pair is in (GAP-200, D-128), by
+    /// its geographic system's code ([`Nad83Realisation`]). The same rules as
+    /// [`TerrainConfig::nad83_realisation`].
+    #[serde(default)]
+    pub nad83_realisation: Option<String>,
 }
 
 impl PointCloudConfig {
@@ -1452,7 +1513,8 @@ pub struct ConfigBaseline {
     /// The directory holding the pinned geoid grids (GAP-108, D-121; GAP-197, D-125;
     /// `deploy/README.md`, "The geoid grids"): `us_nga_egm08_25.tif` (EGM2008),
     /// `us_nga_egm96_15.tif` (EGM96) and `us_noaa_g2018u0.tif` (GEOID18, for NAVD88),
-    /// any or all of them.
+    /// and since GAP-200 the four NADCON5 grids an older NAD83 realisation needs
+    /// (`deploy/README.md`, "NAD83 positions and the frame epoch"), any or all of them.
     ///
     /// Absent means the desktop looks in `PROJ_DATA` (PROJ's own convention, then its
     /// older `PROJ_LIB`), and a deployment with neither has no grid: a height in a datum
@@ -1461,6 +1523,13 @@ pub struct ConfigBaseline {
     /// PN-09 says which of those it is, grid by grid.
     #[serde(default)]
     pub geoid_grid_dir: Option<String>,
+    /// The epoch, as a decimal year, at which a NAD83 file's positions and a NAVD88
+    /// height are carried to WGS 84 (GAP-200, D-127). Absent means the current date: the
+    /// tracks a surface is drawn against are measured now, and the frames drift about
+    /// 2 cm a year apart. Pinning it is for replaying a recording against the picture as
+    /// it was, or for a test that must give the same answer every year.
+    #[serde(default)]
+    pub frame_epoch: Option<f64>,
     /// Per-role window arrangement (D-17, GAP-075). Absent means every role uses the
     /// default order `gungnir_workflow::WorkspaceLayout::for_role` produces.
     #[serde(default)]
@@ -1641,6 +1710,7 @@ impl Default for ConfigBaseline {
             terrain: None,
             point_cloud: None,
             geoid_grid_dir: None,
+            frame_epoch: None,
             ui: UiSettings::default(),
             vocabulary: Vocabulary::default(),
             analytics: AnalyticsConfig::default(),
@@ -2876,7 +2946,29 @@ fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     if let Some(Err(reason)) = t.vertical.as_deref().map(str::parse::<VerticalFrame>) {
         return Err(ConfigError::Invalid(format!("terrain.vertical {reason}")));
     }
+    if let Some(Err(reason)) = t
+        .nad83_realisation
+        .as_deref()
+        .map(str::parse::<Nad83Realisation>)
+    {
+        return Err(ConfigError::Invalid(format!(
+            "terrain.nad83_realisation {reason}"
+        )));
+    }
     Ok(())
+}
+
+/// GAP-200 (D-127): a pinned frame epoch is a decimal year a picture can be at. The
+/// bounds refuse only what cannot be a date: a typo of a year, a millisecond count, or a
+/// value that is not a number.
+fn validate_frame_epoch(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    match baseline.frame_epoch {
+        Some(epoch) if !(1990.0..=2100.0).contains(&epoch) => Err(ConfigError::Invalid(format!(
+            "frame_epoch {epoch} is not a decimal year between 1990 and 2100; give the epoch \
+             the picture is at, such as 2026.5, or leave the field out to use the current date"
+        ))),
+        _ => Ok(()),
+    }
 }
 
 /// GAP-108: a named geoid grid directory is a path, not an empty string. Its existence is
@@ -2921,6 +3013,15 @@ fn validate_point_cloud(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     if let Some(Err(reason)) = pc.vertical.as_deref().map(str::parse::<VerticalFrame>) {
         return Err(ConfigError::Invalid(format!(
             "point_cloud.vertical {reason}"
+        )));
+    }
+    if let Some(Err(reason)) = pc
+        .nad83_realisation
+        .as_deref()
+        .map(str::parse::<Nad83Realisation>)
+    {
+        return Err(ConfigError::Invalid(format!(
+            "point_cloud.nad83_realisation {reason}"
         )));
     }
     Ok(())
@@ -4013,6 +4114,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     validate_terrain(baseline)?;
     validate_point_cloud(baseline)?;
     validate_geoid_grid_dir(baseline)?;
+    validate_frame_epoch(baseline)?;
     validate_radar_feeds(baseline)?;
     validate_ais_feeds(baseline)?;
     validate_adsb_feeds(baseline)?;
@@ -5595,6 +5697,7 @@ MFkw
                 path: "dem/site.asc".into(),
                 frame: "local-enu".into(),
                 vertical: None,
+                nad83_realisation: None,
             }),
             ..ConfigBaseline::default()
         };
@@ -5603,6 +5706,7 @@ MFkw
             path: "dem/site.png".into(),
             frame: "local-enu".into(),
             vertical: None,
+            nad83_realisation: None,
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
         // GAP-023, D-41: a real-world CRS by EPSG code is now accepted syntactically --
@@ -5612,12 +5716,14 @@ MFkw
             path: "dem/site.tif".into(),
             frame: "EPSG:32633".into(),
             vertical: None,
+            nad83_realisation: None,
         });
         validate(&b).expect("a declared real-world CRS by EPSG code is valid");
         b.terrain = Some(TerrainConfig {
             path: "dem/site.tif".into(),
             frame: "epsg:4326".into(),
             vertical: None,
+            nad83_realisation: None,
         });
         validate(&b).expect("lowercase epsg: is accepted the same way");
         // Neither "local-enu" nor "epsg:<code>" is still refused, whatever the reason.
@@ -5625,12 +5731,14 @@ MFkw
             path: "dem/site.tif".into(),
             frame: "wgs84".into(),
             vertical: None,
+            nad83_realisation: None,
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
         b.terrain = Some(TerrainConfig {
             path: "dem/site.tif".into(),
             frame: "epsg:not-a-number".into(),
             vertical: None,
+            nad83_realisation: None,
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
     }
@@ -5673,6 +5781,7 @@ MFkw
                 path: "dem/site.tif".into(),
                 frame: "epsg:32633".into(),
                 vertical: Some("epsg:3855".into()),
+                nad83_realisation: None,
             }),
             geoid_grid_dir: Some("/opt/gungnir/geoid".into()),
             ..ConfigBaseline::default()
@@ -5692,6 +5801,61 @@ MFkw
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
     }
 
+    /// GAP-200 (D-128): a NAD83 realisation is declared by its geographic system's code,
+    /// one of the six this deployment converts, on the terrain and on the pair alike.
+    #[test]
+    fn a_nad83_realisation_is_one_of_the_six_by_its_geographic_code() {
+        assert_eq!("epsg:6318".parse(), Ok(Nad83Realisation(6318)));
+        assert_eq!("EPSG:4269".parse(), Ok(Nad83Realisation(4269)));
+        for refused in [
+            "",
+            "NAD83(2011)",
+            "epsg:4326",
+            "epsg:1116",
+            "epsg:0",
+            "2011",
+        ] {
+            let reason = refused
+                .parse::<Nad83Realisation>()
+                .expect_err("not a realisation by its geographic code");
+            assert!(reason.contains("epsg:6318"), "{refused:?}: {reason}");
+        }
+        let mut b = ConfigBaseline {
+            terrain: Some(TerrainConfig {
+                path: "dem/site.tif".into(),
+                frame: "epsg:26910".into(),
+                vertical: Some("epsg:5703".into()),
+                nad83_realisation: Some("epsg:6318".into()),
+            }),
+            ..ConfigBaseline::default()
+        };
+        validate(&b).expect("a NAD83(2011) declaration is valid");
+        if let Some(t) = b.terrain.as_mut() {
+            t.nad83_realisation = Some("epsg:4326".into());
+        }
+        let Err(ConfigError::Invalid(reason)) = validate(&b) else {
+            panic!("WGS 84 is not a NAD83 realisation");
+        };
+        assert!(reason.contains("terrain.nad83_realisation"), "{reason}");
+    }
+
+    /// GAP-200 (D-127): a pinned frame epoch is a decimal year a picture can be at.
+    #[test]
+    fn a_frame_epoch_is_a_decimal_year() {
+        let mut b = ConfigBaseline::default();
+        for good in [None, Some(1990.0), Some(2026.5), Some(2100.0)] {
+            b.frame_epoch = good;
+            validate(&b).expect("absent, or a year in range");
+        }
+        for bad in [1_989.9, 2_100.1, 1_761_000_000.0, f64::NAN, f64::INFINITY] {
+            b.frame_epoch = Some(bad);
+            let Err(ConfigError::Invalid(reason)) = validate(&b) else {
+                panic!("{bad} is not a decimal year");
+            };
+            assert!(reason.contains("frame_epoch"), "{reason}");
+        }
+    }
+
     #[test]
     fn a_point_cloud_pair_needs_known_formats_bounds_only_on_copc_and_the_local_frame() {
         let file = |path: &str, bounds: Option<[f32; 6]>| PointCloudFileConfig {
@@ -5704,6 +5868,7 @@ MFkw
                 target: file("clouds/b.copc.laz", Some([0.0, 0.0, 0.0, 1.0, 1.0, 1.0])),
                 frame: "local-enu".into(),
                 vertical: None,
+                nad83_realisation: None,
             }),
             ..ConfigBaseline::default()
         };

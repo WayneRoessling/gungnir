@@ -37,17 +37,14 @@
 //! **How accurate each chain is, stated rather than implied.** EGM2008 and EGM96 heights
 //! are defined by their own models, and their grids take them to WGS-84 ellipsoidal
 //! heights to within the grids' interpolation: centimetres, more in steep mountains for
-//! the coarser EGM96 grid. **A NAVD88 height does not reach WGS 84 that well.** GEOID18
-//! relates NAVD88 to **NAD83(2011)** ellipsoidal heights, at NOAA's stated centimetre
-//! level; this workspace then reads that NAD83(2011) height as a WGS-84 one, with no
-//! frame step, exactly as the horizontal conversion already reads a NAD83 latitude and
-//! longitude as WGS-84 ones (PROJ's own choice for a 2D NAD83 source, and for the whole
-//! NAVD88 chain when it runs it itself, is the null "NAD83(2011) to WGS 84 (1)"). The
-//! two frames differ by about a metre or two horizontally and up to a metre vertically
-//! across the United States: at the Autzen fixture, 1.4 m and -0.38 m at epoch 2010.0
-//! (`pyproj`, "Inverse of ITRF2014 to NAD83(2011) (1)"). So a NAVD88 surface lands at
-//! the metre level in WGS-84 terms -- tens of metres better than refusing it or reading
-//! it as ellipsoidal, and not the centimetres the geoid model alone would suggest.
+//! the coarser EGM96 grid. **A NAVD88 height takes one more step.** GEOID18 relates
+//! NAVD88 to **NAD83(2011)** ellipsoidal heights, at NOAA's stated centimetre level, and
+//! NAD83(2011) and WGS 84 differ by a metre or two horizontally and up to a metre
+//! vertically across the United States. Until GAP-200 this workspace read the NAD83(2011)
+//! height as a WGS-84 one, the null step PROJ's own choice takes, and stated it as
+//! metre-level (D-125). Since D-127 the height takes EPSG's time-dependent ITRF2014 to
+//! NAD83(2011) transformation at the picture's epoch (`crate::nad83`), -0.37 m at the
+//! Autzen fixture at 2020.0, and the horizontal position its realisation's chain.
 //!
 //! **The grids are deployment artifacts, never repository files.** EGM2008's is about
 //! 80 MB, GitHub refuses files over 100 MB and the repository should carry none of them
@@ -279,6 +276,94 @@ impl GeoidModel {
 }
 
 impl std::fmt::Display for GeoidModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Every grid a deployment pins: the geoid models (D-121, D-125) and the NADCON5 steps
+/// that carry an older NAD83 realisation to NAD83(2011) (GAP-200, D-128). Each is a
+/// PROJ-data file pinned by its digest, verified the same way ([`GeoidGrid::verify`]),
+/// looked for in the same place and reported on PN-09 line by line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PinnedGrid {
+    /// A geoid model's grid.
+    Geoid(GeoidModel),
+    /// A NADCON5 step's grid.
+    Nadcon5(crate::nad83::Nadcon5Step),
+}
+
+impl PinnedGrid {
+    /// Every pinned grid, in the order PN-09 lists them.
+    pub const ALL: [PinnedGrid; 7] = [
+        PinnedGrid::Geoid(GeoidModel::Egm2008),
+        PinnedGrid::Geoid(GeoidModel::Egm96),
+        PinnedGrid::Geoid(GeoidModel::Geoid18Conus),
+        PinnedGrid::Nadcon5(crate::nad83::Nadcon5Step::Nad83ToHarn),
+        PinnedGrid::Nadcon5(crate::nad83::Nadcon5Step::HarnToFbn),
+        PinnedGrid::Nadcon5(crate::nad83::Nadcon5Step::FbnToNsrs2007),
+        PinnedGrid::Nadcon5(crate::nad83::Nadcon5Step::Nsrs2007To2011),
+    ];
+
+    /// The grid's file name, as PROJ-data distributes it and a deployment installs it.
+    #[must_use]
+    pub fn file(self) -> &'static str {
+        match self {
+            PinnedGrid::Geoid(model) => model.file(),
+            PinnedGrid::Nadcon5(step) => step.file(),
+        }
+    }
+
+    /// The pinned SHA-256, lowercase hexadecimal.
+    #[must_use]
+    pub fn sha256(self) -> &'static str {
+        match self {
+            PinnedGrid::Geoid(model) => model.sha256(),
+            PinnedGrid::Nadcon5(step) => step.sha256(),
+        }
+    }
+
+    /// The pinned file's size, in bytes.
+    #[must_use]
+    pub fn bytes(self) -> u64 {
+        match self {
+            PinnedGrid::Geoid(model) => model.bytes(),
+            PinnedGrid::Nadcon5(step) => step.bytes(),
+        }
+    }
+
+    /// The grid as an operator reads it on PN-09.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            PinnedGrid::Geoid(model) => model.name(),
+            PinnedGrid::Nadcon5(step) => step.name(),
+        }
+    }
+
+    /// What it converts, in words a status line quotes.
+    #[must_use]
+    pub fn converts(self) -> &'static str {
+        match self {
+            PinnedGrid::Geoid(model) => model.heights(),
+            PinnedGrid::Nadcon5(_) => "NAD83 positions of an older realisation",
+        }
+    }
+}
+
+impl From<GeoidModel> for PinnedGrid {
+    fn from(model: GeoidModel) -> Self {
+        PinnedGrid::Geoid(model)
+    }
+}
+
+impl From<crate::nad83::Nadcon5Step> for PinnedGrid {
+    fn from(step: crate::nad83::Nadcon5Step) -> Self {
+        PinnedGrid::Nadcon5(step)
+    }
+}
+
+impl std::fmt::Display for PinnedGrid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.name())
     }
@@ -901,13 +986,16 @@ mod tests {
                 )
             })
             .collect();
-        assert_eq!(pinned.len(), GeoidModel::ALL.len(), "{pinned:?}");
-        for model in GeoidModel::ALL {
+        // Every pinned grid, the NADCON5 steps (GAP-200) with the geoid models.
+        assert_eq!(pinned.len(), PinnedGrid::ALL.len(), "{pinned:?}");
+        for grid in PinnedGrid::ALL {
             let line = pinned
                 .iter()
-                .find(|(_, file)| *file == model.file())
-                .unwrap_or_else(|| panic!("the manifest names {}", model.file()));
-            assert_eq!(line.0, model.sha256(), "{model}");
+                .find(|(_, file)| *file == grid.file())
+                .unwrap_or_else(|| panic!("the manifest names {}", grid.file()));
+            assert_eq!(line.0, grid.sha256(), "{grid}");
+        }
+        for model in GeoidModel::ALL {
             assert!(model.url().starts_with("https://cdn.proj.org/"), "{model}");
             assert!(model.url().ends_with(model.file()), "{model}");
         }
