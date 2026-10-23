@@ -572,6 +572,7 @@ fn the_pinned_grids_are_verified_at_start_and_place_a_dem() {
                 path,
                 frame: "epsg:32633".into(),
                 vertical,
+                nad83_realisation: None,
             }),
             geoid_grid_dir: Some(grid_dir.clone()),
             ..ConfigBaseline::default()
