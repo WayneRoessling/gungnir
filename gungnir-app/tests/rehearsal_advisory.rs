@@ -81,6 +81,22 @@ fn queued(state: &mut AppState, plan: u128) -> PendingApprovalId {
         .expect("queued")
 }
 
+/// Tick PN-07's degraded-condition acknowledgement against the set in force (GAP-195,
+/// D-132), so what these tests ask about is the rehearsal statement alone, and return
+/// what the decision will record for it.
+fn acknowledge_degraded(state: &mut AppState, item: PendingApprovalId) -> Vec<Acknowledgement> {
+    let conditions = workspace::decision_conditions(state, PendingId(item.0));
+    state.dialog.degraded_acknowledged = true;
+    state.dialog.acknowledged_for = conditions.iter().map(|(s, _)| (*s).to_owned()).collect();
+    conditions
+        .into_iter()
+        .map(|(subsystem, statement)| Acknowledgement {
+            subject: format!("degraded {subsystem}"),
+            statement,
+        })
+        .collect()
+}
+
 fn acknowledgements_decided(
     rx: &gungnir_eventing::Receiver<gungnir_eventing::Envelope>,
 ) -> Vec<Vec<Acknowledgement>> {
@@ -152,6 +168,7 @@ fn a_laydown_never_rehearsed_is_acknowledged_before_a_plan_is_acted_on() {
     // PN-07 says it, in its own section, with the tick.
     let item = queued(&mut state, 7);
     state.select_approval(PendingId(item.0));
+    acknowledge_degraded(&mut state, item);
     let mut dialog = state.dialog.clone();
     let (_, frame) = probe.draw(|ui| workspace::render_decision_dialog(ui, &state, &mut dialog));
     assert!(
@@ -202,6 +219,7 @@ fn a_laydown_never_rehearsed_is_acknowledged_before_a_plan_is_acted_on() {
 
     // With the tick against this sentence: recorded, published and audited with it.
     state.select_approval(PendingId(item.0));
+    let degraded = acknowledge_degraded(&mut state, item);
     state.dialog.rehearsal_acknowledged = Some(advisory.statement.clone());
     decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted)
         .expect("acknowledged, the acceptance is recorded");
@@ -212,14 +230,12 @@ fn a_laydown_never_rehearsed_is_acknowledged_before_a_plan_is_acted_on() {
         .iter()
         .find(|r| r.item == Some(item))
         .expect("the acceptance is on the record");
-    assert_eq!(record.acknowledged, vec![advisory.clone()]);
+    // The degraded conditions in force first (GAP-195), then the rehearsal statement.
+    let told = [degraded, vec![advisory.clone()]].concat();
+    assert_eq!(record.acknowledged, told);
     update::tick(&mut state);
     let decided = acknowledgements_decided(&events);
-    assert_eq!(
-        decided,
-        vec![Vec::new(), vec![advisory.clone()]],
-        "{decided:?}"
-    );
+    assert_eq!(decided, vec![Vec::new(), told], "{decided:?}");
     let entry = state
         .audit
         .entries()
@@ -263,9 +279,14 @@ fn a_laydown_rehearsed_under_what_is_running_asks_nothing_and_a_policy_change_as
 
         // A decision asks nothing and records nothing acknowledged.
         let item = queued(&mut state, 9);
+        state.select_approval(PendingId(item.0));
+        acknowledge_degraded(&mut state, item);
         decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted)
-            .expect("nothing to acknowledge");
-        assert!(state.desk.approvals.records()[0].acknowledged.is_empty());
+            .expect("nothing about the rehearsal to acknowledge");
+        assert!(!state.desk.approvals.records()[0]
+            .acknowledged
+            .iter()
+            .any(|a| a.subject == "rehearsal"));
         update::tick(&mut state);
         state.save_session().expect("saved");
     }
@@ -320,8 +341,10 @@ fn a_laydown_rehearsed_under_what_is_running_asks_nothing_and_a_policy_change_as
         advisory.statement
     );
     let item = queued(&mut state, 10);
+    state.select_approval(PendingId(item.0));
+    acknowledge_degraded(&mut state, item);
     assert!(matches!(
         decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted),
-        Err(CommandError::Unacknowledged { .. })
+        Err(CommandError::Unacknowledged { subject, .. }) if subject == "rehearsal"
     ));
 }

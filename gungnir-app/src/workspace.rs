@@ -1413,6 +1413,30 @@ fn alternative_rows<'a>(
 /// solve has since reached the same assignment for the picture on screen**: that is the
 /// plan in force and the planner is current, so there is nothing left to acknowledge
 /// about how it was reached.
+/// The degraded conditions PN-07 draws for queue item `id`, as (subsystem, detail): the
+/// conditions in force and the item's own interim plan, from whichever queue holds it.
+///
+/// For `decisions::decide` and the decision posted through the node (GAP-195, D-132),
+/// which check the acknowledgement against the set in force at the moment of the decision
+/// rather than trust the dialog's disabled button. An item neither queue holds has only
+/// the conditions in force.
+#[must_use]
+pub fn decision_conditions(
+    state: &AppState,
+    id: gungnir_ui::panels::approval_queue::PendingId,
+) -> Vec<(&'static str, String)> {
+    let rows = if crate::projection::node_holds_the_queue(state) {
+        crate::projection::queue_rows(state)
+    } else {
+        crate::decisions::queue_rows(state)
+    };
+    let mut conditions = degraded_conditions(state);
+    if let Some(row) = rows.iter().find(|r| r.id == id) {
+        conditions.extend(interim_item_condition(state, row));
+    }
+    conditions
+}
+
 fn interim_item_condition(
     state: &AppState,
     row: &gungnir_ui::panels::approval_queue::QueueRow<'_>,

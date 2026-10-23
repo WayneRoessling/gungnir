@@ -483,9 +483,9 @@ fn rebuild_decisions(
                 item,
                 overridden,
                 origin,
-                // The node's forwarded route does not carry what was acknowledged
-                // (GAP-193); the desktop's own record keeps it.
-                acknowledged: _,
+                // GAP-193: the forwarded route carries it, so the node's record of the
+                // outage says what was acknowledged, as this desktop's does.
+                acknowledged,
             }) if at >= since => {
                 // A decision another machine forwarded is not this desktop's to forward
                 // on, which is the filter the live path applies to its own records.
@@ -506,6 +506,7 @@ fn rebuild_decisions(
                     role,
                     request,
                     at,
+                    acknowledged,
                 });
             }
             _ => {}
@@ -1025,6 +1026,7 @@ fn record_view(
         role: record.role.clone(),
         request: record.request.clone(),
         at: record.mission_time,
+        acknowledged: record.acknowledged.clone(),
     }
 }
 

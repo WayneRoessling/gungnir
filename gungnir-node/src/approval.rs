@@ -504,13 +504,17 @@ fn answer_one(
         signed_in,
         pending.party.as_deref(),
         pending.role,
+        // GAP-193: what the person acknowledged at their console goes onto this node's
+        // record, its `Decided` event and its audit entry, as given. Whether something had
+        // to be acknowledged is the console's question: only it knows what it drew.
         |desk, cx, _policy, host| {
-            desk.decide_for(
+            desk.decide_acknowledging(
                 cx,
                 host,
                 pending.item,
                 decision,
                 Some(pending.request.clone()),
+                pending.acknowledged.clone(),
             )
         },
     );
@@ -692,7 +696,8 @@ fn record_of(forwarded: &v3::ForwardedDecision) -> DecisionRecord {
         request: r.request.clone(),
         origin: Some(forwarded.origin.clone()),
         mission_time: r.at,
-        acknowledged: Vec::new(),
+        // GAP-193: the forwarding machine's record, whole.
+        acknowledged: r.acknowledged.clone(),
     }
 }
 
@@ -770,6 +775,7 @@ fn view_of(record: &DecisionRecord) -> Option<v3::DecisionRecordView> {
         role: record.role.clone(),
         request: record.request.clone(),
         at: record.mission_time,
+        acknowledged: record.acknowledged.clone(),
     })
 }
 
@@ -887,4 +893,40 @@ fn audit_refusal(
         )
         .by_party(party.map(str::to_owned)),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// **GAP-193.** A forwarded decision keeps what its person acknowledged: the node's
+    /// record of it is the forwarding machine's, field for field, and the view a `409`
+    /// names is that record again.
+    #[test]
+    fn a_forwarded_decision_keeps_what_was_acknowledged() {
+        let told = vec![gungnir_model::Acknowledgement {
+            subject: "degraded tracking".into(),
+            statement: "the tracking pipeline is not running; the picture is not being updated"
+                .into(),
+        }];
+        let forwarded = v3::ForwardedDecision {
+            record: v3::DecisionRecordView {
+                decision: gungnir_model::DecisionId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_61c3),
+                item: None,
+                plan: PlanView::default(),
+                verdict: gungnir_model::events::VerdictSummary::RequiresHumanApproval,
+                choice: v3::DecisionChoice::Accept,
+                operator: Some("7".into()),
+                role: Some("Operator".into()),
+                request: None,
+                at: MissionTime(120.0),
+                acknowledged: told.clone(),
+            },
+            origin: "desktop-a".into(),
+            settled: None,
+        };
+        let record = record_of(&forwarded);
+        assert_eq!(record.acknowledged, told);
+        assert_eq!(view_of(&record), Some(forwarded.record));
+    }
 }

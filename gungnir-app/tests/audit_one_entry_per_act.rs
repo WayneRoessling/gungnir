@@ -243,6 +243,7 @@ fn every_audited_act_on_the_desktop_leaves_exactly_one_entry_naming_it() {
                     role: "Supervisor".into(),
                 })
                 .expect("queued");
+            acknowledge_degraded(s, PendingId(pending.0));
             decisions::decide(s, PendingId(pending.0), OperatorDecision::Accepted)
                 .expect("decided");
         },
@@ -542,13 +543,9 @@ fn every_audit_site_is_an_act_this_file_or_another_performs() {
             "tests/gap_acceptance.rs: a coverage gap accepted (its re-opening is nobody's \
              act, and is written against nobody through `audit::entry`)",
         ),
-        (
-            "gungnir-app/src/decisions.rs",
-            "crate::audit::record(",
-            1,
-            "a rehearsal standing acknowledged before a decision posted through the node \
-             (GAP-193: the node's record does not carry it)",
-        ),
+        // `gungnir-app/src/decisions.rs` wrote one, for an acknowledgement before a decision
+        // posted through the node, until GAP-193 put it on the node's own record and audit
+        // entry. It writes none now, which "no file outside the list" below holds.
         (
             "gungnir-approval/src/queue.rs",
             "host.audit(",
@@ -601,4 +598,20 @@ fn every_audit_site_is_an_act_this_file_or_another_performs() {
             }
         }
     }
+}
+
+/// Tick PN-07's degraded-condition acknowledgement against the set in force for `id`, as a
+/// person at the dialog does (GAP-195, D-132): this test's picture is degraded under test,
+/// and what it tests is something else.
+fn acknowledge_degraded(
+    state: &mut gungnir_app::state::AppState,
+    id: gungnir_ui::panels::approval_queue::PendingId,
+) {
+    let subsystems: Vec<String> = gungnir_app::workspace::decision_conditions(state, id)
+        .into_iter()
+        .map(|(subsystem, _)| subsystem.to_owned())
+        .collect();
+    state.select_approval(id);
+    state.dialog.degraded_acknowledged = true;
+    state.dialog.acknowledged_for = subsystems;
 }

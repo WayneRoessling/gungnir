@@ -540,6 +540,16 @@ pub struct DecisionRequest {
     /// silently preferring one of the two.
     pub item: PendingApprovalId,
     pub choice: DecisionChoice,
+    /// What the person deciding was told and acknowledged at their console before acting
+    /// on the plan (GAP-193): the rehearsal standing (GAP-107) and each degraded condition
+    /// in force (GAP-195, D-132). The node records it on its `DecisionRecord` and on
+    /// `CommandEvent::Decided` as given, since only the console knows what it drew; the
+    /// console asks the question before it posts.
+    ///
+    /// **Additive**: defaulted and left out when empty, so a body without it is the body
+    /// it always was and `SCHEMA_VERSION` stands.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acknowledged: Vec<gungnir_model::Acknowledgement>,
 }
 
 /// `201`: the decision this request recorded, or recorded before under the same
@@ -602,6 +612,10 @@ pub struct DecisionRecordView {
     /// When it was decided, on the forwarding machine's clock. When this node learned of
     /// it is its envelope's time, and both are kept.
     pub at: MissionTime,
+    /// What the person deciding acknowledged, as the forwarding machine's record holds it
+    /// (GAP-193). Defaulted and left out when empty, as on [`DecisionRequest`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acknowledged: Vec<gungnir_model::Acknowledgement>,
 }
 
 /// A decision a desktop took while it was cut off from this node, forwarded on

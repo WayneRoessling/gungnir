@@ -96,6 +96,7 @@ fn a_decision_a_sensor_command_a_requirement_and_a_review_each_leave_a_row() {
             role: "Operator".into(),
         })
         .expect("queued");
+    acknowledge_degraded(&mut state, PendingId(pending.0));
     decisions::decide(&mut state, PendingId(pending.0), OperatorDecision::Accepted)
         .expect("decided");
     // A sensor command.
@@ -126,4 +127,20 @@ fn a_decision_a_sensor_command_a_requirement_and_a_review_each_leave_a_row() {
     // Nobody signed in, and no row pretends otherwise (DN-23 §5 rule 1).
     assert!(state.audit.entries().iter().all(|e| e.operator.is_none()));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Tick PN-07's degraded-condition acknowledgement against the set in force for `id`, as a
+/// person at the dialog does (GAP-195, D-132): this test's picture is degraded under test,
+/// and what it tests is something else.
+fn acknowledge_degraded(
+    state: &mut gungnir_app::state::AppState,
+    id: gungnir_ui::panels::approval_queue::PendingId,
+) {
+    let subsystems: Vec<String> = gungnir_app::workspace::decision_conditions(state, id)
+        .into_iter()
+        .map(|(subsystem, _)| subsystem.to_owned())
+        .collect();
+    state.select_approval(id);
+    state.dialog.degraded_acknowledged = true;
+    state.dialog.acknowledged_for = subsystems;
 }

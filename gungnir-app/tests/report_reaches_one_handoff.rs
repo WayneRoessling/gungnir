@@ -112,6 +112,7 @@ fn a_desktop_that_decides(name: &str) -> (AppState, std::path::PathBuf, Decision
     let Some(item) = state.desk.approvals.queue().first().map(|p| p.id) else {
         panic!("{name} queued nothing: {:?}", state.alerts);
     };
+    acknowledge_degraded(&mut state, PendingId(item.0));
     decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted).expect("decided");
     let decision = state
         .desk
@@ -307,4 +308,20 @@ fn an_effector_report_reaches_the_one_handoff_it_names_across_two_desktops() {
     drop(runtime);
     let _ = std::fs::remove_dir_all(dir_a);
     let _ = std::fs::remove_dir_all(dir_b);
+}
+
+/// Tick PN-07's degraded-condition acknowledgement against the set in force for `id`, as a
+/// person at the dialog does (GAP-195, D-132): this test's picture is degraded under test,
+/// and what it tests is something else.
+fn acknowledge_degraded(
+    state: &mut gungnir_app::state::AppState,
+    id: gungnir_ui::panels::approval_queue::PendingId,
+) {
+    let subsystems: Vec<String> = gungnir_app::workspace::decision_conditions(state, id)
+        .into_iter()
+        .map(|(subsystem, _)| subsystem.to_owned())
+        .collect();
+    state.select_approval(id);
+    state.dialog.degraded_acknowledged = true;
+    state.dialog.acknowledged_for = subsystems;
 }

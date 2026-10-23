@@ -657,6 +657,9 @@ pub struct PendingDecision {
     /// The machine the connection was verified as -- a desktop's name since GAP-141 --
     /// for the audit entry (GAP-111); `None` over plaintext.
     pub party: Option<String>,
+    /// What the person acknowledged at their console (GAP-193), from the body as the route
+    /// vetted it, for the record and the decision's audit entry.
+    pub acknowledged: Vec<gungnir_model::Acknowledgement>,
     /// What the loop decided, or why it would not.
     pub reply: tokio::sync::oneshot::Sender<DecisionAnswer>,
 }
@@ -684,6 +687,7 @@ impl std::fmt::Debug for PendingDecision {
             .field("item", &self.item)
             .field("choice", &self.choice)
             .field("role", &self.role)
+            .field("acknowledged", &self.acknowledged.len())
             .finish_non_exhaustive()
     }
 }
@@ -2878,6 +2882,24 @@ fn vet_decision(
             ));
         }
     }
+    // 5. An acknowledgement names what was acknowledged and says it (GAP-193). One with
+    // an empty subject or statement acknowledges nothing, and is refused rather than put on
+    // the record as though somebody had read something.
+    if let Some(blank) = request
+        .acknowledged
+        .iter()
+        .find(|a| a.subject.trim().is_empty() || a.statement.trim().is_empty())
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Some(item),
+            format!(
+                "an acknowledgement names its subject and states what was read; \
+                 subject {:?} with statement {:?} acknowledges nothing",
+                blank.subject, blank.statement
+            ),
+        ));
+    }
     Ok((item, request))
 }
 
@@ -3092,6 +3114,7 @@ async fn decide_queued(
             operator: session.operator,
             role: session.role,
             party: peer.party.clone(),
+            acknowledged: request.acknowledged,
             reply,
         });
     }

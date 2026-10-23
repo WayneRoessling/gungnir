@@ -20,7 +20,8 @@
 //! 2. Accept is gated on an explicit acknowledgement of the degraded conditions in
 //!    force. With none in force the acknowledgement is not asked for; with any in
 //!    force it is, because accepting a plan built on a degraded picture is a different
-//!    act from accepting one built on a sound picture.
+//!    act from accepting one built on a sound picture. Override is gated on it too,
+//!    since D-132 (GAP-195): it acts on a plan as an acceptance does.
 //! 3. Accept is drawn last, after reject and override, so the reflexive click and the
 //!    reflexive keyboard traversal both land somewhere else.
 //! 4. No control is bound to Enter, and [`render_decision_dialog`] returns a choice
@@ -216,12 +217,25 @@ pub fn accept_enabled(view: &DecisionDialogView<'_>, state: &DecisionDialogState
         && rehearsal_acknowledged(view, state)
 }
 
-/// Whether the override control may be enabled: the authority, and the rehearsal
-/// statement acknowledged when there is one, because an override acts on a plan as an
-/// acceptance does (GAP-107). A rejection acts on nothing and asks for neither.
+/// Whether the override control may be enabled: the authority, the degraded conditions
+/// acknowledged when any is in force (GAP-195, D-132), and the rehearsal statement
+/// acknowledged when there is one (GAP-107), because an override acts on a plan as an
+/// acceptance does. A rejection acts on nothing and asks for neither.
 #[must_use]
 pub fn override_enabled(view: &DecisionDialogView<'_>, state: &DecisionDialogState) -> bool {
-    view.may_override && rehearsal_acknowledged(view, state)
+    view.may_override
+        && (view.degraded.is_empty() || state.degraded_acknowledged)
+        && rehearsal_acknowledged(view, state)
+}
+
+/// What a person must acknowledge before acting on the plan, when something is still
+/// unacknowledged: the line drawn under a disabled accept or override control.
+fn acknowledge_first(view: &DecisionDialogView<'_>, state: &DecisionDialogState) -> &'static str {
+    if view.degraded.is_empty() || state.degraded_acknowledged {
+        "Acknowledge where the laydown in force stands before acting on the plan."
+    } else {
+        "Acknowledge the degraded conditions before acting on the plan."
+    }
 }
 
 /// A rejection is recorded with its reason, so an empty reason is not a rejection.
@@ -554,6 +568,9 @@ fn draw_controls(
         {
             choice = Some(DecisionChoice::Override);
         }
+        if !override_enabled(view, state) {
+            ui.label(RichText::new(acknowledge_first(view, state)).color(palette.warning_color));
+        }
     } else {
         ui.label(
             RichText::new("Overriding needs a higher authority than this role holds.")
@@ -567,14 +584,7 @@ fn draw_controls(
             RichText::new("This role may not accept a plan.").color(palette.muted_text_color()),
         );
     } else if !accept_enabled(view, state) {
-        ui.label(
-            RichText::new(if rehearsal_acknowledged(view, state) {
-                "Acknowledge the degraded conditions before accepting."
-            } else {
-                "Acknowledge where the laydown in force stands before accepting."
-            })
-            .color(palette.warning_color),
-        );
+        ui.label(RichText::new(acknowledge_first(view, state)).color(palette.warning_color));
     }
     if ui
         .add_enabled(
@@ -792,5 +802,44 @@ mod tests {
         let fresh = DecisionDialogState::default();
         assert!(accept_enabled(&v, &fresh), "nothing asked, nothing to tick");
         assert!(override_enabled(&v, &fresh));
+    }
+
+    /// GAP-195, D-132: a degraded condition closes override as it closes accept, until
+    /// the conditions are acknowledged, and the tick does not survive the set changing.
+    /// Rejecting never needs it.
+    #[test]
+    fn a_degraded_condition_closes_override_until_acknowledged() {
+        let r = row();
+        let journal = [Degraded {
+            subsystem: "journal",
+            detail: "writes are failing; this decision may not be recorded durably",
+        }];
+        let mut v = view(&r, &journal);
+        v.may_override = true;
+
+        let mut state = DecisionDialogState::default();
+        state.reconcile(v.degraded);
+        assert!(!override_enabled(&v, &state));
+        assert!(!accept_enabled(&v, &state));
+        state.reject_reason = "not on this picture".into();
+        assert!(reject_enabled(&state), "a rejection acts on nothing");
+
+        state.degraded_acknowledged = true;
+        assert!(override_enabled(&v, &state));
+        assert!(accept_enabled(&v, &state));
+
+        let both = [
+            journal[0],
+            Degraded {
+                subsystem: "tracking",
+                detail: "the tracking pipeline is not running; the picture is not being updated",
+            },
+        ];
+        v.degraded = &both;
+        state.reconcile(v.degraded);
+        assert!(
+            !override_enabled(&v, &state),
+            "a tick for one set does not cover a larger one"
+        );
     }
 }

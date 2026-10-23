@@ -817,6 +817,7 @@ fn decide(
     item: PendingApprovalId,
     decision: OperatorDecision,
 ) -> DecisionRecord {
+    acknowledge_degraded(state, PendingId(item.0));
     decisions::decide(state, PendingId(item.0), decision).expect("decided");
     state
         .desk
@@ -940,7 +941,7 @@ fn an_outage_decided_offline_reaches_the_node_once_and_what_both_sides_did_is_fa
         at(a, b, t);
         let item = node.propose(plan);
         let before = node.records().len();
-        projection::decide(b, item, DecisionChoice::Accept).expect("posted");
+        projection::decide(b, item, DecisionChoice::Accept, Vec::new()).expect("posted");
         until(a, b, "the node to record B's decision", 10.0, |_, _| {
             node.records().len() > before
         });
@@ -2407,4 +2408,20 @@ fn a_report_carrying_a_nan_reaches_its_partner_marked_unavailable_and_a_finite_o
     drop(node);
     let _ = std::fs::remove_dir_all(&a_dir);
     let _ = std::fs::remove_dir_all(&scratch);
+}
+
+/// Tick PN-07's degraded-condition acknowledgement against the set in force for `id`, as a
+/// person at the dialog does (GAP-195, D-132): this test's picture is degraded under test,
+/// and what it tests is something else.
+fn acknowledge_degraded(
+    state: &mut gungnir_app::state::AppState,
+    id: gungnir_ui::panels::approval_queue::PendingId,
+) {
+    let subsystems: Vec<String> = gungnir_app::workspace::decision_conditions(state, id)
+        .into_iter()
+        .map(|(subsystem, _)| subsystem.to_owned())
+        .collect();
+    state.select_approval(id);
+    state.dialog.degraded_acknowledged = true;
+    state.dialog.acknowledged_for = subsystems;
 }

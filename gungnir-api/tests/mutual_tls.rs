@@ -379,6 +379,7 @@ fn forwarded(origin: &str) -> gungnir_api::v3::ForwardedDecision {
             role: Some("Supervisor".into()),
             request: None,
             at: MissionTime(120.0),
+            acknowledged: Vec::new(),
         },
         origin: origin.to_owned(),
         settled: None,

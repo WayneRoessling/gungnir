@@ -720,6 +720,7 @@ fn two_desktops_show_one_node_queue_and_neither_decides_it_itself() {
         &mut console_a,
         point,
         gungnir_remote::queue::DecisionChoice::Accept,
+        Vec::new(),
     )
     .expect("the Operator may decide the point item");
     // **The deciding console's own item goes first.** It holds the node's `201`, so the

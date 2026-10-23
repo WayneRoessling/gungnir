@@ -207,6 +207,7 @@ fn decide(state: &mut AppState) -> gungnir_model::DecisionId {
             role: "Operator".into(),
         })
         .expect("queued");
+    acknowledge_degraded(state, PendingId(pending.0));
     decisions::decide(state, PendingId(pending.0), OperatorDecision::Accepted).expect("decided");
     state
         .desk
@@ -299,6 +300,7 @@ fn a_handoff_to_an_accepting_endpoint_is_delivered_and_a_refusal_is_recorded() {
             role: "Operator".into(),
         })
         .expect("queued");
+    acknowledge_degraded(&mut state, PendingId(pending.0));
     decisions::decide(&mut state, PendingId(pending.0), OperatorDecision::Accepted)
         .expect("decided");
     let second = state
@@ -462,6 +464,7 @@ fn decide_tracks(state: &mut AppState, plan: u128, tracks: &[u64]) -> gungnir_mo
             role: "Operator".into(),
         })
         .expect("queued");
+    acknowledge_degraded(state, PendingId(pending.0));
     decisions::decide(state, PendingId(pending.0), OperatorDecision::Accepted).expect("decided");
     state
         .desk
@@ -636,4 +639,20 @@ fn a_handoff_and_a_warning_whose_figures_are_all_finite_are_posted_byte_for_byte
         "an all-finite handoff is posted exactly as `serde_json::to_value` posted it"
     );
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Tick PN-07's degraded-condition acknowledgement against the set in force for `id`, as a
+/// person at the dialog does (GAP-195, D-132): this test's picture is degraded under test,
+/// and what it tests is something else.
+fn acknowledge_degraded(
+    state: &mut gungnir_app::state::AppState,
+    id: gungnir_ui::panels::approval_queue::PendingId,
+) {
+    let subsystems: Vec<String> = gungnir_app::workspace::decision_conditions(state, id)
+        .into_iter()
+        .map(|(subsystem, _)| subsystem.to_owned())
+        .collect();
+    state.select_approval(id);
+    state.dialog.degraded_acknowledged = true;
+    state.dialog.acknowledged_for = subsystems;
 }
