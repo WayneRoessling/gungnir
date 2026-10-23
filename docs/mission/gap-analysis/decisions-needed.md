@@ -421,7 +421,8 @@ outcomes are explained in `../../record/`; mission outcomes in `../mission-analy
   main last passed it (2026-09-27), and was found on PR #200. Seven were patch updates in
   `Cargo.lock` alone: `rustls` 0.23.46 (RUSTSEC-2026-0346 to -0349), `rustls-webpki`
   0.103.16 (RUSTSEC-2026-0382), `ctutils` 0.4.5 (RUSTSEC-2026-0385) and `clipboard-win`
-  5.4.3, whose 5.4.1 was yanked. The other three are unmaintained notices for
+  5.4.3, whose 5.4.1 was yanked; an eighth, `tokio` 1.53.3 (RUSTSEC-2026-0386, unsound),
+  was published while the pull request ran and was fixed the same way. The other three are unmaintained notices for
   `zbus_names`, `zvariant` and `zvariant_derive` (RUSTSEC-2026-0370 to -0372), merged into
   zbus 6.0 on 2026-10-16. They are not confined to the Linux desktop, as the quick-xml
   entries are: `keyring`'s Secret Service store carries them into `gungnir-security`, and
