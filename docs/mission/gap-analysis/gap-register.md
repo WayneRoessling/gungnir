@@ -190,11 +190,11 @@ history, and an entry is never edited once it has merged.
 | GAP-196 | A UAS's height above mean sea level is placed as an ellipsoidal height | Technical | CAP-1.7 | 3 | 6 | S | 18 | I4 | Services engineer | Closed |
 | GAP-197 | A DEM or point cloud in NAVD88, EGM96 or a national height datum cannot be placed | Technical | CAP-2.10 | 3 | 8 | M | 24 | I4 | UI engineer | Closed |
 | GAP-193 | A linked desktop's rehearsal acknowledgement is not on the node's decision record | Technical | CAP-5.9, CAP-7.3 | 3 | 10 | S | 30 | I3 | Services engineer | Open |
-| GAP-194 | A gap acceptance is held only by the desktop that recorded it | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | M | 12 | I3 | Services engineer | Open |
+| GAP-194 | A gap acceptance is held only by the desktop that recorded it | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | L | 12 | I3 | Services engineer | Open |
 | GAP-195 | PN-07's degraded-condition acknowledgement is on no record | Technical | CAP-5.9 | 3 | 10 | S | 30 | I3 | UI engineer | Open |
 | GAP-198 | The node places a UAS's height above mean sea level uncorrected | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
 | GAP-199 | A UAS reporting only its height above ground is placed at height zero | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
-| GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | M | 32 | I4 | UI engineer | Open |
+| GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | L | 32 | I4 | UI engineer | Open |
 
 Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
@@ -2730,13 +2730,14 @@ Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.4 Coverage and gaps; CAP-7.3 Three profiles.
 - History:
   - 2026-09-26, Open: Found building GAP-106. The owner's decision is about what an acceptance is, not where it lives in a system of systems; the node already answers coverage and holds the queue, so which machine holds acceptances is a design question of its own, not a detail to take under the delegation.
+  - 2026-10-23, Open: **Decided by the owner, 2026-10-23 (D-131); nothing is built yet.** The node holds acceptances for its linked desktops, as it holds the queue. Effort raised from M to L: the node has no laydown to re-open against, and getting the laydown in force to it is part of the build. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
 - Evidence: `gungnir-app/src/gap_acceptance.rs`; `gungnir-node/src/main.rs`'s coverage answer; `../../design/DN-33-accepting-a-coverage-gap.md` §9.
-- Severity: 3. Reach: 4 threads. Effort: M. Priority: 12.
+- Severity: 3. Reach: 4 threads. Effort: L. Priority: 12.
 - Impact: A commander's acceptance is drawn on the desktop that recorded it and nowhere else: a node's `/v2|v3/coverage` answer and a second desktop's PN-11 show the same gap as unexamined.
-- Closing action: Decide who holds an acceptance in a linked deployment -- the node, as it holds the queue (D-55), or each desktop with an exchange between them -- then carry it on the coverage answer so every console marks it.
+- Closing action: Build D-131. A `/v3` write path for an acceptance (a `gungnir-api` write path, so human-owned); the node authorizing `coverage.accept_gap` against the signed-in commander, journaling and auditing it; D-118's re-opening run on the node, with the laydown in force reaching it, since the node knows no laydown today; accepted gaps marked on the `/v2` and `/v3` coverage answer; a cut-off desktop's acceptances forwarded when its node answers, as D-55's decisions are.
 - Target: I3. Owner: Services engineer. Status: Open.
 - Reference: Found building GAP-106 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`).
-- Depends on: GAP-106.
+- Depends on: GAP-106, D-131.
 
 **GAP-195 PN-07's degraded-condition acknowledgement is on no record**
 
@@ -2744,13 +2745,14 @@ Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.9 Role workspaces and workflow.
 - History:
   - 2026-09-26, Open: Found building GAP-107, when the rehearsal acknowledgement was made to travel with the decision and the older degraded-condition one beside it turned out not to. Not folded in: which conditions are recorded, and whether `decide` refuses without them, changes what every decision on a degraded picture records, and the degraded set is recomputed every frame.
+  - 2026-10-23, Open: **Decided by the owner, 2026-10-23 (D-132); nothing is built yet.** Recorded and enforced in `decide`, for accept and override both, for D-119's reason. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
 - Evidence: `gungnir-ui/src/panels/decision_dialog.rs` `degraded_acknowledged`; `gungnir-app/src/decisions.rs` `decide`.
 - Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
 - Impact: A plan accepted while the tracker was down or the journal failing was gated on a person ticking that they read it, and nothing records that they did: the decision record and the audit entry say nothing of the conditions it was taken under.
-- Closing action: Put each degraded condition acknowledged onto `DecisionRecord::acknowledged`, as the rehearsal standing now is (GAP-107), and check it in `decisions::decide` rather than only in the dialog.
+- Closing action: Build D-132. Each degraded condition acknowledged on `DecisionRecord::acknowledged`, named by its subsystem and worded as drawn; `decisions::decide` refusing an accept or an override the acknowledgement does not cover at the moment of the decision; `override_enabled` gaining the degraded gate `accept_enabled` already has. A linked desktop's acknowledgement reaches the node on the field GAP-193 carries.
 - Target: I3. Owner: UI engineer. Status: Open.
 - Reference: Found building GAP-107 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`).
-- Depends on: GAP-107.
+- Depends on: GAP-107, D-132.
 
 **GAP-198 The node places a UAS's height above mean sea level uncorrected**
 
@@ -2758,13 +2760,14 @@ Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.7 Cooperative identity.
 - History:
   - 2026-09-26, Open: Filed closing GAP-196. The node's feeds hold a named reason and every such height is flagged and counted there, so nothing is silent; what is missing is the correction itself, which needs a dependency edge and a native library the node image does not carry today.
+  - 2026-10-23, Open: **Decided by the owner, 2026-10-23 (D-129); nothing is built yet.** The node corrects through the same verified grid as the desktop, over a new edge to `gungnir-data` with `crs`. Rejected: a reader without PROJ, and keeping D-124's flag on the node. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
 - Evidence: `gungnir-node/src/main.rs` (`NODE_HAS_NO_GEOID`, the reason every node feed holds); `gungnir-node/Cargo.toml` (no edge to `gungnir-data`, no `crs`).
 - Severity: 3. Reach: 6 threads. Effort: M. Priority: 18.
 - Impact: `gungnir-node` binds the same ASTERIX Category 129 feeds as the desktop and tracks every UAS it hears, but carries no geoid model, so each UAS's height stays above mean sea level -- flagged, counted on the health line and weighed with a widened vertical variance (D-124), but off the ellipsoid by the local separation, about 35 m over the Baltic. A picture a node serves to its clients carries those heights.
-- Closing action: Decide whether the node carries the EGM2008 grid: an edge `gungnir-node` to `gungnir-data` with `crs`, which links libproj and libtiff into the node image and needs the grid installed beside it, verified the same way; or a geoid lookup the node reaches without PROJ, which D-121 rejected for the desktop.
+- Closing action: Build D-129. Accept the edge `gungnir-node` to `gungnir-data` in `../../../ARCHITECTURE.md` §7.1 and `../../design/dependency-edges.md` first, then link `crs`; build libproj with libtiff in `deploy/node/Dockerfile`'s build stage and carry libtiff and `proj.db` in the runtime image; lend the feeds the grid verified from `geoid_grid_dir`, a mounted directory, never the image; say verified, refused or none on the node's health line. D-124 stays the path without a verified grid.
 - Target: I4. Owner: Services engineer. Status: Open.
 - Reference: Found closing GAP-196 (`../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`).
-- Depends on: D-121, D-124, GAP-196.
+- Depends on: D-121, D-124, GAP-196, D-129.
 
 **GAP-199 A UAS reporting only its height above ground is placed at height zero**
 
@@ -2772,13 +2775,14 @@ Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.7 Cooperative identity.
 - History:
   - 2026-09-26, Open: Filed closing GAP-196, which settled the mean-sea-level height and left this one as it was: the report says the height is 0 and not a measurement, and PN-04 says so, but the detection's variance does not.
+  - 2026-10-23, Open: **Decided by the owner, 2026-10-23 (D-130); nothing is built yet.** A loaded DEM places the height; without one the variance says it is unknown. The node loads no terrain, so it takes the second path. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
 - Evidence: `gungnir_model::UasAltitudeReference::NoAbsoluteHeight`; `gungnir-ingest/src/adapters/asterix.rs` (`uas_position_variance` keeps the baseline for it).
 - Severity: 3. Reach: 6 threads. Effort: M. Priority: 18.
 - Impact: A Category 129 record may carry I129/100 (height above ground level) without I129/090. With no ground elevation model on the ingest path the codec sets the height to 0 and records the loss, and the detection keeps the baseline 30 m vertical sigma, so the tracker weighs a height that may be hundreds of metres wrong as if it were measured.
-- Closing action: Decide whether an above-ground height is placed on the deployment's DEM where one is loaded (terrain height plus AGL, with the DEM's own datum handled as GAP-108 does), and otherwise carried with a vertical variance that says the height is unknown, or whether such a detection should carry no vertical information at all.
+- Closing action: Build D-130. A terrain lookup the host lends the ingest adapter, as it lends `GeoidSeparation`; a UAS with I129/100 and no I129/090 placed at the terrain's ellipsoidal height plus its height above ground where a loaded DEM covers it, the DEM's own vertical error added to the detection's; otherwise flagged with a vertical variance that says the height is unknown, its figure chosen and recorded with the build.
 - Target: I4. Owner: Services engineer. Status: Open.
 - Reference: Found closing GAP-196 (`../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`).
-- Depends on: GAP-101, GAP-196.
+- Depends on: GAP-101, GAP-196, D-130.
 
 **GAP-200 A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84**
 
@@ -2786,11 +2790,12 @@ Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../.
 - Capability: CAP-2.10 Terrain and map context.
 - History:
   - 2026-09-26, Open: Filed closing GAP-197, which asked for the NAD83 realisation question to be handled honestly. D-125 reads NAD83(2011) as WGS 84 and says what that costs; this row keeps the metre in the register rather than only in a decision.
+  - 2026-10-23, Open: **Decided by the owner, 2026-10-23 (D-127, D-128); nothing is built yet.** The time-dependent Helmert at the picture's epoch replaces the null step, and older realisations go through NADCON5, an unqualified NAD83 file needing the baseline's declaration. Measured during the walk: a fixed 2010.0 epoch would leave 0.337 m at Autzen today, so the epoch defaults to the current date. Effort raised from M to L for the four grids and the declaration. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
 - Evidence: `gungnir-data/src/geoid.rs` (module documentation, the NAD83(2011) paragraph); `gungnir-data/src/pointcloud/crs.rs` (`to_local_enu`); `gungnir-app/src/terrain.rs` (`to_wgs84`); PROJ's own choice for the Autzen WKT to EPSG:4979 is the same null step (`gungnir-data/tests/pointcloud_crs.rs`).
-- Severity: 4. Reach: 8 threads. Effort: M. Priority: 32.
+- Severity: 4. Reach: 8 threads. Effort: L. Priority: 32.
 - Impact: A file in NAD83 -- most United States LIDAR, and every NAVD88 height through GEOID18 -- is converted with PROJ's null NAD83-to-WGS-84 step, horizontally and vertically, so it lands 1 to 2 m off horizontally and up to a metre vertically in WGS-84 terms (1.4 m and -0.38 m at the Autzen fixture, epoch 2010.0). Stated on the conversion, in `deploy/README.md` and in D-125, never claimed as centimetres; a metre-level offset against radar and cooperative tracks, not tens of metres.
-- Closing action: Decide whether a NAD83(2011) position is carried to WGS 84 by the published time-dependent transformation (EPSG's "ITRF2014 to NAD83(2011) (1)" and WGS 84's own realisation step), which needs an observation epoch that LAS and GeoTIFF files do not carry, so a baseline field or a documented default; and whether the older NAD83 realisations a file may name (HARN, CORS96, the unqualified NAD83) are refused or taken as NAD83(2011). Apply it to the horizontal and vertical together.
+- Closing action: Build D-127 and D-128. The inverse of EPSG's "ITRF2014 to NAD83(2011) (1)" Helmert as a written-out PROJ pipeline at the picture's epoch (the current date, which a baseline field may pin), horizontal and vertical together, on the DEM, point-cloud and NAVD88 paths. The four NADCON5 conterminous United States grids pinned, verified and reported as EGM2008 is (D-121). A baseline declaration for an unqualified NAD83 file, which is refused by name without one; NAD83(CORS96) read as NAD83(NSRS2007). The Autzen fixture re-measured against `pyproj` at a pinned epoch, and metre-level statements in `deploy/README.md` and the module documentation replaced by what the conversion now claims.
 - Target: I4. Owner: UI engineer. Status: Open.
 - Reference: D-125; GAP-197; `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`.
-- Depends on: D-125, GAP-197.
+- Depends on: D-125, GAP-197, D-127, D-128.
 

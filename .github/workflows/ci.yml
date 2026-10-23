@@ -44,10 +44,13 @@ jobs:
   fmt-clippy-test:
     name: fmt, clippy, test
     runs-on: ubuntu-latest
-    # The warm run is about seven minutes and the cold one about twice that. A job
-    # still going at thirty has hung (ARCHITECTURE.md §10 records one test that looked
-    # exactly like that), and the default limit is six hours of runner for nothing.
-    timeout-minutes: 30
+    # Warm, the run is about eighteen minutes (main, 2026-09-27). Cold it is past
+    # thirty: on 2026-10-23, with main's cache evicted after a month without a push,
+    # the debug tests ended at twenty minutes and the release budget build was still
+    # compiling at thirty, when the job was cancelled. Sixty covers a cold run with
+    # room; a job still going then has hung (ARCHITECTURE.md §10 records one test that
+    # looked exactly like that), and the default limit is six hours of runner for nothing.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
