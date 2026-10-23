@@ -27,6 +27,9 @@ use gungnir_model::{
 use gungnir_policy::PolicyVerdict;
 use gungnir_ui::panels::approval_queue::EmptyBecause;
 
+#[path = "support/healthy.rs"]
+mod healthy;
+
 /// A desktop over a scratch journal directory, so a test never writes into the
 /// developer's `./gungnir-journal`.
 fn desktop(name: &str) -> AppState {
@@ -522,6 +525,7 @@ mod decide_is_authorized_where_it_acts {
         let mut state = desktop("gap127-allowed");
         let item = queued(&mut state, "Operator");
         state.set_role(Role::Operator);
+        super::healthy::healthy(&mut state);
         decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted)
             .expect("the Operator may accept an item offered to the Operator");
         assert_eq!(state.desk.approvals.records().len(), 1);

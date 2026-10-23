@@ -11299,9 +11299,9 @@
     `gungnir-app/src/main.rs` `decide_through_the_node`; `gungnir-api` `/v3` decision
     route; `gungnir-node/src/approval.rs` `record_of`
   action: >-
-    Carry `acknowledged` on the `/v3` decision body and on a forwarded decision, into the
-    node's `DecidedBy`, so the node's `DecisionRecord` and `CommandEvent::Decided` hold it
-    as the desktop's own do. A `gungnir-api` write path, so human-owned.
+    Done 2026-10-23: `acknowledged` on the `/v3` decision body and on a forwarded
+    decision, into the node's `DecidedBy`, so the node's `DecisionRecord` and
+    `CommandEvent::Decided` hold it as the desktop's own do.
   ref: >-
     Found building GAP-107 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`)
   history:
@@ -11313,6 +11313,23 @@
       record is rebuilt without it. Not built there because the route is a `gungnir-api`
       write path, which is human-owned, and the change is the node's record as much as the
       desktop's.
+  - date: 2026-10-23
+    status: Closed
+    note: >-
+      **Closed 2026-10-23.** `v3::DecisionRequest` and `v3::DecisionRecordView` carry
+      `acknowledged`, defaulted and left out when empty, so a body without it is the
+      body it was and `SCHEMA_VERSION` stands. The route refuses `400` an
+      acknowledgement with an empty subject or statement. The node takes the decision
+      through `decide_acknowledging`, so its record, its `Decided` event and its audit
+      entry hold what the console acknowledged, and a forwarded decision keeps it
+      (`record_of`, `view_of`, the desktop's failover rebuild). The node records what it
+      is given; whether something had to be acknowledged is the console's question. The
+      desktop's stopgap audit entry is gone. The route and
+      `gungnir-node/src/approval.rs` are human-owned (a `gungnir-api` write path; D-65);
+      see `../../signatures.md`. Tested in `gungnir-node/tests/approval_queue.rs`
+      (`what_a_console_acknowledged_is_on_the_nodes_record`) and
+      `gungnir-node/src/approval.rs`'s unit test. See
+      `../../record/2026-10-23/a-decision-s-acknowledgements-reach-the-node.md`.
 - id: GAP-194
   name: A gap acceptance is held only by the desktop that recorded it
   type: Technical
@@ -11373,11 +11390,9 @@
     `gungnir-ui/src/panels/decision_dialog.rs` `degraded_acknowledged`;
     `gungnir-app/src/decisions.rs` `decide`
   action: >-
-    Build D-132. Each degraded condition acknowledged on `DecisionRecord::acknowledged`,
-    named by its subsystem and worded as drawn; `decisions::decide` refusing an accept
-    or an override the acknowledgement does not cover at the moment of the decision;
-    `override_enabled` gaining the degraded gate `accept_enabled` already has. A linked
-    desktop's acknowledgement reaches the node on the field GAP-193 carries.
+    Done 2026-10-23 (D-132): each degraded condition acknowledged on
+    `DecisionRecord::acknowledged`, checked in `decisions::decide` for accept and
+    override, and carried to the node on GAP-193's field.
   ref: >-
     Found building GAP-107 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`)
   history:
@@ -11395,6 +11410,21 @@
       **Decided by the owner, 2026-10-23 (D-132); nothing is built yet.** Recorded and
       enforced in `decide`, for accept and override both, for D-119's reason. See
       `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
+  - date: 2026-10-23
+    status: Closed
+    note: >-
+      **Closed 2026-10-23 (D-132).** `decisions::acknowledgements` gathers each degraded
+      condition in force, from `workspace::decision_conditions` (the set PN-07 draws),
+      and then the rehearsal standing. `decide` refuses an accept or an override the
+      tick does not cover at the moment of the decision, comparing by subsystem as the
+      dialog does, and records one `Acknowledgement` per condition: subject `degraded
+      <subsystem>`, statement the detail as drawn. It goes on the record,
+      `CommandEvent::Decided` and the audit entry. A rejection asks nothing. PN-07's
+      override is gated on the degraded tick as accept is. A linked desktop asks the
+      same before it posts, and the node records the answer on GAP-193's field. Tested
+      in `gungnir-app/tests/degraded_acknowledgement.rs` and `gungnir-ui`'s
+      `a_degraded_condition_closes_override_until_acknowledged`. See
+      `../../record/2026-10-23/a-decision-s-acknowledgements-reach-the-node.md`.
 - id: GAP-198
   name: The node places a UAS's height above mean sea level uncorrected
   type: Technical

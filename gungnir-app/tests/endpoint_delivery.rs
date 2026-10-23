@@ -27,6 +27,9 @@ use gungnir_time::ReplayClockAuthority;
 use gungnir_tracking_service::{SubmitError, TrackingService};
 use gungnir_ui::panels::approval_queue::PendingId;
 
+#[path = "support/healthy.rs"]
+mod healthy;
+
 /// A one-thread HTTP server that answers every request with `status` and records how
 /// many it saw, and the body of each.
 ///
@@ -207,6 +210,7 @@ fn decide(state: &mut AppState) -> gungnir_model::DecisionId {
             role: "Operator".into(),
         })
         .expect("queued");
+    healthy::healthy(state);
     decisions::decide(state, PendingId(pending.0), OperatorDecision::Accepted).expect("decided");
     state
         .desk
@@ -299,6 +303,7 @@ fn a_handoff_to_an_accepting_endpoint_is_delivered_and_a_refusal_is_recorded() {
             role: "Operator".into(),
         })
         .expect("queued");
+    healthy::healthy(&mut state);
     decisions::decide(&mut state, PendingId(pending.0), OperatorDecision::Accepted)
         .expect("decided");
     let second = state
@@ -462,6 +467,7 @@ fn decide_tracks(state: &mut AppState, plan: u128, tracks: &[u64]) -> gungnir_mo
             role: "Operator".into(),
         })
         .expect("queued");
+    healthy::healthy(state);
     decisions::decide(state, PendingId(pending.0), OperatorDecision::Accepted).expect("decided");
     state
         .desk

@@ -93,6 +93,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+#[path = "support/healthy.rs"]
+mod healthy;
+
 const PASSPHRASE: &str = "correct horse battery staple";
 /// Desktop A's operator: cut off, deciding on its own queue.
 const A_OPERATOR: u64 = 61;
@@ -656,14 +659,16 @@ impl TrackingService for Picture {
 
 /// A planner that proposes nothing, so the only plans on the cut-off desktop's queue are
 /// the ones the test states and every count below is the test's own.
+///
+/// **It answers, with nothing to propose**: the empty fresh plan the real planner gives a
+/// picture with nothing to solve (GAP-066). It said `NoPlan` until GAP-195, which is the
+/// planner never having answered -- a degraded picture PN-07 asks to be acknowledged
+/// (D-132) -- and not what this test means.
 struct StatedPlans;
 
 impl InterceptService for StatedPlans {
     fn plan(&mut self, _: MissionTime, _: &[TrackView], _: &[ResourceView]) -> PlanOutcome {
-        PlanOutcome::NoPlan {
-            reason: "this test states its plans".into(),
-            progress: None,
-        }
+        PlanOutcome::Fresh(PlanView::default())
     }
     fn is_healthy(&self) -> bool {
         true
@@ -817,6 +822,7 @@ fn decide(
     item: PendingApprovalId,
     decision: OperatorDecision,
 ) -> DecisionRecord {
+    healthy::healthy(state);
     decisions::decide(state, PendingId(item.0), decision).expect("decided");
     state
         .desk
@@ -940,7 +946,7 @@ fn an_outage_decided_offline_reaches_the_node_once_and_what_both_sides_did_is_fa
         at(a, b, t);
         let item = node.propose(plan);
         let before = node.records().len();
-        projection::decide(b, item, DecisionChoice::Accept).expect("posted");
+        projection::decide(b, item, DecisionChoice::Accept, Vec::new()).expect("posted");
         until(a, b, "the node to record B's decision", 10.0, |_, _| {
             node.records().len() > before
         });

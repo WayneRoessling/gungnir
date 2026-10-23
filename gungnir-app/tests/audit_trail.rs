@@ -18,6 +18,9 @@ use gungnir_security::{actions, AuditLog};
 use gungnir_ui::panels::approval_queue::PendingId;
 use gungnir_ui::panels::reports::ReviewAction;
 
+#[path = "support/healthy.rs"]
+mod healthy;
+
 fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
     let dir = std::env::temp_dir().join(format!("gungnir-audit-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -96,6 +99,7 @@ fn a_decision_a_sensor_command_a_requirement_and_a_review_each_leave_a_row() {
             role: "Operator".into(),
         })
         .expect("queued");
+    healthy::healthy(&mut state);
     decisions::decide(&mut state, PendingId(pending.0), OperatorDecision::Accepted)
         .expect("decided");
     // A sensor command.

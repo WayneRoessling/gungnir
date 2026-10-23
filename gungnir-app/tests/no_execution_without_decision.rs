@@ -40,6 +40,9 @@ use gungnir_time::ReplayClockAuthority;
 use gungnir_ui::panels::approval_queue::PendingId;
 use std::path::Path;
 
+#[path = "support/healthy.rs"]
+mod healthy;
+
 fn sources(dir: &Path, out: &mut Vec<(String, String)>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
@@ -250,6 +253,7 @@ fn a_queued_plan_executes_nothing_until_a_person_decides() {
         "the record shows execution before a decision: {seen:?}"
     );
 
+    healthy::healthy(&mut state);
     decisions::decide(&mut state, PendingId(pending.0), OperatorDecision::Accepted)
         .expect("decided");
     update::tick(&mut state);

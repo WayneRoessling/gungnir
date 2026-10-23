@@ -1258,3 +1258,99 @@ async fn a_pre_delegated_item_still_expires_and_escalates() {
     assert_eq!(records[0].item, Some(item));
     node.cleanup();
 }
+
+// ---------------------------------------------------------------------------------
+// GAP-193: what a console acknowledged is on the node's record
+// ---------------------------------------------------------------------------------
+
+/// **GAP-193.** A desktop deciding through its node posts what the person acknowledged at
+/// its console -- the degraded conditions in force (GAP-195) and the laydown's rehearsal
+/// standing (GAP-107) -- and the node puts it, as given, on its `DecisionRecord`, on
+/// `CommandEvent::Decided`, and on the decision's audit entry. An acknowledgement that
+/// names nothing or says nothing is refused `400` and records nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn what_a_console_acknowledged_is_on_the_nodes_record() {
+    let node = Node::spawn("acknowledged").await;
+    let operator = sign_in(node.addr, OPERATOR).await;
+    let item = node
+        .propose(&[track(0, Classification::Hostile)], plan(1, 0, 0))
+        .expect("queued");
+    node.queue().await;
+    node.command_events();
+
+    let (status, body) = post_decision(
+        node.addr,
+        Some(&operator),
+        item,
+        serde_json::json!({
+            "request": "acknowledged-blank",
+            "item": item.to_string(),
+            "choice": "accept",
+            "acknowledged": [{ "subject": "degraded journal", "statement": "  " }],
+        }),
+    )
+    .await;
+    assert_eq!(status, 400, "{body}");
+    assert!(body.contains("acknowledges nothing"), "{body}");
+    node.settle().await;
+    assert!(
+        node.records().is_empty(),
+        "a refused body recorded a decision"
+    );
+
+    let told = vec![
+        gungnir_model::Acknowledgement {
+            subject: "degraded journal".into(),
+            statement: "writes are failing; this decision may not be recorded durably".into(),
+        },
+        gungnir_model::Acknowledgement {
+            subject: "rehearsal".into(),
+            statement: "The laydown in force has never been rehearsed.".into(),
+        },
+    ];
+    let (status, body) = post_decision(
+        node.addr,
+        Some(&operator),
+        item,
+        serde_json::json!({
+            "request": "acknowledged-1",
+            "item": item.to_string(),
+            "choice": "accept",
+            "acknowledged": told.clone(),
+        }),
+    )
+    .await;
+    assert_eq!(status, 201, "{body}");
+    node.settle().await;
+
+    let records = node.records();
+    assert_eq!(records.len(), 1);
+    assert_eq!(
+        records[0].acknowledged, told,
+        "the record holds what was told"
+    );
+    let decided: Vec<Vec<gungnir_model::Acknowledgement>> = node
+        .command_events()
+        .into_iter()
+        .filter_map(|event| match event {
+            CommandEvent::Decided { acknowledged, .. } => Some(acknowledged),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(decided, vec![told], "the event carries it");
+    let entries = node.audit_entries();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == actions::DECIDE_PLAN && e.detail.contains("Accepted"))
+        .expect("the decision is audited");
+    assert!(
+        entry
+            .detail
+            .contains("acknowledged degraded journal: writes are failing")
+            && entry
+                .detail
+                .contains("acknowledged rehearsal: The laydown in force has never been rehearsed."),
+        "{entry:?}"
+    );
+    node.cleanup();
+}

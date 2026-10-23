@@ -115,13 +115,13 @@ pub fn decide(
     // An item the queue does not hold goes on to the desk, which is the one place that
     // can say it was decided or expired; there is no offer to check on an item that is
     // not there.
-    if let Some(item) = state
+    let held = state
         .desk
         .approvals
         .queue()
         .iter()
-        .find(|item| item.id == PendingApprovalId(id.0))
-    {
+        .find(|item| item.id == PendingApprovalId(id.0));
+    if let Some(item) = held {
         if !item.may_be_decided_by(&role_name) {
             return Err(CommandError::NotOffered {
                 item: item.id,
@@ -130,13 +130,17 @@ pub fn decide(
             });
         }
     }
-    // GAP-107: a decision that acts on a plan carries what it was told about the laydown in
-    // force, and is refused without the tick when it was told something.
-    let acknowledged = if matches!(
-        decision,
-        OperatorDecision::Accepted | OperatorDecision::Overridden
-    ) {
-        rehearsal_acknowledgement(state)?
+    // GAP-107, GAP-195: a decision that acts on a plan carries what it was told -- the
+    // degraded conditions in force and the laydown's rehearsal standing -- and is refused
+    // without the tick when it was told something. A rejection asks nothing (D-132), and
+    // neither does an item the queue does not hold: nothing was drawn for it, and the desk
+    // says it was decided or expired.
+    let acknowledged = if held.is_some()
+        && matches!(
+            decision,
+            OperatorDecision::Accepted | OperatorDecision::Overridden
+        ) {
+        acknowledgements(state, id)?
     } else {
         Vec::new()
     };
@@ -156,25 +160,75 @@ pub fn decide(
     Ok(())
 }
 
-/// Audit what a person acknowledged before deciding `item` through the node (GAP-107,
-/// GAP-193): the node's record does not carry it, so this desktop's own log does, one
-/// entry per statement acknowledged.
-pub fn audit_linked_acknowledgement(
-    state: &mut AppState,
-    item: gungnir_model::PendingApprovalId,
-    acknowledged: &[gungnir_model::Acknowledgement],
-) {
-    for a in acknowledged {
-        crate::audit::record(
-            state,
-            gungnir_security::actions::DECIDE_PLAN,
-            format!(
-                "acknowledged {}: {} -- before deciding queue item {item} through the node, \
-                 whose record does not carry it",
-                a.subject, a.statement
-            ),
-        );
+/// Everything a decision acting on plan item `id` acknowledges (GAP-107, GAP-195): each
+/// degraded condition in force, then the laydown's rehearsal standing.
+///
+/// The one place both of this desktop's decision paths ask: its own queue
+/// ([`decide`]), and a decision posted through its node (`main.rs`), whose body carries
+/// the answer onto the node's record (GAP-193). Asked of an accept or an override only;
+/// a rejection acts on nothing and asks nothing (D-119, D-132).
+///
+/// # Errors
+///
+/// `CommandError::Unacknowledged` naming the first thing told and not acknowledged.
+pub fn acknowledgements(
+    state: &AppState,
+    id: PendingId,
+) -> Result<Vec<gungnir_model::Acknowledgement>, CommandError> {
+    let mut acknowledged = degraded_acknowledgement(state, id)?;
+    acknowledged.extend(rehearsal_acknowledgement(state)?);
+    Ok(acknowledged)
+}
+
+/// What a decision acting on plan item `id` acknowledges about the degraded conditions in
+/// force (GAP-195, D-132): nothing when none is, and otherwise one acknowledgement per
+/// condition -- subject `degraded <subsystem>`, statement the detail exactly as PN-07 drew
+/// it -- **provided the person ticked the acknowledgement against this very set**.
+///
+/// The set is computed here, at the moment of the decision, by the function PN-07 draws
+/// from, and compared by subsystem with the set the tick was given against
+/// (`state.dialog.acknowledged_for`), as the dialog itself compares it: a stale plan's age
+/// grows every frame without clearing the tick, while a subsystem going down after it
+/// does clear it. The detail recorded is the one in force when the decision was taken.
+///
+/// # Errors
+///
+/// `CommandError::Unacknowledged` naming the first condition the tick does not cover.
+pub fn degraded_acknowledgement(
+    state: &AppState,
+    id: PendingId,
+) -> Result<Vec<gungnir_model::Acknowledgement>, CommandError> {
+    let mut conditions = crate::workspace::decision_conditions(state, id);
+    if conditions.is_empty() {
+        return Ok(Vec::new());
     }
+    let ticked = state.dialog.degraded_acknowledged;
+    let ticked_for = &state.dialog.acknowledged_for;
+    let as_acknowledgement = |(subsystem, detail): (&str, String)| gungnir_model::Acknowledgement {
+        subject: format!("degraded {subsystem}"),
+        statement: detail,
+    };
+    let covered = ticked
+        && conditions.len() == ticked_for.len()
+        && conditions
+            .iter()
+            .zip(ticked_for)
+            .all(|((subsystem, _), t)| *subsystem == t.as_str());
+    if covered {
+        return Ok(conditions.into_iter().map(as_acknowledgement).collect());
+    }
+    // The first condition the tick does not name; a tick given against the same names in
+    // another order names none of them, and the refusal names the first in force, so it
+    // always names something the person can read.
+    let first = conditions
+        .iter()
+        .position(|(subsystem, _)| !ticked || !ticked_for.iter().any(|t| t == subsystem))
+        .unwrap_or(0);
+    let a = as_acknowledgement(conditions.swap_remove(first));
+    Err(CommandError::Unacknowledged {
+        subject: a.subject,
+        statement: a.statement,
+    })
 }
 
 /// What a decision acting on a plan acknowledges about the laydown in force (GAP-107,
@@ -185,7 +239,8 @@ pub fn audit_linked_acknowledgement(
 /// Here as well as on the panel, because the panel's disabled button holds the rule only
 /// for a person at the screen; this is the place every decision on this desktop's queue
 /// passes through. A desktop deciding through its node asks the same question before it
-/// posts (`main.rs`), and audits the answer on its own log (GAP-193).
+/// posts (`main.rs`, through [`acknowledgements`]), and the node records the answer
+/// (GAP-193).
 ///
 /// # Errors
 ///

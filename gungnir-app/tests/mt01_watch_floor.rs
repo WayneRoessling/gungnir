@@ -599,6 +599,7 @@ fn a_saturated_node_queue_worked_by_three_consoles_ends_every_item_once() {
                     state,
                     PendingApprovalId(item),
                     gungnir_remote::queue::DecisionChoice::Accept,
+                    Vec::new(),
                 )
                 .is_ok()
                 {

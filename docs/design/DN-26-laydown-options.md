@@ -269,8 +269,11 @@ The rule, with the definitions the owner delegated (D-119, D-120):
    quotes it. `decisions::decide` refuses an actionable decision without it,
    `CommandError::Unacknowledged`, and records nothing: the panel's gate is not the only
    place the rule holds.
-7. **A desktop linked to a node** asks and gates the same and audits the acknowledgement on
-   its own log; the node's decision record does not yet carry it (**GAP-193**).
+7. **A desktop linked to a node** asks and gates the same before it posts, and the
+   acknowledgement travels on the `/v3` decision body to the node's decision record, its
+   `CommandEvent::Decided` and its audit entry (**GAP-193**, 2026-10-23), as it does on a
+   forwarded decision. Until then the desktop audited it on its own log, and the node's
+   record did not carry it.
 
 Verification: `gungnir-app/tests/rehearsal_advisory.rs` over round 1's baseline and TT-11
 -- a decision with the laydown in force never rehearsed asks, refuses without the tick, and

@@ -41,6 +41,9 @@ use gungnir_ui::panels::approval_queue::PendingId;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+#[path = "support/healthy.rs"]
+mod healthy;
+
 const PASSPHRASE: &str = "correct horse battery staple";
 /// The node's administrator, who holds `effector.report` and keys in what came over the
 /// radio when an effector has no certificate of its own.
@@ -112,6 +115,7 @@ fn a_desktop_that_decides(name: &str) -> (AppState, std::path::PathBuf, Decision
     let Some(item) = state.desk.approvals.queue().first().map(|p| p.id) else {
         panic!("{name} queued nothing: {:?}", state.alerts);
     };
+    healthy::healthy(&mut state);
     decisions::decide(&mut state, PendingId(item.0), OperatorDecision::Accepted).expect("decided");
     let decision = state
         .desk

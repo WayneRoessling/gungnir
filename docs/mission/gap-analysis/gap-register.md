@@ -189,9 +189,9 @@ history, and an entry is never edited once it has merged.
 | GAP-184 | A rehearsal tracks under the default algorithm baseline, not the deployment's | Technical | CAP-5.2, CAP-2.1 | 2 | 8 | S | 16 | I3 | Services engineer | Closed |
 | GAP-196 | A UAS's height above mean sea level is placed as an ellipsoidal height | Technical | CAP-1.7 | 3 | 6 | S | 18 | I4 | Services engineer | Closed |
 | GAP-197 | A DEM or point cloud in NAVD88, EGM96 or a national height datum cannot be placed | Technical | CAP-2.10 | 3 | 8 | M | 24 | I4 | UI engineer | Closed |
-| GAP-193 | A linked desktop's rehearsal acknowledgement is not on the node's decision record | Technical | CAP-5.9, CAP-7.3 | 3 | 10 | S | 30 | I3 | Services engineer | Open |
+| GAP-193 | A linked desktop's rehearsal acknowledgement is not on the node's decision record | Technical | CAP-5.9, CAP-7.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 | GAP-194 | A gap acceptance is held only by the desktop that recorded it | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | L | 12 | I3 | Services engineer | Open |
-| GAP-195 | PN-07's degraded-condition acknowledgement is on no record | Technical | CAP-5.9 | 3 | 10 | S | 30 | I3 | UI engineer | Open |
+| GAP-195 | PN-07's degraded-condition acknowledgement is on no record | Technical | CAP-5.9 | 3 | 10 | S | 30 | I3 | UI engineer | Closed |
 | GAP-198 | The node places a UAS's height above mean sea level uncorrected | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
 | GAP-199 | A UAS reporting only its height above ground is placed at height zero | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
 | GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | L | 32 | I4 | UI engineer | Open |
@@ -2716,11 +2716,12 @@ Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.9 Role workspaces and workflow; CAP-7.3 Three profiles.
 - History:
   - 2026-09-26, Open: Found building GAP-107. A linked desktop asks, gates and audits the acknowledgement on its own log before it posts; the route has nowhere to put it, and a forwarded record is rebuilt without it. Not built there because the route is a `gungnir-api` write path, which is human-owned, and the change is the node's record as much as the desktop's.
+  - 2026-10-23, Closed: **Closed 2026-10-23.** `v3::DecisionRequest` and `v3::DecisionRecordView` carry `acknowledged`, defaulted and left out when empty, so a body without it is the body it was and `SCHEMA_VERSION` stands. The route refuses `400` an acknowledgement with an empty subject or statement. The node takes the decision through `decide_acknowledging`, so its record, its `Decided` event and its audit entry hold what the console acknowledged, and a forwarded decision keeps it (`record_of`, `view_of`, the desktop's failover rebuild). The node records what it is given; whether something had to be acknowledged is the console's question. The desktop's stopgap audit entry is gone. The route and `gungnir-node/src/approval.rs` are human-owned (a `gungnir-api` write path; D-65); see `../../signatures.md`. Tested in `gungnir-node/tests/approval_queue.rs` (`what_a_console_acknowledged_is_on_the_nodes_record`) and `gungnir-node/src/approval.rs`'s unit test. See `../../record/2026-10-23/a-decision-s-acknowledgements-reach-the-node.md`.
 - Evidence: `gungnir-app/src/main.rs` `decide_through_the_node`; `gungnir-api` `/v3` decision route; `gungnir-node/src/approval.rs` `record_of`.
 - Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
 - Impact: A decision taken on a linked desktop, or forwarded after an outage, reaches the node's record without the rehearsal standing the person acknowledged, so the node's record cannot say what the decider was told; only the desktop's audit log can.
-- Closing action: Carry `acknowledged` on the `/v3` decision body and on a forwarded decision, into the node's `DecidedBy`, so the node's `DecisionRecord` and `CommandEvent::Decided` hold it as the desktop's own do. A `gungnir-api` write path, so human-owned.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Closing action: Done 2026-10-23: `acknowledged` on the `/v3` decision body and on a forwarded decision, into the node's `DecidedBy`, so the node's `DecisionRecord` and `CommandEvent::Decided` hold it as the desktop's own do.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-107 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`).
 - Depends on: GAP-107, GAP-133, GAP-134.
 
@@ -2746,11 +2747,12 @@ Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-09-26, Open: Found building GAP-107, when the rehearsal acknowledgement was made to travel with the decision and the older degraded-condition one beside it turned out not to. Not folded in: which conditions are recorded, and whether `decide` refuses without them, changes what every decision on a degraded picture records, and the degraded set is recomputed every frame.
   - 2026-10-23, Open: **Decided by the owner, 2026-10-23 (D-132); nothing is built yet.** Recorded and enforced in `decide`, for accept and override both, for D-119's reason. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
+  - 2026-10-23, Closed: **Closed 2026-10-23 (D-132).** `decisions::acknowledgements` gathers each degraded condition in force, from `workspace::decision_conditions` (the set PN-07 draws), and then the rehearsal standing. `decide` refuses an accept or an override the tick does not cover at the moment of the decision, comparing by subsystem as the dialog does, and records one `Acknowledgement` per condition: subject `degraded <subsystem>`, statement the detail as drawn. It goes on the record, `CommandEvent::Decided` and the audit entry. A rejection asks nothing. PN-07's override is gated on the degraded tick as accept is. A linked desktop asks the same before it posts, and the node records the answer on GAP-193's field. Tested in `gungnir-app/tests/degraded_acknowledgement.rs` and `gungnir-ui`'s `a_degraded_condition_closes_override_until_acknowledged`. See `../../record/2026-10-23/a-decision-s-acknowledgements-reach-the-node.md`.
 - Evidence: `gungnir-ui/src/panels/decision_dialog.rs` `degraded_acknowledged`; `gungnir-app/src/decisions.rs` `decide`.
 - Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
 - Impact: A plan accepted while the tracker was down or the journal failing was gated on a person ticking that they read it, and nothing records that they did: the decision record and the audit entry say nothing of the conditions it was taken under.
-- Closing action: Build D-132. Each degraded condition acknowledged on `DecisionRecord::acknowledged`, named by its subsystem and worded as drawn; `decisions::decide` refusing an accept or an override the acknowledgement does not cover at the moment of the decision; `override_enabled` gaining the degraded gate `accept_enabled` already has. A linked desktop's acknowledgement reaches the node on the field GAP-193 carries.
-- Target: I3. Owner: UI engineer. Status: Open.
+- Closing action: Done 2026-10-23 (D-132): each degraded condition acknowledged on `DecisionRecord::acknowledged`, checked in `decisions::decide` for accept and override, and carried to the node on GAP-193's field.
+- Target: I3. Owner: UI engineer. Status: Closed.
 - Reference: Found building GAP-107 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`).
 - Depends on: GAP-107, D-132.
 

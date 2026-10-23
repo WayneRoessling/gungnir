@@ -31,6 +31,9 @@ use gungnir_ui::panels::approval_queue::PendingId;
 use rehearsal_standing::InForce;
 use std::path::{Path, PathBuf};
 
+#[path = "support/healthy.rs"]
+mod healthy;
+
 fn testdata_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata")
 }
@@ -59,6 +62,10 @@ fn desktop(dir: &Path, change: impl FnOnce(&mut ConfigBaseline)) -> AppState {
         current: MissionTime(100.0),
     });
     state.set_role(Role::Operator);
+    // A feed bound and the services reported, so a decision here is asked about the
+    // rehearsal alone and not about a picture that is only degraded because nothing has
+    // run yet (GAP-195, D-132).
+    healthy::healthy(&mut state);
     state
 }
 

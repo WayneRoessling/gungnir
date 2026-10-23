@@ -39,6 +39,9 @@ use gungnir_ui::panels::approval_queue::PendingId;
 use gungnir_ui::panels::audit::{SessionAction, SignInDraft};
 use gungnir_ui::panels::reports::{FindingKindView, ReviewAction};
 
+#[path = "support/healthy.rs"]
+mod healthy;
+
 const PASSPHRASE: &str = "correct horse battery staple";
 const SUPERVISOR: u64 = 11;
 const SENSOR_MANAGER: u64 = 12;
@@ -243,6 +246,7 @@ fn every_audited_act_on_the_desktop_leaves_exactly_one_entry_naming_it() {
                     role: "Supervisor".into(),
                 })
                 .expect("queued");
+            healthy::healthy(s);
             decisions::decide(s, PendingId(pending.0), OperatorDecision::Accepted)
                 .expect("decided");
         },
@@ -542,13 +546,9 @@ fn every_audit_site_is_an_act_this_file_or_another_performs() {
             "tests/gap_acceptance.rs: a coverage gap accepted (its re-opening is nobody's \
              act, and is written against nobody through `audit::entry`)",
         ),
-        (
-            "gungnir-app/src/decisions.rs",
-            "crate::audit::record(",
-            1,
-            "a rehearsal standing acknowledged before a decision posted through the node \
-             (GAP-193: the node's record does not carry it)",
-        ),
+        // `gungnir-app/src/decisions.rs` wrote one, for an acknowledgement before a decision
+        // posted through the node, until GAP-193 put it on the node's own record and audit
+        // entry. It writes none now, which "no file outside the list" below holds.
         (
             "gungnir-approval/src/queue.rs",
             "host.audit(",

@@ -916,13 +916,13 @@ impl App {
         reason: String,
     ) {
         use gungnir_remote::queue::DecisionChoice as Wire;
-        // GAP-107: the same question this desktop's own queue asks, before anything is
-        // posted. The node's record does not carry the answer (GAP-193), so it is audited
-        // here, on this desktop's own log.
+        // GAP-107, GAP-195: the same question this desktop's own queue asks, before
+        // anything is posted. The answer travels on the body to the node's record and its
+        // audit entry (GAP-193).
         let acknowledged = if matches!(choice, DecisionChoice::Reject) {
             Vec::new()
         } else {
-            match gungnir_app::decisions::rehearsal_acknowledgement(&self.state) {
+            match gungnir_app::decisions::acknowledgements(&self.state, id) {
                 Ok(acknowledged) => acknowledged,
                 Err(refused) => {
                     self.state
@@ -938,14 +938,13 @@ impl App {
             DecisionChoice::Reject => Wire::Reject { reason },
         };
         let item = gungnir_model::PendingApprovalId(id.0);
-        if let Err(why) = gungnir_app::projection::decide(&mut self.state, item, wire) {
+        if let Err(why) = gungnir_app::projection::decide(&mut self.state, item, wire, acknowledged)
+        {
             tracing::error!(%why, item = %item, "the decision could not be sent to the node");
             self.state
                 .alerts
                 .push(format!("Decision not sent: {why}. Nothing was recorded."));
-            return;
         }
-        gungnir_app::decisions::audit_linked_acknowledgement(&mut self.state, item, &acknowledged);
     }
 
     /// PN-12. A failed open is an alert rather than a silent no-op: the panel would

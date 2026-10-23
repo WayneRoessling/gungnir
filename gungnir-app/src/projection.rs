@@ -245,7 +245,8 @@ pub fn refusal_sentence(refused: &gungnir_remote::queue::DecisionRefused) -> Str
     }
 }
 
-/// Take a decision on one of the node's queue items (DN-31 §6.3, §6.6).
+/// Take a decision on one of the node's queue items (DN-31 §6.3, §6.6), carrying what
+/// the person acknowledged at this console onto the node's record (GAP-193).
 ///
 /// # Errors
 ///
@@ -256,6 +257,7 @@ pub fn decide(
     state: &mut AppState,
     item: PendingApprovalId,
     choice: gungnir_remote::queue::DecisionChoice,
+    acknowledged: Vec<gungnir_model::Acknowledgement>,
 ) -> Result<(), String> {
     let Some(link) = state.link.clone() else {
         return Err("this desktop decides through its node, and no link is up".to_owned());
@@ -273,6 +275,7 @@ pub fn decide(
         request: key,
         item,
         choice,
+        acknowledged,
         attempts: 0,
     });
     Ok(())

@@ -1787,6 +1787,7 @@ async fn flush_decisions(
             request: decision.request.clone(),
             item: decision.item,
             choice: decision.choice.clone(),
+            acknowledged: decision.acknowledged.clone(),
         };
         let response = match with_token(client.post(&url), token)
             .json(&request)

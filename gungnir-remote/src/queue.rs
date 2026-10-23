@@ -325,6 +325,10 @@ pub struct OutboundDecision {
     pub request: RequestId,
     pub item: PendingApprovalId,
     pub choice: DecisionChoice,
+    /// What the person acknowledged at this console before deciding (GAP-193), carried on
+    /// the body so the node's record holds it. Fixed when the operator clicks, like the
+    /// key: a retry says what the first attempt said.
+    pub acknowledged: Vec<gungnir_model::Acknowledgement>,
     /// How many times this has been posted. Counted so a decision that keeps meeting a
     /// `504` is visible as a decision still in flight rather than as one that quietly
     /// never landed.
