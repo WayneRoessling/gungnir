@@ -21,7 +21,7 @@ the owner reviewed. A signature from before the repository existed on 2026-09-07
 the first commit and is marked as such. An entry is never edited; a withdrawn signature
 gets a new entry.
 
-257 signatures.
+258 signatures.
 
 | Date | Signer | What was signed | Kind | Paths | Commit | Record |
 |---|---|---|---|---|---|---|
@@ -282,3 +282,4 @@ gets a new entry.
 | 2026-09-27 | Owner | GAP-106 and GAP-107's human-owned code: `coverage.accept_gap` held by the commander alone, its §4 row and role-matrix cells (D-118); and in `gungnir-command` the decision record's acknowledgement fields and the refusal of an unacknowledged accept or override (D-119). | code | `gungnir-security/src/authz.rs`<br>`gungnir-security/src/lib.rs`<br>`gungnir-security/tests/role_matrix.rs`<br>`gungnir-command/src/lib.rs`<br>`gungnir-command/src/queue.rs` | `1c9fe4dc50` | GAP-106; GAP-107; D-118; D-119; DN-33; DN-26 §11; PR #195 |
 | 2026-09-27 | Owner | GAP-196's `gungnir-ingest` gateway code: the ASTERIX Category 129 arm adding the EGM2008 separation to an I129/090 height when the verified grid is lent, and keeping it flagged as mean sea level with a widened vertical variance and a count when not (D-123, D-124); and the geoid lookup interface in `gungnir-ingest/src/geoid.rs`. | code | `gungnir-ingest/src/adapters/asterix.rs`<br>`gungnir-ingest/src/geoid.rs`<br>`gungnir-ingest/src/lib.rs` | `a4981a0e2b` | GAP-196; D-123; D-124; docs/record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md; PR #197 |
 | 2026-09-27 | Owner | GAP-107's decision-path plumbing in `gungnir-approval`: `ApprovalDesk::decide_acknowledging` carrying what the person deciding was told and acknowledged onto the decision record, `CommandEvent::Decided` and the decision's audit entry (D-119). | code | `gungnir-approval/src/queue.rs` | `1c9fe4dc50` | GAP-107; D-119; DN-26 §11; PR #195 |
+| 2026-10-23 | Owner | GAP-193's and GAP-195's human-owned code: the `/v3` decision body and route carrying what the person deciding acknowledged at their console, refusing an acknowledgement with an empty subject or statement, and handing it to the node loop (`gungnir-api/src/v3/mod.rs`, `gungnir-api/src/transport.rs`; a `gungnir-api` write path); and the node loop taking the decision through `decide_acknowledging` and keeping it on a forwarded decision (`gungnir-node/src/approval.rs`, D-65; D-132). | code | `gungnir-api/src/v3/mod.rs`<br>`gungnir-api/src/transport.rs`<br>`gungnir-node/src/approval.rs` | `e1c2da97e4` | GAP-193; GAP-195; D-132; D-65; docs/record/2026-10-23/a-decision-s-acknowledgements-reach-the-node.md; PR #201 |

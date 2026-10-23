@@ -3314,3 +3314,21 @@
   commit: 1c9fe4dc5039822f66b43359e14f7be77251b355
   pre_repository: false
   record: "GAP-107; D-119; DN-26 §11; PR #195"
+
+- date: 2026-10-23
+  signer: Owner
+  subject: >-
+    GAP-193's and GAP-195's human-owned code: the `/v3` decision body and route carrying
+    what the person deciding acknowledged at their console, refusing an acknowledgement
+    with an empty subject or statement, and handing it to the node loop
+    (`gungnir-api/src/v3/mod.rs`, `gungnir-api/src/transport.rs`; a `gungnir-api` write
+    path); and the node loop taking the decision through `decide_acknowledging` and
+    keeping it on a forwarded decision (`gungnir-node/src/approval.rs`, D-65; D-132).
+  kind: code
+  paths:
+  - gungnir-api/src/v3/mod.rs
+  - gungnir-api/src/transport.rs
+  - gungnir-node/src/approval.rs
+  commit: e1c2da97e457a187794e15c9a9d87b36e5b895c7
+  pre_repository: false
+  record: "GAP-193; GAP-195; D-132; D-65; docs/record/2026-10-23/a-decision-s-acknowledgements-reach-the-node.md; PR #201"
