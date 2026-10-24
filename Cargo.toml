@@ -339,7 +339,7 @@ uuid = { version = "1", default-features = false, features = ["std", "serde"] }
 # generic-array 0.14.7, crypto-common 0.1.7, base64ct 1.8.3 or subtle 2.6.1 already beneath
 # D-20's crates. Repeat that way, not by reading `cargo tree` for a crate no member uses --
 # which reports the crate does not exist.
-p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pem"] }
+p256 = { version = "0.14", features = ["ecdh", "ecdsa", "pem", "getrandom"] }
 
 # D-39: the operating system's keystore (DN-22 §5, amendment 3's
 # "until a §2.9 decision admits an OS-keystore crate"). `v1` is the crate's own

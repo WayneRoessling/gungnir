@@ -3275,3 +3275,30 @@
     degraded picture would go unrecorded); recording without enforcing (the record would
     say what a dialog happened to check). See
     `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
+- id: D-133
+  decision: Whether p256 moves to 0.14 for RUSTSEC-2026-0387
+  question: >-
+    RUSTSEC-2026-0387 (2026-10-23) finds operations in `crypto-bigint` 0.5.5 meant to be
+    constant-time that can take secret-dependent branches, depending on the compiler and
+    target CPU. It reaches every binary through `p256` 0.13, `ecdsa` 0.16 and
+    `elliptic-curve` 0.13, which requires `crypto-bigint` 0.5, and no 0.5 release fixes
+    it; the fix is 0.7.6. `cargo-deny` failed on main and on every pull request. Upgrade
+    `p256` to 0.14, which takes `elliptic-curve` 0.14 and `crypto-bigint` 0.7, or ignore
+    the advisory meanwhile?
+  raised_in: "PR #204's cargo-deny run; D-22; D-34"
+  decider: Owner
+  unblocks: "cargo-deny on main"
+  resolved: 2026-10-24
+  outcome: >-
+    **Taken by the owner, 2026-10-24: `p256` moves to 0.14, in its own pull request, for
+    the owner's signature since `gungnir-security` is human-owned; the advisory is not
+    ignored.** The workspace entry gains `p256`'s `getrandom` feature, which is how 0.14
+    draws keys from the system RNG (the `Generate` trait) now that `rand_core`'s `OsRng`
+    is not re-exported; each key is generated as before, from the operating system's
+    RNG, panicking if it fails exactly as `OsRng` did. `ToEncodedPoint` becomes
+    `ToSec1Point`, and the escrow nonce keeps `aes-gcm`'s own `OsRng`. No signature,
+    key or wire format changes: DER signatures, SEC1 points and PKCS#8 PEM are the same
+    encodings. The graph loses `crypto-bigint` 0.5 and two duplicated crates, `const-oid`
+    0.9 and `hkdf` 0.12. Rejected: a dated ignore (a vulnerability notice in a shipped
+    cryptographic path, not an unmaintained one, and no reason to leave it once a fix
+    exists). See `../../record/2026-10-24/p256-moves-to-0-14-for-a-constant.md`.
