@@ -54,7 +54,9 @@
 //! field.
 //!
 //! A `Queued` or `Escalated` event then marks the projection stale and the link takes a
-//! fresh picture at once. That is not polling -- nothing is asked for while the node's
+//! fresh picture at once. The node offers that event only after it has published the
+//! picture holding its item (`gungnir_node::picture::publish_picture`, GAP-201), so the
+//! picture taken on the frame cannot be older than the frame. That is not polling -- nothing is asked for while the node's
 //! queue is still -- and it is what keeps every field of a row the node's own single
 //! computation. Building a row out of the stream alone would mean joining three events
 //! (`PlanProposed` for the plan, `PlanEvaluated` for the verdict, `Queued` for the

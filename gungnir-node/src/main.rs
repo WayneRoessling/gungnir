@@ -2161,18 +2161,33 @@ async fn run(
         for envelope in journal_rx.try_iter() {
             journal.append(session, &envelope)?;
         }
-        // The same envelopes reach every connected desktop. Offered after the journal
-        // append, so nothing is published to a client that is not yet on disk here --
-        // the node is the system of record, and a desktop must never hold an envelope
-        // the node could lose.
-        for envelope in api_rx.try_iter() {
-            if let Err(err) = api.publish_event(envelope) {
-                tracing::error!(%err, "could not offer an envelope to the transport");
-            }
-        }
 
         let health = picture::read_health(&tracking, &intercept, &gateway);
-        // MOE-06: the transition is on the record, the periodic log is not.
+        api.set_now(now.0);
+        // The same envelopes reach every connected desktop, offered by `publish_picture`
+        // once the picture is out. After the journal append, so nothing is published to
+        // a client that is not yet on disk here -- the node is the system of record, and
+        // a desktop must never hold an envelope the node could lose. After the picture,
+        // so a desktop that reads `GET /v3/queue` on this tick's `Queued` reads a queue
+        // that holds it (GAP-201).
+        picture::publish_picture(
+            &api,
+            tracking.tracks(),
+            tracking.bearing_rays(),
+            tracking.pipeline_stats(),
+            announcer.last_plan(),
+            announcer.last_standing(),
+            health,
+            // GAP-132: the queue goes out with the picture, so `GET /v3/queue` and the
+            // snapshot's `queue` are one publish read through two doors.
+            approval_desk.queue_view(&config, &resources, tracking.tracks()),
+            approval_desk.held_layers(&config),
+            api_rx.try_iter(),
+        );
+
+        // MOE-06: the transition is on the record, the periodic log is not. Published
+        // after this tick's drains, so it is journaled and offered on the next tick, as
+        // it always was; the picture above already carries it.
         let changed = announcer.health(&bus, now, health)?;
         if changed || last_health_log.elapsed() >= HEALTH_LOG_INTERVAL {
             // The registry is reported rather than merely held: a node that built one
@@ -2195,20 +2210,6 @@ async fn run(
             );
             last_health_log = Instant::now();
         }
-        api.set_now(now.0);
-        picture::publish_picture(
-            &api,
-            tracking.tracks(),
-            tracking.bearing_rays(),
-            tracking.pipeline_stats(),
-            announcer.last_plan(),
-            announcer.last_standing(),
-            health,
-            // GAP-132: the queue goes out with the picture, so `GET /v3/queue` and the
-            // snapshot's `queue` are one publish read through two doors.
-            approval_desk.queue_view(&config, &resources, tracking.tracks()),
-            approval_desk.held_layers(&config),
-        );
         // Computed here rather than in the request handler, so a caller's polling rate
         // cannot decide this node's load.
         if let Err(err) = api.publish_coverage(coverage_answer(&config, &sensors)) {

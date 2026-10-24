@@ -26,7 +26,7 @@
 use gungnir_api::transport::NodeApi;
 use gungnir_api::v3::SnapshotResponse;
 use gungnir_config::ConfigBaseline;
-use gungnir_eventing::{Event, EventBus, EventingError};
+use gungnir_eventing::{Envelope, Event, EventBus, EventingError};
 use gungnir_ingest::{AllowListAuthenticator, IngestGateway};
 use gungnir_intercept_service::{DpInterceptService, InterceptService, PlanOutcome};
 use gungnir_model::events::InterceptEvent;
@@ -464,6 +464,17 @@ impl Announcer {
 /// linked desktop has read since GAP-161. And so is the plan's standing, by
 /// `InterceptEvent::PlanStanding` (GAP-157); the snapshot carries the one last published,
 /// so a desktop that connects mid-stall draws the stale line from its first frame.
+///
+/// **Then the tick's `envelopes` are offered to every connected desktop, and not
+/// before** (GAP-201). A linked desktop answers a `Queued` or `Escalated` frame by
+/// reading `GET /v3/queue` at once, and that route reads this snapshot's `queue`. An
+/// envelope offered before this tick's picture let a fast desktop read the queue as it
+/// was, take that as its picture and clear the mark the frame had set, so the item it
+/// had just been told about never showed until the queue moved again. Offered after,
+/// any picture a desktop reads on a frame holds that frame's item, or a later queue
+/// whose ending the stream also carries. The caller appends the envelopes to the
+/// journal first: nothing reaches a client that is not on disk. Returns how many the
+/// transport took; a refusal is logged, as the loop always did.
 #[allow(clippy::too_many_arguments)]
 pub fn publish_picture(
     api: &Arc<NodeApi>,
@@ -475,7 +486,8 @@ pub fn publish_picture(
     health: SystemHealth,
     queue: Vec<gungnir_api::v3::QueueItemView>,
     held_layers: Vec<gungnir_model::HeldLayerView>,
-) {
+    envelopes: impl IntoIterator<Item = Envelope>,
+) -> usize {
     let mut snapshot =
         SnapshotResponse::new(tracks.to_vec(), Some(plan.clone()), health, Vec::new())
             .with_bearing_data(
@@ -492,4 +504,12 @@ pub fn publish_picture(
     if let Err(err) = api.publish_snapshot(snapshot) {
         tracing::error!(%err, "could not publish the snapshot");
     }
+    let mut offered = 0;
+    for envelope in envelopes {
+        match api.publish_event(envelope) {
+            Ok(()) => offered += 1,
+            Err(err) => tracing::error!(%err, "could not offer an envelope to the transport"),
+        }
+    }
+    offered
 }

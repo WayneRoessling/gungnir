@@ -326,17 +326,15 @@ impl Node {
             intercept_healthy: self.intercept.is_healthy(),
             ingest_healthy: true,
         };
-        self.announcer
-            .health(&self.bus, now, health)
-            .expect("published");
-        for envelope in self.api_rx.try_iter() {
-            self.api.publish_event(envelope).expect("offered");
-        }
         self.api.set_now(now.0);
         let queue = self
             .approval
             .queue_view(&self.config, &self.resources, tracks);
-        picture::publish_picture(
+        // The picture, then the tick's envelopes (GAP-201): offered first, a `Queued`
+        // let the desktop read the queue before this tick's item was in it.
+        let envelopes: Vec<Envelope> = self.api_rx.try_iter().collect();
+        let count = envelopes.len();
+        let offered = picture::publish_picture(
             &self.api,
             tracks,
             &[],
@@ -346,7 +344,12 @@ impl Node {
             health,
             queue,
             self.approval.held_layers(&self.config),
+            envelopes,
         );
+        assert_eq!(offered, count, "the transport refused an envelope");
+        self.announcer
+            .health(&self.bus, now, health)
+            .expect("published");
     }
 }
 
