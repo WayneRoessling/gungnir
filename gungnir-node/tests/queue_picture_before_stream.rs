@@ -27,8 +27,8 @@ use gungnir_geo::InMemoryGeoService;
 use gungnir_model::events::CommandEvent;
 use gungnir_model::policy_settings::AuthorityRule;
 use gungnir_model::{
-    Classification, EffectorLayer, InterceptSolutionView, MissionTime, PlanId, PlanKind,
-    PlanView, Provenance, Quality, Releasability, ResourceId, ResourceView, SystemHealth, TrackId,
+    Classification, EffectorLayer, InterceptSolutionView, MissionTime, PlanId, PlanKind, PlanView,
+    Provenance, Quality, Releasability, ResourceId, ResourceView, SystemHealth, TrackId,
     TrackStatus, TrackView, WeaponsControlStatus,
 };
 use gungnir_node::approval::{self, Frame, NodeApproval};
@@ -236,7 +236,11 @@ fn a_queue_event_is_offered_only_once_the_queue_it_announces_is_served() {
 
     // Escalated: the item is offered to the new role in the queue a desktop reads.
     let escalated = node.step(SUBMITTED + ESCALATE_AFTER_S + 1.0, &tracks, None);
-    assert_eq!(escalated.len(), 1, "one item past its escalation, one Escalated");
+    assert_eq!(
+        escalated.len(),
+        1,
+        "one item past its escalation, one Escalated"
+    );
     let Offered { event, queue } = &escalated[0];
     let CommandEvent::Escalated { to_role, .. } = event else {
         panic!("expected Escalated, got {event:?}");
