@@ -43,7 +43,7 @@
 //! `gungnir-data` (`ARCHITECTURE.md` §7.1), which is why the grid crosses as an interface
 //! lent here rather than a call made there.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use gungnir_data::geoid::{GeoidGrid, GeoidModel, PinnedGrid, UndulationService};
@@ -346,14 +346,15 @@ pub fn file_datum(source: &str) -> Result<gungnir_data::nad83::HorizontalDatum, 
 /// so a list whose first entry is PROJ's own `share/proj` still finds a grid installed
 /// beside it.
 fn candidate(baseline_dir: Option<&str>, model: PinnedGrid) -> Option<(PathBuf, GridSource)> {
-    if let Some(dir) = baseline_dir {
-        return Some((Path::new(dir).join(model.file()), GridSource::Baseline));
-    }
-    let listed = std::env::var_os("PROJ_DATA").or_else(|| std::env::var_os("PROJ_LIB"))?;
-    std::env::split_paths(&listed)
-        .map(|dir| dir.join(model.file()))
-        .find(|path| path.is_file())
-        .map(|path| (path, GridSource::ProjData))
+    // The rule is `gungnir-data`'s, shared with the node's own check (GAP-198).
+    gungnir_data::geoid::locate(baseline_dir, model.file()).map(|(path, named)| {
+        let source = if named {
+            GridSource::Baseline
+        } else {
+            GridSource::ProjData
+        };
+        (path, source)
+    })
 }
 
 /// Start the checks on the first tick. Idempotent, and a status already set -- a test

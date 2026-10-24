@@ -214,8 +214,9 @@ jobs:
   # `libsqlite3.a`, which is not what MSVC produces -- and Windows is the target
   # release.yml ships gungnir-app for. So the feature-gated tests in
   # `gungnir-data/tests/pointcloud_crs.rs`, `gungnir-app/tests/pointcloud_crs.rs`,
-  # `gungnir-data/src/geospatial/mod.rs`'s `crs_tests` and `gungnir-app/tests/terrain.rs`
-  # run here and nowhere else. If this job is ever removed, that code becomes untested.
+  # `gungnir-data/src/geospatial/mod.rs`'s `crs_tests`, `gungnir-app/tests/terrain.rs`
+  # and, since GAP-198, `gungnir-node`'s own `crs` build and its geoid test run here and
+  # nowhere else. If this job is ever removed, that code becomes untested.
   #
   # GAP-023's DEM half arrived behind its own `crs-projection` feature and its own
   # `crs-projection.yml` workflow, which was the first place that code ever built. Both
@@ -265,9 +266,9 @@ jobs:
       - name: rustc warnings are errors, with the feature on
         env:
           RUSTFLAGS: -D warnings
-        run: cargo check -p gungnir-data -p gungnir-app --features crs --all-targets
+        run: cargo check -p gungnir-data -p gungnir-app -p gungnir-node --features crs --all-targets
       - name: clippy, with the feature on
-        run: cargo clippy -p gungnir-data -p gungnir-app --features crs --all-targets
+        run: cargo clippy -p gungnir-data -p gungnir-app -p gungnir-node --features crs --all-targets
       # The conversion itself: `gungnir-data`'s check against an independent pyproj run,
       # and `gungnir-app`'s end-to-end tick through a real `LocalFrame`.
       - name: point clouds -- the conversion against the real fixture
@@ -294,6 +295,8 @@ jobs:
           set -o pipefail
           cargo test -p gungnir-data --features crs --test geoid 2>&1 | tee geoid.log
           cargo test -p gungnir-app --features crs --test uas_identification 2>&1 | tee -a geoid.log
+          # GAP-198: the node lending the verified grid to its feeds, on the committed clip.
+          cargo test -p gungnir-node --features crs --bin gungnir-node 2>&1 | tee -a geoid.log
       # The full pinned grids: restored from the cache under the manifest's own digest,
       # each fetched from PROJ's CDN only when missing, and every one checked against
       # deploy/geoid/SHA256SUMS either way, so a changed or truncated file stops the job
@@ -371,6 +374,12 @@ jobs:
   # binary goes into the image through the `--build-context build=` override
   # deploy/node/Dockerfile documents, and the image is started once to prove it runs.
   #
+  # **Since GAP-198 (D-129) the node is built with its `crs` feature**, linking libproj
+  # and libtiff to read the EGM2008 geoid grid, so the build image is the Dockerfile's
+  # own `toolchain` stage (the same `rust` image plus libproj's build dependencies),
+  # built first, and the start-up check is also what proves the runtime stage carries the
+  # shared libraries that libproj needs.
+  #
   # The from-source path still runs where it can still find something: on main (off
   # everyone's critical path, and the build release.yml's container job will repeat),
   # and on a pull request that touches what the in-image compile depends on -- the
@@ -382,8 +391,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # The Dockerfile's build stage. Keep the two in step.
-      BUILD_IMAGE: rust:1.98-slim-bookworm
+      # The Dockerfile's `toolchain` stage, built below: `rust:1.98-slim-bookworm` plus
+      # what libproj's source build needs, since the node is built with `crs` (GAP-198).
+      # Built from the Dockerfile itself, so the two cannot drift.
+      BUILD_IMAGE: gungnir-node-toolchain
     steps:
       - uses: actions/checkout@v4
         with:
@@ -404,11 +415,14 @@ jobs:
       # build had saved -- which held no `target/bookworm` -- and therefore saved nothing,
       # so every run stayed cold with a green "cache hit" in the log. Change the name
       # whenever what this job puts in `target/` changes shape.
+      # `-crs` since GAP-198: the target directory now holds libproj's build too.
       - uses: Swatinem/rust-cache@v2
         with:
-          key: bookworm-container
+          key: bookworm-container-crs
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
+      - name: the build image, from the Dockerfile's own toolchain stage
+        run: docker buildx build -f deploy/node/Dockerfile --target toolchain -t "$BUILD_IMAGE" --load .
       - name: build the headless node only (no UI crates), against the runtime's glibc
         shell: bash
         run: |
@@ -430,7 +444,7 @@ jobs:
             -e RUSTUP_TOOLCHAIN="$ver" \
             -e CARGO_TARGET_DIR=/src/target/bookworm \
             -e CARGO_TERM_COLOR=always \
-            "$BUILD_IMAGE" cargo build --release -p gungnir-node --locked
+            "$BUILD_IMAGE" cargo build --release -p gungnir-node --features crs --locked
       - name: container image, from the binary built above
         run: |
           mkdir -p prebuilt/out

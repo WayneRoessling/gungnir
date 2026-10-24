@@ -578,6 +578,7 @@ REL:uses:RS-node->RS-approval,uses,,RS-node,RS-approval,uses: RS-node -> RS-appr
 REL:uses:RS-node->RS-command,uses,,RS-node,RS-command,uses: RS-node -> RS-command,Dependency
 REL:uses:RS-node->RS-analytics,uses,,RS-node,RS-analytics,uses: RS-node -> RS-analytics,Dependency
 REL:uses:RS-node->RS-observability,uses,,RS-node,RS-observability,uses: RS-node -> RS-observability,Dependency
+REL:uses:RS-node->RS-data,uses,,RS-node,RS-data,uses: RS-node -> RS-data,Dependency
 REL:uses:RS-node->RS-scenario,uses,,RS-node,RS-scenario,uses: RS-node -> RS-scenario,Dependency
 REL:uses:RS-observability->RS-model,uses,,RS-observability,RS-model,uses: RS-observability -> RS-model,Dependency
 REL:uses:RS-oracle->RS-filters,uses,,RS-oracle,RS-filters,uses: RS-oracle -> RS-filters,Dependency
