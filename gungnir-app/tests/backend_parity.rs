@@ -510,22 +510,19 @@ impl Node {
                 .append(SessionId(1), &envelope)
                 .expect("journaled");
         }
-        let mut offered = 0;
-        for envelope in self.api_rx.try_iter() {
-            self.offered = self.offered.max(envelope.seq);
-            self.api.publish_event(envelope).expect("offered");
-            offered += 1;
+        let envelopes: Vec<Envelope> = self.api_rx.try_iter().collect();
+        if let Some(last) = envelopes.iter().map(|e| e.seq).max() {
+            self.offered = self.offered.max(last);
         }
+        let count = envelopes.len();
 
         let health = picture::read_health(&self.tracking, &self.intercept, &self.gateway);
-        self.announcer
-            .health(&self.bus, now, health)
-            .expect("published");
         self.api.set_now(now.0);
         let queue = self
             .approval
             .queue_view(&self.config, &self.resources, self.tracking.tracks());
-        picture::publish_picture(
+        // The picture, then the tick's envelopes (GAP-201).
+        let offered = picture::publish_picture(
             &self.api,
             self.tracking.tracks(),
             self.tracking.bearing_rays(),
@@ -535,7 +532,12 @@ impl Node {
             health,
             queue,
             self.approval.held_layers(&self.config),
+            envelopes,
         );
+        assert_eq!(offered, count, "the transport refused an envelope");
+        self.announcer
+            .health(&self.bus, now, health)
+            .expect("published");
         offered
     }
 }

@@ -195,8 +195,9 @@ history, and an entry is never edited once it has merged.
 | GAP-198 | The node places a UAS's height above mean sea level uncorrected | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
 | GAP-199 | A UAS reporting only its height above ground is placed at height zero | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
 | GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | L | 32 | I4 | UI engineer | Closed |
+| GAP-201 | A linked desktop could miss a queued item until the queue moved again | Technical | CAP-5.9, CAP-4.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 
-Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 183 gaps, 3 mission, 180 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2801,4 +2802,19 @@ Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: UI engineer. Status: Closed.
 - Reference: D-125; GAP-197; `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`.
 - Depends on: D-125, GAP-197, D-127, D-128.
+
+**GAP-201 A linked desktop could miss a queued item until the queue moved again**
+
+- Type: Technical.
+- Capability: CAP-5.9 Role workspaces and workflow; CAP-4.3 Never execute without a decision.
+- History:
+  - 2026-10-24, Open: Found by CI on PR #205, which changed none of the code involved: the linked desktop timed out waiting for the interim plan's queue item.
+  - 2026-10-24, Closed: Fixed on the node. `picture::publish_picture` takes the tick's envelopes and offers them once the snapshot is out; `main.rs` and the four harnesses that copy its order call it that way. The health event keeps its place after the drains. `gungnir-node/tests/queue_picture_before_stream.rs` reads the queue as each `Queued` and `Escalated` is offered, and fails under the old order. See `../../record/2026-10-24/the-queue-s-picture-goes-out-before-its.md`.
+- Evidence: `gungnir-node/src/main.rs` (the tick's `api_rx` drain ran before `picture::publish_picture`); `gungnir_api::transport::NodeApi::queue` (reads the published snapshot); `gungnir_remote::link` (`refresh_queue` on every frame); `gungnir-app/tests/linked_plan_standing.rs` failed once on CI, PR #205, run 40094267726, attempt 1, and never in 32 concurrent local runs.
+- Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
+- Impact: The node's tick offered its envelopes to linked desktops before it published the picture `GET /v3/queue` serves. A desktop that read the queue on a `Queued` or `Escalated` frame could read it as it was before the item, take that as its picture and clear the mark the frame had set, so the item an operator had to decide stayed off PN-06 until some later queue event.
+- Closing action: Publish the picture first and offer the tick's envelopes after it, both after the journal append, through one function every harness calls; test it with a hook at the moment of the offer rather than with timing.
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: GAP-133; DN-31 §6.6; `../../record/2026-10-24/the-queue-s-picture-goes-out-before-its.md`.
+- Depends on: GAP-133.
 

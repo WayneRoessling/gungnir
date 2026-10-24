@@ -5,8 +5,8 @@
 //! GAP-125, the `gungnir-observability` row on the node: "service health flags toggled;
 //! health mirrors flags" (`docs/verification-capability-table.md` §2), through the
 //! functions the node's loop calls, in `main.rs`'s order: the gateway's tick, then
-//! [`picture::read_health`], [`picture::Announcer::health`] and
-//! [`picture::publish_picture`].
+//! [`picture::read_health`], [`picture::publish_picture`] and
+//! [`picture::Announcer::health`].
 //!
 //! Each service's flag is taken true, false, true while the other two stay healthy. After
 //! every tick the node's health, the snapshot a connecting desktop reads, and the bus the
@@ -111,7 +111,7 @@ fn the_nodes_health_follows_each_flag_true_false_true() {
         // The loop's order: ingest first, so an adapter failure is this tick's.
         let _ = gateway.tick(now, &mut tracking);
         let health = picture::read_health(&tracking, &intercept, &gateway);
-        let changed = announcer.health(&bus, now, health).expect("published");
+        // No envelopes offered: this test reads the bus itself, through `events`.
         picture::publish_picture(
             &api,
             &[],
@@ -122,7 +122,9 @@ fn the_nodes_health_follows_each_flag_true_false_true() {
             health,
             Vec::new(),
             Vec::new(),
+            std::iter::empty(),
         );
+        let changed = announcer.health(&bus, now, health).expect("published");
 
         let expected = SystemHealth {
             tracking_healthy: tracking_flag.get(),

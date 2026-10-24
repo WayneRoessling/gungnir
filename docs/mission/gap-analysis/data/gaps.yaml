@@ -11570,3 +11570,48 @@
       verified and listed on PN-09 like the geoid grids. Tested against `pyproj` in both
       `pointcloud_crs.rs` files; the `crs` build runs only in `proj-crs`. See
       `../../record/2026-10-23/nad83-reaches-wgs-84-by-its-realisation.md`.
+
+- id: GAP-201
+  name: A linked desktop could miss a queued item until the queue moved again
+  type: Technical
+  caps: [CAP-5.9, CAP-4.3]
+  layer: Service facades and wiring
+  sev: 3
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: [GAP-133]
+  impact: >-
+    The node's tick offered its envelopes to linked desktops before it published the
+    picture `GET /v3/queue` serves. A desktop that read the queue on a `Queued` or
+    `Escalated` frame could read it as it was before the item, take that as its picture
+    and clear the mark the frame had set, so the item an operator had to decide stayed
+    off PN-06 until some later queue event.
+  evidence: >-
+    `gungnir-node/src/main.rs` (the tick's `api_rx` drain ran before
+    `picture::publish_picture`); `gungnir_api::transport::NodeApi::queue` (reads the
+    published snapshot); `gungnir_remote::link` (`refresh_queue` on every frame);
+    `gungnir-app/tests/linked_plan_standing.rs` failed once on CI, PR #205, run
+    40094267726, attempt 1, and never in 32 concurrent local runs
+  action: >-
+    Publish the picture first and offer the tick's envelopes after it, both after the
+    journal append, through one function every harness calls; test it with a hook at the
+    moment of the offer rather than with timing.
+  ref: >-
+    GAP-133; DN-31 §6.6;
+    `../../record/2026-10-24/the-queue-s-picture-goes-out-before-its.md`
+  history:
+  - date: 2026-10-24
+    status: Open
+    note: >-
+      Found by CI on PR #205, which changed none of the code involved: the linked
+      desktop timed out waiting for the interim plan's queue item.
+  - date: 2026-10-24
+    status: Closed
+    note: >-
+      Fixed on the node. `picture::publish_picture` takes the tick's envelopes and
+      offers them once the snapshot is out; `main.rs` and the four harnesses that copy
+      its order call it that way. The health event keeps its place after the drains.
+      `gungnir-node/tests/queue_picture_before_stream.rs` reads the queue as each
+      `Queued` and `Escalated` is offered, and fails under the old order. See
+      `../../record/2026-10-24/the-queue-s-picture-goes-out-before-its.md`.

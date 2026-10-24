@@ -340,16 +340,16 @@ impl Node {
                 .append(SessionId(2), &envelope)
                 .expect("journaled");
         }
-        for envelope in self.api_rx.try_iter() {
-            self.api.publish_event(envelope).expect("offered");
-        }
         self.api.set_now(NODE_NOW.0);
         let health = SystemHealth {
             tracking_healthy: true,
             intercept_healthy: true,
             ingest_healthy: true,
         };
-        picture::publish_picture(
+        // The picture, then the tick's envelopes (GAP-201).
+        let envelopes: Vec<Envelope> = self.api_rx.try_iter().collect();
+        let count = envelopes.len();
+        let offered = picture::publish_picture(
             &self.api,
             &[],
             &[],
@@ -359,7 +359,9 @@ impl Node {
             health,
             Vec::new(),
             Vec::new(),
+            envelopes,
         );
+        assert_eq!(offered, count, "the transport refused an envelope");
     }
 
     fn entries(&self) -> Vec<AuditEntry> {
