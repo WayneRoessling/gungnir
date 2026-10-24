@@ -458,6 +458,7 @@ fn the_recorded_edges_are_in_the_manifests() {
         ("gungnir-node", "gungnir-command", "(y)"),
         ("gungnir-scenario", "gungnir-sensor-sim", "(z)"),
         ("gungnir-app", "gungnir-sensor-sim", "(aa)"),
+        ("gungnir-node", "gungnir-data", "(ab)"),
     ] {
         assert!(
             has(from, to),

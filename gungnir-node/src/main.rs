@@ -313,6 +313,10 @@ struct FeedReports {
         String,
         gungnir_ingest::adapters::asterix::UasIdentificationSink,
     )>,
+    /// GAP-198 (D-129): what the node has of the EGM2008 geoid -- verified, refused, none
+    /// installed, or not read by a build without `crs` -- on every health line, as PN-09
+    /// says it on the desktop.
+    geoid: String,
 }
 
 impl FeedReports {
@@ -329,9 +333,10 @@ impl FeedReports {
                     s.service_reports,
                     s.malformed_datagrams + s.not_detections
                 );
-                // GAP-196 (D-124): every Category 129 height this binary tracks is above
-                // mean sea level, uncorrected ([`NODE_HAS_NO_GEOID`]); the count is the
-                // loss, said where the feed's other losses are.
+                // GAP-196 (D-124): a Category 129 height the feed could not correct --
+                // no verified EGM2008 grid ([`node_geoid`]), or a position off it -- stays
+                // above mean sea level; the count is the loss, said where the feed's other
+                // losses are.
                 if s.uas_heights_msl_uncorrected > 0 {
                     use std::fmt::Write as _;
                     // Writing into a `String` cannot fail.
@@ -372,10 +377,15 @@ fn build_gateway(
     // DN-16 §5: a peer is a source and is admitted like one, under its own id. The same
     // gateway `gungnir-app/tests/backend_parity.rs` builds (GAP-120).
     let mut gateway = picture::gateway(config);
+    // GAP-198 (D-129): the EGM2008 grid, verified once at start and lent to every radar
+    // feed through one handle, or the reason there is none.
+    let (geoid, geoid_line) = node_geoid(config);
+    tracing::info!(geoid = %geoid_line, "geoid grid");
     let mut reports = FeedReports {
         radar: Vec::new(),
         peers: Vec::new(),
         uas: Vec::new(),
+        geoid: geoid_line,
     };
     if !config.peers.is_empty() {
         reports.peers = bind_peers(config, &mut gateway, handle);
@@ -386,7 +396,7 @@ fn build_gateway(
         );
     }
     let mut sinks = Vec::new();
-    bind_radar_feeds(config, &mut gateway, &mut reports, &mut sinks);
+    bind_radar_feeds(config, &mut gateway, &mut reports, &mut sinks, &geoid);
     // GAP-010: AIS receivers. The reports go to a sink nobody on the node fuses.
     //
     // **The reason changed on 2026-09-06 and the conclusion did not**, which is worth
@@ -451,12 +461,116 @@ fn build_gateway(
     (gateway, sinks, reports, sapient)
 }
 
-/// Why a Category 129 height stays above mean sea level on this binary (GAP-196,
-/// D-124): the EGM2008 grid is read through PROJ in `gungnir-data` behind its `crs`
-/// feature (D-121), and this binary has no edge to that crate (`ARCHITECTURE.md` §7.1)
-/// and links no libproj. GAP-198 is what would change it.
-const NODE_HAS_NO_GEOID: &str = "gungnir-node carries no geoid model: the EGM2008 grid is \
-     read through libproj in gungnir-data, which this binary does not link (GAP-198)";
+/// Why a Category 129 height stays above mean sea level on a node built without the
+/// `crs` feature (GAP-196, D-124; GAP-198): the EGM2008 grid is read through libproj in
+/// `gungnir-data`, which such a build does not link. The node image is built with it.
+#[cfg(not(feature = "crs"))]
+const NODE_BUILT_WITHOUT_CRS: &str = "this gungnir-node was built without the crs feature, \
+     so it reads no geoid grid (GAP-198); the node image is built with it";
+
+/// The EGM2008 geoid as the node's radar feeds see it (GAP-198, D-129), and the line its
+/// health log says about it: the pinned grid, found where the desktop finds it
+/// (`geoid_grid_dir`, else `PROJ_DATA`), verified against its digest, and lent through one
+/// PROJ lookup service -- or the reason there is none, which every feed then holds and
+/// every UAS height above mean sea level carries, flagged and widened (D-124).
+#[cfg(feature = "crs")]
+fn node_geoid(config: &ConfigBaseline) -> (gungnir_ingest::geoid::GeoidHandle, String) {
+    use gungnir_data::geoid::{GeoidGrid, GeoidModel};
+    let model = GeoidModel::Egm2008;
+    let Some((path, named)) =
+        gungnir_data::geoid::locate(config.geoid_grid_dir.as_deref(), model.file())
+    else {
+        let reason = format!(
+            "no EGM2008 geoid grid is installed ({} is in no geoid_grid_dir or PROJ_DATA \
+             directory)",
+            model.file()
+        );
+        return (
+            gungnir_ingest::geoid::GeoidHandle::unavailable(reason.clone()),
+            format!("EGM2008 geoid grid: none installed; {reason}"),
+        );
+    };
+    let from = if named { "geoid_grid_dir" } else { "PROJ_DATA" };
+    let verified = GeoidGrid::verify(&path, model.sha256())
+        .map_err(|e| format!("{} (from {from}) refused: {e}", path.display()));
+    lend_geoid(verified, from)
+}
+
+/// The node built without `crs`: no grid is read, and every feed holds why.
+#[cfg(not(feature = "crs"))]
+fn node_geoid(_config: &ConfigBaseline) -> (gungnir_ingest::geoid::GeoidHandle, String) {
+    (
+        gungnir_ingest::geoid::GeoidHandle::unavailable(NODE_BUILT_WITHOUT_CRS),
+        format!("EGM2008 geoid grid: not read; {NODE_BUILT_WITHOUT_CRS}"),
+    )
+}
+
+/// Lend a verified grid -- or carry the refusal -- as the handle every radar feed holds,
+/// with the health line saying which (GAP-198). A grid that verified and that PROJ still
+/// cannot open for lookups is a refusal too, with PROJ's reason: the deployment installed
+/// it and is not getting what it installed it for.
+#[cfg(feature = "crs")]
+fn lend_geoid(
+    verified: Result<gungnir_data::geoid::GeoidGrid, String>,
+    from: &str,
+) -> (gungnir_ingest::geoid::GeoidHandle, String) {
+    let grid = match verified {
+        Ok(grid) => grid,
+        Err(reason) => {
+            return (
+                gungnir_ingest::geoid::GeoidHandle::unavailable(format!(
+                    "no verified EGM2008 geoid grid: {reason}"
+                )),
+                format!("EGM2008 geoid grid: {reason}"),
+            )
+        }
+    };
+    match gungnir_data::geoid::UndulationService::start(&grid) {
+        Ok(service) => {
+            let handle = gungnir_ingest::geoid::GeoidHandle::default();
+            handle.set_available(std::sync::Arc::new(NodeEgm2008(service)));
+            (
+                handle,
+                format!(
+                    "EGM2008 geoid grid: verified, {} (from {from}; SHA-256 {}...); a UAS's \
+                     height above mean sea level is corrected to the ellipsoid",
+                    grid.path().display(),
+                    &grid.sha256()[..12]
+                ),
+            )
+        }
+        Err(e) => {
+            let reason = format!(
+                "the verified EGM2008 grid {} cannot be read for lookups: {e}",
+                grid.path().display()
+            );
+            (
+                gungnir_ingest::geoid::GeoidHandle::unavailable(reason.clone()),
+                format!("EGM2008 geoid grid: refused, {reason}"),
+            )
+        }
+    }
+}
+
+/// The verified EGM2008 grid as `gungnir-ingest` asks for a separation (GAP-198): the
+/// desktop's `Egm2008Separation`, in this binary, since `gungnir-ingest` may not depend on
+/// `gungnir-data` and the two binaries are where the edge to both lives.
+#[cfg(feature = "crs")]
+#[derive(Debug)]
+struct NodeEgm2008(gungnir_data::geoid::UndulationService);
+
+#[cfg(feature = "crs")]
+impl gungnir_ingest::geoid::GeoidSeparation for NodeEgm2008 {
+    fn model(&self) -> &'static str {
+        gungnir_data::geoid::GeoidModel::Egm2008.name()
+    }
+
+    fn separation_m(&self, lat_deg: f64, lon_deg: f64) -> Result<f64, String> {
+        self.0
+            .undulation(lon_deg, lat_deg)
+            .map_err(|e| e.to_string())
+    }
+}
 
 /// GAP-001, GAP-064: the ASTERIX feeds, each bound to its socket with the sinks this
 /// binary drains. Split out of [`build_gateway`] for the same reason `bind_adsb_feeds`
@@ -468,6 +582,7 @@ fn bind_radar_feeds(
     gateway: &mut IngestGateway,
     reports: &mut FeedReports,
     sinks: &mut Vec<gungnir_ingest::adapters::asterix::ServiceObservationSink>,
+    geoid: &gungnir_ingest::geoid::GeoidHandle,
 ) {
     if config.radar_feeds.is_empty() {
         return;
@@ -482,7 +597,7 @@ fn bind_radar_feeds(
     };
     for spec in feed_specs(config) {
         let feed_sinks = gungnir_ingest::adapters::asterix::FeedSinks {
-            geoid: gungnir_ingest::geoid::GeoidHandle::unavailable(NODE_HAS_NO_GEOID),
+            geoid: geoid.clone(),
             ..gungnir_ingest::adapters::asterix::FeedSinks::default()
         };
         match gungnir_ingest::adapters::asterix::bind_feed(&spec, &frame, &feed_sinks) {
@@ -2084,6 +2199,8 @@ async fn run(
                 sensors = sensors.sensors().len(),
                 covering = sensors.coverage().len(),
                 feeds = ?feed_reports.summary(),
+                // GAP-198: whether a UAS's height above mean sea level is corrected here.
+                geoid = %feed_reports.geoid,
                 retention_purged,
                 audit_purged,
                 // GAP-163: what verification at start found wrong with the audit record,
@@ -2784,9 +2901,9 @@ mod tests {
         );
     }
 
-    /// GAP-196 (D-124): the node lends no geoid model, so a Category 129 height it
-    /// tracks stays above mean sea level; the health line counts such heights beside the
-    /// feed's other losses, and says nothing when there are none.
+    /// GAP-196 (D-124): a Category 129 height the node could not correct stays above mean
+    /// sea level; the health line counts such heights beside the feed's other losses, and
+    /// says nothing when there are none.
     #[test]
     fn the_health_line_counts_uas_heights_left_above_mean_sea_level() {
         let stats = gungnir_ingest::adapters::asterix::FeedStatsSink::default();
@@ -2794,6 +2911,7 @@ mod tests {
             radar: vec![("uas".into(), stats.clone())],
             peers: Vec::new(),
             uas: Vec::new(),
+            geoid: String::new(),
         };
         assert!(
             !reports.summary()[0].contains("mean sea level"),
@@ -2806,7 +2924,66 @@ mod tests {
             line.contains("3 UAS heights above mean sea level, not corrected to the ellipsoid"),
             "{line}"
         );
-        assert!(NODE_HAS_NO_GEOID.contains("GAP-198"));
+    }
+
+    /// GAP-198 (D-129): a node with no grid to read -- a build without `crs`, or one whose
+    /// baseline names a directory holding no EGM2008 grid -- lends no model, and its
+    /// health line says why rather than claiming a correction.
+    #[test]
+    fn a_node_with_no_grid_lends_none_and_says_why() {
+        let dir =
+            std::env::temp_dir().join(format!("gungnir-node-no-geoid-{}", std::process::id()));
+        let config = ConfigBaseline {
+            geoid_grid_dir: Some(dir.to_string_lossy().into_owned()),
+            ..ConfigBaseline::default()
+        };
+        let (handle, line) = node_geoid(&config);
+        assert!(!handle.is_available(), "{line}");
+        assert!(line.starts_with("EGM2008 geoid grid:"), "{line}");
+        let Err(reason) = handle.current() else {
+            panic!("a model was lent with no grid: {line}");
+        };
+        if cfg!(feature = "crs") {
+            assert!(reason.contains("us_nga_egm08_25.tif"), "{reason}");
+        } else {
+            assert!(
+                reason.contains("crs feature") && reason.contains("GAP-198"),
+                "{reason}"
+            );
+        }
+    }
+
+    /// GAP-198 (D-129), with the committed EGM2008 clip standing in for the pinned grid: a
+    /// verified grid is lent, and the separation a feed asks for is the one `pyproj` gives
+    /// over the full grid at that point (`gungnir-data/tests/geoid.rs`'s `PYPROJ`); a file
+    /// that is not the pinned one is refused, and the handle holds why.
+    #[test]
+    #[cfg(feature = "crs")]
+    fn a_verified_grid_is_lent_to_the_feeds_and_a_wrong_one_is_refused() {
+        let clip = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../testdata/geoid/egm08_25_clip_53n56n_13e17e.tif");
+        let grid = gungnir_data::geoid::GeoidGrid::verify(
+            &clip,
+            "60a16af44ca47724fd6cbb58565104a010dd2ef8c2d5ec1c666552052fa83e10",
+        )
+        .expect("the committed clip");
+        let (handle, line) = lend_geoid(Ok(grid), "geoid_grid_dir");
+        assert!(line.contains("verified"), "{line}");
+        let model = handle.current().expect("lent");
+        assert_eq!(model.model(), "EGM2008");
+        let n = model
+            .separation_m(54.148_104_104, 15.0)
+            .expect("on the clip");
+        assert!((n - 34.924_758_738_286_63).abs() < 1e-6, "{n}");
+
+        let refused = gungnir_data::geoid::GeoidGrid::verify(
+            &clip,
+            gungnir_data::geoid::GeoidModel::Egm2008.sha256(),
+        )
+        .map_err(|e| e.to_string());
+        let (handle, line) = lend_geoid(refused, "geoid_grid_dir");
+        assert!(!handle.is_available(), "{line}");
+        assert!(line.starts_with("EGM2008 geoid grid:"), "{line}");
     }
 
     /// GAP-084: the two custody profiles DN-22 §5 assigns to the disconnected desktop are

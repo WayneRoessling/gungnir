@@ -21,21 +21,47 @@
 #     not natively. `ci.yml` still compiles from source when the change touches
 #     something that could break this stage: the manifests, the lockfile, the
 #     toolchain file, or this directory.
+#
+# **The node is built with its `crs` feature** (GAP-198, D-129): it reads the pinned
+# EGM2008 geoid grid through libproj and corrects a UAS's height above mean sea level,
+# as the desktop does. `proj-sys` builds libproj from source -- bookworm's own libproj is
+# older than the 9.6.2 it requires -- so the `toolchain` stage below adds what that build
+# needs, and `ci.yml` compiles in the same stage. The grid is **never** in the image: a
+# deployment mounts the directory holding it and names it in `geoid_grid_dir`, and the
+# node verifies the file against its pinned digest at start (`deploy/README.md`, "The
+# node's geoid grid").
 
-FROM rust:1.98-slim-bookworm AS build
+FROM rust:1.98-slim-bookworm AS toolchain
 # rust-toolchain.toml names the channel "1.98"; the image ships "1.98.1" and rustup
 # treats those as different toolchains, so without this it downloads a second copy of
 # the compiler (five components, a minute or more) before building anything.
 ENV RUSTUP_TOOLCHAIN=$RUST_VERSION
+# libproj's source build (GAP-198): cmake and make to drive it, a C++ compiler, SQLite3
+# three ways -- headers and library to link, and the `sqlite3` binary PROJ's build runs to
+# generate proj.db -- pkg-config so proj-sys can report what it found, and libtiff for the
+# GeoTIFF grid reader. The same list `ci.yml`'s `proj-crs` job installs on its runner.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        cmake make g++ pkg-config libsqlite3-dev sqlite3 libtiff-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM toolchain AS build
 WORKDIR /src
 COPY . .
-RUN cargo build --release -p gungnir-node --locked \
+RUN cargo build --release -p gungnir-node --features crs --locked \
     && mkdir -p /out \
     && cp target/release/gungnir-node /out/gungnir-node
 
 FROM debian:bookworm-slim AS runtime
+# The shared libraries the libproj the node links needs at run time: libtiff to read the
+# grid, SQLite, and the C++ runtime. **No proj.db**: the node hands PROJ one written-out
+# `vgridshift` pipeline over the verified file's absolute path, which PROJ builds without
+# its database, and it converts no coordinate reference system by code.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libtiff6 libsqlite3-0 libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --create-home --uid 10001 gungnir \
-    && mkdir -p /etc/gungnir /var/lib/gungnir \
+    && mkdir -p /etc/gungnir /var/lib/gungnir /opt/gungnir/geoid \
     && chown -R gungnir:gungnir /var/lib/gungnir
 # `/out/gungnir-node` in the `build` stage above, or `<dir>/out/gungnir-node` when a
 # `--build-context build=<dir>` override supplies the binary instead.
@@ -50,6 +76,8 @@ USER gungnir
 WORKDIR /var/lib/gungnir
 ENV RUST_LOG=info
 EXPOSE 7410
+# /opt/gungnir/geoid is where a deployment mounts the pinned grids, read-only, and names
+# in `geoid_grid_dir` (GAP-198); an empty mount point until it does.
 VOLUME ["/var/lib/gungnir"]
 ENTRYPOINT ["gungnir-node"]
 CMD ["/etc/gungnir/config.json"]

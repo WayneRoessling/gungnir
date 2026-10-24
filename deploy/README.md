@@ -17,11 +17,13 @@ docker build -f deploy/node/Dockerfile -t gungnir-node:dev .
 docker run --rm -p 7410:7410 -v gungnir-data:/var/lib/gungnir gungnir-node:dev
 ```
 
-That compiles the node inside the image, with `--locked`, and is the build that ships.
-A binary built elsewhere can be put into the same runtime stage instead -- `ci.yml`
-does this on every pull request with a binary it compiles in the same `rust` image on
-the runner with its cargo cache mounted in, so the image check takes seconds rather
-than a cold six-minute compile:
+That compiles the node inside the image, with `--locked` and its `crs` feature, and is
+the build that ships. libproj is built from source in the Dockerfile's `toolchain` stage,
+which makes a cold build several minutes longer; "The node's geoid grid" below says what
+the feature is for. A binary built elsewhere can be put into the same runtime stage
+instead -- `ci.yml` does this on every pull request with a binary it compiles in that
+same `toolchain` stage on the runner with its cargo cache mounted in, so the image check
+takes seconds rather than a cold compile:
 
 ```bash
 docker buildx build -f deploy/node/Dockerfile -t gungnir-node:dev --build-context build=<dir> .
@@ -155,20 +157,44 @@ Two notes on scope:
   default. The Windows desktop `release.yml` publishes is built without it, so it
   refuses every real-world CRS by name whether or not a grid is installed, and PN-09 says
   that too.
-- **The node does not convert terrain or point clouds**, so a node image needs no grid.
+- **The node does not convert terrain or point clouds**, so it needs no grid but
+  EGM2008, and that only for UAS heights (below).
 
 **A UAS's height above mean sea level uses the same grid (GAP-196, D-123, D-124).** An
 ASTERIX Category 129 report states its height only above mean sea level (I129/090). On
-a `crs` desktop with the grid verified, every bound radar feed adds the EGM2008
-separation at the report's position, so the UAS is placed at a WGS-84 ellipsoidal
-height like everything else. Without the grid, on a desktop built without `crs`, and on
-the node (which links no libproj; GAP-198), the height is kept as mean sea level and
-flagged, never passed off as ellipsoidal:
+a `crs` desktop, and on the node image (GAP-198, D-129), with the grid verified, every
+bound radar feed adds the EGM2008 separation at the report's position, so the UAS is
+placed at a WGS-84 ellipsoidal height like everything else. Without the grid, on a
+desktop built without `crs`, and on a node binary built without it, the height is kept as
+mean sea level and flagged, never passed off as ellipsoidal:
 
 - PN-03 marks the track's U "MSL", and PN-04 says why the height is uncorrected;
 - the detection's provenance says so, and its vertical variance is widened by the square
   of EGM2008's largest separation, 106.91 m;
 - PN-09's radar-feed line, and the node's health line, count such heights.
+
+### The node's geoid grid
+
+The node image is built with `gungnir-node`'s `crs` feature (GAP-198, D-129), so it reads
+the pinned EGM2008 grid the same way the desktop does: from the directory the baseline's
+`geoid_grid_dir` names, else `PROJ_DATA`, verified against its digest at start. The grid
+is never in the image. Fetch and check `us_nga_egm08_25.tif` as above, mount its directory
+read-only, and name it in the node's baseline:
+
+```bash
+docker run --rm -p 7410:7410 -v gungnir-data:/var/lib/gungnir \
+  -v /opt/gungnir/geoid:/opt/gungnir/geoid:ro gungnir-node:dev
+```
+
+```json
+{ "version": 1, "geoid_grid_dir": "/opt/gungnir/geoid" }
+```
+
+The node says at start, and on every health line, which of these holds: **verified**,
+with the path and the start of its digest; **refused**, with the reason -- missing, not
+the pinned file, or unreadable by PROJ; **none installed**; or, for a node binary built
+without the feature, **not read**. `release.yml`'s bare Linux binary is built without
+it, so only the image corrects UAS heights; the bare binary keeps D-124's flag.
 
 A DEM whose `GeoTIFF` keys state no vertical system, which is most of them, needs
 `terrain.vertical` declared: `"ellipsoidal"`, `"epsg:3855"`, `"epsg:5773"` or
