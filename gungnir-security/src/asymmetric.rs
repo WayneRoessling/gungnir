@@ -24,8 +24,11 @@ use aes_gcm::{AeadCore, Aes256Gcm, Key, Nonce};
 use hmac::{Mac, SimpleHmac};
 use p256::ecdsa::signature::Signer;
 use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
-use p256::elliptic_curve::rand_core::OsRng;
-use p256::elliptic_curve::sec1::ToEncodedPoint;
+// The AES-GCM nonce draws from `aes-gcm`'s own `OsRng`, which matches its `rand_core`;
+// p256 0.14 keys come from the system RNG through `Generate` instead.
+use aes_gcm::aead::OsRng;
+use p256::elliptic_curve::sec1::ToSec1Point;
+use p256::elliptic_curve::Generate;
 use p256::pkcs8::{DecodePublicKey, EncodePublicKey};
 use p256::{ecdh, PublicKey, SecretKey};
 use sha2::Sha256;
@@ -94,7 +97,7 @@ impl P256KeyProvider {
         self.signing.insert(
             (code, version),
             SigningVersion {
-                key: SigningKey::random(&mut OsRng),
+                key: SigningKey::generate(),
                 state: KeyState::Active,
             },
         );
@@ -123,7 +126,7 @@ impl P256KeyProvider {
     pub fn public_key_sec1(&self, id: &KeyId) -> Result<Vec<u8>, SecurityError> {
         let entry = self.signing_key(*id)?;
         Ok(VerifyingKey::from(&entry.key)
-            .to_encoded_point(false)
+            .to_sec1_point(false)
             .as_bytes()
             .to_vec())
     }
@@ -207,8 +210,8 @@ impl P256KeyProvider {
             )));
         }
         let material = self.symmetric.key_material(id)?;
-        let ephemeral = ecdh::EphemeralSecret::random(&mut OsRng);
-        let ephemeral_public = PublicKey::from(&ephemeral).to_encoded_point(false);
+        let ephemeral = ecdh::EphemeralSecret::generate();
+        let ephemeral_public = PublicKey::from(&ephemeral).to_sec1_point(false);
         let shared = ephemeral.diffie_hellman(&officer.0);
         let wrap_key = hkdf_sha256(shared.raw_secret_bytes(), ephemeral_public.as_bytes())?;
         let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&wrap_key));
@@ -365,7 +368,7 @@ impl EscrowOfficerKey {
     /// A fresh officer key pair, for the recovery tool's key ceremony and for tests.
     #[must_use]
     pub fn generate() -> Self {
-        Self(SecretKey::random(&mut OsRng))
+        Self(SecretKey::generate())
     }
 
     /// The public half as PEM, for the baseline.

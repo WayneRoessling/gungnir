@@ -1094,7 +1094,7 @@ mod tests {
         use p256::ecdsa::SigningKey;
         let path = dir("escrow");
         let cloud = FakeCloud::new();
-        let officer = SigningKey::random(&mut aes_gcm::aead::OsRng);
+        let officer = <SigningKey as p256::elliptic_curve::Generate>::generate();
         let pem = {
             use p256::pkcs8::EncodePublicKey;
             officer
@@ -1171,7 +1171,7 @@ mod tests {
         use p256::ecdsa::signature::{Signer, Verifier};
         use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
 
-        let signing_key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
+        let signing_key = <SigningKey as p256::elliptic_curve::Generate>::generate();
         let verifying_key = VerifyingKey::from(&signing_key);
         let signature: Signature = signing_key.sign(b"a TLS transcript");
         // Key Vault's own wire format: the fixed-size raw `r || s` bytes, not DER.
