@@ -164,20 +164,17 @@ pub fn poll(state: &mut AppState) {
             // `Some` (its own early return above), so this is reachable only with one
             // configured; the fallback is defensive rather than reachable in practice,
             // and "local-enu" is the same as `mesh.placed()`'s original behaviour.
-            let (declared_frame, declared_vertical) = state
+            let declared = state
                 .config
                 .terrain
                 .as_ref()
-                .map_or(("local-enu", None), |t| {
-                    (t.frame.as_str(), t.vertical.as_deref())
+                .map_or(Declared::default(), |t| Declared {
+                    frame: t.frame.as_str(),
+                    vertical: t.vertical.as_deref(),
+                    nad83_realisation: t.nad83_realisation.as_deref(),
                 });
-            match place(
-                mesh,
-                declared_frame,
-                declared_vertical,
-                state.config.origin,
-                &state.geoid,
-            ) {
+            let epoch = crate::geoid::frame_epoch(&state.config);
+            match place(mesh, declared, state.config.origin, epoch, &state.geoid) {
                 Ok(placed) => {
                     state.terrain = TerrainStatus::Loaded {
                         path,
@@ -237,14 +234,20 @@ const WGS84_EPSG: u32 = 4326;
 /// so a refusal needs no PROJ. Each vertex then lands at its full local ENU position, up
 /// included. A `"local-enu"` DEM is untouched: its heights are already the deployment's
 /// own up.
+///
+/// **And the frame, since GAP-200** (D-127, D-128): a NAD83 DEM is carried to WGS 84 by
+/// its realisation -- the file's, or `terrain.nad83_realisation`'s for an unqualified
+/// NAD83 file -- and `epoch`, and a NAVD88 height takes the Helmert's height difference
+/// at `epoch` ([`gungnir_data::nad83::FrameConversion`]).
 fn place(
     mesh: TerrainMesh,
-    declared_frame: &str,
-    declared_vertical: Option<&str>,
+    declared: Declared<'_>,
     origin: Option<[f64; 3]>,
+    epoch: f64,
     geoid: &crate::geoid::GeoidGrids,
 ) -> Result<TerrainMesh, String> {
-    let frame: Frame = declared_frame
+    let frame: Frame = declared
+        .frame
         .parse()
         .map_err(|reason| format!("terrain.frame {reason}"))?;
     let Some(source_epsg) = source_epsg(frame, mesh.crs)? else {
@@ -256,13 +259,14 @@ fn place(
              no declared local ENU origin (config.origin) to place it against"
         ));
     };
-    let baseline_vertical = crate::geoid::declared_datum("terrain.vertical", declared_vertical)?;
+    let baseline_vertical = crate::geoid::declared_datum("terrain.vertical", declared.vertical)?;
     let heights = gungnir_data::geoid::height_reference(
         "terrain.vertical",
         mesh.vertical_datum().as_ref(),
         baseline_vertical.as_ref(),
         &|model| geoid.grid(model),
     )?;
+    let conversion = frame_conversion(source_epsg, declared.nad83_realisation, epoch, geoid)?;
     let absolute = mesh.absolute_positions_xy();
     let lon_lat_deg = if source_epsg == WGS84_EPSG {
         // Already geographic WGS84: what a GeoTIFF's own [x, y] already means for a
@@ -270,11 +274,11 @@ fn place(
         // nothing for PROJ to do, and this path needs no `crs` feature.
         absolute
     } else {
-        to_wgs84(&absolute, source_epsg)?
+        to_wgs84(&absolute, source_epsg, &conversion)?
     };
     let file_heights: Vec<f64> = mesh.positions.iter().map(|p| f64::from(p[2])).collect();
     let ellipsoidal =
-        gungnir_data::geoid::ellipsoidal_heights(&heights, &lon_lat_deg, &file_heights)
+        gungnir_data::nad83::wgs84_heights(&heights, &conversion, &lon_lat_deg, &file_heights)
             .map_err(|e| e.to_string())?;
     let enu = to_local_enu(&lon_lat_deg, &ellipsoidal, origin);
     // 32767 is GeoTIFF's "user-defined" projected code, the existing convention this
@@ -283,6 +287,51 @@ fn place(
     // that property and `.placed()` on it is correctly a no-op (`origin` is `[0, 0]`).
     mesh.with_enu(&enu, GridCrs::Projected { epsg: Some(32_767) })
         .map_err(|e| e.to_string())
+}
+
+/// What `terrain` declares about the DEM, borrowed from the baseline for one placement.
+#[derive(Debug, Clone, Copy)]
+struct Declared<'a> {
+    frame: &'a str,
+    vertical: Option<&'a str>,
+    nad83_realisation: Option<&'a str>,
+}
+
+impl Default for Declared<'_> {
+    /// `"local-enu"` and nothing else: what `mesh.placed()` always did.
+    fn default() -> Self {
+        Declared {
+            frame: "local-enu",
+            vertical: None,
+            nad83_realisation: None,
+        }
+    }
+}
+
+/// How the DEM's positions and heights reach WGS 84 beyond PROJ's own conversion
+/// (GAP-200): a WGS 84 geographic file is not NAD83's and needs no PROJ to say so; any
+/// other has its datum read through PROJ, and a build without `crs` refuses it by name,
+/// as it refuses converting it.
+fn frame_conversion(
+    source_epsg: u32,
+    declared: Option<&str>,
+    epoch: f64,
+    geoid: &crate::geoid::GeoidGrids,
+) -> Result<gungnir_data::nad83::FrameConversion, String> {
+    const FIELD: &str = "terrain.nad83_realisation";
+    let declared = crate::geoid::declared_realisation(FIELD, declared)?;
+    let file = if source_epsg == WGS84_EPSG {
+        gungnir_data::nad83::HorizontalDatum::NotNad83
+    } else if cfg!(feature = "crs") {
+        crate::geoid::file_datum(&format!("EPSG:{source_epsg}"))?
+    } else {
+        // This build cannot convert the file at all, and `to_wgs84` says so by name; a
+        // datum it could not read anyway is not the refusal to lead with.
+        return gungnir_data::nad83::FrameConversion::not_nad83(epoch);
+    };
+    gungnir_data::nad83::FrameConversion::resolve(FIELD, file, declared, epoch, &|step| {
+        geoid.grid(step)
+    })
 }
 
 /// What a grid's `GridCrs` actually asserts, collapsing `GridCrs`'s three variants (two
@@ -348,12 +397,21 @@ fn source_epsg(frame: Frame, crs: GridCrs) -> Result<Option<u32>, String> {
 /// below refuses by name instead, so this function's signature -- and every caller --
 /// is the same regardless of whether the feature is compiled in.
 #[cfg(feature = "crs")]
-fn to_wgs84(points: &[[f64; 2]], source_epsg: u32) -> Result<Vec<[f64; 2]>, String> {
-    gungnir_data::geospatial::crs::to_wgs84(points, source_epsg).map_err(|e| e.to_string())
+fn to_wgs84(
+    points: &[[f64; 2]],
+    source_epsg: u32,
+    conversion: &gungnir_data::nad83::FrameConversion,
+) -> Result<Vec<[f64; 2]>, String> {
+    gungnir_data::nad83::positions_to_wgs84(&format!("EPSG:{source_epsg}"), conversion, points)
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(not(feature = "crs"))]
-fn to_wgs84(_points: &[[f64; 2]], source_epsg: u32) -> Result<Vec<[f64; 2]>, String> {
+fn to_wgs84(
+    _points: &[[f64; 2]],
+    source_epsg: u32,
+    _conversion: &gungnir_data::nad83::FrameConversion,
+) -> Result<Vec<[f64; 2]>, String> {
     Err(format!(
         "terrain.frame declares EPSG:{source_epsg}; converting a real-world coordinate \
          reference system other than WGS84 geographic needs the crs feature, which \

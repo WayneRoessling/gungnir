@@ -146,7 +146,8 @@ fn a_declared_system_with_no_readable_vertical_unit_is_refused() {
 /// A desktop over `pair` with `origin`, CPU registration forced (never a real `wgpu`
 /// device in a test: `gungnir-app/tests/pointcloud.rs`'s module doc comment has the
 /// history), and a `geoid_grid_dir` that holds no grid, so the state of the grid is the
-/// test's to set rather than `PROJ_DATA`'s.
+/// test's to set rather than `PROJ_DATA`'s. The frame epoch is pinned at 2020.0 (GAP-200,
+/// D-127), so a NAD83 file lands in the same place every year.
 fn desktop(
     name: &str,
     pair: gungnir_config::PointCloudConfig,
@@ -165,6 +166,7 @@ fn desktop(
         origin: Some(origin),
         point_cloud: Some(pair),
         geoid_grid_dir: Some(dir.join("no-grid-here").to_string_lossy().into_owned()),
+        frame_epoch: Some(2020.0),
         ..ConfigBaseline::default()
     };
     gungnir_config::validate(&config).expect("an epsg frame is valid since GAP-102");
@@ -236,6 +238,7 @@ fn the_real_fixtures_navd88_heights_are_refused_without_geoid18_naming_it() {
             target: autzen_bounded(&autzen),
             frame: "epsg:2992".into(),
             vertical: None,
+            nad83_realisation: None,
         },
         autzen_origin(),
     );
@@ -292,6 +295,11 @@ fn enu_of(state: &gungnir_app::state::AppState, i: usize) -> [f64; 3] {
 /// plane at [`autzen_origin`] put them at the values below
 /// (`gungnir-data/tests/pointcloud_crs.rs` has the geodetic ones). Dropping GEOID18 would
 /// miss every up by 23.3 m; the tolerance is a tenth of a millimetre.
+///
+/// **Since GAP-200 (D-127, D-128)** the capture, unqualified NAD83, is declared NAD83(2011)
+/// and carried to WGS 84 by PROJ's own "Inverse of ITRF2014 to NAD83(2011) (1)" at the
+/// pinned epoch 2020.0, height included, before the same rotation: every point sits 1.485
+/// m west, 0.286 m north and 0.370 m lower than under the null step it took before.
 #[test]
 #[cfg(feature = "crs")]
 fn the_real_capture_lands_through_geoid18_where_an_independent_computation_puts_it() {
@@ -306,6 +314,7 @@ fn the_real_capture_lands_through_geoid18_where_an_independent_computation_puts_
             target: autzen_bounded(&autzen),
             frame: "epsg:2992".into(),
             vertical: None,
+            nad83_realisation: Some("epsg:6318".into()),
         },
         autzen_origin(),
     );
@@ -321,25 +330,25 @@ fn the_real_capture_lands_through_geoid18_where_an_independent_computation_puts_
         (
             0,
             [
-                -15.632_399_400_289_087,
-                14.322_704_328_325_154,
-                5.001_896_268_387_805,
+                -17.117_517_993_473_975,
+                14.609_057_347_216_607,
+                4.631_781_270_137_592,
             ],
         ),
         (
             2383,
             [
-                4.199_937_042_242_675,
-                14.821_449_285_954_024,
-                4.611_462_284_825_729,
+                2.714_818_428_914_881,
+                15.107_802_480_091_937,
+                4.241_346_079_527_308,
             ],
         ),
         (
             4766,
             [
-                -7.645_210_074_340_254,
-                -9.606_629_005_367_767,
-                4.642_099_538_056_842,
+                -9.130_328_536_207_893,
+                -9.320_275_897_234_886,
+                4.271_980_851_461_853,
             ],
         ),
     ] {
@@ -363,7 +372,9 @@ fn the_real_capture_lands_through_geoid18_where_an_independent_computation_puts_
 /// [`autzen_origin`]; the first point is the box centre, 29.063 m up because the origin
 /// sits 100 m above the ellipsoid and the point 129.063 m. The cloud spans 1.25 km, where
 /// the loader's `f32` offsets in feet and the placed `f32` offsets in metres each carry
-/// tens of micrometres, so the tolerance is two tenths of a millimetre.
+/// tens of micrometres, so the tolerance is two tenths of a millimetre. Since GAP-200 the
+/// file is declared NAD83(2011) and each point takes the Helmert at 2020.0 too, as in the
+/// test above, so the centre now sits 1.485 m west, 0.286 m north and 28.693 m up.
 #[test]
 #[cfg(feature = "crs")]
 fn a_geokey_file_in_navd88_feet_lands_through_geoid18_where_pyproj_puts_it() {
@@ -381,6 +392,7 @@ fn a_geokey_file_in_navd88_feet_lands_through_geoid18_where_pyproj_puts_it() {
             target: plain(fixture("autzen-geokeys.las")),
             frame: "epsg:2992".into(),
             vertical: None,
+            nad83_realisation: Some("epsg:6318".into()),
         },
         autzen_origin(),
     );
@@ -392,26 +404,30 @@ fn a_geokey_file_in_navd88_feet_lands_through_geoid18_where_pyproj_puts_it() {
         state.point_cloud
     );
     for (i, want) in [
-        [0.0, 0.0, 29.062_630_753_229_662],
         [
-            -487.936_104_413_653_54,
-            -707.021_701_265_043_4,
-            0.403_309_564_943_924_67,
+            -1.485_116_951_756_790_4,
+            0.286_349_919_402_768_55,
+            28.692_512_859_132_05,
         ],
         [
-            511.640_178_016_742_8,
-            744.316_031_152_460_3,
-            64.123_472_020_214_25,
+            -489.421_218_933_011_1,
+            -706.735_350_858_318_5,
+            0.033_129_193_357_638_09,
         ],
         [
-            -14.759_457_977_780_002,
-            -15.713_213_344_444_414,
-            13.975_171_759_190_776,
+            510.155_058_818_637_9,
+            744.602_379_898_132_2,
+            63.753_420_031_563_62,
         ],
         [
-            220.437_830_523_481_95,
-            266.170_492_937_138_7,
-            4.742_427_778_033_175,
+            -16.244_575_804_184_49,
+            -15.426_861_521_485_282,
+            13.605_052_723_981,
+        ],
+        [
+            218.952_710_415_313_48,
+            266.456_847_560_963_9,
+            4.372_331_035_643_839,
         ],
     ]
     .into_iter()
@@ -461,6 +477,7 @@ fn a_pair_with_egm2008_heights_lands_where_an_independent_computation_puts_it() 
             target: plain(fixture("five-points.las")),
             frame: "epsg:32633".into(),
             vertical: Some("epsg:3855".into()),
+            nad83_realisation: None,
         },
         [54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 0.0],
     );
@@ -522,4 +539,44 @@ fn a_pair_with_egm2008_heights_lands_where_an_independent_computation_puts_it() 
         }
     }
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// **GAP-200 (D-128) through a real tick: the real capture's unqualified NAD83 is not
+/// guessed.** With GEOID18 installed and no `point_cloud.nad83_realisation`, the pair is
+/// refused, the refusal naming the field to declare; with HARN declared and no NADCON5
+/// grid installed, it is refused naming the grid HARN needs.
+#[test]
+#[cfg(feature = "crs")]
+fn the_real_captures_unqualified_nad83_is_refused_until_its_realisation_is_declared() {
+    use gungnir_app::pointcloud::PointCloudStatus;
+    use gungnir_config::PointCloudConfig;
+
+    let autzen = fixture("autzen-classified.copc.laz");
+    for (name, declared, expected) in [
+        ("undeclared", None, "point_cloud.nad83_realisation"),
+        (
+            "harn-no-grid",
+            Some("epsg:4152".to_string()),
+            "us_noaa_nadcon5_nad83_harn_nad83_fbn_conus.tif",
+        ),
+    ] {
+        let (mut state, dir) = desktop(
+            name,
+            PointCloudConfig {
+                source: autzen_bounded(&autzen),
+                target: autzen_bounded(&autzen),
+                frame: "epsg:2992".into(),
+                vertical: None,
+                nad83_realisation: declared,
+            },
+            autzen_origin(),
+        );
+        install_geoid18_clip(&mut state);
+        settle(&mut state);
+        let PointCloudStatus::Failed { reason, .. } = &state.point_cloud else {
+            panic!("{name}: refused, not placed: {:?}", state.point_cloud);
+        };
+        assert!(reason.contains(expected), "{name}: {reason}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

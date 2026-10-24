@@ -11534,15 +11534,9 @@
     (`to_wgs84`); PROJ's own choice for the Autzen WKT to EPSG:4979 is the same null
     step (`gungnir-data/tests/pointcloud_crs.rs`)
   action: >-
-    Build D-127 and D-128. The inverse of EPSG's "ITRF2014 to NAD83(2011) (1)" Helmert
-    as a written-out PROJ pipeline at the picture's epoch (the current date, which a
-    baseline field may pin), horizontal and vertical together, on the DEM, point-cloud
-    and NAVD88 paths. The four NADCON5 conterminous United States grids pinned, verified
-    and reported as EGM2008 is (D-121). A baseline declaration for an unqualified NAD83
-    file, which is refused by name without one; NAD83(CORS96) read as NAD83(NSRS2007).
-    The Autzen fixture re-measured against `pyproj` at a pinned epoch, and
-    metre-level statements in `deploy/README.md` and the module documentation
-    replaced by what the conversion now claims.
+    Done 2026-10-23 (D-127, D-128): the static ITRF2014 to NAD83(2011) Helmert at the
+    picture's epoch, the four NADCON5 grids pinned, the unqualified-NAD83 declaration,
+    CORS96 read as NSRS2007, on the DEM, point-cloud and NAVD88 paths.
   ref: >-
     D-125; GAP-197;
     `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`
@@ -11563,3 +11557,16 @@
       Autzen today, so the epoch defaults to the current date. Effort raised from M to L
       for the four grids and the declaration. See
       `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
+  - date: 2026-10-23
+    status: Closed
+    note: >-
+      **Closed 2026-10-23 (D-127, D-128).** `gungnir_data::nad83` reads a file's datum
+      from PROJ's WKT1, resolves its realisation (an unqualified NAD83 file needs
+      `terrain.nad83_realisation` or `point_cloud.nad83_realisation`), and carries it
+      through the NADCON5 grids it needs and EPSG's Helmert at `frame_epoch` or today.
+      PROJ 9.8.1 ignores a `t_obs` parameter, so the Helmert is written as the static
+      one it is at the epoch, matching PROJ's own time-dependent operation exactly. A
+      NAVD88 height takes the Helmert's height difference. The grids are pinned,
+      verified and listed on PN-09 like the geoid grids. Tested against `pyproj` in both
+      `pointcloud_crs.rs` files; the `crs` build runs only in `proj-crs`. See
+      `../../record/2026-10-23/nad83-reaches-wgs-84-by-its-realisation.md`.

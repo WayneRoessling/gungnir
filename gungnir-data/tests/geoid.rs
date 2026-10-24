@@ -272,6 +272,7 @@ fn a_cloud_in_utm_with_egm2008_heights_converts_to_the_pyproj_ellipsoidal_height
         &source,
         vertical,
         &HeightReference::Geoid(GeoidModel::Egm2008, clip()),
+        &not_nad83(),
         &passthrough,
     )
     .expect("converts");
@@ -337,11 +338,15 @@ fn a_cloud_whose_heights_are_already_ellipsoidal_keeps_them() {
         ..pointcloud::PointBuffer::default()
     };
     let source = crs.proj_definition().expect("a WKT");
-    let out =
-        pointcloud::crs::to_local_enu(&cloud, &source, 1.0, &HeightReference::Ellipsoidal, &|g| {
-            [g[0].to_degrees(), g[1].to_degrees(), g[2]]
-        })
-        .expect("converts");
+    let out = pointcloud::crs::to_local_enu(
+        &cloud,
+        &source,
+        1.0,
+        &HeightReference::Ellipsoidal,
+        &not_nad83(),
+        &|g| [g[0].to_degrees(), g[1].to_degrees(), g[2]],
+    )
+    .expect("converts");
     // The corner's height is the lower of the two, 12.0, and the other sits 0.5 above.
     assert!((out.origin[2] - 12.0).abs() < 1e-9, "{:?}", out.origin);
     assert!((f64::from(out.positions[0][2]) - 0.5).abs() < 1e-6);
@@ -372,6 +377,13 @@ fn the_full_pinned_grid_verifies_and_agrees_with_pyproj() {
 /// writer built on GDAL or PDAL puts in its record-2112 VLR.
 #[cfg(feature = "crs")]
 const UTM33_EGM2008_WKT: &str = r#"COMPD_CS["WGS 84 / UTM zone 33N + EGM2008 height",PROJCS["WGS 84 / UTM zone 33N",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",15],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","32633"]],VERT_CS["EGM2008 height",VERT_DATUM["EGM2008 geoid",2005,AUTHORITY["EPSG","1027"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Gravity-related height",UP],AUTHORITY["EPSG","3855"]]]"#;
+
+/// These fixtures are WGS 84 / UTM: not NAD83, so PROJ's own horizontal conversion stands
+/// (GAP-200), and their EGM heights take no frame step. The epoch is pinned all the same.
+#[cfg(feature = "crs")]
+fn not_nad83() -> gungnir_data::nad83::FrameConversion {
+    gungnir_data::nad83::FrameConversion::not_nad83(2020.0).expect("an epoch in range")
+}
 
 /// The directory `ci.yml`'s `proj-crs` job fetched and checked the pinned grids into.
 #[cfg(feature = "crs")]
@@ -477,6 +489,7 @@ fn a_cloud_in_utm_with_egm96_heights_converts_to_the_pyproj_ellipsoidal_height()
         &source,
         1.0,
         &HeightReference::Geoid(GeoidModel::Egm96, egm96_clip()),
+        &not_nad83(),
         &|g| [g[0].to_degrees(), g[1].to_degrees(), g[2]],
     )
     .expect("converts");

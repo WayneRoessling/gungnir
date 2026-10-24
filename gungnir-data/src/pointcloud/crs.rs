@@ -348,6 +348,34 @@ fn wkt1_horizontal_epsg(wkt: &str) -> Option<u32> {
     direct_child(horizontal, "AUTHORITY").and_then(epsg_authority)
 }
 
+/// The EPSG code of a WKT1 horizontal system's geodetic datum (GAP-200, D-128): the
+/// `AUTHORITY` that is the direct child of the `DATUM` within the `GEOGCS` -- itself
+/// within the `PROJCS` of a projected system, and within a top `COMPD_CS` for a compound
+/// one. `None` when the datum carries no EPSG authority, which is never read as a
+/// particular datum.
+///
+/// The datum's own code is what tells NAD83's realisations apart: 6269 for the
+/// unqualified NAD83, 6152 for HARN, 1211 for FBN, 6759 for NSRS2007, 1133 for CORS96
+/// and 1116 for NAD83(2011), where the projected and geographic codes above them number
+/// in the hundreds. A spheroid's `AUTHORITY` is nested one level deeper and never read.
+pub(crate) fn wkt1_datum_epsg(wkt: &str) -> Option<u32> {
+    let top = balanced_node(wkt.trim_start())?;
+    let horizontal = if top.starts_with("COMPD_CS[") {
+        direct_child(top, "PROJCS").or_else(|| direct_child(top, "GEOGCS"))?
+    } else if top.starts_with("PROJCS[") || top.starts_with("GEOGCS[") {
+        top
+    } else {
+        return None;
+    };
+    let geographic = if horizontal.starts_with("PROJCS[") {
+        direct_child(horizontal, "GEOGCS")?
+    } else {
+        horizontal
+    };
+    let datum = direct_child(geographic, "DATUM")?;
+    direct_child(datum, "AUTHORITY").and_then(epsg_authority)
+}
+
 /// The `NAME[...]` node that is a direct child of `node`, skipping any nested inside a
 /// sub-node such as the `GEOGCS` within a `PROJCS` or the `VERT_DATUM` within a
 /// `VERT_CS`.
@@ -501,34 +529,34 @@ pub fn geokey_crs(geo: &las::crs::GeoTiffCrs) -> GeokeyCrs {
 /// is how many metres one unit of the source's vertical axis is. `heights` is how a
 /// height in metres becomes a WGS-84 ellipsoidal one, which
 /// [`crate::geoid::height_reference`] decides from what the file and the baseline state.
-/// `to_enu` takes `[lat_rad, lon_rad, alt_m]` and returns `[east_m, north_m, up_m]`; on
+/// `frame` is how a NAD83 file's positions and a NAVD88 height reach WGS 84 at the
+/// picture's epoch, which [`crate::nad83::FrameConversion::resolve`] decides from the
+/// file's datum and the baseline's declaration. `to_enu` takes `[lat_rad, lon_rad, alt_m]` and returns `[east_m, north_m, up_m]`; on
 /// the desktop that is `gungnir_model::LocalFrame::to_enu`.
 ///
 /// # What this converts
 ///
-/// **The horizontal conversion is PROJ's and is complete.** Easting and northing go
-/// through `proj_trans` from `source` to `EPSG:4979`, so a projected system's inverse
-/// projection and whatever datum step PROJ selects for it are both applied.
+/// **The horizontal conversion is PROJ's, and a NAD83 file's is completed by its
+/// realisation and the epoch (GAP-200, D-127, D-128).** Easting and northing go through
+/// `proj_trans`. A file whose datum is not NAD83's is converted to `EPSG:4979` by
+/// whatever operation PROJ selects. A NAD83 file is unprojected in its own datum, then
+/// carried to NAD83(2011) by the NADCON5 grids its realisation needs and to WGS 84 by the
+/// Helmert at `frame`'s epoch ([`crate::nad83::positions_to_wgs84`]), where PROJ's own
+/// selection was the null NAD83-to-WGS-84 step and left it a metre or two off.
 ///
 /// **The vertical conversion is the file's unit, then the vertical datum (GAP-108 and
-/// D-121; GAP-197 and D-125).** The height is first scaled by the metres-per-unit factor
-/// the file declares. It is then made an ellipsoidal height under `heights`: unchanged
-/// when it already is one, and with the undulation of its datum's pinned geoid grid at
-/// the point's own longitude and latitude added when it is an EGM2008, EGM96 or NAVD88
-/// height, read from the verified grid by PROJ ([`crate::geoid::undulations`]); a point
-/// outside that grid -- NAVD88 outside the conterminous United States -- fails the whole
-/// conversion by name. A height in any other datum never reaches this function:
-/// `height_reference` refuses it by name. (Before GAP-108 no datum shift was applied at
-/// all, so a NAVD88 height was used as though it were ellipsoidal -- about 23 m high at
-/// the Autzen fixture. `proj` 0.31's `Proj::convert` still zeroes the `z` it hands
-/// `proj_trans`, which is why the height does not ride the horizontal transform and the
-/// geoid is applied as its own step.)
-///
-/// **A NAVD88 height lands at the metre level, not the centimetre.** GEOID18 makes it a
-/// NAD83(2011) ellipsoidal height, and the horizontal half likewise converts a NAD83
-/// latitude and longitude with PROJ's null NAD83-to-WGS-84 step; the metre or two
-/// between the two frames is not modelled on either axis (`crate::geoid`'s module
-/// documentation has the figures).
+/// D-121; GAP-197 and D-125), then the frame (GAP-200).** The height is first scaled by
+/// the metres-per-unit factor the file declares. It is then made an ellipsoidal height
+/// under `heights`: unchanged when it already is one, and with the undulation of its
+/// datum's pinned geoid grid at the point's own longitude and latitude added when it is
+/// an EGM2008, EGM96 or NAVD88 height, read from the verified grid by PROJ
+/// ([`crate::geoid::undulations`]); a point outside that grid -- NAVD88 outside the
+/// conterminous United States -- fails the whole conversion by name. A NAVD88 height is
+/// then a NAD83(2011) ellipsoidal height, and takes the Helmert's height difference at
+/// the epoch ([`crate::nad83::wgs84_heights`]). A height in any other datum never reaches
+/// this function: `height_reference` refuses it by name. (`proj` 0.31's `Proj::convert`
+/// still zeroes the `z` it hands `proj_trans`, which is why the height does not ride the
+/// horizontal transform and each vertical step is its own.)
 ///
 /// # Performance
 ///
@@ -550,31 +578,20 @@ pub fn to_local_enu(
     source: &str,
     vertical_metres: f64,
     heights: &crate::geoid::HeightReference,
+    frame: &crate::nad83::FrameConversion,
     to_enu: &dyn Fn([f64; 3]) -> [f64; 3],
 ) -> Result<super::PointBuffer, DataError> {
-    // EPSG:4979 is WGS 84 three-dimensional geographic. `Proj::new_known_crs`
-    // normalizes the axis order for visualisation, so the pair that comes back is
-    // (longitude, latitude) in degrees rather than the authority's own (lat, lon).
-    let transform = proj::Proj::new_known_crs(source, "EPSG:4979", None).map_err(|e| {
-        DataError::Parse(format!(
-            "cannot build a transformation from {source:?} to EPSG:4979: {e}"
-        ))
-    })?;
-    let mut lon_lat_deg = Vec::with_capacity(buffer.positions.len());
+    let mut xy = Vec::with_capacity(buffer.positions.len());
     let mut heights_m = Vec::with_capacity(buffer.positions.len());
     for p in &buffer.positions {
-        let x = f64::from(p[0]) + buffer.origin[0];
-        let y = f64::from(p[1]) + buffer.origin[1];
-        let z = f64::from(p[2]) + buffer.origin[2];
-        let (lon_deg, lat_deg) = transform.convert((x, y)).map_err(|e| {
-            DataError::Parse(format!(
-                "{source:?}: point ({x}, {y}) does not convert: {e}"
-            ))
-        })?;
-        lon_lat_deg.push([lon_deg, lat_deg]);
-        heights_m.push(z * vertical_metres);
+        xy.push([
+            f64::from(p[0]) + buffer.origin[0],
+            f64::from(p[1]) + buffer.origin[1],
+        ]);
+        heights_m.push((f64::from(p[2]) + buffer.origin[2]) * vertical_metres);
     }
-    let ellipsoidal = crate::geoid::ellipsoidal_heights(heights, &lon_lat_deg, &heights_m)?;
+    let lon_lat_deg = crate::nad83::positions_to_wgs84(source, frame, &xy)?;
+    let ellipsoidal = crate::nad83::wgs84_heights(heights, frame, &lon_lat_deg, &heights_m)?;
     let geodetic: Vec<[f64; 3]> = lon_lat_deg
         .iter()
         .zip(ellipsoidal)

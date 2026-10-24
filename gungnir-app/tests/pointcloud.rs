@@ -104,6 +104,7 @@ fn a_copc_target_that_declares_a_real_crs_is_refused_against_a_local_enu_baselin
             },
             frame: "local-enu".into(),
             vertical: None,
+            nad83_realisation: None,
         },
     );
     assert!(
@@ -163,6 +164,7 @@ fn a_pair_of_undeclared_files_still_loads_in_order() {
             target: plain(fixture("five-points.las")),
             frame: "local-enu".into(),
             vertical: None,
+            nad83_realisation: None,
         },
     );
     update::tick(&mut state);
@@ -202,6 +204,7 @@ fn a_missing_source_fails_the_whole_pair_even_though_the_target_would_load() {
             target: plain(fixture("five-points.las")),
             frame: "local-enu".into(),
             vertical: None,
+            nad83_realisation: None,
         },
     );
     settle(&mut state);
@@ -235,6 +238,7 @@ fn a_missing_target_fails_the_pair_and_discards_the_source_that_already_loaded()
             target: plain(fixture("absent.las")),
             frame: "local-enu".into(),
             vertical: None,
+            nad83_realisation: None,
         },
     );
     settle(&mut state);

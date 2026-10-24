@@ -79,7 +79,7 @@ pub struct AppState {
     pub geoid: crate::geoid::GeoidGrids,
     /// The grid checks in flight, off the render thread, one per grid being hashed.
     pub geoid_checks: Vec<(
-        gungnir_data::geoid::GeoidModel,
+        gungnir_data::geoid::PinnedGrid,
         crossbeam_channel::Receiver<Result<gungnir_data::geoid::GeoidGrid, String>>,
     )>,
     /// The geoid model every bound radar feed holds (GAP-196): the verified EGM2008 grid
