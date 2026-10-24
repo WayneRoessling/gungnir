@@ -281,6 +281,27 @@ impl std::fmt::Display for GeoidModel {
     }
 }
 
+/// Where a pinned grid's `file` is looked for, and whether a baseline named the place:
+/// in `named_dir` when the baseline names one -- **final**, whether or not the file is
+/// there, so a grid elsewhere is never substituted for a missing one -- and otherwise in
+/// the first directory listed in `PROJ_DATA` (then the older `PROJ_LIB`) that holds it,
+/// PROJ's own convention for its resource files. `None` with no named directory and no
+/// listed directory holding the file.
+///
+/// One rule for both binaries (GAP-198): the desktop's grid checks and the node's find a
+/// grid the same way.
+#[must_use]
+pub fn locate(named_dir: Option<&str>, file: &str) -> Option<(PathBuf, bool)> {
+    if let Some(dir) = named_dir {
+        return Some((Path::new(dir).join(file), true));
+    }
+    let listed = std::env::var_os("PROJ_DATA").or_else(|| std::env::var_os("PROJ_LIB"))?;
+    std::env::split_paths(&listed)
+        .map(|dir| dir.join(file))
+        .find(|path| path.is_file())
+        .map(|path| (path, false))
+}
+
 /// Every grid a deployment pins: the geoid models (D-121, D-125) and the NADCON5 steps
 /// that carry an older NAD83 realisation to NAD83(2011) (GAP-200, D-128). Each is a
 /// PROJ-data file pinned by its digest, verified the same way ([`GeoidGrid::verify`]),

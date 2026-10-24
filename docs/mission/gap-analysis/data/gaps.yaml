@@ -11442,15 +11442,12 @@
     variance (D-124), but off the ellipsoid by the local separation, about 35 m over the
     Baltic. A picture a node serves to its clients carries those heights.
   evidence: >-
-    `gungnir-node/src/main.rs` (`NODE_HAS_NO_GEOID`, the reason every node feed holds);
-    `gungnir-node/Cargo.toml` (no edge to `gungnir-data`, no `crs`)
+    `gungnir-node/src/main.rs` (`node_geoid`, `lend_geoid`); `gungnir-node/Cargo.toml`
+    (the `crs` feature and edge (ab)); `deploy/node/Dockerfile` (the `toolchain` stage)
   action: >-
-    Build D-129. Accept the edge `gungnir-node` to `gungnir-data` in `ARCHITECTURE.md`
-    §7.1 and `../../design/dependency-edges.md` first, then link `crs`; build libproj
-    with libtiff in `deploy/node/Dockerfile`'s build stage and carry libtiff and
-    `proj.db` in the runtime image; lend the feeds the grid verified from
-    `geoid_grid_dir`, a mounted directory, never the image; say verified, refused or
-    none on the node's health line. D-124 stays the path without a verified grid.
+    Done 2026-10-24 (D-129): edge (ab) `gungnir-node` to `gungnir-data`, optional behind
+    the node's `crs` feature; the EGM2008 grid verified at start and lent to every radar
+    feed; the node image built with the feature.
   ref: >-
     Found closing GAP-196 (`../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`)
   history:
@@ -11468,6 +11465,18 @@
       corrects through the same verified grid as the desktop, over a new edge to
       `gungnir-data` with `crs`. Rejected: a reader without PROJ, and keeping D-124's
       flag on the node. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
+  - date: 2026-10-24
+    status: Closed
+    note: >-
+      **Closed 2026-10-24 (D-129).** Edge (ab) is drawn in `ARCHITECTURE.md` §7 and
+      `dependency-edges.md` §20, optional behind a new `crs` feature on the node, since
+      libproj cannot build on Windows MSVC. At start the node finds the EGM2008 grid by
+      the desktop's rule (`gungnir_data::geoid::locate`, now shared), verifies its
+      digest, and lends one lookup service to every radar feed; every health line says
+      verified, refused, none or not read. The node image builds libproj in a
+      `toolchain` stage and mounts the grid, never baking it in. The bare release binary
+      keeps D-124's flag. The `crs` build runs in CI only. See
+      `../../record/2026-10-24/the-node-corrects-a-uas-height-through-the.md`.
 - id: GAP-199
   name: A UAS reporting only its height above ground is placed at height zero
   type: Technical

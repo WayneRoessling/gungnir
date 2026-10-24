@@ -192,7 +192,7 @@ history, and an entry is never edited once it has merged.
 | GAP-193 | A linked desktop's rehearsal acknowledgement is not on the node's decision record | Technical | CAP-5.9, CAP-7.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 | GAP-194 | A gap acceptance is held only by the desktop that recorded it | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | L | 12 | I3 | Services engineer | Open |
 | GAP-195 | PN-07's degraded-condition acknowledgement is on no record | Technical | CAP-5.9 | 3 | 10 | S | 30 | I3 | UI engineer | Closed |
-| GAP-198 | The node places a UAS's height above mean sea level uncorrected | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
+| GAP-198 | The node places a UAS's height above mean sea level uncorrected | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Closed |
 | GAP-199 | A UAS reporting only its height above ground is placed at height zero | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
 | GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | L | 32 | I4 | UI engineer | Closed |
 
@@ -2763,11 +2763,12 @@ Counts: 182 gaps, 3 mission, 179 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-09-26, Open: Filed closing GAP-196. The node's feeds hold a named reason and every such height is flagged and counted there, so nothing is silent; what is missing is the correction itself, which needs a dependency edge and a native library the node image does not carry today.
   - 2026-10-23, Open: **Decided by the owner, 2026-10-23 (D-129); nothing is built yet.** The node corrects through the same verified grid as the desktop, over a new edge to `gungnir-data` with `crs`. Rejected: a reader without PROJ, and keeping D-124's flag on the node. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
-- Evidence: `gungnir-node/src/main.rs` (`NODE_HAS_NO_GEOID`, the reason every node feed holds); `gungnir-node/Cargo.toml` (no edge to `gungnir-data`, no `crs`).
+  - 2026-10-24, Closed: **Closed 2026-10-24 (D-129).** Edge (ab) is drawn in `../../../ARCHITECTURE.md` §7 and `dependency-edges.md` §20, optional behind a new `crs` feature on the node, since libproj cannot build on Windows MSVC. At start the node finds the EGM2008 grid by the desktop's rule (`gungnir_data::geoid::locate`, now shared), verifies its digest, and lends one lookup service to every radar feed; every health line says verified, refused, none or not read. The node image builds libproj in a `toolchain` stage and mounts the grid, never baking it in. The bare release binary keeps D-124's flag. The `crs` build runs in CI only. See `../../record/2026-10-24/the-node-corrects-a-uas-height-through-the.md`.
+- Evidence: `gungnir-node/src/main.rs` (`node_geoid`, `lend_geoid`); `gungnir-node/Cargo.toml` (the `crs` feature and edge (ab)); `deploy/node/Dockerfile` (the `toolchain` stage).
 - Severity: 3. Reach: 6 threads. Effort: M. Priority: 18.
 - Impact: `gungnir-node` binds the same ASTERIX Category 129 feeds as the desktop and tracks every UAS it hears, but carries no geoid model, so each UAS's height stays above mean sea level -- flagged, counted on the health line and weighed with a widened vertical variance (D-124), but off the ellipsoid by the local separation, about 35 m over the Baltic. A picture a node serves to its clients carries those heights.
-- Closing action: Build D-129. Accept the edge `gungnir-node` to `gungnir-data` in `../../../ARCHITECTURE.md` §7.1 and `../../design/dependency-edges.md` first, then link `crs`; build libproj with libtiff in `deploy/node/Dockerfile`'s build stage and carry libtiff and `proj.db` in the runtime image; lend the feeds the grid verified from `geoid_grid_dir`, a mounted directory, never the image; say verified, refused or none on the node's health line. D-124 stays the path without a verified grid.
-- Target: I4. Owner: Services engineer. Status: Open.
+- Closing action: Done 2026-10-24 (D-129): edge (ab) `gungnir-node` to `gungnir-data`, optional behind the node's `crs` feature; the EGM2008 grid verified at start and lent to every radar feed; the node image built with the feature.
+- Target: I4. Owner: Services engineer. Status: Closed.
 - Reference: Found closing GAP-196 (`../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`).
 - Depends on: D-121, D-124, GAP-196, D-129.
 
