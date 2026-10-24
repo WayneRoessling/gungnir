@@ -458,6 +458,35 @@ marks every observation with its own `SimulationMark` instead and the desktop co
 dependencies, and two edges into it. `gungnir-scenario`'s depth grows by nothing it did
 not already have beneath `gungnir-fusion-async`.
 
+## 20. Edge (ab) -- `gungnir-node` to `gungnir-data` (2026-10-24, GAP-198, D-129)
+
+The owner decided on 2026-10-23 that the node corrects a UAS's height above mean sea level
+through the verified EGM2008 grid, as the desktop does, over a new edge to `gungnir-data`
+with `crs` (D-129). The letter is the next after (aa). Recorded here in the change that
+adds it to a manifest, per §5's rule, with `gungnir-app/tests/dependency_graph.rs` naming
+it among the recorded edges and checking it against `ARCHITECTURE.md` §7.
+
+| Edge | What it is | Evidence |
+|---|---|---|
+| (ab) `gungnir-node` → `gungnir-data` | The node finding, verifying and reading the pinned EGM2008 grid (`gungnir_data::geoid`: `locate`, `GeoidGrid::verify`, `UndulationService`) and lending it to its radar feeds through `gungnir-ingest`'s `GeoidSeparation`, exactly as `gungnir-app` already does. Binary to the data layer, downward; `gungnir-data` depends on nothing above the model, so no cycle is reachable | `gungnir-node/src/main.rs` (`node_geoid`, `lend_geoid`); its tests `a_node_with_no_grid_lends_none_and_says_why` and, with `crs`, `a_verified_grid_is_lent_to_the_feeds_and_a_wrong_one_is_refused` |
+
+**Optional, behind the node's own `crs` feature.** libproj cannot be built on Windows MSVC
+(`gungnir-data/Cargo.toml`'s `crs` comment says why), and `cargo check --workspace`
+compiles the node there, so a non-optional edge would break the workspace's default build
+for anyone on Windows. `gungnir-node`'s `crs` feature turns on `gungnir-data` and its own
+`crs` together; `deploy/node/Dockerfile` builds the node image with it, and `ci.yml`'s
+container job builds and runs that image. A node built without the feature keeps D-124's
+behaviour -- every Category 129 height flagged as mean sea level, widened and counted --
+and its health line says it was built without the grid, rather than claiming nothing.
+
+**Narrow by use.** The node calls the geoid module alone. It converts no terrain and no
+point cloud (`ARCHITECTURE.md` §8.3), so the edge brings PROJ for one written-out
+`vgridshift` pipeline over one verified file, and none of PROJ's operation search.
+
+**Refused**: a geoid reader without PROJ (a second implementation of what D-121 put
+through PROJ alone), and keeping D-124's flag on the node (a known, fixable 35 m in every
+picture a node serves), both by D-129.
+
 ## Traceability
 
 The five notes that add edges: DN-03, DN-11, DN-12, DN-13, DN-19. The four that refuse

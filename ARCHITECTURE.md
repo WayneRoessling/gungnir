@@ -116,7 +116,7 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-intercept-service` | `core`, `coord`, `allocation`, `model` |
 | `gungnir-data-fusion` | `data` |
 | `gungnir-remote` | `model`, `eventing`, `api`, `tracking-service`, `intercept-service`, `security` (t) |
-| `gungnir-node` | `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `sensor-management`, `tracking-service`, `intercept-service`, `api`, `analytics` (g), `security`, `observability`, `modelops` (h), `policy` (k), `geo` (l), `remote` (p), `identity` (s), `approval` (y), `command` (y) |
+| `gungnir-node` | `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `sensor-management`, `tracking-service`, `intercept-service`, `api`, `analytics` (g), `security`, `observability`, `modelops` (h), `policy` (k), `geo` (l), `remote` (p), `identity` (s), `approval` (y), `command` (y), `data` (ab) |
 | `gungnir-ui` | `model` |
 | `gungnir-viewport3d` | `data`, `data-fusion`, `model`, `ui` (theme only) |
 | `gungnir-app` | Both facades, `remote`, `data`, `data-fusion`, `render`, `viewport3d`, `ui`, `workflow`, `security`, `policy`, `command`, `geo`, `replay`, `reporting`, `analytics`, `sensor-management`, `assessment`, `modelops` (h), `decision` (i), `resilience` (m), `identification` (n), `identity` (o), `coord` (u), `approval` (x), `sensor-sim` (aa), `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `observability` |
@@ -534,6 +534,14 @@ edge in the graph are checked by `gungnir-app/tests/dependency_graph.rs` on ever
   later the same day**: GAP-011 closed and the node has tracks, so the two edges are
   still absent by choice rather than by necessity, and adding either is now a decision
   somebody makes rather than one the architecture makes for them.
+- **(ab) `gungnir-node` ──► `gungnir-data`** (2026-10-24, GAP-198, D-129). The node
+  corrects a UAS's height above mean sea level through the verified EGM2008 geoid grid, as
+  the desktop does (D-123), and the grid is read through libproj in `gungnir-data` behind
+  its `crs` feature (D-121). The edge is optional, behind the node's own `crs` feature,
+  because libproj cannot be built on Windows MSVC and a default build of the workspace
+  compiles the node there; `deploy/node/Dockerfile` builds the node image with it. Binary
+  to the data layer, downward, and the node uses the geoid module alone: it converts no
+  terrain and no point cloud. Review: `docs/design/dependency-edges.md` §20.
 - **(g) `gungnir-node` ──► `gungnir-analytics`.** The node computes the coverage report it
   serves. A binary depending on the productization crate it hosts is the same edge
   `gungnir-app` already has; the alternative was for the node to serve a report somebody
@@ -703,7 +711,7 @@ it; `docs/design/DN-31-node-approval-queue.md` plans the change and GAP-130 to G
 | `gungnir-observability` | Local health panel | Node health endpoint, watchdogs |
 | `gungnir-workflow` | Yes (role layouts, alert lifecycle) | Alert lifecycle state, shared |
 | `gungnir-replay`, `gungnir-reporting` | Against the local journal | Against the node's journal |
-| `gungnir-data`, `gungnir-data-fusion`, `gungnir-geo`, `gungnir-analytics` | Yes | Not required. Point-cloud fusion is a desktop capability; a node needs `gungnir-geo` only if geofence policy is evaluated server-side. |
+| `gungnir-data`, `gungnir-data-fusion`, `gungnir-geo`, `gungnir-analytics` | Yes | `gungnir-data` for its geoid module only, behind the node's `crs` feature (edge (ab), GAP-198): the node image reads the EGM2008 grid to correct a UAS's height. Point-cloud and terrain conversion and fusion are desktop capabilities; a node needs `gungnir-geo` only if geofence policy is evaluated server-side. |
 | `gungnir-render`, `gungnir-viewport3d`, `gungnir-ui`, `gungnir-app` | Yes | Never |
 
 ### §8.4 — Degraded connectivity

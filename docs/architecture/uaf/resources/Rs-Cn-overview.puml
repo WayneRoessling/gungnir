@@ -52,6 +52,7 @@ deployment --> service_facades
 deployment --> secure_operate_sustain
 deployment --> assess_decide_govern_action
 deployment --> understand_maintain_the_picture
+deployment --> data_ecosystem
 secure_operate_sustain --> sense_ingest_normalize
 secure_operate_sustain --> tracking_core
 sense_ingest_normalize --> tracking_core

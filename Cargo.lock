@@ -3703,6 +3703,7 @@ dependencies = [
  "gungnir-approval",
  "gungnir-command",
  "gungnir-config",
+ "gungnir-data",
  "gungnir-eventing",
  "gungnir-geo",
  "gungnir-identity",
