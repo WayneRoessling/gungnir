@@ -843,13 +843,13 @@ async fn the_health_route_answers() {
 async fn the_coverage_route_carries_the_parameters_that_found_the_gaps() {
     let api = authenticating(snapshot(Vec::new()));
     api.publish_coverage(gungnir_api::v3::CoverageResponse::Computed(
-        gungnir_analytics::CoverageReport {
+        gungnir_api::v3::ComputedCoverage::unaccepted(gungnir_analytics::CoverageReport {
             parameters: gungnir_analytics::CoverageParameters {
                 sample_spacing_m: 250.0,
                 terrain_masking_applied: false,
             },
             gaps: Vec::new(),
-        },
+        }),
     ))
     .expect("published");
     let url = serve(Arc::clone(&api)).await;
@@ -869,6 +869,8 @@ async fn the_coverage_route_carries_the_parameters_that_found_the_gaps() {
     assert_eq!(body["parameters"]["sample_spacing_m"], 250.0);
     // A flat-terrain answer is optimistic by construction, and saying so is the point.
     assert_eq!(body["parameters"]["terrain_masking_applied"], false);
+    // GAP-194: with nothing accepted the answer is the shape it always was.
+    assert!(body.get("acceptances").is_none(), "{body}");
 }
 
 /// **A node that computed nothing says so, rather than returning an empty gap list.**
@@ -1973,19 +1975,35 @@ async fn a_nan_and_an_infinity_in_a_queue_item_reach_a_linked_desktop() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_nan_and_an_infinity_in_coverage_cross_the_route() {
     let api = authenticating(snapshot(Vec::new()));
+    let report = gungnir_analytics::CoverageReport {
+        parameters: gungnir_analytics::CoverageParameters {
+            sample_spacing_m: 250.0,
+            terrain_masking_applied: false,
+        },
+        gaps: vec![gungnir_analytics::CoverageGap {
+            approach: 0,
+            from_m: 1_000.0,
+            to_m: f64::INFINITY,
+            samples: vec![[f64::from_bits(PAYLOAD_NAN), f64::NEG_INFINITY, 0.0]],
+            severity: gungnir_analytics::GapSeverity::Uncovered,
+        }],
+    };
+    // GAP-194: an acceptance mark beside the report, so the flattened report and the new
+    // field are both read back through the same buffering.
+    let acceptance = gungnir_model::GapAcceptance {
+        id: gungnir_model::GapAcceptanceId(1),
+        gap: gungnir_analytics::accepted_gap(&report.gaps[0], "east", report.parameters),
+        reason: "watched by the patrol".into(),
+        operator: "7".into(),
+        role: "Commander".into(),
+        revision: 1,
+        laydown: None,
+        at: gungnir_model::MissionTime(5.0),
+    };
     api.publish_coverage(gungnir_api::v3::CoverageResponse::Computed(
-        gungnir_analytics::CoverageReport {
-            parameters: gungnir_analytics::CoverageParameters {
-                sample_spacing_m: 250.0,
-                terrain_masking_applied: false,
-            },
-            gaps: vec![gungnir_analytics::CoverageGap {
-                approach: 0,
-                from_m: 1_000.0,
-                to_m: f64::INFINITY,
-                samples: vec![[f64::from_bits(PAYLOAD_NAN), f64::NEG_INFINITY, 0.0]],
-                severity: gungnir_analytics::GapSeverity::Uncovered,
-            }],
+        gungnir_api::v3::ComputedCoverage {
+            report,
+            acceptances: vec![Some(acceptance.clone())],
         },
     ))
     .expect("published");
@@ -2005,11 +2023,240 @@ async fn a_nan_and_an_infinity_in_coverage_cross_the_route() {
     let body = response.text().await.expect("a body");
     let read: gungnir_api::v3::CoverageResponse =
         gungnir_eventing::nonfinite::from_line(&body).expect("the desktop's decoder reads it");
-    let gungnir_api::v3::CoverageResponse::Computed(report) = read else {
+    let gungnir_api::v3::CoverageResponse::Computed(computed) = read else {
         panic!("{body}");
     };
-    let gap = &report.gaps[0];
+    let gap = &computed.report.gaps[0];
     assert_eq!(gap.to_m.to_bits(), f64::INFINITY.to_bits());
     assert_eq!(gap.samples[0][0].to_bits(), PAYLOAD_NAN);
     assert_eq!(gap.samples[0][1].to_bits(), f64::NEG_INFINITY.to_bits());
+    assert_eq!(computed.acceptance_of(0).map(|a| a.id), Some(acceptance.id));
+    assert_eq!(
+        computed.acceptance_of(0).map(|a| a.gap.to_m.to_bits()),
+        Some(f64::INFINITY.to_bits())
+    );
+}
+
+/// GAP-194 (D-131): a gap posted to `POST /v3/coverage/acceptances` as the gap was drawn.
+fn posted_gap() -> serde_json::Value {
+    serde_json::json!({
+        "gap": {
+            "approach": "east",
+            "severity": "uncovered",
+            "from_m": 1000.0,
+            "to_m": 1400.0,
+            "sample_spacing_m": 100.0,
+            "terrain_masking_applied": false
+        },
+        "reason": "watched by the patrol"
+    })
+}
+
+/// Stand in for the node loop: answer every acceptance the route hands over with
+/// `answer`, until the test ends. The loop's own judgement is
+/// `gungnir_node::gap_acceptance`'s, held by its unit tests; this drives the route.
+fn answer_acceptances(
+    api: &Arc<NodeApi>,
+    answer: impl Fn(gungnir_api::transport::PendingAcceptance) -> gungnir_api::transport::AcceptanceAnswer
+        + Send
+        + 'static,
+) {
+    let api = Arc::clone(api);
+    tokio::spawn(async move {
+        loop {
+            for pending in api.take_acceptances() {
+                let (reply, request) = {
+                    let gungnir_api::transport::PendingAcceptance {
+                        gap,
+                        reason,
+                        operator,
+                        role,
+                        party,
+                        accepted_offline,
+                        reply,
+                    } = pending;
+                    let (tx, _rx) = tokio::sync::oneshot::channel();
+                    (
+                        reply,
+                        gungnir_api::transport::PendingAcceptance {
+                            gap,
+                            reason,
+                            operator,
+                            role,
+                            party,
+                            accepted_offline,
+                            reply: tx,
+                        },
+                    )
+                };
+                let _ = reply.send(answer(request));
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    });
+}
+
+/// **A commander's acceptance reaches the loop as the token says, and its answers come
+/// back as `201` and `409`.** The body names no operator, so the one handed over is the
+/// token's, operator 7 as the commander, with the reason trimmed.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_commanders_acceptance_reaches_the_loop_and_its_answer_comes_back() {
+    let api = authenticating_as(snapshot(Vec::new()), gungnir_security::Role::Commander);
+    answer_acceptances(&api, |pending| {
+        assert_eq!(pending.operator, OperatorId(7));
+        assert_eq!(pending.role, gungnir_security::Role::Commander);
+        assert_eq!(pending.reason, "watched by the patrol");
+        if pending.gap.to_m > 1_500.0 {
+            return gungnir_api::transport::AcceptanceAnswer::Refused(
+                gungnir_api::v3::GapAcceptanceRefused::GapNotOnAnswer {
+                    gap: pending.gap.describe(),
+                },
+            );
+        }
+        gungnir_api::transport::AcceptanceAnswer::Recorded(gungnir_model::GapAcceptance {
+            id: gungnir_model::GapAcceptanceId(1),
+            gap: pending.gap,
+            reason: pending.reason,
+            operator: pending.operator.0.to_string(),
+            role: format!("{:?}", pending.role),
+            revision: 3,
+            laydown: None,
+            at: MissionTime(5.0),
+        })
+    });
+    let url = serve(Arc::clone(&api)).await;
+    let token = token(&url).await;
+    let client = reqwest::Client::new();
+    let post = |body: serde_json::Value| {
+        client
+            .post(format!("{url}/v3/coverage/acceptances"))
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+    };
+
+    let mut body = posted_gap();
+    body["reason"] = serde_json::json!("  watched by the patrol  ");
+    let recorded = post(body).await.expect("the route exists");
+    assert_eq!(recorded.status(), 201);
+    let recorded: gungnir_api::v3::GapAcceptanceRecorded =
+        gungnir_eventing::nonfinite::from_line(&recorded.text().await.expect("a body"))
+            .expect("the desktop's decoder reads it");
+    assert_eq!(recorded.acceptance.id, gungnir_model::GapAcceptanceId(1));
+    assert_eq!(recorded.acceptance.operator, "7");
+
+    let mut elsewhere = posted_gap();
+    elsewhere["gap"]["to_m"] = serde_json::json!(1600.0);
+    let refused = post(elsewhere).await.expect("answers");
+    assert_eq!(refused.status(), 409);
+    let refused: gungnir_api::v3::GapAcceptanceRefused =
+        gungnir_eventing::nonfinite::from_line(&refused.text().await.expect("a body"))
+            .expect("reads");
+    assert!(matches!(
+        refused,
+        gungnir_api::v3::GapAcceptanceRefused::GapNotOnAnswer { .. }
+    ));
+}
+
+/// **The route refuses what it can judge without the loop, and audits each refusal**:
+/// no token (`401`), a role without `coverage.accept_gap` (`403`), no reason or a gap that
+/// could name nothing (`400`). Nothing reaches the loop.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_acceptance_route_refuses_what_is_not_a_commanders_acceptance() {
+    // A supervisor may decide plans and may not accept a gap: only the commander may.
+    let supervisor = authenticating(snapshot(Vec::new()));
+    let url = serve(Arc::clone(&supervisor)).await;
+    let supervisor_token = token(&url).await;
+    let client = reqwest::Client::new();
+    let forbidden = client
+        .post(format!("{url}/v3/coverage/acceptances"))
+        .bearer_auth(&supervisor_token)
+        .json(&posted_gap())
+        .send()
+        .await
+        .expect("answers");
+    assert_eq!(forbidden.status(), 403);
+    let unauthenticated = client
+        .post(format!("{url}/v3/coverage/acceptances"))
+        .json(&posted_gap())
+        .send()
+        .await
+        .expect("answers");
+    assert_eq!(unauthenticated.status(), 401);
+
+    let commander = authenticating_as(snapshot(Vec::new()), gungnir_security::Role::Commander);
+    let url = serve(Arc::clone(&commander)).await;
+    let token = token(&url).await;
+    let mut no_reason = posted_gap();
+    no_reason["reason"] = serde_json::json!("   ");
+    let mut backwards = posted_gap();
+    backwards["gap"]["from_m"] = serde_json::json!(2000.0);
+    let mut no_spacing = posted_gap();
+    no_spacing["gap"]["sample_spacing_m"] = serde_json::json!(0.0);
+    let mut nobody_offline = posted_gap();
+    nobody_offline["accepted_offline"] =
+        serde_json::json!({"operator": "", "role": "Commander", "at": 2.5, "origin": "desk-a"});
+    for (body, says) in [
+        (no_reason, "reason"),
+        (backwards, "extent"),
+        (no_spacing, "spacing"),
+        (serde_json::json!({"reason": "no gap"}), "does not read"),
+        (nobody_offline, "forwarded acceptance names who"),
+    ] {
+        let response = client
+            .post(format!("{url}/v3/coverage/acceptances"))
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+            .await
+            .expect("answers");
+        assert_eq!(response.status(), 400, "{says}");
+        let text = response.text().await.expect("a body");
+        assert!(text.contains(says), "{says}: {text}");
+    }
+    assert!(
+        commander.take_acceptances().is_empty(),
+        "nothing reached the loop"
+    );
+    let drain = commander.take_audit();
+    let mut log = gungnir_security::InMemoryAuditLog::new();
+    drain.record_into(&mut log, 0.0);
+    let refusals = gungnir_security::AuditLog::entries(&log)
+        .iter()
+        .filter(|e| e.action == gungnir_security::actions::ACCEPT_COVERAGE_GAP)
+        .count();
+    assert_eq!(refusals, 5, "each refusal is audited");
+}
+
+/// A forwarded acceptance reaches the loop with who accepted it at the cut-off console,
+/// beside the forwarder the token names (D-131).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_forwarded_acceptance_carries_who_accepted_it() {
+    let api = authenticating_as(snapshot(Vec::new()), gungnir_security::Role::Commander);
+    answer_acceptances(&api, |pending| {
+        let offline = pending.accepted_offline.clone().expect("forwarded");
+        assert_eq!(pending.operator, OperatorId(7), "the forwarder");
+        assert_eq!(
+            (offline.operator.as_str(), offline.origin.as_str()),
+            ("3", "desk-a")
+        );
+        gungnir_api::transport::AcceptanceAnswer::Refused(
+            gungnir_api::v3::GapAcceptanceRefused::GapNotOnAnswer {
+                gap: pending.gap.describe(),
+            },
+        )
+    });
+    let url = serve(Arc::clone(&api)).await;
+    let token = token(&url).await;
+    let mut body = posted_gap();
+    body["accepted_offline"] =
+        serde_json::json!({"operator": "3", "role": "Commander", "at": 2.5, "origin": "desk-a"});
+    let response = reqwest::Client::new()
+        .post(format!("{url}/v3/coverage/acceptances"))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .expect("answers");
+    assert_eq!(response.status(), 409);
 }

@@ -3302,3 +3302,29 @@
     0.9 and `hkdf` 0.12. Rejected: a dated ignore (a vulnerability notice in a shipped
     cryptographic path, not an unmaintained one, and no reason to leave it once a fix
     exists). See `../../record/2026-10-24/p256-moves-to-0-14-for-a-constant.md`.
+- id: D-134
+  decision: How the node holds gap acceptances (D-131's build)
+  question: >-
+    GAP-194: D-131 gave the node the acceptances, and left four things to its build. The
+    node takes no baseline from a desktop and computes coverage flat, from its own sensors,
+    while a linked desktop computes its own, terrain-masked where it loads a DEM, and an
+    acceptance names a gap's exact shape. Where do the revision and laydown an acceptance
+    holds for come from; which coverage answer is a gap judged against; what does a
+    cut-off desktop do when the node refuses an acceptance it forwards; and does it land
+    in one pull request or two?
+  raised_in: "GAP-194; D-131; D-118; D-55"
+  decider: Owner
+  unblocks: "GAP-194"
+  resolved: 2026-10-24
+  outcome: >-
+    **Taken by the owner, 2026-10-24, each to the recommended default.** (1) The node
+    reads the `revision` and the laydown marked `current` from the baseline it runs, as
+    the desktop does, and stamps an acceptance with its own; no route sets them. (2) The
+    node judges a gap against the coverage answer it serves on `GET /v3/coverage`; a linked
+    desktop's PN-11 lists the node's gaps with their acceptances and posts those, and its
+    own report keeps a local mark only where a gap matches. Rejected: recording the
+    desktop's gap as sent, which drops D-118's shape check on the node; and the node
+    loading terrain first, a build of its own. (3) A forwarded acceptance the node refuses
+    re-opens on the desktop with the node's reason, journaled and audited, so no console
+    shows an acceptance the node does not hold. (4) Two pull requests, the node first.
+    See `../../record/2026-10-24/the-node-holds-coverage-gap-acceptances.md`.

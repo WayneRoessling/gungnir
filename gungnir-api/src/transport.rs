@@ -488,6 +488,10 @@ pub struct NodeApi {
     /// separate queue from `tasks` for the same reason `reports` is separate from
     /// `submissions`: two different facts, arriving under different authority.
     decisions: Mutex<Vec<PendingDecision>>,
+    /// Gap acceptances waiting for the node loop to judge them against its own coverage
+    /// answer (GAP-194, D-131). A queue of its own: a different fact, under a different
+    /// action, which the loop answers from its own ledger.
+    acceptances: Mutex<Vec<PendingAcceptance>>,
     /// Decision requests the routes refused, waiting for the loop to audit them
     /// (GAP-132, DN-31 §9 row 4). The caller has already been answered; what is owed is
     /// the entry in the record.
@@ -692,6 +696,48 @@ impl std::fmt::Debug for PendingDecision {
     }
 }
 
+/// A gap acceptance the route let through and the node loop has not yet judged (GAP-194,
+/// D-131).
+///
+/// The same carrier as [`PendingDecision`] and for the same reason: the ledger, the
+/// coverage answer the gap is checked against, and the baseline revision and laydown the
+/// acceptance holds for are all the loop's, so the route hands the request over and waits.
+pub struct PendingAcceptance {
+    /// The gap as the caller drew it from this node's coverage answer.
+    pub gap: gungnir_model::AcceptedGap,
+    /// Why, trimmed and never empty: the route refused an empty one.
+    pub reason: String,
+    /// The verified session the acceptance is attributed to (DN-33 §6: a signed-in
+    /// commander, never a selected role).
+    pub operator: gungnir_security::OperatorId,
+    pub role: gungnir_security::Role,
+    /// The machine the connection was verified as, for the audit entry; `None` over
+    /// plaintext.
+    pub party: Option<String>,
+    /// Who accepted it at a cut-off console, when it is forwarded (D-131); the route
+    /// vetted it. `operator` and `role` above are then the forwarder's.
+    pub accepted_offline: Option<v3::OfflineAcceptance>,
+    /// What the loop recorded, or why it would not.
+    pub reply: tokio::sync::oneshot::Sender<AcceptanceAnswer>,
+}
+
+/// What the node loop says about one acceptance (GAP-194): the `201` and the `409` of
+/// [`v3::GapAcceptanceRecorded`] and [`v3::GapAcceptanceRefused`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum AcceptanceAnswer {
+    Recorded(gungnir_model::GapAcceptance),
+    Refused(v3::GapAcceptanceRefused),
+}
+
+impl std::fmt::Debug for PendingAcceptance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PendingAcceptance")
+            .field("gap", &self.gap)
+            .field("role", &self.role)
+            .finish_non_exhaustive()
+    }
+}
+
 /// An outage's decisions the route accepted and the node loop has not yet put on its
 /// record (GAP-134, DN-31 §6.8).
 ///
@@ -837,6 +883,7 @@ impl NodeApi {
             machine_submissions: Mutex::new(Vec::new()),
             tasks: Mutex::new(Vec::new()),
             decisions: Mutex::new(Vec::new()),
+            acceptances: Mutex::new(Vec::new()),
             refusals: Mutex::new(Vec::new()),
             forwarded: Mutex::new(Vec::new()),
             reports: Mutex::new(Vec::new()),
@@ -936,6 +983,17 @@ impl NodeApi {
     #[must_use]
     pub fn take_decisions(&self) -> Vec<PendingDecision> {
         self.decisions
+            .lock()
+            .map(|mut queue| std::mem::take(&mut *queue))
+            .unwrap_or_default()
+    }
+
+    /// Take the gap acceptances the route let through since the last call, in arrival
+    /// order (GAP-194, D-131). The loop answers each through its `reply`; two commanders
+    /// accepting one gap get one acceptance and one `409`.
+    #[must_use]
+    pub fn take_acceptances(&self) -> Vec<PendingAcceptance> {
+        self.acceptances
             .lock()
             .map(|mut queue| std::mem::take(&mut *queue))
             .unwrap_or_default()
@@ -1542,7 +1600,11 @@ pub fn router(api: Arc<NodeApi>) -> Router {
         )
         // GAP-179, D-116: the node's audit record, for a role holding `audit.read`. New in
         // `/v3`; not in `RETIRED`.
-        .route(&crate::path(routes::AUDIT), get(audit_record));
+        .route(&crate::path(routes::AUDIT), get(audit_record))
+        // GAP-194, D-131: a commander's acceptance of a coverage gap, held by the node for
+        // its linked desktops and marked on `GET /v3/coverage`. New in `/v3`; not in
+        // `RETIRED`.
+        .route(&crate::path(routes::COVERAGE_ACCEPTANCES), post(accept_gap));
     RETIRED
         .iter()
         .fold(served, |router, retired| {
@@ -3142,6 +3204,168 @@ async fn decide_queued(
              request key to learn whether it was recorded",
         ),
     }
+}
+
+/// How long the acceptance route waits for the loop: the decision route's window, for the
+/// same loop.
+const ACCEPTANCE_REPLY_TIMEOUT: std::time::Duration = DECISION_REPLY_TIMEOUT;
+
+/// `POST /v3/coverage/acceptances` (GAP-194, D-131; human-owned, a `gungnir-api` write
+/// path): a commander accepts a gap on this node's coverage answer, for the desktops
+/// linked to it.
+///
+/// **The shape of the decision route -- authenticate, vet, hand over, wait -- and its
+/// reason**: the ledger and the coverage answer the gap is judged against are the loop's.
+/// The route answers what it can about the caller and the body, each refusal audited
+/// under `coverage.accept_gap` and nothing recorded:
+///
+/// 1. a valid, unexpired operator token -- `401`: an acceptance names the commander who
+///    made it, so nobody signed in accepts nothing (DN-33 §6);
+/// 2. `coverage.accept_gap` -- `403` naming the role: the commander alone holds it, the
+///    administrator included among those who do not;
+/// 3. the body decodes, names an approach, has finite ends in order and a positive
+///    spacing, and gives a reason; a forwarded one names who accepted it, as which role,
+///    when and where -- `400`.
+///
+/// Then the loop judges the gap against the coverage answer this node serves, under the
+/// baseline revision and laydown its own baseline holds: `201` with the acceptance, or
+/// `409` with why not. A `504` does not mean nothing was recorded; the caller reads
+/// `GET /v3/coverage` to learn whether the gap is marked.
+async fn accept_gap(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+    body: Result<Json<v3::GapAcceptanceRequest>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    const ACTION: &str = actions::ACCEPT_COVERAGE_GAP;
+    // 1. Who is asking.
+    let session = match unaudited_operator_caller(&api, &headers, &peer, "accepting a gap") {
+        Ok(session) => session,
+        Err((status, why)) => {
+            api.audit(
+                &peer,
+                None,
+                ACTION,
+                format_args!("refused: no valid operator session"),
+            );
+            return problem(status, &why);
+        }
+    };
+    let refuse = |status: StatusCode, why: String| {
+        api.audit(
+            &peer,
+            Some(session.operator),
+            ACTION,
+            format_args!("refused: {why}"),
+        );
+        problem(status, &why)
+    };
+    // 2. Whether that role may accept a gap at all.
+    if !gungnir_security::authz::role_permits(session.role, ACTION) {
+        return refuse(
+            StatusCode::FORBIDDEN,
+            format!(
+                "the {:?} role may not accept a coverage gap ({ACTION}); only the commander may",
+                session.role
+            ),
+        );
+    }
+    // 3. Whether the body is an acceptance at all.
+    let request = match body {
+        Ok(Json(request)) => request,
+        Err(rejection) => {
+            return refuse(
+                StatusCode::BAD_REQUEST,
+                format!("the acceptance does not read: {rejection}"),
+            )
+        }
+    };
+    let reason = match vet_acceptance(&request) {
+        Ok(reason) => reason.to_owned(),
+        Err(why) => return refuse(StatusCode::BAD_REQUEST, why),
+    };
+    let (reply, answer) = tokio::sync::oneshot::channel();
+    {
+        let Ok(mut queue) = api.acceptances.lock() else {
+            return problem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "the acceptance queue lock was poisoned",
+            );
+        };
+        queue.push(PendingAcceptance {
+            gap: request.gap,
+            reason,
+            operator: session.operator,
+            role: session.role,
+            party: peer.party.clone(),
+            accepted_offline: request.accepted_offline,
+            reply,
+        });
+    }
+    match tokio::time::timeout(ACCEPTANCE_REPLY_TIMEOUT, answer).await {
+        Ok(Ok(AcceptanceAnswer::Recorded(acceptance))) => lossless_json_as(
+            StatusCode::CREATED,
+            &v3::GapAcceptanceRecorded { acceptance },
+        ),
+        Ok(Ok(AcceptanceAnswer::Refused(refused))) => {
+            lossless_json_as(StatusCode::CONFLICT, &refused)
+        }
+        Ok(Err(_)) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the node loop dropped the acceptance without answering",
+        ),
+        Err(_) => problem(
+            StatusCode::GATEWAY_TIMEOUT,
+            "the node loop did not answer within the reply window; read the coverage answer \
+             to learn whether the gap is marked accepted",
+        ),
+    }
+}
+
+/// Check 3 of [`accept_gap`]: the gap could name one, the reason is given, and a forwarded
+/// acceptance names who accepted it. The trimmed reason, or why the body is refused.
+fn vet_acceptance(request: &v3::GapAcceptanceRequest) -> Result<&str, String> {
+    vet_gap(&request.gap)?;
+    let reason = request.reason.trim();
+    if reason.is_empty() {
+        return Err("an acceptance is recorded with its reason; none was given".to_owned());
+    }
+    if let Some(offline) = &request.accepted_offline {
+        if offline.operator.trim().is_empty()
+            || offline.role.trim().is_empty()
+            || offline.origin.trim().is_empty()
+            || !offline.at.0.is_finite()
+        {
+            return Err(
+                "a forwarded acceptance names who accepted it, as which role, when and on \
+                 which desktop; this one does not"
+                    .to_owned(),
+            );
+        }
+    }
+    Ok(reason)
+}
+
+/// Whether `gap` could name a gap at all (GAP-194): an approach, finite ends in order,
+/// and a positive spacing. Anything else is refused before the loop sees it, rather than
+/// compared against a coverage answer it could never match.
+fn vet_gap(gap: &gungnir_model::AcceptedGap) -> Result<(), String> {
+    if gap.approach.trim().is_empty() {
+        return Err("the gap names no approach".to_owned());
+    }
+    if !(gap.from_m.is_finite() && gap.to_m.is_finite() && gap.from_m <= gap.to_m) {
+        return Err(format!(
+            "the gap's extent, {} m to {} m, is not a stretch of an approach",
+            gap.from_m, gap.to_m
+        ));
+    }
+    if !(gap.sample_spacing_m.is_finite() && gap.sample_spacing_m > 0.0) {
+        return Err(format!(
+            "the gap's sample spacing, {} m, is not a spacing",
+            gap.sample_spacing_m
+        ));
+    }
+    Ok(())
 }
 
 /// `POST /v3/decisions/forwarded` (DN-31 §6.8 and §7, GAP-134): what a desktop decided

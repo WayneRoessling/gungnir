@@ -85,6 +85,9 @@ pub mod routes {
     /// The node's audit record and its verification, for a role holding `audit.read`
     /// (GAP-179, D-116). New in `/v3`, so it has no retired `/v2` form.
     pub const AUDIT: &str = "/audit";
+    /// A commander's acceptance of a coverage gap, held by the node for the desktops
+    /// linked to it (GAP-194, D-131). New in `/v3`, so it has no retired `/v2` form.
+    pub const COVERAGE_ACCEPTANCES: &str = "/coverage/acceptances";
     /// Retired. Served under `/v2` alone, answering `410 Gone` and naming
     /// [`QUEUE_DECISION`] as its successor; `/v3` never served it (GAP-132).
     pub const PLAN_DECISION: &str = "/plans/{plan_id}/decision";
