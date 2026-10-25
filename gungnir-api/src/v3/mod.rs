@@ -257,13 +257,124 @@ pub struct SessionResponse {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "state", rename_all = "kebab-case")]
 pub enum CoverageResponse {
-    Computed(gungnir_analytics::CoverageReport),
+    Computed(ComputedCoverage),
     /// Nothing was computed, and why. A deployment with no declared local frame origin
     /// or no approaches cannot produce a coverage answer, and an empty list would read as
     /// a clean sector.
     NotComputed {
         reason: String,
     },
+}
+
+/// A computed coverage answer: the report, and the acceptance that stands for each of its
+/// gaps on this node (GAP-194, D-131).
+///
+/// **Additive on the wire.** The report's fields are where they were, beside `state`, and
+/// `acceptances` is new beside them; a body written before it reads as no gap accepted,
+/// which is what such a node held. An accepted gap is still in `gaps` and still counted:
+/// the mark names it, it does not remove it (D-118).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ComputedCoverage {
+    #[serde(flatten)]
+    pub report: gungnir_analytics::CoverageReport,
+    /// For each of `report.gaps`, in the same order, the acceptance that stands for it on
+    /// this node, or `None`. Empty when nothing stands.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acceptances: Vec<Option<gungnir_model::GapAcceptance>>,
+}
+
+impl ComputedCoverage {
+    /// A report with no gap accepted.
+    #[must_use]
+    pub fn unaccepted(report: gungnir_analytics::CoverageReport) -> Self {
+        ComputedCoverage {
+            report,
+            acceptances: Vec::new(),
+        }
+    }
+
+    /// The acceptance that stands for gap `index`, if any.
+    #[must_use]
+    pub fn acceptance_of(&self, index: usize) -> Option<&gungnir_model::GapAcceptance> {
+        self.acceptances.get(index).and_then(Option::as_ref)
+    }
+}
+
+/// What `POST /v3/coverage/acceptances` takes (GAP-194, D-131): the gap as the caller drew
+/// it from this node's coverage answer, and why it is tolerated.
+///
+/// **No operator, no role, no revision, no laydown.** The person is whoever the token
+/// says, and what the acceptance holds for is the node's own baseline revision and the
+/// laydown it marks current, read when the node records it -- not what the caller's
+/// console was running.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct GapAcceptanceRequest {
+    pub gap: gungnir_model::AcceptedGap,
+    /// Why, in the commander's words. Required (D-118).
+    pub reason: String,
+    /// Set when a desktop cut off from this node accepted the gap and forwards it now
+    /// (D-131): who accepted it, as that console recorded them. The token is then the
+    /// forwarder's, named on the node's audit entry beside this; the acceptance is the
+    /// accepting commander's, as a forwarded decision is its decider's (D-55). Absent for
+    /// an acceptance made while linked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accepted_offline: Option<OfflineAcceptance>,
+}
+
+/// Who accepted a forwarded gap, and when and where, as the cut-off console recorded it
+/// (GAP-194, D-131). The strings are `GapAcceptance`'s own, so the node records them as
+/// that console wrote them.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct OfflineAcceptance {
+    pub operator: String,
+    pub role: String,
+    /// When it was accepted, on the forwarding desktop's clock.
+    pub at: gungnir_model::MissionTime,
+    /// The desktop's machine identity, as on a forwarded decision.
+    pub origin: String,
+}
+
+/// The node's answer when it recorded an acceptance: `201`, with the acceptance as the
+/// node holds it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct GapAcceptanceRecorded {
+    pub acceptance: gungnir_model::GapAcceptance,
+}
+
+/// Why the node recorded no acceptance, for a request the route itself let through:
+/// `409`. Nothing is journaled or audited as accepted for any of these; the refusal's own
+/// audit entry is written.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "refused", rename_all = "kebab-case")]
+pub enum GapAcceptanceRefused {
+    /// The node computes no coverage, so there is no gap to accept.
+    NotMeasured { reason: String },
+    /// No gap of that shape is on the node's coverage answer now (DN-33 §5's shape): the
+    /// caller drew it from a different answer, or it changed before the node saw it.
+    GapNotOnAnswer { gap: String },
+    /// The gap is already accepted on this node.
+    AlreadyAccepted {
+        gap: String,
+        acceptance: gungnir_model::GapAcceptanceId,
+    },
+}
+
+impl GapAcceptanceRefused {
+    /// The refusal in words, for the caller's panel and the audit entry.
+    #[must_use]
+    pub fn sentence(&self) -> String {
+        match self {
+            GapAcceptanceRefused::NotMeasured { reason } => {
+                format!("the node computes no coverage ({reason}), so there is no gap to accept")
+            }
+            GapAcceptanceRefused::GapNotOnAnswer { gap } => {
+                format!("{gap} is not on the node's coverage answer, so nothing was accepted")
+            }
+            GapAcceptanceRefused::AlreadyAccepted { gap, acceptance } => {
+                format!("{gap} is already accepted on the node ({acceptance})")
+            }
+        }
+    }
 }
 
 /// Who the caller is, for `GET /v3/session`.

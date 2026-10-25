@@ -190,7 +190,7 @@ history, and an entry is never edited once it has merged.
 | GAP-196 | A UAS's height above mean sea level is placed as an ellipsoidal height | Technical | CAP-1.7 | 3 | 6 | S | 18 | I4 | Services engineer | Closed |
 | GAP-197 | A DEM or point cloud in NAVD88, EGM96 or a national height datum cannot be placed | Technical | CAP-2.10 | 3 | 8 | M | 24 | I4 | UI engineer | Closed |
 | GAP-193 | A linked desktop's rehearsal acknowledgement is not on the node's decision record | Technical | CAP-5.9, CAP-7.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
-| GAP-194 | A gap acceptance is held only by the desktop that recorded it | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | L | 12 | I3 | Services engineer | Open |
+| GAP-194 | A gap acceptance is held only by the desktop that recorded it | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | L | 12 | I3 | Services engineer | In progress |
 | GAP-195 | PN-07's degraded-condition acknowledgement is on no record | Technical | CAP-5.9 | 3 | 10 | S | 30 | I3 | UI engineer | Closed |
 | GAP-198 | The node places a UAS's height above mean sea level uncorrected | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Closed |
 | GAP-199 | A UAS reporting only its height above ground is placed at height zero | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Closed |
@@ -2733,13 +2733,14 @@ Counts: 183 gaps, 3 mission, 180 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-09-26, Open: Found building GAP-106. The owner's decision is about what an acceptance is, not where it lives in a system of systems; the node already answers coverage and holds the queue, so which machine holds acceptances is a design question of its own, not a detail to take under the delegation.
   - 2026-10-23, Open: **Decided by the owner, 2026-10-23 (D-131); nothing is built yet.** The node holds acceptances for its linked desktops, as it holds the queue. Effort raised from M to L: the node has no laydown to re-open against, and getting the laydown in force to it is part of the build. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
-- Evidence: `gungnir-app/src/gap_acceptance.rs`; `gungnir-node/src/main.rs`'s coverage answer; `../../design/DN-33-accepting-a-coverage-gap.md` §9.
+  - 2026-10-24, In progress: **The node half built (D-131, D-134).** `POST /v3/coverage/acceptances`, a `gungnir-api` write path, takes a signed-in commander's acceptance and hands it to the node loop, which judges it against its own coverage answer, stamps it with its own baseline revision and current laydown, journals and audits it, re-opens it by DN-33 §5, folds the ledger from the journal at start and keeps its sessions from retention; `GET /v3/coverage` marks each accepted gap. The owner chose each detail on 2026-10-24 (D-134). The desktop half is the second pull request. The route and the transport types are human-owned; see docs/signatures.md. See `../../record/2026-10-24/the-node-holds-coverage-gap-acceptances.md`.
+- Evidence: `gungnir-app/src/gap_acceptance.rs`; `gungnir-remote/src/link.rs`, which reads no coverage answer; `../../design/DN-33-accepting-a-coverage-gap.md` amendment 1.
 - Severity: 3. Reach: 4 threads. Effort: L. Priority: 12.
-- Impact: A commander's acceptance is drawn on the desktop that recorded it and nowhere else: a node's `/v2|v3/coverage` answer and a second desktop's PN-11 show the same gap as unexamined.
-- Closing action: Build D-131. A `/v3` write path for an acceptance (a `gungnir-api` write path, so human-owned); the node authorizing `coverage.accept_gap` against the signed-in commander, journaling and auditing it; D-118's re-opening run on the node, with the laydown in force reaching it, since the node knows no laydown today; accepted gaps marked on the `/v2` and `/v3` coverage answer; a cut-off desktop's acceptances forwarded when its node answers, as D-55's decisions are.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Impact: A commander's acceptance is drawn on the desktop that recorded it and nowhere else: a second desktop's PN-11 shows the same gap as unexamined, and nothing on a linked desktop posts an acceptance to the node, which now holds them.
+- Closing action: The desktop half of D-131 and D-134: the link reading `GET /v3/coverage` with its acceptance marks; a linked desktop's PN-11 listing the node's gaps and posting to `POST /v3/coverage/acceptances`; a cut-off desktop's acceptances forwarded when its node answers, a refused one re-opened with the node's reason.
+- Target: I3. Owner: Services engineer. Status: In progress.
 - Reference: Found building GAP-106 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`).
-- Depends on: GAP-106, D-131.
+- Depends on: GAP-106, D-131, D-134.
 
 **GAP-195 PN-07's degraded-condition acknowledgement is on no record**
 

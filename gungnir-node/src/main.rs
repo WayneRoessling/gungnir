@@ -1470,16 +1470,18 @@ fn coverage_answer(config: &ConfigBaseline, sensors: &InMemorySensorRegistry) ->
         .collect();
     let approaches: Vec<&[[f64; 3]]> = routes.iter().map(Vec::as_slice).collect();
 
-    CoverageResponse::Computed(gungnir_analytics::combined_coverage(
-        &volumes,
-        // No terrain is loaded (GAP-023), so line of sight is flat. Reported on the
-        // parameters rather than assumed away, which is why the response carries them.
-        &gungnir_analytics::FlatTerrainLineOfSight,
-        &approaches,
-        gungnir_analytics::CoverageParameters {
-            sample_spacing_m: config.analytics.coverage_sample_spacing_m,
-            terrain_masking_applied: false,
-        },
+    CoverageResponse::Computed(gungnir_api::v3::ComputedCoverage::unaccepted(
+        gungnir_analytics::combined_coverage(
+            &volumes,
+            // No terrain is loaded (GAP-023), so line of sight is flat. Reported on the
+            // parameters rather than assumed away, which is why the response carries them.
+            &gungnir_analytics::FlatTerrainLineOfSight,
+            &approaches,
+            gungnir_analytics::CoverageParameters {
+                sample_spacing_m: config.analytics.coverage_sample_spacing_m,
+                terrain_masking_applied: false,
+            },
+        ),
     ))
 }
 
@@ -1749,6 +1751,21 @@ async fn run(
         "entity resolver folded from the retained sessions"
     );
 
+    // GAP-194, D-131: the coverage gap acceptances this node holds for its linked desktops,
+    // folded from the whole journal; the first tick re-opens any that no longer hold
+    // against this baseline, with the reason, rather than silently.
+    let mut gap_acceptances = gungnir_node::gap_acceptance::NodeGapAcceptances::recover(&journal);
+    if let Some(reason) = gap_acceptances.unreadable() {
+        tracing::warn!(%reason, "the gap acceptances were folded from an incomplete journal");
+    }
+    tracing::info!(
+        standing = gap_acceptances.standing().count(),
+        "gap acceptances folded from the journal"
+    );
+    // What an acceptance holds for: this node's own baseline revision and the laydown it
+    // marks current (the owner's choice of 2026-10-24).
+    let baseline_holds = gungnir_node::gap_acceptance::BaselineHolds::of(&config);
+
     // GAP-114: the same late-data policy the tracker below applies, so the two agree.
     let clock = WallClockAuthority::new(config.time.late_data);
     // GAP-051: created through the lifecycle rather than minted from the wall clock, so
@@ -1816,6 +1833,7 @@ async fn run(
         &journal,
         config.retention.as_ref(),
         session,
+        &gap_acceptances.sessions_to_keep(),
         &bus,
         clock.now(),
         &mut retention_purged,
@@ -2034,6 +2052,7 @@ async fn run(
                 &journal,
                 config.retention.as_ref(),
                 session,
+                &gap_acceptances.sessions_to_keep(),
                 &bus,
                 now,
                 &mut retention_purged,
@@ -2165,6 +2184,28 @@ async fn run(
         // GAP-179, D-116: the reads of this node's audit record, each recorded before it is
         // answered; before the routes' entries, so this tick's sync and anchor cover it.
         audit_record.answer_reads(approval_desk.audit.as_mut(), &journal, &api, &bus, now)?;
+        // GAP-194, D-131: the coverage answer this tick serves, the commanders' acceptances
+        // the route handed over judged against it, and every standing acceptance checked
+        // against it and this node's baseline. Before the routes' entries, so this tick's
+        // sync covers the audit entries, and before the journal append, so the events are
+        // on disk in the tick they happened. Computed here rather than in the request
+        // handler, so a caller's polling rate cannot decide this node's load.
+        let mut coverage = coverage_answer(&config, &sensors);
+        gungnir_node::gap_acceptance::tick(
+            &mut gap_acceptances,
+            api.take_acceptances(),
+            &baseline_holds.judged(&coverage),
+            &mut gungnir_node::gap_acceptance::Tick {
+                bus: &bus,
+                audit: approval_desk.audit.as_mut(),
+                now,
+                session,
+            },
+        )?;
+        let marks = gap_acceptances.marks(&baseline_holds.judged(&coverage));
+        if let CoverageResponse::Computed(computed) = &mut coverage {
+            computed.acceptances = marks;
+        }
         // GAP-111: the routes' sign-ins, refusals and acts, then one sync for the tick.
         approval::audit_routes(&mut approval_desk, &frame);
 
@@ -2220,9 +2261,8 @@ async fn run(
             );
             last_health_log = Instant::now();
         }
-        // Computed here rather than in the request handler, so a caller's polling rate
-        // cannot decide this node's load.
-        if let Err(err) = api.publish_coverage(coverage_answer(&config, &sensors)) {
+        // Computed above with the acceptances it marks (GAP-194).
+        if let Err(err) = api.publish_coverage(coverage) {
             tracing::error!(%err, "could not publish the coverage answer");
         }
         if let Some(gap) = gateway.seconds_since_last_receipt(now) {
@@ -2272,10 +2312,14 @@ async fn run(
 /// half-removed (`gungnir_store::retention`), and a node that stopped over a housekeeping
 /// failure would lose the mission picture to keep a directory tidy. Only a failure to
 /// publish on the bus stops the loop, as it does everywhere else in it.
+///
+/// `keep` is the sessions holding a standing gap acceptance's record (GAP-194): purging
+/// one would un-accept a gap the next start folds the journal for (DN-33 §8 rule 7).
 fn apply_retention(
     journal: &FileEventJournal,
     policy: Option<&gungnir_store::retention::RetentionPolicy>,
     live: gungnir_store::SessionId,
+    keep: &[gungnir_store::SessionId],
     bus: &InProcessBus,
     now: gungnir_model::MissionTime,
     purged: &mut u64,
@@ -2283,11 +2327,13 @@ fn apply_retention(
     let Some(policy) = policy else {
         return Ok(());
     };
+    let protected: std::collections::BTreeSet<_> =
+        std::iter::once(live).chain(keep.iter().copied()).collect();
     let outcome = match gungnir_mission::apply_retention(
         journal,
         policy,
         std::time::SystemTime::now(),
-        &std::collections::BTreeSet::from([live]),
+        &protected,
     ) {
         Ok(outcome) => outcome,
         Err(err) => {
@@ -2589,9 +2635,9 @@ mod tests {
                 .set_mode(SensorId(1), gungnir_model::SensorMode::Search)
                 .expect("search");
             match coverage_answer(&config, &sensors) {
-                CoverageResponse::Computed(report) => {
-                    report.gap_length_m(gungnir_analytics::GapSeverity::Uncovered)
-                }
+                CoverageResponse::Computed(computed) => computed
+                    .report
+                    .gap_length_m(gungnir_analytics::GapSeverity::Uncovered),
                 CoverageResponse::NotComputed { reason } => panic!("{reason}"),
             }
         };
