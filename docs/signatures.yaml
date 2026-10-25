@@ -3402,3 +3402,19 @@
   commit: 7b40f3e5ea9219755151106446a3683634f38cb1
   pre_repository: false
   record: "GAP-060; D-135; docs/record/2026-10-25/a-node-presents-its-own-persisted-peer-identity.md; PR #213"
+
+- date: 2026-10-25
+  signer: Owner
+  subject: >-
+    GAP-084's human-owned code, built to D-48: the cloud custody profile's wrapped secret
+    records the master-key version it was wrapped under (`WrappedSecret`,
+    `UnwrappedSecret`, `keystore.kms-wrapped`'s `GUNGNIR-KMS-WRAPPED/1` header) and every
+    unwrap asks for exactly that version; a file written before D-48 opens under the latest
+    and is rewritten to record it, and a damaged header is refused by name
+    (`gungnir-security/src/managed_service.rs`).
+  kind: code
+  paths:
+  - gungnir-security/src/managed_service.rs
+  commit: f8f545674bbc3c65e144c72036b0f1e8b51761ec
+  pre_repository: false
+  record: "GAP-084; D-48; docs/record/2026-10-25/gap-084-the-wrapped-secret-records-its-master.md; PR #216"
